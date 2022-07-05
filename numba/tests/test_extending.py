@@ -1923,6 +1923,10 @@ class TestCachingOverloadObjmode(TestCase):
         return test_caching
 
     @classmethod
+    def populate_objmode_cache_ndarray_check_cache(cls):
+        cls.check_objmode_cache_ndarray()
+
+    @classmethod
     def check_objmode_cache_ndarray_check_cache(cls):
         disp = cls.check_objmode_cache_ndarray()
         if len(disp.stats.cache_misses) != 0:
@@ -1935,8 +1939,10 @@ class TestCachingOverloadObjmode(TestCase):
         # Env is missing after cache load.
         cache_dir = temp_directory(self.__class__.__name__)
         with override_config("CACHE_DIR", cache_dir):
-            # Test in local process to populate the cache.
-            self.check_objmode_cache_ndarray()
+            # Run in new process to populate the cache
+            run_in_new_process_in_cache_dir(
+                self.populate_objmode_cache_ndarray_check_cache, cache_dir
+            )
             # Run in new process to use the cache in a fresh process.
             res = run_in_new_process_in_cache_dir(
                 self.check_objmode_cache_ndarray_check_cache, cache_dir

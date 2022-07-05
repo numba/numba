@@ -211,6 +211,29 @@ instead. For example::
     $ NUMBA_USE_TYPEGUARD=1 python runtests.py
 
 
+Running coverage
+''''''''''''''''
+
+Coverage reports can be produced using `coverage.py
+<https://coverage.readthedocs.io/en/stable/index.html>`_. To record coverage
+info for the test suite, run::
+
+    coverage run -m numba.runtests <runtests args>
+
+Next, combine coverage files (potentially for multiple runs) with::
+
+    coverage combine
+
+The combined output can be transformed into various report formats - see the
+`coverage CLI usage reference
+<https://coverage.readthedocs.io/en/stable/cmd.html#command-line-usage>`_.
+For example, to produce an HTML report, run::
+
+    coverage html
+
+Following this command, the report can be viewed by opening ``htmlcov/index.html``.
+
+
 Development rules
 -----------------
 
@@ -266,7 +289,7 @@ circumstances should ``type: ignore`` comments be used.
 
 If you are contributing a new feature, we encourage you to use type hints, even if the file is not currently in the
 checklist. If you want to contribute type hints to enable a new file to be in the checklist, please add the file to the
-``files`` variable in ``mypy.ini``, and decide what level of compliance you are targetting. Level 3 is basic static
+``files`` variable in ``mypy.ini``, and decide what level of compliance you are targeting. Level 3 is basic static
 checks, while levels 2 and 1 represent stricter checking. The levels are described in details in ``mypy.ini``.
 
 There is potential for confusion between the Numba module ``typing`` and Python built-in module ``typing`` used for type

@@ -381,7 +381,7 @@ class InlineWorker(object):
             self.validator(callee_ir)
 
         # save an unmutated copy of the callee_ir to return
-        callee_ir_original = callee_ir.copy()
+        callee_ir_original = copy_ir(callee_ir)
         scope = block.scope
         instr = block.body[i]
         call_expr = instr.value
@@ -407,11 +407,17 @@ class InlineWorker(object):
         assert(len(callee_scopes) == 1)
         callee_scope = callee_scopes[0]
         var_dict = {}
-        for var in callee_scope.localvars._con.values():
+        for var in tuple(callee_scope.localvars._con.values()):
             if not (var.name in callee_freevars):
                 inlined_name = _created_inlined_var_name(
                     callee_ir.func_id.unique_name, var.name)
+                # Update the caller scope with the new names
                 new_var = scope.redefine(inlined_name, loc=var.loc)
+                # Also update the callee scope with the new names. Should the
+                # type and call maps need updating (which requires SSA form) the
+                # transformation to SSA is valid as the IR object is internally
+                # consistent.
+                callee_scope.redefine(inlined_name, loc=var.loc)
                 var_dict[var.name] = new_var
         self.debug_print("var_dict = ", var_dict)
         replace_vars(callee_blocks, var_dict)
@@ -1394,7 +1400,7 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
                  ir.Expr.build_tuple(items=[size_var], loc=loc), loc))
 
         # The general approach is to create an empty array and then fill
-        # the elements in one-by-one from their specificiation.
+        # the elements in one-by-one from their specification.
 
         # Get the numpy type to pass to empty.
         nptype = types.DType(dtype)

@@ -176,6 +176,8 @@ class StencilPass(object):
 
         if config.DEBUG_ARRAY_OPT >= 1:
             print("stencil_blocks after replace stencil accesses")
+            print("start_lengths:", start_lengths)
+            print("end_lengths:", end_lengths)
             ir_utils.dump_blocks(stencil_blocks)
 
         # create parfor loop nests
@@ -184,11 +186,15 @@ class StencilPass(object):
         in_arr_dim_sizes = equiv_set.get_shape(in_arr)
 
         assert ndims == len(in_arr_dim_sizes)
+        start_inds = []
+        last_inds = []
         for i in range(ndims):
             last_ind = self._get_stencil_last_ind(in_arr_dim_sizes[i],
                                         end_lengths[i], gen_nodes, scope, loc)
             start_ind = self._get_stencil_start_ind(
                                         start_lengths[i], gen_nodes, scope, loc)
+            start_inds.append(start_ind)
+            last_inds.append(last_ind)
             # start from stencil size to avoid invalid array access
             loopnests.append(numba.parfors.parfor.LoopNest(parfor_vars[i],
                                 start_ind, last_ind, 1))
@@ -235,7 +241,8 @@ class StencilPass(object):
             if "cval" in stencil_func.options:
                 cval = stencil_func.options["cval"]
                 # TODO: Loosen this restriction to adhere to casting rules.
-                if return_type.dtype != typing.typeof.typeof(cval):
+                cval_ty = typing.typeof.typeof(cval)
+                if not self.typingctx.can_convert(cval_ty, return_type.dtype):
                     raise ValueError("cval type does not match stencil return type.")
 
                 temp2 = return_type.dtype(cval)
@@ -263,13 +270,133 @@ class StencilPass(object):
             dtype_attr_assign = ir.Assign(dtype_np_attr_call, dtype_attr_var, loc)
             init_block.body.append(dtype_attr_assign)
 
-            stmts = ir_utils.gen_np_call("full",
-                                       np.full,
+            stmts = ir_utils.gen_np_call("empty",
+                                       np.empty,
                                        out_arr,
-                                       [shape_var, zero_var, dtype_attr_var],
+                                       [shape_var, dtype_attr_var],
                                        self.typingctx,
                                        self.typemap,
                                        self.calltypes)
+            # ------------------
+            # Generate the code to fill just the border with zero_var.
+
+            # Generate a none var to use in slicing.
+            none_var = ir.Var(scope, mk_unique_var("$none_var"), loc)
+            none_assign = ir.Assign(ir.Const(None, loc), none_var, loc)
+            stmts.append(none_assign)
+            self.typemap[none_var.name] = types.none
+            # Generate a zero var to use in slicing.
+            zero_index_var = ir.Var(scope, mk_unique_var("$zero_index_var"), loc)
+            zero_index_assign = ir.Assign(ir.Const(0, loc), zero_index_var, loc)
+            stmts.append(zero_index_assign)
+            self.typemap[zero_index_var.name] = types.intp
+            # Generate generic ":" slice.
+            # ---- Generate var to hold slice func var.
+            slice_func_var = ir.Var(scope, mk_unique_var("$slice_func_var"), loc)
+            slice_fn_ty = self.typingctx.resolve_value_type(slice)
+            self.typemap[slice_func_var.name] = slice_fn_ty
+            slice_g = ir.Global('slice', slice, loc)
+            slice_assign = ir.Assign(slice_g, slice_func_var, loc)
+            stmts.append(slice_assign)
+            # ---- Generate call to slice func.
+            sig = self.typingctx.resolve_function_type(slice_fn_ty,
+                                                       (types.none,) * 2,
+                                                       {})
+            slice_callexpr = ir.Expr.call(func=slice_func_var,
+                                          args=(none_var, none_var),
+                                          kws=(),
+                                          loc=loc)
+            self.calltypes[slice_callexpr] = sig
+            # ---- Generate slice var
+            slice_var = ir.Var(scope, mk_unique_var("$slice"), loc)
+            self.typemap[slice_var.name] = types.slice2_type
+            slice_assign = ir.Assign(slice_callexpr, slice_var, loc)
+            stmts.append(slice_assign)
+
+            def handle_border(slice_fn_ty,
+                              dim,
+                              scope,
+                              loc,
+                              slice_func_var,
+                              stmts,
+                              border_inds,
+                              border_tuple_items,
+                              other_arg,
+                              other_first):
+                # Handle the border for start or end of the index range.
+                # ---- Generate call to slice func.
+                sig = self.typingctx.resolve_function_type(
+                    slice_fn_ty,
+                    (types.intp,) * 2,
+                    {})
+                si = border_inds[dim]
+                assert(isinstance(si, (int, ir.Var)))
+                si_var = ir.Var(scope, mk_unique_var("$border_ind"), loc)
+                self.typemap[si_var.name] = types.intp
+                if isinstance(si, int):
+                    si_assign = ir.Assign(ir.Const(si, loc), si_var, loc)
+                else:
+                    si_assign = ir.Assign(si, si_var, loc)
+                stmts.append(si_assign)
+
+                slice_callexpr = ir.Expr.call(
+                    func=slice_func_var,
+                    args=(other_arg, si_var) if other_first else (si_var, other_arg),
+                    kws=(),
+                    loc=loc)
+                self.calltypes[slice_callexpr] = sig
+                # ---- Generate slice var
+                border_slice_var = ir.Var(scope, mk_unique_var("$slice"), loc)
+                self.typemap[border_slice_var.name] = types.slice2_type
+                slice_assign = ir.Assign(slice_callexpr, border_slice_var, loc)
+                stmts.append(slice_assign)
+
+                border_tuple_items[dim] = border_slice_var
+                border_ind_var = ir.Var(scope, mk_unique_var(
+                    "$border_index_tuple_var"), loc)
+                self.typemap[border_ind_var.name] = types.containers.UniTuple(
+                    types.slice2_type, ndims)
+                tuple_call = ir.Expr.build_tuple(border_tuple_items, loc)
+                tuple_assign = ir.Assign(tuple_call, border_ind_var, loc)
+                stmts.append(tuple_assign)
+
+                setitem_call = ir.SetItem(out_arr, border_ind_var, zero_var, loc)
+                self.calltypes[setitem_call] = signature(
+                                                types.none, self.typemap[out_arr.name],
+                                                self.typemap[border_ind_var.name],
+                                                self.typemap[out_arr.name].dtype
+                                                )
+                stmts.append(setitem_call)
+
+            # For each dimension, add setitem to set border values.
+            for dim in range(in_arr_typ.ndim):
+                # First, fill all entries with ":".
+                start_tuple_items = [slice_var] * in_arr_typ.ndim
+                last_tuple_items = [slice_var] * in_arr_typ.ndim
+
+                handle_border(slice_fn_ty,
+                              dim,
+                              scope,
+                              loc,
+                              slice_func_var,
+                              stmts,
+                              start_inds,
+                              start_tuple_items,
+                              zero_index_var,
+                              True)
+                handle_border(slice_fn_ty,
+                              dim,
+                              scope,
+                              loc,
+                              slice_func_var,
+                              stmts,
+                              last_inds,
+                              last_tuple_items,
+                              in_arr_dim_sizes[dim],
+                              False)
+
+            # ------------------
+
             equiv_set.insert_equiv(out_arr, in_arr_dim_sizes)
             init_block.body.extend(stmts)
         else: # out is present
