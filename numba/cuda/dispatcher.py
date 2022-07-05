@@ -206,6 +206,13 @@ class _Kernel(serialize.ReduceMixin):
         '''
         return self._codelibrary.get_cufunc().attrs.regs
 
+    @property
+    def shared_mem_per_block(self):
+        '''
+        The amount of shared memory used per block for this kernel.
+        '''
+        return self._codelibrary.get_cufunc().attrs.shared
+
     def inspect_llvm(self):
         '''
         Returns the LLVM IR for this kernel.
@@ -710,6 +717,16 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         else:
             return {sig: overload.regs_per_thread
                     for sig, overload in self.overloads.items()}
+
+    def get_shared_mem_per_block(self, signature=None):
+        if signature is not None:
+            return self.overloads[signature.args].shared_mem_per_block
+        if self.specialized:
+            return next(iter(self.overloads.values())).shared_mem_per_block
+        else:
+            return {sig: overload.shared_mem_per_block
+                    for sig, overload in self.overloads.items()}
+
 
     def get_call_template(self, args, kws):
         # Originally copied from _DispatcherBase.get_call_template. This
