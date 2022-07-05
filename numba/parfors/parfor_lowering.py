@@ -31,6 +31,7 @@ from numba.core.ir_utils import (
     fixup_var_define_in_scope,
     transfer_scope,
     find_max_label,
+    get_global_func_typ,
 )
 from numba.core.typing import signature
 from numba.parfors.parfor import ensure_parallel_support
@@ -38,7 +39,6 @@ from numba.core.errors import (
     NumbaParallelSafetyWarning, NotDefinedError, CompilerError, InternalError,
 )
 from numba.parfors.parfor_lowering_utils import ParforLoweringBuilder
-
 
 def _lower_parfor_parallel(lowerer, parfor):
     """Lowerer that handles LLVM code generation for parfor.
@@ -58,6 +58,7 @@ def _lower_parfor_parallel(lowerer, parfor):
     ensure_parallel_support()
     typingctx = lowerer.context.typing_context
     targetctx = lowerer.context
+    builder = lowerer.builder
     # We copy the typemap here because for race condition variable we'll
     # update their type to array so they can be updated by the gufunc.
     orig_typemap = lowerer.fndesc.typemap
@@ -103,8 +104,7 @@ def _lower_parfor_parallel(lowerer, parfor):
 
     parfor_output_arrays = numba.parfors.parfor.get_parfor_outputs(
         parfor, parfor.params)
-    parfor_redvars, parfor_reddict = numba.parfors.parfor.get_parfor_reductions(
-        lowerer.func_ir, parfor, parfor.params, lowerer.fndesc.calltypes)
+    parfor_redvars, parfor_reddict = parfor.redvars, parfor.reddict
     if config.DEBUG_ARRAY_OPT:
         print("parfor_redvars:", parfor_redvars)
         print("parfor_reddict:", parfor_reddict)
@@ -114,19 +114,45 @@ def _lower_parfor_parallel(lowerer, parfor):
     redarrs = {}
     if nredvars > 0:
         # reduction arrays outer dimension equal to thread count
-        thread_count = get_thread_count()
         scope = parfor.init_block.scope
         loc = parfor.init_block.loc
         pfbdr = ParforLoweringBuilder(lowerer=lowerer, scope=scope, loc=loc)
 
+        # Get the Numba internal function to call to get the thread count.
+        get_num_threads = pfbdr.bind_global_function(
+            fobj=numba.np.ufunc.parallel._iget_num_threads,
+            ftype=get_global_func_typ(numba.np.ufunc.parallel._iget_num_threads),
+            args=()
+        )
+
+        # Insert the call to assign the thread count to a variable.
+        num_threads_var = pfbdr.assign(
+            rhs=pfbdr.call(get_num_threads, args=[]),
+            typ=types.intp,
+            name="num_threads_var")
+
         # For each reduction variable...
         for i in range(nredvars):
-            redvar_typ = lowerer.fndesc.typemap[parfor_redvars[i]]
-            redvar = ir.Var(scope, parfor_redvars[i], loc)
+            red_name = parfor_redvars[i]
+            # Get the type of the reduction variable.
+            redvar_typ = lowerer.fndesc.typemap[red_name]
+            # Get the ir.Var for the reduction variable.
+            redvar = ir.Var(scope, red_name, loc)
+            # Get the type of the array that holds the per-thread
+            # reduction variables.
             redarrvar_typ = redtyp_to_redarraytype(redvar_typ)
             reddtype = redarrvar_typ.dtype
             if config.DEBUG_ARRAY_OPT:
-                print("redvar_typ", redvar_typ, redarrvar_typ, reddtype, types.DType(reddtype))
+                print(
+                    "reduction_info",
+                    red_name,
+                    redvar_typ,
+                    redarrvar_typ,
+                    reddtype,
+                    types.DType(reddtype),
+                    num_threads_var,
+                    type(num_threads_var)
+                )
 
             # If this is reduction over an array,
             # the reduction array has just one added per-worker dimension.
@@ -145,13 +171,6 @@ def _lower_parfor_parallel(lowerer, parfor):
                     types.UniTuple(types.intp, redarrdim),
                 ),
                 kws={'dtype': types.DType(reddtype)}
-            )
-
-            # Create var for outer dimension size of reduction array equal to number of threads.
-            num_threads_var = pfbdr.make_const_variable(
-                cval=thread_count,
-                typ=types.intp,
-                name='num_threads',
             )
 
             size_var_list = [num_threads_var]
@@ -192,7 +211,8 @@ def _lower_parfor_parallel(lowerer, parfor):
             # Remember mapping of original reduction array to the newly created per-worker reduction array.
             redarrs[redvar.name] = redarr_var
 
-            init_val = parfor_reddict[parfor_redvars[i]].init_val
+            init_val = parfor_reddict[red_name].init_val
+
             if init_val is not None:
                 if isinstance(redvar_typ, types.npytypes.Array):
                     # Create an array of identity values for the reduction.
@@ -252,12 +272,32 @@ def _lower_parfor_parallel(lowerer, parfor):
                     lowerer.lower_inst(res_print)
 
 
-            # For each thread, initialize the per-worker reduction array to the current reduction array value.
-            for j in range(thread_count):
-                index_var = pfbdr.make_const_variable(
-                    cval=j, typ=types.uintp, name="index_var",
-                )
-                pfbdr.setitem(obj=redarr_var, index=index_var, val=redtoset)
+            # For each thread, initialize the per-worker reduction array to
+            # the current reduction array value.
+
+            # Get the Numba type of the variable that holds the thread count.
+            num_thread_type = typemap[num_threads_var.name]
+            # Get the LLVM type of the thread count variable.
+            ntllvm_type = targetctx.get_value_type(num_thread_type)
+            # Create a LLVM variable to hold the loop index.
+            alloc_loop_var = cgutils.alloca_once(builder, ntllvm_type)
+            # Associate this LLVM variable to a Numba IR variable so that
+            # we can use setitem IR builder.
+            # Create a Numba IR variable.
+            numba_ir_loop_index_var = scope.redefine("$loop_index", loc)
+            # Give that variable the right type.
+            typemap[numba_ir_loop_index_var.name] = num_thread_type
+            # Associate this Numba variable to the LLVM variable in the
+            # lowerer's varmap.
+            lowerer.varmap[numba_ir_loop_index_var.name] = alloc_loop_var
+            # Insert a loop into the outputed LLVM that goes from 0 to
+            # the current thread count.
+            with cgutils.for_range(builder, lowerer.loadvar(num_threads_var.name), intp=ntllvm_type) as loop:
+                # Store the loop index into the alloca'd LLVM loop index variable.
+                builder.store(loop.index, alloc_loop_var)
+                # Initialize one element of the reduction array using the Numba
+                # IR variable associated with this loop's index.
+                pfbdr.setitem(obj=redarr_var, index=numba_ir_loop_index_var, val=redtoset)
 
     # compile parfor body as a separate function to be used with GUFuncWrapper
     flags = parfor.flags.copy()
@@ -272,7 +312,6 @@ def _lower_parfor_parallel(lowerer, parfor):
         (func,
          func_args,
          func_sig,
-         redargstartdim,
          func_arg_types,
          exp_name_to_tuple_var) = _create_gufunc_for_parfor_body(
             lowerer, parfor, typemap, typingctx, targetctx, flags, {},
@@ -295,7 +334,6 @@ def _lower_parfor_parallel(lowerer, parfor):
         num_inputs,
         num_reductions,
         func_args,
-        redargstartdim,
         func_sig,
         parfor.races,
         typemap)
@@ -323,9 +361,10 @@ def _lower_parfor_parallel(lowerer, parfor):
         parfor.races,
         exp_name_to_tuple_var)
 
-    _parfor_lowering_finalize_reduction(
-        parfor, redarrs, lowerer, parfor_reddict,
-    )
+    if nredvars > 0:
+        _parfor_lowering_finalize_reduction(
+            parfor, redarrs, lowerer, parfor_reddict, num_threads_var,
+        )
 
     # Cleanup reduction variable
     for v in redarrs.values():
@@ -357,13 +396,11 @@ def _parfor_lowering_finalize_reduction(
         redarrs,
         lowerer,
         parfor_reddict,
+        thread_count_var,
     ):
     """Emit code to finalize the reduction from the intermediate values of
     each thread.
     """
-    from numba.np.ufunc.parallel import get_thread_count
-    thread_count = get_thread_count()
-
     # For each reduction variable
     for redvar_name, redarr_var in redarrs.items():
         # Pseudo-code for this loop body:
@@ -387,7 +424,7 @@ def _parfor_lowering_finalize_reduction(
         handler = (_lower_trivial_inplace_binops
                    if reduce_info.redvar_info.redop is not None
                    else _lower_non_trivial_reduce)
-        handler(parfor, lowerer, thread_count, reduce_info)
+        handler(parfor, lowerer, thread_count_var, reduce_info)
 
 
 class ParforsUnexpectedReduceNodeError(InternalError):
@@ -395,7 +432,7 @@ class ParforsUnexpectedReduceNodeError(InternalError):
         super().__init__(f"Unknown reduce instruction node: {inst}")
 
 
-def _lower_trivial_inplace_binops(parfor, lowerer, thread_count, reduce_info):
+def _lower_trivial_inplace_binops(parfor, lowerer, thread_count_var, reduce_info):
     """Lower trivial inplace-binop reduction.
     """
     for inst in reduce_info.redvar_info.reduce_nodes:
@@ -406,7 +443,7 @@ def _lower_trivial_inplace_binops(parfor, lowerer, thread_count, reduce_info):
         elif _is_inplace_binop_and_rhs_is_init(inst, reduce_info.redvar_name):
             fn = inst.value.fn
             redvar_result = _emit_binop_reduce_call(
-                fn, lowerer, thread_count, reduce_info,
+                fn, lowerer, thread_count_var, reduce_info,
             )
             lowerer.storevar(redvar_result, name=inst.target.name)
         # Otherwise?
@@ -425,16 +462,17 @@ def _lower_trivial_inplace_binops(parfor, lowerer, thread_count, reduce_info):
         )
 
 
-def _lower_non_trivial_reduce(parfor, lowerer, thread_count, reduce_info):
+def _lower_non_trivial_reduce(parfor, lowerer, thread_count_var, reduce_info):
     """Lower non-trivial reduction such as call to `functools.reduce()`.
     """
-    ctx = lowerer.context
     init_name = f"{reduce_info.redvar_name}#init"
     # The init_name variable is not defined at this point.
     lowerer.fndesc.typemap.setdefault(init_name, reduce_info.redvar_typ)
     # Emit a sequence of the reduction operation for each intermediate result
     # of each thread.
-    for tid in range(thread_count):
+    num_thread_llval = lowerer.loadvar(thread_count_var.name)
+    with cgutils.for_range(lowerer.builder, num_thread_llval) as loop:
+        tid = loop.index
         for inst in reduce_info.redvar_info.reduce_nodes:
             # Var assigns to Var?
             if _lower_var_to_var_assign(lowerer, inst):
@@ -442,9 +480,7 @@ def _lower_non_trivial_reduce(parfor, lowerer, thread_count, reduce_info):
             # The reduction operation?
             elif (isinstance(inst, ir.Assign)
                     and any(var.name == init_name for var in inst.list_vars())):
-                elem = _emit_getitem_call(
-                    ctx.get_constant(types.intp, tid), lowerer, reduce_info,
-                )
+                elem = _emit_getitem_call(tid, lowerer, reduce_info)
                 lowerer.storevar(elem, init_name)
                 lowerer.lower_inst(inst)
 
@@ -491,7 +527,7 @@ def _emit_getitem_call(idx, lowerer, reduce_info):
     return elem
 
 
-def _emit_binop_reduce_call(binop, lowerer, thread_count, reduce_info):
+def _emit_binop_reduce_call(binop, lowerer, thread_count_var, reduce_info):
     """Emit call to the ``binop`` for the reduction variable.
     """
 
@@ -533,9 +569,7 @@ def _emit_binop_reduce_call(binop, lowerer, thread_count, reduce_info):
         )
         lowerer.lower_inst(res_print)
 
-    arg_thread_count = ctx.get_constant_generic(
-        builder, types.uintp, thread_count,
-    )
+    arg_thread_count = lowerer.loadvar(thread_count_var.name)
     args = (arg_thread_count, arg_arr, reduce_info.init_val)
     sig = signature(
         reduce_info.redvar_typ, types.uintp, redarr_typ, reduce_info.redvar_typ,
@@ -600,14 +634,13 @@ def _create_shape_signature(
         num_inputs,
         num_reductions,
         args,
-        redargstartdim,
         func_sig,
         races,
         typemap):
     '''Create shape signature for GUFunc
     '''
     if config.DEBUG_ARRAY_OPT:
-        print("_create_shape_signature", num_inputs, num_reductions, args, redargstartdim)
+        print("_create_shape_signature", num_inputs, num_reductions, args, races)
         for i in args[1:]:
             print("argument", i, type(i), get_shape_classes(i, typemap=typemap))
 
@@ -622,6 +655,8 @@ def _create_shape_signature(
     max_class = max(class_set) + 1 if class_set else 0
     classes.insert(0, (max_class,)) # force set the class of 'sched' argument
     class_set.add(max_class)
+    thread_num_class = max_class + 1
+    class_set.add(thread_num_class)
     class_map = {}
     # TODO: use prefix + class number instead of single char
     alphabet = ord('a')
@@ -629,6 +664,7 @@ def _create_shape_signature(
        if n >= 0:
            class_map[n] = chr(alphabet)
            alphabet += 1
+    threadcount_ordinal = chr(alphabet)
 
     alpha_dict = {'latest_alpha' : alphabet}
 
@@ -646,6 +682,7 @@ def _create_shape_signature(
     if config.DEBUG_ARRAY_OPT:
         print("args", args)
         print("classes", classes)
+        print("threadcount_ordinal", threadcount_ordinal)
     for cls, arg in zip(classes, args):
         count = count + 1
         if cls:
@@ -653,9 +690,9 @@ def _create_shape_signature(
         else:
             dim_syms = ()
         if (count > num_inouts):
-            # Strip the first symbol corresponding to the number of workers
-            # so that guvectorize will parallelize across the reduction.
-            gu_sin.append(dim_syms[redargstartdim[arg]:])
+            # Add the threadcount_ordinal to represent the thread count
+            # to the start of the reduction array.
+            gu_sin.append(tuple([threadcount_ordinal] + list(dim_syms[1:])))
         else:
             gu_sin.append(dim_syms)
             syms_sin += dim_syms
@@ -925,17 +962,15 @@ def redtyp_to_redarraytype(redtyp):
     # If the reduction type is an array then allocate reduction array with ndim+1 dimensions.
     if isinstance(redtyp, types.npytypes.Array):
         redarrdim += redtyp.ndim
-        # We don't create array of array but multi-dimensional reduciton array with same dtype.
+        # We don't create array of array but multi-dimensional reduction array with same dtype.
         redtyp = redtyp.dtype
     return types.npytypes.Array(redtyp, redarrdim, "C")
 
 def redarraytype_to_sig(redarraytyp):
     """Given a reduction array type, find the type of the reduction argument to the gufunc.
-       Scalar and 1D array reduction both end up with 1D gufunc param type since scalars have to
-       be passed as arrays.
     """
     assert isinstance(redarraytyp, types.npytypes.Array)
-    return types.npytypes.Array(redarraytyp.dtype, max(1, redarraytyp.ndim - 1), redarraytyp.layout)
+    return types.npytypes.Array(redarraytyp.dtype, redarraytyp.ndim, redarraytyp.layout)
 
 def legalize_names_with_typemap(names, typemap):
     """ We use ir_utils.legalize_names to replace internal IR variable names
@@ -1140,6 +1175,9 @@ def _create_gufunc_for_parfor_body(
     param_types = [to_scalar_from_0d(typemap[v]) for v in parfor_params]
     # Calculate types of args passed to gufunc.
     func_arg_types = [typemap[v] for v in (parfor_inputs + parfor_outputs)] + parfor_red_arg_types
+    if config.DEBUG_ARRAY_OPT >= 1:
+        print("new param_types:", param_types)
+        print("new func_arg_types:", func_arg_types)
 
     # Replace illegal parameter names in the loop body with legal ones.
     replace_var_names(loop_body, param_dict)
@@ -1185,7 +1223,7 @@ def _create_gufunc_for_parfor_body(
     gufunc_txt += "def " + gufunc_name + \
         "(sched, " + (", ".join(parfor_params)) + "):\n"
 
-    globls = {"np": np}
+    globls = {"np": np, "numba": numba}
 
     # First thing in the gufunc, we reconstruct tuples from their
     # individual parts, e.g., orig_tup_name = (part1, part2,).
@@ -1245,7 +1283,7 @@ def _create_gufunc_for_parfor_body(
             gufunc_txt += " = (" + ", ".join([param_dict[x] for x in exp_names])
             if len(exp_names) == 1:
                 # Add comma for tuples with singular values.  We can't unilaterally
-                # add a comma alway because (,) isn't valid.
+                # add a comma always because (,) isn't valid.
                 gufunc_txt += ","
 
         gufunc_txt += ")\n"
@@ -1255,17 +1293,20 @@ def _create_gufunc_for_parfor_body(
             gufunc_txt += ("    " + parfor_params_orig[pindex]
                 + " = np.ascontiguousarray(" + parfor_params[pindex] + ")\n")
 
+    gufunc_thread_id_var = "ParallelAcceleratorGufuncThreadId"
+
+    if len(parfor_redarrs) > 0:
+        gufunc_txt += "    " + gufunc_thread_id_var + " = "
+        gufunc_txt += "numba.np.ufunc.parallel._iget_thread_id()\n"
+
     # Add initialization of reduction variables
     for arr, var in zip(parfor_redarrs, parfor_redvars):
-        # If reduction variable is a scalar then save current value to
-        # temp and accumulate on that temp to prevent false sharing.
-        if redtyp_is_scalar(typemap[var]):
-            gufunc_txt += "    " + param_dict[var] + \
-                 "=" + param_dict[arr] + "[0]\n"
-        else:
-            # The reduction variable is an array so np.copy it to a temp.
-            gufunc_txt += "    " + param_dict[var] + \
-                 "=np.copy(" + param_dict[arr] + ")\n"
+        gufunc_txt += "    " + param_dict[var] + \
+             "=" + param_dict[arr] + "[" + gufunc_thread_id_var + "]\n"
+        if config.DEBUG_ARRAY_OPT_RUNTIME:
+            gufunc_txt += "    print(\"thread id =\", ParallelAcceleratorGufuncThreadId)\n"
+            gufunc_txt += "    print(\"initial reduction value\",ParallelAcceleratorGufuncThreadId," + param_dict[var] + "," + param_dict[var] + ".shape)\n"
+            gufunc_txt += "    print(\"reduction array\",ParallelAcceleratorGufuncThreadId," + param_dict[arr] + "," + param_dict[arr] + ".shape)\n"
 
     # For each dimension of the parfor, create a for loop in the generated gufunc function.
     # Iterate across the proper values extracted from the schedule.
@@ -1298,22 +1339,18 @@ def _create_gufunc_for_parfor_body(
         gufunc_txt += "    "
     gufunc_txt += sentinel_name + " = 0\n"
     # Add assignments of reduction variables (for returning the value)
-    redargstartdim = {}
     for arr, var in zip(parfor_redarrs, parfor_redvars):
+        if config.DEBUG_ARRAY_OPT_RUNTIME:
+            gufunc_txt += "    print(\"final reduction value\",ParallelAcceleratorGufuncThreadId," + param_dict[var] + ")\n"
+            gufunc_txt += "    print(\"final reduction array\",ParallelAcceleratorGufuncThreadId," + param_dict[arr] + ")\n"
         # After the gufunc loops, copy the accumulated temp value back to reduction array.
-        if redtyp_is_scalar(typemap[var]):
-            gufunc_txt += "    " + param_dict[arr] + \
-                "[0] = " + param_dict[var] + "\n"
-            redargstartdim[arr] = 1
-        else:
-            # After the gufunc loops, copy the accumulated temp array back to reduction array with ":"
-            gufunc_txt += "    " + param_dict[arr] + \
-                "[:] = " + param_dict[var] + "[:]\n"
-            redargstartdim[arr] = 0
+        gufunc_txt += "    " + param_dict[arr] + \
+            "[" + gufunc_thread_id_var + "] = " + param_dict[var] + "\n"
     gufunc_txt += "    return None\n"
 
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_txt = ", type(gufunc_txt), "\n", gufunc_txt)
+        print("globls:", globls, type(globls))
     # Force gufunc outline into existence.
     locls = {}
     exec(gufunc_txt, globls, locls)
@@ -1484,7 +1521,7 @@ def _create_gufunc_for_parfor_body(
     if config.DEBUG_ARRAY_OPT:
         print("finished create_gufunc_for_parfor_body. kernel_sig = ", kernel_sig)
 
-    return kernel_func, parfor_args, kernel_sig, redargstartdim, func_arg_types, expanded_name_to_tuple_var
+    return kernel_func, parfor_args, kernel_sig, func_arg_types, expanded_name_to_tuple_var
 
 def replace_var_with_array_in_block(vars, block, typemap, calltypes):
     new_block = []
@@ -1532,7 +1569,6 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     builder = lowerer.builder
 
     from numba.np.ufunc.parallel import (build_gufunc_wrapper,
-                           get_thread_count,
                            _launch_threads)
 
     if config.DEBUG_ARRAY_OPT:
@@ -1612,10 +1648,10 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     # Call do_scheduling with appropriate arguments
     dim_starts = cgutils.alloca_once(
         builder, sched_type, size=context.get_constant(
-            types.uintp, num_dim), name="dims")
+            types.uintp, num_dim), name="dim_starts")
     dim_stops = cgutils.alloca_once(
         builder, sched_type, size=context.get_constant(
-            types.uintp, num_dim), name="dims")
+            types.uintp, num_dim), name="dim_stops")
     for i in range(num_dim):
         start, stop, step = loop_ranges[i]
         if start.type != one_type:
@@ -1634,21 +1670,15 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         builder.store(stop, builder.gep(dim_stops,
                                         [context.get_constant(types.uintp, i)]))
 
-    sched_size = get_thread_count() * num_dim * 2
-    sched = cgutils.alloca_once(
-        builder, sched_type, size=context.get_constant(
-            types.uintp, sched_size), name="sched")
-    debug_flag = 1 if config.DEBUG_ARRAY_OPT else 0
-    scheduling_fnty = llvmlite.ir.FunctionType(
-        intp_ptr_t, [uintp_t, sched_ptr_type, sched_ptr_type, uintp_t, sched_ptr_type, intp_t])
-    if index_var_typ.signed:
-        do_scheduling = cgutils.get_or_insert_function(builder.module,
-                                                       scheduling_fnty,
-                                                       "do_scheduling_signed")
-    else:
-        do_scheduling = cgutils.get_or_insert_function(builder.module,
-                                                       scheduling_fnty,
-                                                       "do_scheduling_unsigned")
+    get_chunksize = cgutils.get_or_insert_function(
+        builder.module,
+        llvmlite.ir.FunctionType(uintp_t, []),
+        name="get_parallel_chunksize")
+
+    set_chunksize = cgutils.get_or_insert_function(
+        builder.module,
+        llvmlite.ir.FunctionType(llvmlite.ir.VoidType(), [uintp_t]),
+        name="set_parallel_chunksize")
 
     get_num_threads = cgutils.get_or_insert_function(
         builder.module,
@@ -1656,6 +1686,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         "get_num_threads")
 
     num_threads = builder.call(get_num_threads, [])
+    current_chunksize = builder.call(get_chunksize, [])
 
     with cgutils.if_unlikely(builder, builder.icmp_signed('<=', num_threads,
                                                   num_threads.type(0))):
@@ -1664,10 +1695,37 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
                                                   ("Invalid number of threads. "
                                                    "This likely indicates a bug in Numba.",))
 
+    get_sched_size_fnty = llvmlite.ir.FunctionType(uintp_t, [uintp_t, uintp_t, intp_ptr_t, intp_ptr_t])
+    get_sched_size = cgutils.get_or_insert_function(
+        builder.module,
+        get_sched_size_fnty,
+        name="get_sched_size")
+    num_divisions = builder.call(get_sched_size, [num_threads,
+                                                  context.get_constant(types.uintp, num_dim),
+                                                  dim_starts,
+                                                  dim_stops])
+    builder.call(set_chunksize, [zero])
+
+    multiplier = context.get_constant(types.uintp, num_dim * 2)
+    sched_size = builder.mul(num_divisions, multiplier)
+    sched = builder.alloca(sched_type, size=sched_size, name="sched")
+
+    debug_flag = 1 if config.DEBUG_ARRAY_OPT else 0
+    scheduling_fnty = llvmlite.ir.FunctionType(
+        intp_ptr_t, [uintp_t, intp_ptr_t, intp_ptr_t, uintp_t, sched_ptr_type, intp_t])
+    if index_var_typ.signed:
+        do_scheduling = cgutils.get_or_insert_function(builder.module,
+                                                       scheduling_fnty,
+                                                       name="do_scheduling_signed")
+    else:
+        do_scheduling = cgutils.get_or_insert_function(builder.module,
+                                                       scheduling_fnty,
+                                                       name="do_scheduling_unsigned")
+
     builder.call(
         do_scheduling, [
             context.get_constant(
-                types.uintp, num_dim), dim_starts, dim_stops, num_threads,
+                types.uintp, num_dim), dim_starts, dim_stops, num_divisions,
             sched, context.get_constant(
                     types.intp, debug_flag)])
 
@@ -1676,18 +1734,6 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
 
     nredvars = len(redvars)
     ninouts = len(expr_args) - nredvars
-
-    if config.DEBUG_ARRAY_OPT:
-        for i in range(get_thread_count()):
-            cgutils.printf(builder, "sched[" + str(i) + "] = ")
-            for j in range(num_dim * 2):
-                cgutils.printf(
-                    builder, "%d ", builder.load(
-                        builder.gep(
-                            sched, [
-                                context.get_constant(
-                                    types.intp, i * num_dim * 2 + j)])))
-            cgutils.printf(builder, "\n")
 
     def load_potential_tuple_var(x):
         """Given a variable name, if that variable is not a new name
@@ -1723,7 +1769,6 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     # sched goes first
     builder.store(builder.bitcast(sched, byte_ptr_t), args)
     array_strides.append(context.get_constant(types.intp, sizeof_intp))
-    red_shapes = {}
     rv_to_arg_dict = {}
     # followed by other arguments
     for i in range(num_args):
@@ -1734,11 +1779,9 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         if i >= ninouts:  # reduction variables
             ary = context.make_array(aty)(context, builder, arg)
             strides = cgutils.unpack_tuple(builder, ary.strides, aty.ndim)
-            ary_shapes = cgutils.unpack_tuple(builder, ary.shape, aty.ndim)
             # Start from 1 because we skip the first dimension of length num_threads just like sched.
-            for j in range(1, len(strides)):
+            for j in range(len(strides)):
                 array_strides.append(strides[j])
-            red_shapes[i] = ary_shapes[1:]
             builder.store(builder.bitcast(ary.data, byte_ptr_t), dst)
         elif isinstance(aty, types.ArrayCompatible):
             if var in races:
@@ -1777,8 +1820,8 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     # ----------------------------------------------------------------------------
     # Next, we prepare the individual dimension info recorded in gu_signature
     sig_dim_dict = {}
-    occurances = []
-    occurances = [sched_sig[0]]
+    occurrences = []
+    occurrences = [sched_sig[0]]
     sig_dim_dict[sched_sig[0]] = context.get_constant(types.intp, 2 * num_dim)
     assert len(expr_args) == len(all_args)
     assert len(expr_args) == len(expr_arg_types)
@@ -1803,11 +1846,11 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
                 shapes = cgutils.unpack_tuple(builder, ary.shape, aty.ndim)
                 sig_dim_dict[dim_sym] = shapes[i]
 
-            if not (dim_sym in occurances):
+            if not (dim_sym in occurrences):
                 if config.DEBUG_ARRAY_OPT:
                     print("dim_sym = ", dim_sym, ", i = ", i)
                     cgutils.printf(builder, dim_sym + " = %d\n", sig_dim_dict[dim_sym])
-                occurances.append(dim_sym)
+                occurrences.append(dim_sym)
             i = i + 1
 
     # ----------------------------------------------------------------------------
@@ -1816,10 +1859,10 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     nshapes = len(sig_dim_dict) + 1
     shapes = cgutils.alloca_once(builder, intp_t, size=nshapes, name="pshape")
     # For now, outer loop size is the same as number of threads
-    builder.store(num_threads, shapes)
+    builder.store(num_divisions, shapes)
     # Individual shape variables go next
     i = 1
-    for dim_sym in occurances:
+    for dim_sym in occurrences:
         if config.DEBUG_ARRAY_OPT:
             cgutils.printf(builder, dim_sym + " = %d\n", sig_dim_dict[dim_sym])
         builder.store(
@@ -1841,24 +1884,9 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
                   steps)
     # The steps for all others are 0, except for reduction results.
     for i in range(num_args):
-        if i >= ninouts:  # steps for reduction vars are abi_sizeof(typ)
-            j = i - ninouts
-            # Get the base dtype of the reduction array.
-            redtyp = lowerer.fndesc.typemap[redvars[j]]
-            red_stride = None
-            if isinstance(redtyp, types.npytypes.Array):
-                redtyp = redtyp.dtype
-                red_stride = red_shapes[i]
-            typ = context.get_value_type(redtyp)
-            sizeof = context.get_abi_sizeof(typ)
-            # Set stepsize to the size of that dtype.
-            stepsize = context.get_constant(types.intp, sizeof)
-            if red_stride is not None:
-                for rs in red_stride:
-                    stepsize = builder.mul(stepsize, rs)
-        else:
-            # steps are strides
-            stepsize = zero
+        # steps are strides from one thread to the next
+        stepsize = zero
+
         dst = builder.gep(steps, [context.get_constant(types.intp, 1 + i)])
         builder.store(stepsize, dst)
     for j in range(len(array_strides)):
@@ -1884,6 +1912,8 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     builder.call(fn, [args, shapes, steps, data])
     if config.DEBUG_ARRAY_OPT:
         cgutils.printf(builder, "after calling kernel %p\n", fn)
+
+    builder.call(set_chunksize, [current_chunksize])
 
     for k, v in rv_to_arg_dict.items():
         arg, rv_arg = v

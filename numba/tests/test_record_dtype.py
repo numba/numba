@@ -539,6 +539,22 @@ class TestRecordDtypeMakeCStruct(unittest.TestCase):
                 str(raises.exception),
             )
 
+    def test_nestedarray_issue_8132(self):
+        # issue#8132 is caused by misrepresenting the NestedArray. Instead of
+        # using the storage layout for the contained data, it is represented
+        # as an array object structure.
+
+        # Make an array that is longer than the array object structure.
+        data = np.arange(27 * 2, dtype=np.float64).reshape(27, 2)
+        recty = types.Record.make_c_struct([
+            ('data', types.NestedArray(dtype=types.float64, shape=data.shape)),
+        ])
+        arr = np.array((data,), dtype=recty.dtype)
+        # unpack the nestedarray as a normal array
+        [extracted_array] = arr.tolist()
+        # check that is matches the original values
+        np.testing.assert_array_equal(extracted_array, data)
+
 
 class TestRecordDtype(unittest.TestCase):
 

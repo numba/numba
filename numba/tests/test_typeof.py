@@ -309,6 +309,15 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         self.assertEqual(len({ty0, ty1, ty2}), 3)
         self.assertEqual(ty3, ty2)
 
+    def test_np_random(self):
+        rng = np.random.default_rng()
+        ty_rng = typeof(rng)
+        ty_bitgen = typeof(rng.bit_generator)
+
+        self.assertEqual(ty_rng, types.npy_rng)
+        self.assertEqual(ty_bitgen, types.npy_bitgen)
+
+
 class DistinctChecker(object):
 
     def __init__(self):

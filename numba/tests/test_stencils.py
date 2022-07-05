@@ -2066,15 +2066,11 @@ class TestManyStencils(TestStencilBase):
         self.check(kernel, a)
 
     def test_basic35(self):
-        """simple cval """
+        """simple cval where cval is int but castable to dtype of float"""
         def kernel(a):
             return a[0, 1]
         a = np.arange(12.).reshape(3, 4)
-        ex = self.exception_dict(
-            stencil=NumbaValueError,
-            parfor=ValueError,
-            njit=NumbaValueError)
-        self.check(kernel, a, options={'cval': 5}, expected_exception=ex)
+        self.check(kernel, a, options={'cval': 5})
 
     def test_basic36(self):
         """more complex with cval"""

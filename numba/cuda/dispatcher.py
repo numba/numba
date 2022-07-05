@@ -3,12 +3,12 @@ import os
 import sys
 import ctypes
 import functools
-import warnings
 
 from numba.core import config, serialize, sigutils, types, typing, utils
+from numba.core.caching import Cache, CacheImpl
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.dispatcher import Dispatcher
-from numba.core.errors import NumbaPerformanceWarning, NumbaDeprecationWarning
+from numba.core.errors import NumbaPerformanceWarning
 from numba.core.typing.typeof import Purpose, typeof
 
 from numba.cuda.api import get_current_device
@@ -106,13 +106,39 @@ class _Kernel(serialize.ReduceMixin):
         self._codelibrary = lib
         self.call_helper = cres.call_helper
 
+        # The following are referred to by the cache implementation. Note:
+        # - There are no referenced environments in CUDA.
+        # - Kernels don't have lifted code.
+        # - reload_init is only for parfors.
+        self.target_context = tgt_ctx
+        self.fndesc = cres.fndesc
+        self.environment = cres.environment
+        self._referenced_environments = []
+        self.lifted = []
+        self.reload_init = []
+
+    @property
+    def library(self):
+        return self._codelibrary
+
+    @property
+    def type_annotation(self):
+        return self._type_annotation
+
+    def _find_referenced_environments(self):
+        return self._referenced_environments
+
+    @property
+    def codegen(self):
+        return self.target_context.codegen()
+
     @property
     def argument_types(self):
         return tuple(self.signature.args)
 
     @classmethod
-    def _rebuild(cls, cooperative, name, argtypes, codelibrary, link, debug,
-                 lineinfo, call_helper, extensions):
+    def _rebuild(cls, cooperative, name, signature, codelibrary,
+                 debug, lineinfo, call_helper, extensions):
         """
         Rebuild an instance.
         """
@@ -120,9 +146,10 @@ class _Kernel(serialize.ReduceMixin):
         # invoke parent constructor
         super(cls, instance).__init__()
         # populate members
+        instance.entry_point = None
         instance.cooperative = cooperative
         instance.entry_name = name
-        instance.argument_types = tuple(argtypes)
+        instance.signature = signature
         instance._type_annotation = None
         instance._codelibrary = codelibrary
         instance.debug = debug
@@ -140,7 +167,7 @@ class _Kernel(serialize.ReduceMixin):
         Stream information is discarded.
         """
         return dict(cooperative=self.cooperative, name=self.entry_name,
-                    argtypes=self.argtypes, codelibrary=self.codelibrary,
+                    signature=self.signature, codelibrary=self._codelibrary,
                     debug=self.debug, lineinfo=self.lineinfo,
                     call_helper=self.call_helper, extensions=self.extensions)
 
@@ -149,20 +176,6 @@ class _Kernel(serialize.ReduceMixin):
         Force binding to current CUDA context
         """
         self._codelibrary.get_cufunc()
-
-    @property
-    def ptx(self):
-        '''
-        PTX code for this kernel.
-        '''
-        warnings.warn(
-            "Attribute `ptx` is deprecated and will be removed in the future. "
-            "To retrieve the compiled machine code of the CUDA function for a "
-            "given CUDA compute compatibility `cc`, use the `inspect_asm(cc)` "
-            "method."
-            , NumbaDeprecationWarning
-        )
-        return self._codelibrary.get_asm_str()
 
     @property
     def device(self):
@@ -459,19 +472,49 @@ class _LaunchConfiguration:
         self.sharedmem = sharedmem
 
         if config.CUDA_LOW_OCCUPANCY_WARNINGS:
-            ctx = get_context()
-            smcount = ctx.device.MULTIPROCESSOR_COUNT
+            # Warn when the grid has fewer than 128 blocks. This number is
+            # chosen somewhat heuristically - ideally the minimum is 2 times
+            # the number of SMs, but the number of SMs varies between devices -
+            # some very small GPUs might only have 4 SMs, but an H100-SXM5 has
+            # 132. In general kernels should be launched with large grids
+            # (hundreds or thousands of blocks), so warning when fewer than 128
+            # blocks are used will likely catch most beginner errors, where the
+            # grid tends to be very small (single-digit or low tens of blocks).
+            min_grid_size = 128
             grid_size = griddim[0] * griddim[1] * griddim[2]
-            if grid_size < 2 * smcount:
-                msg = ("Grid size ({grid}) < 2 * SM count ({sm}) "
-                       "will likely result in GPU under utilization due "
-                       "to low occupancy.")
-                msg = msg.format(grid=grid_size, sm=2 * smcount)
+            if grid_size < min_grid_size:
+                msg = (f"Grid size {grid_size} will likely result in GPU "
+                       "under-utilization due to low occupancy.")
                 warn(NumbaPerformanceWarning(msg))
 
     def __call__(self, *args):
         return self.dispatcher.call(args, self.griddim, self.blockdim,
                                     self.stream, self.sharedmem)
+
+
+class CUDACacheImpl(CacheImpl):
+    def reduce(self, kernel):
+        return kernel._reduce_states()
+
+    def rebuild(self, target_context, payload):
+        return _Kernel._rebuild(**payload)
+
+    def check_cachable(self, cres):
+        # CUDA Kernels are always cachable - the reasons for an entity not to
+        # be cachable are:
+        #
+        # - The presence of lifted loops, or
+        # - The presence of dynamic globals.
+        #
+        # neither of which apply to CUDA kernels.
+        return True
+
+
+class CUDACache(Cache):
+    """
+    Implements a cache that saves and loads CUDA kernels and compile results.
+    """
+    _impl_class = CUDACacheImpl
 
 
 class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
@@ -495,7 +538,6 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
     def __init__(self, py_func, targetoptions, pipeline_class=CUDACompiler):
         super().__init__(py_func, targetoptions=targetoptions,
                          pipeline_class=pipeline_class)
-        self._type = self._numba_type_
 
         # The following properties are for specialization of CUDADispatchers. A
         # specialized CUDADispatcher is one that is compiled for exactly one
@@ -512,6 +554,9 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
     @property
     def _numba_type_(self):
         return cuda_types.CUDADispatcher(self)
+
+    def enable_caching(self):
+        self._cache = CUDACache(self.py_func)
 
     @functools.lru_cache(maxsize=128)
     def configure(self, griddim, blockdim, stream=0, sharedmem=0):
@@ -662,22 +707,21 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
 
         A (template, pysig, args, kws) tuple is returned.
         """
-        with self._compiling_counter:
-            # Ensure an exactly-matching overload is available if we can
-            # compile. We proceed with the typing even if we can't compile
-            # because we may be able to force a cast on the caller side.
-            if self._can_compile:
-                self.compile_device(tuple(args))
+        # Ensure an exactly-matching overload is available if we can
+        # compile. We proceed with the typing even if we can't compile
+        # because we may be able to force a cast on the caller side.
+        if self._can_compile:
+            self.compile_device(tuple(args))
 
-            # Create function type for typing
-            func_name = self.py_func.__name__
-            name = "CallTemplate({0})".format(func_name)
+        # Create function type for typing
+        func_name = self.py_func.__name__
+        name = "CallTemplate({0})".format(func_name)
 
-            call_template = typing.make_concrete_template(
-                name, key=func_name, signatures=self.nopython_signatures)
-            pysig = utils.pysignature(self.py_func)
+        call_template = typing.make_concrete_template(
+            name, key=func_name, signatures=self.nopython_signatures)
+        pysig = utils.pysignature(self.py_func)
 
-            return call_template, pysig, args, kws
+        return call_template, pysig, args, kws
 
     def compile_device(self, args):
         """Compile the device function for the given argument types.
@@ -688,31 +732,37 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         Returns the `CompileResult`.
         """
         if args not in self.overloads:
+            with self._compiling_counter:
 
-            debug = self.targetoptions.get('debug')
-            inline = self.targetoptions.get('inline')
-            fastmath = self.targetoptions.get('fastmath')
+                debug = self.targetoptions.get('debug')
+                inline = self.targetoptions.get('inline')
+                fastmath = self.targetoptions.get('fastmath')
 
-            nvvm_options = {
-                'debug': debug,
-                'opt': 3 if self.targetoptions.get('opt') else 0,
-                'fastmath': fastmath
-            }
+                nvvm_options = {
+                    'debug': debug,
+                    'opt': 3 if self.targetoptions.get('opt') else 0,
+                    'fastmath': fastmath
+                }
 
-            cres = compile_cuda(self.py_func, None, args,
-                                debug=debug,
-                                inline=inline,
-                                fastmath=fastmath,
-                                nvvm_options=nvvm_options)
-            self.overloads[args] = cres
+                cres = compile_cuda(self.py_func, None, args,
+                                    debug=debug,
+                                    inline=inline,
+                                    fastmath=fastmath,
+                                    nvvm_options=nvvm_options)
+                self.overloads[args] = cres
 
-            cres.target_context.insert_user_function(cres.entry_point,
-                                                     cres.fndesc,
-                                                     [cres.library])
+                cres.target_context.insert_user_function(cres.entry_point,
+                                                         cres.fndesc,
+                                                         [cres.library])
         else:
             cres = self.overloads[args]
 
         return cres
+
+    def add_overload(self, kernel, argtypes):
+        c_sig = [a._code for a in argtypes]
+        self._insert(c_sig, kernel, cuda=True)
+        self.overloads[argtypes] = kernel
 
     def compile(self, sig):
         '''
@@ -721,23 +771,33 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         '''
         argtypes, return_type = sigutils.normalize_signature(sig)
         assert return_type is None or return_type == types.none
+
+        # Do we already have an in-memory compiled kernel?
         if self.specialized:
             return next(iter(self.overloads.values()))
         else:
             kernel = self.overloads.get(argtypes)
-        if kernel is None:
+            if kernel is not None:
+                return kernel
+
+        # Can we load from the disk cache?
+        kernel = self._cache.load_overload(sig, self.targetctx)
+
+        if kernel is not None:
+            self._cache_hits[sig] += 1
+        else:
+            # We need to compile a new kernel
+            self._cache_misses[sig] += 1
             if not self._can_compile:
                 raise RuntimeError("Compilation disabled")
-            kernel = _Kernel(self.py_func, argtypes,
-                             **self.targetoptions)
-            # Inspired by _DispatcherBase.add_overload, but differs slightly
-            # because we're inserting a _Kernel object instead of a compiled
-            # function.
-            c_sig = [a._code for a in argtypes]
-            self._insert(c_sig, kernel, cuda=True)
-            self.overloads[argtypes] = kernel
 
+            kernel = _Kernel(self.py_func, argtypes, **self.targetoptions)
+            # We call bind to force codegen, so that there is a cubin to cache
             kernel.bind()
+            self._cache.save_overload(sig, kernel)
+
+        self.add_overload(kernel, argtypes)
+
         return kernel
 
     def inspect_llvm(self, signature=None):
@@ -820,16 +880,6 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
 
         for _, defn in self.overloads.items():
             defn.inspect_types(file=file)
-
-    @property
-    def ptx(self):
-        warnings.warn(
-            "Attribute `ptx` is deprecated and will be removed in the future. "
-            "To retrieve the compiled machine code of the CUDA function for a "
-            "given signature `sig`, use the method `inspect_asm(sig)`."
-            , NumbaDeprecationWarning
-        )
-        return {sig: overload.ptx for sig, overload in self.overloads.items()}
 
     def bind(self):
         for defn in self.overloads.values():

@@ -36,7 +36,7 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args)
     char *signature = NULL;
     int identity;
 
-    int i, j;
+    int i, j, idx;
     int custom_dtype = 0;
     PyUFuncGenericFunction *funcs;
     int *types;
@@ -201,6 +201,10 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args)
         PyArray_free(data);
         funcs = NULL;
         data = NULL;
+    }
+
+    for (idx = 0; idx < nout; idx++) {
+        ufunc->op_flags[idx + nin] |= NPY_ITER_READWRITE | NPY_ITER_UPDATEIFCOPY | NPY_ITER_ALLOCATE;
     }
 
     /* Create the sentinel object to clean up dynamically-allocated fields

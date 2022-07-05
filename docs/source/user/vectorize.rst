@@ -30,7 +30,7 @@ loop (or *kernel*) allowing efficient iteration over the actual inputs.
 The :func:`~numba.vectorize` decorator has two modes of operation:
 
 * Eager, or decoration-time, compilation: If you pass one or more type
-  signatures to the decorator, you will be building a Numpy universal
+  signatures to the decorator, you will be building a NumPy universal
   function (ufunc).  The rest of this subsection describes building
   ufuncs using decoration-time compilation.
 
@@ -43,7 +43,7 @@ The :func:`~numba.vectorize` decorator has two modes of operation:
 
 As described above, if you pass a list of signatures to the
 :func:`~numba.vectorize` decorator, your function will be compiled
-into a Numpy ufunc.  In the basic case, only one signature will be
+into a NumPy ufunc.  In the basic case, only one signature will be
 passed::
 
    from numba import vectorize, float64
@@ -301,7 +301,7 @@ Let's try to make a call to :func:`f`::
    >>> f.types   # shorthand for f.ufunc.types
    ['ll->l']
 
-If this was a normal Numpy ufunc, we would have seen an exception
+If this was a normal NumPy ufunc, we would have seen an exception
 complaining that the ufunc couldn't handle the input types.  When we
 call :func:`f` with integer arguments, not only do we receive an
 answer, but we can verify that Numba created a loop supporting C
@@ -317,7 +317,7 @@ We can add additional loops by calling :func:`f` with different inputs::
 We can now verify that Numba added a second loop for dealing with
 floating-point inputs, :code:`"dd->d"`.
 
-If we mix input types to :func:`f`, we can verify that `Numpy ufunc
+If we mix input types to :func:`f`, we can verify that `NumPy ufunc
 casting rules`_ are still in effect::
 
    >>> f(1,2.)
@@ -325,10 +325,10 @@ casting rules`_ are still in effect::
    >>> f.types
    ['ll->l', 'dd->d']
 
-.. _`Numpy ufunc casting rules`: http://docs.scipy.org/doc/numpy/reference/ufuncs.html#casting-rules
+.. _`NumPy ufunc casting rules`: http://docs.scipy.org/doc/numpy/reference/ufuncs.html#casting-rules
 
 This example demonstrates that calling :func:`f` with mixed types
-caused Numpy to select the floating-point loop, and cast the integer
+caused NumPy to select the floating-point loop, and cast the integer
 argument to a floating-point value.  Thus, Numba did not create a
 special :code:`"dl->d"` kernel.
 
@@ -410,7 +410,7 @@ floating-point inputs, :code:`"dd->d"`.
    >>> g.types  # shorthand for g.ufunc.types
    ['ll->l', 'dd->d']
 
-One can also verify that Numpy ufunc casting rules are working as expected::
+One can also verify that NumPy ufunc casting rules are working as expected::
 
    >>> x = np.arange(5, dtype=np.int64)
    >>> y = 2.2

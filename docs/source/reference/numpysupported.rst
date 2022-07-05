@@ -17,7 +17,7 @@ NumPy support in Numba comes in many forms:
 * Numba understands calls to NumPy `ufuncs`_ and is able to generate
   equivalent native code for many of them.
 
-* NumPy arrays are directly supported in Numba.  Access to Numpy arrays
+* NumPy arrays are directly supported in Numba.  Access to NumPy arrays
   is very efficient, as indexing is lowered to direct memory accesses
   when possible.
 
@@ -30,14 +30,14 @@ NumPy support in Numba comes in many forms:
 .. _ufuncs: http://docs.scipy.org/doc/numpy/reference/ufuncs.html
 .. _gufuncs: http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
 
-The following sections focus on the Numpy features supported in
+The following sections focus on the NumPy features supported in
 :term:`nopython mode`, unless otherwise stated.
 
 
 Scalar types
 ============
 
-Numba supports the following Numpy scalar types:
+Numba supports the following NumPy scalar types:
 
 * **Integers**: all integers of either signedness, and any width up to 64 bits
 * **Booleans**
@@ -146,14 +146,14 @@ Without subtyping the last line would fail. With subtyping, no new compilation w
 compiled function for ``record1`` will be used for ``record2``.
 
 .. seealso::
-   `Numpy scalars <http://docs.scipy.org/doc/numpy/reference/arrays.scalars.html>`_
+   `NumPy scalars <http://docs.scipy.org/doc/numpy/reference/arrays.scalars.html>`_
    reference.
 
 
 Array types
 ===========
 
-`Numpy arrays <http://docs.scipy.org/doc/numpy/reference/arrays.ndarray.html>`_
+`NumPy arrays <http://docs.scipy.org/doc/numpy/reference/arrays.ndarray.html>`_
 of any of the scalar types above are supported, regardless of the shape
 or layout.
 
@@ -166,7 +166,7 @@ advanced index is allowed, and it has to be a one-dimensional array
 (it can be combined with an arbitrary number of basic indices as well).
 
 .. seealso::
-   `Numpy indexing <http://docs.scipy.org/doc/numpy/reference/arrays.indexing.html>`_
+   `NumPy indexing <http://docs.scipy.org/doc/numpy/reference/arrays.indexing.html>`_
    reference.
 
 
@@ -224,7 +224,7 @@ version raises an error because of the unsupported use of attribute access.
 Attributes
 ----------
 
-The following attributes of Numpy arrays are supported:
+The following attributes of NumPy arrays are supported:
 
 * :attr:`~numpy.ndarray.dtype`
 * :attr:`~numpy.ndarray.flags`
@@ -254,22 +254,22 @@ non-C-contiguous arrays.
 The ``real`` and ``imag`` attributes
 ''''''''''''''''''''''''''''''''''''
 
-Numpy supports these attributes regardless of the dtype but Numba chooses to
+NumPy supports these attributes regardless of the dtype but Numba chooses to
 limit their support to avoid potential user error.  For numeric dtypes,
-Numba follows Numpy's behavior.  The :attr:`~numpy.ndarray.real` attribute
+Numba follows NumPy's behavior.  The :attr:`~numpy.ndarray.real` attribute
 returns a view of the real part of the complex array and it behaves as an identity
 function for other numeric dtypes.  The :attr:`~numpy.ndarray.imag` attribute
 returns a view of the imaginary part of the complex array and it returns a zero
 array with the same shape and dtype for other numeric dtypes.  For non-numeric
 dtypes, including all structured/record dtypes, using these attributes will
 result in a compile-time (`TypingError`) error.  This behavior differs from
-Numpy's but it is chosen to avoid the potential confusion with field names that
+NumPy's but it is chosen to avoid the potential confusion with field names that
 overlap these attributes.
 
 Calculation
 -----------
 
-The following methods of Numpy arrays are supported in their basic form
+The following methods of NumPy arrays are supported in their basic form
 (without any optional arguments):
 
 * :meth:`~numpy.ndarray.all`
@@ -288,13 +288,13 @@ The following methods of Numpy arrays are supported in their basic form
 * :meth:`~numpy.ndarray.take`
 * :meth:`~numpy.ndarray.var`
 
-The corresponding top-level Numpy functions (such as :func:`numpy.prod`)
+The corresponding top-level NumPy functions (such as :func:`numpy.prod`)
 are similarly supported.
 
 Other methods
 -------------
 
-The following methods of Numpy arrays are supported:
+The following methods of NumPy arrays are supported:
 
 * :meth:`~numpy.ndarray.argmax` (``axis`` keyword argument supported).
 * :meth:`~numpy.ndarray.argmin` (``axis`` keyword argument supported).
@@ -340,7 +340,7 @@ Where applicable, the corresponding top-level NumPy functions (such as
 :func:`numpy.argmax`) are similarly supported.
 
 .. warning::
-   Sorting may be slightly slower than Numpy's implementation.
+   Sorting may be slightly slower than NumPy's implementation.
 
 
 Functions
@@ -507,7 +507,7 @@ The following top-level functions are supported:
 * :func:`numpy.searchsorted` (only the 3 first arguments)
 * :func:`numpy.select` (only using homogeneous lists or tuples for the first
   two arguments, condlist and choicelist). Additionally, these two arguments
-  can only contain arrays (unlike Numpy that also accepts tuples).
+  can only contain arrays (unlike NumPy that also accepts tuples).
 * :func:`numpy.shape`
 * :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments, quicksort accepts
@@ -583,6 +583,61 @@ Modules
 ``random``
 ----------
 
+Generator Objects
+'''''''''''''''''
+Numba supports :py:class:`numpy.random.Generator()` objects. As of version 0.56, users can pass
+individual NumPy :py:class:`Generator` objects into Numba functions and use their
+methods inside the functions. The same algorithms are used as NumPy for
+random number generation hence maintaining parity between the random
+number generated using NumPy and Numba under identical arguments 
+(also the same documentation notes as NumPy :py:class:`Generator` methods apply).
+The current Numba support for :py:class:`Generator` is not thread-safe, hence we
+do not recommend using :py:class:`Generator` methods in methods with parallel
+execution logic.
+
+.. note::
+  NumPy's :py:class:`Generator` objects rely on :py:class:`BitGenerator` to manage state
+  and generate the random bits, which are then transformed into random
+  values from useful distributions. Numba will ``unbox`` the :py:class:`Generator` objects
+  and will maintain a reference to the underlying :py:class:`BitGenerator` objects using NumPy's
+  ``ctypes`` interface bindings. Hence :py:class:`Generator` objects can cross the JIT boundary
+  and their functions be used within Numba-Jit code. Note that since only references
+  to :py:class:`BitGenerator` objects are maintained, any change to the state of a particular
+  :py:class:`Generator` object outside Numba code would affect the state of :py:class:`Generator`
+  inside the Numba code.
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_numpy_generators.py
+   :language: python
+   :start-after: magictoken.npgen_usage.begin
+   :end-before: magictoken.npgen_usage.end
+   :dedent: 8
+
+The following :py:class:`Generator` methods are supported:
+
+* :func:`numpy.random.Generator().exponential()`
+* :func:`numpy.random.Generator().gamma()` (*)
+* :func:`numpy.random.Generator().normal()` (*)
+* :func:`numpy.random.Generator().random()`
+* :func:`numpy.random.Generator().standard_normal()`
+* :func:`numpy.random.Generator().standard_exponential()`
+* :func:`numpy.random.Generator().standard_gamma()` (*)
+* :func:`numpy.random.Generator().uniform()` (*)
+
+.. note::
+  Users can expect Numba to replicate NumPy's results to within
+  the last few (at max 5) ULPs for Linux-x86_64, Windows-x86_64 and macOS.
+
+  For distributions marked above with `(*)`: Due to instruction selection
+  differences across compilers, there may be discrepancies in the order of
+  1000s of ULPs on 32-bit architectures as well as linux-aarch64 and
+  linux-ppc64le platforms. The differences are unlikely to impact the "quality"
+  of the random number generation as they occur through changes in
+  rounding that happen when fused-multiply-add is used instead of multiplication
+  followed by addition.
+
+RandomState and legacy Random number generation
+'''''''''''''''''''''''''''''''''''''''''''''''
+
 Numba supports top-level functions from the
 `numpy.random <http://docs.scipy.org/doc/numpy/reference/routines.random.html>`_
 module, but does not allow you to create individual RandomState instances.
@@ -652,7 +707,7 @@ Permutations
   array) is not supported
 * :func:`numpy.random.permutation`
 * :func:`numpy.random.shuffle`: the sequence argument must be a one-dimension
-  Numpy array or buffer-providing object (such as a :class:`bytearray`
+  NumPy array or buffer-providing object (such as a :class:`bytearray`
   or :class:`array.array`)
 
 Distributions
@@ -696,7 +751,7 @@ The following functions support all arguments.
 
 .. note::
    Calling :func:`numpy.random.seed` from non-Numba code (or from
-   :term:`object mode` code) will seed the Numpy random generator, not the
+   :term:`object mode` code) will seed the NumPy random generator, not the
    Numba random generator.
 
 .. note::
