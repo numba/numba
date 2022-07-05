@@ -382,7 +382,14 @@ def _genfp16_comparison_operator(l_key):
                 else:
                     convertible = self.context.can_convert(args[0], args[1])
 
-                #print(args, convertible)
+                # We allow three cases here:
+                #
+                # 1. Comparing fp16 to fp16 - Conversion.exact
+                # 2. Comparing fp16 to types fp16 can be promoted to
+                #  - Conversion.promote
+                # 3. Comparing fp16 to int8 (safe conversion) -
+                #  - Conversion.safe
+
                 if (convertible == Conversion.exact) or \
                    (convertible == Conversion.promote) or \
                    (convertible == Conversion.safe):
