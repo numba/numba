@@ -103,6 +103,13 @@ class NumbaDebugInfoWarning(NumbaWarning):
     Warning category for an issue with the emission of debug information.
     """
 
+
+class NumbaNumPyWarning(NumbaWarning):
+    """
+    Warning category for replicating a warning from NumPy
+    """
+
+
 # These are needed in the color formatting of errors setup
 
 
