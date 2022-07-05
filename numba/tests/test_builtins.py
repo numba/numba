@@ -13,7 +13,8 @@ from numba.core.compiler import compile_isolated, Flags
 from numba import jit, typeof, njit, typed
 from numba.core import errors, types, utils, config
 from numba.tests.support import (TestCase, tag, ignore_internal_warnings,
-                                 MemoryLeakMixin)
+                                 MemoryLeakMixin, needs_subprocess)
+
 
 py38orlater = utils.PYVERSION >= (3, 8)
 
@@ -1201,7 +1202,9 @@ class TestOperatorMixedTypes(TestCase):
             for x, y in itertools.product(things, things):
                 expected = func.py_func(x, y)
                 got = func(x, y)
-                self.assertEqual(expected, got)
+                message = ("%s %s %s does not match between Python and Numba"
+                           % (x, opstr, y))
+                self.assertEqual(expected, got, message)
 
 
 class TestIsinstanceBuiltin(TestCase):
@@ -1374,8 +1377,9 @@ class TestIsinstanceBuiltin(TestCase):
             got = foo(x)
             self.assertEqual(got, expected)
 
-    def test_experimental_warning(self):
-        # Check that if the isinstance feature is in use then an experiemental
+    @needs_subprocess
+    def test_experimental_warning_impl(self):
+        # Check that if the isinstance feature is in use then an experimental
         # warning is raised.
 
         with warnings.catch_warnings(record=True) as w:
@@ -1395,6 +1399,12 @@ class TestIsinstanceBuiltin(TestCase):
             msg = ("Use of isinstance() detected. This is an experimental "
                    "feature.")
             self.assertIn(msg, str(w[0].message))
+
+    def test_experimental_warning(self):
+        test_name = 'test_experimental_warning_impl'
+        self.subprocess_test_runner(test_module=self.__module__,
+                                    test_class=type(self).__name__,
+                                    test_name=test_name,)
 
 
 class TestGetattrBuiltin(MemoryLeakMixin, TestCase):

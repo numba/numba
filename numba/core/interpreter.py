@@ -3,9 +3,11 @@ import collections
 import dis
 import operator
 import logging
+import textwrap
 
 from numba.core import errors, dataflow, controlflow, ir, config
-from numba.core.errors import NotDefinedError, error_extras
+from numba.core.errors import NotDefinedError, UnsupportedError, error_extras
+from numba.core.ir_utils import get_definition, guard
 from numba.core.utils import (PYVERSION, BINOPS_TO_OPERATORS,
                               INPLACE_BINOPS_TO_OPERATORS,)
 from numba.core.byteflow import Flow, AdaptDFA, AdaptCFA
@@ -77,6 +79,673 @@ class Assigner(object):
             return self.dest_to_src[destname]
         self.unused_dests.discard(destname)
         return None
+
+
+def _remove_assignment_definition(old_body, idx, func_ir, already_deleted_defs):
+    """
+    Deletes the definition defined for old_body at index idx
+    from func_ir. We assume this stmt will be deleted from
+    new_body.
+
+    In some optimizations we may update the same variable multiple times.
+    In this situation, we only need to delete a particular definition once,
+    this is tracked in already_deleted_def, which is a map from
+    assignment name to the set of values that have already been
+    deleted.
+    """
+    lhs = old_body[idx].target.name
+    rhs = old_body[idx].value
+    if rhs in func_ir._definitions[lhs]:
+        func_ir._definitions[lhs].remove(rhs)
+        already_deleted_defs[lhs].add(rhs)
+    elif rhs not in already_deleted_defs[lhs]:
+        raise UnsupportedError(
+            "Inconsistency found in the definitions while executing"
+            " a peephole optimization. This suggests an internal"
+            " error or inconsistency elsewhere in the compiler."
+        )
+
+
+def _call_function_ex_replace_kws_small(
+    old_body,
+    keyword_expr,
+    new_body,
+    buildmap_idx,
+    func_ir,
+    already_deleted_defs
+):
+    """
+    Extracts the kws args passed as varkwarg
+    for CALL_FUNCTION_EX. This pass is taken when
+    n_kws <= 15 and the bytecode looks like:
+
+        # Start for each argument
+        LOAD_FAST  # Load each argument.
+        # End for each argument
+        ...
+        BUILD_CONST_KEY_MAP # Build a map
+
+    In the generated IR, the varkwarg refers
+    to a single build_map that contains all of the
+    kws. In addition to returning the kws, this
+    function updates new_body to remove all usage
+    of the map.
+    """
+    kws = keyword_expr.items.copy()
+    # kws are required to have constant keys.
+    # We update these with the value_indexes
+    value_indexes = keyword_expr.value_indexes
+    for key, index in value_indexes.items():
+        kws[index] = (key, kws[index][1])
+    # Remove the build_map by setting the list
+    # index to None. Nones will be removed later.
+    new_body[buildmap_idx] = None
+    # Remove the definition.
+    _remove_assignment_definition(
+        old_body, buildmap_idx, func_ir, already_deleted_defs
+    )
+    return kws
+
+
+def _call_function_ex_replace_kws_large(
+    old_body,
+    buildmap_name,
+    buildmap_idx,
+    search_end,
+    new_body,
+    func_ir,
+    errmsg,
+    already_deleted_defs
+):
+    """
+    Extracts the kws args passed as varkwarg
+    for CALL_FUNCTION_EX. This pass is taken when
+    n_kws > 15 and the bytecode looks like:
+
+        BUILD_MAP # Construct the map
+        # Start for each argument
+        LOAD_CONST # Load a constant for the name of the argument
+        LOAD_FAST  # Load each argument.
+        MAP_ADD # Append the (key, value) pair to the map
+        # End for each argument
+
+    In the IR generated, the initial build map is empty and a series
+    of setitems are applied afterwards. THE IR looks like:
+
+        $build_map_var = build_map(items=[])
+        $constvar = const(str, ...) # create the const key
+        # CREATE THE ARGUMENT, This may take multiple lines.
+        $created_arg = ...
+        $var = getattr(
+            value=$build_map_var,
+            attr=__setitem__,
+        )
+        $unused_var = call $var($constvar, $created_arg)
+
+    We iterate through the IR, deleting all usages of the buildmap
+    from the new_body, and adds the kws to a new kws list.
+    """
+    # Remove the build_map from the body.
+    new_body[buildmap_idx] = None
+    # Remove the definition.
+    _remove_assignment_definition(
+        old_body, buildmap_idx, func_ir, already_deleted_defs
+    )
+    kws = []
+    search_start = buildmap_idx + 1
+    while search_start <= search_end:
+        # The first value must be a constant.
+        const_stmt = old_body[search_start]
+        if not (
+            isinstance(const_stmt, ir.Assign)
+            and isinstance(const_stmt.value, ir.Const)
+        ):
+            # We cannot handle this format so raise the
+            # original error message.
+            raise UnsupportedError(errmsg)
+        key_var_name = const_stmt.target.name
+        key_val = const_stmt.value.value
+        search_start += 1
+        # Now we need to search for a getattr with setitem
+        found_getattr = False
+        while (
+            search_start <= search_end
+            and not found_getattr
+        ):
+            getattr_stmt = old_body[search_start]
+            if (
+                isinstance(getattr_stmt, ir.Assign)
+                and isinstance(getattr_stmt.value, ir.Expr)
+                and getattr_stmt.value.op == "getattr"
+                and (
+                    getattr_stmt.value.value.name
+                    == buildmap_name
+                )
+                and getattr_stmt.value.attr == "__setitem__"
+            ):
+                found_getattr = True
+            else:
+                # If the argument is "created" in JIT, then there
+                # will be intermediate operations in between setitems.
+                # For example we have arg5=pow(arg5, 2),
+                # then the IR would look like:
+                #
+                #   # Creation of the constant key.
+                #   $const44.26 = const(str, arg5)
+                #
+                #   # Argument creation. This is the section we are skipping
+                #   $46load_global.27 = global(pow: <built-in function pow>)
+                #   $const50.29 = const(int, 2)
+                #   $call.30 = call $46load_global.27(arg5, $const50.29)
+                #
+                #   # Setitem with arg5
+                #   $54map_add.31 = getattr(value=$map.2, attr=__setitem__)
+                #   $54map_add.32 = call $54map_add.31($const44.26, $call.30)
+                search_start += 1
+        if (
+            not found_getattr
+            or search_start == search_end
+        ):
+            # We cannot handle this format so raise the
+            # original error message.
+            raise UnsupportedError(errmsg)
+        setitem_stmt = old_body[search_start + 1]
+        if not (
+            isinstance(setitem_stmt, ir.Assign)
+            and isinstance(setitem_stmt.value, ir.Expr)
+            and setitem_stmt.value.op == "call"
+            and (
+                setitem_stmt.value.func.name
+                == getattr_stmt.target.name
+            )
+            and len(setitem_stmt.value.args) == 2
+            and (
+                setitem_stmt.value.args[0].name
+                == key_var_name
+            )
+        ):
+            # A call statement should always immediately follow the
+            # getattr. If for some reason this doesn't match the code
+            # format, we raise the original error message. This check
+            # is meant as a precaution.
+            raise UnsupportedError(errmsg)
+        arg_var = setitem_stmt.value.args[1]
+        # Append the (key, value) pair.
+        kws.append((key_val, arg_var))
+        # Remove the __setitem__ getattr and call
+        new_body[search_start] = None
+        new_body[search_start + 1] = None
+        # Remove the definitions.
+        _remove_assignment_definition(
+            old_body, search_start, func_ir, already_deleted_defs
+        )
+        _remove_assignment_definition(
+            old_body, search_start + 1, func_ir, already_deleted_defs
+        )
+        search_start += 2
+    return kws
+
+
+def _call_function_ex_replace_args_small(
+    old_body,
+    tuple_expr,
+    new_body,
+    buildtuple_idx,
+    func_ir,
+    already_deleted_defs
+):
+    """
+    Extracts the args passed as vararg
+    for CALL_FUNCTION_EX. This pass is taken when
+    n_args <= 30 and the bytecode looks like:
+
+        # Start for each argument
+        LOAD_FAST  # Load each argument.
+        # End for each argument
+        ...
+        BUILD_TUPLE # Create a tuple of the arguments
+
+    In the IR generated, the vararg refer
+    to a single build_tuple that contains all of the
+    args. In addition to returning the args, this
+    function updates new_body to remove all usage
+    of the tuple.
+    """
+    # Delete the build tuple
+    new_body[buildtuple_idx] = None
+    # Remove the definition.
+    _remove_assignment_definition(
+        old_body, buildtuple_idx, func_ir, already_deleted_defs
+    )
+    # Return the args.
+    return tuple_expr.items
+
+
+def _call_function_ex_replace_args_large(
+    old_body,
+    vararg_stmt,
+    new_body,
+    search_end,
+    func_ir,
+    errmsg,
+    already_deleted_defs
+):
+    """
+    Extracts the args passed as vararg
+    for CALL_FUNCTION_EX. This pass is taken when
+    n_args > 30 and the bytecode looks like:
+
+        BUILD_TUPLE # Create a list to append to
+        # Start for each argument
+        LOAD_FAST  # Load each argument.
+        LIST_APPEND # Add the argument to the list
+        # End for each argument
+        ...
+        LIST_TO_TUPLE # Convert the args to a tuple.
+
+    In the IR generated, the tuple is created by concatenating
+    together several 1 element tuples to an initial empty tuple.
+    We traverse backwards in the IR, collecting args, until we
+    find the original empty tuple. For example, the IR might
+    look like:
+
+        $orig_tuple = build_tuple(items=[])
+        $first_var = build_tuple(items=[Var(arg0, test.py:6)])
+        $next_tuple = $orig_tuple + $first_var
+        ...
+        $final_var = build_tuple(items=[Var(argn, test.py:6)])
+        $final_tuple = $prev_tuple + $final_var
+        $varargs_var = $final_tuple
+    """
+    # We traverse to the front of the block to look for the original
+    # tuple.
+    search_start = 0
+    total_args = []
+    if (
+        isinstance(vararg_stmt, ir.Assign)
+        and isinstance(vararg_stmt.value, ir.Var)
+    ):
+        target_name = vararg_stmt.value.name
+        # If there is an initial assignment, delete it
+        new_body[search_end] = None
+        # Remove the definition.
+        _remove_assignment_definition(
+            old_body, search_end, func_ir, already_deleted_defs
+        )
+        search_end -= 1
+    else:
+        # There must always be an initial assignment
+        # https://github.com/numba/numba/blob/59fa2e335be68148b3bd72a29de3ff011430038d/numba/core/interpreter.py#L259-L260
+        # If this changes we may need to support this branch.
+        raise AssertionError("unreachable")
+    # Traverse backwards to find all concatenations
+    # until eventually reaching the original empty tuple.
+    while search_end >= search_start:
+        concat_stmt = old_body[search_end]
+        if (
+            isinstance(concat_stmt, ir.Assign)
+            and concat_stmt.target.name == target_name
+            and isinstance(concat_stmt.value, ir.Expr)
+            and concat_stmt.value.op == "build_tuple"
+            and not concat_stmt.value.items
+        ):
+            new_body[search_end] = None
+            # Remove the definition.
+            _remove_assignment_definition(
+                old_body, search_end, func_ir, already_deleted_defs
+            )
+            # If we have reached the build_tuple we exit.
+            break
+        else:
+            # We expect to find another arg to append.
+            # The first stmt must be a binop "add"
+            if (search_end == search_start) or not (
+                isinstance(concat_stmt, ir.Assign)
+                and (
+                    concat_stmt.target.name
+                    == target_name
+                )
+                and isinstance(
+                    concat_stmt.value, ir.Expr
+                )
+                and concat_stmt.value.op == "binop"
+                and concat_stmt.value.fn == operator.add
+            ):
+                # We cannot handle this format.
+                raise UnsupportedError(errmsg)
+            lhs_name = concat_stmt.value.lhs.name
+            rhs_name = concat_stmt.value.rhs.name
+            # The previous statement should be a
+            # build_tuple containing the arg.
+            arg_tuple_stmt = old_body[search_end - 1]
+            if not (
+                isinstance(arg_tuple_stmt, ir.Assign)
+                and isinstance(
+                    arg_tuple_stmt.value, ir.Expr
+                )
+                and (
+                    arg_tuple_stmt.value.op
+                    == "build_tuple"
+                )
+                and len(arg_tuple_stmt.value.items) == 1
+            ):
+                # We cannot handle this format.
+                raise UnsupportedError(errmsg)
+            if arg_tuple_stmt.target.name == lhs_name:
+                # The tuple should always be generated on the RHS.
+                raise AssertionError("unreachable")
+            elif arg_tuple_stmt.target.name == rhs_name:
+                target_name = lhs_name
+            else:
+                # We cannot handle this format.
+                raise UnsupportedError(errmsg)
+            total_args.append(
+                arg_tuple_stmt.value.items[0]
+            )
+            new_body[search_end] = None
+            new_body[search_end - 1] = None
+            # Remove the definitions.
+            _remove_assignment_definition(
+                old_body, search_end, func_ir, already_deleted_defs
+            )
+            _remove_assignment_definition(
+                old_body, search_end - 1, func_ir, already_deleted_defs
+            )
+            search_end -= 2
+            # Avoid any space between appends
+            keep_looking = True
+            while search_end >= search_start and keep_looking:
+                next_stmt = old_body[search_end]
+                if (
+                    isinstance(next_stmt, ir.Assign)
+                    and (
+                        next_stmt.target.name
+                        == target_name
+                    )
+                ):
+                    keep_looking = False
+                else:
+                    # If the argument is "created" in JIT, then there
+                    # will be intermediate operations in between appends.
+                    # For example if the next arg after arg4 is pow(arg5, 2),
+                    # then the IR would look like:
+                    #
+                    #   # Appending arg4
+                    #   $arg4_tup = build_tuple(items=[arg4])
+                    #   $append_var.5 = $append_var.4 + $arg4_tup
+                    #
+                    #   # Creation of arg5.
+                    #   # This is the section that we are skipping.
+                    #   $32load_global.20 = global(pow: <built-in function pow>)
+                    #   $const36.22 = const(int, 2)
+                    #   $call.23 = call $32load_global.20(arg5, $const36.22)
+                    #
+                    #   # Appending arg5
+                    #   $arg5_tup = build_tuple(items=[$call.23])
+                    #   $append_var.6 = $append_var.5 + $arg5_tup
+                    search_end -= 1
+    if search_end == search_start:
+        # If we reached the start we never found the build_tuple.
+        # We cannot handle this format so raise the
+        # original error message.
+        raise UnsupportedError(errmsg)
+    # Reverse the arguments so we get the correct order.
+    return total_args[::-1]
+
+
+def peep_hole_call_function_ex_to_call_function_kw(func_ir):
+    """
+    This peephole rewrites a bytecode sequence unique to Python 3.10
+    where CALL_FUNCTION_EX is used instead of CALL_FUNCTION_KW because of
+    stack limitations set by CPython. This limitation is imposed whenever
+    a function call has too many arguments or keyword arguments.
+
+    https://github.com/python/cpython/blob/a58ebcc701dd6c43630df941481475ff0f615a81/Python/compile.c#L55
+    https://github.com/python/cpython/blob/a58ebcc701dd6c43630df941481475ff0f615a81/Python/compile.c#L4442
+
+    In particular, this change is imposed whenever (n_args / 2) + n_kws > 15.
+
+    Different bytecode is generated for args depending on if n_args > 30
+    or n_args <= 30 and similarly if n_kws > 15 or n_kws <= 15.
+
+    This function unwraps the *args and **kwargs in the function call
+    and places these values directly into the args and kwargs of the call.
+    """
+    # All changes are local to the a single block
+    # so it can be traversed in any order.
+    errmsg = textwrap.dedent("""
+        CALL_FUNCTION_EX with **kwargs not supported.
+        If you are not using **kwargs this may indicate that
+        you have a large number of kwargs and are using inlined control
+        flow. You can resolve this issue by moving the control flow out of
+        the function call. For example, if you have
+
+            f(a=1 if flag else 0, ...)
+
+        Replace that with:
+
+            a_val = 1 if flag else 0
+            f(a=a_val, ...)""")
+
+    # Track which definitions have already been deleted
+    already_deleted_defs = collections.defaultdict(set)
+    for blk in func_ir.blocks.values():
+        blk_changed = False
+        new_body = []
+        for i, stmt in enumerate(blk.body):
+            if (
+                isinstance(stmt, ir.Assign)
+                and isinstance(stmt.value, ir.Expr)
+                and stmt.value.op == "call"
+                and stmt.value.varkwarg is not None
+            ):
+                blk_changed = True
+                call = stmt.value
+                args = call.args
+                kws = call.kws
+                # We need to check the call expression contents if
+                # it contains either vararg or varkwarg. If it contains
+                # varkwarg we need to update the IR. If it just contains
+                # vararg we don't need to update the IR, but we need to
+                # check if peep_hole_list_to_tuple failed to replace the
+                # vararg list with a tuple. If so, we output an error
+                # message with suggested code changes.
+                vararg = call.vararg
+                varkwarg = call.varkwarg
+                start_search = i - 1
+                # varkwarg should be defined second so we start there.
+                varkwarg_loc = start_search
+                keyword_def = None
+                found = False
+                while varkwarg_loc >= 0 and not found:
+                    keyword_def = blk.body[varkwarg_loc]
+                    if (
+                        isinstance(keyword_def, ir.Assign)
+                        and keyword_def.target.name == varkwarg.name
+                    ):
+                        found = True
+                    else:
+                        varkwarg_loc -= 1
+                if (
+                    kws
+                    or not found
+                    or not (
+                        isinstance(keyword_def.value, ir.Expr)
+                        and keyword_def.value.op == "build_map"
+                    )
+                ):
+                    # If we couldn't find where the kwargs are created
+                    # then it should be a normal **kwargs call
+                    # so we produce an unsupported message.
+                    raise UnsupportedError(errmsg)
+                # Determine the kws
+                if keyword_def.value.items:
+                    # n_kws <= 15 case.
+                    # Here the IR looks like a series of
+                    # constants, then the arguments and finally
+                    # a build_map that contains all of the pairs.
+                    # For Example:
+                    #
+                    #   $const_n = const("arg_name")
+                    #   $arg_n = ...
+                    #   $kwargs_var = build_map(items=[
+                    #              ($const_0, $arg_0),
+                    #              ...,
+                    #              ($const_n, $arg_n),])
+                    kws = _call_function_ex_replace_kws_small(
+                        blk.body,
+                        keyword_def.value,
+                        new_body,
+                        varkwarg_loc,
+                        func_ir,
+                        already_deleted_defs,
+                    )
+                else:
+                    # n_kws > 15 case.
+                    # Here the IR is an initial empty build_map
+                    # followed by a series of setitems with a constant
+                    # key and then the argument.
+                    # For example:
+                    #
+                    #   $kwargs_var = build_map(items=[])
+                    #   $const_0 = const("arg_name")
+                    #   $arg_0 = ...
+                    #   $my_attr = getattr(const_0, attr=__setitem__)
+                    #   $unused_var = call $my_attr($const_0, $arg_0)
+                    #   ...
+                    kws = _call_function_ex_replace_kws_large(
+                        blk.body,
+                        varkwarg.name,
+                        varkwarg_loc,
+                        i - 1,
+                        new_body,
+                        func_ir,
+                        errmsg,
+                        already_deleted_defs,
+                    )
+                start_search = varkwarg_loc
+                # Vararg isn't required to be provided.
+                if vararg is not None:
+                    if args:
+                        # If we have vararg then args is expected to
+                        # be an empty list.
+                        raise UnsupportedError(errmsg)
+                    vararg_loc = start_search
+                    args_def = None
+                    found = False
+                    while vararg_loc >= 0 and not found:
+                        args_def = blk.body[vararg_loc]
+                        if (
+                            isinstance(args_def, ir.Assign)
+                            and args_def.target.name == vararg.name
+                        ):
+                            found = True
+                        else:
+                            vararg_loc -= 1
+                    if not found:
+                        # If we couldn't find where the args are created
+                        # then we can't handle this format.
+                        raise UnsupportedError(errmsg)
+                    if (
+                        isinstance(args_def.value, ir.Expr)
+                        and args_def.value.op == "build_tuple"
+                    ):
+                        # n_args <= 30 case.
+                        # Here the IR is a simple build_tuple containing
+                        # all of the args.
+                        # For example:
+                        #
+                        #  $arg_n = ...
+                        #  $varargs = build_tuple(
+                        #   items=[$arg_0, ..., $arg_n]
+                        #  )
+                        args = _call_function_ex_replace_args_small(
+                            blk.body,
+                            args_def.value,
+                            new_body,
+                            vararg_loc,
+                            func_ir,
+                            already_deleted_defs,
+                        )
+                    elif (
+                        isinstance(args_def.value, ir.Expr)
+                        and args_def.value.op == "list_to_tuple"
+                    ):
+                        # If there is a call with vararg we need to check
+                        # if the list -> tuple conversion failed and if so
+                        # throw an error.
+                        raise UnsupportedError(errmsg)
+                    else:
+                        # Here the IR is an initial empty build_tuple.
+                        # Then for each arg, a new tuple with a single
+                        # element is created and one by one these are
+                        # added to a growing tuple.
+                        # For example:
+                        #
+                        #  $combo_tup_0 = build_tuple(items=[])
+                        #  $arg0 = ...
+                        #  $arg0_tup = build_tuple(items=[$arg0])
+                        #  $combo_tup_1 = $combo_tup_0 + $arg0_tup
+                        #  $arg1 = ...
+                        #  $arg1_tup = build_tuple(items=[$arg1])
+                        #  $combo_tup_2 = $combo_tup_1 + $arg1_tup
+                        #  ...
+                        #  $combo_tup_n = $combo_tup_{n-1} + $argn_tup
+                        #
+                        # In addition, the IR contains a final
+                        # assignment for the varargs that looks like:
+                        #
+                        #  $varargs_var = $combo_tup_n
+                        #
+                        # Here args_def is expected to be a simple assignment.
+                        args = _call_function_ex_replace_args_large(
+                            blk.body,
+                            args_def,
+                            new_body,
+                            vararg_loc,
+                            func_ir,
+                            errmsg,
+                            already_deleted_defs,
+                        )
+                # Create a new call updating the args and kws
+                new_call = ir.Expr.call(
+                    call.func, args, kws, call.loc, target=call.target
+                )
+                # Drop the existing definition for this stmt.
+                _remove_assignment_definition(
+                    blk.body, i, func_ir, already_deleted_defs
+                )
+                # Update the statement
+                stmt = ir.Assign(new_call, stmt.target, stmt.loc)
+                # Update the definition
+                func_ir._definitions[stmt.target.name].append(new_call)
+            elif (
+                isinstance(stmt, ir.Assign)
+                and isinstance(stmt.value, ir.Expr)
+                and stmt.value.op == "call"
+                and stmt.value.vararg is not None
+            ):
+                # If there is a call with vararg we need to check
+                # if the list -> tuple conversion failed and if so
+                # throw an error.
+                call = stmt.value
+                vararg_name = call.vararg.name
+                if (
+                    vararg_name in func_ir._definitions
+                    and len(func_ir._definitions[vararg_name]) == 1
+                ):
+                    # If this value is still a list to tuple raise the
+                    # exception.
+                    expr = func_ir._definitions[vararg_name][0]
+                    if isinstance(expr, ir.Expr) and expr.op == "list_to_tuple":
+                        raise UnsupportedError(errmsg)
+
+            new_body.append(stmt)
+        # Replace the block body if we changed the IR
+        if blk_changed:
+            blk.body.clear()
+            blk.body.extend([x for x in new_body if x is not None])
+    return func_ir
 
 
 def peep_hole_list_to_tuple(func_ir):
@@ -221,7 +890,26 @@ def peep_hole_list_to_tuple(func_ir):
                                             bt = ir.Expr.build_tuple([arg,],
                                                                      expr.loc)
                                         else:
-                                            bt = arg
+                                            # Extend as tuple
+                                            gv_tuple = ir.Global(
+                                                name="tuple", value=tuple,
+                                                loc=expr.loc,
+                                            )
+                                            tuple_var = arg.scope.redefine(
+                                                "$_list_extend_gv_tuple",
+                                                loc=expr.loc,
+                                            )
+                                            new_hole.append(
+                                                ir.Assign(
+                                                    target=tuple_var,
+                                                    value=gv_tuple,
+                                                    loc=expr.loc,
+                                                ),
+                                            )
+                                            bt = ir.Expr.call(
+                                                tuple_var, (arg,), (),
+                                                loc=expr.loc,
+                                            )
                                         var = ir.Var(arg.scope, tmp_name,
                                                      expr.loc)
                                         asgn = ir.Assign(bt, var, expr.loc)
@@ -256,8 +944,8 @@ def peep_hole_list_to_tuple(func_ir):
                         new_hole.append(x)
                 # Finally write the result back into the original build list as
                 # everything refers to it.
-                new_hole.append(ir.Assign(acc, t2l_agn.target,
-                                          the_build_list.loc))
+                append_and_fix(ir.Assign(acc, t2l_agn.target,
+                                         the_build_list.loc))
                 if _DEBUG:
                     print("\nNEW HOLE:")
                     for x in new_hole:
@@ -312,6 +1000,281 @@ def peep_hole_delete_with_exit(func_ir):
         blk.body.extend(new_body)
 
     return func_ir
+
+
+def peep_hole_fuse_dict_add_updates(func_ir):
+    """
+    This rewrite removes d1._update_from_bytecode(d2)
+    calls that are between two dictionaries, d1 and d2,
+    in the same basic block. This pattern can appear as a
+    result of Python 3.10 bytecode emission changes, which
+    prevent large constant literal dictionaries
+    (> 15 elements) from being constant. If both dictionaries
+    are constant dictionaries defined in the same block and
+    neither is used between the update call, then we replace d1
+    with a new definition that combines the two dictionaries. At
+    the bytecode translation stage we convert DICT_UPDATE into
+    _update_from_bytecode, so we know that _update_from_bytecode
+    always comes from the bytecode change and not user code.
+
+    Python 3.10 may also rewrite the individual dictionaries
+    as an empty build_map + many map_add. Here we again look
+    for an _update_from_bytecode, and if so we replace these
+    with a single constant dictionary.
+
+    When running this algorithm we can always safely remove d2.
+
+    This is the relevant section of the CPython 3.10 that causes
+    this bytecode change:
+    https://github.com/python/cpython/blob/3.10/Python/compile.c#L4048
+    """
+
+    # This algorithm fuses build_map expressions into the largest
+    # possible build map before use. For example, if we have an
+    # IR that looks like this:
+    #
+    #   $d1 = build_map([])
+    #   $key = const("a")
+    #   $value = const(2)
+    #   $setitem_func = getattr($d1, "__setitem__")
+    #   $unused1 = call (setitem_func, ($key, $value))
+    #   $key2 = const("b")
+    #   $value2 = const(3)
+    #   $d2 = build_map([($key2, $value2)])
+    #   $update_func = getattr($d1, "_update_from_bytecode")
+    #   $unused2 = call ($update_func, ($d2,))
+    #   $othervar = None
+    #   $retvar = cast($othervar)
+    #   return $retvar
+    #
+    # Then the IR is rewritten such that any __setitem__ and
+    # _update_from_bytecode operations are fused into the original buildmap.
+    # The new buildmap is then added to the
+    # last location where it had previously had encountered a __setitem__,
+    # _update_from_bytecode, or build_map before any other uses.
+    # The new IR would look like:
+    #
+    #   $key = const("a")
+    #   $value = const(2)
+    #   $key2 = const("b")
+    #   $value2 = const(3)
+    #   $d1 = build_map([($key, $value), ($key2, $value2)])
+    #   $othervar = None
+    #   $retvar = cast($othervar)
+    #   return $retvar
+    #
+    # Note that we don't push $d1 to the bottom of the block. This is because
+    # some values may be found below this block (e.g pop_block) that are pattern
+    # matched in other locations, such as objmode handling. It should be safe to
+    # move a map to the last location at which there was _update_from_bytecode.
+
+    errmsg = textwrap.dedent("""
+        A DICT_UPDATE op-code was encountered that could not be replaced.
+        If you have created a large constant dictionary, this may
+        be an an indication that you are using inlined control
+        flow. You can resolve this issue by moving the control flow out of
+        the dicitonary constructor. For example, if you have
+
+            d = {a: 1 if flag else 0, ...)
+
+        Replace that with:
+
+            a_val = 1 if flag else 0
+            d = {a: a_val, ...)""")
+
+    already_deleted_defs = collections.defaultdict(set)
+    for blk in func_ir.blocks.values():
+        new_body = []
+        # literal map var name -> block idx of the original build_map
+        lit_map_def_idx = {}
+        # literal map var name -> list(map_uses)
+        # This is the index of every build_map or __setitem__
+        # in the IR that will need to be removed if the map
+        # is updated.
+        lit_map_use_idx = collections.defaultdict(list)
+        # literal map var name -> list of key/value items for build map
+        map_updates = {}
+        blk_changed = False
+
+        for i, stmt in enumerate(blk.body):
+            # What instruction should we append
+            new_inst = stmt
+            # Name that should be skipped when tracking used
+            # vars in statement. This is always the lhs with
+            # a build_map.
+            stmt_build_map_out = None
+            if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr):
+                if stmt.value.op == "build_map":
+                    # Skip the output build_map when looking for used vars.
+                    stmt_build_map_out = stmt.target.name
+                    # If we encounter a build map add it to the
+                    # tracked maps.
+                    lit_map_def_idx[stmt.target.name] = i
+                    lit_map_use_idx[stmt.target.name].append(i)
+                    map_updates[stmt.target.name] = stmt.value.items.copy()
+                elif stmt.value.op == "call" and i > 0:
+                    # If we encounter a call we may need to replace
+                    # the body
+                    func_name = stmt.value.func.name
+                    # If we have an update or a setitem
+                    # it will be the previous expression.
+                    getattr_stmt = blk.body[i - 1]
+                    args = stmt.value.args
+                    if (
+                        isinstance(getattr_stmt, ir.Assign)
+                        and getattr_stmt.target.name == func_name
+                        and isinstance(getattr_stmt.value, ir.Expr)
+                        and getattr_stmt.value.op == "getattr"
+                        and getattr_stmt.value.attr in (
+                            "__setitem__", "_update_from_bytecode"
+                        )
+                    ):
+                        update_map_name = getattr_stmt.value.value.name
+                        attr = getattr_stmt.value.attr
+                        if (attr == "__setitem__"
+                           and update_map_name in lit_map_use_idx):
+                            # If we have a setitem, update the lists
+                            map_updates[update_map_name].append(args)
+                            # Update the list of instructions that would
+                            # need to be removed to include the setitem
+                            # and the the getattr
+                            lit_map_use_idx[update_map_name].extend([i - 1, i])
+                        elif attr == "_update_from_bytecode":
+                            d2_map_name = args[0].name
+                            if (update_map_name in lit_map_use_idx
+                               and d2_map_name in lit_map_use_idx):
+                                # If we have an update and the arg is also
+                                # a literal dictionary, fuse the lists.
+                                map_updates[update_map_name].extend(
+                                    map_updates[d2_map_name]
+                                )
+                                # Delete the old IR for d1 and d2
+                                lit_map_use_idx[update_map_name].extend(
+                                    lit_map_use_idx[d2_map_name]
+                                )
+                                lit_map_use_idx[update_map_name].append(i - 1)
+                                for linenum in lit_map_use_idx[update_map_name]:
+                                    # Drop the existing definition.
+                                    _remove_assignment_definition(
+                                        blk.body,
+                                        linenum,
+                                        func_ir,
+                                        already_deleted_defs,
+                                    )
+                                    # Delete it from the new block
+                                    new_body[linenum] = None
+                                # Delete the maps from dicts
+                                del lit_map_def_idx[d2_map_name]
+                                del lit_map_use_idx[d2_map_name]
+                                del map_updates[d2_map_name]
+                                # Add d1 as the new instruction, removing the
+                                # old definition.
+                                _remove_assignment_definition(
+                                    blk.body, i, func_ir, already_deleted_defs
+                                )
+                                new_inst = _build_new_build_map(
+                                    func_ir,
+                                    update_map_name,
+                                    blk.body,
+                                    lit_map_def_idx[update_map_name],
+                                    map_updates[update_map_name],
+                                )
+                                # Update d1 in lit_map_use_idx to just the new
+                                # definition and clear the previous list.
+                                lit_map_use_idx[update_map_name].clear()
+                                lit_map_use_idx[update_map_name].append(i)
+                                # Mark that this block has been modified
+                                blk_changed = True
+                            else:
+                                # If we cannot remove _update_from_bytecode
+                                # Then raise an error for the user.
+                                raise UnsupportedError(errmsg)
+
+            # Check if we need to drop any maps from being tracked.
+            # Skip the setitem/_update_from_bytecode getattr that
+            # will be removed when handling their call in the next
+            # iteration.
+            if not (
+                isinstance(stmt, ir.Assign)
+                and isinstance(stmt.value, ir.Expr)
+                and stmt.value.op == "getattr"
+                and stmt.value.value.name in lit_map_use_idx
+                and stmt.value.attr in ("__setitem__", "_update_from_bytecode")
+            ):
+                for var in stmt.list_vars():
+                    # If a map is used it cannot be fused later in
+                    # the block. As a result we delete it from
+                    # the dicitonaries
+                    if (
+                        var.name in lit_map_use_idx
+                        and var.name != stmt_build_map_out
+                    ):
+                        del lit_map_def_idx[var.name]
+                        del lit_map_use_idx[var.name]
+                        del map_updates[var.name]
+
+            # Append the instruction to the new block
+            new_body.append(new_inst)
+
+        if blk_changed:
+            # If the block is changed replace the block body.
+            blk.body.clear()
+            blk.body.extend([x for x in new_body if x is not None])
+
+    return func_ir
+
+
+def _build_new_build_map(func_ir, name, old_body, old_lineno, new_items):
+    """
+    Create a new build_map with a new set of key/value items
+    but all the other info the same.
+    """
+    old_assign = old_body[old_lineno]
+    old_target = old_assign.target
+    old_bm = old_assign.value
+    # Build the literals
+    literal_keys = []
+    # Track the constant key/values to set the literal_value
+    # field of build_map properly
+    values = []
+    for pair in new_items:
+        k, v = pair
+        key_def = guard(get_definition, func_ir, k)
+        if isinstance(key_def, (ir.Const, ir.Global, ir.FreeVar)):
+            literal_keys.append(key_def.value)
+        value_def = guard(get_definition, func_ir, v)
+        if isinstance(value_def, (ir.Const, ir.Global, ir.FreeVar)):
+            values.append(value_def.value)
+        else:
+            # Append unknown value if not a literal.
+            values.append(_UNKNOWN_VALUE(v.name))
+
+    value_indexes = {}
+    if len(literal_keys) == len(new_items):
+        # All keys must be literals to have any literal values.
+        literal_value = {x: y for x, y in zip(literal_keys, values)}
+        for i, k in enumerate(literal_keys):
+            value_indexes[k] = i
+    else:
+        literal_value = None
+
+    # Construct a new build map.
+    new_bm = ir.Expr.build_map(
+        items=new_items,
+        size=len(new_items),
+        literal_value=literal_value,
+        value_indexes=value_indexes,
+        loc=old_bm.loc,
+    )
+
+    # The previous definition has already been removed
+    # when updating the IR in peep_hole_fuse_dict_add_updates
+    func_ir._definitions[name].append(new_bm)
+
+    # Return a new assign.
+    return ir.Assign(
+        new_bm, ir.Var(old_target.scope, name, old_target.loc), new_bm.loc
+    )
 
 
 class Interpreter(object):
@@ -384,6 +1347,13 @@ class Interpreter(object):
         if PYVERSION in [(3, 9), (3, 10)]:
             peepholes.append(peep_hole_list_to_tuple)
         peepholes.append(peep_hole_delete_with_exit)
+        if PYVERSION == (3, 10):
+            # peep_hole_call_function_ex_to_call_function_kw
+            # depends on peep_hole_list_to_tuple converting
+            # any large number of arguments from a list to a
+            # tuple.
+            peepholes.append(peep_hole_call_function_ex_to_call_function_kw)
+            peepholes.append(peep_hole_fuse_dict_add_updates)
 
         post_processed_ir = self.post_process(peepholes, func_ir)
         return post_processed_ir
@@ -1217,10 +2187,14 @@ class Interpreter(object):
             expr = ir.Expr.call(func, posvals, keyvalues, loc=self.loc)
             self.store(expr, res)
 
-        def op_CALL_FUNCTION_EX(self, inst, func, vararg, res):
+        def op_CALL_FUNCTION_EX(self, inst, func, vararg, varkwarg, res):
             func = self.get(func)
             vararg = self.get(vararg)
-            expr = ir.Expr.call(func, [], [], loc=self.loc, vararg=vararg)
+            if varkwarg is not None:
+                varkwarg = self.get(varkwarg)
+            expr = ir.Expr.call(
+                func, [], [], loc=self.loc, vararg=vararg, varkwarg=varkwarg
+            )
             self.store(expr, res)
 
     def _build_tuple_unpack(self, inst, tuples, temps, is_assign):
@@ -1236,9 +2210,26 @@ class Interpreter(object):
                                loc=self.loc,)
             self.store(exc, temps[0])
         else:
+            loc = self.loc
             for other, tmp in zip(map(self.get, tuples[1:]), temps):
-                out = ir.Expr.binop(fn=operator.add, lhs=first, rhs=other,
-                                    loc=self.loc)
+                # Emit as `first + tuple(other)`
+                gv_tuple = ir.Global(
+                    name="tuple", value=tuple,
+                    loc=loc,
+                )
+                tuple_var = self.store(
+                    gv_tuple, "$_list_extend_gv_tuple", redefine=True,
+                )
+                tuplify_val = ir.Expr.call(
+                    tuple_var, (other,), (),
+                    loc=loc,
+                )
+                tuplify_var = self.store(tuplify_val, "$_tuplify",
+                                         redefine=True)
+                out = ir.Expr.binop(
+                    fn=operator.add, lhs=first, rhs=self.get(tuplify_var.name),
+                    loc=self.loc,
+                )
                 self.store(out, tmp)
                 first = self.get(tmp)
 
@@ -1387,6 +2378,22 @@ class Interpreter(object):
         target = self.get(target)
         value = self.get(value)
         updateattr = ir.Expr.getattr(target, 'update', loc=self.loc)
+        self.store(value=updateattr, name=updatevar)
+        updateinst = ir.Expr.call(self.get(updatevar), (value,), (),
+                                  loc=self.loc)
+        self.store(value=updateinst, name=res)
+
+    def op_DICT_UPDATE(self, inst, target, value, updatevar, res):
+        target = self.get(target)
+        value = self.get(value)
+        # We generate _update_from_bytecode instead of update so we can
+        # differentiate between user .update() calls and those from the
+        # bytecode. This is then used to recombine dictionaries in peephole
+        # optimizations. See the dicussion in this PR about why:
+        # https://github.com/numba/numba/pull/7964/files#r868229306
+        updateattr = ir.Expr.getattr(
+            target, '_update_from_bytecode', loc=self.loc
+        )
         self.store(value=updateattr, name=updatevar)
         updateinst = ir.Expr.call(self.get(updatevar), (value,), (),
                                   loc=self.loc)

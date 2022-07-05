@@ -5,10 +5,11 @@ Implementation of operations on numpy timedelta64.
 import numpy as np
 import operator
 
-from llvmlite.llvmpy.core import Type, Constant
-import llvmlite.llvmpy.core as lc
+import llvmlite.ir
+from llvmlite.ir import Constant
 
 from numba.core import types, cgutils
+from numba.core.cgutils import create_constant_array
 from numba.core.imputils import (lower_builtin, lower_constant,
                                  impl_ret_untracked, lower_cast)
 from numba.np import npdatetime_helpers, numpy_support, npyfuncs
@@ -17,8 +18,8 @@ from numba.core.config import IS_32BITS
 from numba.core.errors import LoweringError
 
 # datetime64 and timedelta64 use the same internal representation
-DATETIME64 = TIMEDELTA64 = Type.int(64)
-NAT = Constant.int(TIMEDELTA64, npdatetime_helpers.NAT)
+DATETIME64 = TIMEDELTA64 = llvmlite.ir.IntType(64)
+NAT = Constant(TIMEDELTA64, npdatetime_helpers.NAT)
 
 TIMEDELTA_BINOP_SIG = (types.NPTimedelta,) * 2
 
@@ -27,21 +28,21 @@ def scale_by_constant(builder, val, factor):
     """
     Multiply *val* by the constant *factor*.
     """
-    return builder.mul(val, Constant.int(TIMEDELTA64, factor))
+    return builder.mul(val, Constant(TIMEDELTA64, factor))
 
 
 def unscale_by_constant(builder, val, factor):
     """
     Divide *val* by the constant *factor*.
     """
-    return builder.sdiv(val, Constant.int(TIMEDELTA64, factor))
+    return builder.sdiv(val, Constant(TIMEDELTA64, factor))
 
 
 def add_constant(builder, val, const):
     """
     Add constant *const* to *val*.
     """
-    return builder.add(val, Constant.int(TIMEDELTA64, const))
+    return builder.add(val, Constant(TIMEDELTA64, const))
 
 
 def scale_timedelta(context, builder, val, srcty, destty):
@@ -88,7 +89,7 @@ def alloc_boolean_result(builder, name='ret'):
     """
     Allocate an uninitialized boolean result slot.
     """
-    ret = cgutils.alloca_once(builder, Type.int(1), name=name)
+    ret = cgutils.alloca_once(builder, llvmlite.ir.IntType(1), name=name)
     return ret
 
 
@@ -96,7 +97,7 @@ def is_not_nat(builder, val):
     """
     Return a predicate which is true if *val* is not NaT.
     """
-    return builder.icmp(lc.ICMP_NE, val, NAT)
+    return builder.icmp_unsigned('!=', val, NAT)
 
 
 def are_not_nat(builder, vals):
@@ -110,18 +111,17 @@ def are_not_nat(builder, vals):
     return pred
 
 
-def make_constant_array(vals):
-    consts = [Constant.int(TIMEDELTA64, v) for v in vals]
-    return Constant.array(TIMEDELTA64, consts)
-
-
-normal_year_months = make_constant_array([31, 28, 31, 30, 31, 30,
-                                          31, 31, 30, 31, 30, 31])
-leap_year_months = make_constant_array([31, 29, 31, 30, 31, 30,
-                                        31, 31, 30, 31, 30, 31])
-normal_year_months_acc = make_constant_array(
+normal_year_months = create_constant_array(
+    TIMEDELTA64,
+    [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
+leap_year_months = create_constant_array(
+    TIMEDELTA64,
+    [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
+normal_year_months_acc = create_constant_array(
+    TIMEDELTA64,
     [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334])
-leap_year_months_acc = make_constant_array(
+leap_year_months_acc = create_constant_array(
+    TIMEDELTA64,
     [0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335])
 
 
@@ -164,18 +164,18 @@ def timedelta_sign_impl(context, builder, sig, args):
     """
     val, = args
     ret = alloc_timedelta_result(builder)
-    zero = Constant.int(TIMEDELTA64, 0)
-    with builder.if_else(builder.icmp(lc.ICMP_SGT, val, zero)
+    zero = Constant(TIMEDELTA64, 0)
+    with builder.if_else(builder.icmp_signed('>', val, zero)
                          ) as (gt_zero, le_zero):
         with gt_zero:
-            builder.store(Constant.int(TIMEDELTA64, 1), ret)
+            builder.store(Constant(TIMEDELTA64, 1), ret)
         with le_zero:
-            with builder.if_else(builder.icmp(lc.ICMP_EQ, val, zero)
+            with builder.if_else(builder.icmp_unsigned('==', val, zero)
                                  ) as (eq_zero, lt_zero):
                 with eq_zero:
-                    builder.store(Constant.int(TIMEDELTA64, 0), ret)
+                    builder.store(Constant(TIMEDELTA64, 0), ret)
                 with lt_zero:
-                    builder.store(Constant.int(TIMEDELTA64, -1), ret)
+                    builder.store(Constant(TIMEDELTA64, -1), ret)
     res = builder.load(ret)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
@@ -286,7 +286,7 @@ def timedelta_over_timedelta(context, builder, sig, args):
     not_nan = are_not_nat(builder, [va, vb])
     ll_ret_type = context.get_value_type(sig.return_type)
     ret = cgutils.alloca_once(builder, ll_ret_type, name='ret')
-    builder.store(Constant.real(ll_ret_type, float('nan')), ret)
+    builder.store(Constant(ll_ret_type, float('nan')), ret)
     with cgutils.if_likely(builder, not_nan):
         va, vb = normalize_timedeltas(context, builder, va, vb, ta, tb)
         va = builder.sitofp(va, ll_ret_type)
@@ -308,8 +308,8 @@ if numpy_support.numpy_version >= (1, 16):
         ll_ret_type = context.get_value_type(sig.return_type)
         not_nan = are_not_nat(builder, [va, vb])
         ret = cgutils.alloca_once(builder, ll_ret_type, name='ret')
-        zero = Constant.int(ll_ret_type, 0)
-        one = Constant.int(ll_ret_type, 1)
+        zero = Constant(ll_ret_type, 0)
+        one = Constant(ll_ret_type, 1)
         builder.store(zero, ret)
         with cgutils.if_likely(builder, not_nan):
             va, vb = normalize_timedeltas(context, builder, va, vb, ta, tb)
@@ -349,7 +349,7 @@ if numpy_support.numpy_version >= (1, 16):
         ll_ret_type = context.get_value_type(sig.return_type)
         ret = alloc_timedelta_result(builder)
         builder.store(NAT, ret)
-        zero = Constant.int(ll_ret_type, 0)
+        zero = Constant(ll_ret_type, 0)
         with cgutils.if_likely(builder, not_nan):
             va, vb = normalize_timedeltas(context, builder, va, vb, ta, tb)
             # is the denominator zero or NaT?
@@ -387,15 +387,15 @@ def _create_timedelta_comparison_impl(ll_op, default_value):
                     # Cannot normalize units => the values are unequal (except if NaT)
                     builder.store(default_value, ret)
                 else:
-                    builder.store(builder.icmp(ll_op, norm_a, norm_b), ret)
+                    builder.store(builder.icmp_unsigned(ll_op, norm_a, norm_b), ret)
             with otherwise:
                 if numpy_support.numpy_version < (1, 16):
                     # No scaling when comparing NaTs
-                    builder.store(builder.icmp(ll_op, va, vb), ret)
+                    builder.store(builder.icmp_unsigned(ll_op, va, vb), ret)
                 else:
                     # NumPy >= 1.16 switched to NaT ==/>=/>/</<= NaT being
                     # False and NaT != <anything, including NaT> being True
-                    if ll_op == lc.ICMP_NE:
+                    if ll_op == '!=':
                         builder.store(cgutils.true_bit, ret)
                     else:
                         builder.store(cgutils.false_bit, ret)
@@ -414,13 +414,13 @@ def _create_timedelta_ordering_impl(ll_op):
             with then:
                 norm_a, norm_b = normalize_timedeltas(
                     context, builder, va, vb, ta, tb)
-                builder.store(builder.icmp(ll_op, norm_a, norm_b), ret)
+                builder.store(builder.icmp_signed(ll_op, norm_a, norm_b), ret)
             with otherwise:
                 if numpy_support.numpy_version < (1, 16):
                     # No scaling when comparing NaT with something else
                     # (i.e. NaT is <= everything else, since it's the smallest
                     #  int64 value)
-                    builder.store(builder.icmp(ll_op, va, vb), ret)
+                    builder.store(builder.icmp_signed(ll_op, va, vb), ret)
                 else:
                     # NumPy >= 1.16 switched to NaT >=/>/</<= NaT being False
                     builder.store(cgutils.false_bit, ret)
@@ -431,13 +431,13 @@ def _create_timedelta_ordering_impl(ll_op):
 
 
 timedelta_eq_timedelta_impl = _create_timedelta_comparison_impl(
-    lc.ICMP_EQ, cgutils.false_bit)
+    '==', cgutils.false_bit)
 timedelta_ne_timedelta_impl = _create_timedelta_comparison_impl(
-    lc.ICMP_NE, cgutils.true_bit)
-timedelta_lt_timedelta_impl = _create_timedelta_ordering_impl(lc.ICMP_SLT)
-timedelta_le_timedelta_impl = _create_timedelta_ordering_impl(lc.ICMP_SLE)
-timedelta_gt_timedelta_impl = _create_timedelta_ordering_impl(lc.ICMP_SGT)
-timedelta_ge_timedelta_impl = _create_timedelta_ordering_impl(lc.ICMP_SGE)
+    '!=', cgutils.true_bit)
+timedelta_lt_timedelta_impl = _create_timedelta_ordering_impl('<')
+timedelta_le_timedelta_impl = _create_timedelta_ordering_impl('<=')
+timedelta_gt_timedelta_impl = _create_timedelta_ordering_impl('>')
+timedelta_ge_timedelta_impl = _create_timedelta_ordering_impl('>=')
 
 for op_, func in [(operator.eq, timedelta_eq_timedelta_impl),
                   (operator.ne, timedelta_ne_timedelta_impl),
@@ -455,13 +455,13 @@ def is_leap_year(builder, year_val):
     Return a predicate indicating whether *year_val* (offset by 1970) is a
     leap year.
     """
-    actual_year = builder.add(year_val, Constant.int(DATETIME64, 1970))
+    actual_year = builder.add(year_val, Constant(DATETIME64, 1970))
     multiple_of_4 = cgutils.is_null(
-        builder, builder.and_(actual_year, Constant.int(DATETIME64, 3)))
+        builder, builder.and_(actual_year, Constant(DATETIME64, 3)))
     not_multiple_of_100 = cgutils.is_not_null(
-        builder, builder.srem(actual_year, Constant.int(DATETIME64, 100)))
+        builder, builder.srem(actual_year, Constant(DATETIME64, 100)))
     multiple_of_400 = cgutils.is_null(
-        builder, builder.srem(actual_year, Constant.int(DATETIME64, 400)))
+        builder, builder.srem(actual_year, Constant(DATETIME64, 400)))
     return builder.and_(multiple_of_4,
                         builder.or_(not_multiple_of_100, multiple_of_400))
 
@@ -676,14 +676,14 @@ def _create_datetime_comparison_impl(ll_op):
                     builder, va, unit_a, ret_unit)
                 norm_b = convert_datetime_for_arith(
                     builder, vb, unit_b, ret_unit)
-                ret_val = builder.icmp(ll_op, norm_a, norm_b)
+                ret_val = builder.icmp_signed(ll_op, norm_a, norm_b)
                 builder.store(ret_val, ret)
             with otherwise:
                 if numpy_support.numpy_version < (1, 16):
                     # No scaling when comparing NaTs
-                    ret_val = builder.icmp(ll_op, va, vb)
+                    ret_val = builder.icmp_signed(ll_op, va, vb)
                 else:
-                    if ll_op == lc.ICMP_NE:
+                    if ll_op == '!=':
                         ret_val = cgutils.true_bit
                     else:
                         ret_val = cgutils.false_bit
@@ -694,12 +694,12 @@ def _create_datetime_comparison_impl(ll_op):
     return impl
 
 
-datetime_eq_datetime_impl = _create_datetime_comparison_impl(lc.ICMP_EQ)
-datetime_ne_datetime_impl = _create_datetime_comparison_impl(lc.ICMP_NE)
-datetime_lt_datetime_impl = _create_datetime_comparison_impl(lc.ICMP_SLT)
-datetime_le_datetime_impl = _create_datetime_comparison_impl(lc.ICMP_SLE)
-datetime_gt_datetime_impl = _create_datetime_comparison_impl(lc.ICMP_SGT)
-datetime_ge_datetime_impl = _create_datetime_comparison_impl(lc.ICMP_SGE)
+datetime_eq_datetime_impl = _create_datetime_comparison_impl('==')
+datetime_ne_datetime_impl = _create_datetime_comparison_impl('!=')
+datetime_lt_datetime_impl = _create_datetime_comparison_impl('<')
+datetime_le_datetime_impl = _create_datetime_comparison_impl('<=')
+datetime_gt_datetime_impl = _create_datetime_comparison_impl('>')
+datetime_ge_datetime_impl = _create_datetime_comparison_impl('>=')
 
 for op, func in [(operator.eq, datetime_eq_datetime_impl),
                  (operator.ne, datetime_ne_datetime_impl),
@@ -720,7 +720,7 @@ def _gen_datetime_max_impl(NAT_DOMINATES):
         in1, in2 = args
         in1_not_nat = is_not_nat(builder, in1)
         in2_not_nat = is_not_nat(builder, in2)
-        in1_ge_in2 = builder.icmp(lc.ICMP_SGE, in1, in2)
+        in1_ge_in2 = builder.icmp_signed('>=', in1, in2)
         res = builder.select(in1_ge_in2, in1, in2)
         if NAT_DOMINATES and numpy_support.numpy_version >= (1, 18):
             # NaT now dominates, like NaN
@@ -741,7 +741,7 @@ def _gen_datetime_min_impl(NAT_DOMINATES):
         in1, in2 = args
         in1_not_nat = is_not_nat(builder, in1)
         in2_not_nat = is_not_nat(builder, in2)
-        in1_le_in2 = builder.icmp(lc.ICMP_SLE, in1, in2)
+        in1_le_in2 = builder.icmp_signed('<=', in1, in2)
         res = builder.select(in1_le_in2, in1, in2)
         if NAT_DOMINATES and numpy_support.numpy_version >= (1, 18):
             # NaT now dominates, like NaN
@@ -762,7 +762,7 @@ def _gen_timedelta_max_impl(NAT_DOMINATES):
         in1, in2 = args
         in1_not_nat = is_not_nat(builder, in1)
         in2_not_nat = is_not_nat(builder, in2)
-        in1_ge_in2 = builder.icmp(lc.ICMP_SGE, in1, in2)
+        in1_ge_in2 = builder.icmp_signed('>=', in1, in2)
         res = builder.select(in1_ge_in2, in1, in2)
         if NAT_DOMINATES and numpy_support.numpy_version >= (1, 18):
             # NaT now dominates, like NaN
@@ -783,7 +783,7 @@ def _gen_timedelta_min_impl(NAT_DOMINATES):
         in1, in2 = args
         in1_not_nat = is_not_nat(builder, in1)
         in2_not_nat = is_not_nat(builder, in2)
-        in1_le_in2 = builder.icmp(lc.ICMP_SLE, in1, in2)
+        in1_le_in2 = builder.icmp_signed('<=', in1, in2)
         res = builder.select(in1_le_in2, in1, in2)
         if NAT_DOMINATES and numpy_support.numpy_version >= (1, 18):
             # NaT now dominates, like NaN
@@ -847,3 +847,9 @@ def ol_hash_npdatetime(x):
                 return np.int64(-2)
             return np.int64(x)
     return impl
+
+
+lower_builtin(npdatetime_helpers.datetime_minimum, types.NPDatetime, types.NPDatetime)(datetime_minimum_impl)
+lower_builtin(npdatetime_helpers.datetime_minimum, types.NPTimedelta, types.NPTimedelta)(datetime_minimum_impl)
+lower_builtin(npdatetime_helpers.datetime_maximum, types.NPDatetime, types.NPDatetime)(datetime_maximum_impl)
+lower_builtin(npdatetime_helpers.datetime_maximum, types.NPTimedelta, types.NPTimedelta)(datetime_maximum_impl)

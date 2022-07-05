@@ -19,7 +19,7 @@ from numba.cuda import codegen, nvvmutils
 
 class CUDATypingContext(typing.BaseContext):
     def load_additional_registries(self):
-        from . import cudadecl, cudamath, libdevicedecl
+        from . import cudadecl, cudamath, libdevicedecl, vector_types
         from numba.core.typing import enumdecl
 
         self.install_registry(cudadecl.registry)
@@ -27,6 +27,7 @@ class CUDATypingContext(typing.BaseContext):
         self.install_registry(cmathdecl.registry)
         self.install_registry(libdevicedecl.registry)
         self.install_registry(enumdecl.registry)
+        self.install_registry(vector_types.typing_registry)
 
     def resolve_value_type(self, val):
         # treat other dispatcher object as another device function
@@ -85,7 +86,7 @@ class CUDATargetContext(BaseContext):
 
     def init(self):
         self._internal_codegen = codegen.JITCUDACodegen("numba.cuda.jit")
-        self._target_data = ll.create_target_data(nvvm.default_data_layout)
+        self._target_data = ll.create_target_data(nvvm.data_layout)
 
     def load_additional_registries(self):
         # side effect of import needed for numba.cpython.*, the builtins
@@ -96,12 +97,16 @@ class CUDATargetContext(BaseContext):
         from numba.cpython import cmathimpl
         from numba.np import arrayobj # noqa: F401
         from numba.np import npdatetime # noqa: F401
-        from . import cudaimpl, printimpl, libdeviceimpl, mathimpl
+        from . import (
+            cudaimpl, printimpl, libdeviceimpl, mathimpl, vector_types
+        )
+
         self.install_registry(cudaimpl.registry)
         self.install_registry(printimpl.registry)
         self.install_registry(libdeviceimpl.registry)
         self.install_registry(cmathimpl.registry)
         self.install_registry(mathimpl.registry)
+        self.install_registry(vector_types.impl_registry)
 
     def codegen(self):
         return self._internal_codegen

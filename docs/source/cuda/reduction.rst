@@ -13,7 +13,7 @@ kernel. An example follows::
         return a + b
 
     A = (numpy.arange(1234, dtype=numpy.float64)) + 1
-    expect = A.sum()      # numpy sum reduction
+    expect = A.sum()      # NumPy sum reduction
     got = sum_reduce(A)   # cuda sum reduction
     assert expect == got
 
