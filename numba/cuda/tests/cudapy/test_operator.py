@@ -69,6 +69,10 @@ def test_multiple_hcmp_5(r, a, b, c):
 
 
 class TestOperatorModule(CUDATestCase):
+    def setUp(self):
+        super().setUp()
+        np.random.seed(0)
+
     """
     Test if operator module is supported by the CUDA target.
     """
@@ -112,7 +116,6 @@ class TestOperatorModule(CUDATestCase):
             with self.subTest(op=op):
                 kernel = cuda.jit("void(b1[:], f2, f2)")(fn)
 
-                expected = np.zeros(1, dtype=np.bool8)
                 got = np.zeros(1, dtype=np.bool8)
                 arg1 = np.random.random(1).astype(np.float16)
                 arg2 = np.random.random(1).astype(np.float16)
@@ -130,11 +133,12 @@ class TestOperatorModule(CUDATestCase):
                operator.eq, operator.ne)
         types = (np.int8, np.int16, np.int32, np.int64,
                  np.float32, np.float64)
-        for fn, op, ty in zip(functions, ops, types):
-            with self.subTest(op=op):
+
+        for (fn, op), ty in itertools.product(zip(functions, ops),
+                                              types):
+            with self.subTest(op=op, ty=ty):
                 kernel = cuda.jit(fn)
 
-                expected = np.zeros(1, dtype=np.bool8)
                 got = np.zeros(1, dtype=np.bool8)
                 arg1 = np.random.random(1).astype(np.float16)
                 arg2 = (np.random.random(1) * 100).astype(ty)
@@ -178,7 +182,7 @@ class TestOperatorModule(CUDATestCase):
                 self.assertIn(s, ptx)
 
     @skip_on_cudasim('Compilation unsupported in the simulator')
-    def test_mixed_fp16_comparison_ptx(self):
+    def test_fp16_int8_comparison_ptx(self):
         functions = (simple_fp16_gt, simple_fp16_ge,
                      simple_fp16_lt, simple_fp16_le,
                      simple_fp16_eq, simple_fp16_ne)
@@ -194,14 +198,13 @@ class TestOperatorModule(CUDATestCase):
                     operator.ne:'setp.ne.f16'}
         for (fn, op), ty in itertools.product(zip(functions, ops),
                                               types_convert):
-            with self.subTest(op=op):
+            with self.subTest(op=op, ty=ty):
                 args = (b1[:], f2, from_dtype(ty))
                 ptx, _ = compile_ptx(fn, args, cc=(5, 3))
-                print(ptx)
                 self.assertIn(opstring[op], ptx)
 
     @skip_on_cudasim('Compilation unsupported in the simulator')
-    def test_mixed_fp16_comparison_ptx2(self):
+    def test_mixed_fp16_comparison_promotion_ptx(self):
         functions = (simple_fp16_gt, simple_fp16_ge,
                      simple_fp16_lt, simple_fp16_le,
                      simple_fp16_eq, simple_fp16_ne)
@@ -223,7 +226,7 @@ class TestOperatorModule(CUDATestCase):
 
         for (fn, op), ty in itertools.product(zip(functions, ops),
                                               types_promote):
-            with self.subTest(op=op):
+            with self.subTest(op=op, ty=ty):
                 arg2_ty = np.result_type(np.float16, ty)
                 args = (b1[:], f2, from_dtype(arg2_ty))
                 ptx, _ = compile_ptx(fn, args, cc=(5, 3))
