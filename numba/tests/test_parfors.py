@@ -240,6 +240,8 @@ class TestParforsBase(TestCase):
                     new_args.append(copy.deepcopy(x))
                 elif isinstance(x, list):
                     new_args.append(x[:])
+                elif isinstance(x, type):
+                    new_args.append(x)
                 else:
                     raise ValueError('Unsupported argument type encountered')
             return tuple(new_args)
@@ -926,14 +928,18 @@ class TestParforNumPy(TestParforsBase):
         # start and stop
         def test_impl2(s, n, dtype):
             return np.arange(s, n, dtype=dtype)
+        # start and step
+        def test_impl3(n, t, dtype):
+            return np.arange(n, step=t, dtype=dtype)
         # start, step, stop
-        def test_impl3(s, n, t, dtype):
+        def test_impl4(s, n, t, dtype):
             return np.arange(s, n, t, dtype=dtype)
 
-        for arg in [11, 128, 30.0, complex(4,5), complex(5,4)]:
+        for arg in [11, 128, 30.0]:
             self.check(test_impl1, arg, np.float64)
             self.check(test_impl2, 2, arg, np.float64)
-            self.check(test_impl3, 2, arg, 2, np.float64)
+            self.check(test_impl3, arg, 2, np.float64)
+            self.check(test_impl4, 2, arg, 2, np.float64)
 
     def test_linspace(self):
         # without num

@@ -1505,7 +1505,11 @@ class PreParforPass(object):
                             pysig = calltype.pysig
                             arg_typs = [self.typemap[x.name] for x in expr.args]
                             kws_typs = [(x, self.typemap[y.name]) for x, y in expr.kws]
-                            folded_arg_typs = self.fold_argument_types(pysig, arg_typs, kws_typs)
+                            if pysig is None:
+                                # If there is no overload we don't support kwargs yet.
+                                folded_arg_typs = tuple(arg_typs)
+                            else:
+                                folded_arg_typs = self.fold_argument_types(pysig, arg_typs, kws_typs)
                             try:
                                 new_func =  repl_func(lhs_typ, *folded_arg_typs)
                             except:
