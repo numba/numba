@@ -370,49 +370,49 @@ def std_parallel_impl(return_type, arg):
     return std_1
 
 def arange_parallel_impl(return_type, *args):
-    dtype = as_dtype(return_type.dtype)
+    ret_dtype = as_dtype(return_type.dtype)
 
-    def arange_1(stop):
-        return np.arange(0, stop, 1, dtype)
+    def arange_1(start, stop=None, step=None, dtype=None):
+        return np.arange(0, start, 1, ret_dtype)
 
-    def arange_2(start, stop):
-        return np.arange(start, stop, 1, dtype)
+    def arange_2_step(start, stop=None, step=None, dtype=None):
+        return np.arange(0, start, step, ret_dtype)
 
-    def arange_3(start, stop, step):
-        return np.arange(start, stop, step, dtype)
+    def arange_2_stop(start, stop=None, step=None, dtype=None):
+        return np.arange(start, stop, 1, ret_dtype)
 
     if any(isinstance(a, types.Complex) for a in args):
-        def arange_4(start, stop, step, dtype):
+        def arange_4(start, stop=None, step=None, dtype=None):
             numba.parfors.parfor.init_prange()
             nitems_c = (stop - start) / step
             nitems_r = math.ceil(nitems_c.real)
             nitems_i = math.ceil(nitems_c.imag)
             nitems = int(max(min(nitems_i, nitems_r), 0))
-            arr = np.empty(nitems, dtype)
+            arr = np.empty(nitems, ret_dtype)
             for i in numba.parfors.parfor.internal_prange(nitems):
                 arr[i] = start + i * step
             return arr
     else:
-        def arange_4(start, stop, step, dtype):
+        def arange_4(start, stop=None, step=None, dtype=None):
             numba.parfors.parfor.init_prange()
             nitems_r = math.ceil((stop - start) / step)
             nitems = int(max(nitems_r, 0))
-            arr = np.empty(nitems, dtype)
-            val = start
+            arr = np.empty(nitems, ret_dtype)
             for i in numba.parfors.parfor.internal_prange(nitems):
                 arr[i] = start + i * step
             return arr
 
-    if len(args) == 1:
+    assert len(args) == 4, "np.arange always supports 4 arguments"
+    # We determine the implementation from which arguments are provided.
+
+    if isinstance(args[1], types.Omitted) and isinstance(args[2], types.Omitted):
         return arange_1
-    elif len(args) == 2:
-        return arange_2
-    elif len(args) == 3:
-        return arange_3
-    elif len(args) == 4:
-        return arange_4
+    elif isinstance(args[1], types.Omitted):
+        return arange_2_step
+    elif isinstance(args[2], types.Omitted):
+        return arange_2_stop
     else:
-        raise ValueError("parallel arange with types {}".format(args))
+        return arange_4
 
 def linspace_parallel_impl(return_type, *args):
     dtype = as_dtype(return_type.dtype)
@@ -1524,7 +1524,7 @@ class PreParforPass(object):
                             # inline the parallel implementation
                             new_blocks, _ = inline_closure_call(self.func_ir, g,
                                             block, i, new_func, self.typingctx, self.targetctx,
-                                            typs, self.typemap, self.calltypes, work_list)
+                                            folded_arg_typs, self.typemap, self.calltypes, work_list)
                             call_table = get_call_table(new_blocks, topological_ordering=False)
 
                             # find the prange in the new blocks and record it for use in diagnostics
