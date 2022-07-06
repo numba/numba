@@ -559,8 +559,8 @@ numba_dictkeys_new(NB_DictKeys **out, Py_ssize_t size, Py_ssize_t key_size, Py_s
 /* Allocate new dictionary */
 int
 numba_dict_new(NB_Dict **out, Py_ssize_t size, Py_ssize_t key_size, Py_ssize_t val_size) {
-    NB_DictKeys* dk;
-    NB_Dict* d;
+    NB_DictKeys *dk;
+    NB_Dict *d;
     int status = numba_dictkeys_new(&dk, size, key_size, val_size);
     if (status != OK) return status;
 
