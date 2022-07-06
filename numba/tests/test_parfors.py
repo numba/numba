@@ -908,7 +908,7 @@ class TestParforNumPy(TestParforsBase):
             return np.arange(n)
         # start and stop
         def test_impl2(s, n):
-            return np.arange(n)
+            return np.arange(s, n)
         # start, step, stop
         def test_impl3(s, n, t):
             return np.arange(s, n, t)
@@ -917,6 +917,23 @@ class TestParforNumPy(TestParforsBase):
             self.check(test_impl1, arg)
             self.check(test_impl2, 2, arg)
             self.check(test_impl3, 2, arg, 2)
+
+    def test_arange_kwargs(self):
+        # Test arange where values include kwargs
+
+        def test_impl1(n, dtype):
+            return np.arange(n, dtype=dtype)
+        # start and stop
+        def test_impl2(s, n, dtype):
+            return np.arange(s, n, dtype=dtype)
+        # start, step, stop
+        def test_impl3(s, n, t, dtype):
+            return np.arange(s, n, t, dtype=dtype)
+
+        for arg in [11, 128, 30.0, complex(4,5), complex(5,4)]:
+            self.check(test_impl1, arg, np.float64)
+            self.check(test_impl2, 2, arg, np.float64)
+            self.check(test_impl3, 2, arg, 2, np.float64)
 
     def test_linspace(self):
         # without num
