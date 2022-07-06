@@ -32,7 +32,7 @@ from numba.core import types, typing, utils, errors, ir, analysis, postproc, rew
 from numba import prange, pndindex
 from numba.np.npdatetime_helpers import datetime_minimum, datetime_maximum
 from numba.np.numpy_support import as_dtype, numpy_version
-from numba.core.typing.templates import infer_global, AbstractTemplate
+from numba.core.typing.templates import infer_global, AbstractTemplate, fold_arguments
 from numba.stencils.stencilparfor import StencilPass
 from numba.core.extending import register_jitable, lower_builtin
 
@@ -1443,6 +1443,29 @@ class PreParforPass(object):
             self._replace_parallel_functions(self.func_ir.blocks)
         self.func_ir.blocks = simplify_CFG(self.func_ir.blocks)
 
+    def fold_argument_types(self, pysig, args, kws):
+        """
+        Given a pysig, positional, and named argument types, fold keyword arguments
+        and resolve defaults by inserting types.Omitted() instances.
+
+        A argument types tuple is returned.
+        """
+        def normal_handler(index, param, value):
+            return value
+
+        def default_handler(index, param, default):
+            return types.Omitted(default)
+
+        def stararg_handler(index, param, values):
+            return types.StarArgTuple(values)
+        # For now, we take argument values from the @jit function, even
+        # in the case of generated jit.
+        args = fold_arguments(pysig, args, kws,
+                              normal_handler,
+                              default_handler,
+                              stararg_handler)
+        return args
+
     def _replace_parallel_functions(self, blocks):
         """
         Replace functions with their parallel implementation in
@@ -1477,9 +1500,14 @@ class PreParforPass(object):
                                     expr.args.insert(0, callname[1])
 
                             require(repl_func is not None)
-                            typs = tuple(self.typemap[x.name] for x in expr.args)
+                            # Support kwargs via argument folding
+                            calltype = self.calltypes[expr]
+                            pysig = calltype.pysig
+                            arg_typs = [self.typemap[x.name] for x in expr.args]
+                            kws_typs = [(x, self.typemap[y.name]) for x, y in expr.kws]
+                            folded_arg_typs = self.fold_argument_types(pysig, arg_typs, kws_typs)
                             try:
-                                new_func =  repl_func(lhs_typ, *typs)
+                                new_func =  repl_func(lhs_typ, *folded_arg_typs)
                             except:
                                 new_func = None
                             require(new_func is not None)

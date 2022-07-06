@@ -777,7 +777,7 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
             else:
                 raise NotImplementedError(
                     "Unsupported defaults to make_function: {}".format(
-                        defaults))
+                        callee_defaults))
         return args
 
 
