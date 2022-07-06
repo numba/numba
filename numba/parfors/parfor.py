@@ -192,7 +192,7 @@ def max_parallel_impl(return_type, arg):
             return val
     return max_1
 
-def argmin_parallel_impl(in_arr):
+def argmin_parallel_impl(in_arr, axis=None):
     numba.parfors.parfor.init_prange()
     argmin_checker(len(in_arr))
     A = in_arr.ravel()
@@ -203,7 +203,7 @@ def argmin_parallel_impl(in_arr):
         ival = min(ival, curr_ival)
     return ival.index
 
-def argmax_parallel_impl(in_arr):
+def argmax_parallel_impl(in_arr, axis=None):
     numba.parfors.parfor.init_prange()
     argmax_checker(len(in_arr))
     A = in_arr.ravel()
@@ -438,8 +438,8 @@ def linspace_parallel_impl(return_type, *args):
         raise ValueError("parallel linspace with types {}".format(args))
 
 swap_functions_map = {
-    ('argmin', 'numpy'): lambda r,a: argmin_parallel_impl,
-    ('argmax', 'numpy'): lambda r,a: argmax_parallel_impl,
+    ('argmin', 'numpy'): lambda r,a,axis=None: argmin_parallel_impl,
+    ('argmax', 'numpy'): lambda r,a,axis=None: argmax_parallel_impl,
     ('min', 'numpy'): min_parallel_impl,
     ('max', 'numpy'): max_parallel_impl,
     ('amin', 'numpy'): min_parallel_impl,
@@ -1488,6 +1488,7 @@ class PreParforPass(object):
                             func_def = get_definition(self.func_ir, expr.func)
                             callname = find_callname(self.func_ir, expr)
                             repl_func = self.replace_functions_map.get(callname, None)
+                            is_method = False
                             # Handle method on array type
                             if (repl_func is None and
                                 len(callname) == 2 and
@@ -1498,11 +1499,15 @@ class PreParforPass(object):
                                 if repl_func is not None:
                                     # Add the array that the method is on to the arg list.
                                     expr.args.insert(0, callname[1])
+                                    is_method = True
 
                             require(repl_func is not None)
                             # Support kwargs via argument folding
                             calltype = self.calltypes[expr]
-                            pysig = calltype.pysig
+                            if is_method:
+                                pysig = calltype.as_function().pysig
+                            else:
+                                pysig = calltype.pysig
                             arg_typs = [self.typemap[x.name] for x in expr.args]
                             kws_typs = [(x, self.typemap[y.name]) for x, y in expr.kws]
                             if pysig is None:
