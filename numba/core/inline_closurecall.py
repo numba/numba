@@ -6,7 +6,6 @@ from numba.core import utils, types, typing, errors, ir, rewrites, config, ir_ut
 from numba import prange
 from numba.parfors.parfor import internal_prange
 from numba.core.ir_utils import (
-    mk_unique_var,
     next_label,
     add_offset_to_labels,
     replace_vars,
@@ -1066,7 +1065,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
     # then the index_var correlates to iterator index; otherwise we'll have to
     # define a new counter.
     range_def = guard(_find_iter_range, func_ir, iter_var, swapped)
-    index_var = ir.Var(scope, mk_unique_var("index"), loc)
+    index_var = scope.redefine("index", loc)
     if range_def and range_def[0] == 0:
         # iterator starts with 0, index_var can just be iter_first_var
         index_var = iter_first_var
@@ -1075,7 +1074,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
         stmts.append(_new_definition(func_ir, index_var, ir.Const(value=-1, loc=loc), loc))
 
     # Insert statement to get the size of the loop iterator
-    size_var = ir.Var(scope, mk_unique_var("size"), loc)
+    size_var = scope.redefine("size", loc)
     if range_def:
         start, stop, range_func_def = range_def
         if start == 0:
@@ -1091,7 +1090,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
     else:
         # this doesn't work in objmode as it's effectively untyped
         if typed:
-            len_func_var = ir.Var(scope, mk_unique_var("len_func"), loc)
+            len_func_var = scope.redefine("len_func", loc)
             from numba.cpython.rangeobj import length_of_iterator
             stmts.append(_new_definition(func_ir, len_func_var,
                                          ir.Global('length_of_iterator',
@@ -1105,17 +1104,17 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
 
     stmts.append(_new_definition(func_ir, size_var, size_val, loc))
 
-    size_tuple_var = ir.Var(scope, mk_unique_var("size_tuple"), loc)
+    size_tuple_var = scope.redefine("size_tuple", loc)
     stmts.append(_new_definition(func_ir, size_tuple_var,
                  ir.Expr.build_tuple(items=[size_var], loc=loc), loc))
 
     # Insert array allocation
-    array_var = ir.Var(scope, mk_unique_var("array"), loc)
-    empty_func = ir.Var(scope, mk_unique_var("empty_func"), loc)
+    array_var = scope.redefine("array", loc)
+    empty_func = scope.redefine("empty_func", loc)
     if dtype_def and dtype_mod_def:
         # when dtype is present, we'll call empty with dtype
-        dtype_mod_var = ir.Var(scope, mk_unique_var("dtype_mod"), loc)
-        dtype_var = ir.Var(scope, mk_unique_var("dtype"), loc)
+        dtype_mod_var = scope.redefine("dtype_mod", loc)
+        dtype_var = scope.redefine("dtype", loc)
         stmts.append(_new_definition(func_ir, dtype_mod_var, dtype_mod_def, loc))
         stmts.append(_new_definition(func_ir, dtype_var,
                          ir.Expr.getattr(dtype_mod_var, dtype_def.attr, loc), loc))
@@ -1165,8 +1164,8 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
         loc = loop_header.loc
         terminator = loop_header.terminator
         stmts = loop_header.body[0:-1]
-        next_index_var = ir.Var(scope, mk_unique_var("next_index"), loc)
-        one = ir.Var(scope, mk_unique_var("one"), loc)
+        next_index_var = scope.redefine("next_index", loc)
+        one = scope.redefine("one", loc)
         # one = 1
         stmts.append(_new_definition(func_ir, one,
                      ir.Const(value=1,loc=loc), loc))
@@ -1258,7 +1257,7 @@ def _fix_nested_array(func_ir):
                                 var_def = get_definition(func_ir, var.name)
                                 if isinstance(var_def, ir.Const):
                                     loc = var.loc
-                                    new_var = ir.Var(scope, mk_unique_var("new_var"), loc)
+                                    new_var = scope.redefine("new_var", loc)
                                     new_const = ir.Const(var_def.value, loc)
                                     new_vardef = _new_definition(func_ir,
                                                     new_var, new_const, loc)
@@ -1388,8 +1387,8 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
         seq, _ = find_build_sequence(func_ir, list_var)
         size = len(seq)
         # Create a tuple to pass to empty below to specify the new array size.
-        size_var = ir.Var(scope, mk_unique_var("size"), loc)
-        size_tuple_var = ir.Var(scope, mk_unique_var("size_tuple"), loc)
+        size_var = scope.redefine("size", loc)
+        size_tuple_var = scope.redefine("size_tuple", loc)
         size_typ = types.intp
         size_tuple_typ = types.UniTuple(size_typ, 1)
         typemap[size_var.name] = size_typ
@@ -1406,7 +1405,7 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
         nptype = types.DType(dtype)
 
         # Create a variable to hold the numpy empty function.
-        empty_func = ir.Var(scope, mk_unique_var("empty_func"), loc)
+        empty_func = scope.redefine("empty_func", loc)
         fnty = get_np_ufunc_typ(np.empty)
         sig = context.resolve_function_type(fnty, (size_typ,), {'dtype':nptype})
 
@@ -1421,13 +1420,13 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
         # by getattr of the dtype string on the numpy module.
 
         # Create var for numpy module.
-        g_np_var = ir.Var(scope, mk_unique_var("$np_g_var"), loc)
+        g_np_var = scope.redefine("$np_g_var", loc)
         typemap[g_np_var.name] = types.misc.Module(np)
         g_np = ir.Global('np', np, loc)
         stmts.append(_new_definition(func_ir, g_np_var, g_np, loc))
 
         # Create var for result of numpy.<dtype>.
-        typ_var = ir.Var(scope, mk_unique_var("$np_typ_var"), loc)
+        typ_var = scope.redefine("$np_typ_var", loc)
         typemap[typ_var.name] = nptype
         dtype_str = str(dtype)
         if dtype_str == 'bool':
@@ -1443,7 +1442,7 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
 
         # Fill in the new empty array one-by-one.
         for i in range(size):
-            index_var = ir.Var(scope, mk_unique_var("index"), loc)
+            index_var = scope.redefine("index", loc)
             index_typ = types.intp
             typemap[index_var.name] = index_typ
             stmts.append(_new_definition(func_ir, index_var,
