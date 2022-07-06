@@ -58,7 +58,7 @@ class GUVectorize(_BaseVectorize):
 def vectorize(ftylist_or_function=(), **kws):
     """vectorize(ftylist_or_function=(), target='cpu', identity=None, **kws)
 
-    A decorator that creates a Numpy ufunc object using Numba compiled
+    A decorator that creates a NumPy ufunc object using Numba compiled
     code.  When no arguments or only keyword arguments are given,
     vectorize will return a Numba dynamic ufunc (DUFunc) object, where
     compilation/specialization may occur at call-time.
@@ -98,7 +98,7 @@ def vectorize(ftylist_or_function=(), **kws):
     Examples
     -------
         @vectorize(['float32(float32, float32)',
-                    'float64(float64, float64)'], identity=1)
+                    'float64(float64, float64)'], identity=0)
         def sum(a, b):
             return a + b
 
