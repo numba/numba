@@ -15,8 +15,7 @@ from numba.np.random._constants import (wi_double, ki_double,
                                         ziggurat_exp_r, fe_double,
                                         we_float, ke_float,
                                         ziggurat_exp_r_f, fe_float,
-                                        M_PI, INT64_MAX,
-                                        ziggurat_nor_inv_r)
+                                        INT64_MAX, ziggurat_nor_inv_r)
 from numba.np.random.generator_core import (next_double, next_float,
                                             next_uint32, next_uint64)
 from numba import float32
@@ -350,14 +349,6 @@ def random_laplace(bitgen, loc, scale):
 
 
 @register_jitable
-def random_gumbel(bitgen, loc, scale):
-    U = 1.0 - next_double(bitgen)
-    while U >= 1.0:
-        U = 1.0 - next_double(bitgen)
-    return loc - scale * np.log(-np.log(U))
-
-
-@register_jitable
 def random_logistic(bitgen, loc, scale):
     U = next_double(bitgen)
     while U <= 0.0:
@@ -388,51 +379,6 @@ def random_wald(bitgen, mean, scale):
         return X
     else:
         return mean * mean / X
-
-
-@register_jitable
-def random_vonmises(bitgen, mu, kappa):
-    if (kappa < 1e-8):
-        return M_PI * (2 * next_double(bitgen) - 1)
-    else:
-        if (kappa < 1e-5):
-            s = (1. / kappa + kappa)
-        else:
-            if (kappa <= 1e6):
-                r = 1 + np.sqrt(1 + 4 * kappa * kappa)
-                rho = (r - np.sqrt(2 * r)) / (2 * kappa)
-                s = (1 + rho * rho) / (2 * rho)
-            else:
-                result = mu + np.sqrt(1. / kappa) * \
-                    random_standard_normal(bitgen)
-                if (result < -M_PI):
-                    result += 2 * M_PI
-                if (result > M_PI):
-                    result -= 2 * M_PI
-                return result
-
-        while 1:
-            U = next_double(bitgen)
-            Z = np.cos(M_PI * U)
-            W = (1 + s * Z) / (s + Z)
-            Y = kappa * (s - W)
-            V = next_double(bitgen)
-            if ((Y * (2 - Y) - V >= 0) or (np.log(Y / V) + 1 - Y >= 0)):
-                break
-
-        U = next_double(bitgen)
-
-        result = np.arccos(W)
-        if (U < 0.5):
-            result = -result
-        result += mu
-        neg = (result < 0)
-        mod = np.fabs(result)
-        mod = (np.fmod(mod + M_PI, 2 * M_PI) - M_PI)
-        if (neg):
-            mod *= -1
-
-        return mod
 
 
 @register_jitable

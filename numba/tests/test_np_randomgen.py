@@ -533,33 +533,6 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         self._check_invalid_types(dist_func, ['loc', 'scale', 'size'],
                                   [1.0, 1.5, (1,)], ['x', 'x', ('x',)])
 
-    def test_gumbel(self):
-        # For this test dtype argument is never used, so we pass [None] as dtype
-        # to make sure it runs only once with default system type.
-
-        test_sizes = [None, (), (100,), (10, 20, 30)]
-        bitgen_types = [None, MT19937]
-
-        # Test with no arguments
-        dist_func = lambda x, size, dtype:x.gumbel()
-        with self.subTest():
-            self.check_numpy_parity(dist_func, test_size=None,
-                                    test_dtype=None,
-                                    ulp_prec=adjusted_ulp_prec)
-
-        dist_func = lambda x, size, dtype:x.gumbel(loc=1.0,scale=1.5, size=size)
-        for _size in test_sizes:
-            for _bitgen in bitgen_types:
-                with self.subTest(_size=_size, _bitgen=_bitgen):
-                    self.check_numpy_parity(dist_func, _bitgen,
-                                            None, _size, None,
-                                            adjusted_ulp_prec)
-
-        dist_func = lambda x, loc, scale, size:\
-            x.gumbel(loc=loc, scale=scale, size=size)
-        self._check_invalid_types(dist_func, ['loc', 'scale', 'size'],
-                                  [1.0, 1.5, (1,)], ['x', 'x', ('x',)])
-
     def test_logistic(self):
         # For this test dtype argument is never used, so we pass [None] as dtype
         # to make sure it runs only once with default system type.
@@ -678,27 +651,6 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             x.wald(mean=mean, scale=scale, size=size)
         self._check_invalid_types(dist_func, ['mean', 'scale', 'size'],
                                   [1.0, 1.5, (1,)], ['x', 'x', ('x',)])
-
-    def test_vonmises(self):
-        # For this test dtype argument is never used, so we pass [None] as dtype
-        # to make sure it runs only once with default system type.
-
-        test_sizes = [None, (), (100,), (10, 20, 30)]
-        bitgen_types = [None, MT19937]
-
-        dist_func = lambda x, size, dtype:\
-            x.vonmises(mu=5.0, kappa=1.5, size=size)
-        for _size in test_sizes:
-            for _bitgen in bitgen_types:
-                with self.subTest(_size=_size, _bitgen=_bitgen):
-                    self.check_numpy_parity(dist_func, _bitgen,
-                                            None, _size, None,
-                                            adjusted_ulp_prec)
-
-        dist_func = lambda x, mu, kappa, size:\
-            x.vonmises(mu=mu, kappa=kappa, size=size)
-        self._check_invalid_types(dist_func, ['mu', 'kappa', 'size'],
-                                  [5, 1, (1,)], ['x', 'x', ('x',)])
 
     def test_geometric(self):
         # For this test dtype argument is never used, so we pass [None] as dtype

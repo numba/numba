@@ -17,9 +17,9 @@ from numba.np.random.distributions import \
      random_standard_exponential_f, random_standard_gamma_f, random_normal,
      random_exponential, random_gamma, random_beta, random_power,
      random_f,random_chisquare,random_standard_cauchy,random_pareto,
-     random_weibull, random_laplace, random_gumbel, random_logistic,
+     random_weibull, random_laplace, random_logistic,
      random_lognormal, random_rayleigh, random_standard_t, random_wald,
-     random_vonmises, random_geometric, random_zipf, random_triangular,
+     random_geometric, random_zipf, random_triangular,
      random_poisson, random_negative_binomial)
 
 
@@ -465,28 +465,6 @@ def NumPyRandomGeneratorType_laplace(inst, loc=0.0, scale=1.0, size=None):
         return impl
 
 
-@overload_method(types.NumPyRandomGeneratorType, 'gumbel')
-def NumPyRandomGeneratorType_gumbel(inst, loc=0.0, scale=1.0, size=None):
-    check_types(loc, [types.Float, types.Integer, int, float], 'loc')
-    check_types(scale, [types.Float, types.Integer, int, float], 'scale')
-    if isinstance(size, types.Omitted):
-        size = size.value
-
-    if is_nonelike(size):
-        def impl(inst, loc=0.0, scale=1.0, size=None):
-            return random_gumbel(inst.bit_generator, loc, scale)
-        return impl
-    else:
-        check_size(size)
-
-        def impl(inst, loc=0.0, scale=1.0, size=None):
-            out = np.empty(size)
-            for i in np.ndindex(size):
-                out[i] = random_gumbel(inst.bit_generator, loc, scale)
-            return out
-        return impl
-
-
 @overload_method(types.NumPyRandomGeneratorType, 'logistic')
 def NumPyRandomGeneratorType_logistic(inst, loc=0.0, scale=1.0, size=None):
     check_types(loc, [types.Float, types.Integer, int, float], 'loc')
@@ -591,28 +569,6 @@ def NumPyRandomGeneratorType_wald(inst, mean, scale, size=None):
             out = np.empty(size)
             for i in np.ndindex(size):
                 out[i] = random_wald(inst.bit_generator, mean, scale)
-            return out
-        return impl
-
-
-@overload_method(types.NumPyRandomGeneratorType, 'vonmises')
-def NumPyRandomGeneratorType_vonmises(inst, mu, kappa, size=None):
-    check_types(mu, [types.Float, types.Integer, int, float], 'mu')
-    check_types(kappa, [types.Float, types.Integer, int, float], 'kappa')
-    if isinstance(size, types.Omitted):
-        size = size.value
-
-    if is_nonelike(size):
-        def impl(inst, mu, kappa, size=None):
-            return random_vonmises(inst.bit_generator, mu, kappa)
-        return impl
-    else:
-        check_size(size)
-
-        def impl(inst, mu, kappa, size=None):
-            out = np.empty(size)
-            for i in np.ndindex(size):
-                out[i] = random_vonmises(inst.bit_generator, mu, kappa)
             return out
         return impl
 
