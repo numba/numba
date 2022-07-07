@@ -727,7 +727,6 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
             return {sig: overload.shared_mem_per_block
                     for sig, overload in self.overloads.items()}
 
-
     def get_call_template(self, args, kws):
         # Originally copied from _DispatcherBase.get_call_template. This
         # version deviates slightly from the _DispatcherBase version in order
