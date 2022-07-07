@@ -379,6 +379,10 @@ def _genfp16_binary_comparison(l_key):
     return Cuda_fp16_cmp
 
 
+# Until issue 7863 is resolved, if multiple concrete templates are utilized
+# function resolution will pick the wrong implementation and errors will occur.
+# We avoid this by using ConcreteTempalte for the intrinisics and
+# AbstractTemplate
 def _genfp16_comparison_operator(l_key):
     @register_global(l_key)
     class Cuda_fp16_operator_cmp(AbstractTemplate):
