@@ -164,6 +164,23 @@ class TestOperatorModule(CUDATestCase):
                 compiled[1, 1](ary, arg1, arg2, arg3)
                 self.assertTrue(ary[0])
 
+    @skip_unless_cc_53
+    def test_multiple_float16_comparisons_false(self):
+        functions = (test_multiple_hcmp_1,
+                     test_multiple_hcmp_2,
+                     test_multiple_hcmp_3,
+                     test_multiple_hcmp_4,
+                     test_multiple_hcmp_5)
+        for fn in functions:
+            with self.subTest(fn=fn):
+                compiled = cuda.jit("void(b1[:], f2, f2, f2)")(fn)
+                ary = np.zeros(1, dtype=np.bool8)
+                arg1 = np.float16(2.)
+                arg2 = np.float16(3.)
+                arg3 = np.float16(1.)
+                compiled[1, 1](ary, arg1, arg2, arg3)
+                self.assertFalse(ary[0])
+
     @skip_on_cudasim('Compilation unsupported in the simulator')
     def test_fp16_comparison_ptx(self):
         functions = (simple_fp16_gt, simple_fp16_ge,
@@ -183,12 +200,13 @@ class TestOperatorModule(CUDATestCase):
 
     @skip_on_cudasim('Compilation unsupported in the simulator')
     def test_fp16_int8_comparison_ptx(self):
+        # Test that int8 can be safely converted to fp16
+        # in a comparison
         functions = (simple_fp16_gt, simple_fp16_ge,
                      simple_fp16_lt, simple_fp16_le,
                      simple_fp16_eq, simple_fp16_ne)
         ops = (operator.gt, operator.ge, operator.lt, operator.le,
                operator.eq, operator.ne)
-        types_convert = (np.int8,)
 
         opstring = {operator.gt:'setp.gt.f16',
                     operator.ge:'setp.ge.f16',
