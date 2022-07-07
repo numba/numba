@@ -310,7 +310,9 @@ class BaseFunction(Callable):
             self._depth -= 1
 
     def _select_best_impl_for(self, matched):
-        # Prefer versions with a specialized signature
+        """Select the signature the most specific .impl_for typeclass.
+        May raise if it is ambiguous.
+        """
         specialized = [
             (temp, sig) for temp, sig in matched
             if sig.impl_for is not None
@@ -319,46 +321,61 @@ class BaseFunction(Callable):
             # Only one specialized version. Return it.
             return specialized[0]
         elif len(specialized) > 1:
-            # Select the most specific implementation
-            spec_types = [sig.impl_for for _, sig in specialized]
-            # Validate the signatures. All impl_for must have a common ancestry.
-            _, shortest_mro = min(zip(map(lambda x: len(x.__mro__), spec_types),
-                                  spec_types), key=lambda x: x[0])
-            common_ancestry = shortest_mro.__mro__
-            for spec_ty in spec_types:
-                if spec_ty.__mro__[-len(common_ancestry):] != common_ancestry:
-                    msg = ("Not all signatures have a"
-                           f" common `impl_for` ancestry in {self}.")
-                    raise errors.CompilerError(msg)
-
-            # Score each signature.
-            # Add score to typeclass that is appears in others MRO.
-            # The lowest scoring one is the most specific.
-            scores = [0] * len(spec_types)
-            for i, this in enumerate(spec_types):
-                for that in spec_types:
-                    if this is not that:
-                        if this in that.__mro__:
-                            scores[i] += 1
-            ranked = sorted(zip(scores, range(len(spec_types))))
+            # Find the best specialized verison.
+            typeclasses = [sig.impl_for for _, sig in specialized]
+            ranked = self._rank_impl_for(typeclasses)
             # Check that the first two do not have the same score.
             [first, second, *_] = ranked
             if first[0] != second[0]:
+                # There's a unique most specific version
                 return specialized[first[1]]
             else:
-                # Ambiguous case
-                msg = f"ambiguous with specialized versions: {specialized}"
-                raise TypeError(msg)
+                # Gather all equally specific typeclasses
+                equal_typeclasses = [specialized[idx][1].impl_for
+                                     for score, idx in ranked
+                                     if score == first[0]]
+                self._raise_ambiguous_impl_for(equal_typeclasses)
+        else:
+            # No specialized version, just return the first match.
+            if len(matched) == 1:
+                return matched[0]
+            elif len(matched) > 1:
+                # Complain about ambigous open versions
+                raise TypeError(f"ambiguous open versions: {matched}")
 
-        # Pick without specialized signature.
-        if len(matched) == 1:
-            return matched[0]
-        elif len(matched) > 1:
-            # Complain about ambigous open versions
-            raise TypeError(f"ambiguous open versions: {matched}")
+    def _rank_impl_for(self, typclasses):
+        """Rank the typeclasses.
+        """
+        # Score each signature.
+        # Add score to typeclass that is appears in others MRO.
+        # The lowest scoring one is the most specific.
+        scores = [0] * len(typclasses)
+        for i, this in enumerate(typclasses):
+            for that in typclasses:
+                if this is not that:
+                    if this in that.__mro__:
+                        scores[i] += 1
+        # Order the typeclasses. Makes a list of (score, typeclass).
+        ranked = sorted(zip(scores, range(len(typclasses))))
+        return ranked
+
+    def _raise_ambiguous_impl_for(self, typclasses):
+        """Raise error for ambiguous impl_for given typeclasses that are equally
+        specific.
+        """
+        mro_lens = map(lambda x: len(x.__mro__), typclasses)
+        _, shortest_mro = min(zip(mro_lens, typclasses), key=lambda x: x[0])
+        common_ancestry = shortest_mro.__mro__
+        for typcls in typclasses:
+            if typcls.__mro__[-len(common_ancestry):] != common_ancestry:
+                msg = ("Not all signatures have a"
+                       f" common `impl_for` ancestry in {self}.")
+                raise errors.CompilerError(msg)
+        # Generally ambiguous
+        msg = f"ambiguous with specialized versions: {typclasses}"
+        raise TypeError(msg)
 
     def _iter_matching_templates(self, context, args, kws, order, failures):
-
         prefer_lit = [True, False]    # old behavior preferring literal
         prefer_not = [False, True]    # new behavior preferring non-literal
 
