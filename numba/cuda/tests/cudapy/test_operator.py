@@ -196,10 +196,9 @@ class TestOperatorModule(CUDATestCase):
                     operator.le:'setp.le.f16',
                     operator.eq:'setp.eq.f16',
                     operator.ne:'setp.ne.f16'}
-        for (fn, op), ty in itertools.product(zip(functions, ops),
-                                              types_convert):
-            with self.subTest(op=op, ty=ty):
-                args = (b1[:], f2, from_dtype(ty))
+        for fn, op in zip(functions, ops):
+            with self.subTest(op=op):
+                args = (b1[:], f2, from_dtype(np.int8))
                 ptx, _ = compile_ptx(fn, args, cc=(5, 3))
                 self.assertIn(opstring[op], ptx)
 
