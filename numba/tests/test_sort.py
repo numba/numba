@@ -942,6 +942,12 @@ class TestNumpySort(TestCase):
         check(argsort_kind_usecase, is_stable=False)
         check(np_argsort_kind_usecase, is_stable=False)
 
+    def test_bad_array(self):
+        cfunc = jit(nopython=True)(np_sort_usecase)
+        msg = '.*Argument "a" must be array-like.*'
+        with self.assertRaisesRegex(errors.TypingError, msg) as raises:
+            cfunc(None)
+
 
 class TestPythonSort(TestCase):
 

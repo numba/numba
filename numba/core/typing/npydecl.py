@@ -511,83 +511,6 @@ def _parse_nested_sequence(context, typ):
         return 0, typ
 
 
-@glue_typing(np.array)
-class NpArray(CallableTemplate):
-    """
-    Typing template for np.array().
-    """
-
-    def generic(self):
-        def typer(object, dtype=None):
-            ndim, seq_dtype = _parse_nested_sequence(self.context, object)
-            if dtype is None:
-                dtype = seq_dtype
-            else:
-                dtype = parse_dtype(dtype)
-                if dtype is None:
-                    return
-            return types.Array(dtype, ndim, 'C')
-
-        return typer
-
-@glue_typing(np.full)
-class NdFull(CallableTemplate):
-
-    def generic(self):
-        def typer(shape, fill_value, dtype=None):
-            if dtype is None:
-                nb_dtype = fill_value
-            else:
-                nb_dtype = parse_dtype(dtype)
-
-            ndim = parse_shape(shape)
-            if nb_dtype is not None and ndim is not None:
-                return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
-
-        return typer
-
-@glue_typing(np.full_like)
-class NdFullLike(CallableTemplate):
-
-    def generic(self):
-        """
-        np.full_like(array, val) -> array of the same shape and layout
-        np.full_like(scalar, val) -> 0-d array of the scalar type
-        """
-        def typer(arg, fill_value, dtype=None):
-            if dtype is not None:
-                nb_dtype = parse_dtype(dtype)
-            elif isinstance(arg, types.Array):
-                nb_dtype = arg.dtype
-            else:
-                nb_dtype = arg
-            if nb_dtype is not None:
-                if isinstance(arg, types.Array):
-                    return arg.copy(dtype=nb_dtype, readonly=False)
-                else:
-                    return types.Array(dtype=nb_dtype, ndim=0, layout='C')
-
-        return typer
-
-
-@glue_typing(np.identity)
-class NdIdentity(AbstractTemplate):
-
-    def generic(self, args, kws):
-        assert not kws
-        n = args[0]
-        if not isinstance(n, types.Integer):
-            return
-        if len(args) >= 2:
-            nb_dtype = parse_dtype(args[1])
-        else:
-            nb_dtype = types.float64
-
-        if nb_dtype is not None:
-            return_type = types.Array(ndim=2, dtype=nb_dtype, layout='C')
-            return signature(return_type, *args)
-
-
 def _infer_dtype_from_inputs(inputs):
     return dtype
 
@@ -614,85 +537,6 @@ class NdLinspace(AbstractTemplate):
             dtype = types.float64
         return_type = types.Array(ndim=1, dtype=dtype, layout='C')
         return signature(return_type, *args)
-
-
-@glue_typing(np.frombuffer)
-class NdFromBuffer(CallableTemplate):
-
-    def generic(self):
-        def typer(buffer, dtype=None):
-            if not isinstance(buffer, types.Buffer) or buffer.layout != 'C':
-                return
-            if dtype is None:
-                nb_dtype = types.float64
-            else:
-                nb_dtype = parse_dtype(dtype)
-
-            if nb_dtype is not None:
-                return types.Array(dtype=nb_dtype, ndim=1, layout='C',
-                                   readonly=not buffer.mutable)
-
-        return typer
-
-
-@glue_typing(np.sort)
-class NdSort(CallableTemplate):
-
-    def generic(self):
-        def typer(a):
-            if isinstance(a, types.Array):
-                return a
-
-        return typer
-
-
-@glue_typing(np.asfortranarray)
-class AsFortranArray(CallableTemplate):
-
-    def generic(self):
-        def typer(a):
-            if isinstance(a, types.Array):
-                return a.copy(layout='F', ndim=max(a.ndim, 1))
-
-        return typer
-
-
-@glue_typing(np.ascontiguousarray)
-class AsContiguousArray(CallableTemplate):
-
-    def generic(self):
-        def typer(a):
-            if isinstance(a, types.Array):
-                return a.copy(layout='C', ndim=max(a.ndim, 1))
-
-        return typer
-
-
-@glue_typing(np.copy)
-class NdCopy(CallableTemplate):
-
-    def generic(self):
-        def typer(a):
-            if isinstance(a, types.Array):
-                layout = 'F' if a.layout == 'F' else 'C'
-                return a.copy(layout=layout, readonly=False)
-
-        return typer
-
-
-@glue_typing(np.expand_dims)
-class NdExpandDims(CallableTemplate):
-
-    def generic(self):
-        def typer(a, axis):
-            if (not isinstance(a, types.Array)
-                or not isinstance(axis, types.Integer)):
-                return
-
-            layout = a.layout if a.ndim <= 1 else 'A'
-            return a.copy(ndim=a.ndim + 1, layout=layout)
-
-        return typer
 
 
 class BaseAtLeastNdTemplate(AbstractTemplate):
@@ -766,51 +610,6 @@ def _choose_concatenation_layout(arrays):
     return 'F' if all(a.layout == 'F' for a in arrays) else 'C'
 
 
-@glue_typing(np.concatenate)
-class NdConcatenate(CallableTemplate):
-
-    def generic(self):
-        def typer(arrays, axis=None):
-            if axis is not None and not isinstance(axis, types.Integer):
-                # Note Numpy allows axis=None, but it isn't documented:
-                # https://github.com/numpy/numpy/issues/7968
-                return
-
-            dtype, ndim = _sequence_of_arrays(self.context,
-                                              "np.concatenate", arrays)
-            if ndim == 0:
-                raise TypeError("zero-dimensional arrays cannot be concatenated")
-
-            layout = _choose_concatenation_layout(arrays)
-
-            return types.Array(dtype, ndim, layout)
-
-        return typer
-
-
-@glue_typing(np.stack)
-class NdStack(CallableTemplate):
-
-    def generic(self):
-        def typer(arrays, axis=None):
-            if axis is not None and not isinstance(axis, types.Integer):
-                # Note Numpy allows axis=None, but it isn't documented:
-                # https://github.com/numpy/numpy/issues/7968
-                return
-
-            dtype, ndim = _sequence_of_arrays(self.context,
-                                                "np.stack", arrays)
-
-            # This diverges from Numpy's behaviour, which simply inserts
-            # a new stride at the requested axis (therefore can return
-            # a 'A' array).
-            layout = 'F' if all(a.layout == 'F' for a in arrays) else 'C'
-
-            return types.Array(dtype, ndim + 1, layout)
-
-        return typer
-
-
 class BaseStackTemplate(CallableTemplate):
 
     def generic(self):
@@ -819,48 +618,6 @@ class BaseStackTemplate(CallableTemplate):
                                               self.func_name, arrays)
 
             ndim = max(ndim, self.ndim_min)
-            layout = _choose_concatenation_layout(arrays)
-
-            return types.Array(dtype, ndim, layout)
-
-        return typer
-
-
-@glue_typing(np.hstack)
-class NdStack(BaseStackTemplate):
-    func_name = "np.hstack"
-    ndim_min = 1
-
-@glue_typing(np.vstack)
-class NdStack(BaseStackTemplate):
-    func_name = "np.vstack"
-    ndim_min = 2
-
-@glue_typing(np.dstack)
-class NdStack(BaseStackTemplate):
-    func_name = "np.dstack"
-    ndim_min = 3
-
-
-
-def _column_stack_dims(context, func_name, arrays):
-    # column_stack() allows stacking 1-d and 2-d arrays together
-    for a in arrays:
-        if a.ndim < 1 or a.ndim > 2:
-            raise TypeError("np.column_stack() is only defined on "
-                            "1-d and 2-d arrays")
-    return 2
-
-
-@glue_typing(np.column_stack)
-class NdColumnStack(CallableTemplate):
-
-    def generic(self):
-        def typer(arrays):
-            dtype, ndim = _sequence_of_arrays(self.context,
-                                              "np.column_stack", arrays,
-                                              dim_chooser=_column_stack_dims)
-
             layout = _choose_concatenation_layout(arrays)
 
             return types.Array(dtype, ndim, layout)
@@ -1040,40 +797,6 @@ class NdIndex(AbstractTemplate):
             return signature(iterator_type, *args)
 
 
-# We use the same typing key for np.round() and np.around() to
-# re-use the implementations automatically.
-@glue_typing(np.round)
-@glue_typing(np.around)
-class Round(AbstractTemplate):
-
-    def generic(self, args, kws):
-        assert not kws
-        assert 1 <= len(args) <= 3
-
-        arg = args[0]
-        if len(args) == 1:
-            decimals = types.intp
-            out = None
-        else:
-            decimals = args[1]
-            if len(args) == 2:
-                out = None
-            else:
-                out = args[2]
-
-        supported_scalars = (types.Integer, types.Float, types.Complex)
-        if isinstance(arg, supported_scalars):
-            assert out is None
-            return signature(arg, *args)
-        if (isinstance(arg, types.Array) and isinstance(arg.dtype, supported_scalars) and
-            isinstance(out, types.Array) and isinstance(out.dtype, supported_scalars) and
-            out.ndim == arg.ndim):
-            # arg can only be complex if out is complex too
-            if (not isinstance(arg.dtype, types.Complex)
-                or isinstance(out.dtype, types.Complex)):
-                return signature(out, *args)
-
-
 @glue_typing(np.where)
 class Where(AbstractTemplate):
 
@@ -1110,63 +833,6 @@ class Where(AbstractTemplate):
                 if not isinstance(x, types.Array):
                     retty = types.Array(retdty, 0, 'C')
                     return signature(retty, *args)
-
-
-@glue_typing(np.sinc)
-class Sinc(AbstractTemplate):
-
-    def generic(self, args, kws):
-        assert not kws
-        assert len(args) == 1
-        arg = args[0]
-        supported_scalars = (types.Float, types.Complex)
-        if (isinstance(arg, supported_scalars) or
-              (isinstance(arg, types.Array) and
-               isinstance(arg.dtype, supported_scalars))):
-            return signature(arg, arg)
-
-
-@glue_typing(np.angle)
-class Angle(CallableTemplate):
-    """
-    Typing template for np.angle()
-    """
-    def generic(self):
-        def typer(z, deg=False):
-            if isinstance(z, types.Array):
-                dtype = z.dtype
-            else:
-                dtype = z
-            if isinstance(dtype, types.Complex):
-                ret_dtype = dtype.underlying_float
-            elif isinstance(dtype, types.Float):
-                ret_dtype = dtype
-            else:
-                return
-            if isinstance(z, types.Array):
-                return z.copy(dtype=ret_dtype)
-            else:
-                return ret_dtype
-        return typer
-
-
-@glue_typing(np.diag)
-class DiagCtor(CallableTemplate):
-    """
-    Typing template for np.diag()
-    """
-    def generic(self):
-        def typer(ref, k=0):
-            if isinstance(ref, types.Array):
-                if ref.ndim == 1:
-                    rdim = 2
-                elif ref.ndim == 2:
-                    rdim = 1
-                else:
-                    return None
-                if isinstance(k, (int, types.Integer)):
-                    return types.Array(ndim=rdim, dtype=ref.dtype, layout='C')
-        return typer
 
 
 @glue_typing(np.take)

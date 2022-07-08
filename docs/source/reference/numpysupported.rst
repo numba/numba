@@ -422,11 +422,13 @@ The following top-level functions are supported:
 * :func:`numpy.argsort` (``kind`` key word argument supported for values
   ``'quicksort'`` and ``'mergesort'``)
 * :func:`numpy.argwhere`
+* :func:`numpy.around`
 * :func:`numpy.array` (only the 2 first arguments)
 * :func:`numpy.array_equal`
 * :func:`numpy.array_split`
 * :func:`numpy.asarray` (only the 2 first arguments)
 * :func:`numpy.asarray_chkfinite` (only the 2 first arguments)
+* :func:`numpy.ascontiguousarray` (only the first argument)
 * :func:`numpy.asfarray`
 * :func:`numpy.asfortranarray` (only the first argument)
 * :func:`numpy.atleast_1d`
@@ -513,7 +515,7 @@ The following top-level functions are supported:
 * :func:`numpy.sort` (no optional arguments, quicksort accepts
   multi-dimensional array and sorts its last axis).
 * :func:`numpy.split`
-* :func:`numpy.stack`
+* :func:`numpy.stack` (only the first two arguments are supported)
 * :func:`numpy.swapaxes`
 * :func:`numpy.take` (only the 2 first arguments)
 * :func:`numpy.take_along_axis` (the axis argument must be a literal value)

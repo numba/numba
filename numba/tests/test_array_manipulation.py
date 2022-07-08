@@ -426,6 +426,20 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         arr = np.array(42)
         check_all_axes(arr)
 
+    def test_expand_dims_exceptions(self):
+        pyfunc = expand_dims
+        cfunc = jit(nopython=True)(pyfunc)
+        arr = np.arange(5)
+
+        with self.assertTypingError() as raises:
+            cfunc('hello', 3)
+        self.assertIn('First argument "a" must be an array', str(raises.exception))
+
+        with self.assertTypingError() as raises:
+            cfunc(arr, 'hello')
+        self.assertIn('Argument "axis" must be an integer', str(raises.exception))
+
+
     def check_atleast_nd(self, pyfunc, cfunc):
         def check_result(got, expected):
             # We would like to check the result has the same contiguity,

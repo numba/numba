@@ -517,6 +517,15 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x_types = [typeof(v) for v in x_values]
         check(x_types, x_values, ulps=2)
 
+    def test_sinc_exceptions(self):
+        pyfunc = sinc
+        cfunc = jit(nopython=True)(pyfunc)
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc('str')
+        self.assertIn('Argument "x" must be a Number or array-like',
+                      str(raises.exception))
+
     def test_contains(self):
         def arrs():
             a_0 = np.arange(10, 50)
@@ -611,6 +620,15 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x_values = np.array(x_values)
         x_types = [types.complex64, types.complex128]
         check(x_types, x_values)
+
+    def test_angle_exceptions(self):
+        pyfunc = angle1
+        cfunc = jit(nopython=True)(pyfunc)
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc('hello')
+        self.assertIn('Argument "z" must be a complex or Array[complex]',
+                      str(raises.exception))
 
     def test_array_equal(self):
         def arrays():
