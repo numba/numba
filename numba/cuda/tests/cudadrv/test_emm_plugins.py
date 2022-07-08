@@ -105,15 +105,16 @@ class TestDeviceOnlyEMMPlugin(CUDATestCase):
     """
 
     def setUp(self):
+        super().setUp()
         # Always start afresh with a new context and memory manager
         cuda.close()
         cuda.set_memory_manager(DeviceOnlyEMMPlugin)
 
     def tearDown(self):
-        # Set the memory manager back to the Numba internal one for subsequent
-        # tests.
+        super().tearDown()
+        # Unset the memory manager for subsequent tests
         cuda.close()
-        cuda.set_memory_manager(cuda.cudadrv.driver.NumbaCUDAMemoryManager)
+        cuda.cudadrv.driver._memory_manager = None
 
     def test_memalloc(self):
         mgr = cuda.current_context().memory_manager

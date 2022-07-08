@@ -75,6 +75,24 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': numbers.complex_negate_impl,
     }
 
+    ufunc_db[np.positive] = {
+        '?->?': numbers.int_positive_impl,
+        'b->b': numbers.int_positive_impl,
+        'B->B': numbers.int_positive_impl,
+        'h->h': numbers.int_positive_impl,
+        'H->H': numbers.int_positive_impl,
+        'i->i': numbers.int_positive_impl,
+        'I->I': numbers.int_positive_impl,
+        'l->l': numbers.int_positive_impl,
+        'L->L': numbers.int_positive_impl,
+        'q->q': numbers.int_positive_impl,
+        'Q->Q': numbers.int_positive_impl,
+        'f->f': numbers.real_positive_impl,
+        'd->d': numbers.real_positive_impl,
+        'F->F': numbers.complex_positive_impl,
+        'D->D': numbers.complex_positive_impl,
+    }
+
     ufunc_db[np.absolute] = {
         '?->?': numbers.int_abs_impl,
         'b->b': numbers.int_abs_impl,
@@ -212,9 +230,12 @@ def _fill_ufunc_db(ufunc_db):
         'QQ->Q': npyfuncs.np_int_udiv_impl,
         'ff->f': npyfuncs.np_real_floor_div_impl,
         'dd->d': npyfuncs.np_real_floor_div_impl,
-        'FF->F': npyfuncs.np_complex_floor_div_impl,
-        'DD->D': npyfuncs.np_complex_floor_div_impl,
     }
+    if numpy_version < (1, 22): # removed in 1.22+
+        ufunc_db[np.floor_divide].update({
+            'FF->F': npyfuncs.np_complex_floor_div_impl,
+            'DD->D': npyfuncs.np_complex_floor_div_impl,
+        })
 
     ufunc_db[np.remainder] = {
         'bb->b': npyfuncs.np_int_srem_impl,
@@ -229,6 +250,21 @@ def _fill_ufunc_db(ufunc_db):
         'QQ->Q': npyfuncs.np_int_urem_impl,
         'ff->f': npyfuncs.np_real_mod_impl,
         'dd->d': npyfuncs.np_real_mod_impl,
+    }
+
+    ufunc_db[np.divmod] = {
+        'bb->bb': npyfuncs.np_int_sdivrem_impl,
+        'BB->BB': npyfuncs.np_int_udivrem_impl,
+        'hh->hh': npyfuncs.np_int_sdivrem_impl,
+        'HH->HH': npyfuncs.np_int_udivrem_impl,
+        'ii->ii': npyfuncs.np_int_sdivrem_impl,
+        'II->II': npyfuncs.np_int_udivrem_impl,
+        'll->ll': npyfuncs.np_int_sdivrem_impl,
+        'LL->LL': npyfuncs.np_int_udivrem_impl,
+        'qq->qq': npyfuncs.np_int_sdivrem_impl,
+        'QQ->QQ': npyfuncs.np_int_udivrem_impl,
+        'ff->ff': npyfuncs.np_real_divmod_impl,
+        'dd->dd': npyfuncs.np_real_divmod_impl,
     }
 
     ufunc_db[np.fmod] = {
@@ -274,6 +310,13 @@ def _fill_ufunc_db(ufunc_db):
         'dd->d': numbers.real_power_impl,
         'FF->F': npyfuncs.np_complex_power_impl,
         'DD->D': npyfuncs.np_complex_power_impl,
+    }
+
+    ufunc_db[np.float_power] = {
+        'ff->f': npyfuncs.real_float_power_impl,
+        'dd->d': npyfuncs.real_float_power_impl,
+        'FF->F': npyfuncs.np_complex_float_power_impl,
+        'DD->D': npyfuncs.np_complex_float_power_impl,
     }
 
     ufunc_db[np.gcd] = {
@@ -397,6 +440,11 @@ def _fill_ufunc_db(ufunc_db):
         'd->d': npyfuncs.np_real_square_impl,
         'F->F': npyfuncs.np_complex_square_impl,
         'D->D': npyfuncs.np_complex_square_impl,
+    }
+
+    ufunc_db[np.cbrt] = {
+        'f->f': npyfuncs.np_real_cbrt_impl,
+        'd->d': npyfuncs.np_real_cbrt_impl,
     }
 
     ufunc_db[np.reciprocal] = {
@@ -832,6 +880,12 @@ def _fill_ufunc_db(ufunc_db):
         '?->?': npyfuncs.np_int_isnan_impl,
     }
 
+    if numpy_version >= (1, 18):
+        ufunc_db[np.isnan].update({
+            'm->?': npyfuncs.np_datetime_isnat_impl,
+            'M->?': npyfuncs.np_datetime_isnat_impl,
+        })
+
     ufunc_db[np.isinf] = {
         'f->?': npyfuncs.np_real_isinf_impl,
         'd->?': npyfuncs.np_real_isinf_impl,
@@ -855,6 +909,12 @@ def _fill_ufunc_db(ufunc_db):
         # boolean
         '?->?': npyfuncs.np_int_isinf_impl,
     }
+
+    if numpy_version >= (1, 18):
+        ufunc_db[np.isinf].update({
+            'm->?': npyfuncs.np_int_isinf_impl,
+            'M->?': npyfuncs.np_int_isinf_impl,
+        })
 
     ufunc_db[np.isfinite] = {
         'f->?': npyfuncs.np_real_isfinite_impl,
@@ -998,6 +1058,9 @@ def _fill_ufunc_db(ufunc_db):
     ufunc_db[np.negative].update({
         'm->m': npdatetime.timedelta_neg_impl,
     })
+    ufunc_db[np.positive].update({
+        'm->m': npdatetime.timedelta_pos_impl,
+    })
     ufunc_db[np.absolute].update({
         'm->m': npdatetime.timedelta_abs_impl,
     })
@@ -1066,22 +1129,22 @@ def _fill_ufunc_db(ufunc_db):
         'mm->?': npdatetime.timedelta_ge_timedelta_impl,
     })
     ufunc_db[np.maximum].update({
-        'MM->M': npdatetime.datetime_max_impl,
-        'mm->m': npdatetime.timedelta_max_impl,
+        'MM->M': npdatetime.datetime_maximum_impl,
+        'mm->m': npdatetime.timedelta_maximum_impl,
     })
     ufunc_db[np.minimum].update({
-        'MM->M': npdatetime.datetime_min_impl,
-        'mm->m': npdatetime.timedelta_min_impl,
+        'MM->M': npdatetime.datetime_minimum_impl,
+        'mm->m': npdatetime.timedelta_minimum_impl,
     })
     # there is no difference for datetime/timedelta in maximum/fmax
     # and minimum/fmin
     ufunc_db[np.fmax].update({
-        'MM->M': npdatetime.datetime_max_impl,
-        'mm->m': npdatetime.timedelta_max_impl,
+        'MM->M': npdatetime.datetime_fmax_impl,
+        'mm->m': npdatetime.timedelta_fmax_impl,
     })
     ufunc_db[np.fmin].update({
-        'MM->M': npdatetime.datetime_min_impl,
-        'mm->m': npdatetime.timedelta_min_impl,
+        'MM->M': npdatetime.datetime_fmin_impl,
+        'mm->m': npdatetime.timedelta_fmin_impl,
     })
 
     if numpy_version >= (1, 16):

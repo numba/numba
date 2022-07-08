@@ -4,7 +4,7 @@ Expose each GPU devices directly.
 This module implements a API that is like the "CUDA runtime" context manager
 for managing CUDA context stack and clean up.  It relies on thread-local globals
 to separate the context stack management of each thread. Contexts are also
-sharable among threads.  Only the main thread can destroy Contexts.
+shareable among threads.  Only the main thread can destroy Contexts.
 
 Note:
 - This module must be imported by the main-thread.
@@ -14,7 +14,7 @@ import functools
 import threading
 from contextlib import contextmanager
 
-from .driver import driver
+from .driver import driver, USE_NV_BINDING
 
 
 class _DeviceList(object):
@@ -139,6 +139,8 @@ class _Runtime(object):
             else:
                 return attached_ctx
         else:
+            if USE_NV_BINDING:
+                devnum = int(devnum)
             return self._activate_context_for(devnum)
 
     def _get_or_create_context_uncached(self, devnum):
@@ -155,10 +157,16 @@ class _Runtime(object):
                     # Get primary context for the active device
                     ctx = self.gpus[ac.devnum].get_primary_context()
                     # Is active context the primary context?
-                    if ctx.handle.value != ac.context_handle.value:
+                    if USE_NV_BINDING:
+                        ctx_handle = int(ctx.handle)
+                        ac_ctx_handle = int(ac.context_handle)
+                    else:
+                        ctx_handle = ctx.handle.value
+                        ac_ctx_handle = ac.context_handle.value
+                    if ctx_handle != ac_ctx_handle:
                         msg = ('Numba cannot operate on non-primary'
                                ' CUDA context {:x}')
-                        raise RuntimeError(msg.format(ac.context_handle.value))
+                        raise RuntimeError(msg.format(ac_ctx_handle))
                     # Ensure the context is ready
                     ctx.prepare_for_use()
                 return ctx

@@ -7,7 +7,7 @@ import re
 import numpy as np
 
 from numba import njit
-from numba.core import typing, types
+from numba.core import types
 from numba.core.compiler import compile_isolated, Flags
 from numba.core.runtime import (
     rtsys,
@@ -24,12 +24,12 @@ import numba.core.typing.cffi_utils as cffi_support
 from numba.core.unsafe.nrt import NRT_get_api
 
 from numba.tests.support import (MemoryLeakMixin, TestCase, temp_directory,
-                                 import_dynamic)
-from numba.core import cpu
+                                 import_dynamic, skip_if_32bit)
+from numba.core.registry import cpu_target
 import unittest
 
 enable_nrt_flags = Flags()
-enable_nrt_flags.set("nrt")
+enable_nrt_flags.nrt = True
 
 linux_only = unittest.skipIf(not sys.platform.startswith('linux'),
                              'linux only test')
@@ -82,7 +82,7 @@ class TestNrtMemInfo(unittest.TestCase):
         # Reset the Dummy class
         Dummy.alive = 0
         # initialize the NRT (in case the tests are run in isolation)
-        cpu.CPUContext(typing.Context())
+        cpu_target.target_context
 
     def test_meminfo_refct_1(self):
         d = Dummy()
@@ -219,6 +219,26 @@ class TestNrtMemInfo(unittest.TestCase):
         # We can't check this deterministically because the memory could be
         # consumed by another thread.
 
+    @skip_if_32bit
+    def test_allocate_invalid_size(self):
+        # Checks that attempting to allocate too big a region fails gracefully.
+        size = types.size_t.maxval // 8 // 2
+        for pred in (True, False):
+            with self.assertRaises(MemoryError) as raises:
+                rtsys.meminfo_alloc(size, safe=pred)
+            self.assertIn(f"Requested allocation of {size} bytes failed.",
+                          str(raises.exception))
+
+    def test_allocate_negative_size(self):
+        # Checks that attempting to allocate negative number of bytes fails
+        # gracefully.
+        size = -10
+        for pred in (True, False):
+            with self.assertRaises(ValueError) as raises:
+                rtsys.meminfo_alloc(size, safe=pred)
+            msg = f"Cannot allocate a negative number of bytes: {size}."
+            self.assertIn(msg, str(raises.exception))
+
 
 class TestTracemalloc(unittest.TestCase):
     """
@@ -226,7 +246,10 @@ class TestTracemalloc(unittest.TestCase):
     """
 
     def measure_memory_diff(self, func):
-        import tracemalloc
+        try:
+            import tracemalloc
+        except ImportError:
+            self.skipTest("tracemalloc not available")
         tracemalloc.start()
         try:
             before = tracemalloc.take_snapshot()
@@ -533,15 +556,15 @@ br i1 %.294, label %B42, label %B160
         def bar(tyctx, x, y):
             def codegen(cgctx, builder, sig, args):
                 (arg_0, arg_1) = args
-                fty = ir.FunctionType(ir.IntType(64), [ir.IntType(64),
-                                                       ir.IntType(64)])
-                mul = builder.asm(fty, "mov $2, $0; imul $1, $0", "=r,r,r",
+                fty = ir.FunctionType(ir.IntType(32), [ir.IntType(32),
+                                                       ir.IntType(32)])
+                mul = builder.asm(fty, "mov $2, $0; imul $1, $0", "=&r,r,r",
                                   (arg_0, arg_1), name="asm_mul",
                                   side_effect=False)
                 return impl_ret_untracked(cgctx, builder, sig.return_type, mul)
-            return signature(x, x, x), codegen
+            return signature(types.int32, types.int32, types.int32), codegen
 
-        @njit(['int64(int64)'])
+        @njit(['int32(int32)'])
         def foo(x):
             x += 1
             z = bar(x, 2)
@@ -554,6 +577,10 @@ br i1 %.294, label %B42, label %B160
 class TestNrtExternalCFFI(MemoryLeakMixin, TestCase):
     """Testing the use of externally compiled C code that use NRT
     """
+    def setUp(self):
+        # initialize the NRT (in case the tests are run in isolation)
+        super(TestNrtExternalCFFI, self).setUp()
+        cpu_target.target_context
 
     def compile_cffi_module(self, name, source, cdef):
         from cffi import FFI
@@ -603,7 +630,7 @@ NRT_MemInfo* test_nrt_api(NRT_api_functions *nrt) {
         """
         cdef = """
 void* test_nrt_api(void *nrt);
-int status;
+extern int status;
         """
 
         ffi, mod = self.compile_cffi_module(name, source, cdef)

@@ -39,7 +39,7 @@ The most basic types can be expressed through simple expressions.  The
 symbols below refer to attributes of the main ``numba`` module (so if
 you read "boolean", it means that symbol can be accessed as ``numba.boolean``).
 Many types are available both as a canonical name and a shorthand alias,
-following Numpy's conventions.
+following NumPy's conventions.
 
 Numbers
 -------
@@ -65,6 +65,8 @@ intc                    --               C int-sized integer
 uintc                   --               C int-sized unsigned integer
 intp                    --               pointer-sized integer
 uintp                   --               pointer-sized unsigned integer
+ssize_t                 --               C ssize_t
+size_t                  --               C size_t
 
 float32                 f4               single-precision floating-point number
 float64, double         f8               double-precision floating-point number
@@ -76,9 +78,9 @@ complex128              c16              double-precision complex number
 Arrays
 ------
 
-The easy way to declare array types is to subscript an elementary type
-according to the number of dimensions.  For example a 1-dimension
-single-precision array::
+The easy way to declare :class:`~numba.types.Array` types is to subscript an
+elementary type according to the number of dimensions. For example a 
+1-dimension single-precision array::
 
    >>> numba.float32[:]
    array(float32, 1d, A)
@@ -115,6 +117,7 @@ as items in sequences, in addition to being callable.
 
 First-class function support is enabled for all Numba :term:`JIT`
 compiled functions and Numba ``cfunc`` compiled functions except when:
+
 - using a non-CPU compiler,
 - the compiled function is a Python generator,
 - the compiled function has Omitted arguments,
@@ -267,7 +270,7 @@ Inference
       reflected list(int64)
 
 
-Numpy scalars
+NumPy scalars
 -------------
 
 Instead of using :func:`~numba.typeof`, non-trivial scalars such as
@@ -275,7 +278,7 @@ structured types can also be constructed programmatically.
 
 .. function:: numba.from_dtype(dtype)
 
-   Create a Numba type corresponding to the given Numpy *dtype*::
+   Create a Numba type corresponding to the given NumPy *dtype*::
 
       >>> struct_dtype = np.dtype([('row', np.float64), ('col', np.float64)])
       >>> ty = numba.from_dtype(struct_dtype)
@@ -286,18 +289,18 @@ structured types can also be constructed programmatically.
 
 .. class:: numba.types.NPDatetime(unit)
 
-   Create a Numba type for Numpy datetimes of the given *unit*.  *unit*
-   should be a string amongst the codes recognized by Numpy (e.g.
+   Create a Numba type for NumPy datetimes of the given *unit*.  *unit*
+   should be a string amongst the codes recognized by NumPy (e.g.
    ``Y``, ``M``, ``D``, etc.).
 
 .. class:: numba.types.NPTimedelta(unit)
 
-   Create a Numba type for Numpy timedeltas of the given *unit*.  *unit*
-   should be a string amongst the codes recognized by Numpy (e.g.
+   Create a Numba type for NumPy timedeltas of the given *unit*.  *unit*
+   should be a string amongst the codes recognized by NumPy (e.g.
    ``Y``, ``M``, ``D``, etc.).
 
    .. seealso::
-      Numpy `datetime units <http://docs.scipy.org/doc/numpy/reference/arrays.datetime.html#datetime-units>`_.
+      NumPy `datetime units <http://docs.scipy.org/doc/numpy/reference/arrays.datetime.html#datetime-units>`_.
 
 
 Arrays
@@ -329,3 +332,44 @@ Optional types
       True
       >>> f(None)
       False
+
+
+Type annotations
+-----------------
+
+.. function:: numba.extending.as_numba_type(py_type)
+
+   Create a Numba type corresponding to the given Python *type annotation*.
+   ``TypingError`` is raised if the type annotation can't be mapped to a Numba
+   type.  This function is meant to be used at statically compile time to
+   evaluate Python type annotations.  For runtime checking of Python objects
+   see ``typeof`` above.
+
+   For any numba type, ``as_numba_type(nb_type) == nb_type``.
+
+      >>> numba.extending.as_numba_type(int)
+      int64
+      >>> import typing  # the Python library, not the Numba one
+      >>> numba.extending.as_numba_type(typing.List[float])
+      ListType[float64]
+      >>> numba.extending.as_numba_type(numba.int32)
+      int32
+
+   ``as_numba_type`` is automatically updated to include any ``@jitclass``.
+
+      >>> @jitclass
+      ... class Counter:
+      ...     x: int
+      ...
+      ...     def __init__(self):
+      ...         self.x = 0
+      ...
+      ...     def inc(self):
+      ...         old_val = self.x
+      ...         self.x += 1
+      ...         return old_val
+      ...
+      >>> numba.extending.as_numba_type(Counter)
+      instance.jitclass.Counter#11bad4278<x:int64>
+
+   Currently ``as_numba_type`` is only used to infer fields for ``@jitclass``.

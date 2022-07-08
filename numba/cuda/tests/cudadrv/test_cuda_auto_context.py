@@ -16,5 +16,6 @@ class TestCudaAutoContext(CUDATestCase):
         dA.copy_to_host(newA)
         self.assertTrue(np.allclose(A, newA))
 
+
 if __name__ == '__main__':
     unittest.main()

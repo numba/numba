@@ -1,21 +1,18 @@
 from warnings import warn
 from numba.core import types, config, sigutils
-from .compiler import (compile_kernel, compile_device, declare_device_function,
-                       AutoJitCUDAKernel, compile_device_template)
-from .simulator.kernel import FakeCUDAKernel
+from numba.core.errors import DeprecationError, NumbaInvalidConfigWarning
+from numba.cuda.compiler import declare_device_function
+from numba.cuda.dispatcher import CUDADispatcher
+from numba.cuda.simulator.kernel import FakeCUDAKernel
 
 
-def jitdevice(func, link=[], debug=None, inline=False):
-    """Wrapper for device-jit.
-    """
-    debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
-    if link:
-        raise ValueError("link keyword invalid for device function")
-    return compile_device_template(func, debug=debug, inline=inline)
+_msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
+                                 "Signatures should be passed as the first "
+                                 "positional argument.")
 
 
-def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
-        link=[], debug=None, **kws):
+def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
+        opt=True, cache=False, **kws):
     """
     JIT compile a python function conforming to the CUDA Python specification.
     If a signature is supplied, then a function is returned that takes a
@@ -31,95 +28,143 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
        .. note:: A kernel cannot have any return value.
     :param device: Indicates whether this is a device function.
     :type device: bool
-    :param bind: Force binding to CUDA context immediately
-    :type bind: bool
     :param link: A list of files containing PTX source to link with the function
     :type link: list
     :param debug: If True, check for exceptions thrown when executing the
        kernel. Since this degrades performance, this should only be used for
-       debugging purposes.  Defaults to False.  (The default value can be
-       overridden by setting environment variable ``NUMBA_CUDA_DEBUGINFO=1``.)
-    :param fastmath: If true, enables flush-to-zero and fused-multiply-add,
-       disables precise division and square root. This parameter has no effect
-       on device function, whose fastmath setting depends on the kernel function
-       from which they are called.
-    :param max_registers: Limit the kernel to using at most this number of
-       registers per thread. Useful for increasing occupancy.
+       debugging purposes. If set to True, then ``opt`` should be set to False.
+       Defaults to False.  (The default value can be overridden by setting
+       environment variable ``NUMBA_CUDA_DEBUGINFO=1``.)
+    :param fastmath: When True, enables fastmath optimizations as outlined in
+       the :ref:`CUDA Fast Math documentation <cuda-fast-math>`.
+    :param max_registers: Request that the kernel is limited to using at most
+       this number of registers per thread. The limit may not be respected if
+       the ABI requires a greater number of registers than that requested.
+       Useful for increasing occupancy.
+    :param opt: Whether to compile from LLVM IR to PTX with optimization
+                enabled. When ``True``, ``-opt=3`` is passed to NVVM. When
+                ``False``, ``-opt=0`` is passed to NVVM. Defaults to ``True``.
+    :type opt: bool
+    :param lineinfo: If True, generate a line mapping between source code and
+       assembly code. This enables inspection of the source code in NVIDIA
+       profiling tools and correlation with program counter sampling.
+    :type lineinfo: bool
+    :param cache: If True, enables the file-based cache for this function.
+    :type cache: bool
     """
-    debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
 
     if link and config.ENABLE_CUDASIM:
         raise NotImplementedError('Cannot link PTX in the simulator')
 
-    if kws.get('boundscheck') == True:
+    if kws.get('boundscheck'):
         raise NotImplementedError("bounds checking is not supported for CUDA")
 
+    if kws.get('argtypes') is not None:
+        msg = _msg_deprecated_signature_arg.format('argtypes')
+        raise DeprecationError(msg)
+    if kws.get('restype') is not None:
+        msg = _msg_deprecated_signature_arg.format('restype')
+        raise DeprecationError(msg)
+    if kws.get('bind') is not None:
+        msg = _msg_deprecated_signature_arg.format('bind')
+        raise DeprecationError(msg)
+
+    debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
     fastmath = kws.get('fastmath', False)
-    if argtypes is None and not sigutils.is_signature(func_or_sig):
+    extensions = kws.get('extensions', [])
+
+    if debug and opt:
+        msg = ("debug=True with opt=True (the default) "
+               "is not supported by CUDA. This may result in a crash"
+               " - set debug=False or opt=False.")
+        warn(NumbaInvalidConfigWarning(msg))
+
+    if device and kws.get('link'):
+        raise ValueError("link keyword invalid for device function")
+
+    if sigutils.is_signature(func_or_sig):
+        if config.ENABLE_CUDASIM:
+            def jitwrapper(func):
+                return FakeCUDAKernel(func, device=device, fastmath=fastmath)
+            return jitwrapper
+
+        argtypes, restype = sigutils.normalize_signature(func_or_sig)
+
+        if restype and not device and restype != types.void:
+            raise TypeError("CUDA kernel must have void return type.")
+
+        def _jit(func):
+            targetoptions = kws.copy()
+            targetoptions['debug'] = debug
+            targetoptions['link'] = link
+            targetoptions['opt'] = opt
+            targetoptions['fastmath'] = fastmath
+            targetoptions['device'] = device
+            targetoptions['extensions'] = extensions
+
+            disp = CUDADispatcher(func, targetoptions=targetoptions)
+
+            if cache:
+                disp.enable_caching()
+
+            if device:
+                from numba.core import typeinfer
+                with typeinfer.register_dispatcher(disp):
+                    disp.compile_device(argtypes)
+            else:
+                disp.compile(argtypes)
+
+            disp._specialized = True
+            disp.disable_compile()
+
+            return disp
+
+        return _jit
+    else:
         if func_or_sig is None:
             if config.ENABLE_CUDASIM:
                 def autojitwrapper(func):
-                    return FakeCUDAKernel(func, device=device, fastmath=fastmath,
-                                          debug=debug)
+                    return FakeCUDAKernel(func, device=device,
+                                          fastmath=fastmath)
             else:
                 def autojitwrapper(func):
-                    return jit(func, device=device, bind=bind, debug=debug,
-                               **kws)
+                    return jit(func, device=device, debug=debug, opt=opt,
+                               link=link, cache=cache, **kws)
 
             return autojitwrapper
         # func_or_sig is a function
         else:
             if config.ENABLE_CUDASIM:
-                return FakeCUDAKernel(func_or_sig, device=device, fastmath=fastmath,
-                                      debug=debug)
-            elif device:
-                return jitdevice(func_or_sig, debug=debug, **kws)
+                return FakeCUDAKernel(func_or_sig, device=device,
+                                      fastmath=fastmath)
             else:
                 targetoptions = kws.copy()
                 targetoptions['debug'] = debug
-                return AutoJitCUDAKernel(func_or_sig, bind=bind, targetoptions=targetoptions)
+                targetoptions['opt'] = opt
+                targetoptions['link'] = link
+                targetoptions['fastmath'] = fastmath
+                targetoptions['device'] = device
+                targetoptions['extensions'] = extensions
+                disp = CUDADispatcher(func_or_sig, targetoptions=targetoptions)
 
-    else:
-        if config.ENABLE_CUDASIM:
-            def jitwrapper(func):
-                return FakeCUDAKernel(func, device=device, fastmath=fastmath,
-                                      debug=debug)
-            return jitwrapper
+                if cache:
+                    disp.enable_caching()
 
-        restype, argtypes = convert_types(func_or_sig, argtypes)
-
-        if restype and not device and restype != types.void:
-            raise TypeError("CUDA kernel must have void return type.")
-
-        def kernel_jit(func):
-            kernel = compile_kernel(func, argtypes, link=link, debug=debug,
-                                    inline=inline, fastmath=fastmath)
-
-            # Force compilation for the current context
-            if bind:
-                kernel.bind()
-
-            return kernel
-
-        def device_jit(func):
-            return compile_device(func, restype, argtypes, inline=inline,
-                                  debug=debug)
-
-        if device:
-            return device_jit
-        else:
-            return kernel_jit
+                return disp
 
 
-def declare_device(name, restype=None, argtypes=None):
-    restype, argtypes = convert_types(restype, argtypes)
+def declare_device(name, sig):
+    """
+    Declare the signature of a foreign function. Returns a descriptor that can
+    be used to call the function from a Python kernel.
+
+    :param name: The name of the foreign function.
+    :type name: str
+    :param sig: The Numba signature of the function.
+    """
+    argtypes, restype = sigutils.normalize_signature(sig)
+    if restype is None:
+        msg = 'Return type must be provided for device declarations'
+        raise TypeError(msg)
+
     return declare_device_function(name, restype, argtypes)
-
-
-def convert_types(restype, argtypes):
-    # eval type string
-    if sigutils.is_signature(restype):
-        assert argtypes is None
-        argtypes, restype = sigutils.normalize_signature(restype)
-
-    return restype, argtypes

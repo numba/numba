@@ -1,24 +1,24 @@
-import sys
 import multiprocessing as mp
+import itertools
 import traceback
 import pickle
 
 import numpy as np
 
 from numba import cuda
-from numba.cuda.cudadrv import drvapi, devicearray
-from numba.cuda.testing import skip_on_cudasim, ContextResettingTestCase
-from numba.tests.support import linux_only
+from numba.cuda.cudadrv import driver
+from numba.cuda.testing import (skip_on_arm, skip_on_cudasim,
+                                skip_under_cuda_memcheck,
+                                ContextResettingTestCase, ForeignArray)
+from numba.tests.support import linux_only, windows_only
 import unittest
-
-linux = sys.platform.startswith('linux')
-has_mp_get_context = hasattr(mp, 'get_context')
 
 
 def core_ipc_handle_test(the_work, result_queue):
     try:
         arr = the_work()
-    except:
+    # Catch anything going wrong in the worker function
+    except:  # noqa: E722
         # FAILED. propagate the exception as a string
         succ = False
         out = traceback.format_exc()
@@ -67,8 +67,8 @@ def ipc_array_test(ipcarr, result_queue):
                     raise AssertionError('invalid exception message')
             else:
                 raise AssertionError('did not raise on reopen')
-
-    except:
+    # Catch any exception so we can propagate it
+    except:  # noqa: E722
         # FAILED. propagate the exception as a string
         succ = False
         out = traceback.format_exc()
@@ -80,9 +80,11 @@ def ipc_array_test(ipcarr, result_queue):
 
 
 @linux_only
-@unittest.skipUnless(has_mp_get_context, "requires multiprocessing.get_context")
+@skip_under_cuda_memcheck('Hangs cuda-memcheck')
 @skip_on_cudasim('Ipc not available in CUDASIM')
+@skip_on_arm('CUDA IPC not supported on ARM in Numba')
 class TestIpcMemory(ContextResettingTestCase):
+
     def test_ipc_handle(self):
         # prepare data for IPC
         arr = np.arange(10, dtype=np.intp)
@@ -93,7 +95,10 @@ class TestIpcMemory(ContextResettingTestCase):
         ipch = ctx.get_ipc_handle(devarr.gpu_data)
 
         # manually prepare for serialization as bytes
-        handle_bytes = bytes(ipch.handle)
+        if driver.USE_NV_BINDING:
+            handle_bytes = ipch.handle.reserved
+        else:
+            handle_bytes = bytes(ipch.handle)
         size = ipch.size
 
         # spawn new process for testing
@@ -109,12 +114,22 @@ class TestIpcMemory(ContextResettingTestCase):
             np.testing.assert_equal(arr, out)
         proc.join(3)
 
-    def check_ipc_handle_serialization(self, index_arg=None):
+    def variants(self):
+        # Test with no slicing and various different slices
+        indices = (None, slice(3, None), slice(3, 8), slice(None, 8))
+        # Test with a Numba DeviceNDArray, or an array from elsewhere through
+        # the CUDA Array Interface
+        foreigns = (False, True)
+        return itertools.product(indices, foreigns)
+
+    def check_ipc_handle_serialization(self, index_arg=None, foreign=False):
         # prepare data for IPC
         arr = np.arange(10, dtype=np.intp)
         devarr = cuda.to_device(arr)
         if index_arg is not None:
             devarr = devarr[index_arg]
+        if foreign:
+            devarr = cuda.as_cuda_array(ForeignArray(devarr))
         expect = devarr.copy_to_host()
 
         # create IPC handle
@@ -125,8 +140,12 @@ class TestIpcMemory(ContextResettingTestCase):
         buf = pickle.dumps(ipch)
         ipch_recon = pickle.loads(buf)
         self.assertIs(ipch_recon.base, None)
-        self.assertEqual(tuple(ipch_recon.handle), tuple(ipch.handle))
         self.assertEqual(ipch_recon.size, ipch.size)
+
+        if driver.USE_NV_BINDING:
+            self.assertEqual(ipch_recon.handle.reserved, ipch.handle.reserved)
+        else:
+            self.assertEqual(tuple(ipch_recon.handle), tuple(ipch.handle))
 
         # spawn new process for testing
         ctx = mp.get_context('spawn')
@@ -142,20 +161,19 @@ class TestIpcMemory(ContextResettingTestCase):
         proc.join(3)
 
     def test_ipc_handle_serialization(self):
-        # test no slicing
-        self.check_ipc_handle_serialization()
-        # slicing tests
-        self.check_ipc_handle_serialization(slice(3, None))
-        self.check_ipc_handle_serialization(slice(3, 8))
-        self.check_ipc_handle_serialization(slice(None, 8))
+        for index, foreign, in self.variants():
+            with self.subTest(index=index, foreign=foreign):
+                self.check_ipc_handle_serialization(index, foreign)
 
-    def check_ipc_array(self, index_arg=None):
+    def check_ipc_array(self, index_arg=None, foreign=False):
         # prepare data for IPC
         arr = np.arange(10, dtype=np.intp)
         devarr = cuda.to_device(arr)
         # Slice
         if index_arg is not None:
             devarr = devarr[index_arg]
+        if foreign:
+            devarr = cuda.as_cuda_array(ForeignArray(devarr))
         expect = devarr.copy_to_host()
         ipch = devarr.get_ipc_handle()
 
@@ -173,23 +191,9 @@ class TestIpcMemory(ContextResettingTestCase):
         proc.join(3)
 
     def test_ipc_array(self):
-        # test no slicing
-        self.check_ipc_array()
-        # slicing tests
-        self.check_ipc_array(slice(3, None))
-        self.check_ipc_array(slice(3, 8))
-        self.check_ipc_array(slice(None, 8))
-
-@unittest.skipIf(linux, 'Only on OS other than Linux')
-@skip_on_cudasim('Ipc not available in CUDASIM')
-class TestIpcNotSupported(ContextResettingTestCase):
-    def test_unsupported(self):
-        arr = np.arange(10, dtype=np.intp)
-        devarr = cuda.to_device(arr)
-        with self.assertRaises(OSError) as raises:
-            devarr.get_ipc_handle()
-        errmsg = str(raises.exception)
-        self.assertIn('OS does not support CUDA IPC', errmsg)
+        for index, foreign, in self.variants():
+            with self.subTest(index=index, foreign=foreign):
+                self.check_ipc_array(index, foreign)
 
 
 def staged_ipc_handle_test(handle, device_num, result_queue):
@@ -200,8 +204,8 @@ def staged_ipc_handle_test(handle, device_num, result_queue):
             arrsize = handle.size // np.dtype(np.intp).itemsize
             hostarray = np.zeros(arrsize, dtype=np.intp)
             cuda.driver.device_to_host(
-                hostarray, deviceptr,  size=handle.size,
-                )
+                hostarray, deviceptr, size=handle.size,
+            )
             handle.close()
         return hostarray
 
@@ -211,7 +215,6 @@ def staged_ipc_handle_test(handle, device_num, result_queue):
 def staged_ipc_array_test(ipcarr, device_num, result_queue):
     try:
         with cuda.gpus[device_num]:
-            this_ctx = cuda.devices.get_context()
             with ipcarr as darr:
                 arr = darr.copy_to_host()
                 try:
@@ -223,7 +226,8 @@ def staged_ipc_array_test(ipcarr, device_num, result_queue):
                         raise AssertionError('invalid exception message')
                 else:
                     raise AssertionError('did not raise on reopen')
-    except:
+    # Catch any exception so we can propagate it
+    except:  # noqa: E722
         # FAILED. propagate the exception as a string
         succ = False
         out = traceback.format_exc()
@@ -235,8 +239,9 @@ def staged_ipc_array_test(ipcarr, device_num, result_queue):
 
 
 @linux_only
-@unittest.skipUnless(has_mp_get_context, "requires multiprocessing.get_context")
+@skip_under_cuda_memcheck('Hangs cuda-memcheck')
 @skip_on_cudasim('Ipc not available in CUDASIM')
+@skip_on_arm('CUDA IPC not supported on ARM in Numba')
 class TestIpcStaged(ContextResettingTestCase):
     def test_staged(self):
         # prepare data for IPC
@@ -254,7 +259,10 @@ class TestIpcStaged(ContextResettingTestCase):
         buf = pickle.dumps(ipch)
         ipch_recon = pickle.loads(buf)
         self.assertIs(ipch_recon.base, None)
-        self.assertEqual(tuple(ipch_recon.handle), tuple(ipch.handle))
+        if driver.USE_NV_BINDING:
+            self.assertEqual(ipch_recon.handle.reserved, ipch.handle.reserved)
+        else:
+            self.assertEqual(tuple(ipch_recon.handle), tuple(ipch.handle))
         self.assertEqual(ipch_recon.size, ipch.size)
 
         # Test on every CUDA devices
@@ -288,6 +296,18 @@ class TestIpcStaged(ContextResettingTestCase):
                 self.fail(out)
             else:
                 np.testing.assert_equal(arr, out)
+
+
+@windows_only
+@skip_on_cudasim('Ipc not available in CUDASIM')
+class TestIpcNotSupported(ContextResettingTestCase):
+    def test_unsupported(self):
+        arr = np.arange(10, dtype=np.intp)
+        devarr = cuda.to_device(arr)
+        with self.assertRaises(OSError) as raises:
+            devarr.get_ipc_handle()
+        errmsg = str(raises.exception)
+        self.assertIn('OS does not support CUDA IPC', errmsg)
 
 
 if __name__ == '__main__':

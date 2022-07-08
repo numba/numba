@@ -18,9 +18,9 @@ execute the parallel tasks.
 
 The relevant source files referenced in this document are
 
-- ``numba/npyufunc/tbbpool.cpp``
-- ``numba/npyufunc/omppool.cpp``
-- ``numba/npyufunc/workqueue.c``
+- ``numba/np/ufunc/tbbpool.cpp``
+- ``numba/np/ufunc/omppool.cpp``
+- ``numba/np/ufunc/workqueue.c``
 
   These files contain the TBB, OpenMP, and workqueue threadpool
   implementations, respectively. Each includes the functions
@@ -29,14 +29,14 @@ The relevant source files referenced in this document are
   schedulers. Note that the basic thread local variable logic is duplicated in
   each of these files, and not shared between them.
 
-- ``numba/npyufunc/parallel.py``
+- ``numba/np/ufunc/parallel.py``
 
   This file contains the Python and JIT compatible wrappers for
   ``set_num_threads()``, ``get_num_threads()``, and ``get_thread_id()``, as
   well as the code that loads the above libraries into Python and launches the
   threadpool.
 
-- ``numba/npyufunc/parfor.py``
+- ``numba/parfors/parfor_lowering.py``
 
   This file contains the main logic for generating code for the parallel
   backend. The thread mask is accessed in this file in the code that generates
@@ -47,7 +47,7 @@ Thread masking
 --------------
 
 As part of its design, Numba never launches new threads beyond the threads
-that are launched initially with ``numba.npyufunc.parallel._launch_threads()``
+that are launched initially with ``numba.np.ufunc.parallel._launch_threads()``
 when the first parallel execution is run. This is due to the way threads were
 already implemented in Numba prior to thread masking being implemented. This
 restriction was kept to keep the design simple, although it could be removed
@@ -164,7 +164,7 @@ Thread ID
 
 A private ``get_thread_id()`` function was added to each threading backend,
 which returns a unique ID for each thread. This can be accessed from Python by
-``numba.npyufunc.parallel._get_thread_id()`` (it can also be used inside a
+``numba.np.ufunc.parallel._get_thread_id()`` (it can also be used inside a
 JIT compiled function). The thread ID function is useful for testing that the
 thread masking behavior is correct, but it should not be used outside of the
 tests. For example, one can call ``set_num_threads(4)`` and then collect all
@@ -195,10 +195,10 @@ The general pattern for using ``get_num_threads`` in code generation is
 
 .. code:: python
 
-   import llvmlite.llvmpy.core as lc
+   from llvmlite import ir as llvmir
 
-   get_num_threads = builder.module.get_or_insert_function(
-       lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
+   get_num_threads = cgutils.get_or_insert_function(builder.module
+       llvmir.FunctionType(llvmir.IntType(types.intp.bitwidth), []),
        name="get_num_threads")
 
    num_threads = builder.call(get_num_threads, [])
@@ -212,7 +212,7 @@ The general pattern for using ``get_num_threads`` in code generation is
 
    # Pass num_threads through to the appropriate backend function here
 
-See the code in ``numba/npyufunc/parfor.py``.
+See the code in ``numba/parfors/parfor_lowering.py``.
 
 The guard against ``num_threads`` being <= 0 is not strictly necessary, but it
 can protect against accidentally incorrect behavior in case the thread masking
@@ -225,3 +225,25 @@ considerations should be taken into account to ensure the use of the
 ``num_threads`` variable is safe. It would probably be better to keep such
 logic in the threading backends, rather than trying to do it in code
 generation.
+
+.. _chunk-details-label:
+
+Parallel Chunksize Details
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+There are some cases in which the actual parallel work chunk sizes may differ
+from the requested
+chunk size that is requested through :func:`numba.set_parallel_chunksize`.
+First, if the number of required chunks based on the specified chunk size
+is less than the number of configured threads then Numba will use all of the configured
+threads to execute the parallel region.  In this case, the actual chunk size will be
+less than the requested chunk size.  Second, due to truncation, in cases where the
+iteration count is slightly less than a multiple of the chunk size
+(e.g., 14 iterations and a specified chunk size of 5), the actual chunk size will be
+larger than the specified chunk size.  As in the given example, the number of chunks
+would be 2 and the actual chunk size would be 7 (i.e. 14 / 2).  Lastly, since Numba
+divides an N-dimensional iteration space into N-dimensional (hyper)rectangular chunks,
+it may be the case there are not N integer factors whose product is equal to the chunk
+size.  In this case, some chunks will have an area/volume larger than the chunk size
+whereas others will be less than the specified chunk size.
+

@@ -2,8 +2,6 @@
 Implementation of tuple objects
 """
 
-from llvmlite import ir
-import llvmlite.llvmpy.core as lc
 import operator
 
 from numba.core.imputils import (lower_builtin, lower_getattr_generic,
@@ -169,7 +167,7 @@ def iternext_unituple(context, builder, sig, args, result):
     idx = builder.load(idxptr)
     count = context.get_constant(types.intp, tupiterty.container.count)
 
-    is_valid = builder.icmp(lc.ICMP_SLT, idx, count)
+    is_valid = builder.icmp_signed('<', idx, count)
     result.set_valid(is_valid)
 
     with builder.if_then(is_valid):
@@ -185,6 +183,24 @@ def iternext_unituple(context, builder, sig, args, result):
         result.yield_(getitem_out)
         nidx = builder.add(idx, context.get_constant(types.intp, 1))
         builder.store(nidx, iterval.index)
+
+
+@overload(operator.getitem)
+def getitem_literal_idx(tup, idx):
+    """
+    Overloads BaseTuple getitem to cover cases where constant
+    inference and RewriteConstGetitems cannot replace it
+    with a static_getitem.
+    """
+    if not (isinstance(tup, types.BaseTuple)
+            and isinstance(idx, types.IntegerLiteral)):
+        return None
+
+    idx_val = idx.literal_value
+    def getitem_literal_idx_impl(tup, idx):
+        return tup[idx_val]
+
+    return getitem_literal_idx_impl
 
 
 @lower_builtin('typed_getitem', types.BaseTuple, types.Any)
@@ -327,10 +343,13 @@ def getitem_unituple(context, builder, sig, args):
         return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
+@lower_builtin('static_getitem', types.LiteralStrKeyDict, types.StringLiteral)
+@lower_builtin('static_getitem', types.LiteralList, types.IntegerLiteral)
+@lower_builtin('static_getitem', types.LiteralList, types.SliceLiteral)
 @lower_builtin('static_getitem', types.BaseTuple, types.IntegerLiteral)
 @lower_builtin('static_getitem', types.BaseTuple, types.SliceLiteral)
 def static_getitem_tuple(context, builder, sig, args):
-    tupty, _ = sig.args
+    tupty, idxty = sig.args
     tup, idx = args
     if isinstance(idx, int):
         if idx < 0:
@@ -341,6 +360,11 @@ def static_getitem_tuple(context, builder, sig, args):
     elif isinstance(idx, slice):
         items = cgutils.unpack_tuple(builder, tup)[idx]
         res = context.make_tuple(builder, sig.return_type, items)
+    elif isinstance(tupty, types.LiteralStrKeyDict):
+        # pretend to be a dictionary
+        idx_val = idxty.literal_value
+        idx_offset = tupty.fields.index(idx_val)
+        res = builder.extract_value(tup, idx_offset)
     else:
         raise NotImplementedError("unexpected index %r for %s"
                                   % (idx, sig.args[0]))
@@ -380,3 +404,9 @@ def tuple_index(tup, value):
         raise ValueError("tuple.index(x): x not in tuple")
 
     return tuple_index_impl
+
+
+@overload(operator.contains)
+def in_seq_empty_tuple(x, y):
+    if isinstance(x, types.Tuple) and not x.types:
+        return lambda x, y: False

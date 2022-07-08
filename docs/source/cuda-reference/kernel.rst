@@ -4,18 +4,62 @@ CUDA Kernel API
 Kernel declaration
 ------------------
 
-The ``@cuda.jit`` decorator is used to create a CUDA kernel:
+The ``@cuda.jit`` decorator is used to create a CUDA dispatcher object that can
+be configured and launched:
 
 .. autofunction:: numba.cuda.jit
 
-.. autoclass:: numba.cuda.compiler.AutoJitCUDAKernel
-   :members: inspect_asm, inspect_llvm, inspect_types, specialize, extensions
 
-Individual specialized kernels are instances of
-:class:`numba.cuda.compiler.CUDAKernel`:
+Dispatcher objects
+------------------
 
-.. autoclass:: numba.cuda.compiler.CUDAKernel
-   :members: bind, ptx, device, inspect_llvm, inspect_asm, inspect_types
+The usual syntax for configuring a Dispatcher with a launch configuration uses
+subscripting, with the arguments being as in the following:
+
+.. code-block:: python
+
+   # func is some function decorated with @cuda.jit
+   func[griddim, blockdim, stream, sharedmem]
+
+
+The ``griddim`` and ``blockdim`` arguments specify the size of the grid and
+thread blocks, and may be either integers or tuples of length up to 3. The
+``stream`` parameter is an optional stream on which the kernel will be launched,
+and the ``sharedmem`` parameter specifies the size of dynamic shared memory in
+bytes.
+
+Subscripting the Dispatcher returns a configuration object that can be called
+with the kernel arguments:
+
+.. code-block:: python
+
+   configured = func[griddim, blockdim, stream, sharedmem]
+   configured(x, y, z)
+
+
+However, it is more idiomatic to configure and call the kernel within a single
+statement:
+
+.. code-block:: python
+
+   func[griddim, blockdim, stream, sharedmem](x, y, z)
+
+This is similar to launch configuration in CUDA C/C++:
+
+.. code-block:: cuda
+
+   func<<<griddim, blockdim, sharedmem, stream>>>(x, y, z)
+
+.. note:: The order of ``stream`` and ``sharedmem`` are reversed in Numba
+   compared to in CUDA C/C++.
+
+Dispatcher objects also provide several utility methods for inspection and
+creating a specialized instance:
+
+.. autoclass:: numba.cuda.dispatcher.CUDADispatcher
+   :members: inspect_asm, inspect_llvm, inspect_sass, inspect_types,
+             get_regs_per_thread, specialize, specialized, extensions, forall
+
 
 Intrinsic Attributes and Functions
 ----------------------------------
@@ -131,6 +175,79 @@ Synchronization and Atomic Operations
     Returns the value of ``array[idx]`` before the storing the new value.
     Behaves like an atomic load.
 
+.. function:: numba.cuda.atomic.sub(array, idx, value)
+
+    Perform ``array[idx] -= value``. Supports int32, int64, float32 and
+    float64 only. The ``idx`` argument can be an integer or a tuple of integer
+    indices for indexing into multi-dimensional arrays. The number of elements
+    in ``idx`` must match the number of dimensions of ``array``.
+
+    Returns the value of ``array[idx]`` before the storing the new value.
+    Behaves like an atomic load.
+
+.. function:: numba.cuda.atomic.and_(array, idx, value)
+
+    Perform ``array[idx] &= value``. Supports int32, uint32, int64,
+    and uint64 only. The ``idx`` argument can be an integer or a tuple of
+    integer indices for indexing into multi-dimensional arrays. The number
+    of elements in ``idx`` must match the number of dimensions of ``array``.
+
+    Returns the value of ``array[idx]`` before the storing the new value.
+    Behaves like an atomic load.
+
+.. function:: numba.cuda.atomic.or_(array, idx, value)
+
+    Perform ``array[idx] |= value``. Supports int32, uint32, int64,
+    and uint64 only. The ``idx`` argument can be an integer or a tuple of
+    integer indices for indexing into multi-dimensional arrays. The number
+    of elements in ``idx`` must match the number of dimensions of ``array``.
+
+    Returns the value of ``array[idx]`` before the storing the new value.
+    Behaves like an atomic load.
+
+.. function:: numba.cuda.atomic.xor(array, idx, value)
+
+    Perform ``array[idx] ^= value``. Supports int32, uint32, int64,
+    and uint64 only. The ``idx`` argument can be an integer or a tuple of
+    integer indices for indexing into multi-dimensional arrays. The number
+    of elements in ``idx`` must match the number of dimensions of ``array``.
+
+    Returns the value of ``array[idx]`` before the storing the new value.
+    Behaves like an atomic load.
+
+.. function:: numba.cuda.atomic.exch(array, idx, value)
+
+    Perform ``array[idx] = value``. Supports int32, uint32, int64,
+    and uint64 only. The ``idx`` argument can be an integer or a tuple of
+    integer indices for indexing into multi-dimensional arrays. The number
+    of elements in ``idx`` must match the number of dimensions of ``array``.
+
+    Returns the value of ``array[idx]`` before the storing the new value.
+    Behaves like an atomic load.
+
+.. function:: numba.cuda.atomic.inc(array, idx, value)
+
+    Perform ``array[idx] = (0 if array[idx] >= value else array[idx] + 1)``.
+    Supports uint32, and uint64 only. The ``idx`` argument can be an integer
+    or a tuple of integer indices for indexing into multi-dimensional arrays.
+    The number of elements in ``idx`` must match the number of dimensions of
+    ``array``.
+
+    Returns the value of ``array[idx]`` before the storing the new value.
+    Behaves like an atomic load.
+
+.. function:: numba.cuda.atomic.dec(array, idx, value)
+
+    Perform ``array[idx] =
+    (value if (array[idx] == 0) or (array[idx] > value) else array[idx] - 1)``.
+    Supports uint32, and uint64 only. The ``idx`` argument can be an integer
+    or a tuple of integer indices for indexing into multi-dimensional arrays.
+    The number of elements in ``idx`` must match the number of dimensions of
+    ``array``.
+
+    Returns the value of ``array[idx]`` before the storing the new value.
+    Behaves like an atomic load.
+
 .. function:: numba.cuda.atomic.max(array, idx, value)
 
     Perform ``array[idx] = max(array[idx], value)``. Support int32, int64,
@@ -168,6 +285,27 @@ Synchronization and Atomic Operations
     .. warning:: All syncthreads functions must be called by every thread in the
                  thread-block. Falling to do so may result in undefined behavior.
 
+
+Cooperative Groups
+~~~~~~~~~~~~~~~~~~
+
+.. function:: numba.cuda.cg.this_grid()
+
+   Get the current grid group.
+
+   :return: The current grid group
+   :rtype: numba.cuda.cg.GridGroup
+
+.. class:: numba.cuda.cg.GridGroup
+
+   A grid group. Users should not construct a GridGroup directly - instead, get
+   the current grid group using :func:`cg.this_grid() <numba.cuda.cg.this_grid>`.
+
+   .. method:: sync()
+
+      Synchronize the current grid group.
+
+
 Memory Fences
 ~~~~~~~~~~~~~
 
@@ -195,12 +333,12 @@ are guaranteed to not move across the memory fences by optimization passes.
    A memory fence at system level (across GPUs).
 
 Warp Intrinsics
-~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~
 
-All warp level operations require at least CUDA 9. The argument ``membermask`` is
-a 32 bit integer mask with each bit corresponding to a thread in the warp, with 1
-meaning the thread is in the subset of threads within the function call. The
-``membermask`` must be all 1 if the GPU compute capability is below 7.x.
+The argument ``membermask`` is a 32 bit integer mask with each bit
+corresponding to a thread in the warp, with 1 meaning the thread is in the
+subset of threads within the function call. The ``membermask`` must be all 1 if
+the GPU compute capability is below 7.x.
 
 .. function:: numba.cuda.syncwarp(membermask)
 
@@ -261,6 +399,19 @@ meaning the thread is in the subset of threads within the function call. The
     all have the same value, otherwise it is 0. And pred is a boolean of whether
     or not all threads in the mask warp have the same warp.
 
+.. function:: numba.cuda.activemask()
+
+    Returns a 32-bit integer mask of all currently active threads in the
+    calling warp. The Nth bit is set if the Nth lane in the warp is active when
+    activemask() is called. Inactive threads are represented by 0 bits in the
+    returned mask. Threads which have exited the kernel are always marked as
+    inactive.
+
+.. function:: numba.cuda.lanemask_lt()
+
+    Returns a 32-bit integer mask of all lanes (including inactive ones) with
+    ID less than the current lane.
+
 
 Integer Intrinsics
 ~~~~~~~~~~~~~~~~~~
@@ -271,22 +422,23 @@ documentation
 <https://docs.nvidia.com/cuda/cuda-math-api/group__CUDA__MATH__INTRINSIC__INT.html>`_.
 
 
-.. function:: numba.cuda.popc
+.. function:: numba.cuda.popc(x)
 
-   Returns the number of set bits in the given value.
+   Returns the number of bits set in ``x``.
 
-.. function:: numba.cuda.brev
+.. function:: numba.cuda.brev(x)
 
-   Reverses the bit pattern of an integer value, for example 0b10110110
-   becomes 0b01101101.
+   Returns the reverse of the bit pattern of ``x``. For example, ``0b10110110``
+   becomes ``0b01101101``.
 
-.. function:: numba.cuda.clz
+.. function:: numba.cuda.clz(x)
 
-   Counts the number of leading zeros in a value.
+   Returns the number of leading zeros in ``x``.
 
-.. function:: numba.cuda.ffs
+.. function:: numba.cuda.ffs(x)
 
-   Find the position of the least significant bit set to 1 in an integer.
+   Returns the position of the first (least significant) bit set to 1 in ``x``,
+   where the least significant bit position is 1. ``ffs(0)`` returns 0.
 
 
 Floating Point Intrinsics
@@ -305,6 +457,108 @@ precision parts of the CUDA Toolkit documentation.
    the C api, but maps to the ``fma.rn.f32`` and ``fma.rn.f64`` (round-to-nearest-even)
    PTX instructions.
 
+.. function:: numba.cuda.cbrt (x)
+
+   Perform the cube root operation, x ** (1/3). Named after the functions
+   ``cbrt`` and ``cbrtf`` in the C api. Supports float32, and float64 arguments
+   only.
+
+16-bit Floating Point Intrinsics
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The following functions are used to operate on 16-bit floating point operands.
+These functions return a 16-bit floating point result.
+
+
+.. function:: numba.cuda.fp16.hfma (a, b, c)
+
+   Perform the fused multiply-add operation ``(a * b) + c`` on 16-bit
+   floating point arguments in round to nearest mode. Maps to the ``fma.rn.f16``
+   PTX instruction.
+
+   Returns the 16-bit floating point result of the fused multiply-add.
+
+.. function:: numba.cuda.fp16.hadd (a, b)
+
+   Perform the add operation ``a + b`` on 16-bit floating point arguments in
+   round to nearest mode. Maps to the ``add.f16`` PTX instruction.
+
+   Returns the 16-bit floating point result of the addition.
+
+.. function:: numba.cuda.fp16.hsub (a, b)
+
+   Perform the subtract operation ``a - b`` on 16-bit floating point arguments in
+   round to nearest mode. Maps to the ``sub.f16`` PTX instruction.
+
+   Returns the 16-bit floating point result of the subtraction.
+
+.. function:: numba.cuda.fp16.hmul (a, b)
+
+   Perform the multiply operation ``a * b`` on 16-bit floating point arguments in
+   round to nearest mode. Maps to the ``mul.f16`` PTX instruction.
+
+   Returns the 16-bit floating point result of the multiplication.
+
+.. function:: numba.cuda.fp16.hneg (a)
+
+   Perform the negation operation ``-a`` on the 16-bit floating point argument.
+   Maps to the ``neg.f16`` PTX instruction.
+
+   Returns the 16-bit floating point result of the negation.
+
+.. function:: numba.cuda.fp16.habs (a)
+
+   Perform the absolute value operation ``|a|`` on the 16-bit floating point argument.
+
+   Returns the 16-bit floating point result of the absolute value operation.
+
+.. function:: numba.cuda.fp16.heq (a, b)
+
+   Perform the comparison operation ``a == b`` on 16-bit floating point arguments.
+
+   Returns a boolean.
+
+.. function:: numba.cuda.fp16.hne (a, b)
+
+   Perform the comparison operation ``a != b`` on 16-bit floating point arguments.
+
+   Returns a boolean.
+
+.. function:: numba.cuda.fp16.hgt (a, b)
+
+   Perform the comparison operation ``a > b`` on 16-bit floating point arguments.
+
+   Returns a boolean.
+
+.. function:: numba.cuda.fp16.hge (a, b)
+
+   Perform the comparison operation ``a >= b`` on 16-bit floating point arguments.
+
+   Returns a boolean.
+
+.. function:: numba.cuda.fp16.hlt (a, b)
+
+   Perform the comparison operation ``a < b`` on 16-bit floating point arguments.
+
+   Returns a boolean.
+
+.. function:: numba.cuda.fp16.hle (a, b)
+
+   Perform the comparison operation ``a <= b`` on 16-bit floating point arguments.
+
+   Returns a boolean.
+
+.. function:: numba.cuda.fp16.hmax (a, b)
+
+   Perform the operation ``a if a > b else b.``
+
+   Returns a 16-bit floating point value.
+
+.. function:: numba.cuda.fp16.hmin (a, b)
+
+   Perform the operation ``a if a < b else b.``
+
+   Returns a 16-bit floating point value.
 
 Control Flow Instructions
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -321,3 +575,12 @@ semantics, please refer to the `relevant CUDA Toolkit documentation
 
     Select between two expressions, depending on the value of the first
     argument. Similar to LLVM's ``select`` instruction.
+
+
+Timer Intrinsics
+~~~~~~~~~~~~~~~~
+
+.. function:: numba.cuda.nanosleep(ns)
+
+    Suspends the thread for a sleep duration approximately close to the delay
+    ``ns``, specified in nanoseconds.

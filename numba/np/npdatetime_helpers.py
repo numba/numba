@@ -45,7 +45,7 @@ def same_kind(src, dest):
 
 
 def can_cast_timedelta_units(src, dest):
-    # Mimick numpy's "safe" casting and promotion
+    # Mimic NumPy's "safe" casting and promotion
     # `dest` must be more precise than `src` and they must be compatible
     # for conversion.
     # XXX should we switch to enforcing "same-kind" for Numpy 1.10+ ?
@@ -89,7 +89,7 @@ def _get_conversion_multiplier(big_unit_code, small_unit_code):
     None is returned if the conversion is not possible through a
     simple integer multiplication.
     """
-    # Mimicks get_datetime_units_factor() in numpy's datetime.c,
+    # Mimics get_datetime_units_factor() in NumPy's datetime.c,
     # with a twist to allow no-op conversion from generic units.
     if big_unit_code == 14:
         return 1
@@ -202,3 +202,11 @@ def get_best_unit(unit_a, unit_b):
     if b > a:
         return unit_b
     return unit_a
+
+
+def datetime_minimum(a, b):
+    pass
+
+
+def datetime_maximum(a, b):
+    pass

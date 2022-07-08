@@ -29,7 +29,11 @@ class _Runtime(object):
 
         # Register globals into the system
         for py_name in _nrt.c_helpers:
-            c_name = "NRT_" + py_name
+            if py_name.startswith("_"):
+                # internal API
+                c_name = py_name
+            else:
+                c_name = "NRT_" + py_name
             c_address = _nrt.c_helpers[py_name]
             ll.add_symbol(c_name, c_address)
 
@@ -88,10 +92,16 @@ class _Runtime(object):
         See `NRT_MemInfo_alloc_safe()` in "nrt.h" for details.
         """
         self._init_guard()
+        if size < 0:
+            msg = f"Cannot allocate a negative number of bytes: {size}."
+            raise ValueError(msg)
         if safe:
             mi = _nrt.meminfo_alloc_safe(size)
         else:
             mi = _nrt.meminfo_alloc(size)
+        if mi == 0: # alloc failed or size was 0 and alloc returned NULL.
+            msg = f"Requested allocation of {size} bytes failed."
+            raise MemoryError(msg)
         return MemInfo(mi)
 
     def get_allocation_stats(self):

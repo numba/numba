@@ -174,7 +174,7 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         self.check_array_unary(arr, arrty, array_ndenumerate_sum)
 
     def test_array_iter(self):
-        # Test iterating over a 1d array
+        # Test iterating over arrays
         arr = np.arange(6)
         self.check_array_iter_1d(arr)
         self.check_array_iter_items(arr)
@@ -189,6 +189,59 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         arr = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
         self.check_array_iter_items(arr)
         self.check_array_iter_items(arr.T)
+
+    def test_array_iter_yielded_order(self):
+        # See issue #5692
+        @jit(nopython=True)
+        def foo(arr):
+            t = []
+            for y1 in arr:
+                for y2 in y1:
+                    t.append(y2.ravel())
+            return t
+
+        # 'F' ordered
+        arr = np.arange(24).reshape((2, 3, 4), order='F')
+        expected = foo.py_func(arr)
+        got = foo(arr)
+        self.assertPreciseEqual(expected, got)
+
+        # 'A' ordered, outer strided
+        arr = np.arange(64).reshape((4, 8, 2), order='F')[::2, :, :]
+        expected = foo.py_func(arr)
+        got = foo(arr)
+        self.assertPreciseEqual(expected, got)
+
+        # 'A' ordered, middle strided
+        arr = np.arange(64).reshape((4, 8, 2), order='F')[:, ::2, :]
+        expected = foo.py_func(arr)
+        got = foo(arr)
+        self.assertPreciseEqual(expected, got)
+
+        # 'A' ordered, inner strided
+        arr = np.arange(64).reshape((4, 8, 2), order='F')[:, :, ::2]
+        expected = foo.py_func(arr)
+        got = foo(arr)
+        self.assertPreciseEqual(expected, got)
+
+        @jit(nopython=True)
+        def flag_check(arr):
+            out = []
+            for sub in arr:
+                out.append((sub, sub.flags.c_contiguous,
+                            sub.flags.f_contiguous))
+            return out
+
+        arr = np.arange(10).reshape((2, 5), order='F')
+        expected = flag_check.py_func(arr)
+        got = flag_check(arr)
+
+        self.assertEqual(len(expected), len(got))
+        ex_arr, e_flag_c, e_flag_f = expected[0]
+        go_arr, g_flag_c, g_flag_f = got[0]
+        np.testing.assert_allclose(ex_arr, go_arr)
+        self.assertEqual(e_flag_c, g_flag_c)
+        self.assertEqual(e_flag_f, g_flag_f)
 
     def test_array_view_iter(self):
         # Test iterating over a 1d view over a 2d array

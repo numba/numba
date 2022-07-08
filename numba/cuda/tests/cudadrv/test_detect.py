@@ -3,7 +3,8 @@ import sys
 import subprocess
 import threading
 from numba import cuda
-from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
+from numba.cuda.testing import (unittest, CUDATestCase, skip_on_cudasim,
+                                skip_under_cuda_memcheck)
 from numba.tests.support import captured_stdout
 
 
@@ -17,6 +18,7 @@ class TestCudaDetect(CUDATestCase):
         self.assertIn('CUDA devices', output)
 
 
+@skip_under_cuda_memcheck('Hangs cuda-memcheck')
 class TestCUDAFindLibs(CUDATestCase):
 
     def run_cmd(self, cmdline, env):

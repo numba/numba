@@ -5,13 +5,25 @@ import numpy as np
 
 from numba import njit, vectorize
 from numba import typeof
-from numba.core import utils, types, typing, ir, compiler, cpu
+from numba.core import utils, types, typing, ir, compiler, cpu, cgutils
 from numba.core.compiler import Compiler, Flags
-from numba.tests.support import MemoryLeakMixin, TestCase
+from numba.core.registry import cpu_target
+from numba.tests.support import (MemoryLeakMixin, TestCase, temp_directory,
+                                 create_temp_module)
+from numba.extending import (
+    overload,
+    models,
+    lower_builtin,
+    register_model,
+    make_attribute_wrapper,
+    type_callable,
+    typeof_impl
+)
+import operator
+import textwrap
+
 import unittest
 
-TIMEDELTA_M = 'timedelta64[M]'
-TIMEDELTA_Y = 'timedelta64[Y]'
 
 class Namespace(dict):
     def __getattr__(s, k):
@@ -84,9 +96,9 @@ class RewritesTester(Compiler):
             flags = Flags()
         flags.nrt = True
         if typing_context is None:
-            typing_context = typing.Context()
+            typing_context = cpu_target.typing_context
         if target_context is None:
-            target_context = cpu.CPUContext(typing_context)
+            target_context = cpu_target.target_context
         return cls(typing_context, target_context, library, args, return_type,
                    flags, locals)
 
@@ -469,6 +481,21 @@ class TestRewriteIssues(MemoryLeakMixin, TestCase):
         self.assertIn("#   u.1 = ", res)
         self.assertIn("#   u.2 = ", res)
 
+    def test_issue_5599_name_collision(self):
+        # The original error will fail in lowering of the array_expr
+        @njit
+        def f(x):
+            arr = np.ones(x)
+
+            for _ in range(2):
+                val =  arr * arr
+                arr = arr.copy()
+            return arr
+
+        got = f(5)
+        expect = f.py_func(5)
+        np.testing.assert_array_equal(got, expect)
+
 
 class TestSemantics(MemoryLeakMixin, unittest.TestCase):
 
@@ -517,7 +544,6 @@ class TestOptionals(MemoryLeakMixin, unittest.TestCase):
         oty = s[0][1]
         self.assertTrue(isinstance(oty, types.Optional))
         self.assertTrue(isinstance(oty.type, types.Float))
-
 
     def test_optional_array_type(self):
 
@@ -615,21 +641,102 @@ class TestOptionalsExceptions(MemoryLeakMixin, unittest.TestCase):
         self.assertTrue(isinstance(oty.type.dtype, types.Float))
 
 
-class TestDatetimeDeltaOps(TestCase):
-    def test_div(self):
-        """
-        Test the division of a timedelta by numeric types
-        """
-        def arr_div(a, b):
-            return a / b
+class TestExternalTypes(MemoryLeakMixin, unittest.TestCase):
+    """ Tests RewriteArrayExprs with external (user defined) types,
+    see #5157"""
 
-        py_func = arr_div
-        cfunc = njit(arr_div)
-        test_cases = [(np.ones(3, np.dtype(TIMEDELTA_M)), np.ones(3, np.dtype(TIMEDELTA_M))),
-                      (np.ones(3, np.dtype(TIMEDELTA_Y)), np.ones(3, np.dtype(TIMEDELTA_Y))),
-                      (np.ones(3, np.dtype(TIMEDELTA_M)), 1),
-                      (np.ones(3, np.dtype(TIMEDELTA_M)), np.ones(3, np.int64)),
-                      (np.ones(3, np.dtype(TIMEDELTA_M)), np.ones(3, np.float64)),
-                     ]
-        for a, b in test_cases:
-            self.assertTrue(np.array_equal(py_func(a, b), cfunc(a,b)))
+    source_lines = textwrap.dedent("""
+        from numba.core import types
+
+        class FooType(types.Type):
+            def __init__(self):
+                super(FooType, self).__init__(name='Foo')
+        """)
+
+    def make_foo_type(self, FooType):
+        class Foo(object):
+            def __init__(self, value):
+                self.value = value
+
+        @register_model(FooType)
+        class FooModel(models.StructModel):
+            def __init__(self, dmm, fe_type):
+                members = [("value", types.intp)]
+                models.StructModel.__init__(self, dmm, fe_type, members)
+
+        make_attribute_wrapper(FooType, "value", "value")
+
+        @type_callable(Foo)
+        def type_foo(context):
+            def typer(value):
+                return FooType()
+
+            return typer
+
+        @lower_builtin(Foo, types.intp)
+        def impl_foo(context, builder, sig, args):
+            typ = sig.return_type
+            [value] = args
+            foo = cgutils.create_struct_proxy(typ)(context, builder)
+            foo.value = value
+            return foo._getvalue()
+
+        @typeof_impl.register(Foo)
+        def typeof_foo(val, c):
+            return FooType()
+
+        return Foo, FooType
+
+    def test_external_type(self):
+        with create_temp_module(self.source_lines) as test_module:
+            Foo, FooType = self.make_foo_type(test_module.FooType)
+
+            # sum of foo class instance and array return an array
+            # binary operation with foo class instance as one of args
+            @overload(operator.add)
+            def overload_foo_add(lhs, rhs):
+                if isinstance(lhs, FooType) and isinstance(rhs, types.Array):
+                    def imp(lhs, rhs):
+                        return np.array([lhs.value, rhs[0]])
+
+                    return imp
+
+            # sum of 2 foo class instances return an array
+            # binary operation with 2 foo class instances as args
+            @overload(operator.add)
+            def overload_foo_add(lhs, rhs):
+                if isinstance(lhs, FooType) and isinstance(rhs, FooType):
+                    def imp(lhs, rhs):
+                        return np.array([lhs.value, rhs.value])
+
+                    return imp
+
+            # neg of foo class instance return an array
+            # unary operation with foo class instance arg
+            @overload(operator.neg)
+            def overload_foo_neg(x):
+                if isinstance(x, FooType):
+                    def imp(x):
+                        return np.array([-x.value])
+
+                    return imp
+
+            @njit
+            def arr_expr_sum1(x, y):
+                return Foo(x) + np.array([y])
+
+            @njit
+            def arr_expr_sum2(x, y):
+                return Foo(x) + Foo(y)
+
+            @njit
+            def arr_expr_neg(x):
+                return -Foo(x)
+
+            np.testing.assert_array_equal(arr_expr_sum1(0, 1), np.array([0, 1]))
+            np.testing.assert_array_equal(arr_expr_sum2(2, 3), np.array([2, 3]))
+            np.testing.assert_array_equal(arr_expr_neg(4), np.array([-4]))
+
+
+if __name__ == "__main__":
+    unittest.main()

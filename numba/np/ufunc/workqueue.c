@@ -27,7 +27,13 @@ race conditions.
 /* PThread */
 #include <pthread.h>
 #include <unistd.h>
+
+#if defined(__FreeBSD__)
+#include <stdlib.h>
+#else
 #include <alloca.h>
+#endif
+
 #include <sys/types.h>
 #include <unistd.h>
 #include <signal.h>
@@ -56,8 +62,13 @@ static int _nesting_level = 0;
    free the task-queue, too. */
 static void reset_after_fork(void);
 
+static void
+add_task_internal(void *fn, void *args, void *dims, void *steps, void *data, int tid);
+
 /* PThread */
 #ifdef NUMBA_PTHREAD
+
+static pthread_key_t tidkey;
 
 typedef struct
 {
@@ -131,13 +142,27 @@ numba_new_thread(void *worker, void *arg)
 static int
 get_thread_id(void)
 {
-    return (int)pthread_self();
+    return (int)(intptr_t)pthread_getspecific(tidkey);
 }
 
-#endif
+static void
+set_thread_id(int tid)
+{
+    pthread_setspecific(tidkey, (void*)(intptr_t)tid);
+}
+
+static void
+platform_launch(void)
+{
+    pthread_key_create(&tidkey, NULL);
+}
+
+#endif /* pthread threading */
 
 /* Win Thread */
 #ifdef NUMBA_WINTHREAD
+
+DWORD tidkey;
 
 typedef struct
 {
@@ -222,15 +247,28 @@ numba_new_thread(void *worker, void *arg)
 static int
 get_thread_id(void)
 {
-    return GetCurrentThreadId();
+    return (int)(intptr_t)TlsGetValue(tidkey);
 }
 
-#endif
+static void
+set_thread_id(int tid)
+{
+    TlsSetValue(tidkey, (void*)(intptr_t)tid);
+}
+
+static void
+platform_launch(void)
+{
+    tidkey = TlsAlloc();
+}
+
+#endif /* Windows threading */
 
 typedef struct Task
 {
     void (*func)(void *args, void *dims, void *steps, void *data);
     void *args, *dims, *steps, *data;
+    int tid;
 } Task;
 
 typedef struct
@@ -283,12 +321,20 @@ static THREAD_LOCAL(int) _TLS_num_threads = 0;
 static void
 set_num_threads(int count)
 {
+    if (!queues)
+    {
+        launch_threads(NUM_THREADS);
+    }
     _TLS_num_threads = count;
 }
 
 static int
 get_num_threads(void)
 {
+    if (!queues)
+    {
+        launch_threads(NUM_THREADS);
+    }
     // This is purely to permit the implementation to survive to the point
     // where it can exit cleanly as multiple threads cannot be used with this
     // backend
@@ -360,22 +406,22 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
 
     if(_DEBUG)
     {
-        printf("inner_ndim: %ld\n",inner_ndim);
-        printf("arg_len: %ld\n", arg_len);
-        printf("total: %ld\n", total);
-        printf("count: %ld\n", count);
+        printf("inner_ndim: %zd\n",inner_ndim);
+        printf("arg_len: %zd\n", arg_len);
+        printf("total: %zd\n", total);
+        printf("count: %zd\n", count);
 
         printf("dimensions: ");
         for(j = 0; j < arg_len; j++)
         {
-            printf("%ld, ", ((size_t *)dimensions)[j]);
+            printf("%zd, ", ((size_t *)dimensions)[j]);
         }
         printf("\n");
 
         printf("steps: ");
         for(j = 0; j < array_count; j++)
         {
-            printf("%ld, ", steps[j]);
+            printf("%zd, ", steps[j]);
         }
         printf("\n");
 
@@ -390,7 +436,7 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
     // threads will end up running.
     for (i = 0; i < NUM_THREADS; i++)
     {
-        add_task(sync_tls, (void *)(&num_threads), NULL, NULL, NULL);
+        add_task_internal(sync_tls, (void *)(&num_threads), NULL, NULL, NULL, i);
     }
     ready();
     synchronize();
@@ -420,7 +466,7 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
             printf("\ncount_space: ");
             for(j = 0; j < arg_len; j++)
             {
-                printf("%ld, ", count_space[j]);
+                printf("%zd, ", count_space[j]);
             }
             printf("\n");
         }
@@ -436,10 +482,10 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
 
             if(_DEBUG)
             {
-                printf("Index %ld\n", j);
+                printf("Index %zd\n", j);
                 printf("-->Got base %p\n", (void *)base);
-                printf("-->Got step %ld\n", step);
-                printf("-->Got offset %ld\n", offset);
+                printf("-->Got step %zd\n", step);
+                printf("-->Got offset %td\n", offset);
                 printf("-->Got addr %p\n", (void *)array_arg_space[j]);
             }
         }
@@ -452,7 +498,7 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
                 printf("%p, ", (void *)array_arg_space[j]);
             }
         }
-        add_task(fn, (void *)array_arg_space, (void *)count_space, steps, data);
+        add_task_internal(fn, (void *)array_arg_space, (void *)count_space, steps, data, i);
     }
 
     ready();
@@ -464,9 +510,14 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
 }
 
 static void
-add_task(void *fn, void *args, void *dims, void *steps, void *data)
+add_task_internal(void *fn, void *args, void *dims, void *steps, void *data, int tid)
 {
     void (*func)(void *args, void *dims, void *steps, void *data) = fn;
+
+    if (!queues)
+    {
+        launch_threads(NUM_THREADS);
+    }
 
     Queue *queue = &queues[queue_pivot];
 
@@ -476,12 +527,19 @@ add_task(void *fn, void *args, void *dims, void *steps, void *data)
     task->dims = dims;
     task->steps = steps;
     task->data = data;
+    task->tid = tid;
 
     /* Move pivot */
     if ( ++queue_pivot == queue_count )
     {
         queue_pivot = 0;
     }
+}
+
+static void
+add_task(void *fn, void *args, void *dims, void *steps, void *data)
+{
+    add_task_internal(fn, args, dims, steps, data, 0);
 }
 
 static
@@ -498,6 +556,7 @@ void thread_worker(void *arg)
         queue_state_wait(queue, READY, RUNNING);
 
         task = &queue->task;
+        set_thread_id(task->tid);
         task->func(task->args, task->dims, task->steps, task->data);
 
         /* Task is done. */
@@ -509,6 +568,8 @@ static void launch_threads(int count)
 {
     if (!queues)
     {
+        platform_launch();
+
         /* If queues are not yet allocated,
            create them, one for each thread. */
         int i;
@@ -533,6 +594,11 @@ static void launch_threads(int count)
 
 static void synchronize(void)
 {
+    // This probably isn't needed, but is put in as a guard
+    if (!queues)
+    {
+        launch_threads(NUM_THREADS);
+    }
     int i;
     for (i = 0; i < queue_count; ++i)
     {
@@ -542,6 +608,11 @@ static void synchronize(void)
 
 static void ready(void)
 {
+    // This probably isn't needed, but is put in as a guard
+    if (!queues)
+    {
+        launch_threads(NUM_THREADS);
+    }
     int i;
     for (i = 0; i < queue_count; ++i)
     {
@@ -553,8 +624,10 @@ static void reset_after_fork(void)
 {
     free(queues);
     queues = NULL;
-    NUM_THREADS = -1;
-    _INIT_NUM_THREADS = -1;
+    if (_INIT_NUM_THREADS != -1)
+    {
+        NUM_THREADS = _INIT_NUM_THREADS;
+    }
     _nesting_level = 0;
 }
 
@@ -565,25 +638,19 @@ MOD_INIT(workqueue)
     if (m == NULL)
         return MOD_ERROR_VAL;
 
-    PyObject_SetAttrString(m, "launch_threads",
-                           PyLong_FromVoidPtr(&launch_threads));
-    PyObject_SetAttrString(m, "synchronize",
-                           PyLong_FromVoidPtr(&synchronize));
-    PyObject_SetAttrString(m, "ready",
-                           PyLong_FromVoidPtr(&ready));
-    PyObject_SetAttrString(m, "add_task",
-                           PyLong_FromVoidPtr(&add_task));
-    PyObject_SetAttrString(m, "parallel_for",
-                           PyLong_FromVoidPtr(&parallel_for));
-    PyObject_SetAttrString(m, "do_scheduling_signed",
-                           PyLong_FromVoidPtr(&do_scheduling_signed));
-    PyObject_SetAttrString(m, "do_scheduling_unsigned",
-                           PyLong_FromVoidPtr(&do_scheduling_unsigned));
-    PyObject_SetAttrString(m, "set_num_threads",
-                           PyLong_FromVoidPtr((void*)&set_num_threads));
-    PyObject_SetAttrString(m, "get_num_threads",
-                           PyLong_FromVoidPtr((void*)&get_num_threads));
-    PyObject_SetAttrString(m, "get_thread_id",
-                           PyLong_FromVoidPtr((void*)&get_thread_id));
+    SetAttrStringFromVoidPointer(m, launch_threads);
+    SetAttrStringFromVoidPointer(m, synchronize);
+    SetAttrStringFromVoidPointer(m, ready);
+    SetAttrStringFromVoidPointer(m, add_task);
+    SetAttrStringFromVoidPointer(m, parallel_for);
+    SetAttrStringFromVoidPointer(m, do_scheduling_signed);
+    SetAttrStringFromVoidPointer(m, do_scheduling_unsigned);
+    SetAttrStringFromVoidPointer(m, set_num_threads);
+    SetAttrStringFromVoidPointer(m, get_num_threads);
+    SetAttrStringFromVoidPointer(m, get_thread_id);
+    SetAttrStringFromVoidPointer(m, set_parallel_chunksize);
+    SetAttrStringFromVoidPointer(m, get_parallel_chunksize);
+    SetAttrStringFromVoidPointer(m, get_sched_size);
+
     return MOD_SUCCESS_VAL(m);
 }

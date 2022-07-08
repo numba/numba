@@ -4,8 +4,10 @@ import re
 
 import numpy as np
 
-from numba.core import errors, types, utils
-
+from numba.core import errors, types
+from numba.core.typing.templates import signature
+from numba.np import npdatetime_helpers
+from numba.core.errors import TypingError
 
 # re-export
 from numba.core.cgutils import is_nonelike   # noqa: F401
@@ -28,7 +30,7 @@ FROM_DTYPE = {
 
     np.dtype('float32'): types.float32,
     np.dtype('float64'): types.float64,
-
+    np.dtype('float16'): types.float16,
     np.dtype('complex64'): types.complex64,
     np.dtype('complex128'): types.complex128,
 
@@ -94,17 +96,22 @@ def from_dtype(dtype):
     try:
         return FROM_DTYPE[dtype]
     except KeyError:
-        char = dtype.char
+        pass
 
+    try:
+        char = dtype.char
+    except AttributeError:
+        pass
+    else:
         if char in 'SU':
             return _from_str_dtype(dtype)
         if char in 'mM':
             return _from_datetime_dtype(dtype)
-        if char in 'V':
+        if char in 'V' and dtype.subdtype is not None:
             subtype = from_dtype(dtype.subdtype[0])
             return types.NestedArray(subtype, dtype.shape)
 
-    raise NotImplementedError(dtype)
+    raise errors.NumbaNotImplementedError(dtype)
 
 
 _as_dtype_letters = {
@@ -147,8 +154,9 @@ def as_dtype(nbtype):
         return np.dtype(spec)
     if isinstance(nbtype, types.PyObject):
         return np.dtype(object)
-    raise NotImplementedError("%r cannot be represented as a Numpy dtype"
-                              % (nbtype,))
+
+    msg = f"{nbtype} cannot be represented as a NumPy dtype"
+    raise errors.NumbaNotImplementedError(msg)
 
 
 def as_struct_dtype(rec):
@@ -278,6 +286,7 @@ def supported_ufunc_loop(ufunc, loop):
     legacy and when implementing new ufuncs the ufunc_db should be preferred,
     as it allows for a more fine-grained incremental support.
     """
+    # NOTE: Assuming ufunc for the CPUContext
     from numba.np import ufunc_db
     loop_sig = loop.ufunc_sig
     try:
@@ -320,6 +329,13 @@ class UFuncLoopSpec(collections.namedtuple('_UFuncLoopSpec',
         return [as_dtype(x) for x in self.outputs]
 
 
+def _ufunc_loop_sig(out_tys, in_tys):
+    if len(out_tys) == 1:
+        return signature(out_tys[0], *in_tys)
+    else:
+        return signature(types.Tuple(out_tys), *in_tys)
+
+
 def ufunc_can_cast(from_, to, has_mixed_inputs, casting='safe'):
     """
     A variant of np.can_cast() that can allow casting any integer to
@@ -356,11 +372,11 @@ def ufunc_find_matching_loop(ufunc, arg_types):
 
     try:
         np_input_types = [as_dtype(x) for x in input_types]
-    except NotImplementedError:
+    except errors.NumbaNotImplementedError:
         return None
     try:
         np_output_types = [as_dtype(x) for x in output_types]
-    except NotImplementedError:
+    except errors.NumbaNotImplementedError:
         return None
 
     # Whether the inputs are mixed integer / floating-point
@@ -382,7 +398,7 @@ def ufunc_find_matching_loop(ufunc, arg_types):
                   for letter in ufunc_letters[len(numba_types):]]
         return types
 
-    def set_output_dt_units(inputs, outputs, ufunc_inputs):
+    def set_output_dt_units(inputs, outputs, ufunc_inputs, ufunc_name):
         """
         Sets the output unit of a datetime type based on the input units
 
@@ -391,27 +407,44 @@ def ufunc_find_matching_loop(ufunc, arg_types):
         leads to an output of timedelta output. However, for those that do,
         the unit of output must be inferred based on the units of the inputs.
 
-        At the moment this function takes care of two cases
-         a) where all inputs are timedelta with the same unit (mm), and
-         therefore the output has the same unit.
-         If in the future this should be extended to a case with mixed units,
-         the rules should be implemented in `npdatetime_helpers` and called
-         from this function to set the correct output unit.
-         This case is used for arr.sum, and for arr1+arr2 where all arrays
-         are timedeltas
-         b) where left operand is a timedelta, ie the "m?" case. This case
-         is used for division, eg timedelta / int
+        At the moment this function takes care of two cases:
+        a) where all inputs are timedelta with the same unit (mm), and
+        therefore the output has the same unit.
+        This case is used for arr.sum, and for arr1+arr2 where all arrays
+        are timedeltas.
+        If in the future this needs to be extended to a case with mixed units,
+        the rules should be implemented in `npdatetime_helpers` and called
+        from this function to set the correct output unit.
+        b) where left operand is a timedelta, i.e. the "m?" case. This case
+        is used for division, eg timedelta / int.
 
-         At the time of writing, numba does not support addition of timedelta
-         and other types, so this function does not consider the case "?m",
-         ie where timedelta is the right operand to a non-timedelta left operand
-         To extend it in the future, just add another elif clause.
+        At the time of writing, Numba does not support addition of timedelta
+        and other types, so this function does not consider the case "?m",
+        i.e. where timedelta is the right operand to a non-timedelta left
+        operand. To extend it in the future, just add another elif clause.
         """
         def make_specific(outputs, unit):
             new_outputs = []
             for out in outputs:
                 if isinstance(out, types.NPTimedelta) and out.unit == "":
                     new_outputs.append(types.NPTimedelta(unit))
+                else:
+                    new_outputs.append(out)
+            return new_outputs
+
+        def make_datetime_specific(outputs, dt_unit, td_unit):
+            new_outputs = []
+            for out in outputs:
+                if isinstance(out, types.NPDatetime) and out.unit == "":
+                    unit = npdatetime_helpers.combine_datetime_timedelta_units(
+                        dt_unit, td_unit)
+                    if unit is None:
+                        raise TypeError(f"ufunc '{ufunc_name}' is not " +
+                                        "supported between " +
+                                        f"datetime64[{dt_unit}] " +
+                                        f"and timedelta64[{td_unit}]"
+                                        )
+                    new_outputs.append(types.NPDatetime(unit))
                 else:
                     new_outputs.append(out)
             return new_outputs
@@ -426,6 +459,20 @@ def ufunc_find_matching_loop(ufunc, arg_types):
             else:
                 return outputs
             return new_outputs
+        elif ufunc_inputs == 'mM':
+            # case where the left operand has timedelta type
+            # and the right operand has datetime
+            td_unit = inputs[0].unit
+            dt_unit = inputs[1].unit
+            return make_datetime_specific(outputs, dt_unit, td_unit)
+
+        elif ufunc_inputs == 'Mm':
+            # case where the right operand has timedelta type
+            # and the left operand has datetime
+            dt_unit = inputs[0].unit
+            td_unit = inputs[1].unit
+            return make_datetime_specific(outputs, dt_unit, td_unit)
+
         elif ufunc_inputs[0] == 'm':
             # case where the left operand has timedelta type
             unit = inputs[0].unit
@@ -440,7 +487,11 @@ def ufunc_find_matching_loop(ufunc, arg_types):
 
     for candidate in ufunc.types:
         ufunc_inputs = candidate[:ufunc.nin]
-        ufunc_outputs = candidate[-ufunc.nout:]
+        ufunc_outputs = candidate[-ufunc.nout:] if ufunc.nout else []
+
+        if 'e' in ufunc_inputs:
+            # Skip float16 arrays since we don't have implementation for them
+            continue
         if 'O' in ufunc_inputs:
             # Skip object arrays
             continue
@@ -473,12 +524,14 @@ def ufunc_find_matching_loop(ufunc, arg_types):
             try:
                 inputs = choose_types(input_types, ufunc_inputs)
                 outputs = choose_types(output_types, ufunc_outputs)
-                # if the left operand or both are timedeltas, then the output
-                # units need to be determined.
-                if ufunc_inputs[0] == 'm':
-                    outputs = set_output_dt_units(inputs, outputs, ufunc_inputs)
+                # if the left operand or both are timedeltas, or the first
+                # argument is datetime and the second argument is timedelta,
+                # then the output units need to be determined.
+                if ufunc_inputs[0] == 'm' or ufunc_inputs == 'Mm':
+                    outputs = set_output_dt_units(inputs, outputs,
+                                                  ufunc_inputs, ufunc.__name__)
 
-            except NotImplementedError:
+            except errors.NumbaNotImplementedError:
                 # One of the selected dtypes isn't supported by Numba
                 # (e.g. float16), try other candidates
                 continue
@@ -579,7 +632,7 @@ def farray(ptr, shape, dtype=None):
     given *shape*, in Fortran order.  If *dtype* is given, it is used as the
     array's dtype, otherwise the array's dtype is inferred from *ptr*'s type.
     """
-    if not isinstance(shape, utils.INT_TYPES):
+    if not isinstance(shape, int):
         shape = shape[::-1]
     return carray(ptr, shape, dtype).T
 
@@ -655,7 +708,13 @@ def type_can_asarray(arr):
     implementation, False otherwise.
     """
 
-    ok = (types.Array, types.Sequence, types.Tuple,
+    ok = (types.Array, types.Sequence, types.Tuple, types.StringLiteral,
           types.Number, types.Boolean, types.containers.ListType)
 
     return isinstance(arr, ok)
+
+
+def check_is_integer(v, name):
+    """Raises TypingError if the value is not an integer."""
+    if not isinstance(v, (int, types.Integer)):
+        raise TypingError('{} must be an integer'.format(name))

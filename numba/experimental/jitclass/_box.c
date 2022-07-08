@@ -11,7 +11,7 @@ typedef struct {
 
 /* Store function defined in numba.core.runtime._nrt_python for use in box_dealloc.
  * It points to a function is code segment that does not need user deallocation
- * and does not disappear while the process is stil running.
+ * and does not disappear while the process is still running.
  */
 static void (*MemInfo_release)(void*) = NULL;
 

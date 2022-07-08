@@ -5,11 +5,6 @@ The Numba repository is quite large, and due to age has functionality spread
 around many locations.  To help orient developers, this document will try to
 summarize where different categories of functionality can be found.
 
-.. note::
-    It is likely that the organization of the code base will change in the
-    future to improve organization.  Follow `issue #3807 <https://github.com/numba/numba/issues/3807>`_
-    for more details.
-
 
 Support Files
 -------------
@@ -25,6 +20,7 @@ Build and Packaging
 - :ghfile:`.flake8` - Preferences for code formatting.  Files should be
   fixed and removed from the exception list as time allows.
 - :ghfile:`.pre-commit-config.yaml` - Configuration file for pre-commit hooks.
+- :ghfile:`.readthedocs.yml` - Configuration file for Read the Docs.
 - :ghfile:`buildscripts/condarecipe.local` - Conda build recipe
 - :ghfile:`buildscripts/condarecipe_clone_icc_rt` - Recipe to build a
   standalone icc_rt package.
@@ -42,8 +38,8 @@ Continuous Integration
 - :ghfile:`codecov.yml` - Codecov.io coverage reporting
 
 
-Documentation / Examples
-''''''''''''''''''''''''
+Documentation
+'''''''''''''
 - :ghfile:`LICENSE` - License for Numba
 - :ghfile:`LICENSES.third-party` - License for third party code vendored
   into Numba
@@ -61,19 +57,12 @@ Documentation / Examples
 - :ghfile:`docs/gh-pages.py` - Utility script to update Numba docs (stored
   as gh-pages)
 - :ghfile:`docs/make.bat` - Not used (remove?)
-- :ghfile:`examples/` - Example scripts demonstrating numba (re/move to
-  numba-examples repo?)
-- :ghfile:`examples/notebooks/` - Example notebooks (re/move to
-  numba-examples repo?)
-- :ghfile:`benchmarks/` - Benchmark scripts (re/move to numba-examples
-  repo?)
-- :ghfile:`tutorials/` - Tutorial notebooks (definitely out of date, should
-  remove and direct to external tutorials)
+- :ghfile:`docs/requirements.txt` - Pip package requirements for building docs
+  with Read the Docs.
 - :ghfile:`numba/scripts/generate_lower_listing.py` - Dump all registered
   implementations decorated with ``@lower*`` for reference
   documentation.  Currently misses implementations from the higher
   level extension API.
-
 
 
 Numba Source Code
@@ -93,6 +82,7 @@ These define aspects of the public Numba interface.
   regular functions on the CPU
 - :ghfile:`numba/core/extending.py` - Public decorators for extending Numba
   (``overload``, ``intrinsic``, etc)
+  - :ghfile:`numba/experimental/structref.py` - Public API for defining a mutable struct
 - :ghfile:`numba/core/ccallback.py` - ``@cfunc`` decorator for compiling
   functions to a fixed C signature.  Used to make callbacks.
 - :ghfile:`numba/np/ufunc/decorators.py` - ufunc/gufunc compilation
@@ -103,6 +93,8 @@ These define aspects of the public Numba interface.
   Numba IR
 - :ghfile:`numba/core/annotations/pretty_annotate.py` - Code highlighting of
   Numba functions and types (both ANSI terminal and HTML)
+- :ghfile:`numba/core/event.py` - A simple event system for applications to
+  listen to specific compiler events.
 
 
 Dispatching
@@ -111,10 +103,10 @@ Dispatching
 - :ghfile:`numba/core/dispatcher.py` - Dispatcher objects are compiled functions
   produced by ``@jit``.  A dispatcher has different implementations
   for different type signatures.
-- :ghfile:`numba/_dispatcher.{h,c}` - C interface to C++ dispatcher
-  implementation
-- :ghfile:`numba/_dispatcherimpl.cpp` - C++ dispatcher implementation (for
-  speed on common data types)
+- :ghfile:`numba/_dispatcher.cpp` - C++ dispatcher implementation (for speed on
+  common data types)
+- :ghfile:`numba/core/retarget.py` - Support for dispatcher objects to switch
+  target via a specific with-context.
 
 
 Compiler Pipeline
@@ -143,8 +135,6 @@ Compiler Pipeline
   print nodes in the IR
 - :ghfile:`numba/core/rewrites/static_raise.py` - Converts exceptions with
   static arguments into a special form that can be lowered
-- :ghfile:`numba/core/rewrites/macros.py` - Generic support for macro expansion
-  in the Numba IR
 - :ghfile:`numba/core/rewrites/static_getitem.py` - Rewrites getitem and setitem
   with constant arguments to allow type inference
 - :ghfile:`numba/core/rewrites/static_binop.py` - Rewrites binary operations
@@ -157,12 +147,15 @@ Compiler Pipeline
   variable lifetime, inserts del operations, and handles generators
 - :ghfile:`numba/core/lowering.py` - General implementation of lowering Numba IR
   to LLVM
+  :ghfile:`numba/core/environment.py` - Runtime environment object
 - :ghfile:`numba/core/withcontexts.py` - General scaffolding for implementing
   context managers in nopython mode, and the objectmode context
   manager
 - :ghfile:`numba/core/pylowering.py` - Lowering of Numba IR in object mode
 - :ghfile:`numba/core/pythonapi.py` - LLVM IR code generation to interface with
   CPython API
+- :ghfile:`numba/core/targetconfig.py` - Utils for target configurations such
+  as compiler flags.
 
 
 Type Management
@@ -232,6 +225,8 @@ Misc Support
   patterns in LLVM IR
 - :ghfile:`numba/core/utils.py` - Python 2 backports of Python 3 functionality
   (also imports local copy of ``six``)
+- :ghfile:`numba/core/overload_glue.py` - Functions for wrapping split typing
+  and lowering API use cases into overloads.
 - :ghfile:`numba/misc/appdirs.py` - Vendored package for determining application
   config directories on every platform
 - :ghfile:`numba/core/compiler_lock.py` - Global compiler lock because Numba's
@@ -268,7 +263,9 @@ Misc Support
 - :ghfile:`numba/core/caching.py` - Disk cache for compiled functions
 - :ghfile:`numba/np/npdatetime.py` - Helper functions for implementing NumPy
   datetime64 support
-
+- :ghfile:`numba/misc/llvm_pass_timings.py` - Helper to record timings of
+  LLVM passes.
+- :ghfile:`numba/cloudpickle` - Vendored cloudpickle subpackage
 
 Core Python Data Types
 ''''''''''''''''''''''
@@ -369,6 +366,8 @@ that must be matched during type inference.
 - :ghfile:`numba/core/typing/cffi_utils.py` - Typing of CFFI objects
 - :ghfile:`numba/core/typing/typeof.py` - Implementation of typeof operations
   (maps Python object to Numba type)
+- :ghfile:`numba/core/typing/asnumbatype.py` - Implementation of
+  ``as_numba_type`` operations (maps Python types to Numba type)
 - :ghfile:`numba/core/typing/npdatetime.py` - Datetime dtype support for NumPy
   arrays
 
@@ -402,6 +401,8 @@ typing and implementation to be specified together.
   needed to link generated code
 - :ghfile:`numba/core/fastmathpass.py` - Rewrite pass to add fastmath
   attributes to function call sites and binary operations
+- :ghfile:`numba/core/removerefctpass.py` - Rewrite pass to remove
+  unnecessary incref/decref pairs
 - :ghfile:`numba/core/descriptors.py` - empty base class for all target
   descriptors (is this needed?)
 - :ghfile:`numba/cpython/builtins.py` - Python builtin functions and
@@ -478,7 +479,6 @@ CPU unit tests (GPU target unit tests listed in later sections
 
 - :ghfile:`runtests.py` - Convenience script that launches test runner and
   turns on full compiler tracebacks
-- :ghfile:`run_coverage.py` - Runs test suite with coverage tracking enabled
 - :ghfile:`.coveragerc` - Coverage.py configuration
 - :ghfile:`numba/runtests.py` - Entry point to unittest runner
 - :ghfile:`numba/testing/_runtests.py` - Implementation of custom test runner
@@ -542,9 +542,9 @@ Note that the CUDA target does reuse some parts of the CPU target.
 - :ghfile:`numba/cuda/compiler.py` - Compiler pipeline for CUDA target
 - :ghfile:`numba/cuda/intrinsic_wrapper.py` - CUDA device intrinsics
   (shuffle, ballot, etc)
-- :ghfile:`numba/cuda/initialize.py` - Defered initialization of the CUDA
+- :ghfile:`numba/cuda/initialize.py` - Deferred initialization of the CUDA
   device and subsystem.  Called only when user imports ``numba.cuda``
-- :ghfile:`numba/cuda/simulator_init.py` - Initalizes the CUDA simulator
+- :ghfile:`numba/cuda/simulator_init.py` - Initializes the CUDA simulator
   subsystem (only when user requests it with env var)
 - :ghfile:`numba/cuda/random.py` - Implementation of random number generator
 - :ghfile:`numba/cuda/api.py` - User facing APIs imported into ``numba.cuda.*``
@@ -580,49 +580,3 @@ Note that the CUDA target does reuse some parts of the CPU target.
 - :ghfile:`numba/cuda/tests/cudadrv/` - Tests of Python wrapper around CUDA
   API
 
-
-ROCm GPU Target
-'''''''''''''''
-
-Note that the ROCm target does reuse some parts of the CPU target, and
-duplicates some code from CUDA target.  A future refactoring could
-pull out the common subset of CUDA and ROCm.  An older version of this
-target was based on the HSA API, so "hsa" appears in many places.
-
-- :ghfile:`numba/roc` - ROCm GPU target for AMD GPUs
-- :ghfile:`numba/roc/descriptor.py` - TargetDescriptor subclass for ROCm
-  target
-- :ghfile:`numba/roc/enums.py` - Internal constants
-- :ghfile:`numba/roc/mathdecl.py` - Declarations of math functions that can
-  be used on device
-- :ghfile:`numba/roc/mathimpl.py` - Implementations of math functions for
-  device
-- :ghfile:`numba/roc/compiler.py` - Compiler pipeline for ROCm target
-- :ghfile:`numba/roc/hlc` - Wrapper around LLVM interface for AMD GPU
-- :ghfile:`numba/roc/initialize.py` - Register ROCm target for ufunc/gufunc
-  compiler
-- :ghfile:`numba/roc/hsadecl.py` - Type signatures for ROCm device API in
-  Python
-- :ghfile:`numba/roc/hsaimpl.py` - Implementations of ROCm device API
-- :ghfile:`numba/roc/dispatch.py` - ufunc/gufunc dispatcher
-- :ghfile:`numba/roc/README.md` - Notes on testing target (should be
-  deleted)
-- :ghfile:`numba/roc/api.py` - Host API for ROCm actions
-- :ghfile:`numba/roc/gcn_occupancy.py` - Heuristic to compute occupancy of
-  kernels
-- :ghfile:`numba/roc/stubs.py` - Host stubs for device functions
-- :ghfile:`numba/roc/vectorizers.py` - Builds ufuncs
-- :ghfile:`numba/roc/target.py` - Target and typing contexts
-- :ghfile:`numba/roc/hsadrv` - Python wrapper around ROCm (based on HSA)
-  driver API calls
-- :ghfile:`numba/roc/codegen.py` - Codegen subclass for ROCm target
-- :ghfile:`numba/roc/decorators.py` - ``@jit`` decorator for kernels and
-  device functions
-- :ghfile:`numba/roc/servicelib/threadlocal.py` - Thread-local stack used by ROC
-  targets
-- :ghfile:`numba/roc/servicelib/service.py` - Should be removed?
-- :ghfile:`numba/roc/tests` - Unit tests for ROCm target
-- :ghfile:`numba/roc/tests/hsapy` - Tests of compiling ROCm kernels written
-  in Python syntax
-- :ghfile:`numba/roc/tests/hsadrv` - Tests of Python wrapper on platform
-  API.

@@ -108,6 +108,8 @@ def make_closure(x):
 
 closure1 = make_closure(3)
 closure2 = make_closure(5)
+closure3 = make_closure(7)
+closure4 = make_closure(9)
 
 
 biggie = np.arange(10**6)
@@ -156,9 +158,20 @@ class _TestModule(TestCase):
         aligned_rec = mod.record_return(mod.aligned_arr, 1)
         self.assertPreciseEqual(tuple(aligned_rec), (2, 43.5))
 
-    # For 2.x
-    def runTest(self):
-        raise NotImplementedError
+
+@jit(cache=True)
+def first_class_function_mul(x):
+    return x * x
+
+
+@jit(cache=True)
+def first_class_function_add(x):
+    return x + x
+
+
+@jit(cache=True)
+def first_class_function_usecase(f, x):
+    return f(x)
 
 
 def self_test():

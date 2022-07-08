@@ -2,22 +2,16 @@ import numpy as np
 from numba import vectorize
 from numba import cuda, float64
 from numba.cuda.testing import skip_on_cudasim, CUDATestCase
-from numba.core import config
 import unittest
 
 sig = [float64(float64, float64)]
-
-
-target='cuda'
-if config.ENABLE_CUDASIM:
-    target='cpu'
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
 class TestCUDAVectorizeScalarArg(CUDATestCase):
 
     def test_vectorize_scalar_arg(self):
-        @vectorize(sig, target=target)
+        @vectorize(sig, target='cuda')
         def vector_add(a, b):
             return a + b
 
@@ -30,7 +24,7 @@ class TestCUDAVectorizeScalarArg(CUDATestCase):
             np.arange(1, 11, dtype=np.float64))
 
     def test_vectorize_all_scalars(self):
-        @vectorize(sig, target=target)
+        @vectorize(sig, target='cuda')
         def vector_add(a, b):
             return a + b
 

@@ -4,15 +4,18 @@ import functools
 import inspect
 import os
 import operator
-import threading
 import timeit
 import math
 import sys
 import traceback
 import weakref
 import warnings
+import threading
+import contextlib
+
 from types import ModuleType
-from collections.abc import Mapping
+from importlib import import_module
+from collections.abc import Mapping, Sequence
 import numpy as np
 
 from inspect import signature as pysignature # noqa: F401
@@ -21,77 +24,8 @@ from inspect import Parameter as pyParameter # noqa: F401
 
 from numba.core.config import (PYVERSION, MACHINE_BITS, # noqa: F401
                                DEVELOPER_MODE) # noqa: F401
+from numba.core import config
 from numba.core import types
-
-INT_TYPES = (int,)
-longint = int
-get_ident = threading.get_ident
-intern = sys.intern
-file_replace = os.replace
-asbyteint = int
-
-# ------------------------------------------------------------------------------
-# Start: Originally from `numba.six` under the following license
-
-"""Utilities for writing code that runs on Python 2 and 3"""
-
-# Copyright (c) 2010-2015 Benjamin Peterson
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
-
-def add_metaclass(metaclass):
-    """Class decorator for creating a class with a metaclass."""
-    def wrapper(cls):
-        orig_vars = cls.__dict__.copy()
-        slots = orig_vars.get('__slots__')
-        if slots is not None:
-            if isinstance(slots, str):
-                slots = [slots]
-            for slots_var in slots:
-                orig_vars.pop(slots_var)
-        orig_vars.pop('__dict__', None)
-        orig_vars.pop('__weakref__', None)
-        return metaclass(cls.__name__, cls.__bases__, orig_vars)
-    return wrapper
-
-
-def reraise(tp, value, tb=None):
-    if value is None:
-        value = tp()
-    if value.__traceback__ is not tb:
-        raise value.with_traceback(tb)
-    raise value
-
-
-def iteritems(d, **kw):
-    return iter(d.items(**kw))
-
-
-def itervalues(d, **kw):
-    return iter(d.values(**kw))
-
-
-get_function_globals = operator.attrgetter("__globals__")
-
-# End: Originally from `numba.six` under the following license
-# ------------------------------------------------------------------------------
 
 
 def erase_traceback(exc_value):
@@ -101,6 +35,23 @@ def erase_traceback(exc_value):
     if exc_value.__traceback__ is not None:
         traceback.clear_frames(exc_value.__traceback__)
     return exc_value.with_traceback(None)
+
+
+def safe_relpath(path, start=os.curdir):
+    """
+    Produces a "safe" relative path, on windows relpath doesn't work across
+    drives as technically they don't share the same root.
+    See: https://bugs.python.org/issue7195 for details.
+    """
+    # find the drive letters for path and start and if they are not the same
+    # then don't use relpath!
+    drive_letter = lambda x: os.path.splitdrive(os.path.abspath(x))[0]
+    drive_path = drive_letter(path)
+    drive_start = drive_letter(start)
+    if drive_path != drive_start:
+        return os.path.abspath(path)
+    else:
+        return os.path.relpath(path, start=start)
 
 
 # Mapping between operator module functions and the corresponding built-in
@@ -128,7 +79,8 @@ BINOPS_TO_OPERATORS = {
     'is': operator.is_,
     'is not': operator.is_not,
     # This one has its args reversed!
-    'in': operator.contains
+    'in': operator.contains,
+    '@': operator.matmul,
 }
 
 INPLACE_BINOPS_TO_OPERATORS = {
@@ -144,6 +96,7 @@ INPLACE_BINOPS_TO_OPERATORS = {
     '^=': operator.ixor,
     '<<=': operator.ilshift,
     '>>=': operator.irshift,
+    '@=': operator.imatmul,
 }
 
 UNARY_BUITINS_TO_OPERATORS = {
@@ -197,9 +150,6 @@ OPERATORS_TO_BUILTINS = {
     operator.truth: 'is_true',
 }
 
-BINOPS_TO_OPERATORS['@'] = operator.matmul
-INPLACE_BINOPS_TO_OPERATORS['@='] = operator.imatmul
-
 
 _shutting_down = False
 
@@ -225,10 +175,87 @@ def shutting_down(globals=globals):
 # which atexit is True. Some of these finalizers may call shutting_down() to
 # check whether the interpreter is shutting down. For this to behave correctly,
 # we need to make sure that _at_shutdown is called before the finalizer exit
-# function. Since atexit operates as a LIFO stack, we first contruct a dummy
+# function. Since atexit operates as a LIFO stack, we first construct a dummy
 # finalizer then register atexit to ensure this ordering.
 weakref.finalize(lambda: None, lambda: None)
 atexit.register(_at_shutdown)
+
+
+def use_new_style_errors():
+    """Returns True if new style errors are to be used, false otherwise"""
+    # This uses `config` so as to make sure it gets the current value from the
+    # module as e.g. some tests mutate the config with `override_config`.
+    return config.CAPTURED_ERRORS == 'new_style'
+
+
+def use_old_style_errors():
+    """Returns True if old style errors are to be used, false otherwise"""
+    # This uses `config` so as to make sure it gets the current value from the
+    # module as e.g. some tests mutate the config with `override_config`.
+    return config.CAPTURED_ERRORS == 'old_style'
+
+
+class ThreadLocalStack:
+    """A TLS stack container.
+
+    Uses the BORG pattern and stores states in threadlocal storage.
+    """
+    _tls = threading.local()
+    stack_name: str
+    _registered = {}
+
+    def __init_subclass__(cls, *, stack_name, **kwargs):
+        super().__init_subclass__(**kwargs)
+        # Register stack_name mapping to the new subclass
+        assert stack_name not in cls._registered, \
+            f"stack_name: '{stack_name}' already in use"
+        cls.stack_name = stack_name
+        cls._registered[stack_name] = cls
+
+    def __init__(self):
+        # This class must not be used directly.
+        assert type(self) is not ThreadLocalStack
+        tls = self._tls
+        attr = f"stack_{self.stack_name}"
+        try:
+            tls_stack = getattr(tls, attr)
+        except AttributeError:
+            tls_stack = list()
+            setattr(tls, attr, tls_stack)
+
+        self._stack = tls_stack
+
+    def push(self, state):
+        """Push to the stack
+        """
+        self._stack.append(state)
+
+    def pop(self):
+        """Pop from the stack
+        """
+        return self._stack.pop()
+
+    def top(self):
+        """Get the top item on the stack.
+
+        Raises IndexError if the stack is empty. Users should check the size
+        of the stack beforehand.
+        """
+        return self._stack[-1]
+
+    def __len__(self):
+        return len(self._stack)
+
+    @contextlib.contextmanager
+    def enter(self, state):
+        """A contextmanager that pushes ``state`` for the duration of the
+        context.
+        """
+        self.push(state)
+        try:
+            yield
+        finally:
+            self.pop()
 
 
 class ConfigOptions(object):
@@ -281,6 +308,45 @@ class ConfigOptions(object):
         return hash(tuple(sorted(self._values.items())))
 
 
+def order_by_target_specificity(target, templates, fnkey=''):
+    """This orders the given templates from most to least specific against the
+    current "target". "fnkey" is an indicative typing key for use in the
+    exception message in the case that there's no usable templates for the
+    current "target".
+    """
+    # No templates... return early!
+    if templates == []:
+        return []
+
+    from numba.core.target_extension import target_registry
+
+    # fish out templates that are specific to the target if a target is
+    # specified
+    DEFAULT_TARGET = 'generic'
+    usable = []
+    for ix, temp_cls in enumerate(templates):
+        # ? Need to do something about this next line
+        md = getattr(temp_cls, "metadata", {})
+        hw = md.get('target', DEFAULT_TARGET)
+        if hw is not None:
+            hw_clazz = target_registry[hw]
+            if target.inherits_from(hw_clazz):
+                usable.append((temp_cls, hw_clazz, ix))
+
+    # sort templates based on target specificity
+    def key(x):
+        return target.__mro__.index(x[1])
+    order = [x[0] for x in sorted(usable, key=key)]
+
+    if not order:
+        msg = (f"Function resolution cannot find any matches for function "
+               f"'{fnkey}' for the current target: '{target}'.")
+        from numba.core.errors import UnsupportedError
+        raise UnsupportedError(msg)
+
+    return order
+
+
 class SortedMap(Mapping):
     """Immutable
     """
@@ -310,26 +376,67 @@ class UniqueDict(dict):
         super(UniqueDict, self).__setitem__(key, value)
 
 
-# Django's cached_property
-# see https://docs.djangoproject.com/en/dev/ref/utils/#django.utils.functional.cached_property    # noqa: E501
+if PYVERSION > (3, 7):
+    from functools import cached_property
+else:
+    from threading import RLock
 
-class cached_property(object):
-    """
-    Decorator that converts a method with a single self argument into a
-    property cached on the instance.
+    # The following cached_property() implementation is adapted from CPython:
+    # https://github.com/python/cpython/blob/3.8/Lib/functools.py#L924-L976
+    # commit SHA: 12b714391e485d0150b343b114999bae4a0d34dd
 
-    Optional ``name`` argument allows you to make cached properties of other
-    methods. (e.g.  url = cached_property(get_absolute_url, name='url') )
-    """
-    def __init__(self, func, name=None):
-        self.func = func
-        self.name = name or func.__name__
+    ###########################################################################
+    ### cached_property() - computed once per instance, cached as attribute
+    ###########################################################################
 
-    def __get__(self, instance, type=None):
-        if instance is None:
-            return self
-        res = instance.__dict__[self.name] = self.func(instance)
-        return res
+    _NOT_FOUND = object()
+
+    class cached_property:
+        def __init__(self, func):
+            self.func = func
+            self.attrname = None
+            self.__doc__ = func.__doc__
+            self.lock = RLock()
+
+        def __set_name__(self, owner, name):
+            if self.attrname is None:
+                self.attrname = name
+            elif name != self.attrname:
+                raise TypeError(
+                    "Cannot assign the same cached_property to two different names " # noqa: E501
+                    f"({self.attrname!r} and {name!r})."
+                )
+
+        def __get__(self, instance, owner=None):
+            if instance is None:
+                return self
+            if self.attrname is None:
+                raise TypeError(
+                    "Cannot use cached_property instance without calling __set_name__ on it.") # noqa: E501
+            try:
+                cache = instance.__dict__
+            except AttributeError:  # not all objects have __dict__ (e.g. class defines slots) # noqa: E501
+                msg = (
+                    f"No '__dict__' attribute on {type(instance).__name__!r} "
+                    f"instance to cache {self.attrname!r} property."
+                )
+                raise TypeError(msg) from None
+            val = cache.get(self.attrname, _NOT_FOUND)
+            if val is _NOT_FOUND:
+                with self.lock:
+                    # check if another thread filled cache while we awaited lock
+                    val = cache.get(self.attrname, _NOT_FOUND)
+                    if val is _NOT_FOUND:
+                        val = self.func(instance)
+                        try:
+                            cache[self.attrname] = val
+                        except TypeError:
+                            msg = (
+                                f"The '__dict__' attribute on {type(instance).__name__!r} instance "    # noqa: E501
+                                f"does not support item assignment for caching {self.attrname!r} property." # noqa: E501
+                            )
+                            raise TypeError(msg) from None
+            return val
 
 
 def runonce(fn):
@@ -349,7 +456,7 @@ def bit_length(intval):
     """
     Return the number of bits necessary to represent integer `intval`.
     """
-    assert isinstance(intval, INT_TYPES)
+    assert isinstance(intval, int)
     if intval >= 0:
         return len(bin(intval)) - 2
     else:
@@ -420,9 +527,6 @@ def benchmark(func, maxsec=1):
     return BenchmarkResult(func, records, number)
 
 
-RANGE_ITER_OBJECTS = (builtins.range,)
-
-
 # A dummy module for dynamically-generated functions
 _dynamic_modname = '<dynamic>'
 _dynamic_module = ModuleType(_dynamic_modname)
@@ -477,8 +581,7 @@ def unified_function_type(numba_types, require_precise=True):
 
     Parameters
     ----------
-    numba_types : tuple
-      Numba type instances.
+    numba_types : Sequence of numba Type instances.
     require_precise : bool
       If True, the returned Numba function type must be precise.
 
@@ -500,9 +603,10 @@ def unified_function_type(numba_types, require_precise=True):
     """
     from numba.core.errors import NumbaExperimentalFeatureWarning
 
-    if not (numba_types
-            and isinstance(numba_types[0],
-                           (types.Dispatcher, types.FunctionType))):
+    if not (isinstance(numba_types, Sequence) and
+            len(numba_types) > 0 and
+            isinstance(numba_types[0],
+                       (types.Dispatcher, types.FunctionType))):
         return
 
     warnings.warn("First-class function type feature is experimental",
@@ -528,12 +632,13 @@ def unified_function_type(numba_types, require_precise=True):
             if mnargs is None:
                 mnargs = mxargs = t.nargs
             elif not (mnargs == mxargs == t.nargs):
-                return numba_types
+                return
             if isinstance(t, types.UndefinedFunctionType):
                 if undefined_function is None:
                     undefined_function = t
                 else:
-                    assert undefined_function == t
+                    # Refuse to unify using function type
+                    return
                 dispatchers.update(t.dispatchers)
             else:
                 if function is None:
@@ -555,3 +660,63 @@ def unified_function_type(numba_types, require_precise=True):
         function = types.UndefinedFunctionType(mnargs, dispatchers)
 
     return function
+
+
+class _RedirectSubpackage(ModuleType):
+    """Redirect a subpackage to a subpackage.
+
+    This allows all references like:
+
+    >>> from numba.old_subpackage import module
+    >>> module.item
+
+    >>> import numba.old_subpackage.module
+    >>> numba.old_subpackage.module.item
+
+    >>> from numba.old_subpackage.module import item
+    """
+    def __init__(self, old_module_locals, new_module):
+        old_module = old_module_locals['__name__']
+        super().__init__(old_module)
+
+        self.__old_module_states = {}
+        self.__new_module = new_module
+
+        new_mod_obj = import_module(new_module)
+
+        # Map all sub-modules over
+        for k, v in new_mod_obj.__dict__.items():
+            # Get attributes so that `subpackage.xyz` and
+            # `from subpackage import xyz` work
+            setattr(self, k, v)
+            if isinstance(v, ModuleType):
+                # Map modules into the interpreter so that
+                # `import subpackage.xyz` works
+                sys.modules[f"{old_module}.{k}"] = sys.modules[v.__name__]
+
+        # copy across dunders so that package imports work too
+        for attr, value in old_module_locals.items():
+            if attr.startswith('__') and attr.endswith('__'):
+                if attr != "__builtins__":
+                    setattr(self, attr, value)
+                    self.__old_module_states[attr] = value
+
+    def __reduce__(self):
+        args = (self.__old_module_states, self.__new_module)
+        return _RedirectSubpackage, args
+
+
+def get_hashable_key(value):
+    """
+        Given a value, returns a key that can be used
+        as a hash. If the value is hashable, we return
+        the value, otherwise we return id(value).
+
+        See discussion in gh #6957
+    """
+    try:
+        hash(value)
+    except TypeError:
+        return id(value)
+    else:
+        return value
