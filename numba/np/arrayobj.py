@@ -4989,6 +4989,7 @@ def np_array_typer(typingctx, object, dtype):
 
 @intrinsic
 def np_array(typingctx, obj, dtype):
+    _check_const_str_dtype("array", dtype)
     ret = np_array_typer(typingctx, obj, dtype)
     sig = ret(obj, dtype)
 
@@ -5015,7 +5016,6 @@ def np_array(typingctx, obj, dtype):
 @overload(np.array)
 def impl_np_array(object, dtype=None):
     _check_const_str_dtype("array", dtype)
-
     if not type_can_asarray(object):
         raise errors.TypingError('The argument "object" must '
                                  'be array-like')
