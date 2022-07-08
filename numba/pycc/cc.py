@@ -154,7 +154,7 @@ class CC(object):
         here = os.path.dirname(__file__)
         mixin_sources = self._mixin_sources[:]
         if self._use_nrt:
-            mixin_sources.append('../core/runtime/nrt.c')
+            mixin_sources.append('../core/runtime/nrt.cpp')
         return [os.path.join(here, f) for f in mixin_sources]
 
     def _get_mixin_defines(self):
