@@ -28,8 +28,6 @@ extern "C"
 typedef void (*NRT_dtor_function)(void *ptr, size_t size, void *info);
 typedef void (*NRT_dealloc_func)(void *ptr, void *dealloc_info);
 
-typedef struct MemSys NRT_MemSys;
-
 typedef void *(*NRT_malloc_func)(size_t size);
 typedef void *(*NRT_realloc_func)(void *ptr, size_t new_size);
 typedef void (*NRT_free_func)(void *ptr);

@@ -43,9 +43,8 @@ static void nrt_fatal_error(const char *msg)
 /*
  * Global resources.
  */
-extern "C" {
 
-struct MemSys {
+struct NRT_MemSys {
     /* Shutdown flag */
     int shutting;
     /* Stats */
@@ -62,7 +61,6 @@ struct MemSys {
 /* The Memory System object */
 static NRT_MemSys TheMSys;
 
-}
 
 extern "C" void NRT_MemSys_init(void) {
     TheMSys.shutting = 0;
@@ -353,7 +351,7 @@ extern "C" void NRT_MemInfo_release(NRT_MemInfo *mi) {
                                                             mi->refct.load()));
     assert (mi->refct > 0 && "RefCt cannot be 0");
     /* RefCt drop to zero */
-    if ((--mi->refct) == 0) {
+    if ((--(mi->refct)) == 0) {
         NRT_MemInfo_call_dtor(mi);
     }
 }
