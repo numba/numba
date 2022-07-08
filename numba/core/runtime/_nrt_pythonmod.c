@@ -136,6 +136,7 @@ declmethod(MemInfo_alloc_aligned);
 declmethod(MemInfo_alloc_safe_aligned);
 declmethod(MemInfo_alloc_safe_aligned_external);
 declmethod_internal(_nrt_get_sample_external_allocator);
+declmethod(MemInfo_alloc_dtor);
 declmethod(MemInfo_alloc_dtor_safe);
 declmethod(MemInfo_call_dtor);
 declmethod(MemInfo_new_varsize);

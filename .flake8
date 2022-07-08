@@ -28,7 +28,6 @@ exclude =
     numba/core/tracing.py
     numba/core/withcontexts.py
     numba/_version.py
-    numba/core/inline_closurecall.py
     numba/core/ir_utils.py
     numba/core/pylowering.py
     numba/python_utils.py
@@ -150,7 +149,6 @@ exclude =
     numba/tests/test_numberctor.py
     numba/tests/test_globals.py
     numba/tests/test_typingerror.py
-    numba/tests/test_object_mode.py
     numba/tests/test_copy_propagate.py
     numba/tests/test_ctypes.py
     numba/tests/test_typeof.py

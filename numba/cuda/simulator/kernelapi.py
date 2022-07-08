@@ -7,10 +7,12 @@ from contextlib import contextmanager
 import sys
 import threading
 import traceback
-
+from numba.core import types
 import numpy as np
 
 from numba.np import numpy_support
+
+from .vector_types import vector_types
 
 
 class Dim3(object):
@@ -59,7 +61,8 @@ class FakeCUDALocal(object):
     CUDA Local arrays
     '''
     def array(self, shape, dtype):
-        dtype = numpy_support.as_dtype(dtype)
+        if isinstance(dtype, types.Type):
+            dtype = numpy_support.as_dtype(dtype)
         return np.empty(shape, dtype)
 
 
@@ -95,7 +98,8 @@ class FakeCUDAShared(object):
         self._dynshared = np.zeros(dynshared_size, dtype=np.byte)
 
     def array(self, shape, dtype):
-        dtype = numpy_support.as_dtype(dtype)
+        if isinstance(dtype, types.Type):
+            dtype = numpy_support.as_dtype(dtype)
         # Dynamic shared memory is requested with size 0 - this all shares the
         # same underlying memory
         if shape == 0:
@@ -282,6 +286,15 @@ class FakeCUDAModule(object):
         self._const = FakeCUDAConst()
         self._atomic = FakeCUDAAtomic()
         self._fp16 = FakeCUDAFp16()
+        # Insert the vector types into the kernel context
+        # Note that we need to do this in addition to exposing them as module
+        # variables in `simulator.__init__.py`, because the test cases need
+        # to access the actual cuda module as well as the fake cuda module
+        # for vector types.
+        for name, svty in vector_types.items():
+            setattr(self, name, svty)
+            for alias in svty.aliases:
+                setattr(self, alias, svty)
 
     @property
     def cg(self):

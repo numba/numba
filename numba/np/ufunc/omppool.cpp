@@ -253,6 +253,9 @@ MOD_INIT(omppool)
     SetAttrStringFromVoidPointer(m, set_num_threads);
     SetAttrStringFromVoidPointer(m, get_num_threads);
     SetAttrStringFromVoidPointer(m, get_thread_id);
+    SetAttrStringFromVoidPointer(m, set_parallel_chunksize);
+    SetAttrStringFromVoidPointer(m, get_parallel_chunksize);
+    SetAttrStringFromVoidPointer(m, get_sched_size);
 
     PyObject *tmp = PyString_FromString(_OMP_VENDOR);
     PyObject_SetAttrString(m, "openmp_vendor", tmp);

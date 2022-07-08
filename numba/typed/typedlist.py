@@ -234,7 +234,7 @@ class List(MutableSequence, pt.Generic[T]):
         Parameters
         ----------
         args: iterable
-            The iterable to intialize the list from
+            The iterable to initialize the list from
         lsttype : numba.core.types.ListType; keyword-only
             Used internally for the list type.
         meminfo : MemInfo; keyword-only
@@ -666,15 +666,15 @@ def impl_numba_typeref_ctor(cls, *args):
         # special case 0d Numpy arrays
         if isinstance(args[0], types.Array) and args[0].ndim == 0:
             def impl(cls, *args):
-                # Instatiate an empty list and populate it with the single
+                # Instantiate an empty list and populate it with the single
                 # value from the array.
                 r = List.empty_list(item_type)
                 r.append(args[0].item())
                 return r
         else:
             def impl(cls, *args):
-                # Instatiate an empty list and populate it with values from the
-                # iterable.
+                # Instantiate an empty list and populate it with values from
+                # the iterable.
                 r = List.empty_list(item_type)
                 for i in args[0]:
                     r.append(i)

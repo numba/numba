@@ -94,7 +94,10 @@ class Record(Type):
             if not isinstance(ty, (Number, NestedArray)):
                 msg = "Only Number and NestedArray types are supported, found: {}. "
                 raise TypeError(msg.format(ty))
-            datatype = ctx.get_data_type(ty)
+            if isinstance(ty, NestedArray):
+                datatype = ctx.data_model_manager[ty].as_storage_type()
+            else:
+                datatype = ctx.get_data_type(ty)
             lltypes.append(datatype)
             size = ctx.get_abi_sizeof(datatype)
             align = ctx.get_abi_alignment(datatype)
@@ -587,3 +590,15 @@ class NestedArray(Array):
     @property
     def key(self):
         return self.dtype, self.shape
+
+
+class NumPyRandomBitGeneratorType(Type):
+    def __init__(self, *args, **kwargs):
+        super(NumPyRandomBitGeneratorType, self).__init__(*args, **kwargs)
+        self.name = 'NumPyRandomBitGeneratorType'
+
+
+class NumPyRandomGeneratorType(Type):
+    def __init__(self, *args, **kwargs):
+        super(NumPyRandomGeneratorType, self).__init__(*args, **kwargs)
+        self.name = 'NumPyRandomGeneratorType'

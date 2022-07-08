@@ -11,10 +11,6 @@
 #include "nrt.h"
 #include "assert.h"
 
-#if !defined MIN
-#define MIN(a, b) ((a) < (b)) ? (a) : (b)
-#endif
-
 
 /* NOTE: if changing the layout, please update numba.core.runtime.atomicops */
 extern "C" {
@@ -138,9 +134,11 @@ extern "C" void NRT_MemInfo_init(NRT_MemInfo *mi,void *data, size_t size,
 NRT_MemInfo *NRT_MemInfo_new(void *data, size_t size,
                              NRT_dtor_function dtor, void *dtor_info)
 {
-    NRT_MemInfo *mi = (NRT_MemInfo *) NRT_Allocate(sizeof(NRT_MemInfo));
-    NRT_Debug(nrt_debug_print("NRT_MemInfo_new mi=%p\n", mi));
-    NRT_MemInfo_init(mi, data, size, dtor, dtor_info, NULL);
+    NRT_MemInfo *mi = (NRT_MemInfo *)NRT_Allocate(sizeof(NRT_MemInfo));
+    if (mi != NULL) {
+        NRT_Debug(nrt_debug_print("NRT_MemInfo_new mi=%p\n", mi));
+        NRT_MemInfo_init(mi, data, size, dtor, dtor_info, NULL);
+    }
     return mi;
 }
 
@@ -157,14 +155,19 @@ static
 void nrt_internal_dtor_safe(void *ptr, size_t size, void *info) {
     NRT_Debug(nrt_debug_print("nrt_internal_dtor_safe %p, %p\n", ptr, info));
     /* See NRT_MemInfo_alloc_safe() */
-    memset(ptr, 0xDE, MIN(size, 256));
+    /* Fill region with debug markers */
+    memset(ptr, 0xDE, size);
 }
 
 static
 void *nrt_allocate_meminfo_and_data(size_t size, NRT_MemInfo **mi_out, NRT_ExternalAllocator *allocator) {
-    NRT_MemInfo *mi;
+    NRT_MemInfo *mi = NULL;
     NRT_Debug(nrt_debug_print("nrt_allocate_meminfo_and_data %p\n", allocator));
-    void *base = NRT_Allocate_External(sizeof(NRT_MemInfo) + size, allocator);
+    char *base = (char *)NRT_Allocate_External(sizeof(NRT_MemInfo) + size, allocator);
+    if (base == NULL) {
+        *mi_out = NULL; /* set meminfo to NULL as allocation failed */
+        return NULL; /* return early as allocation failed */
+    }
     mi = (NRT_MemInfo *) base;
     *mi_out = mi;
     return (void*)((char *)base + sizeof(NRT_MemInfo));
@@ -183,18 +186,33 @@ void nrt_internal_custom_dtor_safe(void *ptr, size_t size, void *info) {
     nrt_internal_dtor_safe(ptr, size, NULL);
 }
 
+static
+void nrt_internal_custom_dtor(void *ptr, size_t size, void *info) {
+    NRT_dtor_function dtor = (void (*)(void*, long unsigned int, void*))info;
+    NRT_Debug(nrt_debug_print("nrt_internal_custom_dtor %p, %p\n",
+                              ptr, info));
+    if (dtor) {
+        dtor(ptr, size, NULL);
+    }
+}
 
 NRT_MemInfo *NRT_MemInfo_alloc(size_t size) {
-    NRT_MemInfo *mi;
+    NRT_MemInfo *mi = NULL;
     void *data = nrt_allocate_meminfo_and_data(size, &mi, NULL);
+    if (data == NULL) {
+        return NULL; /* return early as allocation failed */
+    }
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc %p\n", data));
     NRT_MemInfo_init(mi, data, size, NULL, NULL, NULL);
     return mi;
 }
 
 extern "C" NRT_MemInfo *NRT_MemInfo_alloc_external(size_t size, NRT_ExternalAllocator *allocator) {
-    NRT_MemInfo *mi;
+    NRT_MemInfo *mi = NULL;
     void *data = nrt_allocate_meminfo_and_data(size, &mi, allocator);
+    if (data == NULL) {
+        return NULL; /* return early as allocation failed */
+    }
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc %p\n", data));
     NRT_MemInfo_init(mi, data, size, NULL, NULL, allocator);
     return mi;
@@ -205,27 +223,52 @@ extern "C" NRT_MemInfo *NRT_MemInfo_alloc_safe(size_t size) {
 }
 
 extern "C" NRT_MemInfo* NRT_MemInfo_alloc_dtor_safe(size_t size, NRT_dtor_function dtor) {
-    NRT_MemInfo *mi;
+    NRT_MemInfo *mi = NULL;
     void *data = nrt_allocate_meminfo_and_data(size, &mi, NULL);
-    /* Only fill up a couple cachelines with debug markers, to minimize
-       overhead. */
-    memset(data, 0xCB, MIN(size, 256));
+    if (data == NULL) {
+        return NULL; /* return early as allocation failed */
+    }
+    /* Fill region with debug markers */
+    memset(data, 0xCB, size);
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_dtor_safe %p %zu\n", data, size));
     NRT_MemInfo_init(mi, data, size, nrt_internal_custom_dtor_safe, (void*)dtor, NULL);
     return mi;
 }
 
+NRT_MemInfo* NRT_MemInfo_alloc_dtor(size_t size, NRT_dtor_function dtor) {
+    NRT_MemInfo *mi = NULL;
+    void *data = (void *)nrt_allocate_meminfo_and_data(size, &mi, NULL);
+    if (data == NULL) {
+        return NULL; /* return early as allocation failed */
+    }
+    NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_dtor %p %zu\n", data, size));
+    NRT_MemInfo_init(mi, data, size, nrt_internal_custom_dtor, (void *)dtor, NULL);
+    return mi;
+}
 
 static
 void *nrt_allocate_meminfo_and_data_align(size_t size, unsigned align,
                                           NRT_MemInfo **mi, NRT_ExternalAllocator *allocator)
 {
-    size_t offset, intptr, remainder;
+    size_t offset = 0, intptr = 0, remainder = 0;
     NRT_Debug(nrt_debug_print("nrt_allocate_meminfo_and_data_align %p\n", allocator));
-    void *base = nrt_allocate_meminfo_and_data(size + 2 * align, mi, allocator);
+    char *base = (char *)nrt_allocate_meminfo_and_data(size + 2 * align, mi, allocator);
+    if (base == NULL) {
+        return NULL; /* return early as allocation failed */
+    }
     intptr = (size_t) base;
-    /* See if we are aligned */
-    remainder = intptr % align;
+    /*
+     * See if the allocation is aligned already...
+     * Check if align is a power of 2, if so the modulo can be avoided.
+     */
+    if((align & (align - 1)) == 0)
+    {
+        remainder = intptr & (align - 1);
+    }
+    else
+    {
+        remainder = intptr % align;
+    }
     if (remainder == 0){ /* Yes */
         offset = 0;
     } else { /* No, move forward `offset` bytes */
@@ -235,19 +278,24 @@ void *nrt_allocate_meminfo_and_data_align(size_t size, unsigned align,
 }
 
 extern "C" NRT_MemInfo *NRT_MemInfo_alloc_aligned(size_t size, unsigned align) {
-    NRT_MemInfo *mi;
+    NRT_MemInfo *mi = NULL;
     void *data = nrt_allocate_meminfo_and_data_align(size, align, &mi, NULL);
+    if (data == NULL) {
+        return NULL; /* return early as allocation failed */
+    }
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_aligned %p\n", data));
     NRT_MemInfo_init(mi, data, size, NULL, NULL, NULL);
     return mi;
 }
 
 extern "C" NRT_MemInfo *NRT_MemInfo_alloc_safe_aligned(size_t size, unsigned align) {
-    NRT_MemInfo *mi;
+    NRT_MemInfo *mi = NULL;
     void *data = nrt_allocate_meminfo_and_data_align(size, align, &mi, NULL);
-    /* Only fill up a couple cachelines with debug markers, to minimize
-       overhead. */
-    memset(data, 0xCB, MIN(size, 256));
+    if (data == NULL) {
+        return NULL; /* return early as allocation failed */
+    }
+    /* Fill region with debug markers */
+    memset(data, 0xCB, size);
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_safe_aligned %p %zu\n",
                               data, size));
     NRT_MemInfo_init(mi, data, size, nrt_internal_dtor_safe, (void*)size, NULL);
@@ -255,12 +303,14 @@ extern "C" NRT_MemInfo *NRT_MemInfo_alloc_safe_aligned(size_t size, unsigned ali
 }
 
 extern "C" NRT_MemInfo *NRT_MemInfo_alloc_safe_aligned_external(size_t size, unsigned align, NRT_ExternalAllocator *allocator) {
-    NRT_MemInfo *mi;
+    NRT_MemInfo *mi = NULL;
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_safe_aligned_external %p\n", allocator));
     void *data = nrt_allocate_meminfo_and_data_align(size, align, &mi, allocator);
-    /* Only fill up a couple cachelines with debug markers, to minimize
-       overhead. */
-    memset(data, 0xCB, MIN(size, 256));
+    if (data == NULL) {
+        return NULL; /* return early as allocation failed */
+    }
+    /* Fill region with debug markers */
+    memset(data, 0xCB, size);
     NRT_Debug(nrt_debug_print("NRT_MemInfo_alloc_safe_aligned %p %zu\n",
                               data, size));
     NRT_MemInfo_init(mi, data, size, nrt_internal_dtor_safe, (void*)size, allocator);
@@ -347,10 +397,11 @@ nrt_varsize_dtor(void *ptr, size_t size, void *info) {
 
 NRT_MemInfo *NRT_MemInfo_new_varsize(size_t size)
 {
-    NRT_MemInfo *mi;
+    NRT_MemInfo *mi = NULL;
     void *data = NRT_Allocate(size);
-    if (data == NULL)
-        return NULL;
+    if (data == NULL) {
+        return NULL; /* return early as allocation failed */
+    }
 
     mi = NRT_MemInfo_new(data, size, nrt_varsize_dtor, NULL);
     NRT_Debug(nrt_debug_print("NRT_MemInfo_new_varsize size=%zu "
