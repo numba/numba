@@ -368,6 +368,11 @@ def _genfp16_binary(l_key):
 
     return Cuda_fp16_binary
 
+# Until issue 7863 is resolved, if multiple concrete templates are utilized
+# function resolution will pick the wrong implementation and errors will occur.
+# We avoid this by using ConcreteTempalte for the intrinisics and
+# AbstractTemplate
+
 
 def _genfp16_binary_operator(l_key):
     @register_global(l_key)
@@ -384,6 +389,13 @@ def _genfp16_binary_operator(l_key):
                 else:
                     convertible = self.context.can_convert(args[0], args[1])
 
+                # We allow three cases here:
+                #
+                # 1. Comparing fp16 to fp16 - Conversion.exact
+                # 2. Comparing fp16 to types fp16 can be promoted to
+                # - Conversion.promote
+                # 3. Comparing fp16 to int8 (safe conversion) -
+                # Conversion.safe
                 if (convertible == Conversion.exact) or \
                    (convertible == Conversion.promote) or \
                    (convertible == Conversion.safe):
@@ -391,6 +403,7 @@ def _genfp16_binary_operator(l_key):
                                      types.float16)
 
     return Cuda_fp16_binary2
+
 
 @register_global(float)
 class Float(AbstractTemplate):
