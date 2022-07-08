@@ -118,7 +118,7 @@ extern "C" void NRT_MemInfo_init(NRT_MemInfo *mi,void *data, size_t size,
                       NRT_dtor_function dtor, void *dtor_info,
                       NRT_ExternalAllocator *external_allocator)
 {
-    mi->refct.store(1);  /* starts with 1 refct */
+    mi->refct = 1;  /* starts with 1 refct */
     mi->dtor = dtor;
     mi->dtor_info = dtor_info;
     mi->data = data;
