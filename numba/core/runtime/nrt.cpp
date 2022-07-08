@@ -186,7 +186,7 @@ void nrt_internal_custom_dtor_safe(void *ptr, size_t size, void *info) {
 
 static
 void nrt_internal_custom_dtor(void *ptr, size_t size, void *info) {
-    NRT_dtor_function dtor = (void (*)(void*, long unsigned int, void*))info;
+    NRT_dtor_function dtor = (NRT_dtor_function)info;
     NRT_Debug(nrt_debug_print("nrt_internal_custom_dtor %p, %p\n",
                               ptr, info));
     if (dtor) {
