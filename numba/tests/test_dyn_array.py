@@ -1396,10 +1396,9 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
             func((5, 3), 'int32')
 
         excstr = str(raises.exception)
-        self.assertIn('No match', excstr)
-        restr = r'\barray\(UniTuple\(int.*? x 2\), dtype=unicode_type\)\B'
-        regex = re.compile(restr)
-        self.assertRegex(excstr, regex)
+        msg = (f"If np.array dtype is a string it must be a "
+               "string constant.")
+        self.assertIn(msg, excstr)
 
     def test_2d(self):
         def pyfunc(arg):
