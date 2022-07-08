@@ -139,6 +139,15 @@ These variables influence what is printed out during compilation of
    of the compiler frontend, up to and including generation of the Numba
    Intermediate Representation.
 
+.. envvar:: NUMBA_DEBUG_NRT
+
+   If set to non-zero, print out debugging information at runtime about the use
+   of :ref:`Numba run time (NRT) <arch-numba-runtime>` reference count
+   operations. If set to non-zero, this also switches on the filling of all NRT
+   allocated regions with an identifiable "marker" byte pattern, ``0xCB`` on
+   allocation and ``0xDE`` on deallocation, both to help with debugging memory
+   leaks.
+
 .. envvar:: NUMBA_DEBUGINFO
 
    If set to non-zero, enable debug for the full application by setting
