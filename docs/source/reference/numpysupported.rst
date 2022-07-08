@@ -614,14 +614,32 @@ execution logic.
 
 The following :py:class:`Generator` methods are supported:
 
+* :func:`numpy.random.Generator().beta()` (*)
+* :func:`numpy.random.Generator().chisquare()` (*)
 * :func:`numpy.random.Generator().exponential()`
+* :func:`numpy.random.Generator().f()` (*)
 * :func:`numpy.random.Generator().gamma()` (*)
+* :func:`numpy.random.Generator().geometric()` (*)
+* :func:`numpy.random.Generator().laplace()` (*)
+* :func:`numpy.random.Generator().logistic()` (*)
+* :func:`numpy.random.Generator().lognormal()` (*)
+* :func:`numpy.random.Generator().negative_binomial()` (*)
 * :func:`numpy.random.Generator().normal()` (*)
+* :func:`numpy.random.Generator().pareto()`
+* :func:`numpy.random.Generator().poisson()` (*)
+* :func:`numpy.random.Generator().power()`
 * :func:`numpy.random.Generator().random()`
-* :func:`numpy.random.Generator().standard_normal()`
+* :func:`numpy.random.Generator().rayleigh()`
+* :func:`numpy.random.Generator().standard_cauchy()`
 * :func:`numpy.random.Generator().standard_exponential()`
 * :func:`numpy.random.Generator().standard_gamma()` (*)
+* :func:`numpy.random.Generator().standard_normal()`
+* :func:`numpy.random.Generator().standard_t()` (*)
+* :func:`numpy.random.Generator().triangular()`
 * :func:`numpy.random.Generator().uniform()` (*)
+* :func:`numpy.random.Generator().wald()` (*)
+* :func:`numpy.random.Generator().weibull()`
+* :func:`numpy.random.Generator().zipf()`
 
 .. note::
   Users can expect Numba to replicate NumPy's results to within
