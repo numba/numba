@@ -41,6 +41,10 @@ def simple_fp16abs(ary, a):
 
 
 class TestOperatorModule(CUDATestCase):
+    def setUp(self):
+        super().setUp()
+        np.random.seed(0)
+
     """
     Test if operator module is supported by the CUDA target.
     """
@@ -109,10 +113,9 @@ class TestOperatorModule(CUDATestCase):
         types = (np.int8, np.int16, np.int32, np.int64,
                  np.float32, np.float64)
         for (fn, op), ty in itertools.product(zip(functions, ops), types):
-            with self.subTest(op=op):
+            with self.subTest(op=op, ty=ty):
                 kernel = cuda.jit(fn)
 
-                
                 arg1 = np.random.random(1).astype(np.float16)
                 arg2 = (np.random.random(1) * 100).astype(ty)
                 arg2_ty = np.result_type(np.float16, ty)
@@ -123,7 +126,7 @@ class TestOperatorModule(CUDATestCase):
                 kernel[1, 1](got, arg1[0], arg2[0])
                 expected = op(arg1, arg2)
                 np.testing.assert_allclose(got[0], expected)
-    
+
     @skip_on_cudasim('Compilation unsupported in the simulator')
     def test_fp16_inplace_binary_ptx(self):
         functions = (simple_fp16_iadd, simple_fp16_isub, simple_fp16_imul)
