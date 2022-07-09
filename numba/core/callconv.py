@@ -471,7 +471,7 @@ class CPUCallConv(BaseCallConv):
                 self.return_user_exc(builder, OverflowError, msg, None)
 
         # allocate the excinfo struct
-        struct_size = ir.IntType(64)(self.context.get_abi_sizeof(excinfo_t))
+        struct_size = pyapi.py_ssize_t(self.context.get_abi_sizeof(excinfo_t))
         excinfo = builder.bitcast(self.context.nrt.allocate(builder, struct_size), excinfo_ptr_t)
 
         # hash is computed at runtime, after all arguments are known
