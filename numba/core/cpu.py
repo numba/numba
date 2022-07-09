@@ -8,7 +8,6 @@ from numba import _dynfunc
 from numba.core.callwrapper import PyCallWrapper
 from numba.core.base import BaseContext, PYOBJECT
 from numba.core import utils, types, config, cgutils, callconv, codegen, externals, fastmathpass, intrinsics
-from numba.core.utils import cached_property
 from numba.core.options import TargetOptions, include_default_options
 from numba.core.runtime import rtsys
 from numba.core.compiler_lock import global_compiler_lock
@@ -107,7 +106,7 @@ class CPUContext(BaseContext):
     def codegen(self):
         return self._internal_codegen
 
-    @cached_property
+    @property
     def call_conv(self):
         return callconv.CPUCallConv(self)
 

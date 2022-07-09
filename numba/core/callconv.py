@@ -4,6 +4,7 @@ Calling conventions for Numba-compiled functions.
 
 from collections import namedtuple
 from collections.abc import Iterable
+from decimal import Overflow
 import itertools
 
 from llvmlite import ir
@@ -421,48 +422,47 @@ class CPUCallConv(BaseCallConv):
         struct_gv_ptr = pyapi.serialize_object(exc)  # {i8*, i32, i8*}*
 
         # serialize constant arguments as None
-        none = pyapi.make_none()
-        exc_args = [e if isinstance(e, ir.Instruction) else none for e in exc_args]
+        py_none = pyapi.make_none()
+        exc_args = [e if isinstance(e, ir.Instruction) else
+                    py_none for e in exc_args]
 
-        v = builder.extract_value(builder.load(struct_gv_ptr), 0)
-        _len = builder.extract_value(builder.load(struct_gv_ptr), 1)
-        pybytes = pyapi.bytes_from_string_and_size(
-            v, builder.sext(_len, pyapi.py_ssize_t))
+        # load the serialized exception buffer from the module and create
+        # a python bytes object
+        pickle_buf = builder.extract_value(builder.load(struct_gv_ptr), 0)
+        pickle_bufsz = builder.extract_value(builder.load(struct_gv_ptr), 1)
+        py_bytes = pyapi.bytes_from_string_and_size(
+            pickle_buf, builder.sext(pickle_bufsz, pyapi.py_ssize_t))
+
+        with builder.if_then(cgutils.is_null(builder, py_bytes)):
+            msg = ('PyBytes_FromStringAndSize return NULL',)
+            self.return_user_exc(builder, RuntimeError, msg, None)
 
         # serialize returns a pair (data, hash)
-        tup = pyapi.tuple_pack(exc_args)
-        pair = pyapi.serialize(tup, pybytes)
+        # "py_bytes" holds arguments that can be serialized at compile-time
+        # as a serialized object. While "runtime_args_tup" are the runtime
+        # arguments. At runtime, in the function "runtime_dumps", both lists
+        # are merged into a single one.
+        runtime_args_tup = pyapi.tuple_pack(exc_args)
+        pair = pyapi.serialize(runtime_args_tup, py_bytes)
         data, _hash = pyapi.tuple_getitem(pair, 0), pyapi.tuple_getitem(pair, 1)
         ptr = pyapi.bytes_as_string(data)
         sz = pyapi.bytes_size(data)
 
-        int8_t = ir.IntType(8)
-        alloc_fnty = ir.FunctionType(int8_t.as_pointer(), [int32_t])
-        malloc_fn = cgutils.get_or_insert_function(builder.module, alloc_fnty, name="malloc")
-        struct_size = int32_t(self.context.get_abi_sizeof(excinfo_t))
-        ret = builder.call(malloc_fn, [struct_size])
+        # check for overflow
+        if pyapi.py_ssize_t.width > 32:
+            overflow = builder.icmp_signed('>', sz, int32_t(types.int32.maxval))
+            with builder.if_then(overflow):
+                msg = (f'Bytes size is greater than max value of int32',)
+                self.return_user_exc(builder, OverflowError, msg, None)
 
-        # check if the malloc was successful
-        with builder.if_then(builder.icmp_signed('==', ret, pyapi.get_null_object()), likely=False):
-            # is there a better way to raise an exception?
-            self.return_user_exc(
-                builder,
-                RuntimeError,
-                (f'malloc({struct_size}) return NULL',),
-                None)
-
-        excinfo = builder.bitcast(ret, excinfo_ptr_t)
-
-        # bug on NRT not being enabled!?
-        # RE: No! _get_code_point(a, i) disables NRT and we cannot use nrt.allocate
-        # when NRT is disabled.
-        #
-        # struct_size = ir.IntType(64)(self.context.get_abi_sizeof(excinfo_t))
-        # excinfo = builder.bitcast(self.context.nrt.allocate(builder, struct_size), excinfo_ptr_t)
+        # allocate the excinfo struct
+        struct_size = ir.IntType(64)(self.context.get_abi_sizeof(excinfo_t))
+        excinfo = builder.bitcast(self.context.nrt.allocate(builder, struct_size), excinfo_ptr_t)
 
         # hash is computed at runtime, after all arguments are known
         zero, one, two = int32_t(0), int32_t(1), int32_t(2)
         builder.store(ptr, builder.gep(excinfo, [zero, zero]))
+        # truncating sz to i32 is safe as long sz < MAXVAL(int32_t)
         builder.store(builder.trunc(sz, int32_t), builder.gep(excinfo, [zero, one]))
         builder.store(pyapi.bytes_as_string(_hash), builder.gep(excinfo, [zero, two]))
         builder.store(excinfo, excptr)

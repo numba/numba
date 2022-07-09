@@ -1013,7 +1013,7 @@ numba_unpickle(const char *data, int n, const char *hashed)
     PyObject *buf=NULL, *obj=NULL, *addr=NULL, *hashedbuf=NULL;
     static PyObject *loads=NULL;
 
-    /* Caching the pickle.loads function shaves a couple µs here. */
+    /* Caching the _numba_unpickle function shaves a couple µs here. */
     if (loads == NULL) {
         PyObject *picklemod;
         picklemod = PyImport_ImportModule("numba.core.serialize");
@@ -1045,12 +1045,12 @@ error:
 #endif
 
 NUMBA_EXPORT_FUNC(PyObject *)
-numba_pickle(PyObject* pytuple, PyObject* pybytes)
+numba_pickle(PyObject* runtime_args, PyObject* static_args_bytedata)
 {
     PyObject *obj = NULL;
     static PyObject *dumps = NULL;
 
-    /* Caching the pickle.dumps function shaves a couple µs here. */
+    /* Caching the runtime_dumps function shaves a couple µs here. */
     if (dumps == NULL)
     {
         PyObject *picklemod;
@@ -1063,7 +1063,8 @@ numba_pickle(PyObject* pytuple, PyObject* pybytes)
             return NULL;
     }
 
-    obj = PyObject_CallFunctionObjArgs(dumps, pytuple, pybytes, NULL);
+    obj = PyObject_CallFunctionObjArgs(dumps, runtime_args,
+                                       static_args_bytedata, NULL);
     return obj;
 }
 
