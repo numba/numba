@@ -892,8 +892,9 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         # Tests taken from
         # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/lib/tests/test_stride_tricks.py#L296-L334
         data = [
-            # [[], ()],
+            # [[], ()],  # cannot compute fingerprint of empty list
             [()],
+            [(), ()],
             [(7,)],
             [(1, 2),],
             [(1, 1)],
@@ -923,6 +924,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         for input_shape in data:
             expected = pyfunc(*input_shape)
             got = cfunc(*input_shape)
+            self.assertIsInstance(got, tuple)
             self.assertPreciseEqual(expected, got)
 
     @unittest.skipIf(numpy_version < (1, 20), "requires NumPy 1.20 or newer")

@@ -19,6 +19,15 @@ The following events are built in:
 - ``"numba:llvm_lock"`` is broadcast when the internal LLVM-lock is acquired.
   This is used internally to measure time spent with the lock acquired.
 
+- ``"numba:run_pass"`` is broadcast when a compiler pass is running.
+
+    - ``"name"``: pass name.
+    - ``"qualname"``: qualified name of the function being compiled.
+    - ``"module"``: module name of the function being compiled.
+    - ``"flags"``: compilation flags.
+    - ``"args"``: argument types.
+    - ``"return_type"`` return type.
+
 Applications can register callbacks that are listening for specific events using
 ``register(kind: str, listener: Listener)``, where ``listener`` is an instance
 of ``Listener`` that defines custom actions on occurrence of the specific event.
@@ -50,6 +59,7 @@ _builtin_kinds = frozenset([
     "numba:compiler_lock",
     "numba:compile",
     "numba:llvm_lock",
+    "numba:run_pass",
 ])
 
 
@@ -466,7 +476,7 @@ def _setup_chrome_trace_exit_handler():
     to file.
     """
     listener = RecordingListener()
-    register("nb:run_pass", listener)
+    register("numba:run_pass", listener)
     filename = config.CHROME_TRACE
 
     @atexit.register

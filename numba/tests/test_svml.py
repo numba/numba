@@ -19,7 +19,7 @@ import unittest
 needs_svml = unittest.skipUnless(config.USING_SVML,
                                  "SVML tests need SVML to be present")
 
-# a map of float64 vector lenghs with corresponding CPU architecture
+# a map of float64 vector lengths with corresponding CPU architecture
 vlen2cpu = {2: 'nehalem', 4: 'haswell', 8: 'skylake-avx512'}
 # force LLVM to use AVX512 registers for vectorization
 # https://reviews.llvm.org/D67259
@@ -207,7 +207,7 @@ class TestSVMLGeneration(TestCase):
             fn, contains, avoids = combo_svml_usecase(dtype, mode, vlen,
                                                       flags['fastmath'],
                                                       flags['name'])
-            # look for specific patters in the asm for a given target
+            # look for specific patterns in the asm for a given target
             with override_env_config('NUMBA_CPU_NAME', vlen2cpu[vlen]), \
                  override_env_config('NUMBA_CPU_FEATURES', vlen2cpu_features[vlen]):
                 # recompile for overridden CPU
@@ -355,7 +355,7 @@ class TestSVML(TestCase):
         np.testing.assert_almost_equal(jitstd_result, py_expected, **kwargs)
         np.testing.assert_almost_equal(jitfast_result, py_expected, **kwargs)
 
-        # look for specific patters in the asm for a given target
+        # look for specific patterns in the asm for a given target
         with override_env_config('NUMBA_CPU_NAME', cpu_name), \
              override_env_config('NUMBA_CPU_FEATURES', cpu_features):
             # recompile for overridden CPU

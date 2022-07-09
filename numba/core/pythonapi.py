@@ -662,7 +662,6 @@ class PythonAPI(object):
     #
     # Concrete slice API
     #
-
     def slice_as_ints(self, obj):
         """
         Read the members of a slice of integers.
@@ -696,6 +695,11 @@ class PythonAPI(object):
         fnty = ir.FunctionType(self.pyobj, [self.pyobj])
         fn = self._get_function(fnty, name="PySequence_Tuple")
         return self.builder.call(fn, [obj])
+
+    def sequence_concat(self, obj1, obj2):
+        fnty = ir.FunctionType(self.pyobj, [self.pyobj, self.pyobj])
+        fn = self._get_function(fnty, name="PySequence_Concat")
+        return self.builder.call(fn, [obj1, obj2])
 
     def list_new(self, szval):
         fnty = ir.FunctionType(self.pyobj, [self.py_ssize_t])

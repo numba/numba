@@ -100,7 +100,7 @@ def get_conda_ctk():
     is_conda_env = os.path.exists(os.path.join(sys.prefix, 'conda-meta'))
     if not is_conda_env:
         return
-    # Asssume the existence of NVVM to imply cudatoolkit installed
+    # Assume the existence of NVVM to imply cudatoolkit installed
     paths = find_lib('nvvm')
     if not paths:
         return

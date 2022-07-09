@@ -146,7 +146,7 @@ def map_struct_to_record_dtype(cffi_type):
     }
     is_aligned = True
     for k, v in cffi_type.fields:
-        # guard unsupport values
+        # guard unsupported values
         if v.bitshift != -1:
             msg = "field {!r} has bitshift, this is not supported"
             raise ValueError(msg.format(k))

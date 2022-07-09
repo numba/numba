@@ -201,10 +201,6 @@ def _getpid():
 
 ERROR_MAP = _build_reverse_error_map()
 
-MISSING_FUNCTION_ERRMSG = """driver missing function: %s.
-Requires CUDA 9.2 or above.
-"""
-
 
 class Driver(object):
     """
@@ -371,7 +367,7 @@ class Driver(object):
         # Not found.
         # Delay missing function error to use
         def absent_function(*args, **kws):
-            raise CudaDriverError(MISSING_FUNCTION_ERRMSG % fname)
+            raise CudaDriverError(f'Driver missing function: {fname}')
 
         setattr(self, fname, absent_function)
         return absent_function

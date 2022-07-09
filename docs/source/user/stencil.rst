@@ -243,9 +243,9 @@ to be used for the output of the stencil.  In this case, the
 stencil function will not allocate its own output array.
 Users should assure that the return type of the stencil kernel can
 be safely cast to the element-type of the user-specified output array
-following the `Numpy ufunc casting rules`_.
+following the `NumPy ufunc casting rules`_.
 
-.. _`Numpy ufunc casting rules`: http://docs.scipy.org/doc/numpy/reference/ufuncs.html#casting-rules
+.. _`NumPy ufunc casting rules`: http://docs.scipy.org/doc/numpy/reference/ufuncs.html#casting-rules
 
 An example usage is shown below::
 

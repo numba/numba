@@ -26,12 +26,14 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
                                  RefType)
 from numba.core.typing import signature
 from numba.core.extending import (register_jitable, overload, overload_method,
-                                  intrinsic)
+                                  intrinsic, overload_attribute)
 from numba.misc import quicksort, mergesort
 from numba.cpython import slicing
 from numba.cpython.unsafe.tuple import tuple_setitem, build_full_slice_tuple
 from numba.core.overload_glue import glue_lowering
 from numba.core.extending import overload_classmethod
+from numba.core.typing.npydecl import (parse_dtype as ty_parse_dtype,
+                                       parse_shape as ty_parse_shape)
 
 
 def set_range_metadata(builder, load, lower_bound, upper_bound):
@@ -1098,7 +1100,7 @@ def offset_bounds_from_strides(context, builder, arrty, arr, shapes, strides):
     Compute a half-open range [lower, upper) of byte offsets from the
     array's data pointer, that bound the in-memory extent of the array.
 
-    This mimicks offset_bounds_from_strides() from
+    This mimics offset_bounds_from_strides() from
     numpy/core/src/private/mem_overlap.c
     """
     itemsize = arr.itemsize
@@ -1423,24 +1425,32 @@ def ol_numpy_broadcast_shapes(*args):
                    f'Got {arg}')
             raise errors.TypingError(msg)
 
-    def impl(*args):
-        # discover the number of dimensions
-        m = 0
-        for val in literal_unroll(args):
-            if isinstance(val, int):
-                m = max(m, 1)
-            else:
-                m = max(m, len(val))
+    # discover the number of dimensions
+    m = 0
+    for arg in args:
+        if isinstance(arg, types.Integer):
+            m = max(m, 1)
+        elif isinstance(arg, types.BaseTuple):
+            m = max(m, len(arg))
 
-        # propagate args
-        r = [1] * m
-        for arg in literal_unroll(args):
-            if isinstance(arg, tuple) and len(arg) > 0:
-                numpy_broadcast_shapes_list(r, m, arg)
-            elif isinstance(arg, int):
-                numpy_broadcast_shapes_list(r, m, (arg,))
-        return r
-    return impl
+    if m == 0:
+        return lambda *args: ()
+    else:
+        tup_init = (1,) * m
+
+        def impl(*args):
+            # propagate args
+            r = [1] * m
+            tup = tup_init
+            for arg in literal_unroll(args):
+                if isinstance(arg, tuple) and len(arg) > 0:
+                    numpy_broadcast_shapes_list(r, m, arg)
+                elif isinstance(arg, int):
+                    numpy_broadcast_shapes_list(r, m, (arg,))
+            for idx, elem in enumerate(r):
+                tup = tuple_setitem(tup, idx, elem)
+            return tup
+        return impl
 
 
 if numpy_version >= (1, 20):
@@ -1609,7 +1619,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
     source_indices = tuple(c for c in counts if c is not None)
     val = src_getitem(source_indices)
 
-    # Cast to the destination dtype (cross-dtype slice assignement is allowed)
+    # Cast to the destination dtype (cross-dtype slice assignment is allowed)
     val = context.cast(builder, val, src_dtype, aryty.dtype)
 
     # No need to check for wraparound, as the indexers all ensure
@@ -2580,7 +2590,7 @@ def array_flags(context, builder, typ, value):
 @lower_getattr(types.ArrayFlags, "c_contiguous")
 def array_flags_c_contiguous(context, builder, typ, value):
     if typ.array_type.layout != 'C':
-        # any layout can stil be contiguous
+        # any layout can still be contiguous
         flagsobj = context.make_helper(builder, typ, value=value)
         res = _call_contiguous_check(is_contiguous, context, builder,
                                      typ.array_type, flagsobj.parent)
@@ -2593,7 +2603,7 @@ def array_flags_c_contiguous(context, builder, typ, value):
 @lower_getattr(types.ArrayFlags, "f_contiguous")
 def array_flags_f_contiguous(context, builder, typ, value):
     if typ.array_type.layout != 'F':
-        # any layout can stil be contiguous
+        # any layout can still be contiguous
         flagsobj = context.make_helper(builder, typ, value=value)
         res = _call_contiguous_check(is_fortran, context, builder,
                                      typ.array_type, flagsobj.parent)
@@ -2607,27 +2617,127 @@ def array_flags_f_contiguous(context, builder, typ, value):
 # ------------------------------------------------------------------------------
 # .real / .imag
 
-@lower_getattr(types.Array, "real")
-def array_real_part(context, builder, typ, value):
+@overload_attribute(types.Array, 'real')
+def ol_array_real(arr):
+    typ = arr
     if typ.dtype in types.complex_domain:
-        return array_complex_attr(context, builder, typ, value, attr='real')
+        def impl(arr):
+            return _array_real_attr(arr)
+        return impl
     elif typ.dtype in types.number_domain:
-        # as an identity function
-        return impl_ret_borrowed(context, builder, typ, value)
+        def impl(arr):
+            return arr
+        return impl
     else:
-        raise NotImplementedError('unsupported .real for {}'.format(type.dtype))
+        msg = f"cannot access .real of array of {arr.dtype}"
+        raise errors.TypingError(msg)
 
 
-@lower_getattr(types.Array, "imag")
-def array_imag_part(context, builder, typ, value):
+@intrinsic
+def _force_readonly(tyctx, arr):
+    """Takes an array, and returns it with the readonly bit set through
+    typing"""
+    sig = arr.copy(readonly=True)(arr)
+
+    def impl(cgctx, builder, sig, llargs):
+        arrayty = make_array(arr)
+        array = arrayty(cgctx, builder, llargs[0])
+        return impl_ret_borrowed(cgctx, builder, sig.return_type,
+                                 array._getvalue())
+    return sig, impl
+
+
+@overload_attribute(types.Array, 'imag')
+def ol_array_imag(arr):
+    typ = arr
     if typ.dtype in types.complex_domain:
-        return array_complex_attr(context, builder, typ, value, attr='imag')
+        def impl(arr):
+            return _array_imag_attr(arr)
+        return impl
     elif typ.dtype in types.number_domain:
-        # return a readonly zero array
-        sig = signature(typ.copy(readonly=True), typ)
-        return numpy_zeros_like_nd(context, builder, sig, [value])
+        def impl(arr):
+            # .imag on a real domain dtype is a readonly zeros array
+            tmp = np.zeros_like(arr)
+            rotmp = _force_readonly(tmp)
+            return rotmp
+        return impl
     else:
-        raise NotImplementedError('unsupported .imag for {}'.format(type.dtype))
+        msg = f"cannot access .imag of array of {arr.dtype}"
+        raise errors.TypingError(msg)
+
+
+def _generate_real_imag_attr(attr):
+    """
+    Generates intrinsics for obtaining the real/imaginary part of complex array
+    """
+
+    @intrinsic
+    def intrin_typing(tyctx, arr):
+        sig = arr.copy(dtype=arr.dtype.underlying_float, layout='A')(arr)
+
+        def codegen(cgctx, builder, sig, llargs):
+            value = llargs[0]
+            typ = sig.args[0]
+            """
+            Given a complex array, it's memory layout is:
+
+                R C R C R C
+                ^   ^   ^
+
+            (`R` indicates a float for the real part;
+            `C` indicates a float for the imaginary part;
+            the `^` indicates the start of each element)
+
+            To get the real part, we can simply change the dtype and itemsize to
+            that of the underlying float type.  The new layout is:
+
+                R x R x R x
+                ^   ^   ^
+
+            (`x` indicates unused)
+
+            A load operation will use the dtype to determine the number of bytes
+            to load.
+
+            To get the imaginary part, we shift the pointer by 1 float offset
+            and change the dtype and itemsize.  The new layout is:
+
+                x C x C x C
+                ^   ^   ^
+            """
+            if (attr not in ['real', 'imag'] or
+                    typ.dtype not in types.complex_domain):
+                raise NotImplementedError(f"cannot get attribute `{attr}`")
+
+            arrayty = make_array(typ)
+            array = arrayty(cgctx, builder, value)
+
+            # sizeof underlying float type
+            flty = typ.dtype.underlying_float
+            sizeof_flty = cgctx.get_abi_sizeof(cgctx.get_data_type(flty))
+            itemsize = array.itemsize.type(sizeof_flty)
+
+            # cast data pointer to float type
+            llfltptrty = cgctx.get_value_type(flty).as_pointer()
+            dataptr = builder.bitcast(array.data, llfltptrty)
+
+            # add offset
+            if attr == 'imag':
+                dataptr = builder.gep(dataptr, [ir.IntType(32)(1)])
+
+            # make result
+            resultty = typ.copy(dtype=flty, layout='A')
+            result = make_array(resultty)(cgctx, builder)
+            repl = dict(data=dataptr, itemsize=itemsize)
+            cgutils.copy_struct(result, array, repl)
+            return impl_ret_borrowed(cgctx, builder, resultty,
+                                     result._getvalue())
+        return sig, codegen
+    return intrin_typing
+
+
+_array_real_attr = _generate_real_imag_attr("real")
+_array_imag_attr = _generate_real_imag_attr("imag")
 
 
 @overload_method(types.Array, 'conj')
@@ -2637,64 +2747,9 @@ def array_conj(arr):
         return np.conj(arr)
     return impl
 
-
-def array_complex_attr(context, builder, typ, value, attr):
-    """
-    Given a complex array, it's memory layout is:
-
-        R C R C R C
-        ^   ^   ^
-
-    (`R` indicates a float for the real part;
-     `C` indicates a float for the imaginary part;
-     the `^` indicates the start of each element)
-
-    To get the real part, we can simply change the dtype and itemsize to that
-    of the underlying float type.  The new layout is:
-
-        R x R x R x
-        ^   ^   ^
-
-    (`x` indicates unused)
-
-    A load operation will use the dtype to determine the number of bytes to
-    load.
-
-    To get the imaginary part, we shift the pointer by 1 float offset and
-    change the dtype and itemsize.  The new layout is:
-
-        x C x C x C
-          ^   ^   ^
-    """
-    if attr not in ['real', 'imag'] or typ.dtype not in types.complex_domain:
-        raise NotImplementedError("cannot get attribute `{}`".format(attr))
-
-    arrayty = make_array(typ)
-    array = arrayty(context, builder, value)
-
-    # sizeof underlying float type
-    flty = typ.dtype.underlying_float
-    sizeof_flty = context.get_abi_sizeof(context.get_data_type(flty))
-    itemsize = array.itemsize.type(sizeof_flty)
-
-    # cast data pointer to float type
-    llfltptrty = context.get_value_type(flty).as_pointer()
-    dataptr = builder.bitcast(array.data, llfltptrty)
-
-    # add offset
-    if attr == 'imag':
-        dataptr = builder.gep(dataptr, [ir.IntType(32)(1)])
-
-    # make result
-    resultty = typ.copy(dtype=flty, layout='A')
-    result = make_array(resultty)(context, builder)
-    repl = dict(data=dataptr, itemsize=itemsize)
-    cgutils.copy_struct(result, array, repl)
-    return impl_ret_borrowed(context, builder, resultty, result._getvalue())
-
-
 # ------------------------------------------------------------------------------
 # DType attribute
+
 
 def dtype_type(context, builder, dtypety, dtypeval):
     # Just return a dummy opaque value
@@ -3906,13 +3961,6 @@ def intrin_alloc(typingctx, allocsize, align):
     return sig, codegen
 
 
-def _zero_fill_array(context, builder, ary):
-    """
-    Zero-fill an array.  The array must be contiguous.
-    """
-    cgutils.memset(builder, ary.data, builder.mul(ary.itemsize, ary.nitems), 0)
-
-
 def _parse_shape(context, builder, ty, val):
     """
     Parse the shape argument to an array constructor.
@@ -3985,40 +4033,137 @@ def _parse_empty_like_args(context, builder, sig, args):
         return sig.return_type, ()
 
 
-@glue_lowering(np.empty, types.Any)
-@glue_lowering(np.empty, types.Any, types.Any)
-def numpy_empty_nd(context, builder, sig, args):
-    arrtype, shapes = _parse_empty_args(context, builder, sig, args)
-    ary = _empty_nd_impl(context, builder, arrtype, shapes)
-    return impl_ret_new_ref(context, builder, sig.return_type, ary._getvalue())
+def _check_const_str_dtype(fname, dtype):
+    if isinstance(dtype, types.UnicodeType):
+        msg = f"If np.{fname} dtype is a string it must be a string constant."
+        raise errors.TypingError(msg)
 
 
-@glue_lowering(np.empty_like, types.Any)
-@glue_lowering(np.empty_like, types.Any, types.DTypeSpec)
-@glue_lowering(np.empty_like, types.Any, types.StringLiteral)
-def numpy_empty_like_nd(context, builder, sig, args):
-    arrtype, shapes = _parse_empty_like_args(context, builder, sig, args)
-    ary = _empty_nd_impl(context, builder, arrtype, shapes)
-    return impl_ret_new_ref(context, builder, sig.return_type, ary._getvalue())
+@intrinsic
+def numpy_empty_nd(tyctx, ty_shape, ty_dtype, ty_retty_ref):
+    ty_retty = ty_retty_ref.instance_type
+    sig = ty_retty(ty_shape, ty_dtype, ty_retty_ref)
+
+    def codegen(cgctx, builder, sig, llargs):
+        arrtype, shapes = _parse_empty_args(cgctx, builder, sig, llargs)
+        ary = _empty_nd_impl(cgctx, builder, arrtype, shapes)
+        return ary._getvalue()
+    return sig, codegen
 
 
-@glue_lowering(np.zeros, types.Any)
-@glue_lowering(np.zeros, types.Any, types.Any)
-def numpy_zeros_nd(context, builder, sig, args):
-    arrtype, shapes = _parse_empty_args(context, builder, sig, args)
-    ary = _empty_nd_impl(context, builder, arrtype, shapes)
-    _zero_fill_array(context, builder, ary)
-    return impl_ret_new_ref(context, builder, sig.return_type, ary._getvalue())
+@overload(np.empty)
+def ol_np_empty(shape, dtype=float):
+    _check_const_str_dtype("empty", dtype)
+    if (dtype is float or
+        (isinstance(dtype, types.Function) and dtype.typing_key is float) or
+            is_nonelike(dtype)): #default
+        nb_dtype = types.double
+    else:
+        nb_dtype = ty_parse_dtype(dtype)
+
+    ndim = ty_parse_shape(shape)
+    if nb_dtype is not None and ndim is not None:
+        retty = types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
+
+        def impl(shape, dtype=float):
+            return numpy_empty_nd(shape, dtype, retty)
+        return impl
+    else:
+        msg = f"Cannot parse input types to function np.empty({shape}, {dtype})"
+        raise errors.TypingError(msg)
 
 
-@glue_lowering(np.zeros_like, types.Any)
-@glue_lowering(np.zeros_like, types.Any, types.DTypeSpec)
-@glue_lowering(np.zeros_like, types.Any, types.StringLiteral)
-def numpy_zeros_like_nd(context, builder, sig, args):
-    arrtype, shapes = _parse_empty_like_args(context, builder, sig, args)
-    ary = _empty_nd_impl(context, builder, arrtype, shapes)
-    _zero_fill_array(context, builder, ary)
-    return impl_ret_new_ref(context, builder, sig.return_type, ary._getvalue())
+@intrinsic
+def numpy_empty_like_nd(tyctx, ty_prototype, ty_dtype, ty_retty_ref):
+    ty_retty = ty_retty_ref.instance_type
+    sig = ty_retty(ty_prototype, ty_dtype, ty_retty_ref)
+
+    def codegen(cgctx, builder, sig, llargs):
+        arrtype, shapes = _parse_empty_like_args(cgctx, builder, sig, llargs)
+        ary = _empty_nd_impl(cgctx, builder, arrtype, shapes)
+        return ary._getvalue()
+    return sig, codegen
+
+
+@overload(np.empty_like)
+def ol_np_empty_like(arr, dtype=None):
+    _check_const_str_dtype("empty_like", dtype)
+    if not is_nonelike(dtype):
+        nb_dtype = ty_parse_dtype(dtype)
+    elif isinstance(arr, types.Array):
+        nb_dtype = arr.dtype
+    else:
+        nb_dtype = arr
+    if nb_dtype is not None:
+        if isinstance(arr, types.Array):
+            layout = arr.layout if arr.layout != 'A' else 'C'
+            retty = arr.copy(dtype=nb_dtype, layout=layout, readonly=False)
+        else:
+            retty = types.Array(nb_dtype, 0, 'C')
+    else:
+        msg = ("Cannot parse input types to function "
+               f"np.empty_like({arr}, {dtype})")
+        raise errors.TypingError(msg)
+
+    def impl(arr, dtype=None):
+        return numpy_empty_like_nd(arr, dtype, retty)
+    return impl
+
+
+@intrinsic
+def _zero_fill_array_method(tyctx, self):
+    sig = types.none(self)
+
+    def codegen(cgctx, builder, sig, llargs):
+        ary = make_array(sig.args[0])(cgctx, builder, llargs[0])
+        cgutils.memset(builder, ary.data, builder.mul(ary.itemsize, ary.nitems),
+                       0)
+    return sig, codegen
+
+
+@overload_method(types.Array, '_zero_fill')
+def ol_array_zero_fill(self):
+    """Adds a `._zero_fill` method to zero fill an array using memset."""
+    def impl(self):
+        _zero_fill_array_method(self)
+    return impl
+
+
+@overload(np.zeros)
+def ol_np_zeros(shape, dtype=float):
+    _check_const_str_dtype("zeros", dtype)
+
+    def impl(shape, dtype=float):
+        arr = np.empty(shape, dtype=dtype)
+        arr._zero_fill()
+        return arr
+    return impl
+
+
+@overload(np.zeros_like)
+def ol_np_zeros_like(a, dtype=None):
+    _check_const_str_dtype("zeros_like", dtype)
+
+    # NumPy uses 'a' as the arg name for the array-like
+    def impl(a, dtype=None):
+        arr = np.empty_like(a, dtype=dtype)
+        arr._zero_fill()
+        return arr
+    return impl
+
+
+@overload(np.ones_like)
+def ol_np_ones_like(a, dtype=None):
+    _check_const_str_dtype("ones_like", dtype)
+
+    # NumPy uses 'a' as the arg name for the array-like
+    def impl(a, dtype=None):
+        arr = np.empty_like(a, dtype=dtype)
+        arr_flat = arr.flat
+        for idx in range(len(arr_flat)):
+            arr_flat[idx] = 1
+        return arr
+    return impl
 
 
 @glue_lowering(np.full, types.Any, types.Any)
@@ -4079,64 +4224,19 @@ def numpy_full_like_nd_type_spec(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
-@glue_lowering(np.ones, types.Any)
-def numpy_ones_nd(context, builder, sig, args):
+@overload(np.ones)
+def ol_np_ones(shape, dtype=None):
+    # for some reason the NumPy default for dtype is None in the source but
+    # ends up as np.float64 by definition.
+    _check_const_str_dtype("ones", dtype)
 
-    def ones(shape):
-        arr = np.empty(shape)
+    def impl(shape, dtype=None):
+        arr = np.empty(shape, dtype=dtype)
         arr_flat = arr.flat
         for idx in range(len(arr_flat)):
             arr_flat[idx] = 1
         return arr
-
-    valty = sig.return_type.dtype
-    res = context.compile_internal(builder, ones, sig, args,
-                                   locals={'c': valty})
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-
-@glue_lowering(np.ones, types.Any, types.DTypeSpec)
-@glue_lowering(np.ones, types.Any, types.StringLiteral)
-def numpy_ones_dtype_nd(context, builder, sig, args):
-
-    def ones(shape, dtype):
-        arr = np.empty(shape, dtype)
-        arr_flat = arr.flat
-        for idx in range(len(arr_flat)):
-            arr_flat[idx] = 1
-        return arr
-
-    res = context.compile_internal(builder, ones, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-
-@glue_lowering(np.ones_like, types.Any)
-def numpy_ones_like_nd(context, builder, sig, args):
-
-    def ones_like(arr):
-        arr = np.empty_like(arr)
-        arr_flat = arr.flat
-        for idx in range(len(arr_flat)):
-            arr_flat[idx] = 1
-        return arr
-
-    res = context.compile_internal(builder, ones_like, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-
-@glue_lowering(np.ones_like, types.Any, types.DTypeSpec)
-@glue_lowering(np.ones_like, types.Any, types.StringLiteral)
-def numpy_ones_like_dtype_nd(context, builder, sig, args):
-
-    def ones_like(arr, dtype):
-        arr = np.empty_like(arr, dtype)
-        arr_flat = arr.flat
-        for idx in range(len(arr_flat)):
-            arr_flat[idx] = 1
-        return arr
-
-    res = context.compile_internal(builder, ones_like, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
+    return impl
 
 
 @glue_lowering(np.identity, types.Integer)
