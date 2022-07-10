@@ -3,122 +3,149 @@ import itertools
 import numpy as np
 
 import unittest
-from numba import jit, typeof
+from numba import njit, typeof
 from numba.core import types
 from numba.core.errors import TypingError
 from numba.tests.support import MemoryLeakMixin, TestCase, tag
 
 
-def getitem_usecase(a, b):
-    return a[b]
-
-def setitem_usecase(a, idx, b):
-    a[idx] = b
-
-def np_take(A, indices):
-    return np.take(A, indices)
-
-def np_take_kws(A, indices, axis):
-    return np.take(A, indices, axis=axis)
-
 class TestFancyIndexing(MemoryLeakMixin, TestCase):
+    # (shape or array, indices)
+    # Every case has exactly one, one-dimensional array,
+    # Otherwise it's not fancy indexing
+    indexing_cases = [
+        # Pure integers
+        ((5, 6, 7, 8, 9, 10), (0, 3, np.array([0,1,3,4,2]))),
+        ((5, 6, 7, 8, 9, 10), (0, np.array([0,1,3,4,2]), 5)),
+        ((5, 6, 7, 8, 9, 10), (0, -3, np.array([0,1,3,4,2]))),
+        ((5, 6, 7, 8, 9, 10), (0, np.array([0,1,3,4,2]), -5)),
 
-    def generate_advanced_indices(self, N, many=True):
-        choices = [np.int16([0, N - 1, -2])]
-        if many:
-            choices += [np.uint16([0, 1, N - 1]),
-                        np.bool_([0, 1, 1, 0])]
-        return choices
+        # Pure Slices
+        ((5, 6, 7, 8, 9, 10), (slice(0, 1), slice(4, 5), np.array([0,1,3,4,2]))),
+        ((5, 6, 7, 8, 9, 10), (slice(3, 4), np.array([0,1,3,4,2]), slice(None))),
 
-    def generate_basic_index_tuples(self, N, maxdim, many=True):
-        """
-        Generate basic index tuples with 0 to *maxdim* items.
-        """
-        # Note integers can be considered advanced indices in certain
-        # cases, so we avoid them here.
-        # See "Combining advanced and basic indexing"
-        # in http://docs.scipy.org/doc/numpy/reference/arrays.indexing.html
-        if many:
-            choices = [slice(None, None, None),
-                       slice(1, N - 1, None),
-                       slice(0, None, 2),
-                       slice(N - 1, None, -2),
-                       slice(-N + 1, -1, None),
-                       slice(-1, -N, -2),
-                       ]
-        else:
-            choices = [slice(0, N - 1, None),
-                       slice(-1, -N, -2)]
-        for ndim in range(maxdim + 1):
-            for tup in itertools.product(choices, repeat=ndim):
-                yield tup
+        # Slices + Integers
+        ((5, 6, 7, 8, 9, 10), (slice(4, 5), 3, np.array([0,1,3,4,2]), 1)),
+        ((5, 6, 7, 8, 9, 10), (3, np.array([0,1,3,4,2]), slice(None), slice(4))),
 
-    def generate_advanced_index_tuples(self, N, maxdim, many=True):
-        """
-        Generate advanced index tuples by generating basic index tuples
-        and adding a single advanced index item.
-        """
-        # (Note Numba doesn't support advanced indices with more than
-        #  one advanced index array at the moment)
-        choices = list(self.generate_advanced_indices(N, many=many))
-        for i in range(maxdim + 1):
-            for tup in self.generate_basic_index_tuples(N, maxdim - 1, many):
-                for adv in choices:
-                    yield tup[:i] + (adv,) + tup[i:]
+        # Ellipsis
+        ((5, 6, 7, 8, 9, 10), (Ellipsis, np.array([0,1,3,4,2]))),
+        ((5, 6, 7, 8, 9, 10), (np.array([0,1,3,4,2]), Ellipsis)),
 
-    def generate_advanced_index_tuples_with_ellipsis(self, N, maxdim, many=True):
-        """
-        Same as generate_advanced_index_tuples(), but also insert an
-        ellipsis at various points.
-        """
-        for tup in self.generate_advanced_index_tuples(N, maxdim, many):
-            for i in range(len(tup) + 1):
-                yield tup[:i] + (Ellipsis,) + tup[i:]
+        # Ellipsis + Integers
+        ((5, 6, 7, 8, 9, 10), (Ellipsis, 1, np.array([0,1,3,4,2]))),
+        ((5, 6, 7, 8, 9, 10), (np.array([0,1,3,4,2]), 3, Ellipsis)),
 
-    def check_getitem_indices(self, arr, indices):
-        pyfunc = getitem_usecase
-        cfunc = jit(nopython=True)(pyfunc)
+        # Ellipsis + Slices
+        ((5, 6, 7, 8, 9, 10), (slice(1, 2), Ellipsis, np.array([0,1,3,4,2]))),
+        ((5, 6, 7, 8, 9, 10), (np.array([0,1,3,4,2]), slice(1, 4), Ellipsis)),
+
+        # Ellipsis + Slices + Integers
+        ((5, 6, 7, 8, 9, 10), (Ellipsis, 1, np.array([0,1,3,4,2]), 3, slice(1,5))),
+        ((5, 6, 7, 8, 9, 10), (np.array([0,1,3,4,2]), 3, Ellipsis, slice(1,5))),
+
+        # Boolean Arrays
+        ((5, 6, 7, 8, 9, 10), (slice(4, 5), 3,
+                               np.array([True, False, True, False, True, False, False]),
+                               1)),
+        ((5, 6, 7, 8, 9, 10), (3, np.array([True, False, True, False, True, False]),
+                               slice(None), slice(4))),
+
+        # Pure Arrays
+        ((5, 6, 7, 8, 9, 10), np.array([0,3,-2], dtype=np.int16)),
+        ((5, 6, 7, 8, 9, 10), np.array([0,3,1], dtype=np.uint16)),
+        ((5, 6, 7, 8, 9, 10), np.array([False,True,True,False,False])),
+    ]
+
+    def check_getitem_indices(self, arr_shape, index):
+        def get_item(array, idx):
+            return array[index]
+
+        arr = np.random.random_integers(0, 10, size=arr_shape)
+        get_item_numba = njit(get_item)
         orig = arr.copy()
         orig_base = arr.base or arr
 
-        for index in indices:
-            expected = pyfunc(arr, index)
-            # Sanity check: if a copy wasn't made, this wasn't advanced
-            # but basic indexing, and shouldn't be tested here.
-            assert expected.base is not orig_base
-            got = cfunc(arr, index)
-            # Note Numba may not return the same array strides and
-            # contiguity as Numpy
-            self.assertEqual(got.shape, expected.shape)
-            self.assertEqual(got.dtype, expected.dtype)
-            np.testing.assert_equal(got, expected)
-            # Check a copy was *really* returned by Numba
-            if got.size:
-                got.fill(42)
-                np.testing.assert_equal(arr, orig)
+        expected = get_item(arr, index)
+        got = get_item_numba(arr, index)
+        # Sanity check: In advanced indexing, the result is always a copy.
+        assert expected.base is not orig_base
 
-    def test_getitem_tuple(self):
-        # Test many variations of advanced indexing with a tuple index
-        N = 4
-        ndim = 3
-        arr = np.arange(N ** ndim).reshape((N,) * ndim).astype(np.int32)
-        indices = self.generate_advanced_index_tuples(N, ndim)
+        # Note: Numba may not return the same array strides and
+        # contiguity as Numpy
+        self.assertEqual(got.shape, expected.shape)
+        self.assertEqual(got.dtype, expected.dtype)
+        np.testing.assert_equal(got, expected)
 
-        self.check_getitem_indices(arr, indices)
+        # Check a copy was *really* returned by Numba
+        if got.size:
+            got.fill(42)
+            np.testing.assert_equal(arr, orig)
 
-    def test_getitem_tuple_and_ellipsis(self):
-        # Same, but also insert an ellipsis at a random point
-        N = 4
-        ndim = 3
-        arr = np.arange(N ** ndim).reshape((N,) * ndim).astype(np.int32)
-        indices = self.generate_advanced_index_tuples_with_ellipsis(N, ndim,
-                                                                    many=False)
+    def check_setitem_indices(self, arr_shape, index):
+        def set_item(array, idx, item):
+            array[idx] = item
 
-        self.check_getitem_indices(arr, indices)
+        arr = np.random.random_integers(0, 10, size=arr_shape)
+        set_item_numba = njit(set_item)
+        src = arr[index]
+        expected = np.zeros_like(arr)
+        got = np.zeros_like(arr)
+
+        set_item(expected, index, src)
+        set_item_numba(got, index, src)
+
+        # Note: Numba may not return the same array strides and
+        # contiguity as Numpy
+        self.assertEqual(got.shape, expected.shape)
+        self.assertEqual(got.dtype, expected.dtype)
+
+        np.testing.assert_equal(got, expected)
+
+    def test_getitem(self):
+        for arr_shape, idx in self.indexing_cases:
+            with self.subTest(arr_shape=arr_shape, idx=idx):
+                self.check_getitem_indices(arr_shape, idx)
+
+    def test_setitem(self):
+        for arr_shape, idx in self.indexing_cases:
+            with self.subTest(arr_shape=arr_shape, idx=idx):
+                self.check_setitem_indices(arr_shape, idx)
+
+    def test_fancy_errors(self):
+        arr_shape = (5, 6, 7, 8, 9, 10)
+
+        # Cases with multi-dimensional indexing array
+        idx = (0, 3, np.array([[1, 2], [2, 3]]))
+        with self.assertRaises(TypingError) as raises:
+            self.check_getitem_indices(arr_shape, idx)
+        self.assertIn(
+            'Numba does not support multidimensional indices.',
+            str(raises.exception)
+        )
+
+        # Cases with more than one indexing array
+        idx = (0, 3, np.array([1, 2]), np.array([1, 2]))
+        with self.assertRaises(TypingError) as raises:
+            self.check_getitem_indices(arr_shape, idx)
+        self.assertIn(
+            'Numba doesn\'t support more than one non-scalar array index.',
+            str(raises.exception)
+        )
+
+        # Cases with more than one indexing subspace
+        # (The subspaces here are separated by slice(None))
+        idx = (0, np.array([1, 2]), slice(None), 3, 4)
+        with self.assertRaises(TypingError) as raises:
+            self.check_getitem_indices(arr_shape, idx)
+        self.assertIn(
+            'Numba doesn\'t support more than one indexing subspace',
+            str(raises.exception)
+        )
 
     def test_ellipsis_getsetitem(self):
         # See https://github.com/numba/numba/issues/3225
-        @jit(nopython=True)
+        @njit
         def foo(arr, v):
             arr[..., 0] = arr[..., 1]
 
@@ -126,83 +153,13 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         foo(arr, 1)
         self.assertEqual(arr[0], arr[1])
 
-    def test_getitem_array(self):
-        # Test advanced indexing with a single array index
-        N = 4
-        ndim = 3
-        arr = np.arange(N ** ndim).reshape((N,) * ndim).astype(np.int32)
-        indices = self.generate_advanced_indices(N)
-        self.check_getitem_indices(arr, indices)
-
-    def check_setitem_indices(self, arr, indices):
-        pyfunc = setitem_usecase
-        cfunc = jit(nopython=True)(pyfunc)
-
-        for index in indices:
-            src = arr[index]
-            expected = np.zeros_like(arr)
-            got = np.zeros_like(arr)
-            pyfunc(expected, index, src)
-            cfunc(got, index, src)
-            # Note Numba may not return the same array strides and
-            # contiguity as Numpy
-            self.assertEqual(got.shape, expected.shape)
-            self.assertEqual(got.dtype, expected.dtype)
-            np.testing.assert_equal(got, expected)
-
-    def test_setitem_tuple(self):
-        # Test many variations of advanced indexing with a tuple index
-        N = 4
-        ndim = 3
-        arr = np.arange(N ** ndim).reshape((N,) * ndim).astype(np.int32)
-        indices = self.generate_advanced_index_tuples(N, ndim)
-        self.check_setitem_indices(arr, indices)
-
-    def test_setitem_tuple_and_ellipsis(self):
-        # Same, but also insert an ellipsis at a random point
-        N = 4
-        ndim = 3
-        arr = np.arange(N ** ndim).reshape((N,) * ndim).astype(np.int32)
-        indices = self.generate_advanced_index_tuples_with_ellipsis(N, ndim,
-                                                                    many=False)
-
-        self.check_setitem_indices(arr, indices)
-
-    def test_setitem_array(self):
-        # Test advanced indexing with a single array index
-        N = 4
-        ndim = 3
-        arr = np.arange(N ** ndim).reshape((N,) * ndim).astype(np.int32) + 10
-        indices = self.generate_advanced_indices(N)
-        self.check_setitem_indices(arr, indices)
-
-    def test_setitem_0d(self):
-        # Test setitem with a 0d-array
-        pyfunc = setitem_usecase
-        cfunc = jit(nopython=True)(pyfunc)
-
-        inps = [
-            (np.zeros(3), np.array(3.14)),
-            (np.zeros(2), np.array(2)),
-            (np.zeros(3, dtype=np.int64), np.array(3, dtype=np.int64)),
-            (np.zeros(3, dtype=np.float64), np.array(1, dtype=np.int64)),
-            (np.zeros(5, dtype='<U3'), np.array('abc')),
-            (np.zeros((3,), dtype='<U3'), np.array('a')),
-            (np.array(['abc','def','ghi'], dtype='<U3'),
-             np.array('WXYZ', dtype='<U4')),
-            (np.zeros(3, dtype=complex), np.array(2+3j, dtype=complex)),
-        ]
-
-        for x1, v in inps:
-            x2 = x1.copy()
-            pyfunc(x1, 0, v)
-            cfunc(x2, 0, v)
-            self.assertPreciseEqual(x1, x2)
-
     def test_np_take(self):
+        def np_take(array, indices):
+            return np.take(array, indices)
+
         # shorter version of array.take test in test_array_methods
         pyfunc = np_take
-        cfunc = jit(nopython=True)(pyfunc)
+        cfunc = njit(pyfunc)
 
         def check(arr, ind):
             expected = pyfunc(arr, ind)
@@ -243,14 +200,17 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError):
             cfunc(A, [1.7])
 
+        def np_take_kws(array, indices, axis):
+            return np.take(array, indices, axis=axis)
+    
         # check unsupported arg raises
         with self.assertRaises(TypingError):
-            take_kws = jit(nopython=True)(np_take_kws)
+            take_kws = njit(np_take_kws)
             take_kws(A, 1, 1)
 
         # check kwarg unsupported raises
         with self.assertRaises(TypingError):
-            take_kws = jit(nopython=True)(np_take_kws)
+            take_kws = njit(np_take_kws)
             take_kws(A, 1, axis=1)
 
         #exceptions leak refs
