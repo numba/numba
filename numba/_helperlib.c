@@ -1045,7 +1045,7 @@ error:
 #endif
 
 NUMBA_EXPORT_FUNC(PyObject *)
-numba_pickle(PyObject* runtime_args, PyObject* static_args_bytedata)
+numba_runtime_pickle(PyObject* runtime_args, PyObject* static_args_bytedata)
 {
     PyObject *obj = NULL;
     static PyObject *dumps = NULL;
@@ -1065,6 +1065,8 @@ numba_pickle(PyObject* runtime_args, PyObject* static_args_bytedata)
 
     obj = PyObject_CallFunctionObjArgs(dumps, runtime_args,
                                        static_args_bytedata, NULL);
+    // on failure, runtime_dumps returns None. Is there a better way to handle
+    // this kind of scenario?
     return obj;
 }
 

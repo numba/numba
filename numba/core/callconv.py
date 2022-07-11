@@ -442,7 +442,7 @@ class CPUCallConv(BaseCallConv):
 
         with builder.if_then(cgutils.is_null(builder, py_bytes)):
             msg = ('PyBytes_FromStringAndSize return NULL',)
-            self.return_user_exc(builder, RuntimeError, msg, None)
+            self.return_user_exc(builder, RuntimeError, msg, loc)
 
         # serialize returns a pair (data, hash)
         # "py_bytes" holds arguments that can be serialized at compile-time
@@ -451,6 +451,9 @@ class CPUCallConv(BaseCallConv):
         # are merged into a single one.
         runtime_args_tup = pyapi.tuple_pack(exc_args)
         pair = pyapi.serialize(runtime_args_tup, py_bytes)
+        with builder.if_then(builder.icmp_unsigned('==', py_none, pair)):
+            msg = ('Failed to serialize exception args at runtime',)
+            self.return_user_exc(builder, TypeError, msg, loc)
         data, _hash = pyapi.tuple_getitem(pair, 0), pyapi.tuple_getitem(pair, 1)
         ptr = pyapi.bytes_as_string(data)
         sz = pyapi.bytes_size(data)
@@ -459,19 +462,22 @@ class CPUCallConv(BaseCallConv):
         if pyapi.py_ssize_t.width > 32:
             overflow = builder.icmp_signed('>', sz, int32_t(types.int32.maxval))
             with builder.if_then(overflow):
-                msg = (f'Bytes size is greater than max value of int32',)
-                self.return_user_exc(builder, OverflowError, msg, None)
+                msg = ('Bytes size is greater than max value of int32',)
+                self.return_user_exc(builder, OverflowError, msg, loc)
 
         # allocate the excinfo struct
-        struct_size = pyapi.py_ssize_t(self.context.get_abi_sizeof(excinfo_t))
-        excinfo = builder.bitcast(self.context.nrt.allocate(builder, struct_size), excinfo_ptr_t)
+        st_size = pyapi.py_ssize_t(self.context.get_abi_sizeof(excinfo_t))
+        excinfo = builder.bitcast(self.context.nrt.allocate(builder, st_size),
+                                  excinfo_ptr_t)
 
         # hash is computed at runtime, after all arguments are known
         zero, one, two = int32_t(0), int32_t(1), int32_t(2)
         builder.store(ptr, builder.gep(excinfo, [zero, zero]))
         # truncating sz to i32 is safe as long sz < MAXVAL(int32_t)
-        builder.store(builder.trunc(sz, int32_t), builder.gep(excinfo, [zero, one]))
-        builder.store(pyapi.bytes_as_string(_hash), builder.gep(excinfo, [zero, two]))
+        builder.store(builder.trunc(sz, int32_t), builder.gep(excinfo,
+                                                              [zero, one]))
+        builder.store(pyapi.bytes_as_string(_hash), builder.gep(excinfo,
+                                                                [zero, two]))
         builder.store(excinfo, excptr)
 
     def return_non_const_user_exc(self, builder, exc, exc_args, loc=None,

@@ -377,6 +377,36 @@ class TestRaising(TestCase):
     def test_raise_instance_with_runtime_args_nopython(self):
         self.check_raise_instance_with_runtime_args(flags=no_pyobj_flags_w_nrt)
 
+    def test_dynamic_raise_bad_args(self):
+        def raise_literal_dict():
+            raise ValueError({'a': 1, 'b': np.ones(4)})
+
+        def raise_range():
+            raise ValueError(range(3))
+
+        def raise_rng(rng):
+            raise ValueError(rng.bit_generator)
+
+        funcs = [
+            (raise_literal_dict, ()),
+            (raise_range, ()),
+            (raise_rng, (types.npy_rng,)),
+        ]
+
+        for pyfunc, argtypes in funcs:
+            msg = '.*cannot convert native .* to python object.*'
+            with self.assertRaisesRegex(errors.TypingError, msg):
+                compile_isolated(pyfunc, argtypes)
+
+    def test_dynamic_raise_bad_dict(self):
+        @njit
+        def raise_literal_dict2():
+            raise ValueError({'a': 1, 'b': 3})
+
+        msg = 'Failed to serialize exception args at runtime'
+        with self.assertRaisesRegex(TypeError, msg):
+            raise_literal_dict2()
+
 
 if __name__ == '__main__':
     unittest.main()

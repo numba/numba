@@ -69,7 +69,10 @@ def runtime_dumps(runtime_args, static_args_bytedata):
     real_args = [static_args[i] if runtime_arg is None else runtime_arg
                  for i, runtime_arg in enumerate(runtime_args)]
     obj = (exc, tuple(real_args), locinfo)
-    data = dumps(obj)
+    try:
+        data = dumps(obj)
+    except TypeError:
+        return None
     # Does it worth computing the hash?
     # The "address" arg in _numba_unpickle will be a different value at
     # every call and a cache hit will never happen in _unpickled_memo

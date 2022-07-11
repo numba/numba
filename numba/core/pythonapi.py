@@ -1369,7 +1369,7 @@ class PythonAPI(object):
         # Should one move this function to outside this file? Since this is not
         # actually part of the Python API
         fnty = ir.FunctionType(self.pyobj, (self.pyobj, self.pyobj))
-        fn = self._get_function(fnty, name="numba_pickle")
+        fn = self._get_function(fnty, name="numba_runtime_pickle")
         return self.builder.call(fn, (runtime_args, static_args_bytedata))
 
     def serialize_uncached(self, obj):
@@ -1416,6 +1416,9 @@ class PythonAPI(object):
 
     def c_api_error(self):
         return cgutils.is_not_null(self.builder, self.err_occurred())
+
+    def can_convert_to_native_value(self, typ):
+        return _unboxers.lookup(typ.__class__) is not None
 
     def to_native_value(self, typ, obj):
         """
