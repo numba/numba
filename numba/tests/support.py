@@ -586,6 +586,35 @@ class TestCase(unittest.TestCase):
         self.assertNotIn('FAIL', status.stderr)
         self.assertNotIn('ERROR', status.stderr)
 
+    def run_test_in_subprocess(*maybefunc, timeout=60, envvars=None):
+        """Runs the decorated test in a subprocess via invoking numba's test
+        runner. kwargs timeout and envvars are passed through to
+        subprocess_test_runner."""
+        if len(maybefunc) > 1:
+            raise ValueError("Too many args.")
+        def wrapper(func):
+            def inner(self, *args, **kwargs):
+                if os.environ.get("SUBPROC_TEST", None) is None:
+                    # Not in a subprocess, so stage the call to run the
+                    # test in a subprocess which will set the env var.
+                    class_name = self.__class__.__name__
+                    self.subprocess_test_runner(test_module=self.__module__,
+                                                test_class=class_name,
+                                                test_name=func.__name__,
+                                                timeout=timeout,
+                                                envvars=envvars,)
+                else:
+                    # env var is set, so we're in the subprocess, run the
+                    # actual test.
+                    func(self)
+            return inner
+
+        if maybefunc and isinstance(maybefunc[0], pytypes.FunctionType):
+            func = maybefunc[0]
+            return wrapper(func)
+        else:
+            return wrapper
+
 
 class SerialMixin(object):
     """Mixin to mark test for serial execution.
