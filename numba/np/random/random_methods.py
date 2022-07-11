@@ -319,6 +319,12 @@ def random_bounded_uint8_fill(bitgen, low, rng, mask, size, dtype):
     return out
 
 
+random_bounded_int8_fill = random_bounded_uint8_fill
+random_bounded_int16_fill = random_bounded_uint16_fill
+random_bounded_int32_fill = random_bounded_uint32_fill
+random_bounded_int64_fill = random_bounded_uint64_fill
+
+
 @register_jitable
 def random_bounded_bool_fill(bitgen, low, rng, mask, size, dtype):
     buf = 0
