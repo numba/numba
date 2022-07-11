@@ -21,6 +21,10 @@ from numba.np.random.distributions import \
      random_lognormal, random_rayleigh, random_standard_t, random_wald,
      random_geometric, random_zipf, random_triangular,
      random_poisson, random_negative_binomial)
+from numba.np.random.random_methods import \
+    (random_bounded_uint64_fill, random_bounded_uint32_fill,
+     random_bounded_uint16_fill, random_bounded_uint8_fill,
+     random_bounded_bool_fill, _randint_arg_check)
 
 
 def _get_proper_func(func_32, func_64, dtype, dist_name="the given"):
@@ -78,6 +82,92 @@ def check_types(obj, type_list, arg_name):
     if not any([isinstance(obj, _type) for _type in type_list]):
         raise TypingError(f"Argument {arg_name} is not one of the" +
                           f" expected type(s): {type_list}")
+
+
+# Overload the Generator().integers()
+@overload_method(types.NumPyRandomGeneratorType, 'integers')
+def NumPyRandomGeneratorType_integers(inst, low, high=None, size=None,
+                                      dtype=np.int64, endpoint=False):
+    check_types(low, [types.Float, types.Integer,
+                      types.Boolean, bool, int, float], 'low')
+    check_types(high, [types.Float, types.Integer, types.Boolean,
+                       bool, int, float, type(None)], 'high')
+    check_types(endpoint, [types.Boolean, bool], 'endpoint')
+    if isinstance(size, types.Omitted):
+        size = size.value
+
+    if isinstance(dtype, types.Omitted):
+        dtype = dtype.value
+
+    if not isinstance(dtype, types.Type):
+        dt = np.dtype(dtype)
+        nb_dt = from_dtype(dt)
+        _dtype = dtype
+    else:
+        nb_dt = dtype
+        _dtype = as_dtype(nb_dt)
+
+    if _dtype == np.int32:
+        int_func = random_bounded_uint32_fill
+        lower_bound = -0x80000000
+        upper_bound = 0x7FFFFFFF
+    elif _dtype == np.int64:
+        int_func = random_bounded_uint64_fill
+        lower_bound = -0x8000000000000000
+        upper_bound = 0x7FFFFFFFFFFFFFFF
+    elif _dtype == np.int16:
+        int_func = random_bounded_uint16_fill
+        lower_bound = -0x8000
+        upper_bound = 0xFFFF
+    elif _dtype == np.int8:
+        int_func = random_bounded_uint8_fill
+        lower_bound = -0x80
+        upper_bound = 0xFF
+    elif _dtype == np.uint32:
+        int_func = random_bounded_uint32_fill
+        lower_bound = -0x80000000
+        upper_bound = 0x7FFFFFFF
+    elif _dtype == np.uint64:
+        int_func = random_bounded_uint64_fill
+        lower_bound = -0x8000000000000000
+        upper_bound = 0x7FFFFFFFFFFFFFFF
+    elif _dtype == np.uint16:
+        int_func = random_bounded_uint16_fill
+        lower_bound = -0x8000
+        upper_bound = 0xFFFF
+    elif _dtype == np.uint8:
+        int_func = random_bounded_uint8_fill
+        lower_bound = -0x80
+        upper_bound = 0xFF
+    elif _dtype == np.bool_:
+        int_func = random_bounded_bool_fill
+        lower_bound = -1
+        upper_bound = 2
+    else:
+        raise TypingError("Argument dtype is not one of the" +
+                          " expected type(s): " +
+                          "np.int32, np.int64, np.int16, np.int8, "
+                          "np.uint32, np.uint64, np.uint16, np.uint8, "
+                          "np.bool_")
+
+    if is_nonelike(size):
+        def impl(inst, low, high=None, size=None,
+                 dtype=np.int64, endpoint=False):
+            low, rng = _randint_arg_check(low, high, endpoint,
+                                          lower_bound, upper_bound)
+            mask = None
+            return int_func(inst.bit_generator, low, rng, mask, 1, dtype)[0]
+        return impl
+    else:
+        check_size(size)
+
+        def impl(inst, low, high=None, size=None,
+                 dtype=np.int64, endpoint=False):
+            low, rng = _randint_arg_check(low, high, endpoint,
+                                          lower_bound, upper_bound)
+            mask = None
+            return int_func(inst.bit_generator, low, rng, mask, size, dtype)
+        return impl
 
 
 # Overload the Generator().random()

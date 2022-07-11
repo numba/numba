@@ -92,9 +92,13 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                                       test_size, test_dtype)
         numpy_res = distribution_func.py_func(numpy_rng_instance,
                                               test_size, test_dtype)
-
-        np.testing.assert_array_max_ulp(numpy_res, numba_res,
-                                        maxulp=ulp_prec, dtype=test_dtype)
+        # assert_array_max_ulp doesn't compare scalar booleans/ boolean arrays
+        if isinstance(numba_res, bool) or (isinstance(numba_res, np.ndarray)
+                                           and numba_res.dtype == bool):
+            assert np.all(numba_res == numpy_res)
+        else:
+            np.testing.assert_array_max_ulp(numpy_res, numba_res,
+                                            maxulp=ulp_prec, dtype=test_dtype)
 
         # Check if the end state of both BitGenerators is same
         # after drawing the distributions
@@ -158,6 +162,44 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         for _func, _func_name in zip(funcs, func_names):
             with self.subTest(_func=_func, _func_name=_func_name):
                 self._test_bitgen_func_parity(_func_name, _func)
+
+    def test_integers(self):
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        test_dtypes = [np.int64, np.int32, np.int16, np.int8]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:\
+            x.integers(5, 10, size=size, dtype=dtype)
+        for _size in test_sizes:
+            for _dtype in test_dtypes:
+                for _bitgen in bitgen_types:
+                    with self.subTest(_size=_size, _dtype=_dtype,
+                                      _bitgen=_bitgen):
+                        self.check_numpy_parity(dist_func, _bitgen,
+                                                None, _size, _dtype)
+
+        # Checking dtype = bool seperately
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        test_dtypes = [np.bool_]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:\
+            x.integers(False, True, size=size, dtype=dtype)
+        for _size in test_sizes:
+            for _dtype in test_dtypes:
+                for _bitgen in bitgen_types:
+                    with self.subTest(_size=_size, _dtype=_dtype,
+                                      _bitgen=_bitgen):
+                        self.check_numpy_parity(dist_func, _bitgen,
+                                                None, _size, _dtype)
+
+        dist_func = lambda x, low, high, size, dtype, endpoint:\
+            x.integers(low=low, high=high, size=size,
+                       dtype=dtype, endpoint=endpoint)
+        self._check_invalid_types(dist_func,
+                                  ['low', 'high', 'size', 'dtype', 'endpoint'],
+                                  [1, 5, (1,), np.int64, True],
+                                  ['x', 'x', ('x',), np.float64, 'x'])
 
     def test_random(self):
         test_sizes = [None, (), (100,), (10, 20, 30)]
