@@ -12,6 +12,8 @@ force_pyobj_flags = Flags()
 force_pyobj_flags.force_pyobject = True
 
 no_pyobj_flags = Flags()
+no_pyobj_flags_w_nrt = Flags()
+no_pyobj_flags_w_nrt.nrt = True
 
 
 class MyError(Exception):
@@ -141,7 +143,8 @@ class TestRaising(TestCase):
     def check_against_python(self, exec_mode, pyfunc, cfunc,
                              expected_error_class, *args):
 
-        assert exec_mode in (force_pyobj_flags, no_pyobj_flags)
+        assert exec_mode in (force_pyobj_flags, no_pyobj_flags,
+                             no_pyobj_flags_w_nrt)
 
         # invariant of mode, check the error class and args are the same
         with self.assertRaises(expected_error_class) as pyerr:
@@ -351,9 +354,7 @@ class TestRaising(TestCase):
         self.check_raise_runtime_value(flags=force_pyobj_flags)
 
     def test_raise_runtime_value_nopython(self):
-        no_pyobj_flags.nrt = True
-        self.check_raise_runtime_value(flags=no_pyobj_flags)
-        no_pyobj_flags.nrt = False
+        self.check_raise_runtime_value(flags=no_pyobj_flags_w_nrt)
 
     def check_raise_instance_with_runtime_args(self, flags):
         for clazz in [MyError, UDEArgsToSuper,
@@ -374,9 +375,7 @@ class TestRaising(TestCase):
         self.check_raise_instance_with_runtime_args(flags=force_pyobj_flags)
 
     def test_raise_instance_with_runtime_args_nopython(self):
-        no_pyobj_flags.nrt = True
-        self.check_raise_instance_with_runtime_args(flags=no_pyobj_flags)
-        no_pyobj_flags.nrt = False
+        self.check_raise_instance_with_runtime_args(flags=no_pyobj_flags_w_nrt)
 
 
 if __name__ == '__main__':

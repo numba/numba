@@ -366,6 +366,23 @@ class CPUCallConv(BaseCallConv):
         builder.store(retval, retptr)
         self._return_errcode_raw(builder, RETCODE_OK)
 
+    def build_excinfo_struct(self, exc, exc_args, loc, func_name):
+        # Build excinfo struct
+        if loc is not None:
+            fname = loc._raw_function_name()
+            if fname is None:
+                # could be exec(<string>) or REPL, try func_name
+                fname = func_name
+
+            locinfo = (fname, loc.filename, loc.line)
+            if None in locinfo:
+                locinfo = None
+        else:
+            locinfo = None
+
+        exc = (exc, exc_args, locinfo)
+        return exc
+
     def set_static_user_exc(self, builder, exc, exc_args=None, loc=None,
                             func_name=None):
         if exc is not None and not issubclass(exc, BaseException):
@@ -381,19 +398,7 @@ class CPUCallConv(BaseCallConv):
             exc_args = tuple()
 
         pyapi = self.context.get_python_api(builder)
-        # Build excinfo struct
-        if loc is not None:
-            fname = loc._raw_function_name()
-            if fname is None:
-                # could be exec(<string>) or REPL, try func_name
-                fname = func_name
-
-            locinfo = (fname, loc.filename, loc.line)
-            if None in locinfo:
-                locinfo = None
-        else:
-            locinfo = None
-        exc = (exc, exc_args, locinfo)
+        exc = self.build_excinfo_struct(exc, exc_args, loc, func_name)
         struct_gv = pyapi.serialize_object(exc)
         excptr = self._get_excinfo_argument(builder.function)
         builder.store(struct_gv, excptr)
@@ -419,20 +424,7 @@ class CPUCallConv(BaseCallConv):
                             % (exc,))
 
         pyapi = self.context.get_python_api(builder)
-        # Build excinfo struct
-        if loc is not None:
-            fname = loc._raw_function_name()
-            if fname is None:
-                # could be exec(<string>) or REPL, try func_name
-                fname = func_name
-
-            locinfo = (fname, loc.filename, loc.line)
-            if None in locinfo:
-                locinfo = None
-        else:
-            locinfo = None
-
-        exc = (exc, exc_args, locinfo)
+        exc = self.build_excinfo_struct(exc, exc_args, loc, func_name)
         excptr = self._get_excinfo_argument(builder.function)
         struct_gv_ptr = pyapi.serialize_object(exc)  # {i8*, i32, i8*}*
 
