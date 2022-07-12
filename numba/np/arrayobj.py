@@ -4705,10 +4705,6 @@ def array_astype(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, ret._getvalue())
 
 
-# @glue_lowering(np.frombuffer, types.Buffer)
-# @glue_lowering(np.frombuffer, types.Buffer, types.DTypeSpec)
-# @glue_lowering(np.frombuffer, types.Buffer, types.StringLiteral)
-
 @intrinsic
 def np_frombuffer(typingctx, buffer, dtype, retty):
     ty = retty.instance_type

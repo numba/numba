@@ -423,13 +423,13 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check_err(arr, np.complex128)
 
         # F-contiguous
-        # arr = np.arange(24, dtype=np.int8).reshape((3, 8)).T
-        # check(arr, np.int8)
-        # check(arr, np.float32)
-        # check(arr, np.complex64)
-        # check(arr, dt1)
-        # check_err(arr, dt2)
-        # check_err(arr, np.complex128)
+        arr = np.arange(24, dtype=np.int8).reshape((3, 8)).T
+        check(arr, np.int8)
+        check(arr, np.float32)
+        check(arr, np.complex64)
+        check(arr, dt1)
+        check_err(arr, dt2)
+        check_err(arr, np.complex128)
 
         # Non-contiguous: only a type with the same itemsize can be used
         arr = np.arange(16, dtype=np.int32)[::2]
