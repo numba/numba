@@ -73,8 +73,7 @@ def get_array_index_type(ary, idx):
               and isinstance(ty.dtype, (types.Integer, types.Boolean))):
             if ty.ndim > 1:
                 # Advanced indexing limitation # 1
-                raise NumbaTypeError("Numba does not support"
-                                     " multidimensional indices.")
+                raise NumbaTypeError("Multi-dimensional indices are not supported.")
             array_indices += 1
             advanced = True
             if not in_subspace:
@@ -88,14 +87,14 @@ def get_array_index_type(ary, idx):
     if advanced:
         if array_indices > 1:
             # Advanced indexing limitation # 2
-            raise NumbaTypeError("Numba doesn't support more than"
-                                 " one non-scalar array index.")
+            msg = "Using more than one non-scalar array index is unsupported."
+            raise NumbaTypeError(msg)
         
         if num_subspaces > 1:
             # Advanced indexing limitation # 3
-            raise NumbaTypeError("Numba doesn't support more than"
-                                 " one indexing subspace (consecutive "
-                                 "groups of integer/array indices)")
+            msg = ("Using more than one indexing subspace (consecutive group "
+                   "of integer or array indices) is unsupported.")
+            raise NumbaTypeError(msg)
 
     # Only Numpy arrays support advanced indexing
     if advanced and not isinstance(ary, types.Array):
