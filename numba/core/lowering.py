@@ -617,13 +617,13 @@ class Lower(BaseLower):
             if isinstance(exc_arg, ir.Var):
                 # dynamic values
                 typ = self.typeof(exc_arg.name)
-                # raise exception if cannot convert to native value
-                if not pyapi.can_convert_to_native_value(typ):
-                    msg = f'cannot convert native {typ} to python object'
-                    raise TypingError(msg)
                 val = self.loadvar(exc_arg.name)
                 self.incref(typ, val)
                 obj = pyapi.from_native_value(typ, val, env_manager)
+                # raise exception if cannot convert from native value
+                if cgutils.get_null_value(obj.type) == obj:
+                    msg = f'cannot convert native {typ} to python object'
+                    raise TypingError(msg)
             else:
                 # constants
                 obj = exc_arg
