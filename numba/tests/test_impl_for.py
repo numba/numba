@@ -37,18 +37,22 @@ class TestImplForTypeResolution(TestCase):
         @overload(foo, use_impl_for=True)
         def ov_foo_base(x, y):
             if isinstance(x, types.Array) and isinstance(y, types.Array):
+
                 @impl_for(types.Array)
                 def impl(x, y):
                     return "base"
+
                 return impl
 
         @overload(foo, use_impl_for=True)
         def ov_foo_tensor(x, y):
             if isinstance(x, types.Array) and isinstance(y, types.Array):
                 if isinstance(x, Tensor) or isinstance(y, Tensor):
+
                     @impl_for(Tensor)
                     def impl(x, y):
                         return "tensor"
+
                     return impl
 
         tyctx = cpu_target.typing_context
@@ -89,8 +93,10 @@ class TestImplForTypeResolution(TestCase):
         @overload(foo)
         def ov_foo_base(x, y):
             if isinstance(x, types.Array) and isinstance(y, types.Array):
+
                 def impl(x, y):
                     return "base"
+
                 return impl
 
         @overload(foo, use_impl_for=True)
@@ -99,6 +105,7 @@ class TestImplForTypeResolution(TestCase):
                 # intentionally left open (no impl_for)
                 def impl(x, y):
                     return "tensor"
+
                 return impl
 
         tyctx = cpu_target.typing_context
@@ -109,8 +116,13 @@ class TestImplForTypeResolution(TestCase):
         fnty = tyctx.resolve_value_type(foo)
 
         # When one of the matching overload opt-in to use_impl_for
-        self.check_fail(tyctx, fnty, (tensor_t, tensor_t), Exception,
-                        "ambiguous open versions")
+        self.check_fail(
+            tyctx,
+            fnty,
+            (tensor_t, tensor_t),
+            Exception,
+            "ambiguous open versions",
+        )
 
     def test_ambiguous_impl_for(self):
         def foo():
@@ -127,17 +139,21 @@ class TestImplForTypeResolution(TestCase):
         @overload(foo, use_impl_for=True)
         def ov_foo_base(x, y):
             if isinstance(x, types.Array) and isinstance(y, types.Array):
+
                 @impl_for(types.Array)
                 def impl(x, y):
                     return "base"
+
                 return impl
 
         @overload(foo, use_impl_for=True)
         def ov_foo_tensor(x, y):
             if isinstance(x, Tensor) and isinstance(y, Tensor):
+
                 @impl_for(types.Array)
                 def impl(x, y):
                     return "tensor"
+
                 return impl
 
         tyctx = cpu_target.typing_context
@@ -148,8 +164,13 @@ class TestImplForTypeResolution(TestCase):
         fnty = tyctx.resolve_value_type(foo)
 
         # When one of the matching overload opt-in to use_impl_for
-        self.check_fail(tyctx, fnty, (tensor_t, tensor_t), Exception,
-                        "ambiguous with specialized versions")
+        self.check_fail(
+            tyctx,
+            fnty,
+            (tensor_t, tensor_t),
+            Exception,
+            "ambiguous with specialized versions",
+        )
 
     def test_disjoint_impl_for_types(self):
         def foo():
@@ -166,26 +187,32 @@ class TestImplForTypeResolution(TestCase):
         @overload(foo, use_impl_for=True)
         def ov_foo_base(x, y):
             if isinstance(x, types.Array) and isinstance(y, types.Array):
+
                 @impl_for(types.Array)
                 def impl(x, y):
                     return "base"
+
                 return impl
 
         @overload(foo, use_impl_for=True)
         def ov_foo_tensor(x, y):
             # intentionally accept if either x or y is a Tensor
             if isinstance(x, Tensor) or isinstance(y, Tensor):
+
                 @impl_for(Tensor)
                 def impl(x, y):
                     return "tensor"
+
                 return impl
 
         @overload(foo, use_impl_for=True)
         def ov_foo_disjoint(x, y):
             if isinstance(x, Tensor) and isinstance(y, types.Integer):
+
                 @impl_for(types.Integer)
                 def impl(x, y):
                     return "int"
+
                 return impl
 
         tyctx = cpu_target.typing_context
@@ -200,8 +227,124 @@ class TestImplForTypeResolution(TestCase):
 
         check((array_t, array_t), types.literal("base"))
         check((tensor_t, tensor_t), types.literal("tensor"))
-        self.check_fail(tyctx, fnty, (tensor_t, int_t), CompilerError,
-                        "Not all signatures have a common `impl_for` ancestry")
+        self.check_fail(
+            tyctx,
+            fnty,
+            (tensor_t, int_t),
+            CompilerError,
+            "Not all signatures have a common `impl_for` ancestry",
+        )
+
+    def check_dense_sparse(self, fix_by_more_specific):
+        class Dense(types.Array):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.name = f"dense.{self.name}"
+
+        class Sparse(types.Array):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.name = f"sparse.{self.name}"
+
+        def matmul(a, b):
+            pass
+
+        @overload(matmul)
+        def ov_matmul(a, b):
+            if isinstance(a, types.Array) and isinstance(b, types.Array):
+
+                def impl(a, b):
+                    return "base"
+
+                return impl
+
+        @overload(matmul, use_impl_for=True)
+        def ov_matmul_dense(a, b):
+            if isinstance(a, types.Array) and isinstance(b, types.Array):
+                if isinstance(a, Dense) or isinstance(b, Dense):
+
+                    @impl_for(Dense)
+                    def impl(a, b):
+                        return "dense@dense"
+
+                    return impl
+
+        @overload(matmul, use_impl_for=True)
+        def ov_matmul_sparse(a, b):
+            if isinstance(a, types.Array) and isinstance(b, types.Array):
+                if isinstance(a, Sparse) or isinstance(b, Sparse):
+
+                    @impl_for(Sparse)
+                    def impl(a, b):
+                        return "sparse@sparse"
+
+                    return impl
+
+        if fix_by_more_specific:
+            class DenseSparse(Dense, Sparse):
+                pass
+
+            @overload(matmul, use_impl_for=True)
+            def ov_matmul_dense_sparse(a, b):
+                if isinstance(a, Dense) and isinstance(b, Sparse):
+
+                    @impl_for(DenseSparse)
+                    def impl(a, b):
+                        return "dense@sparse"
+
+                    return impl
+
+            @overload(matmul, use_impl_for=True)
+            def ov_matmul_sparse_dense(a, b):
+                if isinstance(a, Sparse) and isinstance(b, Dense):
+
+                    @impl_for(DenseSparse)
+                    def impl(a, b):
+                        return "sparse@dense"
+
+                    return impl
+
+        models.register_default(Dense)(models.ArrayModel)
+        models.register_default(Sparse)(models.ArrayModel)
+
+        tyctx = cpu_target.typing_context
+        tyctx.refresh()
+
+        array_t = types.Array(types.intp, 2, "A")
+        dense_t = Dense(types.intp, 2, "A")
+        sparse_t = Sparse(types.intp, 2, "A")
+
+        fnty = tyctx.resolve_value_type(matmul)
+
+        def check(args, expect):
+            self.check(tyctx, fnty, args, types.literal(expect))
+
+        # basic
+        check((array_t, array_t), "base")
+        check((dense_t, array_t), "dense@dense")
+        check((dense_t, dense_t), "dense@dense")
+        check((sparse_t, array_t), "sparse@sparse")
+        check((sparse_t, sparse_t), "sparse@sparse")
+
+        def dillenma():
+            check((dense_t, sparse_t), "dense@sparse")
+            check((sparse_t, dense_t), "sparse@dense")
+
+        if fix_by_more_specific:
+            dillenma()
+        else:
+            with self.assertRaises(CompilerError) as raises:
+                dillenma()
+            self.assertIn(
+                "Not all signatures have a common `impl_for` ancestry",
+                str(raises.exception),
+            )
+
+    def test_dense_sparse_ok(self):
+        self.check_dense_sparse(fix_by_more_specific=True)
+
+    def test_dense_sparse_expected_failure(self):
+        self.check_dense_sparse(fix_by_more_specific=False)
 
     def check(self, tyctx, fnty, argtys, expect):
         out_sig = tyctx.resolve_function_type(fnty, argtys, {})
