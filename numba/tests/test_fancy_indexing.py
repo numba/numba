@@ -15,7 +15,8 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
     # Otherwise it's not fancy indexing
     indexing_cases = [
         # Pure integers
-        ((5, 6, 7, 8, 9, 10), (0, 3, np.array([0,1,3,4,2]))),
+        shape = (5, 6, 7, 8, 9, 10)
+        (shape, (0, 3, np.array([0, 1, 3, 4, 2]))),
         ((5, 6, 7, 8, 9, 10), (0, np.array([0,1,3,4,2]), 5)),
         ((5, 6, 7, 8, 9, 10), (0, -3, np.array([0,1,3,4,2]))),
         ((5, 6, 7, 8, 9, 10), (0, np.array([0,1,3,4,2]), -5)),
@@ -83,20 +84,20 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
             np.testing.assert_equal(arr, orig)
 
     def check_setitem_indices(self, arr_shape, index):
+        @njit     
         def set_item(array, idx, item):
             array[idx] = item
 
         arr = np.random.random_integers(0, 10, size=arr_shape)
-        set_item_numba = njit(set_item)
         src = arr[index]
         expected = np.zeros_like(arr)
         got = np.zeros_like(arr)
 
-        set_item(expected, index, src)
-        set_item_numba(got, index, src)
+        set_item.py_func(expected, index, src)
+        set_item(got, index, src)
 
         # Note: Numba may not return the same array strides and
-        # contiguity as Numpy
+        # contiguity as NumPy
         self.assertEqual(got.shape, expected.shape)
         self.assertEqual(got.dtype, expected.dtype)
 
@@ -112,7 +113,7 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
             with self.subTest(arr_shape=arr_shape, idx=idx):
                 self.check_setitem_indices(arr_shape, idx)
 
-    def test_fancy_errors(self):
+    def test_unsupported_condition_exceptions(self):
         arr_shape = (5, 6, 7, 8, 9, 10)
 
         # Cases with multi-dimensional indexing array
