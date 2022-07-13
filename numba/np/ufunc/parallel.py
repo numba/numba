@@ -14,7 +14,7 @@ import os
 import sys
 import warnings
 from threading import RLock as threadRLock
-from ctypes import CFUNCTYPE, c_int, CDLL
+from ctypes import CFUNCTYPE, c_int, CDLL, POINTER, c_uint
 
 import numpy as np
 
@@ -23,10 +23,10 @@ from llvmlite import ir
 
 from numba.np.numpy_support import as_dtype
 from numba.core import types, cgutils, config, errors
+from numba.core.typing import signature
 from numba.np.ufunc.wrappers import _wrapper_info
 from numba.np.ufunc import ufuncbuilder
-from numba.extending import overload
-
+from numba.extending import overload, intrinsic
 
 _IS_OSX = sys.platform.startswith('darwin')
 _IS_LINUX = sys.platform.startswith('linux')
@@ -182,7 +182,7 @@ class ParallelUFuncBuilder(ufuncbuilder.UFuncBuilder):
     def build(self, cres, sig):
         _launch_threads()
 
-        # Buider wrapper for ufunc entry point
+        # Builder wrapper for ufunc entry point
         ctx = cres.target_context
         signature = cres.signature
         library = cres.library
@@ -518,7 +518,7 @@ def _launch_threads():
             launch_threads = CFUNCTYPE(None, c_int)(lib.launch_threads)
             launch_threads(NUM_THREADS)
 
-            _load_num_threads_funcs(lib)  # load late
+            _load_threading_functions(lib)  # load late
 
             # set library name so it can be queried
             global _threading_layer
@@ -526,7 +526,7 @@ def _launch_threads():
             _is_initialized = True
 
 
-def _load_num_threads_funcs(lib):
+def _load_threading_functions(lib):
 
     ll.add_symbol('get_num_threads', lib.get_num_threads)
     ll.add_symbol('set_num_threads', lib.set_num_threads)
@@ -541,6 +541,21 @@ def _load_num_threads_funcs(lib):
 
     global _get_thread_id
     _get_thread_id = CFUNCTYPE(c_int)(lib.get_thread_id)
+
+    ll.add_symbol('set_parallel_chunksize', lib.set_parallel_chunksize)
+    ll.add_symbol('get_parallel_chunksize', lib.get_parallel_chunksize)
+    ll.add_symbol('get_sched_size', lib.get_sched_size)
+    global _set_parallel_chunksize
+    _set_parallel_chunksize = CFUNCTYPE(c_uint,
+                                        c_uint)(lib.set_parallel_chunksize)
+    global _get_parallel_chunksize
+    _get_parallel_chunksize = CFUNCTYPE(c_uint)(lib.get_parallel_chunksize)
+    global _get_sched_size
+    _get_sched_size = CFUNCTYPE(c_uint,
+                                c_uint,
+                                c_uint,
+                                POINTER(c_int),
+                                POINTER(c_int))(lib.get_sched_size)
 
 
 # Some helpers to make set_num_threads jittable
@@ -634,7 +649,7 @@ def get_num_threads():
         raise RuntimeError("Invalid number of threads. "
                            "This likely indicates a bug in Numba. "
                            "(thread_id=%s, num_threads=%s)" %
-                           (_get_thread_id(), num_threads))
+                           (get_thread_id(), num_threads))
     return num_threads
 
 
@@ -645,7 +660,7 @@ def ol_get_num_threads():
     def impl():
         num_threads = _get_num_threads()
         if num_threads <= 0:
-            print("Broken thread_id: ", _get_thread_id())
+            print("Broken thread_id: ", get_thread_id())
             print("num_threads: ", num_threads)
             raise RuntimeError("Invalid number of threads. "
                                "This likely indicates a bug in Numba.")
@@ -653,23 +668,48 @@ def ol_get_num_threads():
     return impl
 
 
-def _get_thread_id():
-    """
-    Returns a unique ID for each thread
+@intrinsic
+def _iget_num_threads(typingctx):
+    _launch_threads()
 
-    This function is private and should only be used for testing purposes.
+    def codegen(context, builder, signature, args):
+        mod = builder.module
+        fnty = ir.FunctionType(cgutils.intp_t, [])
+        fn = cgutils.get_or_insert_function(mod, fnty, "get_num_threads")
+        return builder.call(fn, [])
+    return signature(types.intp), codegen
+
+
+def get_thread_id():
     """
+    Returns a unique ID for each thread in the range 0 (inclusive)
+    to `numba.get_num_threads()` (exclusive).
+    """
+    # Called from the interpreter directly, this should return 0
+    # Called from a sequential JIT region, this should return 0
+    # Called from a parallel JIT region, this should return 0..N
+    # Called from objmode in a parallel JIT region, this should return 0..N
     _launch_threads()
     return _get_thread_id()
 
 
-@overload(_get_thread_id)
+@overload(get_thread_id)
 def ol_get_thread_id():
     _launch_threads()
 
     def impl():
-        return _get_thread_id()
+        return _iget_thread_id()
     return impl
+
+
+@intrinsic
+def _iget_thread_id(typingctx):
+    def codegen(context, builder, signature, args):
+        mod = builder.module
+        fnty = ir.FunctionType(cgutils.intp_t, [])
+        fn = cgutils.get_or_insert_function(mod, fnty, "get_thread_id")
+        return builder.call(fn, [])
+    return signature(types.intp), codegen
 
 
 _DYLD_WORKAROUND_SET = 'NUMBA_DYLD_WORKAROUND' in os.environ
@@ -677,3 +717,42 @@ _DYLD_WORKAROUND_VAL = int(os.environ.get('NUMBA_DYLD_WORKAROUND', 0))
 
 if _DYLD_WORKAROUND_SET and _DYLD_WORKAROUND_VAL:
     _launch_threads()
+
+
+def set_parallel_chunksize(n):
+    _launch_threads()
+    if not isinstance(n, (int, np.integer)):
+        raise TypeError("The parallel chunksize must be an integer")
+    global _set_parallel_chunksize
+    if n < 0:
+        raise ValueError("chunksize must be greater than or equal to zero")
+    return _set_parallel_chunksize(n)
+
+
+def get_parallel_chunksize():
+    _launch_threads()
+    global _get_parallel_chunksize
+    return _get_parallel_chunksize()
+
+
+@overload(set_parallel_chunksize)
+def ol_set_parallel_chunksize(n):
+    _launch_threads()
+    if not isinstance(n, types.Integer):
+        msg = "The parallel chunksize must be an integer"
+        raise errors.TypingError(msg)
+
+    def impl(n):
+        if n < 0:
+            raise ValueError("chunksize must be greater than or equal to zero")
+        return _set_parallel_chunksize(n)
+    return impl
+
+
+@overload(get_parallel_chunksize)
+def ol_get_parallel_chunksize():
+    _launch_threads()
+
+    def impl():
+        return _get_parallel_chunksize()
+    return impl

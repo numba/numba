@@ -63,7 +63,7 @@
           animation: false,
           viewport: null
         }).on('hide.bs.tooltip', function() {
-          // keep them visible even if you acidentally mouse over
+          // keep them visible even if you accidentally mouse over
           if ($a.attr('data-tooltip-keepvisible')) {
             return false
           }

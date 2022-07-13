@@ -64,10 +64,6 @@ class _TestModule(TestCase):
         err = err.getvalue()
         self.assertIn("ZeroDivisionError", err)
 
-    # For 2.x
-    def runTest(self):
-        raise NotImplementedError
-
 
 def self_test():
     mod = sys.modules[__name__]

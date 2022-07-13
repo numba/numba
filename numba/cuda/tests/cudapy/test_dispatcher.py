@@ -1,12 +1,8 @@
 import numpy as np
 import threading
-import warnings
-from contextlib import contextmanager
 
 from numba import cuda, float32, float64, int32, int64, void
-from numba.core.errors import NumbaDeprecationWarning
 from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
-from numba.tests.support import ignore_internal_warnings
 import math
 
 
@@ -362,51 +358,6 @@ class TestDispatcher(CUDATestCase):
 
         self.assertEqual("Add two integers, kernel version", add_kernel.__doc__)
         self.assertEqual("Add two integers, device version", add_device.__doc__)
-
-
-@contextmanager
-def deprecation_warning_catcher():
-    with warnings.catch_warnings(record=True) as w:
-        ignore_internal_warnings()
-        warnings.simplefilter("always", category=NumbaDeprecationWarning)
-        yield w
-
-
-@skip_on_cudasim('Dispatcher objects not used in the simulator')
-class TestDispatcherDeprecation(CUDATestCase):
-    def check_warning(self, warnings, expected_str, category):
-        self.assertEqual(len(warnings), 1)
-        for w in warnings:
-            self.assertEqual(w.category, category)
-            self.assertIn(expected_str, str(w.message))
-
-    def test_ptx_deprecation(self):
-        def f(x):
-            x[0] = 42
-
-        msg = "Attribute `ptx` is deprecated and will be removed in the "
-        "future. "
-
-        # Kernel code path
-        with self.subTest(
-            name="DispatcherOnCudaKernel"
-        ), deprecation_warning_catcher() as w:
-            dispatcher = cuda.jit(f)
-            dispatcher.ptx
-            self.check_warning(w, msg, NumbaDeprecationWarning)
-        with self.subTest(
-            name="KernelObjectOnCudaKernel"
-        ), deprecation_warning_catcher() as w:
-            kernel = dispatcher.compile((float32[::1],))
-            kernel.ptx
-            self.check_warning(w, msg, NumbaDeprecationWarning)
-        # Device function code path
-        with self.subTest(
-            name="DispatcherOnDeviceFunction"
-        ), deprecation_warning_catcher() as w:
-            device_f_dispatcher = cuda.jit(f, device=True)
-            device_f_dispatcher.ptx
-            self.check_warning(w, msg, NumbaDeprecationWarning)
 
 
 if __name__ == '__main__':

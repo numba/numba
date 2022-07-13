@@ -3,13 +3,12 @@ import os
 import sys
 import ctypes
 import functools
-import warnings
 
 from numba.core import config, serialize, sigutils, types, typing, utils
 from numba.core.caching import Cache, CacheImpl
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.dispatcher import Dispatcher
-from numba.core.errors import NumbaPerformanceWarning, NumbaDeprecationWarning
+from numba.core.errors import NumbaPerformanceWarning
 from numba.core.typing.typeof import Purpose, typeof
 
 from numba.cuda.api import get_current_device
@@ -177,20 +176,6 @@ class _Kernel(serialize.ReduceMixin):
         Force binding to current CUDA context
         """
         self._codelibrary.get_cufunc()
-
-    @property
-    def ptx(self):
-        '''
-        PTX code for this kernel.
-        '''
-        warnings.warn(
-            "Attribute `ptx` is deprecated and will be removed in the future. "
-            "To retrieve the compiled machine code of the CUDA function for a "
-            "given CUDA compute compatibility `cc`, use the `inspect_asm(cc)` "
-            "method."
-            , NumbaDeprecationWarning
-        )
-        return self._codelibrary.get_asm_str()
 
     @property
     def device(self):
@@ -911,16 +896,6 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
 
         for _, defn in self.overloads.items():
             defn.inspect_types(file=file)
-
-    @property
-    def ptx(self):
-        warnings.warn(
-            "Attribute `ptx` is deprecated and will be removed in the future. "
-            "To retrieve the compiled machine code of the CUDA function for a "
-            "given signature `sig`, use the method `inspect_asm(sig)`."
-            , NumbaDeprecationWarning
-        )
-        return {sig: overload.ptx for sig, overload in self.overloads.items()}
 
     def bind(self):
         for defn in self.overloads.values():

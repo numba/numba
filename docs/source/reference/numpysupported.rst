@@ -614,7 +614,44 @@ execution logic.
 
 The following :py:class:`Generator` methods are supported:
 
+* :func:`numpy.random.Generator().beta()` (*)
+* :func:`numpy.random.Generator().chisquare()` (*)
+* :func:`numpy.random.Generator().exponential()`
+* :func:`numpy.random.Generator().f()` (*)
+* :func:`numpy.random.Generator().gamma()` (*)
+* :func:`numpy.random.Generator().geometric()` (*)
+* :func:`numpy.random.Generator().laplace()` (*)
+* :func:`numpy.random.Generator().logistic()` (*)
+* :func:`numpy.random.Generator().lognormal()` (*)
+* :func:`numpy.random.Generator().negative_binomial()` (*)
+* :func:`numpy.random.Generator().normal()` (*)
+* :func:`numpy.random.Generator().pareto()`
+* :func:`numpy.random.Generator().poisson()` (*)
+* :func:`numpy.random.Generator().power()`
 * :func:`numpy.random.Generator().random()`
+* :func:`numpy.random.Generator().rayleigh()`
+* :func:`numpy.random.Generator().standard_cauchy()`
+* :func:`numpy.random.Generator().standard_exponential()`
+* :func:`numpy.random.Generator().standard_gamma()` (*)
+* :func:`numpy.random.Generator().standard_normal()`
+* :func:`numpy.random.Generator().standard_t()` (*)
+* :func:`numpy.random.Generator().triangular()`
+* :func:`numpy.random.Generator().uniform()` (*)
+* :func:`numpy.random.Generator().wald()` (*)
+* :func:`numpy.random.Generator().weibull()`
+* :func:`numpy.random.Generator().zipf()`
+
+.. note::
+  Users can expect Numba to replicate NumPy's results to within
+  the last few (at max 5) ULPs for Linux-x86_64, Windows-x86_64 and macOS.
+
+  For distributions marked above with `(*)`: Due to instruction selection
+  differences across compilers, there may be discrepancies in the order of
+  1000s of ULPs on 32-bit architectures as well as linux-aarch64 and
+  linux-ppc64le platforms. The differences are unlikely to impact the "quality"
+  of the random number generation as they occur through changes in
+  rounding that happen when fused-multiply-add is used instead of multiplication
+  followed by addition.
 
 RandomState and legacy Random number generation
 '''''''''''''''''''''''''''''''''''''''''''''''

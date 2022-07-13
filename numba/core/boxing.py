@@ -1230,7 +1230,7 @@ def unbox_numpy_random_bitgenerator(typ, obj, c):
         with early_exit_if_null(c.builder, stack, ct_voidptr_ty):
             handle_failure()
 
-        # This wires in the fnptrs refered to by name
+        # This wires in the fnptrs referred to by name
         def wire_in_fnptrs(name):
             # Find the CFunctionType function
             interface_next_fn = c.pyapi.object_getattr_string(

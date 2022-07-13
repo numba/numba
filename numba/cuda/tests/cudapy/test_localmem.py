@@ -56,8 +56,6 @@ class TestCudaLocalMem(CUDATestCase):
     def test_local_array_complex(self):
         sig = 'void(complex128[:], complex128[:])'
         jculocalcomplex = cuda.jit(sig)(culocalcomplex)
-        # The local memory would be turned into register
-        # self.assertTrue('.local' in jculocalcomplex.ptx)
         A = (np.arange(100, dtype='complex128') - 1) / 2j
         B = np.zeros_like(A)
         jculocalcomplex[1, 1](A, B)
