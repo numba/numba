@@ -88,12 +88,10 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
             array_idx = self.rng.integers(0, 5, size=15)
             # Randomly select 4 slices from our list
             curr_idx = self.rng.choice(slice_choices, size=4).tolist()
-            # Generate two seperate random indices, replace one with
-            # array and second with a boolean array of that shape
-            _array_idx = self.rng.choice(4, size=2, replace=False)
-            curr_idx[_array_idx[0]] = array_idx
-            bool_arr_shape = self.shape[_array_idx[1]]
-            curr_idx[_array_idx[1]] = np.array(
+            # Replace one of the slice with the boolean array index
+            _array_idx = self.rng.choice(4)
+            bool_arr_shape = self.shape[_array_idx]
+            curr_idx[_array_idx] = np.array(
                 self.rng.choice(2, size=bool_arr_shape),
                 dtype=bool
             )
@@ -153,9 +151,9 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         # Cases with permutations of either integers or objects
         indices += self.generate_random_indices()
 
-        for arr_shape, idx in indices:
-            with self.subTest(arr_shape=arr_shape, idx=idx):
-                self.check_getitem_indices(arr_shape, idx)
+        for idx in indices:
+            with self.subTest(idx=idx):
+                self.check_getitem_indices(self.shape, idx)
 
     def test_setitem(self):
         # Cases with a combination of integers + other objects
@@ -164,9 +162,9 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         # Cases with permutations of either integers or objects
         indices += self.generate_random_indices()
 
-        for arr_shape, idx in indices:
-            with self.subTest(arr_shape=arr_shape, idx=idx):
-                self.check_setitem_indices(arr_shape, idx)
+        for idx in indices:
+            with self.subTest(idx=idx):
+                self.check_setitem_indices(self.shape, idx)
 
     def test_unsupported_condition_exceptions(self):
         # Cases with multi-dimensional indexing array
@@ -174,7 +172,7 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             self.check_getitem_indices(self.shape, idx)
         self.assertIn(
-            'Numba does not support multidimensional indices.',
+            'Multi-dimensional indices are not supported.',
             str(raises.exception)
         )
 
@@ -183,7 +181,7 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             self.check_getitem_indices(self.shape, idx)
         self.assertIn(
-            'Numba doesn\'t support more than one non-scalar array index.',
+            'Using more than one non-scalar array index is unsupported.',
             str(raises.exception)
         )
 
@@ -192,8 +190,10 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         idx = (0, np.array([1, 2]), slice(None), 3, 4)
         with self.assertRaises(TypingError) as raises:
             self.check_getitem_indices(self.shape, idx)
+        msg = "Using more than one indexing subspace (consecutive group " +\
+                "of integer or array indices) is unsupported."
         self.assertIn(
-            'Numba doesn\'t support more than one indexing subspace',
+            msg,
             str(raises.exception)
         )
 
