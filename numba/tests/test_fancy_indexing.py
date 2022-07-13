@@ -10,53 +10,97 @@ from numba.tests.support import MemoryLeakMixin, TestCase, tag
 
 
 class TestFancyIndexing(MemoryLeakMixin, TestCase):
-    # (shape or array, indices)
     # Every case has exactly one, one-dimensional array,
     # Otherwise it's not fancy indexing
+    shape = (5, 6, 7, 8, 9, 10)
     indexing_cases = [
-        # Pure integers
-        shape = (5, 6, 7, 8, 9, 10)
-        (shape, (0, 3, np.array([0, 1, 3, 4, 2]))),
-        ((5, 6, 7, 8, 9, 10), (0, np.array([0,1,3,4,2]), 5)),
-        ((5, 6, 7, 8, 9, 10), (0, -3, np.array([0,1,3,4,2]))),
-        ((5, 6, 7, 8, 9, 10), (0, np.array([0,1,3,4,2]), -5)),
-
-        # Pure Slices
-        ((5, 6, 7, 8, 9, 10), (slice(0, 1), slice(4, 5), np.array([0,1,3,4,2]))),
-        ((5, 6, 7, 8, 9, 10), (slice(3, 4), np.array([0,1,3,4,2]), slice(None))),
-
         # Slices + Integers
-        ((5, 6, 7, 8, 9, 10), (slice(4, 5), 3, np.array([0,1,3,4,2]), 1)),
-        ((5, 6, 7, 8, 9, 10), (3, np.array([0,1,3,4,2]), slice(None), slice(4))),
-
-        # Ellipsis
-        ((5, 6, 7, 8, 9, 10), (Ellipsis, np.array([0,1,3,4,2]))),
-        ((5, 6, 7, 8, 9, 10), (np.array([0,1,3,4,2]), Ellipsis)),
+        (slice(4, 5), 3, np.array([0,1,3,4,2]), 1),
+        (3, np.array([0,1,3,4,2]), slice(None), slice(4)),
 
         # Ellipsis + Integers
-        ((5, 6, 7, 8, 9, 10), (Ellipsis, 1, np.array([0,1,3,4,2]))),
-        ((5, 6, 7, 8, 9, 10), (np.array([0,1,3,4,2]), 3, Ellipsis)),
-
-        # Ellipsis + Slices
-        ((5, 6, 7, 8, 9, 10), (slice(1, 2), Ellipsis, np.array([0,1,3,4,2]))),
-        ((5, 6, 7, 8, 9, 10), (np.array([0,1,3,4,2]), slice(1, 4), Ellipsis)),
+        (Ellipsis, 1, np.array([0,1,3,4,2])),
+        (np.array([0,1,3,4,2]), 3, Ellipsis),
 
         # Ellipsis + Slices + Integers
-        ((5, 6, 7, 8, 9, 10), (Ellipsis, 1, np.array([0,1,3,4,2]), 3, slice(1,5))),
-        ((5, 6, 7, 8, 9, 10), (np.array([0,1,3,4,2]), 3, Ellipsis, slice(1,5))),
+        (Ellipsis, 1, np.array([0,1,3,4,2]), 3, slice(1,5)),
+        (np.array([0,1,3,4,2]), 3, Ellipsis, slice(1,5)),
 
-        # Boolean Arrays
-        ((5, 6, 7, 8, 9, 10), (slice(4, 5), 3,
-                               np.array([True, False, True, False, True, False, False]),
-                               1)),
-        ((5, 6, 7, 8, 9, 10), (3, np.array([True, False, True, False, True, False]),
-                               slice(None), slice(4))),
-
-        # Pure Arrays
-        ((5, 6, 7, 8, 9, 10), np.array([0,3,-2], dtype=np.int16)),
-        ((5, 6, 7, 8, 9, 10), np.array([0,3,1], dtype=np.uint16)),
-        ((5, 6, 7, 8, 9, 10), np.array([False,True,True,False,False])),
+        # Boolean Arrays + Integers
+        (slice(4, 5), 3,
+         np.array([True, False, True, False, True, False, False]),
+         1),
+        (3, np.array([True, False, True, False, True, False]),
+         slice(None), slice(4)),
     ]
+
+    rng = np.random.default_rng(1)
+
+    def generate_random_indices(self):
+        N = min(self.shape)
+        slice_choices = [slice(None, None, None),
+            slice(1, N - 1, None),
+            slice(0, None, 2),
+            slice(N - 1, None, -2),
+            slice(-N + 1, -1, None),
+            slice(-1, -N, -2),
+            slice(0, N - 1, None),
+            slice(-1, -N, -2)
+        ]
+        integer_choices = list(np.arange(N))
+
+        indices = []
+
+        # Generate 20 random slice cases
+        for i in range(20):
+            array_idx = self.rng.integers(0, 5, size=15)
+            # Randomly select 4 slices from our list
+            curr_idx = self.rng.choice(slice_choices, size=4).tolist()
+            # Replace one of the slice with the array index
+            _array_idx = self.rng.choice(4)
+            curr_idx[_array_idx] = array_idx
+            indices.append(tuple(curr_idx))
+        
+        # Generate 20 random integer cases 
+        for i in range(20):
+            array_idx = self.rng.integers(0, 5, size=15)
+            # Randomly select 4 integers from our list
+            curr_idx = self.rng.choice(integer_choices, size=4).tolist()
+            # Replace one of the slice with the array index
+            _array_idx = self.rng.choice(4)
+            curr_idx[_array_idx] = array_idx
+            indices.append(tuple(curr_idx))
+
+        # Generate 20 random ellipsis cases
+        for i in range(20):
+            array_idx = self.rng.integers(0, 5, size=15)
+            # Randomly select 4 slices from our list
+            curr_idx = self.rng.choice(slice_choices, size=4).tolist()
+            # Generate two seperate random indices, replace one with
+            # array and second with Ellipsis
+            _array_idx = self.rng.choice(4, size=2, replace=False)
+            curr_idx[_array_idx[0]] = array_idx
+            curr_idx[_array_idx[1]] = Ellipsis
+            indices.append(tuple(curr_idx))
+
+        # Generate 20 random boolean cases
+        for i in range(20):
+            array_idx = self.rng.integers(0, 5, size=15)
+            # Randomly select 4 slices from our list
+            curr_idx = self.rng.choice(slice_choices, size=4).tolist()
+            # Generate two seperate random indices, replace one with
+            # array and second with a boolean array of that shape
+            _array_idx = self.rng.choice(4, size=2, replace=False)
+            curr_idx[_array_idx[0]] = array_idx
+            bool_arr_shape = self.shape[_array_idx[1]]
+            curr_idx[_array_idx[1]] = np.array(
+                self.rng.choice(2, size=bool_arr_shape),
+                dtype=bool
+            )
+
+            indices.append(tuple(curr_idx))
+
+        return indices
 
     def check_getitem_indices(self, arr_shape, index):
         def get_item(array, idx):
@@ -79,9 +123,8 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         np.testing.assert_equal(got, expected)
 
         # Check a copy was *really* returned by Numba
-        if got.size:
-            got.fill(42)
-            np.testing.assert_equal(arr, orig)
+        got.fill(42)
+        np.testing.assert_equal(arr, orig)
 
     def check_setitem_indices(self, arr_shape, index):
         @njit     
@@ -104,22 +147,32 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         np.testing.assert_equal(got, expected)
 
     def test_getitem(self):
-        for arr_shape, idx in self.indexing_cases:
+        # Cases with a combination of integers + other objects
+        indices = self.indexing_cases
+
+        # Cases with permutations of either integers or objects
+        indices += self.generate_random_indices()
+
+        for arr_shape, idx in indices:
             with self.subTest(arr_shape=arr_shape, idx=idx):
                 self.check_getitem_indices(arr_shape, idx)
 
     def test_setitem(self):
-        for arr_shape, idx in self.indexing_cases:
+        # Cases with a combination of integers + other objects
+        indices = self.indexing_cases
+
+        # Cases with permutations of either integers or objects
+        indices += self.generate_random_indices()
+
+        for arr_shape, idx in indices:
             with self.subTest(arr_shape=arr_shape, idx=idx):
                 self.check_setitem_indices(arr_shape, idx)
 
     def test_unsupported_condition_exceptions(self):
-        arr_shape = (5, 6, 7, 8, 9, 10)
-
         # Cases with multi-dimensional indexing array
         idx = (0, 3, np.array([[1, 2], [2, 3]]))
         with self.assertRaises(TypingError) as raises:
-            self.check_getitem_indices(arr_shape, idx)
+            self.check_getitem_indices(self.shape, idx)
         self.assertIn(
             'Numba does not support multidimensional indices.',
             str(raises.exception)
@@ -128,7 +181,7 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         # Cases with more than one indexing array
         idx = (0, 3, np.array([1, 2]), np.array([1, 2]))
         with self.assertRaises(TypingError) as raises:
-            self.check_getitem_indices(arr_shape, idx)
+            self.check_getitem_indices(self.shape, idx)
         self.assertIn(
             'Numba doesn\'t support more than one non-scalar array index.',
             str(raises.exception)
@@ -138,11 +191,37 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         # (The subspaces here are separated by slice(None))
         idx = (0, np.array([1, 2]), slice(None), 3, 4)
         with self.assertRaises(TypingError) as raises:
-            self.check_getitem_indices(arr_shape, idx)
+            self.check_getitem_indices(self.shape, idx)
         self.assertIn(
             'Numba doesn\'t support more than one indexing subspace',
             str(raises.exception)
         )
+
+    def test_setitem_0d(self):
+        @njit     
+        def set_item(array, idx, item):
+            array[idx] = item
+        # Test setitem with a 0d-array
+        pyfunc = set_item.py_func
+        cfunc = set_item
+
+        inps = [
+            (np.zeros(3), np.array(3.14)),
+            (np.zeros(2), np.array(2)),
+            (np.zeros(3, dtype=np.int64), np.array(3, dtype=np.int64)),
+            (np.zeros(3, dtype=np.float64), np.array(1, dtype=np.int64)),
+            (np.zeros(5, dtype='<U3'), np.array('abc')),
+            (np.zeros((3,), dtype='<U3'), np.array('a')),
+            (np.array(['abc','def','ghi'], dtype='<U3'),
+             np.array('WXYZ', dtype='<U4')),
+            (np.zeros(3, dtype=complex), np.array(2+3j, dtype=complex)),
+        ]
+
+        for x1, v in inps:
+            x2 = x1.copy()
+            pyfunc(x1, 0, v)
+            cfunc(x2, 0, v)
+            self.assertPreciseEqual(x1, x2)
 
     def test_ellipsis_getsetitem(self):
         # See https://github.com/numba/numba/issues/3225

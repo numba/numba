@@ -33,7 +33,6 @@ def get_array_index_type(ary, idx):
     right_indices = []
     ellipsis_met = False
     advanced = False
-    has_integer = False
 
     if not isinstance(idx, types.BaseTuple):
         idx = [idx]
@@ -57,7 +56,6 @@ def get_array_index_type(ary, idx):
             ty = types.intp if ty.signed else types.uintp
             # Integer indexing removes the given dimension
             ndim -= 1
-            has_integer = True
             if not in_subspace:
                 num_subspaces += 1
                 in_subspace = True
@@ -65,7 +63,6 @@ def get_array_index_type(ary, idx):
               and isinstance(ty.dtype, types.Integer)):
             # 0-d array used as integer index
             ndim -= 1
-            has_integer = True
             if not in_subspace:
                 num_subspaces += 1
                 in_subspace = True
