@@ -22,6 +22,8 @@ from numba.np.random.distributions import \
      random_geometric, random_zipf, random_triangular,
      random_poisson, random_negative_binomial)
 from numba.np.random import random_methods
+from numba.core.config import IS_32BITS
+from numba.core.extending import register_jitable
 
 
 def _get_proper_func(func_32, func_64, dtype, dist_name="the given"):
@@ -85,10 +87,10 @@ def check_types(obj, type_list, arg_name):
 @overload_method(types.NumPyRandomGeneratorType, 'integers')
 def NumPyRandomGeneratorType_integers(inst, low, high=None, size=None,
                                       dtype=np.int64, endpoint=False):
-    check_types(low, [types.Float, types.Integer,
-                      types.Boolean, bool, int, float], 'low')
-    check_types(high, [types.Float, types.Integer, types.Boolean,
-                       bool, int, float, type(None)], 'high')
+    check_types(low, [types.Integer,
+                      types.Boolean, bool, int], 'low')
+    check_types(high, [types.Integer, types.Boolean,
+                       bool, int, type(None)], 'high')
     check_types(endpoint, [types.Boolean, bool], 'endpoint')
 
     if isinstance(size, types.Omitted):
@@ -123,6 +125,18 @@ def NumPyRandomGeneratorType_integers(inst, low, high=None, size=None,
                               "np.uint32, np.uint64, np.uint16, np.uint8, "
                               "np.bool_")
 
+    # Hack for treating the arguments as 64 bit integers in 32-bit systems
+    # so they don't overflow during the calculations.
+    # TODO: Remove this logic when we drop support for 32-bit systems.
+    if IS_32BITS and _dtype in [np.int32, np.int64, np.uint32, np.uint64]:
+        @register_jitable
+        def cast_arg_if_32(curr_arg):
+            return np.array(curr_arg, dtype=np.int64)
+    else:
+        @register_jitable
+        def cast_arg_if_32(curr_arg):
+            return curr_arg
+
     if is_nonelike(size):
         def impl(inst, low, high=None, size=None,
                  dtype=np.int64, endpoint=False):
@@ -130,6 +144,8 @@ def NumPyRandomGeneratorType_integers(inst, low, high=None, size=None,
                                                          lower_bound,
                                                          upper_bound)
             mask = None
+            low = cast_arg_if_32(low)
+            rng = cast_arg_if_32(rng)
             return int_func(inst.bit_generator, low, rng, mask, 1, dtype)[0]
         return impl
     else:
@@ -141,6 +157,8 @@ def NumPyRandomGeneratorType_integers(inst, low, high=None, size=None,
                                                          lower_bound,
                                                          upper_bound)
             mask = None
+            low = cast_arg_if_32(low)
+            rng = cast_arg_if_32(rng)
             return int_func(inst.bit_generator, low, rng, mask, size, dtype)
         return impl
 

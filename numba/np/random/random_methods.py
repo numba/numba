@@ -97,25 +97,22 @@ def bounded_masked_uint64(bitgen, rng, mask):
 
 @register_jitable
 def buffered_bounded_lemire_uint8(bitgen, rng, bcnt, buf):
-    # /*
-    # * Uses Lemire's algorithm - https://arxiv.org/abs/1805.10941
-    # *
-    # * Note: `rng` should not be 0xFF. When this happens `rng_excl` becomes
-    # * zero.
-    # */
+    # Uses Lemire's algorithm - https://arxiv.org/abs/1805.10941
+    # Note: `rng` should not be 0xFF. When this happens `rng_excl` becomes
+    # zero.
     rng_excl = (rng + 1) & 0xFF
 
     assert(rng != 0xFF)
 
-    # /* Generate a scaled random number. */
+    # Generate a scaled random number.
     n, bcnt, buf = buffered_uint8(bitgen, bcnt, buf)
     m = n * rng_excl
 
-    # /* Rejection sampling to remove any bias */
+    # Rejection sampling to remove any bias
     leftover = m & 0xFF
 
     if (leftover < rng_excl):
-        # /* `rng_excl` is a simple upper bound for `threshold`. */
+        # `rng_excl` is a simple upper bound for `threshold`.
         threshold = ((UINT8_MAX - rng) % rng_excl) & 0xFF
 
         while (leftover < threshold):
@@ -128,25 +125,22 @@ def buffered_bounded_lemire_uint8(bitgen, rng, bcnt, buf):
 
 @register_jitable
 def buffered_bounded_lemire_uint16(bitgen, rng, bcnt, buf):
-    # /*
-    # * Uses Lemire's algorithm - https://arxiv.org/abs/1805.10941
-    # *
-    # * Note: `rng` should not be 0xFFFF. When this happens `rng_excl` becomes
-    # * zero.
-    # */
+    # Uses Lemire's algorithm - https://arxiv.org/abs/1805.10941
+    # Note: `rng` should not be 0xFFFF. When this happens `rng_excl` becomes
+    # zero.
     rng_excl = (rng + 1) & 0xFFFF
 
     assert(rng != 0xFFFF)
 
-    # /* Generate a scaled random number. */
+    # Generate a scaled random number.
     n, bcnt, buf = buffered_uint16(bitgen, bcnt, buf)
     m = n * rng_excl
 
-    # /* Rejection sampling to remove any bias */
+    # Rejection sampling to remove any bias
     leftover = m & 0xFFFF
 
     if (leftover < rng_excl):
-        # /* `rng_excl` is a simple upper bound for `threshold`. */
+        # `rng_excl` is a simple upper bound for `threshold`.
         threshold = ((UINT16_MAX - rng) % rng_excl) & 0xFFFF
 
         while (leftover < threshold):
@@ -200,8 +194,8 @@ def bounded_lemire_uint64(bitgen, rng):
     return (m >> 64)
 
 
-#  Fills an array with cnt random npy_uint64 between off and off + rng
-#  inclusive. The numbers wrap if rng is sufficiently large.
+# Fills an array with cnt random npy_uint64 between off and off + rng
+# inclusive. The numbers wrap if rng is sufficiently large.
 @register_jitable
 def random_bounded_uint64_fill(bitgen, low, rng, mask, size, dtype):
     out = np.empty(size, dtype=dtype)
@@ -243,7 +237,7 @@ def random_bounded_uint32_fill(bitgen, low, rng, mask, size, dtype):
         for i in np.ndindex(size):
             out[i] = low
     elif rng == 0xFFFFFFFF:
-        # /* Lemire32 doesn't support rng = 0xFFFFFFFF. */
+        # Lemire32 doesn't support rng = 0xFFFFFFFF.
         for i in np.ndindex(size):
             out[i] = low + next_uint32(bitgen)
     else:
@@ -266,14 +260,14 @@ def random_bounded_uint16_fill(bitgen, low, rng, mask, size, dtype):
         for i in np.ndindex(size):
             out[i] = low
     elif rng == 0xFFFF:
-        # /* Lemire16 doesn't support rng = 0xFFFF. */
+        # Lemire16 doesn't support rng = 0xFFFF.
         for i in np.ndindex(size):
             val, bcnt, buf = buffered_uint16(bitgen, bcnt, buf)
             out[i] = low + val
 
     else:
         if mask is not None:
-            # /* Smallest bit mask >= max */
+            # Smallest bit mask >= max
             for i in np.ndindex(size):
                 val, bcnt, buf = \
                     buffered_bounded_masked_uint16(bitgen, rng,
@@ -298,13 +292,13 @@ def random_bounded_uint8_fill(bitgen, low, rng, mask, size, dtype):
         for i in np.ndindex(size):
             out[i] = low
     elif rng == 0xFF:
-        # /* Lemire8 doesn't support rng = 0xFF. */
+        # Lemire8 doesn't support rng = 0xFF.
         for i in np.ndindex(size):
             val, bcnt, buf = buffered_uint8(bitgen, bcnt, buf)
             out[i] = low + val
     else:
         if mask is not None:
-            # /* Smallest bit mask >= max */
+            # Smallest bit mask >= max
             for i in np.ndindex(size):
                 val, bcnt, buf = \
                     buffered_bounded_masked_uint8(bitgen, rng,

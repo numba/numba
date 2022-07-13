@@ -165,7 +165,8 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
 
     def test_integers(self):
         test_sizes = [None, (), (100,), (10, 20, 30)]
-        test_dtypes = [np.int64, np.int32, np.int16, np.int8]
+        test_dtypes = [np.int64, np.int32, np.int16, np.int8,
+                       np.uint64, np.uint32, np.uint16, np.uint8]
         bitgen_types = [None, MT19937]
 
         dist_func = lambda x, size, dtype:\
