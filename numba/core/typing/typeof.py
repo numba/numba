@@ -52,6 +52,10 @@ def typeof_impl(val, c):
     if tp is not None:
         return tp
 
+    tp = getattr(val, "_numba_type_", None)
+    if(tp is not None):
+        return tp
+
     # cffi is handled here as it does not expose a public base class
     # for exported functions or CompiledFFI instances.
     from numba.core.typing import cffi_utils
@@ -61,7 +65,7 @@ def typeof_impl(val, c):
         if cffi_utils.is_ffi_instance(val):
             return types.ffi
 
-    return getattr(val, "_numba_type_", None)
+    return None
 
 
 def _typeof_buffer(val, c):
