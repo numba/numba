@@ -594,7 +594,7 @@ class TestCase(unittest.TestCase):
             raise ValueError("Too many args.")
         def wrapper(func):
             def inner(self, *args, **kwargs):
-                if os.environ.get("SUBPROC_TEST", None) is None:
+                if "SUBPROC_TEST" not in os.environ:
                     # Not in a subprocess, so stage the call to run the
                     # test in a subprocess which will set the env var.
                     class_name = self.__class__.__name__
