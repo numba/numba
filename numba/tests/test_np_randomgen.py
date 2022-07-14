@@ -92,13 +92,16 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                                       test_size, test_dtype)
         numpy_res = distribution_func.py_func(numpy_rng_instance,
                                               test_size, test_dtype)
-        # assert_array_max_ulp doesn't compare scalar booleans/ boolean arrays
-        if isinstance(numba_res, bool) or (isinstance(numba_res, np.ndarray)
-                                           and numba_res.dtype == bool):
-            assert np.all(numba_res == numpy_res)
-        else:
+
+        if (isinstance(numba_res, np.ndarray) and
+            np.issubdtype(numba_res.dtype, np.floating)) \
+                or isinstance(numba_res, float):
+            # Float scalars and arrays
             np.testing.assert_array_max_ulp(numpy_res, numba_res,
                                             maxulp=ulp_prec, dtype=test_dtype)
+        else:
+            # Bool/int scalars and arrays
+            np.testing.assert_equal(numba_res, numpy_res)
 
         # Check if the end state of both BitGenerators is same
         # after drawing the distributions

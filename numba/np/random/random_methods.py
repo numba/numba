@@ -11,17 +11,6 @@ from numba.np.random.generator_core import next_uint32, next_uint64
 
 
 @register_jitable
-def gen_mask(mask):
-    mask = mask | (mask >> 1)
-    mask = mask | (mask >> 2)
-    mask = mask | (mask >> 4)
-    mask = mask | (mask >> 8)
-    mask = mask | (mask >> 16)
-    mask = mask | (mask >> 32)
-    return mask
-
-
-@register_jitable
 def buffered_bounded_bool(bitgen, off, rng, mask, bcnt, buf):
     if (rng == 0):
         return off, bcnt, buf
@@ -95,9 +84,19 @@ def bounded_masked_uint64(bitgen, rng, mask):
     return val
 
 
+# Following implementations use Lemire's algorithm:
+# https://arxiv.org/abs/1805.10941
 @register_jitable
 def buffered_bounded_lemire_uint8(bitgen, rng, bcnt, buf):
-    # Uses Lemire's algorithm - https://arxiv.org/abs/1805.10941
+    """
+    Generates a random unsigned 8 bit integer bounded
+    within a given interval using Lemire's rejection.
+
+    The buffer acts as a storage for a 32 bit integer
+    drawn from the associated BitGenerator so that we
+    can generate multiple integers of smaller bitsize
+    from a single draw of the BitGenerator.
+    """
     # Note: `rng` should not be 0xFF. When this happens `rng_excl` becomes
     # zero.
     rng_excl = (rng + 1) & 0xFF
@@ -125,7 +124,15 @@ def buffered_bounded_lemire_uint8(bitgen, rng, bcnt, buf):
 
 @register_jitable
 def buffered_bounded_lemire_uint16(bitgen, rng, bcnt, buf):
-    # Uses Lemire's algorithm - https://arxiv.org/abs/1805.10941
+    """
+    Generates a random unsigned 16 bit integer bounded
+    within a given interval using Lemire's rejection.
+
+    The buffer acts as a storage for a 32 bit integer
+    drawn from the associated BitGenerator so that we
+    can generate multiple integers of smaller bitsize
+    from a single draw of the BitGenerator.
+    """
     # Note: `rng` should not be 0xFFFF. When this happens `rng_excl` becomes
     # zero.
     rng_excl = (rng + 1) & 0xFFFF
@@ -153,6 +160,10 @@ def buffered_bounded_lemire_uint16(bitgen, rng, bcnt, buf):
 
 @register_jitable
 def buffered_bounded_lemire_uint32(bitgen, rng):
+    """
+    Generates a random unsigned 32 bit integer bounded
+    within a given interval using Lemire's rejection.
+    """
     rng_excl = rng + 1
 
     assert(rng != 0xFFFFFFFF)
@@ -176,6 +187,10 @@ def buffered_bounded_lemire_uint32(bitgen, rng):
 
 @register_jitable
 def bounded_lemire_uint64(bitgen, rng):
+    """
+    Generates a random unsigned 64 bit integer bounded
+    within a given interval using Lemire's rejection.
+    """
     rng_excl = rng + 1
 
     assert(rng != 0xFFFFFFFFFFFFFFFF)
@@ -198,6 +213,10 @@ def bounded_lemire_uint64(bitgen, rng):
 # inclusive. The numbers wrap if rng is sufficiently large.
 @register_jitable
 def random_bounded_uint64_fill(bitgen, low, rng, mask, size, dtype):
+    """
+    Fills an array of given size with 64 bit integers
+    bounded by given interval.
+    """
     out = np.empty(size, dtype=dtype)
     if rng == 0:
         for i in np.ndindex(size):
@@ -232,6 +251,10 @@ def random_bounded_uint64_fill(bitgen, low, rng, mask, size, dtype):
 
 @register_jitable
 def random_bounded_uint32_fill(bitgen, low, rng, mask, size, dtype):
+    """
+    Fills an array of given size with 32 bit integers
+    bounded by given interval.
+    """
     out = np.empty(size, dtype=dtype)
     if rng == 0:
         for i in np.ndindex(size):
@@ -252,6 +275,10 @@ def random_bounded_uint32_fill(bitgen, low, rng, mask, size, dtype):
 
 @register_jitable
 def random_bounded_uint16_fill(bitgen, low, rng, mask, size, dtype):
+    """
+    Fills an array of given size with 16 bit integers
+    bounded by given interval.
+    """
     buf = 0
     bcnt = 0
 
@@ -284,6 +311,10 @@ def random_bounded_uint16_fill(bitgen, low, rng, mask, size, dtype):
 
 @register_jitable
 def random_bounded_uint8_fill(bitgen, low, rng, mask, size, dtype):
+    """
+    Fills an array of given size with 8 bit integers
+    bounded by given interval.
+    """
     buf = 0
     bcnt = 0
 
@@ -321,6 +352,9 @@ random_bounded_int64_fill = random_bounded_uint64_fill
 
 @register_jitable
 def random_bounded_bool_fill(bitgen, low, rng, mask, size, dtype):
+    """
+    Fills an array of given size with boolean numbers.
+    """
     buf = 0
     bcnt = 0
     out = np.empty(size, dtype=dtype)
@@ -333,6 +367,13 @@ def random_bounded_bool_fill(bitgen, low, rng, mask, size, dtype):
 
 @register_jitable
 def _randint_arg_check(low, high, endpoint, lower_bound, upper_bound):
+    """
+    Checks if low and high are correctly within the bounds
+    for the given datatype.
+
+    Returns low (the lower bound for given interval) and the
+    size of interval from which random integers would be drawn.
+    """
     if high is None:
         high = low
         low = 0
