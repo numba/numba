@@ -184,18 +184,16 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
 
         # Checking dtype = bool seperately
         test_sizes = [None, (), (100,), (10, 20, 30)]
-        test_dtypes = [np.bool_]
         bitgen_types = [None, MT19937]
 
         dist_func = lambda x, size, dtype:\
-            x.integers(False, True, size=size, dtype=dtype)
+            x.integers(False, True, size=size, dtype=np.bool_)
         for _size in test_sizes:
-            for _dtype in test_dtypes:
-                for _bitgen in bitgen_types:
-                    with self.subTest(_size=_size, _dtype=_dtype,
-                                      _bitgen=_bitgen):
-                        self.check_numpy_parity(dist_func, _bitgen,
-                                                None, _size, _dtype)
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size,
+                                  _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, np.bool_)
 
         dist_func = lambda x, low, high, size, dtype, endpoint:\
             x.integers(low=low, high=high, size=size,
@@ -204,6 +202,102 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                                   ['low', 'high', 'size', 'dtype', 'endpoint'],
                                   [1, 5, (1,), np.int64, True],
                                   ['x', 'x', ('x',), np.float64, 'x'])
+
+    # Testing .integers() dtype wise
+    def test_integers_uint64(self):
+        size = (2, 3)
+        # rng stands for range
+        # rng == 0
+        dist_func = lambda x, size, dtype:\
+            x.integers(5, 6, size=size, dtype=np.uint64)
+        self.check_numpy_parity(dist_func, None,
+                                None, size, np.uint64)
+
+        # rng <= 0xFFFFFFFF
+        dist_func = lambda x, size, dtype:\
+            x.integers(5, 100, size=size, dtype=np.uint64)
+        self.check_numpy_parity(dist_func, None,
+                                None, size, np.uint64)
+
+        # rng > 0xFFFFFFFF
+        dist_func = lambda x, size, dtype:\
+            x.integers(0, 0xFFFFFFFFFF, size=size,
+                       dtype=np.uint64, endpoint=True)
+        self.check_numpy_parity(dist_func, None,
+                                None, size, np.uint64)
+
+        # rng == 0xFFFFFFFFFFFFFFFF
+        dist_func = lambda x, size, dtype:\
+            x.integers(0, 0xFFFFFFFFFFFFFFFF, size=size,
+                       dtype=np.uint64, endpoint=True)
+        self.check_numpy_parity(dist_func, None,
+                                None, size, np.uint64)
+
+    def test_integers_uint32(self):
+        size = (2, 3)
+        # rng stands for range
+        # rng == 0
+        dist_func = lambda x, size, dtype:\
+            x.integers(5, 6, size=size, dtype=np.uint32)
+        self.check_numpy_parity(dist_func, None,
+                                None, size, np.uint32)
+
+        # rng < 0xFFFFFFFF
+        dist_func = lambda x, size, dtype:\
+            x.integers(5, 100, size=size, dtype=np.uint32)
+        self.check_numpy_parity(dist_func, None,
+                                None, size, np.uint32)
+
+        # rng == 0xFFFFFFFF
+        dist_func = lambda x, size, dtype:\
+            x.integers(0, 0xFFFFFFFF, size=size,
+                       dtype=np.uint32, endpoint=True)
+        self.check_numpy_parity(dist_func, None,
+                                None, size, np.uint32)
+
+    def test_integers_uint16(self):
+        size = (2, 3)
+        # rng stands for range
+        # rng == 0
+        dist_func = lambda x, size, dtype:\
+            x.integers(5, 6, size=size, dtype=np.uint16)
+        self.check_numpy_parity(dist_func, None,
+                                None, size, np.uint16)
+
+        # rng < 0xFFFF
+        dist_func = lambda x, size, dtype:\
+            x.integers(5, 100, size=size, dtype=np.uint16)
+        self.check_numpy_parity(dist_func, None,
+                                None, size, np.uint16)
+
+        # rng == 0xFFFF
+        dist_func = lambda x, size, dtype:\
+            x.integers(0, 0xFFFF, size=size,
+                       dtype=np.uint16, endpoint=True)
+        self.check_numpy_parity(dist_func, None,
+                                None, size, np.uint16)
+
+    def test_integers_uint8(self):
+        size = (2, 3)
+        # rng stands for range
+        # rng == 0
+        dist_func = lambda x, size, dtype:\
+            x.integers(5, 6, size=size, dtype=np.uint8)
+        self.check_numpy_parity(dist_func, None,
+                                None, size, np.uint8)
+
+        # rng < 0xFF
+        dist_func = lambda x, size, dtype:\
+            x.integers(5, 10, size=size, dtype=np.uint8)
+        self.check_numpy_parity(dist_func, None,
+                                None, size, np.uint8)
+
+        # rng == 0xFF
+        dist_func = lambda x, size, dtype:\
+            x.integers(0, 0xFF, size=size,
+                       dtype=np.uint8, endpoint=True)
+        self.check_numpy_parity(dist_func, None,
+                                None, size, np.uint8)
 
     def test_random(self):
         test_sizes = [None, (), (100,), (10, 20, 30)]

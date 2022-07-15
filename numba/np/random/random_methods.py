@@ -1,5 +1,6 @@
 import numpy as np
 
+from numba import uint64, uint32, uint16
 from numba.core.extending import register_jitable
 
 from numba.np.random._constants import (UINT32_MAX, UINT64_MAX,
@@ -84,7 +85,7 @@ def bounded_masked_uint64(bitgen, rng, mask):
     return val
 
 
-# Following implementations use Lemire's algorithm:
+# The following implementations use Lemire's algorithm:
 # https://arxiv.org/abs/1805.10941
 @register_jitable
 def buffered_bounded_lemire_uint8(bitgen, rng, bcnt, buf):
@@ -105,7 +106,7 @@ def buffered_bounded_lemire_uint8(bitgen, rng, bcnt, buf):
 
     # Generate a scaled random number.
     n, bcnt, buf = buffered_uint8(bitgen, bcnt, buf)
-    m = n * rng_excl
+    m = uint16(n * rng_excl)
 
     # Rejection sampling to remove any bias
     leftover = m & 0xFF
@@ -116,10 +117,10 @@ def buffered_bounded_lemire_uint8(bitgen, rng, bcnt, buf):
 
         while (leftover < threshold):
             n, bcnt, buf = buffered_uint8(bitgen, bcnt, buf)
-            m = n * rng_excl
+            m = uint16(n * rng_excl)
             leftover = m & 0xFF
 
-    return (m >> 8) & 0xFF, bcnt, buf
+    return m >> 8, bcnt, buf
 
 
 @register_jitable
@@ -141,7 +142,7 @@ def buffered_bounded_lemire_uint16(bitgen, rng, bcnt, buf):
 
     # Generate a scaled random number.
     n, bcnt, buf = buffered_uint16(bitgen, bcnt, buf)
-    m = n * rng_excl
+    m = uint32(n * rng_excl)
 
     # Rejection sampling to remove any bias
     leftover = m & 0xFFFF
@@ -152,10 +153,10 @@ def buffered_bounded_lemire_uint16(bitgen, rng, bcnt, buf):
 
         while (leftover < threshold):
             n, bcnt, buf = buffered_uint16(bitgen, bcnt, buf)
-            m = n * rng_excl
+            m = uint32(n * rng_excl)
             leftover = m & 0xFFFF
 
-    return (m >> 16) & 0xFFFF, bcnt, buf
+    return m >> 16, bcnt, buf
 
 
 @register_jitable
@@ -169,7 +170,7 @@ def buffered_bounded_lemire_uint32(bitgen, rng):
     assert(rng != 0xFFFFFFFF)
 
     # Generate a scaled random number.
-    m = next_uint32(bitgen) * rng_excl
+    m = uint64(next_uint32(bitgen) * rng_excl)
 
     # Rejection sampling to remove any bias
     leftover = m & 0xFFFFFFFF
@@ -179,7 +180,7 @@ def buffered_bounded_lemire_uint32(bitgen, rng):
         threshold = (UINT32_MAX - rng) % rng_excl
 
         while (leftover < threshold):
-            m = next_uint32(bitgen) * rng_excl
+            m = uint64(next_uint32(bitgen) * rng_excl)
             leftover = m & 0xFFFFFFFF
 
     return (m >> 32)
@@ -191,22 +192,33 @@ def bounded_lemire_uint64(bitgen, rng):
     Generates a random unsigned 64 bit integer bounded
     within a given interval using Lemire's rejection.
     """
-    rng_excl = rng + 1
+    rng_excl = rng + uint64(1)
 
     assert(rng != 0xFFFFFFFFFFFFFFFF)
 
-    m = next_uint64(bitgen) * rng_excl
+    x = next_uint64(bitgen)
 
-    leftover = m & 0xFFFFFFFFFFFFFFFF
+    leftover = uint64(x) * uint64(rng_excl)
 
     if (leftover < rng_excl):
         threshold = (UINT64_MAX - rng) % rng_excl
 
         while (leftover < threshold):
-            m = next_uint64(bitgen) * rng_excl
-            leftover = m & 0xFFFFFFFFFFFFFFFF
+            x = next_uint64(bitgen)
+            leftover = uint64(x) * uint64(rng_excl)
 
-    return (m >> 64)
+    x0 = x & uint64(0xFFFFFFFF)
+    x1 = x >> 32
+    rng_excl0 = rng_excl & uint64(0xFFFFFFFF)
+    rng_excl1 = rng_excl >> 32
+    w0 = x0 * rng_excl0
+    t = x1 * rng_excl0 + (w0 >> 32)
+    w1 = t & uint64(0xFFFFFFFF)
+    w2 = t >> 32
+    w1 += x0 * rng_excl1
+    m1 = x1 * rng_excl1 + w2 + (w1 >> 32)
+
+    return m1
 
 
 # Fills an array with cnt random npy_uint64 between off and off + rng
@@ -344,16 +356,10 @@ def random_bounded_uint8_fill(bitgen, low, rng, mask, size, dtype):
     return out
 
 
-random_bounded_int8_fill = random_bounded_uint8_fill
-random_bounded_int16_fill = random_bounded_uint16_fill
-random_bounded_int32_fill = random_bounded_uint32_fill
-random_bounded_int64_fill = random_bounded_uint64_fill
-
-
 @register_jitable
 def random_bounded_bool_fill(bitgen, low, rng, mask, size, dtype):
     """
-    Fills an array of given size with boolean numbers.
+    Fills an array of given size with boolean values.
     """
     buf = 0
     bcnt = 0
@@ -366,19 +372,11 @@ def random_bounded_bool_fill(bitgen, low, rng, mask, size, dtype):
 
 
 @register_jitable
-def _randint_arg_check(low, high, endpoint, lower_bound, upper_bound):
+def _randint_arg_check(low, high, lower_bound, upper_bound):
     """
     Checks if low and high are correctly within the bounds
     for the given datatype.
-
-    Returns low (the lower bound for given interval) and the
-    size of interval from which random integers would be drawn.
     """
-    if high is None:
-        high = low
-        low = 0
-    if not endpoint:
-        high -= 1
 
     if low < lower_bound:
         raise ValueError("low is out of bounds")
@@ -386,5 +384,3 @@ def _randint_arg_check(low, high, endpoint, lower_bound, upper_bound):
         raise ValueError("high is out of bounds")
     if low > high:  # -1 already subtracted, closed interval
         raise ValueError("low is greater than high in given interval")
-    rng = (high - low)
-    return low, rng
