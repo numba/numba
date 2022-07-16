@@ -96,6 +96,16 @@ def jit_with_args(name, argstring):
     pyfunc = compile_function("func", code, globals())
     return jit(nopython=True)(pyfunc)
 
+def jit_with_kwargs(name, kwarg_list):
+    # Similar to jit_with_args, but uses keyword arguments
+    call_args_with_kwargs = ','.join([f'{kw}={kw}' for kw in kwarg_list])
+    signature = ','.join(kwarg_list)
+    code = f"""def func({signature}):
+        return {name}({call_args_with_kwargs})
+"""
+    pyfunc = compile_function("func", code, globals())
+    return jit(nopython=True)(pyfunc)
+
 def jit_nullary(name):
     return jit_with_args(name, "")
 
@@ -334,6 +344,16 @@ class TestRandom(BaseTest):
             self.assertPreciseEqual(results, pyresults, prec=prec, ulps=ulps,
                                     msg="for arguments %s" % (args,))
 
+    def _check_dist_kwargs(self, func, pyfunc, kwargslist, niters=3,
+                           prec='double', ulps=12, pydtype=None):
+        assert len(kwargslist)
+        for kwargs in kwargslist:
+            results = [func(**kwargs) for i in range(niters)]
+            pyresults = [(pyfunc(**kwargs, dtype=pydtype) if pydtype else pyfunc(**kwargs))
+                         for i in range(niters)]
+            self.assertPreciseEqual(results, pyresults, prec=prec, ulps=ulps,
+                                    msg="for arguments %s" % (kwargs,))
+
     def _check_gauss(self, func2, func1, func0, ptr):
         """
         Check a gauss()-like function.
@@ -483,11 +503,26 @@ class TestRandom(BaseTest):
         self._check_dist(func, r.uniform,
                          [(1.5, 1e6), (-2.5, 1e3), (1.5, -2.5)])
 
+    def _check_uniform_kwargs(self, func, ptr):
+        """
+        Check a uniform()-like function.
+        """
+        # Our implementation follows Numpy's (not Python's)
+        r = self._follow_numpy(ptr)
+        self._check_dist_kwargs(func, r.uniform,
+                                [{'low': 1.5, 'high': 1e6},
+                                 {'low': -2.5, 'high': 1e3},
+                                 {'low': 1.5, 'high': -2.5}])
+
+
     def test_random_uniform(self):
         self._check_uniform(jit_binary("random.uniform"), get_py_state_ptr())
 
     def test_numpy_uniform(self):
         self._check_uniform(jit_binary("np.random.uniform"), get_np_state_ptr())
+
+    def test_numpy_uniform_kwargs(self):
+        self._check_uniform_kwargs(jit_with_kwargs("np.random.uniform", ['low', 'high']), get_np_state_ptr())
 
     def _check_triangular(self, func2, func3, ptr):
         """
