@@ -503,16 +503,15 @@ class TestRandom(BaseTest):
         self._check_dist(func, r.uniform,
                          [(1.5, 1e6), (-2.5, 1e3), (1.5, -2.5)])
 
-    def _check_uniform_kwargs(self, func, ptr):
+    def _check_arbitrary_distrib_kwargs(self, func, ptr, distrib, paramlist):
         """
-        Check a uniform()-like function.
+        Check any numpy distribution function. Does Numba use the same keyword argument names as Numpy?
+        And given a fixed seed, do they both return the same samples?
         """
         # Our implementation follows Numpy's (not Python's)
         r = self._follow_numpy(ptr)
-        self._check_dist_kwargs(func, r.uniform,
-                                [{'low': 1.5, 'high': 1e6},
-                                 {'low': -2.5, 'high': 1e3},
-                                 {'low': 1.5, 'high': -2.5}])
+        distrib_method_of_numpy = getattr(r, distrib)
+        self._check_dist_kwargs(func, distrib_method_of_numpy, paramlist)
 
 
     def test_random_uniform(self):
@@ -522,7 +521,12 @@ class TestRandom(BaseTest):
         self._check_uniform(jit_binary("np.random.uniform"), get_np_state_ptr())
 
     def test_numpy_uniform_kwargs(self):
-        self._check_uniform_kwargs(jit_with_kwargs("np.random.uniform", ['low', 'high']), get_np_state_ptr())
+        self._check_arbitrary_distrib_kwargs(jit_with_kwargs("np.random.uniform", ['low', 'high']),
+                                             get_np_state_ptr(),
+                                             'uniform',
+                                             paramlist=[{'low': 1.5, 'high': 1e6},
+                                                        {'low': -2.5, 'high': 1e3},
+                                                        {'low': 1.5, 'high': -2.5}])
 
     def _check_triangular(self, func2, func3, ptr):
         """
