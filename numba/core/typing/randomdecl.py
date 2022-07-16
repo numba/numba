@@ -228,6 +228,15 @@ class Numpy_gamma(ConcreteRandomTemplate):
             return self.array_typer(size)(shape, scale)
         return typer
 
+@glue_typing(np.random.uniform, typing_key="np.random.uniform")
+class Numpy_uniform(ConcreteRandomTemplate):
+    cases = [signature(tp, tp, tp) for tp in _float_types]
+
+    def generic(self):
+        def typer(low, high, size=None):
+            return self.array_typer(size)(low, high)
+        return typer
+
 @glue_typing(np.random.triangular, typing_key="np.random.triangular")
 class Random_ternary_distribution(ConcreteRandomTemplate):
     cases = [signature(tp, tp, tp, tp) for tp in _float_types]
@@ -237,11 +246,9 @@ class Random_ternary_distribution(ConcreteRandomTemplate):
             return self.array_typer(size)(left, mode, right)
         return typer
 
-
 @glue_typing(np.random.beta, typing_key="np.random.beta")
 @glue_typing(np.random.f, typing_key="np.random.f")
 @glue_typing(np.random.gumbel, typing_key="np.random.gumbel")
-@glue_typing(np.random.uniform, typing_key="np.random.uniform")
 @glue_typing(np.random.vonmises, typing_key="np.random.vonmises")
 @glue_typing(np.random.wald, typing_key="np.random.wald")
 @glue_typing(random.betavariate, typing_key="random.betavariate")
@@ -259,7 +266,6 @@ class Random_binary_distribution(ConcreteRandomTemplate):
         def typer(a, b, size=None):
             return self.array_typer(size)(a, b)
         return typer
-
 
 @glue_typing(np.random.chisquare, typing_key="np.random.chisquare")
 @glue_typing(np.random.pareto, typing_key="np.random.pareto")
