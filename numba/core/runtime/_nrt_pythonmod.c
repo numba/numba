@@ -18,34 +18,6 @@ memsys_use_cpython_allocator(PyObject *self, PyObject *args) {
 }
 
 static PyObject *
-memsys_set_atomic_inc_dec(PyObject *self, PyObject *args) {
-    PyObject *addr_inc_obj, *addr_dec_obj;
-    void *addr_inc, *addr_dec;
-    if (!PyArg_ParseTuple(args, "OO", &addr_inc_obj, &addr_dec_obj)) {
-        return NULL;
-    }
-    addr_inc = PyLong_AsVoidPtr(addr_inc_obj);
-    if(PyErr_Occurred()) return NULL;
-    addr_dec = PyLong_AsVoidPtr(addr_dec_obj);
-    if(PyErr_Occurred()) return NULL;
-    NRT_MemSys_set_atomic_inc_dec(addr_inc, addr_dec);
-    Py_RETURN_NONE;
-}
-
-static PyObject *
-memsys_set_atomic_cas(PyObject *self, PyObject *args) {
-    PyObject *addr_cas_obj;
-    void *addr_cas;
-    if (!PyArg_ParseTuple(args, "O", &addr_cas_obj)) {
-        return NULL;
-    }
-    addr_cas = PyLong_AsVoidPtr(addr_cas_obj);
-    if(PyErr_Occurred()) return NULL;
-    NRT_MemSys_set_atomic_cas(addr_cas);
-    Py_RETURN_NONE;
-}
-
-static PyObject *
 memsys_get_stats_alloc(PyObject *self, PyObject *args) {
     return PyLong_FromSize_t(NRT_MemSys_get_stats_alloc());
 }
@@ -119,8 +91,6 @@ static PyMethodDef ext_methods[] = {
 #define declmethod_noargs(func) { #func , ( PyCFunction )func , METH_NOARGS, NULL }
     declmethod_noargs(memsys_use_cpython_allocator),
     declmethod_noargs(memsys_shutdown),
-    declmethod(memsys_set_atomic_inc_dec),
-    declmethod(memsys_set_atomic_cas),
     declmethod_noargs(memsys_get_stats_alloc),
     declmethod_noargs(memsys_get_stats_free),
     declmethod_noargs(memsys_get_stats_mi_alloc),
@@ -166,6 +136,7 @@ declmethod(MemInfo_alloc_aligned);
 declmethod(MemInfo_alloc_safe_aligned);
 declmethod(MemInfo_alloc_safe_aligned_external);
 declmethod_internal(_nrt_get_sample_external_allocator);
+declmethod(MemInfo_alloc_dtor);
 declmethod(MemInfo_alloc_dtor_safe);
 declmethod(MemInfo_call_dtor);
 declmethod(MemInfo_new_varsize);

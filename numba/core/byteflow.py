@@ -827,13 +827,17 @@ class TraceRunner(object):
         state.push(res)
 
     def op_CALL_FUNCTION_EX(self, state, inst):
-        if inst.arg & 1:
+        if inst.arg & 1 and PYVERSION != (3, 10):
             errmsg = "CALL_FUNCTION_EX with **kwargs not supported"
             raise UnsupportedError(errmsg)
+        if inst.arg & 1:
+            varkwarg = state.pop()
+        else:
+            varkwarg = None
         vararg = state.pop()
         func = state.pop()
         res = state.make_temp()
-        state.append(inst, func=func, vararg=vararg, res=res)
+        state.append(inst, func=func, vararg=vararg, varkwarg=varkwarg, res=res)
         state.push(res)
 
     def _dup_topx(self, state, inst, count):
@@ -996,6 +1000,15 @@ class TraceRunner(object):
         state.push(res)
 
     def op_SET_UPDATE(self, state, inst):
+        value = state.pop()
+        index = inst.arg
+        target = state.peek(index)
+        updatevar = state.make_temp()
+        res = state.make_temp()
+        state.append(inst, target=target, value=value, updatevar=updatevar,
+                     res=res)
+
+    def op_DICT_UPDATE(self, state, inst):
         value = state.pop()
         index = inst.arg
         target = state.peek(index)

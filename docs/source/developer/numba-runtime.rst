@@ -101,7 +101,7 @@ Debugging Leaks in C
 --------------------
 
 The start of `numba/core/runtime/nrt.h
-<https://github.com/numba/numba/blob/master/numba/core/runtime/nrt.h>`_
+<https://github.com/numba/numba/blob/main/numba/core/runtime/nrt.h>`_
 has these lines:
 
 .. code-block:: C

@@ -361,7 +361,7 @@ class Structure(object):
 
 def alloca_once(builder, ty, size=None, name='', zfill=False):
     """Allocate stack memory at the entry block of the current function
-    pointed by ``builder`` withe llvm type ``ty``.  The optional ``size`` arg
+    pointed by ``builder`` with llvm type ``ty``.  The optional ``size`` arg
     set the number of element to allocate.  The default is 1.  The optional
     ``name`` arg set the symbol name inside the llvm IR for debugging.
     If ``zfill`` is set, fill the memory with zeros at the current
@@ -377,7 +377,7 @@ def alloca_once(builder, ty, size=None, name='', zfill=False):
         with builder.goto_entry_block():
             ptr = builder.alloca(ty, size=size, name=name)
             # Always zero-fill at init-site.  This is safe.
-            builder.store(ptr.type.pointee(None), ptr)
+            builder.store(ty(None), ptr)
         # Also zero-fill at the use-site
         if zfill:
             builder.store(ptr.type.pointee(None), ptr)
@@ -537,7 +537,7 @@ def for_range_slice(builder, start, stop, step, intp=None, inc=True):
     Parameters
     -------------
     builder : object
-        Builder object
+        IRBuilder object
     start : int
         The beginning value of the slice
     stop : int
@@ -1183,3 +1183,12 @@ def is_nonelike(ty):
         isinstance(ty, types.NoneType) or
         isinstance(ty, types.Omitted)
     )
+
+
+def create_constant_array(ty, val):
+    """
+    Create an LLVM-constant of a fixed-length array from Python values.
+
+    The type provided is the type of the elements.
+    """
+    return ir.Constant(ir.ArrayType(ty, len(val)), val)

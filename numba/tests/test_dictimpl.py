@@ -647,5 +647,5 @@ class TestDictImpl(TestCase):
         set_parametrized_data._reset_overloads()
         set_parametrized_data.targetctx.init()
 
-        for ii in range(50):  # <- somtimes works a few times
+        for ii in range(50):  # <- sometimes works a few times
             self.assertIsNone(set_parametrized_data(x, y))

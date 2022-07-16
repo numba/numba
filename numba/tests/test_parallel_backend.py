@@ -10,6 +10,7 @@ import os
 import random
 import subprocess
 import sys
+import textwrap
 import threading
 import unittest
 
@@ -528,44 +529,47 @@ class TestThreadingLayerPriority(ThreadLayerTestHelper):
 
     def each_env_var(self, env_var: str):
         """Test setting priority via env var NUMBA_THREADING_LAYER_PRIORITY.
-
-        :return: threading_layer_priority, stderr
-            (containing ``@threading_layer@``)
         """
         env = os.environ.copy()
         env['NUMBA_THREADING_LAYER'] = 'default'
         env['NUMBA_THREADING_LAYER_PRIORITY'] = env_var
 
-        code = """import sys
-import numba
+        code = f"""
+                import numba
 
-# trigger threading layer decision
-# hence catching invalid THREADING_LAYER_PRIORITY
-@numba.jit(
-    'float64[::1](float64[::1], float64[::1])',
-    nopython=True,
-    parallel=True,
-)
-def plus(x, y):
-    return x + y
+                # trigger threading layer decision
+                # hence catching invalid THREADING_LAYER_PRIORITY
+                @numba.jit(
+                    'float64[::1](float64[::1], float64[::1])',
+                    nopython=True,
+                    parallel=True,
+                )
+                def plus(x, y):
+                    return x + y
 
-print(' '.join(numba.config.THREADING_LAYER_PRIORITY))
-print("@%s@" % numba.threading_layer(), file=sys.stderr)
-"""
+                captured_envvar = list("{env_var}".split())
+                assert numba.config.THREADING_LAYER_PRIORITY == \
+                    captured_envvar, "priority mismatch"
+                assert numba.threading_layer() == captured_envvar[0],\
+                    "selected backend mismatch"
+                """
         cmd = [
             sys.executable,
             '-c',
-            code,
+            textwrap.dedent(code),
         ]
-        return self.run_cmd(cmd, env=env)
+        self.run_cmd(cmd, env=env)
 
+    @skip_no_omp
+    @skip_no_tbb
     def test_valid_env_var(self):
         default = ['tbb', 'omp', 'workqueue']
         for p in itertools.permutations(default):
             env_var = ' '.join(p)
-            threading_layer_priority, _ = self.each_env_var(env_var)
-            self.assertEqual(threading_layer_priority.strip(), env_var)
+            self.each_env_var(env_var)
 
+    @skip_no_omp
+    @skip_no_tbb
     def test_invalid_env_var(self):
         env_var = 'tbb omp workqueue notvalidhere'
         with self.assertRaises(AssertionError) as raises:
@@ -579,22 +583,16 @@ print("@%s@" % numba.threading_layer(), file=sys.stderr)
     @skip_no_omp
     def test_omp(self):
         for env_var in ("omp tbb workqueue", "omp workqueue tbb"):
-            threading_layer_priority, out = self.each_env_var(env_var)
-            self.assertEqual(threading_layer_priority.strip(), env_var)
-            self.assertIn("@omp@", out)
+            self.each_env_var(env_var)
 
     @skip_no_tbb
     def test_tbb(self):
         for env_var in ("tbb omp workqueue", "tbb workqueue omp"):
-            threading_layer_priority, out = self.each_env_var(env_var)
-            self.assertEqual(threading_layer_priority.strip(), env_var)
-            self.assertIn("@tbb@", out)
+            self.each_env_var(env_var)
 
     def test_workqueue(self):
         for env_var in ("workqueue tbb omp", "workqueue omp tbb"):
-            threading_layer_priority, out = self.each_env_var(env_var)
-            self.assertEqual(threading_layer_priority.strip(), env_var)
-            self.assertIn("@workqueue@", out)
+            self.each_env_var(env_var)
 
 
 @skip_parfors_unsupported
@@ -619,16 +617,13 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
 
             x = np.ones(2**20, np.float32)
             foo(*([x]*8))
-            print("@%s@" % threading_layer())
+            assert threading_layer() == "omp", "omp not found"
         """
         cmdline = [sys.executable, '-c', runme]
         env = os.environ.copy()
         env['NUMBA_THREADING_LAYER'] = "omp"
         env['OMP_STACKSIZE'] = "100K"
-        out, err = self.run_cmd(cmdline, env=env)
-        if self._DEBUG:
-            print(out, err)
-        self.assertIn("@omp@", out)
+        self.run_cmd(cmdline, env=env)
 
     @skip_no_tbb
     def test_single_thread_tbb(self):
@@ -647,16 +642,13 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
                 return acc
 
             foo(100)
-            print("@%s@" % threading_layer())
+            assert threading_layer() == "tbb", "tbb not found"
         """
         cmdline = [sys.executable, '-c', runme]
         env = os.environ.copy()
         env['NUMBA_THREADING_LAYER'] = "tbb"
         env['NUMBA_NUM_THREADS'] = "1"
-        out, err = self.run_cmd(cmdline, env=env)
-        if self._DEBUG:
-            print(out, err)
-        self.assertIn("@tbb@", out)
+        self.run_cmd(cmdline, env=env)
 
     def test_workqueue_aborts_on_nested_parallelism(self):
         """
@@ -697,6 +689,47 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
             # the error message
             self.assertIn("Terminating: Nested parallel kernel launch detected",
                           e_msg)
+
+    @unittest.skipUnless(_HAVE_OS_FORK, "Test needs fork(2)")
+    def test_workqueue_handles_fork_from_non_main_thread(self):
+        # For context see #7872, but essentially the multiprocessing pool
+        # implementation has a number of Python threads for handling the worker
+        # processes, one of which calls fork(2), this results in a fork from a
+        # non-main thread.
+
+        runme = """if 1:
+            from numba import njit, prange, threading_layer
+            import numpy as np
+            import multiprocessing
+
+            if __name__ == "__main__":
+                # Need for force fork context (OSX default is "spawn")
+                multiprocessing.set_start_method('fork')
+
+                @njit(parallel=True)
+                def func(x):
+                    return 10. * x
+
+                arr = np.arange(2.)
+
+                # run in single process to start Numba's thread pool
+                np.testing.assert_allclose(func(arr), func.py_func(arr))
+
+                # now run in a multiprocessing pool to get a fork from a
+                # non-main thread
+                with multiprocessing.Pool(10) as p:
+                    result = p.map(func, [arr])
+                np.testing.assert_allclose(result,
+                                           func.py_func(np.expand_dims(arr, 0)))
+
+                assert threading_layer() == "workqueue"
+        """
+        cmdline = [sys.executable, '-c', runme]
+        env = os.environ.copy()
+        env['NUMBA_THREADING_LAYER'] = "workqueue"
+        env['NUMBA_NUM_THREADS'] = "4"
+
+        self.run_cmd(cmdline, env=env)
 
 
 # 32bit or windows py27 (not that this runs on windows)
@@ -962,7 +995,7 @@ class TestTBBSpecificIssues(ThreadLayerTestHelper):
         # trigger a standard compilation of the function and the thread pools
         # won't have started yet as the parallelisation compiler passes for
         # `work` won't yet have run. This mitigates the fork() call from 1.
-        # occuring after 2. The result of this is that 3. can be tested using
+        # occurring after 2. The result of this is that 3. can be tested using
         # the threading etc herein with the state being known as the above
         # described, i.e. the TBB threading layer has not experienced a fork().
 

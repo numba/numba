@@ -272,6 +272,21 @@ class TestDispatcher(CUDATestCase):
         self.assertIsInstance(regs_per_thread, int)
         self.assertGreater(regs_per_thread, 0)
 
+    def test_dispatcher_docstring(self):
+        # Ensure that CUDA-jitting a function preserves its docstring. See
+        # Issue #5902: https://github.com/numba/numba/issues/5902
+
+        @cuda.jit
+        def add_kernel(a, b):
+            """Add two integers, kernel version"""
+
+        @cuda.jit(device=True)
+        def add_device(a, b):
+            """Add two integers, device version"""
+
+        self.assertEqual("Add two integers, kernel version", add_kernel.__doc__)
+        self.assertEqual("Add two integers, device version", add_device.__doc__)
+
 
 if __name__ == '__main__':
     unittest.main()

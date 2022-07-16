@@ -87,7 +87,7 @@ class Flags(TargetConfig):
     forceinline = Option(
         type=bool,
         default=False,
-        doc="TODO",
+        doc="Force inlining of the function. Overrides _dbg_optnone.",
     )
     no_cpython_wrapper = Option(
         type=bool,
@@ -142,6 +142,20 @@ detail""",
         type=str,
         default="cpu", # if not set, default to CPU
         doc="backend"
+    )
+
+    dbg_extend_lifetimes = Option(
+        type=bool,
+        default=False,
+        doc=("Extend variable lifetime for debugging. "
+             "This automatically turns on with debug=True."),
+    )
+
+    dbg_optnone = Option(
+        type=bool,
+        default=False,
+        doc=("Disable optimization for debug. "
+             "Equivalent to adding optnone attribute in the LLVM Function.")
     )
 
 
@@ -241,6 +255,10 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
 
         return cr
 
+    @property
+    def codegen(self):
+        return self.target_context.codegen()
+
     def dump(self, tab=''):
         print(f'{tab}DUMP {type(self).__name__} {self.entry_point}')
         self.signature.dump(tab=tab + '  ')
@@ -255,20 +273,25 @@ _LowerResult = namedtuple("_LowerResult", [
 ])
 
 
-def compile_result(**kws):
-    keys = set(kws.keys())
+def sanitize_compile_result_entries(entries):
+    keys = set(entries.keys())
     fieldset = set(CR_FIELDS)
     badnames = keys - fieldset
     if badnames:
         raise NameError(*badnames)
     missing = fieldset - keys
     for k in missing:
-        kws[k] = None
+        entries[k] = None
     # Avoid keeping alive traceback variables
-    err = kws['typing_error']
+    err = entries['typing_error']
     if err is not None:
-        kws['typing_error'] = err.with_traceback(None)
-    return CompileResult(**kws)
+        entries['typing_error'] = err.with_traceback(None)
+    return entries
+
+
+def compile_result(**entries):
+    entries = sanitize_compile_result_entries(entries)
+    return CompileResult(**entries)
 
 
 def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,

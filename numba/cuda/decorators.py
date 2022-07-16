@@ -1,8 +1,9 @@
 from warnings import warn
 from numba.core import types, config, sigutils
 from numba.core.errors import DeprecationError, NumbaInvalidConfigWarning
-from .compiler import declare_device_function, Dispatcher
-from .simulator.kernel import FakeCUDAKernel
+from numba.cuda.compiler import declare_device_function
+from numba.cuda.dispatcher import CUDADispatcher
+from numba.cuda.simulator.kernel import FakeCUDAKernel
 
 
 _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
@@ -11,7 +12,7 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
 
 
 def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
-        opt=True, **kws):
+        opt=True, cache=False, **kws):
     """
     JIT compile a python function conforming to the CUDA Python specification.
     If a signature is supplied, then a function is returned that takes a
@@ -48,6 +49,8 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
        assembly code. This enables inspection of the source code in NVIDIA
        profiling tools and correlation with program counter sampling.
     :type lineinfo: bool
+    :param cache: If True, enables the file-based cache for this function.
+    :type cache: bool
     """
 
     if link and config.ENABLE_CUDASIM:
@@ -68,6 +71,7 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
 
     debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
     fastmath = kws.get('fastmath', False)
+    extensions = kws.get('extensions', [])
 
     if debug and opt:
         msg = ("debug=True with opt=True (the default) "
@@ -96,7 +100,24 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
             targetoptions['opt'] = opt
             targetoptions['fastmath'] = fastmath
             targetoptions['device'] = device
-            return Dispatcher(func, [func_or_sig], targetoptions=targetoptions)
+            targetoptions['extensions'] = extensions
+
+            disp = CUDADispatcher(func, targetoptions=targetoptions)
+
+            if cache:
+                disp.enable_caching()
+
+            if device:
+                from numba.core import typeinfer
+                with typeinfer.register_dispatcher(disp):
+                    disp.compile_device(argtypes)
+            else:
+                disp.compile(argtypes)
+
+            disp._specialized = True
+            disp.disable_compile()
+
+            return disp
 
         return _jit
     else:
@@ -107,7 +128,8 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                                           fastmath=fastmath)
             else:
                 def autojitwrapper(func):
-                    return jit(func, device=device, debug=debug, opt=opt, **kws)
+                    return jit(func, device=device, debug=debug, opt=opt,
+                               link=link, cache=cache, **kws)
 
             return autojitwrapper
         # func_or_sig is a function
@@ -122,11 +144,27 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                 targetoptions['link'] = link
                 targetoptions['fastmath'] = fastmath
                 targetoptions['device'] = device
-                sigs = None
-                return Dispatcher(func_or_sig, sigs,
-                                  targetoptions=targetoptions)
+                targetoptions['extensions'] = extensions
+                disp = CUDADispatcher(func_or_sig, targetoptions=targetoptions)
+
+                if cache:
+                    disp.enable_caching()
+
+                return disp
 
 
 def declare_device(name, sig):
+    """
+    Declare the signature of a foreign function. Returns a descriptor that can
+    be used to call the function from a Python kernel.
+
+    :param name: The name of the foreign function.
+    :type name: str
+    :param sig: The Numba signature of the function.
+    """
     argtypes, restype = sigutils.normalize_signature(sig)
+    if restype is None:
+        msg = 'Return type must be provided for device declarations'
+        raise TypeError(msg)
+
     return declare_device_function(name, restype, argtypes)

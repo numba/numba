@@ -27,7 +27,6 @@ from numba.core.analysis import compute_cfg_from_blocks
 from numba.core.typing import npydecl, signature
 import copy
 from numba.core.extending import intrinsic, register_jitable
-import llvmlite.llvmpy.core as lc
 import llvmlite
 from numba.np.unsafe.ndarray import to_fixed_tuple
 
@@ -189,7 +188,7 @@ def assert_equiv(typingctx, *val):
             bshapes = unpack_shapes(b, bty)
             assert len(ashapes) == len(bshapes)
             for (m, n) in zip(ashapes, bshapes):
-                m_eq_n = builder.icmp(lc.ICMP_EQ, m, n)
+                m_eq_n = builder.icmp_unsigned('==', m, n)
                 with builder.if_else(m_eq_n) as (then, orelse):
                     with then:
                         pass
@@ -385,7 +384,7 @@ class ShapeEquivSet(EquivSet):
         self.typemap = typemap
         # defs maps variable name to an int, where
         # 1 means the variable is defined only once, and numbers greater
-        # than 1 means defined more than onces.
+        # than 1 means defined more than once.
         self.defs = defs if defs else {}
         # ind_to_var maps index number to a list of variables (of ir.Var type).
         # It is used to retrieve defined shape variables given an equivalence
@@ -447,13 +446,20 @@ class ShapeEquivSet(EquivSet):
             else:
                 return (obj.value,)
         elif isinstance(obj, tuple):
-            return tuple(self._get_names(x)[0] for x in obj)
+
+            def get_names(x):
+                names = self._get_names(x)
+                if len(names) != 0:
+                    return names[0]
+                return names
+
+            return tuple(get_names(x) for x in obj)
         elif isinstance(obj, int):
             return (obj,)
-        else:
-            raise NotImplementedError(
-                "ShapeEquivSet does not support {}".format(obj)
-            )
+        if config.DEBUG_ARRAY_OPT >= 1:
+            print(
+                f"Ignoring untracked object type {type(obj)} in ShapeEquivSet")
+        return ()
 
     def is_equiv(self, *objs):
         """Overload EquivSet.is_equiv to handle Numba IR variables and
@@ -481,7 +487,7 @@ class ShapeEquivSet(EquivSet):
         return the scalar value, or None otherwise.
         """
         names = self._get_names(obj)
-        if len(names) > 1:
+        if len(names) != 1:
             return None
         return super(ShapeEquivSet, self).get_equiv_const(names[0])
 
@@ -500,7 +506,7 @@ class ShapeEquivSet(EquivSet):
         """Return the set of equivalent objects.
         """
         names = self._get_names(obj)
-        if len(names) > 1:
+        if len(names) != 1:
             return None
         return super(ShapeEquivSet, self).get_equiv_set(names[0])
 
@@ -762,7 +768,7 @@ class SymbolicEquivSet(ShapeEquivSet):
         # means A is defined as: A = B + i, where A,B are variable names,
         # and i is an integer constants.
         self.def_by = def_by if def_by else {}
-        # A "refered-by" table that maps A to a list of [(B, i), (C, j) ...],
+        # A "referred-by" table that maps A to a list of [(B, i), (C, j) ...],
         # which implies a sequence of definitions: B = A - i, C = A - j, and
         # so on, where A,B,C,... are variable names, and i,j,... are
         # integer constants.
@@ -1573,6 +1579,10 @@ class ArrayAnalysis(object):
         elif expr.attr == "shape":
             shape = equiv_set.get_shape(expr.value)
             return ArrayAnalysis.AnalyzeResult(shape=shape)
+        elif expr.attr in ("real", "imag") and self._isarray(expr.value.name):
+            # Shape of real or imag attr is the same as the shape of the array
+            # itself.
+            return ArrayAnalysis.AnalyzeResult(shape=expr.value)
         elif self._isarray(lhs.name):
             canonical_value = get_canonical_alias(
                 expr.value.name, self.alias_map
@@ -1778,7 +1788,7 @@ class ArrayAnalysis(object):
         The computation takes care of negative values used in the slice
         with respect to the given dimensional size ("dsize").
 
-        Extra statments required to produce the result are appended
+        Extra statements required to produce the result are appended
         to parent function's stmts list.
         """
         loc = index.loc
@@ -2050,6 +2060,7 @@ class ArrayAnalysis(object):
         var_shape = equiv_set._get_shape(var)
         if isinstance(ind_typ, types.SliceType):
             seq_typs = (ind_typ,)
+            seq = (ind_var,)
         else:
             require(isinstance(ind_typ, types.BaseTuple))
             seq, op = find_build_sequence(self.func_ir, ind_var)
@@ -2071,7 +2082,10 @@ class ArrayAnalysis(object):
         shape_list = []
         index_var_list = []
         replace_index = False
-        for (typ, size, dsize) in zip(seq_typs, ind_shape, var_shape):
+        for (typ, size, dsize, orig_ind) in zip(seq_typs,
+                                                ind_shape,
+                                                var_shape,
+                                                seq):
             # Convert the given dimension of the get/setitem index expr.
             shape_part, index_var_part = to_shape(typ, size, dsize)
             shape_list.append(shape_part)
@@ -2084,7 +2098,7 @@ class ArrayAnalysis(object):
                 replace_index = True
                 index_var_list.append(index_var_part)
             else:
-                index_var_list.append(size)
+                index_var_list.append(orig_ind)
 
         # If at least one of the dimensions required a new slice variable
         # then we'll need to replace the build_tuple for this get/setitem.

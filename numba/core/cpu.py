@@ -2,7 +2,6 @@ import sys
 import platform
 
 import llvmlite.binding as ll
-import llvmlite.llvmpy.core as lc
 from llvmlite import ir
 
 from numba import _dynfunc
@@ -74,6 +73,7 @@ class CPUContext(BaseContext):
         from numba.core import optional
         from numba.misc import gdb_hook, literal
         from numba.np import linalg, polynomial, arraymath, arrayobj
+        from numba.np.random import generator_core, generator_methods
         from numba.typed import typeddict, dictimpl
         from numba.typed import typedlist, listobject
         from numba.experimental import jitclass, function_type
@@ -275,6 +275,8 @@ _options_mixin = include_default_options(
     "forceinline",
     # Add "target_backend" as a accepted option for the CPU in @jit(...)
     "target_backend",
+    "_dbg_extend_lifetimes",
+    "_dbg_optnone",
 )
 
 class CPUTargetOptions(_options_mixin, TargetOptions):
@@ -290,6 +292,15 @@ class CPUTargetOptions(_options_mixin, TargetOptions):
         if not flags.is_set("debuginfo"):
             flags.debuginfo = config.DEBUGINFO_DEFAULT
 
+        if not flags.is_set("dbg_extend_lifetimes"):
+            if flags.debuginfo:
+                # auto turn on extend-lifetimes if debuginfo is on and
+                # dbg_extend_lifetimes is not set
+                flags.dbg_extend_lifetimes = True
+            else:
+                # set flag using env-var config
+                flags.dbg_extend_lifetimes = config.EXTEND_VARIABLE_LIFETIMES
+
         if not flags.is_set("boundscheck"):
             flags.boundscheck = flags.debuginfo
 
@@ -303,6 +314,10 @@ class CPUTargetOptions(_options_mixin, TargetOptions):
         flags.inherit_if_not_set("target_backend")
 
         flags.inherit_if_not_set("forceinline")
+
+        if flags.forceinline:
+            # forceinline turns off optnone, just like clang.
+            flags.optnone = False
 
 # ----------------------------------------------------------------------------
 # Internal
@@ -323,7 +338,7 @@ def remove_null_refct_call(bb):
     pass
     ## Skipped for now
     # for inst in bb.instructions:
-    #     if isinstance(inst, lc.CallOrInvokeInstruction):
+    #     if isinstance(inst, ir.CallInstr):
     #         fname = inst.called_function.name
     #         if fname == "Py_IncRef" or fname == "Py_DecRef":
     #             arg = inst.args[0]
@@ -347,7 +362,7 @@ def remove_refct_pairs(bb):
 
         # Mark
         for inst in bb.instructions:
-            if isinstance(inst, lc.CallOrInvokeInstruction):
+            if isinstance(inst, ir.CallInstr):
                 fname = inst.called_function.name
                 if fname == "Py_IncRef":
                     arg = inst.operands[0]

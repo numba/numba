@@ -7,6 +7,7 @@ import llvmlite.binding as ll
 
 from numba.core.imputils import Registry, lower_cast
 from numba.core.typing.npydecl import parse_dtype, signature
+from numba.core.datamodel import models
 from numba.core import types, cgutils
 from .cudadrv import nvvm
 from numba import cuda
@@ -523,6 +524,44 @@ def ptx_hfma(context, builder, sig, args):
     asm = ir.InlineAsm(fnty, "fma.rn.f16 $0,$1,$2,$3;", "=h,h,h,h")
     return builder.call(asm, args)
 
+
+_fp16_cmp = """{{
+          .reg .pred __$$f16_cmp_tmp;
+          setp.{op}.f16 __$$f16_cmp_tmp, $1, $2;
+          selp.u16 $0, 1, 0, __$$f16_cmp_tmp;
+        }}"""
+
+
+def _gen_fp16_cmp(op):
+    def ptx_fp16_comparison(context, builder, sig, args):
+        fnty = ir.FunctionType(ir.IntType(16), [ir.IntType(16), ir.IntType(16)])
+        asm = ir.InlineAsm(fnty, _fp16_cmp.format(op=op), '=h,h,h')
+        result = builder.call(asm, args)
+
+        zero = context.get_constant(types.int16, 0)
+        int_result = builder.bitcast(result, ir.IntType(16))
+        return builder.icmp_unsigned("!=", int_result, zero)
+    return ptx_fp16_comparison
+
+
+lower(stubs.fp16.heq, types.float16, types.float16)(_gen_fp16_cmp('eq'))
+lower(stubs.fp16.hne, types.float16, types.float16)(_gen_fp16_cmp('ne'))
+lower(stubs.fp16.hge, types.float16, types.float16)(_gen_fp16_cmp('ge'))
+lower(stubs.fp16.hgt, types.float16, types.float16)(_gen_fp16_cmp('gt'))
+lower(stubs.fp16.hle, types.float16, types.float16)(_gen_fp16_cmp('le'))
+lower(stubs.fp16.hlt, types.float16, types.float16)(_gen_fp16_cmp('lt'))
+
+
+def lower_fp16_minmax(fn, fname, op):
+    @lower(fn, types.float16, types.float16)
+    def ptx_fp16_minmax(context, builder, sig, args):
+        choice = _gen_fp16_cmp(op)(context, builder, sig, args)
+        return builder.select(choice, args[0], args[1])
+
+
+lower_fp16_minmax(stubs.fp16.hmax, 'max', 'gt')
+lower_fp16_minmax(stubs.fp16.hmin, 'min', 'lt')
+
 # See:
 # https://docs.nvidia.com/cuda/libdevice-users-guide/__nv_cbrt.html#__nv_cbrt
 # https://docs.nvidia.com/cuda/libdevice-users-guide/__nv_cbrtf.html#__nv_cbrtf
@@ -972,10 +1011,6 @@ def ptx_nanosleep(context, builder, sig, args):
 # -----------------------------------------------------------------------------
 
 
-def _get_target_data(context):
-    return ll.create_target_data(nvvm.data_layout[context.address_size])
-
-
 def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
                    can_dynsized=False):
     elemcount = reduce(operator.mul, shape, 1)
@@ -987,7 +1022,12 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
         raise ValueError("array length <= 0")
 
     # Check that we support the requested dtype
-    other_supported_type = isinstance(dtype, (types.Record, types.Boolean))
+    data_model = context.data_model_manager[dtype]
+    other_supported_type = (
+        isinstance(dtype, (types.Record, types.Boolean))
+        or isinstance(data_model, models.StructModel)
+        or dtype == types.float16
+    )
     if dtype not in types.number_domain and not other_supported_type:
         raise TypeError("unsupported type: %s" % dtype)
 
@@ -1027,7 +1067,7 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
         addrspaceptr = gvmem.bitcast(ir.PointerType(ir.IntType(8), addrspace))
         dataptr = builder.call(conv, [addrspaceptr])
 
-    targetdata = _get_target_data(context)
+    targetdata = ll.create_target_data(nvvm.data_layout)
     lldtype = context.get_data_type(dtype)
     itemsize = lldtype.get_abi_size(targetdata)
 

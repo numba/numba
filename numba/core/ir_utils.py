@@ -7,22 +7,17 @@ import numpy
 
 import types as pytypes
 import collections
-import operator
 import warnings
-
-from llvmlite import ir as lir
 
 import numba
 from numba.core.extending import _Intrinsic
-from numba.core import types, utils, typing, ir, analysis, postproc, rewrites, config, cgutils
-from numba.core.typing.templates import (signature, infer_global,
-                                         AbstractTemplate)
-from numba.core.imputils import impl_ret_untracked
+from numba.core import types, typing, ir, analysis, postproc, rewrites, config
+from numba.core.typing.templates import signature
 from numba.core.analysis import (compute_live_map, compute_use_defs,
                             compute_cfg_from_blocks)
 from numba.core.errors import (TypingError, UnsupportedError,
-                               NumbaPendingDeprecationWarning, NumbaWarning,
-                               feedback_details, CompilerError)
+                               NumbaPendingDeprecationWarning,
+                               CompilerError)
 
 import copy
 
@@ -1925,7 +1920,7 @@ def is_namedtuple_class(c):
 
 def fill_block_with_call(newblock, callee, label_next, inputs, outputs):
     """Fill *newblock* to call *callee* with arguments listed in *inputs*.
-    The returned values are unwraped into variables in *outputs*.
+    The returned values are unwrapped into variables in *outputs*.
     The block would then jump to *label_next*.
     """
     scope = newblock.scope
@@ -1989,16 +1984,16 @@ def fill_callee_epilogue(block, outputs):
     return block
 
 
-def find_global_value(func_ir, var):
+def find_outer_value(func_ir, var):
     """Check if a variable is a global value, and return the value,
     or raise GuardException otherwise.
     """
     dfn = get_definition(func_ir, var)
-    if isinstance(dfn, ir.Global):
+    if isinstance(dfn, (ir.Global, ir.FreeVar)):
         return dfn.value
 
     if isinstance(dfn, ir.Expr) and dfn.op == 'getattr':
-        prev_val = find_global_value(func_ir, dfn.value)
+        prev_val = find_outer_value(func_ir, dfn.value)
         try:
             val = getattr(prev_val, dfn.attr)
             return val
@@ -2124,9 +2119,9 @@ def raise_on_unsupported_feature(func_ir, typemap):
                "in a function is unsupported (strange things happen!), use "
                "numba.gdb_breakpoint() to create additional breakpoints "
                "instead.\n\nRelevant documentation is available here:\n"
-               "https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html"
-               "/troubleshoot.html#using-numba-s-direct-gdb-bindings-in-"
-               "nopython-mode\n\nConflicting calls found at:\n %s")
+               "https://numba.readthedocs.io/en/stable/user/troubleshoot.html"
+               "#using-numba-s-direct-gdb-bindings-in-nopython-mode\n\n"
+               "Conflicting calls found at:\n %s")
         buf = '\n'.join([x.strformat() for x in gdb_calls])
         raise UnsupportedError(msg % buf)
 
@@ -2142,7 +2137,7 @@ def warn_deprecated(func_ir, typemap):
                 arg = name.split('.')[1]
                 fname = func_ir.func_id.func_qualname
                 tyname = 'list' if isinstance(ty, types.List) else 'set'
-                url = ("https://numba.pydata.org/numba-doc/latest/reference/"
+                url = ("https://numba.readthedocs.io/en/stable/reference/"
                        "deprecation.html#deprecation-of-reflection-for-list-and"
                        "-set-types")
                 msg = ("\nEncountered the use of a type that is scheduled for "
@@ -2215,7 +2210,7 @@ def legalize_single_scope(blocks):
     return len({blk.scope for blk in blocks.values()}) == 1
 
 
-def check_and_legalize_ir(func_ir):
+def check_and_legalize_ir(func_ir, flags: "numba.core.compiler.Flags"):
     """
     This checks that the IR presented is legal
     """
@@ -2223,8 +2218,7 @@ def check_and_legalize_ir(func_ir):
     enforce_no_dels(func_ir)
     # postprocess and emit ir.Dels
     post_proc = postproc.PostProcessor(func_ir)
-    post_proc.run(True, extend_lifetimes=config.EXTEND_VARIABLE_LIFETIMES)
-
+    post_proc.run(True, extend_lifetimes=flags.dbg_extend_lifetimes)
 
 def convert_code_obj_to_function(code_obj, caller_ir):
     """

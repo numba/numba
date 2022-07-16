@@ -227,47 +227,6 @@ compiled in :term:`object mode`.
 .. _deprecation-strict-strides:
 
 
-Deprecation of the ``inspect_ptx()`` method
-===========================================
-
-The undocumented ``inspect_ptx()`` method of functions decorated with
-``@cuda.jit(device=True)`` is sometimes used to compile a Python function to
-PTX for use outside of Numba. An interface for this specific purpose is
-provided in the :func:`compile_ptx() <numba.cuda.compile_ptx>` function.
-``inspect_ptx()`` has one or two longstanding issues and presents a maintenance
-burden for upcoming changes in the CUDA target, so it is deprecated and will be
-removed in favor of the use of :func:`compile_ptx() <numba.cuda.compile_ptx>`.
-
-Recommendations
----------------
-
-Replace any code that compiles device functions to PTX using the following
-pattern:
-
-.. code-block:: python
-
-    @cuda.jit(signature, device=True)
-    def func(args):
-        ...
-
-    ptx_code = func.inspect_ptx(nvvm_options=nvvm_options).decode()
-
-with:
-
-.. code-block:: python
-
-    def func(args):
-        ...
-
-    ptx_code, return_type = compile_ptx(func, signature, device=True, nvvm_options=nvvm_options)
-
-Schedule
---------
-
-- In Numba 0.54: ``inspect_ptx()`` was deprecated.
-- In Numba 0.55: ``inspect_ptx()`` was removed.
-
-
 Deprecation of eager compilation of CUDA device functions
 =========================================================
 
@@ -310,13 +269,13 @@ Schedule
   the provision of signatures for device functions will only enforce casting.
 
 
-Deprecation of ``numba.core.base.BaseContext.add_user_function()``
-==================================================================
+Deprecation and removal of ``numba.core.base.BaseContext.add_user_function()``
+==============================================================================
 
-``add_user_function()``  offers the same functionality as
+``add_user_function()``  offered the same functionality as
 ``insert_user_function()``, only with a check that the function has already
-been inserted at least once.  It is now deprecated as it is no longer used
-internally and it is expected that it is not used externally.
+been inserted at least once.  It is now removed as it was no longer used
+internally and it was expected that it was not used externally.
 
 Recommendations
 ---------------
@@ -326,5 +285,28 @@ Replace any uses of ``add_user_function()`` with ``insert_user_function()``.
 Schedule
 --------
 
-- In Numba 0.55: ``add_user_function()`` will be deprecated.
-- In Numba 0.56: ``add_user_function()`` will be removed.
+- In Numba 0.55: ``add_user_function()`` was deprecated.
+- In Numba 0.56: ``add_user_function()`` was removed.
+
+
+Deprecation and removal of CUDA Toolkits < 10.2 and devices with CC < 5.3
+=========================================================================
+
+- Support for CUDA toolkits less than 10.2 was deprecated and removed.
+- Support for devices with Compute Capability < 5.3 is deprecated and will be
+  removed in the future.
+
+
+Recommendations
+---------------
+
+- For devices of Compute Capability 3.0 and 3.2, Numba 0.55.1 or earlier will
+  be required.
+- CUDA toolkit 10.2 or later (ideally 11.2 or later) should be installed.
+
+Schedule
+--------
+
+- In Numba 0.55.1: support for CC < 5.3 and CUDA toolkits < 10.2 was deprecated.
+- In Numba 0.56: support for CC < 3.5 and CUDA toolkits < 10.2 was removed.
+- In Numba 0.57: support for CC < 5.3 will be removed.

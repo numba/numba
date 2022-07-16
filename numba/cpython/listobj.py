@@ -255,7 +255,7 @@ class ListInstance(_ListPayloadMixin):
             builder.store(cgutils.false_bit, ok)
 
         with builder.if_then(builder.load(ok), likely=True):
-            meminfo = context.nrt.meminfo_new_varsize_dtor(
+            meminfo = context.nrt.meminfo_new_varsize_dtor_unchecked(
                 builder, size=allocsize, dtor=self.get_dtor())
             with builder.if_else(cgutils.is_null(builder, meminfo),
                                  likely=False) as (if_error, if_ok):
@@ -358,8 +358,9 @@ class ListInstance(_ListPayloadMixin):
                 context.call_conv.return_user_exc(builder, MemoryError,
                                                   ("cannot resize list",))
 
-            ptr = context.nrt.meminfo_varsize_realloc(builder, self._list.meminfo,
-                                                      size=allocsize)
+            ptr = context.nrt.meminfo_varsize_realloc_unchecked(builder,
+                                                                self._list.meminfo,
+                                                                size=allocsize)
             cgutils.guard_memory_error(context, builder, ptr,
                                        "cannot resize list")
             self._payload.allocated = new_allocated
@@ -714,11 +715,16 @@ def list_add_inplace(context, builder, sig, args):
 
 
 @lower_builtin(operator.mul, types.List, types.Integer)
+@lower_builtin(operator.mul, types.Integer, types.List)
 def list_mul(context, builder, sig, args):
-    src = ListInstance(context, builder, sig.args[0], args[0])
+    if isinstance(sig.args[0], types.List):
+        list_idx, int_idx = 0, 1
+    else:
+        list_idx, int_idx = 1, 0
+    src = ListInstance(context, builder, sig.args[list_idx], args[list_idx])
     src_size = src.size
 
-    mult = args[1]
+    mult = args[int_idx]
     zero = ir.Constant(mult.type, 0)
     mult = builder.select(cgutils.is_neg_int(builder, mult), zero, mult)
     nitems = builder.mul(mult, src_size)

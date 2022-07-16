@@ -86,7 +86,7 @@ These variables influence what is printed out during compilation of
 
     - ``"old_style"`` (default): this is the exception handling behaviour that
       is present in Numba versions <= 0.54.x. Numba will capture and wrap all
-      errors occuring in compilation and depending on the compilation phase they
+      errors occurring in compilation and depending on the compilation phase they
       will likely materialize as part of the message in a ``TypingError`` or a
       ``LoweringError``.
     - ``"new_style"`` this will treat any exception that does not inherit from
@@ -139,6 +139,15 @@ These variables influence what is printed out during compilation of
    of the compiler frontend, up to and including generation of the Numba
    Intermediate Representation.
 
+.. envvar:: NUMBA_DEBUG_NRT
+
+   If set to non-zero, print out debugging information at runtime about the use
+   of :ref:`Numba run time (NRT) <arch-numba-runtime>` reference count
+   operations. If set to non-zero, this also switches on the filling of all NRT
+   allocated regions with an identifiable "marker" byte pattern, ``0xCB`` on
+   allocation and ``0xDE`` on deallocation, both to help with debugging memory
+   leaks.
+
 .. envvar:: NUMBA_DEBUGINFO
 
    If set to non-zero, enable debug for the full application by setting
@@ -156,11 +165,13 @@ These variables influence what is printed out during compilation of
 
 .. envvar:: NUMBA_GDB_BINARY
 
-   Set the ``gdb`` binary for use in Numba's ``gdb`` support, this takes the
-   form  of a path and full name of the binary, for example:
-   ``/path/from/root/to/binary/name_of_gdb_binary`` This is to permit
-   the use of a ``gdb`` from a non-default location with a non-default name. If
-   not set ``gdb`` is assumed to reside at ``/usr/bin/gdb``.
+   Set the ``gdb`` binary for use in Numba's ``gdb`` support. This takes one of
+   two forms: 1) a path and full name of the binary to explicitly express
+   which binary to use 2) just the name of the binary and the current path will
+   be searched using the standard path resolution rules. For example:
+   ``/path/from/root/to/binary/name_of_gdb_binary`` or
+   ``custom_gdb_binary_name``. This is to permit the use of a ``gdb`` from a
+   non-default location with a non-default name. The default value is ``gdb``.
 
 .. envvar:: NUMBA_DEBUG_TYPEINFER
 
@@ -175,6 +186,14 @@ These variables influence what is printed out during compilation of
 
    If set to non-zero, trace certain function calls (function entry and exit
    events, including arguments and return values).
+
+.. envvar:: NUMBA_CHROME_TRACE
+
+   If defined, chrome tracing is enabled and this variable specifies the filepath
+   of the chrome tracing json file output. The emitted file can be opened by
+   a Chromium-based browser using the profile viewer at `chrome://tracing/`.
+
+   .. warning:: This feature is not supported in multi-process applications. 
 
 .. envvar:: NUMBA_DUMP_BYTECODE
 
@@ -485,10 +504,19 @@ GPU support
 
    When set to 1, the default stream is the per-thread default stream. When set
    to 0, the default stream is the legacy default stream. This defaults to 0,
-   for the legacy default stream. It may default to 1 in a future release of
-   Numba. See `Stream Synchronization Behavior
+   for the legacy default stream. See `Stream Synchronization Behavior
    <https://docs.nvidia.com/cuda/cuda-runtime-api/stream-sync-behavior.html>`_
    for an explanation of the legacy and per-thread default streams.
+
+   This variable only takes effect when using Numba's internal CUDA bindings;
+   when using the NVIDIA bindings, use the environment variable
+   ``CUDA_PYTHON_CUDA_PER_THREAD_DEFAULT_STREAM`` instead.
+
+   .. seealso::
+
+      The `Default Stream section
+      <https://nvidia.github.io/cuda-python/release/11.6.0-notes.html#default-stream>`_
+      in the NVIDIA Bindings documentation.
 
 .. envvar:: NUMBA_CUDA_LOW_OCCUPANCY_WARNINGS
 
@@ -513,6 +541,15 @@ GPU support
    instead of using its own ctypes binding. This defaults to 0 (off), as the
    NVIDIA binding is currently missing support for Per-Thread Default
    Streams and the profiler APIs.
+
+.. envvar:: NUMBA_CUDA_INCLUDE_PATH
+
+   The location of the CUDA include files. This is used when linking CUDA C/C++
+   sources to Python kernels, and needs to be correctly set for CUDA includes to
+   be available to linked C/C++ sources. On Linux, it defaults to
+   ``/usr/local/cuda/include``. On Windows, the default is
+   ``$env:CUDA_PATH\include``.
+
 
 Threading Control
 -----------------

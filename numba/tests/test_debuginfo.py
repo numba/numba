@@ -3,12 +3,16 @@ import inspect
 import re
 import numpy as np
 import math
-
-from numba.tests.support import TestCase, override_config, needs_subprocess
-from numba import jit, njit
-from numba.core import types, utils
-from numba.core.datamodel import default_manager
+from textwrap import dedent
 import unittest
+import warnings
+
+from numba.tests.support import (TestCase, override_config, needs_subprocess,
+                                 ignore_internal_warnings)
+from numba import jit, njit
+from numba.core import types
+from numba.core.datamodel import default_manager
+from numba.core.errors import NumbaDebugInfoWarning
 import llvmlite.binding as llvm
 
 #NOTE: These tests are potentially sensitive to changes in SSA or lowering
@@ -144,6 +148,31 @@ class TestDebugInfoEmission(TestCase):
                                     test_name=test_name,
                                     envvars=self._NUMBA_OPT_0_ENV)
 
+    def _get_metadata_map(self, metadata):
+        """Gets the map of DI label to md, e.g.
+        '!33' -> '!{!"branch_weights", i32 1, i32 99}'
+        """
+        metadata_definition_map = dict()
+        meta_definition_split = re.compile(r'(![0-9]+) = (.*)')
+        for line in metadata:
+            matched = meta_definition_split.match(line)
+            if matched:
+                dbg_val, info = matched.groups()
+                metadata_definition_map[dbg_val] = info
+        return metadata_definition_map
+
+    def _get_lines_from_debuginfo(self, metadata):
+        # Get the lines contained in the debug info
+        md_def_map = self._get_metadata_map(metadata)
+
+        lines = set()
+        for md in md_def_map.values():
+            m = re.match(r"!DILocation\(line: (\d+),", md)
+            if m:
+                ln = int(m.group(1))
+                lines.add(ln)
+        return lines
+
     def test_DW_LANG(self):
 
         @njit(debug=True)
@@ -236,13 +265,7 @@ class TestDebugInfoEmission(TestCase):
         pysrc, pysrc_line_start = inspect.getsourcelines(foo)
 
         # build a map of dbg reference to DI* information
-        metadata_definition_map = dict()
-        meta_definition_split = re.compile(r'(![0-9]+) = (.*)')
-        for line in metadata:
-            matched = meta_definition_split.match(line)
-            if matched:
-                dbg_val, info = matched.groups()
-                metadata_definition_map[dbg_val] = info
+        metadata_definition_map = self._get_metadata_map(metadata)
 
         # Pull out metadata entries referred to by the llvm line end !dbg
         # check they match the python source, the +2 is for the @njit decorator
@@ -270,9 +293,10 @@ class TestDebugInfoEmission(TestCase):
                 groups = matched.groups()
                 self.assertEqual(len(groups), 1)
                 dbg_line = int(groups[0])
-                # +1 for the decorator on Python 3.8+, `inspect` changed, also
-                # recall that Numba's DWARF refers to the "def" line
-                defline = pysrc_line_start + (utils.PYVERSION >= (3, 8))
+                # +1 for the decorator.
+                # Recall that Numba's DWARF refers to the "def" line, but
+                # `inspect` uses the decorator as the first line.
+                defline = pysrc_line_start + 1
                 self.assertEqual(dbg_line, defline)
                 break
         else:
@@ -482,13 +506,7 @@ class TestDebugInfoEmission(TestCase):
                 return a
 
             metadata = self._get_metadata(foo, sig=())
-            metadata_definition_map = dict()
-            meta_definition_split = re.compile(r'(![0-9]+) = (.*)')
-            for line in metadata:
-                matched = meta_definition_split.match(line)
-                if matched:
-                    dbg_val, info = matched.groups()
-                    metadata_definition_map[dbg_val] = info
+            metadata_definition_map = self._get_metadata_map(metadata)
 
             for k, v in metadata_definition_map.items():
                 if 'DILocalVariable(name: "a"' in v:
@@ -523,13 +541,7 @@ class TestDebugInfoEmission(TestCase):
             return a
 
         metadata = self._get_metadata(foo, sig=())
-        metadata_definition_map = dict()
-        meta_definition_split = re.compile(r'(![0-9]+) = (.*)')
-        for line in metadata:
-            matched = meta_definition_split.match(line)
-            if matched:
-                dbg_val, info = matched.groups()
-                metadata_definition_map[dbg_val] = info
+        metadata_definition_map = self._get_metadata_map(metadata)
 
         for k, v in metadata_definition_map.items():
             if 'DILocalVariable(name: "a"' in v:
@@ -594,6 +606,161 @@ class TestDebugInfoEmission(TestCase):
             base_type_marker = base_type_matches[0]
             data_type = metadata_definition_map[base_type_marker]
             self.assertRegex(data_type, expected[field])
+
+    def test_debug_optnone(self):
+        def get_debug_lines(fn):
+            metadata = self._get_metadata(fn, fn.signatures[0])
+            lines = self._get_lines_from_debuginfo(metadata)
+            return lines
+
+        def get_func_attrs(fn):
+            cres = fn.overloads[fn.signatures[0]]
+            lib = cres.library
+            fn = lib._final_module.get_function(cres.fndesc.mangled_name)
+            attrs = set(b' '.join(fn.attributes).split())
+            return attrs
+
+        def foo():
+            n = 10
+            c = 0
+            for i in range(n):
+                c += i
+            return c
+
+        foo_debug = njit(debug=True)(foo)
+        foo_debug_optnone = njit(debug=True, _dbg_optnone=True)(foo)
+        foo_debug_optnone_inline = njit(debug=True, _dbg_optnone=True,
+                                        forceinline=True)(foo)
+
+        firstline = foo.__code__.co_firstlineno
+
+        expected_info = {}
+        expected_info[foo_debug] = dict(
+            # just the dummy line-0 and the line of the return statement
+            lines={0, firstline + 5},
+            must_have_attrs=set(),
+            must_not_have_attrs=set([b"optnone"]),
+        )
+        expected_info[foo_debug_optnone] = dict(
+            # all the lines should be included
+            lines=set(range(firstline + 1, firstline + 6)),
+            must_have_attrs=set([b"optnone"]),
+            must_not_have_attrs=set(),
+        )
+        expected_info[foo_debug_optnone_inline] = dict(
+            # optnone=True is overridden by forceinline, so this looks like the
+            # foo_debug version
+            lines={0, firstline + 5},
+            must_have_attrs=set([b"alwaysinline"]),
+            must_not_have_attrs=set([b"optnone"]),
+        )
+
+        expected_ret = foo()
+
+        for udt, expected in expected_info.items():
+            with self.subTest(udt.targetoptions):
+                got = udt()
+                self.assertEqual(got, expected_ret)
+
+                # Compare the line locations in the debug info.
+                self.assertEqual(get_debug_lines(udt), expected["lines"])
+
+                # Check for attributes on the LLVM function
+                attrs = get_func_attrs(udt)
+                must_have = expected["must_have_attrs"]
+                self.assertEqual(attrs & must_have, must_have)
+                must_not_have = expected["must_not_have_attrs"]
+                self.assertFalse(attrs & must_not_have)
+
+    def test_omitted_arg(self):
+        # See issue 7726
+        @njit(debug=True)
+        def foo(missing=None):
+            pass
+
+        # check that it will actually compile (verifies DI emission is ok)
+        with override_config('DEBUGINFO_DEFAULT', 1):
+            foo()
+
+        metadata = self._get_metadata(foo, sig=(types.Omitted(None),))
+        metadata_definition_map = self._get_metadata_map(metadata)
+
+        # Find DISubroutineType
+        tmp_disubr = []
+        for md in metadata:
+            if "DISubroutineType" in md:
+                tmp_disubr.append(md)
+        self.assertEqual(len(tmp_disubr), 1)
+        disubr = tmp_disubr.pop()
+
+        disubr_matched = re.match(r'.*!DISubroutineType\(types: ([!0-9]+)\)$',
+                                  disubr)
+        self.assertIsNotNone(disubr_matched)
+        disubr_groups = disubr_matched.groups()
+        self.assertEqual(len(disubr_groups), 1)
+        disubr_meta = disubr_groups[0]
+
+        # Find the types in the DISubroutineType arg list
+        disubr_types = metadata_definition_map[disubr_meta]
+        disubr_types_matched = re.match(r'!{(.*)}', disubr_types)
+        self.assertIsNotNone(disubr_matched)
+        disubr_types_groups = disubr_types_matched.groups()
+        self.assertEqual(len(disubr_types_groups), 1)
+
+        # fetch out and assert the last argument type, should be void *
+        md_fn_arg = [x.strip() for x in disubr_types_groups[0].split(',')][-1]
+        arg_ty = metadata_definition_map[md_fn_arg]
+        expected_arg_ty = (r'^.*!DICompositeType\(tag: DW_TAG_structure_type, '
+                           r'name: "Anonymous struct \({}\)", elements: '
+                           r'(![0-9]+), identifier: "{}"\)')
+        self.assertRegex(arg_ty, expected_arg_ty)
+        md_base_ty = re.match(expected_arg_ty, arg_ty).groups()[0]
+        base_ty = metadata_definition_map[md_base_ty]
+        # expect ir.LiteralStructType([])
+        self.assertEqual(base_ty, ('!{}'))
+
+    def test_missing_source(self):
+        strsrc = """
+        def foo():
+            return 1
+        """
+        l = dict()
+        exec(dedent(strsrc), {}, l)
+        foo = njit(debug=True)(l['foo'])
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', NumbaDebugInfoWarning)
+            ignore_internal_warnings()
+            foo()
+
+        self.assertEqual(len(w), 1)
+        found = w[0]
+        self.assertEqual(found.category, NumbaDebugInfoWarning)
+        msg = str(found.message)
+        # make sure the warning contains the right message
+        self.assertIn('Could not find source for function', msg)
+        # and refers to the offending function
+        self.assertIn(str(foo.py_func), msg)
+
+    def test_irregularly_indented_source(self):
+
+        @njit(debug=True)
+        def foo():
+# NOTE: THIS COMMENT MUST START AT COLUMN 0 FOR THIS SAMPLE CODE TO BE VALID # noqa: E115, E501
+            return 1
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', NumbaDebugInfoWarning)
+            ignore_internal_warnings()
+            foo()
+
+        # No warnings
+        self.assertEqual(len(w), 0)
+
+        metadata = self._get_metadata(foo, foo.signatures[0])
+        lines = self._get_lines_from_debuginfo(metadata)
+        # Only one line
+        self.assertEqual(len(lines), 1)
 
 
 if __name__ == '__main__':

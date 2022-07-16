@@ -88,7 +88,7 @@ else:
 DEFAULT_PROTOCOL = pickle.HIGHEST_PROTOCOL
 
 # Track the provenance of reconstructed dynamic classes to make it possible to
-# recontruct instances from the matching singleton class definition when
+# reconstruct instances from the matching singleton class definition when
 # appropriate and preserve the usual "isinstance" semantics of Python objects.
 _DYNAMIC_CLASS_TRACKER_BY_CLASS = weakref.WeakKeyDictionary()
 _DYNAMIC_CLASS_TRACKER_BY_ID = weakref.WeakValueDictionary()
@@ -242,7 +242,7 @@ def _extract_code_globals(co):
         out_names = {names[oparg] for _, oparg in _walk_global_ops(co)}
 
         # Declaring a function inside another one using the "def ..."
-        # syntax generates a constant code object corresonding to the one
+        # syntax generates a constant code object corresponding to one
         # of the nested function's As the nested function may itself need
         # global variables, we need to introspect its code, extract its
         # globals, (look for code object in it's co_consts attribute..) and
@@ -486,7 +486,7 @@ else:
 
 
 def parametrized_type_hint_getinitargs(obj):
-    # The distorted type check sematic for typing construct becomes:
+    # The distorted type check semantic for typing construct becomes:
     # ``type(obj) is type(TypeHint)``, which means "obj is a
     # parametrized TypeHint"
     if type(obj) is type(Literal):  # pragma: no branch
