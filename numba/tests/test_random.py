@@ -752,6 +752,14 @@ class TestRandom(BaseTest):
         r = self._follow_numpy(get_np_state_ptr())
         self._check_dist(gumbel, r.gumbel, [(0.0, 1.0), (-1.5, 3.5)])
 
+    def test_numpy_gumbel_kwargs(self):
+        self._check_arbitrary_distrib_kwargs(jit_with_kwargs("np.random.gumbel", ['loc', 'scale']),
+                                             get_np_state_ptr(),
+                                             distrib="gumbel",
+                                             paramlist=[{'loc': 0.0, 'scale': 1.0},
+                                                        {'loc': -1.5, 'scale': 3.5}])
+
+
     def test_numpy_hypergeometric(self):
         # Our implementation follows Numpy's up to nsamples = 10.
         hg = jit_ternary("np.random.hypergeometric")
