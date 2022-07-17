@@ -248,6 +248,16 @@ class Numpy_gumbel(ConcreteRandomTemplate):
         return typer
 
 
+@glue_typing(np.random.wald, typing_key="np.random.wald")
+class Numpy_wald(ConcreteRandomTemplate):
+    cases = [signature(tp, tp, tp) for tp in _float_types]
+
+    def generic(self):
+        def typer(mean, scale, size=None):
+            return self.array_typer(size)(mean, scale)
+        return typer
+
+
 @glue_typing(np.random.triangular, typing_key="np.random.triangular")
 class Random_ternary_distribution(ConcreteRandomTemplate):
     cases = [signature(tp, tp, tp, tp) for tp in _float_types]
@@ -260,7 +270,6 @@ class Random_ternary_distribution(ConcreteRandomTemplate):
 @glue_typing(np.random.beta, typing_key="np.random.beta")
 @glue_typing(np.random.f, typing_key="np.random.f")
 @glue_typing(np.random.vonmises, typing_key="np.random.vonmises")
-@glue_typing(np.random.wald, typing_key="np.random.wald")
 @glue_typing(random.betavariate, typing_key="random.betavariate")
 @glue_typing(random.gammavariate, typing_key="random.gammavariate")
 @glue_typing(random.gauss, typing_key="random.gauss")
