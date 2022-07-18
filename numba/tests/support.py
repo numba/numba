@@ -558,7 +558,7 @@ class TestCase(unittest.TestCase):
             environment variable name (str) -> value (str)
         It is most convenient to use this method in conjunction with
         @needs_subprocess as the decorator will cause the decorated test to be
-        skipped unless the `SUBPROC_TEST` environment variable is set
+        skipped unless the `SUBPROC_TEST` environment variable is set to 1
         (this special environment variable is set by this method such that the
         specified test(s) will not be skipped in the subprocess).
 
@@ -586,16 +586,14 @@ class TestCase(unittest.TestCase):
         self.assertNotIn('FAIL', status.stderr)
         self.assertNotIn('ERROR', status.stderr)
 
-    def run_test_in_subprocess(*maybefunc, timeout=60, envvars=None):
+    def run_test_in_subprocess(maybefunc=None, timeout=60, envvars=None):
         """Runs the decorated test in a subprocess via invoking numba's test
         runner. kwargs timeout and envvars are passed through to
         subprocess_test_runner."""
-        if len(maybefunc) > 1:
-            raise ValueError("Too many args.")
         def wrapper(func):
             def inner(self, *args, **kwargs):
-                if "SUBPROC_TEST" not in os.environ:
-                    # Not in a subprocess, so stage the call to run the
+                if os.environ.get("SUBPROC_TEST", None) != "1":
+                    # Not in a subprocess test env, so stage the call to run the
                     # test in a subprocess which will set the env var.
                     class_name = self.__class__.__name__
                     self.subprocess_test_runner(test_module=self.__module__,
@@ -609,9 +607,8 @@ class TestCase(unittest.TestCase):
                     func(self)
             return inner
 
-        if maybefunc and isinstance(maybefunc[0], pytypes.FunctionType):
-            func = maybefunc[0]
-            return wrapper(func)
+        if isinstance(maybefunc, pytypes.FunctionType):
+            return wrapper(maybefunc)
         else:
             return wrapper
 
