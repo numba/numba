@@ -172,6 +172,12 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                        np.uint64, np.uint32, np.uint16, np.uint8]
         bitgen_types = [None, MT19937]
 
+        # Test with no arguments
+        dist_func = lambda x, size, dtype:x.integers(0, 100)
+        with self.subTest():
+            self.check_numpy_parity(dist_func, test_size=None,
+                                    test_dtype=None)
+
         dist_func = lambda x, size, dtype:\
             x.integers(5, 10, size=size, dtype=dtype)
         for _size in test_sizes:

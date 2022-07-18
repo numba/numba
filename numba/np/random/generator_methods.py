@@ -83,12 +83,12 @@ def check_types(obj, type_list, arg_name):
 
 # Overload the Generator().integers()
 @overload_method(types.NumPyRandomGeneratorType, 'integers')
-def NumPyRandomGeneratorType_integers(inst, low, high=None, size=None,
+def NumPyRandomGeneratorType_integers(inst, low, high, size=None,
                                       dtype=np.int64, endpoint=False):
     check_types(low, [types.Integer,
                       types.Boolean, bool, int], 'low')
     check_types(high, [types.Integer, types.Boolean,
-                       bool, int, type(None)], 'high')
+                       bool, int], 'high')
     check_types(endpoint, [types.Boolean, bool], 'endpoint')
 
     if isinstance(size, types.Omitted):
@@ -97,13 +97,18 @@ def NumPyRandomGeneratorType_integers(inst, low, high=None, size=None,
     if isinstance(dtype, types.Omitted):
         dtype = dtype.value
 
-    if not isinstance(dtype, types.Type):
-        dt = np.dtype(dtype)
-        nb_dt = from_dtype(dt)
+    if isinstance(dtype, type):
+        nb_dt = from_dtype(np.dtype(dtype))
         _dtype = dtype
-    else:
+    elif isinstance(dtype, types.NumberClass):
         nb_dt = dtype
         _dtype = as_dtype(nb_dt)
+    else:
+        raise TypingError("Argument dtype is not one of the" +
+                          " expected type(s): " +
+                          "np.int32, np.int64, np.int16, np.int8, "
+                          "np.uint32, np.uint64, np.uint16, np.uint8, "
+                          "np.bool_")
 
     if _dtype == np.bool_:
         int_func = random_methods.random_bounded_bool_fill
@@ -112,23 +117,20 @@ def NumPyRandomGeneratorType_integers(inst, low, high=None, size=None,
     else:
         try:
             i_info = np.iinfo(_dtype)
-            int_func = getattr(random_methods,
-                               f'random_bounded_uint{i_info.bits}_fill')
-            lower_bound = i_info.min
-            upper_bound = i_info.max
         except ValueError:
             raise TypingError("Argument dtype is not one of the" +
                               " expected type(s): " +
                               "np.int32, np.int64, np.int16, np.int8, "
                               "np.uint32, np.uint64, np.uint16, np.uint8, "
                               "np.bool_")
+        int_func = getattr(random_methods,
+                           f'random_bounded_uint{i_info.bits}_fill')
+        lower_bound = i_info.min
+        upper_bound = i_info.max
 
     if is_nonelike(size):
-        def impl(inst, low, high=None, size=None,
+        def impl(inst, low, high, size=None,
                  dtype=np.int64, endpoint=False):
-            if high is None:
-                high = dtype(low)
-                low = dtype(0)
             if not endpoint:
                 high -= dtype(1)
             low = dtype(low)
@@ -142,11 +144,8 @@ def NumPyRandomGeneratorType_integers(inst, low, high=None, size=None,
     else:
         check_size(size)
 
-        def impl(inst, low, high=None, size=None,
+        def impl(inst, low, high, size=None,
                  dtype=np.int64, endpoint=False):
-            if high is None:
-                high = dtype(low)
-                low = dtype(0)
             if not endpoint:
                 high -= dtype(1)
             low = dtype(low)
