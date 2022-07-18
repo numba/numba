@@ -997,8 +997,14 @@ class TestRandomArrays(BaseTest):
     def test_numpy_exponential(self):
         self._check_array_dist("exponential", (1.5,))
 
+    def test_numpy_gamma(self):
+        self._check_array_dist("gamma", (2.0, 1.0))
+
     def test_numpy_gumbel(self):
         self._check_array_dist("gumbel", (1.5, 0.5))
+
+    def test_numpy_hypergeometric(self):
+        self._check_array_dist("hypergeometric", (1000, 5000, 10))
 
     def test_numpy_laplace(self):
         self._check_array_dist("laplace", (1.5, 0.5))
@@ -1041,6 +1047,9 @@ class TestRandomArrays(BaseTest):
 
     def test_numpy_standard_exponential(self):
         self._check_array_dist("standard_exponential", ())
+
+    def test_numpy_standard_gamma(self):
+        self._check_array_dist("standard_gamma", (2.0,))
 
     def test_numpy_standard_normal(self):
         self._check_array_dist("standard_normal", ())
