@@ -86,7 +86,7 @@ def get_array_index_type(ary, idx):
             # Advanced indexing limitation # 2
             msg = "Using more than one non-scalar array index is unsupported."
             raise NumbaTypeError(msg)
-        
+
         if num_subspaces > 1:
             # Advanced indexing limitation # 3
             msg = ("Using more than one indexing subspace (consecutive group "
