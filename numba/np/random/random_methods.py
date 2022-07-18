@@ -165,12 +165,12 @@ def buffered_bounded_lemire_uint32(bitgen, rng):
     Generates a random unsigned 32 bit integer bounded
     within a given interval using Lemire's rejection.
     """
-    rng_excl = rng + 1
+    rng_excl = rng + uint32(1)
 
     assert(rng != 0xFFFFFFFF)
 
     # Generate a scaled random number.
-    m = uint64(next_uint32(bitgen) * rng_excl)
+    m = uint64(next_uint32(bitgen)) * uint64(rng_excl)
 
     # Rejection sampling to remove any bias
     leftover = m & 0xFFFFFFFF
@@ -180,7 +180,7 @@ def buffered_bounded_lemire_uint32(bitgen, rng):
         threshold = (UINT32_MAX - rng) % rng_excl
 
         while (leftover < threshold):
-            m = uint64(next_uint32(bitgen) * rng_excl)
+            m = uint64(next_uint32(bitgen)) * uint64(rng_excl)
             leftover = m & 0xFFFFFFFF
 
     return (m >> 32)

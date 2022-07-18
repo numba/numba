@@ -226,6 +226,13 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         self.check_numpy_parity(dist_func, None,
                                 None, size, np.uint64)
 
+        # rng == 0xFFFFFFFFFFFFFFFF - 1
+        dist_func = lambda x, size, dtype:\
+            x.integers(0, 0xFFFFFFFFFFFFFFFF - 1, size=size,
+                       dtype=np.uint64, endpoint=True)
+        self.check_numpy_parity(dist_func, None,
+                                None, size, np.uint64)
+
         # rng == 0xFFFFFFFFFFFFFFFF
         dist_func = lambda x, size, dtype:\
             x.integers(0, 0xFFFFFFFFFFFFFFFF, size=size,
@@ -245,6 +252,13 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         # rng < 0xFFFFFFFF
         dist_func = lambda x, size, dtype:\
             x.integers(5, 100, size=size, dtype=np.uint32)
+        self.check_numpy_parity(dist_func, None,
+                                None, size, np.uint32)
+
+        # rng == 0xFFFFFFFF - 1
+        dist_func = lambda x, size, dtype:\
+            x.integers(0, 0xFFFFFFFF - 1, size=size,
+                       dtype=np.uint32, endpoint=True)
         self.check_numpy_parity(dist_func, None,
                                 None, size, np.uint32)
 
@@ -270,6 +284,13 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         self.check_numpy_parity(dist_func, None,
                                 None, size, np.uint16)
 
+        # rng == 0xFFFF - 1
+        dist_func = lambda x, size, dtype:\
+            x.integers(0, 0xFFFF - 1, size=size,
+                       dtype=np.uint16, endpoint=True)
+        self.check_numpy_parity(dist_func, None,
+                                None, size, np.uint16)
+
         # rng == 0xFFFF
         dist_func = lambda x, size, dtype:\
             x.integers(0, 0xFFFF, size=size,
@@ -289,6 +310,13 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         # rng < 0xFF
         dist_func = lambda x, size, dtype:\
             x.integers(5, 10, size=size, dtype=np.uint8)
+        self.check_numpy_parity(dist_func, None,
+                                None, size, np.uint8)
+
+        # rng == 0xFF - 1
+        dist_func = lambda x, size, dtype:\
+            x.integers(0, 0xFF - 1, size=size,
+                       dtype=np.uint8, endpoint=True)
         self.check_numpy_parity(dist_func, None,
                                 None, size, np.uint8)
 
