@@ -282,7 +282,7 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
 
         def np_take_kws(array, indices, axis):
             return np.take(array, indices, axis=axis)
-    
+
         # check unsupported arg raises
         with self.assertRaises(TypingError):
             take_kws = njit(np_take_kws)
