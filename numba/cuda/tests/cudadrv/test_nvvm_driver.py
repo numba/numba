@@ -28,6 +28,7 @@ class TestNvvmDriver(unittest.TestCase):
 
     def test_nvvm_from_llvm(self):
         m = ir.Module("test_nvvm_from_llvm")
+        m.triple = 'nvptx64-nvidia-cuda'
         fty = ir.FunctionType(ir.VoidType(), [ir.IntType(32)])
         kernel = ir.Function(m, fty, name='mycudakernel')
         bldr = ir.IRBuilder(kernel.append_basic_block('entry'))
@@ -96,7 +97,7 @@ class TestLibDevice(unittest.TestCase):
 
 
 nvvmir_generic = '''\
-target triple="nvptx64-"
+target triple="nvptx64-nvidia-cuda"
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64"
 
 define i32 @ave(i32 %a, i32 %b) {

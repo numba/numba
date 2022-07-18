@@ -113,6 +113,10 @@ class NVVM(object):
         #                           int* minorDbg )
         'nvvmIRVersion': (nvvm_result, POINTER(c_int), POINTER(c_int),
                           POINTER(c_int), POINTER(c_int)),
+        # nvvmResult nvvmVerifyProgram (nvvmProgram prog, int numOptions,
+        #                               const char** options)
+        'nvvmVerifyProgram': (nvvm_result, nvvm_program, c_int,
+                              POINTER(c_char_p))
     }
 
     # Singleton reference
@@ -278,9 +282,13 @@ class CompilationUnit(object):
             optstr = ', '.join(map(repr, options.keys()))
             raise NvvmError("unsupported option {0}".format(optstr))
 
-        # compile
         c_opts = (c_char_p * len(opts))(*[c_char_p(x.encode('utf8'))
                                           for x in opts])
+        # verify
+        err = self.driver.nvvmVerifyProgram(self._handle, len(opts), c_opts)
+        self._try_error(err, 'Failed to verify\n')
+
+        # compile
         err = self.driver.nvvmCompileProgram(self._handle, len(opts), c_opts)
         self._try_error(err, 'Failed to compile\n')
 
