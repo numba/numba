@@ -6,7 +6,6 @@ Implementation of math operations on Array objects.
 import math
 from collections import namedtuple
 from enum import IntEnum
-from functools import partial
 import operator
 import warnings
 
@@ -3148,7 +3147,6 @@ def ov_np_angle(z, deg=False):
 
 @lower_builtin(np.nonzero, types.Array)
 @lower_builtin("array.nonzero", types.Array)
-@glue_lowering(np.where, types.Array)
 def array_nonzero(context, builder, sig, args):
     aryty = sig.args[0]
     # Return type is a N-tuple of 1D C-contiguous arrays
@@ -3242,83 +3240,102 @@ def array_where(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
+def _where_cond_none_none(condition, x=None, y=None):
+    return np.asarray(condition).nonzero()
+
+
+def _where_zero_size_array_impl(dtype):
+    def impl(condition, x=None, y=None):
+        x_ = np.asarray(x).astype(dtype)
+        y_ = np.asarray(y).astype(dtype)
+        return x_ if condition else y_
+    return impl
+
+
 @register_jitable
-def _where_x_y_scalar(cond, x, y, res):
+def _where_generic_inner_impl(cond, x, y, res):
     for idx, c in np.ndenumerate(cond):
-        res[idx] = x if c else y
+        res[idx] = x[idx] if c else y[idx]
     return res
 
 
 @register_jitable
-def _where_x_scalar(cond, x, y, res):
-    for idx, c in np.ndenumerate(cond):
-        res[idx] = x if c else y[idx]
+def _where_fast_inner_impl(cond, x, y, res):
+    cf = cond.flat
+    xf = x.flat
+    yf = y.flat
+    rf = res.flat
+    for i in range(cond.size):
+        rf[i] = xf[i] if cf[i] else yf[i]
     return res
 
 
-@register_jitable
-def _where_y_scalar(cond, x, y, res):
-    for idx, c in np.ndenumerate(cond):
-        res[idx] = x[idx] if c else y
-    return res
+def _where_generic_impl(dtype, layout):
+    use_faster_impl = layout in [{'C'}, {'F'}]
+
+    def impl(condition, x=None, y=None):
+        cond1, x1, y1 = np.asarray(condition), np.asarray(x), np.asarray(y)
+        shape = np.broadcast_shapes(cond1.shape, x1.shape, y1.shape)
+        cond_ = np.broadcast_to(cond1, shape)
+        x_ = np.broadcast_to(x1, shape)
+        y_ = np.broadcast_to(y1, shape)
+        res = np.empty(shape, dtype=dtype)
+        if layout == 'F':
+            res = np.asfortranarray(res)
+        if use_faster_impl:
+            return _where_fast_inner_impl(cond_, x_, y_, res)
+        else:
+            return _where_generic_inner_impl(cond_, x_, y_, res)
+
+    return impl
 
 
-def _where_inner(context, builder, sig, args, impl):
-    cond, x, y = sig.args
+@overload(np.where)
+def ov_np_where(condition, x=None, y=None):
+    if not type_can_asarray(condition):
+        msg = 'The argument "condition" must be array-like'
+        raise NumbaTypeError(msg)
 
-    x_dt = determine_dtype(x)
-    y_dt = determine_dtype(y)
-    npty = np.promote_types(x_dt, y_dt)
+    if is_nonelike(x) ^ is_nonelike(y):
+        msg = 'Arguments "x" and "y" must not be None if either one is provided'
+        raise NumbaTypeError(msg)
 
-    if cond.layout == 'F':
-        def where_impl(cond, x, y):
-            res = np.asfortranarray(np.empty(cond.shape, dtype=npty))
-            return impl(cond, x, y, res)
+    for arg, name in zip((x, y), ('x', 'y')):
+        if not is_nonelike(arg) and not type_can_asarray(arg):
+            msg = 'The argument "{}" must be array-like if provided'
+            raise NumbaTypeError(msg.format(name))
+
+    if is_nonelike(x) and is_nonelike(y):
+        return _where_cond_none_none
+
+    c_arr = isinstance(condition, types.Array)
+    x_arr = isinstance(x, types.Array)
+    y_arr = isinstance(y, types.Array)
+
+    if c_arr:
+        x_dt = determine_dtype(x)
+        y_dt = determine_dtype(y)
+        dtype = np.promote_types(x_dt, y_dt)
+
+        # corner case - 0 dim values
+        def check_0_dim(arg):
+            return isinstance(arg, types.Number) or (
+                isinstance(arg, types.Array) and arg.ndim == 0)
+        special_0_case = all([check_0_dim(a) for a in (condition, x, y)])
+        if special_0_case:
+            return _where_zero_size_array_impl(dtype)
+
+        layout = condition.layout
+        if x_arr and y_arr:
+            if x.layout == y.layout == condition.layout:
+                layout = x.layout
+            else:
+                layout = 'C'
+        return _where_generic_impl(dtype, layout)
     else:
-        def where_impl(cond, x, y):
-            res = np.empty(cond.shape, dtype=npty)
-            return impl(cond, x, y, res)
-
-    res = context.compile_internal(builder, where_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-array_scalar_scalar_where = partial(_where_inner, impl=_where_x_y_scalar)
-array_array_scalar_where = partial(_where_inner, impl=_where_y_scalar)
-array_scalar_array_where = partial(_where_inner, impl=_where_x_scalar)
-
-
-@glue_lowering(np.where, types.Any, types.Any, types.Any)
-def any_where(context, builder, sig, args):
-    cond, x, y = sig.args
-
-    if isinstance(cond, types.Array):
-        if isinstance(x, types.Array):
-            if isinstance(y, types.Array):
-                impl = array_where
-            elif isinstance(y, (types.Number, types.Boolean)):
-                impl = array_array_scalar_where
-        elif isinstance(x, (types.Number, types.Boolean)):
-            if isinstance(y, types.Array):
-                impl = array_scalar_array_where
-            elif isinstance(y, (types.Number, types.Boolean)):
-                impl = array_scalar_scalar_where
-
-        return impl(context, builder, sig, args)
-
-    def scalar_where_impl(cond, x, y):
-        """
-        np.where(scalar, scalar, scalar): return a 0-dim array
-        """
-        scal = x if cond else y
-        # This is the equivalent of np.full_like(scal, scal),
-        # for compatibility with Numpy < 1.8
-        arr = np.empty_like(scal)
-        arr[()] = scal
-        return arr
-
-    res = context.compile_internal(builder, scalar_where_impl, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
+        def impl(condition, x=None, y=None):
+            return np.where(np.asarray(condition), np.asarray(x), np.asarray(y))
+        return impl
 
 
 @overload(np.real)
