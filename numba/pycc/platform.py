@@ -9,7 +9,7 @@ import functools
 import os
 import subprocess
 import sys
-from tempfile import NamedTemporaryFile, mkdtemp, gettempdir
+from tempfile import mkdtemp
 from contextlib import contextmanager
 from pathlib import Path
 
