@@ -806,6 +806,18 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             got = cfunc(input_array, shape)
             self.assertPreciseEqual(got, expected)
 
+    def test_broadcast_to_0d_array(self):
+        pyfunc = numpy_broadcast_to
+        cfunc = jit(nopython=True)(pyfunc)
+
+        arr = np.array(123)
+        shape = ()
+        expected = pyfunc(arr, shape)
+        got = cfunc(arr, shape)
+        self.assertPreciseEqual(expected, got)
+        # ensure that np.broadcast_to returned a read-only array
+        self.assertFalse(got.flags['WRITEABLE'])
+
     def test_broadcast_to_raises(self):
         pyfunc = numpy_broadcast_to
         cfunc = jit(nopython=True)(pyfunc)
@@ -814,11 +826,11 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         # https://github.com/numpy/numpy/blob/75f852edf94a7293e7982ad516bee314d7187c2d/numpy/lib/tests/test_stride_tricks.py#L260-L276  # noqa: E501
         data = [
             [np.zeros((0,)), (), TypingError,
-             'The argument "shape" must be a tuple or an integer.'],
+             'cannot broadcast a non-scalar to a scalar array'],
             [np.zeros((1,)), (), TypingError,
-             'The argument "shape" must be a tuple or an integer.'],
+             'cannot broadcast a non-scalar to a scalar array'],
             [np.zeros((3,)), (), TypingError,
-             'The argument "shape" must be a tuple or an integer.'],
+             'cannot broadcast a non-scalar to a scalar array'],
             [np.zeros((3,)), (1,), ValueError,
              'operands could not be broadcast together with remapped shapes'],
             [np.zeros((3,)), (2,), ValueError,

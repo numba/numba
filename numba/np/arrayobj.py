@@ -1339,6 +1339,26 @@ def _numpy_broadcast_to(typingctx, array, shape):
     return sig, codegen
 
 
+@intrinsic
+def get_readonly_array(typingctx, arr):
+    # returns a copy of arr which is readonly
+    ret = arr.copy(readonly=True)
+    sig = ret(arr)
+
+    def codegen(context, builder, sig, args):
+        [src] = args
+        srcty = sig.args[0]
+
+        dest = make_array(srcty)(context, builder, src)
+        # Hack to return a read-only array
+        setattr(dest, 'parent', Constant(
+                context.get_value_type(dest._datamodel.get_type('parent')),
+                None))
+        res = dest._getvalue()
+        return impl_ret_borrowed(context, builder, sig.return_type, res)
+    return sig, codegen
+
+
 @register_jitable
 def _can_broadcast(array, dest_shape):
     src_shape = array.shape
@@ -1389,6 +1409,14 @@ def numpy_broadcast_to(array, shape):
     elif isinstance(shape, types.Integer):
         def impl(array, shape):
             return np.broadcast_to(array, (shape,))
+    elif isinstance(shape, types.Tuple):
+        if array.ndim == 0:
+            # broadcast_to(0d_array, )
+            def impl(array, shape):
+                return get_readonly_array(array)
+        else:
+            msg = 'cannot broadcast a non-scalar to a scalar array'
+            raise errors.TypingError(msg)
     else:
         msg = ('The argument "shape" must be a tuple or an integer. '
                'Got %s' % shape)
