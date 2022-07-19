@@ -20,13 +20,13 @@ from numba.np.numpy_support import (as_dtype, type_can_asarray, type_is_scalar,
 from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
                                  impl_ret_new_ref, impl_ret_untracked)
 from numba.np.arrayobj import make_array, load_item, store_item, _empty_nd_impl
+from numba.np.arrayobj import __broadcast_shapes
 from numba.np.linalg import ensure_blas
 
 from numba.core.extending import intrinsic
 from numba.core.errors import (RequireLiteralValue, TypingError,
                                NumbaValueError, NumbaNotImplementedError,
                                NumbaTypeError, NumbaDeprecationWarning)
-from numba.core.overload_glue import glue_lowering
 from numba.cpython.unsafe.tuple import tuple_setitem
 
 
@@ -3275,7 +3275,7 @@ def _where_generic_impl(dtype, layout):
 
     def impl(condition, x=None, y=None):
         cond1, x1, y1 = np.asarray(condition), np.asarray(x), np.asarray(y)
-        shape = np.broadcast_shapes(cond1.shape, x1.shape, y1.shape)
+        shape = __broadcast_shapes(cond1.shape, x1.shape, y1.shape)
         cond_ = np.broadcast_to(cond1, shape)
         x_ = np.broadcast_to(x1, shape)
         y_ = np.broadcast_to(y1, shape)
@@ -3308,11 +3308,11 @@ def ov_np_where(condition, x=None, y=None):
     if is_nonelike(x) and is_nonelike(y):
         return _where_cond_none_none
 
-    c_arr = isinstance(condition, types.Array)
+    cond_arr = isinstance(condition, types.Array)
     x_arr = isinstance(x, types.Array)
     y_arr = isinstance(y, types.Array)
 
-    if c_arr:
+    if cond_arr:
         x_dt = determine_dtype(x)
         y_dt = determine_dtype(y)
         dtype = np.promote_types(x_dt, y_dt)

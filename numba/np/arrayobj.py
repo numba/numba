@@ -1502,6 +1502,16 @@ if numpy_version >= (1, 20):
     overload(np.broadcast_shapes)(ol_numpy_broadcast_shapes)
 
 
+def __broadcast_shapes(*args):
+    pass
+
+
+# np.broadcast_shapes is only available on NumPy >= 1.20
+# this quick hack allow us to use np.broadcast_shapes internally without
+# having to check if it exists in the NumPy module
+overload(__broadcast_shapes)(ol_numpy_broadcast_shapes)
+
+
 @overload(np.broadcast_arrays)
 def numpy_broadcast_arrays(*args):
 
