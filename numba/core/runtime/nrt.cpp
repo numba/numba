@@ -90,6 +90,14 @@ extern "C" void NRT_MemSys_enable_stats(void) {
     TheMSys.stats.enabled = true;
 }
 
+extern "C" void NRT_MemSys_disable_stats(void) {
+    TheMSys.stats.enabled = false;
+}
+
+extern "C" size_t NRT_MemSys_stats_enabled(void) {
+    return (size_t)TheMSys.stats.enabled;
+}
+
 extern "C" void NRT_MemSys_set_allocator(NRT_malloc_func malloc_func,
                               NRT_realloc_func realloc_func,
                               NRT_free_func free_func)

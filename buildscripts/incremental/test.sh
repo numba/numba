@@ -25,9 +25,6 @@ export PYTHONFAULTHANDLER=1
 
 # enable new style error handling
 export NUMBA_CAPTURED_ERRORS="new_style"
-# switch on NRT stats
-export NUMBA_NRT_STATS=1
-
 
 # Disable NumPy dispatching to AVX512_SKX feature extensions if the chip is
 # reported to support the feature and NumPy >= 1.22 as this results in the use

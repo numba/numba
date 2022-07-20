@@ -40,6 +40,7 @@ import unittest
 from numba.core.runtime import rtsys
 from numba.np import numpy_support
 from numba.pycc.platform import _external_compiler_ok
+from numba.core.runtime import _nrt_python as _nrt
 
 
 try:
@@ -203,6 +204,17 @@ class CompilationCache(object):
 
 
 class TestCase(unittest.TestCase):
+
+    # Ensure that the tests in the test suite always have the stats counters
+    # running so that e.g. the SerialMixin and any queries from tests to the
+    # stats counters "just work", this being the default since inception.
+    @classmethod
+    def setUpClass(self):
+        _nrt.memsys_enable_stats()
+
+    @classmethod
+    def tearDownClass(self):
+        _nrt.memsys_disable_stats()
 
     longMessage = True
 
