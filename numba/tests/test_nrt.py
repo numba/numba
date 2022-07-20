@@ -776,9 +776,11 @@ class TestNrtStatistics(TestCase):
             tmp = np.ones(3)
             return np.arange(5 * tmp[0])
 
-        # To make sure that the "initial" state is not accidentally "off" and
-        # the disabling has no effect, run this twice, toggles will have to
-        # happen.
+        # Switch on stats
+        _nrt_python.memsys_enable_stats()
+        # check the stats are on
+        self.assertTrue(_nrt_python.memsys_stats_enabled())
+
         for i in range(2):
             # capture the stats state
             stats_1 = rtsys.get_allocation_stats()

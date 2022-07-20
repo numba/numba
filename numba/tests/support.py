@@ -205,17 +205,6 @@ class CompilationCache(object):
 
 class TestCase(unittest.TestCase):
 
-    # Ensure that the tests in the test suite always have the stats counters
-    # running so that e.g. the SerialMixin and any queries from tests to the
-    # stats counters "just work", this being the default since inception.
-    @classmethod
-    def setUpClass(self):
-        _nrt.memsys_enable_stats()
-
-    @classmethod
-    def tearDownClass(self):
-        _nrt.memsys_disable_stats()
-
     longMessage = True
 
     # A random state yielding the same random numbers for any test case.
@@ -818,6 +807,7 @@ class MemoryLeak(object):
 class MemoryLeakMixin(MemoryLeak):
 
     def setUp(self):
+        _nrt.memsys_enable_stats()
         super(MemoryLeakMixin, self).setUp()
         self.memory_leak_setup()
 
@@ -825,6 +815,7 @@ class MemoryLeakMixin(MemoryLeak):
         super(MemoryLeakMixin, self).tearDown()
         gc.collect()
         self.memory_leak_teardown()
+        _nrt.memsys_disable_stats()
 
 
 @contextlib.contextmanager
