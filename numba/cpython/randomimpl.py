@@ -509,8 +509,8 @@ def triangular_impl_3(low, mode, high):
 @overload(np.random.triangular)
 def triangular_impl(low, high, mode, size):
     if isinstance(size, types.NoneType):
-        return lambda low, high, mode, _size: np.random.triangular(low, high,
-                                                                   mode)
+        return lambda low, high, mode, size: np.random.triangular(low, high,
+                                                                  mode)
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                             isinstance(size.dtype,
                                                        types.Integer))):
@@ -610,7 +610,7 @@ def _gammavariate_impl(_random):
 @overload(np.random.gamma)
 def gamma_impl(alpha, beta, size):
     if isinstance(size, types.NoneType):
-        return lambda alpha, beta, _size: np.random.gamma(alpha, beta)
+        return lambda alpha, beta, size: np.random.gamma(alpha, beta)
     if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                            isinstance(size.dtype,
                                                       types.Integer)):
@@ -626,7 +626,7 @@ def gamma_impl(alpha, beta, size):
 @overload(np.random.standard_gamma)
 def standard_gamma_impl(alpha, size):
     if isinstance(size, types.NoneType):
-        return lambda alpha, _size: np.random.standard_gamma(alpha)
+        return lambda alpha, size: np.random.standard_gamma(alpha)
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
                                             and isinstance(size.dtype,
                                                            types.Integer))):
@@ -668,7 +668,7 @@ def _betavariate_impl(gamma):
 @overload(np.random.beta)
 def beta_impl(alpha, beta, size):
     if isinstance(size, types.NoneType):
-        return lambda alpha, beta, _size: np.random.beta(alpha, beta)
+        return lambda alpha, beta, size: np.random.beta(alpha, beta)
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
                                             and isinstance(size.dtype,
                                                            types.Integer))):
@@ -708,7 +708,7 @@ def exponential_impl(scale):
 @overload(np.random.exponential)
 def exponential_impl(scale, size):
     if isinstance(size, types.NoneType):
-        return lambda scale, _size: np.random.exponential(scale)
+        return lambda scale, size: np.random.exponential(scale)
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                             isinstance(size.dtype,
                                                        types.Integer))):
@@ -732,7 +732,7 @@ def exponential_impl():
 @overload(np.random.standard_exponential)
 def standard_exponential_impl(size):
     if isinstance(size, types.NoneType):
-        return lambda _size: np.random.standard_exponential()
+        return lambda size: np.random.standard_exponential()
     if (isinstance(size, types.Integer) or
        (isinstance(size, types.UniTuple) and isinstance(size.dtype,
                                                         types.Integer))
@@ -766,7 +766,7 @@ def np_log_normal_impl2(mu, sigma):
 @overload(np.random.lognormal)
 def lognormal_impl(mu, sigma, size):
     if isinstance(size, types.NoneType):
-        return lambda mu, sigma, _size: np.random.lognormal(mu, sigma)
+        return lambda mu, sigma, size: np.random.lognormal(mu, sigma)
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                             isinstance(size.dtype,
                                                        types.Integer))):
@@ -815,7 +815,7 @@ def pareto_impl(alpha):
 @overload(np.random.pareto)
 def pareto_impl(alpha, size):
     if isinstance(size, types.NoneType):
-        return lambda alpha, _size: np.random.pareto(alpha)
+        return lambda alpha, size: np.random.pareto(alpha)
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                             isinstance(size.dtype,
                                                        types.Integer))):
@@ -854,7 +854,7 @@ def weibull_impl(beta):
 @overload(np.random.weibull)
 def weibull_impl2(beta, size):
     if isinstance(size, types.NoneType):
-        return lambda beta, _size: np.random.weibull(beta)
+        return lambda beta, size: np.random.weibull(beta)
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                             isinstance(size.dtype,
                                                        types.Integer))):
@@ -926,7 +926,7 @@ def _vonmisesvariate_impl(_random):
 @overload(np.random.vonmises)
 def vonmises_impl(mu, kappa, size):
     if isinstance(size, types.NoneType):
-        return lambda mu, kappa, _size: np.random.vonmises(mu, kappa)
+        return lambda mu, kappa, size: np.random.vonmises(mu, kappa)
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
                                             and isinstance(size.dtype,
                                                            types.Integer))):
@@ -998,7 +998,7 @@ def binomial_impl(n, p):
 @overload(np.random.binomial)
 def binomial_impl(n, p, size):
     if isinstance(size, types.NoneType):
-        return lambda n, p, _size: np.random.binomial(n, p)
+        return lambda n, p, size: np.random.binomial(n, p)
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                             isinstance(size.dtype,
                                                        types.Integer))):
@@ -1023,7 +1023,7 @@ def chisquare_impl(df):
 @overload(np.random.chisquare)
 def chisquare_impl2(p, size):
     if isinstance(size, types.NoneType):
-        return lambda p, _size: np.random.chisquare(p)
+        return lambda p, size: np.random.chisquare(p)
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                             isinstance(size.dtype,
                                                        types.Integer))):
@@ -1050,7 +1050,7 @@ def f_impl(num, denom):
 def f_impl(num, denom, size):
     if (isinstance(num, types.Number) and isinstance(denom, types.Number) and
        isinstance(size, types.NoneType)):
-        return lambda num, denom, _size: np.random.f(num, denom)
+        return lambda num, denom, size: np.random.f(num, denom)
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
                                             and isinstance(size.dtype,
                                                            types.Integer))):
@@ -1090,7 +1090,7 @@ def geometric_impl(p):
 @overload(np.random.geometric)
 def geometric_impl(p, size):
     if isinstance(size, types.NoneType):
-        return lambda p, _size: np.random.geometric(p)
+        return lambda p, size: np.random.geometric(p)
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                             isinstance(size.dtype,
                                                        types.Integer))):
@@ -1116,7 +1116,7 @@ def gumbel_impl(loc, scale):
 @overload(np.random.gumbel)
 def gumbel_impl3(loc, scale, size):
     if isinstance(size, types.NoneType):
-        return lambda loc, scale, _size: np.random.gumbel(loc, scale)
+        return lambda loc, scale, size: np.random.gumbel(loc, scale)
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
                                             and isinstance(size.dtype,
                                                            types.Integer))):
@@ -1155,7 +1155,7 @@ def hypergeometric_impl(ngood, nbad, nsamples):
 @overload(np.random.hypergeometric)
 def hypergeometric_impl(ngood, nbad, nsamples, size):
     if isinstance(size, types.NoneType):
-        return lambda ngood, nbad, nsamples, _size:\
+        return lambda ngood, nbad, nsamples, size:\
             np.random.hypergeometric(ngood, nbad, nsamples)
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
                                             and isinstance(size.dtype,
@@ -1189,7 +1189,7 @@ def laplace_impl2(loc, scale):
 @overload(np.random.laplace)
 def laplace_impl3(loc, scale, size):
     if isinstance(size, types.NoneType):
-        return lambda loc, scale, _size: np.random.laplace(loc, scale)
+        return lambda loc, scale, size: np.random.laplace(loc, scale)
     if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                            isinstance(size.dtype,
                                                       types.Integer)):
@@ -1230,7 +1230,7 @@ def logistic_impl2(loc, scale):
 @overload(np.random.logistic)
 def logistic_impl3(loc, scale, size):
     if isinstance(size, types.NoneType):
-        return lambda loc, scale, _size: np.random.logseries(loc, scale)
+        return lambda loc, scale, size: np.random.logistic(loc, scale)
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
                                             and isinstance(size.dtype,
                                                            types.Integer))):
@@ -1278,7 +1278,7 @@ def logseries_impl(p):
 @overload(np.random.logseries)
 def logseries_impl(p, size):
     if isinstance(size, types.NoneType):
-        return lambda p, _size: np.random.logseries(p)
+        return lambda p, size: np.random.logseries(p)
     if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                            isinstance(size.dtype,
                                                       types.Integer)):
@@ -1382,7 +1382,7 @@ def power_impl(a):
 @overload(np.random.power)
 def power_impl(a, size):
     if isinstance(size, types.NoneType):
-        return lambda p, _size: np.random.power(p)
+        return lambda a, size: np.random.power(a)
     if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                            isinstance(size.dtype,
                                                       types.Integer)):
@@ -1415,7 +1415,7 @@ def rayleigh_impl(mode):
 @overload(np.random.rayleigh)
 def rayleigh_impl2(mode, size):
     if isinstance(size, types.NoneType):
-        return lambda mode, _size: np.random.rayleigh(mode)
+        return lambda mode, size: np.random.rayleigh(mode)
     if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                            isinstance(size.dtype,
                                                       types.Integer)):
@@ -1439,7 +1439,7 @@ def cauchy_impl():
 @overload(np.random.standard_cauchy)
 def standard_cauchy_impl(size):
     if isinstance(size, types.NoneType):
-        return lambda p, _size: np.random.standard_cauchy(p)
+        return lambda size: np.random.standard_cauchy()
     if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
                                            and isinstance(size.dtype,
                                                           types.Integer)):
@@ -1467,7 +1467,7 @@ def standard_t_impl(df):
 @overload(np.random.standard_t)
 def standard_t_impl2(df, size):
     if isinstance(size, types.NoneType):
-        return lambda p, _size: np.random.standard_t(p)
+        return lambda p, size: np.random.standard_t(p)
     if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                            isinstance(size.dtype,
                                                       types.Integer)):
@@ -1504,7 +1504,7 @@ def wald_impl(mean, scale):
 @overload(np.random.wald)
 def wald_impl2(mean, scale, size):
     if isinstance(size, types.NoneType):
-        return lambda mean, scale, _size: np.random.wald(mean, scale)
+        return lambda mean, scale, size: np.random.wald(mean, scale)
     if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                            isinstance(size.dtype,
                                                       types.Integer)):
@@ -1539,7 +1539,7 @@ def zipf_impl(a):
 @overload(np.random.zipf)
 def zipf_impl(a, size):
     if isinstance(size, types.NoneType):
-        return lambda a, _size: np.random.zipf(a)
+        return lambda a, size: np.random.zipf(a)
     if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                            isinstance(size.dtype,
                                                       types.Integer)):
@@ -1888,8 +1888,8 @@ def dirichlet(alpha, size=None):
             dirichlet_arr(alpha, out)
             return out
 
-    elif isinstance(size, (types.UniTuple)) and isinstance(size.dtype,
-                                                           types.Integer):
+    elif isinstance(size, types.UniTuple) and isinstance(size.dtype,
+                                                         types.Integer):
         def dirichlet_impl(alpha, size=None):
             """
             dirichlet(..., size=tuple)

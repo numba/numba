@@ -938,7 +938,7 @@ class TestRandomArrays(BaseTest):
         argstring = ', '.join('abcd'[:nargs])
         return jit_with_args(qualname, argstring)
 
-    def _check_array_dist(self, funcname, scalar_args):
+    def _check_array_dist(self, funcname, scalar_args, old=False):
         """
         Check returning an array according to a given distribution.
         """
@@ -953,6 +953,14 @@ class TestRandomArrays(BaseTest):
             if (expected.dtype == np.dtype('int32')
                 and got.dtype == np.dtype('int64')):
                 expected = expected.astype(got.dtype)
+            self.assertPreciseEqual(expected, got, prec='double', ulps=5)
+        # The old glue lowering for array randomness didn't handle None
+        # properly, so it fails on unmigrated distributions. Once migrated,
+        # remove this logic.
+        if not old:
+            args = scalar_args + (None,)
+            expected = pyfunc(*args)
+            got = cfunc(*args)
             self.assertPreciseEqual(expected, got, prec='double', ulps=5)
 
     def test_numpy_randint(self):
@@ -1019,10 +1027,10 @@ class TestRandomArrays(BaseTest):
         self._check_array_dist("logseries", (0.8,))
 
     def test_numpy_normal(self):
-        self._check_array_dist("normal", (0.5, 2.0))
+        self._check_array_dist("normal", (0.5, 2.0), old=True)
 
     def test_numpy_poisson(self):
-        self._check_array_dist("poisson", (0.8,))
+        self._check_array_dist("poisson", (0.8,), old=True)
 
     def test_numpy_power(self):
         self._check_array_dist("power", (0.8,))
@@ -1052,10 +1060,10 @@ class TestRandomArrays(BaseTest):
         self._check_array_dist("standard_gamma", (2.0,))
 
     def test_numpy_standard_normal(self):
-        self._check_array_dist("standard_normal", ())
+        self._check_array_dist("standard_normal", (), old=True)
 
     def test_numpy_uniform(self):
-        self._check_array_dist("uniform", (0.1, 0.4))
+        self._check_array_dist("uniform", (0.1, 0.4), old=True)
 
     def test_numpy_wald(self):
         self._check_array_dist("wald", (0.1, 0.4))
