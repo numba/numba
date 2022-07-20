@@ -273,60 +273,43 @@ class TestDispatcher(CUDATestCase):
         self.assertGreater(regs_per_thread, 0)
 
     def test_get_shared_mem_per_block_unspecialized(self):
-        # A kernel where the register usage per thread is likely to differ
+        N = 10
+
+        # A kernel where the shared memory per block is likely to differ
         # between different specializations
         @cuda.jit
-        def simple_smem_float(ary):
-            sm = cuda.shared.array(100, dtype=float32)
-            i = cuda.grid(1)
-            if i == 0:
-                for j in range(100):
-                    sm[j] = j
-            cuda.syncthreads()
-            ary[i] = sm[i]
-
-        @cuda.jit
-        def simple_smem_double(ary):
-            sm = cuda.shared.array(100, dtype=float64)
-            i = cuda.grid(1)
-            if i == 0:
-                for j in range(100):
-                    sm[j] = j
-            cuda.syncthreads()
-            ary[i] = sm[i]
+        def simple_smem(ary):
+            sm = cuda.shared.array(N, dtype=ary.dtype)
+            for j in range(N):
+                sm[j] = j
+            for j in range(N):
+                ary[j] = sm[j]
 
         # Call the kernel with different arguments to create two different
         # definitions within the Dispatcher object
-        N = 100
         arr_f32 = np.zeros(N, dtype=np.float32)
         arr_f64 = np.zeros(N, dtype=np.float64)
 
-        simple_smem_float[1, N](arr_f32)
-        simple_smem_double[1, N](arr_f64)
+        simple_smem[1, 1](arr_f32)
+        simple_smem[1, 1](arr_f64)
 
         sig_f32 = void(float32[::1])
         sig_f64 = void(float64[::1])
-        shared_mem_per_block_f32 = \
-            simple_smem_float.get_shared_mem_per_block(sig_f32)
-        shared_mem_per_block_f64 = \
-            simple_smem_double.get_shared_mem_per_block(sig_f64)
-        self.assertIsInstance(shared_mem_per_block_f32, int)
-        self.assertIsInstance(shared_mem_per_block_f64, int)
+        sh_mem_f32 = simple_smem.get_shared_mem_per_block(sig_f32)
+        sh_mem_f64 = simple_smem.get_shared_mem_per_block(sig_f64)
+        self.assertIsInstance(sh_mem_f32, int)
+        self.assertIsInstance(sh_mem_f64, int)
 
-        self.assertEqual(shared_mem_per_block_f32, 400)
-        self.assertEqual(shared_mem_per_block_f64, 800)
+        self.assertEqual(sh_mem_f32, N * 4)
+        self.assertEqual(sh_mem_f64, N * 8)
 
-        # Check that getting the shared memory per blockfor all signatures
+        # Check that getting the shared memory per block for all signatures
         # provides the same values as getting the shared mem per block for
         # individual signatures.
-        shared_mem_per_block_f32_all = \
-            simple_smem_float.get_shared_mem_per_block()
-        shared_mem_per_block_f64_all = \
-            simple_smem_double.get_shared_mem_per_block()
-        self.assertEqual(shared_mem_per_block_f32_all[sig_f32.args],
-                         shared_mem_per_block_f32)
-        self.assertEqual(shared_mem_per_block_f64_all[sig_f64.args],
-                         shared_mem_per_block_f64)
+        sh_mem_f32_all = simple_smem.get_shared_mem_per_block()
+        sh_mem_f64_all = simple_smem.get_shared_mem_per_block()
+        self.assertEqual(sh_mem_f32_all[sig_f32.args], sh_mem_f32)
+        self.assertEqual(sh_mem_f64_all[sig_f64.args], sh_mem_f64)
 
     def test_get_shared_mem_per_block_specialized(self):
         @cuda.jit(void(float32[::1]))
@@ -342,7 +325,7 @@ class TestDispatcher(CUDATestCase):
         # Check we get a positive integer for the specialized variation
         shared_mem_per_block = simple_smem.get_shared_mem_per_block()
         self.assertIsInstance(shared_mem_per_block, int)
-        self.assertGreater(shared_mem_per_block, 0)
+        self.assertEqual(shared_mem_per_block, 400)
 
     def test_dispatcher_docstring(self):
         # Ensure that CUDA-jitting a function preserves its docstring. See
