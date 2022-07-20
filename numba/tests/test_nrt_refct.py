@@ -10,14 +10,15 @@ import numpy as np
 import unittest
 from numba import njit
 from numba.core.runtime import rtsys
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, EnableNRTStatsMixin
 
 
-class TestNrtRefCt(TestCase):
+class TestNrtRefCt(EnableNRTStatsMixin, TestCase):
 
     def setUp(self):
         # Clean up any NRT-backed objects hanging in a dead reference cycle
         gc.collect()
+        super(TestNrtRefCt, self).setUp()
 
     def test_no_return(self):
         """

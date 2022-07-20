@@ -23,7 +23,7 @@ import llvmlite.binding as llvm
 import numba.core.typing.cffi_utils as cffi_support
 from numba.core.unsafe.nrt import NRT_get_api
 
-from numba.tests.support import (MemoryLeakMixin, TestCase, temp_directory,
+from numba.tests.support import (EnableNRTStatsMixin, TestCase, temp_directory,
                                  import_dynamic, skip_if_32bit,
                                  run_in_subprocess)
 from numba.core.registry import cpu_target
@@ -305,7 +305,7 @@ class TestTracemalloc(unittest.TestCase):
         self.assertLess(stat.size, N * 0.01)
 
 
-class TestNRTIssue(MemoryLeakMixin, TestCase):
+class TestNRTIssue(TestCase):
     def test_issue_with_refct_op_pruning(self):
         """
         GitHub Issue #1244 https://github.com/numba/numba/issues/1244
@@ -575,13 +575,13 @@ br i1 %.294, label %B42, label %B160
 
 
 @unittest.skipUnless(cffi_support.SUPPORTED, "cffi required")
-class TestNrtExternalCFFI(MemoryLeakMixin, TestCase):
+class TestNrtExternalCFFI(EnableNRTStatsMixin, TestCase):
     """Testing the use of externally compiled C code that use NRT
     """
     def setUp(self):
         # initialize the NRT (in case the tests are run in isolation)
-        super(TestNrtExternalCFFI, self).setUp()
         cpu_target.target_context
+        super(TestNrtExternalCFFI, self).setUp()
 
     def compile_cffi_module(self, name, source, cdef):
         from cffi import FFI
