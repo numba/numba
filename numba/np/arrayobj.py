@@ -26,6 +26,7 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
                                  impl_ret_new_ref, impl_ret_untracked,
                                  RefType)
 from numba.core.typing import signature
+from numba.core.types import Literal
 from numba.core.extending import (register_jitable, overload, overload_method,
                                   intrinsic)
 from numba.misc import quicksort, mergesort
@@ -268,6 +269,29 @@ def update_array_info(aryty, array):
 
     array.itemsize = context.get_constant(types.intp,
                                           get_itemsize(context, aryty))
+
+
+def normalize_axis(func_name, ndim, axis):
+    """Constrain axis values to valid positive values."""
+    raise NotImplementedError()
+
+
+@overload(normalize_axis)
+def _normalize_axis_overloads(func_name, ndim, axis):
+    if not isinstance(func_name, Literal):
+        raise errors.TypingError("func_name must be a str literal.")
+
+    msg = f"{func_name.literal_value}: Axis out of bounds"
+
+    def impl(func_name, ndim, axis):
+        if axis < 0:
+            axis += ndim
+        if axis < 0 or axis >= ndim:
+            raise ValueError(msg)
+
+        return axis
+
+    return impl
 
 
 @lower_builtin('getiter', types.Buffer)
@@ -5939,8 +5963,10 @@ def np_array_split(ary, indices_or_sections, axis=0):
     ):
         def impl(ary, indices_or_sections, axis=0):
             slice_tup = build_full_slice_tuple(ary.ndim)
-            out = list()
+            axis = normalize_axis("np.split", ary.ndim, axis)
+            out = []
             prev = 0
+            cur = 0
             for cur in indices_or_sections:
                 idx = tuple_setitem(slice_tup, axis, slice(prev, cur))
                 out.append(ary[idx])
@@ -5956,8 +5982,10 @@ def np_array_split(ary, indices_or_sections, axis=0):
     ):
         def impl(ary, indices_or_sections, axis=0):
             slice_tup = build_full_slice_tuple(ary.ndim)
-            out = list()
+            axis = normalize_axis("np.split", ary.ndim, axis)
+            out = []
             prev = 0
+            cur = 0
             for cur in literal_unroll(indices_or_sections):
                 idx = tuple_setitem(slice_tup, axis, slice(prev, cur))
                 out.append(ary[idx])
@@ -6222,12 +6250,8 @@ def numpy_swapaxes(arr, axis1, axis2):
     axes_list = tuple(range(ndim))
 
     def impl(arr, axis1, axis2):
-        if axis1 >= ndim or abs(axis1) > ndim:
-            raise ValueError('The second argument "axis1" is out of bounds '
-                             'for array of given dimension')
-        if axis2 >= ndim or abs(axis2) > ndim:
-            raise ValueError('The third argument "axis2" is out of bounds '
-                             'for array of given dimension')
+        axis1 = normalize_axis("np.swapaxes", ndim, axis1)
+        axis2 = normalize_axis("np.swapaxes", ndim, axis2)
 
         # to ensure tuple_setitem support of negative values
         if axis1 < 0:
@@ -6253,8 +6277,7 @@ def _take_along_axis_impl(
 
     # Wrap axis, it's used in tuple_setitem so must be (axis >= 0) to ensure
     # the GEP is in bounds.
-    if axis < 0:
-        axis = arr.ndim + axis
+    axis = normalize_axis("np.take_along_axis", arr.ndim, axis)
 
     # Broadcast the two arrays to matching shapes:
     arr_shape = list(arr.shape)

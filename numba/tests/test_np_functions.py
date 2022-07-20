@@ -2708,6 +2708,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield a, [1, 3]
             yield a, [1, 3], 1
             yield a, [1, 3], 2
+            yield a, [1], -1
+            yield a, [1], -2
+            yield a, [1], -3
+            yield a, np.array([], dtype=np.int64), 0
 
             a = np.arange(100).reshape(2, -1)
             yield a, 1
@@ -2767,6 +2771,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             "array split does not result in an equal division",
             str(raises.exception)
         )
+
+        with self.assertRaises(ValueError) as raises:
+            njit(split)(np.ones(5), [3], axis=-3)
+        self.assertIn("np.split", str(raises.exception))
 
     def test_roll_basic(self):
         pyfunc = roll
@@ -4651,14 +4659,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as raises:
             cfunc(np.arange(4), 1, 0)
 
-        self.assertIn('The second argument "axis1" is out of bounds for array'
-                      ' of given dimension', str(raises.exception))
+        self.assertIn('np.swapaxes', str(raises.exception))
 
         with self.assertRaises(ValueError) as raises:
             cfunc(np.arange(8).reshape(2, 4), 0, -3)
 
-        self.assertIn('The third argument "axis2" is out of bounds for array'
-                      ' of given dimension', str(raises.exception))
+        self.assertIn('np.swapaxes', str(raises.exception))
 
     def test_take_along_axis(self):
         a = np.arange(24).reshape((3, 1, 4, 2))
