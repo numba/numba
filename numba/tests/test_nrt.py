@@ -704,7 +704,7 @@ class TestNrtStatistics(TestCase):
         if self.__stats_state:
             _nrt_python.memsys_enable_stats()
         else:
-            _nrt_python.memsys_diable_stats()
+            _nrt_python.memsys_disable_stats()
 
     def test_stats_env_var_explicit_on(self):
         # Checks that explicitly turning the stats on via the env var works.
