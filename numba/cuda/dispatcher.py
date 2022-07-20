@@ -704,6 +704,16 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
                     for sig, overload in self.overloads.items()}
 
     def get_shared_mem_per_block(self, signature=None):
+        '''
+        Returns the size in bytes of statically allocated shared memory
+        for this kernel.
+
+        :param signature: The signature of the compiled kernel to get shared
+                          memory usage for. This may be omitted for a
+                          specialized kernel.
+        :return: The amount of shared memory allocated by the compiled variant
+                 of the kernel for the given signature and current device.
+        '''
         if signature is not None:
             return self.overloads[signature.args].shared_mem_per_block
         if self.specialized:
