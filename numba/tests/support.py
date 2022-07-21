@@ -558,7 +558,7 @@ class TestCase(unittest.TestCase):
             environment variable name (str) -> value (str)
         It is most convenient to use this method in conjunction with
         @needs_subprocess as the decorator will cause the decorated test to be
-        skipped unless the `SUBPROC_TEST` environment variable is set
+        skipped unless the `SUBPROC_TEST` environment variable is set to 1
         (this special environment variable is set by this method such that the
         specified test(s) will not be skipped in the subprocess).
 
@@ -585,6 +585,32 @@ class TestCase(unittest.TestCase):
         self.assertIn('OK', status.stderr)
         self.assertNotIn('FAIL', status.stderr)
         self.assertNotIn('ERROR', status.stderr)
+
+    def run_test_in_subprocess(maybefunc=None, timeout=60, envvars=None):
+        """Runs the decorated test in a subprocess via invoking numba's test
+        runner. kwargs timeout and envvars are passed through to
+        subprocess_test_runner."""
+        def wrapper(func):
+            def inner(self, *args, **kwargs):
+                if os.environ.get("SUBPROC_TEST", None) != "1":
+                    # Not in a subprocess test env, so stage the call to run the
+                    # test in a subprocess which will set the env var.
+                    class_name = self.__class__.__name__
+                    self.subprocess_test_runner(test_module=self.__module__,
+                                                test_class=class_name,
+                                                test_name=func.__name__,
+                                                timeout=timeout,
+                                                envvars=envvars,)
+                else:
+                    # env var is set, so we're in the subprocess, run the
+                    # actual test.
+                    func(self)
+            return inner
+
+        if isinstance(maybefunc, pytypes.FunctionType):
+            return wrapper(maybefunc)
+        else:
+            return wrapper
 
 
 class SerialMixin(object):
@@ -1041,11 +1067,11 @@ def strace(work, syscalls, timeout=10):
         strace_binary = shutil.which('strace')
         if strace_binary is None:
             raise ValueError("No valid 'strace' binary could be found")
-        cmd = ['strace', # strace
-            '-q', # quietly (no attach/detach print out)
-            '-p', str(parent_pid), # this PID
-            '-e', ','.join(syscalls), # these syscalls
-            '-o', ntf.name] # put output into this file
+        cmd = [strace_binary, # strace
+               '-q', # quietly (no attach/detach print out)
+               '-p', str(parent_pid), # this PID
+               '-e', ','.join(syscalls), # these syscalls
+               '-o', ntf.name] # put output into this file
 
         # redirect stdout, stderr is handled by the `-o` flag to strace.
         popen = subprocess.Popen(cmd, stdout=subprocess.PIPE,)
@@ -1094,6 +1120,12 @@ def strace(work, syscalls, timeout=10):
 
 def _strace_supported():
     """Checks if strace is supported and working"""
+
+    # Only support this on linux where the `strace` binary is likely to be the
+    # strace needed.
+    if not sys.platform.startswith('linux'):
+        return False
+
     def force_clone(): # subprocess triggers a clone
         subprocess.run([sys.executable, '-c', 'exit()'])
 

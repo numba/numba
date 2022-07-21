@@ -374,7 +374,7 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         """
         Returns (dtype numbers, function ptr, EnvironmentObject)
         """
-        # Buider wrapper for ufunc entry point
+        # Builder wrapper for ufunc entry point
         signature = cres.signature
         info = build_gufunc_wrapper(
             self.py_func, cres, self.sin, self.sout,

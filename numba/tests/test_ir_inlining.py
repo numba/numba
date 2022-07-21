@@ -707,7 +707,7 @@ class TestOverloadInlining(MemoryLeakMixin, InliningBase):
             if isinstance(obj, DummyType):
                 return dummy_getitem_impl
 
-        # noth getitem and static_getitem Exprs refer to opertor.getitem
+        # both getitem and static_getitem Exprs refer to operator.getitem
         # hence they are checked using the same expect key
         self.check(impl, Dummy(), 1, inline_expect={'getitem': False})
         self.check(impl_static_getitem, Dummy(),
@@ -1505,7 +1505,7 @@ class TestInlineMiscIssues(TestCase):
     @skip_parfors_unsupported
     def test_issue7380(self):
         # This checks that inlining a function containing a loop into another
-        # loop where the induction variable in boths loops is the same doesn't
+        # loop where the induction variable in both loops is the same doesn't
         # end up with a name collision. Parfors can detect this so it is used.
         # See: https://github.com/numba/numba/issues/7380
 

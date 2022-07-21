@@ -8,8 +8,10 @@ from functools import wraps, partial
 from llvmlite import ir
 
 from numba.core import types, cgutils
+from numba.core.decorators import njit
 from numba.core.pythonapi import box, unbox, NativeValue
-from numba import njit
+from numba.core.typing.typeof import typeof_impl
+from numba.experimental.jitclass import _box
 
 
 _getter_code_template = """
@@ -95,18 +97,66 @@ def _specialize_box(typ):
         doc = getattr(imp, '__doc__', None)
         dct[field] = property(getter, setter, doc=doc)
     # Inject methods as class members
+    supported_dunders = {
+        "__abs__",
+        "__bool__",
+        "__complex__",
+        "__contains__",
+        "__float__",
+        "__getitem__",
+        "__hash__",
+        "__index__",
+        "__int__",
+        "__len__",
+        "__setitem__",
+        "__str__",
+        "__eq__",
+        "__ne__",
+        "__ge__",
+        "__gt__",
+        "__le__",
+        "__lt__",
+        "__add__",
+        "__floordiv__",
+        "__lshift__",
+        "__mod__",
+        "__mul__",
+        "__neg__",
+        "__pos__",
+        "__pow__",
+        "__rshift__",
+        "__sub__",
+        "__truediv__",
+        "__and__",
+        "__or__",
+        "__xor__",
+        "__iadd__",
+        "__ifloordiv__",
+        "__ilshift__",
+        "__imod__",
+        "__imul__",
+        "__ipow__",
+        "__irshift__",
+        "__isub__",
+        "__itruediv__",
+        "__iand__",
+        "__ior__",
+        "__ixor__",
+    }
     for name, func in typ.methods.items():
-        if (name == "__getitem__" or name == "__setitem__") or \
-                (not (name.startswith('__') and name.endswith('__'))):
-
-            dct[name] = _generate_method(name, func)
+        if (
+            name.startswith("__")
+            and name.endswith("__")
+            and name not in supported_dunders
+        ):
+            continue
+        dct[name] = _generate_method(name, func)
 
     # Inject static methods as class members
     for name, func in typ.static_methods.items():
         dct[name] = _generate_method(name, func)
 
     # Create subclass
-    from numba.experimental.jitclass import _box
     subcls = type(typ.classname, (_box.Box,), dct)
     # Store to cache
     _cache_specialized_box[typ] = subcls
@@ -159,7 +209,6 @@ def _box_class_instance(typ, val, c):
         casted = c.builder.bitcast(ptr, llvoidptr.as_pointer())
         c.builder.store(value, casted)
 
-    from numba.experimental.jitclass import _box
     set_member(_box.box_meminfoptr_offset, addr_meminfo)
     set_member(_box.box_dataptr_offset, addr_data)
     return box
@@ -179,7 +228,6 @@ def _unbox_class_instance(typ, val, c):
     inst = struct_cls(c.context, c.builder)
 
     # load from Python object
-    from numba.experimental.jitclass import _box
     ptr_meminfo = access_member(_box.box_meminfoptr_offset)
     ptr_dataptr = access_member(_box.box_dataptr_offset)
 
@@ -192,3 +240,17 @@ def _unbox_class_instance(typ, val, c):
     c.context.nrt.incref(c.builder, typ, ret)
 
     return NativeValue(ret, is_error=c.pyapi.c_api_error())
+
+
+# Add a typeof_impl implementation for boxed jitclasses to short-circut the
+# various tests in typeof. This is needed for jitclasses which implement a
+# custom hash method. Without this, typeof_impl will return None, and one of the
+# later attempts to determine the type of the jitclass (before checking for
+# _numba_type_) will look up the object in a dictionary, triggering the hash
+# method. This will cause the dispatcher to determine the call signature of the
+# jit decorated obj.__hash__ method, which will call typeof(obj), and thus
+# infinite loop.
+# This implementation is here instead of in typeof.py to avoid circular imports.
+@typeof_impl.register(_box.Box)
+def _typeof_jitclass_box(val, c):
+    return getattr(type(val), "_numba_type_")

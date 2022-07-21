@@ -6,8 +6,13 @@ from numba import cuda
 from numba.core import types
 from numba.cuda.testing import (CUDATestCase, skip_on_cudasim,
                                 skip_unless_cc_53)
+from numba.types import float16, float32
 import itertools
 import unittest
+
+
+def native_cast(x):
+    return float(x)
 
 
 def to_int8(x):
@@ -233,6 +238,14 @@ class TestCasting(CUDATestCase):
                                                pyfunc(fromty(3.21)))
                     np.testing.assert_allclose(cfunc(-3.21),
                                                pyfunc(fromty(-3.21)) + 0j)
+
+    @skip_on_cudasim('Compilation unsupported in the simulator')
+    def test_native_cast(self):
+        float32_ptx, _ = cuda.compile_ptx(native_cast, (float32,), device=True)
+        self.assertIn("st.f32", float32_ptx)
+
+        float16_ptx, _ = cuda.compile_ptx(native_cast, (float16,), device=True)
+        self.assertIn("st.u16", float16_ptx)
 
 
 if __name__ == '__main__':

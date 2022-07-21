@@ -11,7 +11,7 @@ import numpy as np
 
 from numba import (njit, set_num_threads, get_num_threads, prange, config,
                    threading_layer, guvectorize)
-from numba.np.ufunc.parallel import _get_thread_id
+from numba.np.ufunc.parallel import get_thread_id
 from numba.core.errors import TypingError
 from numba.tests.support import TestCase, skip_parfors_unsupported, tag
 from numba.tests.test_parallel_backend import TestInSubprocess
@@ -207,7 +207,7 @@ class TestNumThreads(TestCase):
                 x = 5000000
                 buf = np.empty((x,))
                 for i in prange(x):
-                    buf[i] = _get_thread_id()
+                    buf[i] = get_thread_id()
                 return len(np.unique(buf)), get_num_threads()
 
             out = test_func()
@@ -218,7 +218,7 @@ class TestNumThreads(TestCase):
                          nopython=True,
                          target='parallel')
             def test_gufunc(x, out):
-                x[:] = _get_thread_id()
+                x[:] = get_thread_id()
                 out[0] = get_num_threads()
 
             # Reshape to force parallelism
@@ -242,7 +242,7 @@ class TestNumThreads(TestCase):
                 x = 5000000
                 buf = np.empty((x,))
                 for i in prange(x):
-                    buf[i] = _get_thread_id()
+                    buf[i] = get_thread_id()
                 return len(np.unique(buf)), get_num_threads()
 
             out = test_func()
@@ -254,7 +254,7 @@ class TestNumThreads(TestCase):
                          target='parallel')
             def test_gufunc(x, out):
                 set_num_threads(mask)
-                x[:] = _get_thread_id()
+                x[:] = get_thread_id()
                 out[0] = get_num_threads()
 
             # Reshape to force parallelism
@@ -477,7 +477,7 @@ class TestNumThreads(TestCase):
             set_num_threads(local_nt)  # set to 3 threads
             for i in prange(BIG):
                 acc += 1
-                tid[i] = _get_thread_id()
+                tid[i] = get_thread_id()
             return acc, np.unique(tid)
 
         @njit(parallel=True)
@@ -547,6 +547,35 @@ class TestNumThreads(TestCase):
 
     def tearDown(self):
         set_num_threads(config.NUMBA_NUM_THREADS)
+
+    @skip_parfors_unsupported
+    def _test_get_thread_id_not_parallel(self):
+        python_get_thread_id = get_thread_id()
+        check_array_size = 8
+
+        @njit(parallel=False)
+        def par_false(size):
+            njit_par_false_tid = get_thread_id()
+            res = np.ones(size)
+            for i in prange(size):
+                res[i] = get_thread_id()
+            return njit_par_false_tid, res
+
+        @njit(parallel=True)
+        def par_true(size):
+            njit_par_true_tid = get_thread_id()
+            res = np.ones(size)
+            for i in range(size):
+                res[i] = get_thread_id()
+            return njit_par_true_tid, res
+
+        self.assertEqual(python_get_thread_id, 0)
+        njit_par_false_tid, njit_par_false_arr = par_false(check_array_size)
+        self.assertEqual(njit_par_false_tid, 0)
+        np.testing.assert_equal(njit_par_false_arr, 0)
+        njit_par_true_tid, njit_par_true_arr = par_true(check_array_size)
+        self.assertEqual(njit_par_true_tid, 0)
+        np.testing.assert_equal(njit_par_true_arr, 0)
 
 
 class TestNumThreadsBackends(TestInSubprocess, TestCase):

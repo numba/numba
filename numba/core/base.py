@@ -789,7 +789,7 @@ class BaseContext(object):
             cstr = self.insert_const_string(mod, format_string)
         else:
             cstr = format_string
-        fnty = Type.function(Type.int(), (GENERIC_POINTER,), var_arg=True)
+        fnty = llvmir.FunctionType(llvmir.IntType(32), (GENERIC_POINTER,), var_arg=True)
         fn = cgutils.get_or_insert_function(mod, fnty, "printf")
         return builder.call(fn, (cstr,) + tuple(args))
 
