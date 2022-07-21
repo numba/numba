@@ -20,7 +20,7 @@ from numba import njit, typeof, objmode, types
 from numba.core.extending import overload
 from numba.tests.support import (MemoryLeak, TestCase, captured_stdout,
                                  skip_unless_scipy, needs_strace, linux_only,
-                                 strace, needs_subprocess)
+                                 strace)
 from numba.core.utils import PYVERSION
 from numba.experimental import jitclass
 import unittest
@@ -1227,8 +1227,8 @@ class TestMisc(TestCase):
 
     @linux_only
     @needs_strace
-    @needs_subprocess
-    def test_no_fork_in_compilation_impl(self):
+    @TestCase.run_test_in_subprocess
+    def test_no_fork_in_compilation(self):
         # Checks that there is no fork/clone/execve during compilation, see
         # issue #7881. This needs running in a subprocess as the offending fork
         # call that triggered #7881 occurs on the first call to uuid1 as it's
@@ -1247,16 +1247,6 @@ class TestMisc(TestCase):
         # check that compilation does not trigger fork, clone or execve
         strace_data = strace(force_compile, syscalls)
         self.assertFalse(strace_data)
-
-    @linux_only
-    @needs_strace
-    def test_no_fork_in_compilation(self):
-        # Runs the test_no_fork_in_compilation_impl test in a subprocess
-        themod = f'numba.tests.test_withlifting'
-        testname = 'test_no_fork_in_compilation_impl'
-        self.subprocess_test_runner(test_module=themod,
-                                    test_class='TestMisc',
-                                    test_name=testname,)
 
 
 if __name__ == '__main__':

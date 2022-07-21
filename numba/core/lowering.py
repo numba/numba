@@ -14,7 +14,7 @@ from numba.core.errors import (LoweringError, new_error_context, TypingError,
                                NumbaDebugInfoWarning)
 from numba.core.funcdesc import default_mangler
 from numba.core.environment import Environment
-from numba.core.analysis import compute_use_defs
+from numba.core.analysis import compute_use_defs, must_use_alloca
 from numba.misc.firstlinefinder import get_func_body_first_lineno
 
 
@@ -354,6 +354,7 @@ class Lower(BaseLower):
 
         if not self.func_ir.func_id.is_generator:
             use_defs = compute_use_defs(blocks)
+            alloca_vars = must_use_alloca(blocks)
 
             # Compute where variables are defined
             var_assign_map = defaultdict(set)
@@ -369,11 +370,11 @@ class Lower(BaseLower):
 
             # Keep only variables that are defined locally and used locally
             for var in var_assign_map:
-                if len(var_assign_map[var]) == 1:
+                if var not in alloca_vars and len(var_assign_map[var]) == 1:
                     # Usemap does not keep locally defined variables.
                     if len(var_use_map[var]) == 0:
                         # Ensure that the variable is not defined multiple times
-                        # the the block
+                        # in the block
                         [defblk] = var_assign_map[var]
                         assign_stmts = self.blocks[defblk].find_insts(ir.Assign)
                         assigns = [stmt for stmt in assign_stmts

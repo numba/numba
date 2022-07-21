@@ -23,8 +23,8 @@ min_python_version = "3.7"
 max_python_version = "3.11"  # exclusive
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.18"
-min_llvmlite_version = "0.39.0dev0"
-max_llvmlite_version = "0.40"
+min_llvmlite_version = "0.40.0dev0"
+max_llvmlite_version = "0.41"
 
 if sys.platform.startswith('linux'):
     # Patch for #2555 to make wheels without libpython
@@ -335,7 +335,7 @@ def get_ext_modules():
 
     ext_nrt_python = Extension(name='numba.core.runtime._nrt_python',
                                sources=['numba/core/runtime/_nrt_pythonmod.c',
-                                        'numba/core/runtime/nrt.c'],
+                                        'numba/core/runtime/nrt.cpp'],
                                depends=['numba/core/runtime/nrt.h',
                                         'numba/_pymodule.h',
                                         'numba/core/runtime/_nrt_python.c'],
@@ -398,7 +398,7 @@ metadata = dict(
         # Some C files are needed by pycc
         "numba": ["*.c", "*.h"],
         "numba.pycc": ["*.c", "*.h"],
-        "numba.core.runtime": ["*.c", "*.h"],
+        "numba.core.runtime": ["*.cpp", "*.c", "*.h"],
         "numba.cext": ["*.c", "*.h"],
         # numba gdb hook init command language file
         "numba.misc": ["cmdlang.gdb"],

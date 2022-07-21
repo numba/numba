@@ -1375,9 +1375,11 @@ class TestIsinstanceBuiltin(TestCase):
             got = foo(x)
             self.assertEqual(got, expected)
 
+    @TestCase.run_test_in_subprocess
     def test_experimental_warning(self):
-        # Check that if the isinstance feature is in use then an experiemental
-        # warning is raised.
+        # Check that if the isinstance feature is in use then an experimental
+        # warning is raised. Needs subproc as something else in the test suite
+        # might triggered the warning already.
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter('always', errors.NumbaWarning)

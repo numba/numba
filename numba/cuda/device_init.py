@@ -1,4 +1,5 @@
 # Re export
+import sys
 from .stubs import (threadIdx, blockIdx, blockDim, gridDim, laneid,
                     warpsize, syncthreads, syncthreads_count, syncwarp,
                     syncthreads_and, syncthreads_or, shared, local,
@@ -6,7 +7,8 @@ from .stubs import (threadIdx, blockIdx, blockDim, gridDim, laneid,
                     vote_sync_intrinsic, match_any_sync, match_all_sync,
                     threadfence_block, threadfence_system,
                     threadfence, selp, popc, brev, clz, ffs, fma, cbrt,
-                    cg, activemask, lanemask_lt, nanosleep, fp16)
+                    cg, activemask, lanemask_lt, nanosleep, fp16,
+                    _vector_type_stubs)
 from .cudadrv.error import CudaSupportError
 from numba.cuda.cudadrv.driver import (BaseCUDAMemoryManager,
                                        HostOnlyCUDAMemoryManager,
@@ -30,6 +32,13 @@ from .intrinsic_wrapper import (all_sync, any_sync, eq_sync, ballot_sync,
 from .kernels import reduction
 
 reduce = Reduce = reduction.Reduce
+
+# Expose vector type constructors and aliases as module level attributes.
+for vector_type_stub in _vector_type_stubs:
+    setattr(sys.modules[__name__], vector_type_stub.__name__, vector_type_stub)
+    for alias in vector_type_stub.aliases:
+        setattr(sys.modules[__name__], alias, vector_type_stub)
+del vector_type_stub, _vector_type_stubs
 
 
 def is_available():
