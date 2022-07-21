@@ -18,7 +18,6 @@ Threading layer on top of OpenMP.
 #ifdef _MSC_VER
 #include <malloc.h>
 #else
-#include <pthread.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <signal.h>
