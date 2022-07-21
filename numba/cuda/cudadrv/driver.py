@@ -37,8 +37,8 @@ from .drvapi import API_PROTOTYPES
 from .drvapi import cu_occupancy_b2d_size, cu_stream_callback_pyobj, cu_uuid
 from numba.cuda.cudadrv import enums, drvapi, _extras
 
-from ptxcompiler import compile_ptx, MVCLinkerError
-from ptxcompiler import MVCLinker as _MVCLinker
+from ptxcompiler import compile_ptx
+from mvclinker import MVCLinker as _MVCLinker, MVCLinkerError
 
 USE_NV_BINDING = config.CUDA_USE_NVIDIA_BINDING
 
