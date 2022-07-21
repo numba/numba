@@ -315,7 +315,7 @@ def _randint_arg_check(low, high, endpoint, lower_bound, upper_bound):
     # This is being done to avoid high being accidentally
     # casted to int64/32 while subtracting 1 before
     # checking bounds, avoids overflow.
-    if high > 0 and endpoint:
+    if high > 0 and not endpoint:
         high = uint64(high) - uint64(1)
 
     if high > upper_bound:
