@@ -379,10 +379,18 @@ def _genfp16_binary_comparison(l_key):
     return Cuda_fp16_cmp
 
 
-# Until issue 7863 is resolved, if multiple concrete templates are utilized
-# function resolution will pick the wrong implementation and errors will occur.
-# We avoid this by using ConcreteTempalte for the intrinisics and
-# AbstractTemplate
+# If multiple ConcreteTemplates provide typing for a single function, then
+# function resolution will pick the first compatible typing it finds even if it
+# involves inserting a cast that would be considered undesirable (in this
+# specific case, float16s could be cast to float32s for comparisons).
+#
+# To work around this, we instead use an AbstractTemplate that implements
+# exactly the casting logic that we desire. The AbstractTemplate gets
+# considered in preference to ConcreteTemplates during typing.
+#
+# This is tracked as Issue #7863 (https://github.com/numba/numba/issues/7863) -
+# once this is resolved it should be possible to replace this AbstractTemplate
+# with a ConcreteTemplate to simplify the logic.
 def _genfp16_comparison_operator(l_key):
     @register_global(l_key)
     class Cuda_fp16_operator_cmp(AbstractTemplate):
