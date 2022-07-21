@@ -14,6 +14,7 @@ import numpy as np
 
 from numba import pndindex, literal_unroll
 from numba.core import types, utils, typing, errors, cgutils, extending
+from numba.core.decorators import generated_jit
 from numba.np.numpy_support import (as_dtype, carray, farray, is_contiguous,
                                     is_fortran, check_is_integer,
                                     type_is_scalar)
@@ -26,7 +27,7 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
                                  impl_ret_new_ref, impl_ret_untracked,
                                  RefType)
 from numba.core.typing import signature
-from numba.core.types import Literal
+from numba.core.types import StringLiteral
 from numba.core.extending import (register_jitable, overload, overload_method,
                                   intrinsic)
 from numba.misc import quicksort, mergesort
@@ -271,14 +272,10 @@ def update_array_info(aryty, array):
                                           get_itemsize(context, aryty))
 
 
+@generated_jit(nopython=True)
 def normalize_axis(func_name, ndim, axis):
     """Constrain axis values to valid positive values."""
-    raise NotImplementedError()
-
-
-@overload(normalize_axis)
-def _normalize_axis_overloads(func_name, ndim, axis):
-    if not isinstance(func_name, Literal):
+    if not isinstance(func_name, StringLiteral):
         raise errors.TypingError("func_name must be a str literal.")
 
     msg = f"{func_name.literal_value}: Axis out of bounds"
