@@ -201,6 +201,13 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                     self.check_numpy_parity(dist_func, _bitgen,
                                             None, _size, np.bool_)
 
+        # Test dtype casting for high and low
+        dist_func = lambda x, size, dtype: \
+            x.integers(np.uint8(0), np.int64(100))
+        with self.subTest():
+            self.check_numpy_parity(dist_func, test_size=None,
+                                    test_dtype=None)
+
         dist_func = lambda x, low, high, size, dtype, endpoint:\
             x.integers(low=low, high=high, size=size,
                        dtype=dtype, endpoint=endpoint)

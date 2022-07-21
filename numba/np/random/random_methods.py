@@ -12,7 +12,7 @@ from numba.np.random.generator_core import next_uint32, next_uint64
 
 
 @register_jitable
-def buffered_bounded_bool(bitgen, off, rng, mask, bcnt, buf):
+def buffered_bounded_bool(bitgen, off, rng, bcnt, buf):
     if (rng == 0):
         return off, bcnt, buf
     if not bcnt:
@@ -47,42 +47,6 @@ def buffered_uint16(bitgen, bcnt, buf):
         bcnt -= 1
 
     return uint16(buf), bcnt, buf
-
-
-@register_jitable
-def buffered_bounded_masked_uint32(bitgen, rng, mask):
-    val = (next_uint32(bitgen) & mask)
-    while (val > rng):
-        val = (next_uint32(bitgen) & mask)
-    return val
-
-
-@register_jitable
-def buffered_bounded_masked_uint16(bitgen, rng, mask, bcnt, buf):
-    val, bcnt, buf = buffered_uint16(bitgen, bcnt, buf)
-
-    while (val & mask) > rng:
-        val, bcnt, buf = buffered_uint16(bitgen, bcnt, buf)
-
-    return val, bcnt, buf
-
-
-@register_jitable
-def buffered_bounded_masked_uint8(bitgen, rng, mask, bcnt, buf):
-    val, bcnt, buf = buffered_uint8(bitgen, bcnt, buf)
-
-    while (val & mask) > rng:
-        val, bcnt, buf = buffered_uint8(bitgen, bcnt, buf)
-
-    return val, bcnt, buf
-
-
-@register_jitable
-def bounded_masked_uint64(bitgen, rng, mask):
-    val = (next_uint64(bitgen) & mask)
-    while (val > rng):
-        val = (next_uint64(bitgen) & mask)
-    return val
 
 
 # The following implementations use Lemire's algorithm:
@@ -222,7 +186,7 @@ def bounded_lemire_uint64(bitgen, rng):
 
 
 @register_jitable
-def random_bounded_uint64_fill(bitgen, low, rng, mask, size, dtype):
+def random_bounded_uint64_fill(bitgen, low, rng, size, dtype):
     """
     Returns a new array of given size with 64 bit integers
     bounded by given interval.
@@ -236,31 +200,21 @@ def random_bounded_uint64_fill(bitgen, low, rng, mask, size, dtype):
             for i in np.ndindex(size):
                 out[i] = low + next_uint32(bitgen)
         else:
-            if mask is not None:
-                for i in np.ndindex(size):
-                    out[i] = low + \
-                        buffered_bounded_masked_uint32(bitgen,
-                                                       rng, mask)
-            else:
-                for i in np.ndindex(size):
-                    out[i] = low + buffered_bounded_lemire_uint32(bitgen, rng)
+            for i in np.ndindex(size):
+                out[i] = low + buffered_bounded_lemire_uint32(bitgen, rng)
 
     elif (rng == 0xFFFFFFFFFFFFFFFF):
         for i in np.ndindex(size):
             out[i] = low + next_uint64(bitgen)
     else:
-        if mask is not None:
-            for i in np.ndindex(size):
-                out[i] = low + bounded_masked_uint64(bitgen, rng, mask)
-        else:
-            for i in np.ndindex(size):
-                out[i] = low + bounded_lemire_uint64(bitgen, rng)
+        for i in np.ndindex(size):
+            out[i] = low + bounded_lemire_uint64(bitgen, rng)
 
     return out
 
 
 @register_jitable
-def random_bounded_uint32_fill(bitgen, low, rng, mask, size, dtype):
+def random_bounded_uint32_fill(bitgen, low, rng, size, dtype):
     """
     Returns a new array of given size with 32 bit integers
     bounded by given interval.
@@ -274,17 +228,13 @@ def random_bounded_uint32_fill(bitgen, low, rng, mask, size, dtype):
         for i in np.ndindex(size):
             out[i] = low + next_uint32(bitgen)
     else:
-        if mask is not None:
-            for i in np.ndindex(size):
-                out[i] = low + buffered_bounded_masked_uint32(bitgen, rng, mask)
-        else:
-            for i in np.ndindex(size):
-                out[i] = low + buffered_bounded_lemire_uint32(bitgen, rng)
+        for i in np.ndindex(size):
+            out[i] = low + buffered_bounded_lemire_uint32(bitgen, rng)
     return out
 
 
 @register_jitable
-def random_bounded_uint16_fill(bitgen, low, rng, mask, size, dtype):
+def random_bounded_uint16_fill(bitgen, low, rng, size, dtype):
     """
     Returns a new array of given size with 16 bit integers
     bounded by given interval.
@@ -303,24 +253,16 @@ def random_bounded_uint16_fill(bitgen, low, rng, mask, size, dtype):
             out[i] = low + val
 
     else:
-        if mask is not None:
-            # Smallest bit mask >= max
-            for i in np.ndindex(size):
-                val, bcnt, buf = \
-                    buffered_bounded_masked_uint16(bitgen, rng,
-                                                   mask, bcnt, buf)
-                out[i] = low + val
-        else:
-            for i in np.ndindex(size):
-                val, bcnt, buf = \
-                    buffered_bounded_lemire_uint16(bitgen, rng,
-                                                   bcnt, buf)
-                out[i] = low + val
+        for i in np.ndindex(size):
+            val, bcnt, buf = \
+                buffered_bounded_lemire_uint16(bitgen, rng,
+                                               bcnt, buf)
+            out[i] = low + val
     return out
 
 
 @register_jitable
-def random_bounded_uint8_fill(bitgen, low, rng, mask, size, dtype):
+def random_bounded_uint8_fill(bitgen, low, rng, size, dtype):
     """
     Returns a new array of given size with 8 bit integers
     bounded by given interval.
@@ -338,24 +280,16 @@ def random_bounded_uint8_fill(bitgen, low, rng, mask, size, dtype):
             val, bcnt, buf = buffered_uint8(bitgen, bcnt, buf)
             out[i] = low + val
     else:
-        if mask is not None:
-            # Smallest bit mask >= max
-            for i in np.ndindex(size):
-                val, bcnt, buf = \
-                    buffered_bounded_masked_uint8(bitgen, rng,
-                                                  mask, bcnt, buf)
-                out[i] = low + val
-        else:
-            for i in np.ndindex(size):
-                val, bcnt, buf = \
-                    buffered_bounded_lemire_uint8(bitgen, rng,
-                                                  bcnt, buf)
-                out[i] = low + val
+        for i in np.ndindex(size):
+            val, bcnt, buf = \
+                buffered_bounded_lemire_uint8(bitgen, rng,
+                                              bcnt, buf)
+            out[i] = low + val
     return out
 
 
 @register_jitable
-def random_bounded_bool_fill(bitgen, low, rng, mask, size, dtype):
+def random_bounded_bool_fill(bitgen, low, rng, size, dtype):
     """
     Returns a new array of given size with boolean values.
     """
@@ -363,21 +297,27 @@ def random_bounded_bool_fill(bitgen, low, rng, mask, size, dtype):
     bcnt = 0
     out = np.empty(size, dtype=dtype)
     for i in np.ndindex(size):
-        val, bcnt, buf = buffered_bounded_bool(bitgen, low, rng,
-                                               mask, bcnt, buf)
+        val, bcnt, buf = buffered_bounded_bool(bitgen, low, rng, bcnt, buf)
         out[i] = low + val
     return out
 
 
 @register_jitable
-def _randint_arg_check(low, high, lower_bound, upper_bound):
+def _randint_arg_check(low, high, endpoint, lower_bound, upper_bound):
     """
-    Checks if low and high are correctly within the bounds
+    Check that low and high are within the bounds
     for the given datatype.
     """
 
     if low < lower_bound:
         raise ValueError("low is out of bounds")
+
+    # This is being done to avoid high being accidentally
+    # casted to int64/32 while subtracting 1 before
+    # checking bounds, avoids overflow.
+    if high > 0 and endpoint:
+        high = uint64(high) - uint64(1)
+
     if high > upper_bound:
         raise ValueError("high is out of bounds")
     if low > high:  # -1 already subtracted, closed interval

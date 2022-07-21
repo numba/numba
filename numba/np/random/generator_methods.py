@@ -131,30 +131,29 @@ def NumPyRandomGeneratorType_integers(inst, low, high, size=None,
     if is_nonelike(size):
         def impl(inst, low, high, size=None,
                  dtype=np.int64, endpoint=False):
+            random_methods._randint_arg_check(low, high, endpoint,
+                                              lower_bound, upper_bound)
             if not endpoint:
                 high -= dtype(1)
             low = dtype(low)
             high = dtype(high)
             rng = high - low
-            random_methods._randint_arg_check(low, high,
-                                              lower_bound, upper_bound)
-            mask = None
-            return int_func(inst.bit_generator, low, rng, mask, 1, dtype)[0]
+            return int_func(inst.bit_generator, low, rng, 1, dtype)[0]
         return impl
     else:
         check_size(size)
 
         def impl(inst, low, high, size=None,
                  dtype=np.int64, endpoint=False):
+            random_methods._randint_arg_check(low, high, endpoint,
+                                              lower_bound, upper_bound)
             if not endpoint:
                 high -= dtype(1)
             low = dtype(low)
             high = dtype(high)
             rng = high - low
-            random_methods._randint_arg_check(low, high,
-                                              lower_bound, upper_bound)
-            mask = None
-            return int_func(inst.bit_generator, low, rng, mask, size, dtype)
+
+            return int_func(inst.bit_generator, low, rng, size, dtype)
         return impl
 
 
