@@ -439,7 +439,7 @@ The following top-level functions are supported:
 * :func:`numpy.broadcast_arrays` (only the first argument)
 * :func:`numpy.broadcast_shapes`
 * :func:`numpy.column_stack`
-* :func:`numpy.concatenate`
+* :func:`numpy.concatenate` (only supports tuple arguments)
 * :func:`numpy.convolve` (only the 2 first arguments)
 * :func:`numpy.copy` (only the first argument)
 * :func:`numpy.corrcoef` (only the 3 first arguments, requires SciPy)
