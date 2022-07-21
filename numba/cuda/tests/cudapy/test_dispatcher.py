@@ -322,7 +322,6 @@ class TestDispatcher(CUDATestCase):
             cuda.syncthreads()
             ary[i] = sm[i]
 
-        # Check we get a positive integer for the specialized variation
         shared_mem_per_block = simple_smem.get_shared_mem_per_block()
         self.assertIsInstance(shared_mem_per_block, int)
         self.assertEqual(shared_mem_per_block, 400)
