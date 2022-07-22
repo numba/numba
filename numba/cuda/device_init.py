@@ -1,14 +1,14 @@
 # Re export
 import sys
-from .stubs import (threadIdx, blockIdx, blockDim, gridDim, laneid,
-                    warpsize, syncthreads, syncthreads_count, syncwarp,
-                    syncthreads_and, syncthreads_or, shared, local,
-                    const, grid, gridsize, atomic, shfl_sync_intrinsic,
-                    vote_sync_intrinsic, match_any_sync, match_all_sync,
-                    threadfence_block, threadfence_system,
-                    threadfence, selp, popc, brev, clz, ffs, fma, cbrt,
-                    cg, activemask, lanemask_lt, nanosleep, fp16,
+from .stubs import (threadIdx, blockIdx, blockDim, gridDim, laneid, warpsize,
+                    syncwarp, shared, local, const, atomic,
+                    shfl_sync_intrinsic, vote_sync_intrinsic, match_any_sync,
+                    match_all_sync, threadfence_block, threadfence_system,
+                    threadfence, selp, popc, brev, clz, ffs, fma, cbrt, cg,
+                    activemask, lanemask_lt, nanosleep, fp16,
                     _vector_type_stubs)
+from .intrinsics import (grid, gridsize, syncthreads, syncthreads_and,
+                         syncthreads_count, syncthreads_or)
 from .cudadrv.error import CudaSupportError
 from numba.cuda.cudadrv.driver import (BaseCUDAMemoryManager,
                                        HostOnlyCUDAMemoryManager,

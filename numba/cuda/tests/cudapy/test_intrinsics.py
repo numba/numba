@@ -5,6 +5,7 @@ import re
 from numba import cuda, int64
 from numba.cuda import compile_ptx
 from numba.core.types import f2
+from numba.core.extending import overload
 from numba.cuda.testing import (unittest, CUDATestCase, skip_on_cudasim,
                                 skip_unless_cc_53)
 
@@ -234,8 +235,19 @@ def simple_laneid(ary):
     ary[i] = cuda.laneid
 
 
+def cuda_warpsize():
+    pass
+
+
+@overload(cuda_warpsize, hardware='cuda')
+def ol_warpsize():
+    def impl():
+        return cuda.warpsize
+    return impl
+
+
 def simple_warpsize(ary):
-    ary[0] = cuda.warpsize
+    ary[0] = cuda_warpsize()
 
 
 class TestCudaIntrinsic(CUDATestCase):

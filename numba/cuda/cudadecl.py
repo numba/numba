@@ -1,4 +1,4 @@
-from numba.core import types, errors
+from numba.core import types
 from numba.core.typing.npydecl import (parse_dtype, parse_shape,
                                        register_number_classes)
 from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
@@ -14,32 +14,6 @@ register_attr = registry.register_attr
 register_global = registry.register_global
 
 register_number_classes(register_global)
-
-
-class GridFunction(CallableTemplate):
-    def generic(self):
-        def typer(ndim):
-            if not isinstance(ndim, types.IntegerLiteral):
-                raise errors.RequireLiteralValue(ndim)
-            val = ndim.literal_value
-            if val == 1:
-                restype = types.int32
-            elif val in (2, 3):
-                restype = types.UniTuple(types.int32, val)
-            else:
-                raise ValueError('argument can only be 1, 2, 3')
-            return signature(restype, types.int32)
-        return typer
-
-
-@register
-class Cuda_grid(GridFunction):
-    key = cuda.grid
-
-
-@register
-class Cuda_gridsize(GridFunction):
-    key = cuda.gridsize
 
 
 class Cuda_array_decl(CallableTemplate):
@@ -84,30 +58,6 @@ class Cuda_const_array_like(CallableTemplate):
         def typer(ndarray):
             return ndarray
         return typer
-
-
-@register
-class Cuda_syncthreads(ConcreteTemplate):
-    key = cuda.syncthreads
-    cases = [signature(types.none)]
-
-
-@register
-class Cuda_syncthreads_count(ConcreteTemplate):
-    key = cuda.syncthreads_count
-    cases = [signature(types.i4, types.i4)]
-
-
-@register
-class Cuda_syncthreads_and(ConcreteTemplate):
-    key = cuda.syncthreads_and
-    cases = [signature(types.i4, types.i4)]
-
-
-@register
-class Cuda_syncthreads_or(ConcreteTemplate):
-    key = cuda.syncthreads_or
-    cases = [signature(types.i4, types.i4)]
 
 
 @register
@@ -589,12 +539,6 @@ class CudaFp16Template(AttributeTemplate):
 class CudaModuleTemplate(AttributeTemplate):
     key = types.Module(cuda)
 
-    def resolve_grid(self, mod):
-        return types.Function(Cuda_grid)
-
-    def resolve_gridsize(self, mod):
-        return types.Function(Cuda_gridsize)
-
     def resolve_cg(self, mod):
         return types.Module(cuda.cg)
 
@@ -609,9 +553,6 @@ class CudaModuleTemplate(AttributeTemplate):
 
     def resolve_gridDim(self, mod):
         return dim3
-
-    def resolve_warpsize(self, mod):
-        return types.int32
 
     def resolve_laneid(self, mod):
         return types.int32
@@ -636,18 +577,6 @@ class CudaModuleTemplate(AttributeTemplate):
 
     def resolve_cbrt(self, mod):
         return types.Function(Cuda_cbrt)
-
-    def resolve_syncthreads(self, mod):
-        return types.Function(Cuda_syncthreads)
-
-    def resolve_syncthreads_count(self, mod):
-        return types.Function(Cuda_syncthreads_count)
-
-    def resolve_syncthreads_and(self, mod):
-        return types.Function(Cuda_syncthreads_and)
-
-    def resolve_syncthreads_or(self, mod):
-        return types.Function(Cuda_syncthreads_or)
 
     def resolve_threadfence(self, mod):
         return types.Function(Cuda_threadfence_device)
