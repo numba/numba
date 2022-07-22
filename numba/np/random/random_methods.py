@@ -64,7 +64,7 @@ def buffered_bounded_lemire_uint8(bitgen, rng, bcnt, buf):
     """
     # Note: `rng` should not be 0xFF. When this happens `rng_excl` becomes
     # zero.
-    rng_excl = (rng + 1) & 0xFF
+    rng_excl = rng + uint8(1)
 
     assert(rng != 0xFF)
 
@@ -77,7 +77,7 @@ def buffered_bounded_lemire_uint8(bitgen, rng, bcnt, buf):
 
     if (leftover < rng_excl):
         # `rng_excl` is a simple upper bound for `threshold`.
-        threshold = ((UINT8_MAX - rng) % rng_excl) & 0xFF
+        threshold = ((uint8(UINT8_MAX) - rng) % rng_excl)
 
         while (leftover < threshold):
             n, bcnt, buf = buffered_uint8(bitgen, bcnt, buf)
@@ -100,7 +100,7 @@ def buffered_bounded_lemire_uint16(bitgen, rng, bcnt, buf):
     """
     # Note: `rng` should not be 0xFFFF. When this happens `rng_excl` becomes
     # zero.
-    rng_excl = (rng + 1) & 0xFFFF
+    rng_excl = rng + uint16(1)
 
     assert(rng != 0xFFFF)
 
@@ -113,7 +113,7 @@ def buffered_bounded_lemire_uint16(bitgen, rng, bcnt, buf):
 
     if (leftover < rng_excl):
         # `rng_excl` is a simple upper bound for `threshold`.
-        threshold = ((UINT16_MAX - rng) % rng_excl) & 0xFFFF
+        threshold = ((uint16(UINT16_MAX) - rng) % rng_excl)
 
         while (leftover < threshold):
             n, bcnt, buf = buffered_uint16(bitgen, bcnt, buf)
@@ -317,8 +317,11 @@ def _randint_arg_check(low, high, endpoint, lower_bound, upper_bound):
     # checking bounds, avoids overflow.
     if high > 0 and not endpoint:
         high = uint64(high) - uint64(1)
+        upper_bound = uint64(upper_bound)
+        if low > 0:
+            low = uint64(low)
 
-    if high > upper_bound:
+    if high >= upper_bound:
         raise ValueError("high is out of bounds")
     if low > high:  # -1 already subtracted, closed interval
         raise ValueError("low is greater than high in given interval")
