@@ -239,7 +239,7 @@ def cuda_warpsize():
     pass
 
 
-@overload(cuda_warpsize, hardware='cuda')
+@overload(cuda_warpsize, target='cuda')
 def ol_warpsize():
     def impl():
         return cuda.warpsize
