@@ -963,6 +963,30 @@ class TestRandomArrays(BaseTest):
             got = cfunc(*args)
             self.assertPreciseEqual(expected, got, prec='double', ulps=5)
 
+    def _check_array_dist_gamma(self, funcname,  scalar_args, extra_pyfunc_args):
+        """
+        Check returning an array according to a given gamma distribution,
+        where we use CPython's implementation rather than NumPy's.
+        """
+        cfunc = self._compile_array_dist(funcname, len(scalar_args) + 1)
+        r = self._follow_cpython(get_np_state_ptr())
+        pyfunc = getattr(r, "gammavariate")
+        pyfunc_args = scalar_args + extra_pyfunc_args
+        pyrandom = lambda *_args: pyfunc(*pyfunc_args)
+
+        args = scalar_args + (None,)
+        expected = pyrandom()
+        got = cfunc(*args)
+        self.assertPreciseEqual(expected, got, prec='double', ulps=5)
+        for size in (8, (2, 3)):
+            args = scalar_args + (size,)
+            expected = np.empty(size)
+            expected_flat = expected.flat
+            for idx in range(expected.size):
+                expected_flat[idx] = pyrandom()
+            got = cfunc(*args)
+            self.assertPreciseEqual(expected, got, prec='double', ulps=5)
+
     def test_numpy_randint(self):
         cfunc = self._compile_array_dist("randint", 3)
         low, high = 1000, 10000
@@ -1006,7 +1030,7 @@ class TestRandomArrays(BaseTest):
         self._check_array_dist("exponential", (1.5,))
 
     def test_numpy_gamma(self):
-        self._check_array_dist("gamma", (2.0, 1.0))
+        self._check_array_dist_gamma("gamma", (2.0, 1.0), ())
 
     def test_numpy_gumbel(self):
         self._check_array_dist("gumbel", (1.5, 0.5))
@@ -1057,7 +1081,7 @@ class TestRandomArrays(BaseTest):
         self._check_array_dist("standard_exponential", ())
 
     def test_numpy_standard_gamma(self):
-        self._check_array_dist("standard_gamma", (2.0,))
+        self._check_array_dist_gamma("standard_gamma", (2.0,), (1.0,))
 
     def test_numpy_standard_normal(self):
         self._check_array_dist("standard_normal", (), old=True)
