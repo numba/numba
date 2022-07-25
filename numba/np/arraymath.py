@@ -456,19 +456,6 @@ def zero_dim_msg(fn_name):
     return msg
 
 
-def _is_nat(x):
-    pass
-
-
-@overload(_is_nat)
-def ol_is_nat(x):
-    if numpy_version >= (1, 18):
-        return lambda x: np.isnat(x)
-    else:
-        nat = x('NaT')
-        return lambda x: x == nat
-
-
 @lower_builtin(np.min, types.Array)
 @lower_builtin("array.min", types.Array)
 def array_min(context, builder, sig, args):
@@ -476,25 +463,19 @@ def array_min(context, builder, sig, args):
     MSG = zero_dim_msg('minimum')
 
     if isinstance(ty, (types.NPDatetime, types.NPTimedelta)):
-        # NP < 1.18: NaT is smaller than every other value, but it is
-        # ignored as far as min() is concerned.
-        # NP >= 1.18: NaT dominates like NaN
         def array_min_impl(arry):
             if arry.size == 0:
                 raise ValueError(MSG)
 
             it = np.nditer(arry)
             min_value = next(it).take(0)
-            if _is_nat(min_value):
+            if np.isnat(min_value):
                 return min_value
 
             for view in it:
                 v = view.item()
-                if _is_nat(v):
-                    if numpy_version >= (1, 18):
-                        return v
-                    else:
-                        continue
+                if np.isnat(v):
+                    return v
                 if v < min_value:
                     min_value = v
             return min_value
@@ -559,25 +540,19 @@ def array_max(context, builder, sig, args):
     MSG = zero_dim_msg('maximum')
 
     if isinstance(ty, (types.NPDatetime, types.NPTimedelta)):
-        # NP < 1.18: NaT is smaller than every other value, but it is
-        # ignored as far as min() is concerned.
-        # NP >= 1.18: NaT dominates like NaN
         def array_max_impl(arry):
             if arry.size == 0:
                 raise ValueError(MSG)
 
             it = np.nditer(arry)
             max_value = next(it).take(0)
-            if _is_nat(max_value):
+            if np.isnat(max_value):
                 return max_value
 
             for view in it:
                 v = view.item()
-                if _is_nat(v):
-                    if numpy_version >= (1, 18):
-                        return v
-                    else:
-                        continue
+                if np.isnat(v):
+                    return v
                 if v > max_value:
                     max_value = v
             return max_value
@@ -642,13 +617,13 @@ def array_argmin_impl_datetime(arry):
     it = np.nditer(arry)
     min_value = next(it).take(0)
     min_idx = 0
-    if _is_nat(min_value):
+    if np.isnat(min_value):
         return min_idx
 
     idx = 1
     for view in it:
         v = view.item()
-        if _is_nat(v):
+        if np.isnat(v):
             if numpy_version >= (1, 18):
                 return idx
             else:
@@ -730,13 +705,13 @@ def array_argmax_impl_datetime(arry):
     it = np.nditer(arry)
     max_value = next(it).take(0)
     max_idx = 0
-    if _is_nat(max_value):
+    if np.isnat(max_value):
         return max_idx
 
     idx = 1
     for view in it:
         v = view.item()
-        if _is_nat(v):
+        if np.isnat(v):
             if numpy_version >= (1, 18):
                 return idx
             else:
