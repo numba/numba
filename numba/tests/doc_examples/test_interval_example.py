@@ -101,21 +101,60 @@ class IntervalExampleTest(unittest.TestCase):
 
         # magictoken.interval_unbox.begin
         from numba.extending import unbox, NativeValue
+        from contextlib import contextmanager, ExitStack
+
+        @contextmanager
+        def early_exit_if(builder, stack: ExitStack, cond):
+            """
+            Emit code similar to::
+
+                if (cond) {
+                    <body>
+                    return;
+                }
+                <everything after this call>
+
+            However, this "return" will break out of the current `ExitStack`
+            rather than out of the whole function. This gives us a native
+            functionality similar to that of a try-except block.
+            """
+            then, otherwise = stack.enter_context(
+                builder.if_else(cond, likely=False)
+            )
+            with then:
+                yield
+            stack.enter_context(otherwise)
+
+        def early_exit_if_null(builder, stack, obj):
+            return early_exit_if(builder, stack, cgutils.is_null(builder, obj))
 
         @unbox(IntervalType)
         def unbox_interval(typ, obj, c):
             """
             Convert a Interval object to a native interval structure.
             """
-            lo_obj = c.pyapi.object_getattr_string(obj, "lo")
-            hi_obj = c.pyapi.object_getattr_string(obj, "hi")
-            interval = cgutils.create_struct_proxy(typ)(c.context, c.builder)
-            interval.lo = c.pyapi.float_as_double(lo_obj)
-            interval.hi = c.pyapi.float_as_double(hi_obj)
-            c.pyapi.decref(lo_obj)
-            c.pyapi.decref(hi_obj)
-            is_error = cgutils.is_not_null(c.builder, c.pyapi.err_occurred())
-            return NativeValue(interval._getvalue(), is_error=is_error)
+            is_error_ptr = cgutils.alloca_once_value(c.builder,
+                                                     cgutils.false_bit)
+
+            with ExitStack() as stack:
+                interval = cgutils.create_struct_proxy(typ)(c.context,
+                                                            c.builder)
+
+                lo_obj = c.pyapi.object_getattr_string(obj, "lo")
+                with early_exit_if_null(c.builder, stack, lo_obj):
+                    c.builder.store(cgutils.true_bit, is_error_ptr)
+
+                hi_obj = c.pyapi.object_getattr_string(obj, "hi")
+                with early_exit_if_null(c.builder, stack, hi_obj):
+                    c.builder.store(cgutils.true_bit, is_error_ptr)
+
+                interval.lo = c.pyapi.float_as_double(lo_obj)
+                interval.hi = c.pyapi.float_as_double(hi_obj)
+                c.pyapi.decref(lo_obj)
+                c.pyapi.decref(hi_obj)
+
+            return NativeValue(interval._getvalue(),
+                               is_error=c.builder.load(is_error_ptr))
         # magictoken.interval_unbox.end
 
         # magictoken.interval_box.begin
