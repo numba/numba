@@ -12,8 +12,7 @@ import warnings
 from numba.core.compiler import compile_isolated, Flags
 from numba import jit, typeof, njit, typed
 from numba.core import errors, types, utils, config
-from numba.tests.support import (TestCase, tag, ignore_internal_warnings,
-                                 needs_subprocess)
+from numba.tests.support import TestCase, tag, ignore_internal_warnings
 
 py38orlater = utils.PYVERSION >= (3, 8)
 
@@ -1376,10 +1375,11 @@ class TestIsinstanceBuiltin(TestCase):
             got = foo(x)
             self.assertEqual(got, expected)
 
-    @needs_subprocess
-    def test_experimental_warning_impl(self):
+    @TestCase.run_test_in_subprocess
+    def test_experimental_warning(self):
         # Check that if the isinstance feature is in use then an experimental
-        # warning is raised.
+        # warning is raised. Needs subproc as something else in the test suite
+        # might triggered the warning already.
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter('always', errors.NumbaWarning)
@@ -1398,12 +1398,6 @@ class TestIsinstanceBuiltin(TestCase):
             msg = ("Use of isinstance() detected. This is an experimental "
                    "feature.")
             self.assertIn(msg, str(w[0].message))
-
-    def test_experimental_warning(self):
-        test_name = 'test_experimental_warning_impl'
-        self.subprocess_test_runner(test_module=self.__module__,
-                                    test_class=type(self).__name__,
-                                    test_name=test_name,)
 
 
 if __name__ == '__main__':

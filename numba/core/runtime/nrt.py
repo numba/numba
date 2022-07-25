@@ -39,15 +39,6 @@ class _Runtime(object):
 
         # Compile atomic operations
         self._library = nrtdynmod.compile_nrt_functions(ctx)
-
-        self._ptr_inc = self._library.get_pointer_to_function("nrt_atomic_add")
-        self._ptr_dec = self._library.get_pointer_to_function("nrt_atomic_sub")
-        self._ptr_cas = self._library.get_pointer_to_function("nrt_atomic_cas")
-
-        # Install atomic ops to NRT
-        _nrt.memsys_set_atomic_inc_dec(self._ptr_inc, self._ptr_dec)
-        _nrt.memsys_set_atomic_cas(self._ptr_cas)
-
         self._init = True
 
     def _init_guard(self):
