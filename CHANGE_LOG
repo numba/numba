@@ -4,8 +4,8 @@ Version 0.56.0 RC1 (28 June, 2022)
 This release continues to add new features, bug fixes and stability improvements
 to Numba. Please note that this will be the last release that has support for
 Python 3.7 as the next release series (Numba 0.57) will support Python 3.11!
-Also note that, this will be the last release to support linux-32 packages produced
-by the Numba team.
+Also note that, this will be the last release to support linux-32 packages
+produced by the Numba team.
 
 Python language support enhancements:
 
@@ -104,8 +104,8 @@ General Enhancements:
   it now uses ``importlib-metadata`` for querying other packages.
 * Emission of chrome tracing output is now supported for the internal
   compilation event handling system.
-* This release is tested and known to work when using the `Pyston <https://www.pyston.org/>`_ Python
-  interpreter.
+* This release is tested and known to work when using the
+  `Pyston <https://www.pyston.org/>`_ Python interpreter.
 
 Pull-Requests:
 
@@ -265,11 +265,14 @@ Pull-Requests:
 * PR `#8187 <https://github.com/numba/numba/pull/8187>`_: Update CHANGE_LOG for 0.55.2 (`stuartarchibald <https://github.com/stuartarchibald>`_ `esc <https://github.com/esc>`_)
 * PR `#8189 <https://github.com/numba/numba/pull/8189>`_: updated version support information for 0.55.2/0.57 (`esc <https://github.com/esc>`_)
 * PR `#8191 <https://github.com/numba/numba/pull/8191>`_: CUDA: Update deprecation notes for 0.56. (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#8192 <https://github.com/numba/numba/pull/8192>`_: Update CHANGE_LOG for 0.56.0 (`stuartarchibald <https://github.com/stuartarchibald>`_ `esc <https://github.com/esc>`_ `Siu Kwan Lam <https://github.com/sklam>`_)
 * PR `#8195 <https://github.com/numba/numba/pull/8195>`_: Make the workqueue threading backend once again fork safe. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#8196 <https://github.com/numba/numba/pull/8196>`_: Fix numerical tolerance in parfors caching test. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#8197 <https://github.com/numba/numba/pull/8197>`_: Fix `isinstance` warning check test. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#8203 <https://github.com/numba/numba/pull/8203>`_: pin llvmlite 0.39 for public CI builds (`esc <https://github.com/esc>`_)
-* PR `#8192 <https://github.com/numba/numba/pull/8192>`_:  Update CHANGE_LOG for 0.56.0 (`stuartarchibald <https://github.com/stuartarchibald>`_ `esc <https://github.com/esc>`_ `Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#8255 <https://github.com/numba/numba/pull/8255>`_: CUDA: Make numba.cuda.tests.doc_examples.ffi a module to fix #8252 (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#8274 <https://github.com/numba/numba/pull/8274>`_: Update version support table doc for 0.56. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#8275 <https://github.com/numba/numba/pull/8275>`_: Update CHANGE_LOG for 0.56.0 final (`stuartarchibald <https://github.com/stuartarchibald>`_)
 
 Authors:
 
