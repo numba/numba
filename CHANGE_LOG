@@ -1,5 +1,5 @@
-Version 0.56.0 RC1 (28 June, 2022)
-----------------------------------
+Version 0.56.0 (25 July, 2022)
+------------------------------
 
 This release continues to add new features, bug fixes and stability improvements
 to Numba. Please note that this will be the last release that has support for
