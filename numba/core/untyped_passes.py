@@ -904,7 +904,8 @@ class MixedContainerUnroller(FunctionPass):
 
             new_var_dict = {}
             for name, var in var_table.items():
-                new_var_dict[name] = var.scope.redefine(name, var.loc).name
+                scope = switch_ir.blocks[lbl].scope
+                new_var_dict[name] = scope.redefine(name, var.loc).name
             replace_var_names(loop_blocks, new_var_dict)
 
             # clobber the sentinel body and then stuff in the rest
