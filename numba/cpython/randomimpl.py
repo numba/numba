@@ -1262,7 +1262,7 @@ def _logseries_impl(p):
         q = 1.0 - math.exp(r * U)
         if V <= q * q:
             # XXX what if V == 0.0 ?
-            return int(1.0 + math.log(V) / math.log(q))
+            return np.int64(1.0 + math.log(V) / math.log(q))
         elif V >= q:
             return 1
         else:
@@ -1283,7 +1283,7 @@ def logseries_impl(p, size):
                                            isinstance(size.dtype,
                                                       types.Integer)):
         def _impl(p, size):
-            out = np.empty(size, dtype=np.intp)
+            out = np.empty(size, dtype=np.int64)
             out_flat = out.flat
             for idx in range(out.size):
                 out_flat[idx] = np.random.logseries(p)
