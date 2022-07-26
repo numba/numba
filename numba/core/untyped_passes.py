@@ -13,7 +13,7 @@ from numba.core.analysis import (dead_branch_prune, rewrite_semantic_constants,
                                  compute_use_defs)
 from numba.core.ir_utils import (guard, resolve_func_from_module, simplify_CFG,
                                  GuardException, convert_code_obj_to_function,
-                                 mk_unique_var, build_definitions,
+                                 build_definitions,
                                  replace_var_names, get_name_var_table,
                                  compile_to_numba_ir, get_definition,
                                  find_max_label, rename_labels,
@@ -905,7 +905,9 @@ class MixedContainerUnroller(FunctionPass):
             new_var_dict = {}
             for name, var in var_table.items():
                 scope = switch_ir.blocks[lbl].scope
-                if len(scope.get_versions_of(name)) == 0:
+                try:
+                    scope.get_exact(name)
+                except errors.NotDefinedError:
                     # is this correct? In case the scope doesn't have the
                     # variable, we need to define it prior creating new
                     # copies of it!
