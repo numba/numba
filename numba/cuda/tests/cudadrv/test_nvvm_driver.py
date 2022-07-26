@@ -43,6 +43,13 @@ class TestNvvmDriver(unittest.TestCase):
         else:
             self.assertTrue('.address_size 32' in ptx)
 
+    def test_nvvm_ir_verify_fail(self):
+        m = ir.Module("test_bad_ir")
+        m.triple = "unknown-unknown-unknown"
+        fix_data_layout(m)
+        with self.assertRaisesRegex(NvvmError, 'Invalid target triple'):
+            llvm_to_ptx(str(m))
+
     def _test_nvvm_support(self, arch):
         compute_xx = 'compute_{0}{1}'.format(*arch)
         nvvmir = self.get_nvvmir()
