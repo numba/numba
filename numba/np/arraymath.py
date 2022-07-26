@@ -2011,24 +2011,22 @@ def np_ediff1d(ary, to_end=None, to_begin=None):
             # Numpy tries to do this: return ary[1:] - ary[:-1] which
             # results in a TypeError exception being raised
 
-    # since np 1.16 there are casting checks for to_end and to_begin to make
-    # sure they are compatible with the ary
-    if numpy_version >= (1, 16):
-        ary_dt = _dtype_of_compound(ary)
-        to_begin_dt = None
-        if not(is_nonelike(to_begin)):
-            to_begin_dt = _dtype_of_compound(to_begin)
-        to_end_dt = None
-        if not(is_nonelike(to_end)):
-            to_end_dt = _dtype_of_compound(to_end)
+    # Check that to_end and to_begin are compatible with ary
+    ary_dt = _dtype_of_compound(ary)
+    to_begin_dt = None
+    if not(is_nonelike(to_begin)):
+        to_begin_dt = _dtype_of_compound(to_begin)
+    to_end_dt = None
+    if not(is_nonelike(to_end)):
+        to_end_dt = _dtype_of_compound(to_end)
 
-        if to_begin_dt is not None and not np.can_cast(to_begin_dt, ary_dt):
-            msg = "dtype of to_begin must be compatible with input ary"
-            raise NumbaTypeError(msg)
+    if to_begin_dt is not None and not np.can_cast(to_begin_dt, ary_dt):
+        msg = "dtype of to_begin must be compatible with input ary"
+        raise NumbaTypeError(msg)
 
-        if to_end_dt is not None and not np.can_cast(to_end_dt, ary_dt):
-            msg = "dtype of to_end must be compatible with input ary"
-            raise NumbaTypeError(msg)
+    if to_end_dt is not None and not np.can_cast(to_end_dt, ary_dt):
+        msg = "dtype of to_end must be compatible with input ary"
+        raise NumbaTypeError(msg)
 
     def np_ediff1d_impl(ary, to_end=None, to_begin=None):
         # transform each input into an equivalent 1d array
