@@ -13,7 +13,7 @@ from numba.core.analysis import (dead_branch_prune, rewrite_semantic_constants,
                                  compute_use_defs)
 from numba.core.ir_utils import (guard, resolve_func_from_module, simplify_CFG,
                                  GuardException, convert_code_obj_to_function,
-                                 build_definitions,
+                                 mk_unique_var, build_definitions,
                                  replace_var_names, get_name_var_table,
                                  compile_to_numba_ir, get_definition,
                                  find_max_label, rename_labels,
@@ -731,7 +731,6 @@ class TransformLiteralUnrollConstListToTuple(FunctionPass):
                                 raise errors.UnsupportedError(msg, loc)
         return mutated
 
-
 @register_pass(mutates_CFG=True, analysis_only=False)
 class MixedContainerUnroller(FunctionPass):
     _name = "mixed_container_unroller"
@@ -866,7 +865,8 @@ class MixedContainerUnroller(FunctionPass):
                         if (isinstance(stmt.value, ir.Expr) and
                                 stmt.value.op == "typed_getitem"):
                             if isinstance(branch_ty, types.Literal):
-                                new_const_name = blk.scope.redefine(
+                                scope = switch_ir.blocks[lbl].scope
+                                new_const_name = scope.redefine(
                                     "branch_const", stmt.loc).name
                                 new_const_var = ir.Var(
                                     blk.scope, new_const_name, stmt.loc)
@@ -905,6 +905,11 @@ class MixedContainerUnroller(FunctionPass):
             new_var_dict = {}
             for name, var in var_table.items():
                 scope = switch_ir.blocks[lbl].scope
+                if len(scope.get_versions_of(name)) == 0:
+                    # is this correct? In case the scope doesn't have the
+                    # variable, we need to define it prior creating new
+                    # copies of it!
+                    scope.define(name, var.loc)
                 new_var_dict[name] = scope.redefine(name, var.loc).name
             replace_var_names(loop_blocks, new_var_dict)
 
