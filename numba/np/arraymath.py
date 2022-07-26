@@ -2288,13 +2288,12 @@ def binary_search_with_guess(key, arr, length, guess):
     return imin - 1
 
 
-def np_interp_impl_complex_fp_inner_factory(np117_nan_handling):
+def np_interp_impl_complex_fp_inner_factory():
     @register_jitable
     def impl(x, xp, fp, dtype):
         # NOTE: Do not refactor... see note in np_interp function impl below
         # this is a facsimile of arr_interp_complex post 1.16 with added
-        # branching to support np1.17 style NaN handling.  (see
-        # `np117_nan_handling` use)
+        # branching to support np1.17 style NaN handling.
         # https://github.com/numpy/numpy/blob/maintenance/1.16.x/numpy/core/src/multiarray/compiled_base.c    # noqa: E501
         # Permanent reference:
         # https://github.com/numpy/numpy/blob/971e2e89d08deeae0139d3011d15646fdac13c92/numpy/core/src/multiarray/compiled_base.c#L628    # noqa: E501
@@ -2376,19 +2375,11 @@ def np_interp_impl_complex_fp_inner_factory(np117_nan_handling):
                         imag = (dy[j + 1].imag - dy[j].imag) * inv_dx
                         slope = real + 1j * imag
 
-                    # The following branches mimic the behavior of
-                    # different numpy version with regard to handling NaNs.
-                    if np117_nan_handling:
-                        # Numpy 1.17 handles NaN correctly
-                        result = np_interp_impl_complex_fp_innermost_117(
-                            x, slope, x_val, dx, dy, i, j,
-                        )
-                        dres.flat[i] = result
-                    else:
-                        # Numpy 1.16 does not handles NaN correctly.
-                        real = slope.real * (x_val - dx[j]) + dy[j].real
-                        imag = slope.imag * (x_val - dx[j]) + dy[j].imag
-                        dres.flat[i] = real + 1j * imag
+                    # Numpy 1.17 handles NaN correctly
+                    result = np_interp_impl_complex_fp_innermost_117(
+                        x, slope, x_val, dx, dy, i, j,
+                    )
+                    dres.flat[i] = result
         return dres
     return impl
 
@@ -2417,7 +2408,7 @@ def np_interp_impl_complex_fp_innermost_117(x, slope, x_val, dx, dy, i, j):
     return real + 1j * imag
 
 
-def np_interp_impl_inner_factory(np117_nan_handling):
+def np_interp_impl_inner_factory():
     def impl(x, xp, fp, dtype):
         # NOTE: Do not refactor... see note in np_interp function impl below
         # this is a facsimile of arr_interp post 1.16:
@@ -2498,27 +2489,20 @@ def np_interp_impl_inner_factory(np117_nan_handling):
                     # https://github.com/numpy/numpy/blob/91fbe4dde246559fa5b085ebf4bc268e2b89eea8/numpy/core/src/multiarray/compiled_base.c#L610-L616    # noqa: E501
                     #
                     # If we get nan in one direction, try the other
-                    if np117_nan_handling:
-                        if np.isnan(dres.flat[i]):
-                            dres.flat[i] = slope * (x_val - dx[j + 1]) + dy[j + 1]    # noqa: E501
-                            if np.isnan(dres.flat[i]) and dy[j] == dy[j + 1]:
-                                dres.flat[i] = dy[j]
+                    if np.isnan(dres.flat[i]):
+                        dres.flat[i] = slope * (x_val - dx[j + 1]) + dy[j + 1]    # noqa: E501
+                        if np.isnan(dres.flat[i]) and dy[j] == dy[j + 1]:
+                            dres.flat[i] = dy[j]
 
         return dres
     return impl
 
 
 np_interp_impl_inner_post_np117 = register_jitable(
-    np_interp_impl_inner_factory(np117_nan_handling=True)
+    np_interp_impl_inner_factory()
 )
 np_interp_impl_complex_inner_post_np117 = register_jitable(
-    np_interp_impl_complex_fp_inner_factory(np117_nan_handling=True)
-)
-np_interp_impl_inner_pre_np117 = register_jitable(
-    np_interp_impl_inner_factory(np117_nan_handling=False)
-)
-np_interp_impl_complex_inner_pre_np117 = register_jitable(
-    np_interp_impl_complex_fp_inner_factory(np117_nan_handling=False)
+    np_interp_impl_complex_fp_inner_factory()
 )
 
 
