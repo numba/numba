@@ -135,10 +135,15 @@ def NumPyRandomGeneratorType_integers(inst, low, high, size=None,
                                               lower_bound, upper_bound)
             if not endpoint:
                 high -= dtype(1)
-            low = dtype(low)
-            high = dtype(high)
-            rng = high - low
-            return int_func(inst.bit_generator, low, rng, 1, dtype)[0]
+                low = dtype(low)
+                high = dtype(high)
+                rng = high - low
+                return int_func(inst.bit_generator, low, rng, 1, dtype)[0]
+            else:
+                low = dtype(low)
+                high = dtype(high)
+                rng = high - low
+                return int_func(inst.bit_generator, low, rng, 1, dtype)[0]
         return impl
     else:
         check_size(size)
@@ -149,11 +154,15 @@ def NumPyRandomGeneratorType_integers(inst, low, high, size=None,
                                               lower_bound, upper_bound)
             if not endpoint:
                 high -= dtype(1)
-            low = dtype(low)
-            high = dtype(high)
-            rng = high - low
-
-            return int_func(inst.bit_generator, low, rng, size, dtype)
+                low = dtype(low)
+                high = dtype(high)
+                rng = high - low
+                return int_func(inst.bit_generator, low, rng, size, dtype)
+            else:
+                low = dtype(low)
+                high = dtype(high)
+                rng = high - low
+                return int_func(inst.bit_generator, low, rng, size, dtype)
         return impl
 
 

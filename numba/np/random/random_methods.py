@@ -64,7 +64,7 @@ def buffered_bounded_lemire_uint8(bitgen, rng, bcnt, buf):
     """
     # Note: `rng` should not be 0xFF. When this happens `rng_excl` becomes
     # zero.
-    rng_excl = rng + uint8(1)
+    rng_excl = uint8(rng) + uint8(1)
 
     assert(rng != 0xFF)
 
@@ -100,7 +100,7 @@ def buffered_bounded_lemire_uint16(bitgen, rng, bcnt, buf):
     """
     # Note: `rng` should not be 0xFFFF. When this happens `rng_excl` becomes
     # zero.
-    rng_excl = rng + uint16(1)
+    rng_excl = uint16(rng) + uint16(1)
 
     assert(rng != 0xFFFF)
 
@@ -129,7 +129,7 @@ def buffered_bounded_lemire_uint32(bitgen, rng):
     Generates a random unsigned 32 bit integer bounded
     within a given interval using Lemire's rejection.
     """
-    rng_excl = rng + uint32(1)
+    rng_excl = uint32(rng) + uint32(1)
 
     assert(rng != 0xFFFFFFFF)
 
@@ -156,7 +156,7 @@ def bounded_lemire_uint64(bitgen, rng):
     Generates a random unsigned 64 bit integer bounded
     within a given interval using Lemire's rejection.
     """
-    rng_excl = rng + uint64(1)
+    rng_excl = uint64(rng) + uint64(1)
 
     assert(rng != 0xFFFFFFFFFFFFFFFF)
 
@@ -315,13 +315,19 @@ def _randint_arg_check(low, high, endpoint, lower_bound, upper_bound):
     # This is being done to avoid high being accidentally
     # casted to int64/32 while subtracting 1 before
     # checking bounds, avoids overflow.
-    if high > 0 and not endpoint:
-        high = uint64(high) - uint64(1)
+    if high > 0:
+        high = uint64(high)
+        if not endpoint:
+            high -= uint64(1)
         upper_bound = uint64(upper_bound)
         if low > 0:
             low = uint64(low)
-
-    if high >= upper_bound:
-        raise ValueError("high is out of bounds")
-    if low > high:  # -1 already subtracted, closed interval
-        raise ValueError("low is greater than high in given interval")
+        if high > upper_bound:
+            raise ValueError("high is out of bounds")
+        if low > high:  # -1 already subtracted, closed interval
+            raise ValueError("low is greater than high in given interval")
+    else:
+        if high > upper_bound:
+            raise ValueError("high is out of bounds")
+        if low > high:  # -1 already subtracted, closed interval
+            raise ValueError("low is greater than high in given interval")
