@@ -2374,36 +2374,28 @@ def np_interp_impl_complex_inner(x, xp, fp, dtype):
                     imag = (dy[j + 1].imag - dy[j].imag) * inv_dx
                     slope = real + 1j * imag
 
-                # Numpy 1.17 handles NaN correctly
-                result = np_interp_impl_complex_fp_innermost_117(
-                    x, slope, x_val, dx, dy, i, j,
-                )
-                dres.flat[i] = result
+                # Numpy 1.17 handles NaN correctly - this is a copy of
+                # innermost part of arr_interp_complex post 1.17:
+                # https://github.com/numpy/numpy/blob/maintenance/1.17.x/numpy/core/src/multiarray/compiled_base.c    # noqa: E501
+                # Permanent reference:
+                # https://github.com/numpy/numpy/blob/91fbe4dde246559fa5b085ebf4bc268e2b89eea8/numpy/core/src/multiarray/compiled_base.c#L798-L812    # noqa: E501
+
+                # If we get NaN in one direction, try the other
+                real = slope.real * (x_val - dx[j]) + dy[j].real
+                if np.isnan(real):
+                    real = slope.real * (x_val - dx[j + 1]) + dy[j + 1].real
+                    if np.isnan(real) and dy[j].real == dy[j + 1].real:
+                        real = dy[j].real
+
+                imag = slope.imag * (x_val - dx[j]) + dy[j].imag
+                if np.isnan(imag):
+                    imag = slope.imag * (x_val - dx[j + 1]) + dy[j + 1].imag
+                    if np.isnan(imag) and dy[j].imag == dy[j + 1].imag:
+                        imag = dy[j].imag
+
+                dres.flat[i] = real + 1j * imag
+
     return dres
-
-
-@register_jitable
-def np_interp_impl_complex_fp_innermost_117(x, slope, x_val, dx, dy, i, j):
-    # NOTE: Do not refactor... see note in np_interp function impl below
-    # this is a copy of innermost part of arr_interp_complex post 1.17:
-    # https://github.com/numpy/numpy/blob/maintenance/1.17.x/numpy/core/src/multiarray/compiled_base.c    # noqa: E501
-    # Permanent reference:
-    # https://github.com/numpy/numpy/blob/91fbe4dde246559fa5b085ebf4bc268e2b89eea8/numpy/core/src/multiarray/compiled_base.c#L798-L812    # noqa: E501
-
-    # If we get nan in one direction, try the other
-    real = slope.real * (x_val - dx[j]) + dy[j].real
-    if np.isnan(real):
-        real = slope.real * (x_val - dx[j + 1]) + dy[j + 1].real
-        if np.isnan(real) and dy[j].real == dy[j + 1].real:
-            real = dy[j].real
-
-    imag = slope.imag * (x_val - dx[j]) + dy[j].imag
-    if np.isnan(imag):
-        imag = slope.imag * (x_val - dx[j + 1]) + dy[j + 1].imag
-        if np.isnan(imag) and dy[j].imag == dy[j + 1].imag:
-            imag = dy[j].imag
-
-    return real + 1j * imag
 
 
 @register_jitable
