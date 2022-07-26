@@ -2288,102 +2288,6 @@ def binary_search_with_guess(key, arr, length, guess):
     return imin - 1
 
 
-@register_jitable
-def np_interp_impl_complex_fp_inner(x, xp, fp, dtype):
-    # NOTE: Do not refactor... see note in np_interp function impl below
-    # this is a facsimile of arr_interp_complex prior to 1.16:
-    # https://github.com/numpy/numpy/blob/maintenance/1.15.x/numpy/core/src/multiarray/compiled_base.c    # noqa: E501
-    # Permanent reference:
-    # https://github.com/numpy/numpy/blob/3430d78c01a3b9a19adad75f1acb5ae18286da73/numpy/core/src/multiarray/compiled_base.c#L683    # noqa: E501
-    dz = np.asarray(x)
-    dx = np.asarray(xp)
-    dy = np.asarray(fp)
-
-    if len(dx) == 0:
-        raise ValueError('array of sample points is empty')
-
-    if len(dx) != len(dy):
-        raise ValueError('fp and xp are not of the same size.')
-
-    if dx.size == 1:
-        return np.full(dz.shape, fill_value=dy[0], dtype=dtype)
-
-    dres = np.empty(dz.shape, dtype=dtype)
-
-    lenx = dz.size
-    lenxp = len(dx)
-    lval = dy[0]
-    rval = dy[lenxp - 1]
-
-    if lenxp == 1:
-        xp_val = dx[0]
-        fp_val = dy[0]
-
-        for i in range(lenx):
-            x_val = dz.flat[i]
-            if x_val < xp_val:
-                dres.flat[i] = lval
-            elif x_val > xp_val:
-                dres.flat[i] = rval
-            else:
-                dres.flat[i] = fp_val
-
-    else:
-        j = 0
-
-        # only pre-calculate slopes if there are relatively few of them.
-        if lenxp <= lenx:
-            slopes = np.empty((lenxp - 1), dtype=dtype)
-        else:
-            slopes = np.empty(0, dtype=dtype)
-
-        if slopes.size:
-            for i in range(lenxp - 1):
-                inv_dx = 1 / (dx[i + 1] - dx[i])
-                real = (dy[i + 1].real - dy[i].real) * inv_dx
-                imag = (dy[i + 1].imag - dy[i].imag) * inv_dx
-                slopes[i] = real + 1j * imag
-
-        for i in range(lenx):
-            x_val = dz.flat[i]
-
-            if np.isnan(x_val):
-                real = x_val
-                imag = 0.0
-                dres.flat[i] = real + 1j * imag
-                continue
-
-            j = binary_search_with_guess(x_val, dx, lenxp, j)
-
-            if j == -1:
-                dres.flat[i] = lval
-            elif j == lenxp:
-                dres.flat[i] = rval
-            elif j == lenxp - 1:
-                dres.flat[i] = dy[j]
-            else:
-                if slopes.size:
-                    slope = slopes[j]
-                else:
-                    inv_dx = 1 / (dx[j + 1] - dx[j])
-                    real = (dy[j + 1].real - dy[j].real) * inv_dx
-                    imag = (dy[j + 1].imag - dy[j].imag) * inv_dx
-                    slope = real + 1j * imag
-
-                real = slope.real * (x_val - dx[j]) + dy[j].real
-                imag = slope.imag * (x_val - dx[j]) + dy[j].imag
-                dres.flat[i] = real + 1j * imag
-
-                # NOTE: there's a change in master which is not
-                # in any released version of 1.16.x yet... as
-                # per the real value implementation, but
-                # interpolate real and imaginary parts
-                # independently; this will need to be added in
-                # due course
-
-    return dres
-
-
 def np_interp_impl_complex_fp_inner_factory(np117_nan_handling):
     @register_jitable
     def impl(x, xp, fp, dtype):
@@ -2513,91 +2417,6 @@ def np_interp_impl_complex_fp_innermost_117(x, slope, x_val, dx, dy, i, j):
     return real + 1j * imag
 
 
-@register_jitable
-def np_interp_impl_inner(x, xp, fp, dtype):
-    # NOTE: Do not refactor... see note in np_interp function impl below
-    # this is a facsimile of arr_interp prior to 1.16:
-    # https://github.com/numpy/numpy/blob/maintenance/1.15.x/numpy/core/src/multiarray/compiled_base.c    # noqa: E501
-    # Permanent reference:
-    # https://github.com/numpy/numpy/blob/3430d78c01a3b9a19adad75f1acb5ae18286da73/numpy/core/src/multiarray/compiled_base.c#L532    # noqa: E501
-    dz = np.asarray(x, dtype=np.float64)
-    dx = np.asarray(xp, dtype=np.float64)
-    dy = np.asarray(fp, dtype=np.float64)
-
-    if len(dx) == 0:
-        raise ValueError('array of sample points is empty')
-
-    if len(dx) != len(dy):
-        raise ValueError('fp and xp are not of the same size.')
-
-    if dx.size == 1:
-        return np.full(dz.shape, fill_value=dy[0], dtype=dtype)
-
-    dres = np.empty(dz.shape, dtype=dtype)
-
-    lenx = dz.size
-    lenxp = len(dx)
-    lval = dy[0]
-    rval = dy[lenxp - 1]
-
-    if lenxp == 1:
-        xp_val = dx[0]
-        fp_val = dy[0]
-
-        for i in range(lenx):
-            x_val = dz.flat[i]
-            if x_val < xp_val:
-                dres.flat[i] = lval
-            elif x_val > xp_val:
-                dres.flat[i] = rval
-            else:
-                dres.flat[i] = fp_val
-
-    else:
-        j = 0
-
-        # only pre-calculate slopes if there are relatively few of them.
-        if lenxp <= lenx:
-            slopes = (dy[1:] - dy[:-1]) / (dx[1:] - dx[:-1])
-        else:
-            slopes = np.empty(0, dtype=dtype)
-
-        for i in range(lenx):
-            x_val = dz.flat[i]
-
-            if np.isnan(x_val):
-                dres.flat[i] = x_val
-                continue
-
-            j = binary_search_with_guess(x_val, dx, lenxp, j)
-
-            if j == -1:
-                dres.flat[i] = lval
-            elif j == lenxp:
-                dres.flat[i] = rval
-            elif j == lenxp - 1:
-                dres.flat[i] = dy[j]
-            else:
-                if slopes.size:
-                    slope = slopes[j]
-                else:
-                    slope = (dy[j + 1] - dy[j]) / (dx[j + 1] - dx[j])
-
-                dres.flat[i] = slope * (x_val - dx[j]) + dy[j]
-
-                # NOTE: this is in master but not in any released
-                # version of 1.16.x yet...
-                #
-                # If we get nan in one direction, try the other
-                # if np.isnan(dres.flat[i]):
-                #     dres.flat[i] = slope * (x_val - dx[j + 1]) + dy[j + 1]
-                #
-                #     if np.isnan(dres.flat[i]) and dy[j] == dy[j + 1]:
-                #         dres.flat[i] = dy[j]
-
-    return dres
-
-
 def np_interp_impl_inner_factory(np117_nan_handling):
     def impl(x, xp, fp, dtype):
         # NOTE: Do not refactor... see note in np_interp function impl below
@@ -2705,22 +2524,9 @@ np_interp_impl_complex_inner_pre_np117 = register_jitable(
 
 @overload(np.interp)
 def np_interp(x, xp, fp):
-    # NOTE: there is considerable duplication present in the functions:
-    # np_interp_impl_complex_fp_inner_116
-    # np_interp_impl_complex_fp_inner
-    # np_interp_impl_inner_116
-    # np_interp_impl_inner
-    #
-    # This is because:
-    # 1. Replicating basic interp is relatively simple, however matching the
-    #    behaviour of NumPy for edge cases is really quite hard, after a
-    #    couple of attempts trying to avoid translation of the C source it
-    #    was deemed unavoidable.
-    # 2. Due to 1. it is much easier to keep track of changes if the Numba
-    #    source reflects the NumPy C source, so the duplication is kept.
-    # 3. There are significant changes that happened in the NumPy 1.16
-    #    release series, hence functions with `np116` appended, they behave
-    #    slightly differently!
+    # Replicating basic interp is relatively simple, but matching the behaviour
+    # of NumPy for edge cases is really quite hard. After a couple of attempts
+    # to avoid translation of the C source it was deemed necessary.
 
     if hasattr(xp, 'ndim') and xp.ndim > 1:
         raise TypingError('xp must be 1D')
@@ -2735,15 +2541,8 @@ def np_interp(x, xp, fp):
     if np.issubdtype(xp_dt, np.complexfloating):
         raise TypingError(complex_dtype_msg)
 
-    if numpy_version >= (1, 17):
-        impl = np_interp_impl_inner_post_np117
-        impl_complex = np_interp_impl_complex_inner_post_np117
-    elif numpy_version >= (1, 16):
-        impl = np_interp_impl_inner_pre_np117
-        impl_complex = np_interp_impl_complex_inner_pre_np117
-    else:
-        impl = np_interp_impl_inner
-        impl_complex = np_interp_impl_complex_fp_inner
+    impl = np_interp_impl_inner_post_np117
+    impl_complex = np_interp_impl_complex_inner_post_np117
 
     fp_dt = determine_dtype(fp)
     dtype = np.result_type(fp_dt, np.float64)
