@@ -2288,100 +2288,98 @@ def binary_search_with_guess(key, arr, length, guess):
     return imin - 1
 
 
-def np_interp_impl_complex_fp_inner_factory():
-    @register_jitable
-    def impl(x, xp, fp, dtype):
-        # NOTE: Do not refactor... see note in np_interp function impl below
-        # this is a facsimile of arr_interp_complex post 1.16 with added
-        # branching to support np1.17 style NaN handling.
-        # https://github.com/numpy/numpy/blob/maintenance/1.16.x/numpy/core/src/multiarray/compiled_base.c    # noqa: E501
-        # Permanent reference:
-        # https://github.com/numpy/numpy/blob/971e2e89d08deeae0139d3011d15646fdac13c92/numpy/core/src/multiarray/compiled_base.c#L628    # noqa: E501
-        dz = np.asarray(x)
-        dx = np.asarray(xp)
-        dy = np.asarray(fp)
+@register_jitable
+def np_interp_impl_complex_inner(x, xp, fp, dtype):
+    # NOTE: Do not refactor... see note in np_interp function impl below
+    # this is a facsimile of arr_interp_complex post 1.16 with added
+    # branching to support np1.17 style NaN handling.
+    # https://github.com/numpy/numpy/blob/maintenance/1.16.x/numpy/core/src/multiarray/compiled_base.c    # noqa: E501
+    # Permanent reference:
+    # https://github.com/numpy/numpy/blob/971e2e89d08deeae0139d3011d15646fdac13c92/numpy/core/src/multiarray/compiled_base.c#L628    # noqa: E501
+    dz = np.asarray(x)
+    dx = np.asarray(xp)
+    dy = np.asarray(fp)
 
-        if len(dx) == 0:
-            raise ValueError('array of sample points is empty')
+    if len(dx) == 0:
+        raise ValueError('array of sample points is empty')
 
-        if len(dx) != len(dy):
-            raise ValueError('fp and xp are not of the same size.')
+    if len(dx) != len(dy):
+        raise ValueError('fp and xp are not of the same size.')
 
-        if dx.size == 1:
-            return np.full(dz.shape, fill_value=dy[0], dtype=dtype)
+    if dx.size == 1:
+        return np.full(dz.shape, fill_value=dy[0], dtype=dtype)
 
-        dres = np.empty(dz.shape, dtype=dtype)
+    dres = np.empty(dz.shape, dtype=dtype)
 
-        lenx = dz.size
-        lenxp = len(dx)
-        lval = dy[0]
-        rval = dy[lenxp - 1]
+    lenx = dz.size
+    lenxp = len(dx)
+    lval = dy[0]
+    rval = dy[lenxp - 1]
 
-        if lenxp == 1:
-            xp_val = dx[0]
-            fp_val = dy[0]
+    if lenxp == 1:
+        xp_val = dx[0]
+        fp_val = dy[0]
 
-            for i in range(lenx):
-                x_val = dz.flat[i]
-                if x_val < xp_val:
-                    dres.flat[i] = lval
-                elif x_val > xp_val:
-                    dres.flat[i] = rval
-                else:
-                    dres.flat[i] = fp_val
-
-        else:
-            j = 0
-
-            # only pre-calculate slopes if there are relatively few of them.
-            if lenxp <= lenx:
-                slopes = np.empty((lenxp - 1), dtype=dtype)
+        for i in range(lenx):
+            x_val = dz.flat[i]
+            if x_val < xp_val:
+                dres.flat[i] = lval
+            elif x_val > xp_val:
+                dres.flat[i] = rval
             else:
-                slopes = np.empty(0, dtype=dtype)
+                dres.flat[i] = fp_val
 
-            if slopes.size:
-                for i in range(lenxp - 1):
-                    inv_dx = 1 / (dx[i + 1] - dx[i])
-                    real = (dy[i + 1].real - dy[i].real) * inv_dx
-                    imag = (dy[i + 1].imag - dy[i].imag) * inv_dx
-                    slopes[i] = real + 1j * imag
+    else:
+        j = 0
 
-            for i in range(lenx):
-                x_val = dz.flat[i]
+        # only pre-calculate slopes if there are relatively few of them.
+        if lenxp <= lenx:
+            slopes = np.empty((lenxp - 1), dtype=dtype)
+        else:
+            slopes = np.empty(0, dtype=dtype)
 
-                if np.isnan(x_val):
-                    real = x_val
-                    imag = 0.0
-                    dres.flat[i] = real + 1j * imag
-                    continue
+        if slopes.size:
+            for i in range(lenxp - 1):
+                inv_dx = 1 / (dx[i + 1] - dx[i])
+                real = (dy[i + 1].real - dy[i].real) * inv_dx
+                imag = (dy[i + 1].imag - dy[i].imag) * inv_dx
+                slopes[i] = real + 1j * imag
 
-                j = binary_search_with_guess(x_val, dx, lenxp, j)
+        for i in range(lenx):
+            x_val = dz.flat[i]
 
-                if j == -1:
-                    dres.flat[i] = lval
-                elif j == lenxp:
-                    dres.flat[i] = rval
-                elif j == lenxp - 1:
-                    dres.flat[i] = dy[j]
-                elif dx[j] == x_val:
-                    # Avoid potential non-finite interpolation
-                    dres.flat[i] = dy[j]
+            if np.isnan(x_val):
+                real = x_val
+                imag = 0.0
+                dres.flat[i] = real + 1j * imag
+                continue
+
+            j = binary_search_with_guess(x_val, dx, lenxp, j)
+
+            if j == -1:
+                dres.flat[i] = lval
+            elif j == lenxp:
+                dres.flat[i] = rval
+            elif j == lenxp - 1:
+                dres.flat[i] = dy[j]
+            elif dx[j] == x_val:
+                # Avoid potential non-finite interpolation
+                dres.flat[i] = dy[j]
+            else:
+                if slopes.size:
+                    slope = slopes[j]
                 else:
-                    if slopes.size:
-                        slope = slopes[j]
-                    else:
-                        inv_dx = 1 / (dx[j + 1] - dx[j])
-                        real = (dy[j + 1].real - dy[j].real) * inv_dx
-                        imag = (dy[j + 1].imag - dy[j].imag) * inv_dx
-                        slope = real + 1j * imag
+                    inv_dx = 1 / (dx[j + 1] - dx[j])
+                    real = (dy[j + 1].real - dy[j].real) * inv_dx
+                    imag = (dy[j + 1].imag - dy[j].imag) * inv_dx
+                    slope = real + 1j * imag
 
-                    # Numpy 1.17 handles NaN correctly
-                    result = np_interp_impl_complex_fp_innermost_117(
-                        x, slope, x_val, dx, dy, i, j,
-                    )
-                    dres.flat[i] = result
-        return dres
-    return impl
+                # Numpy 1.17 handles NaN correctly
+                result = np_interp_impl_complex_fp_innermost_117(
+                    x, slope, x_val, dx, dy, i, j,
+                )
+                dres.flat[i] = result
+    return dres
 
 
 @register_jitable
@@ -2408,102 +2406,93 @@ def np_interp_impl_complex_fp_innermost_117(x, slope, x_val, dx, dy, i, j):
     return real + 1j * imag
 
 
-def np_interp_impl_inner_factory():
-    def impl(x, xp, fp, dtype):
-        # NOTE: Do not refactor... see note in np_interp function impl below
-        # this is a facsimile of arr_interp post 1.16:
-        # https://github.com/numpy/numpy/blob/maintenance/1.16.x/numpy/core/src/multiarray/compiled_base.c    # noqa: E501
-        # Permanent reference:
-        # https://github.com/numpy/numpy/blob/971e2e89d08deeae0139d3011d15646fdac13c92/numpy/core/src/multiarray/compiled_base.c#L473     # noqa: E501
-        dz = np.asarray(x, dtype=np.float64)
-        dx = np.asarray(xp, dtype=np.float64)
-        dy = np.asarray(fp, dtype=np.float64)
+@register_jitable
+def np_interp_impl_inner(x, xp, fp, dtype):
+    # NOTE: Do not refactor... see note in np_interp function impl below
+    # this is a facsimile of arr_interp post 1.16:
+    # https://github.com/numpy/numpy/blob/maintenance/1.16.x/numpy/core/src/multiarray/compiled_base.c    # noqa: E501
+    # Permanent reference:
+    # https://github.com/numpy/numpy/blob/971e2e89d08deeae0139d3011d15646fdac13c92/numpy/core/src/multiarray/compiled_base.c#L473     # noqa: E501
+    dz = np.asarray(x, dtype=np.float64)
+    dx = np.asarray(xp, dtype=np.float64)
+    dy = np.asarray(fp, dtype=np.float64)
 
-        if len(dx) == 0:
-            raise ValueError('array of sample points is empty')
+    if len(dx) == 0:
+        raise ValueError('array of sample points is empty')
 
-        if len(dx) != len(dy):
-            raise ValueError('fp and xp are not of the same size.')
+    if len(dx) != len(dy):
+        raise ValueError('fp and xp are not of the same size.')
 
-        if dx.size == 1:
-            return np.full(dz.shape, fill_value=dy[0], dtype=dtype)
+    if dx.size == 1:
+        return np.full(dz.shape, fill_value=dy[0], dtype=dtype)
 
-        dres = np.empty(dz.shape, dtype=dtype)
+    dres = np.empty(dz.shape, dtype=dtype)
 
-        lenx = dz.size
-        lenxp = len(dx)
-        lval = dy[0]
-        rval = dy[lenxp - 1]
+    lenx = dz.size
+    lenxp = len(dx)
+    lval = dy[0]
+    rval = dy[lenxp - 1]
 
-        if lenxp == 1:
-            xp_val = dx[0]
-            fp_val = dy[0]
+    if lenxp == 1:
+        xp_val = dx[0]
+        fp_val = dy[0]
 
-            for i in range(lenx):
-                x_val = dz.flat[i]
-                if x_val < xp_val:
-                    dres.flat[i] = lval
-                elif x_val > xp_val:
-                    dres.flat[i] = rval
-                else:
-                    dres.flat[i] = fp_val
-
-        else:
-            j = 0
-
-            # only pre-calculate slopes if there are relatively few of them.
-            if lenxp <= lenx:
-                slopes = (dy[1:] - dy[:-1]) / (dx[1:] - dx[:-1])
+        for i in range(lenx):
+            x_val = dz.flat[i]
+            if x_val < xp_val:
+                dres.flat[i] = lval
+            elif x_val > xp_val:
+                dres.flat[i] = rval
             else:
-                slopes = np.empty(0, dtype=dtype)
+                dres.flat[i] = fp_val
 
-            for i in range(lenx):
-                x_val = dz.flat[i]
+    else:
+        j = 0
 
-                if np.isnan(x_val):
-                    dres.flat[i] = x_val
-                    continue
+        # only pre-calculate slopes if there are relatively few of them.
+        if lenxp <= lenx:
+            slopes = (dy[1:] - dy[:-1]) / (dx[1:] - dx[:-1])
+        else:
+            slopes = np.empty(0, dtype=dtype)
 
-                j = binary_search_with_guess(x_val, dx, lenxp, j)
+        for i in range(lenx):
+            x_val = dz.flat[i]
 
-                if j == -1:
-                    dres.flat[i] = lval
-                elif j == lenxp:
-                    dres.flat[i] = rval
-                elif j == lenxp - 1:
-                    dres.flat[i] = dy[j]
-                elif dx[j] == x_val:
-                    # Avoid potential non-finite interpolation
-                    dres.flat[i] = dy[j]
+            if np.isnan(x_val):
+                dres.flat[i] = x_val
+                continue
+
+            j = binary_search_with_guess(x_val, dx, lenxp, j)
+
+            if j == -1:
+                dres.flat[i] = lval
+            elif j == lenxp:
+                dres.flat[i] = rval
+            elif j == lenxp - 1:
+                dres.flat[i] = dy[j]
+            elif dx[j] == x_val:
+                # Avoid potential non-finite interpolation
+                dres.flat[i] = dy[j]
+            else:
+                if slopes.size:
+                    slope = slopes[j]
                 else:
-                    if slopes.size:
-                        slope = slopes[j]
-                    else:
-                        slope = (dy[j + 1] - dy[j]) / (dx[j + 1] - dx[j])
+                    slope = (dy[j + 1] - dy[j]) / (dx[j + 1] - dx[j])
 
-                    dres.flat[i] = slope * (x_val - dx[j]) + dy[j]
+                dres.flat[i] = slope * (x_val - dx[j]) + dy[j]
 
-                    # NOTE: this is in np1.17
-                    # https://github.com/numpy/numpy/blob/maintenance/1.17.x/numpy/core/src/multiarray/compiled_base.c    # noqa: E501
-                    # Permanent reference:
-                    # https://github.com/numpy/numpy/blob/91fbe4dde246559fa5b085ebf4bc268e2b89eea8/numpy/core/src/multiarray/compiled_base.c#L610-L616    # noqa: E501
-                    #
-                    # If we get nan in one direction, try the other
-                    if np.isnan(dres.flat[i]):
-                        dres.flat[i] = slope * (x_val - dx[j + 1]) + dy[j + 1]    # noqa: E501
-                        if np.isnan(dres.flat[i]) and dy[j] == dy[j + 1]:
-                            dres.flat[i] = dy[j]
+                # NOTE: this is in np1.17
+                # https://github.com/numpy/numpy/blob/maintenance/1.17.x/numpy/core/src/multiarray/compiled_base.c    # noqa: E501
+                # Permanent reference:
+                # https://github.com/numpy/numpy/blob/91fbe4dde246559fa5b085ebf4bc268e2b89eea8/numpy/core/src/multiarray/compiled_base.c#L610-L616    # noqa: E501
+                #
+                # If we get nan in one direction, try the other
+                if np.isnan(dres.flat[i]):
+                    dres.flat[i] = slope * (x_val - dx[j + 1]) + dy[j + 1]    # noqa: E501
+                    if np.isnan(dres.flat[i]) and dy[j] == dy[j + 1]:
+                        dres.flat[i] = dy[j]
 
-        return dres
-    return impl
-
-
-np_interp_impl_inner_post_np117 = register_jitable(
-    np_interp_impl_inner_factory()
-)
-np_interp_impl_complex_inner_post_np117 = register_jitable(
-    np_interp_impl_complex_fp_inner_factory()
-)
+    return dres
 
 
 @overload(np.interp)
@@ -2525,16 +2514,13 @@ def np_interp(x, xp, fp):
     if np.issubdtype(xp_dt, np.complexfloating):
         raise TypingError(complex_dtype_msg)
 
-    impl = np_interp_impl_inner_post_np117
-    impl_complex = np_interp_impl_complex_inner_post_np117
-
     fp_dt = determine_dtype(fp)
     dtype = np.result_type(fp_dt, np.float64)
 
     if np.issubdtype(dtype, np.complexfloating):
-        inner = impl_complex
+        inner = np_interp_impl_complex_inner
     else:
-        inner = impl
+        inner = np_interp_impl_inner
 
     def np_interp_impl(x, xp, fp):
         return inner(x, xp, fp, dtype)
