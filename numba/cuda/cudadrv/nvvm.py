@@ -895,6 +895,10 @@ def set_cuda_kernel(lfunc):
     nmd = cgutils.get_or_insert_named_metadata(mod, 'nvvm.annotations')
     nmd.add(md)
 
+    # Marking a kernel 'noinline' causes NVVM to generate a warning, so remove
+    # it if it is present.
+    lfunc.attributes.discard('noinline')
+
 
 def add_ir_version(mod):
     """Add NVVM IR version to module"""
