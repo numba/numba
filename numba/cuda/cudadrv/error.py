@@ -17,3 +17,7 @@ class NvvmError(Exception):
 
 class NvvmSupportError(ImportError):
     pass
+
+
+class NvvmWarning(Warning):
+    pass

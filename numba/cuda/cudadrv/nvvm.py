@@ -12,7 +12,7 @@ import threading
 
 from llvmlite import ir
 
-from .error import NvvmError, NvvmSupportError
+from .error import NvvmError, NvvmSupportError, NvvmWarning
 from .libs import get_libdevice, open_libdevice, open_cudalib
 from numba.core import cgutils, config
 
@@ -312,6 +312,8 @@ class CompilationUnit(object):
 
         # get log
         self.log = self.get_log()
+        if self.log:
+            warnings.warn(self.log, category=NvvmWarning)
 
         return ptxbuf[:]
 

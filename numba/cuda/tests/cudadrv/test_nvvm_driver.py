@@ -1,3 +1,5 @@
+import warnings
+
 from llvmlite import ir
 from numba.cuda.cudadrv.nvvm import (llvm_to_ptx, set_cuda_kernel,
                                      get_arch_option, get_supported_ccs)
@@ -57,6 +59,25 @@ class TestNvvmDriver(unittest.TestCase):
         """
         for arch in get_supported_ccs():
             self._test_nvvm_support(arch=arch)
+
+    def test_nvvm_warning(self):
+        m = ir.Module("test_nvvm_warning")
+        m.data_layout = NVVM().data_layout
+
+        fty = ir.FunctionType(ir.VoidType(), [])
+        kernel = ir.Function(m, fty, name='inlinekernel')
+        builder = ir.IRBuilder(kernel.append_basic_block('entry'))
+        builder.ret_void()
+        set_cuda_kernel(kernel)
+
+        # Add the noinline attribute to trigger NVVM to generate a warning
+        kernel.attributes.add('noinline')
+
+        with warnings.catch_warnings(record=True) as w:
+            llvm_to_ptx(str(m))
+
+        self.assertEqual(len(w), 1)
+        self.assertIn('overriding noinline attribute', str(w[0]))
 
     @unittest.skipIf(True, "No new CC unknown to NVVM yet")
     def test_nvvm_future_support(self):
