@@ -64,23 +64,50 @@ class TestHelperFuncs(TestCase):
 
     def test_integers_arg_check(self):
         rng = np.random.default_rng(1)
-        py_func = lambda x, low, high: \
-            x.integers(low=low, high=high, dtype=np.uint16)
+        py_func = lambda x, low, high, dtype: \
+            x.integers(low=low, high=high, dtype=dtype, endpoint=True)
         numba_func = numba.njit(cache=True)(py_func)
+
+        cases = [
+            # low, high, dtype
+            (np.iinfo(np.uint8).min, 100, np.uint8),
+            (np.iinfo(np.int8).min, 100, np.int8),
+            (np.iinfo(np.uint16).min, 100, np.uint16),
+            (np.iinfo(np.int16).min, 100, np.int16),
+            (np.iinfo(np.uint32).min, 100, np.uint32),
+            (np.iinfo(np.int32).min, 100, np.int32),
+            (np.iinfo(np.uint64).min, 100, np.uint64),
+        ]
+        for low, high, dtype in cases:
+            with self.subTest(low=low, high=high, dtype=dtype):
+                with self.assertRaises(ValueError) as raises:
+                    numba_func(rng, low - 1, high, dtype)
+            self.assertIn(
+                'low is out of bounds',
+                str(raises.exception)
+            )
+
+        cases = [
+            # low, high, dtype
+            (0, np.iinfo(np.uint8).max, np.uint8),
+            (0, np.iinfo(np.int8).max, np.int8),
+            (0, np.iinfo(np.uint16).max, np.uint16),
+            (0, np.iinfo(np.int16).max, np.int16),
+            (0, np.iinfo(np.uint32).max, np.uint32),
+            (0, np.iinfo(np.int32).max, np.int32),
+            (0, np.iinfo(np.int64).max, np.int64),
+        ]
+        for low, high, dtype in cases:
+            with self.subTest(low=low, high=high, dtype=dtype):
+                with self.assertRaises(ValueError) as raises:
+                    numba_func(rng, low, high + 1, dtype)
+                self.assertIn(
+                    'high is out of bounds',
+                    str(raises.exception)
+                )
+
         with self.assertRaises(ValueError) as raises:
-            numba_func(rng, -99, 100)
-        self.assertIn(
-            'low is out of bounds',
-            str(raises.exception)
-        )
-        with self.assertRaises(ValueError) as raises:
-            numba_func(rng, 1, 0xFFFFF)
-        self.assertIn(
-            'high is out of bounds',
-            str(raises.exception)
-        )
-        with self.assertRaises(ValueError) as raises:
-            numba_func(rng, 105, 100)
+            numba_func(rng, 105, 100, np.uint32)
         self.assertIn(
             'low is greater than high in given interval',
             str(raises.exception)
@@ -241,128 +268,59 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                                   ['x', 'x', ('x',), np.float64, 'x'])
 
     # Testing .integers() dtype wise
-    def test_integers_uint64(self):
+    def test_integers_cases(self):
+        cases = [
+            # low, high, dtype
+            (5, 6, np.uint64), # rng == 0 (rng stands for range)
+            (5, 100, np.uint64), # rng <= 0xFFFFFFFF
+            (0, 0xFFFFFFFFFF, np.uint64), # rng > 0xFFFFFFFF
+            (0, 0xFFFFFFFFFFFFFFFF - 1, np.uint64),# rng == 0xFFFFFFFFFFFFFFFF-1
+            (0, 0xFFFFFFFFFFFFFFFF, np.uint64), # rng == 0xFFFFFFFFFFFFFFFF
+
+            (5, 6, np.int64), # rng == 0
+            (5, 100, np.int64), # rng <= 0xFFFFFFFF
+            (0, 0xFFFFFFFFFF, np.int64), # rng > 0xFFFFFFFF
+            (0, 0xFFFFFFFFFFFFFFF - 1, np.int64), # rng == 0xFFFFFFFFFFFFFFF - 1
+            (0, 0xFFFFFFFFFFFFFFF, np.int64), # rng == 0xFFFFFFFFFFFFFFF
+
+            (5, 6, np.uint32), # rng == 0
+            (5, 100, np.uint32), # rng < 0xFFFFFFFF
+            (0, 0xFFFFFFFF - 1, np.uint32), # rng == 0xFFFFFFFF - 1
+            (0, 0xFFFFFFFF, np.uint32), # rng == 0xFFFFFFFF
+
+            (5, 6, np.int32), # rng == 0
+            (5, 100, np.int32), # rng < 0xFFFFFFFF
+            (0, 0xFFFFFFF - 1, np.int32), # rng == 0xFFFFFFF - 1
+            (0, 0xFFFFFFF, np.int32), # rng == 0xFFFFFFF
+
+            (5, 6, np.uint16), # rng == 0
+            (5, 100, np.uint16), # rng < 0xFFFF
+            (0, 0xFFFF - 1, np.uint16), # rng == 0xFFFF - 1
+            (0, 0xFFFF, np.uint16), # rng == 0xFFFF
+
+            (5, 6, np.int16), # rng == 0
+            (5, 10, np.int16), # rng < 0xFFF
+            (0, 0xFFF - 1, np.int16), # rng == 0xFFF - 1
+            (0, 0xFFF, np.int16), # rng == 0xFFF
+
+            (5, 6, np.uint8), # rng == 0
+            (5, 10, np.uint8), # rng < 0xFF
+            (0, 0xFF - 1, np.uint8), # rng == 0xFF - 1
+            (0, 0xFF, np.uint8), # rng == 0xFF
+
+            (5, 6, np.int8), # rng == 0
+            (5, 10, np.int8), # rng < 0xF
+            (0, 0xF - 1, np.int8), # rng == 0xF-1
+            (0, 0xF, np.int8), # rng == 0xF
+        ]
         size = (2, 3)
-        # rng stands for range
-        # rng == 0
-        dist_func = lambda x, size, dtype:\
-            x.integers(5, 6, size=size, dtype=np.uint64)
-        self.check_numpy_parity(dist_func, None,
-                                None, size, np.uint64, 0)
 
-        # rng <= 0xFFFFFFFF
-        dist_func = lambda x, size, dtype:\
-            x.integers(5, 100, size=size, dtype=np.uint64)
-        self.check_numpy_parity(dist_func, None,
-                                None, size, np.uint64, 0)
-
-        # rng > 0xFFFFFFFF
-        dist_func = lambda x, size, dtype:\
-            x.integers(0, 0xFFFFFFFFFF, size=size,
-                       dtype=np.uint64, endpoint=True)
-        self.check_numpy_parity(dist_func, None,
-                                None, size, np.uint64, 0)
-
-        # rng == 0xFFFFFFFFFFFFFFFF - 1
-        dist_func = lambda x, size, dtype:\
-            x.integers(0, 0xFFFFFFFFFFFFFFFF - 1, size=size,
-                       dtype=np.uint64, endpoint=True)
-        self.check_numpy_parity(dist_func, None,
-                                None, size, np.uint64, 0)
-
-        # rng == 0xFFFFFFFFFFFFFFFF
-        dist_func = lambda x, size, dtype:\
-            x.integers(0, 0xFFFFFFFFFFFFFFFF, size=size,
-                       dtype=np.uint64, endpoint=True)
-        self.check_numpy_parity(dist_func, None,
-                                None, size, np.uint64, 0)
-
-    def test_integers_uint32(self):
-        size = (2, 3)
-        # rng stands for range
-        # rng == 0
-        dist_func = lambda x, size, dtype:\
-            x.integers(5, 6, size=size, dtype=np.uint32)
-        self.check_numpy_parity(dist_func, None,
-                                None, size, np.uint32, 0)
-
-        # rng < 0xFFFFFFFF
-        dist_func = lambda x, size, dtype:\
-            x.integers(5, 100, size=size, dtype=np.uint32)
-        self.check_numpy_parity(dist_func, None,
-                                None, size, np.uint32, 0)
-
-        # rng == 0xFFFFFFFF - 1
-        dist_func = lambda x, size, dtype:\
-            x.integers(0, 0xFFFFFFFF - 1, size=size,
-                       dtype=np.uint32, endpoint=True)
-        self.check_numpy_parity(dist_func, None,
-                                None, size, np.uint32, 0)
-
-        # rng == 0xFFFFFFFF
-        dist_func = lambda x, size, dtype:\
-            x.integers(0, 0xFFFFFFFF, size=size,
-                       dtype=np.uint32, endpoint=True)
-        self.check_numpy_parity(dist_func, None,
-                                None, size, np.uint32, 0)
-
-    def test_integers_uint16(self):
-        size = (2, 3)
-        # rng stands for range
-        # rng == 0
-        dist_func = lambda x, size, dtype:\
-            x.integers(5, 6, size=size, dtype=np.uint16)
-        self.check_numpy_parity(dist_func, None,
-                                None, size, np.uint16, 0)
-
-        # rng < 0xFFFF
-        dist_func = lambda x, size, dtype:\
-            x.integers(5, 100, size=size, dtype=np.uint16)
-        self.check_numpy_parity(dist_func, None,
-                                None, size, np.uint16, 0)
-
-        # rng == 0xFFFF - 1
-        dist_func = lambda x, size, dtype:\
-            x.integers(0, 0xFFFF - 1, size=size,
-                       dtype=np.uint16, endpoint=True)
-        self.check_numpy_parity(dist_func, None,
-                                None, size, np.uint16, 0)
-
-        # rng == 0xFFFF
-        dist_func = lambda x, size, dtype:\
-            x.integers(0, 0xFFFF, size=size,
-                       dtype=np.uint16, endpoint=True)
-        self.check_numpy_parity(dist_func, None,
-                                None, size, np.uint16, 0)
-
-    def test_integers_uint8(self):
-        size = (2, 3)
-        # rng stands for range
-        # rng == 0
-        dist_func = lambda x, size, dtype:\
-            x.integers(5, 6, size=size, dtype=np.uint8)
-        self.check_numpy_parity(dist_func, None,
-                                None, size, np.uint8, 0)
-
-        # rng < 0xFF
-        dist_func = lambda x, size, dtype:\
-            x.integers(5, 10, size=size, dtype=np.uint8)
-        self.check_numpy_parity(dist_func, None,
-                                None, size, np.uint8, 0)
-
-        # rng == 0xFF - 1
-        dist_func = lambda x, size, dtype:\
-            x.integers(0, 0xFF - 1, size=size,
-                       dtype=np.uint8, endpoint=True)
-        self.check_numpy_parity(dist_func, None,
-                                None, size, np.uint8, 0)
-
-        # rng == 0xFF
-        dist_func = lambda x, size, dtype:\
-            x.integers(0, 0xFF, size=size,
-                       dtype=np.uint8, endpoint=True)
-        self.check_numpy_parity(dist_func, None,
-                                None, size, np.uint8, 0)
+        for low, high, dtype in cases:
+            with self.subTest(low=low, high=high, dtype=dtype):
+                dist_func = lambda x, size, dtype:\
+                    x.integers(low, high, size=size, dtype=dtype)
+                self.check_numpy_parity(dist_func, None,
+                                        None, size, dtype, 0)
 
     def test_random(self):
         test_sizes = [None, (), (100,), (10, 20, 30)]
