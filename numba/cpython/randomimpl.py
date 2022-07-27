@@ -1095,7 +1095,7 @@ def geometric_impl(p, size):
                                             isinstance(size.dtype,
                                                        types.Integer))):
         def _impl(p, size):
-            out = np.empty(size)
+            out = np.empty(size, dtype=np.int64)
             out_flat = out.flat
             for idx in range(out.size):
                 out_flat[idx] = np.random.geometric(p)
