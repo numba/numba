@@ -1,4 +1,3 @@
-from llvmlite import binding as ll
 from llvmlite import ir
 from warnings import warn
 
@@ -349,14 +348,12 @@ class JITCUDACodegen(Codegen):
     _library_class = CUDACodeLibrary
 
     def __init__(self, module_name):
-        self._data_layout = nvvm.NVVM().data_layout
-        self._target_data = ll.create_target_data(self._data_layout)
+        pass
 
     def _create_empty_module(self, name):
         ir_module = ir.Module(name)
         ir_module.triple = CUDA_TRIPLE
-        if self._data_layout:
-            ir_module.data_layout = self._data_layout
+        ir_module.data_layout = nvvm.NVVM().data_layout
         nvvm.add_ir_version(ir_module)
         return ir_module
 
