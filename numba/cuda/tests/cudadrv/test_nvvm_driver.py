@@ -28,6 +28,7 @@ class TestNvvmDriver(unittest.TestCase):
 
     def test_nvvm_from_llvm(self):
         m = ir.Module("test_nvvm_from_llvm")
+        m.triple = 'nvptx64-nvidia-cuda'
         fty = ir.FunctionType(ir.VoidType(), [ir.IntType(32)])
         kernel = ir.Function(m, fty, name='mycudakernel')
         bldr = ir.IRBuilder(kernel.append_basic_block('entry'))
@@ -41,6 +42,13 @@ class TestNvvmDriver(unittest.TestCase):
             self.assertTrue('.address_size 64' in ptx)
         else:
             self.assertTrue('.address_size 32' in ptx)
+
+    def test_nvvm_ir_verify_fail(self):
+        m = ir.Module("test_bad_ir")
+        m.triple = "unknown-unknown-unknown"
+        fix_data_layout(m)
+        with self.assertRaisesRegex(NvvmError, 'Invalid target triple'):
+            llvm_to_ptx(str(m))
 
     def _test_nvvm_support(self, arch):
         compute_xx = 'compute_{0}{1}'.format(*arch)
@@ -96,7 +104,7 @@ class TestLibDevice(unittest.TestCase):
 
 
 nvvmir_generic = '''\
-target triple="nvptx64-"
+target triple="nvptx64-nvidia-cuda"
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64"
 
 define i32 @ave(i32 %a, i32 %b) {
