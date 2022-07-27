@@ -136,19 +136,10 @@ class TestCudaConstantMemory(CUDATestCase):
         self.assertTrue(np.all(A == CONST3D))
 
         if not ENABLE_CUDASIM:
-            # CUDA <= 11.1 uses two f32 loads to load the complex. CUDA >= 11.2
-            # uses a vector of 2x f32. The root cause of these codegen
-            # differences is not known, but must be accounted for in this test.
-            if cuda.runtime.get_version() > (11, 1):
-                complex_load = 'ld.const.v2.f32'
-                description = 'Load the complex as a vector of 2x f32'
-            else:
-                complex_load = 'ld.const.f32'
-                description = 'load each half of the complex as f32'
-
-            self.assertIn(
-                complex_load, jcuconst3d.inspect_asm(sig), description
-            )
+            asm = jcuconst3d.inspect_asm(sig)
+            complex_load = 'ld.const.v2.f32'
+            description = 'Load the complex as a vector of 2x f32'
+            self.assertIn(complex_load, asm, description)
 
     def test_const_record_empty(self):
         jcuconstRecEmpty = cuda.jit('void(int64[:])')(cuconstRecEmpty)
