@@ -16,7 +16,6 @@ class NVVM(object):
 CompilationUnit = None
 llvm_to_ptx = None
 set_cuda_kernel = None
-fix_data_layout = None
 get_arch_option = None
 LibDevice = None
 NvvmError = None

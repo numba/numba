@@ -24,7 +24,7 @@ class TestCudaInlineAsm(ContextResettingTestCase):
         bldr.ret_void()
 
         # generate ptx
-        nvvm.fix_data_layout(mod)
+        mod.data_layout = nvvm.NVVM().data_layout
         nvvm.set_cuda_kernel(fn)
         nvvmir = str(mod)
         ptx = nvvm.llvm_to_ptx(nvvmir)

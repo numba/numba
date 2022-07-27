@@ -349,7 +349,7 @@ class JITCUDACodegen(Codegen):
     _library_class = CUDACodeLibrary
 
     def __init__(self, module_name):
-        self._data_layout = nvvm.data_layout
+        self._data_layout = nvvm.NVVM().data_layout
         self._target_data = ll.create_target_data(self._data_layout)
 
     def _create_empty_module(self, name):
