@@ -341,16 +341,11 @@ def get_supported_ccs():
 
     ctk_ver = f"{cudart_version[0]}.{cudart_version[1]}"
     unsupported_ver = f"CUDA Toolkit {ctk_ver} is unsupported by Numba - " \
-                      + "10.2 is the minimum required version."
+                      + "11.0 is the minimum required version."
 
     # List of supported compute capability in sorted order
     if cudart_version == (0, 0):
         _supported_cc = ()
-    elif cudart_version == (10, 2):
-        _supported_cc = ((3, 5), (3, 7),
-                         (5, 0), (5, 2), (5, 3),
-                         (6, 0), (6, 1), (6, 2),
-                         (7, 0), (7, 2), (7, 5))
     elif cudart_version == (11, 0):
         _supported_cc = ((3, 5), (3, 7),
                          (5, 0), (5, 2), (5, 3),
@@ -421,7 +416,7 @@ def get_arch_option(major, minor):
 
 
 MISSING_LIBDEVICE_FILE_MSG = '''Missing libdevice file.
-Please ensure you have package cudatoolkit >= 10.2
+Please ensure you have package cudatoolkit >= 11.0
 Install package by:
 
     conda install cudatoolkit

@@ -557,10 +557,7 @@ class TestCudaIntrinsic(CUDATestCase):
     def test_habs_ptx(self):
         args = (f2[:], f2)
         ptx, _ = compile_ptx(simple_habs_scalar, args, cc=(5, 3))
-        if cuda.runtime.get_version() < (10, 2):
-            self.assertRegex(ptx, r'and\.b16.*0x7FFF;')
-        else:
-            self.assertIn('abs.f16', ptx)
+        self.assertIn('abs.f16', ptx)
 
     @skip_unless_cc_53
     def test_fp16_comparison(self):
