@@ -904,13 +904,7 @@ def set_cuda_kernel(lfunc):
 
 def add_ir_version(mod):
     """Add NVVM IR version to module"""
-    i32 = ir.IntType(32)
-    if NVVM().is_nvvm70:
-        # NVVM IR 1.6, DWARF 3.0
-        ir_versions = [i32(1), i32(6), i32(3), i32(0)]
-    else:
-        # NVVM IR 1.1, DWARF 2.0
-        ir_versions = [i32(1), i32(2), i32(2), i32(0)]
-
+    # We specify the IR version to match the current NVVM's IR version
+    ir_versions = [ir.IntType(32)(v) for v in NVVM().get_ir_version()]
     md_ver = mod.add_metadata(ir_versions)
     mod.add_named_metadata('nvvmir.version', md_ver)
