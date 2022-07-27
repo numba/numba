@@ -3,7 +3,7 @@ Example: An Interval Type
 =========================
 
 In this example, we will extend the Numba frontend to add support for a user-defined
-class that it does not internally supported. This will allow:
+class that it does not internally support. This will allow:
 
 * Passing an instance of the class to a Numba function
 * Accessing attributes of the class in a Numba function
