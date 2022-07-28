@@ -5,6 +5,14 @@ from numba import cuda, float32, float64, int32, int64, void
 from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
 import math
 
+CONST_RECORD_FLOAT = np.array(
+    [(1.0, 2), (3.0, 4)],
+    dtype=[('x', np.float32), ('y', np.int32)])
+
+CONST_RECORD_DOUBLE = np.array(
+    [(1.0, 2), (3.0, 4)],
+    dtype=[('x', np.float64), ('y', np.int32)])
+
 
 def add(x, y):
     return x + y
@@ -271,6 +279,67 @@ class TestDispatcher(CUDATestCase):
         regs_per_thread = pi_sin_array.get_regs_per_thread()
         self.assertIsInstance(regs_per_thread, int)
         self.assertGreater(regs_per_thread, 0)
+
+    def test_get_const_mem_unspecialized(self):
+        @cuda.jit
+        def const_record_float(A, B):
+            C = cuda.const.array_like(CONST_RECORD_FLOAT)
+            i = cuda.grid(1)
+            A[i] = C[i]['x']
+            B[i] = C[i]['y']
+
+        @cuda.jit
+        def const_record_double(A, B):
+            C = cuda.const.array_like(CONST_RECORD_DOUBLE)
+            i = cuda.grid(1)
+            A[i] = C[i]['x']
+            B[i] = C[i]['y']
+
+        # Call the kernel with different arguments to create two different
+        # definitions within the Dispatcher object
+        N = 2
+        arr_f32 = np.zeros(N, dtype=np.float32)
+        arr_f64 = np.zeros(N, dtype=np.float64)
+        arr_int = np.zeros(N, dtype=np.int32)
+
+        const_record_float[1, N](arr_f32, arr_int)
+        const_record_double[1, N](arr_f64, arr_int)
+
+        # Check we get a positive integer for the two different variations
+        sig_f32 = void(float32[::1], int32[::1])
+        sig_f64 = void(float64[::1], int32[::1])
+        const_mem_size_f32 = const_record_float.get_const_mem_size(sig_f32)
+        const_mem_size_f64 = const_record_double.get_const_mem_size(sig_f64)
+
+        self.assertIsInstance(const_mem_size_f32, int)
+        self.assertIsInstance(const_mem_size_f64, int)
+
+        self.assertEqual(const_mem_size_f32, CONST_RECORD_FLOAT.nbytes)
+        self.assertEqual(const_mem_size_f64, CONST_RECORD_DOUBLE.nbytes)
+
+        # Check that getting the const memory size for all signatures
+        # provides the same values as getting the const memory size for
+        # individual signatures.
+
+        const_mem_size_f32_all = const_record_float.get_const_mem_size()
+        const_mem_size_f64_all = const_record_double.get_const_mem_size()
+        self.assertEqual(const_mem_size_f32_all[sig_f32.args],
+                         const_mem_size_f32)
+        self.assertEqual(const_mem_size_f64_all[sig_f64.args],
+                         const_mem_size_f64)
+
+    def test_get_const_mem_specialized(self):
+        @cuda.jit(void(float32[::1], int32[::1]))
+        def const_record_float(A, B):
+            C = cuda.const.array_like(CONST_RECORD_FLOAT)
+            i = cuda.grid(1)
+            A[i] = C[i]['x']
+            B[i] = C[i]['y']
+
+        sig_f32 = void(float32[::1], int32[::1])
+        const_mem_size_f32 = const_record_float.get_const_mem_size(sig_f32)
+        self.assertIsInstance(const_mem_size_f32, int)
+        self.assertEqual(const_mem_size_f32, CONST_RECORD_FLOAT.nbytes)
 
     def test_dispatcher_docstring(self):
         # Ensure that CUDA-jitting a function preserves its docstring. See
