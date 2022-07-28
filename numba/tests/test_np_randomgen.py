@@ -81,11 +81,12 @@ class TestHelperFuncs(TestCase):
         for low, high, dtype in cases:
             with self.subTest(low=low, high=high, dtype=dtype):
                 with self.assertRaises(ValueError) as raises:
+                    # min - 1
                     numba_func(rng, low - 1, high, dtype)
-            self.assertIn(
-                'low is out of bounds',
-                str(raises.exception)
-            )
+                self.assertIn(
+                    'low is out of bounds',
+                    str(raises.exception)
+                )
 
         cases = [
             # low, high, dtype
@@ -100,7 +101,32 @@ class TestHelperFuncs(TestCase):
         for low, high, dtype in cases:
             with self.subTest(low=low, high=high, dtype=dtype):
                 with self.assertRaises(ValueError) as raises:
+                    # max + 1, endpoint=True
                     numba_func(rng, low, high + 1, dtype)
+                self.assertIn(
+                    'high is out of bounds',
+                    str(raises.exception)
+                )
+
+        py_func = lambda x, low, high, dtype: \
+            x.integers(low=low, high=high, dtype=dtype, endpoint=False)
+        numba_func = numba.njit(cache=True)(py_func)
+
+        cases = [
+            # low, high, dtype
+            (0, np.iinfo(np.uint8).max, np.uint8),
+            (0, np.iinfo(np.int8).max, np.int8),
+            (0, np.iinfo(np.uint16).max, np.uint16),
+            (0, np.iinfo(np.int16).max, np.int16),
+            (0, np.iinfo(np.uint32).max, np.uint32),
+            (0, np.iinfo(np.int32).max, np.int32),
+            (0, np.iinfo(np.int64).max, np.int64),
+        ]
+        for low, high, dtype in cases:
+            with self.subTest(low=low, high=high, dtype=dtype):
+                with self.assertRaises(ValueError) as raises:
+                    # max + 2, endpoint=Fslse
+                    numba_func(rng, low, high + 2, dtype)
                 self.assertIn(
                     'high is out of bounds',
                     str(raises.exception)
@@ -282,6 +308,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             (0, 0xFFFFFFFFFF, np.int64), # rng > 0xFFFFFFFF
             (0, 0xFFFFFFFFFFFFFFF - 1, np.int64), # rng == 0xFFFFFFFFFFFFFFF - 1
             (0, 0xFFFFFFFFFFFFFFF, np.int64), # rng == 0xFFFFFFFFFFFFFFF
+            (-0xFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFF, np.int64), # min/max
 
             (5, 6, np.uint32), # rng == 0
             (5, 100, np.uint32), # rng < 0xFFFFFFFF
@@ -292,6 +319,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             (5, 100, np.int32), # rng < 0xFFFFFFFF
             (0, 0xFFFFFFF - 1, np.int32), # rng == 0xFFFFFFF - 1
             (0, 0xFFFFFFF, np.int32), # rng == 0xFFFFFFF
+            (-0xFFFFFFF, 0xFFFFFFF, np.int32),
 
             (5, 6, np.uint16), # rng == 0
             (5, 100, np.uint16), # rng < 0xFFFF
@@ -302,6 +330,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             (5, 10, np.int16), # rng < 0xFFF
             (0, 0xFFF - 1, np.int16), # rng == 0xFFF - 1
             (0, 0xFFF, np.int16), # rng == 0xFFF
+            (-0xFFF, 0xFFF, np.int16),
 
             (5, 6, np.uint8), # rng == 0
             (5, 10, np.uint8), # rng < 0xFF
@@ -312,6 +341,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             (5, 10, np.int8), # rng < 0xF
             (0, 0xF - 1, np.int8), # rng == 0xF-1
             (0, 0xF, np.int8), # rng == 0xF
+            (-0xF, 0xF, np.int8),
         ]
         size = (2, 3)
 
