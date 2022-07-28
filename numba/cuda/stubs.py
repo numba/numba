@@ -439,7 +439,7 @@ class atomic(Stub):
     class add(Stub):
         """add(ary, idx, val)
 
-        Perform atomic ary[idx] += val. Supported on int32, float32, and
+        Perform atomic ``ary[idx] += val``. Supported on int32, float32, and
         float64 operands only.
 
         Returns the old value at the index location as if it is loaded
@@ -449,7 +449,7 @@ class atomic(Stub):
     class sub(Stub):
         """sub(ary, idx, val)
 
-        Perform atomic ary[idx] -= val. Supported on int32, float32, and
+        Perform atomic ``ary[idx] -= val``. Supported on int32, float32, and
         float64 operands only.
 
         Returns the old value at the index location as if it is loaded
@@ -459,8 +459,8 @@ class atomic(Stub):
     class and_(Stub):
         """and_(ary, idx, val)
 
-        Perform atomic ary[idx] &= val. Supported on int32, int64, uint32 and
-        uint64 operands only.
+        Perform atomic ``ary[idx] &= val``. Supported on int32, int64, uint32
+        and uint64 operands only.
 
         Returns the old value at the index location as if it is loaded
         atomically.
@@ -469,18 +469,18 @@ class atomic(Stub):
     class or_(Stub):
         """or_(ary, idx, val)
 
-        Perform atomic ary[idx] \|= val. Supported on int32, int64, uint32 and
-        uint64 operands only.
+        Perform atomic ``ary[idx] |= val``. Supported on int32, int64, uint32
+        and uint64 operands only.
 
         Returns the old value at the index location as if it is loaded
         atomically.
-        """  # noqa: W605
+        """
 
     class xor(Stub):
         """xor(ary, idx, val)
 
-        Perform atomic ary[idx] ^= val. Supported on int32, int64, uint32 and
-        uint64 operands only.
+        Perform atomic ``ary[idx] ^= val``. Supported on int32, int64, uint32
+        and uint64 operands only.
 
         Returns the old value at the index location as if it is loaded
         atomically.
@@ -489,7 +489,7 @@ class atomic(Stub):
     class inc(Stub):
         """inc(ary, idx, val)
 
-        Perform atomic ary[idx] += 1 up to val, then reset to 0. Supported
+        Perform atomic ``ary[idx] += 1`` up to val, then reset to 0. Supported
         on uint32, and uint64 operands only.
 
         Returns the old value at the index location as if it is loaded
@@ -499,8 +499,10 @@ class atomic(Stub):
     class dec(Stub):
         """dec(ary, idx, val)
 
-        Perform ary[idx] = (value if (array[idx] == 0) or
-        (array[idx] > value) else array[idx] - 1).
+        Performs::
+
+           ary[idx] = (value if (array[idx] == 0) or
+                       (array[idx] > value) else array[idx] - 1)
 
         Supported on uint32, and uint64 operands only.
 
@@ -511,7 +513,7 @@ class atomic(Stub):
     class exch(Stub):
         """exch(ary, idx, val)
 
-        Perform atomic ary[idx] = val. Supported on int32, int64, uint32 and
+        Perform atomic ``ary[idx] = val``. Supported on int32, int64, uint32 and
         uint64 operands only.
 
         Returns the old value at the index location as if it is loaded
@@ -521,7 +523,7 @@ class atomic(Stub):
     class max(Stub):
         """max(ary, idx, val)
 
-        Perform atomic ary[idx] = max(ary[idx], val).
+        Perform atomic ``ary[idx] = max(ary[idx], val)``.
 
         Supported on int32, int64, uint32, uint64, float32, float64 operands
         only.
@@ -533,7 +535,7 @@ class atomic(Stub):
     class min(Stub):
         """min(ary, idx, val)
 
-        Perform atomic ary[idx] = min(ary[idx], val).
+        Perform atomic ``ary[idx] = min(ary[idx], val)``.
 
         Supported on int32, int64, uint32, uint64, float32, float64 operands
         only.
@@ -545,7 +547,7 @@ class atomic(Stub):
     class nanmax(Stub):
         """nanmax(ary, idx, val)
 
-        Perform atomic ary[idx] = max(ary[idx], val).
+        Perform atomic ``ary[idx] = max(ary[idx], val)``.
 
         NOTE: NaN is treated as a missing value such that:
         nanmax(NaN, n) == n, nanmax(n, NaN) == n
@@ -560,7 +562,7 @@ class atomic(Stub):
     class nanmin(Stub):
         """nanmin(ary, idx, val)
 
-        Perform atomic ary[idx] = min(ary[idx], val).
+        Perform atomic ``ary[idx] = min(ary[idx], val)``.
 
         NOTE: NaN is treated as a missing value, such that:
         nanmin(NaN, n) == n, nanmin(n, NaN) == n

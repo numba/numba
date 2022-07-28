@@ -1,4 +1,9 @@
-# "magictoken" is used for markers as beginning and ending of example text.
+"""
+This test is used by `docs/source/extending/interval-example.rst`.
+
+The "magictoken" comments are used as markers for the beginning and ending of
+example code.
+"""
 import unittest
 
 
