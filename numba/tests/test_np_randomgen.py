@@ -68,15 +68,18 @@ class TestHelperFuncs(TestCase):
             x.integers(low=low, high=high, dtype=dtype, endpoint=True)
         numba_func = numba.njit(cache=True)(py_func)
 
+        py_func = lambda x, low, high, dtype: \
+            x.integers(low=low, high=high, dtype=dtype, endpoint=False)
+        numba_func_endpoint_false = numba.njit(cache=True)(py_func)
+
         cases = [
             # low, high, dtype
-            (np.iinfo(np.uint8).min, 100, np.uint8),
-            (np.iinfo(np.int8).min, 100, np.int8),
-            (np.iinfo(np.uint16).min, 100, np.uint16),
-            (np.iinfo(np.int16).min, 100, np.int16),
-            (np.iinfo(np.uint32).min, 100, np.uint32),
-            (np.iinfo(np.int32).min, 100, np.int32),
-            (np.iinfo(np.uint64).min, 100, np.uint64),
+            (np.iinfo(np.uint8).min, np.iinfo(np.uint8).max, np.uint8),
+            (np.iinfo(np.int8).min, np.iinfo(np.int8).max, np.int8),
+            (np.iinfo(np.uint16).min, np.iinfo(np.uint16).max, np.uint16),
+            (np.iinfo(np.int16).min, np.iinfo(np.int16).max, np.int16),
+            (np.iinfo(np.uint32).min, np.iinfo(np.uint32).max, np.uint32),
+            (np.iinfo(np.int32).min, np.iinfo(np.int32).max, np.int32),
         ]
         for low, high, dtype in cases:
             with self.subTest(low=low, high=high, dtype=dtype):
@@ -88,18 +91,6 @@ class TestHelperFuncs(TestCase):
                     str(raises.exception)
                 )
 
-        cases = [
-            # low, high, dtype
-            (0, np.iinfo(np.uint8).max, np.uint8),
-            (0, np.iinfo(np.int8).max, np.int8),
-            (0, np.iinfo(np.uint16).max, np.uint16),
-            (0, np.iinfo(np.int16).max, np.int16),
-            (0, np.iinfo(np.uint32).max, np.uint32),
-            (0, np.iinfo(np.int32).max, np.int32),
-            (0, np.iinfo(np.int64).max, np.int64),
-        ]
-        for low, high, dtype in cases:
-            with self.subTest(low=low, high=high, dtype=dtype):
                 with self.assertRaises(ValueError) as raises:
                     # max + 1, endpoint=True
                     numba_func(rng, low, high + 1, dtype)
@@ -108,29 +99,41 @@ class TestHelperFuncs(TestCase):
                     str(raises.exception)
                 )
 
-        py_func = lambda x, low, high, dtype: \
-            x.integers(low=low, high=high, dtype=dtype, endpoint=False)
-        numba_func = numba.njit(cache=True)(py_func)
-
-        cases = [
-            # low, high, dtype
-            (0, np.iinfo(np.uint8).max, np.uint8),
-            (0, np.iinfo(np.int8).max, np.int8),
-            (0, np.iinfo(np.uint16).max, np.uint16),
-            (0, np.iinfo(np.int16).max, np.int16),
-            (0, np.iinfo(np.uint32).max, np.uint32),
-            (0, np.iinfo(np.int32).max, np.int32),
-            (0, np.iinfo(np.int64).max, np.int64),
-        ]
-        for low, high, dtype in cases:
-            with self.subTest(low=low, high=high, dtype=dtype):
                 with self.assertRaises(ValueError) as raises:
-                    # max + 2, endpoint=Fslse
-                    numba_func(rng, low, high + 2, dtype)
+                    # max + 2, endpoint=False
+                    numba_func_endpoint_false(rng, low, high + 2, dtype)
                 self.assertIn(
                     'high is out of bounds',
                     str(raises.exception)
                 )
+
+        low, high, dtype = (np.iinfo(np.uint64).min,
+                            np.iinfo(np.uint64).max, np.uint64)
+        with self.assertRaises(ValueError) as raises:
+            # min - 1
+            numba_func(rng, low - 1, high, dtype)
+        self.assertIn(
+            'low is out of bounds',
+            str(raises.exception)
+        )
+
+        low, high, dtype = (np.iinfo(np.int64).min,
+                            np.iinfo(np.int64).max, np.int64)
+        with self.assertRaises(ValueError) as raises:
+            # max + 1, endpoint=True
+            numba_func(rng, low, high + 1, dtype)
+        self.assertIn(
+            'high is out of bounds',
+            str(raises.exception)
+        )
+
+        with self.assertRaises(ValueError) as raises:
+            # max + 2, endpoint=False
+            numba_func_endpoint_false(rng, low, high + 2, dtype)
+        self.assertIn(
+            'high is out of bounds',
+            str(raises.exception)
+        )
 
         with self.assertRaises(ValueError) as raises:
             numba_func(rng, 105, 100, np.uint32)
