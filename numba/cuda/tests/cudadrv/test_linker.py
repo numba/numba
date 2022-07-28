@@ -13,11 +13,13 @@ from numba import cuda, void, float64, int64
 
 CONST1D = np.arange(10, dtype=np.float64)
 
+
 def simple_const_mem(A):
     C = cuda.const.array_like(CONST1D)
     i = cuda.grid(1)
 
     A[i] = C[i] + 1.0
+
 
 def func_with_lots_of_registers(x, a, b, c, d, e, f):
     a1 = 1.0
@@ -237,12 +239,13 @@ class TestLinker(CUDATestCase):
         compiled = compiled.specialize(np.empty(32), *range(6))
         const_mem_size = compiled.get_const_mem_size()
         self.assertEqual(const_mem_size, 0)
-    
+
     def test_get_const_mem_size(self):
         sig = void(float64[::1])
         compiled = cuda.jit(sig)(simple_const_mem)
         const_mem_size = compiled.get_const_mem_size()
         self.assertEqual(const_mem_size, CONST1D.nbytes)
-    
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -702,17 +702,18 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         else:
             return {sig: overload.regs_per_thread
                     for sig, overload in self.overloads.items()}
-    
+
     def get_const_mem_size(self, signature=None):
         '''
-        Returns the size in bytes of user-allocated constant memory in this kernel for
-        the device in the current context.
+        Returns the size in bytes of user-allocated constant memory in this
+        kernel for the device in the current context.
 
         :param signature: The signature of the compiled kernel to get constant
-                          memory usage for. This may be omitted for a specialized
-                          kernel.
+                          memory usage for. This may be omitted for a
+                          specialized kernel.
         :return: The size in bytes of constant memory allocated by the
-         compiled variant of the kernel for the given signature and current device.
+         compiled variant of the kernel for the given signature and current
+        device.
         '''
         if signature is not None:
             return self.overloads[signature.args].const_mem_size
