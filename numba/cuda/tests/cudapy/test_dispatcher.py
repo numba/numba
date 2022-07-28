@@ -340,7 +340,7 @@ class TestDispatcher(CUDATestCase):
         const_mem_size_f32 = const_record_float.get_const_mem_size(sig_f32)
         self.assertIsInstance(const_mem_size_f32, int)
         self.assertEqual(const_mem_size_f32, CONST_RECORD_FLOAT.nbytes)
-    
+
     def test_get_shared_mem_per_block_unspecialized(self):
         N = 10
 
@@ -372,7 +372,6 @@ class TestDispatcher(CUDATestCase):
         self.assertIsInstance(sh_mem_f32, int)
         self.assertIsInstance(sh_mem_f64, int)
 
-        
         self.assertEqual(sh_mem_f32, N * 4)
         self.assertEqual(sh_mem_f64, N * 8)
 
