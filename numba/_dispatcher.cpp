@@ -31,7 +31,7 @@
  * trace_info structure to help make tracing more robust. See:
  * https://github.com/python/cpython/pull/24726
  */
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 10)
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 10)
 
 /*
  * Code originally from:
@@ -102,7 +102,7 @@ call_trace(Py_tracefunc func, PyObject *obj,
     if (tstate->tracing)
         return 0;
     tstate->tracing++;
-    tstate->cframe->use_tracing = 0;
+    tstate->frame->tracing = 0;
     if (frame->f_lasti < 0) {
         frame->f_lineno = frame->f_code->co_firstlineno;
     }
@@ -112,7 +112,7 @@ call_trace(Py_tracefunc func, PyObject *obj,
     }
     result = func(obj, frame, what, arg);
     frame->f_lineno = 0;
-    tstate->cframe->use_tracing = ((tstate->c_tracefunc != NULL)
+    tstate->frame->tracing = ((tstate->c_tracefunc != NULL)
                            || (tstate->c_profilefunc != NULL));
     tstate->tracing--;
     return result;
@@ -188,92 +188,92 @@ else                                                            \
 
 #else
 
-/*
- * Code originally from:
- * https://github.com/python/cpython/blob/d5650a1738fe34f6e1db4af5f4c4edb7cae90a36/Python/ceval.c#L4242-L4257
- */
-static int
-call_trace(Py_tracefunc func, PyObject *obj,
-           PyThreadState *tstate, PyFrameObject *frame,
-           int what, PyObject *arg)
-{
-    int result;
-    if (tstate->tracing)
-        return 0;
-    tstate->tracing++;
-    tstate->use_tracing = 0;
-    result = func(obj, frame, what, arg);
-    tstate->use_tracing = ((tstate->c_tracefunc != NULL)
-                           || (tstate->c_profilefunc != NULL));
-    tstate->tracing--;
-    return result;
-}
-
-/*
- * Code originally from:
- * https://github.com/python/cpython/blob/d5650a1738fe34f6e1db4af5f4c4edb7cae90a36/Python/ceval.c#L4220-L4240
- */
-static int
-call_trace_protected(Py_tracefunc func, PyObject *obj,
-                     PyThreadState *tstate, PyFrameObject *frame,
-                     int what, PyObject *arg)
-{
-    PyObject *type, *value, *traceback;
-    int err;
-    PyErr_Fetch(&type, &value, &traceback);
-    err = call_trace(func, obj, tstate, frame, what, arg);
-    if (err == 0)
-    {
-        PyErr_Restore(type, value, traceback);
-        return 0;
-    }
-    else
-    {
-        Py_XDECREF(type);
-        Py_XDECREF(value);
-        Py_XDECREF(traceback);
-        return -1;
-    }
-}
-
-/*
- * Code originally from:
- * https://github.com/python/cpython/blob/d5650a1738fe34f6e1db4af5f4c4edb7cae90a36/Python/ceval.c#L4520-L4549
- * NOTE: The state test https://github.com/python/cpython/blob/d5650a1738fe34f6e1db4af5f4c4edb7cae90a36/Python/ceval.c#L4521
- * has been removed, it's dealt with in call_cfunc.
- */
-#define C_TRACE(x, call)                                        \
-if (call_trace(tstate->c_profilefunc, tstate->c_profileobj,     \
-               tstate, tstate->frame, PyTrace_CALL, cfunc))     \
-    x = NULL;                                                   \
-else                                                            \
-{                                                               \
-    x = call;                                                   \
-    if (tstate->c_profilefunc != NULL)                          \
-    {                                                           \
-        if (x == NULL)                                          \
-        {                                                       \
-            call_trace_protected(tstate->c_profilefunc,         \
-                                 tstate->c_profileobj,          \
-                                 tstate, tstate->frame,         \
-                                 PyTrace_RETURN, cfunc);        \
-            /* XXX should pass (type, value, tb) */             \
-        }                                                       \
-        else                                                    \
-        {                                                       \
-            if (call_trace(tstate->c_profilefunc,               \
-                           tstate->c_profileobj,                \
-                           tstate, tstate->frame,               \
-                           PyTrace_RETURN, cfunc))              \
-            {                                                   \
-                Py_DECREF(x);                                   \
-                x = NULL;                                       \
-            }                                                   \
-        }                                                       \
-    }                                                           \
-}
-
-
+// /*
+//  * Code originally from:
+//  * https://github.com/python/cpython/blob/d5650a1738fe34f6e1db4af5f4c4edb7cae90a36/Python/ceval.c#L4242-L4257
+//  */
+// static int
+// call_trace(Py_tracefunc func, PyObject *obj,
+//            PyThreadState *tstate, PyFrameObject *frame,
+//            int what, PyObject *arg)
+// {
+//     int result;
+//     if (tstate->tracing)
+//         return 0;
+//     tstate->tracing++;
+//     tstate->use_tracing = 0;
+//     result = func(obj, frame, what, arg);
+//     tstate->use_tracing = ((tstate->c_tracefunc != NULL)
+//                            || (tstate->c_profilefunc != NULL));
+//     tstate->tracing--;
+//     return result;
+// }
+// 
+// /*
+//  * Code originally from:
+//  * https://github.com/python/cpython/blob/d5650a1738fe34f6e1db4af5f4c4edb7cae90a36/Python/ceval.c#L4220-L4240
+//  */
+// static int
+// call_trace_protected(Py_tracefunc func, PyObject *obj,
+//                      PyThreadState *tstate, PyFrameObject *frame,
+//                      int what, PyObject *arg)
+// {
+//     PyObject *type, *value, *traceback;
+//     int err;
+//     PyErr_Fetch(&type, &value, &traceback);
+//     err = call_trace(func, obj, tstate, frame, what, arg);
+//     if (err == 0)
+//     {
+//         PyErr_Restore(type, value, traceback);
+//         return 0;
+//     }
+//     else
+//     {
+//         Py_XDECREF(type);
+//         Py_XDECREF(value);
+//         Py_XDECREF(traceback);
+//         return -1;
+//     }
+// }
+// 
+// /*
+//  * Code originally from:
+//  * https://github.com/python/cpython/blob/d5650a1738fe34f6e1db4af5f4c4edb7cae90a36/Python/ceval.c#L4520-L4549
+//  * NOTE: The state test https://github.com/python/cpython/blob/d5650a1738fe34f6e1db4af5f4c4edb7cae90a36/Python/ceval.c#L4521
+//  * has been removed, it's dealt with in call_cfunc.
+//  */
+// #define C_TRACE(x, call)                                        \
+// if (call_trace(tstate->c_profilefunc, tstate->c_profileobj,     \
+//                tstate, tstate->frame, PyTrace_CALL, cfunc))     \
+//     x = NULL;                                                   \
+// else                                                            \
+// {                                                               \
+//     x = call;                                                   \
+//     if (tstate->c_profilefunc != NULL)                          \
+//     {                                                           \
+//         if (x == NULL)                                          \
+//         {                                                       \
+//             call_trace_protected(tstate->c_profilefunc,         \
+//                                  tstate->c_profileobj,          \
+//                                  tstate, tstate->frame,         \
+//                                  PyTrace_RETURN, cfunc);        \
+//             /* XXX should pass (type, value, tb) */             \
+//         }                                                       \
+//         else                                                    \
+//         {                                                       \
+//             if (call_trace(tstate->c_profilefunc,               \
+//                            tstate->c_profileobj,                \
+//                            tstate, tstate->frame,               \
+//                            PyTrace_RETURN, cfunc))              \
+//             {                                                   \
+//                 Py_DECREF(x);                                   \
+//                 x = NULL;                                       \
+//             }                                                   \
+//         }                                                       \
+//     }                                                           \
+// }
+// 
+// 
 #endif
 
 typedef std::vector<Type> TypeTable;
@@ -562,7 +562,7 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
     fn = (PyCFunctionWithKeywords) PyCFunction_GET_FUNCTION(cfunc);
     tstate = PyThreadState_GET();
 
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 10)
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 10)
     /*
      * On Python 3.10+ trace_info comes from somewhere up in PyFrameEval et al,
      * Numba doesn't have access to that so creates an equivalent struct and
@@ -583,7 +583,7 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
     /*
      * On Python prior to 3.10, tracing state is a member of the threadstate
      */
-    if (tstate->use_tracing && tstate->c_profilefunc)
+    if (tstate->tracing && tstate->c_profilefunc)
 #endif
     {
         /*
@@ -621,11 +621,11 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
         }
         /* Populate the 'fast locals' in `frame` */
         PyFrame_LocalsToFast(frame, 0);
-        tstate->frame = frame;
-        C_TRACE(result, fn(PyCFunction_GET_SELF(cfunc), args, kws));
+        //tstate->cframe = frame;
+        //C_TRACE(result, fn(PyCFunction_GET_SELF(cfunc), args, kws));
         /* write changes back to locals? */
         PyFrame_FastToLocals(frame);
-        tstate->frame = frame->f_back;
+        //tstate->frame = frame->f_back;
 
     error:
         Py_XDECREF(frame);
