@@ -2374,7 +2374,7 @@ def np_interp_impl_complex_inner(x, xp, fp, dtype):
                     imag = (dy[j + 1].imag - dy[j].imag) * inv_dx
                     slope = real + 1j * imag
 
-                # Numpy 1.17 handles NaN correctly - this is a copy of
+                # NumPy 1.17 handles NaN correctly - this is a copy of
                 # innermost part of arr_interp_complex post 1.17:
                 # https://github.com/numpy/numpy/blob/maintenance/1.17.x/numpy/core/src/multiarray/compiled_base.c    # noqa: E501
                 # Permanent reference:
