@@ -28,6 +28,10 @@ def vdot(a, b):
     return np.vdot(a, b)
 
 
+def tensordot(a, b, axes):
+    return np.tensordot(a, b, axes)
+
+
 class TestProduct(TestCase):
     """
     Tests for dot products.
@@ -326,6 +330,107 @@ class TestProduct(TestCase):
         cfunc = jit(nopython=True)(vdot)
         with self.check_contiguity_warning(cfunc.py_func):
             cfunc(a, b)
+
+    @needs_blas
+    def test_tensordot_errors(self):
+        cfunc = jit(nopython=True)(tensordot)
+        a = self.sample_matrix(2, 2, np.float64)
+
+        with self.assertTypingError() as e:
+            cfunc(a, None, ((0, 1), (0, 1)))
+        self.assertIn("Inputs must be array-like.", str(e.exception))
+
+        with self.assertTypingError() as e:
+            cfunc(None, a, ((0, 1), (0, 1)))
+        self.assertIn("Inputs must be array-like.", str(e.exception))
+
+        with self.assertTypingError() as e:
+            cfunc(a, a, 1)
+        self.assertIn("integer axes are not yet supported", str(e.exception))
+
+        # Length of tuples doesn't match:
+        with self.assertRaises(ValueError) as e:
+            cfunc(a, a, ((), (1,)))
+        self.assertIn("shape-mismatch for sum", str(e.exception))
+
+        # Length matches, but array dimensions don't.
+        b = self.sample_matrix(2, 3, np.float64)
+        with self.assertRaises(ValueError) as e:
+            cfunc(a, b, ((0, 1), (0, 1)))
+        self.assertIn("shape-mismatch for sum", str(e.exception))
+
+    @needs_blas
+    def test_tensordot(self):
+        cfunc = jit(nopython=True)(tensordot)
+
+        def assert_same_as_py(arr1, arr2, axes):
+            expected = cfunc.py_func(arr1, arr2, axes)
+            result = cfunc(arr1, arr2, axes)
+            np.testing.assert_allclose(expected, result)
+
+        # 1-D:
+        a = self.sample_vector(6, np.float64)
+        b = self.sample_vector(6, np.float64)
+        assert_same_as_py(a, b, ((0,), (0,)))
+        assert_same_as_py(a, b, ((), ()))
+
+        # 2-D squares:
+        a = self.sample_matrix(3, 3, np.float64)
+        b = self.sample_matrix(3, 3, np.float64)
+        assert_same_as_py(a, b, ((1, 0), (0, 1)))
+        assert_same_as_py(a, b, ((0, 1), (0, 1)))
+        assert_same_as_py(a, b, ((0, 1), (1, 0)))
+        assert_same_as_py(a, b, ((1, 0), (1, 0)))
+        assert_same_as_py(a, b, ((1,), (1,)))
+        assert_same_as_py(a, b, ((0,), (0,)))
+        assert_same_as_py(a, b, ((), ()))
+
+        # 2-D rectangle:
+        a = self.sample_matrix(3, 6, np.float64)
+        b = self.sample_matrix(6, 3, np.float64)
+        assert_same_as_py(a, b, ((1, 0), (0, 1)))
+        assert_same_as_py(a, b.transpose(1, 0), ((0, 1), (0, 1)))
+        assert_same_as_py(a, b, ((1,), (0,)))
+
+        # 3-D:
+        a = np.arange(60.).reshape(3,4,5)
+        b = np.arange(24.).reshape(4,3,2)
+        assert_same_as_py(a, b, ((1, 0), (0, 1)))
+
+    @needs_blas
+    def test_tensordot_numpy(self):
+        """
+        Tests based on the NumPy tensordot tests:
+
+        https://github.com/numpy/numpy/blob/5350aa0972a394afcda4ad6ecaca7690cbe5f702/numpy/core/tests/test_numeric.py#L3511-L3519
+        https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/core/tests/test_einsum.py#L421-L439
+        """
+        cfunc = jit(nopython=True)(tensordot)
+
+        a = np.ndarray((3,0))
+        b = np.ndarray((0,4))
+        td = np.tensordot(a, b, (1, 0))
+        self.assertTrue(np.array_equal(td, np.dot(a, b)))
+
+        a = np.arange(60, dtype=np.float64).reshape(3, 4, 5)
+        b = np.arange(24, dtype=np.float64).reshape(4, 3, 2)
+        self.assertTrue(
+            np.array_equal(np.einsum("ijk, jil -> kl", a, b),
+                           cfunc(a, b, axes=((1, 0), (0, 1)))))
+        self.assertTrue(
+            np.array_equal(
+                np.einsum(a, [0, 1, 2], b, [1, 0, 3], [2, 3]),
+                cfunc(a, b, axes=((1, 0), (0, 1)))))
+
+        c = np.arange(10, dtype=np.float64).reshape(5, 2)
+        np.einsum("ijk,jil->kl", a, b, out=c, dtype=np.float64)
+        self.assertTrue(np.array_equal(
+            c, cfunc(a, b, axes=((1, 0), (0, 1)))))
+        c[...] = 0
+        np.einsum(a, [0, 1, 2], b, [1, 0, 3], [2, 3], out=c,
+                  dtype=np.float64)
+        self.assertTrue(
+            np.array_equal(c, cfunc(a, b, axes=((1, 0), (0, 1)))))
 
 
 # Implementation definitions for the purpose of jitting.

@@ -4879,3 +4879,120 @@ def cross2d(a, b):
         return _cross2d_operation(a_, b_)
 
     return impl
+
+
+@register_jitable
+def _multiply_reduce(a):
+    result = 1
+    for i in range(len(a)):
+        result *= a[i]
+    return result
+
+
+@register_jitable
+def _copy_to_tuple(from_list, to_tuple):
+    for i in range(len(to_tuple)):
+        to_tuple = tuple_setitem(to_tuple, i, from_list[i])
+    return to_tuple
+
+
+@register_jitable
+def _copy_to_tuple_noop(from_list, to_tuple):
+    """Use this when to_tuple is empty."""
+    if len(from_list) != 0:
+        raise ValueError("This should never happen")
+    return to_tuple
+
+
+@overload(np.tensordot)
+def np_tensordot(a, b, axes):
+    """
+    Implementation of np.tensordot().
+
+    For now axes does not yet support integers, and it's limited to a tuple of
+    two tuples, unlike more lenient NumPy.  Original code is
+    https://github.com/numpy/numpy/blob/v1.21.0/numpy/core/numeric.py#L943-L1133
+    """
+    if not type_can_asarray(a) or not type_can_asarray(b):
+        raise TypingError("Inputs must be array-like.")
+    if isinstance(axes, (int, types.Integer)):
+        raise ValueError("integer axes are not yet supported")
+
+    # Prepare starting tuples we will later use to construct new tuples from.
+    newaxes_a_tuple = (0,) * a.ndim
+    newaxes_b_tuple = (0,) * b.ndim
+    olda_tuple = (0,) * (a.ndim - len(axes[0]))
+    oldb_tuple = (0,) * (b.ndim - len(axes[1]))
+
+    # tuple_setitem blows up compilation on 0-length tuples *even if it's not
+    # called*, so avoid it when necessary.
+    if len(olda_tuple) > 0:
+        copy_to_tuple_maybe_empty_a = _copy_to_tuple
+    else:
+        copy_to_tuple_maybe_empty_a = _copy_to_tuple_noop
+
+    if len(oldb_tuple) > 0:
+        copy_to_tuple_maybe_empty_b = _copy_to_tuple
+    else:
+        copy_to_tuple_maybe_empty_b = _copy_to_tuple_noop
+
+    def tensordot_impl(a, b, axes):
+        axes_a, axes_b = axes
+
+        na = len(axes_a)
+        # The assarray() is necessary so that if axes_a is empty, the resulting
+        # list knows it is a list of uint64.
+        axes_a = list(np.asarray(axes_a, dtype=np.uint64))
+
+        nb = len(axes_b)
+        axes_b = list(np.asarray(axes_b, dtype=np.uint64))
+
+        a, b = np.asarray(a), np.asarray(b)
+        as_ = a.shape
+        nda = a.ndim
+        bs = b.shape
+        ndb = b.ndim
+        equal = True
+        if na != nb:
+            equal = False
+        else:
+            for k in range(na):
+                if as_[axes_a[k]] != bs[axes_b[k]]:
+                    equal = False
+                    break
+                if axes_a[k] < 0:
+                    axes_a[k] += nda
+                if axes_b[k] < 0:
+                    axes_b[k] += ndb
+        if not equal:
+            raise ValueError("shape-mismatch for sum")
+
+        # Move the axes to sum over to the end of "a"
+        # and to the front of "b"
+        notin = [k for k in range(nda) if k not in axes_a]
+        newaxes_a = _copy_to_tuple(notin + axes_a, newaxes_a_tuple)
+
+        N2 = 1
+        for axis in axes_a:
+            N2 *= as_[axis]
+        newshape_a = (int(_multiply_reduce([as_[ax] for ax in notin])), N2)
+        olda = copy_to_tuple_maybe_empty_a([as_[axis] for axis in notin],
+                                           olda_tuple)
+
+        notin = [k for k in range(ndb) if k not in axes_b]
+        newaxes_b = _copy_to_tuple(axes_b + notin, newaxes_b_tuple)
+        N2 = 1
+        for axis in axes_b:
+            N2 *= bs[axis]
+        newshape_b = (N2, int(_multiply_reduce([bs[ax] for ax in notin])))
+        oldb = copy_to_tuple_maybe_empty_b([bs[axis] for axis in notin],
+                                           oldb_tuple)
+
+        # It would be nice to figure out way to do reshape on the original
+        # transpose, without ascontiguousarray().
+        at = np.ascontiguousarray(a.transpose(newaxes_a)).reshape(newshape_a)
+        bt = np.ascontiguousarray(b.transpose(newaxes_b)).reshape(newshape_b)
+        res = np.dot(at, bt)
+        return res.reshape(olda + oldb)
+
+    return tensordot_impl
