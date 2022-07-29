@@ -1,10 +1,12 @@
 from numba.cuda.testing import unittest, skip_on_cudasim
 import operator
 from numba.core import types, typing
+from numba.cuda.cudadrv import nvvm
 
 
+@unittest.skipIf(not nvvm.is_available(), "No libNVVM")
 @skip_on_cudasim("Skip on simulator due to use of cuda_target")
-class TestFunctionResolutionNoCuda(unittest.TestCase):
+class TestFunctionResolution(unittest.TestCase):
     def test_fp16_binary_operators(self):
         from numba.cuda.descriptor import cuda_target
         ops = (operator.add, operator.iadd, operator.sub, operator.isub,
