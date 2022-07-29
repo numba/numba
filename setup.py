@@ -328,7 +328,7 @@ def get_ext_modules():
 
     ext_nrt_python = Extension(name='numba.core.runtime._nrt_python',
                                sources=['numba/core/runtime/_nrt_pythonmod.c',
-                                        'numba/core/runtime/nrt.c'],
+                                        'numba/core/runtime/nrt.cpp'],
                                depends=['numba/core/runtime/nrt.h',
                                         'numba/_pymodule.h',
                                         'numba/core/runtime/_nrt_python.c'],
@@ -391,7 +391,7 @@ metadata = dict(
         # Some C files are needed by pycc
         "numba": ["*.c", "*.h"],
         "numba.pycc": ["*.c", "*.h"],
-        "numba.core.runtime": ["*.c", "*.h"],
+        "numba.core.runtime": ["*.cpp", "*.c", "*.h"],
         "numba.cext": ["*.c", "*.h"],
         # numba gdb hook init command language file
         "numba.misc": ["cmdlang.gdb"],

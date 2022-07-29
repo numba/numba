@@ -368,6 +368,387 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         self._check_invalid_types(dist_func, ['shape', 'scale', 'size'],
                                   [5.0, 1.5, (1,)], ['x', 'x', ('x',)])
 
+    def test_beta(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:x.beta(a=1.5, b=2.5, size=size)
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None,
+                                            adjusted_ulp_prec)
+
+        dist_func = lambda x, a, b, size:x.beta(a=a, b=b, size=size)
+        self._check_invalid_types(dist_func, ['a', 'b', 'size'],
+                                  [5.0, 1.5, (1,)], ['x', 'x', ('x',)])
+
+    def test_f(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:x.f(dfnum=2, dfden=3, size=size)
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None,
+                                            adjusted_ulp_prec)
+
+        dist_func = lambda x, dfnum, dfden, size:\
+            x.f(dfnum=dfnum, dfden=dfden, size=size)
+        self._check_invalid_types(dist_func, ['dfnum', 'dfden', 'size'],
+                                  [5, 1, (1,)], ['x', 'x', ('x',)])
+
+    def test_chisquare(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:x.chisquare(df=2, size=size)
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None,
+                                            adjusted_ulp_prec)
+
+        dist_func = lambda x, df, size:\
+            x.chisquare(df=df, size=size)
+        self._check_invalid_types(dist_func, ['df', 'size'],
+                                  [2, (1,)], ['x', ('x',)])
+
+    def test_standard_cauchy(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        # Test with no arguments
+        dist_func = lambda x, size, dtype:x.standard_cauchy()
+        with self.subTest():
+            self.check_numpy_parity(dist_func, test_size=None,
+                                    test_dtype=None)
+
+        dist_func = lambda x, size, dtype:x.standard_cauchy(size=size)
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None)
+
+        dist_func = lambda x, size:x.standard_cauchy(size=size)
+        self._check_invalid_types(dist_func, ['size'],
+                                  [(1,)], [('x',)])
+
+    def test_pareto(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:x.pareto(a=1.0, size=size)
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None)
+
+        dist_func = lambda x, a, size:x.pareto(a=a, size=size)
+        self._check_invalid_types(dist_func, ['a', 'size'],
+                                  [1, (1,)], ['x', ('x',)])
+
+    def test_weibull(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:x.weibull(a=1.0, size=size)
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None)
+
+        dist_func = lambda x, a, size:x.weibull(a=a, size=size)
+        self._check_invalid_types(dist_func, ['a', 'size'],
+                                  [1, (1,)], ['x', ('x',)])
+
+    def test_power(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:x.power(a=0.75, size=size)
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None)
+
+        dist_func = lambda x, a, size:x.power(a=a, size=size)
+        self._check_invalid_types(dist_func, ['a', 'size'],
+                                  [0.75, (1,)], ['x', ('x',)])
+
+    def test_laplace(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        # Test with no arguments
+        dist_func = lambda x, size, dtype:x.laplace()
+        with self.subTest():
+            self.check_numpy_parity(dist_func, test_size=None,
+                                    test_dtype=None,
+                                    ulp_prec=adjusted_ulp_prec)
+
+        dist_func = lambda x, size, dtype:\
+            x.laplace(loc=1.0, scale=1.5, size=size)
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None,
+                                            adjusted_ulp_prec)
+
+        dist_func = lambda x, loc, scale, size:\
+            x.laplace(loc=loc, scale=scale, size=size)
+        self._check_invalid_types(dist_func, ['loc', 'scale', 'size'],
+                                  [1.0, 1.5, (1,)], ['x', 'x', ('x',)])
+
+    def test_logistic(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        # Test with no arguments
+        dist_func = lambda x, size, dtype:x.logistic()
+        with self.subTest():
+            self.check_numpy_parity(dist_func, test_size=None,
+                                    test_dtype=None,
+                                    ulp_prec=adjusted_ulp_prec)
+
+        dist_func = lambda x, size, dtype:\
+            x.logistic(loc=1.0,scale=1.5, size=size)
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None,
+                                            adjusted_ulp_prec)
+
+        dist_func = lambda x, loc, scale, size:\
+            x.logistic(loc=loc, scale=scale, size=size)
+        self._check_invalid_types(dist_func, ['loc', 'scale', 'size'],
+                                  [1.0, 1.5, (1,)], ['x', 'x', ('x',)])
+
+    def test_lognormal(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        # Test with no arguments
+        dist_func = lambda x, size, dtype:x.lognormal()
+        with self.subTest():
+            self.check_numpy_parity(dist_func, test_size=None,
+                                    test_dtype=None,
+                                    ulp_prec=adjusted_ulp_prec)
+
+        dist_func = lambda x, size, dtype:\
+            x.lognormal(mean=5.0, sigma=1.5, size=size)
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None,
+                                            adjusted_ulp_prec)
+
+        dist_func = lambda x, mean, sigma, size:\
+            x.lognormal(mean=mean, sigma=sigma, size=size)
+        self._check_invalid_types(dist_func, ['mean', 'sigma', 'size'],
+                                  [1.0, 1.5, (1,)], ['x', 'x', ('x',)])
+
+    def test_rayleigh(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        # Test with no arguments
+        dist_func = lambda x, size, dtype:x.rayleigh()
+        with self.subTest():
+            self.check_numpy_parity(dist_func, test_size=None,
+                                    test_dtype=None)
+
+        dist_func = lambda x, size, dtype:x.rayleigh(scale=1.5, size=size)
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None)
+
+        dist_func = lambda x, scale, size:x.rayleigh(scale=scale, size=size)
+        self._check_invalid_types(dist_func, ['scale', 'size'],
+                                  [1.5, (1,)], ['x', ('x',)])
+
+    def test_standard_t(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:x.standard_t(df=2, size=size)
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None,
+                                            adjusted_ulp_prec)
+
+        dist_func = lambda x, df, size:x.standard_t(df=df, size=size)
+        self._check_invalid_types(dist_func, ['df', 'size'],
+                                  [2, (1,)], ['x', ('x',)])
+
+    def test_wald(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:x.wald(mean=5.0, scale=1.5, size=size)
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None,
+                                            adjusted_ulp_prec)
+
+        dist_func = lambda x, mean, scale, size:\
+            x.wald(mean=mean, scale=scale, size=size)
+        self._check_invalid_types(dist_func, ['mean', 'scale', 'size'],
+                                  [1.0, 1.5, (1,)], ['x', 'x', ('x',)])
+
+    def test_geometric(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:x.geometric(p=0.75, size=size)
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None,
+                                            adjusted_ulp_prec)
+
+        dist_func = lambda x, p, size:x.geometric(p=p, size=size)
+        self._check_invalid_types(dist_func, ['p', 'size'],
+                                  [0.75, (1,)], ['x', ('x',)])
+
+    def test_zipf(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:x.zipf(a=1.5, size=size)
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None)
+
+        dist_func = lambda x, a, size:x.zipf(a=a, size=size)
+        self._check_invalid_types(dist_func, ['a', 'size'],
+                                  [1, (1,)], ['x', ('x',)])
+
+    def test_triangular(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:\
+            x.triangular(left=0, mode=3, right=5, size=size)
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None)
+
+        dist_func = lambda x, left, mode, right, size:\
+            x.triangular(left=left, mode=mode, right=right, size=size)
+        self._check_invalid_types(dist_func, ['left', 'mode', 'right', 'size'],
+                                  [0, 3, 5, (1,)], ['x', 'x', 'x', ('x',)])
+
+    def test_poisson(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:x.poisson(lam=15, size=size)
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None,
+                                            adjusted_ulp_prec)
+
+        dist_func = lambda x, lam, size:x.poisson(lam=lam, size=size)
+        self._check_invalid_types(dist_func, ['lam', 'size'],
+                                  [15, (1,)], ['x', ('x',)])
+
+    def test_negative_binomial(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:\
+            x.negative_binomial(n=1, p=0.1, size=size)
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None,
+                                            adjusted_ulp_prec)
+
+        dist_func = lambda x, n, p, size:\
+            x.negative_binomial(n=n, p=p, size=size)
+        self._check_invalid_types(dist_func, ['n', 'p', 'size'],
+                                  [1, 0.75, (1,)], ['x', 'x', ('x',)])
+
 
 class TestGeneratorCaching(TestCase, SerialMixin):
     def test_randomgen_caching(self):
