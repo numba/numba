@@ -66,11 +66,11 @@ class TestHelperFuncs(TestCase):
         rng = np.random.default_rng(1)
         py_func = lambda x, low, high, dtype: \
             x.integers(low=low, high=high, dtype=dtype, endpoint=True)
-        numba_func = numba.njit(cache=True)(py_func)
+        numba_func = numba.njit()(py_func)
 
         py_func = lambda x, low, high, dtype: \
             x.integers(low=low, high=high, dtype=dtype, endpoint=False)
-        numba_func_endpoint_false = numba.njit(cache=True)(py_func)
+        numba_func_endpoint_false = numba.njit()(py_func)
 
         cases = [
             # low, high, dtype
