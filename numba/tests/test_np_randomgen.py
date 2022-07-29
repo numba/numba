@@ -67,6 +67,7 @@ class TestHelperFuncs(TestCase):
         py_func = lambda x, low, high, dtype: \
             x.integers(low=low, high=high, dtype=dtype, endpoint=True)
         numba_func = numba.njit()(py_func)
+        numba_func_low = numba.njit()(py_func)
 
         py_func = lambda x, low, high, dtype: \
             x.integers(low=low, high=high, dtype=dtype, endpoint=False)
@@ -85,7 +86,7 @@ class TestHelperFuncs(TestCase):
             with self.subTest(low=low, high=high, dtype=dtype):
                 with self.assertRaises(ValueError) as raises:
                     # min - 1
-                    numba_func(rng, low - 1, high, dtype)
+                    numba_func_low(rng, low - 1, high, dtype)
                 self.assertIn(
                     'low is out of bounds',
                     str(raises.exception)
@@ -111,7 +112,7 @@ class TestHelperFuncs(TestCase):
                             np.iinfo(np.uint64).max, np.uint64)
         with self.assertRaises(ValueError) as raises:
             # min - 1
-            numba_func(rng, low - 1, high, dtype)
+            numba_func_low(rng, low - 1, high, dtype)
         self.assertIn(
             'low is out of bounds',
             str(raises.exception)
