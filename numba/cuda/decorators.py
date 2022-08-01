@@ -83,15 +83,19 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
         raise ValueError("link keyword invalid for device function")
 
     if sigutils.is_signature(func_or_sig):
+        signatures = [func_or_sig]
+        specialized = True
+    elif isinstance(func_or_sig, list):
+        signatures = func_or_sig
+        specialized = False
+    else:
+        signatures = None
+
+    if signatures:
         if config.ENABLE_CUDASIM:
             def jitwrapper(func):
                 return FakeCUDAKernel(func, device=device, fastmath=fastmath)
             return jitwrapper
-
-        argtypes, restype = sigutils.normalize_signature(func_or_sig)
-
-        if restype and not device and restype != types.void:
-            raise TypeError("CUDA kernel must have void return type.")
 
         def _jit(func):
             targetoptions = kws.copy()
@@ -107,14 +111,20 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
             if cache:
                 disp.enable_caching()
 
-            if device:
-                from numba.core import typeinfer
-                with typeinfer.register_dispatcher(disp):
-                    disp.compile_device(argtypes)
-            else:
-                disp.compile(argtypes)
+            for sig in signatures:
+                argtypes, restype = sigutils.normalize_signature(sig)
 
-            disp._specialized = True
+                if restype and not device and restype != types.void:
+                    raise TypeError("CUDA kernel must have void return type.")
+
+                if device:
+                    from numba.core import typeinfer
+                    with typeinfer.register_dispatcher(disp):
+                        disp.compile_device(argtypes)
+                else:
+                    disp.compile(argtypes)
+
+            disp._specialized = specialized
             disp.disable_compile()
 
             return disp

@@ -2,6 +2,7 @@ import numpy as np
 import threading
 
 from numba import cuda, float32, float64, int32, int64, void
+from numba.core.errors import TypingError
 from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
 import math
 
@@ -212,6 +213,184 @@ class TestDispatcher(CUDATestCase):
         for t in threads:
             t.join()
         self.assertFalse(errors)
+
+    def test_explicit_signatures(self):
+        sigs = ["(int64[::1], int64, int64)",
+                "(float64[::1], float64, float64)"]
+        f = cuda.jit(sigs)(add_kernel)
+
+        # Exact signature matches
+        r = np.zeros(1, dtype=np.int64)
+        f[1, 1](r, 1, 2)
+        self.assertPreciseEqual(r[0], 3)
+
+        r = np.zeros(1, dtype=np.float64)
+        f[1, 1](r, 1.5, 2.5)
+        self.assertPreciseEqual(r[0], 4.0)
+
+        # No conversion
+        with self.assertRaises(TypeError) as cm:
+            r = np.zeros(1, dtype=np.complex128)
+            f[1, 1](r, 1j, 1j)
+        self.assertIn("No matching definition", str(cm.exception))
+        self.assertEqual(len(f.overloads), 2, f.overloads)
+
+        # A more interesting one...
+        # (Note that the type of r is deliberately float64 in both cases so
+        # that dispatch is differentiated on the types of x and y only, to
+        # closely preserve the intent of the original test in
+        # numba.tests.test_dispatcher)
+        sigs = ["(float64[::1], float32, float32)",
+                "(float64[::1], float64, float64)"]
+        f = cuda.jit(sigs)(add_kernel)
+
+        r = np.zeros(1, dtype=np.float64)
+        f[1, 1](r, np.float32(1), np.float32(2**-25))
+        self.assertPreciseEqual(r[0], 1.0)
+
+        r = np.zeros(1, dtype=np.float64)
+        f[1, 1](r, 1, 2**-25)
+        self.assertPreciseEqual(r[0], 1.0000000298023224)
+
+        # Fail to resolve ambiguity between the two best overloads
+        # (Also deliberate float64[::1] for the first argument in all cases)
+        f = cuda.jit(["(float64[::1], float32,float64)",
+                      "(float64[::1], float64,float32)",
+                      "(float64[::1], int64,int64)"])(add_kernel)
+        with self.assertRaises(TypeError) as cm:
+            r = np.zeros(1, dtype=np.float64)
+            f[1, 1](r, 1.0, 2.0)
+
+        # The two best matches are output in the error message, as well
+        # as the actual argument types.
+        self.assertRegexpMatches(
+            str(cm.exception),
+            r"Ambiguous overloading for <function add_kernel [^>]*> "
+            r"\(array\(float64, 1d, C\), float64, float64\):\n"
+            r"\(array\(float64, 1d, C\), float32, float64\) -> none\n"
+            r"\(array\(float64, 1d, C\), float64, float32\) -> none"
+        )
+        # The integer signature is not part of the best matches
+        self.assertNotIn("int64", str(cm.exception))
+
+    @unittest.expectedFailure
+    def test_explicit_signatures_unsafe(self):
+        # These tests are from test_explicit_signatures, but have to be xfail
+        # at present because _prepare_args in the CUDA target cannot handle
+        # unsafe conversions of arguments.
+        f = cuda.jit("(int64[::1], int64,int64)")(add_kernel)
+        r = np.zeros(1, dtype=np.int64)
+
+        # Approximate match (unsafe conversion)
+        f[1, 1](r, 1.5, 2.5)
+        self.assertPreciseEqual(r[0], 3)
+        self.assertEqual(len(f.overloads), 1, f.overloads)
+
+        sigs = ["(int64[::1], int64,int64)", "(float64[::1], float64, float64)"]
+        f = cuda.jit(sigs)(add_kernel)
+        r = np.zeros(1, dtype=np.float64)
+        # Approximate match (int32 -> float64 is a safe conversion)
+        f[1, 1](r, np.int32(1), 2.5)
+        self.assertPreciseEqual(r[0], 3.5)
+
+    def test_explicit_signatures_device(self):
+        # Tests similar to test_explicit_signatures, but on a device function
+        # instead of a kernel
+        sigs = ["(int64, int64)",
+                "(float64, float64)"]
+        add_device = cuda.jit(sigs, device=True)(add)
+
+        @cuda.jit
+        def f(r, x, y):
+            r[0] = add_device(x, y)
+
+        # Exact signature matches
+        r = np.zeros(1, dtype=np.int64)
+        f[1, 1](r, 1, 2)
+        self.assertPreciseEqual(r[0], 3)
+
+        r = np.zeros(1, dtype=np.float64)
+        f[1, 1](r, 1.5, 2.5)
+        self.assertPreciseEqual(r[0], 4.0)
+
+        # No conversion
+        with self.assertRaises(TypingError) as cm:
+            r = np.zeros(1, dtype=np.complex128)
+            f[1, 1](r, 1j, 1j)
+
+        msg = str(cm.exception)
+        self.assertIn("Invalid use of type", msg)
+        self.assertIn("with parameters (complex128, complex128)", msg)
+        self.assertEqual(len(f.overloads), 2, f.overloads)
+
+        # A more interesting one...
+        # (Note that the type of r is deliberately float64 in both cases so
+        # that dispatch is differentiated on the types of x and y only, to
+        # closely preserve the intent of the original test in
+        # numba.tests.test_dispatcher)
+        sigs = ["(float32, float32)",
+                "(float64, float64)"]
+        add_device = cuda.jit(sigs, device=True)(add)
+
+        @cuda.jit
+        def f(r, x, y):
+            r[0] = add_device(x, y)
+
+        r = np.zeros(1, dtype=np.float64)
+        f[1, 1](r, np.float32(1), np.float32(2**-25))
+        self.assertPreciseEqual(r[0], 1.0)
+
+        r = np.zeros(1, dtype=np.float64)
+        f[1, 1](r, 1, 2**-25)
+        self.assertPreciseEqual(r[0], 1.0000000298023224)
+
+        # Ambiguity between the two best overloads resolves. This is somewhat
+        # surprising given that ambiguity is not permitted for dispatching
+        # overloads when launching a kernel, but seems to be the general
+        # behaviour of Numba (See Issue #8307:
+        # https://github.com/numba/numba/issues/8307).
+        add_device = cuda.jit(["(float32,float64)",
+                               "(float64,float32)",
+                               "(int64,int64)"], device=True)(add)
+
+        @cuda.jit
+        def f(r, x, y):
+            r[0] = add_device(x, y)
+
+        r = np.zeros(1, dtype=np.float64)
+        f[1, 1](r, 1.5, 2.5)
+        self.assertPreciseEqual(r[0], 4.0)
+
+    def test_explicit_signatures_device_unsafe(self):
+        # These tests are from test_explicit_signatures. The device function
+        # variant of these tests can succeed on CUDA because the compilation
+        # can handle unsafe casting (c.f. test_explicit_signatures_unsafe which
+        # has to xfail due to _prepare_args not supporting unsafe casting).
+        sigs = ["(int64, int64)"]
+        add_device = cuda.jit(sigs, device=True)(add)
+
+        @cuda.jit
+        def f(r, x, y):
+            r[0] = add_device(x, y)
+
+        r = np.zeros(1, dtype=np.int64)
+
+        # Approximate match (unsafe conversion)
+        f[1, 1](r, 1.5, 2.5)
+        self.assertPreciseEqual(r[0], 3)
+        self.assertEqual(len(f.overloads), 1, f.overloads)
+
+        sigs = ["(int64, int64)", "(float64, float64)"]
+        add_device = cuda.jit(sigs, device=True)(add)
+
+        @cuda.jit
+        def f(r, x, y):
+            r[0] = add_device(x, y)
+
+        # Approximate match (int32 -> float64 is a safe conversion)
+        r = np.zeros(1, dtype=np.float64)
+        f[1, 1](r, np.int32(1), 2.5)
+        self.assertPreciseEqual(r[0], 3.5)
 
     def test_get_regs_per_thread_unspecialized(self):
         # A kernel where the register usage per thread is likely to differ
