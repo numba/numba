@@ -184,11 +184,11 @@ class IntervalExampleTest(unittest.TestCase):
 
             with ExitStack() as stack:
                 interval = cgutils.create_struct_proxy(typ)(c.context, c.builder, value=val)
-                lo_obj = c.box(types.float64, coo.data)
+                lo_obj = c.box(types.float64, interval.lo)
                 with early_exit_if_null(c.builder, stack, lo_obj):
                     c.builder.store(fail_obj, ret_ptr)
 
-                hi_obj = c.box(types.float64, coo.data)
+                hi_obj = c.box(types.float64, interval.hi)
                 with early_exit_if_null(c.builder, stack, lo_obj):
                     c.pyapi.decref(lo_obj)
                     c.builder.store(fail_obj, ret_ptr)
