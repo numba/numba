@@ -204,9 +204,12 @@ def _make_constant_bytes(context, builder, nbytes):
     bstr.itemsize = ir.Constant(bstr.itemsize.type, 1)
     bstr.data = context.nrt.meminfo_data(builder, bstr.meminfo)
     bstr.parent = cgutils.get_null_value(bstr.parent.type)
-    # bstr.shape and bstr.strides are not used
-    bstr.shape = cgutils.get_null_value(bstr.shape.type)
-    bstr.strides = cgutils.get_null_value(bstr.strides.type)
+    bstr.shape = cgutils.pack_array(builder, [bstr.nitems],
+                                    context.get_value_type(types.intp))
+    bstr.strides = cgutils.pack_array(builder,
+                                      [ir.Constant(bstr.strides.type.element,
+                                       1)],
+                                      context.get_value_type(types.intp))
     return bstr
 
 
