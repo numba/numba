@@ -238,7 +238,7 @@ and possibly other information.
 The snippet above makes abundant use of the ``c.pyapi`` object, which
 gives access to a subset of the
 `Python interpreter's C API <https://docs.python.org/3/c-api/index.html>`_.
-Note the use of ``c.pyapi.err_occurred()`` to detect any errors that
+Note the use of ``early_exit_if_null`` to detect and handle any errors that
 may have happened when unboxing the object (try passing ``Interval('a', 'b')``
 for example).
 

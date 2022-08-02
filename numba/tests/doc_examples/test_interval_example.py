@@ -107,7 +107,7 @@ class IntervalExampleTest(unittest.TestCase):
         # magictoken.interval_unbox.begin
         from numba.core.boxing import early_exit_if, early_exit_if_null
         from numba.extending import unbox, NativeValue
-        from contextlib import contextmanager, ExitStack
+        from contextlib import ExitStack
 
         @unbox(IntervalType)
         def unbox_interval(typ, obj, c):
@@ -145,7 +145,8 @@ class IntervalExampleTest(unittest.TestCase):
                 c.builder.store(cgutils.false_bit, is_error_ptr)
                 c.builder.store(interval._getvalue(), ret_ptr)
 
-            return NativeValue(c.builder.load(ret_ptr), is_error=c.builder.load(is_error_ptr))
+            return NativeValue(c.builder.load(ret_ptr),
+                               is_error=c.builder.load(is_error_ptr))
         # magictoken.interval_unbox.end
 
         # magictoken.interval_box.begin
@@ -224,7 +225,7 @@ class IntervalExampleTest(unittest.TestCase):
                 raise RuntimeError("I am not a float")
         with self.assertRaises(RuntimeError):
             interval_width(Interval(2, NotAFloat()))
-    
+
         bad_interval = Interval(1, 2)
         del bad_interval.hi
 
