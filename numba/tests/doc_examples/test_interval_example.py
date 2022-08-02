@@ -105,32 +105,9 @@ class IntervalExampleTest(unittest.TestCase):
         # magictoken.interval_lower_builtin.end
 
         # magictoken.interval_unbox.begin
+        from numba.core.boxing import early_exit_if, early_exit_if_null
         from numba.extending import unbox, NativeValue
         from contextlib import contextmanager, ExitStack
-
-        @contextmanager
-        def early_exit_if(builder, stack: ExitStack, cond):
-            """
-            Emit code similar to::
-
-                if (cond) {
-                    <body>
-                    return;
-                }
-                <everything after this call>
-
-            However, this "return" will just break out of the current `ExitStack`,
-            rather than out of the whole function
-            """
-            then, otherwise = stack.enter_context(builder.if_else(cond, likely=False))
-            with then:
-                yield
-            stack.enter_context(otherwise)
-
-
-        def early_exit_if_null(builder, stack, obj):
-            return early_exit_if(builder, stack, cgutils.is_null(builder, obj))
-
 
         @unbox(IntervalType)
         def unbox_interval(typ, obj, c):
@@ -163,8 +140,8 @@ class IntervalExampleTest(unittest.TestCase):
                     c.builder.store(fail_obj, ret_ptr)
 
                 interval = cgutils.create_struct_proxy(typ)(c.context, c.builder)
-                interval.lo = lo_native
-                interval.hi = hi_native
+                interval.lo = lo_native.value
+                interval.hi = hi_native.value
                 c.builder.store(cgutils.false_bit, is_error_ptr)
                 c.builder.store(interval._getvalue(), ret_ptr)
 
@@ -240,6 +217,19 @@ class IntervalExampleTest(unittest.TestCase):
 
         # Test .width attribute
         self.assertEqual(a.width, interval_width(a))
+
+        # Test exceptions
+        class NotAFloat:
+            def __float__(self):
+                raise RuntimeError("I am not a float")
+        with self.assertRaises(RuntimeError):
+            interval_width(Interval(2, NotAFloat()))
+    
+        bad_interval = Interval(1, 2)
+        del bad_interval.hi
+
+        with self.assertRaises(AttributeError):
+            interval_width(bad_interval)
 
         # Test .low and .high usage
         self.assertFalse(inside_interval(a, 5))
