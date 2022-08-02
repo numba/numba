@@ -555,7 +555,7 @@ def dot_2_impl(name, left, right):
                     elif ndims == (1, 1):
                         return dot_2_vv(context, builder, sig, args)
                     else:
-                        assert 0
+                        raise AssertionError('unreachable')
 
             if left.dtype != right.dtype:
                 raise TypingError(
@@ -788,7 +788,7 @@ def dot_3(left, right, out):
                     elif ndims == {1, 2}:
                         return dot_3_vm(context, builder, sig, args)
                     else:
-                        assert 0
+                        raise AssertionError('unreachable')
             if left.dtype != right.dtype or left.dtype != out.dtype:
                 raise TypingError(
                     "np.dot() arguments must all have the same dtype")
