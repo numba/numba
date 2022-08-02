@@ -4,6 +4,7 @@ Implementation of linear algebra operations.
 
 
 import contextlib
+import warnings
 
 from llvmlite import ir
 
@@ -15,7 +16,8 @@ from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
 from numba.core.typing import signature
 from numba.core.extending import intrinsic, overload, register_jitable
 from numba.core import types, cgutils
-from numba.core.errors import TypingError, NumbaTypeError
+from numba.core.errors import TypingError, NumbaTypeError, \
+    NumbaPerformanceWarning
 from .arrayobj import make_array, _empty_nd_impl, array_copy
 from numba.np import numpy_support as np_support
 
@@ -572,6 +574,11 @@ def dot_2_impl(name, left, right):
                                    "dimensions") % name)
             return signature(return_type, left, right), _dot2_codegen
 
+        if left.layout not in 'CF' or right.layout not in 'CF':
+            warnings.warn(
+                "%s is faster on contiguous arrays, called on %s" % (
+                    name, (left, right),), NumbaPerformanceWarning)
+
         return lambda left, right: _impl(left, right)
 
 
@@ -597,6 +604,12 @@ def vdot(left, right):
                 raise TypingError(
                     "np.vdot() arguments must all have the same dtype")
             return signature(left.dtype, left, right), codegen
+
+        if left.layout not in 'CF' or right.layout not in 'CF':
+            warnings.warn(
+                "np.vdot() is faster on contiguous arrays, called on %s"
+                % ((left, right),), NumbaPerformanceWarning)
+
         return lambda left, right: _impl(left, right)
 
 
@@ -794,6 +807,13 @@ def dot_3(left, right, out):
                     "np.dot() arguments must all have the same dtype")
 
             return signature(out, left, right, out), codegen
+
+        if left.layout not in 'CF' or right.layout not in 'CF' or out.layout\
+            not in 'CF':
+            warnings.warn(
+                "np.vdot() is faster on contiguous arrays, called on %s"
+                % ((left, right),), NumbaPerformanceWarning)
+
         return lambda left, right, out: _impl(left, right, out)
 
 
