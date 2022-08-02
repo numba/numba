@@ -1137,6 +1137,26 @@ def box_LiteralStrKeyDict(typ, val, c):
 
 @contextmanager
 def early_exit_if(builder, stack: ExitStack, cond):
+    """
+    The python code::
+
+        with contextlib.ExitStack() as stack:
+            with early_exit_if(builder, stack, cond):
+                cleanup()
+            body()
+
+    emits the code::
+
+        if (cond) {
+            <cleanup>
+        }
+        else {
+            <body>
+        }
+
+    This can be useful for generating code with lots of early exists, without having to increase
+    the indentation each time.
+    """
     then, otherwise = stack.enter_context(builder.if_else(cond, likely=False))
     with then:
         yield
