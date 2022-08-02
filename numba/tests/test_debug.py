@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import
-
 import os
 import platform
 import re
@@ -8,16 +6,18 @@ import warnings
 
 import numpy as np
 
-from .support import (TestCase, override_config, override_env_config,
-                      captured_stdout, forbid_codegen)
-from numba import unittest_support as unittest
-from numba import jit, jitclass, types
-from numba.compiler import compile_isolated, Flags
-from numba.targets.cpu import ParallelOptions
-from numba.errors import NumbaPerformanceWarning
-from numba import compiler, prange
-from .test_parfors import skip_unsupported
-from .matmul_usecase import needs_blas
+from numba.tests.support import (TestCase, override_config, override_env_config,
+                      captured_stdout, forbid_codegen, skip_parfors_unsupported,
+                      needs_blas)
+from numba import jit
+from numba.core import types, compiler
+from numba.core.compiler import compile_isolated, Flags
+from numba.core.cpu import ParallelOptions
+from numba.core.errors import NumbaPerformanceWarning
+from numba import prange
+from numba.experimental import jitclass
+import unittest
+
 
 def simple_nopython(somearg):
     retval = somearg + 1
@@ -47,8 +47,8 @@ def supported_parfor(n):
     return a
 
 force_parallel_flags = Flags()
-force_parallel_flags.set("auto_parallel", ParallelOptions(True))
-force_parallel_flags.set('nrt')
+force_parallel_flags.auto_parallel = ParallelOptions(True)
+force_parallel_flags.nrt = True
 
 class DebugTestBase(TestCase):
 
@@ -84,8 +84,8 @@ class DebugTestBase(TestCase):
 
     def _check_dump_llvm(self, out):
         self.assertIn('--LLVM DUMP', out)
-        if compiler.Flags.OPTIONS['auto_parallel'].enabled == False:
-            self.assertIn('%"retval" = alloca', out)
+        if compiler.Flags.options["auto_parallel"].default.enabled == False:
+            self.assertRegex(out, r'store i64 %\"\.\d", i64\* %"retptr"', out)
 
     def _check_dump_func_opt_llvm(self, out):
         self.assertIn('--FUNCTION OPTIMIZED DUMP %s' % self.func_name, out)
@@ -239,7 +239,7 @@ class TestParforsDebug(TestCase):
         self.assertTrue(warning_found, "Warning message should be found.")
 
     @needs_blas
-    @skip_unsupported
+    @skip_parfors_unsupported
     def test_warns(self):
         """
         Test that using parallel=True on a function that does not have parallel
@@ -252,7 +252,7 @@ class TestParforsDebug(TestCase):
                                     flags=force_parallel_flags)
         self.check_parfors_warning(w)
 
-    @skip_unsupported
+    @skip_parfors_unsupported
     def test_array_debug_opt_stats(self):
         """
         Test that NUMBA_DEBUG_ARRAY_OPT_STATS produces valid output

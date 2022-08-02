@@ -1,13 +1,11 @@
-from __future__ import print_function
-
-import numba.unittest_support as unittest
+import unittest
 
 import dis
 import struct
 import sys
 
-from numba import jit, utils
-from .support import TestCase, tweak_code
+from numba import jit
+from numba.tests.support import TestCase, tweak_code
 
 
 class TestExtendedArg(TestCase):
@@ -25,12 +23,8 @@ class TestExtendedArg(TestCase):
 
         b = bytearray(f.__code__.co_code)
         consts = f.__code__.co_consts
-        if utils.PYVERSION >= (3, 6):
-            bytecode_len = 0xff
-            bytecode_format = "<BB"
-        else:
-            bytecode_len = 0xffff
-            bytecode_format = "<BH"
+        bytecode_len = 0xff
+        bytecode_format = "<BB"
         consts = consts + (None,) * bytecode_len + (42,)
         b[:0] = struct.pack(bytecode_format, dis.EXTENDED_ARG, 1)
         tweak_code(f, codestring=bytes(b), consts=consts)

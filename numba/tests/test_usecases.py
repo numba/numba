@@ -1,24 +1,21 @@
-from __future__ import print_function
-
 import itertools
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from numba import types, utils
+import unittest
+from numba.core.compiler import compile_isolated, Flags
+from numba.core import types, utils
 from numba.tests import usecases
-from .support import TestCase, tag
+from numba.tests.support import TestCase, tag
 
 enable_pyobj_flags = Flags()
-enable_pyobj_flags.set("enable_pyobject")
+enable_pyobj_flags.enable_pyobject = True
 
 force_pyobj_flags = Flags()
-force_pyobj_flags.set("force_pyobject")
+force_pyobj_flags.force_pyobject = True
 
 
 class TestUsecases(TestCase):
 
-    @tag('important')
     def test_andor(self):
         pyfunc = usecases.andor
         cr = compile_isolated(pyfunc, (types.int32, types.int32))
@@ -31,7 +28,6 @@ class TestUsecases(TestCase):
         for args in itertools.product(xs, ys):
             self.assertEqual(pyfunc(*args), cfunc(*args), "args %s" % (args,))
 
-    @tag('important')
     def test_sum1d(self):
         pyfunc = usecases.sum1d
         cr = compile_isolated(pyfunc, (types.int32, types.int32))
@@ -66,7 +62,6 @@ class TestUsecases(TestCase):
         print(utils.benchmark(bm_python, maxsec=.1))
         print(utils.benchmark(bm_numba, maxsec=.1))
 
-    @tag('important')
     def test_sum2d(self):
         pyfunc = usecases.sum2d
         cr = compile_isolated(pyfunc, (types.int32, types.int32))
@@ -78,7 +73,6 @@ class TestUsecases(TestCase):
         for args in itertools.product(ss, es):
             self.assertEqual(pyfunc(*args), cfunc(*args), args)
 
-    @tag('important')
     def test_while_count(self):
         pyfunc = usecases.while_count
         cr = compile_isolated(pyfunc, (types.int32, types.int32))
@@ -106,7 +100,6 @@ class TestUsecases(TestCase):
             cfunc(*args)
             self.assertPreciseEqual(a, b, msg=str(args))
 
-    @tag('important')
     def test_copy_arrays2d(self):
         pyfunc = usecases.copy_arrays2d
         arraytype = types.Array(types.int32, 2, 'A')
@@ -171,7 +164,7 @@ class TestUsecases(TestCase):
         self.assertEqual(pyfunc(test_str, 0, 3), cfunc(test_str, 0, 3))
         self.assertEqual(pyfunc(test_str, 1, 5), cfunc(test_str, 1, 5))
         self.assertEqual(pyfunc(test_str, 2, 3), cfunc(test_str, 2, 3))
-        
+
     def test_string_conversion(self):
         pyfunc = usecases.string_conversion
 

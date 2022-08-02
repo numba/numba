@@ -2,36 +2,38 @@
 Testing object mode specifics.
 
 """
-from __future__ import print_function
 
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from numba import utils, jit
-from .support import TestCase
+import unittest
+from numba.core.compiler import compile_isolated, Flags
+from numba import jit
+from numba.core import utils
+from numba.tests.support import TestCase
 
 
 def complex_constant(n):
     tmp = n + 4
     return tmp + 3j
 
+
 def long_constant(n):
     return n + 100000000000000000000000000000000000000000000000
+
 
 def delitem_usecase(x):
     del x[:]
 
 
 forceobj = Flags()
-forceobj.set("force_pyobject")
+forceobj.force_pyobject = True
 
 
 def loop_nest_3(x, y):
     n = 0
     for i in range(x):
         for j in range(y):
-            for k in range(x+y):
+            for k in range(x + y):
                 n += i * j
 
     return n
@@ -106,6 +108,20 @@ class TestObjectMode(TestCase):
         self.assertPreciseEqual(l, [])
         with self.assertRaises(TypeError):
             cfunc(42)
+
+    def test_starargs_non_tuple(self):
+        def consumer(*x):
+            return x
+
+        @jit(forceobj=True)
+        def foo(x):
+            return consumer(*x)
+
+        arg = "ijo"
+        got = foo(arg)
+        expect = foo.py_func(arg)
+        self.assertEqual(got, tuple(arg))
+        self.assertEqual(got, expect)
 
 
 class TestObjectModeInvalidRewrite(TestCase):

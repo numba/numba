@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-from __future__ import print_function, division, absolute_import
 
 import os
 import logging
@@ -29,7 +28,7 @@ def main(args=None):
 
     from .compiler import ModuleCompiler
     from .platform import Toolchain, find_shared_ending, find_pyext_ending
-    from . import decorators
+    from numba.pycc import decorators
 
     parser = argparse.ArgumentParser(
         description="DEPRECATED - Compile Python modules to a single shared library")

@@ -2,35 +2,33 @@
 Tests for numba.types.
 """
 
-from __future__ import print_function, absolute_import
 
 from collections import namedtuple
-import contextlib
 import gc
-import importlib
 import os
 import operator
-import shutil
 import sys
-import uuid
-try:
-    import cPickle as pickle
-except ImportError:
-    import pickle
 import weakref
 
 import numpy as np
 
-from numba import unittest_support as unittest
-from numba.utils import IS_PY3
-from numba import sigutils, types, typing, errors
-from numba.types.abstract import _typecache
-from numba.typing.templates import make_overload_template
-from numba import jit, njit, numpy_support, typeof
-from numba.extending import (overload, register_model, models, unbox,
-                             NativeValue, typeof_impl)
-from .support import TestCase, tag, temp_directory
-from .enum_usecases import Color, Shake, Shape
+from numba.core import types, typing, errors, sigutils
+from numba.core.types.abstract import _typecache
+from numba.core.types.functions import _header_lead
+from numba.core.typing.templates import make_overload_template
+from numba import jit, njit, typeof
+from numba.core.extending import (overload, register_model, models, unbox,
+                                  NativeValue, typeof_impl)
+from numba.tests.support import TestCase, create_temp_module
+from numba.tests.enum_usecases import Color, Shake, Shape
+import unittest
+from numba.np import numpy_support
+
+
+try:
+    import cPickle as pickle
+except ImportError:
+    import pickle
 
 
 Point = namedtuple('Point', ('x', 'y'))
@@ -48,7 +46,6 @@ class Dummy(object):
 
 class TestTypes(TestCase):
 
-    @tag('important')
     def test_equality(self):
         self.assertEqual(types.int32, types.int32)
         self.assertEqual(types.uint32, types.uint32)
@@ -93,6 +90,14 @@ class TestTypes(TestCase):
 
         # Different dtypes
         self.assertNotEqual(types.DType(types.int32), types.DType(types.int64))
+
+        # CPointer with same addrspace
+        self.assertEqual(types.CPointer(types.float32),
+                         types.CPointer(types.float32))
+
+        # CPointer with different addrspace
+        self.assertNotEqual(types.CPointer(types.float32, 0),
+                            types.CPointer(types.float32, 1))
 
     def test_weaktype(self):
         d = Dummy()
@@ -140,7 +145,6 @@ class TestTypes(TestCase):
         self.assertTrue(b != c)
         self.assertTrue(a != z)
 
-    @tag('important')
     def test_interning(self):
         # Test interning and lifetime of dynamic types.
         a = types.Dummy('xyzzyx')
@@ -176,18 +180,31 @@ class TestTypes(TestCase):
         gc.collect()
         self.assertEqual(len(cache), cache_len)
 
-    @tag('important')
     def test_array_notation(self):
         def check(arrty, scalar, ndim, layout):
             self.assertIs(arrty.dtype, scalar)
             self.assertEqual(arrty.ndim, ndim)
             self.assertEqual(arrty.layout, layout)
+
+        def check_index_error(callable):
+            with self.assertRaises(KeyError) as raises:
+                callable()
+            self.assertIn(
+                "Can only index numba types with slices with no start or "
+                "stop, got", str(raises.exception))
+
         scalar = types.int32
         check(scalar[:], scalar, 1, 'A')
         check(scalar[::1], scalar, 1, 'C')
         check(scalar[:, :], scalar, 2, 'A')
         check(scalar[:, ::1], scalar, 2, 'C')
         check(scalar[::1, :], scalar, 2, 'F')
+
+        check_index_error(lambda: scalar[0])
+        check_index_error(lambda: scalar[:, 4])
+        check_index_error(lambda: scalar[::1, 1:])
+        check_index_error(lambda: scalar[:2])
+        check_index_error(lambda: list(scalar))
 
     def test_array_notation_for_dtype(self):
         def check(arrty, scalar, ndim, layout):
@@ -202,7 +219,6 @@ class TestTypes(TestCase):
         check(dtyped[:, ::1], scalar, 2, 'C')
         check(dtyped[::1, :], scalar, 2, 'F')
 
-    @tag('important')
     def test_call_notation(self):
         # Function call signature
         i = types.int32
@@ -297,13 +313,12 @@ class TestNumbers(TestCase):
         check_order([types.float32, types.float64])
         check_order([types.complex64, types.complex128])
 
-        if IS_PY3:
-            with self.assertRaises(TypeError):
-                types.int8 <= types.uint32
-            with self.assertRaises(TypeError):
-                types.int8 <= types.float32
-            with self.assertRaises(TypeError):
-                types.float64 <= types.complex128
+        with self.assertRaises(TypeError):
+            types.int8 <= types.uint32
+        with self.assertRaises(TypeError):
+            types.int8 <= types.float32
+        with self.assertRaises(TypeError):
+            types.float64 <= types.complex128
 
 
 class TestNdIter(TestCase):
@@ -463,7 +478,7 @@ class TestPickling(TestCase):
         recordtype = np.dtype([('a', np.float64),
                                ('b', np.int32),
                                ('c', np.complex64),
-                               ('d', (np.str, 5))])
+                               ('d', (np.str_, 5))])
         ty = numpy_support.from_dtype(recordtype)
         self.check_pickling(ty)
         self.check_pickling(types.Array(ty, 1, 'A'))
@@ -506,8 +521,8 @@ class TestPickling(TestCase):
     # call templates are not picklable
     @unittest.expectedFailure
     def test_external_function_pointers(self):
-        from numba.typing import ctypes_utils
-        from .ctypes_usecases import c_sin, c_cos
+        from numba.core.typing import ctypes_utils
+        from numba.tests.ctypes_usecases import c_sin, c_cos
         for fnptr in (c_sin, c_cos):
             ty = ctypes_utils.make_function_type(fnptr)
             self.assertIsInstance(ty, types.ExternalFunctionPointer)
@@ -622,42 +637,17 @@ class TestIsInternalTypeMarker(TestCase):
     the `is_internal` attr of a concrete Type class
     """
     source_lines = """
-from numba import types
+from numba.core import types
 
 class FooType(types.Type):
     def __init__(self):
         super(FooType, self).__init__(name='Foo')
 """
 
-    # this is largely copied (with some modifications) from test_jit_module
-    @contextlib.contextmanager
-    def create_temp_module(self, source_lines=None, **jit_options):
-        # Use try/finally so cleanup happens even when an exception is raised
-        try:
-            if source_lines is None:
-                source_lines = self.source_lines
-            tempdir = temp_directory('test_extension_type')
-            # Generate random module name
-            temp_module_name = 'test_extension_type_{}'.format(
-                str(uuid.uuid4()).replace('-', '_'))
-            temp_module_path = os.path.join(tempdir, temp_module_name + '.py')
-
-            with open(temp_module_path, 'w') as f:
-                lines = source_lines.format(jit_options=jit_options)
-                f.write(lines)
-            # Add test_module to sys.path so it can be imported
-            sys.path.insert(0, tempdir)
-            test_module = importlib.import_module(temp_module_name)
-            yield test_module
-        finally:
-            sys.modules.pop(temp_module_name, None)
-            sys.path.remove(tempdir)
-            shutil.rmtree(tempdir)
-
     def test_create_temp_module(self):
         sys_path_original = list(sys.path)
         sys_modules_original = dict(sys.modules)
-        with self.create_temp_module() as test_module:
+        with create_temp_module(self.source_lines) as test_module:
             temp_module_dir = os.path.dirname(test_module.__file__)
             self.assertEqual(temp_module_dir, sys.path[0])
             self.assertEqual(sys.path[1:], sys_path_original)
@@ -670,7 +660,7 @@ class FooType(types.Type):
         try:
             sys_path_original = list(sys.path)
             sys_modules_original = dict(sys.modules)
-            with self.create_temp_module():
+            with create_temp_module(self.source_lines):
                 raise ValueError("Something went wrong!")
         except ValueError:
             # Test that modifications to sys.path / sys.modules are reverted
@@ -679,7 +669,7 @@ class FooType(types.Type):
 
     def test_externally_defined_type_is_external(self):
 
-        with self.create_temp_module(self.source_lines) as test_module:
+        with create_temp_module(self.source_lines) as test_module:
             FooType = test_module.FooType
             self.assertFalse(FooType().is_internal)
 
@@ -744,7 +734,7 @@ class FooType(types.Type):
             with self.assertRaises(errors.TypingError) as raises:
                 call_false_if_not_array_closed_system(Foo())
             estr = str(raises.exception)
-            self.assertIn("Invalid use of Function", estr)
+            self.assertIn(_header_lead, estr)
             self.assertIn("false_if_not_array_closed_system", estr)
             self.assertIn("(Foo)", estr)
 
@@ -752,7 +742,7 @@ class FooType(types.Type):
         # See issue #4970, this checks that unicode eq/ne now ignores extension
         # types.
 
-        with self.create_temp_module(self.source_lines) as test_module:
+        with create_temp_module(self.source_lines) as test_module:
             FooType = test_module.FooType
             self.assertFalse(FooType().is_internal)
 
@@ -787,6 +777,102 @@ class FooType(types.Type):
             self.assertEqual(("RAN CUSTOM EQ OVERLOAD",
                               "RAN CUSTOM NE OVERLOAD"),
                              f(Foo()))
+
+
+class TestIssues(TestCase):
+    def test_omitted_type(self):
+        # issue https://github.com/numba/numba/issues/5471
+        def inner(a):
+            pass
+
+        @overload(inner)
+        def inner_overload(a):
+            if not isinstance(a, types.Literal):
+                return
+            return lambda a: a
+
+        @njit
+        def my_func(a='a'):
+            return inner(a)
+
+        @njit
+        def f():
+            return my_func()
+
+        @njit
+        def g():
+            return my_func('b')
+
+        self.assertEqual(f(), 'a')
+        self.assertEqual(g(), 'b')
+
+    def test_type_of_literal(self):
+        # type(val) where val is a literal should not give a literal type.
+        def inner(a):
+            pass
+
+        @overload(inner)
+        def inner_overload(a):
+            if not isinstance(a, types.Literal):
+                return
+            self.assertIsInstance(a, types.Literal)
+            # NOTE: using 1.23 to ensure that the result is indeed an int.
+            return lambda a: type(a)(a + 1.23)
+
+        @njit
+        def my_func(a=1):
+            return inner(a)
+
+        @njit
+        def f():
+            return my_func()
+
+        @njit
+        def g():
+            return my_func(100)
+
+        self.assertEqual(f(), 2)
+        self.assertEqual(g(), 101)
+
+    def test_issue_typeref_key(self):
+        # issue https://github.com/numba/numba/issues/6336
+        class NoUniqueNameType(types.Dummy):
+            def __init__(self, param):
+                super(NoUniqueNameType, self).__init__('NoUniqueNameType')
+                self.param = param
+
+            @property
+            def key(self):
+                return self.param
+
+        no_unique_name_type_1 = NoUniqueNameType(1)
+        no_unique_name_type_2 = NoUniqueNameType(2)
+
+        for ty1 in (no_unique_name_type_1, no_unique_name_type_2):
+            for ty2 in (no_unique_name_type_1, no_unique_name_type_2):
+                self.assertIs(
+                    types.TypeRef(ty1) == types.TypeRef(ty2), ty1 == ty2)
+
+    def test_issue_list_type_key(self):
+        # https://github.com/numba/numba/issues/6397
+        class NoUniqueNameType(types.Dummy):
+            def __init__(self, param):
+                super(NoUniqueNameType, self).__init__('NoUniqueNameType')
+                self.param = param
+
+            @property
+            def key(self):
+                return self.param
+
+        no_unique_name_type_1 = NoUniqueNameType(1)
+        no_unique_name_type_2 = NoUniqueNameType(2)
+
+        for ty1 in (no_unique_name_type_1, no_unique_name_type_2):
+            for ty2 in (no_unique_name_type_1, no_unique_name_type_2):
+                self.assertIs(
+                    types.ListType(ty1) == types.ListType(ty2),  # noqa: E721
+                    ty1 == ty2
+                )
 
 
 if __name__ == '__main__':

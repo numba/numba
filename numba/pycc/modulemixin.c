@@ -13,39 +13,33 @@
 #define NUMBA_EXPORT_FUNC(_rettype) VISIBILITY_HIDDEN _rettype
 #define NUMBA_EXPORT_DATA(_vartype) VISIBILITY_HIDDEN _vartype
 
+#define PYCC_COMPILING
+
 #include "../_helperlib.c"
 #include "../_dynfunc.c"
 
 #if PYCC_USE_NRT
-#include "../runtime/_nrt_python.c"
-#include "../runtime/nrt.h"
+#include "../core/runtime/_nrt_python.c"
+#include "../core/runtime/nrt.h"
 #endif
 
+/* Defines hashsecret variables (see issue #6386) */
+int64_t _numba_hashsecret_siphash_k0;
+int64_t _numba_hashsecret_siphash_k1;
+int64_t _numba_hashsecret_djbx33a_suffix;
 
 /* NOTE: import_array() is macro, not a function.  It returns NULL on
-   failure on py3, but nothing on py2. */
-#if PY_MAJOR_VERSION >= 3
-    static void *
-    wrap_import_array(void) {
-        import_array();
-        return (void *) 1;
-    }
-#else
-    static void
-    wrap_import_array(void) {
-        import_array();
-    }
-#endif
+   failure */
+static void *
+wrap_import_array(void) {
+    import_array();
+    return (void *) 1;
+}
 
 
 static int
 init_numpy(void) {
-    #if PY_MAJOR_VERSION >= 3
-        return wrap_import_array() != NULL;
-    #else
-        wrap_import_array();
-        return 1;   /* always succeed */
-    #endif
+    return wrap_import_array() != NULL;
 }
 
 
@@ -64,13 +58,11 @@ VISIBILITY_HIDDEN void **PYCC(_unused_) = {
     (void *) Numba_make_generator,
 };
 
-/* The LLVM-generated functions for atomic refcounting */
-extern void *nrt_atomic_add, *nrt_atomic_sub;
-
 /* The structure type constructed by PythonAPI.serialize_uncached() */
 typedef struct {
     const char *data;
     int len;
+    const char *hashbuf;
 } env_def_t;
 
 /* Environment GlobalVariable address type */
@@ -85,7 +77,7 @@ recreate_environment(PyObject *module, env_def_t env)
     EnvironmentObject *envobj;
     PyObject *env_consts;
 
-    env_consts = numba_unpickle(env.data, env.len);
+    env_consts = numba_unpickle(env.data, env.len, env.hashbuf);
     if (env_consts == NULL)
         return NULL;
     if (!PyList_Check(env_consts)) {
@@ -121,6 +113,16 @@ PYCC(pycc_init_) (PyObject *module, PyMethodDef *defs,
                                     env_def_t *envs,
                                     env_gv_t *envgvs)
 {
+    /* Aligns hashsecret with values in current python process so that
+     * hashes computed inside the pycc module are correct if imported
+     * by the current process. Imports in a new process get the right
+     * hash secret through:
+     * `numba.cpython.hashing._load_hashsecret`.
+     */
+    _numba_hashsecret_siphash_k0 = _Py_HashSecret.siphash.k0;
+    _numba_hashsecret_siphash_k1 = _Py_HashSecret.siphash.k1;
+    _numba_hashsecret_djbx33a_suffix = _Py_HashSecret.djbx33a.suffix;
+
     PyMethodDef *fdef;
     PyObject *modname = NULL;
     PyObject *docobj = NULL;
@@ -137,8 +139,6 @@ PYCC(pycc_init_) (PyObject *module, PyMethodDef *defs,
 
 #if PYCC_USE_NRT
     NRT_MemSys_init();
-    NRT_MemSys_set_atomic_inc_dec((NRT_atomic_inc_dec_func) &nrt_atomic_add,
-                                  (NRT_atomic_inc_dec_func) &nrt_atomic_sub);
     if (init_nrt_python_module(module)) {
         goto error;
     }

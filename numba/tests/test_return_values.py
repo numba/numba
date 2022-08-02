@@ -2,19 +2,17 @@
 Test return values
 """
 
-from __future__ import print_function
 
 import math
 
-import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from numba.utils import PYVERSION
-from numba import types
-from numba.errors import TypingError
+import unittest
+from numba.core.compiler import compile_isolated, Flags
+from numba.core import types
+from numba.core.errors import TypingError, NumbaTypeError
 
 
 enable_pyobj_flags = Flags()
-enable_pyobj_flags.set("enable_pyobject")
+enable_pyobj_flags.enable_pyobject = True
 no_pyobj_flags = Flags()
 
 
@@ -42,7 +40,7 @@ class TestReturnValues(unittest.TestCase):
             result = cfunc()
 
     def test_nopython_func_npm(self):
-        with self.assertRaises(TypeError):
+        with self.assertRaises(NumbaTypeError):
             self.test_nopython_func(flags=no_pyobj_flags)
 
     def test_pyobj_func(self, flags=enable_pyobj_flags):
@@ -72,7 +70,7 @@ class TestReturnValues(unittest.TestCase):
             result = cfunc()
 
     def test_module_func_npm(self):
-        with self.assertRaises(TypeError):
+        with self.assertRaises(NumbaTypeError):
             self.test_module_func(flags=no_pyobj_flags)
 
 

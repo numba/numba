@@ -1,19 +1,21 @@
 """
 Python wrapper that connects CPython interpreter to the numba dictobject.
 """
-from numba import config
-from numba.six import MutableMapping
-from numba.types import DictType, TypeRef
-from numba.targets.imputils import numba_typeref_ctor
-from numba import njit, dictobject, types, cgutils, errors, typeof
-from numba.extending import (
-    overload_method,
+from collections.abc import MutableMapping
+from numba.core.types import DictType
+from numba.core.imputils import numba_typeref_ctor
+from numba import njit, typeof
+from numba.core import types, errors, config, cgutils
+from numba.core.extending import (
     overload,
     box,
     unbox,
     NativeValue,
     type_callable,
+    overload_classmethod,
 )
+from numba.typed import dictobject
+from numba.core.typing import signature
 
 
 @njit
@@ -105,7 +107,7 @@ class Dict(MutableMapping):
 
         Parameters
         ----------
-        dcttype : numba.types.DictType; keyword-only
+        dcttype : numba.core.types.DictType; keyword-only
             Used internally for the dictionary type.
         meminfo : MemInfo; keyword-only
             Used internally to pass the MemInfo object when boxing.
@@ -206,8 +208,7 @@ class Dict(MutableMapping):
         return _copy(self)
 
 
-# XXX: should we have a better way to classmethod
-@overload_method(TypeRef, 'empty')
+@overload_classmethod(types.DictType, 'empty')
 def typeddict_empty(cls, key_type, value_type):
     if cls.instance_type is not DictType:
         return
@@ -240,44 +241,76 @@ def box_dicttype(typ, val, c):
 
     dicttype_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ))
 
-    res = c.pyapi.call_function_objargs(fmp_fn, (boxed_meminfo, dicttype_obj))
-    c.pyapi.decref(fmp_fn)
-    c.pyapi.decref(typeddict_mod)
-    c.pyapi.decref(boxed_meminfo)
-    return res
+    result_var = builder.alloca(c.pyapi.pyobj)
+    builder.store(cgutils.get_null_value(c.pyapi.pyobj), result_var)
+    with builder.if_then(cgutils.is_not_null(builder, dicttype_obj)):
+        res = c.pyapi.call_function_objargs(
+            fmp_fn, (boxed_meminfo, dicttype_obj),
+        )
+        c.pyapi.decref(fmp_fn)
+        c.pyapi.decref(typeddict_mod)
+        c.pyapi.decref(boxed_meminfo)
+        builder.store(res, result_var)
+    return builder.load(result_var)
 
 
 @unbox(types.DictType)
 def unbox_dicttype(typ, val, c):
     context = c.context
-    builder = c.builder
 
-    miptr = c.pyapi.object_getattr_string(val, '_opaque')
+    # Check that `type(val) is Dict`
+    dict_type = c.pyapi.unserialize(c.pyapi.serialize_object(Dict))
+    valtype = c.pyapi.object_type(val)
+    same_type = c.builder.icmp_unsigned("==", valtype, dict_type)
 
-    native = c.unbox(types.MemInfoPointer(types.voidptr), miptr)
+    with c.builder.if_else(same_type) as (then, orelse):
+        with then:
+            miptr = c.pyapi.object_getattr_string(val, '_opaque')
 
-    mi = native.value
-    ctor = cgutils.create_struct_proxy(typ)
-    dstruct = ctor(context, builder)
+            mip_type = types.MemInfoPointer(types.voidptr)
+            native = c.unbox(mip_type, miptr)
 
-    data_pointer = context.nrt.meminfo_data(builder, mi)
-    data_pointer = builder.bitcast(
-        data_pointer,
-        dictobject.ll_dict_type.as_pointer(),
-    )
+            mi = native.value
 
-    dstruct.data = builder.load(data_pointer)
-    dstruct.meminfo = mi
+            argtypes = mip_type, typeof(typ)
 
-    dctobj = dstruct._getvalue()
-    c.pyapi.decref(miptr)
+            def convert(mi, typ):
+                return dictobject._from_meminfo(mi, typ)
 
-    return NativeValue(dctobj)
+            sig = signature(typ, *argtypes)
+            nil_typeref = context.get_constant_null(argtypes[1])
+            args = (mi, nil_typeref)
+            is_error, dctobj = c.pyapi.call_jit_code(convert , sig, args)
+            # decref here because we are stealing a reference.
+            c.context.nrt.decref(c.builder, typ, dctobj)
 
+            c.pyapi.decref(miptr)
+            bb_unboxed = c.builder.basic_block
 
-#
-# The following contains the logic for the type-inferred constructor
-#
+        with orelse:
+            # Raise error on incorrect type
+            c.pyapi.err_format(
+                "PyExc_TypeError",
+                "can't unbox a %S as a %S",
+                valtype, dict_type,
+            )
+            bb_else = c.builder.basic_block
+
+    # Phi nodes to gather the output
+    dctobj_res = c.builder.phi(dctobj.type)
+    is_error_res = c.builder.phi(is_error.type)
+
+    dctobj_res.add_incoming(dctobj, bb_unboxed)
+    dctobj_res.add_incoming(dctobj.type(None), bb_else)
+
+    is_error_res.add_incoming(is_error, bb_unboxed)
+    is_error_res.add_incoming(cgutils.true_bit, bb_else)
+
+    # cleanup
+    c.pyapi.decref(dict_type)
+    c.pyapi.decref(valtype)
+
+    return NativeValue(dctobj_res, is_error=is_error_res)
 
 
 @type_callable(DictType)
@@ -301,7 +334,7 @@ def impl_numba_typeref_ctor(cls):
     cls : TypeRef
         Expecting a TypeRef of a precise DictType.
 
-    See also: `redirect_type_ctor` in numba/target/bulitins.py
+    See also: `redirect_type_ctor` in numba/cpython/bulitins.py
     """
     dict_ty = cls.instance_type
     if not isinstance(dict_ty, types.DictType):

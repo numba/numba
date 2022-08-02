@@ -1,5 +1,6 @@
-from __future__ import absolute_import
-from .simulator import *
+# We import * from simulator here because * is imported from simulator_init by
+# numba.cuda.__init__.
+from .simulator import *  # noqa: F403, F401
 
 
 def is_available():
@@ -14,6 +15,3 @@ def cuda_error():
     """
     # Simulator never fails to initialize
     return None
-
-
-

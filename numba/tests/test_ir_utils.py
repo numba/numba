@@ -1,22 +1,21 @@
 import numba
-from .support import TestCase, unittest
-from numba import compiler, jitclass, ir
-from numba.targets.registry import cpu_target
-from numba.compiler import CompilerBase, Flags
-from numba.compiler_machinery import PassManager
-from numba.targets import registry
-from numba import types, ir_utils, bytecode
-from numba.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
-                                  IRProcessing,)
+from numba.tests.support import TestCase, unittest
+from numba.core.registry import cpu_target
+from numba.core.compiler import CompilerBase, Flags
+from numba.core.compiler_machinery import PassManager
+from numba.core import types, ir, bytecode, compiler, ir_utils, registry
+from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode,
+                                       FixupArgs, IRProcessing,)
 
-from numba.typed_passes import (NopythonTypeInference, type_inference_stage,
-                                DeadCodeElimination)
+from numba.core.typed_passes import (NopythonTypeInference,
+                                     type_inference_stage, DeadCodeElimination)
+from numba.experimental import jitclass
 
 # global constant for testing find_const
 GLOBAL_B = 11
 
 
-@jitclass([('val', numba.types.List(numba.intp))])
+@jitclass([('val', numba.core.types.List(numba.intp))])
 class Dummy(object):
     def __init__(self, val):
         self.val = val
@@ -37,10 +36,11 @@ class TestIrUtils(TestCase):
 
         test_ir = compiler.run_frontend(test_func)
         typingctx = cpu_target.typing_context
-        typemap, _, _ = type_inference_stage(
-            typingctx, test_ir, (), None)
+        targetctx = cpu_target.target_context
+        typing_res = type_inference_stage(
+            typingctx, targetctx, test_ir, (), None)
         matched_call = ir_utils.find_callname(
-            test_ir, test_ir.blocks[0].body[14].value, typemap)
+            test_ir, test_ir.blocks[0].body[7].value, typing_res.typemap)
         self.assertTrue(isinstance(matched_call, tuple) and
                         len(matched_call) == 2 and
                         matched_call[0] == 'append')
@@ -88,50 +88,32 @@ class TestIrUtils(TestCase):
             # dead stuff:
             # a const int value 0xdead
             # an assign of above into to variable `dead`
-            # del of both of the above
             # a const int above 0xdeaddead
             # an assign of said int to variable `deaddead`
-            # del of both of the above
-            # this is 8 things to remove
+            # this is 2 statements to remove
 
             self.assertEqual(len(the_ir.blocks), 1)
             block = the_ir.blocks[0]
             deads = []
-            dels = [x for x in block.find_insts(ir.Del)]
             for x in block.find_insts(ir.Assign):
                 if isinstance(getattr(x, 'target', None), ir.Var):
                     if 'dead' in getattr(x.target, 'name', ''):
                         deads.append(x)
 
-            expect_removed = []
             self.assertEqual(len(deads), 2)
-            expect_removed.extend(deads)
-            del_names = [x.value for x in dels]
             for d in deads:
                 # check the ir.Const is the definition and the value is expected
                 const_val = the_ir.get_definition(d.value)
                 self.assertTrue(int('0x%s' % d.target.name, 16),
                                 const_val.value)
-                expect_removed.append(const_val)
 
-                # check there is a del for both sides of the assignment, one for
-                # the dead variable and one for which to it the const gets
-                # assigned
-                self.assertIn(d.value.name, del_names)
-                self.assertIn(d.target.name, del_names)
-
-                for x in dels:
-                    if x.value in (d.value.name, d.target.name):
-                        expect_removed.append(x)
-            self.assertEqual(len(expect_removed), 8)
-            return expect_removed
+            return deads
 
         def check_dce_ir(the_ir):
             self.assertEqual(len(the_ir.blocks), 1)
             block = the_ir.blocks[0]
             deads = []
             consts = []
-            dels = [x for x in block.find_insts(ir.Del)]
             for x in block.find_insts(ir.Assign):
                 if isinstance(getattr(x, 'target', None), ir.Var):
                     if 'dead' in getattr(x.target, 'name', ''):
@@ -139,8 +121,6 @@ class TestIrUtils(TestCase):
                 if isinstance(getattr(x, 'value', None), ir.Const):
                     consts.append(x)
             self.assertEqual(len(deads), 0)
-            # check there's no mention of dead in dels
-            self.assertTrue(all(['dead' not in x.value for x in dels]))
 
             # check the consts to make sure there's no reference to 0xdead or
             # 0xdeaddead
@@ -214,6 +194,11 @@ class TestIrUtils(TestCase):
                     acc += 7
             else:
                 raise ValueError("some string")
+            # prevents inline of return on py310
+            py310_defeat1 = 1  # noqa
+            py310_defeat2 = 2  # noqa
+            py310_defeat3 = 3  # noqa
+            py310_defeat4 = 4  # noqa
             return acc
 
         def bar(a):
@@ -239,6 +224,10 @@ class TestIrUtils(TestCase):
                     acc += 7
             else:
                 raise ValueError("some string")
+            py310_defeat1 = 1  # noqa
+            py310_defeat2 = 2  # noqa
+            py310_defeat3 = 3  # noqa
+            py310_defeat4 = 4  # noqa
             return acc
 
         def baz(a):
@@ -260,6 +249,10 @@ class TestIrUtils(TestCase):
                     acc += 7
             else:
                 raise ValueError("some string")
+            py310_defeat1 = 1  # noqa
+            py310_defeat2 = 2  # noqa
+            py310_defeat3 = 3  # noqa
+            py310_defeat4 = 4  # noqa
             return acc
 
         def get_flat_cfg(func):

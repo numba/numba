@@ -1,9 +1,7 @@
-from __future__ import print_function, absolute_import, division
-
-from numba import unittest_support as unittest
 import numpy as np
 from numba import cuda
-from numba.cuda.testing import SerialMixin
+from numba.cuda.testing import CUDATestCase
+import unittest
 
 
 def reinterpret_array_type(byte_arr, start, stop, output):
@@ -12,7 +10,7 @@ def reinterpret_array_type(byte_arr, start, stop, output):
     output[0] = val
 
 
-class TestCudaArrayMethods(SerialMixin, unittest.TestCase):
+class TestCudaArrayMethods(CUDATestCase):
     def test_reinterpret_array_type(self):
         """
         Reinterpret byte array as int32 in the GPU.

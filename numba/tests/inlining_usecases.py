@@ -1,6 +1,6 @@
 """ Test cases for inlining IR from another module """
 from numba import njit
-from numba.extending import overload
+from numba.core.extending import overload
 
 _GLOBAL1 = 100
 
@@ -12,6 +12,7 @@ def bar():
 
 def baz_factory(a):
     b = 17 + a
+
     @njit(inline='always')
     def baz():
         return _GLOBAL1 + a - b

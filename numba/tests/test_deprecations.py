@@ -1,9 +1,8 @@
-from __future__ import print_function, absolute_import
 import warnings
 from numba import jit
-from numba.errors import (NumbaDeprecationWarning,
+from numba.core.errors import (NumbaDeprecationWarning,
                           NumbaPendingDeprecationWarning, NumbaWarning)
-import numba.unittest_support as unittest
+import unittest
 
 
 class TestDeprecation(unittest.TestCase):
@@ -12,7 +11,7 @@ class TestDeprecation(unittest.TestCase):
         self.assertEqual(len(warnings), 1)
         self.assertEqual(warnings[0].category, category)
         self.assertIn(expected_str, str(warnings[0].message))
-        self.assertIn("http://numba.pydata.org", str(warnings[0].message))
+        self.assertIn("https://numba.readthedocs.io", str(warnings[0].message))
 
     def test_jitfallback(self):
         # tests that @jit falling back to object mode raises a
@@ -53,7 +52,7 @@ class TestDeprecation(unittest.TestCase):
                 self.assertIn(msg, warn_msg)
                 msg = ("\'reflected %s\' found for argument" % container)
                 self.assertIn(msg, warn_msg)
-                self.assertIn("http://numba.pydata.org", warn_msg)
+                self.assertIn("https://numba.readthedocs.io", warn_msg)
 
 
 if __name__ == '__main__':

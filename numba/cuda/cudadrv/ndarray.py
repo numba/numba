@@ -1,7 +1,5 @@
-from __future__ import print_function, absolute_import, division
-
-from . import devices, driver
-from numba.targets.registry import cpu_target
+from numba.cuda.cudadrv import devices, driver
+from numba.core.registry import cpu_target
 
 
 def _calc_array_sizeof(ndim):

@@ -1,13 +1,12 @@
-from __future__ import print_function
-
 import itertools
 
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba import types, jit, typeof
-from numba.errors import TypingError
-from .support import MemoryLeakMixin, TestCase, tag
+import unittest
+from numba import jit, typeof
+from numba.core import types
+from numba.core.errors import TypingError
+from numba.tests.support import MemoryLeakMixin, TestCase, tag
 
 
 def getitem_usecase(a, b):
@@ -127,7 +126,6 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         foo(arr, 1)
         self.assertEqual(arr[0], arr[1])
 
-    @tag('important')
     def test_getitem_array(self):
         # Test advanced indexing with a single array index
         N = 4
@@ -178,6 +176,28 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         indices = self.generate_advanced_indices(N)
         self.check_setitem_indices(arr, indices)
 
+    def test_setitem_0d(self):
+        # Test setitem with a 0d-array
+        pyfunc = setitem_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+
+        inps = [
+            (np.zeros(3), np.array(3.14)),
+            (np.zeros(2), np.array(2)),
+            (np.zeros(3, dtype=np.int64), np.array(3, dtype=np.int64)),
+            (np.zeros(3, dtype=np.float64), np.array(1, dtype=np.int64)),
+            (np.zeros(5, dtype='<U3'), np.array('abc')),
+            (np.zeros((3,), dtype='<U3'), np.array('a')),
+            (np.array(['abc','def','ghi'], dtype='<U3'),
+             np.array('WXYZ', dtype='<U4')),
+            (np.zeros(3, dtype=complex), np.array(2+3j, dtype=complex)),
+        ]
+
+        for x1, v in inps:
+            x2 = x1.copy()
+            pyfunc(x1, 0, v)
+            cfunc(x2, 0, v)
+            self.assertPreciseEqual(x1, x2)
 
     def test_np_take(self):
         # shorter version of array.take test in test_array_methods

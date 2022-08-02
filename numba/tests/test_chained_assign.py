@@ -1,21 +1,13 @@
-from __future__ import print_function
-
 from numba import jit
-import numba.unittest_support as unittest
+import unittest
 import numpy as np
 import copy
-from .support import MemoryLeakMixin
-
-
-try:
-    xrange
-except NameError:
-    xrange = range
+from numba.tests.support import MemoryLeakMixin
 
 
 @jit
 def inc(a):
-    for i in xrange(len(a)):
+    for i in range(len(a)):
         a[i] += 1
     return a
 

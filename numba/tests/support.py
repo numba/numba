@@ -1,74 +1,175 @@
 """
 Assorted utilities for use in tests.
 """
-from __future__ import print_function
 
 import cmath
 import contextlib
+from collections import defaultdict
 import enum
-import errno
 import gc
 import math
+import platform
 import os
+import signal
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import io
 import ctypes
 import multiprocessing as mp
 import warnings
+import traceback
 from contextlib import contextmanager
+import uuid
+import importlib
+import types as pytypes
 
 import numpy as np
+
+from numba import testing
+from numba.core import errors, typing, utils, config, cpu
+from numba.core.compiler import (compile_extra, compile_isolated, Flags,
+                                 DEFAULT_FLAGS, CompilerBase,
+                                 DefaultPassBuilder)
+from numba.core.typed_passes import IRLegalization
+from numba.core.untyped_passes import PreserveIR
+import unittest
+from numba.core.runtime import rtsys
+from numba.np import numpy_support
+from numba.pycc.platform import _external_compiler_ok
+from numba.core.runtime import _nrt_python as _nrt
+
+
 try:
     import scipy
 except ImportError:
     scipy = None
 
-from numba import config, errors, typing, utils, numpy_support, testing
-from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
-from numba.targets import cpu
-import numba.unittest_support as unittest
-from numba.runtime import rtsys
-from numba.six import PY2
-
 
 enable_pyobj_flags = Flags()
-enable_pyobj_flags.set("enable_pyobject")
+enable_pyobj_flags.enable_pyobject = True
 
 force_pyobj_flags = Flags()
-force_pyobj_flags.set("force_pyobject")
+force_pyobj_flags.force_pyobject = True
 
 no_pyobj_flags = Flags()
 
 nrt_flags = Flags()
-nrt_flags.set("nrt")
+nrt_flags.nrt = True
 
 
 tag = testing.make_tag_decorator(['important', 'long_running'])
 
-_windows_py27 = (sys.platform.startswith('win32') and
-                 sys.version_info[:2] == (2, 7))
 _32bit = sys.maxsize <= 2 ** 32
-_reason = 'parfors not supported'
-skip_parfors_unsupported = unittest.skipIf(_32bit or _windows_py27, _reason)
+is_parfors_unsupported = _32bit
+skip_parfors_unsupported = unittest.skipIf(
+    is_parfors_unsupported,
+    'parfors not supported',
+)
 skip_py38_or_later = unittest.skipIf(
     utils.PYVERSION >= (3, 8),
     "unsupported on py3.8 or later"
 )
-skip_tryexcept_unsupported = unittest.skipIf(
-    utils.PYVERSION < (3, 7),
-    "try-except unsupported on py3.6 or earlier"
+
+skip_unless_py10_or_later = unittest.skipUnless(
+    utils.PYVERSION >= (3, 10),
+    "needs Python 3.10 or later"
 )
-skip_tryexcept_supported = unittest.skipIf(
-    utils.PYVERSION >= (3, 7),
-    "try-except supported on py3.7 or later"
+
+skip_unless_py10 = unittest.skipUnless(
+    utils.PYVERSION == (3, 10),
+    "needs Python 3.10"
 )
+
+skip_if_32bit = unittest.skipIf(_32bit, "Not supported on 32 bit")
 
 _msg = "SciPy needed for test"
 skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
+
+_lnx_reason = 'linux only test'
+linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)
+
+_win_reason = 'Windows-only test'
+windows_only = unittest.skipIf(not sys.platform.startswith('win'), _win_reason)
+
+_is_armv7l = platform.machine() == 'armv7l'
+
+disabled_test = unittest.skipIf(True, 'Test disabled')
+
+# See issue #4563, PPC64LE LLVM bug
+skip_ppc64le_issue4563 = unittest.skipIf(platform.machine() == 'ppc64le',
+                                         ("Hits: 'Parameter area must exist "
+                                          "to pass an argument in memory'"))
+
+# Typeguard
+has_typeguard = bool(os.environ.get('NUMBA_USE_TYPEGUARD', 0))
+
+skip_unless_typeguard = unittest.skipUnless(
+    has_typeguard, "Typeguard is not enabled",
+)
+
+skip_if_typeguard = unittest.skipIf(
+    has_typeguard, "Broken if Typeguard is enabled",
+)
+
+# See issue #6465, PPC64LE LLVM bug
+skip_ppc64le_issue6465 = unittest.skipIf(platform.machine() == 'ppc64le',
+                                         ("Hits: 'mismatch in size of "
+                                          "parameter area' in "
+                                          "LowerCall_64SVR4"))
+
+# fenv.h on M1 may have various issues:
+# https://github.com/numba/numba/issues/7822#issuecomment-1065356758
+_uname = platform.uname()
+IS_OSX_ARM64 = _uname.system == 'Darwin' and _uname.machine == 'arm64'
+skip_m1_fenv_errors = unittest.skipIf(IS_OSX_ARM64,
+    "fenv.h-like functionality unreliable on OSX arm64")
+
+try:
+    import scipy.linalg.cython_lapack
+    has_lapack = True
+except ImportError:
+    has_lapack = False
+
+needs_lapack = unittest.skipUnless(has_lapack,
+                                   "LAPACK needs SciPy 1.0+")
+
+try:
+    import scipy.linalg.cython_blas
+    has_blas = True
+except ImportError:
+    has_blas = False
+
+needs_blas = unittest.skipUnless(has_blas, "BLAS needs SciPy 1.0+")
+
+# Decorate a test with @needs_subprocess to ensure it doesn't run unless the
+# `SUBPROC_TEST` environment variable is set. Use this in conjunction with:
+# TestCase::subprocess_test_runner which will execute a given test in subprocess
+# with this environment variable set.
+_exec_cond = os.environ.get('SUBPROC_TEST', None) == '1'
+needs_subprocess = unittest.skipUnless(_exec_cond, "needs subprocess harness")
+
+
+# decorate for test needs external compilers
+needs_external_compilers = unittest.skipIf(not _external_compiler_ok,
+                                           ('Compatible external compilers are '
+                                            'missing'))
+
+
+def ignore_internal_warnings():
+    """Use in testing within a ` warnings.catch_warnings` block to filter out
+    warnings that are unrelated/internally generated by Numba.
+    """
+    # Filter out warnings from typeguard
+    warnings.filterwarnings('ignore', module="typeguard")
+    # Filter out warnings about TBB interface mismatch
+    warnings.filterwarnings(action='ignore',
+                            message=r".*TBB_INTERFACE_VERSION.*",
+                            category=errors.NumbaWarning,
+                            module=r'numba\.np\.ufunc\.parallel.*')
 
 
 class CompilationCache(object):
@@ -79,7 +180,7 @@ class CompilationCache(object):
 
     def __init__(self):
         self.typingctx = typing.Context()
-        self.targetctx = cpu.CPUContext(self.typingctx)
+        self.targetctx = cpu.CPUContext(self.typingctx, 'cpu')
         self.cr_cache = {}
 
     def compile(self, func, args, return_type=None, flags=DEFAULT_FLAGS):
@@ -87,12 +188,12 @@ class CompilationCache(object):
         Compile the function or retrieve an already compiled result
         from the cache.
         """
-        from numba.targets.registry import cpu_target
+        from numba.core.registry import cpu_target
 
         cache_key = (func, args, return_type, flags)
-        try:
+        if cache_key in self.cr_cache:
             cr = self.cr_cache[cache_key]
-        except KeyError:
+        else:
             # Register the contexts in case for nested @jit or @overload calls
             # (same as compile_isolated())
             with cpu_target.nested_context(self.typingctx, self.targetctx):
@@ -171,8 +272,8 @@ class TestCase(unittest.TestCase):
 
 
     _bool_types = (bool, np.bool_)
-    _exact_typesets = [_bool_types, utils.INT_TYPES, (str,), (np.integer,),
-                       (utils.text_type), (bytes, np.bytes_)]
+    _exact_typesets = [_bool_types, (int,), (str,), (np.integer,),
+                       (bytes, np.bytes_)]
     _approx_typesets = [(float,), (complex,), (np.inexact)]
     _sequence_typesets = [(tuple, list)]
     _float_types = (float, np.floating)
@@ -426,7 +527,7 @@ class TestCase(unittest.TestCase):
             _assertNumberEqual(first.imag, second.imag, delta)
         elif isinstance(first, (np.timedelta64, np.datetime64)):
             # Since Np 1.16 NaT == NaT is False, so special comparison needed
-            if numpy_support.version >= (1, 16) and np.isnat(first):
+            if numpy_support.numpy_version >= (1, 16) and np.isnat(first):
                 self.assertEqual(np.isnat(first), np.isnat(second))
             else:
                 _assertNumberEqual(first, second, delta)
@@ -446,13 +547,71 @@ class TestCase(unittest.TestCase):
         self.assertPreciseEqual(got, expected)
         return got, expected
 
-    if PY2:
-        @contextmanager
-        def subTest(self, *args, **kwargs):
-            """A stub TestCase.subTest backport.
-            This implementation is a no-op.
-            """
-            yield
+    def subprocess_test_runner(self, test_module, test_class=None,
+                               test_name=None, envvars=None, timeout=60):
+        """
+        Runs named unit test(s) as specified in the arguments as:
+        test_module.test_class.test_name. test_module must always be supplied
+        and if no further refinement is made with test_class and test_name then
+        all tests in the module will be run. The tests will be run in a
+        subprocess with environment variables specified in `envvars`.
+        If given, envvars must be a map of form:
+            environment variable name (str) -> value (str)
+        It is most convenient to use this method in conjunction with
+        @needs_subprocess as the decorator will cause the decorated test to be
+        skipped unless the `SUBPROC_TEST` environment variable is set to 1
+        (this special environment variable is set by this method such that the
+        specified test(s) will not be skipped in the subprocess).
+
+
+        Following execution in the subprocess this method will check the test(s)
+        executed without error. The timeout kwarg can be used to allow more time
+        for longer running tests, it defaults to 60 seconds.
+        """
+        themod = self.__module__
+        thecls = type(self).__name__
+        parts = (test_module, test_class, test_name)
+        fully_qualified_test = '.'.join(x for x in parts if x is not None)
+        cmd = [sys.executable, '-m', 'numba.runtests', fully_qualified_test]
+        env_copy = os.environ.copy()
+        env_copy['SUBPROC_TEST'] = '1'
+        envvars = pytypes.MappingProxyType({} if envvars is None else envvars)
+        env_copy.update(envvars)
+        status = subprocess.run(cmd, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, timeout=timeout,
+                                env=env_copy, universal_newlines=True)
+        streams = (f'\ncaptured stdout: {status.stdout}\n'
+                   f'captured stderr: {status.stderr}')
+        self.assertEqual(status.returncode, 0, streams)
+        self.assertIn('OK', status.stderr)
+        self.assertNotIn('FAIL', status.stderr)
+        self.assertNotIn('ERROR', status.stderr)
+
+    def run_test_in_subprocess(maybefunc=None, timeout=60, envvars=None):
+        """Runs the decorated test in a subprocess via invoking numba's test
+        runner. kwargs timeout and envvars are passed through to
+        subprocess_test_runner."""
+        def wrapper(func):
+            def inner(self, *args, **kwargs):
+                if os.environ.get("SUBPROC_TEST", None) != "1":
+                    # Not in a subprocess test env, so stage the call to run the
+                    # test in a subprocess which will set the env var.
+                    class_name = self.__class__.__name__
+                    self.subprocess_test_runner(test_module=self.__module__,
+                                                test_class=class_name,
+                                                test_name=func.__name__,
+                                                timeout=timeout,
+                                                envvars=envvars,)
+                else:
+                    # env var is set, so we're in the subprocess, run the
+                    # actual test.
+                    func(self)
+            return inner
+
+        if isinstance(maybefunc, pytypes.FunctionType):
+            return wrapper(maybefunc)
+        else:
+            return wrapper
 
 
 class SerialMixin(object):
@@ -522,21 +681,15 @@ def tweak_code(func, codestring=None, consts=None):
         codestring = co.co_code
     if consts is None:
         consts = co.co_consts
-    if sys.version_info >= (3, 8):
+    if utils.PYVERSION >= (3, 8):
         new_code = tp(co.co_argcount, co.co_posonlyargcount,
                       co.co_kwonlyargcount, co.co_nlocals,
                       co.co_stacksize, co.co_flags, codestring,
                       consts, co.co_names, co.co_varnames,
                       co.co_filename, co.co_name, co.co_firstlineno,
                       co.co_lnotab)
-    elif sys.version_info >= (3,):
-        new_code = tp(co.co_argcount, co.co_kwonlyargcount, co.co_nlocals,
-                      co.co_stacksize, co.co_flags, codestring,
-                      consts, co.co_names, co.co_varnames,
-                      co.co_filename, co.co_name, co.co_firstlineno,
-                      co.co_lnotab)
     else:
-        new_code = tp(co.co_argcount, co.co_nlocals,
+        new_code = tp(co.co_argcount, co.co_kwonlyargcount, co.co_nlocals,
                       co.co_stacksize, co.co_flags, codestring,
                       consts, co.co_names, co.co_varnames,
                       co.co_filename, co.co_name, co.co_firstlineno,
@@ -562,9 +715,8 @@ _trashcan_timeout = 24 * 3600  # 1 day
 def _create_trashcan_dir():
     try:
         os.mkdir(_trashcan_dir)
-    except OSError as e:
-        if e.errno != errno.EEXIST:
-            raise
+    except FileExistsError:
+        pass
 
 def _purge_trashcan_dir():
     freshness_threshold = time.time() - _trashcan_timeout
@@ -605,9 +757,8 @@ def import_dynamic(modname):
     Import and return a module of the given name.  Care is taken to
     avoid issues due to Python's internal directory caching.
     """
-    if sys.version_info >= (3, 3):
-        import importlib
-        importlib.invalidate_caches()
+    import importlib
+    importlib.invalidate_caches()
     __import__(modname)
     return sys.modules[modname]
 
@@ -619,7 +770,7 @@ def captured_output(stream_name):
     """Return a context manager used by captured_stdout/stdin/stderr
     that temporarily replaces the sys stream *stream_name* with a StringIO."""
     orig_stdout = getattr(sys, stream_name)
-    setattr(sys, stream_name, utils.StringIO())
+    setattr(sys, stream_name, io.StringIO())
     try:
         yield getattr(sys, stream_name)
     finally:
@@ -651,6 +802,16 @@ def capture_cache_log():
             yield out
 
 
+class EnableNRTStatsMixin(object):
+    """Mixin to enable the NRT statistics counters."""
+
+    def setUp(self):
+        _nrt.memsys_enable_stats()
+
+    def tearDown(self):
+        _nrt.memsys_disable_stats()
+
+
 class MemoryLeak(object):
 
     __enable_leak_check = True
@@ -679,16 +840,16 @@ class MemoryLeak(object):
         self.__enable_leak_check = False
 
 
-class MemoryLeakMixin(MemoryLeak):
+class MemoryLeakMixin(EnableNRTStatsMixin, MemoryLeak):
 
     def setUp(self):
         super(MemoryLeakMixin, self).setUp()
         self.memory_leak_setup()
 
     def tearDown(self):
-        super(MemoryLeakMixin, self).tearDown()
         gc.collect()
         self.memory_leak_teardown()
+        super(MemoryLeakMixin, self).tearDown()
 
 
 @contextlib.contextmanager
@@ -699,8 +860,8 @@ def forbid_codegen():
 
     If code generation is invoked, a RuntimeError is raised.
     """
-    from numba.targets import codegen
-    patchpoints = ['CodeLibrary._finalize_final_module']
+    from numba.core import codegen
+    patchpoints = ['CPUCodeLibrary._finalize_final_module']
 
     old = {}
     def fail(*args, **kwargs):
@@ -769,9 +930,28 @@ def run_in_new_process_caching(func, cache_dir_prefix=__name__, verbose=True):
         stdout: str
         stderr: str
     """
+    cache_dir = temp_directory(cache_dir_prefix)
+    return run_in_new_process_in_cache_dir(func, cache_dir, verbose=verbose)
+
+
+def run_in_new_process_in_cache_dir(func, cache_dir, verbose=True):
+    """Spawn a new process to run `func` with a temporary cache directory.
+
+    The childprocess's stdout and stderr will be captured and redirected to
+    the current process's stdout and stderr.
+
+    Similar to ``run_in_new_process_caching()`` but the ``cache_dir`` is a
+    directory path instead of a name prefix for the directory path.
+
+    Returns
+    -------
+    ret : dict
+        exitcode: 0 for success. 1 for exception-raised.
+        stdout: str
+        stderr: str
+    """
     ctx = mp.get_context('spawn')
     qout = ctx.Queue()
-    cache_dir = temp_directory(cache_dir_prefix)
     with override_env_config('NUMBA_CACHE_DIR', cache_dir):
         proc = ctx.Process(target=_remote_runner, args=[func, qout])
         proc.start()
@@ -822,3 +1002,216 @@ class CheckWarningsMixin(object):
                     self.assertEqual(w.category, category)
                     found += 1
         self.assertEqual(found, len(messages))
+
+
+def _format_jit_options(**jit_options):
+    if not jit_options:
+        return ''
+    out = []
+    for key, value in jit_options.items():
+        if isinstance(value, str):
+            value = '"{}"'.format(value)
+        out.append('{}={}'.format(key, value))
+    return ', '.join(out)
+
+
+@contextlib.contextmanager
+def create_temp_module(source_lines, **jit_options):
+    """A context manager that creates and imports a temporary module
+    from sources provided in ``source_lines``.
+
+    Optionally it is possible to provide jit options for ``jit_module`` if it
+    is explicitly used in ``source_lines`` like ``jit_module({jit_options})``.
+    """
+    # Use try/finally so cleanup happens even when an exception is raised
+    try:
+        tempdir = temp_directory('test_temp_module')
+        # Generate random module name
+        temp_module_name = 'test_temp_module_{}'.format(
+            str(uuid.uuid4()).replace('-', '_'))
+        temp_module_path = os.path.join(tempdir, temp_module_name + '.py')
+
+        jit_options = _format_jit_options(**jit_options)
+        with open(temp_module_path, 'w') as f:
+            lines = source_lines.format(jit_options=jit_options)
+            f.write(lines)
+        # Add test_module to sys.path so it can be imported
+        sys.path.insert(0, tempdir)
+        test_module = importlib.import_module(temp_module_name)
+        yield test_module
+    finally:
+        sys.modules.pop(temp_module_name, None)
+        sys.path.remove(tempdir)
+        shutil.rmtree(tempdir)
+
+
+def run_in_subprocess(code, flags=None, env=None, timeout=30):
+    """Run a snippet of Python code in a subprocess with flags, if any are
+    given. 'env' is passed to subprocess.Popen(). 'timeout' is passed to
+    popen.communicate().
+
+    Returns the stdout and stderr of the subprocess after its termination.
+    """
+    if flags is None:
+        flags = []
+    cmd = [sys.executable,] + flags + ["-c", code]
+    popen = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE, env=env)
+    out, err = popen.communicate(timeout=timeout)
+    if popen.returncode != 0:
+        msg = "process failed with code %s: stderr follows\n%s\n"
+        raise AssertionError(msg % (popen.returncode, err.decode()))
+    return out, err
+
+
+def strace(work, syscalls, timeout=10):
+    """Runs strace whilst executing the function work() in the current process,
+    captures the listed syscalls (list of strings). Takes an optional timeout in
+    seconds, default is 10, if this is exceeded the process will be sent a
+    SIGKILL. Returns a list of lines that are output by strace.
+    """
+
+    # Open a tmpfile for strace to write into.
+    with tempfile.NamedTemporaryFile('w+t') as ntf:
+
+        parent_pid = os.getpid()
+        strace_binary = shutil.which('strace')
+        if strace_binary is None:
+            raise ValueError("No valid 'strace' binary could be found")
+        cmd = [strace_binary, # strace
+               '-q', # quietly (no attach/detach print out)
+               '-p', str(parent_pid), # this PID
+               '-e', ','.join(syscalls), # these syscalls
+               '-o', ntf.name] # put output into this file
+
+        # redirect stdout, stderr is handled by the `-o` flag to strace.
+        popen = subprocess.Popen(cmd, stdout=subprocess.PIPE,)
+        strace_pid = popen.pid
+        thread_timeout = threading.Timer(timeout, popen.kill)
+        thread_timeout.start()
+
+        def check_return(problem=''):
+            ret = popen.returncode
+            if ret != 0:
+                msg = ("strace exited non-zero, process return code was:"
+                       f"{ret}. {problem}")
+                raise RuntimeError(msg)
+        try:
+            # push the communication onto a thread so it doesn't block.
+            # start comms thread
+            thread_comms = threading.Thread(target=popen.communicate)
+            thread_comms.start()
+
+            # do work
+            work()
+            # Flush the output buffer file
+            ntf.flush()
+            # interrupt the strace process to stop it if it's still running
+            if popen.poll() is None:
+                os.kill(strace_pid, signal.SIGINT)
+            else:
+                # it's not running, probably an issue, raise
+                problem="If this is SIGKILL, increase the timeout?"
+                check_return(problem)
+            # Make sure the return code is 0, SIGINT to detach is considered
+            # a successful exit.
+            popen.wait()
+            check_return()
+            # collect the data
+            strace_data = ntf.readlines()
+        finally:
+            # join communication, should be stopped now as process has
+            # exited
+            thread_comms.join()
+            # should be stopped already
+            thread_timeout.cancel()
+
+    return strace_data
+
+
+def _strace_supported():
+    """Checks if strace is supported and working"""
+
+    # Only support this on linux where the `strace` binary is likely to be the
+    # strace needed.
+    if not sys.platform.startswith('linux'):
+        return False
+
+    def force_clone(): # subprocess triggers a clone
+        subprocess.run([sys.executable, '-c', 'exit()'])
+
+    syscall = 'clone'
+    try:
+        trace = strace(force_clone, [syscall,])
+    except Exception:
+        return False
+    return syscall in ''.join(trace)
+
+
+_HAVE_STRACE = _strace_supported()
+
+
+needs_strace = unittest.skipUnless(_HAVE_STRACE, "needs working strace")
+
+
+class IRPreservingTestPipeline(CompilerBase):
+    """ Same as the standard pipeline, but preserves the func_ir into the
+    metadata store after legalisation, useful for testing IR changes"""
+
+    def define_pipelines(self):
+        pipeline = DefaultPassBuilder.define_nopython_pipeline(
+            self.state, "ir_preserving_custom_pipe")
+        # mangle the default pipeline and inject DCE and IR preservation ahead
+        # of legalisation
+
+        # TODO: add a way to not do this! un-finalizing is not a good idea
+        pipeline._finalized = False
+        pipeline.add_pass_after(PreserveIR, IRLegalization)
+
+        pipeline.finalize()
+        return [pipeline]
+
+
+def print_azure_matrix():
+    """This is a utility function that prints out the map of NumPy to Python
+    versions and how many of that combination are being tested across all the
+    declared config for azure-pipelines. It is useful to run when updating the
+    azure-pipelines config to be able to quickly see what the coverage is."""
+    import yaml
+    from yaml import Loader
+    base_path = os.path.dirname(os.path.abspath(__file__))
+    azure_pipe = os.path.join(base_path, '..', '..', 'azure-pipelines.yml')
+    if not os.path.isfile(azure_pipe):
+        self.skipTest("'azure-pipelines.yml' is not available")
+    with open(os.path.abspath(azure_pipe), 'rt') as f:
+        data = f.read()
+    pipe_yml = yaml.load(data, Loader=Loader)
+
+    templates = pipe_yml['jobs']
+    # first look at the items in the first two templates, this is osx/linux
+    py2np_map = defaultdict(lambda: defaultdict(int))
+    for tmplt in templates[:2]:
+        matrix = tmplt['parameters']['matrix']
+        for setup in matrix.values():
+            py2np_map[setup['NUMPY']][setup['PYTHON']]+=1
+
+    # next look at the items in the windows only template
+    winpath = ['..', '..', 'buildscripts', 'azure', 'azure-windows.yml']
+    azure_windows = os.path.join(base_path, *winpath)
+    if not os.path.isfile(azure_windows):
+        self.skipTest("'azure-windows.yml' is not available")
+    with open(os.path.abspath(azure_windows), 'rt') as f:
+        data = f.read()
+    windows_yml = yaml.load(data, Loader=Loader)
+
+    # There's only one template in windows and its keyed differently to the
+    # above, get its matrix.
+    matrix = windows_yml['jobs'][0]['strategy']['matrix']
+    for setup in matrix.values():
+        py2np_map[setup['NUMPY']][setup['PYTHON']]+=1
+
+    print("NumPy | Python | Count")
+    print("-----------------------")
+    for npver, pys in sorted(py2np_map.items()):
+        for pyver, count in pys.items():
+            print(f" {npver} |  {pyver:<4}  |   {count}")

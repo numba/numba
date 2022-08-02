@@ -2,7 +2,6 @@
 Tests for @cfunc and friends.
 """
 
-from __future__ import division, print_function, absolute_import
 
 import ctypes
 import os
@@ -12,11 +11,12 @@ from collections import namedtuple
 
 import numpy as np
 
-from numba import unittest_support as unittest
-from numba import cfunc, carray, farray, types, typing, utils, njit
-from numba import cffi_support, numpy_support
-from .support import TestCase, tag, captured_stderr
-from .test_dispatcher import BaseCacheTest
+from numba import cfunc, carray, farray, njit
+from numba.core import types, typing, utils
+import numba.core.typing.cffi_utils as cffi_support
+from numba.tests.support import TestCase, tag, captured_stderr
+import unittest
+from numba.np import numpy_support
 
 skip_cffi_unsupported = unittest.skipUnless(
     cffi_support.SUPPORTED,
@@ -108,7 +108,6 @@ carray_voidptr_usecase_sig = types.void(types.voidptr, types.voidptr,
 
 class TestCFunc(TestCase):
 
-    @tag('important')
     def test_basic(self):
         """
         Basic usage and properties of a cfunc.
@@ -124,17 +123,16 @@ class TestCFunc(TestCase):
         self.assertIn("add_usecase", symbol)
 
         addr = f.address
-        self.assertIsInstance(addr, utils.INT_TYPES)
+        self.assertIsInstance(addr, int)
 
         ct = f.ctypes
         self.assertEqual(ctypes.cast(ct, ctypes.c_void_p).value, addr)
 
         self.assertPreciseEqual(ct(2.0, 3.5), 5.5)
 
-    @tag('important')
     @skip_cffi_unsupported
     def test_cffi(self):
-        from . import cffi_usecases
+        from numba.tests import cffi_usecases
         ffi, lib = cffi_usecases.load_inline_module()
 
         f = cfunc(square_sig)(square_usecase)
@@ -148,7 +146,6 @@ class TestCFunc(TestCase):
         f = cfunc(div_sig, locals={'c': types.int64})(div_usecase)
         self.assertPreciseEqual(f.ctypes(8, 3), 2.0)
 
-    @tag('important')
     def test_errors(self):
         f = cfunc(div_sig)(div_usecase)
 
@@ -163,10 +160,7 @@ class TestCFunc(TestCase):
             self.assertPreciseEqual(res, 0.0)
         err = err.getvalue()
         self.assertIn("ZeroDivisionError:", err)
-        if sys.version_info >= (3,):
-            self.assertIn("Exception ignored", err)
-        else:
-            self.assertIn(" ignored", err)
+        self.assertIn("Exception ignored", err)
 
     def test_llvm_ir(self):
         f = cfunc(add_sig)(add_usecase)
@@ -183,64 +177,6 @@ class TestCFunc(TestCase):
         with self.assertTypingError() as raises:
             cfunc(add_sig)(objmode_usecase)
         self.assertIn("Untyped global name 'object'", str(raises.exception))
-
-
-class TestCFuncCache(BaseCacheTest):
-
-    here = os.path.dirname(__file__)
-    usecases_file = os.path.join(here, "cfunc_cache_usecases.py")
-    modname = "cfunc_caching_test_fodder"
-
-    def run_in_separate_process(self):
-        # Cached functions can be run from a distinct process.
-        code = """if 1:
-            import sys
-
-            sys.path.insert(0, %(tempdir)r)
-            mod = __import__(%(modname)r)
-            mod.self_test()
-
-            f = mod.add_usecase
-            assert f.cache_hits == 1
-            f = mod.outer
-            assert f.cache_hits == 1
-            f = mod.div_usecase
-            assert f.cache_hits == 1
-            """ % dict(tempdir=self.tempdir, modname=self.modname)
-
-        popen = subprocess.Popen([sys.executable, "-c", code],
-                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        out, err = popen.communicate()
-        if popen.returncode != 0:
-            raise AssertionError("process failed with code %s: stderr follows\n%s\n"
-                                 % (popen.returncode, err.decode()))
-
-    def check_module(self, mod):
-        mod.self_test()
-
-    @tag('important')
-    def test_caching(self):
-        self.check_pycache(0)
-        mod = self.import_module()
-        self.check_pycache(6)  # 3 index, 3 data
-
-        self.assertEqual(mod.add_usecase.cache_hits, 0)
-        self.assertEqual(mod.outer.cache_hits, 0)
-        self.assertEqual(mod.add_nocache_usecase.cache_hits, 0)
-        self.assertEqual(mod.div_usecase.cache_hits, 0)
-        self.check_module(mod)
-
-        # Reload module to hit the cache
-        mod = self.import_module()
-        self.check_pycache(6)  # 3 index, 3 data
-
-        self.assertEqual(mod.add_usecase.cache_hits, 1)
-        self.assertEqual(mod.outer.cache_hits, 1)
-        self.assertEqual(mod.add_nocache_usecase.cache_hits, 0)
-        self.assertEqual(mod.div_usecase.cache_hits, 1)
-        self.check_module(mod)
-
-        self.run_in_separate_process()
 
 
 class TestCArray(TestCase):
@@ -308,7 +244,6 @@ class TestCArray(TestCase):
         self.assertIn("mismatching dtype 'int32' for pointer",
                       str(raises.exception))
 
-    @tag('important')
     def test_carray(self):
         """
         Test pure Python carray().
@@ -356,7 +291,6 @@ class TestCArray(TestCase):
             f = cfunc(sig)(pyfunc)
             self.check_carray_usecase(self.make_float32_pointer, pyfunc, f.ctypes)
 
-    @tag('important')
     def test_numba_carray(self):
         """
         Test Numba-compiled carray() against pure Python carray()

@@ -1,13 +1,11 @@
-from __future__ import print_function, absolute_import, division
-
 import pickle
 
 import numpy as np
 
 from numba import njit, vectorize
-from numba.npyufunc import dufunc
-from ..support import MemoryLeakMixin
-from numba import unittest_support as unittest
+from numba.tests.support import MemoryLeakMixin
+import unittest
+from numba.np.ufunc import dufunc
 
 
 def pyuadd(a0, a1):
@@ -35,6 +33,7 @@ class TestDUFunc(MemoryLeakMixin, unittest.TestCase):
 
     def test_npm_call(self):
         duadd = self.nopython_dufunc(pyuadd)
+
         @njit
         def npmadd(a0, a1, o0):
             duadd(a0, a1, o0)
@@ -56,6 +55,7 @@ class TestDUFunc(MemoryLeakMixin, unittest.TestCase):
 
     def test_npm_call_implicit_output(self):
         duadd = self.nopython_dufunc(pyuadd)
+
         @njit
         def npmadd(a0, a1):
             return duadd(a0, a1)

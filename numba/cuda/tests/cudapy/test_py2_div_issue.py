@@ -1,15 +1,16 @@
-from __future__ import print_function, absolute_import
 import numpy as np
-from numba import cuda, float32, int32
-from numba.cuda.testing import unittest, SerialMixin
+from numba import cuda, float32, int32, void
+from numba.cuda.testing import unittest, CUDATestCase
 
 
-class TestCudaPy2Div(SerialMixin, unittest.TestCase):
+class TestCudaPy2Div(CUDATestCase):
     def test_py2_div_issue(self):
-        @cuda.jit(argtypes=[float32[:], float32[:], float32[:], int32])
+        @cuda.jit(void(float32[:], float32[:], float32[:], int32))
         def preCalc(y, yA, yB, numDataPoints):
             i = cuda.grid(1)
-            k = i % numDataPoints
+            # k is unused, but may be part of the trigger for the bug this
+            # tests for.
+            k = i % numDataPoints  # noqa: F841
 
             ans = float32(1.001 * float32(i))
 
@@ -22,7 +23,6 @@ class TestCudaPy2Div(SerialMixin, unittest.TestCase):
         y = np.zeros(numDataPoints, dtype=np.float32)
         yA = np.zeros(numDataPoints, dtype=np.float32)
         yB = np.zeros(numDataPoints, dtype=np.float32)
-        z = 1.0
         preCalc[1, 15](y, yA, yB, numDataPoints)
 
         self.assertTrue(np.all(y == yA))

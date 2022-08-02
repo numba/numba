@@ -1,26 +1,22 @@
-from __future__ import print_function
-
 import copy
 import itertools
 import math
 import random
 import sys
+from typing import KeysView
 
 import numpy as np
 
-from numba.compiler import compile_isolated, Flags
-from numba import jit, types, utils, njit, errors
-import numba.unittest_support as unittest
+from numba.core.compiler import compile_isolated, Flags
+from numba import jit, njit
+from numba.core import types, utils, errors
+import unittest
 from numba import testing
-from numba.six import PY2
-from .support import TestCase, MemoryLeakMixin, tag
+from numba.tests.support import TestCase, MemoryLeakMixin, tag
 
-from numba.targets.quicksort import make_py_quicksort, make_jit_quicksort
-from numba.targets.mergesort import make_jit_mergesort
-from .timsort import make_py_timsort, make_jit_timsort, MergeRun
-
-
-skip_py_27 = unittest.skipIf(PY2, "Not supported on Python 2")
+from numba.misc.quicksort import make_py_quicksort, make_jit_quicksort
+from numba.misc.mergesort import make_jit_mergesort
+from numba.misc.timsort import make_py_timsort, make_jit_timsort, MergeRun
 
 
 def make_temp_list(keys, n):
@@ -178,7 +174,6 @@ class BaseTimsortTest(BaseSortingTest):
         f = self.timsort.merge_init
         return f(keys)
 
-    @tag('important')
     def test_binarysort(self):
         n = 20
         def check(l, n, start=0):
@@ -264,7 +259,6 @@ class BaseTimsortTest(BaseSortingTest):
         for i in range(len(l) - 1):
             check(l, i, n)
 
-    @tag('important')
     def test_gallop_left(self):
         n = 20
         f = self.timsort.gallop_left
@@ -408,7 +402,7 @@ class BaseTimsortTest(BaseSortingTest):
         # First check with i == len(stack) - 2
         keys = self.array_factory(orig_keys)
         ms = self.merge_init(keys)
-        # Push sentinel on stack, to check it was't touched
+        # Push sentinel on stack, to check it wasn't touched
         ms = self.timsort.merge_append(ms, stack_sentinel)
         i = ms.n
         ms = self.timsort.merge_append(ms, MergeRun(ssa, na))
@@ -419,7 +413,7 @@ class BaseTimsortTest(BaseSortingTest):
         # Now check with i == len(stack) - 3
         keys = self.array_factory(orig_keys)
         ms = self.merge_init(keys)
-        # Push sentinel on stack, to check it was't touched
+        # Push sentinel on stack, to check it wasn't touched
         ms = self.timsort.merge_append(ms, stack_sentinel)
         i = ms.n
         ms = self.timsort.merge_append(ms, MergeRun(ssa, na))
@@ -653,7 +647,6 @@ class BaseQuicksortTest(BaseSortingTest):
         l = self.duprandom_list(n)
         check(l, n)
 
-    @tag('important')
     def test_run_quicksort(self):
         f = self.quicksort.run_quicksort
 
@@ -723,6 +716,103 @@ class TestQuicksortArrays(BaseQuicksortTest, TestCase):
     def array_factory(self, lst):
         return np.array(lst, dtype=np.float64)
 
+class TestQuicksortMultidimensionalArrays(BaseSortingTest, TestCase):
+
+    quicksort = make_jit_quicksort(is_np_array=True)
+    make_quicksort = staticmethod(make_jit_quicksort)
+
+    def assertSorted(self, orig, result):
+        self.assertEqual(orig.shape, result.shape)
+        self.assertPreciseEqual(orig, result)
+
+    def array_factory(self, lst, shape=None):
+        array = np.array(lst, dtype=np.float64)
+        if shape is None:
+            return array.reshape(-1, array.shape[0])
+        else:
+            return array.reshape(shape)
+
+    def get_shapes(self, n):
+        shapes = []
+        if n == 1:
+            return shapes
+
+        for i in range(2, int(math.sqrt(n)) + 1):
+            if n % i == 0:
+                shapes.append((n // i, i))
+                shapes.append((i, n // i))
+                _shapes = self.get_shapes(n // i)
+                for _shape in _shapes:
+                    shapes.append((i,) + _shape)
+                    shapes.append(_shape + (i,))
+
+        return shapes
+
+    def test_run_quicksort(self):
+        f = self.quicksort.run_quicksort
+
+        for size_factor in (1, 5):
+            # Make lists to be sorted from two chunks of different kinds.
+            sizes = (15, 20)
+
+            all_lists = [self.make_sample_lists(n * size_factor) for n in sizes]
+            for chunks in itertools.product(*all_lists):
+                orig_keys = sum(chunks, [])
+                shape_list = self.get_shapes(len(orig_keys))
+                shape_list.append(None)
+                for shape in shape_list:
+                    keys = self.array_factory(orig_keys, shape=shape)
+                    keys_copy = self.array_factory(orig_keys, shape=shape)
+                    f(keys)
+                    keys_copy.sort()
+                    # The list is now sorted
+                    self.assertSorted(keys_copy, keys)
+
+    def test_run_quicksort_lt(self):
+        def lt(a, b):
+            return a > b
+
+        f = self.make_quicksort(lt=lt, is_np_array=True).run_quicksort
+
+        for size_factor in (1, 5):
+            # Make lists to be sorted from two chunks of different kinds.
+            sizes = (15, 20)
+
+            all_lists = [self.make_sample_lists(n * size_factor) for n in sizes]
+            for chunks in itertools.product(*all_lists):
+                orig_keys = sum(chunks, [])
+                shape_list = self.get_shapes(len(orig_keys))
+                shape_list.append(None)
+                for shape in shape_list:
+                    keys = self.array_factory(orig_keys, shape=shape)
+                    keys_copy = -self.array_factory(orig_keys, shape=shape)
+                    f(keys)
+                    # The list is now rev-sorted
+                    keys_copy.sort()
+                    keys_copy = -keys_copy
+                    self.assertSorted(keys_copy, keys)
+
+        # An imperfect comparison function, as LT(a, b) does not imply not LT(b, a).
+        # The sort should handle it gracefully.
+        def lt_floats(a, b):
+            return math.isnan(b) or a < b
+
+        f = self.make_quicksort(lt=lt_floats, is_np_array=True).run_quicksort
+
+        np.random.seed(42)
+        for size in (5, 20, 50, 500):
+            orig = np.random.random(size=size) * 100
+            orig[np.random.random(size=size) < 0.1] = float('nan')
+            orig_keys = list(orig)
+            shape_list = self.get_shapes(len(orig_keys))
+            shape_list.append(None)
+            for shape in shape_list:
+                keys = self.array_factory(orig_keys, shape=shape)
+                keys_copy = self.array_factory(orig_keys, shape=shape)
+                f(keys)
+                keys_copy.sort()
+                # Non-NaNs are sorted at the front
+                self.assertSorted(keys_copy, keys)
 
 class TestNumpySort(TestCase):
 
@@ -787,7 +877,6 @@ class TestNumpySort(TestCase):
         for orig in self.int_arrays():
             self.check_sort_inplace(pyfunc, cfunc, orig)
 
-    @tag('important')
     def test_array_sort_float(self):
         pyfunc = sort_usecase
         cfunc = jit(nopython=True)(pyfunc)
@@ -832,7 +921,6 @@ class TestNumpySort(TestCase):
         check(argsort_kind_usecase, is_stable=False)
         check(np_argsort_kind_usecase, is_stable=False)
 
-    @tag('important')
     def test_argsort_float(self):
         def check(pyfunc):
             cfunc = jit(nopython=True)(pyfunc)
@@ -842,7 +930,6 @@ class TestNumpySort(TestCase):
         check(argsort_usecase)
         check(np_argsort_usecase)
 
-    @tag('important')
     def test_argsort_float(self):
         def check(pyfunc, is_stable):
             cfunc = jit(nopython=True)(pyfunc)
@@ -858,7 +945,6 @@ class TestNumpySort(TestCase):
 
 class TestPythonSort(TestCase):
 
-    @tag('important')
     def test_list_sort(self):
         pyfunc = list_sort_usecase
         cfunc = jit(nopython=True)(pyfunc)
@@ -986,7 +1072,6 @@ class TestSortSlashSortedWithKey(MemoryLeakMixin, TestCase):
 
         self.assertPreciseEqual(gen(njit)(a[:]), gen(nop_compiler)(a[:]))
 
-    @skip_py_27
     def test_04(self):
 
         a = ['a','b','B','b','C','A']
@@ -1005,7 +1090,6 @@ class TestSortSlashSortedWithKey(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(foo(a[:], external_key),
                                 foo.py_func(a[:], external_key))
 
-    @skip_py_27
     def test_05(self):
 
         a = ['a','b','B','b','C','A']
@@ -1082,6 +1166,33 @@ class TestSortSlashSortedWithKey(MemoryLeakMixin, TestCase):
             expect = "an integer is required for 'reverse'"
             self.assertIn(expect, str(raises.exception))
 
+
+class TestArrayArgsort(MemoryLeakMixin, TestCase):
+    """Tests specific to array.argsort"""
+
+    def test_exceptions(self):
+
+        @njit
+        def nonliteral_kind(kind):
+            np.arange(5).argsort(kind=kind)
+
+        # check non-literal kind
+        with self.assertRaises(errors.TypingError) as raises:
+            # valid spelling but not literal
+            nonliteral_kind('quicksort')
+
+        expect = '"kind" must be a string literal'
+        self.assertIn(expect, str(raises.exception))
+
+        @njit
+        def unsupported_kwarg():
+            np.arange(5).argsort(foo='')
+
+        with self.assertRaises(errors.TypingError) as raises:
+            unsupported_kwarg()
+
+        expect = "Unsupported keywords: ['foo']"
+        self.assertIn(expect, str(raises.exception))
 
 
 if __name__ == '__main__':

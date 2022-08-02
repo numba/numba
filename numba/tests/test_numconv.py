@@ -1,8 +1,7 @@
-from __future__ import print_function
 import itertools
-import numba.unittest_support as unittest
-from numba.compiler import compile_isolated
-from numba import types
+import unittest
+from numba.core.compiler import compile_isolated
+from numba.core import types
 
 
 def template(fromty, toty):

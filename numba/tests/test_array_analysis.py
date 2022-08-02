@@ -1,36 +1,40 @@
-from __future__ import division
-
 import itertools
 
 import numpy as np
 import sys
 from collections import namedtuple
+from io import StringIO
 
-from numba import unittest_support as unittest
-from numba import (njit, typeof, types, typing, typeof, ir, utils, bytecode,
-    jitclass, prange, postproc)
-from .support import TestCase, tag
-from numba.array_analysis import EquivSet, ArrayAnalysis
-from numba.compiler import Compiler, Flags, PassManager
-from numba.targets import cpu, registry
-from numba.numpy_support import version as numpy_version
-from numba.ir_utils import remove_dead
-from numba.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
+from numba import njit, typeof, prange
+from numba.core import (
+    types,
+    typing,
+    ir,
+    bytecode,
+    postproc,
+    cpu,
+    registry,
+    utils,
+)
+from numba.tests.support import (TestCase, tag, skip_parfors_unsupported,
+                                 skip_unless_scipy)
+from numba.parfors.array_analysis import EquivSet, ArrayAnalysis
+from numba.core.compiler import Compiler, Flags, PassManager
+from numba.core.ir_utils import remove_dead
+from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
                              IRProcessing, DeadBranchPrune,
                              RewriteSemanticConstants, GenericRewrites,
                              WithLifting, PreserveIR, InlineClosureLikes)
 
-from numba.typed_passes import (NopythonTypeInference, AnnotateTypes,
+from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                                 NopythonRewrites, IRLegalization)
 
-from numba.compiler_machinery import FunctionPass, PassManager, register_pass
+from numba.core.compiler_machinery import FunctionPass, PassManager, register_pass
+from numba.experimental import jitclass
+import unittest
 
-# for parallel tests, marking that Windows with Python 2.7 is not supported
-_windows_py27 = (sys.platform.startswith('win32') and
-                 sys.version_info[:2] == (2, 7))
-_32bit = sys.maxsize <= 2 ** 32
-_reason = 'parfors not supported'
-skip_unsupported = unittest.skipIf(_32bit or _windows_py27, _reason)
+
+skip_unsupported = skip_parfors_unsupported
 
 
 # test class for #3700
@@ -41,12 +45,16 @@ class ExampleClass3700(object):
         self.T = n + 1
 
 
+# test value for test_global_tuple
+GVAL = (1.2,)
+GVAL2 = (3, 4)
+
+
 class TestEquivSet(TestCase):
 
     """
     Test array_analysis.EquivSet.
     """
-    @tag('important')
     def test_insert_equiv(self):
         s1 = EquivSet()
         s1.insert_equiv('a', 'b')
@@ -59,7 +67,6 @@ class TestEquivSet(TestCase):
         self.assertTrue(s1.is_equiv('a', 'b', 'c', 'd'))
         self.assertFalse(s1.is_equiv('a', 'e'))
 
-    @tag('important')
     def test_intersect(self):
         s1 = EquivSet()
         s2 = EquivSet()
@@ -91,8 +98,7 @@ class ArrayAnalysisPass(FunctionPass):
 
     def run_pass(self, state):
         state.array_analysis = ArrayAnalysis(state.typingctx, state.func_ir,
-                                             state.type_annotation.typemap,
-                                             state.type_annotation.calltypes)
+                                             state.typemap, state.calltypes)
         state.array_analysis.run(state.func_ir.blocks)
         post_proc = postproc.PostProcessor(state.func_ir)
         post_proc.run()
@@ -144,7 +150,6 @@ class ArrayAnalysisTester(Compiler):
                     "inline calls to locally defined closures")
         # typing
         pm.add_pass(NopythonTypeInference, "nopython frontend")
-        pm.add_pass(AnnotateTypes, "annotate types")
 
         if not state.flags.no_rewrites:
             pm.add_pass(NopythonRewrites, "nopython rewrites")
@@ -156,6 +161,7 @@ class ArrayAnalysisTester(Compiler):
             pm.add_pass(ArrayAnalysisPass, "idempotence array analysis")
         # legalise
         pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
+        pm.add_pass(AnnotateTypes, "annotate types")
 
         # partial compile
         pm.finalize()
@@ -169,7 +175,7 @@ class TestArrayAnalysis(TestCase):
         outputs = []
         for func_ir in ir_list:
             remove_dead(func_ir.blocks, func_ir.arg_names, func_ir)
-            output = utils.StringIO()
+            output = StringIO()
             func_ir.dump(file=output)
             outputs.append(output.getvalue())
         self.assertTrue(len(set(outputs)) == 1)  # assert all outputs are equal
@@ -185,7 +191,7 @@ class TestArrayAnalysis(TestCase):
             for func in equivs:
                 # only test the equiv_set of the first block
                 func(analysis.equiv_sets[0])
-        if asserts == None:
+        if asserts is None:
             self.assertTrue(self._has_no_assertcall(analysis.func_ir))
         else:
             for func in asserts:
@@ -390,6 +396,15 @@ class TestArrayAnalysis(TestCase):
         self._compile_and_test(test_tup_arg,
             (types.Tuple((int_arr_typ, int_arr_typ)),), asserts=None)
 
+        def test_arr_in_tup(m):
+            A = np.ones(m)
+            S = (A,)
+            B = np.ones(len(S[0]))
+            return B
+
+        self._compile_and_test(test_arr_in_tup, (types.intp,),
+                               equivs=[self.with_equiv("A", "B")])
+
         T = namedtuple("T", ['a','b'])
         def test_namedtuple(n):
             r = T(n, n)
@@ -460,7 +475,7 @@ class TestArrayAnalysis(TestCase):
 
 
     def test_stencilcall(self):
-        from numba import stencil
+        from numba.stencils.stencil import stencil
         @stencil
         def kernel_1(a):
             return 0.25 * (a[0,1] + a[1,0] + a[0,-1] + a[-1,0])
@@ -610,6 +625,7 @@ class TestArrayAnalysis(TestCase):
                                        self.with_equiv('F', 'D'),],
                                idempotent=False)
 
+    @skip_unless_scipy
     def test_numpy_calls(self):
         def test_zeros(n):
             a = np.zeros(n)
@@ -725,6 +741,17 @@ class TestArrayAnalysis(TestCase):
                                        self.with_equiv('dt', ('k', 'm', 'n')),
                                        self.with_equiv('e', ('m', 'k', 'n')),
                                        self.with_equiv('et', ('m', 'k', 'n'))])
+
+        def test_real_imag_attr(m, n):
+            a = np.ones((m, n))
+            b = a.real
+            c = a.imag
+
+        self._compile_and_test(test_real_imag_attr, (types.intp, types.intp),
+                               equivs=[self.with_equiv('a', ('m', 'n')),
+                                       self.with_equiv('b', ('m', 'n')),
+                                       self.with_equiv('c', ('m', 'n')),
+                                       ])
 
         def test_random(n):
             a0 = np.random.rand(n)
@@ -855,29 +882,28 @@ class TestArrayAnalysis(TestCase):
                                        self.with_equiv('v', (2, 3, 8)),
                                        ])
 
-        if numpy_version >= (1, 10):
-            def test_stack(m, n):
-                a = np.ones(m)
-                b = np.ones(n)
-                c = np.stack((a, b))
-                d = np.ones((m, n))
-                e = np.ones((m, n))
-                f = np.stack((d, e))
-                g = np.stack((d, e), axis=0)
-                h = np.stack((d, e), axis=1)
-                i = np.stack((d, e), axis=2)
-                j = np.stack((d, e), axis=-1)
+        def test_stack(m, n):
+            a = np.ones(m)
+            b = np.ones(n)
+            c = np.stack((a, b))
+            d = np.ones((m, n))
+            e = np.ones((m, n))
+            f = np.stack((d, e))
+            g = np.stack((d, e), axis=0)
+            h = np.stack((d, e), axis=1)
+            i = np.stack((d, e), axis=2)
+            j = np.stack((d, e), axis=-1)
 
-            self._compile_and_test(test_stack, (types.intp, types.intp),
-                                   equivs=[self.with_equiv('m', 'n'),
-                                           self.with_equiv('c', (2, 'm')),
-                                           self.with_equiv(
-                                       'f', 'g', (2, 'm', 'n')),
-                self.with_equiv(
-                                       'h', ('m', 2, 'n')),
-                self.with_equiv(
-                                       'i', 'j', ('m', 'n', 2)),
-            ])
+        self._compile_and_test(test_stack, (types.intp, types.intp),
+                                equivs=[self.with_equiv('m', 'n'),
+                                        self.with_equiv('c', (2, 'm')),
+                                        self.with_equiv(
+                                    'f', 'g', (2, 'm', 'n')),
+            self.with_equiv(
+                                    'h', ('m', 2, 'n')),
+            self.with_equiv(
+                                    'i', 'j', ('m', 'n', 2)),
+        ])
 
         def test_linspace(m, n):
             a = np.linspace(m, n)
@@ -920,6 +946,16 @@ class TestArrayAnalysis(TestCase):
         self._compile_and_test(test_broadcast, (types.intp, types.intp),
                                equivs=[self.with_equiv('a', 'c', 'e')],
                                asserts=None)
+
+        # make sure shape of a global tuple of ints is handled properly
+        def test_global_tuple():
+            a = np.ones(GVAL2)
+            b = np.ones(GVAL2)
+
+        self._compile_and_test(test_global_tuple, (),
+                               equivs=[self.with_equiv('a', 'b')],
+                               asserts=None)
+
 
 class TestArrayAnalysisParallelRequired(TestCase):
     """This is to just split out tests that need the parallel backend and
@@ -1007,6 +1043,97 @@ class TestArrayAnalysisParallelRequired(TestCase):
 
         data = np.arange(10.)
         np.testing.assert_array_equal(test_impl(data), test_impl.py_func(data))
+
+    @skip_unsupported
+    def test_global_tuple(self):
+        """make sure a global tuple with non-integer values does not cause errors
+        (test for #6726).
+        """
+
+        def test_impl():
+            d = GVAL[0]
+            return d
+
+        self.assertEqual(njit(test_impl, parallel=True)(), test_impl())
+
+
+class TestArrayAnalysisInterface(TestCase):
+    def test_analyze_op_call_interface(self):
+        # gather _analyze_op_call_*
+        aoc = {}
+        for fname in dir(ArrayAnalysis):
+            if fname.startswith('_analyze_op_call_'):
+                aoc[fname] = getattr(ArrayAnalysis, fname)
+        # check interface
+        def iface_stub(self, scope, equiv_set, loc, args, kws):
+            pass
+        expected = utils.pysignature(iface_stub)
+        for k, v in aoc.items():
+            got = utils.pysignature(v)
+            with self.subTest(fname=k, sig=got):
+                self.assertEqual(got, expected)
+
+    @skip_unsupported
+    def test_array_analysis_extensions(self):
+        # Test that the `array_analysis` object in `array_analysis_extensions`
+        # can perform analysis on the scope using `equiv_sets`.
+        from numba.parfors.parfor import Parfor
+        from numba.parfors import array_analysis
+
+        orig_parfor = array_analysis.array_analysis_extensions[Parfor]
+
+        shared = {'counter': 0}
+
+        def testcode(array_analysis):
+            # Find call node corresponding to the ``A = empty(n)``
+            func_ir = array_analysis.func_ir
+            for call in func_ir.blocks[0].find_exprs('call'):
+                callee = func_ir.get_definition(call.func)
+                if getattr(callee, "value", None) is empty:
+                    if getattr(call.args[0], 'name', None) == 'n':
+                        break
+            else:
+                return
+
+            variable_A = func_ir.get_assignee(call)
+            # n must be equiv to
+            es = array_analysis.equiv_sets[0]
+            self.assertTrue(es.is_equiv('n', variable_A.name))
+            shared['counter'] += 1
+
+        def new_parfor(parfor, equiv_set, typemap, array_analysis):
+            """Recursive array analysis for parfor nodes.
+            """
+            testcode(array_analysis)
+            # Call original
+            return orig_parfor(
+                parfor, equiv_set, typemap, array_analysis,
+            )
+
+        try:
+            # Replace the array-analysis extension for Parfor node
+            array_analysis.array_analysis_extensions[Parfor] = new_parfor
+
+            empty = np.empty   # avoid scanning a getattr in the IR
+            def f(n):
+                A = empty(n)
+                for i in prange(n):
+                    S = np.arange(i)
+                    A[i] = S.sum()
+                return A + 1
+
+            got = njit(parallel=True)(f)(10)
+            executed_count = shared['counter']
+            self.assertGreater(executed_count, 0)
+        finally:
+            # Re-install the original handler
+            array_analysis.array_analysis_extensions[Parfor] = orig_parfor
+
+        # Check normal execution
+        expected = njit(parallel=True)(f)(10)
+        self.assertPreciseEqual(got, expected)
+        # Make sure we have uninstalled the handler
+        self.assertEqual(executed_count, shared['counter'])
 
 
 if __name__ == '__main__':

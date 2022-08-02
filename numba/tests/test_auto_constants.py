@@ -1,12 +1,12 @@
-from __future__ import print_function, division, absolute_import
-
 import math
 import sys
 
 import numpy as np
 
-from numba import unittest_support as unittest
-from numba.compiler import compile_isolated
+from numba import njit
+from numba.core.compiler import compile_isolated
+import numba.tests.usecases as uc
+import unittest
 
 
 class TestAutoConstants(unittest.TestCase):
@@ -29,7 +29,12 @@ class TestAutoConstants(unittest.TestCase):
 
         self.assertEqual(pyfunc(), cfunc())
 
+    def test_module_string_constant(self):
+        @njit
+        def f():
+            return uc._GLOBAL_STR
+        self.assertEqual(f(), f.py_func())
+
 
 if __name__ == '__main__':
     unittest.main()
-

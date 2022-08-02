@@ -1,13 +1,12 @@
-from __future__ import print_function, absolute_import, division
-
 import sys
 
 import numpy as np
 
-from numba import numpy_support, types
-from numba.compiler import compile_isolated
-from numba import unittest_support as unittest
-from .support import captured_stdout, tag, TestCase
+from numba.core import types
+from numba.core.compiler import compile_isolated
+from numba.tests.support import captured_stdout, tag, TestCase
+import unittest
+from numba.np import numpy_support
 
 
 def usecase1(arr1, arr2):
@@ -69,7 +68,6 @@ class TestRecordUsecase(TestCase):
         self.unaligned_dtype = np.dtype(fields)
         self.aligned_dtype = np.dtype(fields, align=True)
 
-    @tag('important')
     def test_usecase1(self):
         pyfunc = usecase1
 

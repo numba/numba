@@ -1,13 +1,10 @@
-from __future__ import print_function, division, absolute_import
 import numpy as np
 from numba.cuda.cudadrv import driver
 from numba import cuda
-from numba.cuda.testing import unittest, CUDATestCase
-from numba.cuda.testing import skip_on_cudasim
+from numba.cuda.testing import unittest, ContextResettingTestCase
 
 
-@skip_on_cudasim('CUDA Driver API unsupported in the simulator')
-class TestHostAlloc(CUDATestCase):
+class TestHostAlloc(ContextResettingTestCase):
     def test_host_alloc_driver(self):
         n = 32
         mem = cuda.current_context().memhostalloc(n, mapped=True)
@@ -46,6 +43,22 @@ class TestHostAlloc(CUDATestCase):
         self.assertTrue(all(ary == 123))
         driver.device_memset(ary, 0, driver.device_memory_size(ary))
         self.assertTrue(all(ary == 0))
+        self.assertTrue(sum(ary != 0) == 0)
+
+    def test_host_operators(self):
+        for ary in [cuda.mapped_array(10, dtype=np.uint32),
+                    cuda.pinned_array(10, dtype=np.uint32)]:
+            ary[:] = range(10)
+            self.assertTrue(sum(ary + 1) == 55)
+            self.assertTrue(sum((ary + 1) * 2 - 1) == 100)
+            self.assertTrue(sum(ary < 5) == 5)
+            self.assertTrue(sum(ary <= 5) == 6)
+            self.assertTrue(sum(ary > 6) == 3)
+            self.assertTrue(sum(ary >= 6) == 4)
+            self.assertTrue(sum(ary ** 2) == 285)
+            self.assertTrue(sum(ary // 2) == 20)
+            self.assertTrue(sum(ary / 2.0) == 22.5)
+            self.assertTrue(sum(ary % 2) == 5)
 
 
 if __name__ == '__main__':

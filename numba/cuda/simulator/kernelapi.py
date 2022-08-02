@@ -7,10 +7,12 @@ from contextlib import contextmanager
 import sys
 import threading
 import traceback
-
+from numba.core import types
 import numpy as np
 
-from numba import numpy_support
+from numba.np import numpy_support
+
+from .vector_types import vector_types
 
 
 class Dim3(object):
@@ -34,12 +36,33 @@ class Dim3(object):
         yield self.z
 
 
+class GridGroup:
+    '''
+    Used to implement the grid group.
+    '''
+
+    def sync(self):
+        # Synchronization of the grid group is equivalent to synchronization of
+        # the thread block, because we only support cooperative grids with one
+        # block.
+        threading.current_thread().syncthreads()
+
+
+class FakeCUDACg:
+    '''
+    CUDA Cooperative Groups
+    '''
+    def this_grid(self):
+        return GridGroup()
+
+
 class FakeCUDALocal(object):
     '''
     CUDA Local arrays
     '''
     def array(self, shape, dtype):
-        dtype = numpy_support.as_dtype(dtype)
+        if isinstance(dtype, types.Type):
+            dtype = numpy_support.as_dtype(dtype)
         return np.empty(shape, dtype)
 
 
@@ -75,7 +98,8 @@ class FakeCUDAShared(object):
         self._dynshared = np.zeros(dynshared_size, dtype=np.byte)
 
     def array(self, shape, dtype):
-        dtype = numpy_support.as_dtype(dtype)
+        if isinstance(dtype, types.Type):
+            dtype = numpy_support.as_dtype(dtype)
         # Dynamic shared memory is requested with size 0 - this all shares the
         # same underlying memory
         if shape == 0:
@@ -96,38 +120,98 @@ class FakeCUDAShared(object):
             self._allocations[caller] = res
         return res
 
+
 addlock = threading.Lock()
+sublock = threading.Lock()
+andlock = threading.Lock()
+orlock = threading.Lock()
+xorlock = threading.Lock()
 maxlock = threading.Lock()
 minlock = threading.Lock()
 caslock = threading.Lock()
+inclock = threading.Lock()
+declock = threading.Lock()
+exchlock = threading.Lock()
 
 
 class FakeCUDAAtomic(object):
     def add(self, array, index, val):
         with addlock:
+            old = array[index]
             array[index] += val
+        return old
+
+    def sub(self, array, index, val):
+        with sublock:
+            old = array[index]
+            array[index] -= val
+        return old
+
+    def and_(self, array, index, val):
+        with andlock:
+            old = array[index]
+            array[index] &= val
+        return old
+
+    def or_(self, array, index, val):
+        with orlock:
+            old = array[index]
+            array[index] |= val
+        return old
+
+    def xor(self, array, index, val):
+        with xorlock:
+            old = array[index]
+            array[index] ^= val
+        return old
+
+    def inc(self, array, index, val):
+        with inclock:
+            old = array[index]
+            if old >= val:
+                array[index] = 0
+            else:
+                array[index] += 1
+        return old
+
+    def dec(self, array, index, val):
+        with declock:
+            old = array[index]
+            if (old == 0) or (old > val):
+                array[index] = val
+            else:
+                array[index] -= 1
+        return old
+
+    def exch(self, array, index, val):
+        with exchlock:
+            old = array[index]
+            array[index] = val
+        return old
 
     def max(self, array, index, val):
         with maxlock:
-            # CUDA Python's semantics for max differ from Numpy's Python's,
-            # so we have special handling here (CUDA Python treats NaN as
-            # missing data).
-            if np.isnan(array[index]):
-                array[index] = val
-            elif np.isnan(val):
-                return
-            array[index] = max(array[index], val)
+            old = array[index]
+            array[index] = max(old, val)
+        return old
 
     def min(self, array, index, val):
         with minlock:
-            # CUDA Python's semantics for min differ from Numpy's Python's,
-            # so we have special handling here (CUDA Python treats NaN as
-            # missing data).
-            if np.isnan(array[index]):
-                array[index] = val
-            elif np.isnan(val):
-                return
-            array[index] = min(array[index], val)
+            old = array[index]
+            array[index] = min(old, val)
+        return old
+
+    def nanmax(self, array, index, val):
+        with maxlock:
+            old = array[index]
+            array[index] = np.nanmax([array[index], val])
+        return old
+
+    def nanmin(self, array, index, val):
+        with minlock:
+            old = array[index]
+            array[index] = np.nanmin([array[index], val])
+        return old
 
     def compare_and_swap(self, array, old, val):
         with caslock:
@@ -136,6 +220,50 @@ class FakeCUDAAtomic(object):
             if loaded == old:
                 array[index] = val
             return loaded
+
+
+class FakeCUDAFp16(object):
+    def hadd(self, a, b):
+        return a + b
+
+    def hsub(self, a, b):
+        return a - b
+
+    def hmul(self, a, b):
+        return a * b
+
+    def hfma(self, a, b, c):
+        return a * b + c
+
+    def hneg(self, a):
+        return -a
+
+    def habs(self, a):
+        return abs(a)
+
+    def heq(self, a, b):
+        return a == b
+
+    def hne(self, a, b):
+        return a != b
+
+    def hge(self, a, b):
+        return a >= b
+
+    def hgt(self, a, b):
+        return a > b
+
+    def hle(self, a, b):
+        return a <= b
+
+    def hlt(self, a, b):
+        return a < b
+
+    def hmax(self, a, b):
+        return max(a, b)
+
+    def hmin(self, a, b):
+        return min(a, b)
 
 
 class FakeCUDAModule(object):
@@ -152,10 +280,25 @@ class FakeCUDAModule(object):
     def __init__(self, grid_dim, block_dim, dynshared_size):
         self.gridDim = Dim3(*grid_dim)
         self.blockDim = Dim3(*block_dim)
+        self._cg = FakeCUDACg()
         self._local = FakeCUDALocal()
         self._shared = FakeCUDAShared(dynshared_size)
         self._const = FakeCUDAConst()
         self._atomic = FakeCUDAAtomic()
+        self._fp16 = FakeCUDAFp16()
+        # Insert the vector types into the kernel context
+        # Note that we need to do this in addition to exposing them as module
+        # variables in `simulator.__init__.py`, because the test cases need
+        # to access the actual cuda module as well as the fake cuda module
+        # for vector types.
+        for name, svty in vector_types.items():
+            setattr(self, name, svty)
+            for alias in svty.aliases:
+                setattr(self, alias, svty)
+
+    @property
+    def cg(self):
+        return self._cg
 
     @property
     def local(self):
@@ -172,6 +315,10 @@ class FakeCUDAModule(object):
     @property
     def atomic(self):
         return self._atomic
+
+    @property
+    def fp16(self):
+        return self._fp16
 
     @property
     def threadIdx(self):
@@ -219,6 +366,9 @@ class FakeCUDAModule(object):
     def fma(self, a, b, c):
         return a * b + c
 
+    def cbrt(self, a):
+        return a ** (1 / 3)
+
     def brev(self, val):
         return int('{:032b}'.format(val)[::-1], 2)
 
@@ -227,8 +377,14 @@ class FakeCUDAModule(object):
         return len(s) - len(s.lstrip('0'))
 
     def ffs(self, val):
+        # The algorithm is:
+        # 1. Count the number of trailing zeros.
+        # 2. Add 1, because the LSB is numbered 1 rather than 0, and so on.
+        # 3. If we've counted 32 zeros (resulting in 33), there were no bits
+        #    set so we need to return zero.
         s = '{:032b}'.format(val)
-        return len(s) - len(s.rstrip('0'))
+        r = (len(s) - len(s.rstrip('0')) + 1) % 33
+        return r
 
     def selp(self, a, b, c):
         return b if a else c

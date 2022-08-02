@@ -1,11 +1,9 @@
-from __future__ import print_function
-
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from numba import types, errors
-from .support import TestCase
+import unittest
+from numba.core.compiler import compile_isolated, Flags
+from numba.core import types, errors
+from numba.tests.support import TestCase
 
 
 def setitem_slice(a, start, stop, step, scalar):
@@ -27,7 +25,7 @@ class TestStoreSlice(TestCase):
         obs_expected = obs_got.copy()
 
         flags = Flags()
-        flags.set("nrt")
+        flags.nrt = True
         cres = compile_isolated(usecase, (types.float64[:], types.intp),
                                 flags=flags)
         cres.entry_point(obs_got, n)

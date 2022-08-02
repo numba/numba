@@ -4,8 +4,11 @@
 #include <time.h>
 #include <assert.h>
 
+#include "_numba_common.h"
 #include "_typeof.h"
 #include "_hashtable.h"
+#include "_devicearray.h"
+#include "pyerrors.h"
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/ndarrayobject.h>
@@ -41,6 +44,8 @@ static PyObject *str_typeof_pyval = NULL;
 static PyObject *str_value = NULL;
 static PyObject *str_numba_type = NULL;
 
+/* CUDA device array API */
+void **DeviceArray_API;
 
 /*
  * Type fingerprint computation.
@@ -134,20 +139,19 @@ string_writer_put_int32(string_writer_t *w, unsigned int v)
 static int
 string_writer_put_intp(string_writer_t *w, npy_intp v)
 {
-    const int N = sizeof(npy_intp);
-    if (string_writer_ensure(w, N))
+    if (string_writer_ensure(w, NPY_SIZEOF_PY_INTPTR_T))
         return -1;
     w->buf[w->n] = v & 0xff;
     w->buf[w->n + 1] = (v >> 8) & 0xff;
     w->buf[w->n + 2] = (v >> 16) & 0xff;
     w->buf[w->n + 3] = (v >> 24) & 0xff;
-    if (N > 4) {
-        w->buf[w->n + 4] = (v >> 32) & 0xff;
-        w->buf[w->n + 5] = (v >> 40) & 0xff;
-        w->buf[w->n + 6] = (v >> 48) & 0xff;
-        w->buf[w->n + 7] = (v >> 56) & 0xff;
-    }
-    w->n += N;
+#if NPY_SIZEOF_PY_INTPTR_T == 8
+    w->buf[w->n + 4] = (v >> 32) & 0xff;
+    w->buf[w->n + 5] = (v >> 40) & 0xff;
+    w->buf[w->n + 6] = (v >> 48) & 0xff;
+    w->buf[w->n + 7] = (v >> 56) & 0xff;
+#endif
+    w->n += NPY_SIZEOF_PY_INTPTR_T;
     return 0;
 }
 
@@ -195,7 +199,7 @@ enum opcode {
 
 
 static int
-fingerprint_unrecognized(PyObject *val)
+fingerprint_unrecognized(void)
 {
     PyErr_SetString(PyExc_NotImplementedError,
                     "cannot compute type fingerprint for value");
@@ -235,7 +239,7 @@ compute_dtype_fingerprint(string_writer_t *w, PyArray_Descr *descr)
     }
 #endif
 
-    return fingerprint_unrecognized((PyObject *) descr);
+    return fingerprint_unrecognized();
 }
 
 static int
@@ -257,13 +261,81 @@ compute_fingerprint(string_writer_t *w, PyObject *val)
     if (PyComplex_CheckExact(val))
         return string_writer_put_char(w, OP_COMPLEX);
     if (PyTuple_Check(val)) {
-        Py_ssize_t i, n;
-        n = PyTuple_GET_SIZE(val);
-        TRY(string_writer_put_char, w, OP_START_TUPLE);
-        for (i = 0; i < n; i++)
-            TRY(compute_fingerprint, w, PyTuple_GET_ITEM(val, i));
-        TRY(string_writer_put_char, w, OP_END_TUPLE);
-        return 0;
+        if(PyTuple_CheckExact(val)) {
+            Py_ssize_t i, n;
+            n = PyTuple_GET_SIZE(val);
+            TRY(string_writer_put_char, w, OP_START_TUPLE);
+            for (i = 0; i < n; i++)
+                TRY(compute_fingerprint, w, PyTuple_GET_ITEM(val, i));
+            TRY(string_writer_put_char, w, OP_END_TUPLE);
+            return 0;
+        }
+        /* as per typeof.py, check "_asdict" for namedtuple. */
+        else if(PyObject_HasAttrString(val, "_asdict"))
+        {
+            /*
+             * This encodes the class name and field names of a namedtuple into
+             * the fingerprint on the condition that the number of fields is
+             * small (<10) and that the class name and field names are encodable
+             * as ASCII.
+             */
+            PyObject * clazz = NULL;
+            PyObject * name = NULL;
+            PyObject * _fields =  PyObject_GetAttrString(val, "_fields");
+            PyObject * field = NULL;
+            PyObject * ascii_str = NULL;
+            Py_ssize_t i, n, j, flen;
+            char * buf = NULL;
+            int ret;
+
+            clazz = PyObject_GetAttrString(val, "__class__");
+            if (clazz == NULL)
+                return -1;
+
+            name = PyObject_GetAttrString(clazz, "__name__");
+            Py_DECREF(clazz);
+            if (name == NULL)
+                return -1;
+
+            ascii_str = PyUnicode_AsEncodedString(name, "ascii", "ignore");
+            Py_DECREF(name);
+            if (ascii_str == NULL)
+                return -1;
+            ret = PyBytes_AsStringAndSize(ascii_str, &buf, &flen);
+
+            if (ret == -1)
+                return -1;
+            for(j = 0; j < flen; j++) {
+                TRY(string_writer_put_char, w, buf[j]);
+            }
+            Py_DECREF(ascii_str);
+
+            if (_fields == NULL)
+                return -1;
+
+            n = PyTuple_GET_SIZE(val);
+
+            TRY(string_writer_put_char, w, OP_START_TUPLE);
+            for (i = 0; i < n; i++) {
+                field = PyTuple_GET_ITEM(_fields, i);
+                if (field == NULL)
+                    return -1;
+                ascii_str = PyUnicode_AsEncodedString(field, "ascii", "ignore");
+                if (ascii_str == NULL)
+                    return -1;
+                ret = PyBytes_AsStringAndSize(ascii_str, &buf, &flen);
+                if (ret == -1)
+                    return -1;
+                for(j = 0; j < flen; j++) {
+                    TRY(string_writer_put_char, w, buf[j]);
+                }
+                Py_DECREF(ascii_str);
+                TRY(compute_fingerprint, w, PyTuple_GET_ITEM(val, i));
+            }
+            TRY(string_writer_put_char, w, OP_END_TUPLE);
+            Py_DECREF(_fields);
+            return 0;
+        }
     }
     if (PyBytes_Check(val))
         return string_writer_put_char(w, OP_BYTES);
@@ -372,14 +444,14 @@ compute_fingerprint(string_writer_t *w, PyObject *val)
         PyBuffer_Release(&buf);
         return 0;
     }
-    if (PyArray_DescrCheck(val)) {
+    if (NUMBA_PyArray_DescrCheck(val)) {
         TRY(string_writer_put_char, w, OP_NP_DTYPE);
         return compute_dtype_fingerprint(w, (PyArray_Descr *) val);
     }
 
 _unrecognized:
     /* Type not recognized */
-    return fingerprint_unrecognized(val);
+    return fingerprint_unrecognized();
 }
 
 PyObject *
@@ -763,10 +835,110 @@ int typecode_arrayscalar(PyObject *dispatcher, PyObject* aryscalar) {
     return BASIC_TYPECODES[typecode];
 }
 
+static
+int typecode_devicendarray(PyObject *dispatcher, PyObject *ary)
+{
+    int typecode;
+    int dtype;
+    int ndim;
+    int layout = 0;
+
+    PyObject* flags = PyObject_GetAttrString(ary, "flags");
+    if (flags == NULL)
+    {
+        PyErr_Clear();
+        goto FALLBACK;
+    }
+
+    if (PyDict_GetItemString(flags, "C_CONTIGUOUS") == Py_True) {
+        layout = 1;
+    } else if (PyDict_GetItemString(flags, "F_CONTIGUOUS") == Py_True) {
+        layout = 2;
+    }
+
+    Py_DECREF(flags);
+
+    PyObject *ndim_obj = PyObject_GetAttrString(ary, "ndim");
+    if (ndim_obj == NULL) {
+        /* If there's no ndim, try to proceed by clearing the error and using the
+         * fallback. */
+        PyErr_Clear();
+        goto FALLBACK;
+    }
+
+    ndim = PyLong_AsLong(ndim_obj);
+    Py_DECREF(ndim_obj);
+
+    if (PyErr_Occurred()) {
+        /* ndim wasn't an integer for some reason - unlikely to happen, but try
+         * the fallback. */
+        PyErr_Clear();
+        goto FALLBACK;
+    }
+
+    if (ndim <= 0 || ndim > N_NDIM)
+        goto FALLBACK;
+
+    PyObject* dtype_obj = PyObject_GetAttrString(ary, "dtype");
+    if (dtype_obj == NULL) {
+        /* No dtype: try the fallback. */
+        PyErr_Clear();
+        goto FALLBACK;
+    }
+
+    PyObject* num_obj = PyObject_GetAttrString(dtype_obj, "num");
+    Py_DECREF(dtype_obj);
+
+    if (num_obj == NULL) {
+        /* This strange dtype has no num - try the fallback. */
+        PyErr_Clear();
+        goto FALLBACK;
+    }
+
+    int dtype_num = PyLong_AsLong(num_obj);
+    Py_DECREF(num_obj);
+
+    if (PyErr_Occurred()) {
+        /* num wasn't an integer for some reason - unlikely to happen, but try
+         * the fallback. */
+        PyErr_Clear();
+        goto FALLBACK;
+    }
+
+    dtype = dtype_num_to_typecode(dtype_num);
+    if (dtype == -1) {
+        /* Not a dtype we have in the global lookup table. */
+        goto FALLBACK;
+    }
+
+    /* Fast path, using direct table lookup */
+    assert(layout < N_LAYOUT);
+    assert(ndim <= N_NDIM);
+    assert(dtype < N_DTYPES);
+    typecode = cached_arycode[ndim - 1][layout][dtype];
+
+    if (typecode == -1) {
+        /* First use of this table entry, so it requires populating */
+        typecode = typecode_fallback_keep_ref(dispatcher, (PyObject*)ary);
+        cached_arycode[ndim - 1][layout][dtype] = typecode;
+    }
+
+    return typecode;
+
+FALLBACK:
+    /* Slower path, for non-trivial array types. At present this always uses
+       the fingerprinting to get the typecode. Future optimization might
+       implement a cache, but this would require some fast equivalent of
+       PyArray_DESCR for a device array. */
+
+    return typecode_using_fingerprint(dispatcher, (PyObject *) ary);
+}
+
 int
 typeof_typecode(PyObject *dispatcher, PyObject *val)
 {
     PyTypeObject *tyobj = Py_TYPE(val);
+    int subtype_attr;
     /* This needs to be kept in sync with Dispatcher.typeof_pyval(),
      * otherwise funny things may happen.
      */
@@ -793,36 +965,85 @@ typeof_typecode(PyObject *dispatcher, PyObject *val)
         return typecode_arrayscalar(dispatcher, val);
     }
     /* Array handling */
-    else if (PyType_IsSubtype(tyobj, &PyArray_Type)) {
+    else if (tyobj == &PyArray_Type) {
         return typecode_ndarray(dispatcher, (PyArrayObject*)val);
+    }
+    /* Subtype of CUDA device array */
+    else if (PyType_IsSubtype(tyobj, &DeviceArrayType)) {
+        return typecode_devicendarray(dispatcher, val);
+    }
+    /* Subtypes of Array handling */
+    else if (PyType_IsSubtype(tyobj, &PyArray_Type)) {
+        /* By default, Numba will treat all numpy.ndarray subtypes as if they
+           were the base numpy.ndarray type.  In this way, ndarray subtypes
+           can easily use all of the support that Numba has for ndarray
+           methods.
+           EXPERIMENTAL: There may be cases where a programmer would NOT want
+           ndarray subtypes to be treated exactly like the base numpy.ndarray.
+           For this purpose, a currently experimental feature allows a
+           programmer to add an attribute named
+           __numba_array_subtype_dispatch__ to their ndarray subtype.  This
+           attribute can have any value as Numba only checks for the presence
+           of the attribute and not its value.  When present, a ndarray subtype
+           will NOT be typed by Numba as a regular ndarray but this code will
+           fallthrough to the typecode_using_fingerprint call, which will
+           create a new unique Numba typecode for this ndarray subtype.  This
+           behavior has several significant effects.  First, since this
+           ndarray subtype will be treated as a different type by Numba,
+           the Numba dispatcher would then specialize on this type.  So, if
+           there was a function that had several parameters that were
+           expected to be either numpy.ndarray or a subtype of ndarray, then
+           Numba would compile a custom version of this function for each
+           combination of base and subtypes that were actually passed to the
+           function.  Second, because this subtype would now be treated as
+           a totally separate type, it will cease to function in Numba unless
+           an implementation of that type is provided to Numba through the
+           Numba type extension mechanisms (e.g., overload).  This would
+           typically start with defining a Numba type corresponding to the
+           ndarray subtype. This is the same concept as how Numba has a
+           corollary of numpy.ndarray in its type system as types.Array.
+           Next, one would typically defining boxing and unboxing routines
+           and the associated memory model.  Then, overloads for NumPy
+           functions on that type would be created.  However,
+           if the same default array memory model is used then there are tricks
+           one can do to look at Numba's internal types.Array registries and
+           to quickly apply those to the subtype as well.  In this manner,
+           only those cases where the base ndarray and the ndarray subtype
+           behavior differ would new custom functions need to be written for
+           the subtype. Finally,
+           after adding support for the new type, you would have a separate
+           ndarray subtype that could operate with other objects of the same
+           subtype but would not support interoperation with regular NumPy
+           ndarrays.  In standard Python, this interoperation is provided
+           through the __array_ufunc__ magic method in the ndarray subtype
+           class and in that case the function operates on ndarrays or their
+           subtypes.  This idea is extended into Numba such that
+           __array_ufunc__ can be present in a Numba array type object.
+           In this case, this function is consulted during Numba typing and
+           so the arguments to __array_ufunc__ are Numba types instead of
+           ndarray subtypes.  The array type __array_ufunc__ returns the
+           type of the output of the given ufunc.
+         */
+        subtype_attr = PyObject_HasAttrString(val, "__numba_array_subtype_dispatch__");
+        if (!subtype_attr) {
+            return typecode_ndarray(dispatcher, (PyArrayObject*)val);
+        }
     }
 
     return typecode_using_fingerprint(dispatcher, val);
 }
 
 
-#if PY_MAJOR_VERSION >= 3
-    static
-    void* wrap_import_array(void) {
-        import_array(); /* import array returns NULL on failure */
-        return (void*)1;
-    }
-#else
-    static
-    void wrap_import_array(void) {
-        import_array();
-    }
-#endif
+static
+void* wrap_import_array(void) {
+    import_array(); /* import array returns NULL on failure */
+    return (void*)1;
+}
 
 
 static
 int init_numpy(void) {
-    #if PY_MAJOR_VERSION >= 3
-        return wrap_import_array() != NULL;
-    #else
-        wrap_import_array();
-        return 1;   /* always succeed */
-    #endif
+    return wrap_import_array() != NULL;
 }
 
 

@@ -1,18 +1,26 @@
-from __future__ import print_function, absolute_import, division
-
-import cmath
 import math
 import itertools
-import string
-import sys
-import textwrap
 
 import numpy as np
 
-from numba.cuda.testing import unittest, SerialMixin
-from numba import cuda, types, utils, numpy_support
-from numba.tests.support import TestCase, compile_function
-from numba.tests.complex_usecases import *
+from numba.cuda.testing import unittest, CUDATestCase
+from numba.core import types
+from numba import cuda
+from numba.tests.complex_usecases import (real_usecase, imag_usecase,
+                                          conjugate_usecase, phase_usecase,
+                                          polar_as_complex_usecase,
+                                          rect_usecase, isnan_usecase,
+                                          isinf_usecase, isfinite_usecase,
+                                          exp_usecase, log_usecase,
+                                          log_base_usecase, log10_usecase,
+                                          sqrt_usecase, asin_usecase,
+                                          acos_usecase, atan_usecase,
+                                          cos_usecase, sin_usecase,
+                                          tan_usecase, acosh_usecase,
+                                          asinh_usecase, atanh_usecase,
+                                          cosh_usecase, sinh_usecase,
+                                          tanh_usecase)
+from numba.np import numpy_support
 
 
 def compile_scalar_func(pyfunc, argtypes, restype):
@@ -53,7 +61,7 @@ def compile_scalar_func(pyfunc, argtypes, restype):
     return kernel_wrapper
 
 
-class BaseComplexTest(SerialMixin):
+class BaseComplexTest(CUDATestCase):
 
     def basic_values(self):
         reals = [-0.0, +0.0, 1, -1, +1.5, -3.5,
@@ -104,7 +112,7 @@ class BaseComplexTest(SerialMixin):
     run_binary = run_func
 
 
-class TestComplex(BaseComplexTest, TestCase):
+class TestComplex(BaseComplexTest):
 
     def check_real_image(self, pyfunc):
         values = self.basic_values()
@@ -127,14 +135,15 @@ class TestComplex(BaseComplexTest, TestCase):
                        values)
 
 
-class TestCMath(BaseComplexTest, TestCase):
+class TestCMath(BaseComplexTest):
     """
     Tests for cmath module support.
     """
 
     def check_predicate_func(self, pyfunc):
         self.run_unary(pyfunc,
-                       [types.boolean(tp) for tp in (types.complex128, types.complex64)],
+                       [types.boolean(tp)
+                        for tp in (types.complex128, types.complex64)],
                        self.basic_values())
 
     def check_unary_func(self, pyfunc, ulps=1, values=None,
@@ -180,7 +189,6 @@ class TestCMath(BaseComplexTest, TestCase):
     def test_isinf(self):
         self.check_predicate_func(isinf_usecase)
 
-    @unittest.skipIf(utils.PYVERSION < (3, 2), "needs Python 3.2+")
     def test_isfinite(self):
         self.check_predicate_func(isfinite_usecase)
 

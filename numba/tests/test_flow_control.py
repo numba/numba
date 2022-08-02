@@ -1,23 +1,21 @@
-from __future__ import print_function
-
 import itertools
 
-import numba.unittest_support as unittest
-from numba.controlflow import CFGraph, ControlFlowAnalysis
-from numba.compiler import compile_isolated, Flags
-from numba import types
-from numba.bytecode import FunctionIdentity, ByteCode
-from numba.utils import IS_PY3
-from .support import TestCase, tag
+import unittest
+from numba.core.controlflow import CFGraph, ControlFlowAnalysis
+from numba.core.compiler import compile_isolated, Flags
+from numba.core import types
+from numba.core.bytecode import FunctionIdentity, ByteCode
+from numba.core.utils import PYVERSION
+from numba.tests.support import TestCase
 
 enable_pyobj_flags = Flags()
-enable_pyobj_flags.set("enable_pyobject")
+enable_pyobj_flags.enable_pyobject = True
 
 forceobj_flags = Flags()
-forceobj_flags.set("force_pyobject")
+forceobj_flags.force_pyobject = True
 
 no_pyobj_flags = Flags()
-no_pyobj_flags.set("nrt")
+no_pyobj_flags.nrt = True
 
 
 def for_loop_usecase1(x, y):
@@ -251,7 +249,6 @@ class TestFlowControl(TestCase):
     def test_for_loop1(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase1, [-10, 0, 10], [0], flags=flags)
 
-    @tag('important')
     def test_for_loop1_npm(self):
         self.test_for_loop1(flags=no_pyobj_flags)
 
@@ -259,7 +256,6 @@ class TestFlowControl(TestCase):
         self.run_test(for_loop_usecase2, [-10, 0, 10], [-10, 0, 10],
                       flags=flags)
 
-    @tag('important')
     def test_for_loop2_npm(self):
         self.test_for_loop2(flags=no_pyobj_flags)
 
@@ -276,49 +272,42 @@ class TestFlowControl(TestCase):
     def test_for_loop4(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase4, [10], [10], flags=flags)
 
-    @tag('important')
     def test_for_loop4_npm(self):
         self.test_for_loop4(flags=no_pyobj_flags)
 
     def test_for_loop5(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase5, [100], [50], flags=flags)
 
-    @tag('important')
     def test_for_loop5_npm(self):
         self.test_for_loop5(flags=no_pyobj_flags)
 
     def test_for_loop6(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase6, [100], [50], flags=flags)
 
-    @tag('important')
     def test_for_loop6_npm(self):
         self.test_for_loop6(flags=no_pyobj_flags)
 
     def test_for_loop7(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase7, [5], [0], flags=flags)
 
-    @tag('important')
     def test_for_loop7_npm(self):
         self.test_for_loop7(flags=no_pyobj_flags)
 
     def test_for_loop8(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase8, [0, 1], [0, 2, 10], flags=flags)
 
-    @tag('important')
     def test_for_loop8_npm(self):
         self.test_for_loop8(flags=no_pyobj_flags)
 
     def test_for_loop9(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase9, [0, 1], [0, 2, 10], flags=flags)
 
-    @tag('important')
     def test_for_loop9_npm(self):
         self.test_for_loop9(flags=no_pyobj_flags)
 
     def test_for_loop10(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase10, [5], [2, 7], flags=flags)
 
-    @tag('important')
     def test_for_loop10_npm(self):
         self.test_for_loop10(flags=no_pyobj_flags)
 
@@ -337,21 +326,18 @@ class TestFlowControl(TestCase):
     def test_while_loop3(self, flags=enable_pyobj_flags):
         self.run_test(while_loop_usecase3, [10], [10], flags=flags)
 
-    @tag('important')
     def test_while_loop3_npm(self):
         self.test_while_loop3(flags=no_pyobj_flags)
 
     def test_while_loop4(self, flags=enable_pyobj_flags):
         self.run_test(while_loop_usecase4, [10], [0], flags=flags)
 
-    @tag('important')
     def test_while_loop4_npm(self):
         self.test_while_loop4(flags=no_pyobj_flags)
 
     def test_while_loop5(self, flags=enable_pyobj_flags):
         self.run_test(while_loop_usecase5, [0, 5, 10], [0, 5, 10], flags=flags)
 
-    @tag('important')
     def test_while_loop5_npm(self):
         self.test_while_loop5(flags=no_pyobj_flags)
 
@@ -364,21 +350,18 @@ class TestFlowControl(TestCase):
     def test_ifelse2(self, flags=enable_pyobj_flags):
         self.run_test(ifelse_usecase2, [-1, 0, 1], [-1, 0, 1], flags=flags)
 
-    @tag('important')
     def test_ifelse2_npm(self):
         self.test_ifelse2(flags=no_pyobj_flags)
 
     def test_ifelse3(self, flags=enable_pyobj_flags):
         self.run_test(ifelse_usecase3, [-1, 0, 1], [-1, 0, 1], flags=flags)
 
-    @tag('important')
     def test_ifelse3_npm(self):
         self.test_ifelse3(flags=no_pyobj_flags)
 
     def test_ifelse4(self, flags=enable_pyobj_flags):
         self.run_test(ifelse_usecase4, [-1, 0, 1], [-1, 0, 1], flags=flags)
 
-    @tag('important')
     def test_ifelse4_npm(self):
         self.test_ifelse4(flags=no_pyobj_flags)
 
@@ -386,7 +369,6 @@ class TestFlowControl(TestCase):
         self.run_test(ternary_ifelse_usecase1, [-1, 0, 1], [-1, 0, 1],
                       flags=flags)
 
-    @tag('important')
     def test_ternary_ifelse1_npm(self):
         self.test_ternary_ifelse1(flags=no_pyobj_flags)
 
@@ -969,6 +951,80 @@ class TestCFGraph(TestCase):
         for node in [7, 10, 23]:
             self.assertEqual(g.in_loops(node), [loop])
 
+    def test_loop_dfs_pathological(self):
+        # The follow adjlist is an export from the reproducer in #6186
+        g = self.from_adj_list({
+            0: {38, 14},
+            14: {38, 22},
+            22: {38, 30},
+            30: {42, 38},
+            38: {42},
+            42: {64, 50},
+            50: {64, 58},
+            58: {128},
+            64: {72, 86},
+            72: {80, 86},
+            80: {128},
+            86: {108, 94},
+            94: {108, 102},
+            102: {128},
+            108: {128, 116},
+            116: {128, 124},
+            124: {128},
+            128: {178, 174},
+            174: {178},
+            178: {210, 206},
+            206: {210},
+            210: {248, 252},
+            248: {252},
+            252: {282, 286},
+            282: {286},
+            286: {296, 326},
+            296: {330},
+            326: {330},
+            330: {370, 340},
+            340: {374},
+            370: {374},
+            374: {380, 382},
+            380: {382},
+            382: {818, 390},
+            390: {456, 458},
+            456: {458},
+            458: {538, 566},
+            538: {548, 566},
+            548: set(),
+            566: {586, 572},
+            572: {586},
+            586: {708, 596},
+            596: {608},
+            608: {610},
+            610: {704, 620},
+            620: {666, 630},
+            630: {636, 646},
+            636: {666, 646},
+            646: {666},
+            666: {610},
+            704: {706},
+            706: {818},
+            708: {720},
+            720: {722},
+            722: {816, 732},
+            732: {778, 742},
+            742: {748, 758},
+            748: {778, 758},
+            758: {778},
+            778: {722},
+            816: {818},
+            818: set(),
+        })
+        g.set_entry_point(0)
+        g.process()
+        stats = {}
+        # Compute backedges and store the iteration count for testing
+        back_edges = g._find_back_edges(stats=stats)
+        self.assertEqual(back_edges, {(666, 610), (778, 722)})
+        self.assertEqual(stats['iteration_count'], 155)
+
     def test_equals(self):
 
         def get_new():
@@ -1088,12 +1144,17 @@ class TestRealCodeDomFront(TestCase):
         cfa, blkpts = self.get_cfa_and_namedblocks(foo)
         idoms = cfa.graph.immediate_dominators()
 
-        self.assertEqual(blkpts['B0'], idoms[blkpts['B1']])
+        # Py3.10 turns while loop into if(...) { do {...} while(...) }.
+        # Also, `SET_BLOCK_B0` is duplicated. As a result, the second B0
+        # is picked up by `blkpts`.
+        if PYVERSION < (3, 10):
+            self.assertEqual(blkpts['B0'], idoms[blkpts['B1']])
 
         domfront = cfa.graph.dominance_frontier()
         self.assertFalse(domfront[blkpts['A']])
         self.assertFalse(domfront[blkpts['C']])
-        self.assertEqual({blkpts['B0']}, domfront[blkpts['B1']])
+        if PYVERSION < (3, 10):
+            self.assertEqual({blkpts['B0']}, domfront[blkpts['B1']])
 
     def test_loop_nested_and_break(self):
         def foo(n):
@@ -1114,20 +1175,27 @@ class TestRealCodeDomFront(TestCase):
         cfa, blkpts = self.get_cfa_and_namedblocks(foo)
         idoms = cfa.graph.immediate_dominators()
         self.assertEqual(blkpts['D0'], blkpts['C1'])
-        self.assertEqual(blkpts['C0'], idoms[blkpts['C1']])
+
+        # Py3.10 changes while loop into if-do-while
+        if PYVERSION < (3, 10):
+            self.assertEqual(blkpts['C0'], idoms[blkpts['C1']])
 
         domfront = cfa.graph.dominance_frontier()
         self.assertFalse(domfront[blkpts['A']])
         self.assertFalse(domfront[blkpts['G']])
-        self.assertEqual({blkpts['B0']}, domfront[blkpts['B1']])
+        if PYVERSION < (3, 10):
+            self.assertEqual({blkpts['B0']}, domfront[blkpts['B1']])
         # 2 domfront members for C1
         # C0 because of the loop; F because of the break.
-        self.assertEqual({blkpts['C0'], blkpts['F']}, domfront[blkpts['C1']])
+        if PYVERSION < (3, 10):
+            self.assertEqual({blkpts['C0'], blkpts['F']},
+                             domfront[blkpts['C1']])
         self.assertEqual({blkpts['F']}, domfront[blkpts['D1']])
         self.assertEqual({blkpts['E']}, domfront[blkpts['D2']])
-        self.assertEqual({blkpts['C0']}, domfront[blkpts['E']])
-        self.assertEqual({blkpts['B0']}, domfront[blkpts['F']])
-        self.assertEqual({blkpts['B0']}, domfront[blkpts['B0']])
+        if PYVERSION < (3, 10):
+            self.assertEqual({blkpts['C0']}, domfront[blkpts['E']])
+            self.assertEqual({blkpts['B0']}, domfront[blkpts['F']])
+            self.assertEqual({blkpts['B0']}, domfront[blkpts['B0']])
 
     def test_if_else(self):
         def foo(a, b):
@@ -1218,25 +1286,25 @@ class TestRealCodeDomFront(TestCase):
                 SET_BLOCK_D                 # noqa: F821
             SET_BLOCK_E                     # noqa: F821
 
-        # Whether infinite loop (i.g. while True) are optimized out.
-        infinite_loop_opt_out = bool(IS_PY3)
-
         cfa, blkpts = self.get_cfa_and_namedblocks(foo)
 
         idoms = cfa.graph.immediate_dominators()
-        if infinite_loop_opt_out:
+        # Py3.10 optimizes away the infinite loop and removes SET_BLOCK_E from
+        # the bytecode.
+        if PYVERSION >= (3, 10):
+            self.assertNotIn('E', blkpts)
+        else:
             self.assertNotIn(blkpts['E'], idoms)
         self.assertEqual(blkpts['B'], idoms[blkpts['C']])
         self.assertEqual(blkpts['B'], idoms[blkpts['D']])
 
         domfront = cfa.graph.dominance_frontier()
-        if infinite_loop_opt_out:
+        if PYVERSION < (3, 10):
             self.assertNotIn(blkpts['E'], domfront)
         self.assertFalse(domfront[blkpts['A']])
         self.assertFalse(domfront[blkpts['C']])
-        if infinite_loop_opt_out:
-            self.assertEqual({blkpts['B']}, domfront[blkpts['B']])
-            self.assertEqual({blkpts['B']}, domfront[blkpts['D']])
+        self.assertEqual({blkpts['B']}, domfront[blkpts['B']])
+        self.assertEqual({blkpts['B']}, domfront[blkpts['D']])
 
 
 if __name__ == '__main__':

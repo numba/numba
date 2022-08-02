@@ -1,14 +1,13 @@
-from __future__ import print_function
+from ctypes import *
 
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba.ctypes_support import *
+import unittest
 from numba import _helperlib
 
 
 class ArrayStruct3D(Structure):
-    # Mimick the structure defined in numba.targets.arrayobj's make_array()
+    # Mimic the structure defined in numba.targets.arrayobj's make_array()
     _fields_ = [
         ("meminfo", c_void_p),
         ("parent", c_void_p),

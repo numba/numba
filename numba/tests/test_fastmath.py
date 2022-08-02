@@ -1,11 +1,9 @@
-from __future__ import print_function, absolute_import
-
 import math
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba.tests.support import captured_stdout, override_config
 from numba import njit, vectorize, guvectorize
+import unittest
 
 
 class TestFastMath(unittest.TestCase):

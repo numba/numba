@@ -1,5 +1,6 @@
-from numba import njit, ir
+from numba import njit
 import numba
+from numba.core import ir
 
 
 @njit(inline='never')

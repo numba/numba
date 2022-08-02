@@ -31,7 +31,7 @@ Unicode hash cache differences
 
 Both Numba and CPython Unicode string internal representations have a ``hash``
 member for the purposes of caching the string's hash value. This member is
-always checked ahead of computing a hash value the with view of simply providing
+always checked ahead of computing a hash value with the view of simply providing
 a value from cache as it is considerably cheaper to do so. The Numba Unicode
 string hash caching implementation behaves in a similar way to that of
 CPython's. The only notable behavioral change (and its only impact is a minor
@@ -48,7 +48,7 @@ The accommodation of ``PYTHONHASHSEED``
 ---------------------------------------
 
 The ``PYTHONHASHSEED`` environment variable can be used to seed the CPython
-hashing algorithms for e.g. the purposes of reproduciblity. The Numba hashing
+hashing algorithms for e.g. the purposes of reproducibility. The Numba hashing
 implementation directly reads the CPython hashing algorithms' internal state and
 as a result the influence of ``PYTHONHASHSEED`` is replicated in Numba's
 hashing implementations.

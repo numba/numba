@@ -1,15 +1,17 @@
-from __future__ import print_function, absolute_import, division
-
 import contextlib
 import gc
 import pickle
+import runpy
 import subprocess
 import sys
+import unittest
+from multiprocessing import get_context
 
-from numba import unittest_support as unittest
-from numba.errors import TypingError
-from numba.targets import registry
-from .support import TestCase, tag
+import numba
+from numba.core.errors import TypingError
+from numba.tests.support import TestCase
+from numba.core.target_extension import resolve_dispatcher_from_str
+from numba.cloudpickle import dumps, loads
 from .serialize_usecases import *
 
 
@@ -21,10 +23,11 @@ class TestDispatcherPickling(TestCase):
 
     @contextlib.contextmanager
     def simulate_fresh_target(self):
-        dispatcher_cls = registry.dispatcher_registry['cpu']
+        hwstr = 'cpu'
+        dispatcher_cls = resolve_dispatcher_from_str(hwstr)
         old_descr = dispatcher_cls.targetdescr
         # Simulate fresh targetdescr
-        dispatcher_cls.targetdescr = type(dispatcher_cls.targetdescr)()
+        dispatcher_cls.targetdescr = type(dispatcher_cls.targetdescr)(hwstr)
         try:
             yield
         finally:
@@ -47,20 +50,17 @@ class TestDispatcherPickling(TestCase):
             new_func = pickle.loads(pickled)
             check_result(new_func)
 
-    @tag('important')
     def test_call_with_sig(self):
         self.run_with_protocols(self.check_call, add_with_sig, 5, (1, 4))
         # Compilation has been disabled => float inputs will be coerced to int
         self.run_with_protocols(self.check_call, add_with_sig, 5, (1.2, 4.2))
 
-    @tag('important')
     def test_call_without_sig(self):
         self.run_with_protocols(self.check_call, add_without_sig, 5, (1, 4))
         self.run_with_protocols(self.check_call, add_without_sig, 5.5, (1.2, 4.3))
         # Object mode is enabled
         self.run_with_protocols(self.check_call, add_without_sig, "abc", ("a", "bc"))
 
-    @tag('important')
     def test_call_nopython(self):
         self.run_with_protocols(self.check_call, add_nopython, 5.5, (1.2, 4.3))
         # Object mode is disabled
@@ -116,7 +116,6 @@ class TestDispatcherPickling(TestCase):
         self.run_with_protocols(self.check_call, generated_add,
                                 1j + 7, (1j, 2))
 
-    @tag('important')
     def test_other_process(self):
         """
         Check that reconstructing doesn't depend on resources already
@@ -134,7 +133,6 @@ class TestDispatcherPickling(TestCase):
             """.format(**locals())
         subprocess.check_call([sys.executable, "-c", code])
 
-    @tag('important')
     def test_reuse(self):
         """
         Check that deserializing the same function multiple times re-uses
@@ -192,6 +190,136 @@ class TestDispatcherPickling(TestCase):
                     assert "the imp module is deprecated" not in x.msg
         """
         subprocess.check_call([sys.executable, "-c", code])
+
+
+class TestSerializationMisc(TestCase):
+    def test_numba_unpickle(self):
+        # Test that _numba_unpickle is memorizing its output
+        from numba.core.serialize import _numba_unpickle
+
+        random_obj = object()
+        bytebuf = pickle.dumps(random_obj)
+        hashed = hash(random_obj)
+
+        got1 = _numba_unpickle(id(random_obj), bytebuf, hashed)
+        # not the original object
+        self.assertIsNot(got1, random_obj)
+        got2 = _numba_unpickle(id(random_obj), bytebuf, hashed)
+        # unpickled results are the same objects
+        self.assertIs(got1, got2)
+
+
+
+class TestCloudPickleIssues(TestCase):
+    """This test case includes issues specific to the cloudpickle implementation.
+    """
+    _numba_parallel_test_ = False
+
+    def test_dynamic_class_reset_on_unpickle(self):
+        # a dynamic class
+        class Klass:
+            classvar = None
+
+        def mutator():
+            Klass.classvar = 100
+
+        def check():
+            self.assertEqual(Klass.classvar, 100)
+
+        saved = dumps(Klass)
+        mutator()
+        check()
+        loads(saved)
+        # Without the patch, each `loads(saved)` will reset `Klass.classvar`
+        check()
+        loads(saved)
+        check()
+
+    @unittest.skipIf(__name__ == "__main__",
+                     "Test cannot run as when module is __main__")
+    def test_main_class_reset_on_unpickle(self):
+        mp = get_context('spawn')
+        proc = mp.Process(target=check_main_class_reset_on_unpickle)
+        proc.start()
+        proc.join(timeout=60)
+        self.assertEqual(proc.exitcode, 0)
+
+    def test_dynamic_class_reset_on_unpickle_new_proc(self):
+        # a dynamic class
+        class Klass:
+            classvar = None
+
+        # serialize Klass in this process
+        saved = dumps(Klass)
+
+        # Check the reset problem in a new process
+        mp = get_context('spawn')
+        proc = mp.Process(target=check_unpickle_dyn_class_new_proc, args=(saved,))
+        proc.start()
+        proc.join(timeout=60)
+        self.assertEqual(proc.exitcode, 0)
+
+    def test_dynamic_class_issue_7356(self):
+        cfunc = numba.njit(issue_7356)
+        self.assertEqual(cfunc(), (100, 100))
+
+
+class DynClass(object):
+    # For testing issue #7356
+    a = None
+
+
+def issue_7356():
+    with numba.objmode(before="intp"):
+        DynClass.a = 100
+        before = DynClass.a
+    with numba.objmode(after="intp"):
+        after = DynClass.a
+    return before, after
+
+
+def check_main_class_reset_on_unpickle():
+    # Load module and get its global dictionary
+    glbs = runpy.run_module(
+        "numba.tests.cloudpickle_main_class",
+        run_name="__main__",
+    )
+    # Get the Klass and check it is from __main__
+    Klass = glbs['Klass']
+    assert Klass.__module__ == "__main__"
+    assert Klass.classvar != 100
+    saved = dumps(Klass)
+    # mutate
+    Klass.classvar = 100
+    # check
+    _check_dyn_class(Klass, saved)
+
+
+def check_unpickle_dyn_class_new_proc(saved):
+    Klass = loads(saved)
+    assert Klass.classvar != 100
+    # mutate
+    Klass.classvar = 100
+    # check
+    _check_dyn_class(Klass, saved)
+
+
+def _check_dyn_class(Klass, saved):
+    def check():
+        if Klass.classvar != 100:
+            raise AssertionError("Check failed. Klass reset.")
+
+    check()
+    loaded = loads(saved)
+    if loaded is not Klass:
+        raise AssertionError("Expected reuse")
+    # Without the patch, each `loads(saved)` will reset `Klass.classvar`
+    check()
+    loaded = loads(saved)
+    if loaded is not Klass:
+        raise AssertionError("Expected reuse")
+    check()
+
 
 if __name__ == '__main__':
     unittest.main()

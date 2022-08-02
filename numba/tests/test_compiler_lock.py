@@ -1,9 +1,9 @@
 import unittest
-from numba.compiler_lock import (
+from numba.core.compiler_lock import (
     global_compiler_lock,
     require_global_compiler_lock,
 )
-from .support import TestCase
+from numba.tests.support import TestCase
 
 
 class TestCompilerLock(TestCase):

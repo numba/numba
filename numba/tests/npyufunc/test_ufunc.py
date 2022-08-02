@@ -1,12 +1,10 @@
-from __future__ import absolute_import, print_function, division
-
 import numpy as np
 
-from numba import unittest_support as unittest
-from numba import float32, jit
-from numba.npyufunc import Vectorize
-from numba.errors import TypingError
-from ..support import tag, TestCase
+from numba import float32, jit, njit
+from numba.np.ufunc import Vectorize
+from numba.core.errors import TypingError
+from numba.tests.support import TestCase
+import unittest
 
 
 dtype = np.float32
@@ -71,7 +69,6 @@ class TestUFuncs(TestCase):
         info = (cls, a.shape)
         self.assertPreciseEqual(ufunc(a, b, c, d), a + b + c + d, msg=info)
 
-    @tag('important')
     def test_ufunc_attributes(self):
         for v in vectorizers: # 1D
             self._test_ufunc_attributes(v, a[0], b[0])
@@ -81,7 +78,6 @@ class TestUFuncs(TestCase):
             self._test_ufunc_attributes(v, a[:, np.newaxis, :],
                                         b[np.newaxis, :, :])
 
-    @tag('important')
     def test_broadcasting(self):
         for v in vectorizers: # 1D
             self._test_broadcasting(v, a[0], b[0], c[0], d[0])
@@ -91,7 +87,6 @@ class TestUFuncs(TestCase):
             self._test_broadcasting(v, a[:, np.newaxis, :], b[np.newaxis, :, :],
                                     c[:, np.newaxis, :], d[np.newaxis, :, :])
 
-    @tag('important')
     def test_implicit_broadcasting(self):
         for v in vectorizers:
             vectorizer = v(add)
@@ -121,6 +116,29 @@ class TestUFuncs(TestCase):
                 dec(test)(z)
 
             self.assertIn(msg, str(raises.exception))
+
+    def test_optional_type_handling(self):
+        # Tests ufunc compilation with Optional type
+
+        @njit
+        def inner(x, y):
+            if y > 2:
+                z = None
+            else:
+                z = np.ones(4)
+            return np.add(x, z)
+
+        # This causes `z` to be np.ones(4) at runtime, success
+        self.assertPreciseEqual(inner(np.arange(4), 1),
+                                np.arange(1, 5).astype(np.float64))
+
+        with self.assertRaises(TypeError) as raises:
+            # This causes `z` to be None at runtime, TypeError raised on the
+            # type cast of the Optional.
+            inner(np.arange(4), 3)
+
+        msg = "expected array(float64, 1d, C), got None"
+        self.assertIn(msg, str(raises.exception))
 
 
 if __name__ == '__main__':

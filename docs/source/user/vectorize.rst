@@ -1,6 +1,13 @@
 ==================================
-Creating Numpy universal functions
+Creating NumPy universal functions
 ==================================
+
+There are two types of universal functions:
+
+* Those which operate on scalars, these are "universal functions" or *ufuncs*
+  (see ``@vectorize`` below).
+* Those which operate on higher dimensional arrays and scalars, these are
+  "generalized universal functions" or *gufuncs* (``@guvectorize`` below).
 
 .. _vectorize:
 
@@ -23,7 +30,7 @@ loop (or *kernel*) allowing efficient iteration over the actual inputs.
 The :func:`~numba.vectorize` decorator has two modes of operation:
 
 * Eager, or decoration-time, compilation: If you pass one or more type
-  signatures to the decorator, you will be building a Numpy universal
+  signatures to the decorator, you will be building a NumPy universal
   function (ufunc).  The rest of this subsection describes building
   ufuncs using decoration-time compilation.
 
@@ -36,7 +43,7 @@ The :func:`~numba.vectorize` decorator has two modes of operation:
 
 As described above, if you pass a list of signatures to the
 :func:`~numba.vectorize` decorator, your function will be compiled
-into a Numpy ufunc.  In the basic case, only one signature will be
+into a NumPy ufunc.  In the basic case, only one signature will be
 passed::
 
    from numba import vectorize, float64
@@ -150,6 +157,11 @@ argument, which must be filled in by the function.  This is because the
 array is actually allocated by NumPy's dispatch mechanism, which calls into
 the Numba-generated code.
 
+Similar to :func:`~numba.vectorize` decorator, :func:`~numba.guvectorize`
+also has two modes of operation: Eager, or decoration-time compilation and
+lazy, or call-time compilation.
+
+
 Here is a very simple example::
 
    @guvectorize([(int64[:], int64, int64[:])], '(n),()->(n)')
@@ -203,6 +215,49 @@ complicated inputs, depending on their shapes::
    Use it to ensure the generated code does not fallback to
    :term:`object mode`.
 
+.. _overwriting-input-values:
+
+Overwriting input values
+------------------------
+
+In most cases, writing to inputs may also appear to work - however, this
+behaviour cannot be relied on. Consider the following example function::
+
+   @guvectorize([(float64[:], float64[:])], '()->()')
+   def init_values(invals, outvals):
+       invals[0] = 6.5
+       outvals[0] = 4.2
+
+Calling the `init_values` function with an array of `float64` type results in
+visible changes to the input::
+
+   >>> invals = np.zeros(shape=(3, 3), dtype=np.float64)
+   >>> outvals = init_values(invals)
+   >>> invals
+   array([[6.5, 6.5, 6.5],
+          [6.5, 6.5, 6.5],
+          [6.5, 6.5, 6.5]])
+   >>> outvals
+   array([[4.2, 4.2, 4.2],
+       [4.2, 4.2, 4.2],
+       [4.2, 4.2, 4.2]])
+
+This works because NumPy can pass the input data directly into the `init_values`
+function as the data `dtype` matches that of the declared argument.  However, it
+may also create and pass in a temporary array, in which case changes to the
+input are lost. For example, this can occur when casting is required. To
+demonstrate, we can  use an array of `float32` with the `init_values` function::
+
+   >>> invals = np.zeros(shape=(3, 3), dtype=np.float32)
+   >>> outvals = init_values(invals)
+   >>> invals
+   array([[0., 0., 0.],
+          [0., 0., 0.],
+          [0., 0., 0.]], dtype=float32)
+
+In this case, there is no change to the `invals` array because the temporary
+casted array was mutated instead.
+
 .. _dynamic-universal-functions:
 
 Dynamic universal functions
@@ -246,7 +301,7 @@ Let's try to make a call to :func:`f`::
    >>> f.types   # shorthand for f.ufunc.types
    ['ll->l']
 
-If this was a normal Numpy ufunc, we would have seen an exception
+If this was a normal NumPy ufunc, we would have seen an exception
 complaining that the ufunc couldn't handle the input types.  When we
 call :func:`f` with integer arguments, not only do we receive an
 answer, but we can verify that Numba created a loop supporting C
@@ -262,7 +317,7 @@ We can add additional loops by calling :func:`f` with different inputs::
 We can now verify that Numba added a second loop for dealing with
 floating-point inputs, :code:`"dd->d"`.
 
-If we mix input types to :func:`f`, we can verify that `Numpy ufunc
+If we mix input types to :func:`f`, we can verify that `NumPy ufunc
 casting rules`_ are still in effect::
 
    >>> f(1,2.)
@@ -270,10 +325,10 @@ casting rules`_ are still in effect::
    >>> f.types
    ['ll->l', 'dd->d']
 
-.. _`Numpy ufunc casting rules`: http://docs.scipy.org/doc/numpy/reference/ufuncs.html#casting-rules
+.. _`NumPy ufunc casting rules`: http://docs.scipy.org/doc/numpy/reference/ufuncs.html#casting-rules
 
 This example demonstrates that calling :func:`f` with mixed types
-caused Numpy to select the floating-point loop, and cast the integer
+caused NumPy to select the floating-point loop, and cast the integer
 argument to a floating-point value.  Thus, Numba did not create a
 special :code:`"dl->d"` kernel.
 
@@ -297,3 +352,72 @@ floating-point values.  For example::
 If you require precise support for various type signatures, you should
 specify them in the :func:`~numba.vectorize` decorator, and not rely
 on dynamic compilation.
+
+Dynamic generalized universal functions
+=======================================
+
+Similar to a dynamic universal function, if you do not specify any types to
+the :func:`~numba.guvectorize` decorator, your Python function will be used
+to build a dynamic generalized universal function, or :class:`~numba.GUFunc`.
+For example::
+
+   from numba import guvectorize
+
+   @guvectorize('(n),()->(n)')
+   def g(x, y, res):
+       for i in range(x.shape[0]):
+           res[i] = x[i] + y
+
+We can verify the resulting function :func:`g` is a :class:`~numba.GUFunc`
+instance that starts with no supported input types. For instance::
+
+   >>> g
+   <numba._GUFunc 'g'>
+   >>> g.ufunc
+   <ufunc 'g'>
+   >>> g.ufunc.types
+   []
+
+Similar to a :class:`~numba.DUFunc`, as one make calls to :func:`g()`,
+numba generates new kernels for previously unsupported input types. The
+following set of interpreter interactions will illustrate how dynamic
+compilation works for a :class:`~numba.GUFunc`::
+
+   >>> x = np.arange(5, dtype=np.int64)
+   >>> y = 10
+   >>> res = np.zeros_like(x)
+   >>> g(x, y, res)
+   >>> res
+   array([5, 6, 7, 8, 9])
+   >>> g.types
+   ['ll->l']
+
+If this was a normal :func:`guvectorize` function, we would have seen an
+exception complaining that the ufunc could not handle the given input types.
+When we call :func:`g()` with the input arguments, numba creates a new loop
+for the input types.
+
+We can add additional loops by calling :func:`g` with new arguments::
+
+   >>> x = np.arange(5, dtype=np.double)
+   >>> y = 2.2
+   >>> res = np.zeros_like(x)
+   >>> g(x, y, res)
+
+We can now verify that Numba added a second loop for dealing with
+floating-point inputs, :code:`"dd->d"`.
+
+   >>> g.types  # shorthand for g.ufunc.types
+   ['ll->l', 'dd->d']
+
+One can also verify that NumPy ufunc casting rules are working as expected::
+
+   >>> x = np.arange(5, dtype=np.int64)
+   >>> y = 2.2
+   >>> res = np.zeros_like(x)
+   >>> g(x, y, res)
+   >>> res
+
+If you need precise support for various type signatures, you should not rely on dynamic
+compilation and instead, specify the types them as first
+argument in the :func:`~numba.guvectorize` decorator.

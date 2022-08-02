@@ -1,14 +1,12 @@
-from __future__ import division
-
 from itertools import product, combinations_with_replacement
 
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba import jit, typeof
-from numba.compiler import compile_isolated
-from numba.numpy_support import version as np_version
-from .support import TestCase, MemoryLeakMixin, tag
+from numba.core.compiler import compile_isolated
+from numba.np.numpy_support import numpy_version
+from numba.tests.support import TestCase, MemoryLeakMixin, tag
+import unittest
 
 
 def array_all(arr):
@@ -131,6 +129,9 @@ def array_nanpercentile_global(arr, q):
 def array_ptp_global(a):
     return np.ptp(a)
 
+def array_ptp(a):
+    return a.ptp()
+
 def array_quantile_global(arr, q):
     return np.quantile(arr, q)
 
@@ -192,7 +193,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         super(TestArrayReductions, self).setUp()
         np.random.seed(42)
 
-    def check_reduction_basic(self, pyfunc, all_nans=True, **kwargs):
+    def check_reduction_basic(self, pyfunc, **kwargs):
         # Basic reduction checks on 1-d float64 arrays
         cfunc = jit(nopython=True)(pyfunc)
         def check(arr):
@@ -212,12 +213,12 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(arr)
         arr = np.float64(['nan', -1.5, 2.5, 'nan', 'inf', '-inf', 3.0])
         check(arr)
-        if all_nans:
-            # Only NaNs
-            arr = np.float64(['nan', 'nan'])
-            check(arr)
+        arr = np.float64([5.0, 'nan', -1.5, 'nan'])
+        check(arr)
+        # Only NaNs
+        arr = np.float64(['nan', 'nan'])
+        check(arr)
 
-    @tag('important')
     def test_all_basic(self, pyfunc=array_all):
         cfunc = jit(nopython=True)(pyfunc)
         def check(arr):
@@ -233,7 +234,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(arr)
         check(arr[::-1])
 
-    @tag('important')
     def test_any_basic(self, pyfunc=array_any):
         cfunc = jit(nopython=True)(pyfunc)
         def check(arr):
@@ -251,70 +251,48 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(arr)
         check(arr[::-1])
 
-    @tag('important')
     def test_sum_basic(self):
         self.check_reduction_basic(array_sum)
 
-    @tag('important')
     def test_mean_basic(self):
         self.check_reduction_basic(array_mean)
 
-    @tag('important')
     def test_var_basic(self):
         self.check_reduction_basic(array_var, prec='double')
 
-    @tag('important')
     def test_std_basic(self):
         self.check_reduction_basic(array_std)
 
-    @tag('important')
     def test_min_basic(self):
         self.check_reduction_basic(array_min)
 
-    @tag('important')
     def test_max_basic(self):
         self.check_reduction_basic(array_max)
 
-    @tag('important')
     def test_argmin_basic(self):
         self.check_reduction_basic(array_argmin)
 
-    @tag('important')
     def test_argmax_basic(self):
         self.check_reduction_basic(array_argmax)
 
-    @tag('important')
     def test_nanmin_basic(self):
         self.check_reduction_basic(array_nanmin)
 
-    @tag('important')
     def test_nanmax_basic(self):
         self.check_reduction_basic(array_nanmax)
 
-    @tag('important')
-    @unittest.skipUnless(np_version >= (1, 8), "nanmean needs Numpy 1.8+")
     def test_nanmean_basic(self):
         self.check_reduction_basic(array_nanmean)
 
-    @tag('important')
     def test_nansum_basic(self):
-        # Note Numpy < 1.9 has different behaviour for all NaNs:
-        # it returns Nan while later Numpy returns 0.
-        self.check_reduction_basic(array_nansum,
-                                   all_nans=np_version >= (1, 9))
+        self.check_reduction_basic(array_nansum)
 
-    @tag('important')
-    @unittest.skipUnless(np_version >= (1, 10), "nanprod needs Numpy 1.10+")
     def test_nanprod_basic(self):
         self.check_reduction_basic(array_nanprod)
 
-    @tag('important')
-    @unittest.skipUnless(np_version >= (1, 8), "nanstd needs Numpy 1.8+")
     def test_nanstd_basic(self):
         self.check_reduction_basic(array_nanstd)
 
-    @tag('important')
-    @unittest.skipUnless(np_version >= (1, 8), "nanvar needs Numpy 1.8+")
     def test_nanvar_basic(self):
         self.check_reduction_basic(array_nanvar, prec='double')
 
@@ -358,7 +336,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         a[:] = np.nan
         yield a
 
-    @tag('important')
     def test_median_basic(self):
         pyfunc = array_median_global
 
@@ -380,7 +357,14 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         def check(a, q, abs_tol=1e-12):
             expected = pyfunc(a, q)
             got = cfunc(a, q)
-            self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
+            # NOTE: inf/nan is not checked, seems to be susceptible to upstream
+            # changes
+            finite = np.isfinite(expected)
+            if np.all(finite):
+                self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
+            else:
+                self.assertPreciseEqual(got[finite], expected[finite],
+                                        abs_tol=abs_tol)
 
         a = self.random.randn(27).reshape(3, 3, 3)
         q = np.linspace(0, q_upper_bound, 14)[::-1]
@@ -438,7 +422,14 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         def check(a, q, abs_tol=1e-14):
             expected = pyfunc(a, q)
             got = cfunc(a, q)
-            self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
+            # NOTE: inf/nan is not checked, seems to be susceptible to upstream
+            # changes
+            finite = np.isfinite(expected)
+            if np.all(finite):
+                self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
+            else:
+                self.assertPreciseEqual(got[finite], expected[finite],
+                                        abs_tol=abs_tol)
 
         def convert_to_float_and_check(a, q, abs_tol=1e-14):
             expected = pyfunc(a, q).astype(np.float64)
@@ -467,13 +458,16 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         q = np.array(1)
         _check(a, q)
 
-        a = True
-        q = False
-        _check(a, q)
+        if numpy_version < (1, 20):
+            # NumPy 1.20+ rewrites the interpolation part of percentile/quantile
+            # to use np.subtract which doesn't support bools.
+            a = True
+            q = False
+            _check(a, q)
 
-        a = np.array([False, True, True])
-        q = a
-        _check(a, q)
+            a = np.array([False, True, True])
+            q = a
+            _check(a, q)
 
         a = 5
         q = q_upper_bound / 2
@@ -531,37 +525,30 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         self.assertIn('Not supported for complex dtype', str(e.exception))
 
-    @unittest.skipUnless(np_version >= (1, 10), "percentile needs Numpy 1.10+")
     def test_percentile_basic(self):
         pyfunc = array_percentile_global
         self.check_percentile_and_quantile(pyfunc, q_upper_bound=100)
         self.check_percentile_edge_cases(pyfunc, q_upper_bound=100)
         self.check_percentile_exceptions(pyfunc)
 
-    @unittest.skipUnless(np_version >= (1, 11),
-                         "nanpercentile needs Numpy 1.11+")
     def test_nanpercentile_basic(self):
         pyfunc = array_nanpercentile_global
         self.check_percentile_and_quantile(pyfunc, q_upper_bound=100)
         self.check_percentile_edge_cases(pyfunc, q_upper_bound=100)
         self.check_percentile_exceptions(pyfunc)
 
-    @unittest.skipUnless(np_version >= (1, 15), "quantile needs Numpy 1.15+")
     def test_quantile_basic(self):
         pyfunc = array_quantile_global
         self.check_percentile_and_quantile(pyfunc, q_upper_bound=1)
         self.check_percentile_edge_cases(pyfunc, q_upper_bound=1)
         self.check_quantile_exceptions(pyfunc)
 
-    @unittest.skipUnless(np_version >= (1, 15),
-                         "nanquantile needs Numpy 1.15+")
     def test_nanquantile_basic(self):
         pyfunc = array_nanquantile_global
         self.check_percentile_and_quantile(pyfunc, q_upper_bound=1)
         self.check_percentile_edge_cases(pyfunc, q_upper_bound=1)
         self.check_quantile_exceptions(pyfunc)
 
-    @unittest.skipUnless(np_version >= (1, 9), "nanmedian needs Numpy 1.9+")
     def test_nanmedian_basic(self):
         pyfunc = array_nanmedian_global
         self.check_median_basic(pyfunc, self._array_variations)
@@ -621,14 +608,12 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         expected, got = run_comparative(pyfunc, arr)
         self.assertPreciseEqual(got, expected)
 
-    @tag('important')
     def test_array_cumsum(self):
         self.check_cumulative(array_cumsum)
 
     def test_array_cumsum_global(self):
         self.check_cumulative(array_cumsum_global)
 
-    @tag('important')
     def test_array_cumprod(self):
         self.check_cumulative(array_cumprod)
 
@@ -662,7 +647,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_aggregation_magnitude(array_cumsum)
         self.check_aggregation_magnitude(array_cumsum_global)
 
-    @unittest.skipUnless(np_version >= (1, 12), "nancumsum needs Numpy 1.12+")
     def test_nancumsum_magnitude(self):
         self.check_aggregation_magnitude(array_nancumsum, is_prod=True)
 
@@ -674,7 +658,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_aggregation_magnitude(array_cumprod, is_prod=True)
         self.check_aggregation_magnitude(array_cumprod_global, is_prod=True)
 
-    @unittest.skipUnless(np_version >= (1, 12), "nancumprod needs Numpy 1.12+")
     def test_nancumprod_magnitude(self):
         self.check_aggregation_magnitude(array_nancumprod, is_prod=True)
 
@@ -703,8 +686,20 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         np.random.shuffle(arr)
         self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
         # Test with a NaT
-        arr[arr.size // 2] = 'NaT'
-        self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
+        if numpy_version != (1, 21) and 'median' not in pyfunc.__name__:
+            # There's problems with NaT handling in "median" on at least NumPy
+            # 1.21.{3, 4}. See https://github.com/numpy/numpy/issues/20376
+            arr[arr.size // 2] = 'NaT'
+            self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
+        if 'median' not in pyfunc.__name__:
+            # Test with (val, NaT)^N (and with the random NaT from above)
+            # use a loop, there's some weird thing/bug with arr[1::2] = 'NaT'
+
+            # Further Numba has bug(s) relating to NaN/NaT handling in anything
+            # using a partition such as np.median
+            for x in range(1, len(arr), 2):
+                arr[x] = 'NaT'
+            self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
         # Test with all NaTs
         arr.fill(arrty.dtype('NaT'))
         self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
@@ -780,12 +775,10 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         a = a.reshape(3, 3)
         check(a)
 
-    @unittest.skipUnless(np_version >= (1, 12), "nancumprod needs Numpy 1.12+")
     def test_nancumprod_basic(self):
         self.check_cumulative(array_nancumprod)
         self.check_nan_cumulative(array_nancumprod)
 
-    @unittest.skipUnless(np_version >= (1, 12), "nancumsum needs Numpy 1.12+")
     def test_nancumsum_basic(self):
         self.check_cumulative(array_nancumsum)
         self.check_nan_cumulative(array_nancumsum)
@@ -827,6 +820,17 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         for a in a_variations():
             check(a)
+
+    def test_ptp_method(self):
+        # checks wiring of np.ndarray.ptp() only, `np.ptp` test above checks
+        # the actual alg
+        pyfunc = array_ptp
+        cfunc = jit(nopython=True)(pyfunc)
+
+        a = np.arange(10)
+        expected = pyfunc(a)
+        got = cfunc(a)
+        self.assertPreciseEqual(expected, got)
 
     def test_ptp_complex(self):
         pyfunc = array_ptp_global
@@ -955,6 +959,150 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             for a in a_variations():
                 check(a)
 
+    def test_argmax_axis_1d_2d_4d(self):
+        arr1d = np.array([0, 20, 3, 4])
+        arr2d = np.arange(6).reshape(2, 3)
+        arr2d[0,1] += 100
+
+        arr4d = np.arange(120).reshape(2, 3, 4, 5) + 10
+        arr4d[0, 1, 1, 2] += 100
+        arr4d[1, 0, 0, 0] -= 51
+
+        for arr in [arr1d, arr2d, arr4d]:
+            axes = list(range(arr.ndim)) + [
+                -(i+1) for i in range(arr.ndim)
+            ]
+            py_functions = [
+                lambda a, _axis=axis: np.argmax(a, axis=_axis)
+                for axis in axes
+            ]
+            c_functions = [
+                jit(nopython=True)(pyfunc) for pyfunc in py_functions
+            ]
+            for cfunc in c_functions:
+                self.assertPreciseEqual(cfunc.py_func(arr), cfunc(arr))
+
+    def test_argmax_axis_out_of_range(self):
+        arr1d = np.arange(6)
+        arr2d = np.arange(6).reshape(2, 3)
+
+        @jit(nopython=True)
+        def jitargmax(arr, axis):
+            return np.argmax(arr, axis)
+
+        def assert_raises(arr, axis):
+            with self.assertRaisesRegex(ValueError, "axis.*out of bounds"):
+                jitargmax.py_func(arr, axis)
+            with self.assertRaisesRegex(ValueError, "axis.*out of bounds"):
+                jitargmax(arr, axis)
+
+        assert_raises(arr1d, 1)
+        assert_raises(arr1d, -2)
+        assert_raises(arr2d, -3)
+        assert_raises(arr2d, 2)
+
+    def test_argmax_axis_must_be_integer(self):
+        arr = np.arange(6)
+
+        @jit(nopython=True)
+        def jitargmax(arr, axis):
+            return np.argmax(arr, axis)
+
+        with self.assertTypingError() as e:
+            jitargmax(arr, "foo")
+        self.assertIn("axis must be an integer", str(e.exception))
+
+    def test_argmax_method_axis(self):
+        arr2d = np.arange(6).reshape(2, 3)
+
+        def argmax(arr):
+            return arr2d.argmax(axis=0)
+
+        self.assertPreciseEqual(argmax(arr2d),
+                                jit(nopython=True)(argmax)(arr2d))
+
+    def test_argmax_return_type(self):
+        # See issue #7853, return type should be intp not based on input type
+        arr2d = np.arange(6, dtype=np.uint8).reshape(2, 3)
+
+        def argmax(arr):
+            return arr2d.argmax(axis=0)
+
+        self.assertPreciseEqual(argmax(arr2d),
+                                jit(nopython=True)(argmax)(arr2d))
+
+    def test_argmin_axis_1d_2d_4d(self):
+        arr1d = np.array([0, 20, 3, 4])
+        arr2d = np.arange(6).reshape(2, 3)
+        arr2d[0,1] += 100
+
+        arr4d = np.arange(120).reshape(2, 3, 4, 5) + 10
+        arr4d[0, 1, 1, 2] += 100
+        arr4d[1, 0, 0, 0] -= 51
+
+        for arr in [arr1d, arr2d, arr4d]:
+            axes = list(range(arr.ndim)) + [
+                -(i+1) for i in range(arr.ndim)
+            ]
+            py_functions = [
+                lambda a, _axis=axis: np.argmin(a, axis=_axis)
+                for axis in axes
+            ]
+            c_functions = [
+                jit(nopython=True)(pyfunc) for pyfunc in py_functions
+            ]
+            for cfunc in c_functions:
+                self.assertPreciseEqual(cfunc.py_func(arr), cfunc(arr))
+
+    def test_argmin_axis_out_of_range(self):
+        arr1d = np.arange(6)
+        arr2d = np.arange(6).reshape(2, 3)
+
+        @jit(nopython=True)
+        def jitargmin(arr, axis):
+            return np.argmin(arr, axis)
+
+        def assert_raises(arr, axis):
+            with self.assertRaisesRegex(ValueError, "axis.*out of bounds"):
+                jitargmin.py_func(arr, axis)
+            with self.assertRaisesRegex(ValueError, "axis.*out of bounds"):
+                jitargmin(arr, axis)
+
+        assert_raises(arr1d, 1)
+        assert_raises(arr1d, -2)
+        assert_raises(arr2d, -3)
+        assert_raises(arr2d, 2)
+
+    def test_argmin_axis_must_be_integer(self):
+        arr = np.arange(6)
+
+        @jit(nopython=True)
+        def jitargmin(arr, axis):
+            return np.argmin(arr, axis)
+
+        with self.assertTypingError() as e:
+            jitargmin(arr, "foo")
+        self.assertIn("axis must be an integer", str(e.exception))
+
+    def test_argmin_method_axis(self):
+        arr2d = np.arange(6).reshape(2, 3)
+
+        def argmin(arr):
+            return arr2d.argmin(axis=0)
+
+        self.assertPreciseEqual(argmin(arr2d),
+                                jit(nopython=True)(argmin)(arr2d))
+
+    def test_argmin_return_type(self):
+        # See issue #7853, return type should be intp not based on input type
+        arr2d = np.arange(6, dtype=np.uint8).reshape(2, 3)
+
+        def argmin(arr):
+            return arr2d.argmin(axis=0)
+
+        self.assertPreciseEqual(argmin(arr2d),
+                                jit(nopython=True)(argmin)(arr2d))
+
     @classmethod
     def install_generated_tests(cls):
         # These form a testing product where each of the combinations are tested
@@ -978,10 +1126,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         reduction_funcs_rspace = [array_argmin, array_argmin_global,
                                   array_argmax, array_argmax_global]
 
-        if np_version >= (1, 8):
-            reduction_funcs += [array_nanmean, array_nanstd, array_nanvar]
-        if np_version >= (1, 10):
-            reduction_funcs += [array_nanprod]
+        reduction_funcs += [array_nanmean, array_nanstd, array_nanvar]
+        reduction_funcs += [array_nanprod]
 
         dtypes_to_test = [np.int32, np.float32, np.bool_, np.complex64]
 
@@ -1006,7 +1152,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                             # some architectures (power, 32bit) for complex input
                             ulps = 3
                         npr, nbr = run_comparative(redFunc, testArray)
-                        self.assertPreciseEqual(npr, nbr, msg=test_name,
+                        self.assertPreciseEqual(npr, nbr, msg=testName,
                                                 prec="single", ulps=ulps)
 
                     # Install it into the class

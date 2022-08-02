@@ -1,23 +1,15 @@
-from __future__ import print_function, absolute_import
-
 import numpy as np
 
+from collections import namedtuple
 from numba import vectorize
 from numba import cuda, int32, float32, float64
-from numba import unittest_support as unittest
 from numba.cuda.testing import skip_on_cudasim
 from numba.cuda.testing import CUDATestCase
-from numba import config
+import unittest
 
 sig = [int32(int32, int32),
        float32(float32, float32),
        float64(float64, float64)]
-
-
-target='cuda'
-if config.ENABLE_CUDASIM:
-    target='cpu'
-
 
 test_dtypes = np.float32, np.int32
 
@@ -28,7 +20,7 @@ class TestCUDAVectorize(CUDATestCase):
 
     def test_scalar(self):
 
-        @vectorize(sig, target=target)
+        @vectorize(sig, target='cuda')
         def vector_add(a, b):
             return a + b
 
@@ -39,7 +31,7 @@ class TestCUDAVectorize(CUDATestCase):
 
     def test_1d(self):
 
-        @vectorize(sig, target=target)
+        @vectorize(sig, target='cuda')
         def vector_add(a, b):
             return a + b
 
@@ -62,7 +54,7 @@ class TestCUDAVectorize(CUDATestCase):
 
     def test_1d_async(self):
 
-        @vectorize(sig, target=target)
+        @vectorize(sig, target='cuda')
         def vector_add(a, b):
             return a + b
 
@@ -91,7 +83,7 @@ class TestCUDAVectorize(CUDATestCase):
 
     def test_nd(self):
 
-        @vectorize(sig, target=target)
+        @vectorize(sig, target='cuda')
         def vector_add(a, b):
             return a + b
 
@@ -123,7 +115,7 @@ class TestCUDAVectorize(CUDATestCase):
         self.reduce_test2(2 ** 10 + 1)
 
     def test_output_arg(self):
-        @vectorize(sig, target=target)
+        @vectorize(sig, target='cuda')
         def vector_add(a, b):
             return a + b
 
@@ -134,7 +126,7 @@ class TestCUDAVectorize(CUDATestCase):
         self.assertTrue(np.allclose(A + B, C))
 
     def reduce_test(self, n):
-        @vectorize(sig, target=target)
+        @vectorize(sig, target='cuda')
         def vector_add(a, b):
             return a + b
 
@@ -146,7 +138,7 @@ class TestCUDAVectorize(CUDATestCase):
 
     def reduce_test2(self, n):
 
-        @vectorize(sig, target=target)
+        @vectorize(sig, target='cuda')
         def vector_add(a, b):
             return a + b
 
@@ -160,7 +152,7 @@ class TestCUDAVectorize(CUDATestCase):
         self.assertEqual(result, gold)
 
     def test_auto_transfer(self):
-        @vectorize(sig, target=target)
+        @vectorize(sig, target='cuda')
         def vector_add(a, b):
             return a + b
 
@@ -173,7 +165,7 @@ class TestCUDAVectorize(CUDATestCase):
         np.testing.assert_equal(y, x + x)
 
     def test_ufunc_output_ravel(self):
-        @vectorize(sig, target=target)
+        @vectorize(sig, target='cuda')
         def vector_add(a, b):
             return a + b
 
@@ -187,6 +179,47 @@ class TestCUDAVectorize(CUDATestCase):
         got = dx.copy_to_host()
         expect = x + x
         np.testing.assert_equal(got, expect)
+
+    def check_tuple_arg(self, a, b):
+        @vectorize(sig, target='cuda')
+        def vector_add(a, b):
+            return a + b
+
+        r = vector_add(a, b)
+        np.testing.assert_equal(np.asarray(a) + np.asarray(b), r)
+
+    def test_tuple_arg(self):
+        a = (1.0, 2.0, 3.0)
+        b = (4.0, 5.0, 6.0)
+        self.check_tuple_arg(a, b)
+
+    def test_namedtuple_arg(self):
+        Point = namedtuple('Point', ('x', 'y', 'z'))
+        a = Point(x=1.0, y=2.0, z=3.0)
+        b = Point(x=4.0, y=5.0, z=6.0)
+        self.check_tuple_arg(a, b)
+
+    def test_tuple_of_array_arg(self):
+        arr = np.arange(10, dtype=np.int32)
+        a = (arr, arr + 1)
+        b = (arr + 2, arr + 2)
+        self.check_tuple_arg(a, b)
+
+    def test_tuple_of_namedtuple_arg(self):
+        Point = namedtuple('Point', ('x', 'y', 'z'))
+        a = (Point(x=1.0, y=2.0, z=3.0), Point(x=1.5, y=2.5, z=3.5))
+        b = (Point(x=4.0, y=5.0, z=6.0), Point(x=4.5, y=5.5, z=6.5))
+        self.check_tuple_arg(a, b)
+
+    def test_namedtuple_of_array_arg(self):
+        xs1 = np.arange(10, dtype=np.int32)
+        ys1 = xs1 + 2
+        xs2 = np.arange(10, dtype=np.int32) * 2
+        ys2 = xs2 + 1
+        Points = namedtuple('Points', ('xs', 'ys'))
+        a = Points(xs=xs1, ys=ys1)
+        b = Points(xs=xs2, ys=ys2)
+        self.check_tuple_arg(a, b)
 
 
 if __name__ == '__main__':

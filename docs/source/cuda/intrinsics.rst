@@ -2,10 +2,8 @@
 Supported Atomic Operations
 ===========================
 
-Numba provides access to some of the atomic operations supported in CUDA, in the
-:class:`numba.cuda.atomic` class.
-
-Those that are presently implemented are as follows:
+Numba provides access to some of the atomic operations supported in CUDA. Those
+that are presently implemented are as follows:
 
 .. automodule:: numba.cuda
     :members: atomic

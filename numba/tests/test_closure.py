@@ -1,14 +1,12 @@
-from __future__ import print_function
-
 # import numpy in two ways, both uses needed
 import numpy as np
 import numpy
 
-import numba.unittest_support as unittest
-from numba import njit, jit, testing, utils
-from numba.errors import TypingError, UnsupportedError
-from .support import TestCase, tag
-from numba.six import exec_
+import unittest
+from numba import njit, jit
+from numba.core.errors import TypingError, UnsupportedError
+from numba.core import ir
+from numba.tests.support import TestCase, IRPreservingTestPipeline
 
 
 class TestClosure(TestCase):
@@ -95,19 +93,6 @@ class TestClosure(TestCase):
     def test_jit_inner_function_npm(self):
         self.run_jit_inner_function(nopython=True)
 
-    @testing.allow_interpreter_mode
-    def test_return_closure(self):
-
-        def outer(x):
-
-            def inner():
-                return x + 1
-
-            return inner
-
-        cfunc = jit(outer)
-        self.assertEqual(cfunc(10)(), outer(10)())
-
 
 class TestInlinedClosure(TestCase):
     """
@@ -116,7 +101,6 @@ class TestInlinedClosure(TestCase):
     at compile time.
     """
 
-    @tag('important')
     def test_inner_function(self):
 
         def outer(x):
@@ -129,7 +113,6 @@ class TestInlinedClosure(TestCase):
         cfunc = njit(outer)
         self.assertEqual(cfunc(10), outer(10))
 
-    @tag('important')
     def test_inner_function_with_closure(self):
 
         def outer(x):
@@ -143,7 +126,6 @@ class TestInlinedClosure(TestCase):
         cfunc = njit(outer)
         self.assertEqual(cfunc(10), outer(10))
 
-    @tag('important')
     def test_inner_function_with_closure_2(self):
 
         def outer(x):
@@ -158,7 +140,6 @@ class TestInlinedClosure(TestCase):
         cfunc = njit(outer)
         self.assertEqual(cfunc(10), outer(10))
 
-    @unittest.skipIf(utils.PYVERSION < (3, 0), "needs Python 3")
     def test_inner_function_with_closure_3(self):
 
         code = """
@@ -174,12 +155,11 @@ class TestInlinedClosure(TestCase):
                 return inner(x) + inner(x) + z
         """
         ns = {}
-        exec_(code.strip(), ns)
+        exec(code.strip(), ns)
 
         cfunc = njit(ns['outer'])
         self.assertEqual(cfunc(10), ns['outer'](10))
 
-    @tag('important')
     def test_inner_function_nested(self):
 
         def outer(x):
@@ -199,7 +179,6 @@ class TestInlinedClosure(TestCase):
         cfunc = njit(outer)
         self.assertEqual(cfunc(10), outer(10))
 
-    @tag('important')
     def test_bulk_use_cases(self):
         """ Tests the large number of use cases defined below """
 
@@ -386,7 +365,7 @@ class TestInlinedClosure(TestCase):
             return inner2(inner, x)
 
         def outer20(x):
-            #""" Test calling numpy in closure """
+            """ Test calling numpy in closure """
             z = x + 1
 
             def inner(x):
@@ -394,12 +373,19 @@ class TestInlinedClosure(TestCase):
             return inner(x)
 
         def outer21(x):
-            #""" Test calling numpy import as in closure """
+            """ Test calling numpy import as in closure """
             z = x + 1
 
             def inner(x):
                 return x + np.cos(z)
             return inner(x)
+
+        def outer22():
+            """Test to ensure that unsupported *args raises correctly"""
+            def bar(a, b):
+                pass
+            x = 1, 2
+            bar(*x)
 
         # functions to test that are expected to pass
         f = [outer1, outer2, outer5, outer6, outer7, outer8,
@@ -447,6 +433,46 @@ class TestInlinedClosure(TestCase):
         msg = "The use of yield in a closure is unsupported."
         self.assertIn(msg, str(raises.exception))
 
+        with self.assertRaises(UnsupportedError) as raises:
+            cfunc = jit(nopython=True)(outer22)
+            cfunc()
+        msg = "Calling a closure with *args is unsupported."
+        self.assertIn(msg, str(raises.exception))
+
+    def test_closure_renaming_scheme(self):
+        # See #7380, this checks that inlined (from closure) variables have a
+        # name derived from the function they were defined in.
+
+        @njit(pipeline_class=IRPreservingTestPipeline)
+        def foo(a, b):
+            def bar(z):
+                x = 5
+                y = 10
+                return x + y + z
+            return bar(a), bar(b)
+
+        self.assertEqual(foo(10, 20), (25, 35))
+
+        # check IR. Look for the `x = 5`... there should be
+        # Two lots of `const(int, 5)`, one for each inline
+        # The LHS of the assignment will have a name like:
+        # closure__locals__bar_v2_x
+        # Ensure that this is the case!
+        func_ir = foo.overloads[foo.signatures[0]].metadata['preserved_ir']
+        store = []
+        for blk in func_ir.blocks.values():
+            for stmt in blk.body:
+                if isinstance(stmt, ir.Assign):
+                    if isinstance(stmt.value, ir.Const):
+                        if stmt.value.value == 5:
+                            store.append(stmt)
+
+        self.assertEqual(len(store), 2)
+        for i in store:
+            name = i.target.name
+            regex = r'closure__locals__bar_v[0-9]+.x'
+            self.assertRegex(name, regex)
+
 
 class TestObjmodeFallback(TestCase):
     # These are all based on tests from real life issues where, predominantly,
@@ -466,7 +492,7 @@ class TestObjmodeFallback(TestCase):
                 [set(np.argwhere(coxv == x).flatten()) for x in groups]
 
         x = np.random.random((10, 10))
-        y = np.abs((np.random.randn(10, 10) * 1.732)).astype(np.int)
+        y = np.abs((np.random.randn(10, 10) * 1.732)).astype(int)
         for d in self.decorators:
             d(numbaFailure)(x, y)
 

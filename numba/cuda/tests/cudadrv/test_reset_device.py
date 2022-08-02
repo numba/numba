@@ -1,16 +1,11 @@
-from __future__ import print_function, absolute_import, division
 import threading
 from numba import cuda
 from numba.cuda.cudadrv.driver import driver
-from numba.cuda.testing import unittest, CUDATestCase
-
-try:
-    from Queue import Queue  # Python 2
-except:
-    from queue import Queue  # Python 3
+from numba.cuda.testing import unittest, ContextResettingTestCase
+from queue import Queue
 
 
-class TestResetDevice(CUDATestCase):
+class TestResetDevice(ContextResettingTestCase):
     def test_reset_device(self):
 
         def newthread(exception_queue):

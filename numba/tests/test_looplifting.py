@@ -1,19 +1,32 @@
-from __future__ import print_function, division, absolute_import
-
+from io import StringIO
 import numpy as np
 
-from numba import types, utils
-from numba import unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from .support import TestCase, tag, MemoryLeakMixin
+from numba.core import types
+from numba.core.compiler import compile_extra, Flags
+from numba.tests.support import TestCase, tag, MemoryLeakMixin
+import unittest
 
 
 looplift_flags = Flags()
-looplift_flags.set("enable_pyobject")
-looplift_flags.set("enable_looplift")
+looplift_flags.enable_pyobject = True
+looplift_flags.enable_looplift = True
 
 pyobject_looplift_flags = looplift_flags.copy()
-pyobject_looplift_flags.set("enable_pyobject_looplift")
+pyobject_looplift_flags.enable_pyobject_looplift = True
+
+
+def compile_isolated(pyfunc, argtypes, **kwargs):
+    from numba.core.registry import cpu_target
+
+    kwargs.setdefault('return_type', None)
+    kwargs.setdefault('locals', {})
+    return compile_extra(
+        cpu_target.typing_context,
+        cpu_target.target_context,
+        pyfunc,
+        argtypes,
+        **kwargs,
+    )
 
 
 def lift1(x):
@@ -120,8 +133,14 @@ def reject_npm1(x):
 class TestLoopLifting(MemoryLeakMixin, TestCase):
 
     def try_lift(self, pyfunc, argtypes):
-        cres = compile_isolated(pyfunc, argtypes,
-                                flags=looplift_flags)
+        from numba.core.registry import cpu_target
+
+        cres = compile_extra(
+            cpu_target.typing_context,
+            cpu_target.target_context,
+            pyfunc, argtypes,
+            return_type=None, flags=looplift_flags, locals={},
+        )
         # One lifted loop
         self.assertEqual(len(cres.lifted), 1)
         return cres
@@ -204,7 +223,6 @@ class TestLoopLifting(MemoryLeakMixin, TestCase):
     def test_lift3(self):
         self.check_lift_ok(lift3, (types.intp,), (123,))
 
-    @tag('important')
     def test_lift4(self):
         self.check_lift_ok(lift4, (types.intp,), (123,))
 
@@ -212,9 +230,8 @@ class TestLoopLifting(MemoryLeakMixin, TestCase):
         self.check_lift_ok(lift5, (types.intp,), (123,))
 
     def test_lift_issue2561(self):
-        self.check_no_lift(lift_issue2561, (), ())
+        self.check_lift_ok(lift_issue2561, (), ())
 
-    @tag('important')
     def test_lift_gen1(self):
         self.check_lift_generator_ok(lift_gen1, (types.intp,), (123,))
 
@@ -256,7 +273,7 @@ class TestLoopLiftingAnnotate(TestCase):
         r = cfoo(x)
         np.testing.assert_equal(r, xcopy + 1)
 
-        buf = utils.StringIO()
+        buf = StringIO()
         cfoo.inspect_types(file=buf)
         annotation = buf.getvalue()
         buf.close()
@@ -293,7 +310,7 @@ class TestLoopLiftingAnnotate(TestCase):
         r = cfoo(x)
         np.testing.assert_equal(r, (xcopy + 1) * 2)
 
-        buf = utils.StringIO()
+        buf = StringIO()
         cfoo.inspect_types(file=buf)
         annotation = buf.getvalue()
         buf.close()

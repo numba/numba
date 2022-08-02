@@ -1,19 +1,20 @@
-from __future__ import print_function, division, absolute_import
-
 import collections
 import itertools
 
 import numpy as np
 
-from numba import unittest_support as unittest
-from numba.compiler import compile_isolated
-from numba import njit, jit, types, errors, utils
-from .support import TestCase, MemoryLeakMixin, tag
+from numba.core.compiler import compile_isolated
+from numba import njit, jit, typeof, literally
+from numba.core import types, errors, utils
+from numba.tests.support import TestCase, MemoryLeakMixin, tag
+import unittest
 
 
 Rect = collections.namedtuple('Rect', ('width', 'height'))
 
 Point = collections.namedtuple('Point', ('x', 'y', 'z'))
+
+Point2 = collections.namedtuple('Point2', ('x', 'y', 'z'))
 
 Empty = collections.namedtuple('Empty', ())
 
@@ -143,7 +144,6 @@ class TestTupleTypeNotIterable(unittest.TestCase):
 
 class TestTupleReturn(TestCase):
 
-    @tag('important')
     def test_array_tuple(self):
         aryty = types.Array(types.float64, 1, 'C')
         cres = compile_isolated(tuple_return_usecase, (aryty, aryty))
@@ -162,7 +162,6 @@ class TestTupleReturn(TestCase):
         self.assertEqual(ra, a)
         self.assertEqual(rb, b)
 
-    @tag('important')
     def test_hetero_tuple(self):
         alltypes = []
         allvalues = []
@@ -184,7 +183,6 @@ class TestTupleReturn(TestCase):
 
 class TestTuplePassing(TestCase):
 
-    @tag('important')
     def test_unituple(self):
         tuple_type = types.UniTuple(types.int32, 2)
         cr_first = compile_isolated(tuple_first, (tuple_type,))
@@ -192,7 +190,6 @@ class TestTuplePassing(TestCase):
         self.assertPreciseEqual(cr_first.entry_point((4, 5)), 4)
         self.assertPreciseEqual(cr_second.entry_point((4, 5)), 5)
 
-    @tag('important')
     def test_hetero_tuple(self):
         tuple_type = types.Tuple((types.int64, types.float32))
         cr_first = compile_isolated(tuple_first, (tuple_type,))
@@ -212,7 +209,6 @@ class TestTuplePassing(TestCase):
 
 class TestOperations(TestCase):
 
-    @tag('important')
     def test_len(self):
         pyfunc = len_usecase
         cr = compile_isolated(pyfunc,
@@ -222,7 +218,17 @@ class TestOperations(TestCase):
                               [types.UniTuple(types.int64, 3)])
         self.assertPreciseEqual(cr.entry_point((4, 5, 6)), 3)
 
-    @tag('important')
+    def test_index_literal(self):
+        # issue #6023, test non-static getitem with IntegerLiteral index
+        def pyfunc(tup, idx):
+            idx = literally(idx)
+            return tup[idx]
+        cfunc = njit(pyfunc)
+
+        tup = (4, 3.1, 'sss')
+        for i in range(len(tup)):
+            self.assertPreciseEqual(cfunc(tup, i), tup[i])
+
     def test_index(self):
         pyfunc = tuple_index
         cr = compile_isolated(pyfunc,
@@ -273,9 +279,8 @@ class TestOperations(TestCase):
         with self.assertTypingError() as raises:
             cr = compile_isolated(pyfunc, ())
         msg = ("Cannot infer the type of variable 'c', have imprecise type: "
-               "list(undefined).")
+               "list(undefined)<iv=None>.")
         self.assertIn(msg, str(raises.exception))
-
 
     def test_in(self):
         pyfunc = in_usecase
@@ -284,6 +289,10 @@ class TestOperations(TestCase):
         tup = (4, 1, 5)
         for i in range(5):
             self.assertPreciseEqual(cr.entry_point(i, tup), pyfunc(i, tup))
+
+        # Test the empty case
+        cr = compile_isolated(pyfunc, [types.int64, types.Tuple([])])
+        self.assertPreciseEqual(cr.entry_point(1, ()), pyfunc(1, ()))
 
     def check_slice(self, pyfunc):
         tup = (4, 5, 6, 7)
@@ -315,7 +324,6 @@ class TestOperations(TestCase):
                               [types.Tuple(())])
         self.assertPreciseEqual(cr.entry_point(()), pyfunc(()))
 
-    @tag('important')
     def test_add(self):
         pyfunc = add_usecase
         samples = [(types.Tuple(()), ()),
@@ -355,27 +363,21 @@ class TestOperations(TestCase):
                      ((4, 5), (4, 6, 7))]:
             eq(pyfunc, cfunc, args)
 
-    @tag('important')
     def test_eq(self):
         self._test_compare(eq_usecase)
 
-    @tag('important')
     def test_ne(self):
         self._test_compare(ne_usecase)
 
-    @tag('important')
     def test_gt(self):
         self._test_compare(gt_usecase)
 
-    @tag('important')
     def test_ge(self):
         self._test_compare(ge_usecase)
 
-    @tag('important')
     def test_lt(self):
         self._test_compare(lt_usecase)
 
-    @tag('important')
     def test_le(self):
         self._test_compare(le_usecase)
 
@@ -450,11 +452,9 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
                      ((4, 5), (4, 6, 7))]:
             eq(pyfunc, cfunc, (Rect(*a), Point(*b)))
 
-    @tag('important')
     def test_eq(self):
         self._test_compare(eq_usecase)
 
-    @tag('important')
     def test_ne(self):
         self._test_compare(ne_usecase)
 
@@ -470,7 +470,6 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
     def test_le(self):
         self._test_compare(le_usecase)
 
-    @tag('important')
     def test_getattr(self):
         pyfunc = getattr_usecase
         cfunc = jit(nopython=True)(pyfunc)
@@ -479,7 +478,6 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
             p = Point(*args)
             self.assertPreciseEqual(cfunc(p), pyfunc(p))
 
-    @tag('important')
     def test_construct(self):
         def check(pyfunc):
             cfunc = jit(nopython=True)(pyfunc)
@@ -528,7 +526,6 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
         r = call(123, 0)
         self.assertEqual(r, Rect(width=123, height=-321))
 
-    @unittest.skipIf(utils.PYVERSION < (3, 0), "needs Python 3")
     def test_string_literal_in_ctor(self):
         # Test for issue #3813
 
@@ -538,6 +535,32 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
 
         r = foo()
         self.assertEqual(r, Rect(width=10, height='somestring'))
+
+    def test_dispatcher_mistreat(self):
+        # Test for issue #5215 that mistreat namedtuple as tuples
+        @jit(nopython=True)
+        def foo(x):
+            return x
+
+        in1 = (1, 2,  3)
+        out1 = foo(in1)
+        self.assertEqual(in1, out1)
+
+        in2 = Point(1, 2, 3)
+        out2 = foo(in2)
+        self.assertEqual(in2, out2)
+
+        # Check the signatures
+        self.assertEqual(len(foo.nopython_signatures), 2)
+        self.assertEqual(foo.nopython_signatures[0].args[0], typeof(in1))
+        self.assertEqual(foo.nopython_signatures[1].args[0], typeof(in2))
+
+        # Differently named
+        in3 = Point2(1, 2, 3)
+        out3 = foo(in3)
+        self.assertEqual(in3, out3)
+        self.assertEqual(len(foo.nopython_signatures), 3)
+        self.assertEqual(foo.nopython_signatures[2].args[0], typeof(in3))
 
 
 class TestTupleNRT(TestCase, MemoryLeakMixin):
@@ -611,11 +634,9 @@ class TestMethods(TestCase):
 
 class TestTupleBuild(TestCase):
 
-    @unittest.skipIf(utils.PYVERSION < (3, 0), "needs Python 3")
     def test_build_unpack(self):
         def check(p):
-            # using eval here since Python 2 doesn't even support the syntax
-            pyfunc = eval("lambda a: (1, *a)")
+            pyfunc = lambda a: (1, *a)
             cfunc = jit(nopython=True)(pyfunc)
             self.assertPreciseEqual(cfunc(p), pyfunc(p))
 
@@ -624,12 +645,46 @@ class TestTupleBuild(TestCase):
         # Heterogeneous
         check((4, 5.5))
 
+    def test_build_unpack_assign_like(self):
+        # see #6534
+        def check(p):
+            pyfunc = lambda a: (*a,)
+            cfunc = jit(nopython=True)(pyfunc)
+            self.assertPreciseEqual(cfunc(p), pyfunc(p))
 
-    @unittest.skipIf(utils.PYVERSION < (3, 0), "needs Python 3")
+        # Homogeneous
+        check((4, 5))
+        # Heterogeneous
+        check((4, 5.5))
+
+    def test_build_unpack_fail_on_list_assign_like(self):
+        # see #6534
+        def check(p):
+            pyfunc = lambda a: (*a,)
+            cfunc = jit(nopython=True)(pyfunc)
+            self.assertPreciseEqual(cfunc(p), pyfunc(p))
+
+        with self.assertRaises(errors.TypingError) as raises:
+            check([4, 5])
+
+        if utils.PYVERSION > (3, 8):
+            # Python 3.9 has a peephole rewrite due to large changes in tuple
+            # unpacking. It results in a tuple + list situation from the above
+            # so the error message reflects that. Catching this specific and
+            # seemingly rare sequence in the peephole rewrite is prohibitively
+            # hard. Should it be reported numerous times, revisit then.
+            msg1 = "No implementation of function"
+            self.assertIn(msg1, str(raises.exception))
+            msg2 = "tuple(reflected list(" # ignore the rest of reflected list
+                                           # part, it's repr is quite volatile.
+            self.assertIn(msg2, str(raises.exception))
+        else:
+            msg = "Only tuples are supported when unpacking a single item"
+            self.assertIn(msg, str(raises.exception))
+
     def test_build_unpack_more(self):
         def check(p):
-            # using eval here since Python 2 doesn't even support the syntax
-            pyfunc = eval("lambda a: (1, *a, (1, 2), *a)")
+            pyfunc = lambda a: (1, *a, (1, 2), *a)
             cfunc = jit(nopython=True)(pyfunc)
             self.assertPreciseEqual(cfunc(p), pyfunc(p))
 
@@ -638,15 +693,12 @@ class TestTupleBuild(TestCase):
         # Heterogeneous
         check((4, 5.5))
 
-
-    @unittest.skipIf(utils.PYVERSION < (3, 0), "needs Python 3")
     def test_build_unpack_call(self):
         def check(p):
-            # using eval here since Python 2 doesn't even support the syntax
             @jit
             def inner(*args):
                 return args
-            pyfunc = eval("lambda a: inner(1, *a)", locals())
+            pyfunc = lambda a: inner(1, *a)
             cfunc = jit(nopython=True)(pyfunc)
             self.assertPreciseEqual(cfunc(p), pyfunc(p))
 
@@ -655,14 +707,12 @@ class TestTupleBuild(TestCase):
         # Heterogeneous
         check((4, 5.5))
 
-    @unittest.skipIf(utils.PYVERSION < (3, 6), "needs Python 3.6+")
     def test_build_unpack_call_more(self):
         def check(p):
-            # using eval here since Python 2 doesn't even support the syntax
             @jit
             def inner(*args):
                 return args
-            pyfunc = eval("lambda a: inner(1, *a, *(1, 2), *a)", locals())
+            pyfunc = lambda a: inner(1, *a, *(1, 2), *a)
             cfunc = jit(nopython=True)(pyfunc)
             self.assertPreciseEqual(cfunc(p), pyfunc(p))
 
@@ -683,6 +733,44 @@ class TestTupleBuild(TestCase):
         # Heterogeneous
         check(lambda a: tuple(a), (4, 5.5))
 
+    @unittest.skipIf(utils.PYVERSION < (3, 9), "needs Python 3.9+")
+    def test_unpack_with_predicate_fails(self):
+        # this fails as the list_to_tuple/list_extend peephole bytecode
+        # rewriting needed for Python 3.9+ cannot yet traverse the CFG.
+        @njit
+        def foo():
+            a = (1,)
+            b = (3,2,  4)
+            return (*(b if a[0] else (5, 6)),)
+
+        with self.assertRaises(errors.UnsupportedError) as raises:
+            foo()
+        msg = "op_LIST_EXTEND at the start of a block"
+        self.assertIn(msg, str(raises.exception))
+
+    def test_build_unpack_with_calls_in_unpack(self):
+        def check(p):
+            def pyfunc(a):
+                z = [1, 2]
+                return (*a, z.append(3), z.extend(a), np.ones(3)), z
+
+            cfunc = jit(nopython=True)(pyfunc)
+            self.assertPreciseEqual(cfunc(p), pyfunc(p))
+
+        check((4, 5))
+
+    def test_build_unpack_complicated(self):
+        def check(p):
+            def pyfunc(a):
+                z = [1, 2]
+                return (*a, *(*a, a), *(a, (*(a, (1, 2), *(3,), *a),
+                        (a, 1, (2, 3), *a, 1), (1,))),
+                        *(z.append(4), z.extend(a))), z
+
+            cfunc = jit(nopython=True)(pyfunc)
+            self.assertPreciseEqual(cfunc(p), pyfunc(p))
+
+        check((10, 20))
 
 
 if __name__ == '__main__':

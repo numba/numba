@@ -5,16 +5,18 @@ Installation
 Compatibility
 -------------
 
-Numba is compatible with Python 3.6 or later, and Numpy versions 1.15 or later.
+Numba is compatible with Python 3.7--3.10, and Numpy versions 1.18 or later.
 
 Our supported platforms are:
 
 * Linux x86 (32-bit and 64-bit)
-* Linux ppcle64 (POWER8)
+* Linux ppcle64 (POWER8, POWER9)
 * Windows 7 and later (32-bit and 64-bit)
-* OS X 10.9 and later (64-bit)
-* NVIDIA GPUs of compute capability 2.0 and later
-* AMD ROC dGPUs (linux only and not for AMD Carrizo or Kaveri APU)
+* OS X 10.9 and later (64-bit and unofficial support on M1/Arm64)
+* \*BSD (unofficial support only)
+* NVIDIA GPUs of compute capability 5.3 and later
+
+  * Compute capabilities 3.5 - 5.2 are supported, but deprecated.
 * ARMv7 (32-bit little-endian, such as Raspberry Pi 2 and 3)
 * ARMv8 (64-bit little-endian, such as the NVIDIA Jetson)
 
@@ -68,22 +70,6 @@ To use CUDA with Numba installed by `pip`, you need to install the `CUDA SDK
 :ref:`cudatoolkit-lookup` for details. Numba can also detect CUDA libraries
 installed system-wide on Linux.
 
-Enabling AMD ROCm GPU Support
------------------------------
-
-The `ROCm Platform <https://rocm.github.io/>`_ allows GPU computing with AMD
-GPUs on Linux.  To enable ROCm support in Numba,  conda is required, so begin
-with an Anaconda or Miniconda installation with Numba 0.40 or later installed.
-Then:
-
-1. Follow the `ROCm installation instructions <https://rocm.github.io/install.html>`_.
-2. Install ``roctools`` conda package from the ``numba`` channel::
-
-    $ conda install -c numba roctools
-
-See the `roc-examples <https://github.com/numba/roc-examples>`_ repository for
-sample notebooks.
-
 
 .. _numba-install-armv7:
 
@@ -115,13 +101,8 @@ Raspberry Pi CPU is 64-bit, Raspbian runs it in 32-bit mode, so look at
 Conda-forge support for AArch64 is still quite experimental and packages are limited,
 but it does work enough for Numba to build and pass tests.  To set up the environment:
 
-* Install `conda4aarch64 <https://github.com/jjhelmus/conda4aarch64/releases>`_.
+* Install `miniforge <https://github.com/conda-forge/miniforge>`_.
   This will create a minimal conda environment.
-* Add the ``c4aarch64`` and ``conda-forge`` channels to your conda
-  configuration::
-
-    $ conda config --add channels c4aarch64
-    $ conda config --add channels conda-forge
 
 * Then you can install Numba from the ``numba`` channel::
 
@@ -161,6 +142,7 @@ Source archives of the latest release can also be found on
   * Linux ``ARM``: no conda packages, use the system compiler
   * Mac OSX: ``clang_osx-64`` and ``clangxx_osx-64`` or the system compiler at
     ``/usr/bin/clang`` (Mojave onwards)
+  * Mac OSX (M1): ``clang_osx-arm64`` and ``clangxx_osx-arm64``
   * Windows: a version of Visual Studio appropriate for the Python version in
     use
 
@@ -170,6 +152,37 @@ Then you can build and install Numba from the top level of the source tree::
 
     $ python setup.py install
 
+.. _numba-source-install-env_vars:
+
+Build time environment variables and configuration of optional components
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Below are environment variables that are applicable to altering how Numba would
+otherwise build by default along with information on configuration options.
+
+.. envvar:: NUMBA_DISABLE_OPENMP (default: not set)
+
+  To disable compilation of the OpenMP threading backend set this environment
+  variable to a non-empty string when building. If not set (default):
+
+  * For Linux and Windows it is necessary to provide OpenMP C headers and
+    runtime  libraries compatible with the compiler tool chain mentioned above,
+    and for these to be accessible to the compiler via standard flags.
+  * For OSX the conda package ``llvm-openmp`` provides suitable C headers and
+    libraries. If the compilation requirements are not met the OpenMP threading
+    backend will not be compiled.
+
+.. envvar:: NUMBA_DISABLE_TBB (default: not set)
+
+  To disable the compilation of the TBB threading backend set this environment
+  variable to a non-empty string when building. If not set (default) the TBB C
+  headers and libraries must be available at compile time. If building with
+  ``conda build`` this requirement can be met by installing the ``tbb-devel``
+  package. If not building with ``conda build`` the requirement can be met via a
+  system installation of TBB or through the use of the ``TBBROOT`` environment
+  variable to provide the location of the TBB installation. For more
+  information about setting ``TBBROOT`` see the `Intel documentation <https://software.intel.com/content/www/us/en/develop/documentation/advisor-user-guide/top/appendix/adding-parallelism-to-your-program/adding-the-parallel-framework-to-your-build-environment/defining-the-tbbroot-environment-variable.html>`_.
+
 .. _numba-source-install-check:
 
 Dependency List
@@ -177,7 +190,7 @@ Dependency List
 
 Numba has numerous required and optional dependencies which additionally may
 vary with target operating system and hardware. The following lists them all
-(as of September 2019).
+(as of July 2020).
 
 * Required build time:
 
@@ -186,32 +199,36 @@ vary with target operating system and hardware. The following lists them all
   * ``llvmlite``
   * Compiler toolchain mentioned above
 
-* Optional build time:
-
-  * ``llvm-openmp`` (OSX) - provides headers for compiling OpenMP support into
-    Numba's threading backend
-  * ``intel-openmp`` (OSX) - provides OpenMP library support for Numba's
-    threading backend.
-  * ``tbb-devel`` - provides TBB headers/libraries for compiling TBB support
-    into Numba's threading backend
-
 * Required run time:
 
   * ``setuptools``
   * ``numpy``
   * ``llvmlite``
 
+* Optional build time:
+
+  See :ref:`numba-source-install-env_vars` for more details about additional
+  options for the configuration and specification of these optional components.
+
+  * ``llvm-openmp`` (OSX) - provides headers for compiling OpenMP support into
+    Numba's threading backend
+  * ``tbb-devel`` - provides TBB headers/libraries for compiling TBB support
+    into Numba's threading backend (2021 <= version < 2021.6 required).
+  * ``importlib_metadata`` (for Python versions < 3.9)
+
 * Optional runtime are:
 
   * ``scipy`` - provides cython bindings used in Numba's ``np.linalg.*``
     support
   * ``tbb`` - provides the TBB runtime libraries used by Numba's TBB threading
-    backend
+    backend (version >= 2021 required).
   * ``jinja2`` - for "pretty" type annotation output (HTML) via the ``numba``
     CLI
   * ``cffi`` - permits use of CFFI bindings in Numba compiled functions
-  * ``intel-openmp`` - (OSX) provides OpenMP library support for Numba's OpenMP
-    threading backend
+  * ``llvm-openmp`` - (OSX) provides OpenMP library support for Numba's OpenMP
+    threading backend.
+  * ``intel-openmp`` - (OSX) provides an alternative OpenMP library for use with
+    Numba's OpenMP threading backend.
   * ``ipython`` - if in use, caching will use IPython's cache
     directories/caching still works
   * ``pyyaml`` - permits the use of a ``.numba_config.yaml``
@@ -224,14 +241,69 @@ vary with target operating system and hardware. The following lists them all
     support
   * Compiler toolchain mentioned above, if you would like to use ``pycc`` for
     Ahead-of-Time (AOT) compilation
+  * ``r2pipe`` - required for assembly CFG inspection.
+  * ``radare2`` as an executable on the ``$PATH`` - required for assembly CFG
+    inspection. `See here <https://github.com/radareorg/radare2>`_ for
+    information on obtaining and installing.
+  * ``graphviz`` - for some CFG inspection functionality.
+  * ``pickle5`` - provides Python 3.8 pickling features for faster pickling in
+    Python 3.7.
+  * ``typeguard`` - used by ``runtests.py`` for
+    :ref:`runtime type-checking <type_anno_check>`.
+  * ``cuda-python`` - The NVIDIA CUDA Python bindings. See :ref:`cuda-bindings`.
+    Numba requires Version 11.6 or greater.
 
 * To build the documentation:
 
   * ``sphinx``
   * ``pygments``
-  * ``sphinx-bootstrap``
+  * ``sphinx_rtd_theme``
   * ``numpydoc``
   * ``make`` as an executable on the ``$PATH``
+
+.. _numba_support_info:
+
+Version support information
+---------------------------
+
+This is the canonical reference for information concerning which versions of
+Numba's dependencies were tested and known to work against a given version of
+Numba. Other versions of the dependencies (especially NumPy) may work reasonably
+well but were not tested. The use of ``x`` in a version number indicates all
+patch levels supported. The use of ``?`` as a version is due to missing
+information.
+
++----------++--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| Numba     | Release date | Python                    | NumPy                      | llvmlite                     | LLVM              | TBB                         |
++===========+==============+===========================+============================+==============================+===================+=============================+
+| 0.57.x    | TBC          | 3.8.x <= version < 3.12   | 1.19 <= version < 1.24     | 0.40.x                       | 11.x              | 2021.x                      |
++-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.56.x    | 2022-07-25   | 3.7.x <= version < 3.11   | 1.18 <= version < 1.23     | 0.39.x                       | 11.x              | 2021.x                      |
++-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.55.2    | 2022-05-25   | 3.7.x <= version < 3.11   | 1.18 <= version < 1.23     | 0.38.x                       | 11.x              | 2021.x                      |
++-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.55.{0,1}| 2022-01-13   | 3.7.x <= version < 3.11   | 1.18 <= version < 1.22     | 0.38.x                       | 11.x              | 2021.x                      |
++-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.54.x    | 2021-08-19   | 3.6.x <= version < 3.10   | 1.17 <= version < 1.21     | 0.37.x                       | 11.x              | 2021.x                      |
++-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.53.x    | 2021-03-11   | 3.6.x <= version < 3.10   | 1.15 <= version < 1.21     | 0.36.x                       | 11.x              | 2019.5 <= version < 2021.4  |
++-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.52.x    | 2020-11-30   | 3.6.x <= version < 3.9    | 1.15 <= version < 1.20     | 0.35.x                       | 10.x              | 2019.5 <= version < 2020.3  |
+|           |              |                           |                            |                              | (9.x for aarch64) |                             |
++-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.51.x    | 2020-08-12   | 3.6.x <= version < 3.9    | 1.15 <= version < 1.19     | 0.34.x                       | 10.x              | 2019.5 <= version < 2020.0  |
+|           |              |                           |                            |                              | (9.x for aarch64) |                             |
++-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.50.x    | 2020-06-10   | 3.6.x <= version < 3.9    | 1.15 <= version < 1.19     | 0.33.x                       | 9.x               | 2019.5 <= version < 2020.0  |
++-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.49.x    | 2020-04-16   | 3.6.x <= version < 3.9    | 1.15 <= version < 1.18     | 0.31.x <= version < 0.33.x   | 9.x               | 2019.5 <= version < 2020.0  |
++-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.48.x    | 2020-01-27   | 3.6.x <= version < 3.9    | 1.15 <= version < 1.18     | 0.31.x                       | 8.x               | 2018.0.5 <= version < ?     |
+|           |              |                           |                            |                              | (7.x for ppc64le) |                             |
++-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.47.x    | 2020-01-02   | 3.5.x <= version < 3.9;   | 1.15 <= version < 1.18     | 0.30.x                       | 8.x               | 2018.0.5 <= version < ?     |
+|           |              | version == 2.7.x          |                            |                              | (7.x for ppc64le) |                             |
++-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
 
 Checking your installation
 --------------------------
@@ -239,12 +311,11 @@ Checking your installation
 You should be able to import Numba from the Python prompt::
 
     $ python
-    Python 2.7.15 |Anaconda custom (x86_64)| (default, May  1 2018, 18:37:05)
-    [GCC 4.2.1 Compatible Clang 4.0.1 (tags/RELEASE_401/final)] on darwin
+    Python 3.10.2 | packaged by conda-forge | (main, Jan 14 2022, 08:02:09) [GCC 9.4.0] on linux
     Type "help", "copyright", "credits" or "license" for more information.
     >>> import numba
     >>> numba.__version__
-    '0.39.0+0.g4e49566.dirty'
+    '0.55.1'
 
 You can also try executing the ``numba --sysinfo`` (or ``numba -s`` for short)
 command to report information about your system capabilities. See :ref:`cli` for
@@ -256,37 +327,41 @@ further information.
     System info:
     --------------------------------------------------------------------------------
     __Time Stamp__
-    2018-08-28 15:46:24.631054
+    Report started (local time)                   : 2022-01-18 10:35:08.981319
 
     __Hardware Information__
-    Machine                             : x86_64
-    CPU Name                            : haswell
-    CPU Features                        :
-    aes avx avx2 bmi bmi2 cmov cx16 f16c fma fsgsbase lzcnt mmx movbe pclmul popcnt
-    rdrnd sse sse2 sse3 sse4.1 sse4.2 ssse3 xsave xsaveopt
+    Machine                                       : x86_64
+    CPU Name                                      : skylake-avx512
+    CPU Count                                     : 12
+    CPU Features                                  :
+    64bit adx aes avx avx2 avx512bw avx512cd avx512dq avx512f avx512vl bmi bmi2
+    clflushopt clwb cmov cx16 cx8 f16c fma fsgsbase fxsr invpcid lzcnt mmx
+    movbe pclmul pku popcnt prfchw rdrnd rdseed rtm sahf sse sse2 sse3 sse4.1
+    sse4.2 ssse3 xsave xsavec xsaveopt xsaves
 
     __OS Information__
-    Platform                            : Darwin-17.6.0-x86_64-i386-64bit
-    Release                             : 17.6.0
-    System Name                         : Darwin
-    Version                             : Darwin Kernel Version 17.6.0: Tue May  8 15:22:16 PDT 2018; root:xnu-4570.61.1~1/RELEASE_X86_64
-    OS specific info                    : 10.13.5   x86_64
+    Platform Name                                 : Linux-5.4.0-94-generic-x86_64-with-glibc2.31
+    Platform Release                              : 5.4.0-94-generic
+    OS Name                                       : Linux
+    OS Version                                    : #106-Ubuntu SMP Thu Jan 6 23:58:14 UTC 2022
 
     __Python Information__
-    Python Compiler                     : GCC 4.2.1 Compatible Clang 4.0.1 (tags/RELEASE_401/final)
-    Python Implementation               : CPython
-    Python Version                      : 2.7.15
-    Python Locale                       : en_US UTF-8
+    Python Compiler                               : GCC 9.4.0
+    Python Implementation                         : CPython
+    Python Version                                : 3.10.2
+    Python Locale                                 : en_GB.UTF-8
 
     __LLVM information__
-    LLVM version                        : 6.0.0
+    LLVM Version                                  : 11.1.0
 
     __CUDA Information__
     Found 1 CUDA devices
-    id 0         GeForce GT 750M                              [SUPPORTED]
-                          compute capability: 3.0
-                               pci device id: 0
-                                  pci bus id: 1
+    id 0      b'Quadro RTX 8000'                              [SUPPORTED]
+                          Compute Capability: 7.5
+                               PCI Device ID: 0
+                                  PCI Bus ID: 21
+                                        UUID: GPU-e6489c45-5b68-3b03-bab7-0e7c8e809643
+                                    Watchdog: Enabled
+                 FP32/FP64 Performance Ratio: 32
 
 (output truncated due to length)
-

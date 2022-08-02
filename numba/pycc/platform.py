@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 from distutils.ccompiler import CCompiler, new_compiler
 from distutils.command.build_ext import build_ext
 from distutils.sysconfig import customize_compiler
@@ -11,8 +9,9 @@ import functools
 import os
 import subprocess
 import sys
-from tempfile import NamedTemporaryFile, mkdtemp, gettempdir
+from tempfile import mkdtemp
 from contextlib import contextmanager
+from pathlib import Path
 
 _configs = {
     # DLL suffix, Python C extension suffix
@@ -59,7 +58,7 @@ def _check_external_compiler():
                 ntf.close()
                 # *output_dir* is set to avoid the compiler putting temp files
                 # in the current directory.
-                compiler.compile([ntf.name], output_dir=gettempdir())
+                compiler.compile([ntf.name], output_dir=Path(ntf.name).anchor)
         except Exception: # likely CompileError or file system issue
             return False
     return True
@@ -236,7 +235,7 @@ def _exec_command(command, use_shell=None, use_tee=None, **env):
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE,
                                 universal_newlines=True)
-    except EnvironmentError:
+    except OSError:
         # Return 127, as os.spawn*() and /bin/sh do
         return '', 127
     text, err = proc.communicate()

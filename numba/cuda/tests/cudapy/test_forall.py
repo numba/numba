@@ -1,10 +1,8 @@
-from __future__ import print_function, absolute_import
-
 import numpy as np
 
 from numba import cuda
-import numba.unittest_support as unittest
-from numba.cuda.testing import SerialMixin
+import unittest
+from numba.cuda.testing import CUDATestCase
 
 
 @cuda.jit
@@ -14,7 +12,7 @@ def foo(x):
         x[i] += 1
 
 
-class TestForAll(SerialMixin, unittest.TestCase):
+class TestForAll(CUDATestCase):
     def test_forall_1(self):
         arr = np.arange(11)
         orig = arr.copy()

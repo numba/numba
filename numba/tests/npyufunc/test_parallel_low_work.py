@@ -1,14 +1,12 @@
 """
 There was a deadlock problem when work count is smaller than number of threads.
 """
-from __future__ import absolute_import, print_function, division
-
-from numba import unittest_support as unittest
 
 import numpy as np
 
 from numba import float32, float64, int32, uint32
-from numba.npyufunc import Vectorize
+from numba.np.ufunc import Vectorize
+import unittest
 
 
 def vector_add(a, b):

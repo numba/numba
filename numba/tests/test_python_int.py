@@ -1,12 +1,10 @@
-from __future__ import print_function
-
-import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from numba import types
+import unittest
+from numba.core.compiler import compile_isolated, Flags
+from numba.core import types
 
 
 force_pyobj_flags = Flags()
-force_pyobj_flags.set("force_pyobject")
+force_pyobj_flags.force_pyobject = True
 
 no_pyobj_flags = Flags()
 

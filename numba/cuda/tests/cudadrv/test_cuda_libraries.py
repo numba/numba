@@ -1,8 +1,6 @@
-from __future__ import absolute_import
-
 from numba.cuda.testing import unittest
 from numba.cuda.testing import skip_on_cudasim, skip_unless_conda_cudatoolkit
-from numba.findlib import find_lib
+from numba.misc.findlib import find_lib
 
 
 @skip_on_cudasim('Library detection unsupported in the simulator')
@@ -15,6 +13,10 @@ class TestLibraryDetection(unittest.TestCase):
         PyCulib (and potentially others) rely on Numba's library finding
         capacity to find and subsequently load these libraries.
         """
-        core_libs = ['nvvm', 'cublas', 'cusparse', 'cufft', 'curand']
+        core_libs = ['nvvm']
         for l in core_libs:
             self.assertNotEqual(find_lib(l), [])
+
+
+if __name__ == '__main__':
+    unittest.main()

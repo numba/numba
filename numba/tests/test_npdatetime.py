@@ -4,20 +4,24 @@ Test np.datetime64 and np.timedelta64 support.
 
 # NOTE: datetime64 and timedelta64 ufuncs are tested in test_ufuncs.
 
-from __future__ import print_function
 
 import contextlib
 import itertools
+import re
+import unittest
 import warnings
 
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba import config, jit, npdatetime, types, vectorize, numpy_support
-from numba.numpy_support import version as numpy_version
-from numba.errors import TypingError
-from .support import TestCase, tag
+from numba import jit, vectorize, njit
+from numba.np.numpy_support import numpy_version
+from numba.core import types, config
+from numba.core.errors import TypingError
+from numba.tests.support import TestCase, tag, skip_parfors_unsupported
+from numba.np import npdatetime_helpers, numpy_support
 
+TIMEDELTA_M = np.dtype('timedelta64[M]')
+TIMEDELTA_Y = np.dtype('timedelta64[Y]')
 
 def value_unit(val):
     ty = numpy_support.from_dtype(val.dtype)
@@ -72,6 +76,14 @@ def neg_usecase(x):
 def abs_usecase(x):
     return abs(x)
 
+def hash_usecase(x):
+    return hash(x)
+
+def min_usecase(x, y):
+    return min(x, y)
+
+def max_usecase(x, y):
+    return max(x, y)
 
 def make_add_constant(const):
     def add_constant(x):
@@ -81,11 +93,11 @@ def make_add_constant(const):
 
 class TestModuleHelpers(TestCase):
     """
-    Test the various helpers in numba.npdatetime.
+    Test the various helpers in numba.npdatetime_helpers.
     """
 
     def test_can_cast_timedelta(self):
-        f = npdatetime.can_cast_timedelta_units
+        f = npdatetime_helpers.can_cast_timedelta_units
         for a, b in itertools.product(date_units, time_units):
             self.assertFalse(f(a, b), (a, b))
             self.assertFalse(f(b, a), (a, b))
@@ -107,7 +119,7 @@ class TestModuleHelpers(TestCase):
         check_units_group(time_units)
 
     def test_timedelta_conversion(self):
-        f = npdatetime.get_timedelta_conversion_factor
+        f = npdatetime_helpers.get_timedelta_conversion_factor
         for unit in all_units + ('',):
             self.assertEqual(f(unit, unit), 1)
         for unit in all_units:
@@ -132,7 +144,7 @@ class TestModuleHelpers(TestCase):
         self.assertEqual(f('W', 'us'), 24 * 7 * 3600 * 1000 * 1000)
 
     def test_datetime_timedelta_scaling(self):
-        f = npdatetime.get_datetime_timedelta_conversion
+        f = npdatetime_helpers.get_datetime_timedelta_conversion
         def check_error(dt_unit, td_unit):
             with self.assertRaises(RuntimeError):
                 f(dt_unit, td_unit)
@@ -171,7 +183,7 @@ class TestModuleHelpers(TestCase):
         self.assertEqual(f('M', 's'), ('s', (97 + 400 * 365) *  24 * 3600, 400 * 12))
 
     def test_combine_datetime_timedelta_units(self):
-        f = npdatetime.combine_datetime_timedelta_units
+        f = npdatetime_helpers.combine_datetime_timedelta_units
         for unit in all_units:
             self.assertEqual(f(unit, unit), unit)
             self.assertEqual(f('', unit), unit)
@@ -183,7 +195,7 @@ class TestModuleHelpers(TestCase):
             self.assertEqual(f(dt_unit, td_unit), td_unit)
 
     def test_same_kind(self):
-        f = npdatetime.same_kind
+        f = npdatetime_helpers.same_kind
         for u in all_units:
             self.assertTrue(f(u, u))
         A = ('Y', 'M', 'W', 'D')
@@ -262,7 +274,6 @@ class TestTimedeltaArithmetic(TestCase):
     def jit(self, pyfunc):
         return jit(**self.jitargs)(pyfunc)
 
-    @tag('important')
     def test_add(self):
         f = self.jit(add_usecase)
         def check(a, b, expected):
@@ -272,9 +283,6 @@ class TestTimedeltaArithmetic(TestCase):
         check(TD(1), TD(2), TD(3))
         check(TD(1, 's'), TD(2, 's'), TD(3, 's'))
         # Implicit unit promotion
-        if not numpy_support.strict_ufunc_typing:
-            check(TD(1), TD(2, 's'), TD(3, 's'))
-            check(TD(1), TD(2, 'ms'), TD(3, 'ms'))
         check(TD(1, 's'), TD(2, 'us'), TD(1000002, 'us'))
         check(TD(1, 'W'), TD(2, 'D'), TD(9, 'D'))
         # NaTs
@@ -285,7 +293,6 @@ class TestTimedeltaArithmetic(TestCase):
         with self.assertRaises((TypeError, TypingError)):
             f(TD(1, 'M'), TD(1, 'D'))
 
-    @tag('important')
     def test_sub(self):
         f = self.jit(sub_usecase)
         def check(a, b, expected):
@@ -295,9 +302,6 @@ class TestTimedeltaArithmetic(TestCase):
         check(TD(3), TD(2), TD(1))
         check(TD(3, 's'), TD(2, 's'), TD(1, 's'))
         # Implicit unit promotion
-        if not numpy_support.strict_ufunc_typing:
-            check(TD(3), TD(2, 's'), TD(1, 's'))
-            check(TD(3), TD(2, 'ms'), TD(1, 'ms'))
         check(TD(3, 's'), TD(2, 'us'), TD(2999998, 'us'))
         check(TD(1, 'W'), TD(2, 'D'), TD(5, 'D'))
         # NaTs
@@ -361,8 +365,6 @@ class TestTimedeltaArithmetic(TestCase):
 
         # timedelta64 / timedelta64
         check(TD(7), TD(3), 7. / 3.)
-        if not numpy_support.strict_ufunc_typing:
-            check(TD(7), TD(3, 'ms'), 7. / 3.)
         check(TD(7, 'us'), TD(3, 'ms'), 7. / 3000.)
         check(TD(7, 'ms'), TD(3, 'us'), 7000. / 3.)
         check(TD(7), TD(0), float('+inf'))
@@ -376,7 +378,6 @@ class TestTimedeltaArithmetic(TestCase):
         with self.assertRaises((TypeError, TypingError)):
             div(TD(1, 'M'), TD(1, 'D'))
 
-    @tag('important')
     def test_eq_ne(self):
         eq = self.jit(eq_usecase)
         ne = self.jit(ne_usecase)
@@ -384,7 +385,7 @@ class TestTimedeltaArithmetic(TestCase):
             expected_val = expected
             not_expected_val = not expected
 
-            if numpy_support.version >= (1, 16):
+            if numpy_version >= (1, 16):
                 # since np 1.16 all NaT == comparisons are False, including
                 # NaT==NaT, conversely != is True
                 if np.isnat(a) or np.isnat(a):
@@ -420,7 +421,7 @@ class TestTimedeltaArithmetic(TestCase):
             expected_val = expected
             not_expected_val = not expected
 
-            if numpy_support.version >= (1, 16):
+            if numpy_version >= (1, 16):
                 # since np 1.16 all NaT magnitude comparisons including equality
                 # are False (as NaT == NaT is now False)
                 if np.isnat(a) or np.isnat(a):
@@ -460,7 +461,7 @@ class TestTimedeltaArithmetic(TestCase):
             expected_val = expected
             not_expected_val = not expected
 
-            if numpy_support.version >= (1, 16):
+            if numpy_version >= (1, 16):
                 # since np 1.16 all NaT magnitude comparisons including equality
                 # are False (as NaT == NaT is now False)
                 if np.isnat(a) or np.isnat(a):
@@ -529,6 +530,44 @@ class TestTimedeltaArithmetic(TestCase):
         check(TD('NaT'))
         check(TD('NaT', 'ms'))
 
+    def test_hash(self):
+        f = self.jit(hash_usecase)
+        def check(a):
+            self.assertPreciseEqual(f(a), hash(a))
+
+        TD_CASES = ((3,), (-4,), (3, 'ms'), (-4, 'ms'), (27, 'D'),
+                    (2, 'D'), (2, 'W'), (2, 'Y'), (3, 'W'),
+                    (365, 'D'), (10000, 'D'), (-10000, 'D'),
+                    ('NaT',), ('NaT', 'ms'), ('NaT', 'D'), (-1,))
+        DT_CASES = (('2014',), ('2016',), ('2000',), ('2014-02',),
+                    ('2014-03',), ('2014-04',), ('2016-02',), ('2000-12-31',),
+                    ('2014-01-16',), ('2014-01-05',), ('2014-01-07',),
+                    ('2014-01-06',), ('2014-02-02',), ('2014-02-27',),
+                    ('2014-02-16',), ('2014-03-01',), ('2000-01-01T01:02:03.002Z',),
+                    ('2000-01-01T01:02:03Z',), ('NaT',))
+
+        for case, typ in zip(TD_CASES + DT_CASES,
+                             (TD,) * len(TD_CASES) + (DT,) * len(TD_CASES)):
+            check(typ(*case))
+
+    def _test_min_max(self, usecase):
+        f = self.jit(usecase)
+        def check(a, b):
+            self.assertPreciseEqual(f(a, b), usecase(a, b))
+
+        for cases in (
+            (TD(0), TD(1), TD(2), TD('NaT')),
+            (TD(0, 's'), TD(1, 's'), TD(2, 's'), TD('NaT', 's')),
+        ):
+            for a, b in itertools.product(cases, cases):
+                check(a, b)
+
+    def test_min(self):
+        self._test_min_max(min_usecase)
+
+    def test_max(self):
+        self._test_min_max(max_usecase)
+
 
 class TestTimedeltaArithmeticNoPython(TestTimedeltaArithmetic):
 
@@ -552,7 +591,6 @@ class TestDatetimeArithmetic(TestCase):
                                     category=DeprecationWarning)
             yield
 
-    @tag('important')
     def test_add_sub_timedelta(self):
         """
         Test `datetime64 + timedelta64` and `datetime64 - timedelta64`.
@@ -568,32 +606,21 @@ class TestDatetimeArithmetic(TestCase):
                 self.assertPreciseEqual(a + b, expected)
 
         # Y + ...
-        if not numpy_support.strict_ufunc_typing:
-            check(DT('2014'), TD(2), DT('2016'))
         check(DT('2014'), TD(2, 'Y'), DT('2016'))
         check(DT('2014'), TD(2, 'M'), DT('2014-03'))
         check(DT('2014'), TD(3, 'W'), DT('2014-01-16', 'W'))
         check(DT('2014'), TD(4, 'D'), DT('2014-01-05'))
         check(DT('2000'), TD(365, 'D'), DT('2000-12-31'))
-        if not numpy_support.strict_ufunc_typing:
-            check(DT('2001'), TD(61, 'm'), DT('2001-01-01T01:01Z'))
-            check(DT('2001'), TD(61, 's'), DT('2001-01-01T00:01:01Z'))
         # M + ...
-        if not numpy_support.strict_ufunc_typing:
-            check(DT('2014-02'), TD(2), DT('2014-04'))
         check(DT('2014-02'), TD(2, 'Y'), DT('2016-02'))
         check(DT('2014-02'), TD(2, 'M'), DT('2014-04'))
         check(DT('2014-02'), TD(2, 'D'), DT('2014-02-03'))
-        if not numpy_support.strict_ufunc_typing:
-            check(DT('2014-02'), TD(61, 's'), DT('2014-02-01T00:01:01Z'))
         # W + ...
         check(DT('2014-01-07', 'W'), TD(2, 'W'), DT('2014-01-16', 'W'))
         # D + ...
         check(DT('2014-02-02'), TD(27, 'D'), DT('2014-03-01'))
         check(DT('2012-02-02'), TD(27, 'D'), DT('2012-02-29'))
         check(DT('2012-02-02'), TD(2, 'W'), DT('2012-02-16'))
-        if not numpy_support.strict_ufunc_typing:
-            check(DT('2014-02-02'), TD(73, 'h'), DT('2014-02-05T01Z'))
         # s + ...
         check(DT('2000-01-01T01:02:03Z'), TD(2, 'h'), DT('2000-01-01T03:02:03Z'))
         check(DT('2000-01-01T01:02:03Z'), TD(2, 'ms'), DT('2000-01-01T01:02:03.002Z'))
@@ -616,16 +643,10 @@ class TestDatetimeArithmetic(TestCase):
 
         # NaTs
         check(DT('NaT'), TD(2), DT('NaT'))
-        if not numpy_support.strict_ufunc_typing:
-            check(DT('NaT', 's'), TD(2), DT('NaT', 's'))
         check(DT('NaT', 's'), TD(2, 'h'), DT('NaT', 's'))
         check(DT('NaT', 's'), TD(2, 'ms'), DT('NaT', 'ms'))
-        if not numpy_support.strict_ufunc_typing:
-            check(DT('2014'), TD('NaT'), DT('NaT', 'Y'))
         check(DT('2014'), TD('NaT', 'W'), DT('NaT', 'W'))
         check(DT('2014-01-01'), TD('NaT', 'W'), DT('NaT', 'D'))
-        if not numpy_support.strict_ufunc_typing:
-            check(DT('NaT', 's'), TD('NaT'), DT('NaT', 's'))
         check(DT('NaT', 's'), TD('NaT', 'ms'), DT('NaT', 'ms'))
 
         # Cannot add datetime days and timedelta months or years
@@ -660,8 +681,6 @@ class TestDatetimeArithmetic(TestCase):
         check(DT('2014-02'), DT('2017-01'), TD(-35, 'M'))
         check(DT('2014-02-28'), DT('2015-03-01'), TD(-366, 'D'))
         # NaTs
-        if not numpy_support.strict_ufunc_typing:
-            check(DT('NaT'), DT('2000'), TD('NaT', 'Y'))
         check(DT('NaT', 'M'), DT('2000'), TD('NaT', 'M'))
         check(DT('NaT', 'M'), DT('2000-01-01'), TD('NaT', 'D'))
         check(DT('NaT'), DT('NaT'), TD('NaT'))
@@ -669,13 +688,10 @@ class TestDatetimeArithmetic(TestCase):
         with self.silence_numpy_warnings():
             dts = self.datetime_samples()
             for a, b in itertools.product(dts, dts):
-                if (numpy_support.strict_ufunc_typing
-                    and not npdatetime.same_kind(value_unit(a),
-                                                 value_unit(b))):
+                if (not npdatetime_helpers.same_kind(value_unit(a), value_unit(b))):
                     continue
                 self.assertPreciseEqual(sub(a, b), a - b, (a, b))
 
-    @tag('important')
     def test_comparisons(self):
         # Test all datetime comparisons all at once
         eq = self.jit(eq_usecase)
@@ -689,7 +705,7 @@ class TestDatetimeArithmetic(TestCase):
             expected_val = expected
             not_expected_val = not expected
 
-            if numpy_support.version >= (1, 16):
+            if numpy_version >= (1, 16):
                 # since np 1.16 all NaT comparisons bar != are False, including
                 # NaT==NaT
                 if np.isnat(a) or np.isnat(b):
@@ -727,7 +743,7 @@ class TestDatetimeArithmetic(TestCase):
             expected_val = expected
             not_expected_val = not expected
 
-            if numpy_support.version >= (1, 16):
+            if numpy_version >= (1, 16):
                 # since np 1.16 all NaT magnitude comparisons including equality
                 # are False (as NaT == NaT is now False)
                 if np.isnat(a) or np.isnat(b):
@@ -760,15 +776,8 @@ class TestDatetimeArithmetic(TestCase):
         check_eq(DT('2014-01-01T00:01:01Z', 's'),
               DT('2014-01-01T00:01Z', 'm'), False)
         # NaTs
-        if not numpy_support.strict_ufunc_typing:
-            check_lt(DT('NaT'), DT('2017'), True)
         check_lt(DT('NaT', 'Y'), DT('2017'), True)
-        if not numpy_support.strict_ufunc_typing:
-            check_lt(DT('NaT', 'ms'), DT('2017'), True)
         check_eq(DT('NaT'), DT('NaT'), True)
-        if not numpy_support.strict_ufunc_typing:
-            check_eq(DT('NaT', 'Y'), DT('NaT'), True)
-            check_eq(DT('NaT', 'ms'), DT('NaT', 'M'), True)
 
         # Check comparison between various units
         dts = self.datetime_samples()
@@ -780,14 +789,30 @@ class TestDatetimeArithmetic(TestCase):
             for unit in units:
                 # Force conversion
                 b = a.astype('M8[%s]' % unit)
-                if (numpy_support.strict_ufunc_typing
-                    and not npdatetime.same_kind(value_unit(a),
-                                                 value_unit(b))):
+                if (not npdatetime_helpers.same_kind(value_unit(a),
+                                                     value_unit(b))):
                     continue
                 check_eq(a, b, True)
                 check_lt(a, b + np.timedelta64(1, unit), True)
                 check_lt(b - np.timedelta64(1, unit), a, True)
 
+    def _test_min_max(self, usecase):
+        f = self.jit(usecase)
+        def check(a, b):
+            self.assertPreciseEqual(f(a, b), usecase(a, b))
+
+        for cases in (
+            (DT(0, 'ns'), DT(1, 'ns'), DT(2, 'ns'), DT('NaT', 'ns')),
+            (DT(0, 's'), DT(1, 's'), DT(2, 's'), DT('NaT', 's')),
+        ):
+            for a, b in itertools.product(cases, cases):
+                check(a, b)
+
+    def test_min(self):
+        self._test_min_max(min_usecase)
+
+    def test_max(self):
+        self._test_min_max(max_usecase)
 
 class TestDatetimeArithmeticNoPython(TestDatetimeArithmetic):
 
@@ -815,6 +840,249 @@ class TestMetadataScalingFactor(TestCase):
     def test_timedelta_npm(self):
         with self.assertTypingError():
             self.test_timedelta(nopython=True)
+
+
+class TestDatetimeDeltaOps(TestCase):
+    def test_div(self):
+        """
+        Test the division of a timedelta by numeric types
+        """
+        def arr_div(a, b):
+            return a / b
+
+        py_func = arr_div
+        cfunc = njit(arr_div)
+        test_cases = [
+            (np.ones(3, TIMEDELTA_M), np.ones(3, TIMEDELTA_M)),
+            (np.ones(3, TIMEDELTA_M), np.ones(3, TIMEDELTA_Y)),
+            (np.ones(3, TIMEDELTA_Y), np.ones(3, TIMEDELTA_M)),
+            (np.ones(3, TIMEDELTA_Y), np.ones(3, TIMEDELTA_Y)),
+            (np.ones(3, TIMEDELTA_M), 1),
+            (np.ones(3, TIMEDELTA_M), np.ones(3, np.int64)),
+            (np.ones(3, TIMEDELTA_M), np.ones(3, np.float64)),
+        ]
+        for a, b in test_cases:
+            self.assertTrue(np.array_equal(py_func(a, b), cfunc(a, b)))
+
+
+class TestDatetimeArrayOps(TestCase):
+
+    def _test_td_add_or_sub(self, operation, parallel):
+        """
+        Test the addition/subtraction of a datetime array with a timedelta type
+        """
+        def impl(a, b):
+            return operation(a, b)
+
+        arr_one = np.array([
+                        np.datetime64("2011-01-01"),
+                        np.datetime64("1971-02-02"),
+                        np.datetime64("2021-03-03"),
+                        np.datetime64("2004-12-07"),
+                    ], dtype="datetime64[ns]")
+        arr_two = np.array([
+                        np.datetime64("2011-01-01"),
+                        np.datetime64("1971-02-02"),
+                        np.datetime64("2021-03-03"),
+                        np.datetime64("2004-12-07"),
+                    ], dtype="datetime64[D]")
+        py_func = impl
+        cfunc = njit(parallel=parallel)(impl)
+        test_cases = [
+            (arr_one, np.timedelta64(1000)),
+            (arr_two, np.timedelta64(1000)),
+            (arr_one, np.timedelta64(-54557)),
+            (arr_two, np.timedelta64(-54557)),
+        ]
+        # np.add is commutative so test the reversed order
+        if operation is np.add:
+            test_cases.extend([
+                (np.timedelta64(1000), arr_one),
+                (np.timedelta64(1000), arr_two),
+                (np.timedelta64(-54557), arr_one),
+                (np.timedelta64(-54557), arr_two),
+            ])
+        for a, b in test_cases:
+            self.assertTrue(np.array_equal(py_func(a, b), cfunc(a, b)))
+
+    def test_add_td(self):
+        self._test_td_add_or_sub(np.add, False)
+
+    @skip_parfors_unsupported
+    def test_add_td_parallel(self):
+        self._test_td_add_or_sub(np.add, True)
+
+    def test_sub_td(self):
+        self._test_td_add_or_sub(np.subtract, False)
+
+    @skip_parfors_unsupported
+    def test_sub_td_parallel(self):
+        self._test_td_add_or_sub(np.subtract, True)
+
+    def _test_add_sub_td_no_match(self, operation):
+        """
+        Tests that attempting to add/sub a datetime64 and timedelta64
+        with types that cannot be cast raises a reasonable exception.
+        """
+        @njit
+        def impl(a, b):
+            return operation(a, b)
+
+        fname = operation.__name__
+        expected = re.escape((f"ufunc '{fname}' is not supported between "
+                              "datetime64[ns] and timedelta64[M]"))
+        with self.assertRaisesRegex((TypingError, TypeError), expected):
+            impl(
+                np.array([np.datetime64("2011-01-01"),],
+                         dtype="datetime64[ns]"),
+                np.timedelta64(1000,'M')
+            )
+
+    def test_add_td_no_match(self):
+        self._test_add_sub_td_no_match(np.add)
+
+    def test_sub_td_no_match(self):
+        self._test_add_sub_td_no_match(np.subtract)
+
+    def _test_min_max(self, operation, parallel, method):
+        if method:
+            if operation is np.min:
+                def impl(arr):
+                    return arr.min()
+            else:
+                def impl(arr):
+                    return arr.max()
+        else:
+            def impl(arr):
+                return operation(arr)
+
+        py_func = impl
+        cfunc = njit(parallel=parallel)(impl)
+
+        test_cases = [
+            np.array([
+                DT(0, "ns"),
+                DT(1, "ns"),
+                DT(2, "ns"),
+                DT(3, "ns"),
+            ]),
+            np.array([
+                DT("2011-01-01", "ns"),
+                DT("1971-02-02", "ns"),
+                DT("1900-01-01", "ns"),
+                DT("2021-03-03", "ns"),
+                DT("2004-12-07", "ns"),
+            ]),
+            np.array([
+                DT("2011-01-01", "D"),
+                DT("1971-02-02", "D"),
+                DT("1900-01-01", "D"),
+                DT("2021-03-03", "D"),
+                DT("2004-12-07", "D"),
+            ]),
+            np.array([
+                DT("2011-01-01", "ns"),
+                DT("1971-02-02", "ns"),
+                DT("1900-01-01", "ns"),
+                DT("2021-03-03", "ns"),
+                DT("2004-12-07", "ns"),
+                DT("NaT", "ns"),
+            ]),
+            np.array([
+                DT("NaT", "ns"),
+                DT("2011-01-01", "ns"),
+                DT("1971-02-02", "ns"),
+                DT("1900-01-01", "ns"),
+                DT("2021-03-03", "ns"),
+                DT("2004-12-07", "ns"),
+            ]),
+            np.array([
+                DT("1971-02-02", "ns"),
+                DT("NaT", "ns"),
+            ]),
+            np.array([
+                DT("NaT", "ns"),
+                DT("NaT", "ns"),
+                DT("NaT", "ns"),
+            ]),
+            np.array([
+                TD(1, "ns"),
+                TD(2, "ns"),
+                TD(3, "ns"),
+                TD(4, "ns"),
+            ]),
+            np.array([
+                TD(1, "D"),
+                TD(2, "D"),
+                TD(3, "D"),
+                TD(4, "D"),
+            ]),
+            np.array([
+                TD("NaT", "ns"),
+                TD(1, "ns"),
+                TD(2, "ns"),
+                TD(3, "ns"),
+                TD(4, "ns"),
+            ]),
+            np.array([
+                TD(1, "ns"),
+                TD(2, "ns"),
+                TD(3, "ns"),
+                TD(4, "ns"),
+                TD("NaT", "ns"),
+            ]),
+            np.array([
+                TD("NaT", "ns"),
+            ]),
+            np.array([
+                TD("NaT", "ns"),
+                TD("NaT", "ns"),
+                TD("NaT", "ns"),
+            ]),
+        ]
+
+        for arr in test_cases:
+            py_res = py_func(arr)
+            c_res = cfunc(arr)
+            if np.isnat(py_res) or np.isnat(c_res):
+                self.assertTrue(np.isnat(py_res))
+                self.assertTrue(np.isnat(c_res))
+            else:
+                self.assertEqual(py_res, c_res)
+
+    def test_min_func(self):
+        self._test_min_max(min, False, False)
+
+    def test_np_min_func(self):
+        self._test_min_max(np.min, False, False)
+
+    def test_min_method(self):
+        self._test_min_max(np.min, False, True)
+
+    def test_max_func(self):
+        self._test_min_max(max, False, False)
+
+    def test_np_max_func(self):
+        self._test_min_max(np.max, False, False)
+
+    def test_max_method(self):
+        self._test_min_max(np.max, False, True)
+
+    @skip_parfors_unsupported
+    def test_min_func_parallel(self):
+        self._test_min_max(np.min, True, False)
+
+    @skip_parfors_unsupported
+    def test_min_method_parallel(self):
+        self._test_min_max(np.min, True, True)
+
+    @skip_parfors_unsupported
+    def test_max_func_parallel(self):
+        self._test_min_max(np.max, True, False)
+
+    @skip_parfors_unsupported
+    def test_max_method_parallel(self):
+        self._test_min_max(np.max, True, True)
 
 
 if __name__ == '__main__':

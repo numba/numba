@@ -1,8 +1,25 @@
-from __future__ import print_function
-
-import numba.unittest_support as unittest
-from numba import compiler, ir, objmode
+import unittest
+from unittest.case import TestCase
+import warnings
 import numpy as np
+
+from numba import objmode
+from numba.core import ir, compiler
+from numba.core import errors
+from numba.core.compiler import (
+    CompilerBase,
+    ReconstructSSA,
+)
+from numba.core.compiler_machinery import (
+    FunctionPass,
+    PassManager,
+    register_pass,
+)
+from numba.core.untyped_passes import (
+    TranslateByteCode,
+    IRProcessing,
+)
+from numba import njit
 
 
 class TestIR(unittest.TestCase):
@@ -267,15 +284,6 @@ class TestIRNodes(CheckEquality):
         e = ir.Var(None, 'bar', self.loc1)
         self.check(a, same=[b, c, d], different=[e])
 
-    def test_intrinsic(self):
-        a = ir.Intrinsic('foo', 'bar', (0,), self.loc1)
-        b = ir.Intrinsic('foo', 'bar', (0,), self.loc1)
-        c = ir.Intrinsic('foo', 'bar', (0,), self.loc2)
-        d = ir.Intrinsic('baz', 'bar', (0,), self.loc1)
-        e = ir.Intrinsic('foo', 'baz', (0,), self.loc1)
-        f = ir.Intrinsic('foo', 'bar', (1,), self.loc1)
-        self.check(a, same=[b, c], different=[d, e, f])
-
     def test_undefinedtype(self):
         a = ir.UndefinedType()
         b = ir.UndefinedType()
@@ -338,6 +346,10 @@ class TestIRCompounds(CheckEquality):
         self.check(a, same=[b], different=[c])
 
     def test_functionir(self):
+
+        def run_frontend(x):
+            return compiler.run_frontend(x, emit_dels=True)
+
         # this creates a function full of all sorts of things to ensure the IR
         # is pretty involved, it then compares two instances of the compiled
         # function IR to check the IR is the same invariant of objects, and then
@@ -383,8 +395,9 @@ class TestIRCompounds(CheckEquality):
 
         x = gen()
         y = gen()
-        x_ir = compiler.run_frontend(x)
-        y_ir = compiler.run_frontend(y)
+        x_ir = run_frontend(x)
+        y_ir = run_frontend(y)
+
         self.assertTrue(x_ir.equal_ir(y_ir))
 
         def check_diffstr(string, pointing_at=[]):
@@ -412,7 +425,7 @@ class TestIRCompounds(CheckEquality):
         z = gen()
         self.assertFalse(x_ir.equal_ir(y_ir))
 
-        z_ir = compiler.run_frontend(z)
+        z_ir = run_frontend(z)
 
         change_set = set()
         for label in reversed(list(z_ir.blocks.keys())):
@@ -431,6 +444,9 @@ class TestIRCompounds(CheckEquality):
                 change_set.add(str(b[idx]))
                 b[idx], b[idx + 1] = b[idx + 1], b[idx]
                 break
+
+        # ensure that a mutation occurred.
+        self.assertTrue(change_set)
 
         self.assertFalse(x_ir.equal_ir(z_ir))
         self.assertEqual(len(change_set), 2)
@@ -456,16 +472,88 @@ class TestIRCompounds(CheckEquality):
             e = np.sqrt(d + 1)
             return e
 
-        foo_ir = compiler.run_frontend(foo)
-        bar_ir = compiler.run_frontend(bar)
+        foo_ir = run_frontend(foo)
+        bar_ir = run_frontend(bar)
         self.assertTrue(foo_ir.equal_ir(bar_ir))
         self.assertIn("IR is considered equivalent", foo_ir.diff_str(bar_ir))
 
-        baz_ir = compiler.run_frontend(baz)
+        baz_ir = run_frontend(baz)
         self.assertFalse(foo_ir.equal_ir(baz_ir))
         tmp = foo_ir.diff_str(baz_ir)
         self.assertIn("Other block contains more statements", tmp)
         check_diffstr(tmp, ["c + b", "b + c"])
+
+
+class TestIRPedanticChecks(TestCase):
+    def test_var_in_scope_assumption(self):
+        # Create a pass that clears ir.Scope in ir.Block
+        @register_pass(mutates_CFG=False, analysis_only=False)
+        class RemoveVarInScope(FunctionPass):
+            _name = "_remove_var_in_scope"
+
+            def __init__(self):
+                FunctionPass.__init__(self)
+
+            # implement method to do the work, "state" is the internal compiler
+            # state from the CompilerBase instance.
+            def run_pass(self, state):
+                func_ir = state.func_ir
+                # walk the blocks
+                for blk in func_ir.blocks.values():
+                    oldscope = blk.scope
+                    # put in an empty Scope
+                    blk.scope = ir.Scope(parent=oldscope.parent,
+                                         loc=oldscope.loc)
+                return True
+
+        # Create a pass that always fails, to stop the compiler
+        @register_pass(mutates_CFG=False, analysis_only=False)
+        class FailPass(FunctionPass):
+            _name = "_fail"
+
+            def __init__(self, *args, **kwargs):
+                FunctionPass.__init__(self)
+
+            def run_pass(self, state):
+                # This is unreachable. SSA pass should have raised before this
+                # pass when run with `error.NumbaPedanticWarning`s raised as
+                # errors.
+                raise AssertionError("unreachable")
+
+        class MyCompiler(CompilerBase):
+            def define_pipelines(self):
+                pm = PassManager("testing pm")
+                pm.add_pass(TranslateByteCode, "analyzing bytecode")
+                pm.add_pass(IRProcessing, "processing IR")
+                pm.add_pass(RemoveVarInScope, "_remove_var_in_scope")
+                pm.add_pass(ReconstructSSA, "ssa")
+                pm.add_pass(FailPass, "_fail")
+                pm.finalize()
+                return [pm]
+
+        @njit(pipeline_class=MyCompiler)
+        def dummy(x):
+            # To trigger SSA and the pedantic check, this function must have
+            # multiple assignments to the same variable in different blocks.
+            a = 1
+            b = 2
+            if a < b:
+                a = 2
+            else:
+                b = 3
+            return a, b
+
+        with warnings.catch_warnings():
+            # Make NumbaPedanticWarning an error
+            warnings.simplefilter("error", errors.NumbaPedanticWarning)
+            # Catch NumbaIRAssumptionWarning
+            with self.assertRaises(errors.NumbaIRAssumptionWarning) as raises:
+                dummy(1)
+            # Verify the error message
+            self.assertRegex(
+                str(raises.exception),
+                r"variable '[a-z]' is not in scope",
+            )
 
 
 if __name__ == '__main__':

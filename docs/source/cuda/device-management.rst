@@ -67,10 +67,26 @@ obtain a context manager that ensures execution on the selected GPU.
    :noindex:
 .. attribute:: numba.cuda.cudadrv.devices.gpus
 
-:py:data:`.gpus` is an instance of the :class:`_DeviceList` class, from which
-the current GPU context can also be retrieved:
+:py:data:`numba.cuda.gpus` is an instance of the ``_DeviceList`` class, from
+which the current GPU context can also be retrieved:
 
 .. autoclass:: numba.cuda.cudadrv.devices._DeviceList
     :members: current
     :noindex:
+
+
+Device UUIDs
+============
+
+The UUID of a device (equal to that returned by ``nvidia-smi -L``) is available
+in the :attr:`uuid <numba.cuda.cudadrv.driver.Device.uuid>` attribute of a CUDA
+device object.
+
+For example, to obtain the UUID of the current device:
+
+.. code-block:: python
+
+   dev = cuda.current_context().device
+   # prints e.g. "GPU-e6489c45-5b68-3b03-bab7-0e7c8e809643"
+   print(dev.uuid)
 

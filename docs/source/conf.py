@@ -15,7 +15,6 @@
 
 import sys
 import os
-import sphinx_bootstrap_theme
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
@@ -27,6 +26,16 @@ except ImportError:
     # Numba is run from its source checkout
     sys.path.insert(0, os.path.abspath('../..'))
     import numba
+
+
+on_rtd = os.environ.get('READTHEDOCS') == 'True'
+
+if on_rtd:
+    # The following is needed to fix RTD issue with numpydoc
+    # https://github.com/readthedocs/sphinx_rtd_theme/issues/766
+    from conda.cli.python_api import run_command as conda_cmd
+
+    conda_cmd("install", "-c", "conda-forge", "sphinx_rtd_theme>=0.5.1", "-y")
 
 # -- General configuration ------------------------------------------------
 
@@ -65,7 +74,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Numba'
-copyright = u'2012, Anaconda, Inc.'
+copyright = u'2012-2020, Anaconda, Inc. and others'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -118,20 +127,28 @@ pygments_style = 'sphinx'
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-#html_theme = 'default'
+html_theme = 'sphinx_rtd_theme'
 
-# pip install sphinx_bootstrap_theme
-html_theme = 'bootstrap'
-
-# Theme options are theme-specific and customize the look and feel of a theme
-# further.  For a list of options available for each theme, see the
-# documentation.
+# All sphinx_rtd_theme options. Default values commented out; uncomment to
+# change.
 html_theme_options = {
-  'bootswatch_theme': "paper",
+    'canonical_url': 'https://numba.readthedocs.io/en/stable/',
+    # 'logo_only': False,
+    # 'display_version': True,
+    # 'prev_next_buttons_location': 'bottom',
+    'style_external_links': True,
+    # 'vcs_pageview_mode': '',
+    'style_nav_header_background': '#00A3E0',
+    # Toc options
+    'collapse_navigation': False,
+    # 'sticky_navigation': True,
+    # 'navigation_depth': 4,
+    # 'includehidden': True,
+    # 'titles_only': False
 }
 
 # Add any paths that contain custom themes here, relative to this directory.
-html_theme_path = sphinx_bootstrap_theme.get_html_theme_path()
+#html_theme_path = None
 
 # The name for this set of Sphinx documents.  If None, it defaults to
 # "<project> v<release> documentation".
@@ -142,12 +159,12 @@ html_theme_path = sphinx_bootstrap_theme.get_html_theme_path()
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-html_logo = "../_static/numba_blue_icon_rgb.png"
+html_logo = "../_static/numba-white-icon-rgb.svg"
 
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
 # pixels large.
-#html_favicon = None
+html_favicon = '../_static/numba-blue-icon-rgb.svg'
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
@@ -207,22 +224,22 @@ htmlhelp_basename = 'Numbadoc'
 # -- Options for LaTeX output ---------------------------------------------
 
 latex_elements = {
-# The paper size ('letterpaper' or 'a4paper').
-#'papersize': 'letterpaper',
+    # The paper size ('letterpaper' or 'a4paper').
+    #'papersize': 'letterpaper',
 
-# The font size ('10pt', '11pt' or '12pt').
-#'pointsize': '10pt',
+    # The font size ('10pt', '11pt' or '12pt').
+    #'pointsize': '10pt',
 
-# Additional stuff for the LaTeX preamble.
-#'preamble': '',
+    # Additional stuff for the LaTeX preamble.
+    #'preamble': '',
 }
 
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-  ('index', 'numba.tex', u'Numba Documentation',
-   u'Anaconda', 'manual'),
+    ('index', 'numba.tex', u'Numba Documentation',
+     u'Anaconda', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -265,9 +282,9 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  ('index', 'Numba', 'Numba Documentation',
-   'Anaconda', 'Numba', 'One line description of project.',
-   'Miscellaneous'),
+    ('index', 'Numba', 'Numba Documentation',
+     'Anaconda', 'Numba', 'One line description of project.',
+     'Miscellaneous'),
 ]
 
 # Documents to append as an appendix to all manuals.
@@ -287,9 +304,9 @@ texinfo_documents = [
 # and the Numpy documentation.
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
-    'numpy': ('http://docs.scipy.org/doc/numpy', None),
-    'llvmlite': ('http://llvmlite.pydata.org/en/latest/', None),
-    }
+    'numpy': ('https://numpy.org/doc/stable/', None),
+    'llvmlite': ('https://llvmlite.readthedocs.io/en/latest/', None),
+}
 
 
 # numpydoc options
@@ -299,9 +316,10 @@ numpydoc_show_class_members = False
 
 # -- Custom autogeneration ------------------------------------------------
 
+
 def _autogenerate():
     from numba.scripts.generate_lower_listing import gen_lower_listing
-    from numba.help.inspector import write_listings
+    from numba.misc.help.inspector import write_listings
 
     basedir = os.path.dirname(__file__)
     gen_lower_listing(os.path.join(basedir,
@@ -322,4 +340,4 @@ _autogenerate()
 
 
 def setup(app):
-    app.add_stylesheet("numba-docs.css")
+    app.add_css_file('rtd-overrides.css')

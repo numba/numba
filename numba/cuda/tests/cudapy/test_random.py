@@ -1,13 +1,10 @@
-from __future__ import print_function, division, absolute_import
-
 import math
 
 import numpy as np
 
-from numba import cuda, config, float32
+from numba import cuda
 from numba.cuda.testing import unittest
-import numba.cuda.random
-from numba.cuda.testing import skip_on_cudasim, SerialMixin
+from numba.cuda.testing import skip_on_cudasim, CUDATestCase
 
 from numba.cuda.random import \
     xoroshiro128p_uniform_float32, xoroshiro128p_normal_float32, \
@@ -24,10 +21,12 @@ def rng_kernel_float32(states, out, count, distribution):
     thread_id = cuda.grid(1)
 
     for i in range(count):
+        idx = thread_id * count + i
+
         if distribution == UNIFORM:
-            out[thread_id * count + i] = xoroshiro128p_uniform_float32(states, thread_id)
+            out[idx] = xoroshiro128p_uniform_float32(states, thread_id)
         elif distribution == NORMAL:
-            out[thread_id * count + i] = xoroshiro128p_normal_float32(states, thread_id)
+            out[idx] = xoroshiro128p_normal_float32(states, thread_id)
 
 
 @cuda.jit
@@ -35,13 +34,15 @@ def rng_kernel_float64(states, out, count, distribution):
     thread_id = cuda.grid(1)
 
     for i in range(count):
+        idx = thread_id * count + i
+
         if distribution == UNIFORM:
-            out[thread_id * count + i] = xoroshiro128p_uniform_float64(states, thread_id)
+            out[idx] = xoroshiro128p_uniform_float64(states, thread_id)
         elif distribution == NORMAL:
-            out[thread_id * count + i] = xoroshiro128p_normal_float64(states, thread_id)
+            out[idx] = xoroshiro128p_normal_float64(states, thread_id)
 
 
-class TestCudaRandomXoroshiro128p(SerialMixin, unittest.TestCase):
+class TestCudaRandomXoroshiro128p(CUDATestCase):
     def test_create(self):
         states = cuda.random.create_xoroshiro128p_states(10, seed=1)
         s = states.copy_to_host()
@@ -52,7 +53,7 @@ class TestCudaRandomXoroshiro128p(SerialMixin, unittest.TestCase):
         s1 = states.copy_to_host()
 
         states = cuda.random.create_xoroshiro128p_states(10, seed=1,
-            subsequence_start=3)
+                                                         subsequence_start=3)
         s2 = states.copy_to_host()
 
         # Starting seeds should match up with offset of 3
@@ -60,7 +61,8 @@ class TestCudaRandomXoroshiro128p(SerialMixin, unittest.TestCase):
 
     def test_create_stream(self):
         stream = cuda.stream()
-        states = cuda.random.create_xoroshiro128p_states(10, seed=1, stream=stream)
+        states = cuda.random.create_xoroshiro128p_states(10, seed=1,
+                                                         stream=stream)
         s = states.copy_to_host()
         self.assertEqual(len(np.unique(s)), 10)
 
@@ -72,7 +74,7 @@ class TestCudaRandomXoroshiro128p(SerialMixin, unittest.TestCase):
         self.assertAlmostEqual(out.min(), 0.0, delta=1e-3)
         self.assertAlmostEqual(out.max(), 1.0, delta=1e-3)
         self.assertAlmostEqual(out.mean(), 0.5, delta=1.5e-2)
-        self.assertAlmostEqual(out.std(), 1.0/(2*math.sqrt(3)), delta=6e-3)
+        self.assertAlmostEqual(out.std(), 1.0 / (2 * math.sqrt(3)), delta=6e-3)
 
     def test_uniform_float32(self):
         self.check_uniform(rng_kernel_float32, np.float32)
@@ -96,6 +98,7 @@ class TestCudaRandomXoroshiro128p(SerialMixin, unittest.TestCase):
     @skip_on_cudasim('skip test for speed under cudasim')
     def test_normal_float64(self):
         self.check_normal(rng_kernel_float64, np.float64)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -4,7 +4,6 @@ exercise caching compiled C callbacks.
 
 See test_cfunc.py.
 """
-from __future__ import division, print_function, absolute_import
 
 import sys
 
@@ -64,10 +63,6 @@ class _TestModule(TestCase):
             f.ctypes(7, 0)
         err = err.getvalue()
         self.assertIn("ZeroDivisionError", err)
-
-    # For 2.x
-    def runTest(self):
-        raise NotImplementedError
 
 
 def self_test():

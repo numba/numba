@@ -2,7 +2,7 @@
 
 import numpy as np
 from numba import from_dtype, njit, void
-from .support import TestCase
+from numba.tests.support import TestCase
 
 
 class TestAlignment(TestCase):

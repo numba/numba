@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import array
 import gc
 import itertools
@@ -7,10 +5,12 @@ import sys
 
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from numba import types, jit, numpy_support
-from .support import TestCase
+import unittest
+from numba.core.compiler import compile_isolated, Flags
+from numba import jit
+from numba.core import types
+from numba.tests.support import TestCase
+from numba.np import numpy_support
 
 
 def identity(x):
@@ -215,6 +215,18 @@ class TestConversion(TestCase):
         mem = memoryview(bytearray(b"xyz"))
         tp = types.Optional(types.Buffer(types.intc, 1, 'C'))
         self.check_argument_cleanup(tp, mem)
+
+    def test_stringliteral_to_unicode(self):
+        # See issue #6907, explicit signature on bar() takes a unicode_type but
+        # the call to bar() in foo() is with a StringLiteral
+
+        @jit(types.void(types.unicode_type), nopython=True)
+        def bar(string):
+            pass
+
+        @jit(types.void(), nopython=True)
+        def foo2():
+            bar("literal string")
 
 
 if __name__ == '__main__':

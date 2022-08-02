@@ -1,14 +1,12 @@
 """
 Testing C implementation of the numba typed-list
 """
-from __future__ import print_function, absolute_import, division
 
 import ctypes
 import struct
 
-from .support import TestCase
+from numba.tests.support import TestCase
 from numba import _helperlib
-from numba.six import b
 
 
 LIST_OK = 0
@@ -16,6 +14,7 @@ LIST_ERR_INDEX = -1
 LIST_ERR_NO_MEMORY = -2
 LIST_ERR_MUTATED = -3
 LIST_ERR_ITER_EXHAUSTED = -4
+LIST_ERR_IMMUTABLE = -5
 
 
 class List(object):
@@ -56,9 +55,28 @@ class List(object):
     def __delitem__(self, i):
         self.list_delitem(i)
 
+    def handle_index(self, i):
+        # handling negative indices is done at the compiler level, so we only
+        # support -1 to be last element of the list here
+        if i < -1 or len(self) == 0:
+            IndexError("list index out of range")
+        elif i == -1:
+            i = len(self) - 1
+        return i
+
     @property
     def allocated(self):
         return self.list_allocated()
+
+    @property
+    def is_mutable(self):
+        return self.list_is_mutable()
+
+    def set_mutable(self):
+        return self.list_set_is_mutable(1)
+
+    def set_immutable(self):
+        return self.list_set_is_mutable(0)
 
     def append(self, item):
         self.list_append(item)
@@ -82,14 +100,23 @@ class List(object):
     def list_allocated(self):
         return self.tc.numba_list_allocated(self.lp)
 
+    def list_is_mutable(self):
+        return self.tc.numba_list_is_mutable(self.lp)
+
+    def list_set_is_mutable(self, is_mutable):
+        return self.tc.numba_list_set_is_mutable(self.lp, is_mutable)
+
     def list_setitem(self, i, item):
         status = self.tc.numba_list_setitem(self.lp, i, item)
         if status == LIST_ERR_INDEX:
             raise IndexError("list index out of range")
+        elif status == LIST_ERR_IMMUTABLE:
+            raise ValueError("list is immutable")
         else:
             self.tc.assertEqual(status, LIST_OK)
 
     def list_getitem(self, i):
+        i = self.handle_index(i)
         item_out_buffer = ctypes.create_string_buffer(self.item_size)
         status = self.tc.numba_list_getitem(self.lp, i, item_out_buffer)
         if status == LIST_ERR_INDEX:
@@ -100,22 +127,16 @@ class List(object):
 
     def list_append(self, item):
         status = self.tc.numba_list_append(self.lp, item)
+        if status == LIST_ERR_IMMUTABLE:
+            raise ValueError("list is immutable")
         self.tc.assertEqual(status, LIST_OK)
 
     def list_pop(self, i):
-        # handling negative indices is done at the compiler level, so we only
-        # support -1 to be last element of the list here
-        if i < -1 or len(self) == 0:
-            IndexError("list index out of range")
-        elif i is -1:
-            i = len(self) - 1
-        item_out_buffer = ctypes.create_string_buffer(self.item_size)
-        status = self.tc.numba_list_pop(self.lp, i, item_out_buffer)
-        if status == LIST_ERR_INDEX:
-            raise IndexError("list index out of range")
-        else:
-            self.tc.assertEqual(status, LIST_OK)
-            return item_out_buffer.raw
+        # pop is getitem and delitem
+        i = self.handle_index(i)
+        item = self.list_getitem(i)
+        self.list_delitem(i)
+        return item
 
     def list_delitem(self, i):
         # special case slice
@@ -124,10 +145,18 @@ class List(object):
                                                      i.start,
                                                      i.stop,
                                                      i.step)
+            if status == LIST_ERR_IMMUTABLE:
+                raise ValueError("list is immutable")
             self.tc.assertEqual(status, LIST_OK)
-        # must be an integer, defer to pop
+        # must be an integer, defer to delitem
         else:
-            self.list_pop(i)
+            i = self.handle_index(i)
+            status = self.tc.numba_list_delitem(self.lp, i)
+            if status == LIST_ERR_INDEX:
+                raise IndexError("list index out of range")
+            elif status == LIST_ERR_IMMUTABLE:
+                raise ValueError("list is immutable")
+            self.tc.assertEqual(status, LIST_OK)
 
     def list_iter(self, itptr):
         self.tc.numba_list_iter(itptr, self.lp)
@@ -207,6 +236,18 @@ class TestListImpl(TestCase):
             ctypes.c_int,
             [list_t],
         )
+        # numba_list_is_mutable(NB_List *lp)
+        self.numba_list_is_mutable = wrap(
+            'list_is_mutable',
+            ctypes.c_int,
+            [list_t],
+        )
+        # numba_list_set_is_mutable(NB_List *lp, int is_mutable)
+        self.numba_list_set_is_mutable = wrap(
+            'list_set_is_mutable',
+            None,
+            [list_t, ctypes.c_int],
+        )
         # numba_list_setitem(NB_List *l, Py_ssize_t i, const char *item)
         self.numba_list_setitem = wrap(
             'list_setitem',
@@ -225,11 +266,11 @@ class TestListImpl(TestCase):
             ctypes.c_int,
             [list_t, ctypes.c_ssize_t, ctypes.c_char_p],
         )
-        # numba_list_pop(NB_List *l,  Py_ssize_t i, char *out)
-        self.numba_list_pop = wrap(
-            'list_pop',
+        # numba_list_delitem(NB_List *l,  Py_ssize_t i)
+        self.numba_list_delitem = wrap(
+            'list_delitem',
             ctypes.c_int,
-            [list_t, ctypes.c_ssize_t, ctypes.c_char_p],
+            [list_t, ctypes.c_ssize_t],
         )
         # numba_list_delete_slice(NB_List *l,
         #                         Py_ssize_t start,
@@ -375,6 +416,26 @@ class TestListImpl(TestCase):
         received = [j for j in l]
         self.assertEqual(received, expected)
 
+    def test_delitem(self):
+        l = List(self, 1, 0)
+        values = [b'a', b'b', b'c', b'd', b'e', b'f', b'g', b'h']
+        for i in values:
+            l.append(i)
+        self.assertEqual(len(l), 8)
+
+        # delete first item
+        del l[0]
+        self.assertEqual(len(l), 7)
+        self.assertEqual(list(l), values[1:])
+        # delete last item
+        del l[-1]
+        self.assertEqual(len(l), 6)
+        self.assertEqual(list(l), values[1:-1])
+        # delete item from middle
+        del l[2]
+        self.assertEqual(len(l), 5)
+        self.assertEqual(list(l), [b'b', b'c', b'e', b'f', b'g'])
+
     def test_delete_slice(self):
         l = List(self, 1, 0)
         values = [b'a', b'b', b'c', b'd', b'e', b'f', b'g', b'h']
@@ -408,7 +469,8 @@ class TestListImpl(TestCase):
         l = List(self, item_size, 0)
 
         def make_item(v):
-            return b("{:0{}}".format(nmax - v - 1, item_size)[:item_size])
+            tmp = "{:0{}}".format(nmax - v - 1, item_size).encode("latin-1")
+            return tmp[:item_size]
 
         for i in range(nmax):
             l.append(make_item(i))
@@ -422,3 +484,44 @@ class TestListImpl(TestCase):
         # Check different sizes of the key & value.
         for i in range(1, 16):
             self.check_sizing(item_size=i, nmax=2**i)
+
+    def test_mutability(self):
+        # setup and populate a singleton
+        l = List(self, 8, 1)
+        one = struct.pack("q", 1)
+        l.append(one)
+        self.assertTrue(l.is_mutable)
+        self.assertEqual(len(l), 1)
+        r = struct.unpack("q", l[0])[0]
+        self.assertEqual(r, 1)
+
+        # set to immutable and test guards
+        l.set_immutable()
+        self.assertFalse(l.is_mutable)
+        # append
+        with self.assertRaises(ValueError) as raises:
+            l.append(one)
+        self.assertIn("list is immutable", str(raises.exception))
+        # setitem
+        with self.assertRaises(ValueError) as raises:
+            l[0] = one
+        self.assertIn("list is immutable", str(raises.exception))
+        # pop
+        with self.assertRaises(ValueError) as raises:
+            l.pop()
+        self.assertIn("list is immutable", str(raises.exception))
+        # delitem with index
+        with self.assertRaises(ValueError) as raises:
+            del l[0]
+        self.assertIn("list is immutable", str(raises.exception))
+        # delitem with slice
+        with self.assertRaises(ValueError) as raises:
+            del l[0:1:1]
+        self.assertIn("list is immutable", str(raises.exception))
+        l.set_mutable()
+
+        # check that nothing has changed
+        self.assertTrue(l.is_mutable)
+        self.assertEqual(len(l), 1)
+        r = struct.unpack("q", l[0])[0]
+        self.assertEqual(r, 1)
