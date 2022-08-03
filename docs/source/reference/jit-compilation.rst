@@ -1,11 +1,10 @@
 Just-in-Time compilation
 ========================
 
+.. _jit-decorator:
 
 JIT functions
 -------------
-
-.. _jit-decorator:
 
 .. decorator:: numba.jit(signature=None, nopython=False, nogil=False, cache=False, forceobj=False, parallel=False, error_model='python', fastmath=False, locals={}, boundscheck=False)
 
