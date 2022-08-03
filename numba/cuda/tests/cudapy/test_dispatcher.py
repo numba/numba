@@ -238,7 +238,7 @@ class TestDispatcher(CUDATestCase):
         # A more interesting one...
         # (Note that the type of r is deliberately float64 in both cases so
         # that dispatch is differentiated on the types of x and y only, to
-        # closely preserve the intent of the original test in
+        # closely preserve the intent of the original test from
         # numba.tests.test_dispatcher)
         sigs = ["(float64[::1], float32, float32)",
                 "(float64[::1], float64, float64)"]
@@ -293,16 +293,22 @@ class TestDispatcher(CUDATestCase):
         f[1, 1](r, np.int32(1), 2.5)
         self.assertPreciseEqual(r[0], 3.5)
 
-    def test_explicit_signatures_device(self):
-        # Tests similar to test_explicit_signatures, but on a device function
-        # instead of a kernel
-        sigs = ["(int64, int64)",
-                "(float64, float64)"]
+    def add_device_usecase(self, sigs):
+        # Generate a kernel that calls the add device function compiled with a
+        # given set of signatures
         add_device = cuda.jit(sigs, device=True)(add)
 
         @cuda.jit
         def f(r, x, y):
             r[0] = add_device(x, y)
+
+        return f
+
+    def test_explicit_signatures_device(self):
+        # Tests similar to test_explicit_signatures, but on a device function
+        # instead of a kernel
+        sigs = ["(int64, int64)", "(float64, float64)"]
+        f = self.add_device_usecase(sigs)
 
         # Exact signature matches
         r = np.zeros(1, dtype=np.int64)
@@ -326,15 +332,10 @@ class TestDispatcher(CUDATestCase):
         # A more interesting one...
         # (Note that the type of r is deliberately float64 in both cases so
         # that dispatch is differentiated on the types of x and y only, to
-        # closely preserve the intent of the original test in
+        # closely preserve the intent of the original test from
         # numba.tests.test_dispatcher)
-        sigs = ["(float32, float32)",
-                "(float64, float64)"]
-        add_device = cuda.jit(sigs, device=True)(add)
-
-        @cuda.jit
-        def f(r, x, y):
-            r[0] = add_device(x, y)
+        sigs = ["(float32, float32)", "(float64, float64)"]
+        f = self.add_device_usecase(sigs)
 
         r = np.zeros(1, dtype=np.float64)
         f[1, 1](r, np.float32(1), np.float32(2**-25))
@@ -349,13 +350,8 @@ class TestDispatcher(CUDATestCase):
         # overloads when launching a kernel, but seems to be the general
         # behaviour of Numba (See Issue #8307:
         # https://github.com/numba/numba/issues/8307).
-        add_device = cuda.jit(["(float32,float64)",
-                               "(float64,float32)",
-                               "(int64,int64)"], device=True)(add)
-
-        @cuda.jit
-        def f(r, x, y):
-            r[0] = add_device(x, y)
+        sigs = ["(float32,float64)", "(float64,float32)", "(int64,int64)"]
+        f = self.add_device_usecase(sigs)
 
         r = np.zeros(1, dtype=np.float64)
         f[1, 1](r, 1.5, 2.5)
@@ -367,25 +363,16 @@ class TestDispatcher(CUDATestCase):
         # can handle unsafe casting (c.f. test_explicit_signatures_unsafe which
         # has to xfail due to _prepare_args not supporting unsafe casting).
         sigs = ["(int64, int64)"]
-        add_device = cuda.jit(sigs, device=True)(add)
-
-        @cuda.jit
-        def f(r, x, y):
-            r[0] = add_device(x, y)
-
-        r = np.zeros(1, dtype=np.int64)
+        f = self.add_device_usecase(sigs)
 
         # Approximate match (unsafe conversion)
+        r = np.zeros(1, dtype=np.int64)
         f[1, 1](r, 1.5, 2.5)
         self.assertPreciseEqual(r[0], 3)
         self.assertEqual(len(f.overloads), 1, f.overloads)
 
         sigs = ["(int64, int64)", "(float64, float64)"]
-        add_device = cuda.jit(sigs, device=True)(add)
-
-        @cuda.jit
-        def f(r, x, y):
-            r[0] = add_device(x, y)
+        f = self.add_device_usecase(sigs)
 
         # Approximate match (int32 -> float64 is a safe conversion)
         r = np.zeros(1, dtype=np.float64)
