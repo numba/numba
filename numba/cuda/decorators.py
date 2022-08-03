@@ -14,21 +14,22 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
 def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
         opt=True, cache=False, **kws):
     """
-    JIT compile a python function conforming to the CUDA Python specification.
-    If a signature is supplied, then a function is returned that takes a
-    function to compile.
+    JIT compile a Python function for CUDA GPUs.
 
-    :param func_or_sig: A function to JIT compile, or a signature of a function
-       to compile. If a function is supplied, then a
-       :class:`numba.cuda.compiler.AutoJitCUDAKernel` is returned. If a
-       signature is supplied, then a function is returned. The returned
-       function accepts another function, which it will compile and then return
-       a :class:`numba.cuda.compiler.AutoJitCUDAKernel`.
+    :param func_or_sig: A function to JIT compile, or *signatures* of a
+       function to compile. If a function is supplied, then a
+       :class:`Dispatcher <numba.cuda.dispatcher.CUDADispatcher>` is returned.
+       Otherwise, ``func_or_sig`` may be a signature or a list of signatures,
+       and a function is returned. The returned function accepts another
+       function, which it will compile and then return a :class:`Dispatcher
+       <numba.cuda.dispatcher.CUDADispatcher>`. See :ref:`jit-decorator` for
+       more information about passing signatures.
 
        .. note:: A kernel cannot have any return value.
     :param device: Indicates whether this is a device function.
     :type device: bool
-    :param link: A list of files containing PTX source to link with the function
+    :param link: A list of files containing PTX or CUDA C/C++ source to link
+       with the function
     :type link: list
     :param debug: If True, check for exceptions thrown when executing the
        kernel. Since this degrades performance, this should only be used for
