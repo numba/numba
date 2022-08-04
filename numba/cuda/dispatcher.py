@@ -197,6 +197,13 @@ class _Kernel(serialize.ReduceMixin):
         The amount of shared memory used per block for this kernel.
         '''
         return self._codelibrary.get_cufunc().attrs.shared
+    
+    @property
+    def local_mem_per_thread(self):
+        '''
+        The amount of local memory used per thread for this kernel.
+        '''
+        return self._codelibrary.get_cufunc().attrs.local
 
     def inspect_llvm(self):
         '''
@@ -720,6 +727,25 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
             return next(iter(self.overloads.values())).shared_mem_per_block
         else:
             return {sig: overload.shared_mem_per_block
+                    for sig, overload in self.overloads.items()}
+    
+    def get_local_mem_per_thread(self, signature=None):
+        '''
+        Returns the size in bytes of local memory per thread
+        for this kernel.
+
+        :param signature: The signature of the compiled kernel to get local
+                          memory usage for. This may be omitted for a
+                          specialized kernel.
+        :return: The amount of local memory allocated by the compiled variant
+                 of the kernel for the given signature and current device.
+        '''
+        if signature is not None:
+            return self.overloads[signature.args].local_mem_per_thread
+        if self.specialized:
+            return next(iter(self.overloads.values())).local_mem_per_thread
+        else:
+            return {sig: overload.local_mem_per_thread
                     for sig, overload in self.overloads.items()}
 
     def get_call_template(self, args, kws):
