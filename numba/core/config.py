@@ -223,6 +223,9 @@ class _EnvReloader(object):
         # Enable debug prints in nrtdynmod and use of "safe" API functions
         DEBUG_NRT = _readenv("NUMBA_DEBUG_NRT", int, 0)
 
+        # Enable NRT statistics counters
+        NRT_STATS = _readenv("NUMBA_NRT_STATS", int, 0)
+
         # How many recently deserialized functions to retain regardless
         # of external references
         FUNCTION_CACHE_SIZE = _readenv("NUMBA_FUNCTION_CACHE_SIZE", int, 128)

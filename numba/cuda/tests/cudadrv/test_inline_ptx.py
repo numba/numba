@@ -9,6 +9,7 @@ from numba.cuda.testing import skip_on_cudasim
 class TestCudaInlineAsm(ContextResettingTestCase):
     def test_inline_rsqrt(self):
         mod = ir.Module(__name__)
+        mod.triple = 'nvptx64-nvidia-cuda'
         fnty = ir.FunctionType(ir.VoidType(), [ir.PointerType(ir.FloatType())])
         fn = ir.Function(mod, fnty, 'cu_rsqrt')
         bldr = ir.IRBuilder(fn.append_basic_block('entry'))
