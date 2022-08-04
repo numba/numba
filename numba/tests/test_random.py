@@ -1151,6 +1151,9 @@ class TestRandomArrays(BaseTest):
     def test_numpy_wald(self):
         self._check_array_dist("wald", (0.1, 0.4))
 
+    def test_numpy_vonmises(self):
+        self._check_array_dist_self("vonmises", (0.5, 2.5))
+
     def test_numpy_zipf(self):
         self._check_array_dist("zipf", (2.5,))
 

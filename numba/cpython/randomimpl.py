@@ -975,7 +975,6 @@ def binomial_impl(n, p):
             np_prod = n * p
             bound = min(n, np_prod + 10.0 * math.sqrt(np_prod * q + 1))
 
-            finished = False
             total = 0
             while niters > 0:
                 X = 0
