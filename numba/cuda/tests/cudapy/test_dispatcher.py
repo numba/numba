@@ -327,6 +327,9 @@ class TestDispatcher(CUDATestCase):
         self.assertEqual(shared_mem_per_block, 400)
 
     def test_get_local_mem_per_block_unspecialized(self):
+        # NOTE: A large amount of local memory must be allcoated
+        # otherwise the compiler will optimize out the call to
+        # cuda.local.array and use local registers instead
         N = 10000
 
         # A kernel where the local memory per thread is likely to differ
@@ -346,7 +349,6 @@ class TestDispatcher(CUDATestCase):
 
         simple_lmem[1, 1](arr_f32)
         simple_lmem[1, 1](arr_f64)
-        print(list(simple_lmem.inspect_asm().values())[0])
 
         sig_f32 = void(float32[::1])
         sig_f64 = void(float64[::1])
@@ -365,7 +367,25 @@ class TestDispatcher(CUDATestCase):
         sh_mem_f64_all = simple_lmem.get_local_mem_per_thread()
         self.assertEqual(sh_mem_f32_all[sig_f32.args], local_mem_f32)
         self.assertEqual(sh_mem_f64_all[sig_f64.args], local_mem_f64)
-    
+
+    def test_get_local_mem_per_thread_specialized(self):
+        # NOTE: A large amount of local memory must be allcoated
+        # otherwise the compiler will optimize out the call to
+        # cuda.local.array and use local registers instead
+        N = 10000
+
+        @cuda.jit(void(float32[::1]))
+        def simple_lmem(ary):
+            lm = cuda.local.array(N, dtype=ary.dtype)
+            for j in range(N):
+                lm[j] = j
+            for j in range(N):
+                ary[j] = lm[j]
+
+        local_mem_per_thread = simple_lmem.get_local_mem_per_thread()
+        self.assertIsInstance(local_mem_per_thread, int)
+        self.assertEqual(local_mem_per_thread, N * 4)
+
     def test_dispatcher_docstring(self):
         # Ensure that CUDA-jitting a function preserves its docstring. See
         # Issue #5902: https://github.com/numba/numba/issues/5902

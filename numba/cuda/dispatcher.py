@@ -197,7 +197,7 @@ class _Kernel(serialize.ReduceMixin):
         The amount of shared memory used per block for this kernel.
         '''
         return self._codelibrary.get_cufunc().attrs.shared
-    
+
     @property
     def local_mem_per_thread(self):
         '''
@@ -728,7 +728,7 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         else:
             return {sig: overload.shared_mem_per_block
                     for sig, overload in self.overloads.items()}
-    
+
     def get_local_mem_per_thread(self, signature=None):
         '''
         Returns the size in bytes of local memory per thread
