@@ -4,7 +4,6 @@ import sys
 import numpy as np
 
 from numba import vectorize, guvectorize
-from numba.np.numpy_support import numpy_version
 
 from numba.tests.support import (TestCase, CheckWarningsMixin,
                                  skip_m1_fenv_errors)
@@ -48,12 +47,8 @@ class TestExceptions(TestCase):
         with self.assertRaises(ValueError) as cm:
             f(arr, out)
         self.assertIn('Value must be positive', str(cm.exception))
-        if numpy_version < (1, 19):
-            # After the first error we get garbage
-            self.assertEqual(list(out), [1, 2, 0, 2, 0, 2])
-        else:
-            # All values were computed except for the ones giving an error
-            self.assertEqual(list(out), [1, 2, 0, 3, 0, 4])
+        # All values were computed except for the ones giving an error
+        self.assertEqual(list(out), [1, 2, 0, 3, 0, 4])
 
     def test_ufunc_raise(self):
         self.check_ufunc_raise(nopython=True)

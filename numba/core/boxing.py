@@ -73,26 +73,16 @@ def box_float(typ, val, c):
 
 @unbox(types.Float)
 def unbox_float(typ, obj, c):
-    is_error_ptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
-    float_val = cgutils.alloca_once(c.builder, c.context.get_argument_type(typ))
-    with ExitStack() as stack:
-        fobj = c.pyapi.number_float(obj)
-        with early_exit_if_null(c.builder, stack, fobj):
-            c.builder.store(cgutils.true_bit, is_error_ptr)
-
-        dbval = c.pyapi.float_as_double(fobj)
-        c.pyapi.decref(fobj)
-        with early_exit_if(c.builder, stack, c.pyapi.c_api_error()):
-            c.builder.store(cgutils.true_bit, is_error_ptr)
-
-        if typ == types.float32:
-            val = c.builder.fptrunc(dbval,
-                                    c.context.get_argument_type(typ))
-        else:
-            assert typ == types.float64
-            val = dbval
-        c.builder.store(val, float_val)
-    return NativeValue(c.builder.load(float_val), is_error=c.builder.load(is_error_ptr))
+    fobj = c.pyapi.number_float(obj)
+    dbval = c.pyapi.float_as_double(fobj)
+    c.pyapi.decref(fobj)
+    if typ == types.float32:
+        val = c.builder.fptrunc(dbval,
+                                c.context.get_argument_type(typ))
+    else:
+        assert typ == types.float64
+        val = dbval
+    return NativeValue(val, is_error=c.pyapi.c_api_error())
 
 
 @box(types.Complex)
