@@ -503,9 +503,10 @@ class TestRandom(BaseTest):
         self._check_dist(func, r.uniform,
                          [(1.5, 1e6), (-2.5, 1e3), (1.5, -2.5)])
 
-    def _check_arbitrary_distrib_kwargs(self, func, ptr, distrib, paramlist):
+    def _check_any_distrib_kwargs(self, func, ptr, distrib, paramlist):
         """
-        Check any numpy distribution function. Does Numba use the same keyword argument names as Numpy?
+        Check any numpy distribution function. Does Numba use the same keyword
+        argument names as Numpy?
         And given a fixed seed, do they both return the same samples?
         """
         # Our implementation follows Numpy's (not Python's)
@@ -521,12 +522,13 @@ class TestRandom(BaseTest):
         self._check_uniform(jit_binary("np.random.uniform"), get_np_state_ptr())
 
     def test_numpy_uniform_kwargs(self):
-        self._check_arbitrary_distrib_kwargs(jit_with_kwargs("np.random.uniform", ['low', 'high']),
-                                             get_np_state_ptr(),
-                                             'uniform',
-                                             paramlist=[{'low': 1.5, 'high': 1e6},
-                                                        {'low': -2.5, 'high': 1e3},
-                                                        {'low': 1.5, 'high': -2.5}])
+        self._check_any_distrib_kwargs(
+            jit_with_kwargs("np.random.uniform", ['low', 'high']),
+            get_np_state_ptr(),
+            'uniform',
+            paramlist=[{'low': 1.5, 'high': 1e6},
+                       {'low': -2.5, 'high': 1e3},
+                       {'low': 1.5, 'high': -2.5}])
 
     def _check_triangular(self, func2, func3, ptr):
         """
@@ -753,11 +755,12 @@ class TestRandom(BaseTest):
         self._check_dist(gumbel, r.gumbel, [(0.0, 1.0), (-1.5, 3.5)])
 
     def test_numpy_gumbel_kwargs(self):
-        self._check_arbitrary_distrib_kwargs(jit_with_kwargs("np.random.gumbel", ['loc', 'scale']),
-                                             get_np_state_ptr(),
-                                             distrib="gumbel",
-                                             paramlist=[{'loc': 0.0, 'scale': 1.0},
-                                                        {'loc': -1.5, 'scale': 3.5}])
+        self._check_any_distrib_kwargs(
+            jit_with_kwargs("np.random.gumbel", ['loc', 'scale']),
+            get_np_state_ptr(),
+            distrib="gumbel",
+            paramlist=[{'loc': 0.0, 'scale': 1.0},
+                       {'loc': -1.5, 'scale': 3.5}])
 
 
     def test_numpy_hypergeometric(self):
@@ -883,11 +886,11 @@ class TestRandom(BaseTest):
 
     def test_numpy_wald_kwargs(self):
         numba_version = jit_with_kwargs("np.random.wald", ['mean', 'scale'])
-        self._check_arbitrary_distrib_kwargs(numba_version,
-                                             get_np_state_ptr(),
-                                             distrib="wald",
-                                             paramlist=[{'mean': 1.0, 'scale': 1.0},
-                                                        {'mean': 2.0, 'scale': 5.0}])
+        self._check_any_distrib_kwargs(numba_version,
+                                       get_np_state_ptr(),
+                                       distrib="wald",
+                                       paramlist=[{'mean': 1.0, 'scale': 1.0},
+                                                  {'mean': 2.0, 'scale': 5.0}])
         self.assertRaises(ValueError, numba_version, 0.0, 1.0)
         self.assertRaises(ValueError, numba_version, -0.1, 1.0)
         self.assertRaises(ValueError, numba_version, 1.0, 0.0)
