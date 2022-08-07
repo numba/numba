@@ -42,9 +42,7 @@ class _OverloadWrapper(object):
         co_args = [co_argcount]
         additional_co_nlocals = len(varnames)
 
-        from numba.core import utils
-        if utils.PYVERSION >= (3, 8):
-            co_args.append(stub_code.co_posonlyargcount)
+        co_args.append(stub_code.co_posonlyargcount)
         co_args.append(stub_code.co_kwonlyargcount)
         co_args.extend([stub_code.co_nlocals + additional_co_nlocals,
                         stub_code.co_stacksize,

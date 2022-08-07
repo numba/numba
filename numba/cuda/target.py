@@ -1,10 +1,10 @@
 import re
+from functools import cached_property
 import llvmlite.binding as ll
 from llvmlite import ir
 
 from numba.core import typing, types, debuginfo, itanium_mangler, cgutils
 from numba.core.dispatcher import Dispatcher
-from numba.core.utils import cached_property
 from numba.core.base import BaseContext
 from numba.core.callconv import MinimalCallConv
 from numba.core.typing import cmathdecl

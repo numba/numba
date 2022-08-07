@@ -28,7 +28,7 @@ from numba.core.cpu import InlineOptions
 from numba.core.compiler import DefaultPassBuilder, CompilerBase
 from numba.core.typed_passes import InlineOverloads
 from numba.core.typing import signature
-from numba.tests.support import (TestCase, unittest, skip_py38_or_later,
+from numba.tests.support import (TestCase, unittest,
                                  MemoryLeakMixin, IRPreservingTestPipeline,
                                  skip_parfors_unsupported,
                                  ignore_internal_warnings)
@@ -437,42 +437,6 @@ class TestFunctionInlining(MemoryLeakMixin, InliningBase):
             return bar(z + 2)
 
         self.check(impl, inline_expect={'foo': True}, block_count=1)
-
-    @skip_py38_or_later
-    def test_inline_involved(self):
-
-        fortran = njit(inline='always')(_gen_involved())
-
-        @njit(inline='always')
-        def boz(j):
-            acc = 0
-
-            def biz(t):
-                return t + acc
-            for x in range(j):
-                acc += biz(8 + acc) + fortran(2., acc, 1, 12j, biz(acc))
-            return acc
-
-        @njit(inline='always')
-        def foo(a):
-            acc = 0
-            for p in range(12):
-                tmp = fortran(1, 1, 1, 1, 1)
-
-                def baz(x):
-                    return 12 + a + x + tmp
-                acc += baz(p) + 8 + boz(p) + tmp
-            return acc + baz(2)
-
-        def impl():
-            z = 9
-
-            def bar(x):
-                return foo(z) + 7 + x
-            return bar(z + 2)
-
-        self.check(impl, inline_expect={'foo': True, 'boz': True,
-                                        'fortran': True}, block_count=37)
 
     def test_inline_renaming_scheme(self):
         # See #7380, this checks that inlined variables have a name derived from

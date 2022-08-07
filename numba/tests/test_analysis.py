@@ -663,8 +663,7 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
         # create new code parts
         co_args = [pyfunc_code.co_argcount]
 
-        if utils.PYVERSION >= (3, 8):
-            co_args.append(pyfunc_code.co_posonlyargcount)
+        co_args.append(pyfunc_code.co_posonlyargcount)
         co_args.append(pyfunc_code.co_kwonlyargcount)
         co_args.extend([pyfunc_code.co_nlocals,
                         pyfunc_code.co_stacksize,

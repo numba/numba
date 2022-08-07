@@ -27,7 +27,7 @@ import numba.parfors.parfor
 from numba import (njit, prange, parallel_chunksize,
                    get_parallel_chunksize, set_parallel_chunksize,
                    set_num_threads, get_num_threads, typeof)
-from numba.core import (types, utils, typing, errors, ir, rewrites,
+from numba.core import (types, typing, errors, ir, rewrites,
                         typed_passes, inline_closurecall, config, compiler, cpu)
 from numba.extending import (overload_method, register_model,
                              typeof_impl, unbox, NativeValue, models)
@@ -3363,8 +3363,7 @@ class TestPrangeBase(TestParforsBase):
         # create new code parts
         co_args = [pyfunc_code.co_argcount]
 
-        if utils.PYVERSION >= (3, 8):
-            co_args.append(pyfunc_code.co_posonlyargcount)
+        co_args.append(pyfunc_code.co_posonlyargcount)
         co_args.append(pyfunc_code.co_kwonlyargcount)
         co_args.extend([pyfunc_code.co_nlocals,
                         pyfunc_code.co_stacksize,
