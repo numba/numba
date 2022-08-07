@@ -316,13 +316,6 @@ _unsupported = set([ 'frexp',
                      'modf',
                  ])
 
-# A list of ufuncs that are in fact aliases of other ufuncs. They need to insert the
-# resolve method, but not register the ufunc itself
-_aliases = set(["bitwise_not", "mod", "abs"])
-
-# In python3 np.divide is mapped to np.true_divide
-if np.divide == np.true_divide:
-    _aliases.add("divide")
 
 def _numpy_ufunc(name):
     func = getattr(np, name)
@@ -331,7 +324,11 @@ def _numpy_ufunc(name):
 
     typing_class.__name__ = "resolve_{0}".format(name)
 
-    if not name in _aliases:
+    # A list of ufuncs that are in fact aliases of other ufuncs. They need to
+    # insert the resolve method, but not register the ufunc itself
+    aliases = ("abs", "bitwise_not", "divide", "abs")
+
+    if name not in aliases:
         infer_global(func, types.Function(typing_class))
 
 all_ufuncs = sum([_math_operations, _trigonometric_functions,
@@ -360,7 +357,7 @@ supported_array_operators = set(
 
 del _math_operations, _trigonometric_functions, _bit_twiddling_functions
 del _comparison_functions, _floating_functions, _unsupported
-del _aliases, _numpy_ufunc
+del _numpy_ufunc
 
 
 # -----------------------------------------------------------------------------

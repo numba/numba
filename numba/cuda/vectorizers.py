@@ -10,9 +10,10 @@ class CUDAUFuncDispatcher(object):
     Invoke the CUDA ufunc specialization for the given inputs.
     """
 
-    def __init__(self, types_to_retty_kernels):
+    def __init__(self, types_to_retty_kernels, pyfunc):
         self.functions = types_to_retty_kernels
         self._maxblocksize = 0  # ignored
+        self.__name__ = pyfunc.__name__
 
     @property
     def max_blocksize(self):
@@ -215,7 +216,7 @@ class CUDAVectorize(deviceufunc.DeviceVectorize):
         return cuda.jit(fnobj)
 
     def build_ufunc(self):
-        return CUDAUFuncDispatcher(self.kernelmap)
+        return CUDAUFuncDispatcher(self.kernelmap, self.pyfunc)
 
     @property
     def _kernel_template(self):
