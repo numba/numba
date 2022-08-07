@@ -1,8 +1,6 @@
 """gdb printing extension for Numba types.
 """
 import re
-import sys
-_PYVERSION = sys.version_info[:2]
 
 try:
     import gdb.printing
@@ -177,16 +175,10 @@ class NumbaUnicodeTypePrinter:
             # This needs sorting out, encoding is wrong
             this_proc = gdb.selected_inferior()
             mem = this_proc.read_memory(int(data), nitems * kind)
-            if _PYVERSION < (3, 0):
-                try:
-                    buf = unicode(mem, 'utf-8') # noqa F821
-                except UnicodeDecodeError as e:
-                    buf = "ERROR: %s" % str(e)
+            if isinstance(mem, memoryview):
+                buf = bytes(mem).decode()
             else:
-                if isinstance(mem, memoryview):
-                    buf = bytes(mem).decode()
-                else:
-                    buf = mem.decode('utf-8')
+                buf = mem.decode('utf-8')
         else:
             buf = str(data)
         return "'%s'" % buf

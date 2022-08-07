@@ -3,16 +3,13 @@ from itertools import product
 from itertools import permutations
 
 from numba import njit
-from numba.core import types, utils
+from numba.core import types
 import unittest
 from numba.tests.support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
 from numba.core.errors import TypingError, UnsupportedError
 from numba.cpython.unicode import _MAX_UNICODE
 from numba.core.types.functions import _header_lead
 from numba.extending import overload
-
-
-_py37_or_later = utils.PYVERSION >= (3, 7)
 
 
 def isascii(s):
@@ -2147,8 +2144,6 @@ class TestUnicode(BaseTest):
         for s in UNICODE_EXAMPLES + [''] + extras + cpython:
             self.assertEqual(pyfunc(s), cfunc(s), msg=msg.format(s))
 
-    @unittest.skipUnless(_py37_or_later,
-                         'isascii method requires Python 3.7 or later')
     def test_isascii(self):
         def pyfunc(x):
             return x.isascii()
