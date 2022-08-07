@@ -135,14 +135,10 @@ static PyTypeObject EnvironmentType = {
     0,                         /* tp_del */
     0,                         /* tp_version_tag */
     0,                         /* tp_finalize */
-#if PY_MAJOR_VERSION == 3
-/* Python 3.8 has two slots, 3.9 has one. */
-#if PY_MINOR_VERSION > 7
     0,                         /* tp_vectorcall */
-#if PY_MINOR_VERSION == 8
+/* Python 3.8 has two slots. */
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 8)
     0,                         /* tp_print */
-#endif
-#endif
 #endif
 };
 
@@ -245,14 +241,10 @@ static PyTypeObject ClosureType = {
     0,                         /* tp_del */
     0,                         /* tp_version_tag */
     0,                         /* tp_finalize */
-#if PY_MAJOR_VERSION == 3
-/* Python 3.8 has two slots, 3.9 has one. */
-#if PY_MINOR_VERSION > 7
     0,                         /* tp_vectorcall */
-#if PY_MINOR_VERSION == 8
+/* Python 3.8 has two slots. */
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 8)
     0,                         /* tp_print */
-#endif
-#endif
 #endif
 };
 
@@ -382,13 +374,7 @@ generator_dealloc(GeneratorObject *gen)
         PyObject_ClearWeakRefs((PyObject *) gen);
     /* XXX The finalizer may be called after the LLVM module has been
        destroyed (typically at interpreter shutdown) */
-#if PY_MAJOR_VERSION >= 3
-#if PY_MINOR_VERSION >= 7
     if (!_Py_IsFinalizing())
-#else
-    if (!_Py_Finalizing)
-#endif
-#endif
         if (gen->finalizer != NULL)
             gen->finalizer(gen->state);
     Py_XDECREF(gen->env);
@@ -462,14 +448,10 @@ static PyTypeObject GeneratorType = {
     0,                                        /* tp_del */
     0,                                        /* tp_version_tag */
     0,                                        /* tp_finalize */
-#if PY_MAJOR_VERSION == 3
-/* Python 3.8 has two slots, 3.9 has one. */
-#if PY_MINOR_VERSION > 7
     0,                         /* tp_vectorcall */
-#if PY_MINOR_VERSION == 8
+/* Python 3.8 has two slots. */
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 8)
     0,                         /* tp_print */
-#endif
-#endif
 #endif
 };
 

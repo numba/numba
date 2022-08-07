@@ -1,4 +1,5 @@
 import platform
+from functools import cached_property
 
 import llvmlite.binding as ll
 from llvmlite import ir
@@ -8,7 +9,6 @@ from numba.core.callwrapper import PyCallWrapper
 from numba.core.base import BaseContext
 from numba.core import (utils, types, config, cgutils, callconv, codegen,
                         externals, fastmathpass, intrinsics)
-from numba.core.utils import cached_property
 from numba.core.options import TargetOptions, include_default_options
 from numba.core.runtime import rtsys
 from numba.core.compiler_lock import global_compiler_lock

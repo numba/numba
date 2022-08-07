@@ -1,5 +1,6 @@
 import collections
 import warnings
+from functools import cached_property
 
 from llvmlite import ir
 
@@ -349,7 +350,7 @@ class NumpyNdIterType(IteratorType):
         else:
             return views[0]
 
-    @utils.cached_property
+    @cached_property
     def indexers(self):
         """
         A list of (kind, start_dim, end_dim, indices) where:
@@ -380,7 +381,7 @@ class NumpyNdIterType(IteratorType):
             d.setdefault(indexer, []).append(i)
         return list(k + (v,) for k, v in d.items())
 
-    @utils.cached_property
+    @cached_property
     def need_shaped_indexing(self):
         """
         Whether iterating on this iterator requires keeping track of
