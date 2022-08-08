@@ -1154,7 +1154,7 @@ def early_exit_if(builder, stack: ExitStack, cond):
             <body>
         }
 
-    This can be useful for generating code with lots of early exists, without having to increase
+    This can be useful for generating code with lots of early exits, without having to increase
     the indentation each time.
     """
     then, otherwise = stack.enter_context(builder.if_else(cond, likely=False))
