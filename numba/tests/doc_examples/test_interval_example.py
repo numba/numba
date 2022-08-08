@@ -114,39 +114,31 @@ class IntervalExampleTest(unittest.TestCase):
             """
             Convert a Interval object to a native interval structure.
             """
-            ret_ptr = cgutils.alloca_once(c.builder, c.context.get_value_type(typ))
             is_error_ptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
-            fail_obj = c.context.get_constant_null(typ)
+            interval = cgutils.create_struct_proxy(typ)(c.context, c.builder)
 
             with ExitStack() as stack:
                 lo_obj = c.pyapi.object_getattr_string(obj, "lo")
                 with early_exit_if_null(c.builder, stack, lo_obj):
                     c.builder.store(cgutils.true_bit, is_error_ptr)
-                    c.builder.store(fail_obj, ret_ptr)
                 lo_native = c.unbox(types.float64, lo_obj)
                 c.pyapi.decref(lo_obj)
                 with early_exit_if(c.builder, stack, lo_native.is_error):
                     c.builder.store(cgutils.true_bit, is_error_ptr)
-                    c.builder.store(fail_obj, ret_ptr)
 
                 hi_obj = c.pyapi.object_getattr_string(obj, "hi")
                 with early_exit_if_null(c.builder, stack, hi_obj):
                     c.builder.store(cgutils.true_bit, is_error_ptr)
-                    c.builder.store(fail_obj, ret_ptr)
                 hi_native = c.unbox(types.float64, hi_obj)
                 c.pyapi.decref(hi_obj)
                 with early_exit_if(c.builder, stack, hi_native.is_error):
                     c.builder.store(cgutils.true_bit, is_error_ptr)
-                    c.builder.store(fail_obj, ret_ptr)
 
-                interval = cgutils.create_struct_proxy(typ)(c.context, c.builder)
                 interval.lo = lo_native.value
                 interval.hi = hi_native.value
                 c.builder.store(cgutils.false_bit, is_error_ptr)
-                c.builder.store(interval._getvalue(), ret_ptr)
 
-            return NativeValue(c.builder.load(ret_ptr),
-                               is_error=c.builder.load(is_error_ptr))
+            return NativeValue(interval._getvalue(), is_error=c.builder.load(is_error_ptr))
         # magictoken.interval_unbox.end
 
         # magictoken.interval_box.begin
