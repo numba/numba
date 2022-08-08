@@ -1818,6 +1818,18 @@ class TestMore(TestCase):
 
         self.assertEqual(foo(), foo.py_func())
 
+    def test_unroll_with_non_conformant_loops_present(self):
+        # See issue #8311
+
+        @njit('(Tuple((int64, float64)),)')
+        def foo(tup):
+            for t in literal_unroll(tup):
+                pass
+
+            x = 1
+            while x == 1:
+                x = 0
+
 
 def capture(real_pass):
     """ Returns a compiler pass that captures the mutation state reported
