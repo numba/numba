@@ -1164,6 +1164,10 @@ def early_exit_if(builder, stack: ExitStack, cond):
 
 
 def early_exit_if_null(builder, stack, obj):
+    """
+    A convenience wrapper for :func:`early_exit_if`, for the common case where the CPython API
+    indicates an error by returning ``NULL``.
+    """
     return early_exit_if(builder, stack, cgutils.is_null(builder, obj))
 
 
