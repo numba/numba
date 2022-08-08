@@ -105,8 +105,7 @@ class IntervalExampleTest(unittest.TestCase):
         # magictoken.interval_lower_builtin.end
 
         # magictoken.interval_unbox.begin
-        from numba.core.boxing import early_exit_if, early_exit_if_null
-        from numba.extending import unbox, NativeValue
+        from numba.extending import unbox, early_exit_if, early_exit_if_null, NativeValue
         from contextlib import ExitStack
 
         @unbox(IntervalType)
