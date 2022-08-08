@@ -105,7 +105,7 @@ class IntervalExampleTest(unittest.TestCase):
         # magictoken.interval_lower_builtin.end
 
         # magictoken.interval_unbox.begin
-        from numba.extending import unbox, early_exit_if, early_exit_if_null, NativeValue
+        from numba.extending import unbox, NativeValue
         from contextlib import ExitStack
 
         @unbox(IntervalType)
@@ -118,19 +118,19 @@ class IntervalExampleTest(unittest.TestCase):
 
             with ExitStack() as stack:
                 lo_obj = c.pyapi.object_getattr_string(obj, "lo")
-                with early_exit_if_null(c.builder, stack, lo_obj):
+                with cgutils.early_exit_if_null(c.builder, stack, lo_obj):
                     c.builder.store(cgutils.true_bit, is_error_ptr)
                 lo_native = c.unbox(types.float64, lo_obj)
                 c.pyapi.decref(lo_obj)
-                with early_exit_if(c.builder, stack, lo_native.is_error):
+                with cgutils.early_exit_if(c.builder, stack, lo_native.is_error):
                     c.builder.store(cgutils.true_bit, is_error_ptr)
 
                 hi_obj = c.pyapi.object_getattr_string(obj, "hi")
-                with early_exit_if_null(c.builder, stack, hi_obj):
+                with cgutils.early_exit_if_null(c.builder, stack, hi_obj):
                     c.builder.store(cgutils.true_bit, is_error_ptr)
                 hi_native = c.unbox(types.float64, hi_obj)
                 c.pyapi.decref(hi_obj)
-                with early_exit_if(c.builder, stack, hi_native.is_error):
+                with cgutils.early_exit_if(c.builder, stack, hi_native.is_error):
                     c.builder.store(cgutils.true_bit, is_error_ptr)
 
                 interval.lo = lo_native.value
@@ -154,16 +154,16 @@ class IntervalExampleTest(unittest.TestCase):
             with ExitStack() as stack:
                 interval = cgutils.create_struct_proxy(typ)(c.context, c.builder, value=val)
                 lo_obj = c.box(types.float64, interval.lo)
-                with early_exit_if_null(c.builder, stack, lo_obj):
+                with cgutils.early_exit_if_null(c.builder, stack, lo_obj):
                     c.builder.store(fail_obj, ret_ptr)
 
                 hi_obj = c.box(types.float64, interval.hi)
-                with early_exit_if_null(c.builder, stack, lo_obj):
+                with cgutils.early_exit_if_null(c.builder, stack, lo_obj):
                     c.pyapi.decref(lo_obj)
                     c.builder.store(fail_obj, ret_ptr)
 
                 class_obj = c.pyapi.unserialize(c.pyapi.serialize_object(Interval))
-                with early_exit_if_null(c.builder, stack, class_obj):
+                with cgutils.early_exit_if_null(c.builder, stack, class_obj):
                     c.pyapi.decref(lo_obj)
                     c.pyapi.decref(hi_obj)
                     c.builder.store(fail_obj, ret_ptr)
