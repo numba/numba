@@ -1506,6 +1506,9 @@ def _create_gufunc_for_parfor_body(
         flags.noalias = True
 
     fixup_var_define_in_scope(gufunc_ir.blocks)
+    # switch blocks in gufunc_ir to use the same scope as parfor.init_block
+    for block in gufunc_ir.blocks.values():
+        transfer_scope(block, parfor.init_block.scope)
     kernel_func = compiler.compile_ir(
         typingctx,
         targetctx,
