@@ -12,6 +12,18 @@ from numba.np.random.generator_core import next_uint32, next_uint64
 
 
 @register_jitable
+def gen_mask(max):
+    mask = uint64(max)
+    mask |= mask >> 1
+    mask |= mask >> 2
+    mask |= mask >> 4
+    mask |= mask >> 8
+    mask |= mask >> 16
+    mask |= mask >> 32
+    return mask
+
+
+@register_jitable
 def buffered_bounded_bool(bitgen, off, rng, bcnt, buf):
     if (rng == 0):
         return off, bcnt, buf
@@ -331,3 +343,29 @@ def _randint_arg_check(low, high, endpoint, lower_bound, upper_bound):
             raise ValueError("high is out of bounds")
         if low > high:  # -1 already subtracted, closed interval
             raise ValueError("low is greater than high in given interval")
+
+
+@register_jitable
+def random_interval(bitgen, max):
+    if (max == 0):
+        return 0
+
+    mask = max
+
+    mask |= mask >> 1
+    mask |= mask >> 2
+    mask |= mask >> 4
+    mask |= mask >> 8
+    mask |= mask >> 16
+    mask |= mask >> 32
+
+    if (max <= 0xffffffff):
+        value = next_uint32(bitgen) & mask
+        while value > max:
+            value = next_uint32(bitgen) & mask
+    else:
+        value = next_uint64(bitgen) & mask
+        while value > max:
+            value = next_uint64(bitgen) & mask
+
+    return value

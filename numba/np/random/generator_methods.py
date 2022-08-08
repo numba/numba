@@ -4,7 +4,7 @@ Implementation of method overloads for Generator objects.
 
 import numpy as np
 from numba.core import types
-from numba.core.extending import overload_method
+from numba.core.extending import overload_method, register_jitable
 from numba.np.numpy_support import as_dtype, from_dtype
 from numba.np.random.generator_core import next_float, next_double
 from numba.np.numpy_support import is_nonelike
@@ -164,6 +164,49 @@ def NumPyRandomGeneratorType_integers(inst, low, high, size=None,
                 rng = high - low
                 return int_func(inst.bit_generator, low, rng, size, dtype)
         return impl
+
+
+# Overload the Generator().shuffle()
+@overload_method(types.NumPyRandomGeneratorType, 'shuffle')
+def NumPyRandomGeneratorType_shuffle(inst, arr):
+    check_types(arr, [types.Array], 'arr')
+
+    def impl(inst, arr):
+        for i in range(arr.shape[0] - 1, 0, -1):
+            j = random_methods.random_interval(inst.bit_generator, i)
+            if i == j:
+                continue
+            if arr.ndim != 1:
+                buffer = np.copy(arr[j])
+                arr[j] = np.copy(arr[i])
+                arr[i] = buffer
+            else:
+                buffer = arr[j]
+                arr[j] = arr[i]
+                arr[i] = buffer
+
+    return impl
+
+
+# Overload the Generator().permutation()
+@overload_method(types.NumPyRandomGeneratorType, 'permutation')
+def NumPyRandomGeneratorType_permutation(inst, arr):
+    check_types(arr, [types.Array], 'arr')
+
+    if isinstance(arr, types.Integer):
+        @register_jitable
+        def array_maker(arr):
+            return np.arange(arr)
+    else:
+        @register_jitable
+        def array_maker(arr):
+            return arr.copy()
+
+    def impl(inst, arr):
+        new_arr = array_maker(arr)
+        inst.shuffle(new_arr)
+        return new_arr
+    return impl
 
 
 # Overload the Generator().random()

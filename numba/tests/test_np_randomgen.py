@@ -946,6 +946,50 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         self._check_invalid_types(dist_func, ['n', 'p', 'size'],
                                   [1, 0.75, (1,)], ['x', 'x', ('x',)])
 
+    def test_shuffle(self):
+        test_sizes = [(100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        def dist_func(x, size, dtype):
+            arr = x.random(size=size)
+            x.shuffle(arr)
+            return arr
+
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None,
+                                            adjusted_ulp_prec)
+
+        def dist_func(x, arr):
+            x.shuffle(arr)
+            return arr
+
+        self._check_invalid_types(dist_func, ['arr'],
+                                  [np.array([3,4,5])], ['x'])
+
+    def test_permutation(self):
+        test_sizes = [(100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        def dist_func(x, size, dtype):
+            arr = x.random(size=size)
+            return x.permutation(arr)
+
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None,
+                                            adjusted_ulp_prec)
+
+        def dist_func(x, arr):
+            return x.permutation(arr)
+
+        self._check_invalid_types(dist_func, ['arr'],
+                                  [np.array([3,4,5])], ['x'])
+
 
 class TestGeneratorCaching(TestCase, SerialMixin):
     def test_randomgen_caching(self):
