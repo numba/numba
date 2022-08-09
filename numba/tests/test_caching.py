@@ -1072,7 +1072,7 @@ class TestCFuncCache(BaseCacheTest):
         self.run_in_separate_process()
 
 
-class TestCacheStringSource(BaseCacheUsecasesTest):
+class TestCacheStringSource(DispatcherCacheUsecasesTest):
     """Test cache for String source functions
 
     It mirrors the tests done on caching of normal functions, except:
