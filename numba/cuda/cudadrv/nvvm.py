@@ -659,12 +659,6 @@ def llvm_replace(llvmir):
     for decl, fn in replacements:
         llvmir = llvmir.replace(decl, fn)
 
-    # llvm.numba_nvvm.atomic is used to prevent LLVM 9 onwards auto-upgrading
-    # these intrinsics into atomicrmw instructions, which are not recognized by
-    # NVVM. We can now replace them with the real intrinsic names, ready to
-    # pass to NVVM.
-    llvmir = llvmir.replace('llvm.numba_nvvm.atomic', 'llvm.nvvm.atomic')
-
     if NVVM().is_nvvm70:
         llvmir = llvm100_to_70_ir(llvmir)
     else:
