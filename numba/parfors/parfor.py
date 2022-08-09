@@ -1478,6 +1478,10 @@ class PreParforPass(object):
 
                             require(repl_func is not None)
                             typs = tuple(self.typemap[x.name] for x in expr.args)
+                            # The dtype keyword argument is handled by typing and can
+                            # be removed here during the implementation replacement so
+                            # that subsequent typing and argument handling won't fail.
+                            expr.kws = list(filter(lambda x: x[0] != "dtype", expr.kws))
                             try:
                                 new_func =  repl_func(lhs_typ, *typs)
                             except:
