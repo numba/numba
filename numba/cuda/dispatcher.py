@@ -194,7 +194,7 @@ class _Kernel(serialize.ReduceMixin):
     @property
     def const_mem_size(self):
         '''
-        The size of user-allocated const memory for this kernel.
+        The amount of const memory used by this kernel.
         '''
         return self._codelibrary.get_cufunc().attrs.const
 
@@ -712,8 +712,8 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
 
     def get_const_mem_size(self, signature=None):
         '''
-        Returns the size in bytes of user-allocated constant memory in this
-        kernel for the device in the current context.
+        Returns the size in bytes of constant memory used by this kernel for
+        the device in the current context.
 
         :param signature: The signature of the compiled kernel to get constant
                           memory usage for. This may be omitted for a

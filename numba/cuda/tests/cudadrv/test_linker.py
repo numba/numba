@@ -244,17 +244,11 @@ class TestLinker(CUDATestCase):
         compiled = cuda.jit(sig, max_registers=38)(func_with_lots_of_registers)
         self.assertLessEqual(compiled.get_regs_per_thread(), 38)
 
-    def test_get_no_const_memory(self):
-        compiled = cuda.jit(func_with_lots_of_registers)
-        compiled = compiled.specialize(np.empty(32), *range(6))
-        const_mem_size = compiled.get_const_mem_size()
-        self.assertEqual(const_mem_size, 0)
-
     def test_get_const_mem_size(self):
         sig = void(float64[::1])
         compiled = cuda.jit(sig)(simple_const_mem)
         const_mem_size = compiled.get_const_mem_size()
-        self.assertEqual(const_mem_size, CONST1D.nbytes)
+        self.assertGreaterEqual(const_mem_size, CONST1D.nbytes)
 
     def test_get_no_shared_memory(self):
         compiled = cuda.jit(func_with_lots_of_registers)
