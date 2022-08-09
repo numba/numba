@@ -241,7 +241,9 @@ def __gufunc_{name}({args}):
 class CUDAGUFuncVectorize(deviceufunc.DeviceGUFuncVectorize):
     def build_ufunc(self):
         engine = deviceufunc.GUFuncEngine(self.inputsig, self.outputsig)
-        return CUDAGenerializedUFunc(kernelmap=self.kernelmap, engine=engine, pyfunc=self.pyfunc)
+        return CUDAGenerializedUFunc(kernelmap=self.kernelmap,
+                                     engine=engine,
+                                     pyfunc=self.pyfunc)
 
     def _compile_kernel(self, fnobj, sig):
         return cuda.jit(sig)(fnobj)
