@@ -263,6 +263,9 @@ class FunctionTemplate(ABC):
     # non-literals.
     # subclass overide-able
     prefer_literal = False
+
+    allow_ambiguous = False
+
     # metadata
     metadata = {}
 
@@ -273,6 +276,7 @@ class FunctionTemplate(ABC):
         options = {
             'unsafe_casting': self.unsafe_casting,
             'exact_match_required': self.exact_match_required,
+            'allow_ambiguous': self.allow_ambiguous,
         }
         selected = self.context.resolve_overload(self.key, cases, args, kws,
                                                  **options)
@@ -477,6 +481,7 @@ class ConcreteTemplate(FunctionTemplate):
     Defines attributes "cases" as a list of signature to match against the
     given input types.
     """
+    allow_ambiguous = False
 
     def apply(self, args, kws):
         cases = getattr(self, 'cases')

@@ -590,7 +590,7 @@ class BaseContext(object):
         return True
 
     def resolve_overload(self, key, cases, args, kws,
-                         allow_ambiguous=True, unsafe_casting=True,
+                         *, allow_ambiguous, unsafe_casting=True,
                          exact_match_required=False):
         """
         Given actual *args* and *kws*, find the best matching
