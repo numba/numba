@@ -305,7 +305,7 @@ class TestCUDAGufunc(CUDATestCase):
         self.check_tuple_arg(a, b)
 
     def test_name_attribute(self):
-        @nb.guvectorize('void(f8[:], f8[:])', '()->()', target = 'cuda')
+        @guvectorize('void(f8[:], f8[:])', '()->()', target = 'cuda')
         def bar(x, y):
             y[0] = x[0] ** 2
 
