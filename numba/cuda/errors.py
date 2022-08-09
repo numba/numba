@@ -1,4 +1,5 @@
 import numbers
+from numba.core.errors import LoweringError
 
 
 class KernelRuntimeError(RuntimeError):
@@ -12,8 +13,12 @@ class KernelRuntimeError(RuntimeError):
         super(KernelRuntimeError, self).__init__(msg)
 
 
-_launch_help_url = ("https://numba.pydata.org/numba-doc/"
-                    "latest/cuda/kernels.html#kernel-invocation")
+class CudaLoweringError(LoweringError):
+    pass
+
+
+_launch_help_url = ("https://numba.readthedocs.io/en/stable/cuda/"
+                    "kernels.html#kernel-invocation")
 missing_launch_config_msg = """
 Kernel launch configuration was not specified. Use the syntax:
 

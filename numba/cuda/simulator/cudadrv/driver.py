@@ -38,6 +38,17 @@ class LinkerError(RuntimeError):
     pass
 
 
+class NvrtcError(RuntimeError):
+    pass
+
+
+class CudaAPIError(RuntimeError):
+    pass
+
+
 def launch_kernel(*args, **kwargs):
     msg = 'Launching kernels directly is not supported in the simulator'
     raise RuntimeError(msg)
+
+
+USE_NV_BINDING = False

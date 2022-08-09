@@ -18,7 +18,7 @@ from numba.tests.matmul_usecase import (matmul_usecase, imatmul_usecase,
 Noflags = Flags()
 
 force_pyobj_flags = Flags()
-force_pyobj_flags.set("force_pyobject")
+force_pyobj_flags.force_pyobject = True
 
 
 def make_static_power(exp):
@@ -1594,6 +1594,15 @@ class TestBooleanLiteralOperators(TestCase):
         def test_impl():
             a, b = False, True
             return (bool(a), bool(b))
+
+        cfunc = jit(nopython=True)(test_impl)
+        self.assertEqual(test_impl(), cfunc())
+
+    def test_bool_to_str(self):
+
+        def test_impl():
+            a, b = False, True
+            return (str(a), str(b))
 
         cfunc = jit(nopython=True)(test_impl)
         self.assertEqual(test_impl(), cfunc())

@@ -4,10 +4,8 @@ Implementation of the range object for fixed-size integers.
 
 import operator
 
-import llvmlite.llvmpy.core as lc
-
 from numba import prange
-from numba.core import types, cgutils
+from numba.core import types, cgutils, errors
 from numba.cpython.listobj import ListIterInstance
 from numba.np.arrayobj import make_array
 from numba.core.imputils import (lower_builtin, lower_cast,
@@ -124,10 +122,10 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
             diff = builder.sub(stop, start)
             zero = context.get_constant(int_type, 0)
             one = context.get_constant(int_type, 1)
-            pos_diff = builder.icmp(lc.ICMP_SGT, diff, zero)
-            pos_step = builder.icmp(lc.ICMP_SGT, step, zero)
+            pos_diff = builder.icmp_signed('>', diff, zero)
+            pos_step = builder.icmp_signed('>', step, zero)
             sign_differs = builder.xor(pos_diff, pos_step)
-            zero_step = builder.icmp(lc.ICMP_EQ, step, zero)
+            zero_step = builder.icmp_unsigned('==', step, zero)
 
             with cgutils.if_unlikely(builder, zero_step):
                 # step shouldn't be zero
@@ -141,7 +139,7 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
                 with orelse:
                     rem = builder.srem(diff, step)
                     rem = builder.select(pos_diff, rem, builder.neg(rem))
-                    uneven = builder.icmp(lc.ICMP_SGT, rem, zero)
+                    uneven = builder.icmp_signed('>', rem, zero)
                     newcount = builder.add(builder.sdiv(diff, step),
                                            builder.select(uneven, one, zero))
                     builder.store(newcount, self.count)
@@ -152,7 +150,7 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
             zero = context.get_constant(int_type, 0)
             countptr = self.count
             count = builder.load(countptr)
-            is_valid = builder.icmp(lc.ICMP_SGT, count, zero)
+            is_valid = builder.icmp_signed('>', count, zero)
             result.set_valid(is_valid)
 
             with builder.if_then(is_valid):
@@ -181,9 +179,10 @@ def range_to_range(context, builder, fromty, toty, val):
     return cgutils.make_anonymous_struct(builder, items)
 
 @intrinsic
-def range_iter_len(typingctx, val):
+def length_of_iterator(typingctx, val):
     """
-    An implementation of len(range_iter) for internal use.
+    An implementation of len(iter) for internal use.
+    Primary use is for array comprehensions (see inline_closurecall).
     """
     if isinstance(val, types.RangeIteratorType):
         val_type = val.yield_type
@@ -213,7 +212,27 @@ def range_iter_len(typingctx, val):
             # array iterates along the outer dimension
             return impl_ret_untracked(context, builder, intp_t, shape[0])
         return signature(types.intp, val), codegen
+    elif isinstance(val, types.UniTupleIter):
+        def codegen(context, builder, sig, args):
+            (iterty,) = sig.args
+            tuplety = iterty.container
+            intp_t = context.get_value_type(types.intp)
+            count_const = intp_t(tuplety.count)
+            return impl_ret_untracked(context, builder, intp_t, count_const)
 
+        return signature(types.intp, val), codegen
+    elif isinstance(val, types.ListTypeIteratorType):
+        def codegen(context, builder, sig, args):
+            (value,) = args
+            intp_t = context.get_value_type(types.intp)
+            from numba.typed.listobject import ListIterInstance
+            iterobj = ListIterInstance(context, builder, sig.args[0], value)
+            return impl_ret_untracked(context, builder, intp_t, iterobj.size)
+        return signature(types.intp, val), codegen
+    else:
+        msg = ('Unsupported iterator found in array comprehension, try '
+               'preallocating the array and filling manually.')
+        raise errors.TypingError(msg)
 
 def make_range_attr(index, attribute):
     @intrinsic

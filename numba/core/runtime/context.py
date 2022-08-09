@@ -1,6 +1,24 @@
-from llvmlite import ir
+import functools
+from collections import namedtuple
 
-from numba.core import types, cgutils
+from llvmlite import ir
+from numba.core import types, cgutils, errors, config
+
+
+_NRT_Meminfo_Functions = namedtuple("_NRT_Meminfo_Functions",
+                                    ("alloc",
+                                     "alloc_dtor",
+                                     "alloc_aligned"))
+
+
+_NRT_MEMINFO_SAFE_API = _NRT_Meminfo_Functions("NRT_MemInfo_alloc_safe",
+                                               "NRT_MemInfo_alloc_dtor_safe",
+                                               "NRT_MemInfo_alloc_safe_aligned")
+
+
+_NRT_MEMINFO_DEFAULT_API = _NRT_Meminfo_Functions("NRT_MemInfo_alloc",
+                                                  "NRT_MemInfo_alloc_dtor",
+                                                  "NRT_MemInfo_alloc_aligned")
 
 
 class NRTContext(object):
@@ -11,20 +29,45 @@ class NRTContext(object):
     def __init__(self, context, enabled):
         self._context = context
         self._enabled = enabled
+        # If DEBUG_NRT is set, use the safe function variants which use memset
+        # to inject a few known bytes into the start of allocated regions.
+        if config.DEBUG_NRT:
+            self._meminfo_api = _NRT_MEMINFO_SAFE_API
+        else:
+            self._meminfo_api = _NRT_MEMINFO_DEFAULT_API
 
     def _require_nrt(self):
         if not self._enabled:
-            raise RuntimeError("NRT required but not enabled")
+            raise errors.NumbaRuntimeError("NRT required but not enabled")
 
+    def _check_null_result(func):
+        @functools.wraps(func)
+        def wrap(self, builder, *args, **kwargs):
+            memptr = func(self, builder, *args, **kwargs)
+            msg = "Allocation failed (probably too large)."
+            cgutils.guard_memory_error(self._context, builder, memptr, msg=msg)
+            return memptr
+        return wrap
+
+    @_check_null_result
     def allocate(self, builder, size):
         """
-        Low-level allocate a new memory area of `size` bytes.
+        Low-level allocate a new memory area of `size` bytes. The result of the
+        call is checked and if it is NULL, i.e. allocation failed, then a
+        MemoryError is raised.
+        """
+        return self.allocate_unchecked(builder, size)
+
+    def allocate_unchecked(self, builder, size):
+        """
+        Low-level allocate a new memory area of `size` bytes. Returns NULL to
+        indicate error/failure to allocate.
         """
         self._require_nrt()
 
         mod = builder.module
         fnty = ir.FunctionType(cgutils.voidptr_t, [cgutils.intp_t])
-        fn = mod.get_or_insert_function(fnty, name="NRT_Allocate")
+        fn = cgutils.get_or_insert_function(mod, fnty, "NRT_Allocate")
         fn.return_value.add_attribute("noalias")
         return builder.call(fn, [size])
 
@@ -36,35 +79,72 @@ class NRTContext(object):
 
         mod = builder.module
         fnty = ir.FunctionType(ir.VoidType(), [cgutils.voidptr_t])
-        fn = mod.get_or_insert_function(fnty, name="NRT_Free")
+        fn = cgutils.get_or_insert_function(mod, fnty, "NRT_Free")
         return builder.call(fn, [ptr])
 
+    @_check_null_result
     def meminfo_alloc(self, builder, size):
         """
         Allocate a new MemInfo with a data payload of `size` bytes.
 
         A pointer to the MemInfo is returned.
+
+        The result of the call is checked and if it is NULL, i.e. allocation
+        failed, then a MemoryError is raised.
+        """
+        return self.meminfo_alloc_unchecked(builder, size)
+
+    def meminfo_alloc_unchecked(self, builder, size):
+        """
+        Allocate a new MemInfo with a data payload of `size` bytes.
+
+        A pointer to the MemInfo is returned.
+
+        Returns NULL to indicate error/failure to allocate.
         """
         self._require_nrt()
 
         mod = builder.module
         fnty = ir.FunctionType(cgutils.voidptr_t, [cgutils.intp_t])
-        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_alloc_safe")
+        fn = cgutils.get_or_insert_function(mod, fnty,
+                                            self._meminfo_api.alloc)
         fn.return_value.add_attribute("noalias")
         return builder.call(fn, [size])
 
+    @_check_null_result
     def meminfo_alloc_dtor(self, builder, size, dtor):
+        """
+        Allocate a new MemInfo with a data payload of `size` bytes and a
+        destructor `dtor`.
+
+        A pointer to the MemInfo is returned.
+
+        The result of the call is checked and if it is NULL, i.e. allocation
+        failed, then a MemoryError is raised.
+        """
+        return self.meminfo_alloc_dtor_unchecked(builder, size, dtor)
+
+    def meminfo_alloc_dtor_unchecked(self, builder, size, dtor):
+        """
+        Allocate a new MemInfo with a data payload of `size` bytes and a
+        destructor `dtor`.
+
+        A pointer to the MemInfo is returned.
+
+        Returns NULL to indicate error/failure to allocate.
+        """
         self._require_nrt()
 
         mod = builder.module
         fnty = ir.FunctionType(cgutils.voidptr_t,
                                [cgutils.intp_t, cgutils.voidptr_t])
-        fn = mod.get_or_insert_function(fnty,
-                                        name="NRT_MemInfo_alloc_dtor_safe")
+        fn = cgutils.get_or_insert_function(mod, fnty,
+                                            self._meminfo_api.alloc_dtor)
         fn.return_value.add_attribute("noalias")
         return builder.call(fn, [size,
                                  builder.bitcast(dtor, cgutils.voidptr_t)])
 
+    @_check_null_result
     def meminfo_alloc_aligned(self, builder, size, align):
         """
         Allocate a new MemInfo with an aligned data payload of `size` bytes.
@@ -72,14 +152,29 @@ class NRTContext(object):
         a Python int or a LLVM uint32 value.
 
         A pointer to the MemInfo is returned.
+
+        The result of the call is checked and if it is NULL, i.e. allocation
+        failed, then a MemoryError is raised.
+        """
+        return self.meminfo_alloc_aligned_unchecked(builder, size, align)
+
+    def meminfo_alloc_aligned_unchecked(self, builder, size, align):
+        """
+        Allocate a new MemInfo with an aligned data payload of `size` bytes.
+        The data pointer is aligned to `align` bytes.  `align` can be either
+        a Python int or a LLVM uint32 value.
+
+        A pointer to the MemInfo is returned.
+
+        Returns NULL to indicate error/failure to allocate.
         """
         self._require_nrt()
 
         mod = builder.module
         u32 = ir.IntType(32)
         fnty = ir.FunctionType(cgutils.voidptr_t, [cgutils.intp_t, u32])
-        fn = mod.get_or_insert_function(fnty,
-                                        name="NRT_MemInfo_alloc_safe_aligned")
+        fn = cgutils.get_or_insert_function(mod, fnty,
+                                            self._meminfo_api.alloc_aligned)
         fn.return_value.add_attribute("noalias")
         if isinstance(align, int):
             align = self._context.get_constant(types.uint32, align)
@@ -87,6 +182,7 @@ class NRTContext(object):
             assert align.type == u32, "align must be a uint32"
         return builder.call(fn, [size, align])
 
+    @_check_null_result
     def meminfo_new_varsize(self, builder, size):
         """
         Allocate a MemInfo pointing to a variable-sized data area.  The area
@@ -94,29 +190,63 @@ class NRTContext(object):
         re-allocating it doesn't change the MemInfo's address.
 
         A pointer to the MemInfo is returned.
+
+        The result of the call is checked and if it is NULL, i.e. allocation
+        failed, then a MemoryError is raised.
+        """
+        return self.meminfo_new_varsize_unchecked(builder, size)
+
+    def meminfo_new_varsize_unchecked(self, builder, size):
+        """
+        Allocate a MemInfo pointing to a variable-sized data area.  The area
+        is separately allocated (i.e. two allocations are made) so that
+        re-allocating it doesn't change the MemInfo's address.
+
+        A pointer to the MemInfo is returned.
+
+        Returns NULL to indicate error/failure to allocate.
         """
         self._require_nrt()
 
         mod = builder.module
         fnty = ir.FunctionType(cgutils.voidptr_t, [cgutils.intp_t])
-        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_new_varsize")
+        fn = cgutils.get_or_insert_function(mod, fnty,
+                                            "NRT_MemInfo_new_varsize")
         fn.return_value.add_attribute("noalias")
         return builder.call(fn, [size])
 
+    @_check_null_result
     def meminfo_new_varsize_dtor(self, builder, size, dtor):
         """
         Like meminfo_new_varsize() but also set the destructor for
         cleaning up references to objects inside the allocation.
+
+        A pointer to the MemInfo is returned.
+
+        The result of the call is checked and if it is NULL, i.e. allocation
+        failed, then a MemoryError is raised.
+        """
+        return self.meminfo_new_varsize_dtor_unchecked(builder, size, dtor)
+
+    def meminfo_new_varsize_dtor_unchecked(self, builder, size, dtor):
+        """
+        Like meminfo_new_varsize() but also set the destructor for
+        cleaning up references to objects inside the allocation.
+
+        A pointer to the MemInfo is returned.
+
+        Returns NULL to indicate error/failure to allocate.
         """
         self._require_nrt()
 
         mod = builder.module
         fnty = ir.FunctionType(cgutils.voidptr_t,
                                [cgutils.intp_t, cgutils.voidptr_t])
-        fn = mod.get_or_insert_function(
-            fnty, name="NRT_MemInfo_new_varsize_dtor")
+        fn = cgutils.get_or_insert_function(
+            mod, fnty, "NRT_MemInfo_new_varsize_dtor")
         return builder.call(fn, [size, dtor])
 
+    @_check_null_result
     def meminfo_varsize_alloc(self, builder, meminfo, size):
         """
         Allocate a new data area for a MemInfo created by meminfo_new_varsize().
@@ -127,14 +257,45 @@ class NRTContext(object):
         more than simply copying the data area (e.g. for hash tables).
 
         The old pointer will have to be freed with meminfo_varsize_free().
+
+        The result of the call is checked and if it is NULL, i.e. allocation
+        failed, then a MemoryError is raised.
+        """
+        return self.meminfo_varsize_alloc_unchecked(builder, meminfo, size)
+
+    def meminfo_varsize_alloc_unchecked(self, builder, meminfo, size):
+        """
+        Allocate a new data area for a MemInfo created by meminfo_new_varsize().
+        The new data pointer is returned, for convenience.
+
+        Contrary to realloc(), this always allocates a new area and doesn't
+        copy the old data.  This is useful if resizing a container needs
+        more than simply copying the data area (e.g. for hash tables).
+
+        The old pointer will have to be freed with meminfo_varsize_free().
+
+        Returns NULL to indicate error/failure to allocate.
         """
         return self._call_varsize_alloc(builder, meminfo, size,
                                         "NRT_MemInfo_varsize_alloc")
 
+    @_check_null_result
     def meminfo_varsize_realloc(self, builder, meminfo, size):
         """
         Reallocate a data area allocated by meminfo_new_varsize().
         The new data pointer is returned, for convenience.
+
+        The result of the call is checked and if it is NULL, i.e. allocation
+        failed, then a MemoryError is raised.
+        """
+        return self.meminfo_varsize_realloc_unchecked(builder, meminfo, size)
+
+    def meminfo_varsize_realloc_unchecked(self, builder, meminfo, size):
+        """
+        Reallocate a data area allocated by meminfo_new_varsize().
+        The new data pointer is returned, for convenience.
+
+        Returns NULL to indicate error/failure to allocate.
         """
         return self._call_varsize_alloc(builder, meminfo, size,
                                         "NRT_MemInfo_varsize_realloc")
@@ -149,7 +310,8 @@ class NRTContext(object):
         mod = builder.module
         fnty = ir.FunctionType(ir.VoidType(),
                                [cgutils.voidptr_t, cgutils.voidptr_t])
-        fn = mod.get_or_insert_function(fnty, name="NRT_MemInfo_varsize_free")
+        fn = cgutils.get_or_insert_function(mod, fnty,
+                                            "NRT_MemInfo_varsize_free")
         return builder.call(fn, (meminfo, ptr))
 
     def _call_varsize_alloc(self, builder, meminfo, size, funcname):
@@ -158,7 +320,7 @@ class NRTContext(object):
         mod = builder.module
         fnty = ir.FunctionType(cgutils.voidptr_t,
                                [cgutils.voidptr_t, cgutils.intp_t])
-        fn = mod.get_or_insert_function(fnty, name=funcname)
+        fn = cgutils.get_or_insert_function(mod, fnty, funcname)
         fn.return_value.add_attribute("noalias")
         return builder.call(fn, [meminfo, size])
 
@@ -173,8 +335,8 @@ class NRTContext(object):
         from numba.core.runtime.nrtdynmod import meminfo_data_ty
 
         mod = builder.module
-        fn = mod.get_or_insert_function(meminfo_data_ty,
-                                        name="NRT_MemInfo_data_fast")
+        fn = cgutils.get_or_insert_function(mod, meminfo_data_ty,
+                                            "NRT_MemInfo_data_fast")
         return builder.call(fn, [meminfo])
 
     def get_meminfos(self, builder, ty, val):
@@ -204,7 +366,8 @@ class NRTContext(object):
         meminfos = self.get_meminfos(builder, typ, value)
         for _, mi in meminfos:
             mod = builder.module
-            fn = mod.get_or_insert_function(incref_decref_ty, name=funcname)
+            fn = cgutils.get_or_insert_function(mod, incref_decref_ty,
+                                                funcname)
             # XXX "nonnull" causes a crash in test_dyn_array: can this
             # function be called with a NULL pointer?
             fn.args[0].add_attribute("noalias")
@@ -230,7 +393,7 @@ class NRTContext(object):
 
         fnty = ir.FunctionType(cgutils.voidptr_t, ())
         mod = builder.module
-        fn = mod.get_or_insert_function(fnty, name="NRT_get_api")
+        fn = cgutils.get_or_insert_function(mod, fnty, "NRT_get_api")
         return builder.call(fn, ())
 
     def eh_check(self, builder):

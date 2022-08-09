@@ -7,11 +7,11 @@ import builtins
 import operator
 import inspect
 
-from llvmlite.llvmpy.core import Type, Constant
-import llvmlite.llvmpy.core as lc
+import llvmlite.ir
 
 from numba.core import types, utils, ir, generators, cgutils
-from numba.core.errors import ForbiddenConstruct, LoweringError
+from numba.core.errors import (ForbiddenConstruct, LoweringError,
+                               NumbaNotImplementedError)
 from numba.core.lowering import BaseLower
 
 
@@ -136,12 +136,12 @@ class PyLower(BaseLower):
 
         elif isinstance(inst, ir.Branch):
             cond = self.loadvar(inst.cond.name)
-            if cond.type == Type.int(1):
+            if cond.type == llvmlite.ir.IntType(1):
                 istrue = cond
             else:
                 istrue = self.pyapi.object_istrue(cond)
-            zero = lc.Constant.null(istrue.type)
-            pred = self.builder.icmp(lc.ICMP_NE, istrue, zero)
+            zero = llvmlite.ir.Constant(istrue.type, None)
+            pred = self.builder.icmp_unsigned('!=', istrue, zero)
             tr = self.blkmap[inst.truebr]
             fl = self.blkmap[inst.falsebr]
             self.builder.cbranch(pred, tr, fl)
@@ -152,6 +152,9 @@ class PyLower(BaseLower):
 
         elif isinstance(inst, ir.Del):
             self.delvar(inst.value)
+
+        elif isinstance(inst, ir.PopBlock):
+            pass # this is just a marker
 
         elif isinstance(inst, ir.Raise):
             if inst.exception is not None:
@@ -165,7 +168,8 @@ class PyLower(BaseLower):
             self.return_exception_raised()
 
         else:
-            raise NotImplementedError(type(inst), inst)
+            msg = f"{type(inst)}, {inst}"
+            raise NumbaNotImplementedError(msg)
 
     @utils.cached_property
     def _omitted_typobj(self):
@@ -285,8 +289,10 @@ class PyLower(BaseLower):
             args = self.pyapi.tuple_pack(argvals)
             if expr.vararg:
                 # Expand *args
-                new_args = self.pyapi.number_add(args,
-                                                 self.loadvar(expr.vararg.name))
+                varargs = self.pyapi.sequence_tuple(
+                                self.loadvar(expr.vararg.name))
+                new_args = self.pyapi.sequence_concat(args, varargs)
+                self.decref(varargs)
                 self.decref(args)
                 args = new_args
             if not expr.kws:
@@ -370,7 +376,7 @@ class PyLower(BaseLower):
             # Check tuple size is as expected
             tup_size = self.pyapi.tuple_size(tup)
             expected_size = self.context.get_constant(types.intp, expr.count)
-            has_wrong_size = self.builder.icmp(lc.ICMP_NE,
+            has_wrong_size = self.builder.icmp_unsigned('!=',
                                                tup_size, expected_size)
             with cgutils.if_unlikely(self.builder, has_wrong_size):
                 self.return_exception(ValueError)
@@ -533,8 +539,8 @@ class PyLower(BaseLower):
         """
         Raise an exception if *num* is smaller than *ok_value*.
         """
-        ok = lc.Constant.int(num.type, ok_value)
-        pred = self.builder.icmp(lc.ICMP_SLT, num, ok)
+        ok = llvmlite.ir.Constant(num.type, ok_value)
+        pred = self.builder.icmp_signed('<', num, ok)
         with cgutils.if_unlikely(self.builder, pred):
             self.return_exception_raised()
 
@@ -624,6 +630,11 @@ class PyLower(BaseLower):
             ptr = self.builder.alloca(ltype, name=name)
             self.builder.store(cgutils.get_null_value(ltype), ptr)
         return ptr
+
+    def _alloca_var(self, name, fetype):
+        # This is here for API compatibility with lowering.py::Lower.
+        # NOTE: fetype is unused
+        return self.alloca(name)
 
     def incref(self, value):
         self.pyapi.incref(value)

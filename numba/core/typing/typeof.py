@@ -7,9 +7,16 @@ import numpy as np
 
 from numba.core import types, utils, errors
 from numba.np import numpy_support
-
+from numba.np.numpy_support import numpy_version
 # terminal color markup
 _termcolor = errors.termcolor()
+
+# Note that the BitGenerator class exists in _bit_generator.pxd in
+# NumPy 1.18 (has underscore) and then bit_generator.pxd in NumPy 1.19
+if numpy_version < (1, 19):
+    from numpy.random._bit_generator import BitGenerator
+else:
+    from numpy.random.bit_generator import BitGenerator
 
 
 class Purpose(enum.Enum):
@@ -93,6 +100,9 @@ def _typeof_type(val, c):
 
     if issubclass(val, np.generic):
         return types.NumberClass(numpy_support.from_dtype(val))
+
+    if issubclass(val, types.Type):
+        return types.TypeRef(val)
 
     from numba.typed import Dict
     if issubclass(val, Dict):
@@ -232,8 +242,8 @@ def _typeof_dtype(val, c):
 def _typeof_ndarray(val, c):
     try:
         dtype = numpy_support.from_dtype(val.dtype)
-    except NotImplementedError:
-        raise ValueError("Unsupported array dtype: %s" % (val.dtype,))
+    except errors.NumbaNotImplementedError:
+        raise errors.NumbaValueError(f"Unsupported array dtype: {val.dtype}")
     layout = numpy_support.map_layout(val)
     readonly = not val.flags.writeable
     return types.Array(dtype, val.ndim, layout, readonly=readonly)
@@ -262,3 +272,13 @@ def _typeof_nb_type(val, c):
         return types.NumberClass(val)
     else:
         return types.TypeRef(val)
+
+
+@typeof_impl.register(BitGenerator)
+def typeof_numpy_random_bitgen(val, c):
+    return types.NumPyRandomBitGeneratorType(val)
+
+
+@typeof_impl.register(np.random.Generator)
+def typeof_random_generator(val, c):
+    return types.NumPyRandomGeneratorType(val)

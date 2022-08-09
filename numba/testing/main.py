@@ -198,10 +198,18 @@ class NumbaTestProgram(unittest.main):
         parser.add_argument('-j', '--slice', dest='useslice', nargs='?',
                             type=str, const="None",
                             help='Slice the test sequence')
-        parser.add_argument('-g', '--gitdiff', dest='gitdiff',
-                            action='store_true',
+
+        def git_diff_str(x):
+            if x != 'ancestor':
+                raise ValueError("invalid option for --gitdiff")
+            return x
+
+        parser.add_argument('-g', '--gitdiff', dest='gitdiff', type=git_diff_str,
+                            default=False, nargs='?',
                             help=('Run tests from changes made against '
-                                  'origin/master as identified by `git diff`'))
+                                  'origin/main as identified by `git diff`. '
+                                  'If set to "ancestor", the diff compares '
+                                  'against the common ancestor.'))
         return parser
 
     def _handle_tags(self, argv, tagstr):
@@ -266,8 +274,11 @@ class NumbaTestProgram(unittest.main):
             self.test = _choose_random_tests(self.test, self.random_select,
                                              self.random_seed)
 
-        if self.gitdiff:
-            self.test = _choose_gitdiff_tests(self.test)
+        if self.gitdiff is not False:
+            self.test = _choose_gitdiff_tests(
+                self.test,
+                use_common_ancestor=(self.gitdiff == 'ancestor'),
+            )
 
         if self.verbosity <= 0:
             # We aren't interested in informational messages / warnings when
@@ -379,14 +390,18 @@ def _flatten_suite(test):
     return tests
 
 
-def _choose_gitdiff_tests(tests):
+def _choose_gitdiff_tests(tests, *, use_common_ancestor=False):
     try:
         from git import Repo
     except ImportError:
         raise ValueError("gitpython needed for git functionality")
     repo = Repo('.')
     path = os.path.join('numba', 'tests')
-    target = 'origin/master..HEAD'
+    if use_common_ancestor:
+        print(f"Git diff by common ancestor")
+        target = 'origin/main...HEAD'
+    else:
+        target = 'origin/main..HEAD'
     gdiff_paths = repo.git.diff(target, path, name_only=True).split()
     # normalise the paths as they are unix style from repo.git.diff
     gdiff_paths = [os.path.normpath(x) for x in gdiff_paths]

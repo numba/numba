@@ -27,36 +27,46 @@ requirements:
   build:
     - {{ compiler('c') }}      # [not (armv6l or armv7l or aarch64)]
     - {{ compiler('cxx') }}    # [not (armv6l or armv7l or aarch64)]
-    # both of these are needed on osx, llvm for the headers, Intel for the lib
+    # OpenMP headers from llvm needed for OSX.
     - llvm-openmp              # [osx]
-    - intel-openmp             # [osx]
   host:
     - python
     - numpy
     - setuptools
+    - importlib_metadata       # [py<39]
     # On channel https://anaconda.org/numba/
-    - llvmlite >=0.36.0dev0,<0.36
+    - llvmlite >=0.40.0dev0,<0.40
     # TBB devel version is to match TBB libs.
     # 2020.3 is the last version with the "old" ABI
-    - tbb-devel >=2019.5,<=2020.3       # [not (armv6l or armv7l or aarch64 or linux32)]
+    # NOTE: 2021.1..2021.5 are API compatible for Numba's purposes.
+    # NOTE: ppc64le exclusion is temporary until packages are more generally
+    #       available.
+    - tbb-devel >=2021,<2021.6       # [not (armv6l or armv7l or aarch64 or linux32 or ppc64le)]
   run:
-    - python >=3.6
-    - numpy >=1.15
+    - python >=3.7
+    # NumPy 1.22.0, 1.22.1, 1.22.2 are all broken for ufuncs, see #7756
+    - numpy >=1.18, !=1.22.0, !=1.22.1, !=1.22.2
     - setuptools
+    - importlib_metadata       # [py<39]
     # On channel https://anaconda.org/numba/
-    - llvmlite >=0.36.0dev0,<0.36
+    - llvmlite >=0.40.0dev0,<0.40
   run_constrained:
-    # If TBB is present it must be at least version 2019.5 from Anaconda due to
-    # build flag issues triggering UB. It must also be <=2020.3 due to ABI
-    # changes in TBB, see https://github.com/numba/numba/pull/6096.
-    # 2020.3 is the last version with the "old" ABI
-    - tbb >=2019.5,<=2020.3    # [not (armv6l or armv7l or aarch64 or linux32)]
+    # If TBB is present it must be at least version 2021
+    - tbb >=2021    # [not (armv6l or armv7l or aarch64 or linux32 or ppc64le)]
     # avoid confusion from openblas bugs
     - libopenblas !=0.3.6      # [x86_64]
-    # CUDA 9.0 or later is required for CUDA support
-    - cudatoolkit >=9.0
+    # 0.3.17 buggy on M1 silicon
+    # https://github.com/xianyi/OpenBLAS/blob/v0.3.20/Changelog.txt#L118
+    # https://github.com/numba/numba/issues/7822#issuecomment-1063229855
+    # Exclude 0.3.20 too
+    # https://github.com/numba/numba/issues/8096
+    - libopenblas >=0.3.18, !=0.3.20     # [arm64]
+    # CUDA 10.2 or later is required for CUDA support
+    - cudatoolkit >=10.2
     # scipy 1.0 or later
     - scipy >=1.0
+    # CUDA Python 11.6 or later
+    - cuda-python >=11.6
 
 test:
   requires:
@@ -67,8 +77,12 @@ test:
     - scipy                    # [not (armv6l or armv7l)]
     - ipython                  # [not (armv6l or armv7l or aarch64)]
     - setuptools
-    - tbb  >=2019.5            # [not (armv6l or armv7l or aarch64 or linux32)]
-    - intel-openmp             # [osx]
+    - tbb  >=2021              # [not (armv6l or armv7l or aarch64 or linux32 or ppc64le)]
+    - llvm-openmp              # [osx]
+    # This is for driving gdb tests
+    - pexpect                  # [linux64]
+    # For testing ipython
+    - ipykernel
     # Need these for AOT. Do not init msvc as it may not be present
     - {{ compiler('c') }}      # [not (win or armv6l or armv7l or aarch64)]
     - {{ compiler('cxx') }}    # [not (win or armv6l or armv7l or aarch64)]

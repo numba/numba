@@ -2,6 +2,8 @@ import math
 import numpy as np
 from numba import jit
 
+_GLOBAL_STR = "abc"
+
 def sum1d(s, e):
     c = 0
     for i in range(s, e):

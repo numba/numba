@@ -1,9 +1,9 @@
 from numba import jit, typeof
-from numba.core import types, serialize, sigutils
+from numba.core import cgutils, types, serialize, sigutils
+from numba.core.extending import is_jitted
 from numba.core.typing import npydecl
 from numba.core.typing.templates import AbstractTemplate, signature
 from numba.np.ufunc import _internal
-from numba.core.dispatcher import Dispatcher
 from numba.parfors import array_analysis
 from numba.np.ufunc import ufuncbuilder
 from numba.np import numpy_support
@@ -38,8 +38,9 @@ def make_dufunc_kernel(_dufunc):
                 func_type = self.context.call_conv.get_function_type(
                     isig.return_type, isig.args)
             module = self.builder.block.function.module
-            entry_point = module.get_or_insert_function(
-                func_type, name=self.cres.fndesc.llvm_func_name)
+            entry_point = cgutils.get_or_insert_function(
+                module, func_type,
+                self.cres.fndesc.llvm_func_name)
             entry_point.attributes.add("alwaysinline")
 
             _, res = self.context.call_conv.call_function(
@@ -76,7 +77,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
     __base_kwargs = set(('identity', '_keepalive', 'nin', 'nout'))
 
     def __init__(self, py_func, identity=None, cache=False, targetoptions={}):
-        if isinstance(py_func, Dispatcher):
+        if is_jitted(py_func):
             py_func = py_func.py_func
         dispatcher = jit(_target='npyufunc',
                          cache=cache,

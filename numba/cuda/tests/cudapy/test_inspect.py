@@ -14,7 +14,9 @@ class TestInspect(CUDATestCase):
         return cuda.current_context().device.compute_capability
 
     def test_monotyped(self):
-        @cuda.jit("(float32, int32)")
+        sig = (float32, int32)
+
+        @cuda.jit(sig)
         def foo(x, y):
             pass
 
@@ -27,9 +29,9 @@ class TestInspect(CUDATestCase):
         self.assertIn("(float32, int32)", typeanno)
         file.close()
         # Function name in LLVM
-        self.assertIn("foo", foo.inspect_llvm())
+        self.assertIn("foo", foo.inspect_llvm(sig))
 
-        asm = foo.inspect_asm()
+        asm = foo.inspect_asm(sig)
 
         # Function name in PTX
         self.assertIn("foo", asm)
@@ -55,23 +57,23 @@ class TestInspect(CUDATestCase):
         # Signature in LLVM dict
         llvmirs = foo.inspect_llvm()
         self.assertEqual(2, len(llvmirs), )
-        self.assertIn((self.cc, (intp, intp)), llvmirs)
-        self.assertIn((self.cc, (float64, float64)), llvmirs)
+        self.assertIn((intp, intp), llvmirs)
+        self.assertIn((float64, float64), llvmirs)
 
         # Function name in LLVM
-        self.assertIn("foo", llvmirs[self.cc, (intp, intp)])
-        self.assertIn("foo", llvmirs[self.cc, (float64, float64)])
+        self.assertIn("foo", llvmirs[intp, intp])
+        self.assertIn("foo", llvmirs[float64, float64])
 
         asmdict = foo.inspect_asm()
 
-        # Signature in LLVM dict
+        # Signature in assembly dict
         self.assertEqual(2, len(asmdict), )
-        self.assertIn((self.cc, (intp, intp)), asmdict)
-        self.assertIn((self.cc, (float64, float64)), asmdict)
+        self.assertIn((intp, intp), asmdict)
+        self.assertIn((float64, float64), asmdict)
 
-        # NNVM inserted in PTX
-        self.assertIn("foo", asmdict[self.cc, (intp, intp)])
-        self.assertIn("foo", asmdict[self.cc, (float64, float64)])
+        # NVVM inserted in PTX
+        self.assertIn("foo", asmdict[intp, intp])
+        self.assertIn("foo", asmdict[float64, float64])
 
     def _test_inspect_sass(self, kernel, name, sass):
         # Ensure function appears in output
@@ -89,13 +91,15 @@ class TestInspect(CUDATestCase):
 
     @skip_without_nvdisasm('nvdisasm needed for inspect_sass()')
     def test_inspect_sass_eager(self):
-        @cuda.jit((float32[::1], int32[::1]))
+        sig = (float32[::1], int32[::1])
+
+        @cuda.jit(sig)
         def add(x, y):
             i = cuda.grid(1)
             if i < len(x):
                 x[i] += y[i]
 
-        self._test_inspect_sass(add, 'add', add.inspect_sass())
+        self._test_inspect_sass(add, 'add', add.inspect_sass(sig))
 
     @skip_without_nvdisasm('nvdisasm needed for inspect_sass()')
     def test_inspect_sass_lazy(self):

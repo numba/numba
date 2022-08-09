@@ -39,7 +39,7 @@ all the variables in use, this is so it can generate a type specific
 implementation of your code that can be compiled down to machine code. A common
 reason for Numba failing to compile (especially in :term:`nopython mode`) is a
 type inference failure, essentially Numba cannot work out what the type of all
-the variables in your code should be. 
+the variables in your code should be.
 
 For example, let's consider this trivial function::
 
@@ -135,22 +135,22 @@ is determined at runtime based on the value of `x`::
     ...:         return (1,)
     ...:     else:
     ...:         return 1
-    ...:     
+    ...:
 
     In [3]: f(10)
 
-Trying to execute this function, errors out as follows:: 
+Trying to execute this function, errors out as follows::
 
     TypingError: Failed at nopython (nopython frontend)
     Can't unify return type from the following types: tuple(int64 x 1), int64
-    Return of: IR name '$8.2', type '(int64 x 1)', location: 
+    Return of: IR name '$8.2', type '(int64 x 1)', location:
     File "<ipython-input-2-51ef1cc64bea>", line 4:
     def f(x):
         <source elided>
         if x > 10:
             return (1,)
             ^
-    Return of: IR name '$12.2', type 'int64', location: 
+    Return of: IR name '$12.2', type 'int64', location:
     File "<ipython-input-2-51ef1cc64bea>", line 6:
     def f(x):
         <source elided>
@@ -371,7 +371,7 @@ In order to debug code, it is possible to disable JIT compilation, which makes
 the ``jit`` decorator (and the ``njit`` decorator) act as if
 they perform no operation, and the invocation of decorated functions calls the
 original Python function instead of a compiled version. This can be toggled by
-setting the :envvar:`NUMBA_DISABLE_JIT` enviroment variable to ``1``.
+setting the :envvar:`NUMBA_DISABLE_JIT` environment variable to ``1``.
 
 When this mode is enabled, the ``vectorize`` and ``guvectorize`` decorators will
 still result in compilation of a ufunc, as there is no straightforward pure
@@ -388,28 +388,59 @@ Setting the ``debug`` keyword argument in the ``jit`` decorator
 code.  To debug, GDB version 7.0 or above is required.  Currently, the following
 debug info is available:
 
-* Function name will be shown in the backtrace.  But, no type information.
+* Function name will be shown in the backtrace along with type information and
+  values (if available).
 * Source location (filename and line number) is available.  For example,
-  user can set break point by the absolute filename and line number;
+  users can set a break point by the absolute filename and line number;
   e.g. ``break /path/to/myfile.py:6``.
+* Arguments to the current function can be show with ``info args``
 * Local variables in the current function can be shown with ``info locals``.
-* Type of variable with ``whatis myvar``.
-* Value of variable with ``print myvar`` or ``display myvar``.
+* The type of variables can be shown with ``whatis myvar``.
+* The value of variables can be shown with ``print myvar`` or ``display myvar``.
 
   * Simple numeric types, i.e. int, float and double, are shown in their
-    native representation.  But, integers are assumed to be signed.
-  * Other types are shown as sequence of bytes.
+    native representation.
+  * Other types are shown as a structure based on Numba's memory model
+    representation of the type.
+
+Further, the Numba ``gdb`` printing extension can be loaded into ``gdb`` (if the
+``gdb`` has Python support) to permit the printing of variables as they would be
+in native Python. The extension does this by reinterpreting Numba's memory model
+representations as Python types. Information about the ``gdb`` installation that
+Numba is using, including the path to load the ``gdb`` printing extension, can
+be displayed by using the ``numba -g`` command. For best results ensure that the
+Python that ``gdb`` is using has a NumPy module accessible. An example output
+of the ``gdb`` information follows:
+
+.. code-block:: none
+  :emphasize-lines: 1
+
+    $ numba -g
+    GDB info:
+    --------------------------------------------------------------------------------
+    Binary location                               : <some path>/gdb
+    Print extension location                      : <some python path>/numba/misc/gdb_print_extension.py
+    Python version                                : 3.8
+    NumPy version                                 : 1.20.0
+    Numba printing extension supported            : True
+
+    To load the Numba gdb printing extension, execute the following from the gdb prompt:
+
+    source <some python path>/numba/misc/gdb_print_extension.py
+
+    --------------------------------------------------------------------------------
 
 Known issues:
 
-* Stepping depends heavily on optimization level.
-
-  * At full optimization (equivalent to O3), most of the variables are
-    optimized out.
-  * With no optimization (e.g. ``NUMBA_OPT=0``), source location jumps around
-    when stepping through the code.
-  * At O1 optimization (e.g. ``NUMBA_OPT=1``), stepping is stable but some
-    variables are optimized out.
+* Stepping depends heavily on optimization level. At full optimization
+  (equivalent to O3), most of the variables are optimized out. It is often
+  beneficial to use the jit option ``_dbg_optnone=True`` 
+  or the environment variable :envvar:`NUMBA_OPT` to adjust the 
+  optimization level and the jit option ``_dbg_extend_lifetimes=True`` 
+  (which is on by default if ``debug=True``) or
+  :envvar:`NUMBA_EXTEND_VARIABLE_LIFETIMES` to extend
+  the lifetime of variables to the end of their scope so as to get a debugging
+  experience closer to the semantics of Python execution.
 
 * Memory consumption increases significantly with debug info enabled.
   The compiler emits extra information (`DWARF <http://www.dwarfstd.org/>`_)
@@ -430,7 +461,22 @@ Internal details:
   the variables will be ``x``, ``x$1`` and ``x$2``.  (In the Numba IR, they are
   ``x``, ``x.1`` and ``x.2``.)
 
-* When debug is enabled, inlining of the function is disabled.
+* When debug is enabled, inlining of functions at LLVM IR level is disabled.
+
+JIT options for debug
+---------------------
+
+* ``debug`` (bool). Set to ``True`` to enable debug info. Defaults to ``False``.
+* ``_dbg_optnone`` (bool). Set to ``True`` to disable all LLVM optimization passes 
+  on the function. Defaults to ``False``. See :envvar:`NUMBA_OPT` for a global setting
+  to disable optimization.
+* ``_dbg_extend_lifetimes`` (bool). Set to ``True`` to extend the lifetime of
+  objects such that they more closely follow the semantics of Python.
+  Automatically set to ``True`` when 
+  ``debug=True``; otherwise, defaults to ``False``. Users can explicitly set this option 
+  to ``False`` to retain the normal execution semantics of compiled code.
+  See :envvar:`NUMBA_EXTEND_VARIABLE_LIFETIMES` for a global option to extend object 
+  lifetimes.
 
 Example debug usage
 -------------------
@@ -449,44 +495,102 @@ The python source:
       d = (a, b, c)
       print(a, b, c, d)
 
-  r= foo(123)
+  r = foo(123)
   print(r)
 
 In the terminal:
 
 .. code-block:: none
-  :emphasize-lines: 1, 8, 13, 15, 20, 25, 27, 29
+  :emphasize-lines: 1, 3, 7, 12, 14, 16, 20, 22, 26, 28, 30, 32, 34, 36
 
-  $ NUMBA_OPT=1 gdb -q python
-  Reading symbols from python...done.
-  (gdb) break /home/user/chk_debug.py:5
-  No source file named /home/user/chk_debug.py.
-  Make breakpoint pending on future shared library load? (y or [n]) y
+    $ NUMBA_OPT=0 NUMBA_EXTEND_VARIABLE_LIFETIMES=1 gdb -q python
+    Reading symbols from python...
+    (gdb) break test1.py:5
+    No source file named test1.py.
+    Make breakpoint pending on future shared library load? (y or [n]) y
+    Breakpoint 1 (test1.py:5) pending.
+    (gdb) run test1.py
+    Starting program: <path>/bin/python test1.py
+    ...
+    Breakpoint 1, __main__::foo_241[abi:c8tJTC_2fWgEeGLSgydRTQUgiqKEZ6gEoDvQJmaQIA](long long) (a=123) at test1.py:5
+    5           b = a + 1
+    (gdb) info args
+    a = 123
+    (gdb) n
+    6           c = a * 2.34
+    (gdb) info locals
+    b = 124
+    c = 0
+    d = {f0 = 0, f1 = 0, f2 = 0}
+    (gdb) n
+    7           d = (a, b, c)
+    (gdb) info locals
+    b = 124
+    c = 287.81999999999999
+    d = {f0 = 0, f1 = 0, f2 = 0}
+    (gdb) whatis b
+    type = int64
+    (gdb) whatis d
+    type = Tuple(int64, int64, float64) ({i64, i64, double})
+    (gdb) n
+    8           print(a, b, c, d)
+    (gdb) print b
+    $1 = 124
+    (gdb) print d
+    $2 = {f0 = 123, f1 = 124, f2 = 287.81999999999999}
+    (gdb) bt
+    #0  __main__::foo_241[abi:c8tJTC_2fWgEeGLSgydRTQUgiqKEZ6gEoDvQJmaQIA](long long) (a=123) at test1.py:8
+    #1  0x00007ffff06439fa in cpython::__main__::foo_241[abi:c8tJTC_2fWgEeGLSgydRTQUgiqKEZ6gEoDvQJmaQIA](long long) ()
 
-  Breakpoint 1 (/home/user/chk_debug.py:5) pending.
-  (gdb) run chk_debug.py
-  Starting program: /home/user/miniconda/bin/python chk_debug.py
-  ...
-  Breakpoint 1, __main__::foo$241(long long) () at chk_debug.py:5
-  5	    b = a + 1
-  (gdb) n
-  6	    c = a * 2.34
-  (gdb) bt
-  #0  __main__::foo$241(long long) () at chk_debug.py:6
-  #1  0x00007ffff7fec47c in cpython::__main__::foo$241(long long) ()
-  #2  0x00007fffeb7976e2 in call_cfunc (locals=0x0, kws=0x0, args=0x7fffeb486198,
-  ...
-  (gdb) info locals
-  a = 0
-  d = <error reading variable d (DWARF-2 expression error: `DW_OP_stack_value' operations must be used either alone or in conjunction with DW_OP_piece or DW_OP_bit_piece.)>
-  c = 0
-  b = 124
-  (gdb) whatis b
-  type = i64
-  (gdb) whatis d
-  type = {i64, i64, double}
-  (gdb) print b
-  $2 = 124
+
+Another example follows that makes use of the Numba ``gdb`` printing extension
+mentioned above, note the change in the print format once the extension is
+loaded with ``source`` :
+
+The Python source:
+
+.. code-block:: python
+  :linenos:
+
+    from numba import njit
+    import numpy as np
+
+    @njit(debug=True)
+    def foo(n):
+        x = np.arange(n)
+        y = (x[0], x[-1])
+        return x, y
+
+    foo(4)
+
+In the terminal:
+
+.. code-block:: none
+  :emphasize-lines: 1, 3, 4, 7, 12, 14, 16, 17, 20
+
+    $ NUMBA_OPT=0 NUMBA_EXTEND_VARIABLE_LIFETIMES=1 gdb -q python
+    Reading symbols from python...
+    (gdb) set breakpoint pending on
+    (gdb) break test2.py:8
+    No source file named test2.py.
+    Breakpoint 1 (test2.py:8) pending.
+    (gdb) run test2.py
+    Starting program: <path>/bin/python test2.py
+    ...
+    Breakpoint 1, __main__::foo_241[abi:c8tJTC_2fWgEeGLSgydRTQUgiqKEZ6gEoDvQJmaQIA](long long) (n=4) at test2.py:8
+    8           return x, y
+    (gdb) print x
+    $1 = {meminfo = 0x55555688f470 "\001", parent = 0x0, nitems = 4, itemsize = 8, data = 0x55555688f4a0, shape = {4}, strides = {8}}
+    (gdb) print y
+    $2 = {0, 3}
+    (gdb) source numba/misc/gdb_print_extension.py
+    (gdb) print x
+    $3 =
+    [0 1 2 3]
+    (gdb) print y
+    $4 = (0, 3)
+
+
 
 Globally override debug setting
 -------------------------------
@@ -572,26 +676,19 @@ In the terminal (``...`` on a line by itself indicates output that is not
 presented for brevity):
 
 .. code-block:: none
-    :emphasize-lines: 1, 15, 20, 31, 33, 35, 37, 39
+    :emphasize-lines: 1, 4, 8, 13, 24, 26, 28, 30, 32, 37
 
-    $ NUMBA_OPT=0 python demo_gdb.py
-    Attaching to PID: 27157
-    GNU gdb (GDB) Red Hat Enterprise Linux 8.0.1-36.el7
+    $ NUMBA_OPT=0 NUMBA_EXTEND_VARIABLE_LIFETIMES=1 python demo_gdb.py
     ...
-    Attaching to process 27157
-    ...
-    Reading symbols from <elided for brevity> ...done.
-    0x00007f0380c31550 in __nanosleep_nocancel () at ../sysdeps/unix/syscall-template.S:81
-    81      T_PSEUDO (SYSCALL_SYMBOL, SYSCALL_NAME, SYSCALL_NARGS)
-    Breakpoint 1 at 0x7f036ac388f0: file numba/_helperlib.c, line 1090.
-    Continuing.
-
-    Breakpoint 1, numba_gdb_breakpoint () at numba/_helperlib.c:1090
-    1090    }
+    Breakpoint 1, 0x00007fb75238d830 in numba_gdb_breakpoint () from numba/_helperlib.cpython-39-x86_64-linux-gnu.so
     (gdb) s
-    Single stepping until exit from function _ZN5numba7targets8gdb_hook8hook_gdb12$3clocals$3e8impl$242E5Tuple,
+    Single stepping until exit from function numba_gdb_breakpoint,
     which has no line number information.
-    __main__::foo$241(long long) () at demo_gdb.py:7
+    0x00007fb75233e1cf in numba::misc::gdb_hook::hook_gdb::_3clocals_3e::impl_242[abi:c8tJTIeFCjyCbUFRqqOAK_2f6h0phxApMogijRBAA_3d](StarArgTuple) ()
+    (gdb) s
+    Single stepping until exit from function _ZN5numba4misc8gdb_hook8hook_gdb12_3clocals_3e8impl_242B44c8tJTIeFCjyCbUFRqqOAK_2f6h0phxApMogijRBAA_3dE12StarArgTuple,
+    which has no line number information.
+    __main__::foo_241[abi:c8tJTC_2fWgEeGLSgydRTQUgiqKEZ6gEoDvQJmaQIA](long long) (a=123) at demo_gdb.py:7
     7           c = a * 2.34
     (gdb) l
     2
@@ -610,20 +707,30 @@ presented for brevity):
     $2 = 124
     (gdb) p c
     $3 = 0
-    (gdb) n
-    8           d = (a, b, c)
-    (gdb) p c
-    $4 = 287.81999999999999
+    (gdb) b 9
+    Breakpoint 2 at 0x7fb73d1f7287: file demo_gdb.py, line 9.
+    (gdb) c
+    Continuing.
+
+    Breakpoint 2, __main__::foo_241[abi:c8tJTC_2fWgEeGLSgydRTQUgiqKEZ6gEoDvQJmaQIA](long long) (a=123) at demo_gdb.py:9
+    9           print(a, b, c, d)
+    (gdb) info locals
+    b = 124
+    c = 287.81999999999999
+    d = {f0 = 123, f1 = 124, f2 = 287.81999999999999}
+
 
 It can be seen in the above example that execution of the code is paused at the
 location of the ``gdb()`` function call at end of the ``numba_gdb_breakpoint``
 function (this is the Numba internal symbol registered as breakpoint with
-``gdb``). Issuing a ``step`` at this point moves to the stack frame of the
+``gdb``). Issuing a ``step`` twice at this point moves to the stack frame of the
 compiled Python source. From there, it can be seen that the variables ``a`` and
 ``b`` have been evaluated but ``c`` has not, as demonstrated by printing their
 values, this is precisely as expected given the location of the ``gdb()`` call.
-Issuing a ``next`` then evaluates line ``7`` and ``c`` is assigned a value as
-demonstrated by the final print.
+Issuing a ``break`` on line 9 and then continuing execution leads to the
+evaluation of line ``7``. The variable ``c`` is assigned a value as a result of
+the execution and this can be seen in output of ``info locals`` when the
+breakpoint is hit.
 
 Running with ``gdb`` enabled
 ----------------------------
@@ -669,76 +776,33 @@ In the terminal (``...`` on a line by itself indicates output that is not
 presented for brevity):
 
 .. code-block:: none
-    :emphasize-lines: 1, 15, 17, 19, 21
+    :emphasize-lines: 1, 6, 8, 10, 12
 
-    $ python demo_gdb_segfault.py
-    Attaching to PID: 5444
-    GNU gdb (GDB) Red Hat Enterprise Linux 8.0.1-36.el7
+    $ NUMBA_OPT=0 python demo_gdb_segfault.py
     ...
-    Attaching to process 5444
-    ...
-    Reading symbols from <elided for brevity> ...done.
-    0x00007f8d8010a550 in __nanosleep_nocancel () at ../sysdeps/unix/syscall-template.S:81
-    81      T_PSEUDO (SYSCALL_SYMBOL, SYSCALL_NAME, SYSCALL_NARGS)
-    Breakpoint 1 at 0x7f8d6a1118f0: file numba/_helperlib.c, line 1090.
-    Continuing.
-
-    0x00007fa7b810a41f in __main__::foo$241(Array<long long, 1, C, mutable, aligned>, long long) () at demo_gdb_segfault.py:9
-    9           d = c[index] # access an address that is a) invalid b) out of the page
+    Program received signal SIGSEGV, Segmentation fault.
+    0x00007f5a4ca655eb in __main__::foo_241[abi:c8tJTC_2fWgEeGLSgydRTQUgiqKEZ6gEoDvQJmaQIA](Array<long long, 1, C, mutable, aligned>, long long) (a=..., index=1000000000) at demo_gdb_segfault.py:12
+    12          d = c[index] # access an address that is a) invalid b) out of the page
     (gdb) p index
     $1 = 1000000000
     (gdb) p c
-    $2 = "p\202\017\364\371U\000\000\000\000\000\000\000\000\000\000\n\000\000\000\000\000\000\000\b\000\000\000\000\000\000\000\240\202\017\364\371U\000\000\n\000\000\000\000\000\000\000\b\000\000\000\000\000\000"
+    $2 = {meminfo = 0x5586cfb95830 "\001", parent = 0x0, nitems = 10, itemsize = 8, data = 0x5586cfb95860, shape = {10}, strides = {8}}
     (gdb) whatis c
-    type = {i8*, i8*, i64, i64, double*, [1 x i64], [1 x i64]}
-    (gdb) x /32xb c
-    0x7ffd56195068: 0x70    0x82    0x0f    0xf4    0xf9    0x55    0x00    0x00
-    0x7ffd56195070: 0x00    0x00    0x00    0x00    0x00    0x00    0x00    0x00
-    0x7ffd56195078: 0x0a    0x00    0x00    0x00    0x00    0x00    0x00    0x00
-    0x7ffd56195080: 0x08    0x00    0x00    0x00    0x00    0x00    0x00    0x00
+    type = array(float64, 1d, C) ({i8*, i8*, i64, i64, double*, [1 x i64], [1 x i64]})
+    (gdb) p c.nitems
+    $3 = 10
 
-
-In the ``gdb`` output it can be noted that the ``numba_gdb_breakpoint`` function
-was registered as a breakpoint (its symbol is in ``numba/_helperlib.c``),
-that a ``SIGSEGV`` signal was caught, and the line in which the access violation
-occurred is printed.
+In the ``gdb`` output it can be noted that a ``SIGSEGV`` signal was caught, and
+the line in which the access violation occurred is printed.
 
 Continuing the example as a debugging session demonstration, first ``index``
-can be printed, and it is evidently 1e9. Printing ``c`` gives a lot of bytes, so
-the type needs looking up. The type of ``c`` shows the layout for the array
-``c`` based on its ``DataModel`` (look in the Numba source
-``numba.datamodel.models`` for the layouts, the ``ArrayModel`` is presented
-below for ease).
-
-.. code-block:: python
-
-    class ArrayModel(StructModel):
-        def __init__(self, dmm, fe_type):
-            ndim = fe_type.ndim
-            members = [
-                ('meminfo', types.MemInfoPointer(fe_type.dtype)),
-                ('parent', types.pyobject),
-                ('nitems', types.intp),
-                ('itemsize', types.intp),
-                ('data', types.CPointer(fe_type.dtype)),
-                ('shape', types.UniTuple(types.intp, ndim)),
-                ('strides', types.UniTuple(types.intp, ndim)),
-            ]
-
-The type inspected from ``gdb``
-(``type = {i8*, i8*, i64, i64, double*, [1 x i64], [1 x i64]}``) corresponds
-directly to the members of the ``ArrayModel``. Given the segfault came from an
-invalid access it would be informative to check the number of items in the array
-and compare that to the index requested.
-
-Examining the memory of ``c``, (``x /32xb c``), the first 16 bytes are the two
-``i8*`` corresponding to the ``meminfo`` pointer and the ``parent``
-``pyobject``. The next two groups of 8 bytes are ``i64``/``intp`` types
-corresponding to ``nitems`` and ``itemsize`` respectively. Evidently their
-values are ``0x0a`` and ``0x08``, this makes sense as the input array ``a`` has
-10 elements and is of type ``int64`` which is 8 bytes wide. It's therefore clear
-that the segfault comes from an invalid access of index ``1000000000`` in an
-array containing ``10`` items.
+can be printed, and it is evidently 1e9. Printing ``c`` shows that it is a
+structure, so the type needs looking up and it can be seen that is it an
+``array(float64, 1d, C)`` type. Given the segfault came from an invalid access
+it would be informative to check the number of items in the array and compare
+that to the index requested. Inspecting the ``nitems`` member of the structure
+``c`` shows 10 items. It's therefore clear that the segfault comes from an
+invalid access of index ``1000000000`` in an array containing ``10`` items.
 
 Adding breakpoints to code
 --------------------------
@@ -768,26 +832,15 @@ In the terminal (``...`` on a line by itself indicates output that is not
 presented for brevity):
 
 .. code-block:: none
-    :emphasize-lines: 1, 17, 20, 31, 33, 35, 40, 42
+    :emphasize-lines: 1, 4, 9, 20, 22, 24, 29, 31
 
     $ NUMBA_OPT=0 python demo_gdb_breakpoints.py
-    Attaching to PID: 20366
-    GNU gdb (GDB) Red Hat Enterprise Linux 8.0.1-36.el7
     ...
-    Attaching to process 20366
-    Reading symbols from <elided for brevity> ...done.
-    [Thread debugging using libthread_db enabled]
-    Using host libthread_db library "/lib64/libthread_db.so.1".
-    Reading symbols from /lib64/libc.so.6...Reading symbols from /usr/lib/debug/usr/lib64/libc-2.17.so.debug...done.
-    0x00007f631db5e550 in __nanosleep_nocancel () at ../sysdeps/unix/syscall-template.S:81
-    81      T_PSEUDO (SYSCALL_SYMBOL, SYSCALL_NAME, SYSCALL_NARGS)
-    Breakpoint 1 at 0x7f6307b658f0: file numba/_helperlib.c, line 1090.
-    Continuing.
-
-    Breakpoint 1, numba_gdb_breakpoint () at numba/_helperlib.c:1090
-    1090    }
+    Breakpoint 1, 0x00007fb65bb4c830 in numba_gdb_breakpoint () from numba/_helperlib.cpython-39-x86_64-linux-gnu.so
     (gdb) step
-    __main__::foo$241(long long) () at demo_gdb_breakpoints.py:8
+    Single stepping until exit from function numba_gdb_breakpoint,
+    which has no line number information.
+    __main__::foo_241[abi:c8tJTC_2fWgEeGLSgydRTQUgiqKEZ6gEoDvQJmaQIA](long long) (a=123) at demo_gdb_breakpoints.py:8
     8           c = a * 2.34
     (gdb) l
     3       @njit(debug=True)
@@ -804,11 +857,11 @@ presented for brevity):
     $1 = 124
     (gdb) p c
     $2 = 0
-    (gdb) continue
+    (gdb) c
     Continuing.
 
-    Breakpoint 1, numba_gdb_breakpoint () at numba/_helperlib.c:1090
-    1090    }
+    Breakpoint 1, 0x00007fb65bb4c830 in numba_gdb_breakpoint ()
+    from numba/_helperlib.cpython-39-x86_64-linux-gnu.so
     (gdb) step
     11          print(a, b, c, d)
     (gdb) p c
@@ -1067,6 +1120,7 @@ on which the child will break. Additional :func:`numba.gdb_breakpoint` calls
 create calls to the registered breakpoint hence the program will also break at
 these locations.
 
+.. _debugging-cuda-python-code:
 
 Debugging CUDA Python code
 ==========================

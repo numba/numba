@@ -77,6 +77,28 @@ These variables influence what is printed out during compilation of
 
     If set to non-zero, show resources for getting help. Default is zero.
 
+.. envvar:: NUMBA_CAPTURED_ERRORS
+
+    Alters the way in which Numba captures and handles exceptions that do not
+    inherit from ``numba.core.errors.NumbaError`` during compilation (e.g.
+    standard Python exceptions). This does not impact runtime exception
+    handling. Valid values are:
+
+    - ``"old_style"`` (default): this is the exception handling behaviour that
+      is present in Numba versions <= 0.54.x. Numba will capture and wrap all
+      errors occurring in compilation and depending on the compilation phase they
+      will likely materialize as part of the message in a ``TypingError`` or a
+      ``LoweringError``.
+    - ``"new_style"`` this will treat any exception that does not inherit from
+      ``numba.core.errors.NumbaError`` **and** is raised during compilation as a
+      "hard error", i.e. the exception will propagate and compilation will halt.
+      The purpose of this new style is to differentiate between intentionally
+      raised exceptions and those which occur due to mistakes. For example, if
+      an ``AttributeError`` occurs in the typing of an ``@overload`` function,
+      under this new behaviour it is assumed that this a mistake in the
+      implementation and compilation will halt due to this exception. This
+      behaviour will eventually become the default.
+
 .. envvar:: NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING
 
     If set to non-zero error message highlighting is disabled. This is useful
@@ -117,6 +139,21 @@ These variables influence what is printed out during compilation of
    of the compiler frontend, up to and including generation of the Numba
    Intermediate Representation.
 
+.. envvar:: NUMBA_DEBUG_NRT
+
+   If set to non-zero, print out debugging information at runtime about the use
+   of :ref:`Numba run time (NRT) <arch-numba-runtime>` reference count
+   operations. If set to non-zero, this also switches on the filling of all NRT
+   allocated regions with an identifiable "marker" byte pattern, ``0xCB`` on
+   allocation and ``0xDE`` on deallocation, both to help with debugging memory
+   leaks.
+
+.. envvar:: NUMBA_NRT_STATS
+
+   If set to non-zero, enable the
+   :ref:`Numba run time (NRT) <arch-numba-runtime>` statistics counters. These
+   counters are enabled process wide on import of Numba and are atomic.
+
 .. envvar:: NUMBA_DEBUGINFO
 
    If set to non-zero, enable debug for the full application by setting
@@ -125,13 +162,22 @@ These variables influence what is printed out during compilation of
    for each compiled function.
    Default value equals to the value of `NUMBA_ENABLE_PROFILING`.
 
+.. envvar:: NUMBA_EXTEND_VARIABLE_LIFETIMES
+
+    If set to non-zero, extend the lifetime of variables to the end of the block
+    in which their lifetime ends. This is particularly useful in conjunction
+    with :envvar:`NUMBA_DEBUGINFO` as it helps with introspection of values.
+    Default is zero.
+
 .. envvar:: NUMBA_GDB_BINARY
 
-   Set the ``gdb`` binary for use in Numba's ``gdb`` support, this takes the
-   form  of a path and full name of the binary, for example:
-   ``/path/from/root/to/binary/name_of_gdb_binary`` This is to permit
-   the use of a ``gdb`` from a non-default location with a non-default name. If
-   not set ``gdb`` is assumed to reside at ``/usr/bin/gdb``.
+   Set the ``gdb`` binary for use in Numba's ``gdb`` support. This takes one of
+   two forms: 1) a path and full name of the binary to explicitly express
+   which binary to use 2) just the name of the binary and the current path will
+   be searched using the standard path resolution rules. For example:
+   ``/path/from/root/to/binary/name_of_gdb_binary`` or
+   ``custom_gdb_binary_name``. This is to permit the use of a ``gdb`` from a
+   non-default location with a non-default name. The default value is ``gdb``.
 
 .. envvar:: NUMBA_DEBUG_TYPEINFER
 
@@ -146,6 +192,14 @@ These variables influence what is printed out during compilation of
 
    If set to non-zero, trace certain function calls (function entry and exit
    events, including arguments and return values).
+
+.. envvar:: NUMBA_CHROME_TRACE
+
+   If defined, chrome tracing is enabled and this variable specifies the filepath
+   of the chrome tracing json file output. The emitted file can be opened by
+   a Chromium-based browser using the profile viewer at `chrome://tracing/`.
+
+   .. warning:: This feature is not supported in multi-process applications. 
 
 .. envvar:: NUMBA_DUMP_BYTECODE
 
@@ -227,6 +281,14 @@ These variables influence what is printed out during compilation of
 .. envvar:: NUMBA_DUMP_ASSEMBLY
 
    Dump the native assembly code of compiled functions.
+
+.. envvar:: NUMBA_LLVM_PASS_TIMINGS
+
+    Set to ``1`` to enable recording of pass timings in LLVM;
+    e.g. ``NUMBA_LLVM_PASS_TIMINGS=1``.
+    See :ref:`developer-llvm-timings`.
+
+    *Default value*: ``0`` (Off)
 
 .. seealso::
    :ref:`numba-troubleshooting` and :ref:`architecture`.
@@ -409,6 +471,92 @@ GPU support
    takes place, and the user of Numba (and other CUDA libraries) is responsible
    for ensuring correctness with respect to synchronization on streams.
 
+.. envvar:: NUMBA_CUDA_LOG_LEVEL
+
+   For debugging purposes. If no other logging is configured, the value of this
+   variable is the logging level for CUDA API calls. The default value is
+   ``CRITICAL`` - to trace all API calls on standard error, set this to
+   ``DEBUG``.
+
+.. envvar:: NUMBA_CUDA_LOG_API_ARGS
+
+   By default the CUDA API call logs only give the names of functions called.
+   Setting this variable to 1 also includes the values of arguments to Driver
+   API calls in the logs.
+
+.. envvar:: NUMBA_CUDA_DRIVER
+
+   Path of the directory in which the CUDA driver libraries are to be found.
+   Normally this should not need to be set as Numba can locate the driver in
+   standard locations. However, this variable can be used if the driver is in a
+   non-standard location.
+
+.. envvar:: NUMBA_CUDA_LOG_SIZE
+
+   Buffer size for logs produced by CUDA driver API operations. This defaults
+   to 1024 and should not normally need to be modified - however, if an error
+   in an API call produces a large amount of output that appears to be
+   truncated (perhaps due to multiple long function names, for example) then
+   this variable can be used to increase the buffer size and view the full
+   error message.
+
+.. envvar:: NUMBA_CUDA_VERBOSE_JIT_LOG
+
+   Whether the CUDA driver should produce verbose log messages. Defaults to 1,
+   indicating that verbose messaging is enabled. This should not need to be
+   modified under normal circumstances.
+
+.. envvar:: NUMBA_CUDA_PER_THREAD_DEFAULT_STREAM
+
+   When set to 1, the default stream is the per-thread default stream. When set
+   to 0, the default stream is the legacy default stream. This defaults to 0,
+   for the legacy default stream. See `Stream Synchronization Behavior
+   <https://docs.nvidia.com/cuda/cuda-runtime-api/stream-sync-behavior.html>`_
+   for an explanation of the legacy and per-thread default streams.
+
+   This variable only takes effect when using Numba's internal CUDA bindings;
+   when using the NVIDIA bindings, use the environment variable
+   ``CUDA_PYTHON_CUDA_PER_THREAD_DEFAULT_STREAM`` instead.
+
+   .. seealso::
+
+      The `Default Stream section
+      <https://nvidia.github.io/cuda-python/release/11.6.0-notes.html#default-stream>`_
+      in the NVIDIA Bindings documentation.
+
+.. envvar:: NUMBA_CUDA_LOW_OCCUPANCY_WARNINGS
+
+   Enable warnings if the grid size is too small relative to the number of
+   streaming multiprocessors (SM). This option is on by default (default value is 1).
+
+   The heuristic checked is whether ``gridsize < 2 * (number of SMs)``. NOTE: The absence of
+   a warning does not imply a good gridsize relative to the number of SMs. Disabling
+   this warning will reduce the number of CUDA API calls (during JIT compilation), as the
+   heuristic needs to check the number of SMs available on the device in the
+   current context.
+
+.. envvar:: NUMBA_CUDA_WARN_ON_IMPLICIT_COPY
+
+   Enable warnings if a kernel is launched with host memory which forces a copy to and
+   from the device. This option is on by default (default value is 1).
+
+.. envvar:: NUMBA_CUDA_USE_NVIDIA_BINDING
+
+   When set to 1, Numba will attempt to use the `NVIDIA CUDA Python binding
+   <https://nvidia.github.io/cuda-python/>`_ to make calls to the driver API
+   instead of using its own ctypes binding. This defaults to 0 (off), as the
+   NVIDIA binding is currently missing support for Per-Thread Default
+   Streams and the profiler APIs.
+
+.. envvar:: NUMBA_CUDA_INCLUDE_PATH
+
+   The location of the CUDA include files. This is used when linking CUDA C/C++
+   sources to Python kernels, and needs to be correctly set for CUDA includes to
+   be available to linked C/C++ sources. On Linux, it defaults to
+   ``/usr/local/cuda/include``. On Windows, the default is
+   ``$env:CUDA_PATH\include``.
+
+
 Threading Control
 -----------------
 
@@ -443,3 +591,14 @@ Threading Control
    * ``tbb`` - A threading layer backed by Intel TBB.
    * ``omp`` - A threading layer backed by OpenMP.
    * ``workqueue`` - A simple built-in work-sharing task scheduler.
+
+.. envvar:: NUMBA_THREADING_LAYER_PRIORITY
+
+   This environment variable controls the order in which the libraries used for
+   concurrent execution, for the CPU parallel targets
+   (``@vectorize(target='parallel')``, ``@guvectorize(target='parallel')``
+   and ``@njit(parallel=True)``), are prioritized for use. The variable type is
+   string and by default is ``tbb omp workqueue``, with the priority taken based
+   on position from the left of the string, left most being the highest. Valid
+   values are any permutation of the three choices (for more information about
+   these see :ref:`the threading layer documentation <numba-threading-layer>`.)

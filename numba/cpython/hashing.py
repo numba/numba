@@ -10,7 +10,6 @@ import warnings
 from collections import namedtuple
 
 import llvmlite.binding as ll
-import llvmlite.llvmpy.core as lc
 from llvmlite import ir
 
 from numba.core.extending import (
@@ -18,8 +17,11 @@ from numba.core.extending import (
 from numba.core import errors
 from numba.core import types, utils
 from numba.core.unsafe.bytes import grab_byte, grab_uint64_t
+from numba.cpython.randomimpl import (const_int, get_next_int, get_next_int32,
+                                      get_state_ptr)
 
 _py38_or_later = utils.PYVERSION >= (3, 8)
+_py310_or_later = utils.PYVERSION >= (3, 10)
 
 # This is Py_hash_t, which is a Py_ssize_t, which has sizeof(size_t):
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Include/pyport.h#L91-L96    # noqa: E501
@@ -57,9 +59,13 @@ def process_return(val):
         asint = int(-2)
     return asint
 
+
 # This is a translation of CPython's _Py_HashDouble:
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L34-L129   # noqa: E501
-
+# NOTE: In Python 3.10 hash of nan is now hash of the pointer to the PyObject
+# containing said nan. Numba cannot replicate this as there is no object, so it
+# elects to replicate the behaviour i.e. hash of nan is something "unique" which
+# satisfies https://bugs.python.org/issue43475.
 
 @register_jitable(locals={'x': _Py_uhash_t,
                           'y': _Py_uhash_t,
@@ -76,7 +82,15 @@ def _Py_HashDouble(v):
             else:
                 return -_PyHASH_INF
         else:
-            return _PyHASH_NAN
+            # Python 3.10 does not use `_PyHASH_NAN`.
+            # https://github.com/python/cpython/blob/2c4792264f9218692a1bd87398a60591f756b171/Python/pyhash.c#L102   # noqa: E501
+            # Numba returns a pseudo-random number to reflect the spirit of the
+            # change.
+            if _py310_or_later:
+                x = _prng_random_hash()
+                return process_return(x)
+            else:
+                return _PyHASH_NAN
 
     m, e = math.frexp(v)
 
@@ -113,9 +127,35 @@ def _Py_HashDouble(v):
 def _fpext(tyctx, val):
     def impl(cgctx, builder, signature, args):
         val = args[0]
-        return builder.fpext(val, lc.Type.double())
+        return builder.fpext(val, ir.DoubleType())
     sig = types.float64(types.float32)
     return sig, impl
+
+
+@intrinsic
+def _prng_random_hash(tyctx):
+
+    def impl(cgctx, builder, signature, args):
+        state_ptr = get_state_ptr(cgctx, builder, "internal")
+        bits = const_int(_hash_width)
+
+        # Why not just use get_next_int() with the correct bitwidth?
+        # get_next_int() always returns an i64, because the bitwidth it is
+        # passed may not be a compile-time constant, so it needs to allocate
+        # the largest unit of storage that may be required. Therefore, if the
+        # hash width is 32, then we need to use get_next_int32() to ensure we
+        # don't return a wider-than-expected hash, even if everything above
+        # the low 32 bits would have been zero.
+        if _hash_width == 32:
+            value = get_next_int32(cgctx, builder, state_ptr)
+        else:
+            value = get_next_int(cgctx, builder, state_ptr, bits, False)
+
+        return value
+
+    sig = _Py_hash_t()
+    return sig, impl
+
 
 # This is a translation of CPython's long_hash, but restricted to the numerical
 # domain reachable by int64/uint64 (i.e. no BigInt like support):

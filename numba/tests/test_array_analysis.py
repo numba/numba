@@ -16,7 +16,8 @@ from numba.core import (
     registry,
     utils,
 )
-from numba.tests.support import TestCase, tag, skip_parfors_unsupported
+from numba.tests.support import (TestCase, tag, skip_parfors_unsupported,
+                                 skip_unless_scipy)
 from numba.parfors.array_analysis import EquivSet, ArrayAnalysis
 from numba.core.compiler import Compiler, Flags, PassManager
 from numba.core.ir_utils import remove_dead
@@ -42,6 +43,11 @@ class ExampleClass3700(object):
     def __init__(self, n):
         self.L = n
         self.T = n + 1
+
+
+# test value for test_global_tuple
+GVAL = (1.2,)
+GVAL2 = (3, 4)
 
 
 class TestEquivSet(TestCase):
@@ -92,8 +98,7 @@ class ArrayAnalysisPass(FunctionPass):
 
     def run_pass(self, state):
         state.array_analysis = ArrayAnalysis(state.typingctx, state.func_ir,
-                                             state.type_annotation.typemap,
-                                             state.type_annotation.calltypes)
+                                             state.typemap, state.calltypes)
         state.array_analysis.run(state.func_ir.blocks)
         post_proc = postproc.PostProcessor(state.func_ir)
         post_proc.run()
@@ -145,7 +150,6 @@ class ArrayAnalysisTester(Compiler):
                     "inline calls to locally defined closures")
         # typing
         pm.add_pass(NopythonTypeInference, "nopython frontend")
-        pm.add_pass(AnnotateTypes, "annotate types")
 
         if not state.flags.no_rewrites:
             pm.add_pass(NopythonRewrites, "nopython rewrites")
@@ -157,6 +161,7 @@ class ArrayAnalysisTester(Compiler):
             pm.add_pass(ArrayAnalysisPass, "idempotence array analysis")
         # legalise
         pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
+        pm.add_pass(AnnotateTypes, "annotate types")
 
         # partial compile
         pm.finalize()
@@ -620,6 +625,7 @@ class TestArrayAnalysis(TestCase):
                                        self.with_equiv('F', 'D'),],
                                idempotent=False)
 
+    @skip_unless_scipy
     def test_numpy_calls(self):
         def test_zeros(n):
             a = np.zeros(n)
@@ -735,6 +741,17 @@ class TestArrayAnalysis(TestCase):
                                        self.with_equiv('dt', ('k', 'm', 'n')),
                                        self.with_equiv('e', ('m', 'k', 'n')),
                                        self.with_equiv('et', ('m', 'k', 'n'))])
+
+        def test_real_imag_attr(m, n):
+            a = np.ones((m, n))
+            b = a.real
+            c = a.imag
+
+        self._compile_and_test(test_real_imag_attr, (types.intp, types.intp),
+                               equivs=[self.with_equiv('a', ('m', 'n')),
+                                       self.with_equiv('b', ('m', 'n')),
+                                       self.with_equiv('c', ('m', 'n')),
+                                       ])
 
         def test_random(n):
             a0 = np.random.rand(n)
@@ -930,6 +947,16 @@ class TestArrayAnalysis(TestCase):
                                equivs=[self.with_equiv('a', 'c', 'e')],
                                asserts=None)
 
+        # make sure shape of a global tuple of ints is handled properly
+        def test_global_tuple():
+            a = np.ones(GVAL2)
+            b = np.ones(GVAL2)
+
+        self._compile_and_test(test_global_tuple, (),
+                               equivs=[self.with_equiv('a', 'b')],
+                               asserts=None)
+
+
 class TestArrayAnalysisParallelRequired(TestCase):
     """This is to just split out tests that need the parallel backend and
     therefore serialised execution.
@@ -1017,6 +1044,18 @@ class TestArrayAnalysisParallelRequired(TestCase):
         data = np.arange(10.)
         np.testing.assert_array_equal(test_impl(data), test_impl.py_func(data))
 
+    @skip_unsupported
+    def test_global_tuple(self):
+        """make sure a global tuple with non-integer values does not cause errors
+        (test for #6726).
+        """
+
+        def test_impl():
+            d = GVAL[0]
+            return d
+
+        self.assertEqual(njit(test_impl, parallel=True)(), test_impl())
+
 
 class TestArrayAnalysisInterface(TestCase):
     def test_analyze_op_call_interface(self):
@@ -1081,7 +1120,7 @@ class TestArrayAnalysisInterface(TestCase):
                 for i in prange(n):
                     S = np.arange(i)
                     A[i] = S.sum()
-                return A
+                return A + 1
 
             got = njit(parallel=True)(f)(10)
             executed_count = shared['counter']

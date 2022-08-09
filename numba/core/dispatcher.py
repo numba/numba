@@ -3,16 +3,16 @@
 
 import collections
 import functools
-import os
-import struct
 import sys
 import types as pytypes
 import uuid
 import weakref
-from copy import deepcopy
+from contextlib import ExitStack
 
 from numba import _dispatcher
-from numba.core import utils, types, errors, typing, serialize, config, compiler, sigutils
+from numba.core import (
+    utils, types, errors, typing, serialize, config, compiler, sigutils
+)
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.typeconv.rules import default_type_manager
 from numba.core.typing.templates import fold_arguments
@@ -20,6 +20,52 @@ from numba.core.typing.typeof import Purpose, typeof
 from numba.core.bytecode import get_code_object
 from numba.core.caching import NullCache, FunctionCache
 from numba.core import entrypoints
+from numba.core.retarget import BaseRetarget
+import numba.core.event as ev
+
+
+class _RetargetStack(utils.ThreadLocalStack, stack_name="retarget"):
+    def push(self, state):
+        super().push(state)
+        _dispatcher.set_use_tls_target_stack(len(self) > 0)
+
+    def pop(self):
+        super().pop()
+        _dispatcher.set_use_tls_target_stack(len(self) > 0)
+
+
+class TargetConfigurationStack:
+    """The target configuration stack.
+
+    Uses the BORG pattern and stores states in threadlocal storage.
+
+    WARNING: features associated with this class are experimental. The API
+    may change without notice.
+    """
+
+    def __init__(self):
+        self._stack = _RetargetStack()
+
+    def get(self):
+        """Get the current target from the top of the stack.
+
+        May raise IndexError if the stack is empty. Users should check the size
+        of the stack beforehand.
+        """
+        return self._stack.top()
+
+    def __len__(self):
+        """Size of the stack
+        """
+        return len(self._stack)
+
+    @classmethod
+    def switch_target(cls, retarget: BaseRetarget):
+        """Returns a contextmanager that pushes a new retarget handler,
+        an instance of `numba.core.retarget.BaseRetarget`, onto the
+        target-config stack for the duration of the context-manager.
+        """
+        return cls()._stack.enter(retarget)
 
 
 class OmittedArg(object):
@@ -61,8 +107,10 @@ class _FunctionCompiler(object):
         """
         def normal_handler(index, param, value):
             return value
+
         def default_handler(index, param, default):
             return types.Omitted(default)
+
         def stararg_handler(index, param, values):
             return types.StarArgTuple(values)
         # For now, we take argument values from the @jit function, even
@@ -164,7 +212,7 @@ _CompileStats = collections.namedtuple(
     '_CompileStats', ('cache_path', 'cache_hits', 'cache_misses'))
 
 
-class _CompilingCounter(object):
+class CompilingCounter(object):
     """
     A simple counter that increment in __enter__ and decrement in __exit__.
     """
@@ -205,6 +253,10 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         self.func_code = get_code_object(py_func)
         # but newer python uses a different name
         self.__code__ = self.func_code
+        # a place to keep an active reference to the types of the active call
+        self._types_active_call = []
+        # Default argument values match the py_func
+        self.__defaults__ = py_func.__defaults__
 
         argnames = tuple(pysig.parameters)
         default_values = self.py_func.__defaults__ or ()
@@ -223,7 +275,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                                         exact_match_required)
 
         self.doc = py_func.__doc__
-        self._compiling_counter = _CompilingCounter()
+        self._compiling_counter = CompilingCounter()
         weakref.finalize(self, self._make_finalizer())
 
     def _compilation_chain_init_hook(self):
@@ -362,8 +414,10 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                 argtypes.append(types.Omitted(a.value))
             else:
                 argtypes.append(self.typeof_pyval(a))
+
+        return_val = None
         try:
-            return self.compile(tuple(argtypes))
+            return_val = self.compile(tuple(argtypes))
         except errors.ForceLiteralArg as e:
             # Received request for compiler re-entry with the list of arguments
             # indicated by e.requested_args.
@@ -378,7 +432,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                      "This is likely caused by an error in typing. "
                      "Please see nested and suppressed exceptions.")
                 info = ', '.join('Arg #{} is {}'.format(i, args[i])
-                                 for i in  sorted(already_lit_pos))
+                                 for i in sorted(already_lit_pos))
                 raise errors.CompilerError(m.format(info))
             # Convert requested arguments into a Literal.
             args = [(types.literal
@@ -386,7 +440,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                      else lambda x: x)(args[i])
                     for i, v in enumerate(args)]
             # Re-enter compilation with the Literal-ized arguments
-            return self._compile_for_args(*args)
+            return_val = self._compile_for_args(*args)
 
         except errors.TypingError as e:
             # Intercept typing error that may be due to an argument
@@ -401,14 +455,14 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                 else:
                     if tp is None:
                         failed_args.append(
-                            (i,
-                             "cannot determine Numba type of value %r" % (val,)))
+                            (i, f"cannot determine Numba type of value {val}"))
             if failed_args:
                 # Patch error message to ease debugging
-                msg = str(e).rstrip() + (
-                    "\n\nThis error may have been caused by the following argument(s):\n%s\n"
-                    % "\n".join("- argument %d: %s" % (i, err)
-                                for i, err in failed_args))
+                args_str = "\n".join(
+                    f"- argument {i}: {err}" for i, err in failed_args
+                )
+                msg = (f"{str(e).rstrip()} \n\nThis error may have been caused "
+                       f"by the following argument(s):\n{args_str}\n")
                 e.patch_message(msg)
 
             error_rewrite(e, 'typing')
@@ -417,8 +471,8 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             error_rewrite(e, 'unsupported_error')
         except (errors.NotDefinedError, errors.RedefinedError,
                 errors.VerificationError) as e:
-            # These errors are probably from an issue with either the code supplied
-            # being syntactically or otherwise invalid
+            # These errors are probably from an issue with either the code
+            # supplied being syntactically or otherwise invalid
             error_rewrite(e, 'interpreter')
         except errors.ConstantInferenceError as e:
             # this is from trying to infer something as constant when it isn't
@@ -431,6 +485,9 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                     e.patch_message('\n'.join((str(e).rstrip(), help_msg)))
             # ignore the FULL_TRACEBACKS config, this needs reporting!
             raise e
+        finally:
+            self._types_active_call = []
+        return return_val
 
     def inspect_llvm(self, signature=None):
         """Get the LLVM intermediate representation generated by compilation.
@@ -601,7 +658,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         if signature is not None:
             cres = self.overloads[signature]
             lib = cres.library
-            return lib.get_disasm_cfg()
+            return lib.get_disasm_cfg(cres.fndesc.mangled_name)
 
         return dict((sig, self.inspect_disasm_cfg(sig))
                     for sig in self.signatures)
@@ -679,7 +736,28 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         else:
             if tp is None:
                 tp = types.pyobject
+        self._types_active_call.append(tp)
         return tp
+
+    def _callback_add_timer(self, duration, cres, lock_name):
+        md = cres.metadata
+        # md can be None when code is loaded from cache
+        if md is not None:
+            timers = md.setdefault("timers", {})
+            if lock_name not in timers:
+                # Only write if the metadata does not exist
+                timers[lock_name] = duration
+            else:
+                msg = f"'{lock_name} metadata is already defined."
+                raise AssertionError(msg)
+
+    def _callback_add_compiler_timer(self, duration, cres):
+        return self._callback_add_timer(duration, cres,
+                                        lock_name="compiler_lock")
+
+    def _callback_add_llvm_timer(self, duration, cres):
+        return self._callback_add_timer(duration, cres,
+                                        lock_name="llvm_lock")
 
 
 class _MemoMixin:
@@ -700,7 +778,7 @@ class _MemoMixin:
         """
         u = self.__uuid
         if u is None:
-            u = str(uuid.uuid1())
+            u = str(uuid.uuid4())
             self._set_uuid(u)
         return u
 
@@ -722,7 +800,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
     _impl_kinds = {
         'direct': _FunctionCompiler,
         'generated': _GeneratedFunctionCompiler,
-        }
+    }
 
     __numba__ = 'py_func'
 
@@ -767,10 +845,14 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         self._type = types.Dispatcher(self)
         self.typingctx.insert_global(self, self._type)
 
+        # Remember target restriction
+        self._required_target_backend = targetoptions.get('target_backend')
+
     def dump(self, tab=''):
-        print(f'{tab}DUMP {type(self).__name__}[{self.py_func.__name__}, type code={self._type._code}]')
+        print(f'{tab}DUMP {type(self).__name__}[{self.py_func.__name__}'
+              f', type code={self._type._code}]')
         for cres in self.overloads.values():
-            cres.dump(tab = tab + '  ')
+            cres.dump(tab=tab + '  ')
         print(f'{tab}END DUMP {type(self).__name__}[{self.py_func.__name__}]')
 
     @property
@@ -830,38 +912,65 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         self._can_compile = can_compile
         return self
 
-    @global_compiler_lock
     def compile(self, sig):
-        if not self._can_compile:
-            raise RuntimeError("compilation disabled")
-        # Use counter to track recursion compilation depth
-        with self._compiling_counter:
-            args, return_type = sigutils.normalize_signature(sig)
-            # Don't recompile if signature already exists
-            existing = self.overloads.get(tuple(args))
-            if existing is not None:
-                return existing.entry_point
-            # Try to load from disk cache
-            cres = self._cache.load_overload(sig, self.targetctx)
-            if cres is not None:
-                self._cache_hits[sig] += 1
-                # XXX fold this in add_overload()? (also see compiler.py)
-                if not cres.objectmode:
-                    self.targetctx.insert_user_function(cres.entry_point,
-                                                        cres.fndesc, [cres.library])
-                self.add_overload(cres)
-                return cres.entry_point
+        disp = self._get_dispatcher_for_current_target()
+        if disp is not self:
+            return disp.compile(sig)
 
-            self._cache_misses[sig] += 1
-            try:
-                cres = self._compiler.compile(args, return_type)
-            except errors.ForceLiteralArg as e:
-                def folded(args, kws):
-                    return self._compiler.fold_argument_types(args, kws)[1]
-                raise e.bind_fold_arguments(folded)
-            self.add_overload(cres)
-            self._cache.save_overload(sig, cres)
-            return cres.entry_point
+        with ExitStack() as scope:
+            cres = None
+
+            def cb_compiler(dur):
+                if cres is not None:
+                    self._callback_add_compiler_timer(dur, cres)
+
+            def cb_llvm(dur):
+                if cres is not None:
+                    self._callback_add_llvm_timer(dur, cres)
+
+            scope.enter_context(ev.install_timer("numba:compiler_lock",
+                                                 cb_compiler))
+            scope.enter_context(ev.install_timer("numba:llvm_lock", cb_llvm))
+            scope.enter_context(global_compiler_lock)
+
+            if not self._can_compile:
+                raise RuntimeError("compilation disabled")
+            # Use counter to track recursion compilation depth
+            with self._compiling_counter:
+                args, return_type = sigutils.normalize_signature(sig)
+                # Don't recompile if signature already exists
+                existing = self.overloads.get(tuple(args))
+                if existing is not None:
+                    return existing.entry_point
+                # Try to load from disk cache
+                cres = self._cache.load_overload(sig, self.targetctx)
+                if cres is not None:
+                    self._cache_hits[sig] += 1
+                    # XXX fold this in add_overload()? (also see compiler.py)
+                    if not cres.objectmode:
+                        self.targetctx.insert_user_function(cres.entry_point,
+                                                            cres.fndesc,
+                                                            [cres.library])
+                    self.add_overload(cres)
+                    return cres.entry_point
+
+                self._cache_misses[sig] += 1
+                ev_details = dict(
+                    dispatcher=self,
+                    args=args,
+                    return_type=return_type,
+                )
+                with ev.trigger_event("numba:compile", data=ev_details):
+                    try:
+                        cres = self._compiler.compile(args, return_type)
+                    except errors.ForceLiteralArg as e:
+                        def folded(args, kws):
+                            return self._compiler.fold_argument_types(args,
+                                                                      kws)[1]
+                        raise e.bind_fold_arguments(folded)
+                    self.add_overload(cres)
+                self._cache.save_overload(sig, cres)
+                return cres.entry_point
 
     def get_compile_result(self, sig):
         """Compile (if needed) and return the compilation result with the
@@ -878,7 +987,8 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         """
         sigs = list(self.overloads)
         old_can_compile = self._can_compile
-        # Ensure the old overloads are disposed of, including compiled functions.
+        # Ensure the old overloads are disposed of,
+        # including compiled functions.
         self._make_finalizer()()
         self._reset_overloads()
         self._cache.flush()
@@ -895,7 +1005,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
             cache_path=self._cache.cache_path,
             cache_hits=self._cache_hits,
             cache_misses=self._cache_misses,
-            )
+        )
 
     def parallel_diagnostics(self, signature=None, level=1):
         """
@@ -923,7 +1033,9 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         if signature is not None:
             return self.overloads[signature].metadata
         else:
-            return dict((sig, self.overloads[sig].metadata) for sig in self.signatures)
+            return dict(
+                (sig,self.overloads[sig].metadata) for sig in self.signatures
+            )
 
     def get_function_type(self):
         """Return unique function type of dispatcher when possible, otherwise
@@ -936,6 +1048,34 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         if not self._can_compile and len(self.overloads) == 1:
             cres = tuple(self.overloads.values())[0]
             return types.FunctionType(cres.signature)
+
+    def _get_retarget_dispatcher(self):
+        """Returns a dispatcher for the retarget request.
+        """
+        # Check TLS target configuration
+        tc = TargetConfigurationStack()
+        retarget = tc.get()
+        retarget.check_compatible(self)
+        disp = retarget.retarget(self)
+        return disp
+
+    def _get_dispatcher_for_current_target(self):
+        """Returns a dispatcher for the current target registered in
+        `TargetConfigurationStack`. `self` is returned if no target is
+        specified.
+        """
+        tc = TargetConfigurationStack()
+        if tc:
+            return self._get_retarget_dispatcher()
+        else:
+            return self
+
+    def _call_tls_target(self, *args, **kwargs):
+        """This is called when the C dispatcher logic sees a retarget request.
+        """
+        disp = self._get_retarget_dispatcher()
+        # Call the new dispatcher
+        return disp(*args, **kwargs)
 
 
 class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
@@ -1014,38 +1154,67 @@ class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         """
         pass
 
-    @global_compiler_lock
     def compile(self, sig):
-        # Use counter to track recursion compilation depth
-        with self._compiling_counter:
-            # XXX this is mostly duplicated from Dispatcher.
-            flags = self.flags
-            args, return_type = sigutils.normalize_signature(sig)
+        with ExitStack() as scope:
+            cres = None
 
-            # Don't recompile if signature already exists
-            # (e.g. if another thread compiled it before we got the lock)
-            existing = self.overloads.get(tuple(args))
-            if existing is not None:
-                return existing.entry_point
+            def cb_compiler(dur):
+                if cres is not None:
+                    self._callback_add_compiler_timer(dur, cres)
 
-            self._pre_compile(args, return_type, flags)
+            def cb_llvm(dur):
+                if cres is not None:
+                    self._callback_add_llvm_timer(dur, cres)
 
-            # Clone IR to avoid (some of the) mutation in the rewrite pass
-            cloned_func_ir = self.func_ir.copy()
-            cres = compiler.compile_ir(typingctx=self.typingctx,
-                                       targetctx=self.targetctx,
-                                       func_ir=cloned_func_ir,
-                                       args=args, return_type=return_type,
-                                       flags=flags, locals=self.locals,
-                                       lifted=(),
-                                       lifted_from=self.lifted_from,
-                                       is_lifted_loop=True,)
+            scope.enter_context(ev.install_timer("numba:compiler_lock",
+                                                 cb_compiler))
+            scope.enter_context(ev.install_timer("numba:llvm_lock", cb_llvm))
+            scope.enter_context(global_compiler_lock)
 
-            # Check typing error if object mode is used
-            if cres.typing_error is not None and not flags.enable_pyobject:
-                raise cres.typing_error
-            self.add_overload(cres)
-            return cres.entry_point
+            # Use counter to track recursion compilation depth
+            with self._compiling_counter:
+                # XXX this is mostly duplicated from Dispatcher.
+                flags = self.flags
+                args, return_type = sigutils.normalize_signature(sig)
+
+                # Don't recompile if signature already exists
+                # (e.g. if another thread compiled it before we got the lock)
+                existing = self.overloads.get(tuple(args))
+                if existing is not None:
+                    return existing.entry_point
+
+                self._pre_compile(args, return_type, flags)
+
+                # Clone IR to avoid (some of the) mutation in the rewrite pass
+                cloned_func_ir = self.func_ir.copy()
+
+                ev_details = dict(
+                    dispatcher=self,
+                    args=args,
+                    return_type=return_type,
+                )
+                with ev.trigger_event("numba:compile", data=ev_details):
+                    cres = compiler.compile_ir(typingctx=self.typingctx,
+                                               targetctx=self.targetctx,
+                                               func_ir=cloned_func_ir,
+                                               args=args,
+                                               return_type=return_type,
+                                               flags=flags, locals=self.locals,
+                                               lifted=(),
+                                               lifted_from=self.lifted_from,
+                                               is_lifted_loop=True,)
+
+                    # Check typing error if object mode is used
+                    if (cres.typing_error is not None and
+                            not flags.enable_pyobject):
+                        raise cres.typing_error
+                    self.add_overload(cres)
+                return cres.entry_point
+
+    def _get_dispatcher_for_current_target(self):
+        # Lifted code does not honor the target switch currently.
+        # No work has been done to check if this can be allowed.
+        return self
 
 
 class LiftedLoop(LiftedCode):
@@ -1056,7 +1225,6 @@ class LiftedLoop(LiftedCode):
 class LiftedWith(LiftedCode):
 
     can_cache = True
-
 
     def _reduce_extras(self):
         return dict(output_types=self.output_types)

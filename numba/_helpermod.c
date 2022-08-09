@@ -116,6 +116,7 @@ build_c_helpers_dict(void)
     /* PRNG support */
     declmethod(get_py_random_state);
     declmethod(get_np_random_state);
+    declmethod(get_internal_random_state);
     declmethod(rnd_shuffle);
     declmethod(rnd_init);
     declmethod(poisson_ptrs);

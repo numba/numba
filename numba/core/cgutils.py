@@ -9,7 +9,7 @@ import functools
 
 from llvmlite import ir
 
-from numba.core import utils, types, config
+from numba.core import utils, types, config, debuginfo
 import numba.core.datamodel
 
 
@@ -361,7 +361,7 @@ class Structure(object):
 
 def alloca_once(builder, ty, size=None, name='', zfill=False):
     """Allocate stack memory at the entry block of the current function
-    pointed by ``builder`` withe llvm type ``ty``.  The optional ``size`` arg
+    pointed by ``builder`` with llvm type ``ty``.  The optional ``size`` arg
     set the number of element to allocate.  The default is 1.  The optional
     ``name`` arg set the symbol name inside the llvm IR for debugging.
     If ``zfill`` is set, fill the memory with zeros at the current
@@ -370,23 +370,35 @@ def alloca_once(builder, ty, size=None, name='', zfill=False):
     """
     if isinstance(size, int):
         size = ir.Constant(intp_t, size)
-    with builder.goto_entry_block():
-        ptr = builder.alloca(ty, size=size, name=name)
-        # Always zero-fill at init-site.  This is safe.
-        builder.store(ty(None), ptr)
-    # Also zero-fill at the use-site
-    if zfill:
-        builder.store(ty(None), ptr)
-    return ptr
+    # suspend debug metadata emission else it links up python source lines with
+    # alloca in the entry block as well as their actual location and it makes
+    # the debug info "jump about".
+    with debuginfo.suspend_emission(builder):
+        with builder.goto_entry_block():
+            ptr = builder.alloca(ty, size=size, name=name)
+            # Always zero-fill at init-site.  This is safe.
+            builder.store(ty(None), ptr)
+        # Also zero-fill at the use-site
+        if zfill:
+            builder.store(ptr.type.pointee(None), ptr)
+        return ptr
 
 
-def alloca_once_value(builder, value, name=''):
+def sizeof(builder, ptr_type):
+    """Compute sizeof using GEP
+    """
+    null = ptr_type(None)
+    offset = null.gep([int32_t(1)])
+    return builder.ptrtoint(offset, intp_t)
+
+
+def alloca_once_value(builder, value, name='', zfill=False):
     """
     Like alloca_once(), but passing a *value* instead of a type.  The
     type is inferred and the allocated slot is also initialized with the
     given value.
     """
-    storage = alloca_once(builder, value.type)
+    storage = alloca_once(builder, value.type, zfill=zfill)
     builder.store(value, storage)
     return storage
 
@@ -396,10 +408,33 @@ def insert_pure_function(module, fnty, name):
     Insert a pure function (in the functional programming sense) in the
     given module.
     """
-    fn = module.get_or_insert_function(fnty, name=name)
+    fn = get_or_insert_function(module, fnty, name)
     fn.attributes.add("readonly")
     fn.attributes.add("nounwind")
     return fn
+
+
+def get_or_insert_function(module, fnty, name):
+    """
+    Get the function named *name* with type *fnty* from *module*, or insert it
+    if it doesn't exist.
+    """
+    fn = module.globals.get(name, None)
+    if fn is None:
+        fn = ir.Function(module, fnty, name)
+    return fn
+
+
+def get_or_insert_named_metadata(module, name):
+    try:
+        return module.get_named_metadata(name)
+    except KeyError:
+        return module.add_named_metadata(name)
+
+
+def add_global_variable(module, ty, name, addrspace=0):
+    unique_name = module.get_unique_name(name)
+    return ir.GlobalVariable(module, ty, unique_name, addrspace)
 
 
 def terminate(builder, bbend):
@@ -502,7 +537,7 @@ def for_range_slice(builder, start, stop, step, intp=None, inc=True):
     Parameters
     -------------
     builder : object
-        Builder object
+        IRBuilder object
     start : int
         The beginning value of the slice
     stop : int
@@ -907,6 +942,18 @@ def memset(builder, ptr, size, value):
     builder.call(fn, [ptr, value, size, bool_t(0)])
 
 
+def memset_padding(builder, ptr):
+    """
+    Fill padding bytes of the pointee with zeros.
+    """
+    # Load existing value
+    val = builder.load(ptr)
+    # Fill pointee with zeros
+    memset(builder, ptr, sizeof(builder, ptr.type), 0)
+    # Store value back
+    builder.store(val, ptr)
+
+
 def global_constant(builder_or_module, name, value, linkage='internal'):
     """
     Get or create a (LLVM module-)global constant with *name* or *value*.
@@ -915,7 +962,7 @@ def global_constant(builder_or_module, name, value, linkage='internal'):
         module = builder_or_module
     else:
         module = builder_or_module.module
-    data = module.add_global_variable(value.type, name=name)
+    data = add_global_variable(module, value.type, name)
     data.linkage = linkage
     data.global_constant = True
     data.initializer = value
@@ -1136,3 +1183,12 @@ def is_nonelike(ty):
         isinstance(ty, types.NoneType) or
         isinstance(ty, types.Omitted)
     )
+
+
+def create_constant_array(ty, val):
+    """
+    Create an LLVM-constant of a fixed-length array from Python values.
+
+    The type provided is the type of the elements.
+    """
+    return ir.Constant(ir.ArrayType(ty, len(val)), val)

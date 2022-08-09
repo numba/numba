@@ -4,7 +4,9 @@ from numba.np.ufunc.decorators import Vectorize, GUVectorize, vectorize, guvecto
 from numba.np.ufunc._internal import PyUFunc_None, PyUFunc_Zero, PyUFunc_One
 from numba.np.ufunc import _internal, array_exprs
 from numba.np.ufunc.parallel import (threading_layer, get_num_threads,
-                                     set_num_threads, _get_thread_id)
+                                     set_num_threads, get_thread_id,
+                                     set_parallel_chunksize,
+                                     get_parallel_chunksize)
 
 
 if hasattr(_internal, 'PyUFunc_ReorderableNone'):
@@ -25,16 +27,6 @@ def _init():
     Vectorize.target_registry.ondemand['cuda'] = init_cuda_vectorize
     GUVectorize.target_registry.ondemand['cuda'] = init_cuda_guvectorize
 
-    def init_roc_vectorize():
-        from numba.roc.vectorizers import HsaVectorize
-        return HsaVectorize
-
-    def init_roc_guvectorize():
-        from numba.roc.vectorizers import HsaGUFuncVectorize
-        return HsaGUFuncVectorize
-
-    Vectorize.target_registry.ondemand['roc'] = init_roc_vectorize
-    GUVectorize.target_registry.ondemand['roc'] = init_roc_guvectorize
 
 _init()
 del _init

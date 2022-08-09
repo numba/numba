@@ -1,12 +1,13 @@
-from numba.core import types
+from numba.core import types, errors
 from numba.core.typing.npydecl import (parse_dtype, parse_shape,
                                        register_number_classes)
 from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          AbstractTemplate, CallableTemplate,
                                          signature, Registry)
 from numba.cuda.types import dim3, grid_group
+from numba.core.typeconv import Conversion
 from numba import cuda
-
+import operator
 
 registry = Registry()
 register = registry.register
@@ -19,6 +20,8 @@ register_number_classes(register_global)
 class GridFunction(CallableTemplate):
     def generic(self):
         def typer(ndim):
+            if not isinstance(ndim, types.IntegerLiteral):
+                raise errors.RequireLiteralValue(ndim)
             val = ndim.literal_value
             if val == 1:
                 restype = types.int32
@@ -206,6 +209,18 @@ class Cuda_match_all_sync(ConcreteTemplate):
 
 
 @register
+class Cuda_activemask(ConcreteTemplate):
+    key = cuda.activemask
+    cases = [signature(types.uint32)]
+
+
+@register
+class Cuda_lanemask_lt(ConcreteTemplate):
+    key = cuda.lanemask_lt
+    cases = [signature(types.uint32)]
+
+
+@register
 class Cuda_popc(ConcreteTemplate):
     """
     Supported types from `llvm.popc`
@@ -234,6 +249,24 @@ class Cuda_fma(ConcreteTemplate):
     cases = [
         signature(types.float32, types.float32, types.float32, types.float32),
         signature(types.float64, types.float64, types.float64, types.float64),
+    ]
+
+
+@register
+class Cuda_hfma(ConcreteTemplate):
+    key = cuda.fp16.hfma
+    cases = [
+        signature(types.float16, types.float16, types.float16, types.float16)
+    ]
+
+
+@register
+class Cuda_cbrt(ConcreteTemplate):
+
+    key = cuda.cbrt
+    cases = [
+        signature(types.float32, types.float32),
+        signature(types.float64, types.float64),
     ]
 
 
@@ -273,14 +306,14 @@ class Cuda_ffs(ConcreteTemplate):
     """
     key = cuda.ffs
     cases = [
-        signature(types.int8, types.int8),
-        signature(types.int16, types.int16),
-        signature(types.int32, types.int32),
-        signature(types.int64, types.int64),
-        signature(types.uint8, types.uint8),
-        signature(types.uint16, types.uint16),
+        signature(types.uint32, types.int8),
+        signature(types.uint32, types.int16),
+        signature(types.uint32, types.int32),
+        signature(types.uint32, types.int64),
+        signature(types.uint32, types.uint8),
+        signature(types.uint32, types.uint16),
         signature(types.uint32, types.uint32),
-        signature(types.uint64, types.uint64),
+        signature(types.uint32, types.uint64),
     ]
 
 
@@ -303,6 +336,109 @@ class Cuda_selp(AbstractTemplate):
             return
 
         return signature(a, test, a, a)
+
+
+def _genfp16_unary(l_key):
+    @register
+    class Cuda_fp16_unary(ConcreteTemplate):
+        key = l_key
+        cases = [signature(types.float16, types.float16)]
+
+    return Cuda_fp16_unary
+
+
+def _genfp16_binary(l_key):
+    @register
+    class Cuda_fp16_binary(ConcreteTemplate):
+        key = l_key
+        cases = [signature(types.float16, types.float16, types.float16)]
+
+    return Cuda_fp16_binary
+
+
+@register_global(float)
+class Float(AbstractTemplate):
+
+    def generic(self, args, kws):
+        assert not kws
+
+        [arg] = args
+
+        if arg == types.float16:
+            return signature(arg, arg)
+
+
+def _genfp16_binary_comparison(l_key):
+    @register
+    class Cuda_fp16_cmp(ConcreteTemplate):
+        key = l_key
+
+        cases = [
+            signature(types.b1, types.float16, types.float16)
+        ]
+    return Cuda_fp16_cmp
+
+
+# If multiple ConcreteTemplates provide typing for a single function, then
+# function resolution will pick the first compatible typing it finds even if it
+# involves inserting a cast that would be considered undesirable (in this
+# specific case, float16s could be cast to float32s for comparisons).
+#
+# To work around this, we instead use an AbstractTemplate that implements
+# exactly the casting logic that we desire. The AbstractTemplate gets
+# considered in preference to ConcreteTemplates during typing.
+#
+# This is tracked as Issue #7863 (https://github.com/numba/numba/issues/7863) -
+# once this is resolved it should be possible to replace this AbstractTemplate
+# with a ConcreteTemplate to simplify the logic.
+def _genfp16_comparison_operator(l_key):
+    @register_global(l_key)
+    class Cuda_fp16_operator_cmp(AbstractTemplate):
+        key = l_key
+
+        def generic(self, args, kws):
+            assert not kws
+
+            if len(args) == 2 and \
+                    (args[0] == types.float16 or args[1] == types.float16):
+                if (args[0] == types.float16):
+                    convertible = self.context.can_convert(args[1], args[0])
+                else:
+                    convertible = self.context.can_convert(args[0], args[1])
+
+                # We allow three cases here:
+                #
+                # 1. Comparing fp16 to fp16 - Conversion.exact
+                # 2. Comparing fp16 to types fp16 can be promoted to
+                #  - Conversion.promote
+                # 3. Comparing fp16 to int8 (safe conversion) -
+                #  - Conversion.safe
+
+                if (convertible == Conversion.exact) or \
+                   (convertible == Conversion.promote) or \
+                   (convertible == Conversion.safe):
+                    return signature(types.b1, types.float16, types.float16)
+
+
+Cuda_hadd = _genfp16_binary(cuda.fp16.hadd)
+Cuda_hsub = _genfp16_binary(cuda.fp16.hsub)
+Cuda_hmul = _genfp16_binary(cuda.fp16.hmul)
+Cuda_hmax = _genfp16_binary(cuda.fp16.hmax)
+Cuda_hmin = _genfp16_binary(cuda.fp16.hmin)
+Cuda_hneg = _genfp16_unary(cuda.fp16.hneg)
+Cuda_habs = _genfp16_unary(cuda.fp16.habs)
+Cuda_heq = _genfp16_binary_comparison(cuda.fp16.heq)
+_genfp16_comparison_operator(operator.eq)
+Cuda_hne = _genfp16_binary_comparison(cuda.fp16.hne)
+_genfp16_comparison_operator(operator.ne)
+Cuda_hge = _genfp16_binary_comparison(cuda.fp16.hge)
+_genfp16_comparison_operator(operator.ge)
+Cuda_hgt = _genfp16_binary_comparison(cuda.fp16.hgt)
+_genfp16_comparison_operator(operator.gt)
+Cuda_hle = _genfp16_binary_comparison(cuda.fp16.hle)
+_genfp16_comparison_operator(operator.le)
+Cuda_hlt = _genfp16_binary_comparison(cuda.fp16.hlt)
+_genfp16_comparison_operator(operator.lt)
 
 
 # generate atomic operations
@@ -359,6 +495,13 @@ class Cuda_atomic_compare_and_swap(AbstractTemplate):
 
         if dty in integer_numba_types and ary.ndim == 1:
             return signature(dty, ary, dty, dty)
+
+
+@register
+class Cuda_nanosleep(ConcreteTemplate):
+    key = cuda.nanosleep
+
+    cases = [signature(types.void, types.uint32)]
 
 
 @register_attr
@@ -444,6 +587,53 @@ class CudaAtomicTemplate(AttributeTemplate):
 
 
 @register_attr
+class CudaFp16Template(AttributeTemplate):
+    key = types.Module(cuda.fp16)
+
+    def resolve_hadd(self, mod):
+        return types.Function(Cuda_hadd)
+
+    def resolve_hsub(self, mod):
+        return types.Function(Cuda_hsub)
+
+    def resolve_hmul(self, mod):
+        return types.Function(Cuda_hmul)
+
+    def resolve_hneg(self, mod):
+        return types.Function(Cuda_hneg)
+
+    def resolve_habs(self, mod):
+        return types.Function(Cuda_habs)
+
+    def resolve_hfma(self, mod):
+        return types.Function(Cuda_hfma)
+
+    def resolve_heq(self, mod):
+        return types.Function(Cuda_heq)
+
+    def resolve_hne(self, mod):
+        return types.Function(Cuda_hne)
+
+    def resolve_hge(self, mod):
+        return types.Function(Cuda_hge)
+
+    def resolve_hgt(self, mod):
+        return types.Function(Cuda_hgt)
+
+    def resolve_hle(self, mod):
+        return types.Function(Cuda_hle)
+
+    def resolve_hlt(self, mod):
+        return types.Function(Cuda_hlt)
+
+    def resolve_hmax(self, mod):
+        return types.Function(Cuda_hmax)
+
+    def resolve_hmin(self, mod):
+        return types.Function(Cuda_hmin)
+
+
+@register_attr
 class CudaModuleTemplate(AttributeTemplate):
     key = types.Module(cuda)
 
@@ -492,6 +682,9 @@ class CudaModuleTemplate(AttributeTemplate):
     def resolve_fma(self, mod):
         return types.Function(Cuda_fma)
 
+    def resolve_cbrt(self, mod):
+        return types.Function(Cuda_cbrt)
+
     def resolve_syncthreads(self, mod):
         return types.Function(Cuda_syncthreads)
 
@@ -528,11 +721,23 @@ class CudaModuleTemplate(AttributeTemplate):
     def resolve_match_all_sync(self, mod):
         return types.Function(Cuda_match_all_sync)
 
+    def resolve_activemask(self, mod):
+        return types.Function(Cuda_activemask)
+
+    def resolve_lanemask_lt(self, mod):
+        return types.Function(Cuda_lanemask_lt)
+
     def resolve_selp(self, mod):
         return types.Function(Cuda_selp)
 
+    def resolve_nanosleep(self, mod):
+        return types.Function(Cuda_nanosleep)
+
     def resolve_atomic(self, mod):
         return types.Module(cuda.atomic)
+
+    def resolve_fp16(self, mod):
+        return types.Module(cuda.fp16)
 
     def resolve_const(self, mod):
         return types.Module(cuda.const)

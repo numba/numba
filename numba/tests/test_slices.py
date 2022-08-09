@@ -5,8 +5,8 @@ import sys
 
 import numpy as np
 
-from numba import jit, typeof, TypingError
-from numba.core import utils
+from numba import jit, literally, njit, typeof, TypingError
+from numba.core import utils, types
 from numba.tests.support import TestCase, MemoryLeakMixin
 from numba.core.types.functions import _header_lead
 import unittest
@@ -182,6 +182,75 @@ class TestSlices(MemoryLeakMixin, TestCase):
             cslice_indices(slice(None, None, 0), 1.2)
         self.assertIn(
             "'%s' object cannot be interpreted as an integer" % typeof(1.2),
+            str(e.exception)
+        )
+
+    def test_slice_from_constant(self):
+        test_tuple = (1, 2, 3, 4)
+
+        for ts in itertools.product(
+            [None, 1, 2, 3], [None, 1, 2, 3], [None, 1, 2, -1, -2]
+        ):
+            ts = slice(*ts)
+
+            @jit(nopython=True)
+            def test_fn():
+                return test_tuple[ts]
+
+            self.assertEqual(test_fn(), test_fn.py_func())
+
+    def test_literal_slice_distinct(self):
+        sl1 = types.misc.SliceLiteral(slice(1, None, None))
+        sl2 = types.misc.SliceLiteral(slice(None, None, None))
+        sl3 = types.misc.SliceLiteral(slice(1, None, None))
+
+        self.assertNotEqual(sl1, sl2)
+        self.assertEqual(sl1, sl3)
+
+    def test_literal_slice_boxing(self):
+        # Tests that a literal slice can be
+        # returned from a JIT function.
+        @njit
+        def f(x):
+            return literally(x)
+
+        slices = (
+            slice(1, 4, 2),
+            slice(1, 2),
+            slice(1),
+            slice(None, 1, 1),
+            slice(1, None, 1),
+            slice(None, None, 1),
+            slice(None),
+            slice(None, None, None)
+        )
+        for sl in slices:
+            self.assertEqual(sl, f(sl))
+
+
+    def test_literal_slice_freevar(self):
+        # Tests passing a literal slice as a freevar
+        # in a closure.
+        z = slice(1, 2, 3)
+        @njit
+        def foo():
+            return z
+
+        self.assertEqual(z, foo())
+
+    def test_literal_slice_maxint(self):
+        # Tests that passing a slice with an integer
+        # that exceeds the maxint size throws a reasonable
+        # error message.
+        @njit()
+        def foo(z):
+            return literally(z)
+
+        maxval = int(2**63)
+        with self.assertRaises(ValueError) as e:
+            foo(slice(None, None, -maxval-1))
+        self.assertIn(
+            "Int value is too large",
             str(e.exception)
         )
 

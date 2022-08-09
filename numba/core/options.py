@@ -1,97 +1,109 @@
 """
 Target Options
 """
+import operator
 
-from numba.core import config
+from numba.core import config, utils
+from numba.core.targetconfig import TargetConfig, Option
 
-class TargetOptions(object):
-    OPTIONS = {}
 
-    def __init__(self):
-        self.values = {}
+class TargetOptions:
+    """Target options maps user options from decorators to the
+    ``numba.core.compiler.Flags`` used by lowering and target context.
+    """
+    class Mapping:
+        def __init__(self, flag_name, apply=lambda x: x):
+            self.flag_name = flag_name
+            self.apply = apply
 
-    def from_dict(self, dic):
-        for k, v in dic.items():
-            try:
-                ctor = self.OPTIONS[k]
-            except KeyError:
-                fmt = "%r does not support option: '%s'"
-                raise KeyError(fmt % (self.__class__, k))
-            else:
-                self.values[k] = ctor(v)
+    def finalize(self, flags, options):
+        """Subclasses can override this method to make target specific
+        customizations of default flags.
+
+        Parameters
+        ----------
+        flags : Flags
+        options : dict
+        """
+        pass
 
     @classmethod
     def parse_as_flags(cls, flags, options):
+        """Parse target options defined in ``options`` and set ``flags``
+        accordingly.
+
+        Parameters
+        ----------
+        flags : Flags
+        options : dict
+        """
         opt = cls()
-        opt.from_dict(options)
-        opt.set_flags(flags)
+        opt._apply(flags, options)
+        opt.finalize(flags, options)
         return flags
 
-    def set_flags(self, flags):
-        """
-        Provide default flags setting logic.
-        Subclass can override.
-        """
-        kws = self.values.copy()
+    def _apply(self, flags, options):
+        # Find all Mapping instances in the class
+        mappings = {}
+        cls = type(self)
+        for k in dir(cls):
+            v = getattr(cls, k)
+            if isinstance(v, cls.Mapping):
+                mappings[k] = v
 
-        if kws.pop('nopython', False) == False:
-            flags.set("enable_pyobject")
+        used = set()
+        for k, mapping in mappings.items():
+            if k in options:
+                v = mapping.apply(options[k])
+                setattr(flags, mapping.flag_name, v)
+                used.add(k)
 
-        if kws.pop("forceobj", False):
-            flags.set("force_pyobject")
-
-        if kws.pop('looplift', True):
-            flags.set("enable_looplift")
-
-        if kws.pop('_nrt', True):
-            flags.set("nrt")
-
-        debug_mode = kws.pop('debug', config.DEBUGINFO_DEFAULT)
-
-        # boundscheck is supplied
-        if 'boundscheck' in kws:
-            boundscheck = kws.pop("boundscheck")
-            if boundscheck is None and debug_mode:
-                # if it's None and debug is on then set it
-                flags.set("boundscheck")
-            else:
-                # irrespective of debug set it to the requested value
-                flags.set("boundscheck", boundscheck)
-        else:
-            # no boundscheck given, if debug mode, set it
-            if debug_mode:
-                flags.set("boundscheck")
-
-        if debug_mode:
-            flags.set("debuginfo")
-
-
-        if kws.pop('nogil', False):
-            flags.set("release_gil")
-
-        if kws.pop('no_rewrites', False):
-            flags.set('no_rewrites')
-
-        if kws.pop('no_cpython_wrapper', False):
-            flags.set('no_cpython_wrapper')
-
-        if kws.pop('no_cfunc_wrapper', False):
-            flags.set('no_cfunc_wrapper')
-
-        if 'parallel' in kws:
-            flags.set('auto_parallel', kws.pop('parallel'))
-
-        if 'fastmath' in kws:
-            flags.set('fastmath', kws.pop('fastmath'))
-
-        if 'error_model' in kws:
-            flags.set('error_model', kws.pop('error_model'))
-
-        if 'inline' in kws:
-            flags.set('inline', kws.pop('inline'))
-
-        flags.set("enable_pyobject_looplift")
-
-        if kws:
+        unused = set(options) - used
+        if unused:
             # Unread options?
-            raise NameError("Unrecognized options: %s" % kws.keys())
+            m = (f"Unrecognized options: {unused}. "
+                 f"Known options are {mappings.keys()}")
+            raise KeyError(m)
+
+
+_mapping = TargetOptions.Mapping
+
+
+class DefaultOptions:
+    """Defines how user-level target options are mapped to the target flags.
+    """
+    nopython = _mapping("enable_pyobject", operator.not_)
+    forceobj = _mapping("force_pyobject")
+    looplift = _mapping("enable_looplift")
+    _nrt = _mapping("nrt")
+    debug = _mapping("debuginfo")
+    boundscheck = _mapping("boundscheck")
+    nogil = _mapping("release_gil")
+
+    no_rewrites = _mapping("no_rewrites")
+    no_cpython_wrapper = _mapping("no_cpython_wrapper")
+    no_cfunc_wrapper = _mapping("no_cfunc_wrapper")
+
+    parallel = _mapping("auto_parallel")
+    fastmath = _mapping("fastmath")
+    error_model = _mapping("error_model")
+    inline = _mapping("inline")
+    forceinline = _mapping("forceinline")
+
+    target_backend = _mapping("target_backend")
+
+    _dbg_extend_lifetimes = _mapping("dbg_extend_lifetimes")
+    _dbg_optnone = _mapping("dbg_optnone")
+
+
+def include_default_options(*args):
+    """Returns a mixin class with a subset of the options
+
+    Parameters
+    ----------
+    *args : str
+        Option names to include.
+    """
+    glbs = {k: getattr(DefaultOptions, k) for k in args}
+
+    return type("OptionMixins", (), glbs)

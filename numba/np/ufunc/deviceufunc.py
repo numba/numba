@@ -90,16 +90,13 @@ class UFuncMechanism(object):
         Get all arguments in array form
         """
         for i, arg in enumerate(self.args):
-            if isinstance(arg, np.ndarray):
-                self.arrays[i] = arg
-            elif self.is_device_array(arg):
+            if self.is_device_array(arg):
                 self.arrays[i] = self.as_device_array(arg)
             elif isinstance(arg, (int, float, complex, np.number)):
                 # Is scalar
                 self.scalarpos.append(i)
             else:
-                raise TypeError("argument #%d has invalid type of %s" \
-                % (i + 1, type(arg) ))
+                self.arrays[i] = np.asarray(arg)
 
     def _fill_argtypes(self):
         """
@@ -107,7 +104,7 @@ class UFuncMechanism(object):
         """
         for i, ary in enumerate(self.arrays):
             if ary is not None:
-                self.argtypes[i] = ary.dtype
+                self.argtypes[i] = np.asarray(ary).dtype
 
     def _resolve_signature(self):
         """Resolve signature.
@@ -353,6 +350,8 @@ class UFuncMechanism(object):
 
 
 def to_dtype(ty):
+    if isinstance(ty, types.EnumMember):
+        ty = ty.dtype
     return np.dtype(str(ty))
 
 
@@ -365,7 +364,8 @@ class DeviceVectorize(_BaseUFuncBuilder):
                 warnings.warn("nopython kwarg for cuda target is redundant",
                               RuntimeWarning)
             else:
-                fmt = "cuda vectorize target does not support option: '%s'"
+                fmt = "Unrecognized options. "
+                fmt += "cuda vectorize target does not support option: '%s'"
                 raise KeyError(fmt % opt)
         self.py_func = func
         self.identity = parse_identity(identity)
@@ -666,7 +666,7 @@ class GenerializedUFunc(object):
         try:
             outdtype, kernel = self.kernelmap[idtypes]
         except KeyError:
-            # No exact match, then use the first compatbile.
+            # No exact match, then use the first compatible.
             # This does not match the numpy dispatching exactly.
             # Later, we may just jit a new version for the missing signature.
             idtypes = self._search_matching_signature(idtypes)

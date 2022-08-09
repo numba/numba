@@ -9,6 +9,7 @@ from numba.core.typeconv import Conversion
 from numba.core import utils
 from .misc import UnicodeType
 from .containers import Bytes
+import numpy as np
 
 class CharSeq(Type):
     """
@@ -44,6 +45,10 @@ class UnicodeCharSeq(Type):
     @property
     def key(self):
         return self.count
+
+    def can_convert_to(self, typingctx, other):
+        if isinstance(other, UnicodeCharSeq):
+            return Conversion.safe
 
     def can_convert_from(self, typingctx, other):
         if isinstance(other, UnicodeType):
@@ -89,7 +94,10 @@ class Record(Type):
             if not isinstance(ty, (Number, NestedArray)):
                 msg = "Only Number and NestedArray types are supported, found: {}. "
                 raise TypeError(msg.format(ty))
-            datatype = ctx.get_data_type(ty)
+            if isinstance(ty, NestedArray):
+                datatype = ctx.data_model_manager[ty].as_storage_type()
+            else:
+                datatype = ctx.get_data_type(ty)
             lltypes.append(datatype)
             size = ctx.get_abi_sizeof(datatype)
             align = ctx.get_abi_alignment(datatype)
@@ -485,6 +493,12 @@ class Array(Buffer):
     def is_precise(self):
         return self.dtype.is_precise()
 
+    @property
+    def box_type(self):
+        """Returns the Python type to box to.
+        """
+        return np.ndarray
+
 
 class ArrayCTypes(Type):
     """
@@ -576,3 +590,15 @@ class NestedArray(Array):
     @property
     def key(self):
         return self.dtype, self.shape
+
+
+class NumPyRandomBitGeneratorType(Type):
+    def __init__(self, *args, **kwargs):
+        super(NumPyRandomBitGeneratorType, self).__init__(*args, **kwargs)
+        self.name = 'NumPyRandomBitGeneratorType'
+
+
+class NumPyRandomGeneratorType(Type):
+    def __init__(self, *args, **kwargs):
+        super(NumPyRandomGeneratorType, self).__init__(*args, **kwargs)
+        self.name = 'NumPyRandomGeneratorType'

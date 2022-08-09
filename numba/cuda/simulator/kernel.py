@@ -40,7 +40,7 @@ def _get_kernel_context():
     return _kernel_context
 
 
-class FakeDefinition:
+class FakeOverload:
     '''
     Used only to provide the max_cooperative_grid_blocks method
     '''
@@ -50,15 +50,23 @@ class FakeDefinition:
         return 1
 
 
+class FakeOverloadDict(dict):
+    def __getitem__(self, key):
+        # Always return a fake overload for any signature, as we don't keep
+        # track of overloads in the simulator.
+        return FakeOverload()
+
+
 class FakeCUDAKernel(object):
     '''
     Wraps a @cuda.jit-ed function.
     '''
 
-    def __init__(self, fn, device, fastmath=False, extensions=[]):
+    def __init__(self, fn, device, fastmath=False, extensions=[], debug=False):
         self.fn = fn
         self._device = device
         self._fastmath = fastmath
+        self._debug = debug
         self.extensions = list(extensions) # defensive copy
         # Initial configuration: grid unconfigured, stream 0, no dynamic shared
         # memory.
@@ -110,7 +118,7 @@ class FakeCUDAKernel(object):
             with swapped_cuda_module(self.fn, fake_cuda_module):
                 # Execute one block at a time
                 for grid_point in np.ndindex(*grid_dim):
-                    bm = BlockManager(self.fn, grid_dim, block_dim)
+                    bm = BlockManager(self.fn, grid_dim, block_dim, self._debug)
                     bm.run(grid_point, *fake_args)
 
             for wb in retr:
@@ -138,25 +146,12 @@ class FakeCUDAKernel(object):
         return self[ntasks, 1, stream, sharedmem]
 
     @property
-    def definition(self):
-        return FakeDefinition()
+    def overloads(self):
+        return FakeOverloadDict()
 
     @property
-    def definitions(self):
-        msg = 'Multiple definitions are unsupported in the simulator'
-        raise NotImplementedError(msg)
-
-    @property
-    def ptx(self):
-        '''
-        Required in order to proceed through some tests, but serves no
-        functional purpose.
-        '''
-        res = '.const'
-        res += '\n.local'
-        if self._fastmath:
-            res += '\ndiv.full.ftz.f32'
-        return res
+    def py_func(self):
+        return self.fn
 
 
 # Thread emulation
@@ -165,8 +160,16 @@ class BlockThread(threading.Thread):
     '''
     Manages the execution of a function for a single CUDA thread.
     '''
-    def __init__(self, f, manager, blockIdx, threadIdx):
-        super(BlockThread, self).__init__(target=f)
+    def __init__(self, f, manager, blockIdx, threadIdx, debug):
+        if debug:
+            def debug_wrapper(*args, **kwargs):
+                np.seterr(divide='raise')
+                f(*args, **kwargs)
+            target = debug_wrapper
+        else:
+            target = f
+
+        super(BlockThread, self).__init__(target=target)
         self.syncthreads_event = threading.Event()
         self.syncthreads_blocked = False
         self._manager = manager
@@ -175,6 +178,7 @@ class BlockThread(threading.Thread):
         self.exception = None
         self.daemon = True
         self.abort = False
+        self.debug = debug
         blockDim = Dim3(*self._manager._block_dim)
         self.thread_id = self.threadIdx.x + (blockDim.x * (self.threadIdx.y +
                                                            blockDim.y *
@@ -253,11 +257,12 @@ class BlockManager(object):
     The polling continues until no threads are alive, when execution is
     complete.
     '''
-    def __init__(self, f, grid_dim, block_dim):
+    def __init__(self, f, grid_dim, block_dim, debug):
         self._grid_dim = grid_dim
         self._block_dim = block_dim
         self._f = f
-        self.block_state = np.zeros(block_dim, dtype=np.bool)
+        self._debug = debug
+        self.block_state = np.zeros(block_dim, dtype=np.bool_)
 
     def run(self, grid_point, *args):
         # Create all threads
@@ -267,7 +272,7 @@ class BlockManager(object):
         for block_point in np.ndindex(*self._block_dim):
             def target():
                 self._f(*args)
-            t = BlockThread(target, self, grid_point, block_point)
+            t = BlockThread(target, self, grid_point, block_point, self._debug)
             t.start()
             threads.add(t)
             livethreads.add(t)

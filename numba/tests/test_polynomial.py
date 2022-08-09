@@ -4,7 +4,7 @@ from itertools import product
 import numpy as np
 
 from numba import jit
-from numba.tests.support import TestCase, tag, needs_lapack
+from numba.tests.support import TestCase, tag, needs_lapack, EnableNRTStatsMixin
 import unittest
 
 
@@ -12,7 +12,7 @@ def roots_fn(p):
     return np.roots(p)
 
 
-class TestPolynomialBase(TestCase):
+class TestPolynomialBase(EnableNRTStatsMixin, TestCase):
     """
     Provides setUp and common data/error modes for testing polynomial functions.
     """
@@ -23,6 +23,7 @@ class TestPolynomialBase(TestCase):
     def setUp(self):
         # Collect leftovers from previous test cases before checking for leaks
         gc.collect()
+        super(TestPolynomialBase, self).setUp()
 
     def assert_error(self, cfunc, args, msg, err=ValueError):
         with self.assertRaises(err) as raises:

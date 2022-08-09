@@ -1,12 +1,14 @@
 # Re export
+import sys
 from .stubs import (threadIdx, blockIdx, blockDim, gridDim, laneid,
                     warpsize, syncthreads, syncthreads_count, syncwarp,
                     syncthreads_and, syncthreads_or, shared, local,
                     const, grid, gridsize, atomic, shfl_sync_intrinsic,
                     vote_sync_intrinsic, match_any_sync, match_all_sync,
                     threadfence_block, threadfence_system,
-                    threadfence, selp, popc, brev, clz, ffs, fma,
-                    cg)
+                    threadfence, selp, popc, brev, clz, ffs, fma, cbrt,
+                    cg, activemask, lanemask_lt, nanosleep, fp16,
+                    _vector_type_stubs)
 from .cudadrv.error import CudaSupportError
 from numba.cuda.cudadrv.driver import (BaseCUDAMemoryManager,
                                        HostOnlyCUDAMemoryManager,
@@ -31,6 +33,13 @@ from .kernels import reduction
 
 reduce = Reduce = reduction.Reduce
 
+# Expose vector type constructors and aliases as module level attributes.
+for vector_type_stub in _vector_type_stubs:
+    setattr(sys.modules[__name__], vector_type_stub.__name__, vector_type_stub)
+    for alias in vector_type_stub.aliases:
+        setattr(sys.modules[__name__], alias, vector_type_stub)
+del vector_type_stub, _vector_type_stubs
+
 
 def is_available():
     """Returns a boolean to indicate the availability of a CUDA GPU.
@@ -51,8 +60,27 @@ def is_available():
     return driver_is_available and nvvm.is_available()
 
 
+def is_supported_version():
+    """Returns True if the CUDA Runtime is a supported version.
+
+    Unsupported versions (e.g. newer versions than those known to Numba)
+    may still work; this function provides a facility to check whether the
+    current Numba version is tested and known to work with the current
+    runtime version. If the current version is unsupported, the caller can
+    decide how to act. Options include:
+
+    - Continuing silently,
+    - Emitting a warning,
+    - Generating an error or otherwise preventing the use of CUDA.
+    """
+
+    return runtime.is_supported_version()
+
+
 def cuda_error():
-    """Returns None or an exception if the CUDA driver fails to initialize.
+    """Returns None if there was no error initializing the CUDA driver.
+    If there was an error initializing the driver, a string describing the
+    error is returned.
     """
     return driver.driver.initialization_error
 

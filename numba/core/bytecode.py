@@ -1,8 +1,3 @@
-"""
-From NumbaPro
-
-"""
-
 from collections import namedtuple, OrderedDict
 import dis
 import inspect
@@ -10,7 +5,7 @@ import itertools
 from types import CodeType, ModuleType
 
 from numba.core import errors, utils, serialize
-
+from numba.core.utils import PYVERSION
 
 opcode_info = namedtuple('opcode_info', ['argsize'])
 
@@ -86,12 +81,27 @@ class ByteCodeInst(object):
         return self.opcode in TERM_OPS
 
     def get_jump_target(self):
+        # With Python 3.10 the addressing of "bytecode" instructions has
+        # changed from using bytes to using 16-bit words instead. As a
+        # consequence the code to determine where a jump will lead had to be
+        # adapted.
+        # See also:
+        # https://bugs.python.org/issue26647
+        # https://bugs.python.org/issue27129
+        # https://github.com/python/cpython/pull/25069
         assert self.is_jump
-        if self.opcode in JREL_OPS:
-            return self.next + self.arg
+        if PYVERSION >= (3, 10):
+            if self.opcode in JREL_OPS:
+                return self.next + self.arg * 2
+            else:
+                assert self.opcode in JABS_OPS
+                return self.arg * 2 - 2
         else:
-            assert self.opcode in JABS_OPS
-            return self.arg
+            if self.opcode in JREL_OPS:
+                return self.next + self.arg
+            else:
+                assert self.opcode in JABS_OPS
+                return self.arg
 
     def __repr__(self):
         return '%s(arg=%s, lineno=%d)' % (self.opname, self.arg, self.lineno)
@@ -336,6 +346,7 @@ class FunctionIdentity(serialize.ReduceMixin):
         # variables, so we make sure to disambiguate using an unique id.
         uid = next(cls._unique_ids)
         self.unique_name = '{}${}'.format(self.func_qualname, uid)
+        self.unique_id = uid
 
         return self
 

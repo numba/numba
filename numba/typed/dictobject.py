@@ -17,6 +17,7 @@ from numba.core.extending import (
     models,
     lower_builtin,
     lower_cast,
+    make_attribute_wrapper,
 )
 from numba.core.imputils import iternext_impl, impl_ret_untracked
 from numba.core import types, cgutils
@@ -35,8 +36,6 @@ from numba.typed.typedobjectutils import (_as_bytes, _cast, _nonoptional,
                                           _sentry_safe_cast_default,
                                           _get_incref_decref,
                                           _get_equal, _container_get_data,)
-from numba.cpython.unicode import make_string_from_constant
-
 
 ll_dict_type = cgutils.voidptr_t
 ll_dictiter_type = cgutils.voidptr_t
@@ -103,6 +102,12 @@ class DictIterModel(models.StructModel):
             ('state', types.voidptr),    # iterator state in C code
         ]
         super(DictIterModel, self).__init__(dmm, fe_type, members)
+
+
+# Make _parent available to make len simple
+make_attribute_wrapper(DictItemsIterableType, "parent", "_parent")
+make_attribute_wrapper(DictKeysIterableType, "parent", "_parent")
+make_attribute_wrapper(DictValuesIterableType, "parent", "_parent")
 
 
 def _raise_if_error(context, builder, status, msg):
@@ -176,7 +181,8 @@ def _call_dict_free(context, builder, ptr):
         ir.VoidType(),
         [ll_dict_type],
     )
-    free = builder.module.get_or_insert_function(fnty, name='numba_dict_free')
+    free = cgutils.get_or_insert_function(builder.module, fnty,
+                                          'numba_dict_free')
     builder.call(free, [ptr])
 
 
@@ -190,7 +196,7 @@ def _imp_dtor(context, module):
         [llvoidptr, llsize, llvoidptr],
     )
     fname = '_numba_dict_dtor'
-    fn = module.get_or_insert_function(fnty, name=fname)
+    fn = cgutils.get_or_insert_function(module, fnty, fname)
 
     if fn.is_declaration:
         # Set linkage
@@ -225,8 +231,8 @@ def _dict_new_minsize(typingctx, keyty, valty):
             ll_status,
             [ll_dict_type.as_pointer(), ll_ssize_t, ll_ssize_t],
         )
-        fn = builder.module.get_or_insert_function(
-            fnty, name='numba_dict_new_minsize')
+        fn = cgutils.get_or_insert_function(builder.module, fnty,
+                                            'numba_dict_new_minsize')
         # Determine sizeof key and value types
         ll_key = context.get_data_type(keyty.instance_type)
         ll_val = context.get_data_type(valty.instance_type)
@@ -283,9 +289,9 @@ def _dict_set_method_table(typingctx, dp, keyty, valty):
 
         dm_key = context.data_model_manager[keyty.instance_type]
         if dm_key.contains_nrt_meminfo():
-            equal = _get_equal(context, builder.module, dm_key, 'dict')
+            equal = _get_equal(context, builder.module, dm_key, 'dict_key')
             key_incref, key_decref = _get_incref_decref(
-                context, builder.module, dm_key, 'dict'
+                context, builder.module, dm_key, 'dict_key'
             )
             builder.store(
                 builder.bitcast(equal, key_equal_ptr.type.pointee),
@@ -303,7 +309,7 @@ def _dict_set_method_table(typingctx, dp, keyty, valty):
         dm_val = context.data_model_manager[valty.instance_type]
         if dm_val.contains_nrt_meminfo():
             val_incref, val_decref = _get_incref_decref(
-                context, builder.module, dm_val, 'dict'
+                context, builder.module, dm_val, 'dict_value'
             )
             builder.store(
                 builder.bitcast(val_incref, val_incref_ptr.type.pointee),
@@ -333,8 +339,8 @@ def _dict_insert(typingctx, d, key, hashval, val):
         )
         [d, key, hashval, val] = args
         [td, tkey, thashval, tval] = sig.args
-        fn = builder.module.get_or_insert_function(fnty,
-                                                   name='numba_dict_insert')
+        fn = cgutils.get_or_insert_function(builder.module, fnty,
+                                            'numba_dict_insert')
 
         dm_key = context.data_model_manager[tkey]
         dm_val = context.data_model_manager[tval]
@@ -343,6 +349,8 @@ def _dict_insert(typingctx, d, key, hashval, val):
         data_val = dm_val.as_data(builder, val)
 
         ptr_key = cgutils.alloca_once_value(builder, data_key)
+        cgutils.memset_padding(builder, ptr_key)
+
         ptr_val = cgutils.alloca_once_value(builder, data_val)
         # TODO: the ptr_oldval is not used.  needed for refct
         ptr_oldval = cgutils.alloca_once(builder, data_val.type)
@@ -377,8 +385,8 @@ def _dict_length(typingctx, d):
             ll_ssize_t,
             [ll_dict_type],
         )
-        fn = builder.module.get_or_insert_function(fnty,
-                                                   name='numba_dict_length')
+        fn = cgutils.get_or_insert_function(builder.module, fnty,
+                                            'numba_dict_length')
         [d] = args
         [td] = sig.args
         dp = _container_get_data(context, builder, td, d)
@@ -404,7 +412,8 @@ def _dict_dump(typingctx, d):
         [td] = sig.args
         [d] = args
         dp = _container_get_data(context, builder, td, d)
-        fn = builder.module.get_or_insert_function(fnty, name='numba_dict_dump')
+        fn = cgutils.get_or_insert_function(builder.module, fnty,
+                                            'numba_dict_dump')
 
         builder.call(fn, [dp])
 
@@ -427,14 +436,15 @@ def _dict_lookup(typingctx, d, key, hashval):
         )
         [td, tkey, thashval] = sig.args
         [d, key, hashval] = args
-        fn = builder.module.get_or_insert_function(fnty,
-                                                   name='numba_dict_lookup')
+        fn = cgutils.get_or_insert_function(builder.module, fnty,
+                                            'numba_dict_lookup')
 
         dm_key = context.data_model_manager[tkey]
         dm_val = context.data_model_manager[td.value_type]
 
         data_key = dm_key.as_data(builder, key)
         ptr_key = cgutils.alloca_once_value(builder, data_key)
+        cgutils.memset_padding(builder, ptr_key)
 
         ll_val = context.get_data_type(td.value_type)
         ptr_val = cgutils.alloca_once(builder, ll_val)
@@ -483,8 +493,8 @@ def _dict_popitem(typingctx, d):
         )
         [d] = args
         [td] = sig.args
-        fn = builder.module.get_or_insert_function(fnty,
-                                                   name='numba_dict_popitem')
+        fn = cgutils.get_or_insert_function(builder.module, fnty,
+                                            'numba_dict_popitem')
 
         dm_key = context.data_model_manager[td.key_type]
         dm_val = context.data_model_manager[td.value_type]
@@ -533,8 +543,8 @@ def _dict_delitem(typingctx, d, hk, ix):
         [d, hk, ix] = args
         [td, thk, tix] = sig.args
 
-        fn = builder.module.get_or_insert_function(fnty,
-                                                   name='numba_dict_delitem')
+        fn = cgutils.get_or_insert_function(builder.module, fnty,
+                                            'numba_dict_delitem')
 
         dp = _container_get_data(context, builder, td, d)
         status = builder.call(fn, [dp, hk, ix])
@@ -668,6 +678,21 @@ def impl_len(d):
     return impl
 
 
+@overload(len)
+def impl_len_iters(d):
+    """len(dict.keys()), len(dict.values()), len(dict.items())
+    """
+    if not isinstance(d, (DictKeysIterableType,
+                      DictValuesIterableType, DictItemsIterableType)):
+        return
+
+    def impl(d):
+        return _dict_length(d._parent)
+
+    return impl
+
+
+@overload_method(types.DictType, '__setitem__')
 @overload(operator.setitem)
 def impl_setitem(d, key, value):
     if not isinstance(d, types.DictType):
@@ -713,7 +738,7 @@ def impl_get(dct, key, default=None):
 
     def impl(dct, key, default=None):
         castedkey = _cast(key, keyty)
-        ix, val = _dict_lookup(dct, key, hash(castedkey))
+        ix, val = _dict_lookup(dct, castedkey, hash(castedkey))
         if ix > DKIX.EMPTY:
             return val
         return default
@@ -887,6 +912,19 @@ def impl_values(d):
     return impl
 
 
+@overload_method(types.DictType, 'update')
+def ol_dict_update(d, other):
+    if not isinstance(d, types.DictType):
+        return
+    if not isinstance(other, types.DictType):
+        return
+
+    def impl(d, other):
+        for k, v in other.items():
+            d[k] = v
+    return impl
+
+
 @overload(operator.eq)
 def impl_equal(da, db):
     if not isinstance(da, types.DictType):
@@ -942,7 +980,8 @@ def impl_iterable_getiter(context, builder, sig, args):
         [ll_dictiter_type, ll_dict_type],
     )
 
-    fn = builder.module.get_or_insert_function(fnty, name='numba_dict_iter')
+    fn = cgutils.get_or_insert_function(builder.module, fnty,
+                                        'numba_dict_iter')
 
     proto = ctypes.CFUNCTYPE(ctypes.c_size_t)
     dictiter_sizeof = proto(_helperlib.c_helpers['dict_iter_sizeof'])
@@ -975,7 +1014,7 @@ def impl_dict_getiter(context, builder, sig, args):
         [ll_dictiter_type, ll_dict_type],
     )
 
-    fn = builder.module.get_or_insert_function(fnty, name='numba_dict_iter')
+    fn = cgutils.get_or_insert_function(builder.module, fnty, 'numba_dict_iter')
 
     proto = ctypes.CFUNCTYPE(ctypes.c_size_t)
     dictiter_sizeof = proto(_helperlib.c_helpers['dict_iter_sizeof'])
@@ -1007,9 +1046,8 @@ def impl_iterator_iternext(context, builder, sig, args, result):
         ll_status,
         [ll_bytes, p2p_bytes, p2p_bytes]
     )
-    iternext = builder.module.get_or_insert_function(
-        iternext_fnty,
-        name='numba_dict_iter_next',
+    iternext = cgutils.get_or_insert_function(
+        builder.module, iternext_fnty, 'numba_dict_iter_next',
     )
     key_raw_ptr = cgutils.alloca_once(builder, ll_bytes)
     val_raw_ptr = cgutils.alloca_once(builder, ll_bytes)
@@ -1206,6 +1244,7 @@ def _str_items_mixed_values_to_tuple(tyctx, d):
         impl = cgctx.get_function('static_getitem',
                                   types.none(d, types.literal('dummy')))
         items = []
+        from numba.cpython.unicode import make_string_from_constant
         for k in range(len(keys)):
             item = impl(builder, (lld, k),)
             casted = cgctx.cast(builder, item, literal_tys[k], d.types[k])
@@ -1273,6 +1312,7 @@ def literalstrkeydict_banned_impl_delitem(d, k):
 @overload_method(types.LiteralStrKeyDict, 'pop')
 @overload_method(types.LiteralStrKeyDict, 'clear')
 @overload_method(types.LiteralStrKeyDict, 'setdefault')
+@overload_method(types.LiteralStrKeyDict, 'update')
 def literalstrkeydict_banned_impl_mutators(d, *args):
     if not isinstance(d, types.LiteralStrKeyDict):
         return

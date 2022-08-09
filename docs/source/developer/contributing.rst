@@ -35,19 +35,15 @@ Numba uses Discourse as a forum for longer running threads such as design
 discussions and roadmap planning. There are various categories available and it
 can be reached at: `numba.discourse.group <https://numba.discourse.group/>`_.
 
-Mailing-list
-''''''''''''
-
-We have a public mailing-list that you can e-mail at numba-users@anaconda.com.
-You can subscribe and read the archives on
-`Google Groups <https://groups.google.com/a/continuum.io/forum/#!forum/numba-users>`_.
-
 Weekly Meetings
 '''''''''''''''
 
 The core Numba developers have a weekly video conference to discuss roadmap,
-feature planning, and outstanding issues.  These meetings are invite only, but
-minutes will be taken and will be posted to the
+feature planning, and outstanding issues.  These meetings are entirely public,
+details are posted on
+`numba.discourse.group Announcements <https://numba.discourse.group/c/announcements/>`_
+and everyone is welcome to join the discussion. Minutes will be taken and will
+be posted to the
 `Numba wiki <https://github.com/numba/numba/wiki/Meeting-Minutes>`_.
 
 .. _report-numba-bugs:
@@ -84,27 +80,28 @@ platform.  In this case, please prepend ``[WIP]`` to your pull request's title.
 Build environment
 '''''''''''''''''
 
-Numba has a number of dependencies (mostly `NumPy <http://www.numpy.org/>`_
-and `llvmlite <https://github.com/numba/llvmlite>`_) with non-trivial build
+Numba has a number of dependencies (mostly `NumPy <http://www.numpy.org/>`_ and
+`llvmlite <https://github.com/numba/llvmlite>`_) with non-trivial build
 instructions.  Unless you want to build those dependencies yourself, we
-recommend you use `conda <http://conda.pydata.org/miniconda.html>`_ to
-create a dedicated development environment and install precompiled versions
-of those dependencies there.
+recommend you use `conda <http://conda.pydata.org/miniconda.html>`_ to create a
+dedicated development environment and install precompiled versions of those
+dependencies there. Read more about the Numba dependencies here:
+`numba-source-install-check`.
 
-First add the Anaconda Cloud ``numba`` channel so as to get development builds
-of the llvmlite library::
+When working with a source checkout of Numba you will also need a development
+build of llvmlite. These are available from the ``numba/label/dev`` channel on
+`anaconda.org <https://anaconda.org/numba/llvmlite>`_.
 
-   $ conda config --add channels numba
 
-Then create an environment with the right dependencies::
+Then, to create an environment with a few of the most common dependencies::
 
-   $ conda create -n numbaenv python=3.6 llvmlite numpy scipy jinja2 cffi
+   $ conda create -n numbaenv python=3.10 numba/label/dev::llvmlite numpy scipy jinja2 cffi
 
 .. note::
-   This installs an environment based on Python 3.6, but you can of course
+   This installs an environment based on Python 3.10, but you can of course
    choose another version supported by Numba.  To test additional features,
-   you may also need to install ``tbb`` and/or ``llvm-openmp`` and
-   ``intel-openmp``.
+   you may also need to install ``tbb`` and/or ``llvm-openmp``. Check the
+   dependency list above for details.
 
 To activate the environment for the current shell session::
 
@@ -118,12 +115,12 @@ Once the environment is activated, you have a dedicated Python with the
 required dependencies::
 
     $ python
-    Python 3.6.6 |Anaconda, Inc.| (default, Jun 28 2018, 11:07:29)
-    [GCC 4.2.1 Compatible Clang 4.0.1 (tags/RELEASE_401/final)] on darwin
+    Python 3.10.3 (main, Mar 28 2022, 04:26:28) [Clang 12.0.0 ] on darwin
     Type "help", "copyright", "credits" or "license" for more information.
+
     >>> import llvmlite
     >>> llvmlite.__version__
-    '0.24.0'
+    0.39.0dev0+61.gf27ac6f
 
 
 Building Numba
@@ -132,7 +129,7 @@ Building Numba
 For a convenient development workflow, we recommend you build Numba inside
 its source checkout::
 
-   $ git clone git://github.com/numba/numba.git
+   $ git clone git@github.com:numba/numba.git
    $ cd numba
    $ python setup.py build_ext --inplace
 
@@ -214,6 +211,29 @@ instead. For example::
     $ NUMBA_USE_TYPEGUARD=1 python runtests.py
 
 
+Running coverage
+''''''''''''''''
+
+Coverage reports can be produced using `coverage.py
+<https://coverage.readthedocs.io/en/stable/index.html>`_. To record coverage
+info for the test suite, run::
+
+    coverage run -m numba.runtests <runtests args>
+
+Next, combine coverage files (potentially for multiple runs) with::
+
+    coverage combine
+
+The combined output can be transformed into various report formats - see the
+`coverage CLI usage reference
+<https://coverage.readthedocs.io/en/stable/cmd.html#command-line-usage>`_.
+For example, to produce an HTML report, run::
+
+    coverage html
+
+Following this command, the report can be viewed by opening ``htmlcov/index.html``.
+
+
 Development rules
 -----------------
 
@@ -269,7 +289,7 @@ circumstances should ``type: ignore`` comments be used.
 
 If you are contributing a new feature, we encourage you to use type hints, even if the file is not currently in the
 checklist. If you want to contribute type hints to enable a new file to be in the checklist, please add the file to the
-``files`` variable in ``mypy.ini``, and decide what level of compliance you are targetting. Level 3 is basic static
+``files`` variable in ``mypy.ini``, and decide what level of compliance you are targeting. Level 3 is basic static
 checks, while levels 2 and 1 represent stricter checking. The levels are described in details in ``mypy.ini``.
 
 There is potential for confusion between the Numba module ``typing`` and Python built-in module ``typing`` used for type
@@ -280,7 +300,7 @@ imported with an ``pt`` prefix. For example, ``typing.Dict`` is imported as ``fr
 Stability
 '''''''''
 
-The repository's ``master`` branch is expected to be stable at all times.
+The repository's ``main`` branch is expected to be stable at all times.
 This translates into the fact that the test suite passes without errors
 on all supported platforms (see below).  This also means that a pull request
 also needs to pass the test suite before it is merged in.
@@ -290,15 +310,15 @@ also needs to pass the test suite before it is merged in.
 Platform support
 ''''''''''''''''
 
-Every commit to the master branch is automatically tested on all of the
-platforms Numba supports. This includes ARMv7, ARMv8, POWER8, as well as both
-AMD and NVIDIA GPUs.  The build system however is internal to Anaconda, so we
-also use `Azure <https://dev.azure.com/numba/numba/_build>`_ to provide public
-continuous integration information for as many combinations as can be supported
-by the service.  Azure CI automatically tests all pull requests on Windows, OS X
-and Linux, as well as a sampling of different Python and NumPy versions. If you
-see problems on platforms you are unfamiliar with, feel free to ask for help in
-your pull request. The Numba core developers can help diagnose cross-platform
+Every commit to the main branch is automatically tested on all of the
+platforms Numba supports. This includes ARMv8, POWER8, and NVIDIA GPUs.
+The build system however is internal to Anaconda, so we also use
+`Azure <https://dev.azure.com/numba/numba/_build>`_ to provide public continuous
+integration information for as many combinations as can be supported by the
+service.  Azure CI automatically tests all pull requests on Windows, OS X and
+Linux, as well as a sampling of different Python and NumPy versions. If you see
+problems on platforms you are unfamiliar with, feel free to ask for help in your
+pull request. The Numba core developers can help diagnose cross-platform
 compatibility issues. Also see the :ref:`continuous integration
 <continuous_integration_testing>` section on how public CI is implemented.
 
@@ -318,7 +338,7 @@ The Numba test suite causes CI systems a lot of grief:
 #. The combination of things that Numba has to test well exceeds the capacity of
    any public CI system, (Python versions x NumPy versions x Operating systems
    x Architectures x feature libraries (e.g. SVML) x threading backends
-   (e.g. OpenMP, TBB)) and then there's CUDA and ROCm too and all their version
+   (e.g. OpenMP, TBB)) and then there's CUDA too and all its version
    variants.
 
 As a result of the above, public CI is implemented as follows:
@@ -335,10 +355,18 @@ As a result of the above, public CI is implemented as follows:
       matrix and each combination runs one chunk. This is done for speed,
       because public CI cannot cope with the load else.
 
-If a pull request is changing CUDA or ROCm code (which cannot be tested on
-Public CI as there's no hardware) or it is making changes to something that the
-core developers consider risky, then it will also be run on the Numba farm just
-to make sure. The Numba project's private build and test farm will actually
+If a Pull Request (PR) changes CUDA code or will affect the CUDA target, it
+needs to be run on `gpuCI <https://gpuci.gpuopenanalytics.com/job/numba/>`_.
+This can be triggered by one of the Numba maintainers commenting ``run gpuCI
+tests`` on the PR discussion. This runs the CUDA testsuite with various CUDA
+toolkit versions on Linux, to provide some initial confidence in the
+correctness of the changes with respect to CUDA. Following approval, the PR
+will also be run on Numba's build farm to test other configurations with CUDA
+(including Windows, which is not tested by gpuCI).
+
+If the PR is not CUDA-related but makes changes to something that the core
+developers consider risky, then it will also be run on the Numba farm just to
+make sure. The Numba project's private build and test farm will actually
 exercise all the applicable tests on all the combinations noted above on real
 hardware!
 
@@ -460,4 +488,4 @@ Finally, use ``git push`` to update the website.
 
 
 .. _typeguard: https://typeguard.readthedocs.io/en/latest/
-.. _runtests.py: https://github.com/numba/numba/blob/master/runtests.py
+.. _runtests.py: https://github.com/numba/numba/blob/main/runtests.py

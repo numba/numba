@@ -4,8 +4,6 @@ about: Tell us about something in the Python language/NumPy you'd like Numba to 
 
 ---
 
----
-
 <!--
 
 Thanks for opening an issue! To help the Numba team handle your information
