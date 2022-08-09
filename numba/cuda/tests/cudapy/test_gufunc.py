@@ -304,6 +304,13 @@ class TestCUDAGufunc(CUDATestCase):
              np.asarray((4.5, 5.5, 6.5)))
         self.check_tuple_arg(a, b)
 
+    def test_name_attribute(self):
+        @nb.guvectorize('void(f8[:], f8[:])', '()->()', target = 'cuda')
+        def bar(x, y):
+            y[0] = x[0] ** 2
+
+        self.assertEqual(bar.__name__, 'bar')
+
 
 if __name__ == '__main__':
     unittest.main()
