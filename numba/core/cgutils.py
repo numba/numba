@@ -859,8 +859,8 @@ def early_exit_if(builder, stack: ExitStack, cond):
             <body>
         }
 
-    This can be useful for generating code with lots of early exits, without having to increase
-    the indentation each time.
+    This can be useful for generating code with lots of early exits, without
+    having to increase the indentation each time.
     """
     then, otherwise = stack.enter_context(builder.if_else(cond, likely=False))
     with then:
@@ -870,8 +870,8 @@ def early_exit_if(builder, stack: ExitStack, cond):
 
 def early_exit_if_null(builder, stack, obj):
     """
-    A convenience wrapper for :func:`early_exit_if`, for the common case where the CPython API
-    indicates an error by returning ``NULL``.
+    A convenience wrapper for :func:`early_exit_if`, for the common case where
+    the CPython API indicates an error by returning ``NULL``.
     """
     return early_exit_if(builder, stack, is_null(builder, obj))
 
