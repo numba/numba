@@ -216,3 +216,41 @@ Compilation options
 A number of keyword-only arguments can be passed to the ``@cfunc``
 decorator: ``nopython`` and ``cache``.  Their meaning is similar to those
 in the ``@jit`` decorator.
+
+
+Calling C code from Numba
+=========================
+
+It is also possible to call C code from Numba ``@jit`` functions. In this
+example, we are going to be compiling a simple function ``sum`` that adds two
+integers and calling it within Numba ``@jit`` code::
+
+   #include <stdint.h>
+
+   int64_t sum(int64_t a, int64_t b){
+      return a + b;
+   }
+
+
+Compile the code with ``gcc lib.c -fpic -shared -o lib.so`` to generate a
+shared library. ::
+
+   from numba import njit
+   from numba.core import types, typing
+   from llvmlite import binding
+
+   # load the library into LLVM
+   binding.load_library_permanently('./path/to/lib.so')
+
+   # Adds typing information
+   c_func_name = 'sum'
+   return_type = types.int64
+   argty = types.int64
+   c_sig = typing.signature(return_type, argty, argty)
+   c_func = types.ExternalFunction(c_func_name, c_sig)
+
+   @njit
+   def example(x, y):
+      return c_func(x, y)
+
+   print(example(3, 4))
