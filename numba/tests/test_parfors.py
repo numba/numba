@@ -908,12 +908,28 @@ class TestParforNumPy(TestParforsBase):
             return np.arange(n)
         # start and stop
         def test_impl2(s, n):
-            return np.arange(n)
+            return np.arange(s, n)
         # start, step, stop
         def test_impl3(s, n, t):
             return np.arange(s, n, t)
 
         for arg in [11, 128, 30.0, complex(4,5), complex(5,4)]:
+            self.check(test_impl1, arg)
+            self.check(test_impl2, 2, arg)
+            self.check(test_impl3, 2, arg, 2)
+
+    def test_arange_dtype(self):
+        # test with stop only
+        def test_impl1(n):
+            return np.arange(n, dtype=np.float32)
+        # start and stop
+        def test_impl2(s, n):
+            return np.arange(s, n, dtype=np.float32)
+        # start, step, stop
+        def test_impl3(s, n, t):
+            return np.arange(s, n, t, dtype=np.float32)
+
+        for arg in [11, 128, 30.0]:
             self.check(test_impl1, arg)
             self.check(test_impl2, 2, arg)
             self.check(test_impl3, 2, arg, 2)
