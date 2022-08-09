@@ -173,7 +173,8 @@ def NumPyRandomGeneratorType_shuffle(inst, arr):
 
     def impl(inst, arr):
         for i in range(arr.shape[0] - 1, 0, -1):
-            j = random_methods.random_interval(inst.bit_generator, i)
+            j = types.intp(random_methods.random_interval(inst.bit_generator,
+                                                          i))
             if i == j:
                 continue
             if arr.ndim != 1:

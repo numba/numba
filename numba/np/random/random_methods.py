@@ -346,11 +346,12 @@ def _randint_arg_check(low, high, endpoint, lower_bound, upper_bound):
 
 
 @register_jitable
-def random_interval(bitgen, max):
-    if (max == 0):
+def random_interval(bitgen, max_val):
+    if (max_val == 0):
         return 0
 
-    mask = max
+    max_val = uint64(max_val)
+    mask = uint64(max_val)
 
     mask |= mask >> 1
     mask |= mask >> 2
@@ -359,13 +360,13 @@ def random_interval(bitgen, max):
     mask |= mask >> 16
     mask |= mask >> 32
 
-    if (max <= 0xffffffff):
-        value = next_uint32(bitgen) & mask
-        while value > max:
-            value = next_uint32(bitgen) & mask
+    if (max_val <= 0xffffffff):
+        value = uint64(next_uint32(bitgen)) & mask
+        while value > max_val:
+            value = uint64(next_uint32(bitgen)) & mask
     else:
         value = next_uint64(bitgen) & mask
-        while value > max:
+        while value > max_val:
             value = next_uint64(bitgen) & mask
 
-    return value
+    return uint64(value)
