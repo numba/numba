@@ -125,6 +125,10 @@ class _CUDAGUFuncCallSteps(GUFuncCallSteps):
 
 
 class CUDAGenerializedUFunc(GenerializedUFunc):
+    def __init__(self, *args, pyfunc, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__name__ = pyfunc.__name__
+
     @property
     def _call_steps(self):
         return _CUDAGUFuncCallSteps
@@ -237,7 +241,7 @@ def __gufunc_{name}({args}):
 class CUDAGUFuncVectorize(deviceufunc.DeviceGUFuncVectorize):
     def build_ufunc(self):
         engine = deviceufunc.GUFuncEngine(self.inputsig, self.outputsig)
-        return CUDAGenerializedUFunc(kernelmap=self.kernelmap, engine=engine)
+        return CUDAGenerializedUFunc(kernelmap=self.kernelmap, engine=engine, pyfunc=self.pyfunc)
 
     def _compile_kernel(self, fnobj, sig):
         return cuda.jit(sig)(fnobj)
