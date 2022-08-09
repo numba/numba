@@ -17,7 +17,6 @@ from numba.core.ir_utils import (
     replace_var_names,
     remove_dels,
     legalize_names,
-    mk_unique_var,
     rename_labels,
     get_name_var_table,
     visit_vars_inner,
@@ -1373,7 +1372,7 @@ def _create_gufunc_for_parfor_body(
         list(param_dict.values()) + legal_loop_indices
     for name, var in var_table.items():
         if not (name in reserved_names):
-            new_var_dict[name] = mk_unique_var(name)
+            new_var_dict[name] = parfor.init_block.scope.redefine(name, loc).name
     replace_var_names(gufunc_ir.blocks, new_var_dict)
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_ir dump after renaming ")
@@ -1414,7 +1413,8 @@ def _create_gufunc_for_parfor_body(
                     strval = "{} =".format(inst.target.name)
                     strconsttyp = types.StringLiteral(strval)
 
-                    lhs = ir.Var(scope, mk_unique_var("str_const"), loc)
+                    lhs = scope.redefine("str_const", loc)
+                    # lhs = ir.Var(scope, mk_unique_var("str_const"), loc)
                     assign_lhs = ir.Assign(value=ir.Const(value=strval, loc=loc),
                                            target=lhs, loc=loc)
                     typemap[lhs.name] = strconsttyp
@@ -1528,12 +1528,12 @@ def replace_var_with_array_in_block(vars, block, typemap, calltypes):
     for inst in block.body:
         if isinstance(inst, ir.Assign) and inst.target.name in vars:
             const_node = ir.Const(0, inst.loc)
-            const_var = ir.Var(inst.target.scope, mk_unique_var("$const_ind_0"), inst.loc)
+            const_var = inst.target.scope.make_temp(inst.loc)
             typemap[const_var.name] = types.uintp
             const_assign = ir.Assign(const_node, const_var, inst.loc)
             new_block.append(const_assign)
 
-            val_var = ir.Var(inst.target.scope, mk_unique_var("$val"), inst.loc)
+            val_var = inst.target.scope.make_temp(inst.loc)
             typemap[val_var.name] = typemap[inst.target.name]
             new_block.append(ir.Assign(inst.value, val_var, inst.loc))
             setitem_node = ir.SetItem(inst.target, const_var, val_var, inst.loc)
