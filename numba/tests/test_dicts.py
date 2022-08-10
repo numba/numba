@@ -110,6 +110,55 @@ class TestCompiledDict(TestCase):
 
         self.assertEqual(foo(), foo.py_func())
 
+    def test_dict_use_with_list_value(self):
+        # Test using reflected list as value
+        @njit
+        def foo():
+            d = {}
+            for i in range(10):
+                d[i] = list(range(i))
+            return d
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_dict_use_with_mutated_list_value(self):
+        # Test using a mutated reflected list as value
+        @njit
+        def foo():
+            l = list(range(3))
+            d = {0: l}
+            l.append(4)
+            return d
+
+        print(foo())
+        self.assertEqual(foo(), foo.py_func())
+        self.assertEqual(len(foo()[0]), 4)
+
+    def test_dict_use_with_set_value(self):
+        # Test using set as value
+        @njit
+        def foo():
+            d = {}
+            for i in range(10):
+                d[i] = set(range(i))
+            return d
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_dict_use_with_mutated_set_value(self):
+        # Test using a mutated set as value
+        @njit
+        def foo():
+            s = set(range(3))
+            d = {0: s}
+            s.add(4)
+            return d
+
+        print(foo())
+        self.assertEqual(foo(), foo.py_func())
+        self.assertEqual(len(foo()[0]), 4)
+
+
     def test_dict_use_with_none_value(self):
         # Test that NoneType cannot be used as value for Dict
         @njit
