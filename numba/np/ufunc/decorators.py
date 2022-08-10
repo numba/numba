@@ -133,7 +133,7 @@ def vectorize(ftylist_or_function=(), **kws):
 def guvectorize(*args, **kwargs):
     """guvectorize(ftylist, signature, target='cpu', identity=None, **kws)
 
-    A decorator to create numpy generialized-ufunc object from Numba compiled
+    A decorator to create numpy generalized-ufunc object from Numba compiled
     code.
 
     Args
@@ -144,7 +144,7 @@ def guvectorize(*args, **kwargs):
         function type.
 
     signature: str
-        A NumPy generialized-ufunc signature.
+        A NumPy generalized-ufunc signature.
         e.g. "(m, n), (n, p)->(m, p)"
 
     identity: int, str, or None
@@ -161,7 +161,7 @@ def guvectorize(*args, **kwargs):
     Returns
     --------
 
-    A NumPy generialized universal-function
+    A NumPy generalized universal-function
 
     Example
     -------
