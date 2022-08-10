@@ -299,6 +299,7 @@ def _lower_parfor_parallel(lowerer, parfor):
                 # IR variable associated with this loop's index.
                 pfbdr.setitem(obj=redarr_var, index=numba_ir_loop_index_var, val=redtoset)
 
+            lowerer.lower_inst(ir.Del(redtoset.name, loc=loc))
     # compile parfor body as a separate function to be used with GUFuncWrapper
     flags = parfor.flags.copy()
     flags.error_model = "numpy"
