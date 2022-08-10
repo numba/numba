@@ -223,8 +223,9 @@ Calling C code from Numba
 
 It is also possible to call C code from Numba ``@jit`` functions. In this
 example, we are going to be compiling a simple function ``sum`` that adds two
-integers and calling it within Numba ``@jit`` code::
+integers and calling it within Numba ``@jit`` code
 
+.. code-block:: C
    #include <stdint.h>
 
    int64_t sum(int64_t a, int64_t b){
@@ -233,7 +234,9 @@ integers and calling it within Numba ``@jit`` code::
 
 
 Compile the code with ``gcc lib.c -fpic -shared -o lib.so`` to generate a
-shared library. ::
+shared library.
+
+.. code-block:: python
 
    from numba import njit
    from numba.core import types, typing
