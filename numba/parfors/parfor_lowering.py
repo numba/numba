@@ -112,6 +112,7 @@ def _lower_parfor_parallel(lowerer, parfor):
     # init reduction array allocation here.
     nredvars = len(parfor_redvars)
     redarrs = {}
+    to_cleanup = []
     if nredvars > 0:
         # reduction arrays outer dimension equal to thread count
         scope = parfor.init_block.scope
@@ -244,6 +245,7 @@ def _lower_parfor_parallel(lowerer, parfor):
                         typ=redvar_typ,
                         name="redtoset",
                     )
+                    to_cleanup.append(redtoset)
                 else:
                     redtoset = pfbdr.make_const_variable(
                         cval=init_val,
@@ -299,7 +301,6 @@ def _lower_parfor_parallel(lowerer, parfor):
                 # IR variable associated with this loop's index.
                 pfbdr.setitem(obj=redarr_var, index=numba_ir_loop_index_var, val=redtoset)
 
-            lowerer.lower_inst(ir.Del(redtoset.name, loc=loc))
     # compile parfor body as a separate function to be used with GUFuncWrapper
     flags = parfor.flags.copy()
     flags.error_model = "numpy"
@@ -369,6 +370,9 @@ def _lower_parfor_parallel(lowerer, parfor):
 
     # Cleanup reduction variable
     for v in redarrs.values():
+        lowerer.lower_inst(ir.Del(v.name, loc=loc))
+
+    for v in to_cleanup:
         lowerer.lower_inst(ir.Del(v.name, loc=loc))
     # Restore the original typemap of the function that was replaced temporarily at the
     # Beginning of this function.
