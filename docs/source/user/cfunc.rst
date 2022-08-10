@@ -226,6 +226,7 @@ example, we are going to be compiling a simple function ``sum`` that adds two
 integers and calling it within Numba ``@jit`` code
 
 .. code-block:: C
+
    #include <stdint.h>
 
    int64_t sum(int64_t a, int64_t b){
