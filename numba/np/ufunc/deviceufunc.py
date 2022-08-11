@@ -637,10 +637,10 @@ class GeneralizedUFunc(object):
         callsteps.adjust_input_types(indtypes)
         callsteps.allocate_outputs(schedule, outdtypes)
         callsteps.prepare_kernel_parameters()
-        newparams, newretval = self._broadcast(schedule,
-                                               callsteps.kernel_parameters,
-                                               callsteps.kernel_returnvalues)
-        callsteps.launch_kernel(kernel, schedule.loopn, newparams + [newretval])
+        newparams = self._broadcast(schedule,
+                                    callsteps.kernel_parameters,
+                                    callsteps.kernel_returnvalues)
+        callsteps.launch_kernel(kernel, schedule.loopn, newparams)
         return callsteps.post_process_result()
 
     def _schedule(self, inputs, outs):
@@ -682,7 +682,6 @@ class GeneralizedUFunc(object):
             raise TypeError("no matching signature")
 
     def _broadcast(self, schedule, params, retvals):
-        retval = retvals[0]
         assert schedule.loopn > 0, "zero looping dimension"
 
         odim = 1 if not schedule.loopdims else schedule.loopn
@@ -695,8 +694,11 @@ class GeneralizedUFunc(object):
             else:
                 # Broadcast vector input
                 newparams.append(self._broadcast_array(p, odim, cs))
-        newretval = retval.reshape(odim, *schedule.oshapes[0])
-        return newparams, newretval
+
+        newretvals = []
+        for retval, oshape in zip(retvals, schedule.oshapes):
+            newretvals.append(retval.reshape(odim, *oshape))
+        return tuple(newparams) + tuple(newretvals)
 
     def _broadcast_array(self, ary, newdim, innerdim):
         newshape = (newdim,) + innerdim
