@@ -627,14 +627,13 @@ class GeneralizedUFunc(object):
         self.kernelmap = kernelmap
         self.engine = engine
         self.max_blocksize = 2 ** 30
-        assert self.engine.nout == 1, "only support single output"
 
     def __call__(self, *args, **kws):
         callsteps = self._call_steps(self.engine.nin, self.engine.nout,
                                      args, kws)
         callsteps.prepare_inputs()
         indtypes, schedule, outdtypes, kernel = self._schedule(
-            callsteps.norm_inputs, callsteps.output)
+            callsteps.norm_inputs, callsteps.outputs)
         callsteps.adjust_input_types(indtypes)
         callsteps.allocate_outputs(schedule, outdtypes)
         callsteps.prepare_kernel_parameters()
@@ -644,7 +643,7 @@ class GeneralizedUFunc(object):
         callsteps.launch_kernel(kernel, schedule.loopn, newparams + [newretval])
         return callsteps.post_process_result()
 
-    def _schedule(self, inputs, out):
+    def _schedule(self, inputs, outs):
         input_shapes = [a.shape for a in inputs]
         schedule = self.engine.schedule(input_shapes)
 
@@ -661,8 +660,12 @@ class GeneralizedUFunc(object):
             outdtypes, kernel = self.kernelmap[indtypes]
 
         # check output
-        if out is not None and schedule.output_shapes[0] != out.shape:
-            raise ValueError('output shape mismatch')
+        if outs is not None:
+            shapes_match = all([sched_shape == out.shape
+                                for (sched_shape, out) in
+                                    zip(schedule.output_shapes, outs)])
+            if not shapes_match:
+                raise ValueError('output shape mismatch')
 
         return indtypes, schedule, outdtypes, kernel
 
@@ -723,7 +726,7 @@ class GUFuncCallSteps(object):
     __slots__ = [
         'args',
         'kwargs',
-        'output',
+        'outputs',
         'norm_inputs',
         'kernel_returnvalue',
         'kernel_parameters',
@@ -732,17 +735,17 @@ class GUFuncCallSteps(object):
     ]
 
     def __init__(self, nin, nout, args, kwargs):
-        if nout > 1:
-            raise ValueError('multiple output is not supported')
         self.args = args
         self.kwargs = kwargs
 
         user_output_is_device = False
-        self.output = self.kwargs.get('out')
-        if self.output is not None:
-            user_output_is_device = self.is_device_array(self.output)
+        self.outputs = self.kwargs.get('out')
+        if self.outputs is not None:
+            user_output_is_device = self.is_device_array(self.outputs)
             if user_output_is_device:
-                self.output = self.as_device_array(self.output)
+                self.outputs = [self.as_device_array(self.outputs)]
+            else:
+                self.outputs = [self.outputs]
         self._is_device_array = [self.is_device_array(a) for a in self.args]
         self._need_device_conversion = (not any(self._is_device_array) and
                                         not user_output_is_device)
@@ -758,11 +761,11 @@ class GUFuncCallSteps(object):
         # Check if there are extra arguments for outputs.
         unused_inputs = inputs[nin:]
         if unused_inputs:
-            if self.output is not None:
-                raise ValueError("cannot specify 'out' as both a positional "
-                                 "and keyword argument")
+            if self.outputs is not None:
+                raise ValueError("cannot specify 'out' as both positional "
+                                 "and keyword arguments")
             else:
-                [self.output] = unused_inputs
+                self.outputs = unused_inputs
 
     def adjust_input_types(self, indtypes):
         """
@@ -783,11 +786,11 @@ class GUFuncCallSteps(object):
 
     def allocate_outputs(self, schedule, outdtypes):
         # allocate output
-        if self._need_device_conversion or self.output is None:
+        if self._need_device_conversion or self.outputs is None:
             retval = self.device_array(shape=schedule.output_shapes[0],
                                        dtype=outdtypes[0])
         else:
-            retval = self.output
+            retval = self.outputs[0]
         self.kernel_returnvalue = retval
 
     def prepare_kernel_parameters(self):
@@ -802,11 +805,15 @@ class GUFuncCallSteps(object):
 
     def post_process_result(self):
         if self._need_device_conversion:
-            out = self.to_host(self.kernel_returnvalue, self.output)
-        elif self.output is None:
+            if self.outputs is None:
+                outputs = [None]
+            else:
+                outputs = self.outputs
+            out = self.to_host(self.kernel_returnvalue, outputs[0])
+        elif self.outputs is None:
             out = self.kernel_returnvalue
         else:
-            out = self.output
+            out = self.outputs[0]
         return out
 
     def prepare_inputs(self):

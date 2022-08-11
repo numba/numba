@@ -281,7 +281,7 @@ class TestCUDAGufunc(CUDATestCase):
         with self.assertRaises(ValueError) as raises:
             foo(inp, out, out=out)
 
-        msg = "cannot specify 'out' as both a positional and keyword argument"
+        msg = "cannot specify 'out' as both positional and keyword arguments"
         self.assertEqual(str(raises.exception), msg)
 
     def check_tuple_arg(self, a, b):
