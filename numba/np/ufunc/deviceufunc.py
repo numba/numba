@@ -376,19 +376,7 @@ class DeviceVectorize(_BaseUFuncBuilder):
     def pyfunc(self):
         return self.py_func
 
-    def add(self, sig=None, argtypes=None, restype=None):
-        # Handle argtypes
-        if argtypes is not None:
-            warnings.warn("Keyword argument argtypes is deprecated",
-                          DeprecationWarning)
-            assert sig is None
-            if restype is None:
-                sig = tuple(argtypes)
-            else:
-                sig = restype(*argtypes)
-        del argtypes
-        del restype
-
+    def add(self, sig=None):
         # compile core as device function
         args, return_type = sigutils.normalize_signature(sig)
         devfnsig = signature(return_type, *args)
@@ -445,27 +433,14 @@ class DeviceGUFuncVectorize(_BaseUFuncBuilder):
         self.identity = parse_identity(identity)
         self.signature = sig
         self.inputsig, self.outputsig = parse_signature(self.signature)
-        assert len(self.outputsig) == 1, "only support 1 output"
-        # { arg_dtype: (return_dtype), cudakernel }
+        # { arg_dtypes: (return_dtypes), cudakernel }
         self.kernelmap = OrderedDict()
 
     @property
     def pyfunc(self):
         return self.py_func
 
-    def add(self, sig=None, argtypes=None, restype=None):
-        # Handle argtypes
-        if argtypes is not None:
-            warnings.warn("Keyword argument argtypes is deprecated",
-                          DeprecationWarning)
-            assert sig is None
-            if restype is None:
-                sig = tuple(argtypes)
-            else:
-                sig = restype(*argtypes)
-        del argtypes
-        del restype
-
+    def add(self, sig=None):
         indims = [len(x) for x in self.inputsig]
         outdims = [len(x) for x in self.outputsig]
         args, return_type = sigutils.normalize_signature(sig)
@@ -491,6 +466,7 @@ class DeviceGUFuncVectorize(_BaseUFuncBuilder):
         kernel = self._compile_kernel(fnobj, sig=tuple(outertys))
 
         dtypes = tuple(np.dtype(str(t.dtype)) for t in outertys)
+
         self.kernelmap[tuple(dtypes[:-1])] = dtypes[-1], kernel
 
     def _compile_kernel(self, fnobj, sig):
