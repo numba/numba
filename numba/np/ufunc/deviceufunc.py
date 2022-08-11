@@ -465,9 +465,12 @@ class DeviceGUFuncVectorize(_BaseUFuncBuilder):
         outertys = list(_determine_gufunc_outer_types(args, indims + outdims))
         kernel = self._compile_kernel(fnobj, sig=tuple(outertys))
 
-        dtypes = tuple(np.dtype(str(t.dtype)) for t in outertys)
+        nout = len(outdims)
+        dtypes = [np.dtype(str(t.dtype)) for t in outertys]
+        indtypes = tuple(dtypes[:-nout])
+        outdtypes = tuple(dtypes[-nout:])
 
-        self.kernelmap[tuple(dtypes[:-1])] = dtypes[-1], kernel
+        self.kernelmap[indtypes] = outdtypes, kernel
 
     def _compile_kernel(self, fnobj, sig):
         raise NotImplementedError
@@ -648,14 +651,14 @@ class GeneralizedUFunc(object):
         # find kernel
         idtypes = tuple(i.dtype for i in inputs)
         try:
-            outdtype, kernel = self.kernelmap[idtypes]
+            [outdtype], kernel = self.kernelmap[idtypes]
         except KeyError:
             # No exact match, then use the first compatible.
             # This does not match the numpy dispatching exactly.
             # Later, we may just jit a new version for the missing signature.
             idtypes = self._search_matching_signature(idtypes)
             # Select kernel
-            outdtype, kernel = self.kernelmap[idtypes]
+            [outdtype], kernel = self.kernelmap[idtypes]
 
         # check output
         if out is not None and schedule.output_shapes[0] != out.shape:
