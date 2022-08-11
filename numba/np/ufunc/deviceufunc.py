@@ -639,7 +639,7 @@ class GeneralizedUFunc(object):
         callsteps.prepare_kernel_parameters()
         newparams, newretval = self._broadcast(schedule,
                                                callsteps.kernel_parameters,
-                                               callsteps.kernel_returnvalue)
+                                               callsteps.kernel_returnvalues)
         callsteps.launch_kernel(kernel, schedule.loopn, newparams + [newretval])
         return callsteps.post_process_result()
 
@@ -681,7 +681,8 @@ class GeneralizedUFunc(object):
         else:
             raise TypeError("no matching signature")
 
-    def _broadcast(self, schedule, params, retval):
+    def _broadcast(self, schedule, params, retvals):
+        retval = retvals[0]
         assert schedule.loopn > 0, "zero looping dimension"
 
         odim = 1 if not schedule.loopdims else schedule.loopn
@@ -726,7 +727,7 @@ class GUFuncCallSteps(object):
         'kwargs',
         'outputs',
         'norm_inputs',
-        'kernel_returnvalue',
+        'kernel_returnvalues',
         'kernel_parameters',
         '_is_device_array',
         '_need_device_conversion',
@@ -791,11 +792,12 @@ class GUFuncCallSteps(object):
     def allocate_outputs(self, schedule, outdtypes):
         # allocate output
         if self._need_device_conversion or self.outputs[0] is None:
-            retval = self.device_array(shape=schedule.output_shapes[0],
-                                       dtype=outdtypes[0])
+            retvals = []
+            for shape, dtype in zip(schedule.output_shapes, outdtypes):
+                retvals.append(self.device_array(shape, dtype))
         else:
-            retval = self.outputs[0]
-        self.kernel_returnvalue = retval
+            retvals = self.outputs
+        self.kernel_returnvalues = retvals
 
     def prepare_kernel_parameters(self):
         params = []
@@ -809,12 +811,18 @@ class GUFuncCallSteps(object):
 
     def post_process_result(self):
         if self._need_device_conversion:
-            out = self.to_host(self.kernel_returnvalue, self.outputs[0])
+            outs = []
+            for retval, output in zip(self.kernel_returnvalues, self.outputs):
+                outs.append(self.to_host(retval, output))
         elif self.outputs[0] is None:
-            out = self.kernel_returnvalue
+            outs = self.kernel_returnvalues
         else:
-            out = self.outputs[0]
-        return out
+            outs = self.outputs
+
+        if len(outs) == 1:
+            return outs[0]
+        else:
+            return outs
 
     def prepare_inputs(self):
         pass
