@@ -173,40 +173,6 @@ class TestCUDAGufunc(CUDATestCase):
         copy(A, out=B)
         self.assertTrue(np.allclose(A, B))
 
-    def test_copy_multiple_outputs(self):
-
-        @guvectorize([void(float32[:], float32[:], float32[:])],
-                     '(x)->(x),(x)',
-                     target='cuda')
-        def copy(A, B, C):
-            for i in range(B.size):
-                B[i] = A[i]
-                C[i] = A[i]
-
-        A = np.arange(10, dtype=np.float32) + 1
-        B = np.zeros_like(A)
-        C = np.zeros_like(A)
-        copy(A, B, C)
-        np.testing.assert_allclose(A, B)
-        np.testing.assert_allclose(A, C)
-
-    def test_copy_and_double_multiple_outputs(self):
-
-        @guvectorize([void(float32[:], float32[:], float32[:])],
-                     '(x)->(x),(x)',
-                     target='cuda')
-        def copy(A, B, C):
-            for i in range(B.size):
-                B[i] = A[i]
-                C[i] = A[i] * 2
-
-        A = np.arange(10, dtype=np.float32) + 1
-        B = np.zeros_like(A)
-        C = np.zeros_like(A)
-        copy(A, B, C)
-        np.testing.assert_allclose(A, B)
-        np.testing.assert_allclose(A * 2, C)
-
     def test_copy_odd(self):
 
         @guvectorize([void(float32[:], float32[:])],
@@ -366,6 +332,72 @@ class TestCUDAGufunc(CUDATestCase):
         msg = te.exception.args[0]
         self.assertIn('guvectorized functions cannot return values', msg)
         self.assertIn('specifies int32 return type', msg)
+
+
+class TestMultipleOutputs(CUDATestCase):
+    def test_multiple_outputs_same_type_passed_in(self):
+        @guvectorize([void(float32[:], float32[:], float32[:])],
+                     '(x)->(x),(x)',
+                     target='cuda')
+        def copy(A, B, C):
+            for i in range(B.size):
+                B[i] = A[i]
+                C[i] = A[i]
+
+        A = np.arange(10, dtype=np.float32) + 1
+        B = np.zeros_like(A)
+        C = np.zeros_like(A)
+        copy(A, B, C)
+        np.testing.assert_allclose(A, B)
+        np.testing.assert_allclose(A, C)
+
+    def test_multiple_outputs_distinct_values(self):
+
+        @guvectorize([void(float32[:], float32[:], float32[:])],
+                     '(x)->(x),(x)',
+                     target='cuda')
+        def copy_and_double(A, B, C):
+            for i in range(B.size):
+                B[i] = A[i]
+                C[i] = A[i] * 2
+
+        A = np.arange(10, dtype=np.float32) + 1
+        B = np.zeros_like(A)
+        C = np.zeros_like(A)
+        copy_and_double(A, B, C)
+        np.testing.assert_allclose(A, B)
+        np.testing.assert_allclose(A * 2, C)
+
+    def test_multiple_output_allocation(self):
+        @guvectorize([void(float32[:], float32[:], float32[:])],
+                     '(x)->(x),(x)',
+                     target='cuda')
+        def copy_and_double(A, B, C):
+            for i in range(B.size):
+                B[i] = A[i]
+                C[i] = A[i] * 2
+
+        A = np.arange(10, dtype=np.float32) + 1
+        B, C = copy_and_double(A)
+        np.testing.assert_allclose(A, B)
+        np.testing.assert_allclose(A * 2, C)
+
+    def test_multiple_output_dtypes(self):
+
+        @guvectorize([void(int32[:], int32[:], float64[:])],
+                     '(x)->(x),(x)',
+                     target='cuda')
+        def copy_and_multiply(A, B, C):
+            for i in range(B.size):
+                B[i] = A[i]
+                C[i] = A[i] * 1.5
+
+        A = np.arange(10, dtype=np.int32) + 1
+        B = np.zeros_like(A)
+        C = np.zeros_like(A, dtype=np.float64)
+        copy_and_multiply(A, B, C)
+        np.testing.assert_allclose(A, B)
+        np.testing.assert_allclose(A * np.float64(1.5), C)
 
 
 if __name__ == '__main__':

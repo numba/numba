@@ -741,7 +741,7 @@ class GUFuncCallSteps(object):
             raise ValueError("cannot specify 'out' as both positional "
                              "and keyword arguments")
         else:
-            outputs = [outputs]
+            outputs = [outputs] * nout
 
         self.args = args
         self.kwargs = kwargs
@@ -792,13 +792,15 @@ class GUFuncCallSteps(object):
                 self.norm_inputs[i] = val.astype(ity)
 
     def allocate_outputs(self, schedule, outdtypes):
-        # allocate output
-        if self._need_device_conversion or self.outputs[0] is None:
-            retvals = []
-            for shape, dtype in zip(schedule.output_shapes, outdtypes):
-                retvals.append(self.device_array(shape, dtype))
-        else:
-            retvals = self.outputs
+        retvals = []
+        for shape, dtype, output in zip(schedule.output_shapes, outdtypes,
+                                        self.outputs):
+            if output is None or self._need_device_conversion:
+                retval = self.device_array(shape, dtype)
+            else:
+                retval = output
+            retvals.append(retval)
+
         self.kernel_returnvalues = retvals
 
     def prepare_kernel_parameters(self):
