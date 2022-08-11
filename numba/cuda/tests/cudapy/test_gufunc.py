@@ -156,7 +156,7 @@ class TestCUDAGufunc(CUDATestCase):
         A = np.arange(10, dtype=np.float32) + 1
         B = np.zeros_like(A)
         copy(A, out=B)
-        self.assertTrue(np.allclose(A, B))
+        np.testing.assert_allclose(A, B)
 
     def test_copy_unspecified_return(self):
         # Ensure that behaviour is correct when the return type is not
@@ -189,6 +189,23 @@ class TestCUDAGufunc(CUDATestCase):
         copy(A, B, C)
         np.testing.assert_allclose(A, B)
         np.testing.assert_allclose(A, C)
+
+    def test_copy_and_double_multiple_outputs(self):
+
+        @guvectorize([void(float32[:], float32[:], float32[:])],
+                     '(x)->(x),(x)',
+                     target='cuda')
+        def copy(A, B, C):
+            for i in range(B.size):
+                B[i] = A[i]
+                C[i] = A[i] * 2
+
+        A = np.arange(10, dtype=np.float32) + 1
+        B = np.zeros_like(A)
+        C = np.zeros_like(A)
+        copy(A, B, C)
+        np.testing.assert_allclose(A, B)
+        np.testing.assert_allclose(A * 2, C)
 
     def test_copy_odd(self):
 
