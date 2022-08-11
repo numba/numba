@@ -470,6 +470,14 @@ class DeviceGUFuncVectorize(_BaseUFuncBuilder):
         outdims = [len(x) for x in self.outputsig]
         args, return_type = sigutils.normalize_signature(sig)
 
+        # It is only valid to specify types.none as a return type, or to not
+        # specify the return type (where the "Python None" is the return type)
+        valid_return_type = return_type in (types.none, None)
+        if not valid_return_type:
+            raise TypeError('guvectorized functions cannot return values: '
+                            f'signature {sig} specifies {return_type} return '
+                           'type')
+
         funcname = self.py_func.__name__
         src = expand_gufunc_template(self._kernel_template, indims,
                                      outdims, funcname, args)

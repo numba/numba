@@ -2,7 +2,7 @@ import numpy as np
 import numpy.core.umath_tests as ut
 
 from collections import namedtuple
-from numba import void, float32, float64
+from numba import void, int32, float32, float64
 from numba import guvectorize
 from numba import cuda
 from numba.cuda.testing import skip_on_cudasim, CUDATestCase
@@ -147,6 +147,21 @@ class TestCUDAGufunc(CUDATestCase):
     def test_copy(self):
 
         @guvectorize([void(float32[:], float32[:])],
+                     '(x)->(x)',
+                     target='cuda')
+        def copy(A, B):
+            for i in range(B.size):
+                B[i] = A[i]
+
+        A = np.arange(10, dtype=np.float32) + 1
+        B = np.zeros_like(A)
+        copy(A, out=B)
+        self.assertTrue(np.allclose(A, B))
+
+    def test_copy_unspecified_return(self):
+        # Ensure that behaviour is correct when the return type is not
+        # specified in the signature.
+        @guvectorize([(float32[:], float32[:])],
                      '(x)->(x)',
                      target='cuda')
         def copy(A, B):
@@ -307,6 +322,16 @@ class TestCUDAGufunc(CUDATestCase):
     def test_gufunc_name(self):
         gufunc = _get_matmulcore_gufunc(max_blocksize=512)
         self.assertEqual(gufunc.__name__, 'matmulcore')
+
+    def test_bad_return_type(self):
+        with self.assertRaises(TypeError) as te:
+            @guvectorize([int32(int32[:], int32[:])], '(m)->(m)', target='cuda')
+            def f(x, y):
+                pass
+
+        msg = te.exception.args[0]
+        self.assertIn('guvectorized functions cannot return values', msg)
+        self.assertIn('specifies int32 return type', msg)
 
 
 if __name__ == '__main__':
