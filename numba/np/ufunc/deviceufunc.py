@@ -660,12 +660,10 @@ class GeneralizedUFunc(object):
             outdtypes, kernel = self.kernelmap[indtypes]
 
         # check output
-        if outs is not None:
-            shapes_match = all([sched_shape == out.shape
-                                for (sched_shape, out) in
-                                    zip(schedule.output_shapes, outs)])
-            if not shapes_match:
-                raise ValueError('output shape mismatch')
+        for sched_shape, out in zip(schedule.output_shapes, outs):
+            if out is not None:
+                if sched_shape != out.shape:
+                    raise ValueError('output shape mismatch')
 
         return indtypes, schedule, outdtypes, kernel
 
@@ -735,20 +733,29 @@ class GUFuncCallSteps(object):
     ]
 
     def __init__(self, nin, nout, args, kwargs):
+        outputs = kwargs.get('out')
+        if outputs is not None and len(args) > nin:
+            raise ValueError("cannot specify 'out' as both positional "
+                             "and keyword arguments")
+        else:
+            outputs = [outputs]
+
         self.args = args
         self.kwargs = kwargs
 
-        user_output_is_device = False
-        self.outputs = self.kwargs.get('out')
-        if self.outputs is not None:
-            user_output_is_device = self.is_device_array(self.outputs)
+        user_outputs_are_device = []
+        self.outputs = []
+        for output in outputs:
+            user_output_is_device = self.is_device_array(output)
             if user_output_is_device:
-                self.outputs = [self.as_device_array(self.outputs)]
+                self.outputs.append(self.as_device_array(output))
             else:
-                self.outputs = [self.outputs]
+                self.outputs.append(output)
+            user_outputs_are_device.append(user_output_is_device)
+
         self._is_device_array = [self.is_device_array(a) for a in self.args]
         self._need_device_conversion = (not any(self._is_device_array) and
-                                        not user_output_is_device)
+                                        not any(user_outputs_are_device))
 
         # Normalize inputs
         inputs = []
@@ -758,14 +765,11 @@ class GUFuncCallSteps(object):
             else:
                 inputs.append(np.asarray(a))
         self.norm_inputs = inputs[:nin]
+
         # Check if there are extra arguments for outputs.
         unused_inputs = inputs[nin:]
         if unused_inputs:
-            if self.outputs is not None:
-                raise ValueError("cannot specify 'out' as both positional "
-                                 "and keyword arguments")
-            else:
-                self.outputs = unused_inputs
+            self.outputs = unused_inputs
 
     def adjust_input_types(self, indtypes):
         """
@@ -786,7 +790,7 @@ class GUFuncCallSteps(object):
 
     def allocate_outputs(self, schedule, outdtypes):
         # allocate output
-        if self._need_device_conversion or self.outputs is None:
+        if self._need_device_conversion or self.outputs[0] is None:
             retval = self.device_array(shape=schedule.output_shapes[0],
                                        dtype=outdtypes[0])
         else:
@@ -805,12 +809,8 @@ class GUFuncCallSteps(object):
 
     def post_process_result(self):
         if self._need_device_conversion:
-            if self.outputs is None:
-                outputs = [None]
-            else:
-                outputs = self.outputs
-            out = self.to_host(self.kernel_returnvalue, outputs[0])
-        elif self.outputs is None:
+            out = self.to_host(self.kernel_returnvalue, self.outputs[0])
+        elif self.outputs[0] is None:
             out = self.kernel_returnvalue
         else:
             out = self.outputs[0]
