@@ -633,10 +633,10 @@ class GeneralizedUFunc(object):
         callsteps = self._call_steps(self.engine.nin, self.engine.nout,
                                      args, kws)
         callsteps.prepare_inputs()
-        indtypes, schedule, outdtype, kernel = self._schedule(
+        indtypes, schedule, outdtypes, kernel = self._schedule(
             callsteps.norm_inputs, callsteps.output)
         callsteps.adjust_input_types(indtypes)
-        callsteps.allocate_outputs(schedule, outdtype)
+        callsteps.allocate_outputs(schedule, outdtypes)
         callsteps.prepare_kernel_parameters()
         newparams, newretval = self._broadcast(schedule,
                                                callsteps.kernel_parameters,
@@ -649,22 +649,22 @@ class GeneralizedUFunc(object):
         schedule = self.engine.schedule(input_shapes)
 
         # find kernel
-        idtypes = tuple(i.dtype for i in inputs)
+        indtypes = tuple(i.dtype for i in inputs)
         try:
-            [outdtype], kernel = self.kernelmap[idtypes]
+            outdtypes, kernel = self.kernelmap[indtypes]
         except KeyError:
             # No exact match, then use the first compatible.
             # This does not match the numpy dispatching exactly.
             # Later, we may just jit a new version for the missing signature.
-            idtypes = self._search_matching_signature(idtypes)
+            indtypes = self._search_matching_signature(indtypes)
             # Select kernel
-            [outdtype], kernel = self.kernelmap[idtypes]
+            outdtypes, kernel = self.kernelmap[indtypes]
 
         # check output
         if out is not None and schedule.output_shapes[0] != out.shape:
             raise ValueError('output shape mismatch')
 
-        return idtypes, schedule, outdtype, kernel
+        return indtypes, schedule, outdtypes, kernel
 
     def _search_matching_signature(self, idtypes):
         """
@@ -781,11 +781,11 @@ class GUFuncCallSteps(object):
                 # Cast types
                 self.norm_inputs[i] = val.astype(ity)
 
-    def allocate_outputs(self, schedule, outdtype):
+    def allocate_outputs(self, schedule, outdtypes):
         # allocate output
         if self._need_device_conversion or self.output is None:
             retval = self.device_array(shape=schedule.output_shapes[0],
-                                       dtype=outdtype)
+                                       dtype=outdtypes[0])
         else:
             retval = self.output
         self.kernel_returnvalue = retval
