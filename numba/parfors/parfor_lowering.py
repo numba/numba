@@ -211,6 +211,7 @@ def _lower_parfor_parallel(lowerer, parfor):
 
             # Remember mapping of original reduction array to the newly created per-worker reduction array.
             redarrs[redvar.name] = redarr_var
+            to_cleanup.append(redarr_var)
 
             init_val = parfor_reddict[red_name].init_val
 
@@ -369,9 +370,6 @@ def _lower_parfor_parallel(lowerer, parfor):
         )
 
     # Cleanup reduction variable
-    for v in redarrs.values():
-        lowerer.lower_inst(ir.Del(v.name, loc=loc))
-
     for v in to_cleanup:
         lowerer.lower_inst(ir.Del(v.name, loc=loc))
     # Restore the original typemap of the function that was replaced temporarily at the
