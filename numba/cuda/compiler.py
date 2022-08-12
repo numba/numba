@@ -11,7 +11,6 @@ from numba.core.typed_passes import (IRLegalization, NativeLowering,
                                      AnnotateTypes)
 from warnings import warn
 from numba.cuda.api import get_current_device
-from numba.core.bytecode import FunctionIdentity
 
 
 def _nvvm_options_type(x):
@@ -273,9 +272,10 @@ def compile_ptx(pyfunc, args, debug=False, lineinfo=False, device=False,
         lib = cres.library
     else:
         tgt = cres.target_context
-        func_identity = FunctionIdentity.from_function(pyfunc)
-        filename = func_identity.filename
-        linenum = func_identity.firstlineno
+        code = pyfunc.__code__
+        filename = code.co_filename
+        linenum = code.co_firstlineno
+
         lib, kernel = tgt.prepare_cuda_kernel(cres.library, cres.fndesc, debug,
                                               nvvm_options, filename, linenum)
 
