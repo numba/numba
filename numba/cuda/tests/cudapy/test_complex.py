@@ -262,7 +262,7 @@ class TestCMath(BaseComplexTest):
 class TestAtomicOnComplexComponents(CUDATestCase):
     # Based on the reproducer from Issue #8309. array.real and array.imag could
     # not be used because they required returning an array from a generated
-    # function, and even if this was permitted, they coudl not be resolved from
+    # function, and even if this was permitted, they could not be resolved from
     # the atomic lowering when they were overloads.
     #
     # See https://github.com/numba/numba/issues/8309
