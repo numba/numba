@@ -242,9 +242,11 @@ shared library.
    from numba import njit
    from numba.core import types, typing
    from llvmlite import binding
+   import os
 
    # load the library into LLVM
-   binding.load_library_permanently('./path/to/lib.so')
+   path = os.path.abspath('.//path/to/shared_library.so')
+   binding.load_library_permanently(path)
 
    # Adds typing information
    c_func_name = 'sum'
