@@ -198,6 +198,13 @@ class _Kernel(serialize.ReduceMixin):
         '''
         return self._codelibrary.get_cufunc().attrs.shared
 
+    @property
+    def max_threads_per_block(self):
+        '''
+        The maximum allowable threads per block.
+        '''
+        return self._codelibrary.get_cufunc().attrs.maxthreads
+
     def inspect_llvm(self):
         '''
         Returns the LLVM IR for this kernel.
@@ -720,6 +727,27 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
             return next(iter(self.overloads.values())).shared_mem_per_block
         else:
             return {sig: overload.shared_mem_per_block
+                    for sig, overload in self.overloads.items()}
+
+    def get_max_threads_per_block(self, signature=None):
+        '''
+        Returns the maximum allowable number of threads per block
+        for this kernel. Exceeding this threshold would result in
+        the failure of a kernel to launch
+
+        :param signature: The signature of the compiled kernel to get max
+                          thread usage for. This may be omitted for a
+                          specialized kernel.
+        :return: The maximum allowable threads per block for the compiled
+                 variant of the kernel for the given signature and current
+                 device.
+        '''
+        if signature is not None:
+            return self.overloads[signature.args].max_threads_per_block
+        if self.specialized:
+            return next(iter(self.overloads.values())).max_threads_per_block
+        else:
+            return {sig: overload.max_threads_per_block
                     for sig, overload in self.overloads.items()}
 
     def get_call_template(self, args, kws):

@@ -6,10 +6,11 @@ from numba.cuda.testing import (skip_on_cudasim, skip_unless_cuda_python,
                                 skip_if_cuda_includes_missing,
                                 skip_with_cuda_python)
 from numba.cuda.testing import CUDATestCase
-from numba.cuda.cudadrv.driver import Linker, LinkerError, NvrtcError
+from numba.cuda.cudadrv.driver import (CudaAPIError, Linker,
+                                       LinkerError, NvrtcError)
 from numba.cuda import require_context
 from numba.tests.support import ignore_internal_warnings
-from numba import cuda, void, float64, int64, int32, typeof
+from numba import cuda, void, float64, int64, int32, typeof, float32
 
 
 def func_with_lots_of_registers(x, a, b, c, d, e, f):
@@ -68,6 +69,20 @@ def simple_smem(ary, dty):
             sm[j] = j
     cuda.syncthreads()
     ary[i] = sm[i]
+
+
+def coop_smem2d(ary):
+    i, j = cuda.grid(2)
+    sm = cuda.shared.array((10, 20), float32)
+    sm[i, j] = (i + 1) / (j + 1)
+    cuda.syncthreads()
+    ary[i, j] = sm[i, j]
+
+
+def simple_maxthreads(ary):
+    i = cuda.grid(1)
+    cuda.syncthreads()
+    ary[i] = i
 
 
 @skip_on_cudasim('Linking unsupported in the simulator')
@@ -253,6 +268,21 @@ class TestLinker(CUDATestCase):
             np.zeros(100, dtype=np.int32), np.float64)
         shared_mem_size = compiled_specialized.get_shared_mem_per_block()
         self.assertEqual(shared_mem_size, 800)
+
+    def test_get_max_threads_per_block(self):
+        compiled = cuda.jit("void(float32[:,::1])")(coop_smem2d)
+        max_threads = compiled.get_max_threads_per_block()
+        self.assertGreater(max_threads, 0)
+
+    def test_max_threads_exceeded(self):
+        compiled = cuda.jit("void(int32[::1])")(simple_maxthreads)
+        max_threads = compiled.get_max_threads_per_block()
+        nelem = max_threads + 1
+        ary = np.empty(nelem, dtype=np.int32)
+        try:
+            compiled[1, nelem](ary)
+        except CudaAPIError as e:
+            self.assertIn("cuLaunchKernel", e.msg)
 
 
 if __name__ == '__main__':
