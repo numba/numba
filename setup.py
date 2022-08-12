@@ -175,7 +175,7 @@ def get_ext_modules():
                                        "numba/cext/dictobject.c",
                                        "numba/cext/listobject.c",
                                        ],
-                              # nunmba/_random.c needs pthreads
+                              # numba/_random.c needs pthreads
                               extra_link_args=install_name_tool_fixer +
                               extra_link_args,
                               depends=["numba/_pymodule.h",
