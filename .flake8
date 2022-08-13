@@ -27,7 +27,8 @@ exclude =
     *.cpp,
     *.c,
     *.h,
-    __init__.py,
+    versioneer.py,
+    numba/__init__.py,
     # Ignore vendored files
     numba/cloudpickle/*,
     # Grandfather in existing failing files.  This list should shrink over time
