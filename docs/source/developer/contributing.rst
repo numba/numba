@@ -267,7 +267,8 @@ with ``pip`` or ``conda`` and then run from the root of the Numba repository::
     flake8 numba
 
 Optionally, you may wish to setup `pre-commit hooks <https://pre-commit.com/>`_
-to automatically run ``flake8`` when you make a git commit. This can be
+to automatically run ``autopep8`` which runs ``flake8`` and applies inline
+changes automatically. This can be
 done by installing ``pre-commit``::
 
     pip install pre-commit
@@ -275,6 +276,10 @@ done by installing ``pre-commit``::
 and then running::
 
     pre-commit install
+
+You can also run pre-commit against all files::
+
+  pre-commit run --all-files
 
 from the root of the Numba repository. Now ``flake8`` will be run each time
 you commit changes. You can skip this check with ``git commit --no-verify``.
