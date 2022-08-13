@@ -503,6 +503,11 @@ def lower_get_type_min_value(context, builder, sig, args):
         res = ir.Constant(lty, val)
     return impl_ret_untracked(context, builder, lty, res)
 
+
+from numba.core.typing.builtins import IndexValue, IndexValueType  # noqa
+from numba.extending import overload, register_jitable  # noqa
+
+
 @lower_builtin(get_type_max_value, types.NumberClass)
 @lower_builtin(get_type_max_value, types.DType)
 def lower_get_type_max_value(context, builder, sig, args):
