@@ -1132,6 +1132,7 @@ class TestListExtendInStarArgNonTupleIterable(MemoryLeakMixin, TestCase):
     NOTE: At the moment, there are no meaningful tests for NoPython because the
     lack of support for `tuple(iterable)` for most iterable types.
     """
+
     def test_list_extend_forceobj(self):
         def consumer(*x):
             return x

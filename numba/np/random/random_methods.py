@@ -66,7 +66,7 @@ def buffered_bounded_lemire_uint8(bitgen, rng, bcnt, buf):
     # zero.
     rng_excl = uint8(rng) + uint8(1)
 
-    assert(rng != 0xFF)
+    assert (rng != 0xFF)
 
     # Generate a scaled random number.
     n, bcnt, buf = buffered_uint8(bitgen, bcnt, buf)
@@ -102,7 +102,7 @@ def buffered_bounded_lemire_uint16(bitgen, rng, bcnt, buf):
     # zero.
     rng_excl = uint16(rng) + uint16(1)
 
-    assert(rng != 0xFFFF)
+    assert (rng != 0xFFFF)
 
     # Generate a scaled random number.
     n, bcnt, buf = buffered_uint16(bitgen, bcnt, buf)
@@ -131,7 +131,7 @@ def buffered_bounded_lemire_uint32(bitgen, rng):
     """
     rng_excl = uint32(rng) + uint32(1)
 
-    assert(rng != 0xFFFFFFFF)
+    assert (rng != 0xFFFFFFFF)
 
     # Generate a scaled random number.
     m = uint64(next_uint32(bitgen)) * uint64(rng_excl)
@@ -158,7 +158,7 @@ def bounded_lemire_uint64(bitgen, rng):
     """
     rng_excl = uint64(rng) + uint64(1)
 
-    assert(rng != 0xFFFFFFFFFFFFFFFF)
+    assert (rng != 0xFFFFFFFFFFFFFFFF)
 
     x = next_uint64(bitgen)
 

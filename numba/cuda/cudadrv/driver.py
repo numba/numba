@@ -1142,6 +1142,7 @@ class _PendingDeallocs(object):
     modified later once the driver is initialized and the total memory capacity
     known.
     """
+
     def __init__(self, capacity=_SizeNotSet):
         self._cons = deque()
         self._disable_count = 0
@@ -1693,6 +1694,7 @@ class _CudaIpcImpl(object):
     """Implementation of GPU IPC using CUDA driver API.
     This requires the devices to be peer accessible.
     """
+
     def __init__(self, parent):
         self.base = parent.base
         self.handle = parent.handle
@@ -1729,6 +1731,7 @@ class _StagedIpcImpl(object):
     """Implementation of GPU IPC using custom staging logic to workaround
     CUDA IPC limitation on peer accessibility between devices.
     """
+
     def __init__(self, parent, source_info):
         self.parent = parent
         self.base = parent.base
@@ -1784,6 +1787,7 @@ class IpcHandle(object):
                    referred to by this IPC handle.
     :type offset: int
     """
+
     def __init__(self, base, handle, size, source_info=None, offset=0):
         self.base = base
         self.handle = handle
@@ -2010,6 +2014,7 @@ class AutoFreePointer(MemoryPointer):
 
     Constructor arguments are the same as for :class:`MemoryPointer`.
     """
+
     def __init__(self, *args, **kwargs):
         super(AutoFreePointer, self).__init__(*args, **kwargs)
         # Releease the self reference to the buffer, so that the finalizer
@@ -2648,6 +2653,7 @@ class CtypesLinker(Linker):
     """
     Links for current device if no CC given
     """
+
     def __init__(self, max_registers=0, lineinfo=False, cc=None):
         logsz = config.CUDA_LOG_SIZE
         linkerinfo = (c_char * logsz)()
@@ -2826,6 +2832,7 @@ class CudaPythonLinker(Linker):
     """
     Links for current device if no CC given
     """
+
     def __init__(self, max_registers=0, lineinfo=False, cc=None):
         logsz = config.CUDA_LOG_SIZE
         linkerinfo = bytearray(logsz)

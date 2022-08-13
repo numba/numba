@@ -504,10 +504,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         check(x_types, x_values)
 
         # complex domain scalar context
-        x_values = [1.+0j, -1+0j, 0.0+0.0j, -0.0+0.0j, 0+1j, 0-1j, 0.5+0.0j, # noqa
-                    -0.5+0.0j, 0.5+0.5j, -0.5-0.5j, 5+5j, -5-5j,             # noqa
+        x_values = [1. + 0j, -1 + 0j, 0.0 + 0.0j, -0.0 + 0.0j, 0 + 1j, 0 - 1j, 0.5 + 0.0j, # noqa
+                    -0.5 + 0.0j, 0.5 + 0.5j, -0.5 - 0.5j, 5 + 5j, -5 - 5j,             # noqa
                     # the following are to test sin(x)/x for small x
-                    5e-21+0j, -5e-21+0j, 5e-21j, +(0-5e-21j)                 # noqa
+                    5e-21 + 0j, -5e-21 + 0j, 5e-21j, +(0 - 5e-21j)                 # noqa
                     ]
         x_types = [types.complex64, types.complex128] * (len(x_values) // 2)
         check(x_types, x_values, ulps=2)
@@ -602,8 +602,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         check(x_types, x_values)
 
         # complex domain scalar context
-        x_values = [1.+0j, -1+0j, 0.0+0.0j, -0.0+0.0j, 1j, -1j, 0.5+0.0j, # noqa
-                    -0.5+0.0j, 0.5+0.5j, -0.5-0.5j, 5+5j, -5-5j]          # noqa
+        x_values = [1. + 0j, -1 + 0j, 0.0 + 0.0j, -0.0 + 0.0j, 1j, -1j, 0.5 + 0.0j, # noqa
+                    -0.5 + 0.0j, 0.5 + 0.5j, -0.5 - 0.5j, 5 + 5j, -5 - 5j]          # noqa
         x_types = [types.complex64, types.complex128] * (len(x_values) // 2 + 1)
         check(x_types, x_values)
 

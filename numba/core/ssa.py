@@ -203,6 +203,7 @@ def _run_ssa_block_pass(states, blk, handler):
 class _BaseHandler:
     """A base handler for all the passes used here for the SSA algorithm.
     """
+
     def on_assign(self, states, assign):
         """
         Called when the pass sees an ``ir.Assign``.
@@ -245,6 +246,7 @@ class _GatherDefsHandler(_BaseHandler):
 
     ``states`` is a Mapping[str, List[ir.Assign]]
     """
+
     def on_assign(self, states, assign):
         states[assign.target.name].append(assign)
 
@@ -259,6 +261,7 @@ class UndefinedVariable:
 class _FreshVarHandler(_BaseHandler):
     """Replaces assignment target with new fresh variables.
     """
+
     def on_assign(self, states, assign):
         if assign.target.name == states['varname']:
             scope = states['scope']

@@ -19,6 +19,7 @@ class Dim3(object):
     '''
     Used to implement thread/block indices/dimensions
     '''
+
     def __init__(self, x, y, z):
         self.x = x
         self.y = y
@@ -52,6 +53,7 @@ class FakeCUDACg:
     '''
     CUDA Cooperative Groups
     '''
+
     def this_grid(self):
         return GridGroup()
 
@@ -60,6 +62,7 @@ class FakeCUDALocal(object):
     '''
     CUDA Local arrays
     '''
+
     def array(self, shape, dtype):
         if isinstance(dtype, types.Type):
             dtype = numpy_support.as_dtype(dtype)
@@ -70,6 +73,7 @@ class FakeCUDAConst(object):
     '''
     CUDA Const arrays
     '''
+
     def array_like(self, ary):
         return ary
 

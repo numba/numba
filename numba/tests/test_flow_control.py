@@ -1080,6 +1080,7 @@ class TestRealCodeDomFront(TestCase):
     can check that a block of a certain name is a IDOM or DOMFRONT of another
     named block.
     """
+
     def cfa(self, bc):
         cfa = ControlFlowAnalysis(bc)
         cfa.run()

@@ -15,6 +15,7 @@ from numba.core.errors import TypingError
 class TestTupleIntrinsic(TestCase):
     """Tests for numba.unsafe.tuple
     """
+
     def test_tuple_setitem(self):
         @njit
         def foo(tup, idxs, vals):
@@ -60,6 +61,7 @@ class TestTupleIntrinsic(TestCase):
 class TestNdarrayIntrinsic(TestCase):
     """Tests for numba.unsafe.ndarray
     """
+
     def test_to_fixed_tuple(self):
         const = 3
 
@@ -129,6 +131,7 @@ class TestNdarrayIntrinsic(TestCase):
 class TestBytesIntrinsic(TestCase):
     """Tests for numba.unsafe.bytes
     """
+
     def test_memcpy_region(self):
         @njit
         def foo(dst, dst_index, src, src_index, nbytes):

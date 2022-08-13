@@ -2014,10 +2014,10 @@ def np_ediff1d(ary, to_end=None, to_begin=None):
     # Check that to_end and to_begin are compatible with ary
     ary_dt = _dtype_of_compound(ary)
     to_begin_dt = None
-    if not(is_nonelike(to_begin)):
+    if not (is_nonelike(to_begin)):
         to_begin_dt = _dtype_of_compound(to_begin)
     to_end_dt = None
-    if not(is_nonelike(to_end)):
+    if not (is_nonelike(to_end)):
         to_end_dt = _dtype_of_compound(to_end)
 
     if to_begin_dt is not None and not np.can_cast(to_begin_dt, ary_dt):

@@ -71,6 +71,7 @@ class TypeCastingRules(object):
     """
     A helper for establishing type casting rules.
     """
+
     def __init__(self, tm):
         self._tm = tm
         self._tg = castgraph.TypeGraph(self._cb_update)

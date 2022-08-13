@@ -18,6 +18,7 @@ class TestVectorization(TestCase):
     """
     Tests to assert that code which should vectorize does indeed vectorize
     """
+
     def gen_ir(self, func, args_tuple, fastmath=False):
         with override_env_config(
             "NUMBA_CPU_NAME", "skylake-avx512"

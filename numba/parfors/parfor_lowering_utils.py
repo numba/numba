@@ -10,6 +10,7 @@ _CallableNode = namedtuple("BoundFunc", ["func", "sig"])
 class ParforLoweringBuilder:
     """Helper class for building Numba-IR and lowering for Parfor.
     """
+
     def __init__(self, lowerer, scope, loc):
         self._lowerer = lowerer
         self._scope = scope

@@ -742,6 +742,7 @@ class ControlFlowAnalysis(object):
         The set of block that is common to all possible code path.
 
     """
+
     def __init__(self, bytecode):
         self.bytecode = bytecode
         self.blocks = {}

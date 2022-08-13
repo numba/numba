@@ -37,6 +37,8 @@ pages_repo = 'git@github.com:numba/numba-doc.git'
 #-----------------------------------------------------------------------------
 # Functions
 #-----------------------------------------------------------------------------
+
+
 def sub_environment():
     """Return an environment dict for executing subcommands in."""
     env = os.environ.copy()
@@ -79,11 +81,12 @@ def sh3(cmd):
 
 def init_repo(path):
     """clone the gh-pages repo if we haven't already."""
-    sh("git clone %s %s"%(pages_repo, path))
+    sh("git clone %s %s" % (pages_repo, path))
     here = os.getcwd()
     cd(path)
     sh('git checkout gh-pages')
     cd(here)
+
 
 #-----------------------------------------------------------------------------
 # Script starts

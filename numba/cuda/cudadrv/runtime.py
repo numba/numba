@@ -21,6 +21,7 @@ class CudaRuntimeAPIError(CudaRuntimeError):
     """
     Raised when there is an error accessing a C API from the CUDA Runtime.
     """
+
     def __init__(self, code, msg):
         self.code = code
         self.msg = msg

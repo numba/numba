@@ -75,6 +75,7 @@ class TestIRMeta(CheckEquality):
     """
     Tests IR node meta, like Loc and Scope
     """
+
     def test_loc(self):
         a = ir.Loc('file', 1, 0)
         b = ir.Loc('file', 1, 0)
@@ -109,6 +110,7 @@ class TestIRNodes(CheckEquality):
     """
     Tests IR nodes
     """
+
     def test_terminator(self):
         # terminator base class inst should always be equal
         t1 = ir.Terminator()
@@ -312,6 +314,7 @@ class TestIRCompounds(CheckEquality):
     """
     Tests IR concepts that have state
     """
+
     def test_varmap(self):
         a = ir.VarMap()
         a.define(self.var_a, 'foo')

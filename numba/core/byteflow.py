@@ -70,6 +70,7 @@ class Flow(object):
 
     Simulate execution to recover dataflow and controlflow information.
     """
+
     def __init__(self, bytecode):
         _logger.debug("bytecode dump:\n%s", bytecode.dump())
         self._bytecode = bytecode
@@ -265,6 +266,7 @@ class Flow(object):
 class TraceRunner(object):
     """Trace runner contains the states for the trace and the opcode dispatch.
     """
+
     def __init__(self, debug_filename):
         self.debug_filename = debug_filename
         self.pending = deque()
@@ -1189,6 +1191,7 @@ class TraceRunner(object):
 class State(object):
     """State of the trace
     """
+
     def __init__(self, bytecode, pc, nstack, blockstack):
         """
         Parameters
@@ -1471,6 +1474,7 @@ Edge = namedtuple("Edge", ["pc", "stack", "blockstack", "npush"])
 class AdaptDFA(object):
     """Adapt Flow to the old DFA class expected by Interpreter
     """
+
     def __init__(self, flow):
         self._flow = flow
 
@@ -1510,6 +1514,7 @@ def _flatten_inst_regs(iterable):
 class AdaptCFA(object):
     """Adapt Flow to the old CFA class expected by Interpreter
     """
+
     def __init__(self, flow):
         self._flow = flow
         self._blocks = {}

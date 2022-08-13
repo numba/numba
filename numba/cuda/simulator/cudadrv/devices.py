@@ -14,6 +14,7 @@ class FakeCUDAContext:
     This stub implements functionality only for simulating a single GPU
     at the moment.
     '''
+
     def __init__(self, device_id):
         self._device_id = device_id
         self._device = FakeCUDADevice()
@@ -69,6 +70,7 @@ class FakeDeviceList:
     keeps track of the GPU status, i.e. whether the context is closed or not,
     which may have been set by the user calling reset()
     '''
+
     def __init__(self):
         self.lst = (FakeCUDAContext(0),)
         self.closed = False

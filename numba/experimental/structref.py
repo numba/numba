@@ -23,6 +23,7 @@ from numba.core.typing.templates import AttributeTemplate
 class _Utils:
     """Internal builder-code utils for structref definitions.
     """
+
     def __init__(self, context, builder, struct_type):
         """
         Parameters

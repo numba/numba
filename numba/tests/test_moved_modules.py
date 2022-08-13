@@ -6,6 +6,7 @@ from numba.tests.support import TestCase
 class TestMovedModule(TestCase):
     """Testing moved modules in Q1 2020 but were decided to kept as public API
     """
+
     def tests_numba_types(self):
         import numba.types
         import numba.core.types as types

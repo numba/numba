@@ -1281,7 +1281,7 @@ class MixedContainerUnroller(FunctionPass):
         # 3. No multiple mix-tuple use
 
         # keep running the transform loop until it reports no more changes
-        while(True):
+        while (True):
             stat = self.apply_transform(state)
             mutated |= stat
             if not stat:

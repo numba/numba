@@ -76,6 +76,7 @@ class TestOperatorModule(CUDATestCase):
     """
     Test if operator module is supported by the CUDA target.
     """
+
     def operator_template(self, op):
         @cuda.jit
         def foo(a, b):

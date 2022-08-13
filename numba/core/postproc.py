@@ -31,6 +31,7 @@ class VariableLifetime(object):
     """
     For lazily building information of variable lifetime
     """
+
     def __init__(self, blocks):
         self._blocks = blocks
 

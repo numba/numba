@@ -4125,6 +4125,7 @@ def _zero_fill_array_method(tyctx, self):
 @overload_method(types.Array, '_zero_fill')
 def ol_array_zero_fill(self):
     """Adds a `._zero_fill` method to zero fill an array using memset."""
+
     def impl(self):
         _zero_fill_array_method(self)
     return impl

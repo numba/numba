@@ -8,6 +8,7 @@ class _ArgManager(object):
     """
     A utility class to handle argument unboxing and cleanup
     """
+
     def __init__(self, context, builder, api, env_manager, endblk, nargs):
         self.context = context
         self.builder = builder

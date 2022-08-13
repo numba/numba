@@ -31,6 +31,7 @@ class _TestModule(TestCase):
     Note this does not define any "test_*" method, instead check_module()
     should be called by hand.
     """
+
     def check_module(self, mod):
         total_cache_hits = 0
         for fn in [mod.arrayexprs_case, mod.prange_case, mod.caller_case]:

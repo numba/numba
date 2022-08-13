@@ -675,6 +675,7 @@ class _RedirectSubpackage(ModuleType):
 
     >>> from numba.old_subpackage.module import item
     """
+
     def __init__(self, old_module_locals, new_module):
         old_module = old_module_locals['__name__']
         super().__init__(old_module)

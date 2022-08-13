@@ -58,6 +58,7 @@ class Event(object):
     The simulator supports the event API, but they do not record timing info,
     and all simulation is synchronous. Execution time is not recorded.
     '''
+
     def record(self, stream=0):
         pass
 

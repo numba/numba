@@ -62,6 +62,7 @@ def argsnkwargs_to_str(args, kwargs):
 class _ResolutionFailures(object):
     """Collect and format function resolution failures.
     """
+
     def __init__(self, context, function_type, args, kwargs, depth=0):
         self._context = context
         self._function_type = function_type
@@ -480,6 +481,7 @@ class _PickleableWeakRef(weakref.ref):
     Note that if the object referred to is not kept alive elsewhere in the
     pickle, the weakref will immediately expire after being constructed.
     """
+
     def __getnewargs__(self):
         obj = self()
         if obj is None:
@@ -594,6 +596,7 @@ class ExternalFunctionPointer(BaseFunction):
     *get_pointer* is a Python function taking an object
     and returning the raw pointer value as an int.
     """
+
     def __init__(self, sig, get_pointer, cconv=None):
         from numba.core.typing.templates import (AbstractTemplate,
                                                  make_concrete_template,

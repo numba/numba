@@ -97,6 +97,7 @@ class Event:
     exc_details : 3-tuple; optional
         Same 3-tuple for ``__exit__``.
     """
+
     def __init__(self, kind, status, data=None, exc_details=None):
         self._kind = _guard_kind(kind)
         self._status = status
@@ -259,6 +260,7 @@ class TimingListener(Listener):
     """A listener that measures the total time spent between *START* and
     *END* events during the time this listener is active.
     """
+
     def __init__(self):
         self._depth = 0
 
@@ -299,6 +301,7 @@ class RecordingListener(Listener):
     is the time the event occurred as returned by ``time.time()`` and the second
     element is the event.
     """
+
     def __init__(self):
         self.buffer = []
 

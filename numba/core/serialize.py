@@ -234,6 +234,7 @@ class PickleCallableByPath:
     >>> wrapped_fn = PickleCallableByPath(my_fn)
     >>> # refer to `wrapped_fn` instead of `my_fn`
     """
+
     def __init__(self, fn):
         self._fn = fn
 

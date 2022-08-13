@@ -225,6 +225,7 @@ class ValueStructProxy(_StructProxy):
     Create a StructProxy suitable for accessing regular values
     (e.g. LLVM values or alloca slots).
     """
+
     def _get_be_type(self, datamodel):
         return datamodel.get_value_type()
 
@@ -239,6 +240,7 @@ class DataStructProxy(_StructProxy):
     """
     Create a StructProxy suitable for accessing data persisted in memory.
     """
+
     def _get_be_type(self, datamodel):
         return datamodel.get_data_type()
 

@@ -11,6 +11,7 @@ class TestCudaLineInfo(CUDATestCase):
     """
     These tests only check the compiled PTX for line mappings
     """
+
     def _getasm(self, fn, sig):
         fn.compile(sig)
         return fn.inspect_asm(sig)

@@ -522,6 +522,7 @@ class SentryLiteralArgs(collections.namedtuple(
 
     >>> sentry_literal_args(pysig, literal_args, args, kwargs)
     """
+
     def for_function(self, func):
         """Bind the sentry to the signature of *func*.
 
@@ -559,6 +560,7 @@ class BoundLiteralArgs(collections.namedtuple(
     """
     This class is usually created by SentryLiteralArgs.
     """
+
     def bind(self, *args, **kwargs):
         """Bind to argument types.
         """

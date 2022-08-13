@@ -32,6 +32,7 @@ def typeof_function_type(val, c):
 class FunctionProtoModel(models.PrimitiveModel):
     """FunctionProtoModel describes the signatures of first-class functions
     """
+
     def __init__(self, dmm, fe_type):
         if isinstance(fe_type, FunctionType):
             ftype = fe_type.ftype
@@ -50,6 +51,7 @@ class FunctionProtoModel(models.PrimitiveModel):
 class FunctionModel(models.StructModel):
     """FunctionModel holds addresses of function implementations
     """
+
     def __init__(self, dmm, fe_type):
         members = [
             # address of cfunc wrapper function:

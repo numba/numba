@@ -22,6 +22,7 @@ class Dict(object):
     """A wrapper around the C-API to provide a minimal dictionary object for
     testing.
     """
+
     def __init__(self, tc, keysize, valsize):
         """
         Parameters
@@ -162,6 +163,7 @@ class DictIter(object):
     Only the `.items()` is needed.  `.keys` and `.values` can be trivially
     implemented on the `.items` iterator.
     """
+
     def __init__(self, parent):
         self.parent = parent
         itsize = self.parent.tc.numba_dict_iter_sizeof()
@@ -186,6 +188,7 @@ class DictIter(object):
 class Parametrized(tuple):
     """supporting type for TestDictImpl.test_parametrized_types
     needs to be global to be cacheable"""
+
     def __init__(self, tup):
         assert all(isinstance(v, str) for v in tup)
 

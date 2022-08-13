@@ -400,6 +400,7 @@ class DeviceRecord(DeviceNDArrayBase):
     '''
     An on-GPU record type
     '''
+
     def __init__(self, dtype, stream=0, gpu_data=None):
         shape = ()
         strides = ()
@@ -547,6 +548,7 @@ class DeviceNDArray(DeviceNDArrayBase):
     '''
     An on-GPU array type
     '''
+
     def is_f_contiguous(self):
         '''
         Return true if the array is Fortran-contiguous.
@@ -746,6 +748,7 @@ class IpcArrayHandle(object):
             some_code(ipc_array)
         # ipc_array is dead at this point
     """
+
     def __init__(self, ipc_handle, array_desc):
         self._array_desc = array_desc
         self._ipc_handle = ipc_handle

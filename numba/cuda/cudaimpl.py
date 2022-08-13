@@ -307,8 +307,8 @@ def ptx_shfl_sync_i32(context, builder, sig, args):
     lmod = builder.module
     fnty = ir.FunctionType(
         ir.LiteralStructType((ir.IntType(32), ir.IntType(1))),
-                            (ir.IntType(32), ir.IntType(32), ir.IntType(32),
-                             ir.IntType(32), ir.IntType(32))
+        (ir.IntType(32), ir.IntType(32), ir.IntType(32),
+         ir.IntType(32), ir.IntType(32))
     )
     func = cgutils.get_or_insert_function(lmod, fnty, fname)
     if value_type.bitwidth == 32:

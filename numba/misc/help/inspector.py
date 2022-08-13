@@ -103,6 +103,7 @@ def inspect_module(module, target=None, alias=None):
 
 class _Stat(object):
     """For gathering simple statistic of (un)supported functions"""
+
     def __init__(self):
         self.supported = 0
         self.unsupported = 0
@@ -202,6 +203,7 @@ def list_modules_in_package(package, module_filters=_default_module_filters):
 class Formatter(object):
     """Base class for formatters.
     """
+
     def __init__(self, fileobj):
         self._fileobj = fileobj
 
@@ -276,6 +278,7 @@ class HTMLFormatter(Formatter):
 class ReSTFormatter(Formatter):
     """Formatter that output ReSTructured text format for Sphinx docs.
     """
+
     def escape(self, text):
         return text
 

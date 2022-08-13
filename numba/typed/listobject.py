@@ -1134,7 +1134,7 @@ def impl_insert(l, index, item):
                 l.append(l[0])
                 # reverse iterate over the list and shift all elements
                 i = len(l) - 1
-                while(i > index):
+                while (i > index):
                     l[i] = l[i - 1]
                     i -= 1
                 # finally, insert the item

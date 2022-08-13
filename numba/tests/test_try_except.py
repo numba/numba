@@ -28,6 +28,7 @@ class TestTryBareExcept(TestCase):
         except:
             <handling>
     """
+
     def test_try_inner_raise(self):
         @njit
         def inner(x):

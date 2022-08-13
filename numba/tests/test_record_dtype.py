@@ -1217,6 +1217,7 @@ class TestRecordArraySetItem(unittest.TestCase):
     """
     Test setitem when index is Literal[str]
     """
+
     def test_literal_variable(self):
         arr = np.array([1, 2], dtype=recordtype2)
         pyfunc = set_field1

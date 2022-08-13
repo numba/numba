@@ -368,7 +368,7 @@ def ufunc_find_matching_loop(ufunc, arg_types):
     # Separate logical input from explicit output arguments
     input_types = arg_types[:ufunc.nin]
     output_types = arg_types[ufunc.nin:]
-    assert(len(input_types) == ufunc.nin)
+    assert (len(input_types) == ufunc.nin)
 
     try:
         np_input_types = [as_dtype(x) for x in input_types]

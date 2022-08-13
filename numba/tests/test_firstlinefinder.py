@@ -26,7 +26,7 @@ class TestFirstLineFinder(TestCase):
     def test_decorated_odd_comment_indent(self):
         @njit
         def foo():
-# NOTE: THIS COMMENT MUST START AT COLUMN 0 FOR THIS SAMPLE CODE TO BE VALID # noqa: E115, E501
+            # NOTE: THIS COMMENT MUST START AT COLUMN 0 FOR THIS SAMPLE CODE TO BE VALID # noqa: E115, E501
             return 1
 
         first_def_line = get_func_body_first_lineno(foo)
@@ -34,7 +34,7 @@ class TestFirstLineFinder(TestCase):
 
     def test_undecorated_odd_comment_indent(self):
         def foo():
-# NOTE: THIS COMMENT MUST START AT COLUMN 0 FOR THIS SAMPLE CODE TO BE VALID # noqa: E115, E501
+            # NOTE: THIS COMMENT MUST START AT COLUMN 0 FOR THIS SAMPLE CODE TO BE VALID # noqa: E115, E501
             return 1
 
         first_def_line = get_func_body_first_lineno(njit(foo))

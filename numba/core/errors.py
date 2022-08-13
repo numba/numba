@@ -88,6 +88,7 @@ class NumbaPedanticWarning(NumbaWarning):
     """
     Warning category for reporting pedantic messages.
     """
+
     def __init__(self, msg, **kwargs):
         super().__init__(f"{msg}\n{pedantic_warning_info}")
 
@@ -685,6 +686,7 @@ class InternalTargetMismatchError(InternalError):
     """For signalling a target mismatch error occurred internally within the
     compiler.
     """
+
     def __init__(self, kind, target_hw, hw_clazz):
         msg = (f"{kind.title()} being resolved on a target from which it does "
                f"not inherit. Local target is {target_hw}, declared "
@@ -708,6 +710,7 @@ class ForceLiteralArg(NumbaError):
     requested_args : frozenset[int]
         requested positions of the arguments.
     """
+
     def __init__(self, arg_indices, fold_arguments=None, loc=None):
         """
         Parameters

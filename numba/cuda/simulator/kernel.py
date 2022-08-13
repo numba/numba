@@ -44,6 +44,7 @@ class FakeOverload:
     '''
     Used only to provide the max_cooperative_grid_blocks method
     '''
+
     def max_cooperative_grid_blocks(self, blockdim):
         # We can only run one block in a cooperative grid because we have no
         # mechanism for synchronization between different blocks
@@ -160,6 +161,7 @@ class BlockThread(threading.Thread):
     '''
     Manages the execution of a function for a single CUDA thread.
     '''
+
     def __init__(self, f, manager, blockIdx, threadIdx, debug):
         if debug:
             def debug_wrapper(*args, **kwargs):
@@ -257,6 +259,7 @@ class BlockManager(object):
     The polling continues until no threads are alive, when execution is
     complete.
     '''
+
     def __init__(self, f, grid_dim, block_dim, debug):
         self._grid_dim = grid_dim
         self._block_dim = block_dim

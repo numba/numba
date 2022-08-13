@@ -46,7 +46,8 @@ class TestCooperativeGroups(CUDATestCase):
 
         # Skip this test if the grid size used in the example is too large for
         # a cooperative launch on the current GPU
-        mb = sequential_rows.overloads[sig].max_cooperative_grid_blocks(blockdim)
+        mb = sequential_rows.overloads[sig].max_cooperative_grid_blocks(
+            blockdim)
         if mb < griddim:
             self.skipTest('Device does not support a large enough coop grid')
 

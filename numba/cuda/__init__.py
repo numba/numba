@@ -9,6 +9,7 @@ else:
 
 from numba.cuda.compiler import compile_ptx, compile_ptx_for_current_device
 
+
 def test(*args, **kwargs):
     if not is_available():
         raise cuda_error()

@@ -171,6 +171,7 @@ def make_callable_template(key, typer, recvr=None):
     """
     Create a callable template with the given key and typer function.
     """
+
     def generic(self):
         return typer
 

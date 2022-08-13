@@ -35,6 +35,7 @@ class TestJitDecorator(TestCase):
     """
     Test the jit and njit decorators
     """
+
     def test_jit_nopython_forceobj(self):
         with self.assertRaises(ValueError) as cm:
             jit(nopython=True, forceobj=True)

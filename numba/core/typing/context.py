@@ -105,6 +105,7 @@ class CallFrame(object):
     """
     A compile-time call frame
     """
+
     def __init__(self, target, typeinfer, func_id, args):
         self.typeinfer = typeinfer
         self.func_id = func_id

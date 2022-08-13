@@ -31,6 +31,7 @@ jit_registry = DelayedRegistry()
 class target_override(object):
     """Context manager to temporarily override the current target with that
        prescribed."""
+
     def __init__(self, name):
         self._orig_target = getattr(_active_context, 'target',
                                     _active_context_default)

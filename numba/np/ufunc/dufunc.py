@@ -55,6 +55,7 @@ def make_dufunc_kernel(_dufunc):
 class DUFuncLowerer(object):
     '''Callable class responsible for lowering calls to a specific DUFunc.
     '''
+
     def __init__(self, dufunc):
         self.kernel = make_dufunc_kernel(dufunc)
         self.libs = []

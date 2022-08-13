@@ -27,7 +27,8 @@ class TestRandom(CUDATestCase):
             for i in range(startz, arr.shape[0], stridez):
                 for j in range(starty, arr.shape[1], stridey):
                     for k in range(startx, arr.shape[2], stridex):
-                        arr[i, j, k] = xoroshiro128p_uniform_float32(rng_states, tid)
+                        arr[i, j, k] = xoroshiro128p_uniform_float32(
+                            rng_states, tid)
 
         # Array dimensions
         X, Y, Z = 701, 900, 719

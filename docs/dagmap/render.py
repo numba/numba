@@ -9,13 +9,13 @@ from jinja2 import Environment, FileSystemLoader
 
 
 Dagmap = collections.namedtuple('Dagmap',
-             ['version', 'meta', 'style', 'tasks'])
+                                ['version', 'meta', 'style', 'tasks'])
 
 
 def parse_yaml(filename):
     with open(filename, 'r') as f:
         contents = yaml.safe_load(f)
-    
+
     meta = contents['meta']
     version = meta['version']
     if version > 1:
@@ -32,11 +32,12 @@ def parse_yaml(filename):
 
 def to_graphviz(dagmap):
     G = graphviz.Digraph(format='svg', engine='neato',
-        graph_attr=dict(bgcolor="#f4f4f4", pad="0.5", overlap="false"),
-        node_attr=dict(width="0.6", style="filled",
-                       fillcolor="#83c6de", color="#83c6de", penwidth="3", label="",
-                       fontname="helvetica Neue Ultra Light", fontsize="28"),
-        edge_attr=dict(color="#616a72", arrowsize="2.0", penwidth="4", fontname="helvetica Neue Ultra Light"))
+                         graph_attr=dict(bgcolor="#f4f4f4",
+                                         pad="0.5", overlap="false"),
+                         node_attr=dict(width="0.6", style="filled",
+                                        fillcolor="#83c6de", color="#83c6de", penwidth="3", label="",
+                                        fontname="helvetica Neue Ultra Light", fontsize="28"),
+                         edge_attr=dict(color="#616a72", arrowsize="2.0", penwidth="4", fontname="helvetica Neue Ultra Light"))
 
     G.node(name='_nothing', label='', style='invis')
 
@@ -59,8 +60,10 @@ def to_graphviz(dagmap):
 def main(argv):
     import argparse
     parser = argparse.ArgumentParser(description='Render Dagmap to Graphviz')
-    parser.add_argument('-o', '--output', required=True, help='output svg filename')
-    parser.add_argument('-t', '--template', default='template.html', help='HTML rendering template')
+    parser.add_argument('-o', '--output', required=True,
+                        help='output svg filename')
+    parser.add_argument('-t', '--template',
+                        default='template.html', help='HTML rendering template')
     parser.add_argument('input', metavar='INPUT', type=str,
                         help='YAML input filename')
 
@@ -70,7 +73,8 @@ def main(argv):
     graph = to_graphviz(dagmap)
     svg = graph.pipe().decode('utf-8')
 
-    template_env = Environment(loader=FileSystemLoader(os.path.dirname(__file__)))
+    template_env = Environment(
+        loader=FileSystemLoader(os.path.dirname(__file__)))
     template = template_env.get_template(args.template)
     html = template.render(svg=json.dumps(svg))
 

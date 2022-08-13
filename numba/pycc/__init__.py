@@ -76,7 +76,8 @@ def main(args=None):
     logger.debug('inputs --> %s', args.inputs)
     decorators.process_input_files(args.inputs)
 
-    compiler = ModuleCompiler(decorators.export_registry, module_name=module_name)
+    compiler = ModuleCompiler(
+        decorators.export_registry, module_name=module_name)
     if args.llvm:
         logger.debug('emit llvm')
         compiler.write_llvm_bitcode(args.output, wrap=args.python)

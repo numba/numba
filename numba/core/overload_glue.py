@@ -230,6 +230,7 @@ class _OverloadWrapper(object):
 class _Gluer:
     """This is a helper class to make sure that each concrete overload has only
     one wrapper as the code relies on the wrapper being a singleton."""
+
     def __init__(self):
         self._registered = dict()
         self._lock = RLock()

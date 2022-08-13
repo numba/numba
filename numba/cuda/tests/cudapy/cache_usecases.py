@@ -17,6 +17,7 @@ class UseCase:
     The return type is inferred from the type of the first argument, unless it
     is explicitly overridden by the ``retty`` kwarg.
     """
+
     def __init__(self, func, retty=None):
         self._func = func
         self._retty = retty

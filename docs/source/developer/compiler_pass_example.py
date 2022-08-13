@@ -75,4 +75,5 @@ def ex_compiler_pass():
 
     assert foo(100) == 132.2
 
+
 ex_compiler_pass()

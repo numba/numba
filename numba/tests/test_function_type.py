@@ -65,6 +65,7 @@ class WAP(types.WrapperAddressProtocol):
     """An example implementation of wrapper address protocol.
 
     """
+
     def __init__(self, func, sig):
         self.pyfunc = func
         self.cfunc = cfunc(sig)(func)
