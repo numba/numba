@@ -34,8 +34,8 @@ from numba.extending import (overload_method, register_model,
 from numba.core.registry import cpu_target
 from numba.core.annotations import type_annotations
 from numba.core.ir_utils import (find_callname, guard, build_definitions,
-                            get_definition, is_getitem, is_setitem,
-                            index_var_of_get_setitem)
+                                 get_definition, is_getitem, is_setitem,
+                                 index_var_of_get_setitem)
 from numba.np.unsafe.ndarray import empty_inferred as unsafe_empty
 from numba.core.bytecode import ByteCodeIter
 from numba.core.compiler import (compile_isolated, Flags, CompilerBase,
@@ -43,10 +43,10 @@ from numba.core.compiler import (compile_isolated, Flags, CompilerBase,
 from numba.core.compiler_machinery import register_pass, AnalysisPass
 from numba.core.typed_passes import IRLegalization
 from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
-                      override_env_config, linux_only, tag,
-                      skip_parfors_unsupported, _32bit, needs_blas,
-                      needs_lapack, disabled_test, skip_unless_scipy,
-                      needs_subprocess)
+                                 override_env_config, linux_only, tag,
+                                 skip_parfors_unsupported, _32bit, needs_blas,
+                                 needs_lapack, disabled_test, skip_unless_scipy,
+                                 needs_subprocess)
 from numba.core.extending import register_jitable
 import cmath
 import unittest
@@ -74,6 +74,7 @@ class TestParforsRunner(TestCase):
     is: `test_<TestClass>` where <TestClass> is the name of the test class in
     this module.
     """
+
     def runner(self):
         themod = self.__module__
         test_clazz_name = self.id().split('.')[-1].split('_')[-1]
@@ -122,12 +123,14 @@ class TestParforsRunner(TestCase):
         self.runner()
 
 
-x86_only = unittest.skipIf(platform.machine() not in ('i386', 'x86_64'), 'x86 only test')
+x86_only = unittest.skipIf(platform.machine() not in (
+    'i386', 'x86_64'), 'x86 only test')
 
 _GLOBAL_INT_FOR_TESTING1 = 17
 _GLOBAL_INT_FOR_TESTING2 = 5
 
 TestNamedTuple = namedtuple('TestNamedTuple', ('part0', 'part1'))
+
 
 def null_comparer(a, b):
     """
@@ -261,9 +264,9 @@ class TestParforsBase(TestCase):
             np.testing.assert_almost_equal(parfor_output, py_expected, **kwargs)
             self.assertEqual(type(njit_output), type(parfor_output))
         else:
-            assert(len(py_args) == len(check_args_for_equality))
+            assert (len(py_args) == len(check_args_for_equality))
             for pyarg, njitarg, parforarg, argcomp in zip(
-                py_args, njit_args, parfor_args, check_args_for_equality):
+                    py_args, njit_args, parfor_args, check_args_for_equality):
                 argcomp(njitarg, pyarg, **kwargs)
                 argcomp(parforarg, pyarg, **kwargs)
 
@@ -272,7 +275,8 @@ class TestParforsBase(TestCase):
 
         # if requested check fastmath variant
         if fastmath_pcres is not None:
-            parfor_fastmath_output = fastmath_pcres.entry_point(*copy_args(*args))
+            parfor_fastmath_output = fastmath_pcres.entry_point(
+                *copy_args(*args))
             np.testing.assert_almost_equal(parfor_fastmath_output, py_expected,
                                            **kwargs)
 
@@ -384,6 +388,7 @@ class TestParforsBase(TestCase):
          cres - a CompileResult from `njit(parallel=True, ...)`
         """
         tm = cres.library._codegen._tm
+
         def emit_asm(mod):
             return str(tm.emit_assembly(mod))
         return self._get_gufunc_info(cres, emit_asm)
@@ -449,19 +454,21 @@ def lr_impl(Y, X, w, iterations):
         w -= np.dot(((1.0 / (1.0 + np.exp(-Y * np.dot(X, w))) - 1.0) * Y), X)
     return w
 
+
 def example_kmeans_test(A, numCenter, numIter, init_centroids):
     centroids = init_centroids
     N, D = A.shape
 
     for l in range(numIter):
-        dist = np.array([[sqrt(np.sum((A[i,:]-centroids[j,:])**2))
-                                for j in range(numCenter)] for i in range(N)])
+        dist = np.array([[sqrt(np.sum((A[i,:] - centroids[j,:])**2))
+                          for j in range(numCenter)] for i in range(N)])
         labels = np.array([dist[i,:].argmin() for i in range(N)])
 
-        centroids = np.array([[np.sum(A[labels==i, j])/np.sum(labels==i)
-                                 for j in range(D)] for i in range(numCenter)])
+        centroids = np.array([[np.sum(A[labels == i, j]) / np.sum(labels == i)
+                               for j in range(D)] for i in range(numCenter)])
 
     return centroids
+
 
 def get_optimized_numba_ir(test_func, args, **kws):
     typingctx = typing.Context()
@@ -486,8 +493,8 @@ def get_optimized_numba_ir(test_func, args, **kws):
         rewrites.rewrite_registry.apply('before-inference', tp.state)
 
         tp.state.typemap, tp.state.return_type, tp.state.calltypes, _ = \
-        typed_passes.type_inference_stage(tp.state.typingctx,
-            tp.state.targetctx, tp.state.func_ir, tp.state.args, None)
+            typed_passes.type_inference_stage(tp.state.typingctx,
+                                              tp.state.targetctx, tp.state.func_ir, tp.state.args, None)
 
         type_annotations.TypeAnnotation(
             func_ir=tp.state.func_ir,
@@ -519,6 +526,7 @@ def get_optimized_numba_ir(test_func, args, **kws):
 
     return test_ir, tp
 
+
 def countParfors(test_func, args, **kws):
     test_ir, tp = get_optimized_numba_ir(test_func, args, **kws)
     ret_count = 0
@@ -535,6 +543,7 @@ def countArrays(test_func, args, **kws):
     test_ir, tp = get_optimized_numba_ir(test_func, args, **kws)
     return _count_arrays_inner(test_ir.blocks, tp.state.typemap)
 
+
 def get_init_block_size(test_func, args, **kws):
     test_ir, tp = get_optimized_numba_ir(test_func, args, **kws)
     blocks = test_ir.blocks
@@ -548,6 +557,7 @@ def get_init_block_size(test_func, args, **kws):
 
     return ret_count
 
+
 def _count_arrays_inner(blocks, typemap):
     ret_count = 0
     arr_set = set()
@@ -560,11 +570,12 @@ def _count_arrays_inner(blocks, typemap):
                 ret_count += _count_arrays_inner(parfor_blocks, typemap)
             if (isinstance(inst, ir.Assign)
                     and isinstance(typemap[inst.target.name],
-                                    types.ArrayCompatible)):
+                                   types.ArrayCompatible)):
                 arr_set.add(inst.target.name)
 
     ret_count += len(arr_set)
     return ret_count
+
 
 def countArrayAllocs(test_func, args, **kws):
     test_ir, tp = get_optimized_numba_ir(test_func, args, **kws)
@@ -574,6 +585,7 @@ def countArrayAllocs(test_func, args, **kws):
         ret_count += _count_array_allocs_inner(test_ir, block)
 
     return ret_count
+
 
 def _count_array_allocs_inner(func_ir, block):
     ret_count = 0
@@ -586,16 +598,18 @@ def _count_array_allocs_inner(func_ir, block):
         if (isinstance(inst, ir.Assign) and isinstance(inst.value, ir.Expr)
                 and inst.value.op == 'call'
                 and (guard(find_callname, func_ir, inst.value) == ('empty', 'numpy')
-                or guard(find_callname, func_ir, inst.value)
-                    == ('empty_inferred', 'numba.np.unsafe.ndarray'))):
+                     or guard(find_callname, func_ir, inst.value)
+                     == ('empty_inferred', 'numba.np.unsafe.ndarray'))):
             ret_count += 1
 
     return ret_count
+
 
 def countNonParforArrayAccesses(test_func, args, **kws):
     test_ir, tp = get_optimized_numba_ir(test_func, args, **kws)
     return _count_non_parfor_array_accesses_inner(test_ir, test_ir.blocks,
                                                   tp.state.typemap)
+
 
 def _count_non_parfor_array_accesses_inner(f_ir, blocks, typemap, parfor_indices=None):
     ret_count = 0
@@ -613,13 +627,13 @@ def _count_non_parfor_array_accesses_inner(f_ir, blocks, typemap, parfor_indices
 
             # getitem
             elif (is_getitem(stmt) and isinstance(typemap[stmt.value.value.name],
-                        types.ArrayCompatible) and not _uses_indices(
-                        f_ir, index_var_of_get_setitem(stmt), parfor_indices)):
+                                                  types.ArrayCompatible) and not _uses_indices(
+                    f_ir, index_var_of_get_setitem(stmt), parfor_indices)):
                 ret_count += 1
 
             # setitem
             elif (is_setitem(stmt) and isinstance(typemap[stmt.target.name],
-                    types.ArrayCompatible) and not _uses_indices(
+                                                  types.ArrayCompatible) and not _uses_indices(
                     f_ir, index_var_of_get_setitem(stmt), parfor_indices)):
                 ret_count += 1
 
@@ -630,6 +644,7 @@ def _count_non_parfor_array_accesses_inner(f_ir, blocks, typemap, parfor_indices
                 parfor_indices.add(stmt.target.name)
 
     return ret_count
+
 
 def _uses_indices(f_ir, index, index_set):
     if index.name in index_set:
@@ -862,7 +877,7 @@ class TestParforNumericalMisc(TestParforsBase):
         A = np.random.ranf((N, D))
         init_centroids = np.random.ranf((centers, D))
         self.check(example_kmeans_test, A, centers, 3, init_centroids,
-                                                                    decimal=1)
+                   decimal=1)
         # TODO: count parfors after k-means fusion is working
         # requires recursive parfor counting
         arg_typs = (types.Array(types.float64, 2, 'C'), types.intp, types.intp,
@@ -907,9 +922,11 @@ class TestParforNumPy(TestParforsBase):
         def test_impl1(n):
             return np.arange(n)
         # start and stop
+
         def test_impl2(s, n):
             return np.arange(n)
         # start, step, stop
+
         def test_impl3(s, n, t):
             return np.arange(s, n, t)
 
@@ -923,6 +940,7 @@ class TestParforNumPy(TestParforsBase):
         def test_impl1(start, stop):
             return np.linspace(start, stop)
         # with num
+
         def test_impl2(start, stop, num):
             return np.linspace(start, stop, num)
 
@@ -938,8 +956,10 @@ class TestParforNumPy(TestParforsBase):
         B = np.random.randint(10, size=(N, 3))
         self.check(test_impl, A)
         self.check(test_impl, B)
-        self.assertEqual(countParfors(test_impl, (types.Array(types.float64, 1, 'C'), )), 1)
-        self.assertEqual(countParfors(test_impl, (types.Array(types.float64, 2, 'C'), )), 1)
+        self.assertEqual(countParfors(
+            test_impl, (types.Array(types.float64, 1, 'C'), )), 1)
+        self.assertEqual(countParfors(
+            test_impl, (types.Array(types.float64, 2, 'C'), )), 1)
 
         # Test variants
         data_gen = lambda: self.gen_linspace_variants(1)
@@ -956,8 +976,10 @@ class TestParforNumPy(TestParforsBase):
         self.check(test_impl, A)
         self.check(test_impl, B)
         self.check(test_impl, C)
-        self.assertEqual(countParfors(test_impl, (types.Array(types.float64, 1, 'C'), )), 2)
-        self.assertEqual(countParfors(test_impl, (types.Array(types.float64, 2, 'C'), )), 2)
+        self.assertEqual(countParfors(
+            test_impl, (types.Array(types.float64, 1, 'C'), )), 2)
+        self.assertEqual(countParfors(
+            test_impl, (types.Array(types.float64, 2, 'C'), )), 2)
 
         # Test variants
         data_gen = lambda: self.gen_linspace_variants(1)
@@ -1001,7 +1023,7 @@ class TestParforNumPy(TestParforsBase):
             D = np.random.chisquare(1.0, (n, n))
             E = np.random.randint(1, high=3, size=(n, n))
             F = np.random.triangular(1, 2, 3, (n, n))
-            return np.sum(A+B+C+D+E+F)
+            return np.sum(A + B + C + D + E + F)
 
         n = 128
         cpfunc = self.compile_parallel(test_impl, (numba.typeof(n),))
@@ -1205,7 +1227,7 @@ class TestParforNumPy(TestParforsBase):
             return result_matrix
 
         a = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0,
-                   7.0, 8.0, 9.0, 10.0, 11.0, 12.0])
+                      7.0, 8.0, 9.0, 10.0, 11.0, 12.0])
         b = 3
 
         self.check(test_impl, a, b)
@@ -1223,7 +1245,7 @@ class TestParforNumPy(TestParforsBase):
             return result_matrix
 
         a = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0,
-                   7.0, 8.0, 9.0, 10.0, 11.0, 12.0])
+                      7.0, 8.0, 9.0, 10.0, 11.0, 12.0])
         b = 3
 
         self.check(test_impl, a, b)
@@ -1243,7 +1265,7 @@ class TestParforNumPy(TestParforsBase):
                 return rm
 
             a = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0,
-                       7.0, 8.0, 9.0, 10.0, 11.0, 12.0])
+                          7.0, 8.0, 9.0, 10.0, 11.0, 12.0])
             b = 3
             test_impl(a, b)
 
@@ -1287,6 +1309,7 @@ class TestParforsUnsupported(TestCase):
                "hardware")
         self.assertIn(msg, str(raised.exception))
 
+
 @skip_parfors_unsupported
 class TestParfors(TestParforsBase):
     """ Tests cpython, reduction and various parfors features"""
@@ -1329,6 +1352,7 @@ class TestParfors(TestParforsBase):
 
     def test_np_func_direct_import(self):
         from numpy import ones  # import here becomes FreeVar
+
         def test_impl(n):
             A = ones(n)
             return A[0]
@@ -1352,7 +1376,7 @@ class TestParfors(TestParforsBase):
         # from issue #2477
         def test_impl(x, is_positive, N):
             for i in numba.prange(2):
-                for j in range( i*N//2, (i+1)*N//2 ):
+                for j in range( i * N // 2, (i + 1) * N // 2 ):
                     is_positive[j] = 0
                     if x[j] > 0:
                         is_positive[j] = 1
@@ -1385,22 +1409,23 @@ class TestParfors(TestParforsBase):
         # test checking reduction over bitarray masked arrays
         n = 160
         A = np.random.randint(10, size=n).astype(np.int32)
+
         def test_impl(A):
-            return np.sum(A[A>=3])
+            return np.sum(A[A >= 3])
         self.check(test_impl, A)
         # TODO: this should fuse
         # self.assertTrue(countParfors(test_impl, (numba.float64[:],)) == 1)
 
         def test_impl(A):
             B = A[:,0]
-            return np.sum(A[B>=3,1])
+            return np.sum(A[B >= 3,1])
         self.check(test_impl, A.reshape((16,10)))
         # TODO: this should also fuse
         #self.assertTrue(countParfors(test_impl, (numba.float64[:,:],)) == 1)
 
         def test_impl(A):
             B = A[:,0]
-            return np.sum(A[B>=3,1:2])
+            return np.sum(A[B >= 3,1:2])
         self.check(test_impl, A.reshape((16,10)))
         # this doesn't fuse due to mixed indices
         self.assertEqual(countParfors(test_impl, (numba.float64[:,:],)), 2)
@@ -1476,7 +1501,8 @@ class TestParfors(TestParforsBase):
 
         n = 211
         self.check(test_impl, n)
-        self.assertEqual(countNonParforArrayAccesses(test_impl, (types.intp,)), 0)
+        self.assertEqual(countNonParforArrayAccesses(
+            test_impl, (types.intp,)), 0)
 
     def test_parfor_array_access3(self):
         def test_impl(n):
@@ -1484,7 +1510,7 @@ class TestParfors(TestParforsBase):
             m = 0
             for i in numba.prange(len(A)):
                 m += A[i]
-                if m==2:
+                if m == 2:
                     i = m
 
         n = 211
@@ -1552,7 +1578,8 @@ class TestParfors(TestParforsBase):
 
         n = 211
         self.check(test_impl, n)
-        self.assertEqual(countNonParforArrayAccesses(test_impl, (types.intp,)), 0)
+        self.assertEqual(countNonParforArrayAccesses(
+            test_impl, (types.intp,)), 0)
 
     @disabled_test # Test itself is problematic, see #3155
     def test_parfor_hoist_setitem(self):
@@ -1580,7 +1607,8 @@ class TestParfors(TestParforsBase):
         n = 211
         d = 3
         self.check(test_impl, n, d)
-        self.assertEqual(countArrayAllocs(test_impl, (types.intp, types.intp)), 4)
+        self.assertEqual(countArrayAllocs(
+            test_impl, (types.intp, types.intp)), 4)
         self.assertEqual(countParfors(test_impl, (types.intp, types.intp)), 4)
 
     def test_ufunc_expr(self):
@@ -1774,7 +1802,7 @@ class TestParfors(TestParforsBase):
             parr = x[0:size]
 
             if half:
-                parr = x[0:size//2]
+                parr = x[0:size // 2]
 
             return parr.sum()
         x = np.ones(20)
@@ -1795,8 +1823,8 @@ class TestParfors(TestParforsBase):
 
         self.check(test_impl, x, y)
         self.assertEqual(countParfors(test_impl,
-                                    (types.Array(types.float64, 1, 'C'),
-                                     types.Array(types.float64, 1, 'C'))), 1)
+                                      (types.Array(types.float64, 1, 'C'),
+                                       types.Array(types.float64, 1, 'C'))), 1)
 
     def test_tuple1(self):
         def test_impl(a):
@@ -1844,6 +1872,7 @@ class TestParfors(TestParforsBase):
 
     def test_namedtuple2(self):
         TestNamedTuple2 = namedtuple('TestNamedTuple2', ('part0', 'part1'))
+
         def test_impl(a):
             antup = TestNamedTuple2(part0=3, part1=4)
             b = 7
@@ -1877,8 +1906,8 @@ class TestParfors(TestParforsBase):
         Y = np.arange(10) + 100
         self.check(test_impl, X, Y)
         self.assertEqual(countParfors(test_impl,
-                                    (types.Array(types.float64, 1, 'C'),
-                                     types.Array(types.float64, 1, 'C'))), 1)
+                                      (types.Array(types.float64, 1, 'C'),
+                                       types.Array(types.float64, 1, 'C'))), 1)
 
     def test_tuple_concat(self):
         # issue5383
@@ -2181,6 +2210,7 @@ class TestParfors(TestParforsBase):
 
         self.check(test_impl, np.zeros((3, 1)))
 
+
 @skip_parfors_unsupported
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
@@ -2215,7 +2245,7 @@ class TestParforsSlice(TestParforsBase):
     def test_parfor_slice1(self):
         def test_impl(a):
             (n,) = a.shape
-            b = a[0:n-2] + a[1:n-1]
+            b = a[0:n - 2] + a[1:n - 1]
             return b
 
         self.check(test_impl, np.ones(10))
@@ -2223,7 +2253,7 @@ class TestParforsSlice(TestParforsBase):
     def test_parfor_slice2(self):
         def test_impl(a, m):
             (n,) = a.shape
-            b = a[0:n-2] + a[1:m]
+            b = a[0:n - 2] + a[1:m]
             return b
 
         # runtime assertion should succeed
@@ -2236,7 +2266,7 @@ class TestParforsSlice(TestParforsBase):
     def test_parfor_slice3(self):
         def test_impl(a):
             (m,n) = a.shape
-            b = a[0:m-1,0:n-1] + a[1:m,1:n]
+            b = a[0:m - 1,0:n - 1] + a[1:m,1:n]
             return b
 
         self.check(test_impl, np.ones((4,3)))
@@ -2244,7 +2274,7 @@ class TestParforsSlice(TestParforsBase):
     def test_parfor_slice4(self):
         def test_impl(a):
             (m,n) = a.shape
-            b = a[:,0:n-1] + a[:,1:n]
+            b = a[:,0:n - 1] + a[:,1:n]
             return b
 
         self.check(test_impl, np.ones((4,3)))
@@ -2252,7 +2282,7 @@ class TestParforsSlice(TestParforsBase):
     def test_parfor_slice5(self):
         def test_impl(a):
             (m,n) = a.shape
-            b = a[0:m-1,:] + a[1:m,:]
+            b = a[0:m - 1,:] + a[1:m,:]
             return b
 
         self.check(test_impl, np.ones((4,3)))
@@ -2331,7 +2361,7 @@ class TestParforsSlice(TestParforsBase):
             (m,n) = a.shape
             b = a.copy()
             c = -1
-            b[1,1:c] = a[0,-n:c-1]
+            b[1,1:c] = a[0,-n:c - 1]
             return b
 
         self.check(test_impl, np.arange(12).reshape((3,4)))
@@ -2349,7 +2379,7 @@ class TestParforsSlice(TestParforsBase):
         def test_impl(a):
             (m,n) = a.shape
             b = a.copy()
-            b[1,-(n-1):] = a[0,-3:4]
+            b[1,-(n - 1):] = a[0,-3:4]
             return b
 
         self.check(test_impl, np.arange(12).reshape((3,4)))
@@ -2361,9 +2391,9 @@ class TestParforsSlice(TestParforsBase):
             slices will in fact be of different sizes and unable to fuse.
         """
         def test_impl(a, b, n):
-            assert(a.shape == b.shape)
+            assert (a.shape == b.shape)
             a[1:n] = 10
-            b[0:(n-1)] = 10
+            b[0:(n - 1)] = 10
             return a * b
 
         self.check(test_impl, np.ones(10), np.zeros(10), 8)
@@ -2460,7 +2490,7 @@ class TestParforsSlice(TestParforsBase):
         def test_impl(a):
             (n,) = a.shape
             b = a.copy()
-            b[-(n-1):] = a[-3:4]
+            b[-(n - 1):] = a[-3:4]
             return b
 
         self.check(test_impl, np.arange(4))
@@ -2518,7 +2548,7 @@ class TestParforsOptions(TestParforsBase):
             b[:n] = a + b * c
             for i in prange(n):
                 c[i] = b[i] * a[i]
-            return reduce(lambda x,y:x+y, c, 0)
+            return reduce(lambda x,y:x + y, c, 0)
 
         self.check(test_impl, np.ones(10))
         args = (numba.float64[:],)
@@ -2532,10 +2562,10 @@ class TestParforsOptions(TestParforsBase):
         #with no fusion, comprehension, setitem
         self.assertEqual(countParfors(test_impl, args, fusion=False,
                          comprehension=False, setitem=False), 4)
-         # with no fusion, comprehension, prange
+        # with no fusion, comprehension, prange
         self.assertEqual(countParfors(test_impl, args, fusion=False,
                          comprehension=False, setitem=False, prange=False), 3)
-         # with no fusion, comprehension, prange, reduction
+        # with no fusion, comprehension, prange, reduction
         self.assertEqual(countParfors(test_impl, args, fusion=False,
                          comprehension=False, setitem=False, prange=False,
                          reduction=False), 2)
@@ -2612,6 +2642,7 @@ class TestParforsMisc(TestParforsBase):
     """
     Tests miscellaneous parts of ParallelAccelerator use.
     """
+
     def test_no_warn_if_cache_set(self):
 
         def pyfunc():
@@ -2725,7 +2756,6 @@ class TestParforsMisc(TestParforsBase):
                             stmt.races = Broken()
                     return True
 
-
         class BreakParforsCompiler(CompilerBase):
 
             def define_pipelines(self):
@@ -2733,7 +2763,6 @@ class TestParforsMisc(TestParforsBase):
                 pm.add_pass_after(BreakParfors, IRLegalization)
                 pm.finalize()
                 return [pm]
-
 
         @njit(parallel=True, pipeline_class=BreakParforsCompiler)
         def foo():
@@ -2975,7 +3004,7 @@ class TestParforsMisc(TestParforsBase):
             gs = gg.shape
             d = gs[0]
             for i_gg in prange(d):
-                gg_next[i_gg, :]  = gg[i_gg, :]
+                gg_next[i_gg, :] = gg[i_gg, :]
                 gg_next[i_gg, 0] += 1
 
             return gg_next
@@ -2983,20 +3012,20 @@ class TestParforsMisc(TestParforsBase):
         d = 4
         k = 2
 
-        gg      = np.zeros((d, k), dtype = np.int32)
-        gg_next = np.zeros((d, k), dtype = np.int32)
+        gg = np.zeros((d, k), dtype=np.int32)
+        gg_next = np.zeros((d, k), dtype=np.int32)
         self.check(test_impl, gg, gg_next)
 
     def test_issue5942_2(self):
         # issue5942: tests statement reordering
         def test_impl(d, k):
-            gg      = np.zeros((d, k), dtype = np.int32)
-            gg_next = np.zeros((d, k), dtype = np.int32)
+            gg = np.zeros((d, k), dtype=np.int32)
+            gg_next = np.zeros((d, k), dtype=np.int32)
 
             for i_gg in prange(d):
                 for n in range(k):
                     gg[i_gg, n] = i_gg
-                gg_next[i_gg, :]  = gg[i_gg, :]
+                gg_next[i_gg, :] = gg[i_gg, :]
                 gg_next[i_gg, 0] += 1
 
             return gg_next
@@ -3047,8 +3076,10 @@ class TestParforsMisc(TestParforsBase):
     def test_issue4963_freevars(self):
         _FREEVAR_INT_FOR_TESTING1 = 17
         _FREEVAR_INT_FOR_TESTING2 = 5
+
         def test_impl():
-            buf = np.zeros((_FREEVAR_INT_FOR_TESTING1, _FREEVAR_INT_FOR_TESTING2))
+            buf = np.zeros((_FREEVAR_INT_FOR_TESTING1,
+                           _FREEVAR_INT_FOR_TESTING2))
             return buf
         self.check(test_impl)
 
@@ -3119,7 +3150,7 @@ class TestParforsDiagnostics(TestParforsBase):
         cpfunc = self.compile_parallel(test_impl, ())
         diagnostics = cpfunc.metadata['parfor_diagnostics']
         self.assert_diagnostics(diagnostics, parfors_count=1,
-                                fusion_info = {3: [4, 5]})
+                                fusion_info={3: [4, 5]})
 
     def test_prange(self):
         def test_impl():
@@ -3183,7 +3214,7 @@ class TestParforsDiagnostics(TestParforsBase):
         diagnostics = cpfunc.metadata['parfor_diagnostics']
         self.assert_diagnostics(diagnostics, parfors_count=1,
                                 fusion_info={2: [3]},
-                                replaced_fns = [('argmin', 'numpy'),])
+                                replaced_fns=[('argmin', 'numpy'),])
 
     def test_reduction(self):
         def test_impl():
@@ -3584,7 +3615,7 @@ class TestPrangeBasic(TestPrangeBase):
         def test_impl(A):
             s = 3
             for i in range(len(A)):
-                s += A[i]*2
+                s += A[i] * 2
             return s
         # this tests reduction detection well since the accumulated variable
         # is initialized before the parfor and the value accessed from the array
@@ -3734,9 +3765,9 @@ class TestPrangeBasic(TestPrangeBase):
     def test_prange27(self):
         # issue5597: usedef error in parfor
         def test_impl(a, b, c):
-            for j in range(b[0]-1):
+            for j in range(b[0] - 1):
                 for k in range(2):
-                    z = np.abs(a[c-1:c+1])
+                    z = np.abs(a[c - 1:c + 1])
             return 0
 
         # patch inner loop to 'prange'
@@ -3972,9 +4003,9 @@ class TestPrangeSpecific(TestPrangeBase):
         def test_impl(n):
             b = np.zeros((n, n))
             for i in range(n):
-              a = b[i]
-              for j in range(n):
-                a[j] = i + j
+                a = b[i]
+                for j in range(n):
+                    a[j] = i + j
             return b.sum()
         self.prange_tester(test_impl, 4)
 
@@ -3982,11 +4013,11 @@ class TestPrangeSpecific(TestPrangeBase):
         def test_impl(n):
             b = np.zeros((n, n, n))
             for i in range(n):
-              a = b[i]
-              for j in range(n):
-                c = a[j]
-                for k in range(n):
-                  c[k] = i + j + k
+                a = b[i]
+                for j in range(n):
+                    c = a[j]
+                    for k in range(n):
+                        c[k] = i + j + k
             return b.sum()
         self.prange_tester(test_impl, 4)
 
@@ -4094,6 +4125,7 @@ class TestPrangeSpecific(TestPrangeBase):
             a = X[-1] + 1
             X.append(a)
             return ret
+
         def test_impl(n):
             for i in prange(n):
                 X = [100]
@@ -4156,7 +4188,7 @@ class TestPrangeSpecific(TestPrangeBase):
                 states[i]['var'] = 1
 
         def comparer(a, b):
-            assert(a[0]['var'] == b[0]['var'])
+            assert (a[0]['var'] == b[0]['var'])
 
         self.prange_tester(test_impl,
                            np.zeros(shape=1, dtype=state_dtype),
@@ -4304,7 +4336,7 @@ class TestParforChunksizing(TestCase):
         # primes, 961 is square of a prime.
         for j in [1000, 997, 943, 961]:
             for i in range(15):
-                res, inner_cs = test_impl(i+1, j)
+                res, inner_cs = test_impl(i + 1, j)
                 self.assertTrue(np.all(res == 13))
                 self.assertTrue(np.all(inner_cs == 0))
 
@@ -4385,7 +4417,8 @@ class TestParforsVectorizer(TestPrangeBase):
             if assertions:
                 schedty = re.compile('call\s+\w+\*\s+@do_scheduling_(\w+)\(')
                 matches = schedty.findall(cres.library.get_llvm_str())
-                self.assertGreaterEqual(len(matches), 1) # at least 1 parfor call
+                # at least 1 parfor call
+                self.assertGreaterEqual(len(matches), 1)
                 self.assertEqual(matches[0], schedule_type)
                 self.assertNotEqual(asm, {})
 
@@ -4522,10 +4555,10 @@ class TestParforsVectorizer(TestPrangeBase):
                 # filter out anything that isn't a trivial instruction
                 # and anything with the gufunc id as it contains an address
                 if spd != '' and not (spd.startswith('.')
-                                     or spd.startswith('_')
-                                     or spd.startswith('"')
-                                     or '__numba_parfor_gufunc' in spd):
-                        acc.append(re.sub('[\t]', '', spd))
+                                      or spd.startswith('_')
+                                      or spd.startswith('"')
+                                      or '__numba_parfor_gufunc' in spd):
+                    acc.append(re.sub('[\t]', '', spd))
             return acc
 
         for k, v in signed_asm.items():
@@ -4556,6 +4589,7 @@ class TestParforsVectorizer(TestPrangeBase):
 class TestParforReductionSetNumThreads(TestCase):
     """Test execution correctness on reductions with set_num_threads.
     """
+
     def test_add(self):
         N = config.NUMBA_NUM_THREADS
         M = 2 * N

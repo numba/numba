@@ -72,7 +72,7 @@ class ListAttribute(AttributeTemplate):
         unified = self.context.unify_pairs(list.dtype, dtype)
         if unified is not None:
             sig = signature(types.none, iterable)
-            sig = sig.replace(recvr = list.copy(dtype=unified))
+            sig = sig.replace(recvr=list.copy(dtype=unified))
             return sig
 
     @bound_function("list.index")
@@ -85,7 +85,7 @@ class ListAttribute(AttributeTemplate):
                 return signature(types.intp, list.dtype, types.intp)
         elif len(args) == 3:
             if (isinstance(args[1], types.Integer)
-                and isinstance(args[2], types.Integer)):
+                    and isinstance(args[2], types.Integer)):
                 return signature(types.intp, list.dtype, types.intp, types.intp)
 
     @bound_function("list.insert")
@@ -96,7 +96,7 @@ class ListAttribute(AttributeTemplate):
             unified = self.context.unify_pairs(list.dtype, item)
             if unified is not None:
                 sig = signature(types.none, types.intp, unified)
-                sig = sig.replace(recvr = list.copy(dtype=unified))
+                sig = sig.replace(recvr=list.copy(dtype=unified))
                 return sig
 
     @bound_function("list.pop")
@@ -158,7 +158,8 @@ class MulList(AbstractTemplate):
 
 
 @infer_global(operator.imul)
-class InplaceMulList(MulList): pass
+class InplaceMulList(MulList):
+    pass
     #key = operator.imul
 
 
@@ -173,26 +174,38 @@ class ListCompare(AbstractTemplate):
             if res is not None:
                 return signature(types.boolean, lhs, rhs)
 
+
 @infer_global(operator.eq)
-class ListEq(ListCompare): pass
+class ListEq(ListCompare):
+    pass
     #key = operator.eq
 
+
 @infer_global(operator.ne)
-class ListNe(ListCompare): pass
+class ListNe(ListCompare):
+    pass
     #key = operator.ne
 
+
 @infer_global(operator.lt)
-class ListLt(ListCompare): pass
+class ListLt(ListCompare):
+    pass
     #key = operator.lt
 
+
 @infer_global(operator.le)
-class ListLe(ListCompare): pass
+class ListLe(ListCompare):
+    pass
     #key = operator.le
 
+
 @infer_global(operator.gt)
-class ListGt(ListCompare): pass
+class ListGt(ListCompare):
+    pass
     #key = operator.gt
 
+
 @infer_global(operator.ge)
-class ListGe(ListCompare): pass
+class ListGe(ListCompare):
+    pass
     #key = operator.ge

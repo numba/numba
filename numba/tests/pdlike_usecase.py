@@ -121,6 +121,7 @@ def typeof_index(val, c):
     assert arrty.ndim == 1
     return IndexType(arrty.dtype, arrty.layout, type(val))
 
+
 @typeof_impl.register(Series)
 def typeof_series(val, c):
     index = typeof_impl(val._index, c)
@@ -128,6 +129,7 @@ def typeof_series(val, c):
     assert arrty.ndim == 1
     assert arrty.layout == 'C'
     return SeriesType(arrty.dtype, index)
+
 
 @type_callable('__array_wrap__')
 def type_array_wrap(context):
@@ -138,6 +140,7 @@ def type_array_wrap(context):
                                    layout=result.layout)
 
     return typer
+
 
 @type_callable(Series)
 def type_series_constructor(context):
@@ -158,40 +161,48 @@ class IndexModel(models.StructModel):
         members = [('data', fe_type.as_array)]
         models.StructModel.__init__(self, dmm, fe_type, members)
 
+
 @register_model(SeriesType)
 class SeriesModel(models.StructModel):
     def __init__(self, dmm, fe_type):
         members = [
             ('index', fe_type.index),
             ('values', fe_type.as_array),
-            ]
+        ]
         models.StructModel.__init__(self, dmm, fe_type, members)
+
 
 make_attribute_wrapper(IndexType, 'data', '_data')
 make_attribute_wrapper(SeriesType, 'index', '_index')
 make_attribute_wrapper(SeriesType, 'values', '_values')
 
+
 def make_index(context, builder, typ, **kwargs):
     return cgutils.create_struct_proxy(typ)(context, builder, **kwargs)
 
+
 def make_series(context, builder, typ, **kwargs):
     return cgutils.create_struct_proxy(typ)(context, builder, **kwargs)
+
 
 @lower_builtin('__array__', IndexType)
 def index_as_array(context, builder, sig, args):
     val = make_index(context, builder, sig.args[0], ref=args[0])
     return val._get_ptr_by_name('data')
 
+
 @lower_builtin('__array__', SeriesType)
 def series_as_array(context, builder, sig, args):
     val = make_series(context, builder, sig.args[0], ref=args[0])
     return val._get_ptr_by_name('values')
+
 
 @lower_builtin('__array_wrap__', IndexType, types.Array)
 def index_wrap_array(context, builder, sig, args):
     dest = make_index(context, builder, sig.return_type)
     dest.data = args[1]
     return impl_ret_borrowed(context, builder, sig.return_type, dest._getvalue())
+
 
 @lower_builtin('__array_wrap__', SeriesType, types.Array)
 def series_wrap_array(context, builder, sig, args):
@@ -200,6 +211,7 @@ def series_wrap_array(context, builder, sig, args):
     dest.values = args[1]
     dest.index = src.index
     return impl_ret_borrowed(context, builder, sig.return_type, dest._getvalue())
+
 
 @lower_builtin(Series, types.Array, IndexType)
 def pdseries_constructor(context, builder, sig, args):
@@ -220,6 +232,7 @@ def unbox_index(typ, obj, c):
     index.data = c.unbox(typ.as_array, data).value
 
     return NativeValue(index._getvalue())
+
 
 @unbox(SeriesType)
 def unbox_series(typ, obj, c):
@@ -246,6 +259,7 @@ def box_index(typ, val, c):
     arrayobj = c.box(typ.as_array, index.data)
     indexobj = c.pyapi.call_function_objargs(classobj, (arrayobj,))
     return indexobj
+
 
 @box(SeriesType)
 def box_series(typ, val, c):
@@ -278,6 +292,7 @@ def index_is_monotonic_increasing(index):
 
     return getter
 
+
 @overload(len)
 def series_len(series):
     """
@@ -287,6 +302,7 @@ def series_len(series):
         def len_impl(series):
             return len(series._values)
         return len_impl
+
 
 @overload_method(SeriesType, 'clip')
 def series_clip(series, lower, upper):

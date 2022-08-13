@@ -63,7 +63,7 @@ def _extract_loop_lifting_candidates(cfg, blocks):
     for loop in find_top_level_loops(cfg):
         _logger.debug("top-level loop: %s", loop)
         if (same_exit_point(loop) and one_entry(loop) and cannot_yield(loop) and
-            cfg.entry_point() not in loop.entries):
+                cfg.entry_point() not in loop.entries):
             candidates.append(loop)
             _logger.debug("add candidate: %s", loop)
     return candidates
@@ -113,7 +113,8 @@ def _loop_lift_get_candidate_infos(cfg, blocks, livemap):
         an_exit = next(iter(loop.exits))  # anyone of the exit block
         if len(loop.exits) > 1:
             # Pre-Py3.8 may have multiple exits
-            [(returnto, _)] = cfg.successors(an_exit)  # requirement checked earlier
+            [(returnto, _)] = cfg.successors(
+                an_exit)  # requirement checked earlier
         else:
             # Post-Py3.8 DO NOT have multiple exits
             returnto = an_exit
@@ -449,7 +450,7 @@ def _get_with_contextmanager(func_ir, blocks, blk_start):
             raise errors.CompilerError(
                 "Undefined variable used as context manager",
                 loc=blocks[blk_start].loc,
-                )
+            )
 
         if ctxobj is None:
             raise errors.CompilerError(_illegal_cm_msg, loc=dfn.loc)
@@ -465,13 +466,13 @@ def _get_with_contextmanager(func_ir, blocks, blk_start):
                 raise errors.CompilerError(
                     "Unsupported context manager in use",
                     loc=blocks[blk_start].loc,
-                    )
+                )
             return ctxobj, extra
     # No contextmanager found?
     raise errors.CompilerError(
         "malformed with-context usage",
         loc=blocks[blk_start].loc,
-        )
+    )
 
 
 def _legalize_with_head(blk):
@@ -486,12 +487,12 @@ def _legalize_with_head(blk):
         raise errors.CompilerError(
             "with's head-block must have exactly 1 ENTER_WITH",
             loc=blk.loc,
-            )
+        )
     if counters.pop(ir.Jump) != 1:
         raise errors.CompilerError(
             "with's head-block must have exactly 1 JUMP",
             loc=blk.loc,
-            )
+        )
     # Can have any number of del
     counters.pop(ir.Del, None)
     # There MUST NOT be any other statements
@@ -499,7 +500,7 @@ def _legalize_with_head(blk):
         raise errors.CompilerError(
             "illegal statements in with's head-block",
             loc=blk.loc,
-            )
+        )
 
 
 def _cfg_nodes_in_region(cfg, region_begin, region_end):
@@ -552,16 +553,16 @@ def find_setupwiths(func_ir):
                 for stmt in blocks[block].body:
                     # raise detected before pop_block
                     if ir_utils.is_raise(stmt):
-                            raise errors.CompilerError(
-                                'unsupported control flow due to raise '
-                                'statements inside with block'
-                                )
+                        raise errors.CompilerError(
+                            'unsupported control flow due to raise '
+                            'statements inside with block'
+                        )
                     # special case 3.7, return before POP_BLOCK
                     if PYVERSION < (3, 8) and ir_utils.is_return(stmt):
-                            raise errors.CompilerError(
-                                'unsupported control flow: due to return '
-                                'statements inside with block'
-                                )
+                        raise errors.CompilerError(
+                            'unsupported control flow: due to return '
+                            'statements inside with block'
+                        )
                     # if a pop_block, process it
                     if ir_utils.is_pop_block(stmt) and block in sus_pops:
                         # record the jump target of this block belonging to this setup
@@ -592,7 +593,7 @@ def find_setupwiths(func_ir):
     # here we need to turn the withs back into a list of tuples so that the
     # rest of the code can cope
     with_ranges_tuple = [(s, list(p)[0])
-             for (s, p) in with_ranges_dict.items()]
+                         for (s, p) in with_ranges_dict.items()]
 
     # check for POP_BLOCKS with multiple outgoing edges and reject
     for (_, p) in with_ranges_tuple:
@@ -619,7 +620,7 @@ def find_setupwiths(func_ir):
     # now we need to rewrite the tuple such that we have SETUP_WITH matching the
     # successor of the block that contains the POP_BLOCK.
     with_ranges_tuple = [(s, func_ir.blocks[p].terminator.get_targets()[0])
-             for (s, p) in with_ranges_tuple]
+                         for (s, p) in with_ranges_tuple]
 
     # finally we check for nested with statements and reject them
     with_ranges_tuple = _eliminate_nested_withs(with_ranges_tuple)
@@ -736,6 +737,7 @@ def _rewrite_return(func_ir, target_block_label):
 
 def _eliminate_nested_withs(with_ranges):
     known_ranges = []
+
     def within_known_range(start, end, known_ranges):
         for a, b in known_ranges:
             # FIXME: this should be a comparison in topological order, right
@@ -750,6 +752,7 @@ def _eliminate_nested_withs(with_ranges):
             known_ranges.append((s, e))
 
     return known_ranges
+
 
 def consolidate_multi_exit_withs(withs: dict, blocks, func_ir):
     """Modify the FunctionIR to merge the exit blocks of with constructs.

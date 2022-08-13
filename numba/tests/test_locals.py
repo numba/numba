@@ -2,6 +2,7 @@ from numba import float32
 from numba.core import compiler
 import unittest
 
+
 def foo():
     x = 123
     return x

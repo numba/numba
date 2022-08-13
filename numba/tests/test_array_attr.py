@@ -42,8 +42,10 @@ def array_size(a):
 def array_flags_contiguous(a):
     return a.flags.contiguous
 
+
 def array_flags_c_contiguous(a):
     return a.flags.c_contiguous
+
 
 def array_flags_f_contiguous(a):
     return a.flags.f_contiguous
@@ -253,8 +255,8 @@ class TestArrayCTypes(MemoryLeakMixin, TestCase):
                 traceback.print_exception()
                 return False
 
-
         # parallel=True is required to reproduce the error.
+
         @njit(parallel=True)
         def foo(size):
             arr = np.ones(size)
@@ -368,6 +370,7 @@ class TestRealImagAttr(MemoryLeakMixin, TestCase):
         self.assertIn("cannot access .imag of array of Record",
                       str(raises.exception))
 
+
 class TestJitclassFlagsSegfault(MemoryLeakMixin, TestCase):
     """Regression test for: https://github.com/numba/numba/issues/4775 """
 
@@ -384,6 +387,7 @@ class TestJitclassFlagsSegfault(MemoryLeakMixin, TestCase):
 
         Z = B()
         Z.foo(np.ones(4))
+
 
 if __name__ == '__main__':
     unittest.main()

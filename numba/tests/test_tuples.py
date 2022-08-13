@@ -18,68 +18,89 @@ Point2 = collections.namedtuple('Point2', ('x', 'y', 'z'))
 
 Empty = collections.namedtuple('Empty', ())
 
+
 def tuple_return_usecase(a, b):
     return a, b
+
 
 def tuple_first(tup):
     a, b = tup
     return a
 
+
 def tuple_second(tup):
     a, b = tup
     return b
 
+
 def tuple_index(tup, idx):
     return tup[idx]
+
 
 def tuple_index_static(tup):
     # Note the negative index
     return tup[-2]
 
+
 def tuple_slice2(tup):
     return tup[1:-1]
+
 
 def tuple_slice3(tup):
     return tup[1::2]
 
+
 def len_usecase(tup):
     return len(tup)
+
 
 def add_usecase(a, b):
     return a + b
 
+
 def eq_usecase(a, b):
     return a == b
+
 
 def ne_usecase(a, b):
     return a != b
 
+
 def gt_usecase(a, b):
     return a > b
+
 
 def ge_usecase(a, b):
     return a >= b
 
+
 def lt_usecase(a, b):
     return a < b
+
 
 def le_usecase(a, b):
     return a <= b
 
+
 def in_usecase(a, b):
     return a in b
+
 
 def bool_usecase(tup):
     return bool(tup), (3 if tup else 2)
 
+
 def getattr_usecase(tup):
     return tup.z, tup.y, tup.x
+
 
 def make_point(a, b, c):
     return Point(a, b, c)
 
+
 def make_point_kws(a, b, c):
     return Point(z=c, y=b, x=a)
+
 
 def make_point_nrt(n):
     r = Rect(list(range(n)), np.zeros(n + 1))
@@ -87,14 +108,18 @@ def make_point_nrt(n):
     p = Point(r, len(r.width), len(r.height))
     return p
 
+
 def type_usecase(tup, *args):
     return type(tup)(*args)
+
 
 def identity(tup):
     return tup
 
+
 def index_method_usecase(tup, value):
     return tup.index(value)
+
 
 def tuple_unpack_static_getitem_err():
     # see issue3895, `c` is imprecise
@@ -120,11 +145,13 @@ class TestTupleLengthError(unittest.TestCase):
         expected = "Tuple 'tup' length must be smaller than 1000"
         self.assertIn(expected, str(raises.exception))
 
+
 class TestTupleTypeNotIterable(unittest.TestCase):
     '''
     issue 4369
     raise an error if 'type' is not iterable
     '''
+
     def test_namedtuple_types_exception(self):
         with self.assertRaises(errors.TypingError) as raises:
             types.NamedTuple(types.uint32, 'p')
@@ -676,7 +703,7 @@ class TestTupleBuild(TestCase):
             msg1 = "No implementation of function"
             self.assertIn(msg1, str(raises.exception))
             msg2 = "tuple(reflected list(" # ignore the rest of reflected list
-                                           # part, it's repr is quite volatile.
+            # part, it's repr is quite volatile.
             self.assertIn(msg2, str(raises.exception))
         else:
             msg = "Only tuples are supported when unpacking a single item"

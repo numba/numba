@@ -38,7 +38,7 @@ class TestDispatcherPickling(TestCase):
     def check_call(self, proto, func, expected_result, args):
         def check_result(func):
             if (isinstance(expected_result, type)
-                and issubclass(expected_result, Exception)):
+                    and issubclass(expected_result, Exception)):
                 self.assertRaises(expected_result, func, *args)
             else:
                 self.assertPreciseEqual(func(*args), expected_result)
@@ -57,21 +57,26 @@ class TestDispatcherPickling(TestCase):
 
     def test_call_without_sig(self):
         self.run_with_protocols(self.check_call, add_without_sig, 5, (1, 4))
-        self.run_with_protocols(self.check_call, add_without_sig, 5.5, (1.2, 4.3))
+        self.run_with_protocols(
+            self.check_call, add_without_sig, 5.5, (1.2, 4.3))
         # Object mode is enabled
-        self.run_with_protocols(self.check_call, add_without_sig, "abc", ("a", "bc"))
+        self.run_with_protocols(
+            self.check_call, add_without_sig, "abc", ("a", "bc"))
 
     def test_call_nopython(self):
         self.run_with_protocols(self.check_call, add_nopython, 5.5, (1.2, 4.3))
         # Object mode is disabled
-        self.run_with_protocols(self.check_call, add_nopython, TypingError, (object(), object()))
+        self.run_with_protocols(
+            self.check_call, add_nopython, TypingError, (object(), object()))
 
     def test_call_nopython_fail(self):
         # Compilation fails
-        self.run_with_protocols(self.check_call, add_nopython_fail, TypingError, (1, 2))
+        self.run_with_protocols(
+            self.check_call, add_nopython_fail, TypingError, (1, 2))
 
     def test_call_objmode_with_global(self):
-        self.run_with_protocols(self.check_call, get_global_objmode, 7.5, (2.5,))
+        self.run_with_protocols(
+            self.check_call, get_global_objmode, 7.5, (2.5,))
 
     def test_call_closure(self):
         inner = closure(1)
@@ -209,7 +214,6 @@ class TestSerializationMisc(TestCase):
         self.assertIs(got1, got2)
 
 
-
 class TestCloudPickleIssues(TestCase):
     """This test case includes issues specific to the cloudpickle implementation.
     """
@@ -254,7 +258,8 @@ class TestCloudPickleIssues(TestCase):
 
         # Check the reset problem in a new process
         mp = get_context('spawn')
-        proc = mp.Process(target=check_unpickle_dyn_class_new_proc, args=(saved,))
+        proc = mp.Process(
+            target=check_unpickle_dyn_class_new_proc, args=(saved,))
         proc.start()
         proc.join(timeout=60)
         self.assertEqual(proc.exitcode, 0)

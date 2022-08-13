@@ -11,10 +11,12 @@ def inc(a):
         a[i] += 1
     return a
 
+
 @jit
 def inc1(a):
     a[0] += 1
     return a[0]
+
 
 @jit
 def inc2(a):
@@ -142,4 +144,3 @@ class TestChainedAssign(MemoryLeakMixin, unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-

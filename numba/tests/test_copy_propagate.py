@@ -8,7 +8,7 @@ from numba.core import types, typing, ir, config, compiler, cpu
 from numba.core.registry import cpu_target
 from numba.core.annotations import type_annotations
 from numba.core.ir_utils import (copy_propagate, apply_copy_propagate,
-                            get_name_var_table)
+                                 get_name_var_table)
 from numba.core.typed_passes import type_inference_stage
 from numba.tests.support import IRPreservingTestPipeline
 import numpy as np
@@ -51,7 +51,7 @@ def inListVar(list_var, var):
 def findAssign(func_ir, var):
     for label, block in func_ir.blocks.items():
         for i, inst in enumerate(block.body):
-            if isinstance(inst, ir.Assign) and inst.target.name!=var:
+            if isinstance(inst, ir.Assign) and inst.target.name != var:
                 all_var = inst.list_vars()
                 if inListVar(all_var, var):
                     return True
@@ -112,7 +112,8 @@ class TestCopyPropagate(unittest.TestCase):
                 return_type=return_type,
                 html_output=config.HTML)
             in_cps, out_cps = copy_propagate(test_ir.blocks, typemap)
-            apply_copy_propagate(test_ir.blocks, in_cps, get_name_var_table(test_ir.blocks), typemap, calltypes)
+            apply_copy_propagate(test_ir.blocks, in_cps, get_name_var_table(
+                test_ir.blocks), typemap, calltypes)
 
             self.assertTrue(findAssign(test_ir, "x"))
 
@@ -136,7 +137,7 @@ class TestCopyPropagate(unittest.TestCase):
             if isinstance(stmt, ir.Assign) and stmt.target.name == "b":
                 b_found = True
                 self.assertTrue(isinstance(stmt.value, ir.Expr)
-                    and stmt.value.op == "binop" and stmt.value.lhs.name == "a")
+                                and stmt.value.op == "binop" and stmt.value.lhs.name == "a")
 
         self.assertTrue(b_found)
 

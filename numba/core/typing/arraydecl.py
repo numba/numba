@@ -197,7 +197,7 @@ class SetItemBuffer(AbstractTemplate):
                     res = val
             elif isinstance(val, types.Sequence):
                 if (res.ndim == 1 and
-                    self.context.can_convert(val.dtype, res.dtype)):
+                        self.context.can_convert(val.dtype, res.dtype)):
                     # Allow assignment of sequence to 1d array
                     res = val
                 else:
@@ -418,7 +418,8 @@ class ArrayAttribute(AttributeTemplate):
             def argsort_stub(kind='quicksort'):
                 pass
             pysig = utils.pysignature(argsort_stub)
-            sig = signature(types.Array(types.intp, 1, 'C'), kind).replace(pysig=pysig)
+            sig = signature(types.Array(types.intp, 1, 'C'),
+                            kind).replace(pysig=pysig)
             return sig
 
     @bound_function("array.view")
@@ -727,7 +728,7 @@ def sum_expand(self, args, kws):
             # the return type of this summation is  an array of dimension one
             # less than the input array.
             return_type = types.Array(dtype=_expand_integer(self.this.dtype),
-                                    ndim=self.this.ndim-1, layout='C')
+                                      ndim=self.this.ndim - 1, layout='C')
         out = signature(return_type, *args, recvr=self.this)
 
     elif args_len == 1 and 'dtype' in kws:
@@ -748,7 +749,7 @@ def sum_expand(self, args, kws):
             # the return type of this summation is  an array of dimension one
             # less than the input array.
             return_type = types.Array(dtype=return_type,
-                                    ndim=self.this.ndim-1, layout='C')
+                                      ndim=self.this.ndim - 1, layout='C')
         out = signature(return_type, *args, recvr=self.this)
     else:
         pass
@@ -799,6 +800,7 @@ def install_array_method(name, generic, prefer_literal=True):
         return types.BoundFunction(temp_class, ary)
 
     setattr(ArrayAttribute, "resolve_" + name, array_attribute_attachment)
+
 
 # Functions that return the same type as the array
 for fname in ["min", "max"]:

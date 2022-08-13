@@ -14,7 +14,7 @@ from numba.core.extending import _Intrinsic
 from numba.core import types, typing, ir, analysis, postproc, rewrites, config
 from numba.core.typing.templates import signature
 from numba.core.analysis import (compute_live_map, compute_use_defs,
-                            compute_cfg_from_blocks)
+                                 compute_cfg_from_blocks)
 from numba.core.errors import (TypingError, UnsupportedError,
                                NumbaPendingDeprecationWarning,
                                CompilerError)
@@ -103,7 +103,7 @@ def mk_alloc(typingctx, typemap, calltypes, lhs, size_var, dtype, scope, loc,
     if typemap:
         typemap[attr_var.name] = get_np_ufunc_typ(numpy.empty)
     attr_assign = ir.Assign(empty_attr_call, attr_var, loc)
-     # Assume str(dtype) returns a valid type
+    # Assume str(dtype) returns a valid type
     dtype_str = str(dtype)
     # alloc call: lhs = empty_attr(size_var, typ_var)
     typ_var = ir.Var(scope, mk_unique_var("$np_typ_var"), loc)
@@ -113,11 +113,11 @@ def mk_alloc(typingctx, typemap, calltypes, lhs, size_var, dtype, scope, loc,
     # then it won't return a valid type and instead can be created
     # with a string. i.e. "datetime64[ns]")
     if (isinstance(dtype, (types.NPDatetime, types.NPTimedelta)) and
-        dtype.unit != ''):
-            typename_const = ir.Const(dtype_str, loc)
-            typ_var_assign = ir.Assign(typename_const, typ_var, loc)
+            dtype.unit != ''):
+        typename_const = ir.Const(dtype_str, loc)
+        typ_var_assign = ir.Assign(typename_const, typ_var, loc)
     else:
-        if dtype_str=='bool':
+        if dtype_str == 'bool':
             # empty doesn't like 'bool' sometimes (e.g. kmeans example)
             dtype_str = 'bool_'
         np_typ_getattr = ir.Expr.getattr(g_np_var, dtype_str, loc)
@@ -142,8 +142,10 @@ def mk_alloc(typingctx, typemap, calltypes, lhs, size_var, dtype, scope, loc,
         empty_c_assign = ir.Assign(alloc_call, empty_c_var, loc)
 
         # attr call: asfortranarray = getattr(g_np_var, asfortranarray)
-        asfortranarray_attr_call = ir.Expr.getattr(g_np_var, "asfortranarray", loc)
-        afa_attr_var = ir.Var(scope, mk_unique_var("$asfortran_array_attr"), loc)
+        asfortranarray_attr_call = ir.Expr.getattr(
+            g_np_var, "asfortranarray", loc)
+        afa_attr_var = ir.Var(scope, mk_unique_var(
+            "$asfortran_array_attr"), loc)
         if typemap:
             typemap[afa_attr_var.name] = get_np_ufunc_typ(numpy.asfortranarray)
         afa_attr_assign = ir.Assign(asfortranarray_attr_call, afa_attr_var, loc)
@@ -349,7 +351,7 @@ def replace_var_names(blocks, namedict):
 def replace_var_callback(var, vardict):
     assert isinstance(var, ir.Var)
     while var.name in vardict.keys():
-        assert(vardict[var.name].name != var.name)
+        assert (vardict[var.name].name != var.name)
         new_var = vardict[var.name]
         var = ir.Var(new_var.scope, new_var.name, new_var.loc)
     return var
@@ -615,7 +617,7 @@ remove_dead_extensions = {}
 
 
 def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
-                                                  alias_set, func_ir, typemap):
+                      alias_set, func_ir, typemap):
     """remove dead code using liveness info.
     Mutable arguments (e.g. arrays) that are not definitely assigned are live
     after return of function.
@@ -700,15 +702,19 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
     block.body = new_body
     return removed
 
+
 # list of functions
 remove_call_handlers = []
+
 
 def remove_dead_random_call(rhs, lives, call_list):
     if len(call_list) == 3 and call_list[1:] == ['random', numpy]:
         return call_list[0] not in {'seed', 'shuffle'}
     return False
 
+
 remove_call_handlers.append(remove_dead_random_call)
+
 
 def has_no_side_effect(rhs, lives, call_table):
     """ Returns True if this expression has no side effects that
@@ -729,7 +735,7 @@ def has_no_side_effect(rhs, lives, call_table):
             call_list == [array_analysis.wrap_index] or
             call_list == [prange] or
             call_list == ['prange', numba] or
-            call_list == [parfor.internal_prange]):
+                call_list == [parfor.internal_prange]):
             return True
         elif (isinstance(call_list[0], _Intrinsic) and
               (call_list[0]._name == 'empty_inferred' or
@@ -754,7 +760,9 @@ def has_no_side_effect(rhs, lives, call_table):
         return False
     return True
 
+
 is_pure_extensions = []
+
 
 def is_pure(rhs, lives, call_table):
     """ Returns True if every time this expression is evaluated it
@@ -769,7 +777,7 @@ def is_pure(rhs, lives, call_table):
             call_list = call_table[func_name]
             if (call_list == [slice] or
                 call_list == ['log', numpy] or
-                call_list == ['empty', numpy]):
+                    call_list == ['empty', numpy]):
                 return True
             for f in is_pure_extensions:
                 if f(rhs, lives, call_list):
@@ -781,6 +789,7 @@ def is_pure(rhs, lives, call_table):
         return False
     return True
 
+
 def is_const_call(module_name, func_name):
     # Returns True if there is no state in the given module changed by the given function.
     if module_name == 'numpy':
@@ -788,8 +797,10 @@ def is_const_call(module_name, func_name):
             return True
     return False
 
+
 alias_analysis_extensions = {}
 alias_func_extensions = {}
+
 
 def get_canonical_alias(v, alias_map):
     if v not in alias_map:
@@ -798,8 +809,9 @@ def get_canonical_alias(v, alias_map):
     v_aliases = sorted(list(alias_map[v]))
     return v_aliases[0]
 
+
 def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
-                                                           arg_aliases=None):
+                           arg_aliases=None):
     "find all array aliases and argument aliases to avoid remove as dead"
     if alias_map is None:
         alias_map = {}
@@ -822,11 +834,11 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                 # only mutable types can alias
                 if is_immutable_type(lhs, typemap):
                     continue
-                if isinstance(expr, ir.Var) and lhs!=expr.name:
+                if isinstance(expr, ir.Var) and lhs != expr.name:
                     _add_alias(lhs, expr.name, alias_map, arg_aliases)
                 # subarrays like A = B[0] for 2D B
                 if (isinstance(expr, ir.Expr) and (expr.op == 'cast' or
-                    expr.op in ['getitem', 'static_getitem'])):
+                                                   expr.op in ['getitem', 'static_getitem'])):
                     _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
                 if isinstance(expr, ir.Expr) and expr.op == 'inplace_binop':
                     _add_alias(lhs, expr.lhs.name, alias_map, arg_aliases)
@@ -853,7 +865,8 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                         alias_func = alias_func_extensions[fdef]
                         alias_func(lhs, expr.args, alias_map, arg_aliases)
                     if fmod == 'numpy' and fname in np_alias_funcs:
-                        _add_alias(lhs, expr.args[0].name, alias_map, arg_aliases)
+                        _add_alias(lhs, expr.args[0].name,
+                                   alias_map, arg_aliases)
                     if isinstance(fmod, ir.Var) and fname in np_alias_funcs:
                         _add_alias(lhs, fmod.name, alias_map, arg_aliases)
 
@@ -868,6 +881,7 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
 
     return alias_map, arg_aliases
 
+
 def _add_alias(lhs, rhs, alias_map, arg_aliases):
     if rhs in arg_aliases:
         arg_aliases.add(lhs)
@@ -880,6 +894,7 @@ def _add_alias(lhs, rhs, alias_map, arg_aliases):
         alias_map[lhs].add(rhs)
     return
 
+
 def is_immutable_type(var, typemap):
     # Conservatively, assume mutable if type not available
     if typemap is None or var not in typemap:
@@ -889,10 +904,11 @@ def is_immutable_type(var, typemap):
     if isinstance(typ, (types.Number, types.scalars._NPDatetimeBase,
                         types.iterators.RangeType)):
         return True
-    if typ==types.string:
+    if typ == types.string:
         return True
     # conservatively, assume mutable
     return False
+
 
 def copy_propagate(blocks, typemap):
     """compute copy propagation information for each block using fixed-point
@@ -1087,7 +1103,7 @@ def apply_copy_propagate(blocks, in_copies, name_var_table, typemap, calltypes,
                     for k in lhs_kill:
                         var_dict.pop(k, None)
             if (isinstance(stmt, ir.Assign)
-                                        and not isinstance(stmt.value, ir.Var)):
+                    and not isinstance(stmt.value, ir.Var)):
                 lhs = stmt.target.name
                 var_dict.pop(lhs, None)
                 # previous t=a is killed if a is killed
@@ -1100,6 +1116,7 @@ def apply_copy_propagate(blocks, in_copies, name_var_table, typemap, calltypes,
         save_copies.extend(var_dict.items())
 
     return save_copies
+
 
 def fix_setitem_type(stmt, typemap, calltypes):
     """Copy propagation can replace setitem target variable, which can be array
@@ -1140,7 +1157,7 @@ def dprint_func_ir(func_ir, title, blocks=None):
         func_ir.blocks = ir_blocks
 
 
-def find_topo_order(blocks, cfg = None):
+def find_topo_order(blocks, cfg=None):
     """find topological order of blocks such that true branches are visited
     first (e.g. for_break test in test_dataflow).
     """
@@ -1300,6 +1317,7 @@ def simplify_CFG(blocks):
     """transform chains of blocks that have no loop into a single block"""
     # first, inline single-branch-block to its predecessors
     cfg = compute_cfg_from_blocks(blocks)
+
     def find_single_branch(label):
         block = blocks[label]
         return len(block.body) == 1 and isinstance(block.body[0], ir.Branch)
@@ -1414,6 +1432,7 @@ def get_array_accesses(blocks, accesses=None):
                     f(inst, accesses)
     return accesses
 
+
 def is_slice_index(index):
     """see if index is a slice index or has slice in it"""
     if isinstance(index, slice):
@@ -1423,6 +1442,7 @@ def is_slice_index(index):
             if isinstance(i, slice):
                 return True
     return False
+
 
 def merge_adjacent_blocks(blocks):
     cfg = compute_cfg_from_blocks(blocks)
@@ -1471,8 +1491,8 @@ def restore_copy_var_names(blocks, save_copies, typemap):
         # if a is user variable and b is generated temporary and b is not
         # already renamed
         if (not a.startswith('$') and b.name.startswith('$')
-                                                and b.name not in rename_dict):
-            new_name = mk_unique_var('${}'.format(a));
+                and b.name not in rename_dict):
+            new_name = mk_unique_var('${}'.format(a))
             rename_dict[b.name] = new_name
             var_rename_map[new_name] = a
             typ = typemap.pop(b.name)
@@ -1493,9 +1513,10 @@ def simplify(func_ir, typemap, calltypes, metadata):
         name_var_table,
         typemap,
         calltypes)
-    var_rename_map = restore_copy_var_names(func_ir.blocks, save_copies, typemap)
+    var_rename_map = restore_copy_var_names(
+        func_ir.blocks, save_copies, typemap)
     if "var_rename_map" not in metadata:
-            metadata["var_rename_map"] = {}
+        metadata["var_rename_map"] = {}
     metadata["var_rename_map"].update(var_rename_map)
     # remove dead code to enable fusion
     if config.DEBUG_ARRAY_OPT >= 1:
@@ -1515,7 +1536,8 @@ def require(cond):
     Raise GuardException if the given condition is False.
     """
     if not cond:
-       raise GuardException
+        raise GuardException
+
 
 def guard(func, *args, **kwargs):
     """
@@ -1528,6 +1550,7 @@ def guard(func, *args, **kwargs):
     except GuardException:
         return None
 
+
 def get_definition(func_ir, name, **kwargs):
     """
     Same as func_ir.get_definition(name), but raise GuardException if
@@ -1537,6 +1560,7 @@ def get_definition(func_ir, name, **kwargs):
         return func_ir.get_definition(name, **kwargs)
     except KeyError:
         raise GuardException
+
 
 def build_definitions(blocks, definitions=None):
     """Build the definitions table of the given blocks by scanning
@@ -1561,7 +1585,9 @@ def build_definitions(blocks, definitions=None):
 
     return definitions
 
+
 build_defs_extensions = {}
+
 
 def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition):
     """Try to find a call expression's function and module names and return
@@ -1640,6 +1666,7 @@ def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition)
             raise GuardException
     return attrs[0], '.'.join(reversed(attrs[1:]))
 
+
 def find_build_sequence(func_ir, var):
     """Check if a variable is constructed via build_tuple or
     build_list or build_set, and return the sequence and the
@@ -1653,6 +1680,7 @@ def find_build_sequence(func_ir, var):
     require(var_def.op in build_ops)
     return var_def.items, var_def.op
 
+
 def find_const(func_ir, var):
     """Check if a variable is defined as constant, and return
     the constant value, or raise GuardException otherwise.
@@ -1661,6 +1689,7 @@ def find_const(func_ir, var):
     var_def = get_definition(func_ir, var)
     require(isinstance(var_def, (ir.Const, ir.Global, ir.FreeVar)))
     return var_def.value
+
 
 def compile_to_numba_ir(mk_func, glbls, typingctx=None, targetctx=None,
                         arg_typs=None, typemap=None, calltypes=None):
@@ -1679,7 +1708,8 @@ def compile_to_numba_ir(mk_func, glbls, typingctx=None, targetctx=None,
     elif hasattr(mk_func, '__code__'):
         code = mk_func.__code__
     else:
-        raise NotImplementedError("function type not recognized {}".format(mk_func))
+        raise NotImplementedError(
+            "function type not recognized {}".format(mk_func))
     f_ir = get_ir_of_code(glbls, code)
     remove_dels(f_ir.blocks)
 
@@ -1699,7 +1729,7 @@ def compile_to_numba_ir(mk_func, glbls, typingctx=None, targetctx=None,
     # data structures typemap and calltypes
     if typingctx:
         f_typemap, f_return_type, f_calltypes, _ = typed_passes.type_inference_stage(
-                typingctx, targetctx, f_ir, arg_typs, None)
+            typingctx, targetctx, f_ir, arg_typs, None)
         # remove argument entries like arg.a from typemap
         arg_names = [vname for vname in f_typemap if vname.startswith("arg.")]
         for a in arg_names:
@@ -1707,6 +1737,7 @@ def compile_to_numba_ir(mk_func, glbls, typingctx=None, targetctx=None,
         typemap.update(f_typemap)
         calltypes.update(f_calltypes)
     return f_ir
+
 
 def _create_function_from_code_obj(fcode, func_env, func_arg, func_clo, glbls):
     """
@@ -1731,6 +1762,7 @@ def _create_function_from_code_obj(fcode, func_env, func_arg, func_clo, glbls):
     f.__name__ = fcode.co_name
     return f
 
+
 def get_ir_of_code(glbls, fcode):
     """
     Compile a code object to get its IR, ir.Del nodes are emitted
@@ -1748,6 +1780,7 @@ def get_ir_of_code(glbls, fcode):
     # we need to run the before inference rewrite pass to normalize the IR
     # XXX: check rewrite pass flag?
     # for example, Raise nodes need to become StaticRaise before type inference
+
     class DummyPipeline(object):
         def __init__(self, f_ir):
             self.state = compiler.StateDict()
@@ -1787,6 +1820,7 @@ def get_ir_of_code(glbls, fcode):
     post_proc.run(True)
     return ir
 
+
 def replace_arg_nodes(block, args):
     """
     Replace ir.Arg(...) with variables
@@ -1794,7 +1828,7 @@ def replace_arg_nodes(block, args):
     for stmt in block.body:
         if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Arg):
             idx = stmt.value.index
-            assert(idx < len(args))
+            assert (idx < len(args))
             stmt.value = args[idx]
     return
 
@@ -1812,9 +1846,10 @@ def replace_returns(blocks, target, return_label):
             block.body.pop()  # remove return
             cast_stmt = block.body.pop()
             assert (isinstance(cast_stmt, ir.Assign)
-                and isinstance(cast_stmt.value, ir.Expr)
-                and cast_stmt.value.op == 'cast'), "invalid return cast"
-            block.body.append(ir.Assign(cast_stmt.value.value, target, stmt.loc))
+                    and isinstance(cast_stmt.value, ir.Expr)
+                    and cast_stmt.value.op == 'cast'), "invalid return cast"
+            block.body.append(
+                ir.Assign(cast_stmt.value.value, target, stmt.loc))
             block.body.append(ir.Jump(return_label, stmt.loc))
 
 
@@ -1841,17 +1876,20 @@ def gen_np_call(func_as_str, func, lhs, args, typingctx, typemap, calltypes):
     np_assign = ir.Assign(np_call, lhs, loc)
     return [g_np_assign, attr_assign, np_assign]
 
+
 def dump_blocks(blocks):
     for label, block in blocks.items():
         print(label, ":")
         for stmt in block.body:
             print("    ", stmt)
 
+
 def is_operator_or_getitem(expr):
     """true if expr is unary or binary operator or getitem"""
     return (isinstance(expr, ir.Expr)
             and getattr(expr, 'op', False)
             and expr.op in ['unary', 'binop', 'inplace_binop', 'getitem', 'static_getitem'])
+
 
 def is_get_setitem(stmt):
     """stmt is getitem assignment or setitem (and static cases)"""
@@ -1864,9 +1902,11 @@ def is_getitem(stmt):
             and isinstance(stmt.value, ir.Expr)
             and stmt.value.op in ['getitem', 'static_getitem'])
 
+
 def is_setitem(stmt):
     """true if stmt is a SetItem or StaticSetItem node"""
     return isinstance(stmt, (ir.SetItem, ir.StaticSetItem))
+
 
 def index_var_of_get_setitem(stmt):
     """get index variable for getitem/setitem nodes (and static cases)"""
@@ -1884,6 +1924,7 @@ def index_var_of_get_setitem(stmt):
 
     return None
 
+
 def set_index_var_of_get_setitem(stmt, new_index):
     if is_getitem(stmt):
         if stmt.value.op == 'getitem':
@@ -1897,7 +1938,7 @@ def set_index_var_of_get_setitem(stmt, new_index):
             stmt.index_var = new_index
     else:
         raise ValueError("getitem or setitem node expected but received {}".format(
-                     stmt))
+            stmt))
 
 
 def is_namedtuple_class(c):
@@ -2052,12 +2093,12 @@ def raise_on_unsupported_feature(func_ir, typemap):
                         expr = ''
 
                     msg = ("Numba encountered the use of a language "
-                            "feature it does not support in this context: "
-                            "%s (op code: make_function not supported). If "
-                            "the feature is explicitly supported it is "
-                            "likely that the result of the expression %s"
-                            "is being used in an unsupported manner.") % \
-                            (use, expr)
+                           "feature it does not support in this context: "
+                           "%s (op code: make_function not supported). If "
+                           "the feature is explicitly supported it is "
+                           "likely that the result of the expression %s"
+                           "is being used in an unsupported manner.") % \
+                        (use, expr)
                     raise UnsupportedError(msg, stmt.value.loc)
 
             # this checks for gdb initialization calls, only one is permitted
@@ -2090,7 +2131,8 @@ def raise_on_unsupported_feature(func_ir, typemap):
                                 numpy.issubdtype(ty, numpy.floating)):
                             continue
 
-                    vardescr = '' if var.startswith('$') else "'{}' ".format(var)
+                    vardescr = '' if var.startswith(
+                        '$') else "'{}' ".format(var)
                     raise TypingError(
                         "'view' can only be called on NumPy dtypes, "
                         "try wrapping the variable {}with 'np.<dtype>()'".
@@ -2104,8 +2146,9 @@ def raise_on_unsupported_feature(func_ir, typemap):
                        "compile-time constants and there is no known way to "
                        "compile a %s type as a constant.")
                 if (getattr(ty, 'reflected', False) or
-                    isinstance(ty, (types.DictType, types.ListType))):
-                    raise TypingError(msg % (ty, stmt.value.name, ty), loc=stmt.loc)
+                        isinstance(ty, (types.DictType, types.ListType))):
+                    raise TypingError(
+                        msg % (ty, stmt.value.name, ty), loc=stmt.loc)
 
             # checks for generator expressions (yield in use when func_ir has
             # not been identified as a generator).
@@ -2141,9 +2184,9 @@ def warn_deprecated(func_ir, typemap):
                        "deprecation.html#deprecation-of-reflection-for-list-and"
                        "-set-types")
                 msg = ("\nEncountered the use of a type that is scheduled for "
-                        "deprecation: type 'reflected %s' found for argument "
-                        "'%s' of function '%s'.\n\nFor more information visit "
-                        "%s" % (tyname, arg, fname, url))
+                       "deprecation: type 'reflected %s' found for argument "
+                       "'%s' of function '%s'.\n\nFor more information visit "
+                       "%s" % (tyname, arg, fname, url))
                 warnings.warn(NumbaPendingDeprecationWarning(msg, loc=loc))
 
 
@@ -2157,6 +2200,7 @@ def resolve_func_from_module(func_ir, node):
     node - the IR node from which to start resolving (should be a `getattr`).
     """
     getattr_chain = []
+
     def resolve_mod(mod):
         if getattr(mod, 'op', False) == 'getattr':
             getattr_chain.insert(0, mod.attr)
@@ -2193,6 +2237,7 @@ def enforce_no_dels(func_ir):
             msg = "Illegal IR, del found at: %s" % dels[0]
             raise CompilerError(msg, loc=dels[0].loc)
 
+
 def enforce_no_phis(func_ir):
     """
     Enforce there being no ir.Expr.phi nodes in the IR.
@@ -2219,6 +2264,7 @@ def check_and_legalize_ir(func_ir, flags: "numba.core.compiler.Flags"):
     # postprocess and emit ir.Dels
     post_proc = postproc.PostProcessor(func_ir)
     post_proc.run(True, extend_lifetimes=flags.dbg_extend_lifetimes)
+
 
 def convert_code_obj_to_function(code_obj, caller_ir):
     """
@@ -2248,7 +2294,8 @@ def convert_code_obj_to_function(code_obj, caller_ir):
                    "variable '%s' in a function that will escape." % x)
             raise TypingError(msg, loc=code_obj.loc)
 
-    func_env = "\n".join(["\tc_%d = %s" % (i, x) for i, x in enumerate(freevars)])
+    func_env = "\n".join(["\tc_%d = %s" % (i, x)
+                         for i, x in enumerate(freevars)])
     func_clo = ",".join(["c_%d" % i for i in range(nfree)])
     co_varnames = list(fcode.co_varnames)
 

@@ -222,7 +222,6 @@ class TestNumberHashing(BaseTest):
         self.check_hash_values([np.int32(-0x7ffffff6)])
         self.check_hash_values([np.int32(-0x7fffff9c)])
 
-
     @skip_unless_py10_or_later
     def test_py310_nan_hash(self):
         # On Python 3.10+ nan's hash to a value which is based on the pointer to

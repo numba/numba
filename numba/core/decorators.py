@@ -276,7 +276,8 @@ def cfunc(sig, locals={}, cache=False, pipeline_class=None, **options):
         additional_args = {}
         if pipeline_class is not None:
             additional_args['pipeline_class'] = pipeline_class
-        res = CFunc(func, sig, locals=locals, options=options, **additional_args)
+        res = CFunc(func, sig, locals=locals,
+                    options=options, **additional_args)
         if cache:
             res.enable_caching()
         res.compile()

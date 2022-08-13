@@ -21,20 +21,26 @@ TIMEDELTA_Y = 'timedelta64[Y]'
 def np_around_array(arr, decimals, out):
     np.around(arr, decimals, out)
 
+
 def np_around_binary(val, decimals):
     return np.around(val, decimals)
+
 
 def np_around_unary(val):
     return np.around(val)
 
+
 def np_round_array(arr, decimals, out):
     np.round(arr, decimals, out)
+
 
 def np_round_binary(val, decimals):
     return np.round(val, decimals)
 
+
 def np_round_unary(val):
     return np.round(val)
+
 
 def _fixed_np_round(arr, decimals=0, out=None):
     """
@@ -65,77 +71,102 @@ def _fixed_np_round(arr, decimals=0, out=None):
 def array_T(arr):
     return arr.T
 
+
 def array_transpose(arr):
     return arr.transpose()
+
 
 def array_copy(arr):
     return arr.copy()
 
+
 def np_copy(arr):
     return np.copy(arr)
+
 
 def np_asfortranarray(arr):
     return np.asfortranarray(arr)
 
+
 def np_ascontiguousarray(arr):
     return np.ascontiguousarray(arr)
+
 
 def array_view(arr, newtype):
     return arr.view(newtype)
 
+
 def array_take(arr, indices):
     return arr.take(indices)
+
 
 def array_take_kws(arr, indices, axis):
     return arr.take(indices, axis=axis)
 
+
 def np_arange_1(arg0):
     return np.arange(arg0)
+
 
 def np_arange_2(arg0, arg1):
     return np.arange(arg0, arg1)
 
+
 def np_arange_3(arg0, arg1, arg2):
     return np.arange(arg0, arg1, arg2)
+
 
 def np_arange_4(arg0, arg1, arg2, arg3):
     return np.arange(arg0, arg1, arg2, arg3)
 
+
 def np_arange_1_stop(arg0, stop):
     return np.arange(arg0, stop=stop)
+
 
 def np_arange_1_step(arg0, step):
     return np.arange(arg0, step=step)
 
+
 def np_arange_1_dtype(arg0, dtype):
     return np.arange(arg0, dtype=dtype)
+
 
 def np_arange_2_step(arg0, arg1, step):
     return np.arange(arg0, arg1, step=step)
 
+
 def np_arange_2_dtype(arg0, arg1, dtype):
     return np.arange(arg0, arg1, dtype=dtype)
+
 
 def np_arange_start_stop(start, stop):
     return np.arange(start=start, stop=stop)
 
+
 def np_arange_start_stop_step(start, stop, step):
     return np.arange(start=start, stop=stop, step=step)
 
+
 def np_arange_start_stop_step_dtype(start, stop, step, dtype):
     return np.arange(start=start, stop=stop, step=step, dtype=dtype)
+
 
 def array_fill(arr, val):
     return arr.fill(val)
 
 # XXX Can't pass a dtype as a Dispatcher argument for now
+
+
 def make_array_view(newtype):
     def array_view(arr):
         return arr.view(newtype)
     return array_view
 
+
 def array_sliced_view(arr, ):
     return arr[0:4].view(np.float32)[0]
+
 
 def make_array_astype(newtype):
     def array_astype(arr):
@@ -149,11 +180,14 @@ def np_frombuffer(b):
     """
     return np.frombuffer(b)
 
+
 def np_frombuffer_dtype(b):
     return np.frombuffer(b, dtype=np.complex64)
 
+
 def np_frombuffer_dtype_str(b):
     return np.frombuffer(b, dtype='complex64')
+
 
 def np_frombuffer_allocated(shape):
     """
@@ -162,45 +196,59 @@ def np_frombuffer_allocated(shape):
     arr = np.ones(shape, dtype=np.int32)
     return np.frombuffer(arr)
 
+
 def np_frombuffer_allocated_dtype(shape):
     arr = np.ones(shape, dtype=np.int32)
     return np.frombuffer(arr, dtype=np.complex64)
 
+
 def identity_usecase(a, b):
     return (a is b), (a is not b)
+
 
 def array_nonzero(a):
     return a.nonzero()
 
+
 def np_nonzero(a):
     return np.nonzero(a)
+
 
 def np_where_1(c):
     return np.where(c)
 
+
 def np_where_3(c, x, y):
     return np.where(c, x, y)
+
 
 def array_item(a):
     return a.item()
 
+
 def array_itemset(a, v):
     a.itemset(v)
+
 
 def array_sum(a, *args):
     return a.sum(*args)
 
+
 def array_sum_axis_kws(a, axis):
     return a.sum(axis=axis)
+
 
 def array_sum_dtype_kws(a, dtype):
     return a.sum(dtype=dtype)
 
+
 def array_sum_axis_dtype_kws(a, dtype, axis):
     return a.sum(axis=axis, dtype=dtype)
 
+
 def array_sum_axis_dtype_pos(a, a1, a2):
     return a.sum(a1, a2)
+
 
 def array_sum_const_multi(arr, axis):
     # use np.sum with different constant args multiple times to check
@@ -216,46 +264,60 @@ def array_sum_const_multi(arr, axis):
     e = np.sum(arr, axis=-1)
     return a, b, c, d, e
 
+
 def array_sum_const_axis_neg_one(a, axis):
     # use .sum with -1 axis, this is for use with 1D arrays where the above
     # "const_multi" variant would raise errors
     return a.sum(axis=-1)
 
+
 def array_cumsum(a, *args):
     return a.cumsum(*args)
+
 
 def array_cumsum_kws(a, axis):
     return a.cumsum(axis=axis)
 
+
 def array_real(a):
     return np.real(a)
+
 
 def array_imag(a):
     return np.imag(a)
 
+
 def np_clip_no_out(a, a_min, a_max):
     return np.clip(a, a_min, a_max)
+
 
 def np_clip(a, a_min, a_max, out=None):
     return np.clip(a, a_min, a_max, out)
 
+
 def np_clip_kwargs(a, a_min, a_max, out=None):
     return np.clip(a, a_min, a_max, out=out)
+
 
 def array_clip(a, a_min=None, a_max=None, out=None):
     return a.clip(a_min, a_max, out)
 
+
 def array_clip_kwargs(a, a_min=None, a_max=None, out=None):
     return a.clip(a_min, a_max, out=out)
+
 
 def array_clip_no_out(a, a_min, a_max):
     return a.clip(a_min, a_max)
 
+
 def array_conj(a):
     return a.conj()
 
+
 def array_conjugate(a):
     return a.conjugate()
+
 
 def np_unique(a):
     return np.unique(a)
@@ -264,11 +326,14 @@ def np_unique(a):
 def array_dot(a, b):
     return a.dot(b)
 
+
 def array_dot_chain(a, b):
     return a.dot(b).dot(b)
 
+
 def array_ctor(n, dtype):
     return np.ones(n, dtype=dtype)
+
 
 class TestArrayMethods(MemoryLeakMixin, TestCase):
     """
@@ -371,6 +436,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             pyfunc = make_array_view(dtype)
             cres = self.ccache.compile(pyfunc, (typeof(arr),))
             return cres.entry_point(arr)
+
         def check(arr, dtype):
             expected = arr.view(dtype)
             self.memory_leak_setup()
@@ -378,6 +444,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(got, expected)
             del got
             self.memory_leak_teardown()
+
         def check_err(arr, dtype):
             with self.assertRaises(ValueError) as raises:
                 run(arr, dtype)
@@ -464,6 +531,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             pyfunc = make_array_astype(dtype)
             cres = self.ccache.compile(pyfunc, (typeof(arr),))
             return cres.entry_point(arr)
+
         def check(arr, dtype):
             expected = arr.astype(dtype).copy(order='A')
             got = run(arr, dtype)
@@ -510,6 +578,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         def run(buf):
             cres = self.ccache.compile(pyfunc, (typeof(buf),))
             return cres.entry_point(buf)
+
         def check(buf):
             old_refcnt = sys.getrefcount(buf)
             expected = pyfunc(buf)
@@ -567,6 +636,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def check_layout_dependent_func(self, pyfunc, fac=np.arange):
         def is_same(a, b):
             return a.ctypes.data == b.ctypes.data
+
         def check_arr(arr):
             cres = compile_isolated(pyfunc, (typeof(arr),))
             expected = pyfunc(arr)
@@ -617,6 +687,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         def run(shape):
             cres = self.ccache.compile(pyfunc, (typeof(shape),))
             return cres.entry_point(shape)
+
         def check(shape):
             expected = pyfunc(shape)
             got = run(shape)
@@ -677,6 +748,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
     def test_np_where_3(self):
         pyfunc = np_where_3
+
         def fac(N):
             np.random.seed(42)
             arr = np.random.random(N)
@@ -712,7 +784,8 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             np.random.shuffle(_types)
             x = _types[0](4)
             y = _types[1](5)
-            cres = compile_isolated(pyfunc, (typeof(scal), typeof(x), typeof(y)))
+            cres = compile_isolated(
+                pyfunc, (typeof(scal), typeof(x), typeof(y)))
             expected = pyfunc(scal, x, y)
             got = cres.entry_point(scal, x, y)
             self.assertPreciseEqual(got, expected)
@@ -963,7 +1036,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                         warnings.simplefilter("ignore")
                         f(*inputs)
                     self.assertIn("Maximum allowed size exceeded",
-                                str(raises.exception))
+                                  str(raises.exception))
 
     def test_arange_accuracy(self):
         # Checking arange reasonably replicates NumPy's algorithm
@@ -1063,7 +1136,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         for arr_list in all_test_arrays:
             for arr in arr_list:
                 for axis in (0, 1, 2):
-                    if axis > len(arr.shape)-1:
+                    if axis > len(arr.shape) - 1:
                         continue
                     with self.subTest("Testing np.sum(axis) with {} "
                                       "input ".format(arr.dtype)):
@@ -1095,7 +1168,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         for arr_list in all_test_arrays:
             for arr in arr_list:
                 for axis in (0, 1, 2):
-                    if axis > len(arr.shape)-1:
+                    if axis > len(arr.shape) - 1:
                         continue
                     with self.subTest("Testing np.sum(axis) with {} "
                                       "input ".format(arr.dtype)):
@@ -1335,6 +1408,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_fill(self):
         pyfunc = array_fill
         cfunc = jit(nopython=True)(pyfunc)
+
         def check(arr, val):
             expected = np.copy(arr)
             erv = pyfunc(expected, val)
@@ -1368,7 +1442,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         np.testing.assert_equal(pyfunc(x), cfunc(x))
 
         x, y = np.meshgrid(x, x)
-        z = x + 1j*y
+        z = x + 1j * y
         np.testing.assert_equal(pyfunc(z), cfunc(z))
 
     def test_imag(self):
@@ -1379,7 +1453,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         np.testing.assert_equal(pyfunc(x), cfunc(x))
 
         x, y = np.meshgrid(x, x)
-        z = x + 1j*y
+        z = x + 1j * y
         np.testing.assert_equal(pyfunc(z), cfunc(z))
 
     def _lower_clip_result_test_util(self, func, a, a_min, a_max):
@@ -1440,7 +1514,8 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                             cfunc(a, None, None)
                         continue
 
-                    np.testing.assert_equal(pyfunc(a, a_min, a_max), cfunc(a, a_min, a_max))
+                    np.testing.assert_equal(
+                        pyfunc(a, a_min, a_max), cfunc(a, a_min, a_max))
 
                     if pyfunc in has_out:
                         pyout = np.empty_like(a)
@@ -1497,7 +1572,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             np.testing.assert_equal(pyfunc(x), cfunc(x))
 
             x, y = np.meshgrid(x, x)
-            z = x + 1j*y
+            z = x + 1j * y
             np.testing.assert_equal(pyfunc(z), cfunc(z))
 
     def test_unique(self):
@@ -1541,6 +1616,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         np.testing.assert_array_equal(pyfunc(*args), cfunc(*args))
         args = n, np.dtype('f4')
         np.testing.assert_array_equal(pyfunc(*args), cfunc(*args))
+
 
 class TestArrayComparisons(TestCase):
 

@@ -34,5 +34,6 @@ class TestParallelEnvVariable(unittest.TestCase):
             env[key] = current
             config.reload_config()
 
+
 if __name__ == '__main__':
     unittest.main()

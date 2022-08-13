@@ -26,7 +26,7 @@ class TestMandelbrot(unittest.TestCase):
         cr = compile_isolated(pyfunc, (types.complex64,))
         cfunc = cr.entry_point
 
-        points = [0+0j, 1+0j, 0+1j, 1+1j, 0.1+0.1j]
+        points = [0 + 0j, 1 + 0j, 0 + 1j, 1 + 1j, 0.1 + 0.1j]
         for p in points:
             self.assertEqual(cfunc(p), pyfunc(p))
 

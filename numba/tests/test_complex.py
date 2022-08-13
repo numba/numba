@@ -41,7 +41,8 @@ class BaseComplexTest(object):
         for tx in x_types:
             cr = compile_isolated(pyfunc, [tx], flags=flags)
             cfunc = cr.entry_point
-            prec = 'single' if tx in (types.float32, types.complex64) else 'double'
+            prec = 'single' if tx in (
+                types.float32, types.complex64) else 'double'
             for vx in x_values:
                 try:
                     expected = pyfunc(vx)

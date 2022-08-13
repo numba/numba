@@ -7,6 +7,7 @@ from numba.tests.support import TestCase, force_pyobj_flags
 def build_map():
     return {0: 1, 2: 3}
 
+
 def build_map_from_local_vars():
     # There used to be a crash due to wrong IR generation for STORE_MAP
     x = TestCase
@@ -26,6 +27,7 @@ class TestCompiledDict(TestCase):
     """Testing `dict()` and `{}` usage that are redirected to
     `numba.typed.Dict`.
     """
+
     def test_use_dict(self):
         # Test dict()
         @njit
@@ -62,7 +64,6 @@ class TestCompiledDict(TestCase):
 
         d = foo()
         self.assertEqual(d, {1: 2})
-
 
     def test_use_curlybraces_with_init1(self):
         # Test {} with 1 item
@@ -124,7 +125,6 @@ class TestCompiledDict(TestCase):
             str(raises.exception),
         )
 
-
     def test_dict_use_with_optional_value(self):
         # Test that Optional cannot be used as value for Dict
         @njit
@@ -167,6 +167,7 @@ class TestCompiledDict(TestCase):
             "Dict.key_type cannot be of type none",
             str(raises.exception),
         )
+
 
 if __name__ == '__main__':
     unittest.main()

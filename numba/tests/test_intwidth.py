@@ -10,20 +10,26 @@ from numba.tests.support import TestCase, tag
 
 max_uint64 = 18446744073709551615
 
+
 def usecase_uint64_global():
     return max_uint64
+
 
 def usecase_uint64_constant():
     return 18446744073709551615
 
+
 def usecase_uint64_func():
     return max(18446744073709551614, 18446744073709551615)
+
 
 def usecase_int64_pos():
     return 9223372036854775807
 
+
 def usecase_int64_neg():
     return -9223372036854775808
+
 
 def usecase_int64_func():
     return (max(9223372036854775807, -9223372036854775808)
@@ -87,4 +93,3 @@ class IntWidthTest(TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-

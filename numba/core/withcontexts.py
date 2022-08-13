@@ -60,6 +60,7 @@ class _ByPassContextType(WithContext):
     """A simple context-manager that tells the compiler to bypass the body
     of the with-block.
     """
+
     def mutate_with_body(self, func_ir, blocks, blk_start, blk_end,
                          body_blocks, dispatcher_factory, extra):
         assert extra is None
@@ -80,6 +81,7 @@ class _CallContextType(WithContext):
     """A simple context-manager that tells the compiler to lift the body of the
     with-block as another function.
     """
+
     def mutate_with_body(self, func_ir, blocks, blk_start, blk_end,
                          body_blocks, dispatcher_factory, extra):
         assert extra is None
@@ -91,7 +93,7 @@ class _CallContextType(WithContext):
             callfrom=blk_start,
             returnto=blk_end,
             body_block_ids=set(body_blocks),
-            )
+        )
 
         lifted_blks = {k: blocks[k] for k in body_blocks}
         _mutate_with_block_callee(lifted_blks, blk_start, blk_end,
@@ -103,13 +105,13 @@ class _CallContextType(WithContext):
             arg_names=tuple(inputs),
             arg_count=len(inputs),
             force_non_generator=True,
-            )
+        )
 
         dispatcher = dispatcher_factory(lifted_ir)
 
         newblk = _mutate_with_block_caller(
             dispatcher, blocks, blk_start, blk_end, inputs, outputs,
-            )
+        )
 
         blocks[blk_start] = newblk
         _clear_blocks(blocks, body_blocks)
@@ -203,14 +205,14 @@ class _ObjModeContextType(WithContext):
         if args:
             raise errors.CompilerError(
                 "objectmode context doesn't take any positional arguments",
-                )
+            )
         typeanns = {}
 
         def report_error(varname, msg, loc):
             raise errors.CompilerError(
-                    f"Error handling objmode argument {varname!r}. {msg}",
-                    loc=loc,
-                )
+                f"Error handling objmode argument {varname!r}. {msg}",
+                loc=loc,
+            )
 
         for k, v in kwargs.items():
             if isinstance(v, ir.Const) and isinstance(v.value, str):
@@ -321,7 +323,7 @@ class _ObjModeContextType(WithContext):
             callfrom=blk_start,
             returnto=blk_end,
             body_block_ids=set(body_blocks),
-            )
+        )
 
         # Determine types in the output tuple
         def strip_var_ver(x):
@@ -368,14 +370,14 @@ class _ObjModeContextType(WithContext):
             arg_names=tuple(inputs),
             arg_count=len(inputs),
             force_non_generator=True,
-            )
+        )
 
         dispatcher = dispatcher_factory(lifted_ir, objectmode=True,
                                         output_types=outtup)
 
         newblk = _mutate_with_block_caller(
             dispatcher, blocks, blk_start, blk_end, inputs, outputs,
-            )
+        )
 
         blocks[blk_start] = newblk
         _clear_blocks(blocks, body_blocks)
@@ -433,7 +435,7 @@ def _mutate_with_block_caller(dispatcher, blocks, blk_start, blk_end,
         label_next=blk_end,
         inputs=inputs,
         outputs=outputs,
-        )
+    )
     return newblock
 
 
@@ -461,11 +463,12 @@ def _mutate_with_block_callee(blocks, blk_start, blk_end, inputs, outputs):
         block=ir.Block(scope=scope, loc=loc),
         inputs=inputs,
         label_next=head_blk,
-        )
+    )
     blocks[blk_end] = ir_utils.fill_callee_epilogue(
         block=ir.Block(scope=scope, loc=loc),
         outputs=outputs,
     )
+
 
 class _ParallelChunksize(WithContext):
     is_callable = True
@@ -475,6 +478,7 @@ class _ParallelChunksize(WithContext):
     to the programmer specified value. On exit the original
     chunksize is restored.
     """
+
     def mutate_with_body(self, func_ir, blocks, blk_start, blk_end,
                          body_blocks, dispatcher_factory, extra):
         ir_utils.dprint_func_ir(func_ir, "Before with changes", blocks=blocks)
@@ -507,8 +511,8 @@ class _ParallelChunksize(WithContext):
         restore_spc_call = ir.Expr.call(spcvar, [orig_pc_var], (), loc)
         restore_state.append(ir.Assign(restore_spc_call, orig_pc_var, loc))
 
-        blocks[blk_start].body = (blocks[blk_start].body[1:-1] + 
-                                  set_state + 
+        blocks[blk_start].body = (blocks[blk_start].body[1:-1] +
+                                  set_state +
                                   [blocks[blk_start].body[-1]])
         blocks[blk_end].body = restore_state + blocks[blk_end].body
         func_ir._definitions = build_definitions(blocks)
@@ -531,5 +535,6 @@ class _ParallelChunksize(WithContext):
 
     def __exit__(self, typ, val, tb):
         numba.set_parallel_chunksize(self.orig_chunksize)
+
 
 parallel_chunksize = _ParallelChunksize()

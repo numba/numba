@@ -89,7 +89,7 @@ class TypeAnnotation(object):
                         atype = 'XXX Lifted Loop XXX'
                         found_lifted_loop = False
                     elif (isinstance(inst.value, ir.Expr) and
-                            inst.value.op ==  'call'):
+                            inst.value.op == 'call'):
                         atype = self.calltypes[inst.value]
                     elif (isinstance(inst.value, ir.Const) and
                             isinstance(inst.value.value, numba.core.dispatcher.LiftedLoop)):
@@ -169,8 +169,6 @@ class TypeAnnotation(object):
                     idents[line] = ['&nbsp;' * amount for amount in ir_id]
                 this_func[key] = idents
 
-
-
         try:
             from jinja2 import Template
         except ImportError:
@@ -226,7 +224,8 @@ class TypeAnnotation(object):
                         # as an object line instead. Lifted loop start lines should
                         # only be marked as lifted loop lines if the lifted loop
                         # was successfully compiled in nopython mode.
-                        func_data['python_tags'][self.lifted_from[0]] = 'object_tag'
+                        func_data['python_tags'][self.lifted_from[0]
+                                                 ] = 'object_tag'
 
             # We're done with this lifted loop, so decrement lifted loop counter.
             # When lifted loop counter hits zero, that means we're ready to write
@@ -252,7 +251,8 @@ class TypeAnnotation(object):
             func_data['ir_indent'] = {}
 
             for num in line_nums:
-                func_data['python_lines'].append((num, python_source[num].strip()))
+                func_data['python_lines'].append(
+                    (num, python_source[num].strip()))
                 indent_len = len(_getindent(python_source[num]))
                 func_data['python_indent'][num] = indent_len
                 func_data['python_tags'][num] = ''
@@ -266,7 +266,6 @@ class TypeAnnotation(object):
                     elif line.strip().endswith('pyobject'):
                         func_data['python_tags'][num] = 'object_tag'
         return self.func_data
-
 
     def __str__(self):
         return self.annotate()

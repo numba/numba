@@ -69,4 +69,3 @@ def parse_prototype(text):
     symbol = text[s:e]
     functype = text[e + 1:]
     return symbol, functype
-

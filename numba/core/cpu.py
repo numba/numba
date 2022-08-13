@@ -19,6 +19,7 @@ from numba.np import ufunc_db
 
 # Keep those structures in sync with _dynfunc.c.
 
+
 class ClosureBody(cgutils.Structure):
     _fields = [('env', types.pyobject)]
 
@@ -160,7 +161,6 @@ class CPUContext(BaseContext):
 
         return dictobject.build_map(self, builder, dict_type, item_types, items)
 
-
     def post_lowering(self, mod, library):
         if self.fastmath:
             fastmathpass.rewrite_module(mod, self.fastmath)
@@ -176,7 +176,8 @@ class CPUContext(BaseContext):
                                release_gil=False):
         wrapper_module = self.create_module("wrapper")
         fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
-        wrapper_callee = ir.Function(wrapper_module, fnty, fndesc.llvm_func_name)
+        wrapper_callee = ir.Function(
+            wrapper_module, fnty, fndesc.llvm_func_name)
         builder = PyCallWrapper(self, wrapper_module, wrapper_callee,
                                 fndesc, env, call_helper=call_helper,
                                 release_gil=release_gil)
@@ -186,12 +187,14 @@ class CPUContext(BaseContext):
     def create_cfunc_wrapper(self, library, fndesc, env, call_helper):
         wrapper_module = self.create_module("cfunc_wrapper")
         fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
-        wrapper_callee = ir.Function(wrapper_module, fnty, fndesc.llvm_func_name)
+        wrapper_callee = ir.Function(
+            wrapper_module, fnty, fndesc.llvm_func_name)
 
         ll_argtypes = [self.get_value_type(ty) for ty in fndesc.argtypes]
         ll_return_type = self.get_value_type(fndesc.restype)
         wrapty = ir.FunctionType(ll_return_type, ll_argtypes)
-        wrapfn = ir.Function(wrapper_module, wrapty, fndesc.llvm_cfunc_wrapper_name)
+        wrapfn = ir.Function(wrapper_module, wrapty,
+                             fndesc.llvm_cfunc_wrapper_name)
         builder = ir.IRBuilder(wrapfn.append_basic_block('entry'))
 
         status, out = self.call_conv.call_function(
@@ -228,7 +231,8 @@ class CPUContext(BaseContext):
         """
         # Code generation
         baseptr = library.get_pointer_to_function(fndesc.llvm_func_name)
-        fnptr = library.get_pointer_to_function(fndesc.llvm_cpython_wrapper_name)
+        fnptr = library.get_pointer_to_function(
+            fndesc.llvm_cpython_wrapper_name)
 
         # Note: we avoid reusing the original docstring to avoid encoding
         # issues on Python 2, see issue #1908
@@ -279,6 +283,7 @@ _options_mixin = include_default_options(
     "_dbg_optnone",
 )
 
+
 class CPUTargetOptions(_options_mixin, TargetOptions):
     def finalize(self, flags, options):
         if not flags.is_set("enable_pyobject"):
@@ -321,6 +326,7 @@ class CPUTargetOptions(_options_mixin, TargetOptions):
 
 # ----------------------------------------------------------------------------
 # Internal
+
 
 def remove_refct_calls(func):
     """

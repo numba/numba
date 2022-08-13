@@ -130,4 +130,3 @@ class TypeGraph(object):
 
     def unsafe(self, a, b):
         self.insert_rule(a, b, Conversion.unsafe)
-

@@ -43,6 +43,7 @@ class RewriteRegistry(object):
         """
         if kind not in self._kinds:
             raise KeyError("invalid kind %r" % (kind,))
+
         def do_register(rewrite_cls):
             if not issubclass(rewrite_cls, Rewrite):
                 raise TypeError('{0} is not a subclass of Rewrite'.format(

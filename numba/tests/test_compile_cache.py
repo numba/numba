@@ -35,10 +35,10 @@ class TestCompileCache(unittest.TestCase):
 
     def test_cache(self):
         def times2(i):
-            return 2*i
+            return 2 * i
 
         def times3(i):
-            return i*3
+            return i * 3
 
         with self._context_builder_sig_args() as (
             context, builder, sig, args,
@@ -67,7 +67,7 @@ class TestCompileCache(unittest.TestCase):
 
             sig2 = typing.signature(types.float64, types.float64)
             llvm_fnty2 = context.call_conv.get_function_type(sig2.return_type,
-                                                            sig2.args)
+                                                             sig2.args)
             function2 = cgutils.get_or_insert_function(builder.module,
                                                        llvm_fnty2, 'test_fn_2')
             args2 = context.call_conv.get_arguments(function2)

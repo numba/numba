@@ -19,6 +19,7 @@ from numba.tests.support import tag, _32bit, captured_stdout
 
 PARALLEL_SUPPORTED = not _32bit
 
+
 def comp_list(n):
     l = [i for i in range(n)]
     s = 0
@@ -255,11 +256,14 @@ class TestArrayComprehension(unittest.TestCase):
         if assert_dtype:
             self.assertEqual(cres[1].dtype, assert_dtype)
         if assert_allocate_list:
-            self.assertIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
+            self.assertIn('allocate list',
+                          cfunc.inspect_llvm(cfunc.signatures[0]))
         else:
-            self.assertNotIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
+            self.assertNotIn(
+                'allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
         if run_parallel:
-            self.assertIn('@do_scheduling', cfunc.inspect_llvm(cfunc.signatures[0]))
+            self.assertIn('@do_scheduling',
+                          cfunc.inspect_llvm(cfunc.signatures[0]))
 
     def test_comp_with_array_1(self):
         def comp_with_array_1(n):
@@ -312,7 +316,8 @@ class TestArrayComprehension(unittest.TestCase):
 
     def test_comp_nest_with_array_3(self):
         def comp_nest_with_array_3(n):
-            l = np.array([[[i * j * k for k in range(n)] for j in range(n)] for i in range(n)])
+            l = np.array([[[i * j * k for k in range(n)]
+                         for j in range(n)] for i in range(n)])
             return l
 
         self.check(comp_nest_with_array_3, 5)
@@ -355,14 +360,15 @@ class TestArrayComprehension(unittest.TestCase):
 
     def test_comp_nest_with_array_conditional(self):
         def comp_nest_with_array_conditional(n):
-            l = np.array([[i * j for j in range(n)] for i in range(n) if i % 2 == 1])
+            l = np.array([[i * j for j in range(n)]
+                         for i in range(n) if i % 2 == 1])
             return l
         self.check(comp_nest_with_array_conditional, 5,
                    assert_allocate_list=True)
 
     def test_comp_nest_with_dependency(self):
         def comp_nest_with_dependency(n):
-            l = np.array([[i * j for j in range(i+1)] for i in range(n)])
+            l = np.array([[i * j for j in range(i + 1)] for i in range(n)])
             return l
         # test is expected to fail
         with self.assertRaises(TypingError) as raises:
@@ -387,6 +393,7 @@ class TestArrayComprehension(unittest.TestCase):
             return a
         # const 1D array is actually inlined
         self.check(no_array_comp1, 10, assert_allocate_list=False)
+
         def no_array_comp2(n):
             l = [1,2,3,4]
             a = np.array(l)
@@ -470,7 +477,8 @@ class TestArrayComprehension(unittest.TestCase):
             str(raises.exception),
         )
         self.assertIn(
-            "(array({}, 1d, C), Literal[int](0), complex128)".format(types.intp),
+            "(array({}, 1d, C), Literal[int](0), complex128)".format(
+                types.intp),
             str(raises.exception),
         )
 

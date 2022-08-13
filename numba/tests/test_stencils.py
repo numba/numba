@@ -105,7 +105,7 @@ class TestStencilBase(unittest.TestCase):
         flags = Flags()
         flags.nrt = True
         options = True if not kws else kws
-        flags.auto_parallel=ParallelOptions(options)
+        flags.auto_parallel = ParallelOptions(options)
         return self._compile_this(func, sig, flags)
 
     def compile_njit(self, func, sig):
@@ -453,15 +453,15 @@ class TestStencil(TestStencilBase):
             B = np.zeros(n)
             c = 1
             numba.stencil(lambda a,c : 0.3 * (a[-c] + a[0] + a[c]))(
-                                                                   A, c, out=B)
+                A, c, out=B)
             return B
 
         def test_impl2(n):
             A = np.arange(n)
             B = np.zeros(n)
             c = 2
-            numba.stencil(lambda a,c : 0.3 * (a[1-c] + a[0] + a[c-1]))(
-                                                                   A, c, out=B)
+            numba.stencil(lambda a,c : 0.3 * (a[1 - c] + a[0] + a[c - 1]))(
+                A, c, out=B)
             return B
 
         # recursive expr case
@@ -469,8 +469,8 @@ class TestStencil(TestStencilBase):
             A = np.arange(n)
             B = np.zeros(n)
             c = 2
-            numba.stencil(lambda a,c : 0.3 * (a[-c+1] + a[0] + a[c-1]))(
-                                                                   A, c, out=B)
+            numba.stencil(lambda a,c : 0.3 * (a[-c + 1] + a[0] + a[c - 1]))(
+                A, c, out=B)
             return B
 
         # multi-constant case
@@ -479,8 +479,8 @@ class TestStencil(TestStencilBase):
             B = np.zeros(n)
             d = 1
             c = 2
-            numba.stencil(lambda a,c,d : 0.3 * (a[-c+d] + a[0] + a[c-d]))(
-                                                                A, c, d, out=B)
+            numba.stencil(lambda a,c,d : 0.3 * (a[-c + d] + a[0] + a[c - d]))(
+                A, c, d, out=B)
             return B
 
         def test_impl_seq(n):
@@ -530,7 +530,8 @@ class TestStencil(TestStencilBase):
         def test_impl(A):
             return numba.stencil(lambda a: 0.3 * (a[-1] + a[0] + a[1]))(A)
 
-        cpfunc = self.compile_parallel(test_impl, (numba.float64[:],), stencil=False)
+        cpfunc = self.compile_parallel(
+            test_impl, (numba.float64[:],), stencil=False)
         self.assertNotIn('@do_scheduling', cpfunc.library.get_llvm_str())
 
     @skip_unsupported
@@ -542,14 +543,14 @@ class TestStencil(TestStencilBase):
             @stencil
             def fun(a):
                 c = 2
-                return a[-c+1]
+                return a[-c + 1]
             B = fun(n)
             return B
 
         def test_impl_seq(n):
             B = np.zeros(len(n), dtype=int)
             for i in range(1, len(n)):
-                B[i] = n[i-1]
+                B[i] = n[i - 1]
             return B
 
         n = np.arange(10)
@@ -606,7 +607,7 @@ class TestStencil(TestStencilBase):
         for compiler in [self.compile_njit, self.compile_parallel]:
             try:
                 compiler(wrapped,())
-            except(NumbaValueError, LoweringError) as e:
+            except (NumbaValueError, LoweringError) as e:
                 self.assertIn(msg, str(e))
             else:
                 raise AssertionError("Expected error was not raised")
@@ -891,12 +892,12 @@ class pyStencilGenerator:
                 if self._idx_len == -1:
                     self._idx_len = len(idx)
                 else:
-                    if(self._idx_len != len(idx)):
+                    if (self._idx_len != len(idx)):
                         raise ValueError(
                             "Relative indexing mismatch detected")
                 if isinstance(node.ctx, ast.Store):
                     msg = ("Assignments to array passed to "
-                            "stencil kernels is not allowed")
+                           "stencil kernels is not allowed")
                     raise ValueError(msg)
                 context = ast.Load()
                 newnode = ast.Subscript(
@@ -950,12 +951,12 @@ class pyStencilGenerator:
                 if self._idx_len == -1:
                     self._idx_len = 1
                 else:
-                    if(self._idx_len != 1):
+                    if (self._idx_len != 1):
                         raise ValueError(
                             "Relative indexing mismatch detected")
                 if isinstance(node.ctx, ast.Store):
                     msg = ("Assignments to array passed to "
-                            "stencil kernels is not allowed")
+                           "stencil kernels is not allowed")
                     raise ValueError(msg)
                 context = ast.Load()
                 newnode = ast.Subscript(
@@ -998,18 +999,18 @@ class pyStencilGenerator:
                     useval = self._const_assigns.get(val, val)
                     value = self.get_val_from_num(val)
                     tmp = ast.BinOp(
-                            left=ast.Name(
-                                id=self._id_pat % self.ids[x],
-                                ctx=ast.Load()),
-                            op=ast.Add(),
-                            right=useval,
-                            ctx=ast.Load())
+                        left=ast.Name(
+                            id=self._id_pat % self.ids[x],
+                            ctx=ast.Load()),
+                        op=ast.Add(),
+                        right=useval,
+                        ctx=ast.Load())
                     ast.copy_location(tmp, node)
                     ast.fix_missing_locations(tmp)
                     return tmp
                 newnode = ast.Slice(gen_idx(node.lower, i),
-                                 gen_idx(node.upper, i),
-                                 node.step)
+                                    gen_idx(node.upper, i),
+                                    node.step)
                 ast.copy_location(newnode, node)
                 ast.fix_missing_locations(newnode)
                 return newnode
@@ -1038,13 +1039,13 @@ class pyStencilGenerator:
                 if self._idx_len == -1:
                     self._idx_len = len(node.slice.dims)
                 else:
-                    if(self._idx_len != len(node.slice.dims)):
+                    if (self._idx_len != len(node.slice.dims)):
                         raise ValueError(
                             "Relative indexing mismatch detected")
 
                 if isinstance(node.ctx, ast.Store):
                     msg = ("Assignments to array passed to "
-                            "stencil kernels is not allowed")
+                           "stencil kernels is not allowed")
                     raise ValueError(msg)
                 context = ast.Load()
                 newnode = ast.Subscript(
@@ -1052,8 +1053,8 @@ class pyStencilGenerator:
                     slice=ast.ExtSlice(
                         dims=idx,
                         ctx=ast.Load()),
-                        ctx=context
-                        )
+                    ctx=context
+                )
 
                 # now work out max/min for index ranges i.e. stencil size
                 if self._mins is None and self._maxes is None:
@@ -1101,13 +1102,12 @@ class pyStencilGenerator:
                 ast.fix_missing_locations(newnode)
                 return newnode
 
-
             def handleSlice(node):
                 idx = computeSlice(0, node.slice)
-                idx.ctx=ast.Load()
+                idx.ctx = ast.Load()
                 if isinstance(node.ctx, ast.Store):
                     msg = ("Assignments to array passed to "
-                            "stencil kernels is not allowed")
+                           "stencil kernels is not allowed")
                     raise ValueError(msg)
                 context = ast.Load()
                 newnode = ast.Subscript(
@@ -1120,7 +1120,7 @@ class pyStencilGenerator:
                 if self._idx_len == -1:
                     self._idx_len = 1
                 else:
-                    if(self._idx_len != 1):
+                    if (self._idx_len != 1):
                         raise ValueError(
                             "Relative indexing mismatch detected")
 
@@ -1148,7 +1148,6 @@ class pyStencilGenerator:
                     self._maxes[0] = self._neighborhood[0][1]
 
                 return newnode
-
 
             node = self.generic_visit(node)
             if (node.value.id in self._argnames) and (
@@ -2766,7 +2765,7 @@ class TestManyStencils(TestStencilBase):
         """ Issue #3454, const(int) == const(int) evaluating incorrectly. """
         def kernel(a):
             b = 0
-            if(2 == 0):
+            if (2 == 0):
                 b = 2
             return a[0, 0] + b
 
@@ -2777,8 +2776,8 @@ class TestManyStencils(TestStencilBase):
         """ Issue #3497, bool return type evaluating incorrectly. """
         def kernel(a):
             return (a[-1, -1] ^ a[-1, 0] ^ a[-1, 1] ^
-                    a[0, -1]  ^ a[0, 0]  ^ a[0, 1]  ^
-                    a[1, -1]  ^ a[1, 0]  ^ a[1, 1])
+                    a[0, -1] ^ a[0, 0] ^ a[0, 1] ^
+                    a[1, -1] ^ a[1, 0] ^ a[1, 1])
 
         A = np.array(np.arange(20) % 2).reshape(4, 5).astype(np.bool_)
         self.check(kernel, A)
@@ -2787,8 +2786,8 @@ class TestManyStencils(TestStencilBase):
         """ Issue #3497, bool return type evaluating incorrectly. """
         def kernel(a):
             return (a[-1, -1] ^ a[-1, 0] ^ a[-1, 1] ^
-                    a[0, -1]  ^ a[0, 0]  ^ a[0, 1]  ^
-                    a[1, -1]  ^ a[1, 0]  ^ a[1, 1])
+                    a[0, -1] ^ a[0, 0] ^ a[0, 1] ^
+                    a[1, -1] ^ a[1, 0] ^ a[1, 1])
 
         A = np.array(np.arange(20) % 2).reshape(4, 5).astype(np.bool_)
         self.check(kernel, A, options={'cval': True})

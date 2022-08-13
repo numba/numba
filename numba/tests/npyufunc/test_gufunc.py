@@ -21,7 +21,7 @@ def matmulcore(A, B, C):
 
 
 def axpy(a, x, y, out):
-    out[0] = a * x  + y
+    out[0] = a * x + y
 
 
 class TestGUFunc(TestCase):
@@ -29,8 +29,10 @@ class TestGUFunc(TestCase):
 
     def check_matmul_gufunc(self, gufunc):
         matrix_ct = 1001
-        A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2, 4)
-        B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(matrix_ct, 4, 5)
+        A = np.arange(matrix_ct * 2 * 4,
+                      dtype=np.float32).reshape(matrix_ct, 2, 4)
+        B = np.arange(matrix_ct * 4 * 5,
+                      dtype=np.float32).reshape(matrix_ct, 4, 5)
 
         C = gufunc(A, B)
         Gold = ut.matrix_multiply(A, B)
@@ -93,7 +95,8 @@ class TestGUFunc(TestCase):
 
         self.assertEqual("numba.tests.npyufunc.test_gufunc", gufunc.__module__)
         self.assertEqual("gufunc", gufunc.__name__)
-        self.assertEqual("TestGUFunc.test_docstring.<locals>.gufunc", gufunc.__qualname__)
+        self.assertEqual(
+            "TestGUFunc.test_docstring.<locals>.gufunc", gufunc.__qualname__)
         self.assertEqual("docstring for gufunc", gufunc.__doc__)
 
 
@@ -115,18 +118,23 @@ class TestDynamicGUFunc(TestCase):
         gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)',
                              target=self.target, is_dynamic=True)
         matrix_ct = 10
-        Ai64 = np.arange(matrix_ct * 2 * 4, dtype=np.int64).reshape(matrix_ct, 2, 4)
-        Bi64 = np.arange(matrix_ct * 4 * 5, dtype=np.int64).reshape(matrix_ct, 4, 5)
-        Ci64 = np.arange(matrix_ct * 2 * 5, dtype=np.int64).reshape(matrix_ct, 2, 5)
+        Ai64 = np.arange(matrix_ct * 2 * 4,
+                         dtype=np.int64).reshape(matrix_ct, 2, 4)
+        Bi64 = np.arange(matrix_ct * 4 * 5,
+                         dtype=np.int64).reshape(matrix_ct, 4, 5)
+        Ci64 = np.arange(matrix_ct * 2 * 5,
+                         dtype=np.int64).reshape(matrix_ct, 2, 5)
         check_matmul_gufunc(gufunc, Ai64, Bi64, Ci64)
 
-        A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2, 4)
-        B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(matrix_ct, 4, 5)
-        C = np.arange(matrix_ct * 2 * 5, dtype=np.float32).reshape(matrix_ct, 2, 5)
+        A = np.arange(matrix_ct * 2 * 4,
+                      dtype=np.float32).reshape(matrix_ct, 2, 4)
+        B = np.arange(matrix_ct * 4 * 5,
+                      dtype=np.float32).reshape(matrix_ct, 4, 5)
+        C = np.arange(matrix_ct * 2 * 5,
+                      dtype=np.float32).reshape(matrix_ct, 2, 5)
         check_matmul_gufunc(gufunc, A, B, C)  # trigger compilation
 
         self.assertEqual(len(gufunc.types), 2)  # ensure two versions of gufunc
-
 
     def test_dynamic_ufunc_like(self):
 
@@ -146,7 +154,6 @@ class TestDynamicGUFunc(TestCase):
                              is_dynamic=True)
         x = np.arange(10, dtype=np.intp)
         check_ufunc_output(gufunc, x)
-
 
     def test_dynamic_scalar_output(self):
         """
@@ -210,7 +217,8 @@ class TestDynamicGUFunc(TestCase):
         attrs = ['signature', 'accumulate', 'at', 'outer', 'reduce', 'reduceat']
         for attr in attrs:
             contains = hasattr(gufunc, attr)
-            self.assertTrue(contains, 'dynamic gufunc not exporting "%s"' % (attr,))
+            self.assertTrue(
+                contains, 'dynamic gufunc not exporting "%s"' % (attr,))
 
         a = np.array([1, 2, 3, 4])
         res = np.array([0, 0, 0, 0])
@@ -224,19 +232,23 @@ class TestDynamicGUFunc(TestCase):
 
         with self.assertRaises(RuntimeError) as raises:
             gufunc.accumulate(a)
-        self.assertEqual(str(raises.exception), "Reduction not defined on ufunc with signature")
+        self.assertEqual(str(raises.exception),
+                         "Reduction not defined on ufunc with signature")
 
         with self.assertRaises(RuntimeError) as raises:
             gufunc.reduce(a)
-        self.assertEqual(str(raises.exception), "Reduction not defined on ufunc with signature")
+        self.assertEqual(str(raises.exception),
+                         "Reduction not defined on ufunc with signature")
 
         with self.assertRaises(RuntimeError) as raises:
             gufunc.reduceat(a, [0, 2])
-        self.assertEqual(str(raises.exception), "Reduction not defined on ufunc with signature")
+        self.assertEqual(str(raises.exception),
+                         "Reduction not defined on ufunc with signature")
 
         with self.assertRaises(TypeError) as raises:
             gufunc.outer(a, a)
-        self.assertEqual(str(raises.exception), "method outer is not allowed in ufunc with non-trivial signature")
+        self.assertEqual(str(
+            raises.exception), "method outer is not allowed in ufunc with non-trivial signature")
 
     def test_gufunc_attributes2(self):
         @guvectorize('(),()->()')
@@ -256,7 +268,8 @@ class TestDynamicGUFunc(TestCase):
         self.assertIsNone(add.signature)
         self.assertEqual(add.reduce(a), 10)
         self.assertPreciseEqual(add.accumulate(a), np.array([1, 3, 6, 10]))
-        self.assertPreciseEqual(add.outer([0, 1], [1, 2]), np.array([[1, 2], [2, 3]]))
+        self.assertPreciseEqual(
+            add.outer([0, 1], [1, 2]), np.array([[1, 2], [2, 3]]))
         self.assertPreciseEqual(add.reduceat(a, [0, 2]), np.array([3, 7]))
 
         x = np.array([1, 2, 3, 4])

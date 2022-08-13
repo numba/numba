@@ -5,9 +5,9 @@ Implementation of tuple objects
 import operator
 
 from numba.core.imputils import (lower_builtin, lower_getattr_generic,
-                                    lower_cast, lower_constant, iternext_impl,
-                                    impl_ret_borrowed, impl_ret_untracked,
-                                    RefType)
+                                 lower_cast, lower_constant, iternext_impl,
+                                 impl_ret_borrowed, impl_ret_untracked,
+                                 RefType)
 from numba.core import typing, types, cgutils
 from numba.core.extending import overload_method, overload, intrinsic
 
@@ -26,12 +26,14 @@ def namedtuple_constructor(context, builder, sig, args):
     # The tuple's contents are borrowed
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
+
 @lower_builtin(operator.add, types.BaseTuple, types.BaseTuple)
 def tuple_add(context, builder, sig, args):
     left, right = [cgutils.unpack_tuple(builder, x) for x in args]
     res = context.make_tuple(builder, sig.return_type, left + right)
     # The tuple's contents are borrowed
     return impl_ret_borrowed(context, builder, sig.return_type, res)
+
 
 def tuple_cmp_ordered(context, builder, op, sig, args):
     tu, tv = sig.args
@@ -41,7 +43,8 @@ def tuple_cmp_ordered(context, builder, op, sig, args):
     for i, (ta, tb) in enumerate(zip(tu.types, tv.types)):
         a = builder.extract_value(u, i)
         b = builder.extract_value(v, i)
-        not_equal = context.generic_compare(builder, operator.ne, (ta, tb), (a, b))
+        not_equal = context.generic_compare(
+            builder, operator.ne, (ta, tb), (a, b))
         with builder.if_then(not_equal):
             pred = context.generic_compare(builder, op, (ta, tb), (a, b))
             builder.store(pred, res)
@@ -70,25 +73,30 @@ def tuple_eq(context, builder, sig, args):
         res = builder.and_(res, pred)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+
 @lower_builtin(operator.ne, types.BaseTuple, types.BaseTuple)
 def tuple_ne(context, builder, sig, args):
     res = builder.not_(tuple_eq(context, builder, sig, args))
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 @lower_builtin(operator.lt, types.BaseTuple, types.BaseTuple)
 def tuple_lt(context, builder, sig, args):
     res = tuple_cmp_ordered(context, builder, operator.lt, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+
 @lower_builtin(operator.le, types.BaseTuple, types.BaseTuple)
 def tuple_le(context, builder, sig, args):
     res = tuple_cmp_ordered(context, builder, operator.le, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+
 @lower_builtin(operator.gt, types.BaseTuple, types.BaseTuple)
 def tuple_gt(context, builder, sig, args):
     res = tuple_cmp_ordered(context, builder, operator.gt, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 @lower_builtin(operator.ge, types.BaseTuple, types.BaseTuple)
 def tuple_ge(context, builder, sig, args):
@@ -96,6 +104,7 @@ def tuple_ge(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 # for hashing see hashing.py
+
 
 @lower_getattr_generic(types.BaseNamedTuple)
 def namedtuple_getattr(context, builder, typ, value, attr):
@@ -118,6 +127,7 @@ def unituple_constant(context, builder, ty, pyval):
     return impl_ret_borrowed(
         context, builder, ty, cgutils.pack_array(builder, consts),
     )
+
 
 @lower_constant(types.Tuple)
 @lower_constant(types.NamedTuple)
@@ -197,6 +207,7 @@ def getitem_literal_idx(tup, idx):
         return None
 
     idx_val = idx.literal_value
+
     def getitem_literal_idx_impl(tup, idx):
         return tup[idx_val]
 
@@ -230,7 +241,7 @@ def getitem_typed(context, builder, sig, args):
 
         with builder.goto_block(bbelse):
             context.call_conv.return_user_exc(builder, IndexError,
-                                            errmsg_oob)
+                                              errmsg_oob)
 
         lrtty = context.get_value_type(sig.return_type)
         voidptrty = context.get_value_type(types.voidptr)
@@ -267,12 +278,12 @@ def getitem_typed(context, builder, sig, args):
                 # suggests this is safe.
                 # End Dragon warning...
                 DOCAST = context.typing_context.unify_types(sig.args[0][i],
-                                        sig.return_type) == sig.return_type
+                                                            sig.return_type) == sig.return_type
                 if DOCAST:
                     value_slot = builder.alloca(lrtty,
                                                 name="TYPED_VALUE_SLOT%s" % i)
                     casted = context.cast(builder, value, sig.args[0][i],
-                                        sig.return_type)
+                                          sig.return_type)
                     builder.store(casted, value_slot)
                 else:
                     value_slot = builder.alloca(value.type,
@@ -377,7 +388,7 @@ def static_getitem_tuple(context, builder, sig, args):
 @lower_cast(types.BaseTuple, types.BaseTuple)
 def tuple_to_tuple(context, builder, fromty, toty, val):
     if (isinstance(fromty, types.BaseNamedTuple)
-        or isinstance(toty, types.BaseNamedTuple)):
+            or isinstance(toty, types.BaseNamedTuple)):
         # Disallowed by typing layer
         raise NotImplementedError
 

@@ -6,6 +6,7 @@ from numba.core import utils, typing, dispatcher, cpu
 # -----------------------------------------------------------------------------
 # Default CPU target descriptors
 
+
 class _NestedContext(object):
     _typing_context = None
     _target_context = None
@@ -85,6 +86,7 @@ class DelayedRegistry(utils.UniqueDict):
         the first time it is is used.  It is used for part of a deferred
         initialization strategy.
     """
+
     def __init__(self, *args, **kws):
         self.ondemand = utils.UniqueDict()
         self.key_type = kws.pop('key_type', None)

@@ -63,6 +63,7 @@ PYTHON_COMPAREOPMAP = {
     operator.contains: 'in'
 }
 
+
 class PyLower(BaseLower):
 
     GeneratorLower = generators.PyGeneratorLower
@@ -290,7 +291,7 @@ class PyLower(BaseLower):
             if expr.vararg:
                 # Expand *args
                 varargs = self.pyapi.sequence_tuple(
-                                self.loadvar(expr.vararg.name))
+                    self.loadvar(expr.vararg.name))
                 new_args = self.pyapi.sequence_concat(args, varargs)
                 self.decref(varargs)
                 self.decref(args)
@@ -357,7 +358,8 @@ class PyLower(BaseLower):
                     # Make the tuple valid by inserting None as dummy
                     # iteration "result" (it will be ignored).
                     self.pyapi.tuple_setitem(pair, 0, self.pyapi.make_none())
-            self.pyapi.tuple_setitem(pair, 1, self.pyapi.bool_from_bool(is_valid))
+            self.pyapi.tuple_setitem(
+                pair, 1, self.pyapi.bool_from_bool(is_valid))
             return pair
         elif expr.op == 'pair_first':
             pair = self.loadvar(expr.value.name)
@@ -377,7 +379,7 @@ class PyLower(BaseLower):
             tup_size = self.pyapi.tuple_size(tup)
             expected_size = self.context.get_constant(types.intp, expr.count)
             has_wrong_size = self.builder.icmp_unsigned('!=',
-                                               tup_size, expected_size)
+                                                        tup_size, expected_size)
             with cgutils.if_unlikely(self.builder, has_wrong_size):
                 self.return_exception(ValueError)
             return tup
@@ -458,7 +460,7 @@ class PyLower(BaseLower):
 
             with self.builder.if_then(obj_is_null):
                 mod = self.pyapi.dict_getitem(moddict,
-                                          self._freeze_string("__builtins__"))
+                                              self._freeze_string("__builtins__"))
                 builtin = self.builtin_lookup(mod, name)
                 bbif = self.builder.basic_block
 

@@ -26,6 +26,7 @@ class _Registry(object):
 
     def register(self, typeclass):
         assert issubclass(typeclass, types.Type)
+
         def decorator(func):
             if typeclass in self.functions:
                 raise KeyError("duplicate registration for %s" % (typeclass,))
@@ -41,6 +42,7 @@ class _Registry(object):
                 return func
         return default
 
+
 # Registries of boxing / unboxing implementations
 _boxers = _Registry()
 _unboxers = _Registry()
@@ -49,6 +51,7 @@ _reflectors = _Registry()
 box = _boxers.register
 unbox = _unboxers.register
 reflect = _reflectors.register
+
 
 class _BoxContext(namedtuple("_BoxContext",
                   ("context", "builder", "pyapi", "env_manager"))):
@@ -190,7 +193,8 @@ class PythonAPI(object):
         self.py_ssize_t = self.context.get_value_type(types.intp)
         self.cstring = ir.PointerType(ir.IntType(8))
         self.gil_state = ir.IntType(_helperlib.py_gil_state_size * 8)
-        self.py_buffer_t = ir.ArrayType(ir.IntType(8), _helperlib.py_buffer_size)
+        self.py_buffer_t = ir.ArrayType(
+            ir.IntType(8), _helperlib.py_buffer_size)
         self.py_hash_t = self.py_ssize_t
         self.py_unicode_1byte_kind = _helperlib.py_unicode_1byte_kind
         self.py_unicode_2byte_kind = _helperlib.py_unicode_2byte_kind
@@ -294,7 +298,8 @@ class PythonAPI(object):
         return self.builder.call(fn, (exctype, msg))
 
     def err_format(self, exctype, msg, *format_args):
-        fnty = ir.FunctionType(ir.VoidType(), [self.pyobj, self.cstring], var_arg=True)
+        fnty = ir.FunctionType(
+            ir.VoidType(), [self.pyobj, self.cstring], var_arg=True)
         fn = self._get_function(fnty, name="PyErr_Format")
         if isinstance(exctype, str):
             exctype = self.get_c_object(exctype)
@@ -743,7 +748,6 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyList_SetSlice")
         return self.builder.call(fn, (lst, start, stop, obj))
 
-
     #
     # Concrete tuple API
     #
@@ -780,7 +784,8 @@ class PythonAPI(object):
         """
         Steals a reference to `item`.
         """
-        fnty = ir.FunctionType(ir.IntType(32), [self.pyobj, ir.IntType(32), self.pyobj])
+        fnty = ir.FunctionType(ir.IntType(
+            32), [self.pyobj, ir.IntType(32), self.pyobj])
         setitem_fn = self._get_function(fnty, name='PyTuple_SetItem')
         index = self.context.get_constant(types.int32, index)
         self.builder.call(setitem_fn, [tuple_val, index, item])
@@ -837,6 +842,7 @@ class PythonAPI(object):
         bb_end = builder.append_basic_block("bb_end")
 
         builder.branch(bb_body)
+
         def do_break():
             builder.branch(bb_end)
 
@@ -913,7 +919,6 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="numba_reset_pyobject_private_data")
         return self.builder.call(fn, (obj,))
 
-
     #
     # Other APIs (organize them better!)
     #
@@ -933,7 +938,7 @@ class PythonAPI(object):
     def call_method(self, callee, method, objargs=()):
         cname = self.context.insert_const_string(self.module, method)
         fnty = ir.FunctionType(self.pyobj, [self.pyobj, self.cstring, self.cstring],
-                             var_arg=True)
+                               var_arg=True)
         fn = self._get_function(fnty, name="PyObject_CallMethod")
         fmt = 'O' * len(objargs)
         cfmt = self.context.insert_const_string(self.module, fmt)
@@ -977,7 +982,8 @@ class PythonAPI(object):
         ops = ['<', '<=', '==', '!=', '>', '>=']
         if opstr in ops:
             opid = ops.index(opstr)
-            fnty = ir.FunctionType(self.pyobj, [self.pyobj, self.pyobj, ir.IntType(32)])
+            fnty = ir.FunctionType(
+                self.pyobj, [self.pyobj, self.pyobj, ir.IntType(32)])
             fn = self._get_function(fnty, name="PyObject_RichCompare")
             lopid = self.context.get_constant(types.int32, opid)
             return self.builder.call(fn, (lhs, rhs, lopid))
@@ -1033,12 +1039,14 @@ class PythonAPI(object):
 
     def object_setattr_string(self, obj, attr, val):
         cstr = self.context.insert_const_string(self.module, attr)
-        fnty = ir.FunctionType(ir.IntType(32), [self.pyobj, self.cstring, self.pyobj])
+        fnty = ir.FunctionType(ir.IntType(
+            32), [self.pyobj, self.cstring, self.pyobj])
         fn = self._get_function(fnty, name="PyObject_SetAttrString")
         return self.builder.call(fn, [obj, cstr, val])
 
     def object_setattr(self, obj, attr, val):
-        fnty = ir.FunctionType(ir.IntType(32), [self.pyobj, self.pyobj, self.pyobj])
+        fnty = ir.FunctionType(ir.IntType(
+            32), [self.pyobj, self.pyobj, self.pyobj])
         fn = self._get_function(fnty, name="PyObject_SetAttr")
         return self.builder.call(fn, [obj, attr, val])
 
@@ -1064,7 +1072,8 @@ class PythonAPI(object):
         """
         obj[key] = val
         """
-        fnty = ir.FunctionType(ir.IntType(32), [self.pyobj, self.pyobj, self.pyobj])
+        fnty = ir.FunctionType(ir.IntType(
+            32), [self.pyobj, self.pyobj, self.pyobj])
         fn = self._get_function(fnty, name="PyObject_SetItem")
         return self.builder.call(fn, (obj, key, val))
 
@@ -1145,7 +1154,8 @@ class PythonAPI(object):
         return self.builder.call(fn, [string])
 
     def string_from_kind_and_data(self, kind, string, size):
-        fnty = ir.FunctionType(self.pyobj, [ir.IntType(32), self.cstring, self.py_ssize_t])
+        fnty = ir.FunctionType(
+            self.pyobj, [ir.IntType(32), self.cstring, self.py_ssize_t])
         fname = "PyUnicode_FromKindAndData"
         fn = self._get_function(fnty, name=fname)
         return self.builder.call(fn, [kind, string, size])
@@ -1197,7 +1207,8 @@ class PythonAPI(object):
 
         intty = ir.IntType(32)
         # Embed the Python type of the array (maybe subclass) in the LLVM IR.
-        serial_aryty_pytype = self.unserialize(self.serialize_object(aryty.box_type))
+        serial_aryty_pytype = self.unserialize(
+            self.serialize_object(aryty.box_type))
 
         fnty = ir.FunctionType(self.pyobj,
                                [self.voidptr, self.pyobj, intty, intty, self.pyobj])
@@ -1222,12 +1233,12 @@ class PythonAPI(object):
         fnty = ir.FunctionType(
             cgutils.voidptr_t,
             [cgutils.voidptr_t, cgutils.voidptr_t],
-            )
+        )
         fn = cgutils.get_or_insert_function(
             mod,
             fnty,
             "NRT_meminfo_new_from_pyobject",
-            )
+        )
         fn.args[0].add_attribute('nocapture')
         fn.args[1].add_attribute('nocapture')
         fn.return_value.add_attribute("noalias")
@@ -1335,7 +1346,7 @@ class PythonAPI(object):
         a {i8* data, i32 length} structure.
         """
         fnty = ir.FunctionType(self.pyobj,
-                             (self.voidptr, ir.IntType(32), self.voidptr))
+                               (self.voidptr, ir.IntType(32), self.voidptr))
         fn = self._get_function(fnty, name="numba_unpickle")
         ptr = self.builder.extract_value(self.builder.load(structptr), 0)
         n = self.builder.extract_value(self.builder.load(structptr), 1)
@@ -1350,7 +1361,8 @@ class PythonAPI(object):
         # First make the array constant
         data = serialize.dumps(obj)
         assert len(data) < 2**31
-        name = ".const.pickledata.%s" % (id(obj) if config.DIFF_IR == 0 else "DIFF_IR")
+        name = ".const.pickledata.%s" % (
+            id(obj) if config.DIFF_IR == 0 else "DIFF_IR")
         bdata = cgutils.make_bytearray(data)
         # Make SHA1 hash on the pickled content
         # NOTE: update buffer size in numba_unpickle() when changing the
@@ -1365,7 +1377,7 @@ class PythonAPI(object):
             arr.bitcast(self.voidptr),
             Constant(ir.IntType(32), arr.type.pointee.count),
             hasharr.bitcast(self.voidptr),
-            ])
+        ])
         return struct
 
     def serialize_object(self, obj):
@@ -1378,7 +1390,8 @@ class PythonAPI(object):
             gv = self.module.__serialized[obj]
         except KeyError:
             struct = self.serialize_uncached(obj)
-            name = ".const.picklebuf.%s" % (id(obj) if config.DIFF_IR == 0 else "DIFF_IR")
+            name = ".const.picklebuf.%s" % (
+                id(obj) if config.DIFF_IR == 0 else "DIFF_IR")
             gv = self.context.insert_unique_const(self.module, name, struct)
             # Make the id() (and hence the name) unique while populating the module.
             self.module.__serialized[obj] = gv
@@ -1457,13 +1470,16 @@ class PythonAPI(object):
         gendesc = self.context.get_generator_desc(typ)
 
         # This is the PyCFunctionWithKeywords generated by PyCallWrapper
-        genfnty = ir.FunctionType(self.pyobj, [self.pyobj, self.pyobj, self.pyobj])
-        genfn = self._get_function(genfnty, name=gendesc.llvm_cpython_wrapper_name)
+        genfnty = ir.FunctionType(
+            self.pyobj, [self.pyobj, self.pyobj, self.pyobj])
+        genfn = self._get_function(
+            genfnty, name=gendesc.llvm_cpython_wrapper_name)
 
         # This is the raw finalizer generated by _lower_generator_finalize_func()
         finalizerty = ir.FunctionType(ir.VoidType(), [self.voidptr])
         if typ.has_finalizer:
-            finalizer = self._get_function(finalizerty, name=gendesc.llvm_finalizer_name)
+            finalizer = self._get_function(
+                finalizerty, name=gendesc.llvm_finalizer_name)
         else:
             finalizer = Constant(ir.PointerType(finalizerty), None)
 
@@ -1494,7 +1510,7 @@ class PythonAPI(object):
 
     def numba_buffer_adaptor(self, buf, ptr):
         fnty = ir.FunctionType(ir.VoidType(),
-                             [ir.PointerType(self.py_buffer_t), self.voidptr])
+                               [ir.PointerType(self.py_buffer_t), self.voidptr])
         fn = self._get_function(fnty, name="numba_adapt_buffer")
         fn.args[0].add_attribute('nocapture')
         fn.args[1].add_attribute('nocapture')
@@ -1518,7 +1534,8 @@ class PythonAPI(object):
         return self.builder.call(fn, [obj, pbuf])
 
     def release_buffer(self, pbuf):
-        fnty = ir.FunctionType(ir.VoidType(), [ir.PointerType(self.py_buffer_t)])
+        fnty = ir.FunctionType(
+            ir.VoidType(), [ir.PointerType(self.py_buffer_t)])
         fn = self._get_function(fnty, name="numba_release_buffer")
         return self.builder.call(fn, [pbuf])
 
@@ -1621,6 +1638,7 @@ class PythonAPI(object):
 class ObjModeUtils:
     """Internal utils for calling objmode dispatcher from within NPM code.
     """
+
     def __init__(self, pyapi):
         self.pyapi = pyapi
 

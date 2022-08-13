@@ -17,14 +17,18 @@ from numba.tests.support import TestCase
 def what():
     pass
 
+
 def foo():
     return what()
+
 
 def bar(x):
     return x.a
 
+
 def issue_868(a):
     return a.shape * 2
+
 
 def impossible_return_type(x):
     if x > 0:
@@ -32,22 +36,28 @@ def impossible_return_type(x):
     else:
         return 1j
 
+
 def bad_hypot_usage():
     return math.hypot(1)
+
 
 def imprecise_list():
     l = []
     return len(l)
 
+
 def using_imprecise_list():
     a = np.array([])
     return a.astype(np.int32)
 
+
 def unknown_module():
     return numpyz.int32(0)
 
+
 def nop(x, y, z):
     pass
+
 
 def array_setitem_invalid_cast():
     arr = np.empty(1, dtype=np.float64)
@@ -95,7 +105,7 @@ class TestTypingError(unittest.TestCase):
 
         expected = ((_header_lead + " Function(<built-in function mul>) found "
                      "for signature:\n \n >>> mul(UniTuple({} x 1), {})")
-            .format(str(types.intp), types.IntegerLiteral(2)))
+                    .format(str(types.intp), types.IntegerLiteral(2)))
         self.assertIn(expected, str(raises.exception))
         self.assertIn("During: typing of", str(raises.exception))
 
@@ -119,9 +129,10 @@ class TestTypingError(unittest.TestCase):
         ctx_lines = [x for x in errmsg.splitlines() if "During:" in x ]
 
         # Check contextual msg
-        self.assertTrue(re.search(r'.*During: resolving callee type: Function.*hypot', ctx_lines[0]))
-        self.assertTrue(re.search(r'.*During: typing of call .*test_typingerror.py', ctx_lines[1]))
-
+        self.assertTrue(
+            re.search(r'.*During: resolving callee type: Function.*hypot', ctx_lines[0]))
+        self.assertTrue(
+            re.search(r'.*During: typing of call .*test_typingerror.py', ctx_lines[1]))
 
     def test_imprecise_list(self):
         """
@@ -165,6 +176,7 @@ class TestTypingError(unittest.TestCase):
 
     def test_template_rejection_error_message_cascade(self):
         from numba import njit
+
         @njit
         def foo():
             z = 1
@@ -206,10 +218,10 @@ class TestArgumentTypingError(unittest.TestCase):
         with self.assertRaises(TypingError) as raises:
             cfunc(1, foo, 1)
 
-        expected=re.compile(("This error may have been caused by the following "
-                             "argument\(s\):\\n- argument 1:.*Cannot determine "
-                             "Numba type of "
-                             "<class \'numba.tests.test_typingerror.Foo\'>"))
+        expected = re.compile(("This error may have been caused by the following "
+                               "argument\(s\):\\n- argument 1:.*Cannot determine "
+                              "Numba type of "
+                               "<class \'numba.tests.test_typingerror.Foo\'>"))
         self.assertTrue(expected.search(str(raises.exception)) is not None)
 
 

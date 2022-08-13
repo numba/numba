@@ -7,8 +7,8 @@ import warnings
 import numpy as np
 
 from numba.tests.support import (TestCase, override_config, override_env_config,
-                      captured_stdout, forbid_codegen, skip_parfors_unsupported,
-                      needs_blas)
+                                 captured_stdout, forbid_codegen, skip_parfors_unsupported,
+                                 needs_blas)
 from numba import jit
 from numba.core import types, compiler
 from numba.core.compiler import compile_isolated, Flags
@@ -23,6 +23,7 @@ def simple_nopython(somearg):
     retval = somearg + 1
     return retval
 
+
 def simple_gen(x, y):
     yield x
     yield y
@@ -32,13 +33,17 @@ class SimpleClass(object):
     def __init__(self):
         self.h = 5
 
+
 simple_class_spec = [('h', types.int32)]
+
 
 def simple_class_user(obj):
     return obj.h
 
+
 def unsupported_parfor(a, b):
     return np.dot(a, b) # dot as gemm unsupported
+
 
 def supported_parfor(n):
     a = np.ones(n)
@@ -46,9 +51,11 @@ def supported_parfor(n):
         a[i] = a[i] + np.sin(i)
     return a
 
+
 force_parallel_flags = Flags()
 force_parallel_flags.auto_parallel = ParallelOptions(True)
 force_parallel_flags.nrt = True
+
 
 class DebugTestBase(TestCase):
 
@@ -219,6 +226,7 @@ class TestEnvironmentOverride(FunctionDebugTestBase):
                                           'optimized_llvm', 'assembly'])
         out = self.compile_simple_nopython()
         self.assertFalse(out)
+
 
 class TestParforsDebug(TestCase):
     """

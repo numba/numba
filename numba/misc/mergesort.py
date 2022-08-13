@@ -105,7 +105,6 @@ def make_mergesort_impl(wrap, lt=None, is_argsort=False):
         argmergesort_inner(arr, None, ws)
         return arr
 
-
     @wrap(no_cpython_wrapper=True)
     def argmergesort(arr):
         "Out-of-place"
@@ -116,7 +115,7 @@ def make_mergesort_impl(wrap, lt=None, is_argsort=False):
 
     return MergesortImplementation(
         run_mergesort=(argmergesort if is_argsort else mergesort)
-        )
+    )
 
 
 def make_jit_mergesort(*args, **kwargs):

@@ -19,12 +19,12 @@ from numba.cpython import cmathimpl, mathimpl, numbers
 # some NumPy constants. Note that we could generate some of them using
 # the math library, but having the values copied from npy_math seems to
 # yield more accurate results
-_NPY_LOG2E  = 1.442695040888963407359924681001892137 # math.log(math.e, 2)
+_NPY_LOG2E = 1.442695040888963407359924681001892137 # math.log(math.e, 2)
 _NPY_LOG10E = 0.434294481903251827651128918916605082 # math.log(math.e, 10)
-_NPY_LOGE2  = 0.693147180559945309417232121458176568 # math.log(2)
+_NPY_LOGE2 = 0.693147180559945309417232121458176568 # math.log(2)
 
 
-def _check_arity_and_homogeneity(sig, args, arity, return_type = None):
+def _check_arity_and_homogeneity(sig, args, arity, return_type=None):
     """checks that the following are true:
     - args and sig.args have arg_count elements
     - all input types are homogeneous
@@ -37,7 +37,7 @@ def _check_arity_and_homogeneity(sig, args, arity, return_type = None):
     if return_type is None:
         return_type = ty
     # must have homogeneous args
-    if not( all(arg==ty for arg in sig.args) and sig.return_type == return_type):
+    if not ( all(arg == ty for arg in sig.args) and sig.return_type == return_type):
         import inspect
         fname = inspect.currentframe().f_back.f_code.co_name
         msg = '{0} called with invalid types: {1}'.format(fname, sig)
@@ -51,7 +51,7 @@ def _call_func_by_name_with_cast(context, builder, sig, args,
     # helper function facilitates that.
     mod = builder.module
     lty = context.get_argument_type(ty)
-    fnty = llvmlite.ir.FunctionType(lty, [lty]*len(sig.args))
+    fnty = llvmlite.ir.FunctionType(lty, [lty] * len(sig.args))
     fn = cgutils.insert_pure_function(mod, fnty, name=func_name)
     cast_args = [context.cast(builder, arg, argty, ty)
                  for arg, argty in zip(args, sig.args) ]
@@ -109,7 +109,6 @@ def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
     return retval
 
 
-
 ########################################################################
 # Division kernels inspired by NumPy loops.c.src code
 #
@@ -131,7 +130,7 @@ def np_int_sdiv_impl(context, builder, sig, args):
 
     ZERO = context.get_constant(ty, 0)
     MINUS_ONE = context.get_constant(ty, -1)
-    MIN_INT = context.get_constant(ty, 1 << (den.type.width-1))
+    MIN_INT = context.get_constant(ty, 1 << (den.type.width - 1))
     den_is_zero = builder.icmp_unsigned('==', ZERO, den)
     den_is_minus_one = builder.icmp_unsigned('==', MINUS_ONE, den)
     num_is_min_int = builder.icmp_unsigned('==', MIN_INT, num)
@@ -188,8 +187,10 @@ def np_int_srem_impl(context, builder, sig, args):
 
 
 def np_int_sdivrem_impl(context, builder, sig, args):
-    div = np_int_sdiv_impl(context, builder, sig.return_type[0](*sig.args), args)
-    rem = np_int_srem_impl(context, builder, sig.return_type[1](*sig.args), args)
+    div = np_int_sdiv_impl(
+        context, builder, sig.return_type[0](*sig.args), args)
+    rem = np_int_srem_impl(
+        context, builder, sig.return_type[1](*sig.args), args)
     return context.make_tuple(builder, sig.return_type, [div, rem])
 
 
@@ -238,8 +239,10 @@ def np_int_urem_impl(context, builder, sig, args):
 
 
 def np_int_udivrem_impl(context, builder, sig, args):
-    div = np_int_udiv_impl(context, builder, sig.return_type[0](*sig.args), args)
-    rem = np_int_urem_impl(context, builder, sig.return_type[1](*sig.args), args)
+    div = np_int_udiv_impl(
+        context, builder, sig.return_type[0](*sig.args), args)
+    rem = np_int_urem_impl(
+        context, builder, sig.return_type[1](*sig.args), args)
     return context.make_tuple(builder, sig.return_type, [div, rem])
 
 
@@ -302,7 +305,8 @@ def np_complex_div_impl(context, builder, sig, args):
     in2r = in2.real  # denominator.real
     in2i = in2.imag  # denominator.imag
     ftype = in1r.type
-    assert all([i.type==ftype for i in [in1r, in1i, in2r, in2i]]), "mismatched types"
+    assert all([i.type == ftype for i in [in1r, in1i, in2r, in2i]]
+               ), "mismatched types"
     out = context.make_helper(builder, sig.return_type)
 
     ZERO = llvmlite.ir.Constant(ftype, 0.0)
@@ -377,6 +381,7 @@ def np_real_logaddexp_impl(context, builder, sig, args):
 ########################################################################
 # NumPy logaddexp2
 
+
 def np_real_logaddexp2_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
 
@@ -398,7 +403,7 @@ def np_int_truediv_impl(context, builder, sig, args):
     # integer truediv always yields double
     num, den = args
     lltype = num.type
-    assert all(i.type==lltype for i in args), "must have homogeneous types"
+    assert all(i.type == lltype for i in args), "must have homogeneous types"
     numty, denty = sig.args
 
     num = context.cast(builder, num, numty, types.float64)
@@ -417,8 +422,10 @@ def np_real_floor_div_impl(context, builder, sig, args):
 
 
 def np_real_divmod_impl(context, builder, sig, args):
-    div = np_real_floor_div_impl(context, builder, sig.return_type[0](*sig.args), args)
-    rem = np_real_mod_impl(context, builder, sig.return_type[1](*sig.args), args)
+    div = np_real_floor_div_impl(
+        context, builder, sig.return_type[0](*sig.args), args)
+    rem = np_real_mod_impl(
+        context, builder, sig.return_type[1](*sig.args), args)
     return context.make_tuple(builder, sig.return_type, [div, rem])
 
 
@@ -440,7 +447,8 @@ def np_complex_floor_div_impl(context, builder, sig, args):
     in2r = in2.real
     in2i = in2.imag
     ftype = in1r.type
-    assert all([i.type==ftype for i in [in1r, in1i, in2r, in2i]]), "mismatched types"
+    assert all([i.type == ftype for i in [in1r, in1i, in2r, in2i]]
+               ), "mismatched types"
 
     ZERO = llvmlite.ir.Constant(ftype, 0.0)
 
@@ -536,7 +544,7 @@ def np_complex_sign_impl(context, builder, sig, args):
     float_ty = ty.underlying_float
 
     ZERO = context.get_constant(float_ty, 0.0)
-    ONE  = context.get_constant(float_ty, 1.0)
+    ONE = context.get_constant(float_ty, 1.0)
     MINUS_ONE = context.get_constant(float_ty, -1.0)
     NAN = context.get_constant(float_ty, float('nan'))
     result = context.make_complex(builder, ty)
@@ -575,7 +583,7 @@ def np_complex_rint_impl(context, builder, sig, args):
     in1 = context.make_complex(builder, ty, value=args[0])
     out = context.make_complex(builder, ty)
 
-    inner_sig = typing.signature(*[float_ty]*2)
+    inner_sig = typing.signature(*[float_ty] * 2)
     out.real = np_real_rint_impl(context, builder, inner_sig, [in1.real])
     out.imag = np_real_rint_impl(context, builder, inner_sig, [in1.imag])
     return out._getvalue()
@@ -595,6 +603,7 @@ def np_complex_exp_impl(context, builder, sig, args):
 
 ########################################################################
 # NumPy exp2
+
 
 def np_real_exp2_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
@@ -635,6 +644,7 @@ def np_complex_log_impl(context, builder, sig, args):
 ########################################################################
 # NumPy log2
 
+
 def np_real_log2_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
@@ -645,6 +655,7 @@ def np_real_log2_impl(context, builder, sig, args):
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
                                        dispatch_table, 'log2')
+
 
 def np_complex_log2_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
@@ -687,13 +698,14 @@ def np_real_expm1_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
     return mathimpl.expm1_impl(context, builder, sig, args)
 
+
 def np_complex_expm1_impl(context, builder, sig, args):
     # this is based on nc_expm1 in funcs.inc.src
     _check_arity_and_homogeneity(sig, args, 1)
 
     ty = sig.args[0]
     float_ty = ty.underlying_float
-    float_unary_sig = typing.signature(*[float_ty]*2)
+    float_unary_sig = typing.signature(*[float_ty] * 2)
 
     MINUS_ONE = context.get_constant(float_ty, -1.0)
     in1 = context.make_complex(builder, ty, value=args[0])
@@ -715,14 +727,15 @@ def np_real_log1p_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
     return mathimpl.log1p_impl(context, builder, sig, args)
 
+
 def np_complex_log1p_impl(context, builder, sig, args):
     # base on NumPy's nc_log1p in funcs.inc.src
     _check_arity_and_homogeneity(sig, args, 1)
 
     ty = sig.args[0]
     float_ty = ty.underlying_float
-    float_unary_sig = typing.signature(*[float_ty]*2)
-    float_binary_sig = typing.signature(*[float_ty]*3)
+    float_unary_sig = typing.signature(*[float_ty] * 2)
+    float_binary_sig = typing.signature(*[float_ty] * 3)
 
     ONE = context.get_constant(float_ty, 1.0)
     in1 = context.make_complex(builder, ty, value=args[0])
@@ -762,11 +775,12 @@ def np_real_square_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
     return builder.fmul(args[0], args[0])
 
+
 def np_complex_square_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
-    binary_sig = typing.signature(*[sig.return_type]*3)
+    binary_sig = typing.signature(*[sig.return_type] * 3)
     return numbers.complex_mul_impl(context, builder, binary_sig,
-                                     [args[0], args[0]])
+                                    [args[0], args[0]])
 
 
 ########################################################################
@@ -802,7 +816,7 @@ def np_int_reciprocal_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
     ty = sig.return_type
 
-    binary_sig = typing.signature(*[ty]*3)
+    binary_sig = typing.signature(*[ty] * 3)
     in_as_float = context.cast(builder, args[0], ty, types.float64)
     ONE = context.get_constant(types.float64, 1)
     result_as_float = builder.fdiv(ONE, in_as_float)
@@ -941,10 +955,9 @@ def np_complex_sinh_impl(context, builder, sig, args):
     # is translated here...
     _check_arity_and_homogeneity(sig, args, 1)
 
-
     ty = sig.args[0]
     fty = ty.underlying_float
-    fsig1 = typing.signature(*[fty]*2)
+    fsig1 = typing.signature(*[fty] * 2)
     x = context.make_complex(builder, ty, args[0])
     out = context.make_complex(builder, ty)
     xr = x.real
@@ -976,7 +989,7 @@ def np_complex_cosh_impl(context, builder, sig, args):
 
     ty = sig.args[0]
     fty = ty.underlying_float
-    fsig1 = typing.signature(*[fty]*2)
+    fsig1 = typing.signature(*[fty] * 2)
     x = context.make_complex(builder, ty, args[0])
     out = context.make_complex(builder, ty)
     xr = x.real
@@ -1008,7 +1021,7 @@ def np_complex_tanh_impl(context, builder, sig, args):
 
     ty = sig.args[0]
     fty = ty.underlying_float
-    fsig1 = typing.signature(*[fty]*2)
+    fsig1 = typing.signature(*[fty] * 2)
     ONE = context.get_constant(fty, 1.0)
     x = context.make_complex(builder, ty, args[0])
     out = context.make_complex(builder, ty)
@@ -1062,22 +1075,23 @@ def np_complex_acosh_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     ty = sig.args[0]
-    csig2 = typing.signature(*[ty]*3)
+    csig2 = typing.signature(*[ty] * 3)
 
     ONE = context.get_constant_generic(builder, ty, 1.0 + 0.0j)
     x = args[0]
 
     x_plus_one = numbers.complex_add_impl(context, builder, csig2, [x,
-                                                                     ONE])
+                                                                    ONE])
     x_minus_one = numbers.complex_sub_impl(context, builder, csig2, [x,
-                                                                      ONE])
+                                                                     ONE])
     sqrt_x_plus_one = np_complex_sqrt_impl(context, builder, sig, [x_plus_one])
-    sqrt_x_minus_one = np_complex_sqrt_impl(context, builder, sig, [x_minus_one])
+    sqrt_x_minus_one = np_complex_sqrt_impl(
+        context, builder, sig, [x_minus_one])
     prod_sqrt = numbers.complex_mul_impl(context, builder, csig2,
-                                          [sqrt_x_plus_one,
-                                           sqrt_x_minus_one])
+                                         [sqrt_x_plus_one,
+                                          sqrt_x_minus_one])
     log_arg = numbers.complex_add_impl(context, builder, csig2, [x,
-                                                                  prod_sqrt])
+                                                                 prod_sqrt])
 
     return np_complex_log_impl(context, builder, sig, [log_arg])
 
@@ -1324,6 +1338,7 @@ def np_complex_logical_not_impl(context, builder, sig, args):
 # integers is shared. For booleans maximum is equivalent to or, and
 # minimum is equivalent to and. Datetime support will go elsewhere.
 
+
 def np_int_smax_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
     arg1, arg2 = args
@@ -1377,7 +1392,7 @@ def np_complex_maximum_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
     ty = sig.args[0]
     bc_sig = typing.signature(types.boolean, ty)
-    bcc_sig = typing.signature(types.boolean, *[ty]*2)
+    bcc_sig = typing.signature(types.boolean, *[ty] * 2)
     arg1, arg2 = args
     arg1_nan = np_complex_isnan_impl(context, builder, bc_sig, [arg1])
     arg2_nan = np_complex_isnan_impl(context, builder, bc_sig, [arg2])
@@ -1398,7 +1413,7 @@ def np_complex_fmax_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
     ty = sig.args[0]
     bc_sig = typing.signature(types.boolean, ty)
-    bcc_sig = typing.signature(types.boolean, *[ty]*2)
+    bcc_sig = typing.signature(types.boolean, *[ty] * 2)
     arg1, arg2 = args
     arg1_nan = np_complex_isnan_impl(context, builder, bc_sig, [arg1])
     arg2_nan = np_complex_isnan_impl(context, builder, bc_sig, [arg2])
@@ -1464,7 +1479,7 @@ def np_complex_minimum_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
     ty = sig.args[0]
     bc_sig = typing.signature(types.boolean, ty)
-    bcc_sig = typing.signature(types.boolean, *[ty]*2)
+    bcc_sig = typing.signature(types.boolean, *[ty] * 2)
     arg1, arg2 = args
     arg1_nan = np_complex_isnan_impl(context, builder, bc_sig, [arg1])
     arg2_nan = np_complex_isnan_impl(context, builder, bc_sig, [arg2])
@@ -1485,7 +1500,7 @@ def np_complex_fmin_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
     ty = sig.args[0]
     bc_sig = typing.signature(types.boolean, ty)
-    bcc_sig = typing.signature(types.boolean, *[ty]*2)
+    bcc_sig = typing.signature(types.boolean, *[ty] * 2)
     arg1, arg2 = args
     arg1_nan = np_complex_isnan_impl(context, builder, bc_sig, [arg1])
     arg2_nan = np_complex_isnan_impl(context, builder, bc_sig, [arg2])
@@ -1586,6 +1601,7 @@ def np_real_copysign_impl(context, builder, sig, args):
 
     return mathimpl.copysign_float_impl(context, builder, sig, args)
 
+
 def np_real_nextafter_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
 
@@ -1596,6 +1612,7 @@ def np_real_nextafter_impl(context, builder, sig, args):
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
                                        dispatch_table, 'nextafter')
+
 
 def np_real_spacing_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)

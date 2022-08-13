@@ -31,6 +31,7 @@ class DataModel(object):
     "value"  representation.
 
     """
+
     def __init__(self, dmm, fe_type):
         self._dmm = dmm
         self._fe_type = fe_type
@@ -161,6 +162,7 @@ class OmittedArgDataModel(DataModel):
     is defined, other representations raise a NotImplementedError.
     """
     # Omitted arguments are using a dummy value type
+
     def get_value_type(self):
         return ir.LiteralStructType([])
 
@@ -294,6 +296,7 @@ class EnumModel(ProxyModel):
     """
     Enum members are represented exactly like their values.
     """
+
     def __init__(self, dmm, fe_type):
         super(EnumModel, self).__init__(dmm, fe_type)
         self._proxied_model = dmm.lookup(fe_type.dtype)
@@ -752,7 +755,6 @@ class UnionModel(StructModel):
         super(UnionModel, self).__init__(dmm, fe_type, members)
 
 
-
 @register_default(types.Pair)
 class PairModel(StructModel):
     def __init__(self, dmm, fe_type):
@@ -800,7 +802,7 @@ class ListIterModel(StructModel):
             # original list object)
             ('meminfo', types.MemInfoPointer(payload_type)),
             ('index', types.EphemeralPointer(types.intp)),
-            ]
+        ]
         super(ListIterModel, self).__init__(dmm, fe_type, members)
 
 
@@ -836,6 +838,7 @@ class SetPayloadModel(StructModel):
         ]
         super(SetPayloadModel, self).__init__(dmm, fe_type, members)
 
+
 @register_default(types.Set)
 class SetModel(StructModel):
     def __init__(self, dmm, fe_type):
@@ -848,6 +851,7 @@ class SetModel(StructModel):
         ]
         super(SetModel, self).__init__(dmm, fe_type, members)
 
+
 @register_default(types.SetIter)
 class SetIterModel(StructModel):
     def __init__(self, dmm, fe_type):
@@ -858,7 +862,7 @@ class SetIterModel(StructModel):
             ('meminfo', types.MemInfoPointer(payload_type)),
             # The index into the entries table
             ('index', types.EphemeralPointer(types.intp)),
-            ]
+        ]
         super(SetIterModel, self).__init__(dmm, fe_type, members)
 
 
@@ -931,6 +935,7 @@ class OptionalModel(StructModel):
             valid = get_valid(value)
             data = self.get(builder, value, "data")
             return builder.select(valid, data, ir.Constant(data.type, None))
+
         def get_valid(value):
             return self.get(builder, value, "valid")
 
@@ -1071,7 +1076,7 @@ class FlatIter(StructModel):
                    ('pointers', types.EphemeralArray(types.CPointer(dtype), ndim)),
                    ('indices', types.EphemeralArray(types.intp, ndim)),
                    ('exhausted', types.EphemeralPointer(types.boolean)),
-        ]
+                   ]
         super(FlatIter, self).__init__(dmm, fe_type, members)
 
 
@@ -1233,12 +1238,14 @@ def handle_numpy_flat_type(dmm, ty):
     else:
         return FlatIter(dmm, ty)
 
+
 @register_default(types.NumpyNdEnumerateType)
 def handle_numpy_ndenumerate_type(dmm, ty):
     if ty.array_type.layout == 'C':
         return CContiguousFlatIter(dmm, ty, need_indices=True)
     else:
         return FlatIter(dmm, ty)
+
 
 @register_default(types.BoundFunction)
 def handle_bound_function(dmm, ty):
@@ -1265,7 +1272,8 @@ class NdIter(StructModel):
             member_name = 'index%d' % i
             if kind == 'flat':
                 # A single index into the flattened array
-                members.append((member_name, types.EphemeralPointer(types.intp)))
+                members.append(
+                    (member_name, types.EphemeralPointer(types.intp)))
             elif kind in ('scalar', 'indexed', '0d'):
                 # Nothing required
                 pass
@@ -1366,6 +1374,7 @@ class DeferredStructModel(CompositeModel):
 class StructPayloadModel(StructModel):
     """Model for the payload of a mutable struct
     """
+
     def __init__(self, dmm, fe_typ):
         members = tuple(fe_typ.field_dict.items())
         super().__init__(dmm, fe_typ, members)
@@ -1375,10 +1384,10 @@ class StructRefModel(StructModel):
     """Model for a mutable struct.
     A reference to the payload
     """
+
     def __init__(self, dmm, fe_typ):
         dtype = fe_typ.get_data_type()
         members = [
             ("meminfo", types.MemInfoPointer(dtype)),
         ]
         super().__init__(dmm, fe_typ, members)
-

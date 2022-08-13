@@ -18,9 +18,11 @@ lower = registry.lower
 def is_nan(builder, z):
     return builder.fcmp_unordered('uno', z.real, z.imag)
 
+
 def is_inf(builder, z):
     return builder.or_(mathimpl.is_inf(builder, z.real),
                        mathimpl.is_inf(builder, z.imag))
+
 
 def is_finite(builder, z):
     return builder.and_(mathimpl.is_finite(builder, z.real),
@@ -34,6 +36,7 @@ def isnan_float_impl(context, builder, sig, args):
     z = context.make_complex(builder, typ, value=value)
     res = is_nan(builder, z)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 @lower(cmath.isinf, types.Complex)
 def isinf_float_impl(context, builder, sig, args):
@@ -84,8 +87,9 @@ def rect_impl(context, builder, sig, args):
 
     inner_sig = signature(sig.return_type, *sig.args + (types.boolean,))
     res = context.compile_internal(builder, rect, inner_sig,
-                                    args + [phi_is_finite])
+                                   args + [phi_is_finite])
     return impl_ret_untracked(context, builder, sig, res)
+
 
 def intrinsic_complex_unary(inner_func):
     def wrapper(context, builder, sig, args):
@@ -101,13 +105,14 @@ def intrinsic_complex_unary(inner_func):
         inner_sig = signature(sig.return_type,
                               *(typ.underlying_float,) * 2 + (types.boolean,) * 2)
         res = context.compile_internal(builder, inner_func, inner_sig,
-                                        (x, y, x_is_finite, y_is_finite))
+                                       (x, y, x_is_finite, y_is_finite))
         return impl_ret_untracked(context, builder, sig, res)
     return wrapper
 
 
 NAN = float('nan')
 INF = float('inf')
+
 
 @lower(cmath.exp, types.Complex)
 @intrinsic_complex_unary
@@ -151,6 +156,7 @@ def exp_impl(x, y, x_is_finite, y_is_finite):
             r = 0
             return complex(r, r)
 
+
 @lower(cmath.log, types.Complex)
 @intrinsic_complex_unary
 def log_impl(x, y, x_is_finite, y_is_finite):
@@ -192,6 +198,7 @@ def log10_impl(context, builder, sig, args):
 def phase_impl(x, y, x_is_finite, y_is_finite):
     """cmath.phase(x + y j)"""
     return math.atan2(y, x)
+
 
 @lower(cmath.polar, types.Complex)
 @intrinsic_complex_unary
@@ -270,6 +277,7 @@ def cos_impl(context, builder, sig, args):
     res = context.compile_internal(builder, cos_impl, sig, args)
     return impl_ret_untracked(context, builder, sig, res)
 
+
 @lower(cmath.cosh, types.Complex)
 def cosh_impl(context, builder, sig, args):
     def cosh_impl(z):
@@ -309,6 +317,7 @@ def sin_impl(context, builder, sig, args):
     res = context.compile_internal(builder, sin_impl, sig, args)
     return impl_ret_untracked(context, builder, sig, res)
 
+
 @lower(cmath.sinh, types.Complex)
 def sinh_impl(context, builder, sig, args):
     def sinh_impl(z):
@@ -344,6 +353,7 @@ def tan_impl(context, builder, sig, args):
 
     res = context.compile_internal(builder, tan_impl, sig, args)
     return impl_ret_untracked(context, builder, sig, res)
+
 
 @lower(cmath.tanh, types.Complex)
 def tanh_impl(context, builder, sig, args):
@@ -399,6 +409,7 @@ def acos_impl(context, builder, sig, args):
     res = context.compile_internal(builder, acos_impl, sig, args)
     return impl_ret_untracked(context, builder, sig, res)
 
+
 @lower(cmath.acosh, types.Complex)
 def acosh_impl(context, builder, sig, args):
     LN_4 = math.log(4)
@@ -425,6 +436,7 @@ def acosh_impl(context, builder, sig, args):
     res = context.compile_internal(builder, acosh_impl, sig, args)
     return impl_ret_untracked(context, builder, sig, res)
 
+
 @lower(cmath.asinh, types.Complex)
 def asinh_impl(context, builder, sig, args):
     LN_4 = math.log(4)
@@ -449,6 +461,7 @@ def asinh_impl(context, builder, sig, args):
     res = context.compile_internal(builder, asinh_impl, sig, args)
     return impl_ret_untracked(context, builder, sig, res)
 
+
 @lower(cmath.asin, types.Complex)
 def asin_impl(context, builder, sig, args):
     def asin_impl(z):
@@ -458,6 +471,7 @@ def asin_impl(context, builder, sig, args):
 
     res = context.compile_internal(builder, asin_impl, sig, args)
     return impl_ret_untracked(context, builder, sig, res)
+
 
 @lower(cmath.atan, types.Complex)
 def atan_impl(context, builder, sig, args):
@@ -472,6 +486,7 @@ def atan_impl(context, builder, sig, args):
 
     res = context.compile_internal(builder, atan_impl, sig, args)
     return impl_ret_untracked(context, builder, sig, res)
+
 
 @lower(cmath.atanh, types.Complex)
 def atanh_impl(context, builder, sig, args):
@@ -499,7 +514,7 @@ def atanh_impl(context, builder, sig, args):
             else:
                 # may be safe from overflow, depending on hypot's implementation...
                 h = math.hypot(z.real * 0.5, z.imag * 0.5)
-                real = z.real/4./h/h
+                real = z.real / 4. / h / h
             imag = -math.copysign(PI_12, -z.imag)
         elif z.real == 1. and ay < THRES_SMALL:
             # C99 standard says:  atanh(1+/-0.) should be inf +/- 0j

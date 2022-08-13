@@ -20,23 +20,30 @@ force_pyobj_flags.force_pyobject = True
 def print_value(x):
     print(x)
 
+
 def print_array_item(arr, i):
     print(arr[i].x)
+
 
 def print_values(a, b, c):
     print(a, b, c)
 
+
 def print_empty():
     print()
+
 
 def print_string(x):
     print(x, "hop!", 3.5)
 
+
 def print_vararg(a, b, c):
     print(a, b, *c)
 
+
 def print_string_vararg(a, b, c):
     print(a, "hop!", b, *c)
+
 
 def make_print_closure(x):
     def print_closure():
@@ -65,10 +72,10 @@ class TestPrint(EnableNRTStatsMixin, TestCase):
         check_values(types.int64, (1, -234,
                                    123456789876543210, -123456789876543210))
         check_values(types.uint64, (1, 234,
-                                   123456789876543210, 2**63 + 123))
+                                    123456789876543210, 2**63 + 123))
         check_values(types.boolean, (True, False))
         check_values(types.float64, (1.5, 100.0**10.0, float('nan')))
-        check_values(types.complex64, (1+1j,))
+        check_values(types.complex64, (1 + 1j,))
         check_values(types.NPTimedelta('ms'), (np.timedelta64(100, 'ms'),))
 
         cr = compile_isolated(pyfunc, (types.float32,))
@@ -192,7 +199,9 @@ class TestPrint(EnableNRTStatsMixin, TestCase):
             print(''.join(['a'] * 10000))
         with captured_stdout():
             foo()
-            self.assertEqual(sys.stdout.getvalue(), ''.join(['a'] * 10000) + '\n')
+            self.assertEqual(sys.stdout.getvalue(),
+                             ''.join(['a'] * 10000) + '\n')
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -144,7 +144,7 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         self.assertFalse(ty.mutable)
         ty = typeof(memoryview(b))
         self.assertEqual(ty, types.MemoryView(types.uint8, 1, "C",
-                                                readonly=True))
+                                              readonly=True))
         self.assertFalse(ty.mutable)
         ty = typeof(array.array('i', [0, 1, 2]))
         self.assertEqual(ty, types.PyArray(types.int32, 1, "C"))
@@ -214,7 +214,8 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         self.assertEqual(tp_rect,
                          types.NamedUniTuple(types.intp, 2, Rect))
         self.assertNotEqual(tp_rect, tp_point)
-        self.assertNotEqual(tp_rect, types.UniTuple(tp_rect.dtype, tp_rect.count))
+        self.assertNotEqual(tp_rect, types.UniTuple(
+            tp_rect.dtype, tp_rect.count))
 
     def test_enum(self):
         tp_red = typeof(Color.red)
@@ -365,7 +366,7 @@ class TestFingerprint(TestCase):
 
     def test_complex(self):
         s = compute_fingerprint(1j)
-        self.assertEqual(s, compute_fingerprint(1+0j))
+        self.assertEqual(s, compute_fingerprint(1 + 0j))
         s = compute_fingerprint(np.complex64())
         self.assertEqual(compute_fingerprint(np.complex64(2.0)), s)
         self.assertNotEqual(compute_fingerprint(np.complex128()), s)

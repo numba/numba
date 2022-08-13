@@ -17,7 +17,7 @@ _meminfo_struct_type = ir.LiteralStructType([
     _pointer_type,  # void *dtor_info
     _pointer_type,  # void *data
     _word_type,     # size_t size
-    ])
+])
 
 
 incref_decref_ty = ir.FunctionType(ir.VoidType(), [_pointer_type])
@@ -43,7 +43,7 @@ def _define_nrt_incref(module, atomic_incr):
     Implement NRT_incref in the module
     """
     fn_incref = cgutils.get_or_insert_function(module, incref_decref_ty,
-                                              "NRT_incref")
+                                               "NRT_incref")
     # Cannot inline this for refcount pruning to work
     fn_incref.attributes.add('noinline')
     builder = ir.IRBuilder(fn_incref.append_basic_block())
@@ -77,7 +77,6 @@ def _define_nrt_decref(module, atomic_decr):
     is_null = builder.icmp_unsigned("==", ptr, cgutils.get_null_value(ptr.type))
     with cgutils.if_unlikely(builder, is_null):
         builder.ret_void()
-
 
     # For memory fence usage, see https://llvm.org/docs/Atomics.html
 

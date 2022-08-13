@@ -22,6 +22,7 @@ except ImportError:
     def isstr(s):
         return isinstance(s, basestring)  # noqa
 
+
 class NotebookTest(TestCase):
     """Validate a notebook. All code cells are executed in order. The output is either checked
     for errors (if no reference output is present), or is compared against expected output.
@@ -31,7 +32,6 @@ class NotebookTest(TestCase):
     http://nbformat.readthedocs.org/en/latest/format_description.html
     http://jupyter-client.readthedocs.org/en/latest/messaging.html
 """
-
 
     IGNORE_TYPES = ["execute_request", "execute_input", "status", "pyin"]
     STRIP_KEYS = ["execution_count", "traceback", "prompt_number", "source"]
@@ -65,7 +65,9 @@ class NotebookTest(TestCase):
                 continue
             if msg['msg_type'] not in self.IGNORE_TYPES:
                 if msg['msg_type'] == 'error':
-                    error_msg = '  ' + msg['content']['ename'] + '\n  ' + msg['content']['evalue']
+                    error_msg = '  ' + \
+                        msg['content']['ename'] + '\n  ' + \
+                        msg['content']['evalue']
                     no_error = False
                     if first_error == -1:
                         first_error = i
@@ -75,7 +77,8 @@ class NotebookTest(TestCase):
                 outputs.append(o)
 
         if (test == 'check_error'):
-            self.assertTrue(no_error, 'Executing cell %d resulted in an error:\n%s'%(first_error, error_msg))
+            self.assertTrue(no_error, 'Executing cell %d resulted in an error:\n%s' % (
+                first_error, error_msg))
         else:
             # Compare computed output against stored output.
             # TODO: This doesn't work right now as the generated output is too diverse to
@@ -86,7 +89,7 @@ class NotebookTest(TestCase):
             #print('output=%s'%outputs)
             #print('expected=%s'%expected)
             #self.assertEqual(scrubbed, expected, "\n{}\n\n{}".format(scrubbed, expected))
-        
+
     def dump_canonical(self, obj):
         return json.dumps(obj, indent=2, sort_keys=True)
 
@@ -167,5 +170,3 @@ class NotebookTest(TestCase):
 
         return not (msg["msg_type"] == "status" and
                     msg["content"]["execution_state"] == "idle")
-
-

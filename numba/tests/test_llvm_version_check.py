@@ -13,6 +13,7 @@ class TestLlvmVersion(unittest.TestCase):
         self.assertTrue(numba.__version__)
 
         llvmlite_version = llvmlite.__version__
+
         def cleanup():
             llvmlite.__version__ = llvmlite_version
         self.addCleanup(cleanup)

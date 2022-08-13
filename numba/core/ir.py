@@ -43,10 +43,14 @@ class Loc(object):
 
     def __eq__(self, other):
         # equivalence is solely based on filename, line and col
-        if type(self) is not type(other): return False
-        if self.filename != other.filename: return False
-        if self.line != other.line: return False
-        if self.col != other.col: return False
+        if type(self) is not type(other):
+            return False
+        if self.filename != other.filename:
+            return False
+        if self.line != other.line:
+            return False
+        if self.col != other.col:
+            return False
         return True
 
     def __ne__(self, other):
@@ -107,7 +111,6 @@ class Loc(object):
             path = os.path.abspath(self.filename)
         return path
 
-
     def strformat(self, nlines_up=2):
 
         lines = self.get_lines()
@@ -135,7 +138,6 @@ class Loc(object):
                         index = idx
                         break
                 use_line = use_line + index
-
 
         ret = [] # accumulates output
         if lines and use_line:
@@ -169,7 +171,7 @@ class Loc(object):
                 if fn_name:
                     ret.append(fn_name)
                     spaces = count_spaces(x)
-                    ret.append(' '*(4 + spaces) + '<source elided>\n')
+                    ret.append(' ' * (4 + spaces) + '<source elided>\n')
 
             if selected:
                 ret.extend(selected[:-1])
@@ -177,13 +179,13 @@ class Loc(object):
 
                 # point at the problem with a caret
                 spaces = count_spaces(selected[-1])
-                ret.append(' '*(spaces) + _termcolor.indicate("^"))
+                ret.append(' ' * (spaces) + _termcolor.indicate("^"))
 
         # if in the REPL source may not be available
         if not ret:
             ret = "<source missing, REPL/exec in use?>"
 
-        err = _termcolor.filename('\nFile "%s", line %d:')+'\n%s'
+        err = _termcolor.filename('\nFile "%s", line %d:') + '\n%s'
         tmp = err % (self._get_path(), use_line, _termcolor.code(''.join(ret)))
         return tmp
 
@@ -748,7 +750,7 @@ class StaticRaise(Terminator):
             return "<static> raise %s" % (self.exc_class,)
         else:
             return "<static> raise %s(%s)" % (self.exc_class,
-                                     ", ".join(map(repr, self.exc_args)))
+                                              ", ".join(map(repr, self.exc_args)))
 
     def get_targets(self):
         return []
@@ -758,6 +760,7 @@ class TryRaise(Stmt):
     """A raise statement inside a try-block
     Similar to ``Raise`` but does not terminate.
     """
+
     def __init__(self, exception, loc):
         assert exception is None or isinstance(exception, Var)
         assert isinstance(loc, Loc)
@@ -788,7 +791,7 @@ class StaticTryRaise(Stmt):
             return "static_try_raise %s" % (self.exc_class,)
         else:
             return "static_try_raise %s(%s)" % (self.exc_class,
-                                     ", ".join(map(repr, self.exc_args)))
+                                                ", ".join(map(repr, self.exc_args)))
 
 
 class Return(Terminator):
@@ -851,6 +854,7 @@ class Assign(Stmt):
     """
     Assign to a variable.
     """
+
     def __init__(self, value, target, loc):
         assert isinstance(value, AbstractRHS)
         assert isinstance(target, Var)
@@ -867,6 +871,7 @@ class Print(Stmt):
     """
     Print some values.
     """
+
     def __init__(self, args, vararg, loc):
         assert all(isinstance(x, Var) for x in args)
         assert vararg is None or isinstance(vararg, Var)
@@ -899,6 +904,7 @@ class Yield(Inst):
 class EnterWith(Stmt):
     """Enter a "with" context
     """
+
     def __init__(self, contextmanager, begin, end, loc):
         """
         Parameters
@@ -925,6 +931,7 @@ class EnterWith(Stmt):
 
 class PopBlock(Stmt):
     """Marker statement for a pop block op code"""
+
     def __init__(self, loc):
         assert isinstance(loc, Loc)
         self.loc = loc
@@ -1018,7 +1025,6 @@ class FreeVar(EqualityCheckMixin, AbstractRHS):
         # Override to not copy constant values in code
         return FreeVar(index=self.index, name=self.name, value=self.value,
                        loc=self.loc)
-
 
 
 class Var(EqualityCheckMixin, AbstractRHS):
@@ -1165,6 +1171,7 @@ class Scope(EqualityCheckMixin):
         Gets all known versions of a given name
         """
         vers = set()
+
         def walk(thename):
             redefs = self.var_redefinitions.get(thename, None)
             if redefs:
@@ -1524,7 +1531,6 @@ class FunctionIR(object):
 
         raise ValueError("Could not find an assignee for %s" % rhs_value)
 
-
     def dump(self, file=None):
         nofile = file is None
         # Avoid early bind of sys.stdout as default value
@@ -1549,7 +1555,6 @@ class FunctionIR(object):
                         style=by_colorscheme())))
             else:
                 print(text)
-
 
     def dump_to_string(self):
         with StringIO() as sb:

@@ -51,6 +51,7 @@ def real_np_types():
                     'float32', 'float64', 'bool_'):
         yield tp_name
 
+
 def complex_np_types():
     for tp_name in ('complex64', 'complex128'):
         yield tp_name
@@ -90,7 +91,7 @@ class TestScalarNumberCtor(TestCase):
             cres = compile_isolated(pyfunc, [ty])
             cfunc = cres.entry_point
             self.assertPreciseEqual(pyfunc(x), cfunc(x),
-                prec='single' if ty is types.float32 else 'exact')
+                                    prec='single' if ty is types.float32 else 'exact')
 
     def test_complex(self):
         pyfunc = docomplex
@@ -99,7 +100,7 @@ class TestScalarNumberCtor(TestCase):
             types.int32, types.int64, types.float32, types.float64,
             types.complex64, types.complex128,
         ]
-        x_values = [1, 1000, 12.2, 23.4, 1.5-5j, 1-4.75j]
+        x_values = [1, 1000, 12.2, 23.4, 1.5 - 5j, 1 - 4.75j]
 
         for ty, x in zip(x_types, x_values):
             cres = compile_isolated(pyfunc, [ty])
@@ -107,7 +108,7 @@ class TestScalarNumberCtor(TestCase):
             got = cfunc(x)
             expected = pyfunc(x)
             self.assertPreciseEqual(pyfunc(x), cfunc(x),
-                prec='single' if ty is types.float32 else 'exact')
+                                    prec='single' if ty is types.float32 else 'exact')
 
         # Check that complex(float32) really creates a complex64,
         # by checking the accuracy of computations.
@@ -134,7 +135,7 @@ class TestScalarNumberCtor(TestCase):
             cres = compile_isolated(pyfunc, [ty, ty])
             cfunc = cres.entry_point
             self.assertPreciseEqual(pyfunc(x, y), cfunc(x, y),
-                prec='single' if ty is types.float32 else 'exact')
+                                    prec='single' if ty is types.float32 else 'exact')
 
         # Check that complex(float32, float32) really creates a complex64,
         # by checking the accuracy of computations.
@@ -177,7 +178,7 @@ class TestScalarNumberCtor(TestCase):
             np_type = getattr(np, tp_name)
             tp = tp_factory(tp_name)
             self.check_type_converter(tp, np_type, values)
-        values.append(1.5+3j)
+        values.append(1.5 + 3j)
         for tp_name in complex_np_types():
             np_type = getattr(np, tp_name)
             tp = tp_factory(tp_name)
@@ -219,14 +220,14 @@ class TestArrayNumberCtor(TestCase):
             (1, 2.5),
             [1.0, 2.5],
             (),
-            ]
+        ]
         for tp_name in real_np_types():
             np_type = getattr(np, tp_name)
             self.check_type_constructor(np_type, values)
         values = [
             (1j, 2.5),
             [1.0, 2.5],
-            ]
+        ]
         for tp_name in complex_np_types():
             np_type = getattr(np, tp_name)
             self.check_type_constructor(np_type, values)
@@ -237,7 +238,7 @@ class TestArrayNumberCtor(TestCase):
             [(1.0, 2.5), (3.5, 4.0)],
             ([1.0, 2.5], [3.5, 4.0]),
             [(), ()],
-            ]
+        ]
         for tp_name in real_np_types():
             np_type = getattr(np, tp_name)
             self.check_type_constructor(np_type, values)

@@ -40,7 +40,7 @@ def make_tag_decorator(known_tags):
 
         def decorate(func):
             if (not callable(func) or isinstance(func, type)
-                or not func.__name__.startswith('test_')):
+                    or not func.__name__.startswith('test_')):
                 raise TypeError("@tag(...) should be used on test methods")
             try:
                 s = func.tags
@@ -70,6 +70,7 @@ def cuda_sensitive_mtime(x):
 
     return key
 
+
 def parse_slice(useslice):
     """Parses the argument string "useslice" as the arguments to the `slice()`
     constructor and returns a slice object that's been instantiated with those
@@ -81,23 +82,26 @@ def parse_slice(useslice):
         return l['sl']
     except Exception:
         msg = ("Expected arguments consumable by 'slice' to follow "
-                "option `-j`, found '%s'" % useslice)
+               "option `-j`, found '%s'" % useslice)
         raise ValueError(msg)
 
 
 class TestLister(object):
     """Simply list available tests rather than running them."""
+
     def __init__(self, useslice):
         self.useslice = parse_slice(useslice)
 
     def run(self, test):
-        result = runner.TextTestResult(sys.stderr, descriptions=True, verbosity=1)
+        result = runner.TextTestResult(
+            sys.stderr, descriptions=True, verbosity=1)
         self._test_list = _flatten_suite(test)
         masked_list = self._test_list[self.useslice]
         self._test_list.sort(key=cuda_sensitive_mtime)
         for t in masked_list:
             print(t.id())
-        print('%d tests found. %s selected' % (len(self._test_list), len(masked_list)))
+        print('%d tests found. %s selected' %
+              (len(self._test_list), len(masked_list)))
         return result
 
 
@@ -229,7 +233,7 @@ class NumbaTestProgram(unittest.main):
                     argv.remove(tag_args)
                 else: # --tagstr=<arg>
                     if '=' in found:
-                        tag_args =  found.split('=')[1].strip()
+                        tag_args = found.split('=')[1].strip()
                     else:
                         raise AssertionError('unreachable')
             except IndexError:
@@ -247,7 +251,6 @@ class NumbaTestProgram(unittest.main):
             attr = tagstr[2:].replace('-', '_')
             setattr(self, attr, tag_args)
             argv.remove(found)
-
 
     def parseArgs(self, argv):
         if '-l' in argv:
@@ -312,7 +315,7 @@ class NumbaTestProgram(unittest.main):
         if self.multiprocess and not self.nomultiproc:
             if self.multiprocess < 1:
                 msg = ("Value specified for the number of processes to use in "
-                    "running the suite must be > 0")
+                       "running the suite must be > 0")
                 raise ValueError(msg)
             self.testRunner = ParallelTestRunner(runner.TextTestRunner,
                                                  self.multiprocess,
@@ -327,7 +330,7 @@ class NumbaTestProgram(unittest.main):
         if self.profile:
             filename = os.path.splitext(
                 os.path.basename(sys.modules['__main__'].__file__)
-                )[0] + '.prof'
+            )[0] + '.prof'
             p = cProfile.Profile(timer=time.perf_counter)  # 3.3+
             p.enable()
             try:
@@ -383,6 +386,7 @@ def _flatten_suite(test):
             if g in str(t):
                 generated.add(t)
     normal = set(tests) - generated
+
     def key(x):
         return x.__module__, type(x).__name__, x._testMethodName
     tests = sorted(normal, key=key)
@@ -414,6 +418,7 @@ def _choose_gitdiff_tests(tests, *, use_common_ancestor=False):
             selected.append(test)
     print("Git diff identified %s tests" % len(selected))
     return unittest.TestSuite(selected)
+
 
 def _choose_tagged_tests(tests, tags, mode='include'):
     """
@@ -524,7 +529,8 @@ class RefleakTestResult(runner.TextTestResult):
             alloc_after, rc_after = _refleak_cleanup()
             if i >= nwarmup:
                 rc_deltas[i - nwarmup] = _int_pool[rc_after - rc_before]
-                alloc_deltas[i - nwarmup] = _int_pool[alloc_after - alloc_before]
+                alloc_deltas[i -
+                             nwarmup] = _int_pool[alloc_after - alloc_before]
             alloc_before, rc_before = alloc_after, rc_after
         return rc_deltas, alloc_deltas
 
@@ -553,7 +559,7 @@ class RefleakTestResult(runner.TextTestResult):
 
         for deltas, item_name, checker in [
             (rc_deltas, 'references', check_rc_deltas),
-            (alloc_deltas, 'memory blocks', check_alloc_deltas)]:
+                (alloc_deltas, 'memory blocks', check_alloc_deltas)]:
             if checker(deltas):
                 msg = '%s leaked %s %s, sum=%s' % (
                     test, deltas, item_name, sum(deltas))
@@ -708,8 +714,10 @@ def _split_nonparallel_tests(test, sliced=slice(None)):
 
     return ptests, stests
 
+
 # A test can't run longer than 10 minutes
 _TIMEOUT = 600
+
 
 class ParallelTestRunner(runner.TextTestRunner):
     """
@@ -786,8 +794,7 @@ class ParallelTestRunner(runner.TextTestRunner):
 
     def run(self, test):
         self._ptests, self._stests = _split_nonparallel_tests(test,
-                                                              sliced=
-                                                              self.useslice)
+                                                              sliced=self.useslice)
         print("Parallel: %s. Serial: %s" % (len(self._ptests),
                                             len(self._stests)))
         # This will call self._run_inner() on the created result object,

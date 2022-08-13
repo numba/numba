@@ -6,6 +6,7 @@ from numba import njit
 from numba.core import types
 import unittest
 
+
 class TestMulti3(unittest.TestCase):
     """
     This test is only relevant for 32-bit architectures.
@@ -17,6 +18,7 @@ class TestMulti3(unittest.TestCase):
     LLVM.  However, optimization passes will create i65 multiplication that
     is then lowered to __multi3.
     """
+
     def test_multi3(self):
         @njit("(int64,)")
         def func(x):
@@ -32,7 +34,8 @@ class TestMulti3(unittest.TestCase):
             x_cases.append(random.randint(0, 0xffffffff))
 
         def expected(x):
-            if x <= 0: return 0
+            if x <= 0:
+                return 0
             return ((x * (x - 1)) // 2) & (2**64 - 1)
 
         for x in x_cases:

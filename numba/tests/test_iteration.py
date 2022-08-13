@@ -22,11 +22,13 @@ def int_tuple_iter_usecase():
         res += i
     return res
 
+
 def float_tuple_iter_usecase():
     res = 0.0
     for i in (1.5, 2.0, 99.3, 3.4):
         res += i
     return res
+
 
 def tuple_tuple_iter_usecase():
     # Recursively homogeneous tuple type
@@ -37,6 +39,7 @@ def tuple_tuple_iter_usecase():
         res = res * 2
     return res
 
+
 def enumerate_nested_tuple_usecase():
     res = 0.0
     for i, j in enumerate(((1.5, 2.0), (99.3, 3.4), (1.8, 2.5))):
@@ -44,6 +47,7 @@ def enumerate_nested_tuple_usecase():
             res += i * l
         res = res * 2
     return res
+
 
 def nested_enumerate_usecase():
     res = 0.0
@@ -68,11 +72,13 @@ def scalar_iter_usecase(iterable):
         res += x
     return res
 
+
 def record_iter_usecase(iterable):
     res = 0.0
     for x in iterable:
         res += x.a * x.b
     return res
+
 
 def record_iter_mutate_usecase(iterable):
     for x in iterable:
@@ -234,7 +240,6 @@ class IterationTest(MemoryLeakMixin, TestCase):
         expect = bar((x, y))
         got = cres.entry_point((x, y))
         self.assertEqual(expect, got)
-
 
 
 class TestIterationRefct(MemoryLeakMixin, TestCase):

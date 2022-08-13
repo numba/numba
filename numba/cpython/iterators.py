@@ -8,7 +8,6 @@ from numba.core.imputils import (
     impl_ret_borrowed, impl_ret_new_ref, RefType)
 
 
-
 @lower_builtin('getiter', types.IteratorType)
 def iterator_getiter(context, builder, sig, args):
     [it] = args
@@ -17,10 +16,12 @@ def iterator_getiter(context, builder, sig, args):
 #-------------------------------------------------------------------------------
 # builtin `enumerate` implementation
 
+
 @lower_builtin(enumerate, types.IterableType)
 @lower_builtin(enumerate, types.IterableType, types.Integer)
 def make_enumerate_object(context, builder, sig, args):
-    assert len(args) == 1 or len(args) == 2 # enumerate(it) or enumerate(it, start)
+    # enumerate(it) or enumerate(it, start)
+    assert len(args) == 1 or len(args) == 2
     srcty = sig.args[0]
 
     if len(args) == 1:
@@ -42,6 +43,7 @@ def make_enumerate_object(context, builder, sig, args):
 
     res = enum._getvalue()
     return impl_ret_new_ref(context, builder, sig.return_type, res)
+
 
 @lower_builtin('iternext', types.EnumerateType)
 @iternext_impl(RefType.NEW)
@@ -81,6 +83,7 @@ def make_zip_object(context, builder, sig, args):
 
     res = zipobj._getvalue()
     return impl_ret_new_ref(context, builder, sig.return_type, res)
+
 
 @lower_builtin('iternext', types.ZipType)
 @iternext_impl(RefType.NEW)

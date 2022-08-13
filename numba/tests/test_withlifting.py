@@ -512,7 +512,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         self.assertIn(
             "Invalid type annotation on non-outgoing variables",
             str(raises.exception),
-            )
+        )
 
     def test_case05_bogus_type_info(self):
         def foo(x):
@@ -539,8 +539,8 @@ class TestLiftObj(MemoryLeak, TestCase):
             # pattern useful?
             with objmode_context():
                 #with npmmode_context(): not implemented yet
-                    with objmode_context():
-                        print(x)
+                with objmode_context():
+                    print(x)
             return x
 
         with self.assertRaises(errors.TypingError) as raises:
@@ -914,6 +914,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         @overload(foo)
         def foo_overload():
             shrubbery = types.float64[:]
+
             def impl():
                 with objmode(out=shrubbery):
                     out = np.arange(10).astype(np.float64)
@@ -933,6 +934,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         @overload(foo)
         def foo_overload():
             shrubbery = types.float64[:]
+
             def impl():
                 with objmode(out=shrubbery):
                     out = np.arange(10).astype(np.float64)
@@ -970,6 +972,7 @@ class TestLiftObj(MemoryLeak, TestCase):
 
     def test_objmode_multi_type_args(self):
         array_ty = types.int32[:]
+
         @njit
         def foo():
             # t1 is a string
@@ -1020,6 +1023,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         @overload(foo)
         def foo_overload():
             shrubbery = mybag._numba_type_
+
             def impl():
                 with objmode(out=shrubbery):
                     out = Bag(123)
@@ -1037,7 +1041,6 @@ class TestLiftObj(MemoryLeak, TestCase):
         exp_array = np.zeros(123, dtype=np.float32) + 3
         self.assertPreciseEqual(z.array, exp_array)
 
-
     @staticmethod
     def case_objmode_cache(x):
         with objmode(output='float64'):
@@ -1046,6 +1049,7 @@ class TestLiftObj(MemoryLeak, TestCase):
 
     def test_objmode_reflected_list(self):
         ret_type = typeof([1, 2, 3, 4, 5])
+
         @njit
         def test2():
             with objmode(out=ret_type):
@@ -1064,6 +1068,7 @@ class TestLiftObj(MemoryLeak, TestCase):
 
     def test_objmode_reflected_set(self):
         ret_type = typeof({1, 2, 3, 4, 5})
+
         @njit
         def test2():
             with objmode(result=ret_type):
@@ -1082,6 +1087,7 @@ class TestLiftObj(MemoryLeak, TestCase):
 
     def test_objmode_typed_dict(self):
         ret_type = types.DictType(types.unicode_type, types.int64)
+
         @njit
         def test4():
             with objmode(res=ret_type):
@@ -1098,6 +1104,7 @@ class TestLiftObj(MemoryLeak, TestCase):
 
     def test_objmode_typed_list(self):
         ret_type = types.ListType(types.int64)
+
         @njit
         def test4():
             with objmode(res=ret_type):
@@ -1191,7 +1198,7 @@ class TestBogusContext(BaseTestWithLifting):
         self.assertIn(
             "Undefined variable used as context manager",
             str(raises.exception),
-            )
+        )
 
     def test_invalid(self):
         the_ir = get_func_ir(lift_invalid)
@@ -1203,7 +1210,7 @@ class TestBogusContext(BaseTestWithLifting):
         self.assertIn(
             "Unsupported context manager in use",
             str(raises.exception),
-            )
+        )
 
     def test_with_as_fails_gracefully(self):
         @njit

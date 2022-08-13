@@ -42,7 +42,9 @@ def f(a, indices):
         sleep(10 * sleep_factor)
         a[idx] = PyThread_get_thread_ident()
 
+
 f_sig = "void(int64[:], intp[:])"
+
 
 def lifted_f(a, indices):
     """
@@ -53,6 +55,7 @@ def lifted_f(a, indices):
         # Let another thread run
         sleep(10 * sleep_factor)
         a[idx] = PyThread_get_thread_ident()
+
 
 def object_f(a, indices):
     """
@@ -139,6 +142,7 @@ class TestGILRelease(TestCase):
         released in a callee.
         """
         compiled_f = jit(f_sig, nopython=True)(f)
+
         @jit(f_sig, nopython=True, nogil=True)
         def caller(a, i):
             compiled_f(a, i)
@@ -149,6 +153,7 @@ class TestGILRelease(TestCase):
         Same, but with both caller and callee asking to release the GIL.
         """
         compiled_f = jit(f_sig, nopython=True, nogil=True)(f)
+
         @jit(f_sig, nopython=True, nogil=True)
         def caller(a, i):
             compiled_f(a, i)
@@ -159,6 +164,7 @@ class TestGILRelease(TestCase):
         When only the callee asks to release the GIL, it gets ignored.
         """
         compiled_f = jit(f_sig, nopython=True, nogil=True)(f)
+
         @jit(f_sig, nopython=True)
         def caller(a, i):
             compiled_f(a, i)

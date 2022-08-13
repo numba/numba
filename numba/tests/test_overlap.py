@@ -12,21 +12,26 @@ def array_overlap1(src, dest, k=1):
     assert src.shape == dest.shape
     dest[k:] = src[:-k]
 
+
 def array_overlap2(src, dest, k=1):
     assert src.shape == dest.shape
     dest[:-k] = src[k:]
+
 
 def array_overlap3(src, dest, k=1):
     assert src.shape == dest.shape
     dest[:,:-k] = src[:,k:]
 
+
 def array_overlap4(src, dest, k=1):
     assert src.shape == dest.shape
     dest[:,k:] = src[:,:-k]
 
+
 def array_overlap5(src, dest, k=1):
     assert src.shape == dest.shape
     dest[...,:-k] = src[...,k:]
+
 
 def array_overlap6(src, dest, k=1):
     assert src.shape == dest.shape
@@ -34,25 +39,31 @@ def array_overlap6(src, dest, k=1):
 
 # Array overlaps involving an in-place reversal
 
+
 def array_overlap11(src, dest):
     assert src.shape == dest.shape
     dest[::-1] = src
+
 
 def array_overlap12(src, dest):
     assert src.shape == dest.shape
     dest[:] = src[::-1]
 
+
 def array_overlap13(src, dest):
     assert src.shape == dest.shape
     dest[:,::-1] = src
+
 
 def array_overlap14(src, dest):
     assert src.shape == dest.shape
     dest[:] = src[:,::-1]
 
+
 def array_overlap15(src, dest):
     assert src.shape == dest.shape
     dest[...,::-1] = src
+
 
 def array_overlap16(src, dest):
     assert src.shape == dest.shape

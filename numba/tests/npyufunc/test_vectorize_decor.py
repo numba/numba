@@ -16,11 +16,13 @@ def sinc(x):
     else:
         return math.sin(x * pi) / (pi * x)
 
+
 def scaled_sinc(x, scale):
     if x == 0.0:
         return scale
     else:
         return scale * (math.sin(x * pi) / (pi * x))
+
 
 def vector_add(a, b):
     return a + b
@@ -100,6 +102,7 @@ class BaseVectorizeNopythonArg(unittest.TestCase, CheckWarningsMixin):
     """
     Test passing the nopython argument to the vectorize decorator.
     """
+
     def _test_target_nopython(self, target, warnings, with_sig=True):
         a = np.array([2.0], dtype=np.float32)
         b = np.array([3.0], dtype=np.float32)
@@ -108,6 +111,7 @@ class BaseVectorizeNopythonArg(unittest.TestCase, CheckWarningsMixin):
         with self.check_warnings(warnings):
             f = vectorize(*args, target=target, nopython=True)(vector_add)
             f(a, b)
+
 
 class TestVectorizeNopythonArg(BaseVectorizeNopythonArg):
     def test_target_cpu_nopython(self):
@@ -124,6 +128,7 @@ class BaseVectorizeUnrecognizedArg(unittest.TestCase, CheckWarningsMixin):
     """
     Test passing an unrecognized argument to the vectorize decorator.
     """
+
     def _test_target_unrecognized_arg(self, target, with_sig=True):
         a = np.array([2.0], dtype=np.float32)
         b = np.array([3.0], dtype=np.float32)
@@ -134,6 +139,7 @@ class BaseVectorizeUnrecognizedArg(unittest.TestCase, CheckWarningsMixin):
             f(a, b)
         self.assertIn("Unrecognized options", str(raises.exception))
 
+
 class TestVectorizeUnrecognizedArg(BaseVectorizeUnrecognizedArg):
     def test_target_cpu_unrecognized_arg(self):
         self._test_target_unrecognized_arg('cpu')
@@ -143,8 +149,6 @@ class TestVectorizeUnrecognizedArg(BaseVectorizeUnrecognizedArg):
 
     def test_target_parallel_unrecognized_arg(self):
         self._test_target_unrecognized_arg('parallel')
-
-
 
 
 if __name__ == '__main__':

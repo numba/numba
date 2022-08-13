@@ -9,9 +9,9 @@ import operator
 from llvmlite import ir
 from numba.core import types, typing, errors, cgutils
 from numba.core.imputils import (lower_builtin, lower_cast,
-                                    iternext_impl, impl_ret_borrowed,
-                                    impl_ret_new_ref, impl_ret_untracked,
-                                    RefType)
+                                 iternext_impl, impl_ret_borrowed,
+                                 impl_ret_new_ref, impl_ret_untracked,
+                                 RefType)
 from numba.core.extending import overload_method, overload
 from numba.core.utils import cached_property
 from numba.misc import quicksort
@@ -132,6 +132,7 @@ class ListPayloadAccessor(_ListPayloadMixin):
     A helper object to access the list attributes given the pointer to the
     payload type.
     """
+
     def __init__(self, context, builder, list_type, payload_ptr):
         self._context = context
         self._builder = builder
@@ -249,7 +250,8 @@ class ListInstance(_ListPayloadMixin):
 
         # Total allocation size = <payload header size> + nitems * itemsize
         allocsize, ovf = cgutils.muladd_with_overflow(builder, nitems,
-                                                      ir.Constant(intp_t, itemsize),
+                                                      ir.Constant(
+                                                          intp_t, itemsize),
                                                       ir.Constant(intp_t, payload_size))
         with builder.if_then(ovf, likely=False):
             builder.store(cgutils.false_bit, ok)
@@ -263,7 +265,8 @@ class ListInstance(_ListPayloadMixin):
                     builder.store(cgutils.false_bit, ok)
                 with if_ok:
                     self._list.meminfo = meminfo
-                    self._list.parent = context.get_constant_null(types.pyobject)
+                    self._list.parent = context.get_constant_null(
+                        types.pyobject)
                     self._payload.allocated = nitems
                     self._payload.size = ir.Constant(intp_t, 0)  # for safety
                     self._payload.dirty = cgutils.false_bit
@@ -378,7 +381,8 @@ class ListInstance(_ListPayloadMixin):
         # allocated < new_size
         is_too_small = builder.icmp_signed('<', allocated, new_size)
         # (allocated >> 2) > new_size
-        is_too_large = builder.icmp_signed('>', builder.ashr(allocated, two), new_size)
+        is_too_large = builder.icmp_signed(
+            '>', builder.ashr(allocated, two), new_size)
 
         with builder.if_then(is_too_large, likely=False):
             # Exact downsize to requested size
@@ -408,6 +412,7 @@ class ListInstance(_ListPayloadMixin):
 
         self.set_dirty(True)
 
+
 class ListIterInstance(_ListPayloadMixin):
 
     def __init__(self, context, builder, iter_type, iter_val):
@@ -419,7 +424,8 @@ class ListIterInstance(_ListPayloadMixin):
 
     @classmethod
     def from_list(cls, context, builder, iter_type, list_val):
-        list_inst = ListInstance(context, builder, iter_type.container, list_val)
+        list_inst = ListInstance(
+            context, builder, iter_type.container, list_val)
         self = cls(context, builder, iter_type, None)
         index = context.get_constant(types.intp, 0)
         self._iter.index = cgutils.alloca_once_value(builder, index)
@@ -472,6 +478,7 @@ def list_constructor(context, builder, sig, args):
 
     return context.compile_internal(builder, list_impl, sig, args)
 
+
 @lower_builtin(list)
 def list_constructor(context, builder, sig, args):
     list_type = sig.return_type
@@ -482,15 +489,19 @@ def list_constructor(context, builder, sig, args):
 #-------------------------------------------------------------------------------
 # Various operations
 
+
 @lower_builtin(len, types.List)
 def list_len(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     return inst.size
 
+
 @lower_builtin('getiter', types.List)
 def getiter_list(context, builder, sig, args):
-    inst = ListIterInstance.from_list(context, builder, sig.return_type, args[0])
+    inst = ListIterInstance.from_list(
+        context, builder, sig.return_type, args[0])
     return impl_ret_borrowed(context, builder, sig.return_type, inst.value)
+
 
 @lower_builtin('iternext', types.ListIter)
 @iternext_impl(RefType.BORROWED)
@@ -517,6 +528,7 @@ def getitem_list(context, builder, sig, args):
     result = inst.getitem(index)
 
     return impl_ret_borrowed(context, builder, sig.return_type, result)
+
 
 @lower_builtin(operator.setitem, types.List, types.Integer, types.Any)
 def setitem_list(context, builder, sig, args):
@@ -552,6 +564,7 @@ def getslice_list(context, builder, sig, args):
             result.inititem(count, value, incref=True)
 
     return impl_ret_new_ref(context, builder, sig.return_type, result.value)
+
 
 @lower_builtin(operator.setitem, types.List, types.SliceType, types.Any)
 def setitem_list(context, builder, sig, args):
@@ -594,7 +607,8 @@ def setitem_list(context, builder, sig, args):
 
             with cgutils.for_range(builder, src_size) as loop:
                 value = src.getitem(loop.index)
-                dest.setitem(builder.add(loop.index, dest_offset), value, incref=True)
+                dest.setitem(builder.add(loop.index, dest_offset),
+                             value, incref=True)
 
         with otherwise:
             with builder.if_then(builder.icmp_signed('!=', size_delta, zero)):
@@ -602,7 +616,7 @@ def setitem_list(context, builder, sig, args):
                 context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
             with cgutils.for_range_slice_generic(
-                builder, slice.start, slice.stop, slice.step) as (pos_range, neg_range):
+                    builder, slice.start, slice.stop, slice.step) as (pos_range, neg_range):
                 with pos_range as (index, count):
                     value = src.getitem(count)
                     dest.setitem(index, value, incref=True)
@@ -611,7 +625,6 @@ def setitem_list(context, builder, sig, args):
                     dest.setitem(index, value, incref=True)
 
     return context.get_dummy_value()
-
 
 
 @lower_builtin(operator.delitem, types.List, types.Integer)
@@ -645,7 +658,7 @@ def delitem_list(context, builder, sig, args):
     # Decref the removed range
     with cgutils.for_range_slice(
             builder, start, real_stop, start.type(1)
-            ) as (idx, _):
+    ) as (idx, _):
         inst.decref_value(inst.getitem(idx))
 
     # Size of the list tail, after the end of slice
@@ -667,6 +680,7 @@ def in_seq(context, builder, sig, args):
         return False
 
     return context.compile_internal(builder, seq_contains_impl, sig, args)
+
 
 @lower_builtin(bool, types.Sequence)
 def sequence_bool(context, builder, sig, args):
@@ -706,6 +720,7 @@ def list_add(context, builder, sig, args):
 
     return impl_ret_new_ref(context, builder, sig.return_type, dest.value)
 
+
 @lower_builtin(operator.iadd, types.List, types.List)
 def list_add_inplace(context, builder, sig, args):
     assert sig.args[0].dtype == sig.return_type.dtype
@@ -735,9 +750,11 @@ def list_mul(context, builder, sig, args):
     with cgutils.for_range_slice(builder, zero, nitems, src_size, inc=True) as (dest_offset, _):
         with cgutils.for_range(builder, src_size) as loop:
             value = src.getitem(loop.index)
-            dest.setitem(builder.add(loop.index, dest_offset), value, incref=True)
+            dest.setitem(builder.add(loop.index, dest_offset),
+                         value, incref=True)
 
     return impl_ret_new_ref(context, builder, sig.return_type, dest.value)
+
 
 @lower_builtin(operator.imul, types.List, types.Integer)
 def list_mul_inplace(context, builder, sig, args):
@@ -754,7 +771,8 @@ def list_mul_inplace(context, builder, sig, args):
     with cgutils.for_range_slice(builder, src_size, nitems, src_size, inc=True) as (dest_offset, _):
         with cgutils.for_range(builder, src_size) as loop:
             value = inst.getitem(loop.index)
-            inst.setitem(builder.add(loop.index, dest_offset), value, incref=True)
+            inst.setitem(builder.add(loop.index, dest_offset),
+                         value, incref=True)
 
     return impl_ret_borrowed(context, builder, sig.return_type, inst.value)
 
@@ -769,6 +787,7 @@ def list_is(context, builder, sig, args):
     ma = builder.ptrtoint(a.meminfo, cgutils.intp_t)
     mb = builder.ptrtoint(b.meminfo, cgutils.intp_t)
     return builder.icmp_signed('==', ma, mb)
+
 
 @lower_builtin(operator.eq, types.List, types.List)
 def list_eq(context, builder, sig, args):
@@ -794,6 +813,7 @@ def list_eq(context, builder, sig, args):
 
     return builder.load(res)
 
+
 @lower_builtin(operator.ne, types.List, types.List)
 def list_ne(context, builder, sig, args):
 
@@ -801,6 +821,7 @@ def list_ne(context, builder, sig, args):
         return not (a == b)
 
     return context.compile_internal(builder, list_ne_impl, sig, args)
+
 
 @lower_builtin(operator.le, types.List, types.List)
 def list_le(context, builder, sig, args):
@@ -817,6 +838,7 @@ def list_le(context, builder, sig, args):
 
     return context.compile_internal(builder, list_le_impl, sig, args)
 
+
 @lower_builtin(operator.lt, types.List, types.List)
 def list_lt(context, builder, sig, args):
 
@@ -832,6 +854,7 @@ def list_lt(context, builder, sig, args):
 
     return context.compile_internal(builder, list_lt_impl, sig, args)
 
+
 @lower_builtin(operator.ge, types.List, types.List)
 def list_ge(context, builder, sig, args):
 
@@ -839,6 +862,7 @@ def list_ge(context, builder, sig, args):
         return b <= a
 
     return context.compile_internal(builder, list_ge_impl, sig, args)
+
 
 @lower_builtin(operator.gt, types.List, types.List)
 def list_gt(context, builder, sig, args):
@@ -850,6 +874,7 @@ def list_gt(context, builder, sig, args):
 
 #-------------------------------------------------------------------------------
 # Methods
+
 
 @lower_builtin("list.append", types.List, types.Any)
 def list_append(context, builder, sig, args):
@@ -863,6 +888,7 @@ def list_append(context, builder, sig, args):
 
     return context.get_dummy_value()
 
+
 @lower_builtin("list.clear", types.List)
 def list_clear(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
@@ -870,12 +896,14 @@ def list_clear(context, builder, sig, args):
 
     return context.get_dummy_value()
 
+
 @lower_builtin("list.copy", types.List)
 def list_copy(context, builder, sig, args):
     def list_copy_impl(lst):
         return list(lst)
 
     return context.compile_internal(builder, list_copy_impl, sig, args)
+
 
 @lower_builtin("list.count", types.List, types.Any)
 def list_count(context, builder, sig, args):
@@ -888,6 +916,7 @@ def list_count(context, builder, sig, args):
         return res
 
     return context.compile_internal(builder, list_count_impl, sig, args)
+
 
 def _list_extend_list(context, builder, sig, args):
     src = ListInstance(context, builder, sig.args[1], args[1])
@@ -906,6 +935,7 @@ def _list_extend_list(context, builder, sig, args):
 
     return dest
 
+
 @lower_builtin("list.extend", types.List, types.IterableType)
 def list_extend(context, builder, sig, args):
     if isinstance(sig.args[1], types.List):
@@ -921,6 +951,7 @@ def list_extend(context, builder, sig, args):
 
     return context.compile_internal(builder, list_extend, sig, args)
 
+
 @lower_builtin("list.index", types.List, types.Any)
 def list_index(context, builder, sig, args):
 
@@ -933,8 +964,9 @@ def list_index(context, builder, sig, args):
 
     return context.compile_internal(builder, list_index_impl, sig, args)
 
+
 @lower_builtin("list.index", types.List, types.Any,
-           types.Integer)
+               types.Integer)
 def list_index(context, builder, sig, args):
 
     def list_index_impl(lst, value, start):
@@ -951,8 +983,9 @@ def list_index(context, builder, sig, args):
 
     return context.compile_internal(builder, list_index_impl, sig, args)
 
+
 @lower_builtin("list.index", types.List, types.Any,
-           types.Integer, types.Integer)
+               types.Integer, types.Integer)
 def list_index(context, builder, sig, args):
 
     def list_index_impl(lst, value, start, stop):
@@ -973,8 +1006,9 @@ def list_index(context, builder, sig, args):
 
     return context.compile_internal(builder, list_index_impl, sig, args)
 
+
 @lower_builtin("list.insert", types.List, types.Integer,
-           types.Any)
+               types.Any)
 def list_insert(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     index = inst.fix_index(args[1])
@@ -990,6 +1024,7 @@ def list_insert(context, builder, sig, args):
 
     return context.get_dummy_value()
 
+
 @lower_builtin("list.pop", types.List)
 def list_pop(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
@@ -1003,6 +1038,7 @@ def list_pop(context, builder, sig, args):
     inst.clear_value(n)     # clear the storage space
     inst.resize(n)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
+
 
 @lower_builtin("list.pop", types.List, types.Integer)
 def list_pop(context, builder, sig, args):
@@ -1022,6 +1058,7 @@ def list_pop(context, builder, sig, args):
     inst.resize(n)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
+
 @lower_builtin("list.remove", types.List, types.Any)
 def list_remove(context, builder, sig, args):
 
@@ -1034,6 +1071,7 @@ def list_remove(context, builder, sig, args):
         raise ValueError("list.remove(x): x not in list")
 
     return context.compile_internal(builder, list_remove_impl, sig, args)
+
 
 @lower_builtin("list.reverse", types.List)
 def list_reverse(context, builder, sig, args):
@@ -1051,6 +1089,7 @@ def list_reverse(context, builder, sig, args):
 
 def gt(a, b):
     return a > b
+
 
 sort_forwards = quicksort.make_jit_quicksort().run_quicksort
 sort_backwards = quicksort.make_jit_quicksort(lt=gt).run_quicksort
@@ -1131,6 +1170,7 @@ def ol_sorted(iterable, key=None, reverse=False):
 # -----------------------------------------------------------------------------
 # Implicit casting
 
+
 @lower_cast(types.List, types.List)
 def list_to_list(context, builder, fromty, toty, val):
     # Casting from non-reflected to reflected
@@ -1140,6 +1180,7 @@ def list_to_list(context, builder, fromty, toty, val):
 # -----------------------------------------------------------------------------
 # Implementations for types.LiteralList
 # -----------------------------------------------------------------------------
+
 
 _banned_error = errors.TypingError("Cannot mutate a literal list")
 
@@ -1186,6 +1227,8 @@ def literal_list_banned_reverse(lst):
 
 
 _index_end = types.intp.maxval
+
+
 @overload_method(types.LiteralList, 'index')
 def literal_list_index(lst, x, start=0, end=_index_end):
     # TODO: To make this work, need consts as slice for start/end so as to
@@ -1194,6 +1237,7 @@ def literal_list_index(lst, x, start=0, end=_index_end):
     if isinstance(lst, types.LiteralList):
         msg = "list.index is unsupported for literal lists"
         raise errors.TypingError(msg)
+
 
 @overload_method(types.LiteralList, 'count')
 def literal_list_count(lst, x):
@@ -1206,6 +1250,7 @@ def literal_list_count(lst, x):
             return count
         return impl
 
+
 @overload_method(types.LiteralList, 'copy')
 def literal_list_count(lst):
     if isinstance(lst, types.LiteralList):
@@ -1213,15 +1258,18 @@ def literal_list_count(lst):
             return lst # tuples are immutable, as is this, so just return it
         return impl
 
+
 @overload(operator.delitem)
 def literal_list_delitem(lst, index):
     if isinstance(lst, types.LiteralList):
         raise _banned_error
 
+
 @overload(operator.setitem)
 def literal_list_setitem(lst, index, value):
     if isinstance(lst, types.LiteralList):
         raise errors.TypingError("Cannot mutate a literal list")
+
 
 @overload(operator.getitem)
 def literal_list_getitem(lst, *args):
@@ -1231,12 +1279,14 @@ def literal_list_getitem(lst, *args):
            "statically determined.")
     raise errors.TypingError(msg)
 
+
 @overload(len)
 def literal_list_len(lst):
     if not isinstance(lst, types.LiteralList):
         return
     l = lst.count
     return lambda lst: l
+
 
 @overload(operator.contains)
 def literal_list_contains(lst, item):
@@ -1247,6 +1297,7 @@ def literal_list_contains(lst, item):
                     return True
             return False
         return impl
+
 
 @lower_cast(types.LiteralList, types.LiteralList)
 def literallist_to_literallist(context, builder, fromty, toty, val):

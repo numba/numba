@@ -159,7 +159,7 @@ class SetOperator(AbstractTemplate):
             return
         a, b = args
         if (isinstance(a, types.Set) and isinstance(b, types.Set)
-            and a.dtype == b.dtype):
+                and a.dtype == b.dtype):
             return signature(a, *args)
 
 
@@ -189,4 +189,3 @@ for op_key in (operator.eq, operator.ne, operator.lt, operator.le, operator.ge, 
     @infer_global(op_key)
     class ConcreteSetComparison(SetComparison):
         key = op_key
-

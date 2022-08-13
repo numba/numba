@@ -322,7 +322,8 @@ class DIBuilder(AbstractDIBuilder):
             function.attributes.add('noinline')
 
     def finalize(self):
-        dbgcu = cgutils.get_or_insert_named_metadata(self.module, self.DBG_CU_NAME)
+        dbgcu = cgutils.get_or_insert_named_metadata(
+            self.module, self.DBG_CU_NAME)
         dbgcu.add(self.dicompileunit)
         self._set_module_flags()
 
@@ -334,7 +335,8 @@ class DIBuilder(AbstractDIBuilder):
         """Set the module flags metadata
         """
         module = self.module
-        mflags = cgutils.get_or_insert_named_metadata(module, 'llvm.module.flags')
+        mflags = cgutils.get_or_insert_named_metadata(
+            module, 'llvm.module.flags')
         # Set *require* behavior to warning
         # See http://llvm.org/docs/LangRef.html#module-flags-metadata
         require_warning_behavior = self._const_int(2)
@@ -414,7 +416,8 @@ class DIBuilder(AbstractDIBuilder):
 
         for idx, llarg in enumerate(llfunc.args):
             if not llarg.name.startswith('arg.'):
-                name = llarg.name.replace('.', '$')    # for gdb to work correctly
+                # for gdb to work correctly
+                name = llarg.name.replace('.', '$')
                 lltype = llarg.type
                 size = self.cgctx.get_abi_sizeof(lltype)
                 mdtype = self._var_type(lltype, size, datamodel=None)

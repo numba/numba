@@ -8,9 +8,9 @@ from numba.core.typing.templates import (AttributeTemplate, AbstractTemplate,
                                          CallableTemplate, Registry, signature)
 
 from numba.np.numpy_support import (ufunc_find_matching_loop,
-                             supported_ufunc_loop, as_dtype,
-                             from_dtype, as_dtype, resolve_output_type,
-                             carray, farray, _ufunc_loop_sig)
+                                    supported_ufunc_loop, as_dtype,
+                                    from_dtype, as_dtype, resolve_output_type,
+                                    carray, farray, _ufunc_loop_sig)
 from numba.core.errors import (TypingError, NumbaPerformanceWarning,
                                NumbaTypeError, NumbaAssertionError)
 from numba import pndindex
@@ -104,19 +104,21 @@ class Numpy_rules_ufunc(AbstractTemplate):
             ufunc, args, kws)
         ufunc_loop = ufunc_find_matching_loop(ufunc, base_types)
         if ufunc_loop is None:
-            raise TypingError("can't resolve ufunc {0} for types {1}".format(ufunc.__name__, args))
+            raise TypingError(
+                "can't resolve ufunc {0} for types {1}".format(ufunc.__name__, args))
 
         # check if all the types involved in the ufunc loop are supported in this mode
         if not supported_ufunc_loop(ufunc, ufunc_loop):
             msg = "ufunc '{0}' using the loop '{1}' not supported in this mode"
-            raise TypingError(msg=msg.format(ufunc.__name__, ufunc_loop.ufunc_sig))
+            raise TypingError(msg=msg.format(
+                ufunc.__name__, ufunc_loop.ufunc_sig))
 
         # if there is any explicit output type, check that it is valid
         explicit_outputs_np = [as_dtype(tp.dtype) for tp in explicit_outputs]
 
         # Numpy will happily use unsafe conversions (although it will actually warn)
-        if not all (np.can_cast(fromty, toty, 'unsafe') for (fromty, toty) in
-                    zip(ufunc_loop.numpy_outputs, explicit_outputs_np)):
+        if not all(np.can_cast(fromty, toty, 'unsafe') for (fromty, toty) in
+                   zip(ufunc_loop.numpy_outputs, explicit_outputs_np)):
             msg = "ufunc '{0}' can't cast result to explicit result type"
             raise TypingError(msg=msg.format(ufunc.__name__))
 
@@ -141,7 +143,8 @@ class Numpy_rules_ufunc(AbstractTemplate):
                         break
                 output_type = types.Array
                 if array_ufunc_type is not None:
-                    output_type = array_ufunc_type.__array_ufunc__(ufunc, "__call__", *args, **kws)
+                    output_type = array_ufunc_type.__array_ufunc__(
+                        ufunc, "__call__", *args, **kws)
                     if output_type is NotImplemented:
                         msg = (f"unsupported use of ufunc {ufunc} on "
                                f"{array_ufunc_type}")
@@ -196,7 +199,8 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
     def install_operations(cls):
         for op, ufunc_name in cls._op_map.items():
             infer_global(op)(
-                type("NumpyRulesArrayOperator_" + ufunc_name, (cls,), dict(key=op))
+                type("NumpyRulesArrayOperator_" +
+                     ufunc_name, (cls,), dict(key=op))
             )
 
     def generic(self, args, kws):
@@ -224,6 +228,7 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
 
 
 _binop_map = NumpyRulesArrayOperator._op_map
+
 
 class NumpyRulesInplaceArrayOperator(NumpyRulesArrayOperator):
     _op_map = {
@@ -314,11 +319,12 @@ _logic_functions = [ "isnat" ]
 # It also works as a nice TODO list for ufunc support :)
 _unsupported = set([ 'frexp',
                      'modf',
-                 ])
+                     ])
 
 
 def _numpy_ufunc(name):
     func = getattr(np, name)
+
     class typing_class(Numpy_rules_ufunc):
         key = func
 
@@ -330,6 +336,7 @@ def _numpy_ufunc(name):
 
     if name not in aliases:
         infer_global(func, types.Function(typing_class))
+
 
 all_ufuncs = sum([_math_operations, _trigonometric_functions,
                   _bit_twiddling_functions, _comparison_functions,
@@ -413,6 +420,7 @@ def _numpy_redirect(fname):
                dict(key=numpy_function, method_name=fname))
     infer_global(numpy_function, types.Function(cls))
 
+
 for func in ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
              'cumsum', 'cumprod', 'argsort', 'nonzero', 'ravel']:
     _numpy_redirect(func)
@@ -457,6 +465,7 @@ def parse_shape(shape):
             ndim = len(shape)
     return ndim
 
+
 def parse_dtype(dtype):
     """
     Return the dtype of a type, if it is either a DtypeSpec (used for most
@@ -474,6 +483,7 @@ def parse_dtype(dtype):
             msg = f"Invalid NumPy dtype specified: '{dtstr}'"
             raise TypingError(msg)
         return from_dtype(dt)
+
 
 def _parse_nested_sequence(context, typ):
     """
@@ -527,6 +537,7 @@ class NpArray(CallableTemplate):
 
         return typer
 
+
 @glue_typing(np.full)
 class NdFull(CallableTemplate):
 
@@ -542,6 +553,7 @@ class NdFull(CallableTemplate):
                 return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
 
         return typer
+
 
 @glue_typing(np.full_like)
 class NdFullLike(CallableTemplate):
@@ -683,7 +695,7 @@ class NdExpandDims(CallableTemplate):
     def generic(self):
         def typer(a, axis):
             if (not isinstance(a, types.Array)
-                or not isinstance(axis, types.Integer)):
+                    or not isinstance(axis, types.Integer)):
                 return
 
             layout = a.layout if a.ndim <= 1 else 'A'
@@ -737,11 +749,12 @@ def _homogeneous_dims(context, func_name, arrays):
             raise NumbaTypeError(msg)
     return ndim
 
+
 def _sequence_of_arrays(context, func_name, arrays,
                         dim_chooser=_homogeneous_dims):
     if (not isinstance(arrays, types.BaseTuple)
         or not len(arrays)
-        or not all(isinstance(a, types.Array) for a in arrays)):
+            or not all(isinstance(a, types.Array) for a in arrays)):
         raise TypeError("%s(): expecting a non-empty tuple of arrays, "
                         "got %s" % (func_name, arrays))
 
@@ -753,6 +766,7 @@ def _sequence_of_arrays(context, func_name, arrays,
                         "compatible dtypes" % func_name)
 
     return dtype, ndim
+
 
 def _choose_concatenation_layout(arrays):
     # Only create a F array if all input arrays have F layout.
@@ -776,7 +790,8 @@ class NdConcatenate(CallableTemplate):
             dtype, ndim = _sequence_of_arrays(self.context,
                                               "np.concatenate", arrays)
             if ndim == 0:
-                raise TypeError("zero-dimensional arrays cannot be concatenated")
+                raise TypeError(
+                    "zero-dimensional arrays cannot be concatenated")
 
             layout = _choose_concatenation_layout(arrays)
 
@@ -796,7 +811,7 @@ class NdStack(CallableTemplate):
                 return
 
             dtype, ndim = _sequence_of_arrays(self.context,
-                                                "np.stack", arrays)
+                                              "np.stack", arrays)
 
             # This diverges from Numpy's behaviour, which simply inserts
             # a new stride at the requested axis (therefore can return
@@ -828,16 +843,17 @@ class NdStack(BaseStackTemplate):
     func_name = "np.hstack"
     ndim_min = 1
 
+
 @glue_typing(np.vstack)
 class NdStack(BaseStackTemplate):
     func_name = "np.vstack"
     ndim_min = 2
 
+
 @glue_typing(np.dstack)
 class NdStack(BaseStackTemplate):
     func_name = "np.dstack"
     ndim_min = 3
-
 
 
 def _column_stack_dims(context, func_name, arrays):
@@ -894,7 +910,8 @@ class MatMulTyperMixin(object):
 
         if out is not None:
             if out_ndim == 0:
-                raise TypeError("explicit output unsupported for vector * vector")
+                raise TypeError(
+                    "explicit output unsupported for vector * vector")
             elif out.ndim != out_ndim:
                 raise TypeError("explicit output has incorrect dimensionality")
             if not isinstance(out, types.Array) or out.layout != 'C':
@@ -984,6 +1001,7 @@ def _check_linalg_matrix(a, func_name):
 # -----------------------------------------------------------------------------
 # Miscellaneous functions
 
+
 @infer_global(np.ndenumerate)
 class NdEnumerate(AbstractTemplate):
 
@@ -1064,10 +1082,10 @@ class Round(AbstractTemplate):
             return signature(arg, *args)
         if (isinstance(arg, types.Array) and isinstance(arg.dtype, supported_scalars) and
             isinstance(out, types.Array) and isinstance(out.dtype, supported_scalars) and
-            out.ndim == arg.ndim):
+                out.ndim == arg.ndim):
             # arg can only be complex if out is complex too
             if (not isinstance(arg.dtype, types.Complex)
-                or isinstance(out.dtype, types.Complex)):
+                    or isinstance(out.dtype, types.Complex)):
                 return signature(out, *args)
 
 
@@ -1087,8 +1105,8 @@ class Where(AbstractTemplate):
         elif len(args) == 3:
             cond, x, y = args
             retdty = from_dtype(np.promote_types(
-                        as_dtype(getattr(args[1], 'dtype', args[1])),
-                        as_dtype(getattr(args[2], 'dtype', args[2]))))
+                as_dtype(getattr(args[1], 'dtype', args[1])),
+                as_dtype(getattr(args[2], 'dtype', args[2]))))
             if isinstance(cond, types.Array):
                 # array where()
                 if isinstance(x, types.Array) and isinstance(y, types.Array):
@@ -1118,8 +1136,8 @@ class Sinc(AbstractTemplate):
         arg = args[0]
         supported_scalars = (types.Float, types.Complex)
         if (isinstance(arg, supported_scalars) or
-              (isinstance(arg, types.Array) and
-               isinstance(arg.dtype, supported_scalars))):
+            (isinstance(arg, types.Array) and
+             isinstance(arg.dtype, supported_scalars))):
             return signature(arg, arg)
 
 
@@ -1128,6 +1146,7 @@ class Angle(CallableTemplate):
     """
     Typing template for np.angle()
     """
+
     def generic(self):
         def typer(z, deg=False):
             if isinstance(z, types.Array):
@@ -1152,6 +1171,7 @@ class DiagCtor(CallableTemplate):
     """
     Typing template for np.diag()
     """
+
     def generic(self):
         def typer(ref, k=0):
             if isinstance(ref, types.Array):
@@ -1190,6 +1210,7 @@ class Take(AbstractTemplate):
 
 # -----------------------------------------------------------------------------
 # Numba helpers
+
 
 @glue_typing(carray)
 class NumbaCArray(CallableTemplate):

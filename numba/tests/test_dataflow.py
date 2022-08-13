@@ -62,6 +62,8 @@ def stack_effect_error(x):
     return i + c
 
 # Some more issues with stack effect and blocks
+
+
 def for_break(n, x):
     for i in range(n):
         n = 0
@@ -72,11 +74,14 @@ def for_break(n, x):
     return i, n
 
 # Issue #571
+
+
 def var_swapping(a, b, c, d, e):
     a, b = b, a
     c, d, e = e, c, d
     a, b, c, d = b, c, d, a
-    return a + b + c + d +e
+    return a + b + c + d + e
+
 
 def unsupported_op_code():
     # needs unsupported "SETUP_EXCEPT" opcode
@@ -84,6 +89,7 @@ def unsupported_op_code():
         pass
     except:
         pass
+
 
 class TestDataFlow(TestCase):
 
@@ -189,4 +195,3 @@ class TestDataFlow(TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-

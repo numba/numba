@@ -25,6 +25,7 @@ attempt_nocopy_reshape = ctypes.CFUNCTYPE(
     ctypes.c_int,  # is_f_order
 )(_helperlib.c_helpers['attempt_nocopy_reshape'])
 
+
 class Dim(object):
     """A single dimension of the array
 
@@ -303,11 +304,12 @@ class Array(object):
         # compute the missing dimension
         if unknownidx >= 0:
             if knownsize == 0 or self.size % knownsize != 0:
-                raise ValueError("cannot infer valid shape for unknown dimension")
+                raise ValueError(
+                    "cannot infer valid shape for unknown dimension")
             else:
                 newdims = newdims[0:unknownidx] \
-                        + (self.size // knownsize,) \
-                        + newdims[unknownidx + 1:]
+                    + (self.size // knownsize,) \
+                    + newdims[unknownidx + 1:]
 
         newsize = functools.reduce(operator.mul, newdims, 1)
 
@@ -386,7 +388,7 @@ class Array(object):
             return self
 
         elif (order in 'CA' and self.is_c_contig or
-                          order in 'FA' and self.is_f_contig):
+              order in 'FA' and self.is_f_contig):
             newshape = (self.size,)
             newstrides = (self.itemsize,)
             arr = self.from_desc(self.extent.begin, newshape, newstrides,

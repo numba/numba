@@ -114,6 +114,7 @@ def simple_usecase1(rec):
     rec.mark('--2--')
     return d
 
+
 def simple_usecase2(rec):
     a = rec('a')
     b = rec('b')
@@ -122,6 +123,7 @@ def simple_usecase2(rec):
     y = x
     a = None
     return y
+
 
 def looping_usecase1(rec):
     a = rec('a')
@@ -134,6 +136,7 @@ def looping_usecase1(rec):
     rec.mark('--loop exit--')
     x = x + c
     return x
+
 
 def looping_usecase2(rec):
     a = rec('a')
@@ -160,11 +163,13 @@ def looping_usecase2(rec):
     rec.mark('--outer loop exit--')
     return cum
 
+
 def generator_usecase1(rec):
     a = rec('a')
     b = rec('b')
     yield a
     yield b
+
 
 def generator_usecase2(rec):
     a = rec('a')
@@ -177,8 +182,10 @@ def generator_usecase2(rec):
 class MyError(RuntimeError):
     pass
 
+
 def do_raise(x):
     raise MyError(x)
+
 
 def raising_usecase1(rec):
     a = rec('a')
@@ -190,6 +197,7 @@ def raising_usecase1(rec):
         c + a
     c + b
 
+
 def raising_usecase2(rec):
     a = rec('a')
     b = rec('b')
@@ -197,6 +205,7 @@ def raising_usecase2(rec):
         c = rec('c')
         do_raise(b)
     a + c
+
 
 def raising_usecase3(rec):
     a = rec('a')
@@ -421,7 +430,6 @@ class TestExtendingVariableLifetimes(SerialMixin, TestCase):
                 func_ir = cres.metadata['preserved_ir']
 
             return func_ir
-
 
         def check(func_ir, expect):
             # assert single block

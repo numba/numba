@@ -189,25 +189,25 @@ class TestUsecases(TestCase):
         test_str2 = '123'
         op = operator.eq
         self.assertEqual(pyfunc(test_str1, test_str2, op),
-            cfunc(test_str1, test_str2, op))
+                         cfunc(test_str1, test_str2, op))
 
         test_str1 = '123'
         test_str2 = '456'
         op = operator.eq
         self.assertEqual(pyfunc(test_str1, test_str2, op),
-            cfunc(test_str1, test_str2, op))
+                         cfunc(test_str1, test_str2, op))
 
         test_str1 = '123'
         test_str2 = '123'
         op = operator.ne
         self.assertEqual(pyfunc(test_str1, test_str2, op),
-            cfunc(test_str1, test_str2, op))
+                         cfunc(test_str1, test_str2, op))
 
         test_str1 = '123'
         test_str2 = '456'
         op = operator.ne
         self.assertEqual(pyfunc(test_str1, test_str2, op),
-            cfunc(test_str1, test_str2, op))
+                         cfunc(test_str1, test_str2, op))
 
     def test_blackscholes_cnd(self):
         pyfunc = usecases.blackscholes_cnd

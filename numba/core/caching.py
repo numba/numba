@@ -189,6 +189,7 @@ class _UserProvidedCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
     A locator that always point to the user provided directory in
     `numba.config.CACHE_DIR`
     """
+
     def __init__(self, py_func, py_file):
         self._py_file = py_file
         self._lineno = py_func.__code__.co_firstlineno
@@ -215,7 +216,8 @@ class _InTreeCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
     def __init__(self, py_func, py_file):
         self._py_file = py_file
         self._lineno = py_func.__code__.co_firstlineno
-        self._cache_path = os.path.join(os.path.dirname(self._py_file), '__pycache__')
+        self._cache_path = os.path.join(
+            os.path.dirname(self._py_file), '__pycache__')
 
     def get_cache_path(self):
         return self._cache_path
@@ -448,6 +450,7 @@ class IndexDataCacheFile(object):
     """
     Implements the logic for the index file and data file used by a cache.
     """
+
     def __init__(self, cache_path, filename_base, source_stamp):
         self._cache_path = cache_path
         self._index_name = '%s.nbi' % (filename_base,)
@@ -728,4 +731,3 @@ def make_library_cache(prefix):
         _impl_class = CustomCodeLibraryCacheImpl
 
     return LibraryCache
-

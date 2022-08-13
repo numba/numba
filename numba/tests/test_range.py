@@ -10,6 +10,8 @@ from numba.core import types, utils
 from numba.tests.support import tag
 
 from numba.cpython.rangeobj import length_of_iterator
+
+
 def loop1(n):
     s = 0
     for i in range(n):
@@ -34,16 +36,22 @@ def loop3(a, b, c):
 def range_len1(n):
     return len(range(n))
 
+
 def range_len2(a, b):
     return len(range(a, b))
 
+
 def range_len3(a, b, c):
     return len(range(a, b, c))
+
+
 def range_iter_len1(a):
     return length_of_iterator(iter(range(a)))
 
+
 def range_iter_len2(a):
     return length_of_iterator(iter(a))
+
 
 def range_attrs(start, stop, step):
     r1 = range(start)
@@ -53,6 +61,7 @@ def range_attrs(start, stop, step):
     for r in (r1, r2, r3):
         tmp.append((r.start, r.stop, r.step))
     return tmp
+
 
 def range_contains(val, start, stop, step):
     r1 = range(start)
@@ -171,12 +180,12 @@ class TestRange(unittest.TestCase):
 
         bool_vals = [True, False]
         int_vals = [-10, -6, -5, -4, -2, -1, 0,
-                     1, 2, 4, 5, 6, 10]
+                    1, 2, 4, 5, 6, 10]
         float_vals = [-1.1, -1.0, 0.0, 1.0, 1.1]
         complex_vals = [1 + 0j, 1 + 1j, 1.1 + 0j, 1.0 + 1.1j]
 
         vallist = (bool_vals + int_vals + float_vals
-                + complex_vals)
+                   + complex_vals)
 
         cfunc = njit(pyfunc)
         for arg in arglist:
@@ -189,7 +198,6 @@ class TestRange(unittest.TestCase):
         for arg in arglist:
             for val in non_numeric_vals:
                 self.assertEqual(cfunc_obj(val, *arg), pyfunc(val, *arg))
-
 
 
 if __name__ == '__main__':

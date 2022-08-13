@@ -22,12 +22,12 @@ from numba.parfors.array_analysis import EquivSet, ArrayAnalysis
 from numba.core.compiler import Compiler, Flags, PassManager
 from numba.core.ir_utils import remove_dead
 from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
-                             IRProcessing, DeadBranchPrune,
-                             RewriteSemanticConstants, GenericRewrites,
-                             WithLifting, PreserveIR, InlineClosureLikes)
+                                       IRProcessing, DeadBranchPrune,
+                                       RewriteSemanticConstants, GenericRewrites,
+                                       WithLifting, PreserveIR, InlineClosureLikes)
 
 from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
-                                NopythonRewrites, IRLegalization)
+                                     NopythonRewrites, IRLegalization)
 
 from numba.core.compiler_machinery import FunctionPass, PassManager, register_pass
 from numba.experimental import jitclass
@@ -55,6 +55,7 @@ class TestEquivSet(TestCase):
     """
     Test array_analysis.EquivSet.
     """
+
     def test_insert_equiv(self):
         s1 = EquivSet()
         s1.insert_equiv('a', 'b')
@@ -119,7 +120,7 @@ class ArrayAnalysisTester(Compiler):
         if typing_context is None:
             typing_context = registry.cpu_target.typing_context
         if target_context is None:
-            target_context =  registry.cpu_target.target_context
+            target_context = registry.cpu_target.target_context
         return cls(typing_context, target_context, library, args, return_type,
                    flags, locals)
 
@@ -394,7 +395,7 @@ class TestArrayAnalysis(TestCase):
 
         int_arr_typ = types.Array(types.intp, 1, 'C')
         self._compile_and_test(test_tup_arg,
-            (types.Tuple((int_arr_typ, int_arr_typ)),), asserts=None)
+                               (types.Tuple((int_arr_typ, int_arr_typ)),), asserts=None)
 
         def test_arr_in_tup(m):
             A = np.ones(m)
@@ -406,11 +407,12 @@ class TestArrayAnalysis(TestCase):
                                equivs=[self.with_equiv("A", "B")])
 
         T = namedtuple("T", ['a','b'])
+
         def test_namedtuple(n):
             r = T(n, n)
             return r[0]
         self._compile_and_test(test_namedtuple, (types.intp,),
-                                equivs=[self.with_equiv('r', ('n', 'n'))],)
+                               equivs=[self.with_equiv('r', ('n', 'n'))],)
 
         # np.where is tricky since it returns tuple of arrays
         def test_np_where_tup_return(A):
@@ -418,7 +420,7 @@ class TestArrayAnalysis(TestCase):
             return len(c[0])
 
         self._compile_and_test(test_np_where_tup_return,
-            (types.Array(types.intp, 1, 'C'),), asserts=None)
+                               (types.Array(types.intp, 1, 'C'),), asserts=None)
 
         def test_shape(A):
             (m, n) = A.shape
@@ -448,7 +450,7 @@ class TestArrayAnalysis(TestCase):
                                asserts=None)
 
         def test_assert_1(m, n):
-            assert(m == n)
+            assert (m == n)
             A = np.ones(m)
             B = np.ones(n)
             return np.sum(A + B)
@@ -456,7 +458,7 @@ class TestArrayAnalysis(TestCase):
                                asserts=None)
 
         def test_assert_2(A, B):
-            assert(A.shape == B.shape)
+            assert (A.shape == B.shape)
             return np.sum(A + B)
 
         self._compile_and_test(test_assert_2, (types.Array(types.intp, 1, 'C'),
@@ -473,9 +475,9 @@ class TestArrayAnalysis(TestCase):
         msg = "Dimension mismatch"
         self.assertIn(msg, str(raises.exception))
 
-
     def test_stencilcall(self):
         from numba.stencils.stencil import stencil
+
         @stencil
         def kernel_1(a):
             return 0.25 * (a[0,1] + a[1,0] + a[0,-1] + a[-1,0])
@@ -491,7 +493,7 @@ class TestArrayAnalysis(TestCase):
 
         def test_2(n):
             a = np.ones((n,n))
-            b = np.ones((n+1,n+1))
+            b = np.ones((n + 1,n + 1))
             kernel_1(a, out=b)
             return a
 
@@ -520,8 +522,8 @@ class TestArrayAnalysis(TestCase):
             A = np.zeros(m)
             B = np.zeros(n)
             s = np.sum(A + B)
-            C = A[1:m-1]
-            D = B[1:n-1]
+            C = A[1:m - 1]
+            D = B[1:n - 1]
             t = np.sum(C + D)
             return s + t
         self._compile_and_test(test_1, (types.intp,types.intp,),
@@ -531,9 +533,9 @@ class TestArrayAnalysis(TestCase):
 
         def test_2(m):
             A = np.zeros(m)
-            B = A[0:m-3]
-            C = A[1:m-2]
-            D = A[2:m-1]
+            B = A[0:m - 3]
+            C = A[1:m - 2]
+            D = A[2:m - 1]
             E = B + C
             return D + E
         self._compile_and_test(test_2, (types.intp,),
@@ -543,8 +545,8 @@ class TestArrayAnalysis(TestCase):
 
         def test_3(m):
             A = np.zeros((m,m))
-            B = A[0:m-2,0:m-2]
-            C = A[1:m-1,1:m-1]
+            B = A[0:m - 2,0:m - 2]
+            C = A[1:m - 1,1:m - 1]
             E = B + C
             return E
         self._compile_and_test(test_3, (types.intp,),
@@ -553,8 +555,8 @@ class TestArrayAnalysis(TestCase):
 
         def test_4(m):
             A = np.zeros((m,m))
-            B = A[0:m-2,:]
-            C = A[1:m-1,:]
+            B = A[0:m - 2,:]
+            C = A[1:m - 1,:]
             E = B + C
             return E
         self._compile_and_test(test_4, (types.intp,),
@@ -564,10 +566,10 @@ class TestArrayAnalysis(TestCase):
         def test_5(m,n):
             A = np.zeros(m)
             B = np.zeros(m)
-            B[0:m-2] = A[1:m-1]
+            B[0:m - 2] = A[1:m - 1]
             C = np.zeros(n)
-            D = A[1:m-1]
-            C[0:n-2] = D
+            D = A[1:m - 1]
+            C[0:n - 2] = D
             # B and C are not necessarily of the same size because we can't
             # derive m == n from (m-2) % m == (n-2) % n
             return B + C
@@ -579,8 +581,8 @@ class TestArrayAnalysis(TestCase):
 
         def test_6(m):
             A = np.zeros((m,m))
-            B = A[0:m-2,:-1]
-            C = A[1:m-1,:-1]
+            B = A[0:m - 2,:-1]
+            C = A[1:m - 1,:-1]
             E = B + C
             return E
         self._compile_and_test(test_6, (types.intp,),
@@ -589,8 +591,8 @@ class TestArrayAnalysis(TestCase):
 
         def test_7(m):
             A = np.zeros((m,m))
-            B = A[0:m-2,-3:-1]
-            C = A[1:m-1,-4:-2]
+            B = A[0:m - 2,-3:-1]
+            C = A[1:m - 1,-4:-2]
             E = B + C
             return E
         self._compile_and_test(test_7, (types.intp,),
@@ -599,7 +601,7 @@ class TestArrayAnalysis(TestCase):
 
         def test_8(m):
             A = np.zeros((m,m))
-            B = A[:m-2,0:]
+            B = A[:m - 2,0:]
             C = A[1:-1,:]
             E = B + C
             return E
@@ -710,7 +712,6 @@ class TestArrayAnalysis(TestCase):
                                equivs=[self.with_equiv('b', ('n', 'n'))],
                                asserts=[self.without_shapecall('b')])
 
-
         def test_transpose(m, n):
             a = np.ones((m, n))
             b = a.T
@@ -721,7 +722,6 @@ class TestArrayAnalysis(TestCase):
                                equivs=[self.with_equiv('a', ('m', 'n')),
                                        self.with_equiv('b', ('n', 'm')),
                                        self.with_equiv('c', ('n', 'm'))])
-
 
         def test_transpose_3d(m, n, k):
             a = np.ones((m, n, k))
@@ -895,14 +895,14 @@ class TestArrayAnalysis(TestCase):
             j = np.stack((d, e), axis=-1)
 
         self._compile_and_test(test_stack, (types.intp, types.intp),
-                                equivs=[self.with_equiv('m', 'n'),
-                                        self.with_equiv('c', (2, 'm')),
-                                        self.with_equiv(
-                                    'f', 'g', (2, 'm', 'n')),
+                               equivs=[self.with_equiv('m', 'n'),
+                                       self.with_equiv('c', (2, 'm')),
+                                       self.with_equiv(
+                                   'f', 'g', (2, 'm', 'n')),
             self.with_equiv(
-                                    'h', ('m', 2, 'n')),
+                                   'h', ('m', 2, 'n')),
             self.with_equiv(
-                                    'i', 'j', ('m', 'n', 2)),
+                                   'i', 'j', ('m', 'n', 2)),
         ])
 
         def test_linspace(m, n):
@@ -969,7 +969,7 @@ class TestArrayAnalysisParallelRequired(TestCase):
 
         @njit
         def swap(x, y):
-            return(y, x)
+            return (y, x)
 
         def test_bug2537(m):
             a = np.ones(m)
@@ -1065,6 +1065,7 @@ class TestArrayAnalysisInterface(TestCase):
             if fname.startswith('_analyze_op_call_'):
                 aoc[fname] = getattr(ArrayAnalysis, fname)
         # check interface
+
         def iface_stub(self, scope, equiv_set, loc, args, kws):
             pass
         expected = utils.pysignature(iface_stub)
@@ -1115,6 +1116,7 @@ class TestArrayAnalysisInterface(TestCase):
             array_analysis.array_analysis_extensions[Parfor] = new_parfor
 
             empty = np.empty   # avoid scanning a getattr in the IR
+
             def f(n):
                 A = empty(n)
                 for i in prange(n):

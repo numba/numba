@@ -22,14 +22,18 @@ def gufunc_foo(inp, n, out):
             raise ValueError('Value must be positive')
         out[i] = inp[i] * n[0]
 
+
 def truediv(a, b):
     return a / b
+
 
 def floordiv(a, b):
     return a // b
 
+
 def remainder(a, b):
     return a % b
+
 
 def power(a, b):
     return a ** b
@@ -71,6 +75,7 @@ class TestExceptions(TestCase):
 
     def test_gufunc_raise_objmode(self):
         self.check_gufunc_raise(forceobj=True)
+
 
 class TestFloatingPointExceptions(TestCase, CheckWarningsMixin):
     """

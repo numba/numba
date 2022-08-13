@@ -3,6 +3,9 @@ Separate module with function samples for serialization tests,
 to avoid issues with __main__.
 """
 
+import numpy as np
+import numpy.random as nprand
+from math import sqrt
 import math
 
 from numba import jit, generated_jit
@@ -13,18 +16,22 @@ from numba.core import types
 def add_with_sig(a, b):
     return a + b
 
+
 @jit
 def add_without_sig(a, b):
     return a + b
+
 
 @jit(nopython=True)
 def add_nopython(a, b):
     return a + b
 
+
 @jit(nopython=True)
 def add_nopython_fail(a, b):
     object()
     return a + b
+
 
 def closure(a):
     @jit(nopython=True)
@@ -32,9 +39,9 @@ def closure(a):
         return a + b + c
     return inner
 
+
 K = 3.0
 
-from math import sqrt
 
 def closure_with_globals(x, **jit_args):
     @jit(**jit_args)
@@ -46,16 +53,16 @@ def closure_with_globals(x, **jit_args):
         return math.hypot(x, y) + sqrt(k)
     return inner
 
+
 @jit(nopython=True)
 def other_function(x, y):
     return math.hypot(x, y)
+
 
 @jit(forceobj=True)
 def get_global_objmode(x):
     return K * x
 
-import numpy as np
-import numpy.random as nprand
 
 @jit(nopython=True)
 def get_renamed_module(x):
@@ -68,6 +75,7 @@ def closure_calling_other_function(x):
     def inner(y, z):
         return other_function(x, y) + z
     return inner
+
 
 def closure_calling_other_closure(x):
     @jit(nopython=True)
@@ -84,6 +92,7 @@ def closure_calling_other_closure(x):
 
 k1 = 5
 k2 = 42
+
 
 @generated_jit(nopython=True)
 def generated_add(x, y):
@@ -109,6 +118,7 @@ def _get_dyn_func(**jit_args):
     ns = {}
     exec(code.strip(), ns)
     return jit(**jit_args)(ns['dyn_func'])
+
 
 dyn_func = _get_dyn_func(nopython=True)
 dyn_func_objmode = _get_dyn_func(forceobj=True)

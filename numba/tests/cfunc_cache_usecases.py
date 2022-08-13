@@ -22,9 +22,11 @@ div_sig = "float64(int64, int64)"
 def add_usecase(x, y):
     return x + y + Z
 
+
 @cfunc(add_sig, nopython=True)
 def add_nocache_usecase(x, y):
     return x + y + Z
+
 
 @cfunc(div_sig, cache=True, nopython=True)
 def div_usecase(a, b):
@@ -34,6 +36,7 @@ def div_usecase(a, b):
 @jit(nopython=True)
 def inner(x, y):
     return x + y + Z
+
 
 @cfunc(add_sig, cache=True, nopython=True)
 def outer(x, y):

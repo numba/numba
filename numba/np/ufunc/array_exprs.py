@@ -23,6 +23,7 @@ class RewriteArrayExprs(rewrites.Rewrite):
     rewriting those expressions to a single operation that will expand
     into something similar to a ufunc call.
     '''
+
     def __init__(self, state, *args, **kws):
         super(RewriteArrayExprs, self).__init__(state, *args, **kws)
         # Install a lowering hook if we are using this rewrite.
@@ -54,7 +55,7 @@ class RewriteArrayExprs(rewrites.Rewrite):
             expr = instr.value
             # Does it assign an expression to an array variable?
             if (isinstance(expr, ir.Expr) and
-                isinstance(typemap.get(target_name, None), types.Array)):
+                    isinstance(typemap.get(target_name, None), types.Array)):
                 self._match_array_expr(instr, expr, target_name)
             elif isinstance(expr, ir.Const):
                 # Track constants since we might need them for an
@@ -377,7 +378,8 @@ def _lower_array_expr(lowerer, expr):
     inner_sig = outer_sig.return_type.dtype(*inner_sig_args)
 
     flags = targetconfig.ConfigStack().top_or_none()
-    flags = compiler.Flags() if flags is None else flags.copy() # make sure it's a clone or a fresh instance
+    # make sure it's a clone or a fresh instance
+    flags = compiler.Flags() if flags is None else flags.copy()
     # Follow the Numpy error model.  Note this also allows e.g. vectorizing
     # division (issue #1223).
     flags.error_model = 'numpy'

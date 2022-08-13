@@ -133,6 +133,7 @@ class Math_frexp(ConcreteTemplate):
         signature(types.Tuple((types.float32, types.intc)), types.float32),
     ]
 
+
 @infer_global(math.ldexp)
 class Math_ldexp(ConcreteTemplate):
     cases = [

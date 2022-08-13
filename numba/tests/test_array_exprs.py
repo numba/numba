@@ -29,14 +29,18 @@ class Namespace(dict):
     def __getattr__(s, k):
         return s[k] if k in s else super(Namespace, s).__getattr__(k)
 
+
 def axy(a, x, y):
     return a * x + y
+
 
 def ax2(a, x, y):
     return a * x + y
 
+
 def pos_root(As, Bs, Cs):
     return (-Bs + (((Bs ** 2.) - (4. * As * Cs)) ** 0.5)) / (2. * As)
+
 
 def neg_root_common_subexpr(As, Bs, Cs):
     _2As = 2. * As
@@ -44,29 +48,37 @@ def neg_root_common_subexpr(As, Bs, Cs):
     _Bs2_4AsCs = (Bs ** 2. - _4AsCs)
     return (-Bs - (_Bs2_4AsCs ** 0.5)) / _2As
 
+
 def neg_root_complex_subexpr(As, Bs, Cs):
     _2As = 2. * As
     _4AsCs = 2. * _2As * Cs
     _Bs2_4AsCs = (Bs ** 2. - _4AsCs) + 0j # Force into the complex domain.
     return (-Bs - (_Bs2_4AsCs ** 0.5)) / _2As
 
+
 vaxy = vectorize(axy)
+
 
 def call_stuff(a0, a1):
     return np.cos(vaxy(a0, np.sin(a1) - 1., 1.))
 
+
 def are_roots_imaginary(As, Bs, Cs):
     return (Bs ** 2 - 4 * As * Cs) < 0
+
 
 def div_add(As, Bs, Cs):
     return As / Bs + Cs
 
+
 def cube(As):
     return As ** 3
+
 
 def explicit_output(a, b, out):
     np.cos(a, out)
     return np.add(out, b, out)
+
 
 def variable_name_reuse(a, b, c, d):
     u = a + b
@@ -187,8 +199,8 @@ class TestArrayExpressions(MemoryLeakMixin, TestCase):
     def _test_root_function(self, fn=pos_root):
         A = np.random.random(10)
         B = np.random.random(10) + 1. # Increase likelihood of real
-                                      # root (could add 2 to force all
-                                      # roots to be real).
+        # root (could add 2 to force all
+        # roots to be real).
         C = np.random.random(10)
         arg_tys = [typeof(arg) for arg in (A, B, C)]
 
@@ -412,7 +424,7 @@ class TestRewriteIssues(MemoryLeakMixin, TestCase):
 
     def test_issue_1264(self):
         n = 100
-        x = np.random.uniform(size=n*3).reshape((n,3))
+        x = np.random.uniform(size=n * 3).reshape((n,3))
         expected = distance_matrix(x)
         actual = njit(distance_matrix)(x)
         np.testing.assert_array_almost_equal(expected, actual)
@@ -488,7 +500,7 @@ class TestRewriteIssues(MemoryLeakMixin, TestCase):
             arr = np.ones(x)
 
             for _ in range(2):
-                val =  arr * arr
+                val = arr * arr
                 arr = arr.copy()
             return arr
 

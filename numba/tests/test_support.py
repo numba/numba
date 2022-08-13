@@ -42,7 +42,8 @@ class TestAssertPreciseEqual(TestCase):
             except AssertionError:
                 pass
             else:
-                self.fail("%s and %s unexpectedly considered equal" % (left, right))
+                self.fail("%s and %s unexpectedly considered equal" %
+                          (left, right))
         assert_fail(left, right)
         assert_fail(right, left)
         assert_fail((left, left), (right, right))
@@ -83,7 +84,7 @@ class TestAssertPreciseEqual(TestCase):
                 self.eq(tp(0), tp(0), prec=prec)
                 self.ne(tp(0), tp(1), prec=prec)
                 self.ne(tp(-1), tp(1), prec=prec)
-                self.ne(tp(2**80), tp(1+2**80), prec=prec)
+                self.ne(tp(2**80), tp(1 + 2**80), prec=prec)
 
     def test_bool_values(self):
         for tpa, tpb in itertools.product(self.bool_types, self.bool_types):
@@ -192,17 +193,22 @@ class TestAssertPreciseEqual(TestCase):
                 self.ne(tp(c_pn), tp(c_nn), prec=prec)
                 # Infinities
                 self.eq(tp(complex(INF, INF)), tp(complex(INF, INF)), prec=prec)
-                self.eq(tp(complex(INF, -INF)), tp(complex(INF, -INF)), prec=prec)
-                self.eq(tp(complex(-INF, -INF)), tp(complex(-INF, -INF)), prec=prec)
-                self.ne(tp(complex(INF, INF)), tp(complex(INF, -INF)), prec=prec)
-                self.ne(tp(complex(INF, INF)), tp(complex(-INF, INF)), prec=prec)
+                self.eq(tp(complex(INF, -INF)),
+                        tp(complex(INF, -INF)), prec=prec)
+                self.eq(tp(complex(-INF, -INF)),
+                        tp(complex(-INF, -INF)), prec=prec)
+                self.ne(tp(complex(INF, INF)), tp(
+                    complex(INF, -INF)), prec=prec)
+                self.ne(tp(complex(INF, INF)), tp(
+                    complex(-INF, INF)), prec=prec)
                 self.eq(tp(complex(INF, 0)), tp(complex(INF, 0)), prec=prec)
                 # NaNs
                 self.eq(tp(complex(NAN, 0)), tp(complex(NAN, 0)), prec=prec)
                 self.eq(tp(complex(0, NAN)), tp(complex(0, NAN)), prec=prec)
                 self.eq(tp(complex(NAN, NAN)), tp(complex(NAN, NAN)), prec=prec)
                 self.eq(tp(complex(INF, NAN)), tp(complex(INF, NAN)), prec=prec)
-                self.eq(tp(complex(NAN, -INF)), tp(complex(NAN, -INF)), prec=prec)
+                self.eq(tp(complex(NAN, -INF)),
+                        tp(complex(NAN, -INF)), prec=prec)
                 # FIXME
                 #self.ne(tp(complex(NAN, INF)), tp(complex(NAN, -INF)))
                 #self.ne(tp(complex(NAN, 0)), tp(complex(NAN, 1)))

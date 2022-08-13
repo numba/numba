@@ -26,7 +26,7 @@ class TestJITMethod(unittest.TestCase):
 
         something = Something(3)
         np.testing.assert_array_equal(something.method(5),
-            np.array([15, 15, 15, 15, 15], dtype=np.float32))
+                                      np.array([15, 15, 15, 15, 15], dtype=np.float32))
 
         # Check that loop lifting in nopython mode was successful
         [cres] = something.method.overloads.values()
@@ -67,6 +67,7 @@ class TestDisabledJIT(unittest.TestCase):
         self.assertEqual(jitted, method)
         self.assertEqual(10, method(10))
         self.assertEqual(10, jitted(10))
+
 
 if __name__ == '__main__':
     unittest.main()

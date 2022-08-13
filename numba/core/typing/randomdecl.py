@@ -96,6 +96,7 @@ class ConcreteRandomTemplate(RandomTemplate):
 class Random_getrandbits(ConcreteTemplate):
     cases = [signature(types.uint64, types.int32)]
 
+
 @glue_typing(random.random, typing_key="random.random")
 @glue_typing(np.random.random, typing_key="np.random.random")
 class Random_random(ConcreteRandomTemplate):
@@ -105,6 +106,7 @@ class Random_random(ConcreteRandomTemplate):
         def typer(size=None):
             return self.array_typer(size)()
         return typer
+
 
 if numpy_version >= (1, 17):
     glue_typing(
@@ -125,6 +127,7 @@ if numpy_version >= (1, 17):
 class Random_randint(ConcreteTemplate):
     cases = [signature(tp, tp, tp) for tp in _int_types]
 
+
 @glue_typing(np.random.randint, typing_key="np.random.randint")
 class Random_randint(ConcreteRandomTemplate):
     cases = [signature(tp, tp) for tp in _int_types]
@@ -141,6 +144,7 @@ class Random_randrange(ConcreteTemplate):
     cases = [signature(tp, tp) for tp in _int_types]
     cases += [signature(tp, tp, tp) for tp in _int_types]
     cases += [signature(tp, tp, tp, tp) for tp in _int_types]
+
 
 @glue_typing(random.seed, typing_key="random.seed")
 @glue_typing(np.random.seed, typing_key="np.random.seed")
@@ -163,9 +167,10 @@ class Numpy_geometric(ConcreteRandomTemplate):
             return self.array_typer(size)(a)
         return typer
 
+
 @glue_typing(np.random.binomial, typing_key="np.random.binomial")
 @glue_typing(np.random.negative_binomial,
-                          typing_key="np.random.negative_binomial")
+             typing_key="np.random.negative_binomial")
 class Numpy_negative_binomial(ConcreteRandomTemplate):
     cases = [signature(types.int64, types.int64, tp) for tp in _float_types]
 
@@ -173,6 +178,7 @@ class Numpy_negative_binomial(ConcreteRandomTemplate):
         def typer(n, p, size=None):
             return self.array_typer(size)(n, p)
         return typer
+
 
 @glue_typing(np.random.poisson, typing_key="np.random.poisson")
 class Numpy_poisson(ConcreteRandomTemplate):
@@ -183,6 +189,7 @@ class Numpy_poisson(ConcreteRandomTemplate):
         def typer(lam=None, size=None):
             return self.array_typer(size)(lam)
         return typer
+
 
 @glue_typing(np.random.exponential, typing_key="np.random.exponential")
 @glue_typing(np.random.rayleigh, typing_key="np.random.rayleigh")
@@ -195,6 +202,7 @@ class Numpy_exponential(ConcreteRandomTemplate):
             return self.array_typer(size)(scale)
         return typer
 
+
 @glue_typing(np.random.hypergeometric, typing_key="np.random.hypergeometric")
 class Numpy_hypergeometric(ConcreteRandomTemplate):
     cases = [signature(tp, tp, tp, tp) for tp in _int_types]
@@ -203,6 +211,7 @@ class Numpy_hypergeometric(ConcreteRandomTemplate):
         def typer(ngood, nbad, nsample, size=None):
             return self.array_typer(size)(ngood, nbad, nsample)
         return typer
+
 
 @glue_typing(np.random.laplace, typing_key="np.random.laplace")
 @glue_typing(np.random.logistic, typing_key="np.random.logistic")
@@ -218,6 +227,7 @@ class Numpy_normal(ConcreteRandomTemplate):
             return self.array_typer(size)(loc, scale)
         return typer
 
+
 @glue_typing(np.random.gamma, typing_key="np.random.gamma")
 class Numpy_gamma(ConcreteRandomTemplate):
     cases = [signature(tp, tp, tp) for tp in _float_types]
@@ -227,6 +237,7 @@ class Numpy_gamma(ConcreteRandomTemplate):
         def typer(shape, scale=None, size=None):
             return self.array_typer(size)(shape, scale)
         return typer
+
 
 @glue_typing(np.random.triangular, typing_key="np.random.triangular")
 class Random_ternary_distribution(ConcreteRandomTemplate):

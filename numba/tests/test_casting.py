@@ -26,6 +26,7 @@ def float_to_complex(x):
 def numpy_scalar_cast_error():
     np.int32(np.zeros((4,)))
 
+
 class TestCasting(unittest.TestCase):
     def test_float_to_int(self):
         pyfunc = float_to_int
@@ -55,7 +56,7 @@ class TestCasting(unittest.TestCase):
         self.assertEqual(cr.signature.return_type, types.uint32)
         self.assertEqual(cfunc(3.21), pyfunc(3.21))
         self.assertEqual(cfunc(3.21), struct.unpack('I', struct.pack('i',
-                                                                      3))[0])
+                                                                     3))[0])
 
     def test_float_to_complex(self):
         pyfunc = float_to_complex
@@ -94,8 +95,8 @@ class TestCasting(unittest.TestCase):
             (np.float32, 12.3),
             (np.float64, 12.3),
             (np.int64, 12),
-            (np.complex64, 2j+3),
-            (np.complex128, 2j+3),
+            (np.complex64, 2j + 3),
+            (np.complex128, 2j + 3),
             (np.timedelta64, np.timedelta64(3, 'h')),
             (np.datetime64, np.datetime64('2016-01-01')),
             ('<U3', 'ABC'),

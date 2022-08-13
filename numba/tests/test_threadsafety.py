@@ -26,7 +26,6 @@ def gufunc_foo(a, b, out):
     out[0] = a + b
 
 
-
 class TestThreadSafety(unittest.TestCase):
 
     def run_jit(self, **options):

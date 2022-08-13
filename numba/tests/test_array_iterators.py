@@ -15,8 +15,10 @@ def array_iter(arr):
         total += i * v
     return total
 
+
 def array_iter_items(arr):
     return list(iter(arr))
+
 
 def array_view_iter(arr, idx):
     total = 0
@@ -24,15 +26,19 @@ def array_view_iter(arr, idx):
         total += i * v
     return total
 
+
 def array_flat(arr, out):
     for i, v in enumerate(arr.flat):
         out[i] = v
 
+
 def array_flat_getitem(arr, ind):
     return arr.flat[ind]
 
+
 def array_flat_setitem(arr, ind, val):
     arr.flat[ind] = val
+
 
 def array_flat_sum(arr):
     s = 0
@@ -40,8 +46,10 @@ def array_flat_sum(arr):
         s = s + (i + 1) * v
     return s
 
+
 def array_flat_len(arr):
     return len(arr.flat)
+
 
 def array_ndenumerate_sum(arr):
     s = 0
@@ -49,11 +57,13 @@ def array_ndenumerate_sum(arr):
         s = s + (i + 1) * (j + 1) * v
     return s
 
+
 def np_ndindex_empty():
     s = 0
     for ind in np.ndindex(()):
         s += s + len(ind) + 1
     return s
+
 
 def np_ndindex(x, y):
     s = 0
@@ -61,6 +71,7 @@ def np_ndindex(x, y):
     for i, j in np.ndindex(x, y):
         s = s + (i + 1) * (j + 1)
     return s
+
 
 def np_ndindex_array(arr):
     s = 0
@@ -70,11 +81,13 @@ def np_ndindex_array(arr):
             s = s + (i + 1) * (j + 1)
     return s
 
+
 def np_nditer1(a):
     res = []
     for u in np.nditer(a):
         res.append(u.item())
     return res
+
 
 def np_nditer2(a, b):
     res = []
@@ -82,11 +95,13 @@ def np_nditer2(a, b):
         res.append((u.item(), v.item()))
     return res
 
+
 def np_nditer3(a, b, c):
     res = []
     for u, v, w in np.nditer((a, b, c)):
         res.append((u.item(), v.item(), w.item()))
     return res
+
 
 def iter_next(arr):
     it = iter(arr)
@@ -109,6 +124,7 @@ def array_flat_premature_free(size):
     for i, v in enumerate(x.flat):
         res[i] = v
     return res
+
 
 def array_ndenumerate_premature_free(size):
     x = np.arange(size)
@@ -300,6 +316,7 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
     def test_array_flat_getitem(self):
         # Test indexing of array.flat object
         pyfunc = array_flat_getitem
+
         def check(arr, ind):
             cr = self.ccache.compile(pyfunc, (typeof(arr), typeof(ind)))
             expected = pyfunc(arr, ind)
@@ -328,6 +345,7 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
     def test_array_flat_setitem(self):
         # Test indexing of array.flat object
         pyfunc = array_flat_setitem
+
         def check(arr, ind):
             arrty = typeof(arr)
             cr = self.ccache.compile(pyfunc, (arrty, typeof(ind), arrty.dtype))
@@ -361,6 +379,7 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
     def test_array_flat_len(self):
         # Test len(array.flat)
         pyfunc = array_flat_len
+
         def check(arr):
             cr = self.ccache.compile(pyfunc, (typeof(arr),))
             expected = pyfunc(arr)

@@ -27,6 +27,7 @@ def get_configs(arg):
 find_shared_ending = functools.partial(get_configs, 0)
 find_pyext_ending = functools.partial(get_configs, 1)
 
+
 @contextmanager
 def _gentmpfile(suffix):
     # windows locks the tempfile so use a tempdir + file, see
@@ -43,6 +44,7 @@ def _gentmpfile(suffix):
             pass
         else:
             os.rmdir(tmpdir)
+
 
 def _check_external_compiler():
     # see if the external compiler bound in numpy.distutil is present
@@ -62,6 +64,7 @@ def _check_external_compiler():
         except Exception: # likely CompileError or file system issue
             return False
     return True
+
 
 # boolean on whether the externally provided compiler is present and
 # functioning correctly

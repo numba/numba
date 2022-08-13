@@ -27,12 +27,15 @@ skip_cffi_unsupported = unittest.skipUnless(
 def add_usecase(a, b):
     return a + b
 
+
 def div_usecase(a, b):
     c = a / b
     return c
 
+
 def square_usecase(a):
     return a ** 2
+
 
 add_sig = "float64(float64, float64)"
 
@@ -40,13 +43,16 @@ div_sig = "float64(int64, int64)"
 
 square_sig = "float64(float64)"
 
+
 def objmode_usecase(a, b):
     object()
     return a + b
 
 # Test functions for carray() and farray()
 
+
 CARRAY_USECASE_OUT_LEN = 8
+
 
 def make_cfarray_usecase(func):
 
@@ -66,6 +72,7 @@ def make_cfarray_usecase(func):
         out[7] = s
 
     return cfarray_usecase
+
 
 carray_usecase = make_cfarray_usecase(carray)
 farray_usecase = make_cfarray_usecase(farray)
@@ -90,6 +97,7 @@ def make_cfarray_dtype_usecase(func):
         out[7] = s
 
     return cfarray_usecase
+
 
 carray_dtype_usecase = make_cfarray_dtype_usecase(carray)
 farray_dtype_usecase = make_cfarray_dtype_usecase(farray)
@@ -272,13 +280,15 @@ class TestCArray(TestCase):
         pyfunc = usecase
         for sig in self.make_carray_sigs(carray_float32_usecase_sig):
             f = cfunc(sig)(pyfunc)
-            self.check_carray_usecase(self.make_float32_pointer, pyfunc, f.ctypes)
+            self.check_carray_usecase(
+                self.make_float32_pointer, pyfunc, f.ctypes)
 
         # With typed pointers and explicit (matching) dtype
         pyfunc = dtype_usecase
         for sig in self.make_carray_sigs(carray_float32_usecase_sig):
             f = cfunc(sig)(pyfunc)
-            self.check_carray_usecase(self.make_float32_pointer, pyfunc, f.ctypes)
+            self.check_carray_usecase(
+                self.make_float32_pointer, pyfunc, f.ctypes)
         # With typed pointers and mismatching dtype
         with self.assertTypingError() as raises:
             f = cfunc(carray_float64_usecase_sig)(pyfunc)
@@ -289,7 +299,8 @@ class TestCArray(TestCase):
         pyfunc = dtype_usecase
         for sig in self.make_carray_sigs(carray_voidptr_usecase_sig):
             f = cfunc(sig)(pyfunc)
-            self.check_carray_usecase(self.make_float32_pointer, pyfunc, f.ctypes)
+            self.check_carray_usecase(
+                self.make_float32_pointer, pyfunc, f.ctypes)
 
     def test_numba_carray(self):
         """
@@ -390,7 +401,7 @@ typedef double (*myfunc)(big_struct*, size_t);
             buffer=ffi.buffer(mydata),
             dtype=numpy_support.as_dtype(nb_big_struct),
             shape=3,
-            )
+        )
         expect = calc(array)
         self.assertEqual(got, expect)
 

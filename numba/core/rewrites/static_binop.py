@@ -19,7 +19,7 @@ class DetectStaticBinops(Rewrite):
         for expr in block.find_exprs(op='binop'):
             try:
                 if (expr.fn in self.rhs_operators
-                    and expr.static_rhs is ir.UNDEFINED):
+                        and expr.static_rhs is ir.UNDEFINED):
                     self.static_rhs[expr] = func_ir.infer_constant(expr.rhs)
             except errors.ConstantInferenceError:
                 continue

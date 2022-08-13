@@ -12,131 +12,174 @@ import unittest
 def array_all(arr):
     return arr.all()
 
+
 def array_all_global(arr):
     return np.all(arr)
+
 
 def array_any(arr):
     return arr.any()
 
+
 def array_any_global(arr):
     return np.any(arr)
+
 
 def array_cumprod(arr):
     return arr.cumprod()
 
+
 def array_cumprod_global(arr):
     return np.cumprod(arr)
+
 
 def array_nancumprod(arr):
     return np.nancumprod(arr)
 
+
 def array_cumsum(arr):
     return arr.cumsum()
+
 
 def array_cumsum_global(arr):
     return np.cumsum(arr)
 
+
 def array_nancumsum(arr):
     return np.nancumsum(arr)
+
 
 def array_sum(arr):
     return arr.sum()
 
+
 def array_sum_global(arr):
     return np.sum(arr)
+
 
 def array_prod(arr):
     return arr.prod()
 
+
 def array_prod_global(arr):
     return np.prod(arr)
+
 
 def array_mean(arr):
     return arr.mean()
 
+
 def array_mean_global(arr):
     return np.mean(arr)
+
 
 def array_var(arr):
     return arr.var()
 
+
 def array_var_global(arr):
     return np.var(arr)
+
 
 def array_std(arr):
     return arr.std()
 
+
 def array_std_global(arr):
     return np.std(arr)
+
 
 def array_min(arr):
     return arr.min()
 
+
 def array_min_global(arr):
     return np.min(arr)
+
 
 def array_max(arr):
     return arr.max()
 
+
 def array_max_global(arr):
     return np.max(arr)
+
 
 def array_argmin(arr):
     return arr.argmin()
 
+
 def array_argmin_global(arr):
     return np.argmin(arr)
+
 
 def array_argmax(arr):
     return arr.argmax()
 
+
 def array_argmax_global(arr):
     return np.argmax(arr)
+
 
 def array_median_global(arr):
     return np.median(arr)
 
+
 def array_nanmin(arr):
     return np.nanmin(arr)
+
 
 def array_nanmax(arr):
     return np.nanmax(arr)
 
+
 def array_nanmean(arr):
     return np.nanmean(arr)
+
 
 def array_nansum(arr):
     return np.nansum(arr)
 
+
 def array_nanprod(arr):
     return np.nanprod(arr)
+
 
 def array_nanstd(arr):
     return np.nanstd(arr)
 
+
 def array_nanvar(arr):
     return np.nanvar(arr)
+
 
 def array_nanmedian_global(arr):
     return np.nanmedian(arr)
 
+
 def array_percentile_global(arr, q):
     return np.percentile(arr, q)
+
 
 def array_nanpercentile_global(arr, q):
     return np.nanpercentile(arr, q)
 
+
 def array_ptp_global(a):
     return np.ptp(a)
+
 
 def array_ptp(a):
     return a.ptp()
 
+
 def array_quantile_global(arr, q):
     return np.quantile(arr, q)
 
+
 def array_nanquantile_global(arr, q):
     return np.nanquantile(arr, q)
+
 
 def base_test_arrays(dtype):
     if dtype == np.bool_:
@@ -154,6 +197,7 @@ def base_test_arrays(dtype):
     assert not (a3.flags.c_contiguous or a3.flags.f_contiguous)
 
     return [a1, a2, a3]
+
 
 def full_test_arrays(dtype):
     array_list = base_test_arrays(dtype)
@@ -174,6 +218,7 @@ def full_test_arrays(dtype):
     for a in array_list:
         assert a.dtype == np.dtype(dtype)
     return array_list
+
 
 def run_comparative(compare_func, test_array):
     arrty = typeof(test_array)
@@ -196,6 +241,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def check_reduction_basic(self, pyfunc, **kwargs):
         # Basic reduction checks on 1-d float64 arrays
         cfunc = jit(nopython=True)(pyfunc)
+
         def check(arr):
             self.assertPreciseEqual(pyfunc(arr), cfunc(arr), **kwargs)
 
@@ -221,6 +267,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     def test_all_basic(self, pyfunc=array_all):
         cfunc = jit(nopython=True)(pyfunc)
+
         def check(arr):
             self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
 
@@ -236,6 +283,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     def test_any_basic(self, pyfunc=array_any):
         cfunc = jit(nopython=True)(pyfunc)
+
         def check(arr):
             self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
 
@@ -298,6 +346,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     def check_median_basic(self, pyfunc, array_variations):
         cfunc = jit(nopython=True)(pyfunc)
+
         def check(arr):
             expected = pyfunc(arr)
             got = cfunc(arr)
@@ -970,7 +1019,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         for arr in [arr1d, arr2d, arr4d]:
             axes = list(range(arr.ndim)) + [
-                -(i+1) for i in range(arr.ndim)
+                -(i + 1) for i in range(arr.ndim)
             ]
             py_functions = [
                 lambda a, _axis=axis: np.argmax(a, axis=_axis)
@@ -1042,7 +1091,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         for arr in [arr1d, arr2d, arr4d]:
             axes = list(range(arr.ndim)) + [
-                -(i+1) for i in range(arr.ndim)
+                -(i + 1) for i in range(arr.ndim)
             ]
             py_functions = [
                 lambda a, _axis=axis: np.argmin(a, axis=_axis)
@@ -1147,7 +1196,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                                           testName=test_name):
                         ulps = 1
                         if 'prod' in red_func.__name__ and \
-                            np.iscomplexobj(testArray):
+                                np.iscomplexobj(testArray):
                             # prod family accumulate slightly more error on
                             # some architectures (power, 32bit) for complex input
                             ulps = 3
@@ -1202,10 +1251,12 @@ class TestArrayReductionsExceptions(MemoryLeakMixin, TestCase):
 
             lmsg = msg.format(fn.__name__)
             lmsg = lmsg.replace('array_','').replace('_global','')
+
             def test_fn(self, func=fn, message=lmsg):
                 self.check_exception(func, message)
 
             setattr(cls, test_name, test_fn)
+
 
 TestArrayReductionsExceptions.install()
 

@@ -75,7 +75,6 @@ class TestParUfuncIssues(unittest.TestCase):
             np.testing.assert_equal(got, 2 * acopy)
 
 
-
 class TestParGUfuncIssues(unittest.TestCase):
 
     _numba_parallel_test_ = False

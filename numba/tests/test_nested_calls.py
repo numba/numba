@@ -15,25 +15,32 @@ import unittest
 def f_inner(a, b, c):
     return a, b, c
 
+
 def f(x, y, z):
     return f_inner(x, c=y, b=z)
+
 
 @jit(nopython=True)
 def g_inner(a, b=2, c=3):
     return a, b, c
 
+
 def g(x, y, z):
     return g_inner(x, b=y), g_inner(a=z, c=x)
+
 
 @jit(nopython=True)
 def star_inner(a=5, *b):
     return a, b
 
+
 def star(x, y, z):
     return star_inner(a=x), star_inner(x, y, z)
 
+
 def star_call(x, y, z):
     return star_inner(x, *y), star_inner(*z)
+
 
 @jit(nopython=True)
 def argcast_inner(a, b):
@@ -42,8 +49,10 @@ def argcast_inner(a, b):
         a = int64(0)
     return a
 
+
 def argcast(a, b):
     return argcast_inner(int32(a), b)
+
 
 @generated_jit(nopython=True)
 def generated_inner(x, y=5, z=6):
@@ -54,6 +63,7 @@ def generated_inner(x, y=5, z=6):
         def impl(x, y, z):
             return x - y, z
     return impl
+
 
 def call_generated(a, b):
     return generated_inner(a, z=b)

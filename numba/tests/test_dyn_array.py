@@ -19,23 +19,30 @@ nrtjit = njit(_nrt=True, nogil=True)
 def np_concatenate1(a, b, c):
     return np.concatenate((a, b, c))
 
+
 def np_concatenate2(a, b, c, axis):
     return np.concatenate((a, b, c), axis=axis)
+
 
 def np_stack1(a, b, c):
     return np.stack((a, b, c))
 
+
 def np_stack2(a, b, c, axis):
     return np.stack((a, b, c), axis=axis)
+
 
 def np_hstack(a, b, c):
     return np.hstack((a, b, c))
 
+
 def np_vstack(a, b, c):
     return np.vstack((a, b, c))
 
+
 def np_dstack(a, b, c):
     return np.dstack((a, b, c))
+
 
 def np_column_stack(a, b, c):
     return np.column_stack((a, b, c))
@@ -441,7 +448,6 @@ class TestDynArray(NrtRefCtTest, TestCase):
 
             return x, y
 
-
         cfunc = nrtjit(pyfunc)
 
         x = np.random.random(100)
@@ -536,7 +542,8 @@ class ConstructorBaseTest(NrtRefCtTest):
         self.assertEqual(ret.strides, expected.strides)
         self.check_result_value(ret, expected)
         # test writability
-        expected = np.empty_like(ret) # np.full_like was not added until Numpy 1.8
+        # np.full_like was not added until Numpy 1.8
+        expected = np.empty_like(ret)
         expected.fill(123)
         ret.fill(123)
         np.testing.assert_equal(ret, expected)
@@ -553,7 +560,8 @@ class ConstructorBaseTest(NrtRefCtTest):
         self.assertEqual(ret.strides, expected.strides)
         self.check_result_value(ret, expected)
         # test writability
-        expected = np.empty_like(ret) # np.full_like was not added until Numpy 1.8
+        # np.full_like was not added until Numpy 1.8
+        expected = np.empty_like(ret)
         expected.fill(123)
         ret.fill(123)
         np.testing.assert_equal(ret, expected)
@@ -574,7 +582,8 @@ class ConstructorBaseTest(NrtRefCtTest):
         self.assertEqual(ret.strides, expected.strides)
         self.check_result_value(ret, expected)
         # test writability
-        expected = np.empty_like(ret)  # np.full_like was not added until Numpy 1.8
+        # np.full_like was not added until Numpy 1.8
+        expected = np.empty_like(ret)
         expected.fill(123)
         ret.fill(123)
         np.testing.assert_equal(ret, expected)
@@ -605,18 +614,21 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
 
     def test_0d(self):
         pyfunc = self.pyfunc
+
         def func():
             return pyfunc(())
         self.check_0d(func)
 
     def test_1d(self):
         pyfunc = self.pyfunc
+
         def func(n):
             return pyfunc(n)
         self.check_1d(func)
 
     def test_1d_dtype(self):
         pyfunc = self.pyfunc
+
         def func(n):
             return pyfunc(n, np.int32)
         self.check_1d(func)
@@ -625,6 +637,7 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
         # dtype as numpy dtype, not as scalar class
         pyfunc = self.pyfunc
         _dtype = np.dtype('int32')
+
         def func(n):
             return pyfunc(n, _dtype)
         self.check_1d(func)
@@ -632,6 +645,7 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
     def test_1d_dtype_str(self):
         pyfunc = self.pyfunc
         _dtype = 'int32'
+
         def func(n):
             return pyfunc(n, _dtype)
         self.check_1d(func)
@@ -644,6 +658,7 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
         # like test_1d_dtype_str but using the shorthand type spellings
         pyfunc = self.pyfunc
         _dtype = 'i4'
+
         def func(n):
             return pyfunc(n, _dtype)
         self.check_1d(func)
@@ -656,6 +671,7 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
         # test_1d_dtype_str but using a structured dtype
         pyfunc = self.pyfunc
         _dtype = "i4, (2,3)f8"
+
         def func(n):
             return pyfunc(n, _dtype)
         self.check_1d(func)
@@ -690,6 +706,7 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
 
     def test_2d(self):
         pyfunc = self.pyfunc
+
         def func(m, n):
             return pyfunc((m, n))
         self.check_2d(func)
@@ -697,10 +714,12 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
     def test_2d_shape_dtypes(self):
         # Test for issue #4575
         pyfunc = self.pyfunc
+
         def func1(m, n):
             return pyfunc((np.int16(m), np.int32(n)))
         self.check_2d(func1)
         # Using a 64-bit value checks that 32 bit systems will downcast to intp
+
         def func2(m, n):
             return pyfunc((np.int64(m), np.int8(n)))
         self.check_2d(func2)
@@ -712,12 +731,14 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
 
     def test_2d_dtype_kwarg(self):
         pyfunc = self.pyfunc
+
         def func(m, n):
             return pyfunc((m, n), dtype=np.complex64)
         self.check_2d(func)
 
     def test_2d_dtype_str_kwarg(self):
         pyfunc = self.pyfunc
+
         def func(m, n):
             return pyfunc((m, n), dtype='complex64')
         self.check_2d(func)
@@ -725,6 +746,7 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
     def test_2d_dtype_str_kwarg_alternative_spelling(self):
         # as test_2d_dtype_str_kwarg but with the numpy shorthand type spelling
         pyfunc = self.pyfunc
+
         def func(m, n):
             return pyfunc((m, n), dtype='c8')
         self.check_2d(func)
@@ -732,6 +754,7 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
     def test_alloc_size(self):
         pyfunc = self.pyfunc
         width = types.intp.bitwidth
+
         def gen_func(shape, dtype):
             return lambda : pyfunc(shape, dtype)
         # Under these values numba will segfault, but that's another issue
@@ -772,6 +795,7 @@ class TestNdFull(ConstructorBaseTest, TestCase):
 
     def test_1d_dtype_instance(self):
         dtype = np.dtype('bool')
+
         def func(n):
             return np.full(n, 4.5, dtype)
         self.check_1d(func)
@@ -846,6 +870,7 @@ class TestNdFull(ConstructorBaseTest, TestCase):
             return np.full((np.int16(m), np.int32(n)), 4.5)
         self.check_2d(func1)
         # Using a 64-bit value checks that 32 bit systems will downcast to intp
+
         def func2(m, n):
             return np.full((np.int64(m), np.int8(n)), 4.5)
         self.check_2d(func2)
@@ -857,6 +882,7 @@ class TestNdFull(ConstructorBaseTest, TestCase):
 
     def test_alloc_size(self):
         width = types.intp.bitwidth
+
         def gen_func(shape, value):
             return lambda : np.full(shape, value)
         # Under these values numba will segfault, but that's another issue
@@ -921,6 +947,7 @@ class TestNdEmptyLike(ConstructorLikeBaseTest, TestCase):
 
     def test_like(self):
         pyfunc = self.pyfunc
+
         def func(arr):
             return pyfunc(arr)
         self.check_like(func, np.float64)
@@ -928,12 +955,14 @@ class TestNdEmptyLike(ConstructorLikeBaseTest, TestCase):
     def test_like_structured(self):
         dtype = np.dtype([('a', np.int16), ('b', np.float32)])
         pyfunc = self.pyfunc
+
         def func(arr):
             return pyfunc(arr)
         self.check_like(func, dtype)
 
     def test_like_dtype(self):
         pyfunc = self.pyfunc
+
         def func(arr):
             return pyfunc(arr, np.int32)
         self.check_like(func, np.float64)
@@ -941,6 +970,7 @@ class TestNdEmptyLike(ConstructorLikeBaseTest, TestCase):
     def test_like_dtype_instance(self):
         dtype = np.dtype('int32')
         pyfunc = self.pyfunc
+
         def func(arr):
             return pyfunc(arr, dtype)
         self.check_like(func, np.float64)
@@ -948,24 +978,28 @@ class TestNdEmptyLike(ConstructorLikeBaseTest, TestCase):
     def test_like_dtype_structured(self):
         dtype = np.dtype([('a', np.int16), ('b', np.float32)])
         pyfunc = self.pyfunc
+
         def func(arr):
             return pyfunc(arr, dtype)
         self.check_like(func, np.float64)
 
     def test_like_dtype_kwarg(self):
         pyfunc = self.pyfunc
+
         def func(arr):
             return pyfunc(arr, dtype=np.int32)
         self.check_like(func, np.float64)
 
     def test_like_dtype_str_kwarg(self):
         pyfunc = self.pyfunc
+
         def func(arr):
             return pyfunc(arr, dtype='int32')
         self.check_like(func, np.float64)
 
     def test_like_dtype_str_kwarg_alternative_spelling(self):
         pyfunc = self.pyfunc
+
         def func(arr):
             return pyfunc(arr, dtype='i4')
         self.check_like(func, np.float64)
@@ -1050,6 +1084,7 @@ class TestNdFullLike(ConstructorLikeBaseTest, TestCase):
     @unittest.expectedFailure
     def test_like_structured(self):
         dtype = np.dtype([('a', np.int16), ('b', np.float32)])
+
         def func(arr):
             return np.full_like(arr, 4.5)
         self.check_like(func, dtype)
@@ -1061,6 +1096,7 @@ class TestNdFullLike(ConstructorLikeBaseTest, TestCase):
 
     def test_like_dtype_instance(self):
         dtype = np.dtype('bool')
+
         def func(arr):
             return np.full_like(arr, 4.5, dtype)
         self.check_like(func, np.float64)
@@ -1178,6 +1214,7 @@ class TestNdEye(BaseTest):
 
     def test_eye_n_m_k_dtype_instance(self):
         dtype = np.dtype('int16')
+
         def func(n, m, k):
             return np.eye(N=n, M=m, k=k, dtype=dtype)
         self.check_eye_n_m_k(func)
@@ -1193,6 +1230,7 @@ class TestNdDiag(TestCase):
         a3x4 = np.arange(12).reshape(3, 4)
         a4x3 = np.arange(12).reshape(4, 3)
         self.matricies = [a3x4, a4x3]
+
         def func(q):
             return np.diag(q)
         self.py = func
@@ -1249,22 +1287,23 @@ class TestNdDiag(TestCase):
             dfunc = nrtjit(self.py_kw)
             dfunc(d, k=3)
 
+
 class TestLinspace(BaseTest):
 
     def test_linspace_2(self):
         def pyfunc(n, m):
             return np.linspace(n, m)
         self.check_outputs(pyfunc,
-                           [(0, 4), (1, 100), (-3.5, 2.5), (-3j, 2+3j),
-                            (2, 1), (1+0.5j, 1.5j)])
+                           [(0, 4), (1, 100), (-3.5, 2.5), (-3j, 2 + 3j),
+                            (2, 1), (1 + 0.5j, 1.5j)])
 
     def test_linspace_3(self):
         def pyfunc(n, m, p):
             return np.linspace(n, m, p)
         self.check_outputs(pyfunc,
                            [(0, 4, 9), (1, 4, 3), (-3.5, 2.5, 8),
-                            (-3j, 2+3j, 7), (2, 1, 0),
-                            (1+0.5j, 1.5j, 5), (1, 1e100, 1)])
+                            (-3j, 2 + 3j, 7), (2, 1, 0),
+                            (1 + 0.5j, 1.5j, 5), (1, 1e100, 1)])
 
     def test_linspace_accuracy(self):
         # Checking linspace reasonably replicates NumPy's algorithm
@@ -1446,9 +1485,9 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
             cfunc((np.int64(1), [np.int64(2)]))
 
         with check_raises(
-                "cannot convert Tuple(int64, Record(a[type=int32;offset=0],"
-                "b[type=float32;offset=4];8;False)) to a homogeneous type",
-            ):
+            "cannot convert Tuple(int64, Record(a[type=int32;offset=0],"
+            "b[type=float32;offset=4];8;False)) to a homogeneous type",
+        ):
             st = np.dtype([('a', 'i4'), ('b', 'f4')])
             val = np.zeros(1, dtype=st)[0]
             cfunc(((1, 2), (np.int64(1), val)))
@@ -1679,7 +1718,7 @@ class TestNpStack(MemoryLeakMixin, TestCase):
         cfunc = nrtjit(pyfunc)
 
         def generate_starargs():
-            yield()
+            yield ()
 
         self.check_3d(pyfunc, cfunc, generate_starargs)
         self.check_runtime_errors(cfunc, generate_starargs)
@@ -1702,7 +1741,7 @@ class TestNpStack(MemoryLeakMixin, TestCase):
         3d and 0d tests for hstack(), vstack(), dstack().
         """
         def generate_starargs():
-            yield()
+            yield ()
 
         self.check_3d(pyfunc, cfunc, generate_starargs)
         # 0d

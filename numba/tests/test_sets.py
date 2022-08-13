@@ -24,12 +24,14 @@ def _build_set_literal_usecase(code, args):
     code = code % {'initializer': ', '.join(repr(arg) for arg in args)}
     return compile_function('build_set', code, globals())
 
+
 def set_literal_return_usecase(args):
     code = """if 1:
     def build_set():
         return {%(initializer)s}
     """
     return _build_set_literal_usecase(code, args)
+
 
 def set_literal_convert_usecase(args):
     code = """if 1:
@@ -45,9 +47,11 @@ def empty_constructor_usecase():
     s.add(1)
     return len(s)
 
+
 def constructor_usecase(arg):
     s = set(arg)
     return len(s)
+
 
 def iterator_usecase(arg):
     s = set(arg)
@@ -56,6 +60,7 @@ def iterator_usecase(arg):
         l.append(v)
     return l
 
+
 def update_usecase(a, b, c):
     s = set()
     s.update(a)
@@ -63,10 +68,12 @@ def update_usecase(a, b, c):
     s.update(c)
     return list(s)
 
+
 def bool_usecase(arg):
     # Remove one element to allow for empty sets.
     s = set(arg[1:])
     return bool(s)
+
 
 def remove_usecase(a, b):
     s = set(a)
@@ -74,11 +81,13 @@ def remove_usecase(a, b):
         s.remove(v)
     return list(s)
 
+
 def discard_usecase(a, b):
     s = set(a)
     for v in b:
         s.discard(v)
     return list(s)
+
 
 def add_discard_usecase(a, u, v):
     s = set(a)
@@ -87,12 +96,14 @@ def add_discard_usecase(a, u, v):
         s.discard(v)
     return list(s)
 
+
 def pop_usecase(a):
     s = set(a)
     l = []
     while len(s) > 0:
         l.append(s.pop())
     return l
+
 
 def contains_usecase(a, b):
     s = set(a)
@@ -101,40 +112,49 @@ def contains_usecase(a, b):
         l.append(v in s)
     return l
 
+
 def difference_update_usecase(a, b):
     s = set(a)
     s.difference_update(set(b))
     return list(s)
+
 
 def intersection_update_usecase(a, b):
     s = set(a)
     s.intersection_update(set(b))
     return list(s)
 
+
 def symmetric_difference_update_usecase(a, b):
     s = set(a)
     s.symmetric_difference_update(set(b))
     return list(s)
 
+
 def isdisjoint_usecase(a, b):
     return set(a).isdisjoint(set(b))
+
 
 def issubset_usecase(a, b):
     return set(a).issubset(set(b))
 
+
 def issuperset_usecase(a, b):
     return set(a).issuperset(set(b))
+
 
 def clear_usecase(a):
     s = set(a)
     s.clear()
     return len(s), list(s)
 
+
 def copy_usecase(a):
     s = set(a)
     ss = s.copy()
     s.pop()
     return len(ss), list(ss)
+
 
 def copy_usecase_empty(a):
     s = set(a)
@@ -143,6 +163,7 @@ def copy_usecase_empty(a):
     s.add(a[0])
     return len(ss), list(ss)
 
+
 def copy_usecase_deleted(a, b):
     s = set(a)
     s.remove(b)
@@ -150,25 +171,30 @@ def copy_usecase_deleted(a, b):
     s.pop()
     return len(ss), list(ss)
 
+
 def difference_usecase(a, b):
     sa = set(a)
     s = sa.difference(set(b))
     return list(s)
+
 
 def intersection_usecase(a, b):
     sa = set(a)
     s = sa.intersection(set(b))
     return list(s)
 
+
 def symmetric_difference_usecase(a, b):
     sa = set(a)
     s = sa.symmetric_difference(set(b))
     return list(s)
 
+
 def union_usecase(a, b):
     sa = set(a)
     s = sa.union(set(b))
     return list(s)
+
 
 def set_return_usecase(a):
     s = set(a)
@@ -183,6 +209,7 @@ def make_operator_usecase(op):
     """ % dict(op=op)
     return compile_function('operator_usecase', code, globals())
 
+
 def make_inplace_operator_usecase(op):
     code = """if 1:
     def inplace_operator_usecase(a, b):
@@ -193,6 +220,7 @@ def make_inplace_operator_usecase(op):
         return list(sc), list(sa)
     """ % dict(op=op)
     return compile_function('inplace_operator_usecase', code, globals())
+
 
 def make_comparison_usecase(op):
     code = """if 1:
@@ -205,6 +233,7 @@ def make_comparison_usecase(op):
 def noop(x):
     pass
 
+
 def unbox_usecase(x):
     """
     Expect a set of numbers
@@ -213,6 +242,7 @@ def unbox_usecase(x):
     for v in x:
         res += v
     return res
+
 
 def unbox_usecase2(x):
     """
@@ -223,6 +253,7 @@ def unbox_usecase2(x):
         res += len(v)
     return res
 
+
 def unbox_usecase3(x):
     """
     Expect a (number, set of numbers) tuple.
@@ -232,6 +263,7 @@ def unbox_usecase3(x):
     for v in b:
         res += v
     return res
+
 
 def unbox_usecase4(x):
     """
@@ -249,6 +281,7 @@ def reflect_simple(sa, sb):
     sa.update(sb)
     return sa, len(sa), len(sb)
 
+
 def reflect_conditional(sa, sb):
     # `sa` may or may not actually reflect a Python set
     if len(sb) > 1:
@@ -260,9 +293,11 @@ def reflect_conditional(sa, sb):
     sa.symmetric_difference_update(sc)
     return sa, len(sa), len(sb)
 
+
 def reflect_exception(s):
     s.add(42)
     raise ZeroDivisionError
+
 
 def reflect_dual(sa, sb):
     sa.add(sb.pop())
@@ -326,6 +361,7 @@ class BaseTest(MemoryLeakMixin, TestCase):
 
     def unordered_checker(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
+
         def check(*args):
             expected = pyfunc(*args)
             got = cfunc(*args)
@@ -366,6 +402,7 @@ class TestSets(BaseTest):
 
         pyfunc = constructor_usecase
         cfunc = jit(nopython=True)(pyfunc)
+
         def check(arg):
             self.assertPreciseEqual(pyfunc(arg), cfunc(arg))
 
@@ -450,6 +487,7 @@ class TestSets(BaseTest):
     def test_contains(self):
         pyfunc = contains_usecase
         cfunc = jit(nopython=True)(pyfunc)
+
         def check(a, b):
             self.assertPreciseEqual(pyfunc(a, b), cfunc(a, b))
 
@@ -477,6 +515,7 @@ class TestSets(BaseTest):
 
     def _test_comparator(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
+
         def check(a, b):
             self.assertPreciseEqual(pyfunc(a, b), cfunc(a, b))
 
@@ -608,6 +647,7 @@ class TestTupleSets(TestSets):
     """
     Test sets with tuple keys.
     """
+
     def _range(self, stop):
         a = np.arange(stop, dtype=np.int64)
         b = a & 0x5555555555555555
@@ -620,6 +660,7 @@ class TestUnicodeSets(TestSets):
     """
     Test sets with unicode keys. For the purpose of testing refcounted sets.
     """
+
     def _range(self, stop):
         return ['A{}'.format(i) for i in range(int(stop))]
 
@@ -638,6 +679,7 @@ class TestUnboxing(BaseTest):
 
     def check_unary(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
+
         def check(arg):
             expected = pyfunc(arg)
             got = cfunc(arg)

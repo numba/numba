@@ -88,6 +88,7 @@ def transpose_array(a):
 def numpy_transpose_array(a):
     return np.transpose(a)
 
+
 def numpy_transpose_array_axes_kwarg(arr, axes):
     return np.transpose(arr, axes=axes)
 
@@ -235,7 +236,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
                 generic_run(pyfunc, arr, shape)
             self.assertEqual(str(raises.exception),
                              "multiple negative shape values")
-
 
         # C-contiguous
         arr = np.arange(24)
@@ -393,7 +393,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as e:
             jit(nopython=True)(numpy_transpose_array)((np.array([0, 1]),))
         self.assertIn("np.transpose does not accept tuples",
-                        str(e.exception))
+                      str(e.exception))
 
     def test_expand_dims(self):
         pyfunc = expand_dims
@@ -492,6 +492,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         def run(arr):
             cres = self.ccache.compile(pyfunc, (typeof(arr),))
             return cres.entry_point(arr)
+
         def check(arr):
             expected = pyfunc(arr)
             got = run(arr)
@@ -737,19 +738,22 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         for a in np.array([]), np.ones(5):
             with self.assertRaises(TypingError) as raises:
                 cfunc(a, val)
-            assert "The first argument must be at least 2-D" in str(raises.exception)
+            assert "The first argument must be at least 2-D" in str(
+                raises.exception)
 
         # multi-dimensional input where dimensions are not all equal
         with self.assertRaises(ValueError) as raises:
             a = np.zeros((3, 3, 4))
             cfunc(a, val)
-            self.assertEqual("All dimensions of input must be of equal length", str(raises.exception))
+            self.assertEqual(
+                "All dimensions of input must be of equal length", str(raises.exception))
 
         # cases where val has incompatible type / value
         def _assert_raises(arr, val):
             with self.assertRaises(ValueError) as raises:
                 cfunc(arr, val)
-            self.assertEqual("Unable to safely conform val to a.dtype", str(raises.exception))
+            self.assertEqual(
+                "Unable to safely conform val to a.dtype", str(raises.exception))
 
         arr = np.zeros((3, 3), dtype=np.int32)
         val = np.nan
@@ -946,7 +950,8 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as raises:
             cfunc((1, 2), (2), (-2))
 
-        self.assertIn("negative dimensions are not allowed", str(raises.exception))
+        self.assertIn("negative dimensions are not allowed",
+                      str(raises.exception))
 
     @unittest.skipIf(numpy_version < (1, 20), "requires NumPy 1.20 or newer")
     def test_broadcast_shapes_invalid_type(self):
@@ -967,7 +972,8 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             with self.assertRaises(TypingError) as raises:
                 cfunc(*inp)
 
-            self.assertIn("must be either an int or tuple[int]", str(raises.exception))
+            self.assertIn(
+                "must be either an int or tuple[int]", str(raises.exception))
 
     def test_shape(self):
         pyfunc = numpy_shape
@@ -1055,7 +1061,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         yield 'a_string'
         yield ''
 
-
     def test_flatnonzero_array_like(self):
         pyfunc = numpy_flatnonzero
         cfunc = jit(nopython=True)(pyfunc)
@@ -1137,9 +1142,11 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             [[(1, 1), (0, 1)], (0, 1)],
         ]
         for input_shapes, expected_shape in data:
-            self.broadcast_arrays_assert_correct_shape(input_shapes, expected_shape)
+            self.broadcast_arrays_assert_correct_shape(
+                input_shapes, expected_shape)
             # Reverse the input shapes since broadcasting should be symmetric.
-            self.broadcast_arrays_assert_correct_shape(input_shapes[::-1], expected_shape)
+            self.broadcast_arrays_assert_correct_shape(
+                input_shapes[::-1], expected_shape)
 
     def test_broadcast_arrays_two_compatible_by_prepending_ones_input_shapes(self):
         # Tests taken from
@@ -1170,9 +1177,11 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             [[(), (0, 1)], (0, 1)],
         ]
         for input_shapes, expected_shape in data:
-            self.broadcast_arrays_assert_correct_shape(input_shapes, expected_shape)
+            self.broadcast_arrays_assert_correct_shape(
+                input_shapes, expected_shape)
             # Reverse the input shapes since broadcasting should be symmetric.
-            self.broadcast_arrays_assert_correct_shape(input_shapes[::-1], expected_shape)
+            self.broadcast_arrays_assert_correct_shape(
+                input_shapes[::-1], expected_shape)
 
     def test_broadcast_arrays_scalar_input(self):
         pyfunc = numpy_broadcast_arrays
@@ -1249,7 +1258,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
                     cfunc(*inarrays)
                 self.assertIn("shape mismatch: objects cannot be broadcast to a single shape",
                               str(raises.exception))
-
 
 
 if __name__ == '__main__':

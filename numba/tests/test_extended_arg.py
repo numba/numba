@@ -37,6 +37,5 @@ class TestExtendedArg(TestCase):
         self.assertPreciseEqual(cfunc(), 42)
 
 
-
 if __name__ == '__main__':
     unittest.main()

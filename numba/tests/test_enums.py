@@ -9,7 +9,7 @@ from numba import jit, vectorize, int8, int16, int32
 
 from numba.tests.support import TestCase
 from .enum_usecases import Color, Shape, Shake, Planet, RequestError, \
-                           IntEnumWithNegatives
+    IntEnumWithNegatives
 
 
 def compare_usecase(a, b):
@@ -49,6 +49,7 @@ def int_coerce_usecase(x):
         return x - RequestError.not_found
     else:
         return x + Shape.circle
+
 
 def int_cast_usecase(x):
     # Explicit coercion of intenums to ints
@@ -110,7 +111,7 @@ class TestEnum(BaseEnumTest, TestCase):
         (Shake.mint, Shake.vanilla),
         (Planet.VENUS, Planet.MARS),
         (Planet.EARTH, Planet.EARTH),
-        ]
+    ]
 
     def test_identity(self):
         """
@@ -133,7 +134,7 @@ class TestIntEnum(BaseEnumTest, TestCase):
         (Shape.circle, Shape.square),
         (RequestError.not_found, RequestError.not_found),
         (RequestError.internal_error, RequestError.not_found),
-        ]
+    ]
 
     def test_int_coerce(self):
         pyfunc = int_coerce_usecase
@@ -165,8 +166,10 @@ class TestIntEnum(BaseEnumTest, TestCase):
     def test_int_shape_cast(self):
         def pyfun_empty(x):
             return np.empty((x, x), dtype='int64').fill(-1)
+
         def pyfun_zeros(x):
             return np.zeros((x, x), dtype='int64')
+
         def pyfun_ones(x):
             return np.ones((x, x), dtype='int64')
         for pyfun in [pyfun_empty, pyfun_zeros, pyfun_ones]:

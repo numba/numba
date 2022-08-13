@@ -22,6 +22,7 @@ from numba.misc.timsort import make_py_timsort, make_jit_timsort, MergeRun
 def make_temp_list(keys, n):
     return [keys[0]] * n
 
+
 def make_temp_array(keys, n):
     return np.empty(n, keys.dtype)
 
@@ -42,8 +43,10 @@ jit_quicksort = make_jit_quicksort()
 def sort_usecase(val):
     val.sort()
 
+
 def argsort_usecase(val):
     return val.argsort()
+
 
 def argsort_kind_usecase(val, is_stable=False):
     if is_stable:
@@ -51,23 +54,29 @@ def argsort_kind_usecase(val, is_stable=False):
     else:
         return val.argsort(kind='quicksort')
 
+
 def sorted_usecase(val):
     return sorted(val)
+
 
 def sorted_reverse_usecase(val, b):
     return sorted(val, reverse=b)
 
+
 def np_sort_usecase(val):
     return np.sort(val)
 
+
 def np_argsort_usecase(val):
     return np.argsort(val)
+
 
 def np_argsort_kind_usecase(val, is_stable=False):
     if is_stable:
         return np.argsort(val, kind='mergesort')
     else:
         return np.argsort(val, kind='quicksort')
+
 
 def list_sort_usecase(n):
     np.random.seed(42)
@@ -77,6 +86,7 @@ def list_sort_usecase(n):
     ll = l[:]
     ll.sort()
     return l, ll
+
 
 def list_sort_reverse_usecase(n, b):
     np.random.seed(42)
@@ -176,6 +186,7 @@ class BaseTimsortTest(BaseSortingTest):
 
     def test_binarysort(self):
         n = 20
+
         def check(l, n, start=0):
             res = self.array_factory(l)
             f(res, res, 0, n, start)
@@ -184,12 +195,12 @@ class BaseTimsortTest(BaseSortingTest):
         f = self.timsort.binarysort
         l = self.sorted_list(n)
         check(l, n)
-        check(l, n, n//2)
+        check(l, n, n // 2)
         l = self.revsorted_list(n)
         check(l, n)
-        l = self.initially_sorted_list(n, n//2)
+        l = self.initially_sorted_list(n, n // 2)
         check(l, n)
-        check(l, n, n//2)
+        check(l, n, n // 2)
         l = self.revsorted_list(n)
         check(l, n)
         l = self.random_list(n)
@@ -199,7 +210,7 @@ class BaseTimsortTest(BaseSortingTest):
 
     def test_binarysort_with_values(self):
         n = 20
-        v = list(range(100, 100+n))
+        v = list(range(100, 100 + n))
 
         def check(l, n, start=0):
             res = self.array_factory(l)
@@ -210,12 +221,12 @@ class BaseTimsortTest(BaseSortingTest):
         f = self.timsort.binarysort
         l = self.sorted_list(n)
         check(l, n)
-        check(l, n, n//2)
+        check(l, n, n // 2)
         l = self.revsorted_list(n)
         check(l, n)
-        l = self.initially_sorted_list(n, n//2)
+        l = self.initially_sorted_list(n, n // 2)
         check(l, n)
-        check(l, n, n//2)
+        check(l, n, n // 2)
         l = self.revsorted_list(n)
         check(l, n)
         l = self.random_list(n)
@@ -242,7 +253,6 @@ class BaseTimsortTest(BaseSortingTest):
                     self.assertLessEqual(a, b)
                 if lo + n < hi:
                     self.assertGreater(l[lo + n - 1], l[lo + n], l)
-
 
         l = self.sorted_list(n, offset=100)
         check(l, 0, n)
@@ -562,13 +572,13 @@ class TestTimsortArrays(JITTimsortMixin, BaseTimsortTest, TestCase):
         self.assertSorted(orig_keys[1:-1], keys[1:-1])
 
 
-
 class BaseQuicksortTest(BaseSortingTest):
 
     # NOTE these tests assume a non-argsort quicksort.
 
     def test_insertion_sort(self):
         n = 20
+
         def check(l, n):
             res = self.array_factory([9999] + l + [-9999])
             f(res, res, 1, n)
@@ -581,7 +591,7 @@ class BaseQuicksortTest(BaseSortingTest):
         check(l, n)
         l = self.revsorted_list(n)
         check(l, n)
-        l = self.initially_sorted_list(n, n//2)
+        l = self.initially_sorted_list(n, n // 2)
         check(l, n)
         l = self.revsorted_list(n)
         check(l, n)
@@ -592,6 +602,7 @@ class BaseQuicksortTest(BaseSortingTest):
 
     def test_partition(self):
         n = 20
+
         def check(l, n):
             res = self.array_factory([9999] + l + [-9999])
             index = f(res, res, 1, n)
@@ -608,7 +619,7 @@ class BaseQuicksortTest(BaseSortingTest):
         check(l, n)
         l = self.revsorted_list(n)
         check(l, n)
-        l = self.initially_sorted_list(n, n//2)
+        l = self.initially_sorted_list(n, n // 2)
         check(l, n)
         l = self.revsorted_list(n)
         check(l, n)
@@ -620,6 +631,7 @@ class BaseQuicksortTest(BaseSortingTest):
     def test_partition3(self):
         # Test the unused partition3() function
         n = 20
+
         def check(l, n):
             res = self.array_factory([9999] + l + [-9999])
             lt, gt = f(res, 1, n)
@@ -638,7 +650,7 @@ class BaseQuicksortTest(BaseSortingTest):
         check(l, n)
         l = self.revsorted_list(n)
         check(l, n)
-        l = self.initially_sorted_list(n, n//2)
+        l = self.initially_sorted_list(n, n // 2)
         check(l, n)
         l = self.revsorted_list(n)
         check(l, n)
@@ -715,6 +727,7 @@ class TestQuicksortArrays(BaseQuicksortTest, TestCase):
 
     def array_factory(self, lst):
         return np.array(lst, dtype=np.float64)
+
 
 class TestQuicksortMultidimensionalArrays(BaseSortingTest, TestCase):
 
@@ -813,6 +826,7 @@ class TestQuicksortMultidimensionalArrays(BaseSortingTest, TestCase):
                 keys_copy.sort()
                 # Non-NaNs are sorted at the front
                 self.assertSorted(keys_copy, keys)
+
 
 class TestNumpySort(TestCase):
 

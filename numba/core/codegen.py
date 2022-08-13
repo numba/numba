@@ -69,6 +69,7 @@ def dump(header, body, lang):
 
             lexer_map = {'llvm': llvm_lexer, 'asm': gas_lexer}
             lexer = lexer_map[lang]
+
             def printer(arg):
                 print(highlight(arg, lexer(),
                       Terminal256Formatter(style=by_colorscheme())))
@@ -88,6 +89,7 @@ class _CFG(object):
     the graph in DOT format.  The ``.display()`` method plots the graph in
     PDF.  If in IPython notebook, the returned image can be inlined.
     """
+
     def __init__(self, cres, name, py_func, **kwargs):
         self.cres = cres
         self.name = name
@@ -116,13 +118,13 @@ class _CFG(object):
 
         _default = False
         _highlight = SimpleNamespace(incref=_default,
-                                    decref=_default,
-                                    returns=_default,
-                                    raises=_default,
-                                    meminfo=_default,
-                                    branches=_default,
-                                    llvm_intrin_calls=_default,
-                                    function_calls=_default,)
+                                     decref=_default,
+                                     returns=_default,
+                                     raises=_default,
+                                     meminfo=_default,
+                                     branches=_default,
+                                     llvm_intrin_calls=_default,
+                                     function_calls=_default,)
         _interleave = SimpleNamespace(python=_default, lineinfo=_default)
 
         def parse_config(_config, kwarg):
@@ -484,8 +486,8 @@ class _CFG(object):
                                 '>{}</td></tr>').format(v, k))
             # The first < and last > are DOT syntax, rest is DOT HTML.
             f.node("Key", label=('<<table BORDER="1" CELLBORDER="1" '
-                    'CELLPADDING="2" CELLSPACING="1"><tr><td BORDER="0">'
-                    'Key:</td></tr>{}</table>>').format(''.join(key_tab)))
+                                 'CELLPADDING="2" CELLSPACING="1"><tr><td BORDER="0">'
+                                 'Key:</td></tr>{}</table>>').format(''.join(key_tab)))
 
         # Render if required
         if filename is not None or view is not None:
@@ -872,8 +874,10 @@ class CPUCodeLibrary(CodeLibrary):
                           % (sym.name.decode(),
                              sym['st_size'],
                              sym['st_value'],
-                             descriptions.describe_symbol_type(sym['st_info']['type']),
-                             descriptions.describe_symbol_bind(sym['st_info']['bind']),
+                             descriptions.describe_symbol_type(
+                                 sym['st_info']['type']),
+                             descriptions.describe_symbol_bind(
+                                 sym['st_info']['bind']),
                              ))
         print()
 
@@ -1024,7 +1028,8 @@ class RuntimeLinker(object):
                 if engine.is_symbol_defined(gv.name):
                     continue
                 # Allocate a memory space for the pointer
-                abortfn = rtsys.library.get_pointer_to_function("nrt_unresolved_abort")
+                abortfn = rtsys.library.get_pointer_to_function(
+                    "nrt_unresolved_abort")
                 ptr = ctypes.c_void_p(abortfn)
                 engine.add_global_mapping(gv, ctypes.addressof(ptr))
                 self._unresolved[sym] = ptr
@@ -1054,6 +1059,7 @@ class RuntimeLinker(object):
             # Delete resolved
             del self._unresolved[name]
 
+
 def _proxy(old):
     @functools.wraps(old)
     def wrapper(self, *args, **kwargs):
@@ -1066,6 +1072,7 @@ class JitEngine(object):
     Since the symbol tracking is incomplete  (doesn't consider
     loaded code object), we are not putting it in llvmlite.
     """
+
     def __init__(self, ee):
         self._ee = ee
         # Track symbol defined via codegen'd Module
@@ -1113,7 +1120,7 @@ class JitEngine(object):
     get_function_address = _proxy(ll.ExecutionEngine.get_function_address)
     get_global_value_address = _proxy(
         ll.ExecutionEngine.get_global_value_address
-        )
+    )
 
 
 class Codegen(metaclass=ABCMeta):

@@ -57,6 +57,7 @@ def lift3(x):
         c += a[i] * x
     return c
 
+
 def lift4(x):
     # Output two variables from the loop
     _ = object()
@@ -68,6 +69,7 @@ def lift4(x):
         d += c
     return c + d
 
+
 def lift5(x):
     _ = object()
     a = np.arange(4)
@@ -76,6 +78,7 @@ def lift5(x):
         if i > 2:
             break
     return a
+
 
 def lift_gen1(x):
     # Outer needs object mode because of np.empty()
@@ -86,12 +89,14 @@ def lift_gen1(x):
         a[i] = x
     yield np.sum(a)
 
+
 def lift_issue2561():
     np.empty(1)   # This forces objectmode because no nrt
     for i in range(10):
         for j in range(10):
             return 1
     return 2
+
 
 def reject1(x):
     a = np.arange(4)
@@ -108,6 +113,7 @@ def reject_gen1(x):
         # Inner is a generator => cannot loop-lift
         yield a[i]
 
+
 def reject_gen2(x):
     _ = object()
     a = np.arange(3)
@@ -119,6 +125,7 @@ def reject_gen2(x):
             # able to separate it.
             res = res ** 2
         yield res
+
 
 def reject_npm1(x):
     a = np.empty(3, dtype=np.int32)
@@ -473,13 +480,14 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
 
     def test_conditionally_defined_in_loop(self):
         from numba import jit
+
         @jit(forceobj=True)
         def test():
             x = 5
             y = 0
             for i in range(2):
                 if i > 0:
-                   x = 6
+                    x = 6
                 y += x
             return y, x
 
@@ -535,7 +543,8 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
             c = 1
             for k in range(A.size):
                 object()  # to force objectmode and looplifting
-                c = c * A[::-1][k]   # the slice that is failing in static_getitem
+                # the slice that is failing in static_getitem
+                c = c * A[::-1][k]
             return c
 
         cfoo = jit(foo)
@@ -585,9 +594,9 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
         def foo(a, b, c, d, x0, y0, n):
             xs, ys = np.zeros(n), np.zeros(n)
             xs[0], ys[0] = x0, y0
-            for i in np.arange(n-1):
-                xs[i+1] = np.sin(a * ys[i]) + c * np.cos(a * xs[i])
-                ys[i+1] = np.sin(b * xs[i]) + d * np.cos(b * ys[i])
+            for i in np.arange(n - 1):
+                xs[i + 1] = np.sin(a * ys[i]) + c * np.cos(a * xs[i])
+                ys[i + 1] = np.sin(b * xs[i]) + d * np.cos(b * ys[i])
             object() # ensure object mode
             return xs, ys
 

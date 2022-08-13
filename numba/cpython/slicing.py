@@ -90,7 +90,7 @@ def get_slice_length(builder, slicestruct):
     # Nominal case
     pos_dividend = builder.sub(delta, one)
     neg_dividend = builder.add(delta, one)
-    dividend  = builder.select(is_step_negative, neg_dividend, pos_dividend)
+    dividend = builder.select(is_step_negative, neg_dividend, pos_dividend)
     nominal_length = builder.add(one, builder.sdiv(dividend, step))
 
     # Catch zero length
@@ -125,6 +125,7 @@ def fix_stride(builder, slice, stride):
     Fix the given stride for the slice's step.
     """
     return builder.mul(slice.step, stride)
+
 
 def guard_invalid_slice(context, builder, typ, slicestruct):
     """
@@ -201,10 +202,12 @@ def slice_start_impl(context, builder, typ, value):
     sli = context.make_helper(builder, typ, value)
     return sli.start
 
+
 @lower_getattr(types.SliceType, "stop")
 def slice_stop_impl(context, builder, typ, value):
     sli = context.make_helper(builder, typ, value)
     return sli.stop
+
 
 @lower_getattr(types.SliceType, "step")
 def slice_step_impl(context, builder, typ, value):

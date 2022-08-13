@@ -25,7 +25,7 @@ class CC(object):
     # NOTE: using ccache can speed up repetitive builds
     # (especially for the mixin modules)
 
-    _mixin_sources = ['modulemixin.c',]  + extension_libs
+    _mixin_sources = ['modulemixin.c',] + extension_libs
 
     # -flto strips all unused helper functions, which 1) makes the
     # produced output much smaller and 2) can make the linking step faster.
@@ -34,12 +34,12 @@ class CC(object):
     _extra_cflags = {
         # Comment out due to odd behavior with GCC 4.9+ with LTO
         # 'posix': ['-flto'],
-        }
+    }
 
     _extra_ldflags = {
         # Comment out due to odd behavior with GCC 4.9+ with LTO
         # 'posix': ['-flto'],
-        }
+    }
 
     def __init__(self, extension_name, source_module=None):
         if '.' in extension_name:
@@ -162,7 +162,7 @@ class CC(object):
         return [
             ('PYCC_MODULE_NAME', self._basename),
             ('PYCC_USE_NRT', int(self._use_nrt)),
-            ]
+        ]
 
     def _get_extra_cflags(self):
         extra_cflags = self._extra_cflags.get(sys.platform, [])
@@ -197,12 +197,12 @@ class CC(object):
     @global_compiler_lock
     def _compile_object_files(self, build_dir):
         compiler = ModuleCompiler(self._export_entries, self._basename,
-                                self._use_nrt, cpu_name=self._target_cpu)
+                                  self._use_nrt, cpu_name=self._target_cpu)
         compiler.external_init_function = self._init_function
         temp_obj = os.path.join(build_dir,
                                 os.path.splitext(self._output_file)[0] + '.o')
         log.info("generating LLVM code for '%s' into %s",
-                self._basename, temp_obj)
+                 self._basename, temp_obj)
         compiler.write_native_object(temp_obj, wrap=True)
         return [temp_obj], compiler.dll_exports
 
@@ -249,7 +249,8 @@ class CC(object):
                      + self._toolchain.get_python_libraries())
         library_dirs = (kwargs.pop('library_dirs', [])
                         + self._toolchain.get_python_library_dirs())
-        python_package_path = self._source_module[:self._source_module.rfind('.')+1]
+        python_package_path = self._source_module[:self._source_module.rfind(
+            '.') + 1]
 
         ext = _CCExtension(name=python_package_path + self._basename,
                            sources=self._get_mixin_sources(),
@@ -277,7 +278,8 @@ class _CCExtension(Extension):
 
     def _prepare_object_files(self, build_ext):
         cc = self._cc
-        dir_util.mkpath(os.path.join(build_ext.build_temp, *self.name.split('.')[:-1]))
+        dir_util.mkpath(os.path.join(
+            build_ext.build_temp, *self.name.split('.')[:-1]))
         objects, _ = cc._compile_object_files(build_ext.build_temp)
         # Add generated object files for linking
         self.extra_objects = objects

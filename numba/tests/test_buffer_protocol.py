@@ -76,7 +76,7 @@ class TestBufferProtocol(MemoryLeakMixin, TestCase):
             ('Q', 2**63 + 1),
             ('f', 1.5),
             ('d', -1.5),
-            ]:
+        ]:
             yield array.array(letter, [i + offset for i in range(n)])
 
     def _memoryviews(self):
@@ -97,7 +97,7 @@ class TestBufferProtocol(MemoryLeakMixin, TestCase):
             ('float64', 1.5, 3.5),
             ('complex64', -8j, 12 + 5j),
             ('complex128', -8j, 12 + 5j),
-            ]:
+        ]:
             yield memoryview(np.linspace(start, stop, n).astype(dtype))
         # Different layouts
         arr = np.arange(12).reshape((3, 4))

@@ -19,8 +19,10 @@ no_pyobj_flags = Flags()
 def get_nopython_func():
     return abs
 
+
 def get_pyobj_func():
     return open
+
 
 def get_module_func():
     return math.floor

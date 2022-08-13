@@ -43,6 +43,7 @@ def unset_macosx_deployment_target():
     if 'MACOSX_DEPLOYMENT_TARGET' in os.environ:
         del os.environ['MACOSX_DEPLOYMENT_TARGET']
 
+
 class TestCompilerChecks(TestCase):
 
     # NOTE: THIS TEST MUST ALWAYS RUN ON WINDOWS, DO NOT SKIP
@@ -155,7 +156,8 @@ class TestLegacyAPI(BasePYCCTest):
 
         bitcode_wrapper_magic = b'\xde\xc0\x17\x0b'
         bitcode_magic = b'BC\xc0\xde'
-        self.assertTrue(bc.startswith((bitcode_magic, bitcode_wrapper_magic)), bc)
+        self.assertTrue(bc.startswith(
+            (bitcode_magic, bitcode_wrapper_magic)), bc)
 
 
 @needs_external_compilers
@@ -314,7 +316,7 @@ class TestCC(BasePYCCTest):
             self.assertPreciseEqual(res, hash("A"))
             res = lib.hash_str("A")
             self.assertPreciseEqual(res, hash("A"))
-            
+
             code = """if 1:
                 from numpy.testing import assert_equal
                 res = lib.hash_literal_str_A()

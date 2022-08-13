@@ -153,8 +153,10 @@ def lgamma(x):
 def pow(x, y):
     return math.pow(x, y)
 
+
 def gcd(x, y):
     return math.gcd(x, y)
+
 
 def copysign(x, y):
     return math.copysign(x, y)

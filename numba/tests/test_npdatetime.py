@@ -23,6 +23,7 @@ from numba.np import npdatetime_helpers, numpy_support
 TIMEDELTA_M = np.dtype('timedelta64[M]')
 TIMEDELTA_Y = np.dtype('timedelta64[Y]')
 
+
 def value_unit(val):
     ty = numpy_support.from_dtype(val.dtype)
     return ty.unit
@@ -37,53 +38,70 @@ all_units = date_units + time_units
 def add_usecase(x, y):
     return x + y
 
+
 def sub_usecase(x, y):
     return x - y
+
 
 def mul_usecase(x, y):
     return x * y
 
+
 def div_usecase(x, y):
     return x / y
+
 
 def floordiv_usecase(x, y):
     return x // y
 
+
 def eq_usecase(x, y):
     return x == y
+
 
 def ne_usecase(x, y):
     return x != y
 
+
 def lt_usecase(x, y):
     return x < y
+
 
 def le_usecase(x, y):
     return x <= y
 
+
 def gt_usecase(x, y):
     return x > y
+
 
 def ge_usecase(x, y):
     return x >= y
 
+
 def pos_usecase(x):
     return +x
+
 
 def neg_usecase(x):
     return -x
 
+
 def abs_usecase(x):
     return abs(x)
+
 
 def hash_usecase(x):
     return hash(x)
 
+
 def min_usecase(x, y):
     return min(x, y)
 
+
 def max_usecase(x, y):
     return max(x, y)
+
 
 def make_add_constant(const):
     def add_constant(x):
@@ -145,6 +163,7 @@ class TestModuleHelpers(TestCase):
 
     def test_datetime_timedelta_scaling(self):
         f = npdatetime_helpers.get_datetime_timedelta_conversion
+
         def check_error(dt_unit, td_unit):
             with self.assertRaises(RuntimeError):
                 f(dt_unit, td_unit)
@@ -179,8 +198,9 @@ class TestModuleHelpers(TestCase):
         self.assertEqual(f('Y', 'W'), ('W', 97 + 400 * 365, 400 * 7))
         self.assertEqual(f('M', 'D'), ('D', 97 + 400 * 365, 400 * 12))
         self.assertEqual(f('M', 'W'), ('W', 97 + 400 * 365, 400 * 12 * 7))
-        self.assertEqual(f('Y', 's'), ('s', (97 + 400 * 365) *  24 * 3600, 400))
-        self.assertEqual(f('M', 's'), ('s', (97 + 400 * 365) *  24 * 3600, 400 * 12))
+        self.assertEqual(f('Y', 's'), ('s', (97 + 400 * 365) * 24 * 3600, 400))
+        self.assertEqual(
+            f('M', 's'), ('s', (97 + 400 * 365) * 24 * 3600, 400 * 12))
 
     def test_combine_datetime_timedelta_units(self):
         f = npdatetime_helpers.combine_datetime_timedelta_units
@@ -224,7 +244,8 @@ class TestMiscCompiling(TestCase):
             self.assertPreciseEqual(f(*args), expected)
 
         # Test passing the signature in object form
-        sig = types.NPDatetime('us')(types.NPDatetime('ms'), types.NPTimedelta('us'))
+        sig = types.NPDatetime('us')(
+            types.NPDatetime('ms'), types.NPTimedelta('us'))
         _check_explicit_signature(sig)
         # Same with the signature in string form
         sig = "NPDatetime('us')(NPDatetime('ms'), NPTimedelta('us'))"
@@ -276,6 +297,7 @@ class TestTimedeltaArithmetic(TestCase):
 
     def test_add(self):
         f = self.jit(add_usecase)
+
         def check(a, b, expected):
             self.assertPreciseEqual(f(a, b), expected)
             self.assertPreciseEqual(f(b, a), expected)
@@ -295,6 +317,7 @@ class TestTimedeltaArithmetic(TestCase):
 
     def test_sub(self):
         f = self.jit(sub_usecase)
+
         def check(a, b, expected):
             self.assertPreciseEqual(f(a, b), expected)
             self.assertPreciseEqual(f(b, a), -expected)
@@ -314,6 +337,7 @@ class TestTimedeltaArithmetic(TestCase):
 
     def test_mul(self):
         f = self.jit(mul_usecase)
+
         def check(a, b, expected):
             self.assertPreciseEqual(f(a, b), expected)
             self.assertPreciseEqual(f(b, a), expected)
@@ -337,6 +361,7 @@ class TestTimedeltaArithmetic(TestCase):
     def test_div(self):
         div = self.jit(div_usecase)
         floordiv = self.jit(floordiv_usecase)
+
         def check(a, b, expected):
             self.assertPreciseEqual(div(a, b), expected)
             self.assertPreciseEqual(floordiv(a, b), expected)
@@ -360,6 +385,7 @@ class TestTimedeltaArithmetic(TestCase):
 
     def test_homogeneous_div(self):
         div = self.jit(div_usecase)
+
         def check(a, b, expected):
             self.assertPreciseEqual(div(a, b), expected)
 
@@ -381,6 +407,7 @@ class TestTimedeltaArithmetic(TestCase):
     def test_eq_ne(self):
         eq = self.jit(eq_usecase)
         ne = self.jit(ne_usecase)
+
         def check(a, b, expected):
             expected_val = expected
             not_expected_val = not expected
@@ -417,6 +444,7 @@ class TestTimedeltaArithmetic(TestCase):
     def test_lt_ge(self):
         lt = self.jit(lt_usecase)
         ge = self.jit(ge_usecase)
+
         def check(a, b, expected):
             expected_val = expected
             not_expected_val = not expected
@@ -442,7 +470,7 @@ class TestTimedeltaArithmetic(TestCase):
         # NaTs
         check(TD('Nat'), TD('Nat'), False)
         check(TD('Nat', 'ms'), TD('Nat', 's'), False)
-        check(TD('Nat'), TD(-(2**63)+1), True)
+        check(TD('Nat'), TD(-(2**63) + 1), True)
         # Incompatible units => exception raised
         with self.assertRaises((TypeError, TypingError)):
             lt(TD(1, 'Y'), TD(365, 'D'))
@@ -457,6 +485,7 @@ class TestTimedeltaArithmetic(TestCase):
     def test_le_gt(self):
         le = self.jit(le_usecase)
         gt = self.jit(gt_usecase)
+
         def check(a, b, expected):
             expected_val = expected
             not_expected_val = not expected
@@ -482,7 +511,7 @@ class TestTimedeltaArithmetic(TestCase):
         # NaTs
         check(TD('Nat'), TD('Nat'), True)
         check(TD('Nat', 'ms'), TD('Nat', 's'), True)
-        check(TD('Nat'), TD(-(2**63)+1), True)
+        check(TD('Nat'), TD(-(2**63) + 1), True)
         # Incompatible units => exception raised
         with self.assertRaises((TypeError, TypingError)):
             le(TD(1, 'Y'), TD(365, 'D'))
@@ -496,6 +525,7 @@ class TestTimedeltaArithmetic(TestCase):
 
     def test_pos(self):
         pos = self.jit(pos_usecase)
+
         def check(a):
             self.assertPreciseEqual(pos(a), +a)
 
@@ -508,6 +538,7 @@ class TestTimedeltaArithmetic(TestCase):
 
     def test_neg(self):
         neg = self.jit(neg_usecase)
+
         def check(a):
             self.assertPreciseEqual(neg(a), -a)
 
@@ -520,6 +551,7 @@ class TestTimedeltaArithmetic(TestCase):
 
     def test_abs(self):
         f = self.jit(abs_usecase)
+
         def check(a):
             self.assertPreciseEqual(f(a), abs(a))
 
@@ -532,6 +564,7 @@ class TestTimedeltaArithmetic(TestCase):
 
     def test_hash(self):
         f = self.jit(hash_usecase)
+
         def check(a):
             self.assertPreciseEqual(f(a), hash(a))
 
@@ -552,6 +585,7 @@ class TestTimedeltaArithmetic(TestCase):
 
     def _test_min_max(self, usecase):
         f = self.jit(usecase)
+
         def check(a, b):
             self.assertPreciseEqual(f(a, b), usecase(a, b))
 
@@ -597,6 +631,7 @@ class TestDatetimeArithmetic(TestCase):
         """
         add = self.jit(add_usecase)
         sub = self.jit(sub_usecase)
+
         def check(a, b, expected):
             with self.silence_numpy_warnings():
                 self.assertPreciseEqual(add(a, b), expected, (a, b))
@@ -623,7 +658,8 @@ class TestDatetimeArithmetic(TestCase):
         check(DT('2012-02-02'), TD(2, 'W'), DT('2012-02-16'))
         # s + ...
         check(DT('2000-01-01T01:02:03Z'), TD(2, 'h'), DT('2000-01-01T03:02:03Z'))
-        check(DT('2000-01-01T01:02:03Z'), TD(2, 'ms'), DT('2000-01-01T01:02:03.002Z'))
+        check(DT('2000-01-01T01:02:03Z'), TD(2, 'ms'),
+              DT('2000-01-01T01:02:03.002Z'))
         # More thorough checking with leap years and faraway years
         for dt_str in ('600', '601', '604', '801',
                        '1900', '1904', '2200', '2300', '2304',
@@ -658,7 +694,7 @@ class TestDatetimeArithmetic(TestCase):
 
     def datetime_samples(self):
         dt_years = ['600', '601', '604', '1968', '1969', '1973',
-                   '2000', '2004', '2005', '2100', '2400', '2401']
+                    '2000', '2004', '2005', '2100', '2400', '2401']
         dt_suffixes = ['', '-01', '-12', '-02-28', '-12-31',
                        '-01-05T12:30:56Z', '-01-05T12:30:56.008Z']
         dts = [DT(a + b) for (a, b) in itertools.product(dt_years, dt_suffixes)]
@@ -670,6 +706,7 @@ class TestDatetimeArithmetic(TestCase):
         Test `datetime64 - datetime64`.
         """
         sub = self.jit(sub_usecase)
+
         def check(a, b, expected=None):
             with self.silence_numpy_warnings():
                 self.assertPreciseEqual(sub(a, b), a - b, (a, b))
@@ -721,10 +758,14 @@ class TestDatetimeArithmetic(TestCase):
                     self.assertFalse(gt(b, a), (a, b))
 
             with self.silence_numpy_warnings():
-                self.assertPreciseEqual(eq(a, b), expected_val, (a, b, expected))
-                self.assertPreciseEqual(eq(b, a), expected_val, (a, b, expected))
-                self.assertPreciseEqual(ne(a, b), not_expected_val, (a, b, expected))
-                self.assertPreciseEqual(ne(b, a), not_expected_val, (a, b, expected))
+                self.assertPreciseEqual(
+                    eq(a, b), expected_val, (a, b, expected))
+                self.assertPreciseEqual(
+                    eq(b, a), expected_val, (a, b, expected))
+                self.assertPreciseEqual(
+                    ne(a, b), not_expected_val, (a, b, expected))
+                self.assertPreciseEqual(
+                    ne(b, a), not_expected_val, (a, b, expected))
                 if expected_val:
                     # If equal, then equal-ordered comparisons are true
                     self.assertTrue(le(a, b), (a, b))
@@ -752,10 +793,14 @@ class TestDatetimeArithmetic(TestCase):
 
             with self.silence_numpy_warnings():
                 lt = self.jit(lt_usecase)
-                self.assertPreciseEqual(lt(a, b), expected_val, (a, b, expected))
-                self.assertPreciseEqual(gt(b, a), expected_val, (a, b, expected))
-                self.assertPreciseEqual(ge(a, b), not_expected_val, (a, b, expected))
-                self.assertPreciseEqual(le(b, a), not_expected_val, (a, b, expected))
+                self.assertPreciseEqual(
+                    lt(a, b), expected_val, (a, b, expected))
+                self.assertPreciseEqual(
+                    gt(b, a), expected_val, (a, b, expected))
+                self.assertPreciseEqual(
+                    ge(a, b), not_expected_val, (a, b, expected))
+                self.assertPreciseEqual(
+                    le(b, a), not_expected_val, (a, b, expected))
                 if expected_val:
                     # If true, then values are not equal
                     check_eq(a, b, False)
@@ -772,9 +817,9 @@ class TestDatetimeArithmetic(TestCase):
         check_eq(DT('2014-01-02'), DT('2014-01-06', 'W'), True)
         # with times
         check_eq(DT('2014-01-01T00:01:00Z', 's'),
-              DT('2014-01-01T00:01Z', 'm'), True)
+                 DT('2014-01-01T00:01Z', 'm'), True)
         check_eq(DT('2014-01-01T00:01:01Z', 's'),
-              DT('2014-01-01T00:01Z', 'm'), False)
+                 DT('2014-01-01T00:01Z', 'm'), False)
         # NaTs
         check_lt(DT('NaT', 'Y'), DT('2017'), True)
         check_eq(DT('NaT'), DT('NaT'), True)
@@ -785,7 +830,7 @@ class TestDatetimeArithmetic(TestCase):
             # Take a number of smaller units
             a_unit = a.dtype.str.split('[')[1][:-1]
             i = all_units.index(a_unit)
-            units = all_units[i:i+6]
+            units = all_units[i:i + 6]
             for unit in units:
                 # Force conversion
                 b = a.astype('M8[%s]' % unit)
@@ -798,6 +843,7 @@ class TestDatetimeArithmetic(TestCase):
 
     def _test_min_max(self, usecase):
         f = self.jit(usecase)
+
         def check(a, b):
             self.assertPreciseEqual(f(a, b), usecase(a, b))
 
@@ -813,6 +859,7 @@ class TestDatetimeArithmetic(TestCase):
 
     def test_max(self):
         self._test_min_max(max_usecase)
+
 
 class TestDatetimeArithmeticNoPython(TestDatetimeArithmetic):
 
@@ -875,17 +922,17 @@ class TestDatetimeArrayOps(TestCase):
             return operation(a, b)
 
         arr_one = np.array([
-                        np.datetime64("2011-01-01"),
-                        np.datetime64("1971-02-02"),
-                        np.datetime64("2021-03-03"),
-                        np.datetime64("2004-12-07"),
-                    ], dtype="datetime64[ns]")
+            np.datetime64("2011-01-01"),
+            np.datetime64("1971-02-02"),
+            np.datetime64("2021-03-03"),
+            np.datetime64("2004-12-07"),
+        ], dtype="datetime64[ns]")
         arr_two = np.array([
-                        np.datetime64("2011-01-01"),
-                        np.datetime64("1971-02-02"),
-                        np.datetime64("2021-03-03"),
-                        np.datetime64("2004-12-07"),
-                    ], dtype="datetime64[D]")
+            np.datetime64("2011-01-01"),
+            np.datetime64("1971-02-02"),
+            np.datetime64("2021-03-03"),
+            np.datetime64("2004-12-07"),
+        ], dtype="datetime64[D]")
         py_func = impl
         cfunc = njit(parallel=parallel)(impl)
         test_cases = [

@@ -1,7 +1,7 @@
 import warnings
 from numba import jit
 from numba.core.errors import (NumbaDeprecationWarning,
-                          NumbaPendingDeprecationWarning, NumbaWarning)
+                               NumbaPendingDeprecationWarning, NumbaWarning)
 import unittest
 
 

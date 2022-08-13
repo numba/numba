@@ -24,6 +24,7 @@ def make_fib2():
 
     return fib2
 
+
 fib2 = make_fib2()
 
 

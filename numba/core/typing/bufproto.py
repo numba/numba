@@ -14,12 +14,12 @@ _pep3118_scalar_map = {
     'd': types.float64,
     'Zf': types.complex64,
     'Zd': types.complex128,
-    }
+}
 
 _type_map = {
     bytearray: types.ByteArray,
     array.array: types.PyArray,
-    }
+}
 
 _type_map[memoryview] = types.MemoryView
 _type_map[bytes] = types.Bytes

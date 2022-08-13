@@ -1,11 +1,15 @@
 """Use cases for testing matmul (@)
 """
+
+
 def matmul_usecase(x, y):
     return x @ y
+
 
 def imatmul_usecase(x, y):
     x @= y
     return x
+
 
 class DumbMatrix(object):
 

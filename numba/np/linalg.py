@@ -11,7 +11,7 @@ import numpy as np
 import operator
 
 from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
-                                    impl_ret_new_ref, impl_ret_untracked)
+                                 impl_ret_new_ref, impl_ret_untracked)
 from numba.core.typing import signature
 from numba.core.extending import overload, register_jitable
 from numba.core import types, cgutils
@@ -545,6 +545,7 @@ def dot_2(context, builder, sig, args):
 
 lower_builtin(operator.matmul, types.Array, types.Array)(dot_2)
 
+
 @glue_lowering(np.vdot, types.Array, types.Array)
 def vdot(context, builder, sig, args):
     """
@@ -740,6 +741,7 @@ def dot_3(context, builder, sig, args):
         else:
             assert 0
 
+
 fatal_error_sig = types.intc()
 fatal_error_func = types.ExternalFunction("numba_fatal_error", fatal_error_sig)
 
@@ -791,6 +793,7 @@ def ol_copy_to_fortran_order(a):
     # This exists because the copy routines don't take order flags yet.
     F_layout = a.layout == 'F'
     A_layout = a.layout == 'A'
+
     def impl(a):
         if F_layout:
             # it's F ordered at compile time, just copy
@@ -822,6 +825,7 @@ def _inv_err_handler(r):
         if r > 0:
             raise np.linalg.LinAlgError(
                 "Matrix is singular to machine precision.")
+
 
 @register_jitable
 def _dummy_liveness_func(a):
@@ -941,6 +945,7 @@ def cho_impl(a):
 
     return cho_impl
 
+
 @overload(np.linalg.eig)
 def eig_impl(a):
     ensure_lapack()
@@ -979,17 +984,17 @@ def eig_impl(a):
             return (wr, vr.T)
 
         r = numba_ez_rgeev(kind,
-                            JOBVL,
-                            JOBVR,
-                            n,
-                            acpy.ctypes,
-                            n,
-                            wr.ctypes,
-                            wi.ctypes,
-                            vl.ctypes,
-                            ldvl,
-                            vr.ctypes,
-                            ldvr)
+                           JOBVL,
+                           JOBVR,
+                           n,
+                           acpy.ctypes,
+                           n,
+                           wr.ctypes,
+                           wi.ctypes,
+                           vl.ctypes,
+                           ldvl,
+                           vr.ctypes,
+                           ldvr)
         _handle_err_maybe_convergence_problem(r)
 
         # By design numba does not support dynamic return types, however,
@@ -1034,16 +1039,16 @@ def eig_impl(a):
             return (w, vr.T)
 
         r = numba_ez_cgeev(kind,
-                            JOBVL,
-                            JOBVR,
-                            n,
-                            acpy.ctypes,
-                            n,
-                            w.ctypes,
-                            vl.ctypes,
-                            ldvl,
-                            vr.ctypes,
-                            ldvr)
+                           JOBVL,
+                           JOBVR,
+                           n,
+                           acpy.ctypes,
+                           n,
+                           w.ctypes,
+                           vl.ctypes,
+                           ldvl,
+                           vr.ctypes,
+                           ldvr)
         _handle_err_maybe_convergence_problem(r)
 
         # put these in to help with liveness analysis,
@@ -1055,6 +1060,7 @@ def eig_impl(a):
         return cmplx_eig_impl
     else:
         return real_eig_impl
+
 
 @overload(np.linalg.eigvals)
 def eigvals_impl(a):
@@ -1097,17 +1103,17 @@ def eigvals_impl(a):
         vr = np.empty((1), dtype=a.dtype)
 
         r = numba_ez_rgeev(kind,
-                            JOBVL,
-                            JOBVR,
-                            n,
-                            acpy.ctypes,
-                            n,
-                            wr.ctypes,
-                            wi.ctypes,
-                            vl.ctypes,
-                            ldvl,
-                            vr.ctypes,
-                            ldvr)
+                           JOBVL,
+                           JOBVR,
+                           n,
+                           acpy.ctypes,
+                           n,
+                           wr.ctypes,
+                           wi.ctypes,
+                           vl.ctypes,
+                           ldvl,
+                           vr.ctypes,
+                           ldvr)
         _handle_err_maybe_convergence_problem(r)
 
         # By design numba does not support dynamic return types, however,
@@ -1153,16 +1159,16 @@ def eigvals_impl(a):
         vr = np.empty((1), dtype=a.dtype)
 
         r = numba_ez_cgeev(kind,
-                            JOBVL,
-                            JOBVR,
-                            n,
-                            acpy.ctypes,
-                            n,
-                            w.ctypes,
-                            vl.ctypes,
-                            ldvl,
-                            vr.ctypes,
-                            ldvr)
+                           JOBVL,
+                           JOBVR,
+                           n,
+                           acpy.ctypes,
+                           n,
+                           w.ctypes,
+                           vl.ctypes,
+                           ldvl,
+                           vr.ctypes,
+                           ldvr)
         _handle_err_maybe_convergence_problem(r)
 
         # put these in to help with liveness analysis,
@@ -1174,6 +1180,7 @@ def eigvals_impl(a):
         return cmplx_eigvals_impl
     else:
         return real_eigvals_impl
+
 
 @overload(np.linalg.eigh)
 def eigh_impl(a):
@@ -1224,6 +1231,7 @@ def eigh_impl(a):
 
     return eigh_impl
 
+
 @overload(np.linalg.eigvalsh)
 def eigvalsh_impl(a):
     ensure_lapack()
@@ -1272,6 +1280,7 @@ def eigvalsh_impl(a):
         return w
 
     return eigvalsh_impl
+
 
 @overload(np.linalg.svd)
 def svd_impl(a, full_matrices=1):
@@ -1913,7 +1922,7 @@ def pinv_impl(a, rcond=1.e-15):
         #one.size
         #zero.size
         _dummy_liveness_func([acpy.size, vt.size, u.size, s.size, one.size,
-            zero.size])
+                              zero.size])
         return acpy.T.ravel().reshape(a.shape).T
 
     return pinv_impl
@@ -2609,7 +2618,7 @@ def outer_impl_none(a, b, out):
     aa = np.asarray(a)
     bb = np.asarray(b)
     return np.multiply(aa.ravel().reshape((aa.size, 1)),
-                        bb.ravel().reshape((1, bb.size)))
+                       bb.ravel().reshape((1, bb.size)))
 
 
 @register_jitable

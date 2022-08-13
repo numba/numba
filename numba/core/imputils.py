@@ -17,6 +17,7 @@ class Registry(object):
     """
     A registry of function and attribute implementations.
     """
+
     def __init__(self, name='unspecified'):
         self.name = name
         self.functions = []
@@ -155,6 +156,7 @@ def _decorate_getattr(impl, ty, attr):
     res.attr = attr
     return res
 
+
 def _decorate_setattr(impl, ty, attr):
     real_impl = impl
 
@@ -179,10 +181,11 @@ def fix_returning_optional(context, builder, sig, status, retval):
         with builder.if_then(builder.not_(status.is_none)):
             optional_value = context.make_optional_value(
                 builder, value_type, retval,
-                )
+            )
             builder.store(optional_value, retvalptr)
         retval = builder.load(retvalptr)
     return retval
+
 
 def user_function(fndesc, libs):
     """
@@ -297,6 +300,7 @@ class _IternextResult(object):
         """
         return self._pairobj.first
 
+
 class RefType(Enum):
     """
     Enumerate the reference type
@@ -313,6 +317,7 @@ class RefType(Enum):
     An untracked reference
     """
     UNTRACKED = 3
+
 
 def iternext_impl(ref_type=None):
     """
@@ -334,7 +339,7 @@ def iternext_impl(ref_type=None):
             pair_type = sig.return_type
             pairobj = context.make_helper(builder, pair_type)
             func(context, builder, sig, args,
-                _IternextResult(context, builder, pairobj))
+                 _IternextResult(context, builder, pairobj))
             if ref_type == RefType.NEW:
                 impl_ret = impl_ret_new_ref
             elif ref_type == RefType.BORROWED:
@@ -344,7 +349,7 @@ def iternext_impl(ref_type=None):
             else:
                 raise ValueError("Unknown ref_type encountered")
             return impl_ret(context, builder,
-                                    pair_type, pairobj._getvalue())
+                            pair_type, pairobj._getvalue())
         return wrapper
     return outer
 

@@ -108,7 +108,7 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
             (c_sin, c_cos, 1.0),
             (c_sin, c_cos, -1.0),
             (c_cos, c_sin, 1.0),
-            (c_cos, c_sin, -1.0)]:
+                (c_cos, c_sin, -1.0)]:
             expected = pyfunc(fa, fb, x)
             got = cfunc(fa, fb, x)
             self.assertEqual(got, expected)
@@ -258,4 +258,3 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-

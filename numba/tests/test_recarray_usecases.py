@@ -73,8 +73,8 @@ class TestRecordUsecase(TestCase):
 
         # This is an unaligned dtype
         mystruct_dt = np.dtype([('p', np.float64),
-                           ('row', np.float64),
-                           ('col', np.float64)])
+                                ('row', np.float64),
+                                ('col', np.float64)])
         mystruct = numpy_support.from_dtype(mystruct_dt)
 
         cres = compile_isolated(pyfunc, (mystruct[:], mystruct[:]))

@@ -25,6 +25,7 @@ class C(object):
 def setattr_usecase(o, v):
     o.x = v
 
+
 def delattr_usecase(o):
     del o.x
 
@@ -32,7 +33,8 @@ def delattr_usecase(o):
 class TestAttributes(TestCase):
     def test_setattr(self, flags=enable_pyobj_flags):
         pyfunc = setattr_usecase
-        cr = compile_isolated(pyfunc, (types.pyobject, types.int32), flags=flags)
+        cr = compile_isolated(
+            pyfunc, (types.pyobject, types.int32), flags=flags)
         cfunc = cr.entry_point
         c = C()
         cfunc(c, 123)
@@ -40,7 +42,8 @@ class TestAttributes(TestCase):
 
     def test_setattr_attribute_error(self, flags=enable_pyobj_flags):
         pyfunc = setattr_usecase
-        cr = compile_isolated(pyfunc, (types.pyobject, types.int32), flags=flags)
+        cr = compile_isolated(
+            pyfunc, (types.pyobject, types.int32), flags=flags)
         cfunc = cr.entry_point
         # Can't set undeclared slot
         with self.assertRaises(AttributeError):

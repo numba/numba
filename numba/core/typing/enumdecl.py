@@ -58,7 +58,6 @@ class EnumEq(EnumCompare):
     pass
 
 
-
 @infer_global(operator.ne)
 class EnumNe(EnumCompare):
     pass

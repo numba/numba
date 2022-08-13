@@ -12,6 +12,7 @@ class _MarkNrtCallVisitor(CallVisitor):
     """
     A pass to mark all NRT_incref and NRT_decref.
     """
+
     def __init__(self):
         self.marked = set()
 
@@ -53,7 +54,6 @@ def _legalize(module, dmm, fndesc):
         Valid input are any type that does not need refcount except Array.
         """
         return valid_output(ty) or isinstance(ty, types.Array)
-
 
     # Ensure no reference to function marked as
     # "numba_args_may_always_need_nrt"

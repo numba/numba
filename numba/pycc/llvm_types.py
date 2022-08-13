@@ -25,13 +25,14 @@ if _trace_refs_:
         Constant(_void_star, None),            # _ob_prev
         Constant(_llvm_py_ssize_t, 1),         # ob_refcnt
         Constant(_void_star, None),            # ob_type
-        ])
+    ])
 
 else:
-    _pyobject_head = llvmlite.ir.LiteralStructType([_llvm_py_ssize_t, _void_star])
+    _pyobject_head = llvmlite.ir.LiteralStructType(
+        [_llvm_py_ssize_t, _void_star])
     _pyobject_head_init = Constant.literal_struct([
         Constant(_llvm_py_ssize_t, 1),    # ob_refcnt
         Constant(_void_star, None),       # ob_type
-        ])
+    ])
 
 _pyobject_head_p = llvmlite.ir.PointerType(_pyobject_head)

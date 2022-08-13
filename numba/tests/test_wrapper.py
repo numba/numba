@@ -71,7 +71,6 @@ class TestWrapper(unittest.TestCase):
         print(utils.benchmark(pycfunc, maxsec=.5))
         print(utils.benchmark(overloaded, maxsec=.5))
 
-
     def test_add(self):
         """
         This seems to be about the amount of work to balance out the overhead
@@ -97,7 +96,6 @@ class TestWrapper(unittest.TestCase):
         print(utils.benchmark(python, maxsec=.5))
         print(utils.benchmark(pycfunc, maxsec=.5))
         print(utils.benchmark(overloaded, maxsec=.5))
-
 
 
 if __name__ == '__main__':

@@ -13,7 +13,7 @@ QuicksortImplementation = collections.namedtuple(
      'partition', 'partition3', 'insertion_sort',
      # The top-level function
      'run_quicksort',
-     ))
+    ))
 
 
 Partition = collections.namedtuple('Partition', ('start', 'stop'))
@@ -243,7 +243,6 @@ def make_quicksort_impl(wrap, lt=None, is_argsort=False, is_list=False, is_np_ar
 
             insertion_sort(A, low, high)
 
-
     return QuicksortImplementation(wrap,
                                    partition, partition3, insertion_sort,
                                    run_quicksort)
@@ -251,6 +250,7 @@ def make_quicksort_impl(wrap, lt=None, is_argsort=False, is_list=False, is_np_ar
 
 def make_py_quicksort(*args, **kwargs):
     return make_quicksort_impl((lambda f: f), *args, **kwargs)
+
 
 def make_jit_quicksort(*args, **kwargs):
     from numba.core.extending import register_jitable

@@ -143,6 +143,5 @@ class TestAmbiguousOverloads(unittest.TestCase):
                     pass   # ignore not implemented cast
 
 
-
 if __name__ == '__main__':
     unittest.main()

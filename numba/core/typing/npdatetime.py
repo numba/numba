@@ -60,7 +60,7 @@ class TimedeltaOrderedCmpOp(AbstractTemplate):
         if not all(isinstance(tp, types.NPTimedelta) for tp in args):
             return
         if (npdatetime_helpers.can_cast_timedelta_units(left.unit, right.unit) or
-            npdatetime_helpers.can_cast_timedelta_units(right.unit, left.unit)):
+                npdatetime_helpers.can_cast_timedelta_units(right.unit, left.unit)):
             return signature(types.boolean, left, right)
 
 
@@ -101,7 +101,7 @@ class TimedeltaDivOp(AbstractTemplate):
             return
         if isinstance(right, types.NPTimedelta):
             if (npdatetime_helpers.can_cast_timedelta_units(left.unit, right.unit)
-                or npdatetime_helpers.can_cast_timedelta_units(right.unit, left.unit)):
+                    or npdatetime_helpers.can_cast_timedelta_units(right.unit, left.unit)):
                 return signature(types.float64, left, right)
         elif isinstance(right, (types.Float)):
             return signature(left, left, right)
@@ -115,54 +115,66 @@ class TimedeltaDivOp(AbstractTemplate):
 class TimedeltaUnaryPos(TimedeltaUnaryOp):
     key = operator.pos
 
+
 @infer_global(operator.neg)
 class TimedeltaUnaryNeg(TimedeltaUnaryOp):
     key = operator.neg
+
 
 @infer_global(operator.add)
 @infer_global(operator.iadd)
 class TimedeltaBinAdd(TimedeltaBinOp):
     key = operator.add
 
+
 @infer_global(operator.sub)
 @infer_global(operator.isub)
 class TimedeltaBinSub(TimedeltaBinOp):
     key = operator.sub
+
 
 @infer_global(operator.mul)
 @infer_global(operator.imul)
 class TimedeltaBinMult(TimedeltaMixOp):
     key = operator.mul
 
+
 @infer_global(operator.truediv)
 @infer_global(operator.itruediv)
 class TimedeltaTrueDiv(TimedeltaDivOp):
     key = operator.truediv
+
 
 @infer_global(operator.floordiv)
 @infer_global(operator.ifloordiv)
 class TimedeltaFloorDiv(TimedeltaDivOp):
     key = operator.floordiv
 
+
 @infer_global(operator.eq)
 class TimedeltaCmpEq(TimedeltaCmpOp):
     key = operator.eq
+
 
 @infer_global(operator.ne)
 class TimedeltaCmpNe(TimedeltaCmpOp):
     key = operator.ne
 
+
 @infer_global(operator.lt)
 class TimedeltaCmpLt(TimedeltaOrderedCmpOp):
     key = operator.lt
+
 
 @infer_global(operator.le)
 class TimedeltaCmpLE(TimedeltaOrderedCmpOp):
     key = operator.le
 
+
 @infer_global(operator.gt)
 class TimedeltaCmpGt(TimedeltaOrderedCmpOp):
     key = operator.gt
+
 
 @infer_global(operator.ge)
 class TimedeltaCmpGE(TimedeltaOrderedCmpOp):
@@ -200,6 +212,7 @@ class DatetimePlusTimedelta(AbstractTemplate):
             if unit is not None:
                 return signature(types.NPDatetime(unit), left, right)
 
+
 @infer_global(operator.sub)
 @infer_global(operator.isub)
 class DatetimeMinusTimedelta(AbstractTemplate):
@@ -216,6 +229,7 @@ class DatetimeMinusTimedelta(AbstractTemplate):
                                                                        td.unit)
             if unit is not None:
                 return signature(types.NPDatetime(unit), dt, td)
+
 
 @infer_global(operator.sub)
 class DatetimeMinusDatetime(AbstractTemplate):
@@ -247,21 +261,26 @@ class DatetimeCmpOp(AbstractTemplate):
 class DatetimeCmpEq(DatetimeCmpOp):
     key = operator.eq
 
+
 @infer_global(operator.ne)
 class DatetimeCmpNe(DatetimeCmpOp):
     key = operator.ne
+
 
 @infer_global(operator.lt)
 class DatetimeCmpLt(DatetimeCmpOp):
     key = operator.lt
 
+
 @infer_global(operator.le)
 class DatetimeCmpLE(DatetimeCmpOp):
     key = operator.le
 
+
 @infer_global(operator.gt)
 class DatetimeCmpGt(DatetimeCmpOp):
     key = operator.gt
+
 
 @infer_global(operator.ge)
 class DatetimeCmpGE(DatetimeCmpOp):
@@ -275,7 +294,8 @@ class DatetimeMinMax(AbstractTemplate):
         assert not kws
         assert len(args) == 2
         error_msg = "DatetimeMinMax requires both arguments to be NPDatetime type or both arguments to be NPTimedelta types"
-        assert isinstance(args[0], (types.NPDatetime, types.NPTimedelta)), error_msg
+        assert isinstance(args[0], (types.NPDatetime,
+                          types.NPTimedelta)), error_msg
         if isinstance(args[0], types.NPDatetime):
             if not isinstance(args[1], types.NPDatetime):
                 raise TypeError(error_msg)

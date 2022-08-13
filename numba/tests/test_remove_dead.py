@@ -11,19 +11,19 @@ from numba.core import types, typing, ir, config, compiler
 from numba.core.registry import cpu_target
 from numba.core.annotations import type_annotations
 from numba.core.ir_utils import (copy_propagate, apply_copy_propagate,
-                            get_name_var_table, remove_dels, remove_dead,
-                            remove_call_handlers, alias_func_extensions)
+                                 get_name_var_table, remove_dels, remove_dead,
+                                 remove_call_handlers, alias_func_extensions)
 from numba.core.typed_passes import type_inference_stage
 from numba.core.compiler_machinery import FunctionPass, register_pass, PassManager
 from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
-                             IRProcessing, DeadBranchPrune,
-                             RewriteSemanticConstants, GenericRewrites,
-                             WithLifting, PreserveIR, InlineClosureLikes)
+                                       IRProcessing, DeadBranchPrune,
+                                       RewriteSemanticConstants, GenericRewrites,
+                                       WithLifting, PreserveIR, InlineClosureLikes)
 
 from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
-                           NopythonRewrites, PreParforPass, ParforPass,
-                           DumpParforDiagnostics, NativeLowering,
-                           IRLegalization, NoPythonBackend, NativeLowering)
+                                     NopythonRewrites, PreParforPass, ParforPass,
+                                     DumpParforDiagnostics, NativeLowering,
+                                     IRLegalization, NoPythonBackend, NativeLowering)
 import numpy as np
 from numba.tests.support import skip_parfors_unsupported, needs_blas
 import unittest
@@ -39,23 +39,28 @@ def test_will_propagate(b, z, w):
     a = 2 * x
     return a < b
 
+
 def null_func(a,b,c,d):
     False
+
 
 @numba.njit
 def dummy_aliased_func(A):
     return A
 
+
 def alias_ext_dummy_func(lhs_name, args, alias_map, arg_aliases):
     ir_utils._add_alias(lhs_name, args[0].name, alias_map, arg_aliases)
+
 
 def findLhsAssign(func_ir, var):
     for label, block in func_ir.blocks.items():
         for i, inst in enumerate(block.body):
-            if isinstance(inst, ir.Assign) and inst.target.name==var:
+            if isinstance(inst, ir.Assign) and inst.target.name == var:
                 return True
 
     return False
+
 
 class TestRemoveDead(unittest.TestCase):
 
@@ -76,10 +81,12 @@ class TestRemoveDead(unittest.TestCase):
             typingctx.refresh()
             targetctx.refresh()
             args = (types.int64, types.int64, types.int64)
-            typemap, _, calltypes, _ = type_inference_stage(typingctx, targetctx, test_ir, args, None)
+            typemap, _, calltypes, _ = type_inference_stage(
+                typingctx, targetctx, test_ir, args, None)
             remove_dels(test_ir.blocks)
             in_cps, out_cps = copy_propagate(test_ir.blocks, typemap)
-            apply_copy_propagate(test_ir.blocks, in_cps, get_name_var_table(test_ir.blocks), typemap, calltypes)
+            apply_copy_propagate(test_ir.blocks, in_cps, get_name_var_table(
+                test_ir.blocks), typemap, calltypes)
 
             remove_dead(test_ir.blocks, test_ir.arg_names, test_ir)
             self.assertFalse(findLhsAssign(test_ir, "x"))
@@ -93,7 +100,7 @@ class TestRemoveDead(unittest.TestCase):
                 if (isinstance(inst, ir.Assign) and
                     isinstance(inst.value, ir.Expr) and
                     inst.value.op == 'call' and
-                    func_ir.get_definition(inst.value.func).attr == 'seed'):
+                        func_ir.get_definition(inst.value.func).attr == 'seed'):
                     return True
             return False
 
@@ -203,7 +210,7 @@ class TestRemoveDead(unittest.TestCase):
         old_ext_handlers = alias_func_extensions.copy()
         try:
             alias_func_extensions[('dummy_aliased_func',
-                'numba.tests.test_remove_dead')] = alias_ext_dummy_func
+                                   'numba.tests.test_remove_dead')] = alias_ext_dummy_func
             self.run_array_index_test(func)
         finally:
             # recover global state
@@ -263,8 +270,8 @@ class TestRemoveDead(unittest.TestCase):
                             state.func_ir,
                             state.typemap)
                 numba.parfors.parfor.get_parfor_params(state.func_ir.blocks,
-                                                parfor_pass.options.fusion,
-                                                parfor_pass.nested_fusion_info)
+                                                       parfor_pass.options.fusion,
+                                                       parfor_pass.nested_fusion_info)
                 return True
 
         class TestPipeline(compiler.Compiler):
@@ -272,6 +279,7 @@ class TestRemoveDead(unittest.TestCase):
             remove_dead(). Copy propagation can replace B in the example code
             which this pipeline avoids.
             """
+
             def define_pipelines(self):
                 name = 'test parfor aliasing'
                 pm = PassManager(name)
@@ -282,7 +290,8 @@ class TestRemoveDead(unittest.TestCase):
                 # pre typing
                 if not self.state.flags.no_rewrites:
                     pm.add_pass(GenericRewrites, "nopython rewrites")
-                    pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
+                    pm.add_pass(RewriteSemanticConstants,
+                                "rewrite semantic constants")
                     pm.add_pass(DeadBranchPrune, "dead branch pruning")
                 pm.add_pass(InlineClosureLikes,
                             "inline calls to locally defined closures")

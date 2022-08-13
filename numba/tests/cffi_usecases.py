@@ -131,6 +131,7 @@ def init():
         cffi_bool = dll._numba_test_boolean
         del dll
 
+
 def init_ool():
     """
     Same as init() for OOL mode.
@@ -150,29 +151,36 @@ def init_ool():
         vector_imag = mod.lib.vector_imag
         del mod
 
+
 ffi = ffi_ool = None
 
 
 def use_cffi_sin(x):
     return cffi_sin(x) * 2
 
+
 def use_two_funcs(x):
     return cffi_sin(x) - cffi_cos(x)
+
 
 def use_cffi_sin_ool(x):
     return cffi_sin_ool(x) * 2
 
+
 def use_cffi_boolean_true():
     return cffi_bool_ool()
 
+
 def use_two_funcs_ool(x):
     return cffi_sin_ool(x) - cffi_cos_ool(x)
+
 
 def use_func_pointer(fa, fb, x):
     if x > 0:
         return fa(x)
     else:
         return fb(x)
+
 
 def use_user_defined_symbols():
     return cffi_foo(1, 2, 3)
@@ -181,8 +189,10 @@ def use_user_defined_symbols():
 # (cffi_usecases_ool.ffi is a CompiledFFI object) so we use both in these
 # functions.
 
+
 def vector_sin_float32(x, y):
     vsSin(len(x), ffi.from_buffer(x), ffi_ool.from_buffer(y))
+
 
 def vector_sin_float64(x, y):
     vdSin(len(x), ffi.from_buffer(x), ffi_ool.from_buffer(y))
@@ -192,6 +202,7 @@ def vector_sin_float64(x, y):
 
 def vector_extract_real(x, y):
     vector_real(ffi.from_buffer(x), ffi.from_buffer(y), len(x))
+
 
 def vector_extract_imag(x, y):
     vector_imag(ffi.from_buffer(x), ffi.from_buffer(y), len(x))

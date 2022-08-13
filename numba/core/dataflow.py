@@ -40,7 +40,8 @@ class DataFlowAnalysis(object):
             ib = self.infos[ib.offset]
             incoming_blocks.append(ib)
             if (ib.offset, blk.offset) in self.edge_process:
-                edge_callbacks.append(self.edge_process[(ib.offset, blk.offset)])
+                edge_callbacks.append(
+                    self.edge_process[(ib.offset, blk.offset)])
 
             # Compute stack offset at block entry
             # The stack effect of our predecessors should be known
@@ -182,7 +183,7 @@ class DataFlowAnalysis(object):
             raise UnsupportedError(
                 msg,
                 loc=Loc(filename=self.bytecode.func_id.filename,
-                line=inst.lineno)
+                        line=inst.lineno)
             )
         value = info.pop()
         strvar = info.make_temp()
@@ -227,7 +228,8 @@ class DataFlowAnalysis(object):
         target = info.peek(index)
         appendvar = info.make_temp()
         res = info.make_temp()
-        info.append(inst, target=target, value=value, appendvar=appendvar, res=res)
+        info.append(inst, target=target, value=value,
+                    appendvar=appendvar, res=res)
 
     def op_BUILD_MAP(self, info, inst):
         dct = info.make_temp()
@@ -248,7 +250,7 @@ class DataFlowAnalysis(object):
         setitemvar = info.make_temp()
         res = info.make_temp()
         info.append(inst, target=target, key=key, value=value,
-                     setitemvar=setitemvar, res=res)
+                    setitemvar=setitemvar, res=res)
 
     def op_BUILD_SET(self, info, inst):
         count = inst.arg
@@ -340,13 +342,16 @@ class DataFlowAnalysis(object):
         pair = info.make_temp()
         indval = info.make_temp()
         pred = info.make_temp()
-        info.append(inst, iterator=iterator, pair=pair, indval=indval, pred=pred)
+        info.append(inst, iterator=iterator, pair=pair,
+                    indval=indval, pred=pred)
         info.push(indval)
         # Setup for stack POP (twice) at loop exit (before processing instruction at jump target)
+
         def pop_info(info):
             info.pop()
             info.pop()
-        self.edge_process[(info.block.offset, inst.get_jump_target())] = pop_info
+        self.edge_process[(info.block.offset,
+                           inst.get_jump_target())] = pop_info
 
     def op_CALL_FUNCTION(self, info, inst):
         narg = inst.arg

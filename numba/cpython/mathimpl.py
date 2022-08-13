@@ -43,6 +43,7 @@ def is_nan(builder, val):
     """
     return builder.fcmp_unordered('uno', val, val)
 
+
 def is_inf(builder, val):
     """
     Return a condition testing whether *val* is an infinite.
@@ -53,6 +54,7 @@ def is_inf(builder, val):
     isneginf = builder.fcmp_ordered('==', val, neg_inf)
     return builder.or_(isposinf, isneginf)
 
+
 def is_finite(builder, val):
     """
     Return a condition testing whether *val* is a finite.
@@ -61,12 +63,14 @@ def is_finite(builder, val):
     val_minus_val = builder.fsub(val, val)
     return builder.fcmp_ordered('ord', val_minus_val, val_minus_val)
 
+
 def f64_as_int64(builder, val):
     """
     Bitcast a double into a 64-bit integer.
     """
     assert val.type == llvmlite.ir.DoubleType()
     return builder.bitcast(val, llvmlite.ir.IntType(64))
+
 
 def int64_as_f64(builder, val):
     """
@@ -75,12 +79,14 @@ def int64_as_f64(builder, val):
     assert val.type == llvmlite.ir.IntType(64)
     return builder.bitcast(val, llvmlite.ir.DoubleType())
 
+
 def f32_as_int32(builder, val):
     """
     Bitcast a float into a 32-bit integer.
     """
     assert val.type == llvmlite.ir.FloatType()
     return builder.bitcast(val, llvmlite.ir.IntType(32))
+
 
 def int32_as_f32(builder, val):
     """
@@ -89,12 +95,14 @@ def int32_as_f32(builder, val):
     assert val.type == llvmlite.ir.IntType(32)
     return builder.bitcast(val, llvmlite.ir.FloatType())
 
+
 def negate_real(builder, val):
     """
     Negate real number *val*, with proper handling of zeros.
     """
     # The negative zero forces LLVM to handle signed zeros properly.
     return builder.fsub(Constant(val.type, -0.0), val)
+
 
 def call_fp_intrinsic(builder, name, args):
     """
@@ -120,9 +128,11 @@ def _unary_int_input_wrapper_impl(wrapped_impl):
 
     return implementer
 
+
 def unary_math_int_impl(fn, float_impl):
     impl = _unary_int_input_wrapper_impl(float_impl)
     lower(fn, types.Integer)(impl)
+
 
 def unary_math_intr(fn, intrcode):
     """
@@ -135,6 +145,7 @@ def unary_math_intr(fn, intrcode):
 
     unary_math_int_impl(fn, float_impl)
     return float_impl
+
 
 def unary_math_extern(fn, f32extern, f64extern, int_restype=False):
     """
@@ -157,7 +168,7 @@ def unary_math_extern(fn, f32extern, f64extern, int_restype=False):
         func_name = {
             types.float32: f32extern,
             types.float64: f64extern,
-            }[input_type]
+        }[input_type]
         fnty = llvmlite.ir.FunctionType(lty, [lty])
         fn = cgutils.insert_pure_function(builder.module, fnty, name=func_name)
         res = builder.call(fn, (val,))
@@ -200,7 +211,8 @@ log2_impl = unary_math_extern(math.log2, "log2f", "log2")
 ceil_impl = unary_math_extern(math.ceil, "ceilf", "ceil", True)
 floor_impl = unary_math_extern(math.floor, "floorf", "floor", True)
 
-gamma_impl = unary_math_extern(math.gamma, "numba_gammaf", "numba_gamma") # work-around
+gamma_impl = unary_math_extern(
+    math.gamma, "numba_gammaf", "numba_gamma") # work-around
 sqrt_impl = unary_math_extern(math.sqrt, "sqrtf", "sqrt")
 trunc_impl = unary_math_extern(math.trunc, "truncf", "trunc", True)
 lgamma_impl = unary_math_extern(math.lgamma, "lgammaf", "lgamma")
@@ -211,6 +223,7 @@ def isnan_float_impl(context, builder, sig, args):
     [val] = args
     res = is_nan(builder, val)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 @lower(math.isnan, types.Integer)
 def isnan_int_impl(context, builder, sig, args):
@@ -223,6 +236,7 @@ def isinf_float_impl(context, builder, sig, args):
     [val] = args
     res = is_inf(builder, val)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 @lower(math.isinf, types.Integer)
 def isinf_int_impl(context, builder, sig, args):
@@ -262,11 +276,12 @@ def frexp_impl(context, builder, sig, args):
     fltty = context.get_data_type(sig.args[0])
     intty = context.get_data_type(sig.return_type[1])
     expptr = cgutils.alloca_once(builder, intty, name='exp')
-    fnty = llvmlite.ir.FunctionType(fltty, (fltty, llvmlite.ir.PointerType(intty)))
+    fnty = llvmlite.ir.FunctionType(
+        fltty, (fltty, llvmlite.ir.PointerType(intty)))
     fname = {
         "float": "numba_frexpf",
         "double": "numba_frexp",
-        }[str(fltty)]
+    }[str(fltty)]
     fn = cgutils.get_or_insert_function(builder.module, fnty, fname)
     res = builder.call(fn, (val, expptr))
     res = cgutils.make_anonymous_struct(builder, (res, builder.load(expptr)))
@@ -281,7 +296,7 @@ def ldexp_impl(context, builder, sig, args):
     fname = {
         "float": "numba_ldexpf",
         "double": "numba_ldexp",
-        }[str(fltty)]
+    }[str(fltty)]
     fn = cgutils.insert_pure_function(builder.module, fnty, name=fname)
     res = builder.call(fn, (val, exp))
     return impl_ret_untracked(context, builder, sig.return_type, res)
@@ -298,6 +313,7 @@ def atan2_s64_impl(context, builder, sig, args):
     fsig = signature(types.float64, types.float64, types.float64)
     return atan2_float_impl(context, builder, fsig, (y, x))
 
+
 @lower(math.atan2, types.uint64, types.uint64)
 def atan2_u64_impl(context, builder, sig, args):
     [y, x] = args
@@ -305,6 +321,7 @@ def atan2_u64_impl(context, builder, sig, args):
     x = builder.uitofp(x, llvmlite.ir.DoubleType())
     fsig = signature(types.float64, types.float64, types.float64)
     return atan2_float_impl(context, builder, fsig, (y, x))
+
 
 @lower(math.atan2, types.Float, types.Float)
 def atan2_float_impl(context, builder, sig, args):
@@ -315,7 +332,7 @@ def atan2_float_impl(context, builder, sig, args):
     func_name = {
         types.float32: "atan2f",
         types.float64: "atan2"
-        }[ty]
+    }[ty]
     fnty = llvmlite.ir.FunctionType(lty, (lty, lty))
     fn = cgutils.insert_pure_function(builder.module, fnty, name=func_name)
     res = builder.call(fn, args)
@@ -383,9 +400,11 @@ def radians_float_impl(context, builder, sig, args):
     res = builder.fmul(x, coef)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+
 unary_math_int_impl(math.radians, radians_float_impl)
 
 # -----------------------------------------------------------------------------
+
 
 @lower(math.degrees, types.Float)
 def degrees_float_impl(context, builder, sig, args):
@@ -394,9 +413,11 @@ def degrees_float_impl(context, builder, sig, args):
     res = builder.fmul(x, coef)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+
 unary_math_int_impl(math.degrees, degrees_float_impl)
 
 # -----------------------------------------------------------------------------
+
 
 @lower(math.pow, types.Float, types.Float)
 @lower(math.pow, types.Float, types.Integer)
@@ -410,6 +431,7 @@ def pow_impl(context, builder, sig, args):
 def _unsigned(T):
     """Convert integer to unsigned integer of equivalent width."""
     pass
+
 
 @overload(_unsigned)
 def _unsigned_impl(T):
@@ -430,8 +452,10 @@ def gcd_impl(context, builder, sig, args):
         Stein's algorithm, heavily cribbed from Julia implementation.
         """
         T = type(a)
-        if a == 0: return abs(b)
-        if b == 0: return abs(a)
+        if a == 0:
+            return abs(b)
+        if b == 0:
+            return abs(a)
         za = trailing_zeros(a)
         zb = trailing_zeros(b)
         k = min(za, zb)

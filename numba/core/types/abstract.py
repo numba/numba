@@ -16,13 +16,16 @@ from numba.core.utils import cached_property, get_hashable_key
 # in _dispatcher.c's internal caches).
 _typecodes = itertools.count()
 
+
 def _autoincr():
     n = next(_typecodes)
     # 4 billion types should be enough, right?
     assert n < 2 ** 32, "Limited to 4 billion types"
     return n
 
+
 _typecache: ptDict[weakref.ref, weakref.ref] = {}
+
 
 def _on_type_disposal(wr, _pop=_typecache.pop):
     _pop(wr, None)
@@ -207,13 +210,13 @@ class Type(metaclass=_TypeMetaclass):
                 layout = 'A'
         else:
             # Raise a KeyError to not be handled by collection constructors (e.g. list).
-            raise KeyError(f"Can only index numba types with slices with no start or stop, got {args}.")
+            raise KeyError(
+                f"Can only index numba types with slices with no start or stop, got {args}.")
 
         return ndim, layout
 
     def cast_python_value(self, args):
         raise NotImplementedError
-
 
     @property
     def is_internal(self):
@@ -222,11 +225,13 @@ class Type(metaclass=_TypeMetaclass):
         return self._is_internal
 
     def dump(self, tab=''):
-        print(f'{tab}DUMP {type(self).__name__}[code={self._code}, name={self.name}]')
+        print(
+            f'{tab}DUMP {type(self).__name__}[code={self._code}, name={self.name}]')
 
 # XXX we should distinguish between Dummy (no meaningful
 # representation, e.g. None or a builtin function) and Opaque (has a
 # meaningful representation, e.g. ExternalFunctionPointer)
+
 
 class Dummy(Type):
     """
@@ -461,12 +466,12 @@ class Literal(Type):
         return self._literal_type_cache
 
 
-
 class TypeRef(Dummy):
     """Reference to a type.
 
     Used when a type is passed as a value.
     """
+
     def __init__(self, instance_type):
         self.instance_type = instance_type
         super(TypeRef, self).__init__('typeref[{}]'.format(self.instance_type))
@@ -481,6 +486,7 @@ class InitialValue(object):
     Used as a mixin for a type will potentially have an initial value that will
     be carried in the .initial_value attribute.
     """
+
     def __init__(self, initial_value):
         self._initial_value = initial_value
 
@@ -496,6 +502,7 @@ class Poison(Type):
     to call the constructor with the type that's being poisoned (for whatever
     reason) but this isn't strictly required.
     """
+
     def __init__(self, ty):
         self.ty = ty
         super(Poison, self).__init__(name="Poison<%s>" % ty)

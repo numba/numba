@@ -1,4 +1,6 @@
-import os, sys, subprocess
+import os
+import sys
+import subprocess
 import itertools
 
 import numpy as np
@@ -184,7 +186,7 @@ class TestUnify(unittest.TestCase):
             tys = list(tys)
             expected = types.Optional(ctx.unify_types(*tys))
             results = [ctx.unify_types(*comb)
-                       for comb in itertools.permutations(tys  + [types.none])]
+                       for comb in itertools.permutations(tys + [types.none])]
             # All results must be equal
             for res in results:
                 self.assertEqual(res, expected)
@@ -603,6 +605,7 @@ def list_unify_usecase1(n):
         res += x.pop()
     return res
 
+
 def list_unify_usecase2(n):
     res = []
     for i in range(n):
@@ -613,6 +616,7 @@ def list_unify_usecase2(n):
     res.append((123j, 42))
     return res
 
+
 def range_unify_usecase(v):
     if v:
         r = range(np.int32(3))
@@ -620,6 +624,7 @@ def range_unify_usecase(v):
         r = range(np.int64(5))
     for x in r:
         return x
+
 
 def issue_1394(a):
     if a:
@@ -818,6 +823,7 @@ class TestPartialTypingErrors(unittest.TestCase):
     """
     Make sure partial typing stores type errors in compiler state properly
     """
+
     def test_partial_typing_error(self):
         # example with type unification error
         def impl(flag):

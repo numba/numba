@@ -84,7 +84,7 @@ class IntegerLiteral(Literal, Integer):
             name=name,
             bitwidth=basetype.bitwidth,
             signed=basetype.signed,
-            )
+        )
 
     def can_convert_to(self, typingctx, other):
         conv = typingctx.can_convert(self.literal_type, other)
@@ -103,7 +103,7 @@ class BooleanLiteral(Literal, Boolean):
         Boolean.__init__(
             self,
             name=name
-            )
+        )
 
     def can_convert_to(self, typingctx, other):
         conv = typingctx.can_convert(self.literal_type, other)
@@ -182,6 +182,7 @@ class _NPDatetimeBase(Type):
 class NPTimedelta(_NPDatetimeBase):
     type_name = 'timedelta64'
 
+
 @total_ordering
 class NPDatetime(_NPDatetimeBase):
     type_name = 'datetime64'
@@ -198,7 +199,8 @@ class EnumClass(Dummy):
         assert isinstance(dtype, Type)
         self.instance_class = cls
         self.dtype = dtype
-        name = "%s<%s>(%s)" % (self.basename, self.dtype, self.instance_class.__name__)
+        name = "%s<%s>(%s)" % (self.basename, self.dtype,
+                               self.instance_class.__name__)
         super(EnumClass, self).__init__(name)
 
     @property
@@ -239,7 +241,8 @@ class EnumMember(Type):
         assert isinstance(dtype, Type)
         self.instance_class = cls
         self.dtype = dtype
-        name = "%s<%s>(%s)" % (self.basename, self.dtype, self.instance_class.__name__)
+        name = "%s<%s>(%s)" % (self.basename, self.dtype,
+                               self.instance_class.__name__)
         super(EnumMember, self).__init__(name)
 
     @property

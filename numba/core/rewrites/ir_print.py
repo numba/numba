@@ -23,7 +23,7 @@ class RewritePrintCalls(Rewrite):
                     if expr.kws:
                         # Only positional args are supported
                         msg = ("Numba's print() function implementation does not "
-                            "support keyword arguments.")
+                               "support keyword arguments.")
                         raise errors.UnsupportedError(msg, inst.loc)
                     prints[inst] = expr
         return len(prints) > 0

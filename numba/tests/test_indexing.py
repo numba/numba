@@ -22,12 +22,14 @@ Noflags.nrt = True
 def slicing_1d_usecase(a, start, stop, step):
     return a[start:stop:step]
 
+
 def slicing_1d_usecase2(a, start, stop, step):
     b = a[start:stop:step]
     total = 0
     for i in range(b.shape[0]):
         total += b[i] * (i + 1)
     return total
+
 
 def slicing_1d_usecase3(a, start, stop):
     b = a[start:stop]
@@ -36,12 +38,14 @@ def slicing_1d_usecase3(a, start, stop):
         total += b[i] * (i + 1)
     return total
 
+
 def slicing_1d_usecase4(a):
     b = a[:]
     total = 0
     for i in range(b.shape[0]):
         total += b[i] * (i + 1)
     return total
+
 
 def slicing_1d_usecase5(a, start):
     b = a[start:]
@@ -50,12 +54,14 @@ def slicing_1d_usecase5(a, start):
         total += b[i] * (i + 1)
     return total
 
+
 def slicing_1d_usecase6(a, stop):
     b = a[:stop]
     total = 0
     for i in range(b.shape[0]):
         total += b[i] * (i + 1)
     return total
+
 
 def slicing_1d_usecase7(a, start):
     # Omitted stop with negative step (issue #1690)
@@ -64,6 +70,7 @@ def slicing_1d_usecase7(a, start):
     for i in range(b.shape[0]):
         total += b[i] * (i + 1)
     return total
+
 
 def slicing_1d_usecase8(a, start):
     # Omitted start with negative step
@@ -78,9 +85,11 @@ def slicing_2d_usecase(a, start1, stop1, step1, start2, stop2, step2):
     # The index is a homogeneous tuple of slices
     return a[start1:stop1:step1, start2:stop2:step2]
 
+
 def slicing_2d_usecase3(a, start1, stop1, step1, index):
     # The index is a heterogeneous tuple
     return a[start1:stop1:step1, index]
+
 
 def slicing_3d_usecase(a, index0, start1, index2):
     b = a[index0, start1:, index2]
@@ -89,12 +98,14 @@ def slicing_3d_usecase(a, index0, start1, index2):
         total += b[i] * (i + 1)
     return total
 
+
 def slicing_3d_usecase2(a, index0, stop1, index2):
     b = a[index0, :stop1, index2]
     total = 0
     for i in range(b.shape[0]):
         total += b[i] * (i + 1)
     return total
+
 
 def partial_1d_usecase(a, index):
     b = a[index]
@@ -103,26 +114,34 @@ def partial_1d_usecase(a, index):
         total += b[i] * (i + 1)
     return total
 
+
 def integer_indexing_1d_usecase(a, i):
     return a[i]
+
 
 def integer_indexing_2d_usecase(a, i1, i2):
     return a[i1,i2]
 
+
 def integer_indexing_2d_usecase2(a, i1, i2):
     return a[i1][i2]
+
 
 def ellipsis_usecase1(a, i, j):
     return a[i:j, ...]
 
+
 def ellipsis_usecase2(a, i, j):
     return a[..., i:j]
+
 
 def ellipsis_usecase3(a, i, j):
     return a[i, ..., j]
 
+
 def none_index_usecase(a):
     return a[None]
+
 
 def empty_tuple_usecase(a):
     return a[()]
@@ -142,11 +161,13 @@ def slicing_1d_usecase_set(a, b, start, stop, step):
     a[start:stop:step] = b
     return a
 
+
 def slicing_1d_usecase_add(a, b, start, stop):
     # NOTE: uses the ROT_FOUR opcode on Python 2, only on the [start:stop]
     # with inplace operator form.
     a[start:stop] += b
     return a
+
 
 def slicing_2d_usecase_set(a, b, start, stop, step, start2, stop2, step2):
     a[start:stop:step,start2:stop2:step2] = b
@@ -200,7 +221,6 @@ class TestGetItem(TestCase):
         for arg in args:
             self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
 
-
         # Any
         arraytype = types.Array(types.int32, 1, 'A')
         argtys = (arraytype, types.int32, types.int32, types.int32)
@@ -240,7 +260,6 @@ class TestGetItem(TestCase):
 
         for arg in args:
             self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
-
 
         # Any
         arraytype = types.Array(types.int32, 1, 'A')
@@ -622,6 +641,7 @@ class TestGetItem(TestCase):
         @njit
         def index1(X, i0):
             return X[i0]
+
         @njit
         def index2(X, i0, i1):
             return index1(X[i0], i1)
@@ -799,6 +819,7 @@ class TestSetItem(TestCase):
         arg = np.arange(N, dtype='i2') + 40
         bounds = [0, 2, N - 2, N, N + 1, N + 3,
                   -2, -N + 2, -N, -N - 1, -N - 3]
+
         def make_dest():
             return np.zeros_like(arg, dtype='i4')
         for start, stop in itertools.product(bounds, bounds):
@@ -912,7 +933,7 @@ class TestSetItem(TestCase):
         cr = compile_isolated(pyfunc, argtys, flags=flags)
         cfunc = cr.entry_point
 
-        arg = np.arange(10*10, dtype='i4').reshape(10,10)
+        arg = np.arange(10 * 10, dtype='i4').reshape(10,10)
         tests = [
             (0, 10, 1, 0, 10, 1),
             (2, 3, 1, 2, 3, 1),
@@ -921,8 +942,10 @@ class TestSetItem(TestCase):
             (0, 10, 2, 0, 10, 2),
         ]
         for test in tests:
-            pyleft = pyfunc(np.zeros_like(arg), arg[slice(*test[0:3]), slice(*test[3:6])], *test)
-            cleft = cfunc(np.zeros_like(arg), arg[slice(*test[0:3]), slice(*test[3:6])], *test)
+            pyleft = pyfunc(np.zeros_like(arg), arg[slice(
+                *test[0:3]), slice(*test[3:6])], *test)
+            cleft = cfunc(np.zeros_like(arg), arg[slice(
+                *test[0:3]), slice(*test[3:6])], *test)
             self.assertPreciseEqual(cleft, pyleft)
 
     def test_2d_slicing_broadcast(self, flags=enable_pyobj_flags):
@@ -938,7 +961,7 @@ class TestSetItem(TestCase):
         cr = compile_isolated(pyfunc, argtys, flags=flags)
         cfunc = cr.entry_point
 
-        arg = np.arange(10*10, dtype='i4').reshape(10,10)
+        arg = np.arange(10 * 10, dtype='i4').reshape(10,10)
         val = 42
         tests = [
             (0, 10, 1, 0, 10, 1),
@@ -1000,7 +1023,8 @@ class TestSetItem(TestCase):
         self.assertEqual(dst.tolist(), [1, 2, 3, 4, 5])
         # 4D -> 2D Array Broadcasting
         dst = np.arange(6).reshape(2, 3)
-        setitem_broadcast_usecase(dst, np.arange(1, 1 + dst.size).reshape(1, 1, 2, 3))
+        setitem_broadcast_usecase(dst, np.arange(
+            1, 1 + dst.size).reshape(1, 1, 2, 3))
         self.assertEqual(dst.tolist(), [[1, 2, 3], [4, 5, 6]])
 
     def test_setitem_broadcast_error(self):
@@ -1110,7 +1134,7 @@ class TestTyping(TestCase):
             # Strided slices = > "A" layout
             ((slice3_type, intp, intp,), False, False),
             ((intp, intp, slice3_type,), False, False),
-            ]
+        ]
 
         for index_tuple, keep_c, _ in indices:
             index = types.Tuple(index_tuple)

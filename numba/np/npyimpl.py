@@ -65,6 +65,7 @@ class _ScalarHelper(object):
     current use-cases) reading back a stored value. This class
     will always "load" the original value it got at its creation.
     """
+
     def __init__(self, ctxt, bld, val, ty):
         self.context = ctxt
         self.builder = bld
@@ -125,6 +126,7 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder',
     It provides methods to generate code loading/storing specific
     items as well as support code for handling indices.
     """
+
     def create_iter_indices(self):
         intpty = self.context.get_value_type(types.intp)
         ZERO = ir.Constant(ir.IntType(intpty.width), 0)
@@ -172,8 +174,8 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
 
     # then prepare the arg for a concrete instance
     if isinstance(tyinp, types.ArrayCompatible):
-        ary     = ctxt.make_array(tyinp)(ctxt, bld, inp)
-        shape   = cgutils.unpack_tuple(bld, ary.shape, tyinp.ndim)
+        ary = ctxt.make_array(tyinp)(ctxt, bld, inp)
+        shape = cgutils.unpack_tuple(bld, ary.shape, tyinp.ndim)
         strides = cgutils.unpack_tuple(bld, ary.strides, tyinp.ndim)
         return _ArrayHelper(ctxt, bld, shape, strides, ary.data,
                             tyinp.layout, tyinp.dtype, tyinp.ndim, inp)
@@ -187,6 +189,8 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
 
 _broadcast_onto_sig = types.intp(types.intp, types.CPointer(types.intp),
                                  types.intp, types.CPointer(types.intp))
+
+
 def _broadcast_onto(src_ndim, src_shape, dest_ndim, dest_shape):
     '''Low-level utility function used in calculating a shape for
     an implicit output array.  This function assumes that the
@@ -227,6 +231,7 @@ def _broadcast_onto(src_ndim, src_shape, dest_ndim, dest_shape):
             dest_index += 1
     return dest_index
 
+
 def _build_array(context, builder, array_ty, input_types, inputs):
     """Utility function to handle allocation of an implicit output array
     given the target context, builder, output array type, and a list of
@@ -237,6 +242,7 @@ def _build_array(context, builder, array_ty, input_types, inputs):
                    for x in input_types]
 
     intp_ty = context.get_value_type(types.intp)
+
     def make_intp_const(val):
         return context.get_constant(types.intp, val)
 
@@ -300,17 +306,19 @@ def _build_array(context, builder, array_ty, input_types, inputs):
             raise
         out_val = array_val._getvalue()
     else:
-        wrap_args = (inputs[array_wrapper_index].return_val, array_val._getvalue())
+        wrap_args = (inputs[array_wrapper_index].return_val,
+                     array_val._getvalue())
         out_val = array_wrap(builder, wrap_args)
 
     ndim = array_ty.ndim
-    shape   = cgutils.unpack_tuple(builder, array_val.shape, ndim)
+    shape = cgutils.unpack_tuple(builder, array_val.shape, ndim)
     strides = cgutils.unpack_tuple(builder, array_val.strides, ndim)
     return _ArrayHelper(context, builder, shape, strides, array_val.data,
                         array_ty.layout, array_ty.dtype, ndim,
                         out_val)
 
 # ufuncs either return a single result when nout == 1, else a tuple of results
+
 
 def _unpack_output_types(ufunc, sig):
     if ufunc.nout == 1:
@@ -357,7 +365,8 @@ def numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
         if ufunc.nin + out_i >= len(arguments):
             # this out argument is not provided
             if isinstance(ret_ty, types.ArrayCompatible):
-                output = _build_array(context, builder, ret_ty, sig.args, arguments)
+                output = _build_array(
+                    context, builder, ret_ty, sig.args, arguments)
             else:
                 output = _prepare_argument(
                     context, builder,
@@ -389,11 +398,13 @@ def numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
             index.update_indices(loop_indices, i)
             vals_in.append(arg.load_data(index.as_values()))
 
-        vals_out = _unpack_output_values(ufunc, builder, kernel.generate(*vals_in))
+        vals_out = _unpack_output_values(
+            ufunc, builder, kernel.generate(*vals_in))
         for val_out, output in zip(vals_out, outputs):
             output.store_data(loop_indices, val_out)
 
-    out = _pack_output_values(ufunc, context, builder, sig.return_type, [o.return_val for o in outputs])
+    out = _pack_output_values(ufunc, context, builder, sig.return_type, [
+                              o.return_val for o in outputs])
     return impl_ret_new_ref(context, builder, sig.return_type, out)
 
 
@@ -413,7 +424,7 @@ class _Kernel(object):
 
         """
         if (isinstance(fromty, types.Complex) and
-            not isinstance(toty, types.Complex)):
+                not isinstance(toty, types.Complex)):
             # attempt conversion of the real part to the specified type.
             # note that NumPy issues a warning in this kind of conversions
             newty = fromty.underlying_float
@@ -495,6 +506,7 @@ def register_ufunc_kernel(ufunc, kernel):
 
 def register_unary_operator_kernel(operator, ufunc, kernel, inplace=False):
     assert not inplace  # are there any inplace unary operators?
+
     def lower_unary_operator(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel)
     _arr_kind = types.Array
@@ -558,7 +570,8 @@ def _register_ufuncs():
             elif ufunc.nin == 2:
                 register_binary_operator_kernel(operator, ufunc, kernel)
             else:
-                raise RuntimeError("There shouldn't be any non-unary or binary operators")
+                raise RuntimeError(
+                    "There shouldn't be any non-unary or binary operators")
 
     for _op_map in (npydecl.NumpyRulesInplaceArrayOperator._op_map,
                     ):
@@ -566,11 +579,14 @@ def _register_ufuncs():
             ufunc = getattr(np, ufunc_name)
             kernel = kernels[ufunc]
             if ufunc.nin == 1:
-                register_unary_operator_kernel(operator, ufunc, kernel, inplace=True)
+                register_unary_operator_kernel(
+                    operator, ufunc, kernel, inplace=True)
             elif ufunc.nin == 2:
-                register_binary_operator_kernel(operator, ufunc, kernel, inplace=True)
+                register_binary_operator_kernel(
+                    operator, ufunc, kernel, inplace=True)
             else:
-                raise RuntimeError("There shouldn't be any non-unary or binary operators")
+                raise RuntimeError(
+                    "There shouldn't be any non-unary or binary operators")
 
 
 _register_ufuncs()
@@ -600,6 +616,7 @@ def _make_dtype_object(typingctx, desc):
         # Convert the str description into np.dtype then to numba type.
         nb_type = from_dtype(np.dtype(thestr))
         return from_nb_type(nb_type)
+
 
 @overload(np.dtype)
 def numpy_dtype(desc):

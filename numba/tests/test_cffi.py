@@ -82,7 +82,7 @@ class TestCFFI(TestCase):
             (mod.cffi_sin, mod.cffi_cos_ool, 1.0),
             (mod.cffi_sin, mod.cffi_cos_ool, -1.0),
             (mod.cffi_cos, mod.cffi_sin_ool, 1.0),
-            (mod.cffi_cos, mod.cffi_sin_ool, -1.0)]:
+                (mod.cffi_cos, mod.cffi_sin_ool, -1.0)]:
             expected = pyfunc(fa, fb, x)
             got = cfunc(fa, fb, x)
             self.assertEqual(got, expected)

@@ -11,9 +11,11 @@ def foo(a, b):
 def bar(a, b):
     return cfoo(a, b) + b
 
+
 @jit
 def inner(x, y):
     return x + y
+
 
 @jit(nopython=True)
 def outer(x, y):

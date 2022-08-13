@@ -11,6 +11,7 @@ from .misc import UnicodeType
 from .containers import Bytes
 import numpy as np
 
+
 class CharSeq(Type):
     """
     A fixed-length 8-bit character sequence.
@@ -428,7 +429,7 @@ class Array(Buffer):
         if readonly:
             self.mutable = False
         if (not aligned or
-            (isinstance(dtype, Record) and not dtype.aligned)):
+                (isinstance(dtype, Record) and not dtype.aligned)):
             self.aligned = False
         if name is None:
             type_name = "array"
@@ -484,10 +485,10 @@ class Array(Buffer):
         Convert this Array to the *other*.
         """
         if (isinstance(other, Array) and other.ndim == self.ndim
-            and other.dtype == self.dtype):
+                and other.dtype == self.dtype):
             if (other.layout in ('A', self.layout)
                 and (self.mutable or not other.mutable)
-                and (self.aligned or not other.aligned)):
+                    and (self.aligned or not other.aligned)):
                 return Conversion.safe
 
     def is_precise(self):
@@ -504,6 +505,7 @@ class ArrayCTypes(Type):
     """
     This is the type for `np.ndarray.ctypes`.
     """
+
     def __init__(self, arytype):
         # This depends on the ndim for the shape and strides attributes,
         # even though they are not implemented, yet.
@@ -538,6 +540,7 @@ class ArrayFlags(Type):
     """
     This is the type for `np.ndarray.flags`.
     """
+
     def __init__(self, arytype):
         self.array_type = arytype
         name = "ArrayFlags({0})".format(self.array_type)
@@ -583,8 +586,8 @@ class NestedArray(Array):
         stride = self.size
         strides = []
         for i in reversed(self._shape):
-             strides.append(stride)
-             stride *= i
+            strides.append(stride)
+            stride *= i
         return tuple(reversed(strides))
 
     @property

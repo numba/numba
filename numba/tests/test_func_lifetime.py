@@ -16,6 +16,7 @@ class Dummy(object):
 def global_usecase1(x):
     return x + 1
 
+
 def global_usecase2():
     return global_obj + 1
 

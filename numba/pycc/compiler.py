@@ -24,7 +24,7 @@ __all__ = ['Compiler']
 NULL = ir.Constant(lt._void_star, None)
 ZERO = ir.Constant(lt._int32, 0)
 ONE = ir.Constant(lt._int32, 1)
-METH_VARARGS_AND_KEYWORDS = ir.Constant(lt._int32, 1|2)
+METH_VARARGS_AND_KEYWORDS = ir.Constant(lt._int32, 1 | 2)
 
 
 def get_header():
@@ -151,10 +151,10 @@ class _ModuleCompiler(object):
 
         for entry in self.export_entries:
             cres = compile_extra(self.typing_context, self.context,
-                                entry.function,
-                                entry.signature.args,
-                                entry.signature.return_type, flags,
-                                locals={}, library=library)
+                                 entry.function,
+                                 entry.signature.args,
+                                 entry.signature.return_type, flags,
+                                 locals={}, library=library)
 
             func_name = cres.fndesc.llvm_func_name
             llvm_func = cres.library.get_function(func_name)
@@ -244,7 +244,8 @@ class _ModuleCompiler(object):
 
         sentinel = ir.Constant.literal_struct([NULL, NULL, ZERO, NULL])
         method_defs.append(sentinel)
-        method_array_init = create_constant_array(self.method_def_ty, method_defs)
+        method_array_init = create_constant_array(
+            self.method_def_ty, method_defs)
         method_array = cgutils.add_global_variable(llvm_module,
                                                    method_array_init.type,
                                                    '.module_methods')
@@ -399,7 +400,8 @@ class ModuleCompiler(_ModuleCompiler):
     def _emit_python_wrapper(self, llvm_module):
         # Figure out the Python C API module creation function, and
         # get a LLVM function for it.
-        create_module_fn = ir.Function(llvm_module, *self.module_create_definition)
+        create_module_fn = ir.Function(
+            llvm_module, *self.module_create_definition)
         create_module_fn.linkage = 'external'
 
         # Define a constant string for the module name.
@@ -411,7 +413,7 @@ class ModuleCompiler(_ModuleCompiler):
              ir.Constant(self.m_init_ty, None),             # m_init
              ir.Constant(lt._llvm_py_ssize_t, None),        # m_index
              ir.Constant(lt._pyobject_head_p, None),        # m_copy
-            )
+             )
         )
         mod_def_base = cgutils.add_global_variable(llvm_module,
                                                    mod_def_base_init.type,
@@ -431,7 +433,7 @@ class ModuleCompiler(_ModuleCompiler):
              ir.Constant(self.traverseproc_ty, None),        # m_traverse
              ir.Constant(self.inquiry_ty, None),             # m_clear
              ir.Constant(self.freefunc_ty, None)             # m_free
-            )
+             )
         )
 
         # Define a constant string for the module name.
@@ -468,4 +470,3 @@ class ModuleCompiler(_ModuleCompiler):
         builder.ret(mod)
 
         self.dll_exports.append(mod_init_fn.name)
-

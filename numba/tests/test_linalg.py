@@ -74,7 +74,6 @@ class TestProduct(EnableNRTStatsMixin, TestCase):
             self.assertPreciseEqual(got, expected, ignore_sign_on_zero=True)
             del got, expected
 
-
     def _aligned_copy(self, arr):
         # This exists for armv7l because NumPy wants aligned arrays for the
         # `out` arg of functions, but np.empty/np.copy doesn't seem to always
@@ -1008,7 +1007,6 @@ class TestLinalgEigenSystems(TestLinalgBase):
         check = self._check_worker(cfunc, name, expected_res_len,
                                    check_for_domain_change)
 
-
         # The main test loop
         for dtype, order in product(self.dtypes, 'FC'):
             a = self.sample_matrix(n, dtype, order)
@@ -1103,10 +1101,10 @@ class TestLinalgEigenSystems(TestLinalgBase):
                     # trivial system, doesn't matter, just checking if it gets
                     # mutated
                     X = np.array([[10., 1, 0, 1],
-                                [1, 9, 0, 0],
-                                [0, 0, 8, 0],
-                                [1, 0, 0, 7],
-                                ], order='F', dtype=dtype)
+                                  [1, 9, 0, 0],
+                                  [0, 0, 8, 0],
+                                  [1, 0, 0, 7],
+                                  ], order='F', dtype=dtype)
 
                     X_orig = np.copy(X)
 
@@ -1576,10 +1574,10 @@ class TestLinalgLstsq(TestLinalgSystems):
 
         # check empty arrays
         empties = [
-        [(0, 1), (1,)], # empty A, valid b
-        [(1, 0), (1,)], # empty A, valid b
-        [(1, 1), (0,)], # valid A, empty 1D b
-        [(1, 1), (1, 0)],  # valid A, empty 2D b
+            [(0, 1), (1,)], # empty A, valid b
+            [(1, 0), (1,)], # empty A, valid b
+            [(1, 1), (0,)], # valid A, empty 1D b
+            [(1, 1), (1, 0)],  # valid A, empty 2D b
         ]
 
         for A, b in empties:
@@ -2616,7 +2614,7 @@ class TestBasics(TestLinalgSystems):  # TestLinalgSystems for 1d test
             (a, b) = self._get_input(size1, size2, dtype)
             check(a, b)
             c = np.empty((np.asarray(a).size, np.asarray(b).size),
-                            dtype=np.asarray(a).dtype)
+                         dtype=np.asarray(a).dtype)
             check(a, b, out=c)
 
         self._assert_wrong_dim("outer", cfunc)
@@ -2671,7 +2669,6 @@ class TestHelpers(TestCase):
         orders = ['C', 'F']
         check(direct_call, np.asfortranarray, shapes, dtypes, orders)
 
-
         @njit
         def slice_to_any(a):
             # make a 'any' layout slice
@@ -2688,6 +2685,7 @@ class TestHelpers(TestCase):
             return np.asfortranarray(sliced)
 
         check(slice_to_any, expected_slice_to_any, shapes, dtypes, orders)
+
 
 if __name__ == '__main__':
     unittest.main()

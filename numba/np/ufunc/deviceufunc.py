@@ -718,7 +718,7 @@ class GeneralizedUFunc(object):
         # Creating new dimension
         elif len(ary.shape) < len(newshape):
             assert newshape[-len(ary.shape):] == ary.shape, \
-               "cannot add dim and reshape at the same time"
+                "cannot add dim and reshape at the same time"
             return self._broadcast_add_axis(ary, newshape)
 
         # Collapsing dimension

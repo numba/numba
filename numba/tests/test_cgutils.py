@@ -14,6 +14,7 @@ from numba.tests.support import TestCase, run_in_subprocess
 
 machine_int = ir.IntType(types.intp.bitwidth)
 
+
 def machine_const(n):
     return ir.Constant(machine_int, n)
 
@@ -28,7 +29,7 @@ class StructureTestCase(TestCase):
     def compile_function(self, nargs):
         llvm_fnty = ir.FunctionType(machine_int, [machine_int] * nargs)
         ctypes_fnty = ctypes.CFUNCTYPE(ctypes.c_size_t,
-                                    * (ctypes.c_size_t,) * nargs)
+                                       * (ctypes.c_size_t,) * nargs)
         module = self.context.create_module("")
 
         function = cgutils.get_or_insert_function(module, llvm_fnty, self.id())
@@ -48,7 +49,6 @@ class StructureTestCase(TestCase):
             return cfunc(*args)
 
         yield self.context, builder, function.args, call_func
-
 
     def get_bytearray_addr(self, ba):
         assert isinstance(ba, bytearray)
@@ -87,7 +87,7 @@ class StructureTestCase(TestCase):
         offset = 8
 
         with self.run_struct_access(struct_class, buf, offset) \
-            as (context, builder, args, inst):
+                as (context, builder, args, inst):
             yield context, builder, inst
 
         self.assertNotEqual(buf, expected)
@@ -101,7 +101,7 @@ class StructureTestCase(TestCase):
 
         fmt = "=iH"
         with self.run_simple_struct_test(S, fmt, (0x12345678, 0xABCD)) \
-            as (context, builder, inst):
+                as (context, builder, inst):
             inst.a = ir.Constant(ir.IntType(32), 0x12345678)
             inst.b = ir.Constant(ir.IntType(16), 0xABCD)
 
@@ -112,7 +112,7 @@ class StructureTestCase(TestCase):
 
         fmt = "=df"
         with self.run_simple_struct_test(S, fmt, (1.23, 4.56)) \
-            as (context, builder, inst):
+                as (context, builder, inst):
             inst.a = ir.Constant(ir.DoubleType(), 1.23)
             inst.b = ir.Constant(ir.FloatType(), 4.56)
 
@@ -145,7 +145,6 @@ class TestCGContext(TestCase):
 
         out, _ = run_in_subprocess(code)
         self.assertIn(str(value), out.decode())
-
 
 
 if __name__ == '__main__':

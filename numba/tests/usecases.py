@@ -4,6 +4,7 @@ from numba import jit
 
 _GLOBAL_STR = "abc"
 
+
 def sum1d(s, e):
     c = 0
     for i in range(s, e):
@@ -51,6 +52,7 @@ def redefine1():
 
 def andor(x, y):
     return (x > 0 and x < 10) or (y > 0 and y < 10)
+
 
 andornopython = jit(nopython=True)(andor)
 

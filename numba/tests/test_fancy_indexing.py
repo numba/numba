@@ -12,14 +12,18 @@ from numba.tests.support import MemoryLeakMixin, TestCase, tag
 def getitem_usecase(a, b):
     return a[b]
 
+
 def setitem_usecase(a, idx, b):
     a[idx] = b
+
 
 def np_take(A, indices):
     return np.take(A, indices)
 
+
 def np_take_kws(A, indices, axis):
     return np.take(A, indices, axis=axis)
+
 
 class TestFancyIndexing(MemoryLeakMixin, TestCase):
 
@@ -190,7 +194,7 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
             (np.zeros((3,), dtype='<U3'), np.array('a')),
             (np.array(['abc','def','ghi'], dtype='<U3'),
              np.array('WXYZ', dtype='<U4')),
-            (np.zeros(3, dtype=complex), np.array(2+3j, dtype=complex)),
+            (np.zeros(3, dtype=complex), np.array(2 + 3j, dtype=complex)),
         ]
 
         for x1, v in inps:

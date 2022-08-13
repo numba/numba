@@ -331,6 +331,7 @@ def timedelta_floor_div_timedelta(context, builder, sig, args):
     res = builder.load(ret)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+
 def timedelta_mod_timedelta(context, builder, sig, args):
     # inspired by https://github.com/numpy/numpy/blob/fe8072a12d65e43bd2e0b0f9ad67ab0108cc54b3/numpy/core/src/umath/loops.c.src#L1424
     # alg is basically as `a % b`:
@@ -382,7 +383,8 @@ def _create_timedelta_comparison_impl(ll_op, default_value):
                     # Cannot normalize units => the values are unequal (except if NaT)
                     builder.store(default_value, ret)
                 else:
-                    builder.store(builder.icmp_unsigned(ll_op, norm_a, norm_b), ret)
+                    builder.store(builder.icmp_unsigned(
+                        ll_op, norm_a, norm_b), ret)
             with otherwise:
                 if numpy_support.numpy_version < (1, 16):
                     # No scaling when comparing NaTs
@@ -568,11 +570,12 @@ def convert_datetime_for_arith(builder, dt_val, src_unit, dest_unit):
     dt_val, dt_unit = reduce_datetime_for_unit(
         builder, dt_val, src_unit, dest_unit)
     # Then multiply by the remaining constant factor.
-    dt_factor = npdatetime_helpers.get_timedelta_conversion_factor(dt_unit, dest_unit)
+    dt_factor = npdatetime_helpers.get_timedelta_conversion_factor(
+        dt_unit, dest_unit)
     if dt_factor is None:
         # This can happen when using explicit output in a ufunc.
         raise LoweringError("cannot convert datetime64 from %r to %r"
-                                       % (src_unit, dest_unit))
+                            % (src_unit, dest_unit))
     return scale_by_constant(builder, dt_val, dt_factor)
 
 
@@ -702,7 +705,7 @@ for op, func in [(operator.eq, datetime_eq_datetime_impl),
                  (operator.le, datetime_le_datetime_impl),
                  (operator.gt, datetime_gt_datetime_impl),
                  (operator.ge, datetime_ge_datetime_impl)]:
-    lower_builtin(op, *[types.NPDatetime]*2)(func)
+    lower_builtin(op, *[types.NPDatetime] * 2)(func)
 
 
 ########################################################################
@@ -726,8 +729,10 @@ def _gen_datetime_max_impl(NAT_DOMINATES):
         return impl_ret_untracked(context, builder, sig.return_type, res)
     return datetime_max_impl
 
+
 datetime_maximum_impl = _gen_datetime_max_impl(True)
 datetime_fmax_impl = _gen_datetime_max_impl(False)
+
 
 def _gen_datetime_min_impl(NAT_DOMINATES):
     def datetime_min_impl(context, builder, sig, args):
@@ -747,8 +752,10 @@ def _gen_datetime_min_impl(NAT_DOMINATES):
         return impl_ret_untracked(context, builder, sig.return_type, res)
     return datetime_min_impl
 
+
 datetime_minimum_impl = _gen_datetime_min_impl(True)
 datetime_fmin_impl = _gen_datetime_min_impl(False)
+
 
 def _gen_timedelta_max_impl(NAT_DOMINATES):
     def timedelta_max_impl(context, builder, sig, args):
@@ -768,8 +775,10 @@ def _gen_timedelta_max_impl(NAT_DOMINATES):
         return impl_ret_untracked(context, builder, sig.return_type, res)
     return timedelta_max_impl
 
+
 timedelta_maximum_impl = _gen_timedelta_max_impl(True)
 timedelta_fmax_impl = _gen_timedelta_max_impl(False)
+
 
 def _gen_timedelta_min_impl(NAT_DOMINATES):
     def timedelta_min_impl(context, builder, sig, args):
@@ -789,8 +798,10 @@ def _gen_timedelta_min_impl(NAT_DOMINATES):
         return impl_ret_untracked(context, builder, sig.return_type, res)
     return timedelta_min_impl
 
+
 timedelta_minimum_impl = _gen_timedelta_min_impl(True)
 timedelta_fmin_impl = _gen_timedelta_min_impl(False)
+
 
 def _cast_to_timedelta(context, builder, val):
     temp = builder.alloca(TIMEDELTA64)
@@ -844,7 +855,11 @@ def ol_hash_npdatetime(x):
     return impl
 
 
-lower_builtin(npdatetime_helpers.datetime_minimum, types.NPDatetime, types.NPDatetime)(datetime_minimum_impl)
-lower_builtin(npdatetime_helpers.datetime_minimum, types.NPTimedelta, types.NPTimedelta)(datetime_minimum_impl)
-lower_builtin(npdatetime_helpers.datetime_maximum, types.NPDatetime, types.NPDatetime)(datetime_maximum_impl)
-lower_builtin(npdatetime_helpers.datetime_maximum, types.NPTimedelta, types.NPTimedelta)(datetime_maximum_impl)
+lower_builtin(npdatetime_helpers.datetime_minimum,
+              types.NPDatetime, types.NPDatetime)(datetime_minimum_impl)
+lower_builtin(npdatetime_helpers.datetime_minimum,
+              types.NPTimedelta, types.NPTimedelta)(datetime_minimum_impl)
+lower_builtin(npdatetime_helpers.datetime_maximum,
+              types.NPDatetime, types.NPDatetime)(datetime_maximum_impl)
+lower_builtin(npdatetime_helpers.datetime_maximum,
+              types.NPTimedelta, types.NPTimedelta)(datetime_maximum_impl)

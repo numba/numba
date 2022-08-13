@@ -11,6 +11,7 @@ no_pyobj_flags = Flags()
 def isnan(x):
     return x != x
 
+
 def isequal(x):
     return x == x
 
@@ -35,6 +36,6 @@ class TestNaN(unittest.TestCase):
     def test_nans_npm(self):
         self.test_nans(flags=no_pyobj_flags)
 
+
 if __name__ == '__main__':
     unittest.main()
-

@@ -41,4 +41,3 @@ def rewrite_module(mod, options):
     flags = options.flags
     FastFloatBinOpVisitor(flags).visit(mod)
     FastFloatCallVisitor(flags).visit(mod)
-

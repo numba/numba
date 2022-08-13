@@ -33,6 +33,7 @@ nrt_no_pyobj_flags.nrt = True
 def abs_usecase(x):
     return abs(x)
 
+
 def all_usecase(x, y):
     if x == None and y == None:
         return all([])
@@ -42,6 +43,7 @@ def all_usecase(x, y):
         return all([x])
     else:
         return all([x, y])
+
 
 def any_usecase(x, y):
     if x == None and y == None:
@@ -53,14 +55,18 @@ def any_usecase(x, y):
     else:
         return any([x, y])
 
+
 def bool_usecase(x):
     return bool(x)
+
 
 def complex_usecase(x, y):
     return complex(x, y)
 
+
 def divmod_usecase(x, y):
     return divmod(x, y)
+
 
 def enumerate_usecase():
     result = 0
@@ -68,11 +74,13 @@ def enumerate_usecase():
         result += i * j
     return result
 
+
 def enumerate_start_usecase():
     result = 0
     for i, j in enumerate((1., 2.5, 3.), 42):
         result += i * j
     return result
+
 
 def enumerate_invalid_start_usecase():
     result = 0
@@ -80,39 +88,50 @@ def enumerate_invalid_start_usecase():
         result += i * j
     return result
 
+
 def filter_usecase(x, filter_func):
     return filter(filter_func, x)
+
 
 def float_usecase(x):
     return float(x)
 
+
 def format_usecase(x, y):
     return x.format(y)
+
 
 def globals_usecase():
     return globals()
 
 # NOTE: hash() is tested in test_hashing
 
+
 def hex_usecase(x):
     return hex(x)
+
 
 def str_usecase(x):
     return str(x)
 
+
 def int_usecase(x, base):
     return int(x, base=base)
+
 
 def iter_next_usecase(x):
     it = iter(x)
     return next(it), next(it)
 
+
 def locals_usecase(x):
     y = 5
     return locals()['y']
 
+
 def long_usecase(x, base):
     return long(x, base=base)
+
 
 def map_usecase(x, map_func):
     return map(map_func, x)
@@ -121,11 +140,14 @@ def map_usecase(x, map_func):
 def max_usecase1(x, y):
     return max(x, y)
 
+
 def max_usecase2(x, y):
     return max([x, y])
 
+
 def max_usecase3(x):
     return max(x)
+
 
 def max_usecase4():
     return max(())
@@ -134,38 +156,50 @@ def max_usecase4():
 def min_usecase1(x, y):
     return min(x, y)
 
+
 def min_usecase2(x, y):
     return min([x, y])
+
 
 def min_usecase3(x):
     return min(x)
 
+
 def min_usecase4():
     return min(())
+
 
 def oct_usecase(x):
     return oct(x)
 
+
 def reduce_usecase(reduce_func, x):
     return functools.reduce(reduce_func, x)
+
 
 def round_usecase1(x):
     return round(x)
 
+
 def round_usecase2(x, n):
     return round(x, n)
+
 
 def sum_usecase(x):
     return sum(x)
 
+
 def type_unary_usecase(a, b):
     return type(a)(b)
+
 
 def truth_usecase(p):
     return operator.truth(p)
 
+
 def unichr_usecase(x):
     return unichr(x)
+
 
 def zip_usecase():
     result = 0
@@ -173,11 +207,13 @@ def zip_usecase():
         result += i * j
     return result
 
+
 def zip_0_usecase():
     result = 0
     for i in zip():
         result += 1
     return result
+
 
 def zip_1_usecase():
     result = 0
@@ -323,12 +359,15 @@ def invalid_isinstance_optional_usecase(x):
     else:
         return False
 
+
 def invalid_isinstance_unsupported_type_usecase():
     ntpl = namedtuple('ntpl', ['a', 'b'])
     inst = ntpl(1, 2)
+
     def impl(x):
         return isinstance(inst, ntpl)
     return impl
+
 
 class TestBuiltins(TestCase):
 
@@ -535,7 +574,7 @@ class TestBuiltins(TestCase):
         pyfunc = filter_usecase
         cr = compile_isolated(pyfunc, (types.Dummy('list'),
                                        types.Dummy('function_ptr')),
-                                       flags=flags)
+                              flags=flags)
         cfunc = cr.entry_point
 
         filter_func = lambda x: x % 2
@@ -719,7 +758,7 @@ class TestBuiltins(TestCase):
         pyfunc = map_usecase
         cr = compile_isolated(pyfunc, (types.Dummy('list'),
                                        types.Dummy('function_ptr')),
-                                       flags=flags)
+                              flags=flags)
         cfunc = cr.entry_point
 
         map_func = lambda x: x * 2
@@ -880,7 +919,6 @@ class TestBuiltins(TestCase):
     def test_min_empty_tuple(self):
         self.check_min_max_empty_tuple(min_usecase4, "min")
 
-
     def test_oct(self, flags=enable_pyobj_flags):
         pyfunc = oct_usecase
 
@@ -897,7 +935,7 @@ class TestBuiltins(TestCase):
         pyfunc = reduce_usecase
         cr = compile_isolated(pyfunc, (types.Dummy('function_ptr'),
                                        types.Dummy('list')),
-                                       flags=flags)
+                              flags=flags)
         cfunc = cr.entry_point
 
         reduce_func = lambda x, y: x + y
@@ -905,7 +943,7 @@ class TestBuiltins(TestCase):
         x = range(10)
         self.assertPreciseEqual(cfunc(reduce_func, x), pyfunc(reduce_func, x))
 
-        x = [x + x/10.0 for x in range(10)]
+        x = [x + x / 10.0 for x in range(10)]
         self.assertPreciseEqual(cfunc(reduce_func, x), pyfunc(reduce_func, x))
 
         x = [complex(x, x) for x in range(10)]
@@ -957,7 +995,7 @@ class TestBuiltins(TestCase):
         x = range(10)
         self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
-        x = [x + x/10.0 for x in range(10)]
+        x = [x + x / 10.0 for x in range(10)]
         self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
         x = [complex(x, x) for x in range(10)]
@@ -982,7 +1020,7 @@ class TestBuiltins(TestCase):
         # check call with default kwarg, start=0
         def args():
             yield [*range(10)]
-            yield [x + x/10.0 for x in range(10)]
+            yield [x + x / 10.0 for x in range(10)]
             yield [x * 1j for x in range(10)]
             yield (1, 2, 3)
             yield (1, 2, 3j)
@@ -1007,7 +1045,7 @@ class TestBuiltins(TestCase):
         # check call with changing default kwarg, start
         def args_kws():
             yield [*range(10)], 12
-            yield [x + x/10.0 for x in range(10)], 19j
+            yield [x + x / 10.0 for x in range(10)], 19j
             yield [x * 1j for x in range(10)], -2
             yield (1, 2, 3), 9
             yield (1, 2, 3j), -0
@@ -1193,6 +1231,7 @@ class TestOperatorMixedTypes(TestCase):
     def test_cmp(self):
         for opstr in ('gt', 'lt', 'ge', 'le', 'eq', 'ne'):
             op = getattr(operator, opstr)
+
             @njit
             def func(a, b):
                 return op(a, b)
@@ -1283,10 +1322,10 @@ class TestIsinstanceBuiltin(TestCase):
              'Cannot infer numba type of python type'),
             (invalid_isinstance_usecase_phi_nopropagate,
              ('isinstance() cannot determine the type of variable "z" due to a '
-             'branch.')),
+              'branch.')),
             (invalid_isinstance_optional_usecase,
              ('isinstance() cannot determine the type of variable "z" due to a '
-             'branch.')),
+              'branch.')),
             (invalid_isinstance_unsupported_type_usecase(),
              ('isinstance() does not support variables of type "ntpl(')),
         ]

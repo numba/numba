@@ -15,7 +15,7 @@ def global_ndarray_func(x):
 # Create complex array with real and imaginary parts of distinct value
 cplx_X = np.arange(10, dtype=np.complex128)
 tmp = np.arange(10, dtype=np.complex128)
-cplx_X += (tmp+10)*1j
+cplx_X += (tmp + 10) * 1j
 
 
 def global_cplx_arr_copy(a):
@@ -63,6 +63,7 @@ record_only_X = np.recarray(1, dtype=x_dt)[0]
 record_only_X.a = 1
 record_only_X.b = 1.5
 
+
 @jit(nopython=True)
 def global_record_func(x):
     return x.a == record_only_X.a
@@ -72,6 +73,7 @@ def global_record_func(x):
 def global_module_func(x, y):
     return usecases.andornopython(x, y)
 
+
 # Test a global tuple
 tup_int = (1, 2)
 tup_str = ('a', 'b')
@@ -80,6 +82,7 @@ tup_float = (1.2, 3.5)
 tup_npy_ints = (np.uint64(12), np.int8(3))
 tup_tup_array = ((np.ones(5),),)
 mixed_tup_tup_array = (('Z', np.ones(5),), 2j, 'A')
+
 
 def global_int_tuple():
     return tup_int[0] + tup_int[1]
@@ -119,6 +122,7 @@ _glbl_np_bool_F = np.bool_(False)
 def _sink(*args):
     pass
 
+
 def global_npy_bool():
     _sink(_glbl_np_bool_T, _glbl_np_bool_F)
     return _glbl_np_bool_T, _glbl_np_bool_F
@@ -139,7 +143,6 @@ class TestGlobals(unittest.TestCase):
     def test_global_ndarray_npm(self):
         self.check_global_ndarray(nopython=True)
 
-
     def check_global_complex_arr(self, **jitargs):
         # (see github issue #897)
         ctestfunc = jit(**jitargs)(global_cplx_arr_copy)
@@ -153,7 +156,6 @@ class TestGlobals(unittest.TestCase):
     def test_global_complex_arr_npm(self):
         self.check_global_complex_arr(nopython=True)
 
-
     def check_global_rec_arr(self, **jitargs):
         # (see github issue #897)
         ctestfunc = jit(**jitargs)(global_rec_arr_copy)
@@ -166,7 +168,6 @@ class TestGlobals(unittest.TestCase):
 
     def test_global_rec_arr_npm(self):
         self.check_global_rec_arr(nopython=True)
-
 
     def check_global_rec_arr_extract(self, **jitargs):
         # (see github issue #897)
@@ -182,7 +183,6 @@ class TestGlobals(unittest.TestCase):
 
     def test_global_rec_arr_extract_npm(self):
         self.check_global_rec_arr_extract(nopython=True)
-
 
     def check_two_global_rec_arrs(self, **jitargs):
         # (see github issue #897)

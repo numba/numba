@@ -115,8 +115,8 @@ class TestUnpack(MemoryLeakMixin, TestCase):
     def test_unpack_shape(self, flags=force_pyobj_flags):
         pyfunc = unpack_shape
         cr = compile_isolated(pyfunc, [types.Array(dtype=types.int32,
-                                                        ndim=3,
-                                                        layout='C')],
+                                                   ndim=3,
+                                                   layout='C')],
                               flags=flags)
         cfunc = cr.entry_point
         a = np.zeros(shape=(1, 2, 3)).astype(np.int32)

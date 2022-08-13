@@ -9,6 +9,7 @@ from numba.np import arrayobj
 
 registry = Registry('cffiimpl')
 
+
 @registry.lower('ffi.from_buffer', types.Buffer)
 def from_buffer(context, builder, sig, args):
     assert len(sig.args) == 1

@@ -48,20 +48,20 @@ def generic_is(context, builder, sig, args):
     lhs_type, rhs_type = sig.args
     # the lhs and rhs have the same type
     if lhs_type == rhs_type:
-            # mutable types
-            if lhs_type.mutable:
-                msg = 'no default `is` implementation'
-                raise LoweringError(msg)
-            # immutable types
+        # mutable types
+        if lhs_type.mutable:
+            msg = 'no default `is` implementation'
+            raise LoweringError(msg)
+        # immutable types
+        else:
+            # fallbacks to `==`
+            try:
+                eq_impl = context.get_function(operator.eq, sig)
+            except NotImplementedError:
+                # no `==` implemented for this type
+                return cgutils.false_bit
             else:
-                # fallbacks to `==`
-                try:
-                    eq_impl = context.get_function(operator.eq, sig)
-                except NotImplementedError:
-                    # no `==` implemented for this type
-                    return cgutils.false_bit
-                else:
-                    return eq_impl(builder, args)
+                return eq_impl(builder, args)
     else:
         return cgutils.false_bit
 
@@ -138,10 +138,12 @@ def gen_non_eq(val):
             return impl
     return none_equality
 
+
 overload(operator.eq)(gen_non_eq(True))
 overload(operator.ne)(gen_non_eq(False))
 
 #-------------------------------------------------------------------------------
+
 
 @lower_getattr_generic(types.DeferredType)
 def deferred_getattr(context, builder, typ, value, attr):
@@ -153,6 +155,7 @@ def deferred_getattr(context, builder, typ, value, attr):
     imp = context.get_getattr(inner_type, attr)
     return imp(context, builder, inner_type, val, attr)
 
+
 @lower_cast(types.Any, types.DeferredType)
 @lower_cast(types.Optional, types.DeferredType)
 @lower_cast(types.Boolean, types.DeferredType)
@@ -160,6 +163,7 @@ def any_to_deferred(context, builder, fromty, toty, val):
     actual = context.cast(builder, val, fromty, toty.get())
     model = context.data_model_manager[toty]
     return model.set(builder, model.make_uninitialized(), actual)
+
 
 @lower_cast(types.DeferredType, types.Any)
 @lower_cast(types.DeferredType, types.Boolean)
@@ -219,15 +223,18 @@ def max_iterable(context, builder, sig, args):
     args = cgutils.unpack_tuple(builder, args[0])
     return do_minmax(context, builder, argtys, args, operator.gt)
 
+
 @lower_builtin(max, types.VarArg(types.Any))
 def max_vararg(context, builder, sig, args):
     return do_minmax(context, builder, sig.args, args, operator.gt)
+
 
 @lower_builtin(min, types.BaseTuple)
 def min_iterable(context, builder, sig, args):
     argtys = list(sig.args[0])
     args = cgutils.unpack_tuple(builder, args[0])
     return do_minmax(context, builder, argtys, args, operator.lt)
+
 
 @lower_builtin(min, types.VarArg(types.Any))
 def min_vararg(context, builder, sig, args):
@@ -237,6 +244,7 @@ def min_vararg(context, builder, sig, args):
 def _round_intrinsic(tp):
     # round() rounds half to even
     return "llvm.rint.f%d" % (tp.bitwidth,)
+
 
 @lower_builtin(round, types.Float)
 def round_impl_unary(context, builder, sig, args):
@@ -249,6 +257,7 @@ def round_impl_unary(context, builder, sig, args):
     # unary round() returns an int
     res = builder.fptosi(res, context.get_value_type(sig.return_type))
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 @lower_builtin(round, types.Float, types.Integer)
 def round_impl_binary(context, builder, sig, args):
@@ -333,6 +342,7 @@ def number_constructor(context, builder, sig, args):
     if isinstance(sig.return_type, types.Array):
         # Array constructor
         dt = sig.return_type.dtype
+
         def foo(*arg_hack):
             return np.array(arg_hack, dtype=dt)
         res = context.compile_internal(builder, foo, sig, args)
@@ -351,6 +361,7 @@ def number_constructor(context, builder, sig, args):
 def constant_dummy(context, builder, ty, pyval):
     # This handles None, etc.
     return context.get_dummy_value()
+
 
 @lower_constant(types.ExternalFunctionPointer)
 def constant_function_pointer(context, builder, ty, pyval):
@@ -428,16 +439,19 @@ def sized_bool(context, builder, sig, args):
     else:
         return cgutils.false_bit
 
+
 @lower_builtin(tuple)
 def lower_empty_tuple(context, builder, sig, args):
     retty = sig.return_type
     res = context.get_constant_undef(retty)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+
 @lower_builtin(tuple, types.BaseTuple)
 def lower_tuple(context, builder, sig, args):
     val, = args
     return impl_ret_borrowed(context, builder, sig.return_type, val)
+
 
 @overload(bool)
 def bool_sequence(x):
@@ -455,12 +469,14 @@ def bool_sequence(x):
             return len(x) > 0
         return bool_impl
 
+
 @overload(bool, inline='always')
 def bool_none(x):
     if isinstance(x, types.NoneType) or x is None:
         return lambda x: False
 
 # -----------------------------------------------------------------------------
+
 
 def get_type_max_value(typ):
     if isinstance(typ, types.Float):
@@ -469,12 +485,14 @@ def get_type_max_value(typ):
         return typ.maxval
     raise NotImplementedError("Unsupported type")
 
+
 def get_type_min_value(typ):
     if isinstance(typ, types.Float):
         return -np.inf
     if isinstance(typ, types.Integer):
         return typ.minval
     raise NotImplementedError("Unsupported type")
+
 
 @lower_builtin(get_type_min_value, types.NumberClass)
 @lower_builtin(get_type_min_value, types.DType)
@@ -493,7 +511,8 @@ def lower_get_type_min_value(context, builder, sig, args):
         elif bw == 64:
             lty = ir.DoubleType()
         else:
-            raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
+            raise NotImplementedError(
+                "llvmlite only supports 32 and 64 bit floats")
         npty = getattr(np, 'float{}'.format(bw))
         res = ir.Constant(lty, -np.inf)
     elif isinstance(typ, (types.NPDatetime, types.NPTimedelta)):
@@ -525,7 +544,8 @@ def lower_get_type_max_value(context, builder, sig, args):
         elif bw == 64:
             lty = ir.DoubleType()
         else:
-            raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
+            raise NotImplementedError(
+                "llvmlite only supports 32 and 64 bit floats")
         npty = getattr(np, 'float{}'.format(bw))
         res = ir.Constant(lty, np.inf)
     elif isinstance(typ, (types.NPDatetime, types.NPTimedelta)):
@@ -537,8 +557,6 @@ def lower_get_type_max_value(context, builder, sig, args):
 
 # -----------------------------------------------------------------------------
 
-from numba.core.typing.builtins import IndexValue, IndexValueType
-from numba.extending import overload, register_jitable
 
 @lower_builtin(IndexValue, types.intp, types.Type)
 @lower_builtin(IndexValue, types.uintp, types.Type)
@@ -824,7 +842,7 @@ def ol_isinstance(var, typs):
                     numba_typ.key[0] == types.undefined:
                 # check for containers (list, tuple, set, ...)
                 if isinstance(var_ty, numba_typ.__class__) or \
-                    (isinstance(var_ty, types.BaseTuple) and \
+                    (isinstance(var_ty, types.BaseTuple) and
                         isinstance(numba_typ, types.BaseTuple)):
                     return true_impl
 
@@ -872,6 +890,7 @@ def resolve_getattr(tyctx, obj, name, default):
                 default.instance_class == _getattr_default_type):
             # it's not the marker default value, so return it
             sig = default(obj, name, default)
+
             def impl(cgctx, builder, sig, llargs):
                 tmp = llargs[-1]
                 cgctx.nrt.incref(builder, default, tmp)
@@ -881,6 +900,7 @@ def resolve_getattr(tyctx, obj, name, default):
             fnty = tyctx.resolve_value_type(_getattr_raise_attr_exc)
             raise_sig = fnty.get_call_type(tyctx, (obj, name), {})
             sig = types.none(obj, name, default)
+
             def impl(cgctx, builder, sig, llargs):
                 native_impl = cgctx.get_function(fnty, raise_sig)
                 return native_impl(builder, llargs[:-1])
@@ -899,6 +919,7 @@ def resolve_getattr(tyctx, obj, name, default):
             # Else it's some other type of attribute.
             # Ensure typing calls occur at typing time, not at lowering
             attrty = tyctx.resolve_getattr(obj, lname)
+
             def impl(cgctx, builder, sig, ll_args):
                 attr_impl = cgctx.get_getattr(obj, lname)
                 res = attr_impl(cgctx, builder, obj, ll_args[0], lname)
@@ -932,4 +953,3 @@ def ol_getattr(obj, name, default):
     def impl(obj, name, default):
         return resolve_getattr(obj, name, default)
     return impl
-
