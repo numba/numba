@@ -678,9 +678,11 @@ class ListTypeIteratorType(SimpleIteratorType):
         super(ListTypeIteratorType, self).__init__(name, yield_type)
 
 
-def _sentry_forbidden_types(key):
+def _sentry_forbidden_types(key, value):
     # Forbids List and Set for now
     if isinstance(key, (Set, List)):
+        raise TypingError("{} as key is forbidden".format(key))
+    if isinstance(key, (Set, List)) and key.reflected:
         raise TypingError("{} as key is forbidden".format(key))
 
 
@@ -699,7 +701,7 @@ class DictType(IterableType, InitialValue):
         if isinstance(valty, (Optional, NoneType)):
             fmt = "Dict.value_type cannot be of type {}"
             raise TypingError(fmt.format(valty))
-        _sentry_forbidden_types(keyty)
+        _sentry_forbidden_types(keyty, valty)
         self.key_type = keyty
         self.value_type = valty
         self.keyvalue_type = Tuple([keyty, valty])
