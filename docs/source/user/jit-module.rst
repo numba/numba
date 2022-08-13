@@ -51,18 +51,18 @@ all the functions which are defined in ``mymodule.py`` jitted using
 
    def inc(x):
       return x + 1
-   
+
    def add(x, y):
       return x + y
-   
+
    import numpy as np
    # Use NumPy's mean function
    mean = np.mean
-   
+
    @jit(nogil=True)
    def mul(a, b):
       return a * b
-   
+
    jit_module(nopython=True, error_model="numpy")
 
    def div(a, b):

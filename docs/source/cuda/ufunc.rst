@@ -64,7 +64,7 @@ the CUDA ufunc functionality.  This may be accomplished as follows::
 
     from numba import guvectorize
 
-    @guvectorize(['void(float32[:,:], float32[:,:], float32[:,:])'], 
+    @guvectorize(['void(float32[:,:], float32[:,:], float32[:,:])'],
                  '(m,n),(n,p)->(m,p)', target='cuda')
     def matmulcore(A, B, C):
         ...

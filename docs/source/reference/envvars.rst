@@ -199,7 +199,7 @@ These variables influence what is printed out during compilation of
    of the chrome tracing json file output. The emitted file can be opened by
    a Chromium-based browser using the profile viewer at `chrome://tracing/`.
 
-   .. warning:: This feature is not supported in multi-process applications. 
+   .. warning:: This feature is not supported in multi-process applications.
 
 .. envvar:: NUMBA_DUMP_BYTECODE
 

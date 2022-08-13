@@ -11,7 +11,7 @@ be used to debug CUDA Python code, either by adding print statements to your
 code, or by using the debugger to step through the execution of an individual
 thread.
 
-The simulator deliberately allows running non-CUDA code like starting a debugger 
+The simulator deliberately allows running non-CUDA code like starting a debugger
 and printing arbitrary expressions for debugging purposes. Therefore, it is
 best to start from code that compiles for the CUDA target, and then move over to
 the simulator to investigate issues.
@@ -24,7 +24,7 @@ Using the simulator
 ===================
 
 The simulator is enabled by setting the environment variable
-:envvar:`NUMBA_ENABLE_CUDASIM` to 1 prior to importing Numba. CUDA Python code 
+:envvar:`NUMBA_ENABLE_CUDASIM` to 1 prior to importing Numba. CUDA Python code
 may then be executed as normal. The easiest way to use the debugger inside a
 kernel is to only stop a single thread, otherwise the interaction with the
 debugger is difficult to handle. For example, the kernel below will stop in
@@ -93,8 +93,8 @@ Some limitations of the simulator include:
   structured array access by attribute that works with the hardware target may
   fail in the simulator - see :ref:`structured-array-access`.
 * Operations directly against device arrays are only partially supported, that
-  is, testing equality, less than, greater than, and basic mathematical 
-  operations are supported, but many other operations, such as the in-place 
+  is, testing equality, less than, greater than, and basic mathematical
+  operations are supported, but many other operations, such as the in-place
   operators and bit operators are not.
 * The :func:`ffs() <numba.cuda.ffs>` function only works correctly for values
   that can be represented using 32-bit integers.

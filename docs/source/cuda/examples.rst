@@ -101,7 +101,7 @@ propagates through an object over time. It works by discretizing the problem in 
 1. The domain is partitioned into a mesh of points that each have an individual temperature.
 2. Time is partitioned into discrete intervals that are advanced forward sequentially.
 
-Then, the following assumption is applied: The temperature of a point after some interval 
+Then, the following assumption is applied: The temperature of a point after some interval
 has passed is some weighted average of the temperature of the points that are directly
 adjacent to it. Intuitively, if all the points in the domain are very hot
 and a single point in the middle is very cold, as time passes, the hot points will cause
@@ -109,9 +109,9 @@ the cold one to heat up and the cold point will cause the surrounding hot pieces
 slightly. Simply put, the heat spreads throughout the object.
 
 We can implement this simulation using a Numba kernel. Let's start simple by assuming
-we have a one dimensional object which we'll represent with an array of values. The position 
+we have a one dimensional object which we'll represent with an array of values. The position
 of the element in the array is the position of a point within the object, and the value
-of the element represents the temperature. 
+of the element represents the temperature.
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_laplace.py
    :language: python
@@ -138,7 +138,7 @@ The initial state of the problem can be visualized as:
 
 In our kernel each thread will be responsible for managing the temperature update for a single element
 in a loop over the desired number of timesteps. The kernel is below. Note the use of cooperative group
-synchronization and the use of two buffers swapped at each iteration to avoid race conditions. See 
+synchronization and the use of two buffers swapped at each iteration to avoid race conditions. See
 :func:`numba.cuda.cg.this_grid() <numba.cuda.cg.this_grid>` for details.
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_laplace.py
@@ -237,15 +237,15 @@ A common problem in business analytics is that of grouping the activity of users
 sessions, called "sessionization". The idea is that users generally traverse through a website and perform
 various actions (clicking something, filling out a form, etc.) in discrete groups. Perhaps a customer spends
 some time shopping for an item in the morning and then again at night - often the business is interested in
-treating these periods as separate interactions with their service, and this creates the problem of 
+treating these periods as separate interactions with their service, and this creates the problem of
 programmatically splitting up activity in some agreed-upon way.
 
-Here we'll illustrate how to write a Numba kernel to solve this problem. We'll start with data 
-containing two fields: let ``user_id`` represent a unique ID corresponding to an individual customer, and let 
-``action_time`` be a time that some unknown action was taken on the service. Right now, we'll assume there's 
+Here we'll illustrate how to write a Numba kernel to solve this problem. We'll start with data
+containing two fields: let ``user_id`` represent a unique ID corresponding to an individual customer, and let
+``action_time`` be a time that some unknown action was taken on the service. Right now, we'll assume there's
 only one type of action, so all there is to know is when it happened.
 
-Our goal will be to create a new column called ``session_id``, which contains a label corresponding to a unique 
+Our goal will be to create a new column called ``session_id``, which contains a label corresponding to a unique
 session. We'll define the boundary between sessions as when there has been at least one hour between clicks.
 
 
@@ -256,7 +256,7 @@ session. We'll define the boundary between sessions as when there has been at le
    :end-before: ex_sessionize.import.end
    :dedent: 8
    :linenos:
-   
+
 Here is a solution using Numba:
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_sessionize.py
@@ -285,8 +285,8 @@ and a similar pattern is seen throughout.
 JIT Function CPU-GPU Compatibility
 ==================================
 
-This example demonstrates how ``numba.jit`` can be used to jit compile a function for the CPU, while at the same time making 
-it available for use inside CUDA kernels. This can be very useful for users that are migrating workflows from CPU to GPU as 
+This example demonstrates how ``numba.jit`` can be used to jit compile a function for the CPU, while at the same time making
+it available for use inside CUDA kernels. This can be very useful for users that are migrating workflows from CPU to GPU as
 they can directly reuse potential business logic with fewer code changes.
 
 Take the following example function:
@@ -309,7 +309,7 @@ The function ``business_logic`` can be run standalone in compiled form on the CP
    :dedent: 8
    :linenos:
 
-It can also be directly reused threadwise inside a GPU kernel. For example one may 
+It can also be directly reused threadwise inside a GPU kernel. For example one may
 generate some vectors to represent ``x``, ``y``, and ``z``:
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_cpu_gpu_compat.py
@@ -345,12 +345,12 @@ This kernel can be invoked in the normal way:
 Monte Carlo Integration
 =======================
 
-This example shows how to use Numba to approximate the value of a definite integral by rapidly generating 
-random numbers on the GPU. A detailed description of the mathematical mechanics of Monte Carlo integeration 
-is out of the scope of the example, but it can briefly be described as an averaging process where the area 
+This example shows how to use Numba to approximate the value of a definite integral by rapidly generating
+random numbers on the GPU. A detailed description of the mathematical mechanics of Monte Carlo integeration
+is out of the scope of the example, but it can briefly be described as an averaging process where the area
 under the curve is approximated by taking the average of many rectangles formed by its function values.
 
-In addition, this example shows how to perform reductions in numba using the 
+In addition, this example shows how to perform reductions in numba using the
 :func:`cuda.reduce() <numba.cuda.Reduce>` API.
 
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_montecarlo.py

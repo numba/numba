@@ -89,7 +89,7 @@ JIT-compiled::
    result = f(jitted_g_function, 1)
 
 However, dispatching with arguments that are functions has extra overhead.
-If this matters for your application, you can also use a factory function to 
+If this matters for your application, you can also use a factory function to
 capture the function argument in a closure::
 
    def make_f(g):

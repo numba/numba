@@ -88,7 +88,7 @@ Example output::
     Machine                                       : x86_64
     CPU Name                                      : haswell
     CPU count                                     : 8
-    CPU Features                                  : 
+    CPU Features                                  :
     aes avx avx2 bmi bmi2 cmov cx16 f16c fma fsgsbase invpcid lzcnt mmx movbe pclmul
     popcnt rdrnd sahf sse sse2 sse3 sse4.1 sse4.2 ssse3 xsave xsaveopt
 
@@ -153,7 +153,7 @@ To try it out, create an example script called ``myscript.py``::
     @numba.jit
     def f(x):
         return 2 * x
-    
+
     f(42)
 
 and then execute one of the following commands::

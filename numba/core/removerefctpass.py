@@ -1,5 +1,5 @@
 """
-Implement a rewrite pass on a LLVM module to remove unnecessary 
+Implement a rewrite pass on a LLVM module to remove unnecessary
 refcount operations.
 """
 

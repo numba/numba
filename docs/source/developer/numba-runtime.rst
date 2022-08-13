@@ -7,15 +7,15 @@ Notes on Numba Runtime
 
 The *Numba Runtime (NRT)* provides the language runtime to the *nopython mode*
 Python subset.  NRT is a standalone C library with a Python binding.  This
-allows :term:`NPM` runtime feature to be used without the GIL.  Currently, the 
+allows :term:`NPM` runtime feature to be used without the GIL.  Currently, the
 only language feature implemented in NRT is memory management.
 
 
 Memory Management
 =================
 
-NRT implements memory management for :term:`NPM` code.  It uses *atomic 
-reference count* for threadsafe, deterministic memory management.  NRT maintains 
+NRT implements memory management for :term:`NPM` code.  It uses *atomic
+reference count* for threadsafe, deterministic memory management.  NRT maintains
 a separate ``MemInfo`` structure for storing information about each allocation.
 
 Cooperating with CPython
@@ -23,12 +23,12 @@ Cooperating with CPython
 
 For NRT to cooperate with CPython, the NRT python binding provides adaptors for
 converting python objects that export a memory region.  When such an
-object is used as an argument to a :term:`NPM` function, a new ``MemInfo`` is 
-created and it acquires a reference to the Python object.  When a :term:`NPM` 
-value is returned to the Python interpreter, the associated ``MemInfo`` 
-(if any) is checked.  If the ``MemInfo`` references a Python object, the 
-underlying Python object is released and returned instead.  Otherwise, the 
-``MemInfo`` is wrapped in a Python object and returned. Additional process 
+object is used as an argument to a :term:`NPM` function, a new ``MemInfo`` is
+created and it acquires a reference to the Python object.  When a :term:`NPM`
+value is returned to the Python interpreter, the associated ``MemInfo``
+(if any) is checked.  If the ``MemInfo`` references a Python object, the
+underlying Python object is released and returned instead.  Otherwise, the
+``MemInfo`` is wrapped in a Python object and returned. Additional process
 maybe required depending on the type.
 
 The current implementation supports Numpy array and any buffer-exporting types.

@@ -15,10 +15,10 @@ int main() {
 	tm.addConversion(t_float, t_int64);
 	tm.addPromotion(t_int32, t_int64);
 
-	cout << "int32 -> float " 
-		 << TCCString(tm.isCompatible(tm.get("int32"), tm.get("float"))) 
+	cout << "int32 -> float "
+		 << TCCString(tm.isCompatible(tm.get("int32"), tm.get("float")))
 		 << EOL;
-	cout << "int32 -> int64 " 
+	cout << "int32 -> int64 "
 	     << TCCString(tm.isCompatible(tm.get("int32"), tm.get("int64")))
 	     << EOL;
 
@@ -34,6 +34,6 @@ int main() {
 	cout << "Selected " << sel << '\n';
 
 
-	
+
 	return 0;
 }

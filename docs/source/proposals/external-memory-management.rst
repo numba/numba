@@ -53,7 +53,7 @@ Device vs. Host memory
 
 An EMM will always take responsibility for the management of device memory.
 However, not all CUDA memory management libraries also support managing host
-memory, so a facility for Numba to continue the management of host memory 
+memory, so a facility for Numba to continue the management of host memory
 whilst ceding control of device memory to the EMM will be provided.
 
 Deallocation strategies
@@ -421,7 +421,7 @@ the following rules:
   used by the ``HostOnlyCUDAMemoryManager``.
 
   * If the subclass has nothing to do on initialisation (possibly) or reset
-    (unlikely) then it need not implement these methods. 
+    (unlikely) then it need not implement these methods.
   * However, if it does implement these methods then it must also call the
     methods from ``HostOnlyCUDAMemoryManager`` in its own implementations.
 
@@ -514,14 +514,14 @@ The plugin implementation consists of additions to `python/rmm/rmm.py
            return MemoryPointer(ctx, ptr, size, finalizer=finalizer)
 
       def get_ipc_handle(self, memory):
-           """ 
+           """
            Get an IPC handle for the memory with offset modified by the RMM memory
            pool.
            """
            # This implementation provides a functional implementation and illustrates
            # what get_ipc_handle needs to do, but it is not a very "clean"
            # implementation, and it relies on borrowing bits of Numba internals to
-           # initialise ipchandle. 
+           # initialise ipchandle.
            #
            # A more polished implementation might make use of additional functions in
            # the RMM C++ layer for initialising IPC handles, and not use any Numba
@@ -590,7 +590,7 @@ creates a device array is as follows:
 .. code-block:: python
 
    # example.py
-   import rmm 
+   import rmm
    import numpy as np
 
    from numba import cuda

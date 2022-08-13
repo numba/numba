@@ -53,7 +53,7 @@ overloads:
 This can be used to ensure that the kernel is launched with no more than the
 maximum number of blocks. Exceeding the maximum number of blocks for the
 cooperative launch will result in a ``CUDA_ERROR_COOPERATIVE_LAUNCH_TOO_LARGE``
-error. 
+error.
 
 
 Applications and Example

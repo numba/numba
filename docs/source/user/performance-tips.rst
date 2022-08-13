@@ -198,7 +198,7 @@ libraries are simply locatable!) then Numba automatically configures the LLVM
 back end to use the SVML intrinsic functions where ever possible. SVML provides
 both high and low accuracy versions of each intrinsic and the version that is
 used is determined through the use of the ``fastmath`` keyword. The default is
-to use high accuracy which is accurate to within ``1 ULP``, however if 
+to use high accuracy which is accurate to within ``1 ULP``, however if
 ``fastmath`` is set to ``True`` then the lower accuracy versions of the
 intrinsics are used (answers to within ``4 ULP``).
 

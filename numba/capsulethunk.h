@@ -1,7 +1,7 @@
 /**
- 
- This is a modified version of capsulethunk.h for use in llvmpy 
- 
+
+ This is a modified version of capsulethunk.h for use in llvmpy
+
 **/
 
 #ifndef __CAPSULETHUNK_H

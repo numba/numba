@@ -52,7 +52,7 @@ sections, using the :func:`~numba.cuda.defer_cleanup` context manager.
 When an EMM Plugin is in use, the deallocation strategy is implemented by the
 EMM, and Numba's internal deallocation mechanism is not used. The EMM
 Plugin could implement:
-  
+
 - A similar strategy to the Numba deallocation behaviour, or
 - Something more appropriate to the plugin - for example, deallocated memory
   might immediately be returned to a memory pool.

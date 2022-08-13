@@ -1309,7 +1309,7 @@ def unbox_numpy_random_generator(typ, obj, c):
     * ('meminfo', types.MemInfoPointer(types.voidptr)): The information about the memory
         stored at the pointer (to the original Generator PyObject). This is useful for
         keeping track of reference counts within the Python runtime. Helps prevent cases
-        where deletion happens in Python runtime without NRT being awareness of it. 
+        where deletion happens in Python runtime without NRT being awareness of it.
     """
     is_error_ptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
 

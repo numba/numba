@@ -86,7 +86,7 @@ def get_html_template():
             /* override JupyterLab style */
             .annotation_table td {
                 text-align: left;
-                background-color: transparent; 
+                background-color: transparent;
                 padding: 1px;
             }
 
@@ -96,7 +96,7 @@ def get_html_template():
 
             .annotation_table code
             {
-                background-color: transparent; 
+                background-color: transparent;
                 white-space: normal;
             }
 
@@ -213,7 +213,7 @@ def get_html_template():
 
 def reform_code(annotation):
     """
-    Extract the code from the Numba annotation datastructure. 
+    Extract the code from the Numba annotation datastructure.
 
     Pygments can only highlight full multi-line strings, the Numba
     annotation is list of single lines, with indentation removed.

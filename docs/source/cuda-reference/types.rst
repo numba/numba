@@ -19,7 +19,7 @@ this is the recommended way to instantiate vector types.
 
 For convenience, users adapting existing kernels from CUDA C/C++ to Python may use
 aliases consistent with the C/C++ namings. For example, ``float3`` aliases ``float32x3``,
-``long3`` aliases ``int32x3`` or ``int64x3`` (depending on the platform), etc. 
+``long3`` aliases ``int32x3`` or ``int64x3`` (depending on the platform), etc.
 
 Second, unlike CUDA C/C++ where factory functions are used, vector types are constructed directly
 with their constructor. For example, to construct a ``float32x3``:
@@ -44,7 +44,7 @@ vector type. For example, all of the following constructions are valid:
     # Construct a 4-component vector with 2 2-component vectors
     u4 = uint32x4(u2, u2)
 
-The 1st, 2nd, 3rd and 4th component of the vector type can be accessed through fields 
+The 1st, 2nd, 3rd and 4th component of the vector type can be accessed through fields
 ``x``, ``y``, ``z``, and ``w`` respectively. The components are immutable after
 construction in the present version of Numba; it is expected that support for
 mutating vector components will be added in a future release.

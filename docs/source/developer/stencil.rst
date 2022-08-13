@@ -4,7 +4,7 @@
 .. _arch-stencil:
 
 =================
-Notes on stencils 
+Notes on stencils
 =================
 
 Numba provides the :ref:`@stencil decorator <numba-stencil>` to
@@ -37,15 +37,15 @@ Outside jit context
 ``StencilFunc`` overrides the ``__call__`` method so that calls
 to ``StencilFunc`` objects execute the stencil::
 
-    def __call__(self, *args, **kwargs):                                        
+    def __call__(self, *args, **kwargs):
         result = kwargs.get('out')
-                                                                                
-        new_stencil_func = self._stencil_wrapper(result, None, *args)           
-                                                                                
-        if result is None:                                                      
-            return new_stencil_func.entry_point(*args)                          
-        else:                                                                   
-            return new_stencil_func.entry_point(*args, result)                  
+
+        new_stencil_func = self._stencil_wrapper(result, None, *args)
+
+        if result is None:
+            return new_stencil_func.entry_point(*args)
+        else:
+            return new_stencil_func.entry_point(*args, result)
 
 First, the presence of the optional :ref:`out <stencil-function-out>`
 parameter is checked.  If it is present then the output array is
@@ -106,7 +106,7 @@ the relative kernel indices into absolute array indices based on the
 loop indices, and replacing the kernel's ``return`` statement with
 a statement to assign the computed value into the output array.
 
-To accomplish this transformation, first, a copy of the stencil 
+To accomplish this transformation, first, a copy of the stencil
 kernel IR is created so that subsequent modifications of the IR
 for different stencil signatures will not effect each other.
 
