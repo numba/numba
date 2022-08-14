@@ -4407,7 +4407,7 @@ class TestParforsVectorizer(TestPrangeBase):
         with overrides[0], overrides[1]:
             sig = tuple(numba.typeof(x) for x in args)
             pfunc_vectorizable = self.generate_prange_func(func, None)
-            if fastmath == True:
+            if fastmath is True:
                 cres = self.compile_parallel_fastmath(pfunc_vectorizable, sig)
             else:
                 cres = self.compile_parallel(pfunc_vectorizable, sig)

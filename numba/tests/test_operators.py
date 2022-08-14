@@ -1530,10 +1530,10 @@ class TestBooleanLiteralOperators(TestCase):
             return a == b_val
 
         def test_impl3():
-            r1 = True == True
-            r2 = True == False
-            r3 = False == True
-            r4 = False == False
+            r1 = True is True
+            r2 = True is False
+            r3 = False is True
+            r4 = False is False
             return (r1, r2, r3, r4)
 
         for a_val, b in itertools.product([True, False], repeat=2):
@@ -1556,10 +1556,10 @@ class TestBooleanLiteralOperators(TestCase):
             return a != b_val
 
         def test_impl3():
-            r1 = True != True
-            r2 = True != False
-            r3 = False != True
-            r4 = False != False
+            r1 = True is not True
+            r2 = True is not False
+            r3 = False is not True
+            r4 = False is not False
             return (r1, r2, r3, r4)
 
         for a_val, b in itertools.product([True, False], repeat=2):
