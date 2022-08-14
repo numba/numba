@@ -14,7 +14,33 @@ ignore =
     # line break before binary operator
     W503,
     # line break after binary operator
-    W504
+    W504,
+    # Line too long
+    E501,
+    # Do not use bare except, specify exception instead
+    E722,
+    # SyntaxError
+    E999,
+    # Module imported but unused
+    F401,
+    # Import module from line n shadowed by loop variable
+    F402,
+    # 'from module import *' used; unable to detect undefined names
+    F403,
+    # Name may be undefined, or defined from star imports: module
+    F405,
+    # .format(...) unused positional arguments
+    F523,
+    # f-string is missing placeholders
+    F541,
+    # Redefinition of unused name from line n
+    F811,
+    # Undefined name name
+    F821,
+    # Undefined name name in __all__
+    F822,
+    # Local variable name is assigned to but never used
+    F841
 max-line-length = 80
 
 exclude =
