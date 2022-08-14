@@ -341,7 +341,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     """
 
     def setUp(self):
-        super(TestArrayMethods, self).setUp()
+        super().setUp()
         self.ccache = CompilationCache()
 
     def check_round_scalar(self, unary_pyfunc, binary_pyfunc):
@@ -1119,7 +1119,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
         for arr_list in all_test_arrays:
             for arr in arr_list:
-                with self.subTest("Test np.sum with {} input ".format(arr.dtype)):
+                with self.subTest(f"Test np.sum with {arr.dtype} input "):
                     self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
 
     def test_sum_axis_kws1(self):

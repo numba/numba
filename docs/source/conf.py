@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 #
 # Numba documentation build configuration file, created by
 # sphinx-quickstart on Tue Dec 30 11:55:40 2014.
@@ -73,8 +72,8 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'Numba'
-copyright = u'2012-2020, Anaconda, Inc. and others'
+project = 'Numba'
+copyright = '2012-2020, Anaconda, Inc. and others'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -238,8 +237,8 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    ('index', 'numba.tex', u'Numba Documentation',
-     u'Anaconda', 'manual'),
+    ('index', 'numba.tex', 'Numba Documentation',
+     'Anaconda', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -330,7 +329,7 @@ def _autogenerate():
         write_listings(
             package_name=package,
             filename=os.path.join(
-                basedir, 'developer', 'autogen_{}_listing'.format(package),
+                basedir, 'developer', f'autogen_{package}_listing',
             ),
             output_format='rst',
         )

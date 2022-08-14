@@ -117,7 +117,7 @@ class TestAmbiguousOverloads(unittest.TestCase):
 
     def test_ambiguous_casts(self):
         os = self.create_overload_selector(kind='casts')
-        all_types = set(t for sig, impl in os.versions for t in sig)
+        all_types = {t for sig, impl in os.versions for t in sig}
         # ensure there are no ambiguous cast overloads
         # note: using permutations to avoid testing cast to the same type
         for sig in permutations(all_types, r=2):
@@ -134,7 +134,7 @@ class TestAmbiguousOverloads(unittest.TestCase):
             os.append(impl, sig)
 
         for fn, os in selectors.items():
-            all_types = set(t for sig, impl in os.versions for t in sig)
+            all_types = {t for sig, impl in os.versions for t in sig}
             # ensure there are no ambiguous overloads
             for sig in product(all_types, all_types):
                 try:

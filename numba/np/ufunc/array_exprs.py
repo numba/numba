@@ -25,7 +25,7 @@ class RewriteArrayExprs(rewrites.Rewrite):
     '''
 
     def __init__(self, state, *args, **kws):
-        super(RewriteArrayExprs, self).__init__(state, *args, **kws)
+        super().__init__(state, *args, **kws)
         # Install a lowering hook if we are using this rewrite.
         special_ops = state.targetctx.special_ops
         if 'arrayexpr' not in special_ops:
@@ -113,7 +113,7 @@ class RewriteArrayExprs(rewrites.Rewrite):
         elif ir_op == 'call':
             return self.typemap[ir_expr.func.name].typing_key
         raise NotImplementedError(
-            "Don't know how to find the operator for '{0}' expressions.".format(
+            "Don't know how to find the operator for '{}' expressions.".format(
                 ir_op))
 
     def _get_operands(self, ir_expr):
@@ -128,7 +128,7 @@ class RewriteArrayExprs(rewrites.Rewrite):
         elif ir_op == 'call':
             return ir_expr.args
         raise NotImplementedError(
-            "Don't know how to find the operands for '{0}' expressions.".format(
+            "Don't know how to find the operands for '{}' expressions.".format(
                 ir_op))
 
     def _translate_expr(self, ir_expr):
@@ -288,7 +288,7 @@ def _arr_expr_to_ast(expr):
                 assert op in _unaryops
                 return ast.UnaryOp(_unaryops[op](), ast_args[0]), env
         elif _is_ufunc(op):
-            fn_name = "__ufunc_or_dufunc_{0}".format(
+            fn_name = "__ufunc_or_dufunc_{}".format(
                 hex(hash(op)).replace("-", "_"))
             fn_ast_name = ast.Name(fn_name, ast.Load())
             env[fn_name] = op # Stash the ufunc or DUFunc in the environment
@@ -301,7 +301,7 @@ def _arr_expr_to_ast(expr):
     elif isinstance(expr, ir.Const):
         return ast.Num(expr.value), {}
     raise NotImplementedError(
-        "Don't know how to translate array expression '%r'" % (expr,))
+        "Don't know how to translate array expression '{!r}'".format(expr))
 
 
 @contextlib.contextmanager
@@ -349,7 +349,7 @@ def _lower_array_expr(lowerer, expr):
                     for param_name in expr_params]
         # Parse a stub function to ensure the AST is populated with
         # reasonable defaults for the Python version.
-        ast_module = ast.parse('def {0}(): return'.format(expr_name),
+        ast_module = ast.parse(f'def {expr_name}(): return',
                                expr_filename, 'exec')
         assert hasattr(ast_module, 'body') and len(ast_module.body) == 1
         ast_fn = ast_module.body[0]

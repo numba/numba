@@ -140,7 +140,7 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
     """
 
     def setUp(self):
-        super(TestArrayIterators, self).setUp()
+        super().setUp()
         self.ccache = CompilationCache()
 
     def check_array_iter_1d(self, arr):

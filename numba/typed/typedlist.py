@@ -242,7 +242,7 @@ class List(MutableSequence, pt.Generic[T]):
         allocated: int; keyword-only
             Used internally to pre-allocate space for items
         """
-        illegal_kwargs = any((kw not in self._legal_kwargs for kw in kwargs))
+        illegal_kwargs = any(kw not in self._legal_kwargs for kw in kwargs)
         if illegal_kwargs or args and kwargs:
             raise TypeError("List() takes no keyword arguments")
         if kwargs:
@@ -430,18 +430,18 @@ class List(MutableSequence, pt.Generic[T]):
     def __str__(self):
         buf = []
         for x in self:
-            buf.append("{}".format(x))
+            buf.append(f"{x}")
         # Check whether the code was invoked from IPython shell
         try:
             get_ipython
-            return '[{0}, ...]'.format(', '.join(buf[:1000]))
+            return '[{}, ...]'.format(', '.join(buf[:1000]))
         except (NameError, IndexError):
-            return '[{0}]'.format(', '.join(buf))
+            return '[{}]'.format(', '.join(buf))
 
     def __repr__(self):
         body = str(self)
         prefix = str(self._list_type) if self._typed else "ListType[Undefined]"
-        return "{prefix}({body})".format(prefix=prefix, body=body)
+        return f"{prefix}({body})"
 
 
 @overload_classmethod(ListType, 'empty_list')
@@ -602,7 +602,7 @@ def typedlist_call(context):
 
     """
 
-    class Typer(object):
+    class Typer:
 
         def attach_sig(self):
             from inspect import signature as mypysig
@@ -658,7 +658,7 @@ def impl_numba_typeref_ctor(cls, *args):
         return  # reject
     # Ensure the list is precisely typed.
     if not list_ty.is_precise():
-        msg = "expecting a precise ListType but got {}".format(list_ty)
+        msg = f"expecting a precise ListType but got {list_ty}"
         raise LoweringError(msg)
 
     item_type = types.TypeRef(list_ty.item_type)

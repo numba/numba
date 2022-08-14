@@ -25,7 +25,7 @@ _inline_info = namedtuple('inline_info',
                           'func_ir typemap calltypes signature')
 
 
-class Signature(object):
+class Signature:
     """
     The signature of a function call or operation, i.e. its argument types
     and return type.
@@ -96,7 +96,7 @@ class Signature(object):
         return not (self == other)
 
     def __repr__(self):
-        return "%s -> %s" % (self.args, self.return_type)
+        return "{} -> {}".format(self.args, self.return_type)
 
     @property
     def is_method(self):
@@ -175,7 +175,7 @@ def make_callable_template(key, typer, recvr=None):
     def generic(self):
         return typer
 
-    name = "%s_CallableTemplate" % (key,)
+    name = "{}_CallableTemplate".format(key)
     bases = (CallableTemplate,)
     class_dict = dict(key=key, generic=generic, recvr=recvr)
     return type(name, bases, class_dict)
@@ -505,8 +505,8 @@ class ConcreteTemplate(FunctionTemplate):
 
 class _EmptyImplementationEntry(InternalError):
     def __init__(self, reason):
-        super(_EmptyImplementationEntry, self).__init__(
-            "_EmptyImplementationEntry({!r})".format(reason),
+        super().__init__(
+            f"_EmptyImplementationEntry({reason!r})",
         )
 
 
@@ -589,7 +589,8 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             return "Difference: %s" % diff
 
         if a != b:
-            specialized = "argument names.\n%s\n%s" % (sig_str, gen_diff(a, b))
+            specialized = "argument names.\n{}\n{}".format(
+                sig_str, gen_diff(a, b))
             raise InternalError(err_prefix + specialized)
 
         # ensure kwargs are the same
@@ -892,7 +893,7 @@ def make_overload_template(func, overload_func, jit_options, strict,
     Compiler options are passed as a dictionary to *jit_options*.
     """
     func_name = getattr(func, '__name__', str(func))
-    name = "OverloadTemplate_%s" % (func_name,)
+    name = "OverloadTemplate_{}".format(func_name)
     base = _OverloadFunctionTemplate
     dct = dict(key=func, _overload_func=staticmethod(overload_func),
                _impl_cache={}, _compiled_overloads={}, _jit_options=jit_options,
@@ -902,7 +903,7 @@ def make_overload_template(func, overload_func, jit_options, strict,
     return type(base)(name, (base,), dct)
 
 
-class _TemplateTargetHelperMixin(object):
+class _TemplateTargetHelperMixin:
     """Mixin for helper methods that assist with target/registry resolution"""
 
     def _get_target_registry(self, reason):
@@ -1019,7 +1020,7 @@ def make_intrinsic_template(handle, defn, name, kwargs):
     return type(base)(name, (base,), dct)
 
 
-class AttributeTemplate(object):
+class AttributeTemplate:
     def __init__(self, context):
         self.context = context
 
@@ -1050,7 +1051,7 @@ class _OverloadAttributeTemplate(_TemplateTargetHelperMixin, AttributeTemplate):
     is_method = False
 
     def __init__(self, context):
-        super(_OverloadAttributeTemplate, self).__init__(context)
+        super().__init__(context)
         self.context = context
         self._init_once()
 
@@ -1158,7 +1159,7 @@ def make_overload_attribute_template(typ, attr, overload_func, inline,
     *overload_func*.
     """
     assert isinstance(typ, types.Type) or issubclass(typ, types.Type)
-    name = "OverloadAttributeTemplate_%s_%s" % (typ, attr)
+    name = "OverloadAttributeTemplate_{}_{}".format(typ, attr)
     # Note the implementation cache is subclass-specific
     dct = dict(key=typ, _attr=attr, _impl_cache={},
                _inline=staticmethod(InlineOptions(inline)),
@@ -1220,7 +1221,7 @@ def bound_function(template_key):
 
 # -----------------------------
 
-class Registry(object):
+class Registry:
     """
     A registry of typing declarations.  The registry stores such declarations
     for functions, attributes and globals.
@@ -1285,7 +1286,7 @@ class Registry(object):
             return decorator
 
 
-class BaseRegistryLoader(object):
+class BaseRegistryLoader:
     """
     An incremental loader for a registry.  Each new call to
     new_registrations() will iterate over the not yet seen registrations.
@@ -1301,13 +1302,12 @@ class BaseRegistryLoader(object):
     """
 
     def __init__(self, registry):
-        self._registrations = dict(
-            (name, utils.stream_list(getattr(registry, name)))
-            for name in self.registry_items)
+        self._registrations = {
+            name: utils.stream_list(getattr(registry, name))
+            for name in self.registry_items}
 
     def new_registrations(self, name):
-        for item in next(self._registrations[name]):
-            yield item
+        yield from next(self._registrations[name])
 
 
 class RegistryLoader(BaseRegistryLoader):

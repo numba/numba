@@ -32,7 +32,7 @@ def main(*argv, **kwds):
     return _main(['<main>'] + list(argv), **kwds)
 
 
-class _FailedFirstRunner(object):
+class _FailedFirstRunner:
     """
     Test Runner to handle the failed-first (--failed-first) option.
     """
@@ -68,7 +68,7 @@ class _FailedFirstRunner(object):
             print("No tests to run")
             return True
         # Run the testsuite
-        print("Running {} tests".format(len(tests)))
+        print(f"Running {len(tests)} tests")
         print('Flags', flags)
         result = run_tests([prog] + flags + tests, **kwds)
         # Update failed tests records only if we have run the all the tests
@@ -78,7 +78,7 @@ class _FailedFirstRunner(object):
         return result.wasSuccessful()
 
     def save_failed_tests(self, result, all_tests):
-        print("Saving failed tests to {}".format(self.cache_filename))
+        print(f"Saving failed tests to {self.cache_filename}")
         cache = []
         # Find failed tests
         failed = set()

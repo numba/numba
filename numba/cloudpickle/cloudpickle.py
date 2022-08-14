@@ -40,7 +40,6 @@ LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
 NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
-from __future__ import print_function
 
 import builtins
 import dis
@@ -532,7 +531,7 @@ def parametrized_type_hint_getinitargs(obj):
         initargs = (Callable, (args, result))
     else:  # pragma: no cover
         raise pickle.PicklingError(
-            "Cloudpickle Error: Unknown type {}".format(type(obj))
+            f"Cloudpickle Error: Unknown type {type(obj)}"
         )
     return initargs
 
@@ -609,7 +608,7 @@ def instance(cls):
 
 
 @instance
-class _empty_cell_value(object):
+class _empty_cell_value:
     """sentinel for empty closures
     """
     @classmethod
@@ -638,7 +637,7 @@ def _fill_function(*args):
         keys = ['globals', 'defaults', 'dict', 'module', 'closure_values']
         state = dict(zip(keys, args[1:]))
     else:
-        raise ValueError('Unexpected _fill_value arguments: %r' % (args,))
+        raise ValueError('Unexpected _fill_value arguments: {!r}'.format(args))
 
     # - At pickling time, any dynamic global variable used by func is
     #   serialized by value (in state['globals']).

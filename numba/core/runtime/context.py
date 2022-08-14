@@ -21,7 +21,7 @@ _NRT_MEMINFO_DEFAULT_API = _NRT_Meminfo_Functions("NRT_MemInfo_alloc",
                                                   "NRT_MemInfo_alloc_aligned")
 
 
-class NRTContext(object):
+class NRTContext:
     """
     An object providing access to NRT APIs in the lowering pass.
     """

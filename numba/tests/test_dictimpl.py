@@ -18,7 +18,7 @@ DKIX_EMPTY = -1
 ALIGN = 4 if IS_32BITS else 8
 
 
-class Dict(object):
+class Dict:
     """A wrapper around the C-API to provide a minimal dictionary object for
     testing.
     """
@@ -157,7 +157,7 @@ class Dict(object):
             return key.value, val.value
 
 
-class DictIter(object):
+class DictIter:
     """A iterator for the `Dict.items()`.
 
     Only the `.items()` is needed.  `.keys` and `.values` can be trivially
@@ -198,7 +198,7 @@ class ParametrizedType(types.Type):
     BUT type name is the same for all n"""
 
     def __init__(self, value):
-        super(ParametrizedType, self).__init__('ParametrizedType')
+        super().__init__('ParametrizedType')
         self.dtype = types.unicode_type
         self.n = len(value)
 
@@ -385,10 +385,10 @@ class TestDictImpl(TestCase):
         d = Dict(self, 8, 8)
 
         def make_key(v):
-            return "key_{:04}".format(v)
+            return f"key_{v:04}"
 
         def make_val(v):
-            return "val_{:04}".format(v)
+            return f"val_{v:04}"
 
         # Check insert
         for i in range(nmax):
@@ -467,10 +467,10 @@ class TestDictImpl(TestCase):
         keys = {}
 
         def make_key(v):
-            return "k_{:06x}".format(v)
+            return f"k_{v:06x}"
 
         def make_val(v):
-            return "v_{:06x}".format(v)
+            return f"v_{v:06x}"
 
         for i in range(nmax):
             d[make_key(i)] = make_val(i)
@@ -536,10 +536,10 @@ class TestDictImpl(TestCase):
         d = Dict(self, 8, 8)
 
         def make_key(v):
-            return "k_{:06x}".format(v)
+            return f"k_{v:06x}"
 
         def make_val(v):
-            return "v_{:06x}".format(v)
+            return f"v_{v:06x}"
 
         for i in range(nmax):
             d[make_key(i)] = make_val(i)
@@ -571,10 +571,10 @@ class TestDictImpl(TestCase):
         nmax = 1000
 
         def make_key(v):
-            return "{:04}".format(v)
+            return f"{v:04}"
 
         def make_val(v):
-            return "{:04}".format(v + nmax)
+            return f"{v + nmax:04}"
 
         for i in range(nmax):
             d[make_key(i)] = make_val(i)

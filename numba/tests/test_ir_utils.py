@@ -16,7 +16,7 @@ GLOBAL_B = 11
 
 
 @jitclass([('val', numba.core.types.List(numba.intp))])
-class Dummy(object):
+class Dummy:
     def __init__(self, val):
         self.val = val
 

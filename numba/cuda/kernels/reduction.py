@@ -161,7 +161,7 @@ def _gpu_reduce_factory(fn, nbtype):
     return cuda.jit(gpu_reduce_block_strided)
 
 
-class Reduce(object):
+class Reduce:
     """Create a reduction object that reduces values using a given binary
     function. The binary function is compiled once and cached inside this
     object. Keeping this object alive will prevent re-compilation.

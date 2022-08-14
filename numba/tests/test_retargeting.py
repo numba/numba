@@ -28,7 +28,7 @@ class CustomCPU(CPU):
 
 
 # Nested contexts to help with isolatings bits of compilations
-class _NestedContext(object):
+class _NestedContext:
     _typing_context = None
     _target_context = None
 

@@ -47,7 +47,7 @@ _blas_kinds = {
 def get_blas_kind(dtype, func_name="<BLAS function>"):
     kind = _blas_kinds.get(dtype)
     if kind is None:
-        raise TypeError("unsupported dtype for %s()" % (func_name,))
+        raise TypeError("unsupported dtype for {}()".format(func_name))
     return kind
 
 
@@ -733,10 +733,10 @@ def dot_3(context, builder, sig, args):
     ensure_blas()
 
     with make_contiguous(context, builder, sig, args) as (sig, args):
-        ndims = set(x.ndim for x in sig.args[:2])
-        if ndims == set([2]):
+        ndims = {x.ndim for x in sig.args[:2]}
+        if ndims == {2}:
             return dot_3_mm(context, builder, sig, args)
-        elif ndims == set([1, 2]):
+        elif ndims == {1, 2}:
             return dot_3_vm(context, builder, sig, args)
         else:
             assert 0

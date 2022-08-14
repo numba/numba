@@ -20,7 +20,7 @@ else:
 _TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.
 
 
-class _DummyClass(object):
+class _DummyClass:
     def __init__(self, value):
         self.value = value
 
@@ -131,7 +131,7 @@ class TestEntrypoints(TestCase):
             # of how to handle the global "_DummyClass".
             class DummyType(numba.types.Type):
                 def __init__(self):
-                    super(DummyType, self).__init__(name='DummyType')
+                    super().__init__(name='DummyType')
 
             @numba.extending.typeof_impl.register(_DummyClass)
             def typer_DummyClass(val, c):
@@ -142,7 +142,7 @@ class TestEntrypoints(TestCase):
                 def __init__(self, dmm, fe_type):
                     members = [
                         ('value', numba.types.float64), ]
-                    super(DummyModel, self).__init__(dmm, fe_type, members)
+                    super().__init__(dmm, fe_type, members)
 
             @numba.extending.unbox(DummyType)
             def unbox_dummy(typ, obj, c):
@@ -222,7 +222,7 @@ class TestEntrypoints(TestCase):
         themod = self.__module__
         thecls = type(self).__name__
         methname = 'test_entrypoint_handles_type_extensions'
-        injected_method = '%s.%s.%s' % (themod, thecls, methname)
+        injected_method = '{}.{}.{}'.format(themod, thecls, methname)
         cmdline = [sys.executable, "-m", "numba.runtests", injected_method]
         out, err = self.run_cmd(cmdline, env_copy)
         _DEBUG = False

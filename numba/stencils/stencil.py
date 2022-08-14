@@ -21,7 +21,7 @@ import operator
 from numba.np import numpy_support
 
 
-class StencilFuncLowerer(object):
+class StencilFuncLowerer:
     '''Callable class responsible for lowering calls to a specific StencilFunc.
     '''
 
@@ -67,7 +67,7 @@ def slice_addition(the_slice, addend):
     return slice(the_slice.start + addend, the_slice.stop + addend)
 
 
-class StencilFunc(object):
+class StencilFunc:
     """
     A special type to hold stencil information for the IR.
     """
@@ -511,7 +511,7 @@ class StencilFunc(object):
 
         # We generate a Numba function to execute this stencil and here
         # create the unique name of this function.
-        stencil_func_name = "__numba_stencil_%s_%s" % (
+        stencil_func_name = "__numba_stencil_{}_{}".format(
             hex(id(the_array)).replace("-", "_"),
             self.id)
 
@@ -530,9 +530,9 @@ class StencilFunc(object):
                                                          name_var_table)
         sig_extra = ""
         if result is not None:
-            sig_extra += ", {}=None".format(out_name)
+            sig_extra += f", {out_name}=None"
         if "neighborhood" in dict(self.kws):
-            sig_extra += ", {}=None".format(neighborhood_name)
+            sig_extra += f", {neighborhood_name}=None"
 
         # Get a list of the standard indexed array names.
         standard_indexed = self.options.get("standard_indexing", [])
@@ -581,8 +581,8 @@ class StencilFunc(object):
                 lo = kernel_size[i][0]
                 hi = kernel_size[i][1]
             else:
-                lo = "{}[{}][0]".format(neighborhood_name, i)
-                hi = "{}[{}][1]".format(neighborhood_name, i)
+                lo = f"{neighborhood_name}[{i}][0]"
+                hi = f"{neighborhood_name}[{i}][1]"
             ranges.append((lo, hi))
 
         # If there are more than one relatively indexed arrays, add a call to
@@ -597,7 +597,7 @@ class StencilFunc(object):
 
         # Get the shape of the first input array.
         shape_name = ir_utils.get_unused_var_name("full_shape", name_var_table)
-        func_text += "    {} = {}.shape\n".format(shape_name, first_arg)
+        func_text += f"    {shape_name} = {first_arg}.shape\n"
 
         # Converts cval to a string constant
         def cval_as_str(cval):
@@ -634,8 +634,8 @@ class StencilFunc(object):
             for dim in range(the_array.ndim):
                 start_items = [":"] * the_array.ndim
                 end_items = [":"] * the_array.ndim
-                start_items[dim] = ":-{}".format(self.neighborhood[dim][0])
-                end_items[dim] = "-{}:".format(self.neighborhood[dim][1])
+                start_items[dim] = f":-{self.neighborhood[dim][0]}"
+                end_items[dim] = f"-{self.neighborhood[dim][1]}:"
                 func_text += "    " + \
                     "{}[{}] = {}\n".format(out_name, ",".join(
                         start_items), cval_as_str(cval))
@@ -649,7 +649,7 @@ class StencilFunc(object):
                 if not self._typingctx.can_convert(cval_ty, return_type.dtype):
                     msg = "cval type does not match stencil return type."
                     raise NumbaValueError(msg)
-                out_init = "{}[:] = {}\n".format(out_name, cval_as_str(cval))
+                out_init = f"{out_name}[:] = {cval_as_str(cval)}\n"
                 func_text += "    " + out_init
 
         offset = 1
@@ -680,8 +680,8 @@ class StencilFunc(object):
         # Put a sentinel in the code so we can locate it in the IR.  We will
         # remove this sentinel assignment and replace it with the IR for the
         # stencil kernel body.
-        func_text += "{} = 0\n".format(sentinel_name)
-        func_text += "    return {}\n".format(out_name)
+        func_text += f"{sentinel_name} = 0\n"
+        func_text += f"    return {out_name}\n"
 
         if config.DEBUG_ARRAY_OPT >= 1:
             print("new stencil func text")
@@ -805,12 +805,12 @@ class StencilFunc(object):
             rttype = numpy_support.from_dtype(rdtype)
             result_type = types.npytypes.Array(rttype, result.ndim,
                                                numpy_support.map_layout(result))
-            array_types = tuple([typing.typeof.typeof(x) for x in args])
+            array_types = tuple(typing.typeof.typeof(x) for x in args)
             array_types_full = tuple([typing.typeof.typeof(x) for x in args] +
                                      [result_type])
         else:
             result = None
-            array_types = tuple([typing.typeof.typeof(x) for x in args])
+            array_types = tuple(typing.typeof.typeof(x) for x in args)
             array_types_full = array_types
 
         if config.DEBUG_ARRAY_OPT >= 1:

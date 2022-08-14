@@ -60,7 +60,7 @@ class TestViewIntFloat(TestCase):
         self.do_testing(inputs, dtypes)
 
     def test_python_scalar_exception(self):
-        intty = getattr(np, 'int{}'.format(types.intp.bitwidth))
+        intty = getattr(np, f'int{types.intp.bitwidth}')
 
         @njit
         def myview():

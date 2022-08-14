@@ -52,7 +52,7 @@ def to_fixed_tuple(typingctx, array, length):
         raise RequireLiteralValue('*length* argument must be a constant')
 
     if array.ndim != 1:
-        raise TypingError("Not supported on array.ndim={}".format(array.ndim))
+        raise TypingError(f"Not supported on array.ndim={array.ndim}")
 
     # Determine types
     tuple_size = int(length.literal_value)

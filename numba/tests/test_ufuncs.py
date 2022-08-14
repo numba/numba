@@ -54,27 +54,27 @@ def _unimplemented(func):
 
 def _make_ufunc_usecase(ufunc):
     ldict = {}
-    arg_str = ','.join(['a{0}'.format(i) for i in range(ufunc.nargs)])
+    arg_str = ','.join([f'a{i}' for i in range(ufunc.nargs)])
     func_str = 'def fn({0}):\n    np.{1}({0})'.format(arg_str, ufunc.__name__)
     exec(func_str, globals(), ldict)
     fn = ldict['fn']
-    fn.__name__ = '{0}_usecase'.format(ufunc.__name__)
+    fn.__name__ = f'{ufunc.__name__}_usecase'
     return fn
 
 
 def _make_unary_ufunc_op_usecase(ufunc_op):
     ldict = {}
-    exec("def fn(x):\n    return {0}(x)".format(ufunc_op), globals(), ldict)
+    exec(f"def fn(x):\n    return {ufunc_op}(x)", globals(), ldict)
     fn = ldict["fn"]
-    fn.__name__ = "usecase_{0}".format(hash(ufunc_op))
+    fn.__name__ = f"usecase_{hash(ufunc_op)}"
     return fn
 
 
 def _make_binary_ufunc_op_usecase(ufunc_op):
     ldict = {}
-    exec("def fn(x,y):\n    return x{0}y".format(ufunc_op), globals(), ldict)
+    exec(f"def fn(x,y):\n    return x{ufunc_op}y", globals(), ldict)
     fn = ldict["fn"]
-    fn.__name__ = "usecase_{0}".format(hash(ufunc_op))
+    fn.__name__ = f"usecase_{hash(ufunc_op)}"
     return fn
 
 
@@ -85,9 +85,9 @@ def _make_inplace_ufunc_op_usecase(ufunc_op):
     """
     if isinstance(ufunc_op, str):
         ldict = {}
-        exec("def fn(x,y):\n    x{0}y".format(ufunc_op), globals(), ldict)
+        exec(f"def fn(x,y):\n    x{ufunc_op}y", globals(), ldict)
         fn = ldict["fn"]
-        fn.__name__ = "usecase_{0}".format(hash(ufunc_op))
+        fn.__name__ = f"usecase_{hash(ufunc_op)}"
     else:
         def inplace_op(x, y):
             ufunc_op(x, y)
@@ -104,7 +104,7 @@ def _as_dtype_value(tyargs, args):
 class BaseUFuncTest(MemoryLeakMixin):
 
     def setUp(self):
-        super(BaseUFuncTest, self).setUp()
+        super().setUp()
         self.inputs = [
             (np.uint32(0), types.uint32),
             (np.uint32(1), types.uint32),
@@ -1205,15 +1205,15 @@ class TestScalarUFuncs(TestCase):
             got = cfunc(*args)
             expected = pyfunc(*_as_dtype_value(tyargs, args))
 
-            msg = 'for args {0} typed {1}'.format(args, tyargs)
+            msg = f'for args {args} typed {tyargs}'
 
             # note: due to semantics of ufuncs, thing like adding a int32 to a
             # uint64 results in doubles (as neither int32 can be cast safely
             # to uint64 nor vice-versa, falling back to using the float version.
             # Modify in those cases the expected value (the numpy version does
             # not use typed integers as inputs so its result is an integer)
-            special = set([(types.int32, types.uint64), (types.uint64, types.int32),
-                           (types.int64, types.uint64), (types.uint64, types.int64)])
+            special = {(types.int32, types.uint64), (types.uint64, types.int32),
+                       (types.int64, types.uint64), (types.uint64, types.int64)}
             if tyargs in special:
                 expected = float(expected)
             else:
@@ -1396,7 +1396,7 @@ class _LoopTypesTester(TestCase):
             return np.array([negzero, 1.5 + 1.5j, 1j * float('nan'), 0j],
                             dtype=a_letter_type)
         else:
-            raise RuntimeError("type %r not understood" % (a_letter_type,))
+            raise RuntimeError("type {!r} not understood".format(a_letter_type))
 
     def _check_loop(self, fn, ufunc, loop):
         # the letter types for the args
@@ -1463,8 +1463,8 @@ class _LoopTypesTester(TestCase):
         def test_template(self):
             fn = _make_ufunc_usecase(ufunc)
             self._check_loop(fn, ufunc, loop)
-        setattr(cls, "test_{0}_{1}".format(ufunc.__name__,
-                                           loop.replace('->', '_')),
+        setattr(cls, "test_{}_{}".format(ufunc.__name__,
+                                         loop.replace('->', '_')),
                 test_template)
 
     @classmethod

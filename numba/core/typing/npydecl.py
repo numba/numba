@@ -105,7 +105,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
         ufunc_loop = ufunc_find_matching_loop(ufunc, base_types)
         if ufunc_loop is None:
             raise TypingError(
-                "can't resolve ufunc {0} for types {1}".format(ufunc.__name__, args))
+                f"can't resolve ufunc {ufunc.__name__} for types {args}")
 
         # check if all the types involved in the ufunc loop are supported in this mode
         if not supported_ufunc_loop(ufunc, ufunc_loop):
@@ -213,7 +213,7 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
         (particularly user-defined operators).
         '''
         try:
-            sig = super(NumpyRulesArrayOperator, self).generic(args, kws)
+            sig = super().generic(args, kws)
         except TypingError:
             return None
         if sig is None:
@@ -255,7 +255,7 @@ class NumpyRulesInplaceArrayOperator(NumpyRulesArrayOperator):
         if not isinstance(lhs, types.ArrayCompatible):
             return
         args = args + (lhs,)
-        sig = super(NumpyRulesInplaceArrayOperator, self).generic(args, kws)
+        sig = super().generic(args, kws)
         # Strip off the fake explicit output
         assert len(sig.args) == 3
         real_sig = signature(sig.return_type, *sig.args[:2])
@@ -272,7 +272,7 @@ class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
     def generic(self, args, kws):
         assert not kws
         if len(args) == 1 and isinstance(args[0], types.ArrayCompatible):
-            return super(NumpyRulesUnaryArrayOperator, self).generic(args, kws)
+            return super().generic(args, kws)
 
 
 # list of unary ufuncs to register
@@ -317,9 +317,9 @@ _logic_functions = [ "isnat" ]
 # implemented.
 #
 # It also works as a nice TODO list for ufunc support :)
-_unsupported = set([ 'frexp',
-                     'modf',
-                     ])
+_unsupported = { 'frexp',
+                 'modf',
+                 }
 
 
 def _numpy_ufunc(name):
@@ -328,7 +328,7 @@ def _numpy_ufunc(name):
     class typing_class(Numpy_rules_ufunc):
         key = func
 
-    typing_class.__name__ = "resolve_{0}".format(name)
+    typing_class.__name__ = f"resolve_{name}"
 
     # A list of ufuncs that are in fact aliases of other ufuncs. They need to
     # insert the resolve method, but not register the ufunc itself
@@ -416,7 +416,7 @@ class Numpy_method_redirection(AbstractTemplate):
 # Function to glue attributes onto the numpy-esque object
 def _numpy_redirect(fname):
     numpy_function = getattr(np, fname)
-    cls = type("Numpy_redirect_{0}".format(fname), (Numpy_method_redirection,),
+    cls = type(f"Numpy_redirect_{fname}", (Numpy_method_redirection,),
                dict(key=numpy_function, method_name=fname))
     infer_global(numpy_function, types.Function(cls))
 
@@ -430,7 +430,7 @@ for func in ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
 # Numpy scalar constructors
 
 # Register np.int8, etc. as converters to the equivalent Numba types
-np_types = set(getattr(np, str(nb_type)) for nb_type in types.number_domain)
+np_types = {getattr(np, str(nb_type)) for nb_type in types.number_domain}
 np_types.add(np.bool_)
 # Those may or may not be aliases (depending on the Numpy build / version)
 np_types.add(np.intc)
@@ -885,7 +885,7 @@ class NdColumnStack(CallableTemplate):
 # Linear algebra
 
 
-class MatMulTyperMixin(object):
+class MatMulTyperMixin:
 
     def matmul_typer(self, a, b, out=None):
         """
@@ -897,14 +897,14 @@ class MatMulTyperMixin(object):
             raise TypingError("%s only supported on 1-D and 2-D arrays"
                               % (self.func_name, ))
         # Output dimensionality
-        ndims = set([a.ndim, b.ndim])
-        if ndims == set([2]):
+        ndims = {a.ndim, b.ndim}
+        if ndims == {2}:
             # M * M
             out_ndim = 2
-        elif ndims == set([1, 2]):
+        elif ndims == {1, 2}:
             # M* V and V * M
             out_ndim = 1
-        elif ndims == set([1]):
+        elif ndims == {1}:
             # V * V
             out_ndim = 0
 

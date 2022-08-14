@@ -331,19 +331,19 @@ class TestLiteralDispatch(TestCase):
 
 class TestLiteralDispatchWithCustomType(TestCase):
     def make_dummy_type(self):
-        class Dummy(object):
+        class Dummy:
             def lit(self, a):
                 return a
 
         class DummyType(types.Type):
             def __init__(self):
-                super(DummyType, self).__init__(name="dummy")
+                super().__init__(name="dummy")
 
         @register_model(DummyType)
         class DummyTypeModel(models.StructModel):
             def __init__(self, dmm, fe_type):
                 members = []
-                super(DummyTypeModel, self).__init__(dmm, fe_type, members)
+                super().__init__(dmm, fe_type, members)
 
         @intrinsic
         def init_dummy(typingctx):

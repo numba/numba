@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-
-
 import os
 import logging
 import subprocess

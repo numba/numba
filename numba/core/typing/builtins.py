@@ -157,8 +157,8 @@ def choose_result_int(*inputs):
 # The "machine" integer types to take into consideration for operator typing
 # (according to the integer typing NBEP)
 machine_ints = (
-    sorted(set((types.intp, types.int64))) +
-    sorted(set((types.uintp, types.uint64)))
+    sorted({types.intp, types.int64}) +
+    sorted({types.uintp, types.uint64})
 )
 
 # Explicit integer rules for binary operators; smaller ints will be
@@ -876,7 +876,7 @@ class TypeRefAttribute(AttributeTemplate):
             # For example, see numba/typed/typeddict.py
             #   @type_callable(DictType)
             #   def typeddict_call(context):
-            class Redirect(object):
+            class Redirect:
 
                 def __init__(self, context):
                     self.context = context
@@ -1132,7 +1132,7 @@ class MinValInfer(AbstractTemplate):
 #------------------------------------------------------------------------------
 
 
-class IndexValue(object):
+class IndexValue:
     """
     Index and value
     """
@@ -1142,14 +1142,14 @@ class IndexValue(object):
         self.value = val
 
     def __repr__(self):
-        return 'IndexValue(%f, %f)' % (self.index, self.value)
+        return 'IndexValue({:f}, {:f})'.format(self.index, self.value)
 
 
 class IndexValueType(types.Type):
     def __init__(self, val_typ):
         self.val_typ = val_typ
-        super(IndexValueType, self).__init__(
-            name='IndexValueType({})'.format(val_typ))
+        super().__init__(
+            name=f'IndexValueType({val_typ})')
 
 
 @typeof_impl.register(IndexValue)

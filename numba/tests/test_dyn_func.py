@@ -4,7 +4,7 @@ import numba
 from numba.tests.support import TestCase
 
 
-class Issue455(object):
+class Issue455:
     """
     Test code from issue 455.
     """

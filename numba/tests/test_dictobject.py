@@ -1057,7 +1057,7 @@ class TestDictTypeCasting(TestCase):
         with self.assertRaises(TypingError) as raises:
             _sentry_safe_cast(fromty, toty)
         self.assertIn(
-            'cannot safely cast {fromty} to {toty}'.format(**locals()),
+            f'cannot safely cast {fromty} to {toty}',
             str(raises.exception),
         )
 
@@ -1413,7 +1413,7 @@ class TestDictForbiddenTypes(TestCase):
         self.assertIn(expect, msg)
 
     def assert_disallow_key(self, ty):
-        msg = '{} as key is forbidden'.format(ty)
+        msg = f'{ty} as key is forbidden'
         self.assert_disallow(msg, lambda: Dict.empty(ty, types.intp))
 
         @njit
@@ -1422,7 +1422,7 @@ class TestDictForbiddenTypes(TestCase):
         self.assert_disallow(msg, foo)
 
     def assert_disallow_value(self, ty):
-        msg = '{} as value is forbidden'.format(ty)
+        msg = f'{ty} as value is forbidden'
         self.assert_disallow(msg, lambda: Dict.empty(types.intp, ty))
 
         @njit
@@ -1492,7 +1492,7 @@ class TestDictInferred(TestCase):
         with self.assertRaises(TypingError) as raises:
             foo(k, v, w)
         self.assertIn(
-            'cannot safely cast float64 to {}'.format(typeof(v)),
+            f'cannot safely cast float64 to {typeof(v)}',
             str(raises.exception),
         )
 
@@ -1508,7 +1508,7 @@ class TestDictInferred(TestCase):
         with self.assertRaises(TypingError) as raises:
             foo(k, h, v)
         self.assertIn(
-            'cannot safely cast float64 to {}'.format(typeof(v)),
+            f'cannot safely cast float64 to {typeof(v)}',
             str(raises.exception),
         )
 
@@ -1737,7 +1737,7 @@ class TestNonCompiledInfer(TestCase):
 
 
 @jitclass(spec=[('a', types.intp)])
-class Bag(object):
+class Bag:
     def __init__(self, a):
         self.a = a
 
@@ -2188,11 +2188,11 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
     def test_dict_items(self):
         @njit
         def foo():
-            ld = {'a': 2j, 'c': 'd', 'f': np.zeros((5))}
+            ld = {'a': 2j, 'c': 'd', 'f': np.zeros(5)}
             return ld.items()
 
         self.assertPreciseEqual(foo(),
-                                (('a', 2j), ('c', 'd'), ('f', np.zeros((5)))))
+                                (('a', 2j), ('c', 'd'), ('f', np.zeros(5))))
 
     def test_dict_return(self):
 

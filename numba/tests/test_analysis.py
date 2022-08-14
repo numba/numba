@@ -114,8 +114,8 @@ class TestBranchPruneBase(MemoryLeakMixin, TestCase):
                 assert 0, "unreachable"
 
         # compare labels
-        original_labels = set([_ for _ in before.blocks.keys()])
-        new_labels = set([_ for _ in after.blocks.keys()])
+        original_labels = {_ for _ in before.blocks.keys()}
+        new_labels = {_ for _ in after.blocks.keys()}
         # assert that the new labels are precisely the original less the
         # expected pruned labels
         try:
@@ -658,7 +658,7 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
         co_consts = {k: v for k, v in enumerate(pyfunc_code.co_consts)}
         for k, v in consts.items():
             co_consts[k] = v
-        new_consts = tuple([v for _, v in sorted(co_consts.items())])
+        new_consts = tuple(v for _, v in sorted(co_consts.items()))
 
         # create new code parts
         co_args = [pyfunc_code.co_argcount]

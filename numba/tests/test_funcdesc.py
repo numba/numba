@@ -1,4 +1,3 @@
-
 import unittest
 
 from numba import njit

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from itertools import product
 from itertools import permutations
 
@@ -355,7 +354,7 @@ def chr_usecase(x):
 
 class BaseTest(MemoryLeakMixin, TestCase):
     def setUp(self):
-        super(BaseTest, self).setUp()
+        super().setUp()
 
 
 UNICODE_EXAMPLES = [
@@ -439,12 +438,12 @@ class TestUnicode(BaseTest):
         for a in UNICODE_EXAMPLES:
             for b in reversed(UNICODE_EXAMPLES):
                 self.assertEqual(pyfunc(a, b),
-                                 cfunc(a, b), '%s, %s' % (a, b))
+                                 cfunc(a, b), '{}, {}'.format(a, b))
                 # comparing against something that's not unicode
                 self.assertEqual(pyfunc(a, 1),
-                                 cfunc(a, 1), '%s, %s' % (a, 1))
+                                 cfunc(a, 1), '{}, {}'.format(a, 1))
                 self.assertEqual(pyfunc(1, b),
-                                 cfunc(1, b), '%s, %s' % (1, b))
+                                 cfunc(1, b), '{}, {}'.format(1, b))
 
     def test_eq_optional(self):
         # See issue #7474
@@ -477,7 +476,7 @@ class TestUnicode(BaseTest):
             self.assertEqual(
                 pyfunc(a, a),
                 cfunc(a, a),
-                '%s: "%s", "%s"' % (usecase.__name__, a, a),
+                '{}: "{}", "{}"'.format(usecase.__name__, a, a),
             )
 
         # Check comparison to adjacent
@@ -485,13 +484,13 @@ class TestUnicode(BaseTest):
             self.assertEqual(
                 pyfunc(a, b),
                 cfunc(a, b),
-                '%s: "%s", "%s"' % (usecase.__name__, a, b),
+                '{}: "{}", "{}"'.format(usecase.__name__, a, b),
             )
             # and reversed
             self.assertEqual(
                 pyfunc(b, a),
                 cfunc(b, a),
-                '%s: "%s", "%s"' % (usecase.__name__, b, a),
+                '{}: "{}", "{}"'.format(usecase.__name__, b, a),
             )
 
     def test_lt(self, flags=no_pyobj_flags):
@@ -551,7 +550,7 @@ class TestUnicode(BaseTest):
         accepted_types = (types.Integer, int)
         with self.assertRaises(TypingError) as raises:
             cfunc('\t', 2.4)
-        msg = '"tabsize" must be {}, not float'.format(accepted_types)
+        msg = f'"tabsize" must be {accepted_types}, not float'
         self.assertIn(msg, str(raises.exception))
 
     def test_startswith(self, flags=no_pyobj_flags):
@@ -561,7 +560,7 @@ class TestUnicode(BaseTest):
             for b in ['', 'x', a[:-2], a[3:], a, a + a]:
                 self.assertEqual(pyfunc(a, b),
                                  cfunc(a, b),
-                                 '%s, %s' % (a, b))
+                                 '{}, {}'.format(a, b))
 
     def test_endswith(self, flags=no_pyobj_flags):
         pyfunc = endswith_usecase
@@ -570,7 +569,7 @@ class TestUnicode(BaseTest):
             for b in ['', 'x', a[:-2], a[3:], a, a + a]:
                 self.assertEqual(pyfunc(a, b),
                                  cfunc(a, b),
-                                 '%s, %s' % (a, b))
+                                 '{}, {}'.format(a, b))
 
     def test_endswith_default(self):
         pyfunc = endswith_usecase
@@ -689,7 +688,7 @@ class TestUnicode(BaseTest):
             for substr in extras:
                 self.assertEqual(pyfunc(substr, a),
                                  cfunc(substr, a),
-                                 "'%s' in '%s'?" % (substr, a))
+                                 "'{}' in '{}'?".format(substr, a))
 
     def test_partition_exception_invalid_sep(self):
         self.disable_leak_check()
@@ -706,7 +705,7 @@ class TestUnicode(BaseTest):
         accepted_types = (types.UnicodeType, types.UnicodeCharSeq)
         with self.assertRaises(TypingError) as raises:
             cfunc('a', None)
-        msg = '"sep" must be {}, not none'.format(accepted_types)
+        msg = f'"sep" must be {accepted_types}, not none'
         self.assertIn(msg, str(raises.exception))
 
     def test_partition(self):
@@ -790,7 +789,7 @@ class TestUnicode(BaseTest):
         for start, end, name in [(0.1, 5, 'start'), (0, 0.5, 'end')]:
             with self.assertRaises(TypingError) as raises:
                 cfunc('ascii', 'sci', start, end)
-            msg = '"{}" must be {}, not float'.format(name, accepted)
+            msg = f'"{name}" must be {accepted}, not float'
             self.assertIn(msg, str(raises.exception))
 
     def test_rpartition_exception_invalid_sep(self):
@@ -808,7 +807,7 @@ class TestUnicode(BaseTest):
         accepted_types = (types.UnicodeType, types.UnicodeCharSeq)
         with self.assertRaises(TypingError) as raises:
             cfunc('a', None)
-        msg = '"sep" must be {}, not none'.format(accepted_types)
+        msg = f'"sep" must be {accepted_types}, not none'
         self.assertIn(msg, str(raises.exception))
 
     def test_rpartition(self):
@@ -845,8 +844,8 @@ class TestUnicode(BaseTest):
     def test_count_with_start(self):
         pyfunc = count_with_start_usecase
         cfunc = njit(pyfunc)
-        error_msg = "%s\n%s" % ("'{0}'.py_count('{1}', {2}) = {3}",
-                                "'{0}'.c_count('{1}', {2}) = {4}")
+        error_msg = "{}\n{}".format("'{0}'.py_count('{1}', {2}) = {3}",
+                                    "'{0}'.c_count('{1}', {2}) = {4}")
 
         for s, sub in UNICODE_COUNT_EXAMPLES:
             for i in range(-18, 18):
@@ -865,8 +864,8 @@ class TestUnicode(BaseTest):
     def test_count_with_start_end(self):
         pyfunc = count_with_start_end_usecase
         cfunc = njit(pyfunc)
-        error_msg = "%s\n%s" % ("'{0}'.py_count('{1}', {2}, {3}) = {4}",
-                                "'{0}'.c_count('{1}', {2}, {3}) = {5}")
+        error_msg = "{}\n{}".format("'{0}'.py_count('{1}', {2}, {3}) = {4}",
+                                    "'{0}'.c_count('{1}', {2}, {3}) = {5}")
 
         for s, sub in UNICODE_COUNT_EXAMPLES:
             for i, j in product(range(-18, 18), (-18, 18)):
@@ -922,8 +921,8 @@ class TestUnicode(BaseTest):
         self.assertIn('The slice indices must be an Integer or None',
                       str(raises.exception))
 
-        error_msg = "%s\n%s" % ("'{0}'.py_count('{1}', {2}, {3}) = {4}",
-                                "'{0}'.c_count_op('{1}', {2}, {3}) = {5}")
+        error_msg = "{}\n{}".format("'{0}'.py_count('{1}', {2}, {3}) = {4}",
+                                    "'{0}'.c_count_op('{1}', {2}, {3}) = {5}")
         sig_optional = types.int64(types.unicode_type,
                                    types.unicode_type,
                                    types.Optional(types.int64),
@@ -998,7 +997,7 @@ class TestUnicode(BaseTest):
             for sub_str in [None, 1, False]:
                 with self.assertRaises(TypingError) as raises:
                     cfunc(s, sub_str)
-                msg = 'must be {}'.format(types.UnicodeType)
+                msg = f'must be {types.UnicodeType}'
                 self.assertIn(msg, str(raises.exception))
 
     def test_rfind_wrong_start_end(self):
@@ -1011,21 +1010,21 @@ class TestUnicode(BaseTest):
                 for start, end in product([0.1, False], [-1, 1]):
                     with self.assertRaises(TypingError) as raises:
                         cfunc(s, sub_str, start, end)
-                    msg = '"start" must be {}'.format(accepted_types)
+                    msg = f'"start" must be {accepted_types}'
                     self.assertIn(msg, str(raises.exception))
 
                 # test wrong end
                 for start, end in product([-1, 1], [-0.1, True]):
                     with self.assertRaises(TypingError) as raises:
                         cfunc(s, sub_str, start, end)
-                    msg = '"end" must be {}'.format(accepted_types)
+                    msg = f'"end" must be {accepted_types}'
                     self.assertIn(msg, str(raises.exception))
 
     def test_rfind_wrong_start_end_optional(self):
         s = UNICODE_EXAMPLES[0]
         sub_str = s[1:-1]
         accepted_types = (types.Integer, types.NoneType)
-        msg = 'must be {}'.format(accepted_types)
+        msg = f'must be {accepted_types}'
 
         def try_compile_wrong_start_optional(*args):
             wrong_sig_optional = types.int64(types.unicode_type,
@@ -1191,7 +1190,7 @@ class TestUnicode(BaseTest):
             for start, end, name in [(0.1, 5, 'start'), (0, 0.5, 'end')]:
                 with self.assertRaises(TypingError) as raises:
                     cfunc('ascii', 'sci', start, end)
-                msg = '"{}" must be {}, not float'.format(name, accepted)
+                msg = f'"{name}" must be {accepted}, not float'
                 self.assertIn(msg, str(raises.exception))
 
     def test_getitem(self):
@@ -1367,7 +1366,7 @@ class TestUnicode(BaseTest):
             for b in UNICODE_EXAMPLES[::-1]:
                 self.assertEqual(pyfunc(a, b),
                                  cfunc(a, b),
-                                 "'%s' + '%s'?" % (a, b))
+                                 "'{}' + '{}'?".format(a, b))
 
     def test_repeat(self, flags=no_pyobj_flags):
         pyfunc = repeat_usecase
@@ -1430,7 +1429,7 @@ class TestUnicode(BaseTest):
         for test_str, splitter in CASES:
             self.assertEqual(pyfunc(test_str, splitter),
                              cfunc(test_str, splitter),
-                             "'%s'.split('%s')?" % (test_str, splitter))
+                             "'{}'.split('{}')?".format(test_str, splitter))
 
     def test_split_with_maxsplit(self):
         CASES = [
@@ -1484,7 +1483,7 @@ class TestUnicode(BaseTest):
         for test_str in CASES:
             self.assertEqual(pyfunc(test_str),
                              cfunc(test_str),
-                             "'%s'.split()?" % (test_str,))
+                             "'{}'.split()?".format(test_str))
 
     def test_split_exception_invalid_keepends(self):
         pyfunc = splitlines_with_keepends_usecase
@@ -1494,7 +1493,7 @@ class TestUnicode(BaseTest):
         for ty, keepends in (('none', None), ('unicode_type', 'None')):
             with self.assertRaises(TypingError) as raises:
                 cfunc('\n', keepends)
-            msg = '"keepends" must be {}, not {}'.format(accepted_types, ty)
+            msg = f'"keepends" must be {accepted_types}, not {ty}'
             self.assertIn(msg, str(raises.exception))
 
     def test_splitlines(self):
@@ -1547,7 +1546,7 @@ class TestUnicode(BaseTest):
         for sep in [' ', None]:
             with self.assertRaises(TypingError) as raises:
                 cfunc('a', sep, 2.4)
-            msg = '"maxsplit" must be {}, not float'.format(accepted_types)
+            msg = f'"maxsplit" must be {accepted_types}, not float'
             self.assertIn(msg, str(raises.exception))
 
     def test_rsplit(self):
@@ -1638,7 +1637,7 @@ class TestUnicode(BaseTest):
         for sep in CASES:
             self.assertEqual(pyfunc(sep),
                              cfunc(sep),
-                             "'%s'.join([])?" % (sep,))
+                             "'{}'.join([])?".format(sep))
 
     def test_join_non_string_exception(self):
         # Verify that join of list of integers raises typing exception
@@ -1673,7 +1672,7 @@ class TestUnicode(BaseTest):
         for sep, parts in CASES:
             self.assertEqual(pyfunc(sep, parts),
                              cfunc(sep, parts),
-                             "'%s'.join('%s')?" % (sep, parts))
+                             "'{}'.join('{}')?".format(sep, parts))
 
     def test_join_interleave_str(self):
         # can pass a string as the parts iterable
@@ -1688,7 +1687,7 @@ class TestUnicode(BaseTest):
         for sep, parts in CASES:
             self.assertEqual(pyfunc(sep, parts),
                              cfunc(sep, parts),
-                             "'%s'.join('%s')?" % (sep, parts))
+                             "'{}'.join('{}')?".format(sep, parts))
 
     def test_justification(self):
         for pyfunc, case_name in [(center_usecase, 'center'),
@@ -1756,7 +1755,7 @@ class TestUnicode(BaseTest):
             for b in UNICODE_EXAMPLES[::-1]:
                 self.assertEqual(pyfunc(a, b),
                                  cfunc(a, b),
-                                 "'%s' + '%s'?" % (a, b))
+                                 "'{}' + '{}'?".format(a, b))
 
     def test_isidentifier(self):
         def pyfunc(s):
@@ -1819,7 +1818,7 @@ class TestUnicode(BaseTest):
             for string, chars in STRIP_CASES:
                 self.assertEqual(pyfunc(string),
                                  cfunc(string),
-                                 "'%s'.%s()?" % (string, case_name))
+                                 "'{}'.{}()?".format(string, case_name))
         # parametrized form
         for pyfunc, case_name in [(strip_usecase_chars, 'strip'),
                                   (lstrip_usecase_chars, 'lstrip'),
@@ -1846,8 +1845,8 @@ class TestUnicode(BaseTest):
                 for string, chars in STRIP_CASES:
                     self.assertEqual(pyfunc(string, chars),
                                      fn(string, chars),
-                                     "'%s'.%s('%s')?" % (string, case_name,
-                                                         chars))
+                                     "'{}'.{}('{}')?".format(string, case_name,
+                                                             chars))
 
     def test_isspace(self):
         def pyfunc(s):
@@ -1973,7 +1972,7 @@ class TestUnicode(BaseTest):
             for cmpop in ['==', '!=', '<', '>', '<=', '>=', '']:
                 args = [cmpop, x, y]
                 self.assertEqual(pyfunc(*args), cfunc(*args),
-                                 msg='failed on {}'.format(args))
+                                 msg=f'failed on {args}')
 
     def test_literal_concat(self):
         def pyfunc(x):
@@ -2012,7 +2011,7 @@ class TestUnicode(BaseTest):
         for cmpop in ['==', '!=', '<', '>', '<=', '>=', '']:
             args = [cmpop]
             self.assertEqual(pyfunc(*args), cfunc(*args),
-                             msg='failed on {}'.format(args))
+                             msg=f'failed on {args}')
 
     def test_literal_len(self):
         def pyfunc():
@@ -2027,7 +2026,7 @@ class TestUnicode(BaseTest):
         for a in [-1, 0, 1, slice(1, None), slice(None, -1)]:
             args = [a]
             self.assertEqual(pyfunc(*args), cfunc(*args),
-                             msg='failed on {}'.format(args))
+                             msg=f'failed on {args}')
 
     def test_literal_in(self):
         def pyfunc(x):
@@ -2037,7 +2036,7 @@ class TestUnicode(BaseTest):
         for a in ['a', '9', '1', '', '8uha', '987']:
             args = [a]
             self.assertEqual(pyfunc(*args), cfunc(*args),
-                             msg='failed on {}'.format(args))
+                             msg=f'failed on {args}')
 
     def test_literal_xyzwith(self):
         def pyfunc(x, y):
@@ -2046,7 +2045,7 @@ class TestUnicode(BaseTest):
         cfunc = njit(pyfunc)
         for args in permutations('abcdefg', r=2):
             self.assertEqual(pyfunc(*args), cfunc(*args),
-                             msg='failed on {}'.format(args))
+                             msg=f'failed on {args}')
 
     def test_literal_find(self):
         def pyfunc(x):
@@ -2056,7 +2055,7 @@ class TestUnicode(BaseTest):
         for a in ['ab']:
             args = [a]
             self.assertEqual(pyfunc(*args), cfunc(*args),
-                             msg='failed on {}'.format(args))
+                             msg=f'failed on {args}')
 
     def test_not(self):
         def pyfunc(x):
@@ -2066,7 +2065,7 @@ class TestUnicode(BaseTest):
         for a in UNICODE_EXAMPLES:
             args = [a]
             self.assertEqual(pyfunc(*args), cfunc(*args),
-                             msg='failed on {}'.format(args))
+                             msg=f'failed on {args}')
 
     def test_capitalize(self):
         def pyfunc(x):
@@ -2102,7 +2101,7 @@ class TestUnicode(BaseTest):
         for a in UNICODE_EXAMPLES + uppers + extras + cpython + fourxcpy:
             args = [a]
             self.assertEqual(pyfunc(*args), cfunc(*args),
-                             msg='failed on {}'.format(args))
+                             msg=f'failed on {args}')
 
     def test_upper(self):
         def pyfunc(x):
@@ -2112,7 +2111,7 @@ class TestUnicode(BaseTest):
         for a in UNICODE_EXAMPLES:
             args = [a]
             self.assertEqual(pyfunc(*args), cfunc(*args),
-                             msg='failed on {}'.format(args))
+                             msg=f'failed on {args}')
 
     def test_casefold(self):
         def pyfunc(x):

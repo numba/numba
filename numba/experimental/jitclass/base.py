@@ -31,14 +31,14 @@ class InstanceModel(models.StructModel):
             ('meminfo', types.MemInfoPointer(dtype)),
             ('data', types.CPointer(cls_data_ty)),
         ]
-        super(InstanceModel, self).__init__(dmm, fe_typ, members)
+        super().__init__(dmm, fe_typ, members)
 
 
 class InstanceDataModel(models.StructModel):
     def __init__(self, dmm, fe_typ):
         clsty = fe_typ.class_type
         members = [(_mangle_attr(k), v) for k, v in clsty.struct.items()]
-        super(InstanceDataModel, self).__init__(dmm, fe_typ, members)
+        super().__init__(dmm, fe_typ, members)
 
 
 default_manager.register(types.ClassInstanceType, InstanceModel)
@@ -130,7 +130,7 @@ class JitClassType(type):
 def _validate_spec(spec):
     for k, v in spec.items():
         if not isinstance(k, str):
-            raise TypeError("spec keys should be strings, got %r" % (k,))
+            raise TypeError("spec keys should be strings, got {!r}".format(k))
         if not isinstance(v, types.Type):
             raise TypeError("spec values should be Numba type instances, got %r"
                             % (v,))
@@ -203,7 +203,7 @@ def register_class_type(cls, spec, class_ctor, builder):
     # Check for name shadowing
     shadowed = (set(methods) | set(props) | set(static_methods)) & set(spec)
     if shadowed:
-        raise NameError("name shadowing: {0}".format(', '.join(shadowed)))
+        raise NameError("name shadowing: {}".format(', '.join(shadowed)))
 
     docstring = others.pop('__doc__', "")
     _drop_ignored_attrs(others)
@@ -214,7 +214,7 @@ def register_class_type(cls, spec, class_ctor, builder):
 
     for k, v in props.items():
         if v.fdel is not None:
-            raise TypeError("deleter is not supported: {0}".format(k))
+            raise TypeError(f"deleter is not supported: {k}")
 
     jit_methods = {k: njit(v) for k, v in methods.items()}
 
@@ -279,9 +279,9 @@ class ConstructorTemplate(templates.AbstractTemplate):
 
 def _drop_ignored_attrs(dct):
     # ignore anything defined by object
-    drop = set(['__weakref__',
-                '__module__',
-                '__dict__'])
+    drop = {'__weakref__',
+            '__module__',
+            '__dict__'}
 
     if '__annotations__' in dct:
         drop.add('__annotations__')
@@ -303,7 +303,7 @@ def _drop_ignored_attrs(dct):
         del dct[k]
 
 
-class ClassBuilder(object):
+class ClassBuilder:
     """
     A jitclass builder for a mutable jitclass.  This will register
     typing and implementation hooks to the given typing and target contexts.
@@ -479,7 +479,7 @@ def get_attr_impl(context, builder, typ, value, attr):
         _add_linking_libs(context, call)
         return imputils.impl_ret_new_ref(context, builder, sig.return_type, out)
 
-    raise NotImplementedError('attribute {0!r} not implemented'.format(attr))
+    raise NotImplementedError(f'attribute {attr!r} not implemented')
 
 
 @ClassBuilder.class_impl_registry.lower_setattr_generic(types.ClassInstanceType)
@@ -519,7 +519,7 @@ def set_attr_impl(context, builder, sig, args, attr):
         _add_linking_libs(context, call)
     else:
         raise NotImplementedError(
-            'attribute {0!r} not implemented'.format(attr))
+            f'attribute {attr!r} not implemented')
 
 
 def imp_dtor(context, module, instance_type):
@@ -528,7 +528,7 @@ def imp_dtor(context, module, instance_type):
     dtor_ftype = llvmir.FunctionType(llvmir.VoidType(),
                                      [llvoidptr, llsize, llvoidptr])
 
-    fname = "_Dtor.{0}".format(instance_type.name)
+    fname = f"_Dtor.{instance_type.name}"
     dtor_fn = cgutils.get_or_insert_function(module, dtor_ftype, fname)
     if dtor_fn.is_declaration:
         # Define

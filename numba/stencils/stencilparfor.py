@@ -30,7 +30,7 @@ def _compute_last_ind(dim_size, index_const):
         return dim_size
 
 
-class StencilPass(object):
+class StencilPass:
     def __init__(self, func_ir, typemap, calltypes, array_analysis, typingctx,
                  targetctx, flags):
         self.func_ir = func_ir
@@ -878,7 +878,7 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
     return stencil_func_ir, sf.get_return_type(args)[0], arg_to_arr_dict
 
 
-class DummyPipeline(object):
+class DummyPipeline:
     def __init__(self, typingctx, targetctx, args, f_ir):
         from numba.core.compiler import StateDict
         self.state = StateDict()
@@ -950,7 +950,7 @@ def _get_const_unary_expr(stencil_ir, func_ir, index_def):
     # return -c as constant
     const_val = _get_const_index_expr_inner(stencil_ir, func_ir, inner_var)
     op = OPERATORS_TO_BUILTINS[index_def.fn]
-    return eval("{}{}".format(op, const_val))
+    return eval(f"{op}{const_val}")
 
 
 def _get_const_binary_expr(stencil_ir, func_ir, index_def):
@@ -961,4 +961,4 @@ def _get_const_binary_expr(stencil_ir, func_ir, index_def):
     arg1 = _get_const_index_expr_inner(stencil_ir, func_ir, index_def.lhs)
     arg2 = _get_const_index_expr_inner(stencil_ir, func_ir, index_def.rhs)
     op = OPERATORS_TO_BUILTINS[index_def.fn]
-    return eval("{}{}{}".format(arg1, op, arg2))
+    return eval(f"{arg1}{op}{arg2}")

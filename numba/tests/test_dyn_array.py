@@ -345,7 +345,7 @@ class TestDynArray(NrtRefCtTest, TestCase):
             out = np.empty_like(arr)
             thread = threading.Thread(target=wrapped,
                                       args=(arr, out),
-                                      name="worker{0}".format(i))
+                                      name=f"worker{i}")
             workers.append(thread)
             inputs.append(arr)
             outputs.append(out)
@@ -402,7 +402,7 @@ class TestDynArray(NrtRefCtTest, TestCase):
             swapct = random.randrange(1000)
             thread = threading.Thread(target=wrapped,
                                       args=(swapct, input, out),
-                                      name="worker{0}".format(i))
+                                      name=f"worker{i}")
             workers.append(thread)
             outputs.append(out)
             swapcts.append(swapct)
@@ -606,7 +606,7 @@ class ConstructorBaseTest(NrtRefCtTest):
 class TestNdZeros(ConstructorBaseTest, TestCase):
 
     def setUp(self):
-        super(TestNdZeros, self).setUp()
+        super().setUp()
         self.pyfunc = np.zeros
 
     def check_result_value(self, ret, expected):
@@ -765,7 +765,7 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
 class TestNdOnes(TestNdZeros):
 
     def setUp(self):
-        super(TestNdOnes, self).setUp()
+        super().setUp()
         self.pyfunc = np.ones
 
     @unittest.expectedFailure
@@ -890,7 +890,7 @@ class TestNdFull(ConstructorBaseTest, TestCase):
         self.check_alloc_size(gen_func((1 << width - 8, 64), 1))
 
 
-class ConstructorLikeBaseTest(object):
+class ConstructorLikeBaseTest:
 
     def mutate_array(self, arr):
         try:
@@ -939,7 +939,7 @@ class ConstructorLikeBaseTest(object):
 class TestNdEmptyLike(ConstructorLikeBaseTest, TestCase):
 
     def setUp(self):
-        super(TestNdEmptyLike, self).setUp()
+        super().setUp()
         self.pyfunc = np.empty_like
 
     def check_result_value(self, ret, expected):
@@ -1019,7 +1019,7 @@ class TestNdEmptyLike(ConstructorLikeBaseTest, TestCase):
                "string constant.")
         self.assertIn(msg, excstr)
         self.assertIn(
-            '{}(array(float64, 1d, C), unicode_type)'.format(pyfunc.__name__),
+            f'{pyfunc.__name__}(array(float64, 1d, C), unicode_type)',
             excstr)
 
     def test_like_dtype_invalid_str(self):
@@ -1039,23 +1039,23 @@ class TestNdEmptyLike(ConstructorLikeBaseTest, TestCase):
 class TestNdZerosLike(TestNdEmptyLike):
 
     def setUp(self):
-        super(TestNdZerosLike, self).setUp()
+        super().setUp()
         self.pyfunc = np.zeros_like
 
     def check_result_value(self, ret, expected):
         np.testing.assert_equal(ret, expected)
 
     def test_like_structured(self):
-        super(TestNdZerosLike, self).test_like_structured()
+        super().test_like_structured()
 
     def test_like_dtype_structured(self):
-        super(TestNdZerosLike, self).test_like_dtype_structured()
+        super().test_like_dtype_structured()
 
 
 class TestNdOnesLike(TestNdZerosLike):
 
     def setUp(self):
-        super(TestNdOnesLike, self).setUp()
+        super().setUp()
         self.pyfunc = np.ones_like
         self.expected_value = 1
 
@@ -1063,11 +1063,11 @@ class TestNdOnesLike(TestNdZerosLike):
 
     @unittest.expectedFailure
     def test_like_structured(self):
-        super(TestNdOnesLike, self).test_like_structured()
+        super().test_like_structured()
 
     @unittest.expectedFailure
     def test_like_dtype_structured(self):
-        super(TestNdOnesLike, self).test_like_dtype_structured()
+        super().test_like_dtype_structured()
 
 
 class TestNdFullLike(ConstructorLikeBaseTest, TestCase):
@@ -1476,12 +1476,12 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
                 yield
             self.assertIn(msg, str(raises.exception))
 
-        with check_raises(('array(float64, 1d, C) not allowed in a '
-                           'homogeneous sequence')):
+        with check_raises('array(float64, 1d, C) not allowed in a '
+                          'homogeneous sequence'):
             cfunc(np.array([1.]))
 
-        with check_raises(('type Tuple(int64, reflected list(int64)<iv=None>) '
-                          'does not have a regular shape')):
+        with check_raises('type Tuple(int64, reflected list(int64)<iv=None>) '
+                          'does not have a regular shape'):
             cfunc((np.int64(1), [np.int64(2)]))
 
         with check_raises(

@@ -255,7 +255,7 @@ class TestCUDAGufunc(CUDATestCase):
         self.assertEqual(msg[:len(head)], head)
         items = msg[len(head):].strip().split(',')
         items = [i.strip("'\" ") for i in items]
-        self.assertEqual(set(['what1', 'ever2']), set(items))
+        self.assertEqual({'what1', 'ever2'}, set(items))
 
     def test_duplicated_output(self):
         @guvectorize([void(float32[:], float32[:])], '(x)->(x)', target='cuda')

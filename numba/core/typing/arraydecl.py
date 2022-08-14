@@ -288,7 +288,7 @@ class ArrayAttribute(AttributeTemplate):
             if ty in types.number_domain:
                 # Guard against non integer type
                 if not isinstance(ty, types.Integer):
-                    raise TypeError("transpose() arg cannot be {0}".format(ty))
+                    raise TypeError(f"transpose() arg cannot be {ty}")
                 return True
             else:
                 return False
@@ -316,7 +316,7 @@ class ArrayAttribute(AttributeTemplate):
 
         else:
             if any(not sentry_shape_scalar(a) for a in args):
-                raise TypeError("transpose({0}) is not supported".format(
+                raise TypeError("transpose({}) is not supported".format(
                     ', '.join(args)))
             assert ary.ndim == len(args)
             return signature(self.resolve_T(ary).copy(layout="A"), *args)
@@ -361,7 +361,7 @@ class ArrayAttribute(AttributeTemplate):
             if ty in types.number_domain:
                 # Guard against non integer type
                 if not isinstance(ty, types.Integer):
-                    raise TypeError("reshape() arg cannot be {0}".format(ty))
+                    raise TypeError(f"reshape() arg cannot be {ty}")
                 return True
             else:
                 return False
@@ -392,7 +392,7 @@ class ArrayAttribute(AttributeTemplate):
         else:
             # vararg case
             if any(not sentry_shape_scalar(a) for a in args):
-                raise TypeError("reshape({0}) is not supported".format(
+                raise TypeError("reshape({}) is not supported".format(
                     ', '.join(map(str, args))))
 
             retty = ary.copy(ndim=len(args))
@@ -439,8 +439,8 @@ class ArrayAttribute(AttributeTemplate):
         assert not kws
         dtype, = args
         if isinstance(dtype, types.UnicodeType):
-            raise RequireLiteralValue(("array.astype if dtype is a string it "
-                                       "must be constant"))
+            raise RequireLiteralValue("array.astype if dtype is a string it "
+                                      "must be constant")
         dtype = parse_dtype(dtype)
         if dtype is None:
             return

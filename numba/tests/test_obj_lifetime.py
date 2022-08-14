@@ -24,7 +24,7 @@ forceobj_flags.force_pyobject = True
 no_pyobj_flags = Flags()
 
 
-class _Dummy(object):
+class _Dummy:
 
     def __init__(self, recorder, name):
         self.recorder = recorder
@@ -33,7 +33,7 @@ class _Dummy(object):
 
     def __add__(self, other):
         assert isinstance(other, _Dummy)
-        return _Dummy(self.recorder, "%s + %s" % (self.name, other.name))
+        return _Dummy(self.recorder, "{} + {}".format(self.name, other.name))
 
     def __iter__(self):
         return _DummyIterator(self.recorder, "iter(%s)" % self.name)
@@ -47,12 +47,12 @@ class _DummyIterator(_Dummy):
         if self.count >= 3:
             raise StopIteration
         self.count += 1
-        return _Dummy(self.recorder, "%s#%s" % (self.name, self.count))
+        return _Dummy(self.recorder, "{}#{}".format(self.name, self.count))
 
     next = __next__
 
 
-class RefRecorder(object):
+class RefRecorder:
     """
     An object which records events when instances created through it
     are deleted.  Custom events can also be recorded to aid in
@@ -174,8 +174,7 @@ def generator_usecase1(rec):
 def generator_usecase2(rec):
     a = rec('a')
     b = rec('b')
-    for x in a:
-        yield x
+    yield from a
     yield b
 
 
@@ -285,7 +284,7 @@ class TestObjLifetime(TestCase):
                 # User may or may not expect duplicates, handle them properly
                 remaining.remove(d)
         self.assertEqual(actual, expected,
-                         "the full list of recorded events is: %r" % (recorded,))
+                         "the full list of recorded events is: {!r}".format(recorded))
 
     def test_simple1(self):
         rec = self.compile_and_record(simple_usecase1)

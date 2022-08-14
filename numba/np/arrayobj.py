@@ -74,7 +74,7 @@ def make_array(array_type):
             try:
                 array_impl = self._context.get_function('__array__', sig)
             except NotImplementedError:
-                return super(ArrayStruct, self)._make_refs(ref)
+                return super()._make_refs(ref)
 
             # Return a wrapped structure and its unwrapped reference
             datamodel = self._context.data_model_manager[array_type]
@@ -238,7 +238,7 @@ def populate_array(array, data, shape, strides, itemsize, meminfo,
     # Make sure that we have all the fields
     got_fields = set(attrs.keys())
     if got_fields != required_fields:
-        raise ValueError("missing {0}".format(required_fields - got_fields))
+        raise ValueError(f"missing {required_fields - got_fields}")
 
     # Set field value
     for k, v in attrs.items():
@@ -383,7 +383,7 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices,
                 cgutils.do_boundscheck(context, builder, ind, shapes[ax], ax)
             output_indices.append(ind)
         else:
-            raise NotImplementedError("unexpected index type: %s" % (idxty,))
+            raise NotImplementedError("unexpected index type: {}".format(idxty))
         ax += 1
 
     # Fill up missing dimensions at the end
@@ -568,7 +568,7 @@ def array_itemset(context, builder, sig, args):
 # Advanced / fancy indexing
 
 
-class Indexer(object):
+class Indexer:
     """
     Generic indexer interface, for generating indices over a fancy indexed
     array on a single dimension.
@@ -910,7 +910,7 @@ class SliceIndexer(Indexer):
         builder.position_at_end(self.bb_end)
 
 
-class FancyIndexer(object):
+class FancyIndexer:
     """
     Perform fancy indexing on the given array.
     """
@@ -960,7 +960,7 @@ class FancyIndexer(object):
                     assert 0
                 indexers.append(indexer)
             else:
-                raise AssertionError("unexpected index type: %s" % (idxty,))
+                raise AssertionError("unexpected index type: {}".format(idxty))
             ax += 1
 
         # Fill up missing dimensions at the end
@@ -977,7 +977,7 @@ class FancyIndexer(object):
         for i in self.indexers:
             i.prepare()
         # Compute the resulting shape
-        self.indexers_shape = sum([i.get_shape() for i in self.indexers], ())
+        self.indexers_shape = sum((i.get_shape() for i in self.indexers), ())
 
     def get_shape(self):
         """
@@ -2064,8 +2064,8 @@ def np_clip(a, a_min, a_max, out=None):
 
     if (not isinstance(a_min, types.NoneType) and
             not type_can_asarray(a_min)):
-        raise errors.TypingError(('The argument "a_min" must be a number '
-                                 'or an array-like'))
+        raise errors.TypingError('The argument "a_min" must be a number '
+                                 'or an array-like')
 
     if (not isinstance(a_max, types.NoneType) and
             not type_can_asarray(a_max)):
@@ -3063,7 +3063,7 @@ def make_nditer_cls(nditerty):
     narrays = len(nditerty.arrays)
     nshapes = ndim if nditerty.need_shaped_indexing else 1
 
-    class BaseSubIter(object):
+    class BaseSubIter:
         """
         Base class for sub-iterators of a nditer() instance.
         """
@@ -3890,7 +3890,7 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
         strides = tuple(strides)
     else:
         raise NotImplementedError(
-            "Don't know how to allocate array with layout '{0}'.".format(
+            "Don't know how to allocate array with layout '{}'.".format(
                 arrtype.layout))
 
     # Check overflow, numpy also does this after checking order

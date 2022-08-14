@@ -85,7 +85,7 @@ class DataModelTester(unittest.TestCase):
         str(materialized)
 
 
-class SupportAsDataMixin(object):
+class SupportAsDataMixin:
     """Test as_data() and from_data()
     """
     # XXX test load_from_data_pointer() as well
@@ -114,7 +114,7 @@ class SupportAsDataMixin(object):
         str(materialized)
 
 
-class NotSupportAsDataMixin(object):
+class NotSupportAsDataMixin:
     """Ensure as_data() and from_data() raise NotImplementedError.
     """
 

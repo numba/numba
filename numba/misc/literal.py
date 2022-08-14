@@ -9,7 +9,7 @@ def _ov_literally(obj):
     if isinstance(obj, (types.Literal, types.InitialValue)):
         return lambda obj: obj
     else:
-        m = "Invalid use of non-Literal type in literally({})".format(obj)
+        m = f"Invalid use of non-Literal type in literally({obj})"
         raise TypingError(m)
 
 

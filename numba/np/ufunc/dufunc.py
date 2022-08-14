@@ -21,7 +21,7 @@ def make_dufunc_kernel(_dufunc):
         dufunc = _dufunc
 
         def __init__(self, context, builder, outer_sig):
-            super(DUFuncKernel, self).__init__(context, builder, outer_sig)
+            super().__init__(context, builder, outer_sig)
             self.inner_sig, self.cres = self.dufunc.find_ewise_function(
                 outer_sig.args)
 
@@ -52,7 +52,7 @@ def make_dufunc_kernel(_dufunc):
     return DUFuncKernel
 
 
-class DUFuncLowerer(object):
+class DUFuncLowerer:
     '''Callable class responsible for lowering calls to a specific DUFunc.
     '''
 
@@ -75,7 +75,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
     """
     # NOTE: __base_kwargs must be kept in synch with the kwlist in
     # _internal.c:dufunc_init()
-    __base_kwargs = set(('identity', '_keepalive', 'nin', 'nout'))
+    __base_kwargs = {'identity', '_keepalive', 'nin', 'nout'}
 
     def __init__(self, py_func, identity=None, cache=False, targetoptions={}):
         if is_jitted(py_func):
@@ -87,7 +87,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
 
     def _initialize(self, dispatcher, identity):
         identity = ufuncbuilder.parse_identity(identity)
-        super(DUFunc, self).__init__(dispatcher, identity=identity)
+        super().__init__(dispatcher, identity=identity)
         # Loop over a copy of the keys instead of the keys themselves,
         # since we're changing the dictionary while looping.
         self._install_type()
@@ -211,7 +211,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
         this DUFunc.
         """
         if self._frozen:
-            raise RuntimeError("compilation disabled for %s" % (self,))
+            raise RuntimeError("compilation disabled for {}".format(self))
         assert isinstance(argtys, tuple)
         if return_type is None:
             sig = argtys

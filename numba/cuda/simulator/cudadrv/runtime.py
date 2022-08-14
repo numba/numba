@@ -4,7 +4,7 @@ provided to allow tests to import correctly.
 '''
 
 
-class FakeRuntime(object):
+class FakeRuntime:
     def get_version(self):
         return (-1, -1)
 

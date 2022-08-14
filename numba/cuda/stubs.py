@@ -8,7 +8,7 @@ import itertools
 from inspect import Signature, Parameter
 
 
-class Stub(object):
+class Stub:
     '''
     A stub object to represent special objects that are meaningless
     outside the context of a CUDA kernel

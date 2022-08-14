@@ -976,8 +976,8 @@ class TestDatetimeArrayOps(TestCase):
             return operation(a, b)
 
         fname = operation.__name__
-        expected = re.escape((f"ufunc '{fname}' is not supported between "
-                              "datetime64[ns] and timedelta64[M]"))
+        expected = re.escape(f"ufunc '{fname}' is not supported between "
+                             "datetime64[ns] and timedelta64[M]")
         with self.assertRaisesRegex((TypingError, TypeError), expected):
             impl(
                 np.array([np.datetime64("2011-01-01"),],

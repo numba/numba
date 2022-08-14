@@ -100,7 +100,7 @@ class UnicodeIteratorModel(StructModel):
     def __init__(self, dmm, fe_type):
         members = [('index', types.EphemeralPointer(types.uintp)),
                    ('data', fe_type.data)]
-        super(UnicodeIteratorModel, self).__init__(dmm, fe_type, members)
+        super().__init__(dmm, fe_type, members)
 
 # CAST
 
@@ -582,13 +582,13 @@ def unicode_idx_check_type(ty, name):
 
     accepted = (types.Integer, types.NoneType)
     if thety is not None and not isinstance(thety, accepted):
-        raise TypingError('"{}" must be {}, not {}'.format(name, accepted, ty))
+        raise TypingError(f'"{name}" must be {accepted}, not {ty}')
 
 
 def unicode_sub_check_type(ty, name):
     """Check object belongs to unicode type"""
     if not isinstance(ty, types.UnicodeType):
-        msg = '"{}" must be {}, not {}'.format(name, types.UnicodeType, ty)
+        msg = f'"{name}" must be {types.UnicodeType}, not {ty}'
         raise TypingError(msg)
 
 
@@ -906,7 +906,7 @@ def unicode_expandtabs(data, tabsize=8):
     accepted = (types.Integer, int)
     if thety is not None and not isinstance(thety, accepted):
         raise TypingError(
-            '"tabsize" must be {}, not {}'.format(accepted, tabsize))
+            f'"tabsize" must be {accepted}, not {tabsize}')
 
     def expandtabs_impl(data, tabsize=8):
         length = len(data)
@@ -1109,7 +1109,7 @@ def unicode_rsplit(data, sep=None, maxsplit=-1):
 
         if thety is not None and not isinstance(thety, accepted):
             raise TypingError(
-                '"{}" must be {}, not {}'.format(name, accepted, ty))
+                f'"{name}" must be {accepted}, not {ty}')
 
     _unicode_rsplit_check_type(sep, 'sep', (types.UnicodeType,
                                             types.UnicodeCharSeq,

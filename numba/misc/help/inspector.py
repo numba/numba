@@ -101,7 +101,7 @@ def inspect_module(module, target=None, alias=None):
         yield info
 
 
-class _Stat(object):
+class _Stat:
     """For gathering simple statistic of (un)supported functions"""
 
     def __init__(self):
@@ -200,7 +200,7 @@ def list_modules_in_package(package, module_filters=_default_module_filters):
         yield mod
 
 
-class Formatter(object):
+class Formatter:
     """Base class for formatters.
     """
 
@@ -237,7 +237,7 @@ class HTMLFormatter(Formatter):
             modname,
             itemname,
         ))
-        self.print(': <b>{}</b>'.format(typename))
+        self.print(f': <b>{typename}</b>')
         self.print('<div><pre>', explained, '</pre></div>')
 
         self.print("<ul>")
@@ -258,7 +258,7 @@ class HTMLFormatter(Formatter):
                     self.escape(source['docstring'] or '')
                 ))
             else:
-                self.print("<li>{}".format(self.escape(str(tcls))))
+                self.print(f"<li>{self.escape(str(tcls))}")
             self.print("</li>")
         self.print("</ul>")
         self.print('</li>')
@@ -272,7 +272,7 @@ class HTMLFormatter(Formatter):
         self.print('</li>')
 
     def write_statistic(self, stats):
-        self.print('<p>{}</p>'.format(stats.describe()))
+        self.print(f'<p>{stats.describe()}</p>')
 
 
 class ReSTFormatter(Formatter):
@@ -297,12 +297,12 @@ class ReSTFormatter(Formatter):
 
     def write_supported_item(self, modname, itemname, typename, explained,
                              sources, alias):
-        self.print('.. function:: {}.{}'.format(modname, itemname))
+        self.print(f'.. function:: {modname}.{itemname}')
         self.print('   :noindex:')
         self.print()
 
         if alias:
-            self.print("   Alias to: ``{}``".format(alias))
+            self.print(f"   Alias to: ``{alias}``")
         self.print()
 
         for tcls, source in sources.items():
@@ -324,7 +324,7 @@ class ReSTFormatter(Formatter):
                 )
 
             else:
-                self.print("   - defined by ``{}``".format(str(tcls)))
+                self.print(f"   - defined by ``{str(tcls)}``")
         self.print()
 
     def write_unsupported_item(self, modname, itemname):
@@ -344,7 +344,7 @@ class ReSTFormatter(Formatter):
 def _format_module_infos(formatter, package_name, mod_sequence, target=None):
     """Format modules.
     """
-    formatter.title('Listings for {}'.format(package_name))
+    formatter.title(f'Listings for {package_name}')
     alias_map = {}  # remember object seen to track alias
     for mod in mod_sequence:
         stat = _Stat()
@@ -402,7 +402,7 @@ def write_listings(package_name, filename, output_format):
             _format_module_infos(fmtr, package_name, mods)
     else:
         raise ValueError(
-            "Output format '{}' is not supported".format(output_format))
+            f"Output format '{output_format}' is not supported")
 
 
 program_description = """

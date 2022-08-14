@@ -205,7 +205,7 @@ def assert_equiv(typingctx, *val):
     return signature(types.none, *val), codegen
 
 
-class EquivSet(object):
+class EquivSet:
 
     """EquivSet keeps track of equivalence relations between
     a set of objects.
@@ -240,7 +240,7 @@ class EquivSet(object):
         )
 
     def __repr__(self):
-        return "EquivSet({})".format(self.ind_to_obj)
+        return f"EquivSet({self.ind_to_obj})"
 
     def is_empty(self):
         """Return true if the set is empty, or false otherwise.
@@ -393,7 +393,7 @@ class ShapeEquivSet(EquivSet):
         # ind_to_const maps index number to a constant, if known.
         self.ind_to_const = ind_to_const if ind_to_const else {}
 
-        super(ShapeEquivSet, self).__init__(obj_to_ind, ind_to_obj, next_id)
+        super().__init__(obj_to_ind, ind_to_obj, next_id)
 
     def empty(self):
         """Return an empty ShapeEquivSet.
@@ -437,7 +437,7 @@ class ShapeEquivSet(EquivSet):
                 if ndim == 0:
                     return (name,)
                 else:
-                    return tuple("{}#{}".format(name, i) for i in range(ndim))
+                    return tuple(f"{name}#{i}" for i in range(ndim))
             else:
                 return (name,)
         elif isinstance(obj, ir.Const):
@@ -474,11 +474,11 @@ class ShapeEquivSet(EquivSet):
         ndim = ndims[0]
         if not all(ndim == x for x in ndims):
             if config.DEBUG_ARRAY_OPT >= 1:
-                print("is_equiv: Dimension mismatch for {}".format(objs))
+                print(f"is_equiv: Dimension mismatch for {objs}")
             return False
         for i in range(ndim):
             names = [obj_name[i] for obj_name in obj_names]
-            if not super(ShapeEquivSet, self).is_equiv(*names):
+            if not super().is_equiv(*names):
                 return False
         return True
 
@@ -489,7 +489,7 @@ class ShapeEquivSet(EquivSet):
         names = self._get_names(obj)
         if len(names) != 1:
             return None
-        return super(ShapeEquivSet, self).get_equiv_const(names[0])
+        return super().get_equiv_const(names[0])
 
     def get_equiv_var(self, obj):
         """If the given object is equivalent to some defined variable,
@@ -508,7 +508,7 @@ class ShapeEquivSet(EquivSet):
         names = self._get_names(obj)
         if len(names) != 1:
             return None
-        return super(ShapeEquivSet, self).get_equiv_set(names[0])
+        return super().get_equiv_set(names[0])
 
     def _insert(self, objs):
         """Overload EquivSet._insert to manage ind_to_var dictionary.
@@ -529,7 +529,7 @@ class ShapeEquivSet(EquivSet):
             if i in self.ind_to_const:
                 assert constval is None
                 constval = self.ind_to_const[i]
-        super(ShapeEquivSet, self)._insert(objs)
+        super()._insert(objs)
         new_ind = self.obj_to_ind[objs[0]]
         for i in set(inds):
             if i in self.ind_to_var:
@@ -548,12 +548,12 @@ class ShapeEquivSet(EquivSet):
         obj_names = [x for x in obj_names if x != ()]  # rule out 0d shape
         if len(obj_names) <= 1:
             return
-        names = sum([list(x) for x in obj_names], [])
+        names = sum((list(x) for x in obj_names), [])
         ndims = [len(x) for x in obj_names]
         ndim = ndims[0]
         assert all(
             ndim == x for x in ndims
-        ), "Dimension mismatch for {}".format(objs)
+        ), f"Dimension mismatch for {objs}"
         varlist = []
         constlist = []
         for obj in objs:
@@ -590,7 +590,7 @@ class ShapeEquivSet(EquivSet):
 
         for i in range(ndim):
             names = [obj_name[i] for obj_name in obj_names]
-            ie_res = super(ShapeEquivSet, self).insert_equiv(*names)
+            ie_res = super().insert_equiv(*names)
             some_change = some_change or ie_res
 
         return some_change
@@ -649,7 +649,7 @@ class ShapeEquivSet(EquivSet):
     def intersect(self, equiv_set):
         """Overload the intersect method to handle ind_to_var.
         """
-        newset = super(ShapeEquivSet, self).intersect(equiv_set)
+        newset = super().intersect(equiv_set)
         ind_to_var = {}
         for i, objs in newset.ind_to_obj.items():
             assert len(objs) > 0
@@ -789,7 +789,7 @@ class SymbolicEquivSet(ShapeEquivSet):
         # wrap_map maps from a tuple of equivalence class ids for a slice and
         # a dimension size to some new equivalence class id for the output size.
         self.wrap_map = {}
-        super(SymbolicEquivSet, self).__init__(
+        super().__init__(
             typemap, defs, ind_to_var, obj_to_ind, ind_to_obj, next_id
         )
 
@@ -937,7 +937,7 @@ class SymbolicEquivSet(ShapeEquivSet):
                                     if i == -offset
                                 ]
                         if len(names) > 1:
-                            super(SymbolicEquivSet, self)._insert(names)
+                            super()._insert(names)
             return value
 
     def define(self, var, redefined, func_ir=None, typ=None):
@@ -952,7 +952,7 @@ class SymbolicEquivSet(ShapeEquivSet):
             name = var.name
         else:
             name = var
-        super(SymbolicEquivSet, self).define(name, redefined)
+        super().define(name, redefined)
         if (
             func_ir
             and self.defs.get(name, 0) == 1
@@ -989,7 +989,7 @@ class SymbolicEquivSet(ShapeEquivSet):
         if len(uniqs) <= 1:
             return False
         uniqs = list(uniqs)
-        super(SymbolicEquivSet, self)._insert(uniqs)
+        super()._insert(uniqs)
         objs = self.ind_to_obj[self._get_ind(uniqs[0])]
 
         # New equivalence guided by def_by and ref_by
@@ -1038,10 +1038,10 @@ class SymbolicEquivSet(ShapeEquivSet):
             if isinstance(typ, types.SliceType):
                 return (obj,)
             else:
-                return super(SymbolicEquivSet, self)._get_shape(obj)
+                return super()._get_shape(obj)
 
 
-class WrapIndexMeta(object):
+class WrapIndexMeta:
     """
       Array analysis should be able to analyze all the function
       calls that it adds to the IR.  That way, array analysis can
@@ -1095,7 +1095,7 @@ def runtime_broadcast_assert_shapes(max_dim, arg0, arg1):
     return to_fixed_tuple(rev, max_dim)
 
 
-class ArrayAnalysis(object):
+class ArrayAnalysis:
     aa_count = 0
 
     """Analyzes Numpy array computations for properties such as
@@ -1292,7 +1292,7 @@ class ArrayAnalysis(object):
         redefineds = set()
         equiv_set.define(var, redefineds, self.func_ir, typ)
 
-    class AnalyzeResult(object):
+    class AnalyzeResult:
         def __init__(self, **kwargs):
             self.kwargs = kwargs
 
@@ -1563,7 +1563,7 @@ class ArrayAnalysis(object):
         return pre, post
 
     def _analyze_expr(self, scope, equiv_set, expr, lhs):
-        fname = "_analyze_op_{}".format(expr.op)
+        fname = f"_analyze_op_{expr.op}"
         try:
             fn = getattr(self, fname)
         except AttributeError:
@@ -2205,7 +2205,7 @@ class ArrayAnalysis(object):
             else:
                 break
         else:
-            out = tuple([ir.Const(x, expr.loc) for x in consts])
+            out = tuple(ir.Const(x, expr.loc) for x in consts)
             return ArrayAnalysis.AnalyzeResult(
                 shape=out,
                 rhs=ir.Const(tuple(consts), expr.loc)
@@ -2249,7 +2249,7 @@ class ArrayAnalysis(object):
             added_mod_name = True
         else:
             args = expr.args
-        fname = "_analyze_op_call_{}_{}".format(mod_name, fname).replace(
+        fname = f"_analyze_op_call_{mod_name}_{fname}".replace(
             ".", "_"
         )
         if fname in UFUNC_MAP_OP:  # known numpy ufuncs
@@ -3063,7 +3063,7 @@ class ArrayAnalysis(object):
         """
         asserts = []
         new_shape = []
-        max_dim = max([len(shape) for shape in shapes])
+        max_dim = max(len(shape) for shape in shapes)
         const_size_one = None
         for i in range(max_dim):
             sizes = []
@@ -3179,7 +3179,7 @@ class ArrayAnalysis(object):
         else:
             shape_attr_call = ir.Expr.getattr(var, "shape", var.loc)
             attr_var = ir.Var(
-                var.scope, mk_unique_var("{}_shape".format(var.name)), var.loc
+                var.scope, mk_unique_var(f"{var.name}_shape"), var.loc
             )
             shape_attr_typ = types.containers.UniTuple(types.intp, ndims)
         size_vars = []
@@ -3205,7 +3205,7 @@ class ArrayAnalysis(object):
                     assert isinstance(size_val, ir.Const)
                     size_var = ir.Var(
                         var.scope,
-                        mk_unique_var("{}_size{}".format(var.name, i)),
+                        mk_unique_var(f"{var.name}_size{i}"),
                         var.loc,
                     )
                     post.append(ir.Assign(size_val, size_var, var.loc))
@@ -3215,7 +3215,7 @@ class ArrayAnalysis(object):
                 # get size: Asize0 = A_sh_attr[0]
                 size_var = ir.Var(
                     var.scope,
-                    mk_unique_var("{}_size{}".format(var.name, i)),
+                    mk_unique_var(f"{var.name}_size{i}"),
                     var.loc,
                 )
                 getitem = ir.Expr.static_getitem(attr_var, i, None, var.loc)

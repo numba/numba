@@ -101,7 +101,7 @@ def compile_multi3(context):
     return library
 
 
-class _Installer(object):
+class _Installer:
 
     _installed = False
 

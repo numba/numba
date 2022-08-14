@@ -117,7 +117,7 @@ def typeof_ta_ndarray(val, c):
     try:
         dtype = numpy_support.from_dtype(val.dtype)
     except NotImplementedError:
-        raise ValueError("Unsupported array dtype: %s" % (val.dtype,))
+        raise ValueError("Unsupported array dtype: {}".format(val.dtype))
     layout = numpy_support.map_layout(val)
     readonly = not val.flags.writeable
     return MyArrayType(dtype, val.ndim, layout, readonly=readonly)
@@ -137,7 +137,7 @@ class MyArrayTypeModel(numba.core.datamodel.models.StructModel):
             ('strides', types.UniTuple(types.intp, ndim)),
             ('extra_field', types.intp),
         ]
-        super(MyArrayTypeModel, self).__init__(dmm, fe_type, members)
+        super().__init__(dmm, fe_type, members)
 
 
 @type_callable(MyArray)

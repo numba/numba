@@ -17,7 +17,7 @@ from contextlib import contextmanager
 from .driver import driver, USE_NV_BINDING
 
 
-class _DeviceList(object):
+class _DeviceList:
     def __getattr__(self, attr):
         # First time looking at "lst" attribute.
         if attr == "lst":
@@ -31,7 +31,7 @@ class _DeviceList(object):
             return gpus
 
         # Other attributes
-        return super(_DeviceList, self).__getattr__(attr)
+        return super().__getattr__(attr)
 
     def __getitem__(self, devnum):
         '''
@@ -58,7 +58,7 @@ class _DeviceList(object):
                 return self[devnum]
 
 
-class _DeviceContextManager(object):
+class _DeviceContextManager:
     """
     Provides a context manager for executing in the context of the chosen
     device. The normal use of instances of this type is from
@@ -84,10 +84,10 @@ class _DeviceContextManager(object):
         self._device.get_primary_context().pop()
 
     def __str__(self):
-        return "<Managed Device {self.id}>".format(self=self)
+        return f"<Managed Device {self.id}>"
 
 
-class _Runtime(object):
+class _Runtime:
     """Emulate the CUDA runtime context management.
 
     It owns all Devices and Contexts.

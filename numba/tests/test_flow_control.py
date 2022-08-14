@@ -654,7 +654,7 @@ class TestCFGraph(TestCase):
         self.assertEqual(sorted(got), sorted(expected))
         for node in sorted(got):
             self.assertEqual(sorted(got[node]), sorted(expected[node]),
-                             "mismatch for %r" % (node,))
+                             "mismatch for {!r}".format(node))
 
     def test_dominators_loopless(self):
         def eq_(d, l):
@@ -1111,7 +1111,7 @@ class TestRealCodeDomFront(TestCase):
         would be the name for the current block.
         """
         namedblocks = {}
-        blocks = sorted([x.offset for x in cfa.iterblocks()])
+        blocks = sorted(x.offset for x in cfa.iterblocks())
         prefix = 'SET_BLOCK_'
 
         for inst in bc:

@@ -1682,7 +1682,8 @@ def noncentral_chisquare(df, nonc, size=None):
             return noncentral_chisquare_single(df, nonc)
 
     elif isinstance(size, types.Integer) or (
-        (isinstance(size, (types.UniTuple)) and isinstance(size.dtype, types.Integer))
+        isinstance(size, (types.UniTuple)) and isinstance(
+            size.dtype, types.Integer)
     ):
 
         def noncentral_chisquare_impl(df, nonc, size=None):

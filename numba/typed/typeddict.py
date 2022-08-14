@@ -180,13 +180,13 @@ class Dict(MutableMapping):
     def __str__(self):
         buf = []
         for k, v in self.items():
-            buf.append("{}: {}".format(k, v))
+            buf.append(f"{k}: {v}")
         return '{{{0}}}'.format(', '.join(buf))
 
     def __repr__(self):
         body = str(self)
         prefix = str(self._dict_type)
-        return "{prefix}({body})".format(prefix=prefix, body=body)
+        return f"{prefix}({body})"
 
     def get(self, key, default=None):
         if not self._typed:
@@ -338,11 +338,11 @@ def impl_numba_typeref_ctor(cls):
     """
     dict_ty = cls.instance_type
     if not isinstance(dict_ty, types.DictType):
-        msg = "expecting a DictType but got {}".format(dict_ty)
+        msg = f"expecting a DictType but got {dict_ty}"
         return  # reject
     # Ensure the dictionary is precisely typed.
     if not dict_ty.is_precise():
-        msg = "expecting a precise DictType but got {}".format(dict_ty)
+        msg = f"expecting a precise DictType but got {dict_ty}"
         raise errors.LoweringError(msg)
 
     key_type = types.TypeRef(dict_ty.key_type)

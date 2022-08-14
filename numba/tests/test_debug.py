@@ -29,7 +29,7 @@ def simple_gen(x, y):
     yield y
 
 
-class SimpleClass(object):
+class SimpleClass:
     def __init__(self):
         self.h = 5
 
@@ -59,8 +59,8 @@ force_parallel_flags.nrt = True
 
 class DebugTestBase(TestCase):
 
-    all_dumps = set(['bytecode', 'cfg', 'ir', 'typeinfer', 'llvm',
-                     'func_opt_llvm', 'optimized_llvm', 'assembly'])
+    all_dumps = {'bytecode', 'cfg', 'ir', 'typeinfer', 'llvm',
+                 'func_opt_llvm', 'optimized_llvm', 'assembly'}
 
     def assert_fails(self, *args, **kwargs):
         self.assertRaises(AssertionError, *args, **kwargs)
@@ -311,7 +311,7 @@ class TestParforsDebug(TestCase):
                 self.assertIn(to_match, trials)
 
             # Check the post fusion statements are correct
-            pattern = (supported_parfor.__name__, 1, set([parfor_state]))
+            pattern = (supported_parfor.__name__, 1, {parfor_state})
             fmt = 'After fusion, function {} has {} parallel for-loop(s) #{}.'
             for trials in after_fusion_output:
                 to_match = fmt.format(*pattern)

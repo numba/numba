@@ -19,7 +19,7 @@ class DocsJitclassUsageTest(TestCase):
         ]
 
         @jitclass(spec)
-        class Bag(object):
+        class Bag:
             def __init__(self, value):
                 self.value = value
                 self.array = np.zeros(value, dtype=np.float32)

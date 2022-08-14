@@ -75,7 +75,7 @@ except ImportError:
 # Define a custom type and an implicit cast on it
 
 
-class MyDummy(object):
+class MyDummy:
     pass
 
 
@@ -121,7 +121,7 @@ def unbox_index(typ, obj, c):
 
 
 def base_dummy_type_factory(name):
-    class DynType(object):
+    class DynType:
         pass
 
     class DynTypeType(types.Opaque):
@@ -497,7 +497,7 @@ def mk_func_test_impl():
 # Define a types derived from types.Callable and overloads for them
 
 
-class MyClass(object):
+class MyClass:
     pass
 
 
@@ -507,8 +507,8 @@ class CallableTypeRef(types.Callable):
         self.instance_type = instance_type
         self.sig_to_impl_key = {}
         self.compiled_templates = []
-        super(CallableTypeRef, self).__init__('callable_type_ref'
-                                              '[{}]'.format(self.instance_type))
+        super().__init__('callable_type_ref'
+                         '[{}]'.format(self.instance_type))
 
     def get_call_type(self, context, args, kws):
 

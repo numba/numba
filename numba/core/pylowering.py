@@ -17,7 +17,7 @@ from numba.core.lowering import BaseLower
 
 # Issue #475: locals() is unsupported as calling it naively would give
 # out wrong results.
-_unsupported_builtins = set([locals])
+_unsupported_builtins = {locals}
 
 # Map operators to methods on the PythonAPI class
 PYTHON_BINOPMAP = {
@@ -75,7 +75,7 @@ class PyLower(BaseLower):
         self._live_vars = set()
 
     def pre_lower(self):
-        super(PyLower, self).pre_lower()
+        super().pre_lower()
         self.init_pyapi()
 
     def post_lower(self):

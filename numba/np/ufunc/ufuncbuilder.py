@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import inspect
 from contextlib import contextmanager
 
@@ -225,13 +223,13 @@ def parse_identity(identity):
     try:
         identity = _identities[identity]
     except KeyError:
-        raise ValueError("Invalid identity value %r" % (identity,))
+        raise ValueError("Invalid identity value {!r}".format(identity))
     return identity
 
 
 # Class definitions
 
-class _BaseUFuncBuilder(object):
+class _BaseUFuncBuilder:
 
     def add(self, sig=None):
         if hasattr(self, 'targetoptions'):

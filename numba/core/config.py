@@ -56,7 +56,7 @@ def _os_supports_avx():
     # Executing the CPUID instruction may report AVX available even though
     # the kernel doesn't support it, so parse /proc/cpuinfo instead.
     try:
-        f = open('/proc/cpuinfo', 'r')
+        f = open('/proc/cpuinfo')
     except OSError:
         # If /proc isn't available, assume yes
         return True
@@ -80,7 +80,7 @@ def _validate_captured_errors_style(style_str):
         return rendered_style
 
 
-class _EnvReloader(object):
+class _EnvReloader:
 
     def __init__(self):
         self.reset()
@@ -101,7 +101,7 @@ class _EnvReloader(object):
                        "`conda install pyyaml`.")
                 warnings.warn(msg)
             else:
-                with open(_config_fname, 'rt') as f:
+                with open(_config_fname) as f:
                     y_conf = yaml.safe_load(f)
                 if y_conf is not None:
                     for k, v in y_conf.items():

@@ -63,7 +63,7 @@ def is_available():
 _nvvm_lock = threading.Lock()
 
 
-class NVVM(object):
+class NVVM:
     '''Process-wide singleton.
     '''
     _PROTOTYPES = {
@@ -184,7 +184,7 @@ class NVVM(object):
                 raise exc
 
 
-class CompilationUnit(object):
+class CompilationUnit:
     def __init__(self):
         self.driver = NVVM()
         self._handle = nvvm_program()
@@ -280,7 +280,7 @@ class CompilationUnit(object):
         # If there are any option left
         if options:
             optstr = ', '.join(map(repr, options.keys()))
-            raise NvvmError("unsupported option {0}".format(optstr))
+            raise NvvmError(f"unsupported option {optstr}")
 
         c_opts = (c_char_p * len(opts))(*[c_char_p(x.encode('utf8'))
                                           for x in opts])
@@ -308,7 +308,7 @@ class CompilationUnit(object):
         return ptxbuf[:]
 
     def _try_error(self, err, msg):
-        self.driver.check_error(err, "%s\n%s" % (msg, self.get_log()))
+        self.driver.check_error(err, "{}\n{}".format(msg, self.get_log()))
 
     def get_log(self):
         reslen = c_size_t()
@@ -436,7 +436,7 @@ Install package by:
 '''
 
 
-class LibDevice(object):
+class LibDevice:
     _cache_ = None
 
     def __init__(self):
@@ -755,7 +755,7 @@ def llvm100_to_34_ir(ir):
             m = re_type_tok.search(s, pos)
             if m is None:
                 # End of line
-                raise RuntimeError("failed parsing leading type: %s" % (s,))
+                raise RuntimeError("failed parsing leading type: {}".format(s))
                 break
             pos = m.end()
             tok = m.group(0)
@@ -812,7 +812,8 @@ def llvm100_to_34_ir(ir):
             # to "getelementptr ty *ptr, ..."
             m = re_getelementptr.search(line)
             if m is None:
-                raise RuntimeError("failed parsing getelementptr: %s" % (line,))
+                raise RuntimeError(
+                    "failed parsing getelementptr: {}".format(line))
             pos = m.end()
             line = line[:pos] + parse_out_leading_type(line[pos:])
         if 'load ' in line:
@@ -861,9 +862,9 @@ def _replace_llvm_memset_usage(m):
         raise ValueError("No alignment attribute found on memset dest")
     else:
         align = align_attr.group(1)
-    params.insert(-1, 'i32 {}'.format(align))
+    params.insert(-1, f'i32 {align}')
     out = ', '.join(params)
-    return '({})'.format(out)
+    return f'({out})'
 
 
 def _replace_llvm_memset_declaration(m):
@@ -874,7 +875,7 @@ def _replace_llvm_memset_declaration(m):
     params = list(m.group(1).split(','))
     params.insert(-1, 'i32')
     out = ', '.join(params)
-    return '({})'.format(out)
+    return f'({out})'
 
 
 def set_cuda_kernel(lfunc):

@@ -128,14 +128,14 @@ class TestDispatcherPickling(TestCase):
         """
         func = closure_calling_other_closure(3.0)
         pickled = pickle.dumps(func)
-        code = """if 1:
+        code = f"""if 1:
             import pickle
 
             data = {pickled!r}
             func = pickle.loads(data)
             res = func(4.0)
             assert res == 8.0, res
-            """.format(**locals())
+            """
         subprocess.check_call([sys.executable, "-c", code])
 
     def test_reuse(self):
@@ -269,7 +269,7 @@ class TestCloudPickleIssues(TestCase):
         self.assertEqual(cfunc(), (100, 100))
 
 
-class DynClass(object):
+class DynClass:
     # For testing issue #7356
     a = None
 

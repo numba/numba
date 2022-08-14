@@ -110,7 +110,7 @@ def unbox_complex(typ, obj, c):
 
     with cgutils.if_unlikely(c.builder, failed):
         c.pyapi.err_set_string("PyExc_TypeError",
-                               "conversion to %s failed" % (typ,))
+                               "conversion to {} failed".format(typ))
 
     if typ == types.complex64:
         # Downcast to complex64 if necessary
@@ -401,10 +401,10 @@ def box_slice_literal(typ, val, c):
             try:
                 typeof(field_obj, Purpose)
             except ValueError as e:
-                raise ValueError((
+                raise ValueError(
                     f"Unable to create literal slice. "
                     f"Error encountered with {field_name} "
-                    f"attribute. {str(e)}")
+                    f"attribute. {str(e)}"
                 )
 
     py_ctor, py_args = typ.literal_value.__reduce__()
@@ -638,7 +638,7 @@ def box_list(typ, val, c):
     return c.builder.load(res)
 
 
-class _NumbaTypeHelper(object):
+class _NumbaTypeHelper:
     """A helper for acquiring `numba.typeof` for type checking.
 
     Usage
@@ -796,7 +796,7 @@ def reflect_list(typ, val, c):
     if not typ.reflected:
         return
     if typ.dtype.reflected:
-        msg = "cannot reflect element of reflected container: {}\n".format(typ)
+        msg = f"cannot reflect element of reflected container: {typ}\n"
         raise TypeError(msg)
 
     list = listobj.ListInstance(c.context, c.builder, typ, val)
@@ -1117,13 +1117,13 @@ def box_pyobject(typ, val, c):
 
 def unbox_unsupported(typ, obj, c):
     c.pyapi.err_set_string("PyExc_TypeError",
-                           "can't unbox {!r} type".format(typ))
+                           f"can't unbox {typ!r} type")
     res = c.context.get_constant_null(typ)
     return NativeValue(res, is_error=cgutils.true_bit)
 
 
 def box_unsupported(typ, val, c):
-    msg = "cannot convert native %s to Python object" % (typ,)
+    msg = "cannot convert native {} to Python object".format(typ)
     c.pyapi.err_set_string("PyExc_TypeError", msg)
     res = c.pyapi.get_null_object()
     return res

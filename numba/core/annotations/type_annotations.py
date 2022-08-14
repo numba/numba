@@ -42,7 +42,7 @@ class SourceLines(Mapping):
         return bool(self.lines)
 
 
-class TypeAnnotation(object):
+class TypeAnnotation:
 
     # func_data dict stores annotation data for all functions that are
     # compiled. We store the data in the TypeAnnotation class since a new
@@ -99,10 +99,11 @@ class TypeAnnotation(object):
                         # TODO: fix parfor lowering so that typemap is valid.
                         atype = self.typemap.get(inst.target.name, "<missing>")
 
-                    aline = "%s = %s  :: %s" % (inst.target, inst.value, atype)
+                    aline = "{} = {}  :: {}".format(
+                        inst.target, inst.value, atype)
                 elif isinstance(inst, ir.SetItem):
                     atype = self.calltypes[inst]
-                    aline = "%s  :: %s" % (inst, atype)
+                    aline = "{}  :: {}".format(inst, atype)
                 else:
                     aline = "%s" % inst
                 groupedinst[lineno].append("  %s" % aline)
@@ -125,7 +126,7 @@ class TypeAnnotation(object):
                     ind = _getindent(srcline)
                     print("%s# --- LINE %d --- " % (ind, num), file=io)
                     for inst in groupedinst[num]:
-                        print('%s# %s' % (ind, inst), file=io)
+                        print('{}# {}'.format(ind, inst), file=io)
                     print(file=io)
                     print(srcline, file=io)
                     print(file=io)
@@ -142,7 +143,7 @@ class TypeAnnotation(object):
                 print("# Source code unavailable", file=io)
                 for num in groupedinst:
                     for inst in groupedinst[num]:
-                        print('%s' % (inst,), file=io)
+                        print('{}'.format(inst), file=io)
                     print(file=io)
 
             return io.getvalue()
@@ -176,7 +177,7 @@ class TypeAnnotation(object):
 
         root = os.path.join(os.path.dirname(__file__))
         template_filename = os.path.join(root, 'template.html')
-        with open(template_filename, 'r') as template:
+        with open(template_filename) as template:
             html = template.read()
 
         template = Template(html)

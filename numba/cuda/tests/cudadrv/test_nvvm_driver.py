@@ -51,11 +51,11 @@ class TestNvvmDriver(unittest.TestCase):
             llvm_to_ptx(str(m))
 
     def _test_nvvm_support(self, arch):
-        compute_xx = 'compute_{0}{1}'.format(*arch)
+        compute_xx = 'compute_{}{}'.format(*arch)
         nvvmir = self.get_nvvmir()
         ptx = llvm_to_ptx(nvvmir, arch=compute_xx, ftz=1, prec_sqrt=0,
                           prec_div=0).decode('utf8')
-        self.assertIn(".target sm_{0}{1}".format(*arch), ptx)
+        self.assertIn(".target sm_{}{}".format(*arch), ptx)
         self.assertIn('simple', ptx)
         self.assertIn('ave', ptx)
 
@@ -74,7 +74,7 @@ class TestNvvmDriver(unittest.TestCase):
             # (5, 2),  # for example
         ]
         for arch in future_archs:
-            pat = r"-arch=compute_{0}{1}".format(*arch)
+            pat = r"-arch=compute_{}{}".format(*arch)
             with self.assertRaises(NvvmError) as raises:
                 self._test_nvvm_support(arch=arch)
             self.assertIn(pat, raises.msg)

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Test hashing of various supported types.
 """
@@ -232,7 +231,7 @@ class TestNumberHashing(BaseTest):
         # Run 10 hashes, make sure that the "uniqueness" is sufficient that
         # there's more than one hash value. Not much more can be done!
         x = [float('nan') for i in range(10)]
-        out = set([self.cfunc(z) for z in x])
+        out = {self.cfunc(z) for z in x}
         self.assertGreater(len(out), 1)
 
 

@@ -5,7 +5,7 @@ from os.path import isdir, isfile, join, dirname, basename
 class TestLoader(loader.TestLoader):
 
     def __init__(self, topleveldir=None):
-        super(TestLoader, self).__init__()
+        super().__init__()
         self._top_level_dir = topleveldir or dirname(dirname(dirname(__file__)))
 
     def _find_tests(self, start_dir, pattern, namespace=False):
@@ -22,5 +22,4 @@ class TestLoader(loader.TestLoader):
                 except Exception as e:
                     yield loader._make_failed_load_tests(package.__name__, e, self.suiteClass)
         else:
-            for t in super(TestLoader, self)._find_tests(start_dir, pattern):
-                yield t
+            yield from super()._find_tests(start_dir, pattern)

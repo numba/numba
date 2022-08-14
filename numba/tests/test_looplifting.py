@@ -287,7 +287,7 @@ class TestLoopLiftingAnnotate(TestCase):
 
         self.assertIn("The function contains lifted loops", annotation)
         line = foo.__code__.co_firstlineno + 2  # 2 lines down from func head
-        self.assertIn("Loop at line {line}".format(line=line), annotation)
+        self.assertIn(f"Loop at line {line}", annotation)
         self.assertIn("Has 1 overloads", annotation)
 
     def test_annotate_2(self):
@@ -325,8 +325,8 @@ class TestLoopLiftingAnnotate(TestCase):
         self.assertIn("The function contains lifted loops", annotation)
         line1 = foo.__code__.co_firstlineno + 3  # 3 lines down from func head
         line2 = foo.__code__.co_firstlineno + 6  # 6 lines down from func head
-        self.assertIn("Loop at line {line}".format(line=line1), annotation)
-        self.assertIn("Loop at line {line}".format(line=line2), annotation)
+        self.assertIn(f"Loop at line {line1}", annotation)
+        self.assertIn(f"Loop at line {line2}", annotation)
 
 
 class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):

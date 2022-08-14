@@ -1458,7 +1458,7 @@ def _create_gufunc_for_parfor_body(
                         continue
 
                     # Make constant string
-                    strval = "{} =".format(inst.target.name)
+                    strval = f"{inst.target.name} ="
                     strconsttyp = types.StringLiteral(strval)
 
                     lhs = ir.Var(scope, mk_unique_var("str_const"), loc)
@@ -1670,9 +1670,9 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         loop_ranges[i] = (start, stop, step)
 
         if config.DEBUG_ARRAY_OPT:
-            print("call_parallel_gufunc loop_ranges[{}] = ".format(i), start,
+            print(f"call_parallel_gufunc loop_ranges[{i}] = ", start,
                   stop, step)
-            cgutils.printf(builder, "loop range[{}]: %d %d (%d)\n".format(i),
+            cgutils.printf(builder, f"loop range[{i}]: %d %d (%d)\n",
                            start, stop, step)
 
     # Commonly used LLVM types and constants

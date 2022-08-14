@@ -37,7 +37,7 @@ class CapturedTrace:
         return log
 
 
-class Class(object):
+class Class:
 
     @tracing.trace
     @classmethod
@@ -68,7 +68,7 @@ class Class(object):
         return '<Class instance>'
 
 
-class Class2(object):
+class Class2:
     @classmethod
     def class_method(cls):
         pass
@@ -111,7 +111,7 @@ def test(x, y, z=True):
 class TestTracing(unittest.TestCase):
 
     def __init__(self, *args):
-        super(TestTracing, self).__init__(*args)
+        super().__init__(*args)
 
     def setUp(self):
         self.capture = CapturedTrace()

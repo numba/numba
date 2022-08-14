@@ -166,7 +166,7 @@ class TestParforsBase(TestCase):
         self.fast_pflags.auto_parallel = cpu.ParallelOptions(True)
         self.fast_pflags.nrt = True
         self.fast_pflags.fastmath = cpu.FastMathOptions(True)
-        super(TestParforsBase, self).__init__(*args)
+        super().__init__(*args)
 
     def _compile_this(self, func, sig, flags):
         return compile_isolated(func, sig, flags=flags)
@@ -181,7 +181,7 @@ class TestParforsBase(TestCase):
         return self._compile_this(func, sig, flags=self.cflags)
 
     def compile_all(self, pyfunc, *args, **kwargs):
-        sig = tuple([numba.typeof(x) for x in args])
+        sig = tuple(numba.typeof(x) for x in args)
 
         # compile the prange injected function
         cpfunc = self.compile_parallel(pyfunc, sig)
@@ -652,13 +652,13 @@ def _uses_indices(f_ir, index, index_set):
 
     ind_def = guard(get_definition, f_ir, index)
     if isinstance(ind_def, ir.Expr) and ind_def.op == 'build_tuple':
-        varnames = set(v.name for v in ind_def.items)
+        varnames = {v.name for v in ind_def.items}
         return len(varnames & index_set) != 0
 
     return False
 
 
-class TestPipeline(object):
+class TestPipeline:
     def __init__(self, typingctx, targetctx, args, test_ir):
         self.state = compiler.StateDict()
         self.state.typingctx = typingctx
@@ -2789,7 +2789,7 @@ class TestParforsMisc(TestParforsBase):
         dummy_type = DummyType("my_dummy")
         register_model(DummyType)(models.OpaqueModel)
 
-        class Dummy(object):
+        class Dummy:
             pass
 
         @typeof_impl.register(Dummy)
@@ -3127,7 +3127,8 @@ class TestParforsDiagnostics(TestParforsBase):
                     if replaced[0] == x:
                         break
                 else:
-                    msg = "Replacement for %s was not found. Had %s" % (x, repl)
+                    msg = "Replacement for {} was not found. Had {}".format(
+                        x, repl)
                     raise AssertionError(msg)
 
         if hoisted_allocations is not None:
@@ -3275,8 +3276,8 @@ class TestPrangeBase(TestParforsBase):
             # patch all instances, cheat by just switching
             # range for prange
             assert 'range' in pyfunc_code.co_names
-            prange_names = tuple([x if x != 'range' else 'prange'
-                                  for x in pyfunc_code.co_names])
+            prange_names = tuple(x if x != 'range' else 'prange'
+                                 for x in pyfunc_code.co_names)
             new_code = bytes(pyfunc_code.co_code)
         else:
             # patch specified instances...
@@ -3402,7 +3403,7 @@ class TestPrangeBase(TestParforsBase):
 
         # Compile functions
         # compile a standard njit of the original function
-        sig = tuple([numba.typeof(x) for x in args])
+        sig = tuple(numba.typeof(x) for x in args)
         cfunc = self.compile_njit(pyfunc, sig)
 
         # compile the prange injected function
@@ -3534,7 +3535,7 @@ class TestPrangeBasic(TestPrangeBase):
     def test_prange08(self):
         def test_impl():
             n = 4
-            A = np.ones((n))
+            A = np.ones(n)
             acc = 0
             for i in range(len(A)):
                 for j in range(len(A)):
@@ -3546,7 +3547,7 @@ class TestPrangeBasic(TestPrangeBase):
     def test_prange08_1(self):
         def test_impl():
             n = 4
-            A = np.ones((n))
+            A = np.ones(n)
             acc = 0
             for i in range(4):
                 for j in range(4):
@@ -3976,9 +3977,9 @@ class TestPrangeSpecific(TestPrangeBase):
         cres = self.compile_parallel_fastmath(pfunc, ())
         ir = self._get_gufunc_ir(cres)
         _id = '%[A-Z_0-9]?(.[0-9]+)+[.]?[i]?'
-        recipr_str = '\s+%s = fmul fast double %s, 5.000000e-01'
+        recipr_str = r'\s+%s = fmul fast double %s, 5.000000e-01'
         reciprocal_inst = re.compile(recipr_str % (_id, _id))
-        fadd_inst = re.compile('\s+%s = fadd fast double %s, %s'
+        fadd_inst = re.compile(r'\s+%s = fadd fast double %s, %s'
                                % (_id, _id, _id))
         # check there is something like:
         #  %.329 = fmul fast double %.325, 5.000000e-01
@@ -4404,7 +4405,7 @@ class TestParforsVectorizer(TestPrangeBase):
             overrides.append(override_env_config(k, v))
 
         with overrides[0], overrides[1]:
-            sig = tuple([numba.typeof(x) for x in args])
+            sig = tuple(numba.typeof(x) for x in args)
             pfunc_vectorizable = self.generate_prange_func(func, None)
             if fastmath == True:
                 cres = self.compile_parallel_fastmath(pfunc_vectorizable, sig)
@@ -4415,7 +4416,7 @@ class TestParforsVectorizer(TestPrangeBase):
             asm = self._get_gufunc_asm(cres)
 
             if assertions:
-                schedty = re.compile('call\s+\w+\*\s+@do_scheduling_(\w+)\(')
+                schedty = re.compile(r'call\s+\w+\*\s+@do_scheduling_(\w+)\(')
                 matches = schedty.findall(cres.library.get_llvm_str())
                 # at least 1 parfor call
                 self.assertGreaterEqual(len(matches), 1)
@@ -4427,7 +4428,7 @@ class TestParforsVectorizer(TestPrangeBase):
     # this is a common match pattern for something like:
     # \n\tvsqrtpd\t-192(%rbx,%rsi,8), %zmm0\n
     # to check vsqrtpd operates on zmm
-    match_vsqrtpd_on_zmm = re.compile('\n\s+vsqrtpd\s+.*zmm.*\n')
+    match_vsqrtpd_on_zmm = re.compile('\n\\s+vsqrtpd\\s+.*zmm.*\n')
 
     @linux_only
     def test_vectorizer_fastmath_asm(self):

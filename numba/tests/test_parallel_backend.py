@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 """
 Tests the parallel backend
 """
@@ -91,7 +89,7 @@ def gufunc_foo(a, b, out):
     out[0] = a + b
 
 
-class runnable(object):
+class runnable:
     def __init__(self, **options):
         self._options = options
 
@@ -107,7 +105,7 @@ class jit_runner(runnable):
         np.testing.assert_allclose(expected, got)
 
 
-class mask_runner(object):
+class mask_runner:
     def __init__(self, runner, mask, **options):
         self.runner = runner
         self.mask = mask
@@ -186,7 +184,7 @@ def compile_factory(parallel_class, queue_impl):
 _thread_class = threading.Thread
 
 
-class _proc_class_impl(object):
+class _proc_class_impl:
 
     def __init__(self, method):
         self._method = method
@@ -344,7 +342,7 @@ class TestParallelBackend(TestParallelBackendBase):
 TestParallelBackend.generate()
 
 
-class TestInSubprocess(object):
+class TestInSubprocess:
     backends = {'tbb': skip_no_tbb,
                 'omp': skip_no_omp,
                 'workqueue': unittest.skipIf(False, '')}
@@ -391,16 +389,16 @@ class TestSpecificBackend(TestInSubprocess, TestParallelBackendBase):
         themod = cls.__module__
         thecls = TestParallelBackend.__name__
         methname = "test_" + p + '_' + name
-        injected_method = '%s.%s.%s' % (themod, thecls, methname)
+        injected_method = '{}.{}.{}'.format(themod, thecls, methname)
 
         def test_template(self):
             o, e = self.run_test_in_separate_process(injected_method, backend)
             if self._DEBUG:
-                print('stdout:\n "%s"\n stderr:\n "%s"' % (o, e))
+                print('stdout:\n "{}"\n stderr:\n "{}"'.format(o, e))
             self.assertIn('OK', e)
             self.assertTrue('FAIL' not in e)
             self.assertTrue('ERROR' not in e)
-        injected_test = "test_%s_%s_%s" % (p, name, backend)
+        injected_test = "test_{}_{}_{}".format(p, name, backend)
         # Mark as long_running
         setattr(cls, injected_test,
                 tag('long_running')(backend_guard(test_template)))
@@ -464,7 +462,7 @@ class ThreadLayerTestHelper(TestCase):
     def run_cmd(self, cmdline, env=None):
         if env is None:
             env = os.environ.copy()
-            env['NUMBA_THREADING_LAYER'] = str("omp")
+            env['NUMBA_THREADING_LAYER'] = "omp"
         popen = subprocess.Popen(cmdline,
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE,

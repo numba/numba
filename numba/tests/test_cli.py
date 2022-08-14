@@ -60,7 +60,7 @@ class TestCLI(TestCase):
             with self.subTest(msg=f"{path} exists"):
                 self.assertTrue(os.path.exists(path))
             with self.subTest(msg="json load"):
-                with open(path, 'r') as f:
+                with open(path) as f:
                     info = json.load(f)
             safe_contents = {
                 int: (

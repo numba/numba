@@ -150,7 +150,7 @@ def _get_unique_smem_id(name):
     """
     global _unique_smem_id
     _unique_smem_id += 1
-    return "{0}_{1}".format(name, _unique_smem_id)
+    return f"{name}_{_unique_smem_id}"
 
 
 @lower(cuda.shared.array, types.IntegerLiteral, types.Any)
@@ -357,7 +357,7 @@ def ptx_match_any_sync(context, builder, sig, args):
     width = sig.args[1].bitwidth
     if sig.args[1] in types.real_domain:
         value = builder.bitcast(value, ir.IntType(width))
-    fname = 'llvm.nvvm.match.any.sync.i{}'.format(width)
+    fname = f'llvm.nvvm.match.any.sync.i{width}'
     lmod = builder.module
     fnty = ir.FunctionType(ir.IntType(32), (ir.IntType(32), ir.IntType(width)))
     func = cgutils.get_or_insert_function(lmod, fnty, fname)
@@ -373,7 +373,7 @@ def ptx_match_all_sync(context, builder, sig, args):
     width = sig.args[1].bitwidth
     if sig.args[1] in types.real_domain:
         value = builder.bitcast(value, ir.IntType(width))
-    fname = 'llvm.nvvm.match.all.sync.i{}'.format(width)
+    fname = f'llvm.nvvm.match.all.sync.i{width}'
     lmod = builder.module
     fnty = ir.FunctionType(ir.LiteralStructType((ir.IntType(32),
                                                  ir.IntType(1))),
@@ -801,7 +801,7 @@ def _atomic_dispatcher(dispatch_fn):
         indty, indices = _normalize_indices(context, builder, indty, inds)
 
         if dtype != valty:
-            raise TypeError("expect %s but got %s" % (dtype, valty))
+            raise TypeError("expect {} but got {}".format(dtype, valty))
 
         if aryty.ndim != len(indty):
             raise TypeError("indexing %d-D array with %d-D index" %

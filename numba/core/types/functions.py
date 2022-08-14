@@ -55,11 +55,11 @@ def _bt_as_lines(bt):
 
 def argsnkwargs_to_str(args, kwargs):
     buf = [str(a) for a in tuple(args)]
-    buf.extend(["{}={}".format(k, v) for k, v in kwargs.items()])
+    buf.extend([f"{k}={v}" for k, v in kwargs.items()])
     return ', '.join(buf)
 
 
-class _ResolutionFailures(object):
+class _ResolutionFailures:
     """Collect and format function resolution failures.
     """
 
@@ -87,7 +87,7 @@ class _ResolutionFailures(object):
         isexc = isinstance(error, Exception)
         errclazz = '%s: ' % type(error).__name__ if isexc else ''
 
-        key = "{}{}".format(errclazz, str(error))
+        key = f"{errclazz}{str(error)}"
         self._failures[key].append(_FAILURE(calltemplate, matched, error,
                                             literal))
 
@@ -96,7 +96,7 @@ class _ResolutionFailures(object):
         """
         indent = ' ' * self._scale
         argstr = argsnkwargs_to_str(self._args, self._kwargs)
-        ncandidates = sum([len(x) for x in self._failures.values()])
+        ncandidates = sum(len(x) for x in self._failures.values())
 
         # sort out a display name for the function
         tykey = self._function_type.typing_key
@@ -115,7 +115,7 @@ class _ResolutionFailures(object):
                                           fname=fname,
                                           signature=argstr,
                                           ncandidates=ncandidates)]
-        nolitargs = tuple([unliteral(a) for a in self._args])
+        nolitargs = tuple(unliteral(a) for a in self._args)
         nolitkwargs = {k: unliteral(v) for k, v in self._kwargs.items()}
         nolitargstr = argsnkwargs_to_str(nolitargs, nolitkwargs)
 
@@ -192,14 +192,14 @@ class _ResolutionFailures(object):
                     else:
                         bt = [""]
                     bt_as_lines = _bt_as_lines(bt)
-                    nd2indent = '\n{}'.format(2 * indent)
+                    nd2indent = f'\n{2 * indent}'
                     errstr += _termcolor.reset(nd2indent +
                                                nd2indent.join(bt_as_lines))
                 msgbuf.append(_termcolor.highlight(_wrapper(errstr,
                                                             ldepth + 2)))
                 loc = self.get_loc(template, error)
                 if loc:
-                    msgbuf.append('{}raised from {}'.format(indent, loc))
+                    msgbuf.append(f'{indent}raised from {loc}')
 
         # the commented bit rewraps each block, may not be helpful?!
         return _wrapper('\n'.join(msgbuf) + '\n') # , self._scale * ldepth)
@@ -208,9 +208,9 @@ class _ResolutionFailures(object):
         """Format error message or exception
         """
         if isinstance(error, Exception):
-            return '{}: {}'.format(type(error).__name__, error)
+            return f'{type(error).__name__}: {error}'
         else:
-            return '{}'.format(error)
+            return f'{error}'
 
     def get_loc(self, classtemplate, error):
         """Get source location information from the error message.
@@ -218,7 +218,7 @@ class _ResolutionFailures(object):
         if isinstance(error, Exception) and hasattr(error, '__traceback__'):
             # traceback is unavailable in py2
             frame = traceback.extract_tb(error.__traceback__)[-1]
-            return "{}:{}".format(frame[0], frame[1])
+            return f"{frame[0]}:{frame[1]}"
 
     def raise_error(self):
         for faillist in self._failures.values():
@@ -247,7 +247,7 @@ class BaseFunction(Callable):
 
         if isinstance(template, (list, tuple)):
             self.templates = tuple(template)
-            keys = set(temp.key for temp in self.templates)
+            keys = {temp.key for temp in self.templates}
             if len(keys) != 1:
                 raise ValueError("incompatible templates: keys = %s"
                                  % (keys,))
@@ -256,9 +256,9 @@ class BaseFunction(Callable):
             self.templates = (template,)
             self.typing_key = template.key
         self._impl_keys = {}
-        name = "%s(%s)" % (self.__class__.__name__, self.typing_key)
+        name = "{}({})".format(self.__class__.__name__, self.typing_key)
         self._depth = 0
-        super(BaseFunction, self).__init__(name)
+        super().__init__(name)
 
     @property
     def key(self):
@@ -303,7 +303,7 @@ class BaseFunction(Callable):
                     if uselit:
                         sig = temp.apply(args, kws)
                     else:
-                        nolitargs = tuple([_unlit_non_poison(a) for a in args])
+                        nolitargs = tuple(_unlit_non_poison(a) for a in args)
                         nolitkws = {k: _unlit_non_poison(v)
                                     for k, v in kws.items()}
                         sig = temp.apply(nolitargs, nolitkws)
@@ -323,7 +323,7 @@ class BaseFunction(Callable):
                         registered_sigs = getattr(temp, 'cases', None)
                         if registered_sigs is not None:
                             msg = "No match for registered cases:\n%s"
-                            msg = msg % '\n'.join(" * {}".format(x) for x in
+                            msg = msg % '\n'.join(f" * {x}" for x in
                                                   registered_sigs)
                         else:
                             msg = 'No match.'
@@ -358,9 +358,9 @@ class BoundFunction(Callable, Opaque):
         self.template = newcls
         self.typing_key = self.template.key
         self.this = this
-        name = "%s(%s for %s)" % (self.__class__.__name__,
-                                  self.typing_key, self.this)
-        super(BoundFunction, self).__init__(name)
+        name = "{}({} for {})".format(self.__class__.__name__,
+                                      self.typing_key, self.this)
+        super().__init__(name)
 
     def unify(self, typingctx, other):
         if (isinstance(other, BoundFunction) and
@@ -412,7 +412,7 @@ class BoundFunction(Callable, Opaque):
             else:
                 # if the unliteral_args and unliteral_kws are the same as the
                 # literal ones, set up to not bother retrying
-                unliteral_args = tuple([_unlit_non_poison(a) for a in args])
+                unliteral_args = tuple(_unlit_non_poison(a) for a in args)
                 unliteral_kws = {k: _unlit_non_poison(v)
                                  for k, v in kws.items()}
                 skip = unliteral_args == args and kws == unliteral_kws
@@ -447,7 +447,7 @@ class BoundFunction(Callable, Opaque):
                                                         error.__traceback__)
                     else:
                         bt = [""]
-                    nd2indent = '\n{}'.format(2 * indent)
+                    nd2indent = f'\n{2 * indent}'
                     errstr = _termcolor.reset(nd2indent +
                                               nd2indent.join(_bt_as_lines(bt)))
                     return _termcolor.reset(errstr)
@@ -525,11 +525,11 @@ class Dispatcher(WeakType, Callable, Dummy):
 
     def __init__(self, dispatcher):
         self._store_object(dispatcher)
-        super(Dispatcher, self).__init__("type(%s)" % dispatcher)
+        super().__init__("type(%s)" % dispatcher)
 
     def dump(self, tab=''):
-        print((f'{tab}DUMP {type(self).__name__}[code={self._code}, '
-               f'name={self.name}]'))
+        print(f'{tab}DUMP {type(self).__name__}[code={self._code}, '
+              f'name={self.name}]')
         self.dispatcher.dump(tab=tab + '  ')
         print(f'{tab}END DUMP')
 
@@ -625,7 +625,7 @@ class ExternalFunctionPointer(BaseFunction):
             template = GilRequiringDefn
         else:
             template = make_concrete_template("CFuncPtr", sig, [sig])
-        super(ExternalFunctionPointer, self).__init__(template)
+        super().__init__(template)
 
     @property
     def key(self):
@@ -643,7 +643,7 @@ class ExternalFunction(Function):
         self.symbol = symbol
         self.sig = sig
         template = typing.make_concrete_template(symbol, symbol, [sig])
-        super(ExternalFunction, self).__init__(template)
+        super().__init__(template)
 
     @property
     def key(self):
@@ -658,7 +658,7 @@ class NamedTupleClass(Callable, Opaque):
     def __init__(self, instance_class):
         self.instance_class = instance_class
         name = "class(%s)" % (instance_class)
-        super(NamedTupleClass, self).__init__(name)
+        super().__init__(name)
 
     def get_call_type(self, context, args, kws):
         # Overridden by the __call__ constructor resolution in
@@ -683,8 +683,8 @@ class NumberClass(Callable, DTypeSpec, Opaque):
 
     def __init__(self, instance_type):
         self.instance_type = instance_type
-        name = "class(%s)" % (instance_type,)
-        super(NumberClass, self).__init__(name)
+        name = "class({})".format(instance_type)
+        super().__init__(name)
 
     def get_call_type(self, context, args, kws):
         # Overridden by the __call__ constructor resolution in typing.builtins
@@ -717,8 +717,8 @@ class RecursiveCall(Opaque):
     def __init__(self, dispatcher_type):
         assert isinstance(dispatcher_type, Dispatcher)
         self.dispatcher_type = dispatcher_type
-        name = "recursive(%s)" % (dispatcher_type,)
-        super(RecursiveCall, self).__init__(name)
+        name = "recursive({})".format(dispatcher_type)
+        super().__init__(name)
         # Initializing for the first time
         if self._overloads is None:
             self._overloads = {}

@@ -30,7 +30,7 @@ def parse_integer_signed(name):
 @total_ordering
 class Integer(Number):
     def __init__(self, name, bitwidth=None, signed=None):
-        super(Integer, self).__init__(name)
+        super().__init__(name)
         if bitwidth is None:
             bitwidth = parse_integer_bitwidth(name)
         if signed is None:
@@ -77,7 +77,7 @@ class Integer(Number):
 class IntegerLiteral(Literal, Integer):
     def __init__(self, value):
         self._literal_init(value)
-        name = 'Literal[int]({})'.format(value)
+        name = f'Literal[int]({value})'
         basetype = self.literal_type
         Integer.__init__(
             self,
@@ -99,7 +99,7 @@ class BooleanLiteral(Literal, Boolean):
 
     def __init__(self, value):
         self._literal_init(value)
-        name = 'Literal[bool]({})'.format(value)
+        name = f'Literal[bool]({value})'
         Boolean.__init__(
             self,
             name=name
@@ -117,7 +117,7 @@ Literal.ctor_map[bool] = BooleanLiteral
 @total_ordering
 class Float(Number):
     def __init__(self, *args, **kws):
-        super(Float, self).__init__(*args, **kws)
+        super().__init__(*args, **kws)
         # Determine bitwidth
         assert self.name.startswith('float')
         bitwidth = int(self.name[5:])
@@ -135,7 +135,7 @@ class Float(Number):
 @total_ordering
 class Complex(Number):
     def __init__(self, name, underlying_float, **kwargs):
-        super(Complex, self).__init__(name, **kwargs)
+        super().__init__(name, **kwargs)
         self.underlying_float = underlying_float
         # Determine bitwidth
         assert self.name.startswith('complex')
@@ -157,10 +157,10 @@ class _NPDatetimeBase(Type):
     """
 
     def __init__(self, unit, *args, **kws):
-        name = '%s[%s]' % (self.type_name, unit)
+        name = '{}[{}]'.format(self.type_name, unit)
         self.unit = unit
         self.unit_code = npdatetime_helpers.DATETIME_UNITS[self.unit]
-        super(_NPDatetimeBase, self).__init__(name, *args, **kws)
+        super().__init__(name, *args, **kws)
 
     def __lt__(self, other):
         if self.__class__ is not other.__class__:
@@ -199,9 +199,9 @@ class EnumClass(Dummy):
         assert isinstance(dtype, Type)
         self.instance_class = cls
         self.dtype = dtype
-        name = "%s<%s>(%s)" % (self.basename, self.dtype,
-                               self.instance_class.__name__)
-        super(EnumClass, self).__init__(name)
+        name = "{}<{}>({})".format(self.basename, self.dtype,
+                                   self.instance_class.__name__)
+        super().__init__(name)
 
     @property
     def key(self):
@@ -241,9 +241,9 @@ class EnumMember(Type):
         assert isinstance(dtype, Type)
         self.instance_class = cls
         self.dtype = dtype
-        name = "%s<%s>(%s)" % (self.basename, self.dtype,
-                               self.instance_class.__name__)
-        super(EnumMember, self).__init__(name)
+        name = "{}<{}>({})".format(self.basename, self.dtype,
+                                   self.instance_class.__name__)
+        super().__init__(name)
 
     @property
     def key(self):

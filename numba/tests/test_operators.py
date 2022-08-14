@@ -27,7 +27,7 @@ def make_static_power(exp):
     return pow_usecase
 
 
-class LiteralOperatorImpl(object):
+class LiteralOperatorImpl:
 
     @staticmethod
     def add_usecase(x, y):
@@ -198,7 +198,7 @@ class LiteralOperatorImpl(object):
         return x is y
 
 
-class FunctionalOperatorImpl(object):
+class FunctionalOperatorImpl:
 
     @staticmethod
     def add_usecase(x, y):
@@ -578,7 +578,7 @@ class TestOperators(TestCase):
         for usecase in usecases:
             for tp_name, runner_name in tp_runners.items():
                 for nopython in (False, True):
-                    test_name = "test_%s_%s" % (usecase, tp_name)
+                    test_name = "test_{}_{}".format(usecase, tp_name)
                     if nopython:
                         test_name += "_npm"
                     flags = Noflags if nopython else force_pyobj_flags
@@ -1002,14 +1002,14 @@ class TestOperators(TestCase):
         Make sure that bitwise float operations are not allowed
         """
         def assert_reject_compile(pyfunc, argtypes, opname):
-            msg = 'expecting TypingError when compiling {}'.format(pyfunc)
+            msg = f'expecting TypingError when compiling {pyfunc}'
             with self.assertRaises(errors.TypingError, msg=msg) as raises:
                 compile_isolated(pyfunc, argtypes)
             # check error message
             fmt = _header_lead + ' {}'
             expecting = fmt.format(opname
                                    if isinstance(opname, str)
-                                   else 'Function({})'.format(opname))
+                                   else f'Function({opname})')
             self.assertIn(expecting, str(raises.exception))
 
         methods = [

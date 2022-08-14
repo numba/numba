@@ -158,7 +158,7 @@ def skip_if_cudadevrt_missing(fn):
     return unittest.skipIf(cudadevrt_missing(), 'cudadevrt missing')(fn)
 
 
-class ForeignArray(object):
+class ForeignArray:
     """
     Class for emulating an array coming from another library through the CUDA
     Array interface. This just hides a DeviceNDArray so that it doesn't look

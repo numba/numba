@@ -94,7 +94,7 @@ class TestStencilBase(unittest.TestCase):
         self.cflags = Flags()
         self.cflags.nrt = True
 
-        super(TestStencilBase, self).__init__(*args)
+        super().__init__(*args)
 
     def _compile_this(self, func, sig, flags):
         return compile_extra(registry.cpu_target.typing_context,
@@ -112,7 +112,7 @@ class TestStencilBase(unittest.TestCase):
         return self._compile_this(func, sig, flags=self.cflags)
 
     def compile_all(self, pyfunc, *args, **kwargs):
-        sig = tuple([numba.typeof(x) for x in args])
+        sig = tuple(numba.typeof(x) for x in args)
         # compile with parallel=True
         cpfunc = self.compile_parallel(pyfunc, sig)
         # compile a standard njit of the original function
@@ -143,7 +143,7 @@ class TestStencilBase(unittest.TestCase):
 class TestStencil(TestStencilBase):
 
     def __init__(self, *args, **kwargs):
-        super(TestStencil, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     @skip_unsupported
     def test_stencil1(self):
@@ -1550,7 +1550,7 @@ def pyStencil(func_or_mode='constant', **options):
 class TestManyStencils(TestStencilBase):
 
     def __init__(self, *args, **kwargs):
-        super(TestManyStencils, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def check(self, pyfunc, *args, **kwargs):
         """
@@ -1650,7 +1650,7 @@ class TestManyStencils(TestStencilBase):
                 "Up to 3 arguments can be provided, found %s" %
                 len(args))
 
-        sig = tuple([numba.typeof(x) for x in args])
+        sig = tuple(numba.typeof(x) for x in args)
 
         njit_output = None
         with errorhandler(njit_ex, "njit"):
@@ -1687,7 +1687,8 @@ class TestManyStencils(TestStencilBase):
                         njit_output, expected, decimal=1)
                     self.assertEqual(expected.dtype, njit_output.dtype)
             except Exception as e:
-                should_not_fail.append(('njit', "%s: %s" % (type(e), str(e))))
+                should_not_fail.append(
+                    ('njit', "{}: {}".format(type(e), str(e))))
                 print("@njit failed: %s" % str(e))
 
             try:

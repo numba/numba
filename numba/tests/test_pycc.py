@@ -164,7 +164,7 @@ class TestLegacyAPI(BasePYCCTest):
 class TestCC(BasePYCCTest):
 
     def setUp(self):
-        super(TestCC, self).setUp()
+        super().setUp()
         from numba.tests import compile_with_pycc
         self._test_module = compile_with_pycc
         imp.reload(self._test_module)
@@ -191,10 +191,10 @@ class TestCC(BasePYCCTest):
             else:
                 raise RuntimeError('cannot disable numba package')
 
-            sys.path.insert(0, %(path)r)
-            import %(name)s as lib
-            """ % {'name': lib.__name__,
-                   'path': os.path.dirname(lib.__file__)}
+            sys.path.insert(0, {path!r})
+            import {name} as lib
+            """.format(name=lib.__name__,
+                       path=os.path.dirname(lib.__file__))
         code = prolog.strip(' ') + code
         subprocess.check_call([sys.executable, '-c', code])
 
@@ -272,10 +272,10 @@ class TestCC(BasePYCCTest):
                 res = lib.power(2, 7)
                 assert res == 128
                 res = lib.random(42)
-                assert_allclose(res, %(expected)s)
+                assert_allclose(res, {expected})
                 res = lib.spacing(1.0)
                 assert_allclose(res, 2**-52)
-                """ % {'expected': expected}
+                """.format(expected=expected)
             self.check_cc_compiled_in_subprocess(lib, code)
 
     def test_compile_nrt(self):

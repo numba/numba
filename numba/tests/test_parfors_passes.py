@@ -24,7 +24,7 @@ from numba.core.registry import cpu_target
 from numba.tests.support import (TestCase, is_parfors_unsupported)
 
 
-class MyPipeline(object):
+class MyPipeline:
     def __init__(self, typingctx, targetctx, args, test_ir):
         self.state = compiler.StateDict()
         self.state.typingctx = typingctx

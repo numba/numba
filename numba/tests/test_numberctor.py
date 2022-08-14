@@ -45,16 +45,14 @@ def converter(tp):
 
 
 def real_np_types():
-    for tp_name in ('int8', 'int16', 'int32', 'int64',
-                    'uint8', 'uint16', 'uint32', 'uint64',
-                    'intc', 'uintc', 'intp', 'uintp',
-                    'float32', 'float64', 'bool_'):
-        yield tp_name
+    yield from ('int8', 'int16', 'int32', 'int64',
+                'uint8', 'uint16', 'uint32', 'uint64',
+                'intc', 'uintc', 'intp', 'uintp',
+                'float32', 'float64', 'bool_')
 
 
 def complex_np_types():
-    for tp_name in ('complex64', 'complex128'):
-        yield tp_name
+    yield from ('complex64', 'complex128')
 
 
 class TestScalarNumberCtor(TestCase):
@@ -169,7 +167,7 @@ class TestScalarNumberCtor(TestCase):
             expected = np_converter(val)
             got = cfunc(val)
             self.assertPreciseEqual(got, expected,
-                                    msg="for type %s with arg %s" % (np_type, val))
+                                    msg="for type {} with arg {}".format(np_type, val))
 
     def check_number_types(self, tp_factory):
         values = [0, 1, -1, 100003, 10000000000007, -100003, -10000000000007,

@@ -45,7 +45,7 @@ class GeneratorDescriptor(FunctionDescriptor):
         return 'finalize_' + self.mangled_name
 
 
-class BaseGeneratorLower(object):
+class BaseGeneratorLower:
     """
     Base support class for lowering generators.
     """
@@ -133,7 +133,7 @@ class BaseGeneratorLower(object):
         yielded value).
         """
         lower.setup_function(self.gendesc)
-        lower.debug_print("# lower_next_func: {0}".format(
+        lower.debug_print("# lower_next_func: {}".format(
             self.gendesc.unique_name))
         assert self.gendesc.argtypes[0] == self.gentype
         builder = lower.builder
@@ -204,7 +204,7 @@ class BaseGeneratorLower(object):
 
     def debug_print(self, builder, msg):
         if config.DEBUG_JIT:
-            self.context.debug_print(builder, "DEBUGJIT: {0}".format(msg))
+            self.context.debug_print(builder, f"DEBUGJIT: {msg}")
 
 
 class GeneratorLower(BaseGeneratorLower):
@@ -297,7 +297,7 @@ class PyGeneratorLower(BaseGeneratorLower):
         builder.ret_void()
 
 
-class LowerYield(object):
+class LowerYield:
     """
     Support class for lowering a particular yield point.
     """

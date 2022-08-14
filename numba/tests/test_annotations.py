@@ -116,7 +116,7 @@ class TestAnnotation(TestCase):
         self.assertEqual(output.count(sigfmt.format(sig_i64)), 1)
         # Ensure the loop is tagged
         self.assertEqual(len(re.findall(re_lifted_tag, output)), 1,
-                         msg='%s not found in %s' % (re_lifted_tag, output))
+                         msg='{} not found in {}'.format(re_lifted_tag, output))
 
         # Compile float64 version
         sig_f64 = (types.float64,)
@@ -160,7 +160,7 @@ class TestTypeAnnotation(unittest.TestCase):
         for i, ln in enumerate(lines):
             if pat in ln:
                 return i
-        raise ValueError("can't find {!r}".format(pat))
+        raise ValueError(f"can't find {pat!r}")
 
     def getlines(self, func):
         strbuf = StringIO()

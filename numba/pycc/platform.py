@@ -71,11 +71,11 @@ def _check_external_compiler():
 _external_compiler_ok = _check_external_compiler()
 
 
-class _DummyExtension(object):
+class _DummyExtension:
     libraries = []
 
 
-class Toolchain(object):
+class Toolchain:
 
     def __init__(self):
         if not _external_compiler_ok:
@@ -113,13 +113,13 @@ class Toolchain(object):
                 compilers = ['gcc_linux-32', 'gxx_linux-32']
             else:
                 compilers = ['gcc_linux-64', 'gxx_linux-64']
-            msg = "%s %s" % (basemsg, conda_msg % ' '.join(compilers))
+            msg = "{} {}".format(basemsg, conda_msg % ' '.join(compilers))
         elif plt.startswith('darwin'):
             compilers = ['clang_osx-64', 'clangxx_osx-64']
-            msg = "%s %s" % (basemsg, conda_msg % ' '.join(compilers))
+            msg = "{} {}".format(basemsg, conda_msg % ' '.join(compilers))
         elif plt.startswith('win32'):
             winmsg = "Cannot find suitable msvc."
-            msg = "%s %s" % (basemsg, winmsg)
+            msg = "{} {}".format(basemsg, winmsg)
         else:
             msg = "Unknown platform %s" % plt
         raise RuntimeError(msg)

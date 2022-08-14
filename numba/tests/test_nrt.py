@@ -38,7 +38,7 @@ x86_only = unittest.skipIf(platform.machine() not in ('i386', 'x86_64'),
                            'x86 only test')
 
 
-class Dummy(object):
+class Dummy:
     alive = 0
 
     def __init__(self):
@@ -501,7 +501,7 @@ br i1 %.294, label %B42, label %B160
 
         # all GONE lines are pruned
         for i in [1, 2, 3, 4, 5]:
-            gone = '; GONE {}'.format(i)
+            gone = f'; GONE {i}'
             self.assertIn(gone, pruned_lines)
         # no other lines
         self.assertEqual(len(list(pruned_lines.splitlines())), len(combined))
@@ -582,7 +582,7 @@ class TestNrtExternalCFFI(EnableNRTStatsMixin, TestCase):
     def setUp(self):
         # initialize the NRT (in case the tests are run in isolation)
         cpu_target.target_context
-        super(TestNrtExternalCFFI, self).setUp()
+        super().setUp()
 
     def compile_cffi_module(self, name, source, cdef):
         from cffi import FFI
@@ -590,7 +590,7 @@ class TestNrtExternalCFFI(EnableNRTStatsMixin, TestCase):
         ffi = FFI()
         ffi.set_source(name, source, include_dirs=[include_path()])
         ffi.cdef(cdef)
-        tmpdir = temp_directory("cffi_test_{}".format(name))
+        tmpdir = temp_directory(f"cffi_test_{name}")
         ffi.compile(tmpdir=tmpdir)
         sys.path.append(tmpdir)
         try:
@@ -609,7 +609,7 @@ class TestNrtExternalCFFI(EnableNRTStatsMixin, TestCase):
         return table
 
     def test_manage_memory(self):
-        name = "{}_test_manage_memory".format(self.__class__.__name__)
+        name = f"{self.__class__.__name__}_test_manage_memory"
         source = r"""
 #include <stdio.h>
 #include "numba/core/runtime/nrt_external.h"
@@ -650,7 +650,7 @@ extern int status;
         self.assertEqual(mod.lib.status, 0xdead)
 
     def test_allocate(self):
-        name = "{}_test_allocate".format(self.__class__.__name__)
+        name = f"{self.__class__.__name__}_test_allocate"
         source = r"""
 #include <stdio.h>
 #include "numba/core/runtime/nrt_external.h"
@@ -677,7 +677,7 @@ NRT_MemInfo* test_nrt_api(NRT_api_functions *nrt, size_t n) {
         mi = nrt.MemInfo(mi_addr)
         self.assertEqual(mi.refcount, 1)
 
-        buffer = ffi.buffer(ffi.cast("char [{}]".format(numbytes), mi.data))
+        buffer = ffi.buffer(ffi.cast(f"char [{numbytes}]", mi.data))
         arr = np.ndarray(shape=(3,), dtype=np.intp, buffer=buffer)
         np.testing.assert_equal(arr, [0xded, 0xabc, 0xdef])
 

@@ -23,7 +23,7 @@ PYOBJECT = GENERIC_POINTER
 void_ptr = GENERIC_POINTER
 
 
-class OverloadSelector(object):
+class OverloadSelector:
     """
     An object matching an actual signature against a registry of formal
     signatures and choosing the best candidate, if any.
@@ -73,9 +73,9 @@ class OverloadSelector(object):
             same = list(takewhile(lambda x: genericity[x] == firstscore,
                                   ordered))
             if len(same) > 1:
-                msg = ["{n} ambiguous signatures".format(n=len(same))]
+                msg = [f"{len(same)} ambiguous signatures"]
                 for sig in same:
-                    msg += ["{0} => {1}".format(sig, candidates[sig])]
+                    msg += [f"{sig} => {candidates[sig]}"]
                 raise errors.NumbaTypeError('\n'.join(msg))
         return ordered[0]
 
@@ -167,7 +167,7 @@ def _load_global_helpers():
             ll.add_symbol("PyExc_%s" % (obj.__name__), id(obj))
 
 
-class BaseContext(object):
+class BaseContext:
     """
 
     Notes on Structure
@@ -345,7 +345,7 @@ class BaseContext(object):
         obj = copy.copy(self)  # shallow copy
         for k, v in kws.items():
             if not hasattr(obj, k):
-                raise NameError("unknown option {0!r}".format(k))
+                raise NameError(f"unknown option {k!r}")
             setattr(obj, k, v)
         if obj.codegen() is not self.codegen():
             # We can't share functions across different codegens
@@ -510,7 +510,7 @@ class BaseContext(object):
             return impl(self, builder, ty, val)
         except NotImplementedError:
             raise NotImplementedError(
-                "Cannot lower constant of type '%s'" % (ty,))
+                "Cannot lower constant of type '{}'".format(ty))
 
     def get_constant(self, ty, val):
         """
@@ -561,7 +561,7 @@ class BaseContext(object):
             return self.get_function(fn, sig, _firstcall=False)
 
         raise NotImplementedError(
-            "No definition for lowering %s%s" % (key, sig))
+            "No definition for lowering {}{}".format(key, sig))
 
     def get_generator_desc(self, genty):
         """
@@ -618,7 +618,7 @@ class BaseContext(object):
             pass
 
         raise NotImplementedError(
-            "No definition for lowering %s.%s" % (typ, attr))
+            "No definition for lowering {}.{}".format(typ, attr))
 
     def get_setattr(self, attr, sig):
         """
@@ -707,7 +707,7 @@ class BaseContext(object):
             return impl(self, builder, fromty, toty, val)
         except errors.NumbaNotImplementedError:
             raise errors.NumbaNotImplementedError(
-                "Cannot cast %s to %s: %s" % (fromty, toty, val))
+                "Cannot cast {} to {}: {}".format(fromty, toty, val))
 
     def generic_compare(self, builder, key, argtypes, args):
         """
@@ -1099,7 +1099,7 @@ class BaseContext(object):
         llvoidptr = self.get_value_type(types.voidptr)
         addr = self.get_constant(types.uintp, intaddr).inttoptr(llvoidptr)
         # Use a unique name by embedding the address value
-        symname = 'numba.dynamic.globals.{:x}'.format(intaddr)
+        symname = f'numba.dynamic.globals.{intaddr:x}'
         gv = cgutils.add_global_variable(mod, llvoidptr, symname)
         # Use linkonce linkage to allow merging with other GV of the same name.
         # And, avoid optimization from assuming its value.
@@ -1184,7 +1184,7 @@ class BaseContext(object):
         raise NotImplementedError(f"{self} does not support ufunc")
 
 
-class _wrap_impl(object):
+class _wrap_impl:
     """
     A wrapper object to call an implementation function with some predefined
     (context, signature) arguments.
@@ -1216,7 +1216,7 @@ def _has_loc(fn):
     return 'loc' in sig.parameters
 
 
-class _wrap_missing_loc(object):
+class _wrap_missing_loc:
 
     def __init__(self, fn):
         self.func = fn # store this to help with debug

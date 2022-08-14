@@ -21,7 +21,7 @@ from numba.experimental.jitclass.base import JitClassType
 from numba.tests.support import MemoryLeakMixin, TestCase, skip_if_typeguard
 
 
-class TestClass1(object):
+class TestClass1:
     def __init__(self, x, y, z=1, *, a=5):
         self.x = x
         self.y = y
@@ -29,7 +29,7 @@ class TestClass1(object):
         self.a = a
 
 
-class TestClass2(object):
+class TestClass2:
     def __init__(self, x, y, z=1, *args, a=5):
         self.x = x
         self.y = y
@@ -50,7 +50,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
     def _check_spec(self, spec=None, test_cls=None, all_expected=None):
         if test_cls is None:
             @jitclass(spec)
-            class Test(object):
+            class Test:
 
                 def __init__(self):
                     pass
@@ -88,7 +88,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         spec = [("x", int32)]
 
         @jitclass(spec)
-        class Test1(object):
+        class Test1:
             x: int
             y: pt.List[float]
 
@@ -118,7 +118,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         spec1 = [("x", int), ("y", float32[:])]
         spec2 = [(1, int32), ("y", float32[:])]
 
-        class Test(object):
+        class Test:
 
             def __init__(self):
                 pass
@@ -152,7 +152,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         spec["arr"] = float32[:]
 
         @jitclass(spec)
-        class Float2AndArray(object):
+        class Float2AndArray:
 
             def __init__(self, x, y, arr):
                 self.x = x
@@ -172,7 +172,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         spec["y"] = int32
 
         @jitclass(spec)
-        class Vector2(object):
+        class Vector2:
 
             def __init__(self, x, y):
                 self.x = x
@@ -262,7 +262,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         spec["val"] = boolean
 
         @jitclass(spec)
-        class Foo(object):
+        class Foo:
 
             def __init__(self, val):
                 self.val = val
@@ -282,7 +282,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             return node.data
 
         @jitclass(spec)
-        class LinkedNode(object):
+        class LinkedNode:
 
             def __init__(self, data, next):
                 self.data = data
@@ -339,7 +339,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         spec["c"] = float64
 
         @jitclass(spec)
-        class Struct(object):
+        class Struct:
 
             def __init__(self, a, b, c):
                 self.a = a
@@ -388,7 +388,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                          "cannot subclass from a jitclass")
 
     def test_base_class(self):
-        class Base(object):
+        class Base:
 
             def what(self):
                 return self.attr
@@ -404,7 +404,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
     def test_globals(self):
 
-        class Mine(object):
+        class Mine:
             constant = 123
 
             def __init__(self):
@@ -418,7 +418,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
     def test_user_getter_setter(self):
         @jitclass([("attr", int32)])
-        class Foo(object):
+        class Foo:
 
             def __init__(self, attr):
                 self.attr = attr
@@ -455,7 +455,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(c, 567 - 1)
 
     def test_user_deleter_error(self):
-        class Foo(object):
+        class Foo:
 
             def __init__(self):
                 pass
@@ -474,7 +474,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                          "deleter is not supported: value")
 
     def test_name_shadowing_error(self):
-        class Foo(object):
+        class Foo:
 
             def __init__(self):
                 pass
@@ -497,7 +497,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
     def test_distinct_classes(self):
         # Different classes with the same names shouldn't confuse the compiler
         @jitclass([("x", int32)])
-        class Foo(object):
+        class Foo:
 
             def __init__(self, x):
                 self.x = x + 2
@@ -508,7 +508,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         FirstFoo = Foo
 
         @jitclass([("x", int32)])
-        class Foo(object):
+        class Foo:
 
             def __init__(self, x):
                 self.x = x - 2
@@ -525,7 +525,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(foo.run(), 2)
 
     def test_parameterized(self):
-        class MyClass(object):
+        class MyClass:
 
             def __init__(self, value):
                 self.value = value
@@ -555,7 +555,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         }
 
         @jitclass(spec)
-        class MyClass(object):
+        class MyClass:
 
             def __init__(self, value):
                 self.value = value
@@ -651,7 +651,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
     def test_docstring(self):
 
         @jitclass
-        class Apple(object):
+        class Apple:
             "Class docstring"
 
             def __init__(self):
@@ -674,7 +674,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                 ("b", float64)]
 
         @jitclass(spec)
-        class TestClass(object):
+        class TestClass:
             def __init__(self, x, y, z):
                 self.a = x * y
                 self.b = z
@@ -693,7 +693,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                 ("z", int32)]
 
         @jitclass(spec)
-        class TestClass(object):
+        class TestClass:
             def __init__(self, x, y, z=1):
                 self.x = x
                 self.y = y
@@ -763,7 +763,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         spec = []
 
         @jitclass(spec)
-        class TestClass(object):
+        class TestClass:
             def __init__(self):
                 pass
 
@@ -783,7 +783,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         spec = [("data", int32[:])]
 
         @jitclass(spec)
-        class TestClass(object):
+        class TestClass:
             def __init__(self):
                 self.data = np.zeros(10, dtype=np.int32)
 
@@ -814,7 +814,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         spec = [("data", int32[:])]
 
         @jitclass(spec)
-        class TestClass(object):
+        class TestClass:
             def __init__(self):
                 self.data = np.zeros(10, dtype=np.int32)
 
@@ -840,7 +840,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         spec = [("data", int32[:, :])]
 
         @jitclass(spec)
-        class TestClass(object):
+        class TestClass:
             def __init__(self):
                 self.data = np.zeros((10, 10), dtype=np.int32)
 
@@ -870,7 +870,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         spec = [("data", int32[:, :])]
 
         @jitclass(spec)
-        class TestClass(object):
+        class TestClass:
             def __init__(self):
                 self.data = np.zeros((10, 10), dtype=np.int32)
 
@@ -899,7 +899,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         spec = [("data", int32[:])]
 
         @jitclass(spec)
-        class TestClass(object):
+        class TestClass:
             def __init__(self):
                 self.data = np.zeros(10, dtype=np.int32)
 
@@ -942,7 +942,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         spec.extend([(letter.upper() * 10, float64) for letter in alphabet])
 
         @jitclass(spec)
-        class TruncatedLabel(object):
+        class TruncatedLabel:
             def __init__(self,):
                 self.aaaaaaaaaa = 10.
 
@@ -957,7 +957,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
     def test_pickling(self):
         @jitclass
-        class PickleTestSubject(object):
+        class PickleTestSubject:
             def __init__(self):
                 pass
 
@@ -1117,7 +1117,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         spec = OrderedDict(value=int32)
 
         @jitclass(spec)
-        class Foo(object):
+        class Foo:
             def __init__(self, value):
                 self.value = value
 
@@ -1128,7 +1128,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                 return self.value + 1
 
         @jitclass(spec)
-        class Bar(object):
+        class Bar:
             def __init__(self, value):
                 self.value = value
 

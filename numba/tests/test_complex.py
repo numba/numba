@@ -15,7 +15,7 @@ enable_pyobj_flags.enable_pyobject = True
 no_pyobj_flags = Flags()
 
 
-class BaseComplexTest(object):
+class BaseComplexTest:
 
     def basic_values(self):
         reals = [-0.0, +0.0, 1, -1, +1.5, -3.5,
@@ -50,7 +50,7 @@ class BaseComplexTest(object):
                     self.assertIn("math domain error", str(e))
                     continue
                 got = cfunc(vx)
-                msg = 'for input %r with prec %r' % (vx, prec)
+                msg = 'for input {!r} with prec {!r}'.format(vx, prec)
                 self.assertPreciseEqual(got, expected, prec=prec,
                                         ulps=ulps, abs_tol=abs_tol, msg=msg)
 
@@ -60,7 +60,7 @@ class BaseComplexTest(object):
             cr = compile_isolated(pyfunc, [tx, ty], flags=flags)
             cfunc = cr.entry_point
             prec = ('single'
-                    if set([tx, ty]) & set([types.float32, types.complex64])
+                    if {tx, ty} & {types.float32, types.complex64}
                     else 'double')
             for vx, vy in values:
                 try:
@@ -71,7 +71,7 @@ class BaseComplexTest(object):
                 except ZeroDivisionError:
                     continue
                 got = cfunc(vx, vy)
-                msg = 'for input %r with prec %r' % ((vx, vy), prec)
+                msg = 'for input {!r} with prec {!r}'.format((vx, vy), prec)
                 self.assertPreciseEqual(got, expected, prec=prec,
                                         ulps=ulps, msg=msg)
 

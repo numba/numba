@@ -16,7 +16,7 @@ from numba import cext
 extension_libs = cext.get_extension_libs()
 
 
-class CC(object):
+class CC:
     """
     An ahead-of-time compiler to create extension modules that don't
     depend on Numba.

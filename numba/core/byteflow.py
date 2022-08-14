@@ -24,7 +24,7 @@ _NO_RAISE_OPS = frozenset({
 
 
 @total_ordering
-class BlockKind(object):
+class BlockKind:
     """Kinds of block to make related code safer than just `str`.
     """
     _members = frozenset({
@@ -44,19 +44,19 @@ class BlockKind(object):
         if isinstance(other, BlockKind):
             return self._value < other._value
         else:
-            raise TypeError('cannot compare to {!r}'.format(type(other)))
+            raise TypeError(f'cannot compare to {type(other)!r}')
 
     def __eq__(self, other):
         if isinstance(other, BlockKind):
             return self._value == other._value
         else:
-            raise TypeError('cannot compare to {!r}'.format(type(other)))
+            raise TypeError(f'cannot compare to {type(other)!r}')
 
     def __repr__(self):
-        return "BlockKind({})".format(self._value)
+        return f"BlockKind({self._value})"
 
 
-class _lazy_pformat(object):
+class _lazy_pformat:
     def __init__(self, *args, **kwargs):
         self.args = args
         self.kwargs = kwargs
@@ -65,7 +65,7 @@ class _lazy_pformat(object):
         return pformat(*self.args, **self.kwargs)
 
 
-class Flow(object):
+class Flow:
     """Data+Control Flow analysis.
 
     Simulate execution to recover dataflow and controlflow information.
@@ -263,7 +263,7 @@ class Flow(object):
                 raise UnsupportedError(msg)
 
 
-class TraceRunner(object):
+class TraceRunner:
     """Trace runner contains the states for the trace and the opcode dispatch.
     """
 
@@ -279,7 +279,7 @@ class TraceRunner(object):
         inst = state.get_inst()
         _logger.debug("dispatch pc=%s, inst=%s", state._pc, inst)
         _logger.debug("stack %s", state._stack)
-        fn = getattr(self, "op_{}".format(inst.opname), None)
+        fn = getattr(self, f"op_{inst.opname}", None)
         if fn is not None:
             fn(state, inst)
         else:
@@ -1188,7 +1188,7 @@ class TraceRunner(object):
 
 
 @total_ordering
-class State(object):
+class State:
     """State of the trace
     """
 
@@ -1471,7 +1471,7 @@ class State(object):
 Edge = namedtuple("Edge", ["pc", "stack", "blockstack", "npush"])
 
 
-class AdaptDFA(object):
+class AdaptDFA:
     """Adapt Flow to the old DFA class expected by Interpreter
     """
 
@@ -1507,11 +1507,10 @@ def _flatten_inst_regs(iterable):
         if isinstance(item, str):
             yield item
         elif isinstance(item, (tuple, list)):
-            for x in _flatten_inst_regs(item):
-                yield x
+            yield from _flatten_inst_regs(item)
 
 
-class AdaptCFA(object):
+class AdaptCFA:
     """Adapt Flow to the old CFA class expected by Interpreter
     """
 
@@ -1554,7 +1553,7 @@ class AdaptCFA(object):
         self._flow.cfgraph.dump()
 
 
-class AdaptCFBlock(object):
+class AdaptCFBlock:
     def __init__(self, blockinfo, offset):
         self.offset = offset
         self.body = tuple(i for i, _ in blockinfo.insts)

@@ -42,7 +42,7 @@ def fallback_context(state, msg):
             msg_rewrite = ("\nCompilation is falling back to object mode "
                            "WITH%s looplifting enabled because %s"
                            % (loop_lift, msg))
-            warnings.warn_explicit('%s due to: %s' % (msg_rewrite, e),
+            warnings.warn_explicit('{} due to: {}'.format(msg_rewrite, e),
                                    errors.NumbaWarning,
                                    state.func_id.filename,
                                    state.func_id.firstlineno)
@@ -550,7 +550,7 @@ class PrintIRCFG(FunctionPass):
     def run_pass(self, state):
         fir = state.func_ir
         self._ver += 1
-        fir.render_dot(filename_prefix='v{}'.format(self._ver)).render()
+        fir.render_dot(filename_prefix=f'v{self._ver}').render()
         return False
 
 
@@ -1227,7 +1227,7 @@ class MixedContainerUnroller(FunctionPass):
         # and derive some new IR for this set of blocks
         this_loop = loop_info.loop
         this_loop_body = this_loop.body - \
-            set([this_loop.header])
+            {this_loop.header}
         loop_blocks = {
             x: func_ir.blocks[x] for x in this_loop_body}
         new_ir = func_ir.derive(loop_blocks)
@@ -1419,12 +1419,12 @@ class IterLoopCanonicalization(FunctionPass):
             except ValueError:
                 pass
         induction_vars |= tmp
-        induction_var_names = set([x.name for x in induction_vars])
+        induction_var_names = {x.name for x in induction_vars}
 
         # Find the downstream blocks that might reference the induction var
         succ = set()
         for lbl in loop.exits:
-            succ |= set([x[0] for x in cfg.successors(lbl)])
+            succ |= {x[0] for x in cfg.successors(lbl)}
         check_blocks = (loop.body | loop.exits | succ) ^ {loop.header}
 
         # replace RHS use of induction var with getitem

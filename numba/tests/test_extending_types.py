@@ -27,13 +27,13 @@ def gen_mock_float():
 class TestExtTypDummy(unittest.TestCase):
 
     def setUp(self):
-        class Dummy(object):
+        class Dummy:
             def __init__(self, value):
                 self.value = value
 
         class DummyType(types.Type):
             def __init__(self):
-                super(DummyType, self).__init__(name='Dummy')
+                super().__init__(name='Dummy')
 
         dummy_type = DummyType()
 
@@ -77,7 +77,7 @@ class TestExtTypDummy(unittest.TestCase):
                     return float(x.value)
                 return codegen
             else:
-                raise NumbaTypeError('cannot type float({})'.format(x))
+                raise NumbaTypeError(f'cannot type float({x})')
 
     def test_overload_float(self):
         mock_float = gen_mock_float()

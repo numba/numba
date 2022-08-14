@@ -14,7 +14,7 @@ def foo_factory(n):
     return foo
 
 
-foo1, foo2, foo3 = [foo_factory(x) for x in range(3)]
+foo1, foo2, foo3 = (foo_factory(x) for x in range(3))
 
 
 @njit(debug=True)

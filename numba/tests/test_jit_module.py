@@ -132,8 +132,8 @@ jit_module({jit_options})
                                     **jit_options) as test_module:
                 logs = logs.getvalue()
                 expected = ["Auto decorating function",
-                            "from module {}".format(test_module.__name__),
-                            "with jit and options: {}".format(jit_options)]
+                            f"from module {test_module.__name__}",
+                            f"with jit and options: {jit_options}"]
                 self.assertTrue(all(i in logs for i in expected))
 
     def test_jit_module_logging_level(self):

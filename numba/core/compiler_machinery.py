@@ -16,7 +16,7 @@ import numba.core.event as ev
 _termcolor = errors.termcolor()
 
 
-class SimpleTimer(object):
+class SimpleTimer:
     """
     A simple context managed timer
     """
@@ -107,7 +107,7 @@ class CompilerPass(metaclass=ABCMeta):
         return self._analysis[pass_name]
 
 
-class SSACompliantMixin(object):
+class SSACompliantMixin:
     """ Mixin to indicate a pass is SSA form compliant. Nothing is asserted
     about this condition at present.
     """
@@ -132,7 +132,7 @@ class LoweringPass(CompilerPass):
     pass
 
 
-class AnalysisUsage(object):
+class AnalysisUsage:
     """This looks and behaves like LLVM's AnalysisUsage because its like that.
     """
 
@@ -167,7 +167,7 @@ def debug_print(*args, **kwargs):
 pass_timings = namedtuple('pass_timings', 'init run finalize')
 
 
-class PassManager(object):
+class PassManager:
     """
     The PassManager is a named instance of a particular compilation pipeline
     """
@@ -261,7 +261,7 @@ class PassManager(object):
         """
         Patches the error to show the stage that it arose in.
         """
-        newmsg = "{desc}\n{exc}".format(desc=desc, exc=exc)
+        newmsg = f"{desc}\n{exc}"
         exc.args = (newmsg,)
         return exc
 
@@ -334,7 +334,7 @@ class PassManager(object):
         # inject runtimes
         pt = pass_timings(init_time.elapsed, pass_time.elapsed,
                           finalize_time.elapsed)
-        self.exec_times["%s_%s" % (index, pss.name())] = pt
+        self.exec_times["{}_{}".format(index, pss.name())] = pt
 
         # debug print after this pass?
         debug_print(pss.name(), self._print_after + self._print_wrap, "AFTER")
@@ -406,7 +406,7 @@ class PassManager(object):
 pass_info = namedtuple('pass_info', 'pass_inst mutates_CFG analysis_only')
 
 
-class PassRegistry(object):
+class PassRegistry:
     """
     Pass registry singleton class.
     """
@@ -449,7 +449,7 @@ class PassRegistry(object):
 
     def dump(self):
         for k, v in self._registry.items():
-            print("%s: %s" % (k, v))
+            print("{}: {}".format(k, v))
 
 
 _pass_registry = PassRegistry()

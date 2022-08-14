@@ -40,7 +40,7 @@ def type_callable(func):
         def generic(self):
             return typing_func(self.context)
 
-        name = "%s_CallableTemplate" % (func_name,)
+        name = "{}_CallableTemplate".format(func_name)
         bases = (CallableTemplate,)
         class_dict = dict(key=func, generic=generic)
         template = type(name, bases, class_dict)
@@ -360,11 +360,11 @@ class _Intrinsic(ReduceMixin):
         """
         This is only defined to pretend to be a callable from CPython.
         """
-        msg = '{0} is not usable in pure-python'.format(self)
+        msg = f'{self} is not usable in pure-python'
         raise NotImplementedError(msg)
 
     def __repr__(self):
-        return "<intrinsic {0}>".format(self._name)
+        return f"<intrinsic {self._name}>"
 
     def __deepcopy__(self, memo):
         # NOTE: Intrinsic are immutable and we don't need to copy.

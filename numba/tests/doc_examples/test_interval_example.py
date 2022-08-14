@@ -11,7 +11,7 @@ class IntervalExampleTest(unittest.TestCase):
 
     def test_interval_class_usage(self):
         # magictoken.interval_py_class.begin
-        class Interval(object):
+        class Interval:
             """
             A half-open interval on the real number line.
             """
@@ -21,7 +21,7 @@ class IntervalExampleTest(unittest.TestCase):
                 self.hi = hi
 
             def __repr__(self):
-                return 'Interval(%f, %f)' % (self.lo, self.hi)
+                return 'Interval({:f}, {:f})'.format(self.lo, self.hi)
 
             @property
             def width(self):
@@ -33,7 +33,7 @@ class IntervalExampleTest(unittest.TestCase):
 
         class IntervalType(types.Type):
             def __init__(self):
-                super(IntervalType, self).__init__(name='Interval')
+                super().__init__(name='Interval')
 
         interval_type = IntervalType()
         # magictoken.interval_type_class.end
@@ -164,8 +164,8 @@ class IntervalExampleTest(unittest.TestCase):
         def check_equal_intervals(x, y):
             self.assertIsInstance(x, Interval)
             self.assertIsInstance(y, Interval)
-            self.assertEquals(x.lo, y.lo)
-            self.assertEquals(x.hi, y.hi)
+            self.assertEqual(x.lo, y.lo)
+            self.assertEqual(x.hi, y.hi)
 
         a = Interval(2, 3)
         b = Interval(4, 5)

@@ -108,7 +108,7 @@ def is_hash_used(context, builder, h):
 SetLoop = collections.namedtuple('SetLoop', ('index', 'entry', 'do_break'))
 
 
-class _SetPayload(object):
+class _SetPayload:
 
     def __init__(self, context, builder, set_type, ptr):
         payload = get_payload_struct(context, builder, set_type, ptr)
@@ -363,7 +363,7 @@ class _SetPayload(object):
         yield self.get_entry(i)
 
 
-class SetInstance(object):
+class SetInstance:
 
     def __init__(self, context, builder, set_type, set_val):
         self._context = context
@@ -1162,7 +1162,7 @@ class SetInstance(object):
         self._context.nrt.decref(self._builder, self._ty.dtype, val)
 
 
-class SetIterInstance(object):
+class SetIterInstance:
 
     def __init__(self, context, builder, iter_type, iter_val):
         self._context = context

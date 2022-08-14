@@ -17,7 +17,7 @@ class TestCudaNDArray(CUDATestCase):
 
         ary = np.asarray(1.234)
         dary = cuda.to_device(ary)
-        self.assertEquals(dary.ndim, 0)
+        self.assertEqual(dary.ndim, 0)
         devicearray.verify_cuda_ndarray_interface(dary)
 
     def test_device_array_from_readonly(self):
@@ -41,8 +41,8 @@ class TestCudaNDArray(CUDATestCase):
     def test_devicearray_shape(self):
         ary = np.arange(2 * 3 * 4).reshape(2, 3, 4)
         dary = cuda.to_device(ary)
-        self.assertEquals(ary.shape, dary.shape)
-        self.assertEquals(ary.shape[1:], dary.shape[1:])
+        self.assertEqual(ary.shape, dary.shape)
+        self.assertEqual(ary.shape[1:], dary.shape[1:])
 
     def test_devicearray(self):
         array = np.arange(100, dtype=np.int32)
@@ -231,7 +231,7 @@ class TestCudaNDArray(CUDATestCase):
             (a_c, a_f),
             (a_c, a_c),
         ]:
-            msg = '%s => %s' % (
+            msg = '{} => {}'.format(
                 'C' if original.flags.c_contiguous else 'F',
                 'C' if copy.flags.c_contiguous else 'F',
             )
@@ -262,7 +262,7 @@ class TestCudaNDArray(CUDATestCase):
         with self.assertRaises(ValueError) as e:
             d.copy_to_device(cuda.to_device(a_f))
         self.assertEqual(
-            "incompatible strides: {} vs. {}".format(a_c.strides, a_f.strides),
+            f"incompatible strides: {a_c.strides} vs. {a_f.strides}",
             str(e.exception))
 
         d.copy_to_device(cuda.to_device(a_c))
@@ -273,7 +273,7 @@ class TestCudaNDArray(CUDATestCase):
         with self.assertRaises(ValueError) as e:
             d.copy_to_device(cuda.to_device(a_c))
         self.assertEqual(
-            "incompatible strides: {} vs. {}".format(a_f.strides, a_c.strides),
+            f"incompatible strides: {a_f.strides} vs. {a_c.strides}",
             str(e.exception))
 
         d.copy_to_device(cuda.to_device(a_f))

@@ -113,7 +113,7 @@ def _define_atomic_inc_dec(module, op, ordering):
     the memory ordering.  The generated function returns the new value.
     """
     ftype = ir.FunctionType(_word_type, [_word_type.as_pointer()])
-    fn_atomic = ir.Function(module, ftype, name="nrt_atomic_{0}".format(op))
+    fn_atomic = ir.Function(module, ftype, name=f"nrt_atomic_{op}")
 
     [ptr] = fn_atomic.args
     bb = fn_atomic.append_basic_block()

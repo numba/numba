@@ -23,7 +23,7 @@ class TestPolynomialBase(EnableNRTStatsMixin, TestCase):
     def setUp(self):
         # Collect leftovers from previous test cases before checking for leaks
         gc.collect()
-        super(TestPolynomialBase, self).setUp()
+        super().setUp()
 
     def assert_error(self, cfunc, args, msg, err=ValueError):
         with self.assertRaises(err) as raises:

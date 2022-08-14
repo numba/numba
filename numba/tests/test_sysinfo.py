@@ -14,7 +14,7 @@ import numba.misc.numba_sysinfo as nsi
 class TestSysInfo(TestCase):
 
     def setUp(self):
-        super(TestSysInfo, self).setUp()
+        super().setUp()
         self.info = nsi.get_sysinfo()
         self.safe_contents = {
             int: (
@@ -61,7 +61,7 @@ class TestSysInfo(TestCase):
         self.safe_keys = chain(*self.safe_contents.values())
 
     def tearDown(self):
-        super(TestSysInfo, self).tearDown()
+        super().tearDown()
         # System info might contain long strings or lists so delete it.
         del self.info
 
@@ -94,7 +94,7 @@ class TestSysInfoWithPsutil(TestCase):
     cpus_list = [1, 2]
 
     def setUp(self):
-        super(TestSysInfoWithPsutil, self).setUp()
+        super().setUp()
         self.psutil_orig_state = nsi._psutil_import
         # Mocking psutil
         nsi._psutil_import = True
@@ -112,7 +112,7 @@ class TestSysInfoWithPsutil(TestCase):
         self.info = nsi.get_os_spec_info(platform.system())
 
     def tearDown(self):
-        super(TestSysInfoWithPsutil, self).tearDown()
+        super().tearDown()
         nsi._psutil_import = self.psutil_orig_state
 
     def test_has_all_data(self):
@@ -137,13 +137,13 @@ class TestSysInfoWithPsutil(TestCase):
 class TestSysInfoWithoutPsutil(TestCase):
 
     def setUp(self):
-        super(TestSysInfoWithoutPsutil, self).setUp()
+        super().setUp()
         self.psutil_orig_state = nsi._psutil_import
         nsi._psutil_import = False
         self.info = nsi.get_os_spec_info(platform.system())
 
     def tearDown(self):
-        super(TestSysInfoWithoutPsutil, self).tearDown()
+        super().tearDown()
         nsi._psutil_import = self.psutil_orig_state
 
     def test_has_all_data(self):

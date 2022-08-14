@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import logging
 import os
 import sys
@@ -63,7 +61,7 @@ def get_header():
     """ % hasattr(numpy, 'complex256'))
 
 
-class ExportEntry(object):
+class ExportEntry:
     """
     A simple record for exporting symbols.
     """
@@ -74,10 +72,10 @@ class ExportEntry(object):
         self.function = function
 
     def __repr__(self):
-        return "ExportEntry(%r, %r)" % (self.symbol, self.signature)
+        return "ExportEntry({!r}, {!r})".format(self.symbol, self.signature)
 
 
-class _ModuleCompiler(object):
+class _ModuleCompiler:
     """A base class to compile Python modules to a single shared library or
     extension module.
 
@@ -118,7 +116,7 @@ class _ModuleCompiler(object):
             self.module_name, **aot_options)
 
     def _mangle_method_symbol(self, func_name):
-        return "._pycc_method_%s" % (func_name,)
+        return "._pycc_method_{}".format(func_name)
 
     def _emit_python_wrapper(self, llvm_module):
         """Emit generated Python wrapper and extension module code.
@@ -219,7 +217,7 @@ class _ModuleCompiler(object):
                 restype = self.emit_type(export_entry.signature.return_type)
                 args = ", ".join(self.emit_type(argtype)
                                  for argtype in export_entry.signature.args)
-                fout.write("extern %s %s(%s);\n" % (restype, name, args))
+                fout.write("extern {} {}({});\n".format(restype, name, args))
 
     def _emit_method_array(self, llvm_module):
         """

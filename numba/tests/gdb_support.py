@@ -35,7 +35,7 @@ _msg = "pexpect module needed for test"
 skip_unless_pexpect = unittest.skipUnless(_HAVE_PEXPECT, _msg)
 
 
-class GdbMIDriver(object):
+class GdbMIDriver:
     """
     Driver class for the GDB machine interface:
     https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI.html

@@ -41,7 +41,7 @@ lower = registry.lower
 # the scalar is returned. For arrays code for actual indexing is
 # generated and reading performs the appropriate indirection.
 
-class _ScalarIndexingHelper(object):
+class _ScalarIndexingHelper:
     def update_indices(self, loop_indices, name):
         pass
 
@@ -49,7 +49,7 @@ class _ScalarIndexingHelper(object):
         pass
 
 
-class _ScalarHelper(object):
+class _ScalarHelper:
     """Helper class to handle scalar arguments (and result).
     Note that store_data is only used when generating code for
     a scalar ufunc and to write the output value.
@@ -183,7 +183,7 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
           or isinstance(tyinp, types.scalars._NPDatetimeBase)):
         return _ScalarHelper(ctxt, bld, inp, tyinp)
     else:
-        raise NotImplementedError('unsupported type for {0}: {1}'.format(where,
+        raise NotImplementedError('unsupported type for {}: {}'.format(where,
                                   str(tyinp)))
 
 
@@ -409,7 +409,7 @@ def numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
 
 
 # Kernels are the code to be executed inside the multidimensional loop.
-class _Kernel(object):
+class _Kernel:
     def __init__(self, context, builder, outer_sig):
         self.context = context
         self.builder = builder
@@ -460,7 +460,7 @@ def _ufunc_db_function(ufunc):
 
     class _KernelImpl(_Kernel):
         def __init__(self, context, builder, outer_sig):
-            super(_KernelImpl, self).__init__(context, builder, outer_sig)
+            super().__init__(context, builder, outer_sig)
             loop = ufunc_find_matching_loop(
                 ufunc, outer_sig.args + tuple(_unpack_output_types(ufunc, outer_sig)))
             self.fn = context.get_ufunc_info(ufunc).get(loop.ufunc_sig)
@@ -627,4 +627,4 @@ def numpy_dtype(desc):
             return _make_dtype_object(desc)
         return imp
     else:
-        raise errors.NumbaTypeError('unknown dtype descriptor: {}'.format(desc))
+        raise errors.NumbaTypeError(f'unknown dtype descriptor: {desc}')

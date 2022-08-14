@@ -7,7 +7,7 @@ from numba.tests.support import TestCase
 import unittest
 
 
-class Dummy(object):
+class Dummy:
 
     def __add__(self, other):
         return other + 5

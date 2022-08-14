@@ -31,7 +31,7 @@ class TestNvvmWithoutCuda(unittest.TestCase):
         for ln in fixed.splitlines():
             if 'call void @llvm.memset' in ln:
                 # The i32 4 is the alignment
-                self.assertRegexpMatches(
+                self.assertRegex(
                     ln,
                     r'i32 4, i1 false\)'.replace(' ', r'\s+'),
                 )
@@ -73,7 +73,7 @@ class TestNvvmWithoutCuda(unittest.TestCase):
 
         # Ensure all characters appear in the generated constant array.
         elements = ", ".join([str(i) for i in range(256)])
-        myconstant = f"myconstant[256] = {{{elements}}}".encode('utf-8')
+        myconstant = f"myconstant[256] = {{{elements}}}".encode()
         self.assertIn(myconstant, ptx)
 
 

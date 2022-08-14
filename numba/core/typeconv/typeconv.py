@@ -19,7 +19,7 @@ from numba.core.typeconv import castgraph, Conversion
 from numba.core import types
 
 
-class TypeManager(object):
+class TypeManager:
 
     # The character codes used by the C/C++ API (_typeconv.cpp)
     _conversion_codes = {Conversion.safe: ord("s"),
@@ -67,7 +67,7 @@ class TypeManager(object):
         return _typeconv.get_pointer(self._ptr)
 
 
-class TypeCastingRules(object):
+class TypeCastingRules:
     """
     A helper for establishing type casting rules.
     """

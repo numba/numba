@@ -195,7 +195,7 @@ def get_os_spec_info(os_name):
             # Open file within Python
             if os.path.exists(cmd[0]):
                 try:
-                    with open(cmd[0], 'r') as f:
+                    with open(cmd[0]) as f:
                         out = f.readlines()
                         if out:
                             out[0] = ' '.join((cmd[0], out[0]))
@@ -204,7 +204,7 @@ def get_os_spec_info(os_name):
                     _error_log.append(f'Error (file read): {e}')
                     continue
             else:
-                _warning_log.append('Warning (no file): {}'.format(cmd[0]))
+                _warning_log.append(f'Warning (no file): {cmd[0]}')
                 continue
         else:
             # Spawn a subprocess
@@ -315,7 +315,7 @@ def get_sysinfo():
     except RuntimeError as e:
         _error_log.append(f'Error (CPU features): {e}')
     else:
-        features = sorted([key for key, value in feature_map.items() if value])
+        features = sorted(key for key, value in feature_map.items() if value)
         sys_info[_cpu_features] = ' '.join(features)
 
     # Python locale
@@ -432,10 +432,10 @@ def get_sysinfo():
         # parses a linux based error message, this is to provide feedback
         # and hide user paths etc
         try:
-            path, problem, symbol = [x.strip() for x in e.msg.split(':')]
+            path, problem, symbol = (x.strip() for x in e.msg.split(':'))
             extn_dso = os.path.split(path)[1]
             if backend in extn_dso:
-                return "%s: %s" % (problem, symbol)
+                return "{}: {}".format(problem, symbol)
         except Exception:
             pass
         return "Unknown import problem."

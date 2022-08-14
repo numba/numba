@@ -42,7 +42,7 @@ def nlargest(n, iterable):
 class _TestHeapq(MemoryLeakMixin):
 
     def setUp(self):
-        super(_TestHeapq, self).setUp()
+        super().setUp()
         self.ccache = CompilationCache()
         self.rnd = np.random.RandomState(42)
 

@@ -1141,7 +1141,7 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         ]
 
         @jitclass(spec)
-        class Bag(object):
+        class Bag:
             def __init__(self, value):
                 self.value = value
                 self.array = np.zeros(value, dtype=np.float32)
@@ -1176,7 +1176,7 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
     def test_4960(self):
         # Test the reproducer from #4960 and make sure it doesn't segfault
         @jitclass([('value', int32)])
-        class Simple(object):
+        class Simple:
             def __init__(self, value):
                 self.value = value
 
@@ -1246,7 +1246,7 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
 class TestListSort(MemoryLeakMixin, TestCase):
     def setUp(self):
-        super(TestListSort, self).setUp()
+        super().setUp()
         np.random.seed(0)
 
     def make(self, ctor, data):
@@ -1283,7 +1283,7 @@ class TestListSort(MemoryLeakMixin, TestCase):
         possible_reverse = [True, False]
         for key, reverse in product(possible_keys, possible_reverse):
             my_lists = self.make_both(np.random.randint(0, 100, 23))
-            msg = "case for key={} reverse={}".format(key, reverse)
+            msg = f"case for key={key} reverse={reverse}"
             self.assertEqual(
                 list(udt(my_lists['nb'], key=key, reverse=reverse)),
                 udt(my_lists['py'], key=key, reverse=reverse),

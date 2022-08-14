@@ -333,7 +333,7 @@ def run_frontend(func, inline_closures=False, emit_dels=False):
     return func_ir
 
 
-class _CompileStatus(object):
+class _CompileStatus:
     """
     Describes the state of compilation. Used like a C record.
     """
@@ -346,7 +346,7 @@ class _CompileStatus(object):
     def __repr__(self):
         vals = []
         for k in self.__slots__:
-            vals.append("{k}={v}".format(k=k, v=getattr(self, k)))
+            vals.append(f"{k}={getattr(self, k)}")
         return ', '.join(vals)
 
 
@@ -396,7 +396,7 @@ def _make_subtarget(targetctx, flags):
     return targetctx.subtarget(**subtargetoptions)
 
 
-class CompilerBase(object):
+class CompilerBase:
     """
     Stores and manages states for the compiler
     """
@@ -474,10 +474,10 @@ class CompilerBase(object):
             pms = self.define_pipelines()
             for pm in pms:
                 pipeline_name = pm.pipeline_name
-                func_name = "%s.%s" % (self.state.func_id.modname,
-                                       self.state.func_id.func_qualname)
+                func_name = "{}.{}".format(self.state.func_id.modname,
+                                           self.state.func_id.func_qualname)
 
-                event("Pipeline: %s for %s" % (pipeline_name, func_name))
+                event("Pipeline: {} for {}".format(pipeline_name, func_name))
                 self.state.metadata['pipeline_times'] = {pipeline_name:
                                                          pm.exec_times}
                 is_final_pipeline = pm == pms[-1]
@@ -543,7 +543,7 @@ class Compiler(CompilerBase):
         return pms
 
 
-class DefaultPassBuilder(object):
+class DefaultPassBuilder:
     """
     This is the default pass builder, it contains the "classic" default
     pipelines as pre-canned PassManager instances:

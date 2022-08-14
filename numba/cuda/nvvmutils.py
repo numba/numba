@@ -225,7 +225,7 @@ def call_sreg(builder, name):
     return builder.call(fn, ())
 
 
-class SRegBuilder(object):
+class SRegBuilder:
     def __init__(self, builder):
         self.builder = builder
 

@@ -18,7 +18,7 @@ force_pyobj_flags.force_pyobject = True
 no_pyobj_flags = Flags()
 
 
-class C(object):
+class C:
     pass
 
 

@@ -17,7 +17,7 @@ LIST_ERR_ITER_EXHAUSTED = -4
 LIST_ERR_IMMUTABLE = -5
 
 
-class List(object):
+class List:
     """A wrapper around the C-API to provide a minimal list object for
     testing.
     """
@@ -177,7 +177,7 @@ class List(object):
             return item.value
 
 
-class ListIter(object):
+class ListIter:
     """An iterator for the `List`.
     """
 

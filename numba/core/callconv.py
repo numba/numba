@@ -52,7 +52,7 @@ FIRST_USEREXC = 1
 RETCODE_USEREXC = _const_int(FIRST_USEREXC)
 
 
-class BaseCallConv(object):
+class BaseCallConv:
 
     def __init__(self, context):
         self.context = context
@@ -83,8 +83,8 @@ class BaseCallConv(object):
             self.return_value(builder, retval)
 
         else:
-            raise NotImplementedError("returning {0} for {1}".format(valty,
-                                                                     retty))
+            raise NotImplementedError("returning {} for {}".format(valty,
+                                                                   retty))
 
     def return_native_none(self, builder):
         self._return_errcode_raw(builder, RETCODE_NONE)
@@ -285,7 +285,7 @@ class MinimalCallConv(BaseCallConv):
         return status, out
 
 
-class _MinimalCallHelper(object):
+class _MinimalCallHelper:
     """
     A call helper object for the "minimal" calling convention.
     User exceptions are represented as integer codes and stored in
@@ -602,7 +602,7 @@ class CPUCallConv(BaseCallConv):
         return status, out
 
 
-class ErrorModel(object):
+class ErrorModel:
 
     def __init__(self, call_conv):
         self.call_conv = call_conv

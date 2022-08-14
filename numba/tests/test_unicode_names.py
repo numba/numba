@@ -1,16 +1,13 @@
-# -*- coding: utf-8 -*-
-
-
 from numba import njit, cfunc
 from numba.tests.support import TestCase, unittest
 from numba.core import cgutils
 
-unicode_name1 = u"""
+unicode_name1 = """
 def unicode_name1(ಠ_ರೃ, ಠਊಠ):
     return (ಠ_ರೃ) + (ಠਊಠ)
 """
 
-unicode_name2 = u"""
+unicode_name2 = """
 def Ծ_Ծ(ಠ_ರೃ, ಠਊಠ):
     return (ಠ_ರೃ) + (ಠਊಠ)
 """

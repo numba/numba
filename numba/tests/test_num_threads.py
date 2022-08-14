@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function, absolute_import, division
-
 import sys
 import os
 import re
@@ -596,13 +593,13 @@ class TestNumThreadsBackends(TestInSubprocess, TestCase):
     def _inject(cls, name, backend, backend_guard, num_threads):
         themod = cls.__module__
         thecls = cls._class.__name__
-        injected_method = '%s.%s.%s' % (themod, thecls, name)
+        injected_method = '{}.{}.{}'.format(themod, thecls, name)
 
         def test_template(self):
             o, e = self.run_test_in_separate_process(injected_method, backend,
                                                      num_threads)
             if self._DEBUG:
-                print('stdout:\n "%s"\n stderr:\n "%s"' % (o, e))
+                print('stdout:\n "{}"\n stderr:\n "{}"'.format(o, e))
             self.assertIn('OK', e)
             self.assertTrue('FAIL' not in e)
             self.assertTrue('ERROR' not in e)
@@ -610,7 +607,8 @@ class TestNumThreadsBackends(TestInSubprocess, TestCase):
             if m:
                 self.skipTest(m.group(1))
 
-        injected_test = "%s_%s_%s_threads" % (name[1:], backend, num_threads)
+        injected_test = "{}_{}_{}_threads".format(
+            name[1:], backend, num_threads)
         setattr(cls, injected_test,
                 tag('long_running')(backend_guard(test_template)))
 

@@ -157,7 +157,7 @@ def slice_constructor_impl(context, builder, sig, args):
         default_stop_pos,
         default_stop_neg,
         default_step,
-    ) = [context.get_constant(types.intp, x) for x in get_defaults(context)]
+    ) = (context.get_constant(types.intp, x) for x in get_defaults(context))
 
     slice_args = [None] * 3
 
@@ -253,7 +253,7 @@ def make_slice_from_constant(context, builder, ty, pyval):
         default_stop_pos,
         default_stop_neg,
         default_step,
-    ) = [context.get_constant(types.intp, x) for x in get_defaults(context)]
+    ) = (context.get_constant(types.intp, x) for x in get_defaults(context))
 
     step = pyval.step
     if step is None:

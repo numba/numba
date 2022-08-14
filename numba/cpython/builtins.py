@@ -513,7 +513,7 @@ def lower_get_type_min_value(context, builder, sig, args):
         else:
             raise NotImplementedError(
                 "llvmlite only supports 32 and 64 bit floats")
-        npty = getattr(np, 'float{}'.format(bw))
+        npty = getattr(np, f'float{bw}')
         res = ir.Constant(lty, -np.inf)
     elif isinstance(typ, (types.NPDatetime, types.NPTimedelta)):
         bw = 64
@@ -546,7 +546,7 @@ def lower_get_type_max_value(context, builder, sig, args):
         else:
             raise NotImplementedError(
                 "llvmlite only supports 32 and 64 bit floats")
-        npty = getattr(np, 'float{}'.format(bw))
+        npty = getattr(np, f'float{bw}')
         res = ir.Constant(lty, np.inf)
     elif isinstance(typ, (types.NPDatetime, types.NPTimedelta)):
         bw = 64

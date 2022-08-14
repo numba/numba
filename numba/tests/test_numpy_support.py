@@ -155,7 +155,7 @@ class TestFromDtype(TestCase):
             check(dt, enum, types.IntEnumMember)
 
 
-class ValueTypingTestBase(object):
+class ValueTypingTestBase:
     """
     Common tests for the typing of values.  Also used by test_special.
     """
@@ -241,7 +241,7 @@ class TestArrayScalars(ValueTypingTestBase, TestCase):
             f(t)
 
 
-class FakeUFunc(object):
+class FakeUFunc:
     __slots__ = ('nin', 'nout', 'types', 'ntypes')
     __name__ = "fake ufunc"
 

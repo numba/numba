@@ -40,7 +40,7 @@ Point = namedtuple('Point', ('x', 'y'))
 Rect = namedtuple('Rect', ('width', 'height'))
 
 
-class Custom(object):
+class Custom:
 
     @property
     def _numba_type_(self):
@@ -109,7 +109,7 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         a5 = a1.astype(a1.dtype.newbyteorder())
         with self.assertRaises(NumbaValueError) as raises:
             typeof(a5)
-        self.assertIn("Unsupported array dtype: %s" % (a5.dtype,),
+        self.assertIn("Unsupported array dtype: {}".format(a5.dtype),
                       str(raises.exception))
 
     def test_structured_arrays(self):
@@ -194,7 +194,7 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         self.assertIn("Cannot type list element type", str(raises.exception))
 
     def test_sets(self):
-        v = set([1.0, 2.0, 3.0])
+        v = {1.0, 2.0, 3.0}
         self.assertEqual(typeof(v), types.Set(types.float64, reflected=True))
         v = frozenset(v)
         with self.assertRaises(ValueError) as raises:
@@ -319,14 +319,15 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         self.assertEqual(ty_bitgen, types.npy_bitgen)
 
 
-class DistinctChecker(object):
+class DistinctChecker:
 
     def __init__(self):
         self._distinct = set()
 
     def add(self, obj):
         if obj in self._distinct:
-            raise AssertionError("%r already in %r" % (obj, self._distinct))
+            raise AssertionError(
+                "{!r} already in {!r}".format(obj, self._distinct))
         self._distinct.add(obj)
 
 
@@ -396,7 +397,7 @@ class TestFingerprint(TestCase):
         d = np.timedelta64(2, 's')
         self.assertEqual(compute_fingerprint(a),
                          compute_fingerprint(b))
-        distinct = set(compute_fingerprint(x) for x in (a, c, d))
+        distinct = {compute_fingerprint(x) for x in (a, c, d)}
         self.assertEqual(len(distinct), 3, distinct)
 
     def test_arrays(self):
@@ -530,14 +531,14 @@ class TestFingerprint(TestCase):
     def test_sets(self):
         distinct = DistinctChecker()
 
-        s = compute_fingerprint(set([1]))
-        self.assertEqual(compute_fingerprint(set([2, 3])), s)
+        s = compute_fingerprint({1})
+        self.assertEqual(compute_fingerprint({2, 3}), s)
         distinct.add(s)
 
         distinct.add(compute_fingerprint([1]))
-        distinct.add(compute_fingerprint(set([1j])))
-        distinct.add(compute_fingerprint(set([4.5, 6.7])))
-        distinct.add(compute_fingerprint(set([(1,)])))
+        distinct.add(compute_fingerprint({1j}))
+        distinct.add(compute_fingerprint({4.5, 6.7}))
+        distinct.add(compute_fingerprint({(1,)}))
 
         with self.assertRaises(ValueError):
             compute_fingerprint(set())

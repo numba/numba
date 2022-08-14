@@ -27,7 +27,7 @@ import unittest
 
 class Namespace(dict):
     def __getattr__(s, k):
-        return s[k] if k in s else super(Namespace, s).__getattr__(k)
+        return s[k] if k in s else super().__getattr__(k)
 
 
 def axy(a, x, y):
@@ -185,7 +185,7 @@ class TestArrayExpressions(MemoryLeakMixin, TestCase):
         if out is None:
             out = set()
         if not isinstance(expr, tuple):
-            raise ValueError("{0} not a tuple".format(expr))
+            raise ValueError(f"{expr} not a tuple")
         operation, operands = expr
         processed_operands = []
         for operand in operands:
@@ -346,7 +346,7 @@ class TestArrayExpressions(MemoryLeakMixin, TestCase):
             intersections = expr_set_0.intersection(expr_set_1)
             if intersections:
                 self.fail("Common subexpressions detected in array "
-                          "expressions ({0})".format(intersections))
+                          "expressions ({})".format(intersections))
 
     def test_complex_subexpression(self):
         return self.test_common_subexpressions(neg_root_complex_subexpr)
@@ -666,7 +666,7 @@ class TestExternalTypes(MemoryLeakMixin, unittest.TestCase):
         """)
 
     def make_foo_type(self, FooType):
-        class Foo(object):
+        class Foo:
             def __init__(self, value):
                 self.value = value
 

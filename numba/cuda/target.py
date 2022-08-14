@@ -52,7 +52,7 @@ class CUDATypingContext(typing.BaseContext):
                 val = disp
 
         # continue with parent logic
-        return super(CUDATypingContext, self).resolve_value_type(val)
+        return super().resolve_value_type(val)
 
 # -----------------------------------------------------------------------------
 # Implementation
@@ -125,8 +125,8 @@ class CUDATargetContext(BaseContext):
         from numba import cuda
         nonconsts = ('threadIdx', 'blockDim', 'blockIdx', 'gridDim', 'laneid',
                      'warpsize')
-        nonconsts_with_mod = tuple([(types.Module(cuda), nc)
-                                    for nc in nonconsts])
+        nonconsts_with_mod = tuple((types.Module(cuda), nc)
+                                   for nc in nonconsts)
         return nonconsts_with_mod
 
     @cached_property

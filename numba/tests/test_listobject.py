@@ -221,7 +221,7 @@ class TestGetitem(MemoryLeakMixin, TestCase):
         # try all signed integers and make sure they are cast
         for t in (types.signed_domain
                   ):
-            self.assertEqual(foo((t(0))), 0)
+            self.assertEqual(foo(t(0)), 0)
 
     def test_list_getitem_different_sized_int_index(self):
         # Checks that the index type cast and ext/trunc to the
@@ -598,7 +598,7 @@ class TestSetitem(MemoryLeakMixin, TestCase):
         # try all signed integers and make sure they are cast
         for t in (types.signed_domain
                   ):
-            self.assertEqual(foo((t(0))), 1)
+            self.assertEqual(foo(t(0)), 1)
 
 
 class TestPop(MemoryLeakMixin, TestCase):
@@ -658,7 +658,7 @@ class TestPop(MemoryLeakMixin, TestCase):
         # try all signed integers and make sure they are cast
         for t in (types.signed_domain
                   ):
-            self.assertEqual(foo((t(0))), 0)
+            self.assertEqual(foo(t(0)), 0)
 
     def test_list_pop_empty_index_error_no_index(self):
         self.disable_leak_check()
@@ -1456,7 +1456,7 @@ class TestIter(MemoryLeakMixin, TestCase):
         with self.assertRaises(RuntimeError) as raises:
             foo()
         self.assertIn(
-            'list was mutated during iteration'.format(**locals()),
+            f'list was mutated during iteration',
             str(raises.exception),
         )
 
@@ -1492,7 +1492,7 @@ class TestItemCasting(TestCase):
         with self.assertRaises(TypingError) as raises:
             TestItemCasting.foo(fromty, toty)
         self.assertIn(
-            'cannot safely cast {fromty} to {toty}'.format(**locals()),
+            f'cannot safely cast {fromty} to {toty}',
             str(raises.exception),
         )
 

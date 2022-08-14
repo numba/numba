@@ -29,8 +29,7 @@ def disassemble_cubin(cubin):
 
         try:
             cp = subprocess.run(['nvdisasm', fname], check=True,
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE)
+                                capture_output=True)
         except FileNotFoundError as e:
             msg = ("nvdisasm is required for SASS inspection, and has not "
                    "been found.\n\nYou may need to install the CUDA "

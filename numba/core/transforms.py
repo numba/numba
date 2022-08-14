@@ -25,7 +25,7 @@ def _extract_loop_lifting_candidates(cfg, blocks):
         "all exits must point to the same location"
         outedges = set()
         for k in loop.exits:
-            succs = set(x for x, _ in cfg.successors(k))
+            succs = {x for x, _ in cfg.successors(k)}
             if not succs:
                 # If the exit point has no successor, it contains an return
                 # statement, which is not handled by the looplifting code.
@@ -189,7 +189,7 @@ def _loop_lift_modify_blocks(func_ir, loopinfo, blocks,
     if len(loop.exits) > 1:
         # Pre-Py3.8 may have multiple exits
         loopblockkeys |= loop.exits
-    loopblocks = dict((k, blocks[k].copy()) for k in loopblockkeys)
+    loopblocks = {k: blocks[k].copy() for k in loopblockkeys}
     # Modify the loop blocks
     _loop_lift_prepare_loop_func(loopinfo, loopblocks)
 
@@ -511,9 +511,9 @@ def _cfg_nodes_in_region(cfg, region_begin, region_end):
     while stack:
         tos = stack.pop()
         succs, _ = zip(*cfg.successors(tos))
-        nodes = set([node for node in succs
-                     if node not in region_nodes and
-                     node != region_end])
+        nodes = {node for node in succs
+                 if node not in region_nodes and
+                 node != region_end}
         stack.extend(nodes)
         region_nodes |= nodes
 

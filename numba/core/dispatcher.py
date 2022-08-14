@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-
-
 import collections
 import functools
 import sys
@@ -68,7 +65,7 @@ class TargetConfigurationStack:
         return cls()._stack.enter(retarget)
 
 
-class OmittedArg(object):
+class OmittedArg:
     """
     A placeholder for omitted arguments with a default value.
     """
@@ -77,14 +74,14 @@ class OmittedArg(object):
         self.value = value
 
     def __repr__(self):
-        return "omitted arg(%r)" % (self.value,)
+        return "omitted arg({!r})".format(self.value)
 
     @property
     def _numba_type_(self):
         return types.Omitted(self.value)
 
 
-class _FunctionCompiler(object):
+class _FunctionCompiler:
     def __init__(self, py_func, targetdescr, targetoptions, locals,
                  pipeline_class):
         self.py_func = py_func
@@ -174,7 +171,7 @@ class _GeneratedFunctionCompiler(_FunctionCompiler):
 
     def __init__(self, py_func, targetdescr, targetoptions, locals,
                  pipeline_class):
-        super(_GeneratedFunctionCompiler, self).__init__(
+        super().__init__(
             py_func, targetdescr, targetoptions, locals, pipeline_class)
         self.impls = set()
 
@@ -212,7 +209,7 @@ _CompileStats = collections.namedtuple(
     '_CompileStats', ('cache_path', 'cache_hits', 'cache_misses'))
 
 
-class CompilingCounter(object):
+class CompilingCounter:
     """
     A simple counter that increment in __enter__ and decrement in __exit__.
     """
@@ -364,7 +361,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
 
         # Create function type for typing
         func_name = self.py_func.__name__
-        name = "CallTemplate({0})".format(func_name)
+        name = f"CallTemplate({func_name})"
         # The `key` isn't really used except for diagnosis here,
         # so avoid keeping a reference to `cfunc`.
         call_template = typing.make_concrete_template(
@@ -431,7 +428,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                      "{}.\n"
                      "This is likely caused by an error in typing. "
                      "Please see nested and suppressed exceptions.")
-                info = ', '.join('Arg #{} is {}'.format(i, args[i])
+                info = ', '.join(f'Arg #{i} is {args[i]}'
                                  for i in sorted(already_lit_pos))
                 raise errors.CompilerError(m.format(info))
             # Convert requested arguments into a Literal.
@@ -509,7 +506,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             lib = self.overloads[signature].library
             return lib.get_llvm_str()
 
-        return dict((sig, self.inspect_llvm(sig)) for sig in self.signatures)
+        return {sig: self.inspect_llvm(sig) for sig in self.signatures}
 
     def inspect_asm(self, signature=None):
         """Get the generated assembly code.
@@ -531,7 +528,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             lib = self.overloads[signature].library
             return lib.get_asm_str()
 
-        return dict((sig, self.inspect_asm(sig)) for sig in self.signatures)
+        return {sig: self.inspect_asm(sig) for sig in self.signatures}
 
     def inspect_types(self, file=None, signature=None,
                       pretty=False, style='default', **kwargs):
@@ -572,7 +569,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                 file = sys.stdout
 
             for ver, res in overloads.items():
-                print("%s %s" % (self.py_func.__name__, ver), file=file)
+                print("{} {}".format(self.py_func.__name__, ver), file=file)
                 print('-' * 80, file=file)
                 print(res.type_annotation, file=file)
                 print('=' * 80, file=file)
@@ -640,8 +637,8 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                 fname = cres.fndesc.mangled_name
             return lib.get_function_cfg(fname, py_func=self.py_func, **kwargs)
 
-        return dict((sig, self.inspect_cfg(sig, show_wrapper=show_wrapper))
-                    for sig in self.signatures)
+        return {sig: self.inspect_cfg(sig, show_wrapper=show_wrapper)
+                for sig in self.signatures}
 
     def inspect_disasm_cfg(self, signature=None):
         """
@@ -660,8 +657,8 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             lib = cres.library
             return lib.get_disasm_cfg(cres.fndesc.mangled_name)
 
-        return dict((sig, self.inspect_disasm_cfg(sig))
-                    for sig in self.signatures)
+        return {sig: self.inspect_disasm_cfg(sig)
+                for sig in self.signatures}
 
     def get_annotation_info(self, signature=None):
         """
@@ -684,7 +681,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         Callback for the C _Dispatcher object.
         """
         assert not kws, "kwargs not handled"
-        args = tuple([self.typeof_pyval(a) for a in args])
+        args = tuple(self.typeof_pyval(a) for a in args)
         # The order here must be deterministic for testing purposes, which
         # is ensured by the OrderedDict.
         sigs = self.nopython_signatures
@@ -719,7 +716,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         return found
 
     def __repr__(self):
-        return "%s(%s)" % (type(self).__name__, self.py_func)
+        return "{}({})".format(type(self).__name__, self.py_func)
 
     def typeof_pyval(self, val):
         """
@@ -1033,9 +1030,9 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         if signature is not None:
             return self.overloads[signature].metadata
         else:
-            return dict(
-                (sig,self.overloads[sig].metadata) for sig in self.signatures
-            )
+            return {
+                sig:self.overloads[sig].metadata for sig in self.signatures
+            }
 
     def get_function_type(self):
         """Return unique function type of dispatcher when possible, otherwise
@@ -1247,7 +1244,7 @@ class LiftedWith(LiftedCode):
         pysig = None
         # Create function type for typing
         func_name = self.py_func.__name__
-        name = "CallTemplate({0})".format(func_name)
+        name = f"CallTemplate({func_name})"
         # The `key` isn't really used except for diagnosis here,
         # so avoid keeping a reference to `cfunc`.
         call_template = typing.make_concrete_template(
@@ -1288,7 +1285,7 @@ class ObjModeLiftedWith(LiftedWith):
         signatures = [typing.signature(self.output_types, *args)]
         pysig = None
         func_name = self.py_func.__name__
-        name = "CallTemplate({0})".format(func_name)
+        name = f"CallTemplate({func_name})"
         call_template = typing.make_concrete_template(
             name, key=func_name, signatures=signatures)
 
@@ -1319,4 +1316,4 @@ class ObjModeLiftedWith(LiftedWith):
 # Initialize typeof machinery
 _dispatcher.typeof_init(
     OmittedArg,
-    dict((str(t), t._code) for t in types.number_domain))
+    {str(t): t._code for t in types.number_domain})

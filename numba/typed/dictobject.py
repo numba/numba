@@ -88,7 +88,7 @@ class DictModel(models.StructModel):
             ('meminfo', _meminfo_dictptr),
             ('data', types.voidptr),   # ptr to the C dict
         ]
-        super(DictModel, self).__init__(dmm, fe_type, members)
+        super().__init__(dmm, fe_type, members)
 
 
 @register_model(DictItemsIterableType)
@@ -101,7 +101,7 @@ class DictIterModel(models.StructModel):
             ('parent', fe_type.parent),  # reference to the dict
             ('state', types.voidptr),    # iterator state in C code
         ]
-        super(DictIterModel, self).__init__(dmm, fe_type, members)
+        super().__init__(dmm, fe_type, members)
 
 
 # Make _parent available to make len simple
@@ -147,7 +147,7 @@ def _from_meminfo(typingctx, mi, dicttyperef):
         raise TypingError('expected a MemInfoPointer for dict.')
     dicttype = dicttyperef.instance_type
     if not isinstance(dicttype, DictType):
-        raise TypingError('expected a {}'.format(DictType))
+        raise TypingError(f'expected a {DictType}')
 
     def codegen(context, builder, sig, args):
         [tmi, tdref] = sig.args
@@ -1091,7 +1091,7 @@ def impl_iterator_iternext(context, builder, sig, args, result):
             result.yield_(val)
         else:
             # unreachable
-            raise AssertionError('unknown type: {}'.format(iter_type.iterable))
+            raise AssertionError(f'unknown type: {iter_type.iterable}')
 
 
 def build_map(context, builder, dict_type, item_types, items):
@@ -1192,7 +1192,7 @@ def literalstrkeydict_impl_keys(d):
         return
     # create a key iterator by specialising a DictType instance with the
     # literal keys and returning that
-    t = tuple([x.literal_value for x in d.literal_value.keys()])
+    t = tuple(x.literal_value for x in d.literal_value.keys())
 
     def impl(d):
         d = dict()

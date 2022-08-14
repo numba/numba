@@ -39,7 +39,7 @@ skip_unsupported = skip_parfors_unsupported
 
 # test class for #3700
 @jitclass([('L', types.int32), ('T', types.int32)])
-class ExampleClass3700(object):
+class ExampleClass3700:
     def __init__(self, n):
         self.L = n
         self.T = n + 1
@@ -612,7 +612,7 @@ class TestArrayAnalysis(TestCase):
         def test_9(m):
             # issues #3461 and #3554, checks equivalence on empty slices
             # and across binop
-            A = np.zeros((m))
+            A = np.zeros(m)
             B = A[:0] # B = array([], dtype=int64)
             C = A[1:]
             D = A[:-1:-1] # D = array([], dtype=int64)

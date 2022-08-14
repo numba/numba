@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import numpy as np
 
 from numba import config, cuda, int32

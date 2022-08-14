@@ -119,9 +119,9 @@ def mangle_identifier(ident, template_params='', *, abi_tags=(), uid=None):
     enc_abi_tags = list(map(mangle_abi_tag, abi_tags))
     extras = template_params + ''.join(enc_abi_tags)
     if len(parts) > 1:
-        return 'N%s%sE' % (''.join(parts), extras)
+        return 'N{}{}E'.format(''.join(parts), extras)
     else:
-        return '%s%s' % (parts[0], extras)
+        return '{}{}'.format(parts[0], extras)
 
 
 def mangle_type_or_value(typ):

@@ -66,7 +66,7 @@ def vectorize_usecase(x):
         return RequestError.dummy
 
 
-class BaseEnumTest(object):
+class BaseEnumTest:
 
     def test_compare(self):
         pyfunc = compare_usecase

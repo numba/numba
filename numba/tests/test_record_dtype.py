@@ -1076,7 +1076,7 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
         cfunc = cres.entry_point
 
         for i in range(self.refsample1d.size):
-            chars = "{0}".format(hex(i + 10))
+            chars = f"{hex(i + 10)}"
             pyfunc(self.refsample1d, i, chars)
             cfunc(self.nbsample1d, i, chars)
             np.testing.assert_equal(self.refsample1d, self.nbsample1d)
@@ -1544,7 +1544,7 @@ class TestNestedArrays(TestCase):
         pyfunc(*pyargs)
 
         nbargs = gen()
-        cfunc = self.get_cfunc(pyfunc, tuple((typeof(arg) for arg in nbargs)))
+        cfunc = self.get_cfunc(pyfunc, tuple(typeof(arg) for arg in nbargs))
         cfunc(*nbargs)
         np.testing.assert_equal(pyargs, nbargs)
 
@@ -1557,7 +1557,7 @@ class TestNestedArrays(TestCase):
         pyfunc = record_setitem_array
         errmsg = "unsupported array index type"
         with self.assertRaisesRegex(TypingError, errmsg):
-            self.get_cfunc(pyfunc, tuple((typeof(arg) for arg in args)))
+            self.get_cfunc(pyfunc, tuple(typeof(arg) for arg in args))
 
     def test_getitem_idx(self):
         # Test __getitem__ with numerical index

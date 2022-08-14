@@ -80,19 +80,19 @@ def create_nested_list(x, y, z, a, b, c):
 
 
 def list_comprehension1():
-    return sum([x**2 for x in range(10)])
+    return sum(x**2 for x in range(10))
 
 
 def list_comprehension2():
-    return sum([x for x in range(10) if x % 2 == 0])
+    return sum(x for x in range(10) if x % 2 == 0)
 
 
 def list_comprehension3():
-    return sum([math.pow(x, 2) for x in range(10)])
+    return sum(math.pow(x, 2) for x in range(10))
 
 
 def list_comprehension4():
-    return sum([x * y for x in range(10) for y in range(10)])
+    return sum(x * y for x in range(10) for y in range(10))
 
 
 def list_comprehension5():
@@ -738,9 +738,9 @@ class TestLists(MemoryLeakMixin, TestCase):
             cfunc(1, 2**58)
         if sys.platform.startswith('darwin'):
             libc = ct.CDLL('libc.dylib')
-            libc.printf("###Please ignore the above error message i.e. \
+            libc.printf(b"###Please ignore the above error message i.e. \
 can't allocate region. It is in fact the purpose of this test to \
-request more memory than can be provided###\n".encode("UTF-8"))
+request more memory than can be provided###\n")
         # Overflow size computation when multiplying by item size
         with self.assertRaises(MemoryError):
             cfunc(1, 2**62)
@@ -768,7 +768,7 @@ request more memory than can be provided###\n".encode("UTF-8"))
     def _test_compare(self, pyfunc):
         def eq(args):
             self.assertIs(cfunc(*args), pyfunc(*args),
-                          "mismatch for arguments %s" % (args,))
+                          "mismatch for arguments {}".format(args))
 
         cfunc = jit(nopython=True)(pyfunc)
         eq(((1, 2), (1, 2)))
@@ -818,7 +818,7 @@ class TestUnboxing(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypeError) as raises:
             yield
         if msg is not None:
-            self.assertRegexpMatches(str(raises.exception), msg)
+            self.assertRegex(str(raises.exception), msg)
 
     def check_unary(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
@@ -1403,13 +1403,13 @@ class TestListOfList(ManagedListTestCase):
         self.compile_and_test(bar, r)
 
 
-class Item(object):
+class Item:
     def __init__(self, many, scalar):
         self.many = many
         self.scalar = scalar
 
 
-class Container(object):
+class Container:
     def __init__(self, n):
         self.data = [[np.arange(i).astype(np.float64)] for i in range(n)]
 

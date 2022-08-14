@@ -492,7 +492,7 @@ class NvvmDIBuilder(DIBuilder):
         self._last_lineno = line
         # Add call to an inline asm to mark line location
         asmty = ir.FunctionType(ir.VoidType(), [])
-        asm = ir.InlineAsm(asmty, "// dbg {}".format(line), "",
+        asm = ir.InlineAsm(asmty, f"// dbg {line}", "",
                            side_effect=True)
         call = builder.call(asm, [])
         md = self._di_location(line)

@@ -10,7 +10,7 @@ from numba.tests.support import override_config
 
 class TestJITMethod(unittest.TestCase):
     def test_bound_jit_method_with_loop_lift(self):
-        class Something(object):
+        class Something:
             def __init__(self, x0):
                 self.x0 = x0
 
@@ -35,7 +35,7 @@ class TestJITMethod(unittest.TestCase):
         self.assertTrue(loopcres.fndesc.native)
 
     def test_unbound_jit_method(self):
-        class Something(object):
+        class Something:
             def __init__(self, x0):
                 self.x0 = x0
 
@@ -44,7 +44,7 @@ class TestJITMethod(unittest.TestCase):
                 return self.x0
 
         something = Something(3)
-        self.assertEquals(Something.method(something), 3)
+        self.assertEqual(Something.method(something), 3)
 
 
 class TestDisabledJIT(unittest.TestCase):

@@ -5,7 +5,7 @@ from numba.np.ufunc.deviceufunc import (UFuncMechanism, GeneralizedUFunc,
                                         GUFuncCallSteps)
 
 
-class CUDAUFuncDispatcher(object):
+class CUDAUFuncDispatcher:
     """
     Invoke the CUDA ufunc specialization for the given inputs.
     """

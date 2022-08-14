@@ -235,7 +235,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     """
 
     def setUp(self):
-        super(TestArrayReductions, self).setUp()
+        super().setUp()
         np.random.seed(42)
 
     def check_reduction_basic(self, pyfunc, **kwargs):

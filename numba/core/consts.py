@@ -6,7 +6,7 @@ from numba.core.errors import ConstantInferenceError, NumbaError
 from numba.core import ir
 
 
-class ConstantInference(object):
+class ConstantInference:
     """
     A constant inference engine for a given interpreter.
     Inference inspects the IR to try and compute a compile-time constant for
@@ -51,7 +51,7 @@ class ConstantInference(object):
         # (the message) are captured and then raised again but with the location
         # set to the expression that caused the constant inference error.
         raise ConstantInferenceError(
-            "Constant inference not possible for: %s" % (val,), loc=None)
+            "Constant inference not possible for: {}".format(val), loc=None)
 
     def _do_infer(self, name):
         if not isinstance(name, str):
@@ -61,7 +61,7 @@ class ConstantInference(object):
             defn = self._func_ir.get_definition(name)
         except KeyError:
             raise ConstantInferenceError(
-                "no single definition for %r" % (name,))
+                "no single definition for {!r}".format(name))
         try:
             const = defn.infer_constant()
         except ConstantInferenceError:

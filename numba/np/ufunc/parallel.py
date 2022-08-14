@@ -109,7 +109,7 @@ def build_gufunc_kernel(library, ctx, info, sig, inner_ndim):
                                            byte_ptr_t])
     wrapperlib = ctx.codegen().create_library('parallelgufuncwrapper')
     mod = wrapperlib.create_ir_module('parallel.gufunc.wrapper')
-    kernel_name = ".kernel.{}_{}".format(id(info.env), info.name)
+    kernel_name = f".kernel.{id(info.env)}_{info.name}"
     lfunc = ir.Function(mod, fnty, name=kernel_name)
 
     bb_entry = lfunc.append_basic_block('')
@@ -213,9 +213,7 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
                  targetoptions={}):
         # Force nopython mode
         targetoptions.update(dict(nopython=True))
-        super(
-            ParallelGUFuncBuilder,
-            self).__init__(
+        super().__init__(
             py_func=py_func,
             signature=signature,
             identity=identity,
@@ -263,8 +261,8 @@ def build_gufunc_wrapper(py_func, cres, sin, sout, cache, is_parfors):
     innerinfo = ufuncbuilder.build_gufunc_wrapper(
         py_func, cres, sin, sout, cache=cache, is_parfors=is_parfors,
     )
-    sym_in = set(sym for term in sin for sym in term)
-    sym_out = set(sym for term in sout for sym in term)
+    sym_in = {sym for term in sin for sym in term}
+    sym_out = {sym for term in sout for sym in term}
     inner_ndim = len(sym_in | sym_out)
 
     info = build_gufunc_kernel(
@@ -280,7 +278,7 @@ _backend_init_thread_lock = threadRLock()
 _windows = sys.platform.startswith('win32')
 
 
-class _nop(object):
+class _nop:
     """A no-op contextmanager
     """
 

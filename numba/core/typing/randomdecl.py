@@ -20,7 +20,7 @@ infer_getattr = registry.register_attr
 # object (e.g. the string "random.seed") as a key, not the bound method itself.
 # (same for np.random.random(), etc.)
 
-_int_types = sorted(set((types.intp, types.int64)))
+_int_types = sorted({types.intp, types.int64})
 # Should we support float32?
 _float_types = [types.float64]
 
@@ -37,7 +37,7 @@ def normalize_shape(shape):
         ndim = len(shape)
         return types.UniTuple(types.intp, ndim), ndim
     else:
-        raise TypeError("invalid size type %s" % (shape,))
+        raise TypeError("invalid size type {}".format(shape))
 
 
 class RandomTemplate(CallableTemplate):

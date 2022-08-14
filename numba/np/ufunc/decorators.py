@@ -8,7 +8,7 @@ from numba.np.ufunc import dufunc
 from numba.np.ufunc import gufunc
 
 
-class _BaseVectorize(object):
+class _BaseVectorize:
 
     @classmethod
     def get_identity(cls, kwargs):

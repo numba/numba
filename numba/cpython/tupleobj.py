@@ -29,7 +29,7 @@ def namedtuple_constructor(context, builder, sig, args):
 
 @lower_builtin(operator.add, types.BaseTuple, types.BaseTuple)
 def tuple_add(context, builder, sig, args):
-    left, right = [cgutils.unpack_tuple(builder, x) for x in args]
+    left, right = (cgutils.unpack_tuple(builder, x) for x in args)
     res = context.make_tuple(builder, sig.return_type, left + right)
     # The tuple's contents are borrowed
     return impl_ret_borrowed(context, builder, sig.return_type, res)

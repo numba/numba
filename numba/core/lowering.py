@@ -21,7 +21,7 @@ from numba.misc.firstlinefinder import get_func_body_first_lineno
 _VarArgItem = namedtuple("_VarArgItem", ("vararg", "index"))
 
 
-class BaseLower(object):
+class BaseLower:
     """
     Lower IR to LLVM
     """
@@ -241,7 +241,7 @@ class BaseLower(object):
         # pre_lower() may have changed the current basic block
         entry_block_tail = self.builder.basic_block
 
-        self.debug_print("# function begin: {0}".format(
+        self.debug_print("# function begin: {}".format(
             self.fndesc.unique_name))
 
         # Lower all blocks
@@ -304,7 +304,7 @@ class BaseLower(object):
 
     def debug_print(self, msg):
         if config.DEBUG_JIT:
-            self.context.debug_print(self.builder, "DEBUGJIT: {0}".format(msg))
+            self.context.debug_print(self.builder, f"DEBUGJIT: {msg}")
 
     def print_variable(self, msg, varname):
         """Helper to emit ``print(msg, varname)`` for debugging.
@@ -388,7 +388,7 @@ class Lower(BaseLower):
     def pre_block(self, block):
         from numba.core.unsafe import eh
 
-        super(Lower, self).pre_block(block)
+        super().pre_block(block)
         self._cur_ir_block = block
 
         if block == self.firstblk:
@@ -474,7 +474,7 @@ class Lower(BaseLower):
                 self.call_conv.return_optional_value(self.builder, ty, oty, val)
                 return
             assert ty == oty, (
-                "type '{}' does not match return type '{}'".format(oty, ty))
+                f"type '{oty}' does not match return type '{ty}'")
             retval = self.context.get_return_value(self.builder, ty, val)
             self.call_conv.return_value(self.builder, retval)
 
@@ -865,7 +865,7 @@ class Lower(BaseLower):
 
     def lower_call(self, resty, expr):
         signature = self.fndesc.calltypes[expr]
-        self.debug_print("# lower_call: expr = {0}".format(expr))
+        self.debug_print(f"# lower_call: expr = {expr}")
         if isinstance(signature.return_type, types.Phantom):
             return self.context.get_dummy_value()
 
@@ -1107,8 +1107,8 @@ class Lower(BaseLower):
 
     def _lower_call_normal(self, fnty, expr, signature):
         # Normal function resolution
-        self.debug_print("# calling normal function: {0}".format(fnty))
-        self.debug_print("# signature: {0}".format(signature))
+        self.debug_print(f"# calling normal function: {fnty}")
+        self.debug_print(f"# signature: {signature}")
         if isinstance(fnty, types.ObjModeDispatcher):
             argvals = expr.func.args
         else:

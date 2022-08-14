@@ -172,7 +172,7 @@ def ignore_internal_warnings():
                             module=r'numba\.np\.ufunc\.parallel.*')
 
 
-class CompilationCache(object):
+class CompilationCache:
     """
     A cache of compilation results for various signatures and flags.
     This can make tests significantly faster (or less slow).
@@ -387,7 +387,8 @@ class TestCase(unittest.TestCase):
         else:
             return
         # Decorate the failure message with more information
-        self.fail("when comparing %s and %s: %s" % (first, second, failure_msg))
+        self.fail("when comparing {} and {}: {}".format(
+            first, second, failure_msg))
 
     def _assertPreciseEqual(self, first, second, prec='exact', ulps=1,
                             msg=None, ignore_sign_on_zero=False,
@@ -414,10 +415,10 @@ class TestCase(unittest.TestCase):
         first_family = self._detect_family(first)
         second_family = self._detect_family(second)
 
-        assertion_message = "Type Family mismatch. (%s != %s)" % (first_family,
-                                                                  second_family)
+        assertion_message = "Type Family mismatch. ({} != {})".format(first_family,
+                                                                      second_family)
         if msg:
-            assertion_message += ': %s' % (msg,)
+            assertion_message += ': {}'.format(msg)
         self.assertEqual(first_family, second_family, msg=assertion_message)
 
         # We now know they are in the same comparison family
@@ -485,7 +486,7 @@ class TestCase(unittest.TestCase):
             assertion_message = ("Mismatching return types (%s vs. %s)"
                                  % (first.__class__, second.__class__))
             if msg:
-                assertion_message += ': %s' % (msg,)
+                assertion_message += ': {}'.format(msg)
             self.fail(assertion_message)
 
         try:
@@ -516,7 +517,7 @@ class TestCase(unittest.TestCase):
             elif prec == 'double':
                 bits = 53
             else:
-                raise ValueError("unsupported precision %r" % (prec,))
+                raise ValueError("unsupported precision {!r}".format(prec))
             k = 2 ** (ulps - bits - 1)
             delta = k * (abs(first) + abs(second))
         else:
@@ -576,9 +577,8 @@ class TestCase(unittest.TestCase):
         env_copy['SUBPROC_TEST'] = '1'
         envvars = pytypes.MappingProxyType({} if envvars is None else envvars)
         env_copy.update(envvars)
-        status = subprocess.run(cmd, stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, timeout=timeout,
-                                env=env_copy, universal_newlines=True)
+        status = subprocess.run(cmd, capture_output=True, timeout=timeout,
+                                env=env_copy, text=True)
         streams = (f'\ncaptured stdout: {status.stdout}\n'
                    f'captured stderr: {status.stderr}')
         self.assertEqual(status.returncode, 0, streams)
@@ -613,7 +613,7 @@ class TestCase(unittest.TestCase):
             return wrapper
 
 
-class SerialMixin(object):
+class SerialMixin:
     """Mixin to mark test for serial execution.
     """
     _numba_parallel_test_ = False
@@ -706,7 +706,7 @@ else:
     # Mix the UID into the directory name to allow different users to
     # run the test suite without permission errors (issue #1586)
     _trashcan_dir = os.path.join(tempfile.gettempdir(),
-                                 "%s.%s" % (_trashcan_dir, os.getuid()))
+                                 "{}.{}".format(_trashcan_dir, os.getuid()))
 
 # Stale temporary directories are deleted after they are older than this value.
 # The test suite probably won't ever take longer than this...
@@ -808,7 +808,7 @@ def capture_cache_log():
             yield out
 
 
-class EnableNRTStatsMixin(object):
+class EnableNRTStatsMixin:
     """Mixin to enable the NRT statistics counters."""
 
     def setUp(self):
@@ -818,7 +818,7 @@ class EnableNRTStatsMixin(object):
         _nrt.memsys_disable_stats()
 
 
-class MemoryLeak(object):
+class MemoryLeak:
 
     __enable_leak_check = True
 
@@ -849,13 +849,13 @@ class MemoryLeak(object):
 class MemoryLeakMixin(EnableNRTStatsMixin, MemoryLeak):
 
     def setUp(self):
-        super(MemoryLeakMixin, self).setUp()
+        super().setUp()
         self.memory_leak_setup()
 
     def tearDown(self):
         gc.collect()
         self.memory_leak_teardown()
-        super(MemoryLeakMixin, self).tearDown()
+        super().tearDown()
 
 
 @contextlib.contextmanager
@@ -909,7 +909,7 @@ def redirect_fd(fd):
     r, w = os.pipe()
     try:
         os.dup2(w, fd)
-        yield io.open(r, "r")
+        yield open(r)
     finally:
         libnumba._numba_flush_stdout()
         os.close(w)
@@ -997,7 +997,7 @@ def _remote_runner(fn, qout):
     sys.exit(exitcode)
 
 
-class CheckWarningsMixin(object):
+class CheckWarningsMixin:
     @contextlib.contextmanager
     def check_warnings(self, messages, category=RuntimeWarning):
         with warnings.catch_warnings(record=True) as catch:
@@ -1018,8 +1018,8 @@ def _format_jit_options(**jit_options):
     out = []
     for key, value in jit_options.items():
         if isinstance(value, str):
-            value = '"{}"'.format(value)
-        out.append('{}={}'.format(key, value))
+            value = f'"{value}"'
+        out.append(f'{key}={value}')
     return ', '.join(out)
 
 
@@ -1191,7 +1191,7 @@ def print_azure_matrix():
     azure_pipe = os.path.join(base_path, '..', '..', 'azure-pipelines.yml')
     if not os.path.isfile(azure_pipe):
         self.skipTest("'azure-pipelines.yml' is not available")
-    with open(os.path.abspath(azure_pipe), 'rt') as f:
+    with open(os.path.abspath(azure_pipe)) as f:
         data = f.read()
     pipe_yml = yaml.load(data, Loader=Loader)
 
@@ -1208,7 +1208,7 @@ def print_azure_matrix():
     azure_windows = os.path.join(base_path, *winpath)
     if not os.path.isfile(azure_windows):
         self.skipTest("'azure-windows.yml' is not available")
-    with open(os.path.abspath(azure_windows), 'rt') as f:
+    with open(os.path.abspath(azure_windows)) as f:
         data = f.read()
     windows_yml = yaml.load(data, Loader=Loader)
 

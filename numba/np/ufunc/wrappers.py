@@ -246,7 +246,7 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, cres):
     return _wrapper_info(library=wrapperlib, env=env, name=wrapper.name)
 
 
-class UArrayArg(object):
+class UArrayArg:
     def __init__(self, context, builder, args, steps, i, fe_type):
         self.context = context
         self.builder = builder
@@ -290,7 +290,7 @@ class UArrayArg(object):
 GufWrapperCache = make_library_cache('guf')
 
 
-class _GufuncWrapper(object):
+class _GufuncWrapper:
     def __init__(self, py_func, cres, sin, sout, cache, is_parfors):
         """
         The *is_parfors* argument is a boolean that indicates if the GUfunc
@@ -600,7 +600,7 @@ def _prepare_call_to_object_mode(context, builder, pyapi, func,
     return innercall, builder.load(error_pointer)
 
 
-class GUArrayArg(object):
+class GUArrayArg:
     def __init__(self, context, builder, args, steps, i, step_offset,
                  typ, syms, sym_dim):
 
@@ -629,7 +629,7 @@ class GUArrayArg(object):
                     pass
                 else:
                     raise TypeError("type and shape signature mismatch for arg "
-                                    "#{0}".format(i + 1))
+                                    "#{}".format(i + 1))
 
             ndim = typ.ndim
             shape = [sym_dim[s] for s in syms]
@@ -656,8 +656,8 @@ class GUArrayArg(object):
         else:
             # If typ is not an array
             if syms:
-                raise TypeError("scalar type {0} given for non scalar "
-                                "argument #{1}".format(typ, i + 1))
+                raise TypeError("scalar type {} given for non scalar "
+                                "argument #{}".format(typ, i + 1))
             self._loader = _ScalarArgLoader(dtype=typ, stride=core_step)
 
     def get_array_at_offset(self, ind):
@@ -665,7 +665,7 @@ class GUArrayArg(object):
                                  data=self.data, ind=ind)
 
 
-class _ScalarArgLoader(object):
+class _ScalarArgLoader:
     """
     Handle GFunc argument loading where a scalar type is used in the core
     function.
@@ -685,7 +685,7 @@ class _ScalarArgLoader(object):
         return builder.load(dptr)
 
 
-class _ArrayArgLoader(object):
+class _ArrayArgLoader:
     """
     Handle GUFunc argument loading where an array is expected.
     """

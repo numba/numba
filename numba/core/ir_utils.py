@@ -270,7 +270,7 @@ def get_global_func_typ(func):
     for (k, v) in typing.templates.builtin_registry.globals:
         if k == func:
             return v
-    raise RuntimeError("func type not found {}".format(func))
+    raise RuntimeError(f"func type not found {func}")
 
 
 def mk_loop_header(typemap, phi_var, calltypes, scope, loc):
@@ -447,7 +447,7 @@ def visit_vars_inner(node, callback, cbdata):
     elif isinstance(node, list):
         return [visit_vars_inner(n, callback, cbdata) for n in node]
     elif isinstance(node, tuple):
-        return tuple([visit_vars_inner(n, callback, cbdata) for n in node])
+        return tuple(visit_vars_inner(n, callback, cbdata) for n in node)
     elif isinstance(node, ir.Expr):
         # if node.op in ['binop', 'inplace_binop']:
         #     lhs = node.lhs.name
@@ -816,7 +816,7 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
     if alias_map is None:
         alias_map = {}
     if arg_aliases is None:
-        arg_aliases = set(a for a in args if not is_immutable_type(a, typemap))
+        arg_aliases = {a for a in args if not is_immutable_type(a, typemap)}
 
     # update definitions since they are not guaranteed to be up-to-date
     # FIXME keep definitions up-to-date to avoid the need for rebuilding
@@ -1151,7 +1151,7 @@ def dprint_func_ir(func_ir, title, blocks=None):
         ir_blocks = func_ir.blocks
         func_ir.blocks = ir_blocks if blocks == None else blocks
         name = func_ir.func_id.func_qualname
-        print(("IR %s: %s" % (title, name)).center(80, "-"))
+        print(("IR {}: {}".format(title, name)).center(80, "-"))
         func_ir.dump()
         print("-" * 40)
         func_ir.blocks = ir_blocks
@@ -1492,7 +1492,7 @@ def restore_copy_var_names(blocks, save_copies, typemap):
         # already renamed
         if (not a.startswith('$') and b.name.startswith('$')
                 and b.name not in rename_dict):
-            new_name = mk_unique_var('${}'.format(a))
+            new_name = mk_unique_var(f'${a}')
             rename_dict[b.name] = new_name
             var_rename_map[new_name] = a
             typ = typemap.pop(b.name)
@@ -1709,7 +1709,7 @@ def compile_to_numba_ir(mk_func, glbls, typingctx=None, targetctx=None,
         code = mk_func.__code__
     else:
         raise NotImplementedError(
-            "function type not recognized {}".format(mk_func))
+            f"function type not recognized {mk_func}")
     f_ir = get_ir_of_code(glbls, code)
     remove_dels(f_ir.blocks)
 
@@ -1781,7 +1781,7 @@ def get_ir_of_code(glbls, fcode):
     # XXX: check rewrite pass flag?
     # for example, Raise nodes need to become StaticRaise before type inference
 
-    class DummyPipeline(object):
+    class DummyPipeline:
         def __init__(self, f_ir):
             self.state = compiler.StateDict()
             self.state.typingctx = None
@@ -2132,7 +2132,7 @@ def raise_on_unsupported_feature(func_ir, typemap):
                             continue
 
                     vardescr = '' if var.startswith(
-                        '$') else "'{}' ".format(var)
+                        '$') else f"'{var}' "
                     raise TypingError(
                         "'view' can only be called on NumPy dtypes, "
                         "try wrapping the variable {}with 'np.<dtype>()'".
@@ -2322,7 +2322,7 @@ def convert_code_obj_to_function(code_obj, caller_ir):
 
     func_arg = ",".join(["%s" % (co_varnames[i]) for i in range(nargs)])
     if n_kwargs:
-        kw_const = ["%s = %s" % (co_varnames[i + nargs], kwarg_defaults_tup[i])
+        kw_const = ["{} = {}".format(co_varnames[i + nargs], kwarg_defaults_tup[i])
                     for i in range(n_kwargs)]
         func_arg += ", "
         func_arg += ", ".join(kw_const)

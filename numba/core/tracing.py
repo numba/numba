@@ -67,9 +67,9 @@ def create_events(fname, spec, args, kwds):
         values = dict(zip(spec.args[-len(spec.defaults):],spec.defaults))
     values.update(kwds)
     values.update(list(zip(spec.args[:len(args)], args)))
-    positional = ['%s=%r' % (a, values.pop(a)) for a in spec.args]
+    positional = ['{}={!r}'.format(a, values.pop(a)) for a in spec.args]
     anonymous = [str(a) for a in args[len(positional):]]
-    keywords = ['%s=%r' % (k, values[k]) for k in sorted(values.keys())]
+    keywords = ['{}={!r}'.format(k, values[k]) for k in sorted(values.keys())]
     params = ', '.join([f for f in chain(positional, anonymous, keywords) if f])
 
     enter = ['>> ', tls.indent * ' ', fname, '(', params, ')']

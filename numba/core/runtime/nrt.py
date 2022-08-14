@@ -12,7 +12,7 @@ from numba.core.runtime import _nrt_python as _nrt
 _nrt_mstats = namedtuple("nrt_mstats", ["alloc", "free", "mi_alloc", "mi_free"])
 
 
-class _Runtime(object):
+class _Runtime:
     def __init__(self):
         self._init = False
 

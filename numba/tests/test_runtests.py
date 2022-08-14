@@ -39,7 +39,7 @@ class TestCase(unittest.TestCase):
     def check_listing_prefix(self, prefix):
         listing = self.get_testsuite_listing([prefix])
         for ln in listing[:-1]:
-            errmsg = '{!r} not startswith {!r}'.format(ln, prefix)
+            errmsg = f'{ln!r} not startswith {prefix!r}'
             self.assertTrue(ln.startswith(prefix), msg=errmsg)
 
     def check_testsuite_size(self, args, minsize):
@@ -130,7 +130,7 @@ class TestCase(unittest.TestCase):
         full = filter_test(self.get_testsuite_listing([]))
         sliced = []
         for i in range(3):
-            subset = self.get_testsuite_listing(['-j', '{},None,3'.format(i)])
+            subset = self.get_testsuite_listing(['-j', f'{i},None,3'])
             sliced.extend(filter_test(subset))
         # The tests must be equivalent
         self.assertEqual(sorted(full), sorted(sliced))
@@ -163,7 +163,7 @@ class TestCase(unittest.TestCase):
         azure_pipe = os.path.join(base_path, '..', '..', 'azure-pipelines.yml')
         if not os.path.isfile(azure_pipe):
             self.skipTest("'azure-pipelines.yml' is not available")
-        with open(os.path.abspath(azure_pipe), 'rt') as f:
+        with open(os.path.abspath(azure_pipe)) as f:
             data = f.read()
         pipe_yml = yaml.load(data, Loader=Loader)
 
@@ -180,7 +180,7 @@ class TestCase(unittest.TestCase):
         azure_windows = os.path.join(base_path, *winpath)
         if not os.path.isfile(azure_windows):
             self.skipTest("'azure-windows.yml' is not available")
-        with open(os.path.abspath(azure_windows), 'rt') as f:
+        with open(os.path.abspath(azure_windows)) as f:
             data = f.read()
         windows_yml = yaml.load(data, Loader=Loader)
 

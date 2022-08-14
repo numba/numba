@@ -54,8 +54,7 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
             choices = [slice(0, N - 1, None),
                        slice(-1, -N, -2)]
         for ndim in range(maxdim + 1):
-            for tup in itertools.product(choices, repeat=ndim):
-                yield tup
+            yield from itertools.product(choices, repeat=ndim)
 
     def generate_advanced_index_tuples(self, N, maxdim, many=True):
         """

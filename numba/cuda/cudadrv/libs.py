@@ -84,7 +84,7 @@ def test(_platform=None, print_paths=True):
     libs = 'nvvm cudart'.split()
     for lib in libs:
         path = get_cudalib(lib, _platform)
-        print('Finding {} from {}'.format(lib, _get_source_variable(lib)))
+        print(f'Finding {lib} from {_get_source_variable(lib)}')
         if print_paths:
             print('\tlocated at', path)
         else:
@@ -96,13 +96,13 @@ def test(_platform=None, print_paths=True):
                 open_cudalib(lib)
                 print('\tok')
             except OSError as e:
-                print('\tERROR: failed to open %s:\n%s' % (lib, e))
+                print('\tERROR: failed to open {}:\n{}'.format(lib, e))
                 failed = True
 
     # Check for cudadevrt (the only static library)
     lib = 'cudadevrt'
     path = get_cudalib(lib, _platform, static=True)
-    print('Finding {} from {}'.format(lib, _get_source_variable(lib)))
+    print(f'Finding {lib} from {_get_source_variable(lib)}')
     if print_paths:
         print('\tlocated at', path)
     else:
@@ -111,7 +111,7 @@ def test(_platform=None, print_paths=True):
     try:
         check_static_lib(lib)
     except FileNotFoundError as e:
-        print('\tERROR: failed to find %s:\n%s' % (lib, e))
+        print('\tERROR: failed to find {}:\n{}'.format(lib, e))
         failed = True
 
     # Check for libdevice

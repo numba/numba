@@ -162,7 +162,7 @@ class TestTupleTypeNotIterable(unittest.TestCase):
 
     def test_tuple_types_exception(self):
         with self.assertRaises(errors.TypingError) as raises:
-            types.Tuple((types.uint32))
+            types.Tuple(types.uint32)
         self.assertIn(
             "Argument 'types' is not iterable",
             str(raises.exception)
@@ -367,7 +367,7 @@ class TestOperations(TestCase):
     def _test_compare(self, pyfunc):
         def eq(pyfunc, cfunc, args):
             self.assertIs(cfunc(*args), pyfunc(*args),
-                          "mismatch for arguments %s" % (args,))
+                          "mismatch for arguments {}".format(args))
 
         # Same-sized tuples
         argtypes = [types.Tuple((types.int64, types.float32)),
@@ -462,7 +462,7 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
     def _test_compare(self, pyfunc):
         def eq(pyfunc, cfunc, args):
             self.assertIs(cfunc(*args), pyfunc(*args),
-                          "mismatch for arguments %s" % (args,))
+                          "mismatch for arguments {}".format(args))
 
         cfunc = jit(nopython=True)(pyfunc)
 

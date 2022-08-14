@@ -65,7 +65,7 @@ def array_setitem_invalid_cast():
     return arr
 
 
-class Foo(object):
+class Foo:
     def __repr__(self):
         return "<Foo instance>"
 
@@ -166,7 +166,7 @@ class TestTypingError(unittest.TestCase):
 
         errmsg = str(raises.exception)
         self.assertIn(
-            _header_lead + " Function({})".format(operator.setitem),
+            _header_lead + f" Function({operator.setitem})",
             errmsg,
         )
         self.assertIn(
@@ -218,10 +218,10 @@ class TestArgumentTypingError(unittest.TestCase):
         with self.assertRaises(TypingError) as raises:
             cfunc(1, foo, 1)
 
-        expected = re.compile(("This error may have been caused by the following "
-                               "argument\(s\):\\n- argument 1:.*Cannot determine "
+        expected = re.compile("This error may have been caused by the following "
+                              "argument\\(s\\):\\n- argument 1:.*Cannot determine "
                               "Numba type of "
-                               "<class \'numba.tests.test_typingerror.Foo\'>"))
+                              "<class \'numba.tests.test_typingerror.Foo\'>")
         self.assertTrue(expected.search(str(raises.exception)) is not None)
 
 

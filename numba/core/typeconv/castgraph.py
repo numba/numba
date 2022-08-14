@@ -27,7 +27,7 @@ class Conversion(enum.IntEnum):
     nil = 99
 
 
-class CastSet(object):
+class CastSet:
     """A set of casting rules.
 
     There is at most one rule per target type.
@@ -52,7 +52,7 @@ class CastSet(object):
         return len(self._rels)
 
     def __repr__(self):
-        body = ["{rel}({ty})".format(rel=rel, ty=ty)
+        body = [f"{rel}({ty})"
                 for ty, rel in self._rels.items()]
         return "{" + ', '.join(body) + "}"
 
@@ -66,7 +66,7 @@ class CastSet(object):
         return self._rels[item]
 
 
-class TypeGraph(object):
+class TypeGraph:
     """A graph that maintains the casting relationship of all types.
 
     This simplifies the definition of casting rules by automatically

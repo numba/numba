@@ -96,10 +96,10 @@ class CudaAPIError(CudaDriverError):
     def __init__(self, code, msg):
         self.code = code
         self.msg = msg
-        super(CudaAPIError, self).__init__(code, msg)
+        super().__init__(code, msg)
 
     def __str__(self):
-        return "[%s] %s" % (self.code, self.msg)
+        return "[{}] {}".format(self.code, self.msg)
 
 
 def find_driver():
@@ -202,7 +202,7 @@ def _getpid():
 ERROR_MAP = _build_reverse_error_map()
 
 
-class Driver(object):
+class Driver:
     """
     Driver API functions are lazily bound.
     """
@@ -381,7 +381,7 @@ class Driver(object):
     def _check_ctypes_error(self, fname, retcode):
         if retcode != enums.CUDA_SUCCESS:
             errname = ERROR_MAP.get(retcode, "UNKNOWN_CUDA_ERROR")
-            msg = "Call to %s results in %s" % (fname, errname)
+            msg = "Call to {} results in {}".format(fname, errname)
             _logger.error(msg)
             if retcode == enums.CUDA_ERROR_NOT_INITIALIZED:
                 self._detect_fork()
@@ -394,7 +394,7 @@ class Driver(object):
             retval = retval[0]
 
         if retcode != binding.CUresult.CUDA_SUCCESS:
-            msg = "Call to %s results in %s" % (fname, retcode.name)
+            msg = "Call to {} results in {}".format(fname, retcode.name)
             _logger.error(msg)
             if retcode == binding.CUresult.CUDA_ERROR_NOT_INITIALIZED:
                 self._detect_fork()
@@ -463,7 +463,7 @@ class Driver(object):
         return (major, minor)
 
 
-class _ActiveContext(object):
+class _ActiveContext:
     """An contextmanager object to cache active context to reduce dependency
     on querying the CUDA driver API.
 
@@ -533,7 +533,7 @@ def _build_reverse_device_attrs():
 DEVICE_ATTRIBUTES = _build_reverse_device_attrs()
 
 
-class Device(object):
+class Device:
     """
     The device object owns the CUDA contexts.  This is owned by the driver
     object.  User should not construct devices directly.
@@ -691,7 +691,7 @@ def met_requirement_for_device(device):
                                (device, MIN_REQUIRED_CC))
 
 
-class BaseCUDAMemoryManager(object, metaclass=ABCMeta):
+class BaseCUDAMemoryManager(metaclass=ABCMeta):
     """Abstract base class for External Memory Management (EMM) Plugins."""
 
     def __init__(self, *args, **kwargs):
@@ -1135,7 +1135,7 @@ class _SizeNotSet(int):
 _SizeNotSet = _SizeNotSet()
 
 
-class _PendingDeallocs(object):
+class _PendingDeallocs:
     """
     Pending deallocations of a context (or device since we are using the primary
     context). The capacity defaults to being unset (_SizeNotSet) but can be
@@ -1218,7 +1218,7 @@ MemoryInfo = namedtuple("MemoryInfo", "free,total")
 """
 
 
-class Context(object):
+class Context:
     """
     This object wraps a CUDA Context resource.
 
@@ -1690,7 +1690,7 @@ def _module_finalizer(context, handle):
     return core
 
 
-class _CudaIpcImpl(object):
+class _CudaIpcImpl:
     """Implementation of GPU IPC using CUDA driver API.
     This requires the devices to be peer accessible.
     """
@@ -1727,7 +1727,7 @@ class _CudaIpcImpl(object):
         self._opened_mem = None
 
 
-class _StagedIpcImpl(object):
+class _StagedIpcImpl:
     """Implementation of GPU IPC using custom staging logic to workaround
     CUDA IPC limitation on peer accessibility between devices.
     """
@@ -1770,7 +1770,7 @@ class _StagedIpcImpl(object):
         pass
 
 
-class IpcHandle(object):
+class IpcHandle:
     """
     CUDA IPC handle. Serialization of the CUDA IPC handle object is implemented
     here.
@@ -1892,7 +1892,7 @@ class IpcHandle(object):
                    source_info=source_info, offset=offset)
 
 
-class MemoryPointer(object):
+class MemoryPointer:
     """A memory pointer that owns a buffer, with an optional finalizer. Memory
     pointers provide reference counting, and instances are initialized with a
     reference count of 1.
@@ -2016,7 +2016,7 @@ class AutoFreePointer(MemoryPointer):
     """
 
     def __init__(self, *args, **kwargs):
-        super(AutoFreePointer, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         # Releease the self reference to the buffer, so that the finalizer
         # is invoked if all the derived pointers are gone.
         self.refct -= 1
@@ -2057,8 +2057,8 @@ class MappedMemory(AutoFreePointer):
             self._bufptr_ = self.host_pointer.value
 
         self.device_pointer = devptr
-        super(MappedMemory, self).__init__(context, devptr, size,
-                                           finalizer=finalizer)
+        super().__init__(context, devptr, size,
+                         finalizer=finalizer)
         self.handle = self.host_pointer
 
         # For buffer interface
@@ -2147,7 +2147,7 @@ class ManagedMemory(AutoFreePointer):
         return ManagedOwnedPointer(weakref.proxy(self))
 
 
-class OwnedPointer(object):
+class OwnedPointer:
     def __init__(self, memptr, view=None):
         self._mem = memptr
 
@@ -2186,7 +2186,7 @@ class ManagedOwnedPointer(OwnedPointer, mviewbuf.MemAlloc):
     pass
 
 
-class Stream(object):
+class Stream:
     def __init__(self, context, handle, finalizer, external=False):
         self.context = context
         self.handle = handle
@@ -2308,7 +2308,7 @@ class Stream(object):
         return future
 
 
-class Event(object):
+class Event:
     def __init__(self, context, handle, finalizer=None):
         self.context = context
         self.handle = handle
@@ -2711,7 +2711,7 @@ class CtypesLinker(Linker):
             driver.cuLinkAddData(self.handle, enums.CU_JIT_INPUT_PTX,
                                  ptxbuf, len(ptx), namebuf, 0, None, None)
         except CudaAPIError as e:
-            raise LinkerError("%s\n%s" % (e, self.error_log))
+            raise LinkerError("{}\n{}".format(e, self.error_log))
 
     def add_file(self, path, kind):
         pathbuf = c_char_p(path.encode("utf8"))
@@ -2723,7 +2723,7 @@ class CtypesLinker(Linker):
             if e.code == enums.CUDA_ERROR_FILE_NOT_FOUND:
                 msg = f'{path} not found'
             else:
-                msg = "%s\n%s" % (e, self.error_log)
+                msg = "{}\n{}".format(e, self.error_log)
             raise LinkerError(msg)
 
     def add_cu(self, path, name):
@@ -2737,7 +2737,7 @@ class CtypesLinker(Linker):
         try:
             driver.cuLinkComplete(self.handle, byref(cubin), byref(size))
         except CudaAPIError as e:
-            raise LinkerError("%s\n%s" % (e, self.error_log))
+            raise LinkerError("{}\n{}".format(e, self.error_log))
 
         size = size.value
         assert size > 0, 'linker returned a zero sized cubin'
@@ -2820,12 +2820,12 @@ class NvrtcProgram:
     def check(self, err):
         if isinstance(err, binding.CUresult):
             if err != binding.CUresult.CUDA_SUCCESS:
-                raise RuntimeError('CUDA Error calling NVRTC: {}'.format(err))
+                raise RuntimeError(f'CUDA Error calling NVRTC: {err}')
         elif isinstance(err, nvrtc.nvrtcResult):
             if err != nvrtc.nvrtcResult.NVRTC_SUCCESS:
-                raise RuntimeError('NVRTC Error: {}'.format(err))
+                raise RuntimeError(f'NVRTC Error: {err}')
         else:
-            raise RuntimeError('Unknown error type: {}'.format(err))
+            raise RuntimeError(f'Unknown error type: {err}')
 
 
 class CudaPythonLinker(Linker):
@@ -2889,7 +2889,7 @@ class CudaPythonLinker(Linker):
             driver.cuLinkAddData(self.handle, input_ptx, ptx, len(ptx),
                                  namebuf, 0, [], [])
         except CudaAPIError as e:
-            raise LinkerError("%s\n%s" % (e, self.error_log))
+            raise LinkerError("{}\n{}".format(e, self.error_log))
 
     def add_cu(self, cu, name):
         program = NvrtcProgram(cu, name)
@@ -2913,14 +2913,14 @@ class CudaPythonLinker(Linker):
             if e.code == binding.CUresult.CUDA_ERROR_FILE_NOT_FOUND:
                 msg = f'{path} not found'
             else:
-                msg = "%s\n%s" % (e, self.error_log)
+                msg = "{}\n{}".format(e, self.error_log)
             raise LinkerError(msg)
 
     def complete(self):
         try:
             cubin, size = driver.cuLinkComplete(self.handle)
         except CudaAPIError as e:
-            raise LinkerError("%s\n%s" % (e, self.error_log))
+            raise LinkerError("{}\n{}".format(e, self.error_log))
 
         assert size > 0, 'linker returned a zero sized cubin'
         del self._keep_alive[:]
@@ -2984,7 +2984,7 @@ def device_memory_size(devmem):
         else:
             sz = e - s
         devmem._cuda_memsize_ = sz
-    assert sz >= 0, "{} length array".format(sz)
+    assert sz >= 0, f"{sz} length array"
     return sz
 
 

@@ -623,20 +623,20 @@ class TestDebugInfoEmission(TestCase):
             # just the dummy line-0 and the line of the return statement
             lines={0, firstline + 5},
             must_have_attrs=set(),
-            must_not_have_attrs=set([b"optnone"]),
+            must_not_have_attrs={b"optnone"},
         )
         expected_info[foo_debug_optnone] = dict(
             # all the lines should be included
             lines=set(range(firstline + 1, firstline + 6)),
-            must_have_attrs=set([b"optnone"]),
+            must_have_attrs={b"optnone"},
             must_not_have_attrs=set(),
         )
         expected_info[foo_debug_optnone_inline] = dict(
             # optnone=True is overridden by forceinline, so this looks like the
             # foo_debug version
             lines={0, firstline + 5},
-            must_have_attrs=set([b"alwaysinline"]),
-            must_not_have_attrs=set([b"optnone"]),
+            must_have_attrs={b"alwaysinline"},
+            must_not_have_attrs={b"optnone"},
         )
 
         expected_ret = foo()

@@ -11,7 +11,7 @@ from numba.core.errors import UnsupportedError
 NEW_BLOCKERS = frozenset(['SETUP_LOOP', 'FOR_ITER', 'SETUP_WITH'])
 
 
-class CFBlock(object):
+class CFBlock:
 
     def __init__(self, offset):
         self.offset = offset
@@ -79,7 +79,7 @@ class _DictOfContainers(collections.defaultdict):
         return [(k, vs) for k, vs in sorted(self.items()) if vs]
 
 
-class CFGraph(object):
+class CFGraph:
     """
     Generic (almost) implementation of a Control Flow Graph.
     """
@@ -517,7 +517,7 @@ class CFGraph(object):
             preds_table = self._succs
             succs_table = self._preds
         else:
-            entries = set([self._entry_point])
+            entries = {self._entry_point}
             preds_table = self._preds
             succs_table = self._succs
 
@@ -527,7 +527,7 @@ class CFGraph(object):
 
         doms = {}
         for e in entries:
-            doms[e] = set([e])
+            doms[e] = {e}
 
         todo = []
         for n in self._nodes:
@@ -539,7 +539,7 @@ class CFGraph(object):
             n = todo.pop()
             if n in entries:
                 continue
-            new_doms = set([n])
+            new_doms = {n}
             preds = preds_table[n]
             if preds:
                 new_doms |= functools.reduce(set.intersection,
@@ -667,7 +667,7 @@ class CFGraph(object):
             header = dest
             # Build up the loop body from the back edge's source node,
             # up to the source header.
-            body = set([header])
+            body = {header}
             queue = [src]
             while queue:
                 n = queue.pop()
@@ -696,7 +696,7 @@ class CFGraph(object):
     def _find_in_loops(self):
         loops = self._loops
         # Compute the loops to which each node belongs.
-        in_loops = dict((n, []) for n in self._nodes)
+        in_loops = {n: [] for n in self._nodes}
         # Sort loops from longest to shortest
         # This ensures that outer loops will come before inner loops
         for loop in sorted(loops.values(), key=lambda loop: len(loop.body)):
@@ -705,8 +705,8 @@ class CFGraph(object):
         return in_loops
 
     def _dump_adj_lists(self, file):
-        adj_lists = dict((src, sorted(list(dests)))
-                         for src, dests in self._succs.items())
+        adj_lists = {src: sorted(list(dests))
+                     for src, dests in self._succs.items()}
         import pprint
         pprint.pprint(adj_lists, stream=file)
 
@@ -725,7 +725,7 @@ class CFGraph(object):
         return not self.__eq__(other)
 
 
-class ControlFlowAnalysis(object):
+class ControlFlowAnalysis:
     """
     Attributes
     ----------
@@ -823,8 +823,8 @@ class ControlFlowAnalysis(object):
                 self.blocks[out].incoming_jumps[b.offset] = pops
 
         # Find liveblocks
-        self.liveblocks = dict((i, self.blocks[i])
-                               for i in self.graph.nodes())
+        self.liveblocks = {i: self.blocks[i]
+                           for i in self.graph.nodes()}
 
         for lastblk in reversed(self.blockseq):
             if lastblk in self.liveblocks:

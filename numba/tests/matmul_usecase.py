@@ -11,7 +11,7 @@ def imatmul_usecase(x, y):
     return x
 
 
-class DumbMatrix(object):
+class DumbMatrix:
 
     def __init__(self, value):
         self.value = value

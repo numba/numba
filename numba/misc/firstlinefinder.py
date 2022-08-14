@@ -37,7 +37,7 @@ class FindDefFirstLine(ast.NodeVisitor):
             # Name of function matches.
 
             # The `def` line may match co_firstlineno.
-            possible_start_lines = set([node.lineno])
+            possible_start_lines = {node.lineno}
             if node.decorator_list:
                 # Has decorators.
                 # The first decorator line may match co_firstlineno.

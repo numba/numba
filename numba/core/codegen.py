@@ -81,7 +81,7 @@ def dump(header, body, lang):
     print('=' * 80)
 
 
-class _CFG(object):
+class _CFG:
     """
     Wraps the CFG graph for different display method.
 
@@ -255,7 +255,7 @@ class _CFG(object):
             n = 300
             if len(s) > n:
                 hs = str(hash(s))
-                s = '{}...<hash={}>'.format(s[:n], hs)
+                s = f'{s[:n]}...<hash={hs}>'
             s = html.escape(s) # deals with  &, < and >
             s = s.replace('\\{', "&#123;")
             s = s.replace('\\}', "&#125;")
@@ -446,7 +446,7 @@ class _CFG(object):
             # add in the port line at the end of the block if it was present
             # (this was built right at the top of the parse)
             if port_line:
-                new_lines.append('<tr>{}</tr>'.format(port_line))
+                new_lines.append(f'<tr>{port_line}</tr>')
 
             # If there was data, create a table, else don't!
             dat = ''.join(new_lines)
@@ -454,7 +454,7 @@ class _CFG(object):
                 tab = (('<table id="%s" BORDER="1" CELLBORDER="0" '
                        'CELLPADDING="0" CELLSPACING="0">%s</table>') % (idc,
                                                                         dat))
-                label = '<{}>'.format(tab)
+                label = f'<{tab}>'
             else:
                 label = ''
 
@@ -557,7 +557,7 @@ class CodeLibrary(metaclass=ABCMeta):
         return self._name
 
     def __repr__(self):
-        return "<Library %r at 0x%x>" % (self.name, id(self))
+        return "<Library {!r} at 0x{:x}>".format(self.name, id(self))
 
     def _raise_if_finalized(self):
         if self._finalized:
@@ -626,16 +626,16 @@ class CodeLibrary(metaclass=ABCMeta):
 
     def _get_compiled_object(self):
         if not self._object_caching_enabled:
-            raise ValueError("object caching not enabled in %s" % (self,))
+            raise ValueError("object caching not enabled in {}".format(self))
         if self._compiled_object is None:
-            raise RuntimeError("no compiled object yet for %s" % (self,))
+            raise RuntimeError("no compiled object yet for {}".format(self))
         return self._compiled_object
 
     def _set_compiled_object(self, value):
         if not self._object_caching_enabled:
-            raise ValueError("object caching not enabled in %s" % (self,))
+            raise ValueError("object caching not enabled in {}".format(self))
         if self._compiled:
-            raise ValueError("library already compiled: %s" % (self,))
+            raise ValueError("library already compiled: {}".format(self))
         self._compiled_object = value
         self._disable_inspection = True
 
@@ -946,7 +946,7 @@ class CPUCodeLibrary(CodeLibrary):
             self._codegen._engine._load_defined_symbols(self._shared_module)
             return self
         else:
-            raise ValueError("unsupported serialization kind %r" % (kind,))
+            raise ValueError("unsupported serialization kind {!r}".format(kind))
 
 
 class AOTCodeLibrary(CPUCodeLibrary):
@@ -1003,7 +1003,7 @@ class JITCodeLibrary(CPUCodeLibrary):
             self._codegen._engine.finalize_object()
 
 
-class RuntimeLinker(object):
+class RuntimeLinker:
     """
     For tracking unresolved symbols generated at runtime due to recursion.
     """
@@ -1067,7 +1067,7 @@ def _proxy(old):
     return wrapper
 
 
-class JitEngine(object):
+class JitEngine:
     """Wraps an ExecutionEngine to provide custom symbol tracking.
     Since the symbol tracking is incomplete  (doesn't consider
     loaded code object), we are not putting it in llvmlite.
@@ -1291,7 +1291,7 @@ class CPUCodegen(Codegen):
                 "https://numba.readthedocs.io/en/stable/user/faq.html#llvm-locale-bug "
                 "for more information."
                 % (loc,))
-        raise AssertionError("Unexpected IR:\n%s\n" % (ir_out,))
+        raise AssertionError("Unexpected IR:\n{}\n".format(ir_out))
 
     def magic_tuple(self):
         """

@@ -83,7 +83,7 @@ def disassemble_elf_to_cfg(elf, mangled_symbol):
                     raise e
         return data
 
-    class DisasmCFG(object):
+    class DisasmCFG:
 
         def _repr_svg_(self):
             try:

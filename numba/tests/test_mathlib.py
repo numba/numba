@@ -190,7 +190,7 @@ class TestMathLib(TestCase):
             got = cfunc(vx)
             expected = pyfunc(vx)
             actual_prec = 'single' if tx is types.float32 else prec
-            msg = 'for input %r' % (vx,)
+            msg = 'for input {!r}'.format(vx)
             self.assertPreciseEqual(got, expected, prec=actual_prec, msg=msg,
                                     **kwargs)
 
@@ -202,7 +202,7 @@ class TestMathLib(TestCase):
             got = cfunc(x, y)
             expected = pyfunc(x, y)
             actual_prec = 'single' if ty is types.float32 else prec
-            msg = 'for inputs (%r, %r)' % (x, y)
+            msg = 'for inputs ({!r}, {!r})'.format(x, y)
             self.assertPreciseEqual(got, expected, prec=actual_prec, msg=msg)
 
     def check_predicate_func(self, pyfunc, flags=enable_pyobj_flags):
@@ -517,9 +517,9 @@ class TestMathLib(TestCase):
 
             with warnings.catch_warnings():
                 warnings.simplefilter("error", RuntimeWarning)
-                self.assertRaisesRegexp(RuntimeWarning,
-                                        'overflow encountered in .*_scalars',
-                                        naive_hypot, val, val)
+                self.assertRaisesRegex(RuntimeWarning,
+                                       'overflow encountered in .*_scalars',
+                                       naive_hypot, val, val)
 
     def test_hypot_npm(self):
         self.test_hypot(flags=no_pyobj_flags)
@@ -646,7 +646,7 @@ class TestMathLib(TestCase):
                          (-0.0, 0), (-0.0, 1),
                          (float('inf'), 0), (float('-inf'), 0),
                          (float('nan'), 0)]:
-                msg = 'for input %r' % (args,)
+                msg = 'for input {!r}'.format(args)
                 self.assertPreciseEqual(cfunc(*args), pyfunc(*args))
 
     def test_ldexp_npm(self):

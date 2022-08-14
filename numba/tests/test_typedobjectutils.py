@@ -36,7 +36,7 @@ class TestTypedObjectUtils(TestCase):
                 self.assertEqual(len(w), 1)
                 # Make sure the warning is about unsafe cast
                 self.assertIn(
-                    "unsafe cast from {} to {}".format(fromty, toty),
+                    f"unsafe cast from {fromty} to {toty}",
                     str(w[0]),
                 )
 

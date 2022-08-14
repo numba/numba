@@ -68,7 +68,7 @@ def literal(value):
     try:
         ctor = Literal.ctor_map[ty]
     except KeyError:
-        raise LiteralTypingError("{} cannot be used as a literal".format(ty))
+        raise LiteralTypingError(f"{ty} cannot be used as a literal")
     else:
         return ctor(value)
 
@@ -92,7 +92,7 @@ class Omitted(Opaque):
         # Use helper function to support both hashable and non-hashable
         # values. See discussion in gh #6957.
         self._value_key = get_hashable_key(value)
-        super(Omitted, self).__init__("omitted(default=%r)" % (value,))
+        super().__init__("omitted(default={!r})".format(value))
 
     @property
     def key(self):
@@ -112,7 +112,7 @@ class VarArg(Type):
 
     def __init__(self, dtype):
         self.dtype = dtype
-        super(VarArg, self).__init__("*%s" % dtype)
+        super().__init__("*%s" % dtype)
 
     @property
     def key(self):
@@ -122,7 +122,7 @@ class VarArg(Type):
 class Module(Dummy):
     def __init__(self, pymod):
         self.pymod = pymod
-        super(Module, self).__init__("Module(%s)" % pymod)
+        super().__init__("Module(%s)" % pymod)
 
     @property
     def key(self):
@@ -139,7 +139,7 @@ class MemInfoPointer(Type):
     def __init__(self, dtype):
         self.dtype = dtype
         name = "memory-managed *%s" % dtype
-        super(MemInfoPointer, self).__init__(name)
+        super().__init__(name)
 
     @property
     def key(self):
@@ -162,10 +162,10 @@ class CPointer(Type):
         self.dtype = dtype
         self.addrspace = addrspace
         if addrspace is not None:
-            name = "%s_%s*" % (dtype, addrspace)
+            name = "{}_{}*".format(dtype, addrspace)
         else:
             name = "%s*" % dtype
-        super(CPointer, self).__init__(name)
+        super().__init__(name)
 
     @property
     def key(self):
@@ -190,7 +190,7 @@ class EphemeralArray(Type):
         self.dtype = dtype
         self.count = count
         name = "*%s[%d]" % (dtype, count)
-        super(EphemeralArray, self).__init__(name)
+        super().__init__(name)
 
     @property
     def key(self):
@@ -204,7 +204,7 @@ class Object(Type):
     def __init__(self, clsobj):
         self.cls = clsobj
         name = "Object(%s)" % clsobj.__name__
-        super(Object, self).__init__(name)
+        super().__init__(name)
 
     @property
     def key(self):
@@ -221,7 +221,7 @@ class Optional(Type):
         typ = unliteral(typ)
         self.type = typ
         name = "OptionalType(%s)" % self.type
-        super(Optional, self).__init__(name)
+        super().__init__(name)
 
     @property
     def key(self):
@@ -287,7 +287,7 @@ class ExceptionClass(Callable, Phantom):
         assert issubclass(exc_class, BaseException)
         name = "%s" % (exc_class.__name__)
         self.exc_class = exc_class
-        super(ExceptionClass, self).__init__(name)
+        super().__init__(name)
 
     def get_call_type(self, context, args, kws):
         return self.get_call_signatures()[0][0]
@@ -313,9 +313,9 @@ class ExceptionInstance(Phantom):
 
     def __init__(self, exc_class):
         assert issubclass(exc_class, BaseException)
-        name = "%s(...)" % (exc_class.__name__,)
+        name = "{}(...)".format(exc_class.__name__)
         self.exc_class = exc_class
-        super(ExceptionInstance, self).__init__(name)
+        super().__init__(name)
 
     @property
     def key(self):
@@ -328,7 +328,7 @@ class SliceType(Type):
         assert members in (2, 3)
         self.members = members
         self.has_step = members >= 3
-        super(SliceType, self).__init__(name)
+        super().__init__(name)
 
     @property
     def key(self):
@@ -338,7 +338,7 @@ class SliceType(Type):
 class SliceLiteral(Literal, SliceType):
     def __init__(self, value):
         self._literal_init(value)
-        name = 'Literal[slice]({})'.format(value)
+        name = f'Literal[slice]({value})'
         members = 2 if value.step is None else 3
         SliceType.__init__(self, name=name, members=members)
 
@@ -361,8 +361,8 @@ class ClassInstanceType(Type):
 
     def __init__(self, class_type):
         self.class_type = class_type
-        name = "{0}.{1}".format(self.name_prefix, self.class_type.name)
-        super(ClassInstanceType, self).__init__(name)
+        name = f"{self.name_prefix}.{self.class_type.name}"
+        super().__init__(name)
 
     def get_data_type(self):
         return ClassDataType(self)
@@ -421,10 +421,10 @@ class ClassType(Callable, Opaque):
         self.jit_props = jit_props
         self.jit_static_methods = jit_static_methods
         self.struct = struct
-        fielddesc = ','.join("{0}:{1}".format(k, v) for k, v in struct.items())
-        name = "{0}.{1}#{2:x}<{3}>".format(self.name_prefix, self.class_name,
-                                           id(self), fielddesc)
-        super(ClassType, self).__init__(name)
+        fielddesc = ','.join(f"{k}:{v}" for k, v in struct.items())
+        name = "{}.{}#{:x}<{}>".format(self.name_prefix, self.class_name,
+                                       id(self), fielddesc)
+        super().__init__(name)
 
     def get_call_type(self, context, args, kws):
         return self.ctor_template(context).apply(args, kws)
@@ -464,8 +464,8 @@ class DeferredType(Type):
 
     def __init__(self):
         self._define = None
-        name = "{0}#{1}".format(type(self).__name__, id(self))
-        super(DeferredType, self).__init__(name)
+        name = f"{type(self).__name__}#{id(self)}"
+        super().__init__(name)
 
     def get(self):
         if self._define is None:
@@ -476,7 +476,7 @@ class DeferredType(Type):
         if self._define is not None:
             raise TypeError("deferred type already defined")
         if not isinstance(typ, Type):
-            raise TypeError("arg is not a Type; got: {0}".format(type(typ)))
+            raise TypeError(f"arg is not a Type; got: {type(typ)}")
         self._define = typ
 
     def unify(self, typingctx, other):
@@ -493,8 +493,8 @@ class ClassDataType(Type):
 
     def __init__(self, classtyp):
         self.class_type = classtyp
-        name = "data.{0}".format(self.class_type.name)
-        super(ClassDataType, self).__init__(name)
+        name = f"data.{self.class_type.name}"
+        super().__init__(name)
 
 
 class ContextManager(Callable, Phantom):
@@ -504,11 +504,11 @@ class ContextManager(Callable, Phantom):
 
     def __init__(self, cm):
         self.cm = cm
-        super(ContextManager, self).__init__("ContextManager({})".format(cm))
+        super().__init__(f"ContextManager({cm})")
 
     def get_call_signatures(self):
         if not self.cm.is_callable:
-            msg = "contextmanager {} is not callable".format(self.cm)
+            msg = f"contextmanager {self.cm} is not callable"
             raise TypingError(msg)
 
         return (), False
@@ -517,7 +517,7 @@ class ContextManager(Callable, Phantom):
         from numba.core import typing
 
         if not self.cm.is_callable:
-            msg = "contextmanager {} is not callable".format(self.cm)
+            msg = f"contextmanager {self.cm} is not callable"
             raise TypingError(msg)
 
         posargs = list(args) + [v for k, v in sorted(kws.items())]
@@ -530,7 +530,7 @@ class ContextManager(Callable, Phantom):
 class UnicodeType(IterableType, Hashable):
 
     def __init__(self, name):
-        super(UnicodeType, self).__init__(name)
+        super().__init__(name)
 
     @property
     def iterator_type(self):
@@ -542,4 +542,4 @@ class UnicodeIteratorType(SimpleIteratorType):
     def __init__(self, dtype):
         name = "iter_unicode"
         self.data = dtype
-        super(UnicodeIteratorType, self).__init__(name, dtype)
+        super().__init__(name, dtype)

@@ -27,10 +27,10 @@ class FakeShape(tuple):
     def __getitem__(self, k):
         if isinstance(k, int) and k < 0:
             raise IndexError('tuple index out of range')
-        return super(FakeShape, self).__getitem__(k)
+        return super().__getitem__(k)
 
 
-class FakeWithinKernelCUDAArray(object):
+class FakeWithinKernelCUDAArray:
     '''
     Created to emulate the behavior of arrays within kernels, where either
     array.item or array['item'] is valid (that is, give all structured
@@ -68,7 +68,7 @@ class FakeWithinKernelCUDAArray(object):
         return len(self._item)
 
 
-class FakeCUDAArray(object):
+class FakeCUDAArray:
     '''
     Implements the interface of a DeviceArray/DeviceRecord, but mostly just
     wraps a NumPy array.
@@ -393,7 +393,7 @@ def verify_cuda_ndarray_interface(obj):
         if not hasattr(obj, attr):
             raise AttributeError(attr)
         if not isinstance(getattr(obj, attr), typ):
-            raise AttributeError('%s must be of type %s' % (attr, typ))
+            raise AttributeError('{} must be of type {}'.format(attr, typ))
 
     requires_attr('shape', tuple)
     requires_attr('strides', tuple)

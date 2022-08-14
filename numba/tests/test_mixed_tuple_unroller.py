@@ -1176,8 +1176,7 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
         # test yielding from an unroll
         @njit
         def gen(a):
-            for x in literal_unroll(a):
-                yield x
+            yield from literal_unroll(a)
 
         @njit
         def foo():
@@ -1197,8 +1196,7 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
             @njit
             def foo():
                 def gen(a):
-                    for x in literal_unroll(a):
-                        yield x
+                    yield from literal_unroll(a)
                 return [next(x) for x in cons(gen, (1, 2.3, 4j,))]
             return foo
 
@@ -1654,7 +1652,7 @@ class TestMore(TestCase):
 
         self.assertIn("getiter", str(raises.exception))
         re = r".*Tuple\(int[0-9][0-9], float64\).*"
-        self.assertRegexpMatches(str(raises.exception), re)
+        self.assertRegex(str(raises.exception), re)
 
     def test_unroll_tuple_of_dict(self):
 

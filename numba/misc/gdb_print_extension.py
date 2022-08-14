@@ -91,7 +91,7 @@ class NumbaArrayPrinter:
                 # Converts a gdb handle to a dwarf array to a tuple of ints
                 fields = dwarr.type.fields()
                 lo, hi = fields[0].type.range()
-                return tuple([int(dwarr[x]) for x in range(lo, hi + 1)])
+                return tuple(int(dwarr[x]) for x in range(lo, hi + 1))
 
             # shape/strides extraction
             shape = dwarr2inttuple(rshp)
@@ -117,7 +117,7 @@ class NumbaArrayPrinter:
                                                               strides=strides,)
                     return '\n' + str(new_arr)
                 # Catch all for no NumPy
-                return "array([...], dtype=%s, shape=%s)" % (dtype_str, shape)
+                return "array([...], dtype={}, shape={})".format(dtype_str, shape)
             else:
                 # Not yet initialized or NULLed out data
                 buf = list(["NULL/Uninitialized"])
@@ -132,7 +132,7 @@ class NumbaComplexPrinter:
         self.val = val
 
     def to_string(self):
-        return "%s+%sj" % (self.val['real'], self.val['imag'])
+        return "{}+{}j".format(self.val['real'], self.val['imag'])
 
 
 class NumbaTuplePrinter:

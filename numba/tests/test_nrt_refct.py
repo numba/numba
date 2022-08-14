@@ -18,7 +18,7 @@ class TestNrtRefCt(EnableNRTStatsMixin, TestCase):
     def setUp(self):
         # Clean up any NRT-backed objects hanging in a dead reference cycle
         gc.collect()
-        super(TestNrtRefCt, self).setUp()
+        super().setUp()
 
     def test_no_return(self):
         """

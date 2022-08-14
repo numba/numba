@@ -13,7 +13,7 @@ from numba.core.extending import (
 from numba.core.imputils import impl_ret_borrowed
 
 
-class Index(object):
+class Index:
     """
     A minimal pandas.Index-like object.
     """
@@ -43,7 +43,7 @@ class IndexType(types.Buffer):
 
     def __init__(self, dtype, layout, pyclass):
         self.pyclass = pyclass
-        super(IndexType, self).__init__(dtype, 1, layout)
+        super().__init__(dtype, 1, layout)
 
     @property
     def key(self):
@@ -61,7 +61,7 @@ class IndexType(types.Buffer):
         return type(self)(dtype, layout, self.pyclass)
 
 
-class Series(object):
+class Series:
     """
     A minimal pandas.Series-like object.
     """
@@ -96,8 +96,8 @@ class SeriesType(types.ArrayCompatible):
         self.dtype = dtype
         self.index = index
         self.values = types.Array(self.dtype, 1, 'C')
-        name = "series(%s, %s)" % (dtype, index)
-        super(SeriesType, self).__init__(name)
+        name = "series({}, {})".format(dtype, index)
+        super().__init__(name)
 
     @property
     def key(self):

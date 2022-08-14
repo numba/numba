@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Test function name mangling.
 The mangling affects the ABI of numba compiled binaries.
@@ -22,19 +21,19 @@ class TestMangling(TestCase):
         self.assertEqual(name, '_Z3fooif')
 
     def test_unicode_fname(self):
-        fname = u'foಠ'
+        fname = 'foಠ'
         argtypes = types.int32, types.float32
         name = default_mangler(fname, argtypes)
         self.assertIsInstance(name, str)
         # manually encode it
         unichar = fname[2]
-        enc = ''.join('_{:02x}'.format(c)
+        enc = ''.join(f'_{c:02x}'
                       for c in unichar.encode('utf8'))
         text = 'fo' + enc
-        expect = '_Z{}{}if'.format(len(text), text)
+        expect = f'_Z{len(text)}{text}if'
         self.assertEqual(name, expect)
         # ensure result chars are in the right charset
-        self.assertRegexpMatches(name, r'^_Z[a-zA-Z0-9_\$]+$')
+        self.assertRegex(name, r'^_Z[a-zA-Z0-9_\$]+$')
 
 
 if __name__ == '__main__':

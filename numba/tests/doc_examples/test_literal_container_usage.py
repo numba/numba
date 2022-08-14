@@ -33,7 +33,7 @@ class DocsLiteralContainerUsageTest(unittest.TestCase):
                         elif isinstance(lv, int):
                             const_expr.append(k.literal_value * lv)
                     else: # it's an array
-                        const_expr.append("Array(dim={dim}".format(dim=v.ndim))
+                        const_expr.append(f"Array(dim={v.ndim}")
                 const_strings = tuple(const_expr)
 
                 def impl(x):

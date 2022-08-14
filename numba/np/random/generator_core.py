@@ -23,7 +23,7 @@ class NumPyRngBitGeneratorModel(models.StructModel):
             ('fnptr_next_double', types.uintp),
             ('bit_generator', types.uintp),
         ]
-        super(NumPyRngBitGeneratorModel, self).__init__(dmm, fe_type, members)
+        super().__init__(dmm, fe_type, members)
 
 
 _bit_gen_type = types.NumPyRandomBitGeneratorType('bit_generator')
@@ -37,9 +37,7 @@ class NumPyRandomGeneratorTypeModel(models.StructModel):
             ('meminfo', types.MemInfoPointer(types.voidptr)),
             ('parent', types.pyobject)
         ]
-        super(
-            NumPyRandomGeneratorTypeModel,
-            self).__init__(
+        super().__init__(
             dmm,
             fe_type,
             members)

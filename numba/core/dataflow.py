@@ -7,7 +7,7 @@ from numba.core.errors import UnsupportedError
 from numba.core.ir import Loc
 
 
-class DataFlowAnalysis(object):
+class DataFlowAnalysis:
     """
     Perform stack2reg
 
@@ -89,7 +89,7 @@ class DataFlowAnalysis(object):
 
     def handle_unknown_opcode(self, info, inst):
         raise UnsupportedError(
-            "Use of unknown opcode '{}'".format(inst.opname),
+            f"Use of unknown opcode '{inst.opname}'",
             loc=Loc(filename=self.bytecode.func_id.filename,
                     line=inst.lineno)
         )
@@ -784,21 +784,21 @@ class DataFlowAnalysis(object):
         pass
 
 
-class LoopBlock(object):
+class LoopBlock:
     __slots__ = ('stack_offset',)
 
     def __init__(self):
         self.stack_offset = None
 
 
-class WithBlock(object):
+class WithBlock:
     __slots__ = ('stack_offset',)
 
     def __init__(self):
         self.stack_offset = None
 
 
-class BlockInfo(object):
+class BlockInfo:
     def __init__(self, block, offset, incoming_blocks):
         self.block = block
         self.offset = offset
@@ -828,7 +828,7 @@ class BlockInfo(object):
 
     def make_temp(self, prefix=''):
         self.tempct += 1
-        name = '$%s%s.%s' % (prefix, self.offset, self.tempct)
+        name = '${}{}.{}'.format(prefix, self.offset, self.tempct)
         return name
 
     def push(self, val):

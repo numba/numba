@@ -28,7 +28,7 @@ target_registry = _TargetRegistry()
 jit_registry = DelayedRegistry()
 
 
-class target_override(object):
+class target_override:
     """Context manager to temporarily override the current target with that
        prescribed."""
 

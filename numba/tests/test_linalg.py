@@ -38,7 +38,7 @@ class TestProduct(EnableNRTStatsMixin, TestCase):
     def setUp(self):
         # Collect leftovers from previous test cases before checking for leaks
         gc.collect()
-        super(TestProduct, self).setUp()
+        super().setUp()
 
     def sample_vector(self, n, dtype):
         # Be careful to generate only exactly representable float values,
@@ -425,7 +425,7 @@ class TestLinalgBase(EnableNRTStatsMixin, TestCase):
     def setUp(self):
         # Collect leftovers from previous test cases before checking for leaks
         gc.collect()
-        super(TestLinalgBase, self).setUp()
+        super().setUp()
 
     def sample_vector(self, n, dtype):
         # Be careful to generate only exactly representable float values,
@@ -535,7 +535,7 @@ class TestLinalgBase(EnableNRTStatsMixin, TestCase):
 
     def assert_wrong_dimensions(self, name, cfunc, args, la_prefix=True):
         prefix = "np.linalg" if la_prefix else "np"
-        msg = "%s.%s() only supported on 2-D arrays" % (prefix, name)
+        msg = "{}.{}() only supported on 2-D arrays".format(prefix, name)
         self.assert_error(cfunc, args, msg, errors.TypingError)
 
     def assert_no_nan_or_inf(self, cfunc, args):
@@ -1371,7 +1371,7 @@ class TestLinalgSystems(TestLinalgBase):
     # check for RHS with dimension > 2 raises
     def assert_wrong_dimensions_1D(self, name, cfunc, args, la_prefix=True):
         prefix = "np.linalg" if la_prefix else "np"
-        msg = "%s.%s() only supported on 1 and 2-D arrays" % (prefix, name)
+        msg = "{}.{}() only supported on 1 and 2-D arrays".format(prefix, name)
         self.assert_error(cfunc, args, msg, errors.TypingError)
 
     # check that a dimensionally invalid system raises
@@ -2468,7 +2468,7 @@ class TestTrace(TestLinalgBase):
     """
 
     def setUp(self):
-        super(TestTrace, self).setUp()
+        super().setUp()
         # compile two versions, one with and one without the offset kwarg
         self.cfunc_w_offset = jit(nopython=True)(trace_matrix)
         self.cfunc_no_offset = jit(nopython=True)(trace_matrix_no_offset)

@@ -438,7 +438,7 @@ def _unsigned_impl(T):
     if T in types.unsigned_domain:
         return lambda T: T
     elif T in types.signed_domain:
-        newT = getattr(types, 'uint{}'.format(T.bitwidth))
+        newT = getattr(types, f'uint{T.bitwidth}')
         return lambda T: newT(T)
 
 

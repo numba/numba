@@ -187,7 +187,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
     """
 
     def setUp(self):
-        super(TestArrayManipulation, self).setUp()
+        super().setUp()
         self.ccache = CompilationCache()
 
     def test_array_reshape(self):
@@ -352,7 +352,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             # Check supplied axis permutations
             for axes in permutations(tuple(range(arrs[i].ndim))):
                 ndim = len(axes)
-                neg_axes = tuple([x - ndim for x in axes])
+                neg_axes = tuple(x - ndim for x in axes)
                 check(arrs[i], axes)
                 check(arrs[i], neg_axes)
 
@@ -694,7 +694,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         # non-contiguous arrays
         def _multi_dimensional_array_variations_strided(n):
             for shape in _shape_variations(n):
-                tmp = np.zeros(tuple([x * 2 for x in shape]), dtype=np.float64)
+                tmp = np.zeros(tuple(x * 2 for x in shape), dtype=np.float64)
                 slicer = tuple(slice(0, x * 2, 2) for x in shape)
                 yield tmp[slicer]
 

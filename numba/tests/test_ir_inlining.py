@@ -121,12 +121,12 @@ class InliningBase(TestCase):
 
         # Use test_id to make sure no collision is possible.
         test_id = self.id()
-        DummyType = type('DummyTypeFor{}'.format(test_id), (types.Opaque,), {})
+        DummyType = type(f'DummyTypeFor{test_id}', (types.Opaque,), {})
 
         dummy_type = DummyType("my_dummy")
         register_model(DummyType)(OpaqueModel)
 
-        class Dummy(object):
+        class Dummy:
             pass
 
         @typeof_impl.register(Dummy)
@@ -1102,7 +1102,7 @@ class TestOverloadInlining(MemoryLeakMixin, InliningBase):
 class TestOverloadMethsAttrsInlining(InliningBase):
     def setUp(self):
         self.make_dummy_type()
-        super(TestOverloadMethsAttrsInlining, self).setUp()
+        super().setUp()
 
     def check_method(self, test_impl, args, expected, block_count,
                      expects_inlined=True):

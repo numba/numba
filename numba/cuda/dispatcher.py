@@ -230,7 +230,7 @@ class _Kernel(serialize.ReduceMixin):
         if file is None:
             file = sys.stdout
 
-        print("%s %s" % (self.entry_name, self.argument_types), file=file)
+        print("{} {}".format(self.entry_name, self.argument_types), file=file)
         print('-' * 80, file=file)
         print(self._type_annotation, file=file)
         print('=' * 80, file=file)
@@ -313,13 +313,13 @@ class _Kernel(serialize.ReduceMixin):
                 else:
                     sym, filepath, lineno = loc
                     filepath = os.path.abspath(filepath)
-                    locinfo = 'In function %r, file %s, line %s, ' % (sym,
-                                                                      filepath,
-                                                                      lineno,)
+                    locinfo = 'In function {!r}, file {}, line {}, '.format(sym,
+                                                                            filepath,
+                                                                            lineno)
                 # Prefix the exception message with the thread position
-                prefix = "%stid=%s ctaid=%s" % (locinfo, tid, ctaid)
+                prefix = "{}tid={} ctaid={}".format(locinfo, tid, ctaid)
                 if exc_args:
-                    exc_args = ("%s: %s" % (prefix, exc_args[0]),) + \
+                    exc_args = ("{}: {}".format(prefix, exc_args[0]),) + \
                         exc_args[1:]
                 else:
                     exc_args = prefix,
@@ -424,7 +424,7 @@ class _Kernel(serialize.ReduceMixin):
             raise NotImplementedError(ty, val)
 
 
-class ForAll(object):
+class ForAll:
     def __init__(self, dispatcher, ntasks, tpb, stream, sharedmem):
         if ntasks < 0:
             raise ValueError("Can't create ForAll with negative task count: %s"
@@ -660,7 +660,7 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         '''
         cc = get_current_device().compute_capability
         argtypes = tuple(
-            [self.typingctx.resolve_argument_type(a) for a in args])
+            self.typingctx.resolve_argument_type(a) for a in args)
         if self.specialized:
             raise RuntimeError('Dispatcher already specialized')
 
@@ -741,7 +741,7 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
 
         # Create function type for typing
         func_name = self.py_func.__name__
-        name = "CallTemplate({0})".format(func_name)
+        name = f"CallTemplate({func_name})"
 
         call_template = typing.make_concrete_template(
             name, key=func_name, signatures=self.nopython_signatures)

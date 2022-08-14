@@ -452,7 +452,7 @@ def array_std(context, builder, sig, args):
 
 def zero_dim_msg(fn_name):
     msg = ("zero-size array to reduction operation "
-           "{0} which has no identity".format(fn_name))
+           "{} which has no identity".format(fn_name))
     return msg
 
 
@@ -2649,11 +2649,11 @@ def determine_dtype(array_like):
 def check_dimensions(array_like, name):
     if isinstance(array_like, types.Array):
         if array_like.ndim > 2:
-            raise TypeError("{0} has more than 2 dimensions".format(name))
+            raise TypeError(f"{name} has more than 2 dimensions")
     elif isinstance(array_like, types.Sequence):
         if isinstance(array_like.key[0], types.Sequence):
             if isinstance(array_like.key[0].key[0], types.Sequence):
-                raise TypeError("{0} has more than 2 dimensions".format(name))
+                raise TypeError(f"{name} has more than 2 dimensions")
 
 
 @register_jitable
@@ -3202,7 +3202,7 @@ def array_where(context, builder, sig, args):
     """
     np.where(array, array, array)
     """
-    layouts = set(a.layout for a in sig.args)
+    layouts = {a.layout for a in sig.args}
 
     npty = np.promote_types(as_dtype(sig.args[1].dtype),
                             as_dtype(sig.args[2].dtype))
@@ -3502,10 +3502,10 @@ def jit_np_intersect1d(ar1, ar2):
 def validate_1d_array_like(func_name, seq):
     if isinstance(seq, types.Array):
         if seq.ndim != 1:
-            raise TypeError("{0}(): input should have dimension 1"
+            raise TypeError("{}(): input should have dimension 1"
                             .format(func_name))
     elif not isinstance(seq, types.Sequence):
-        raise TypeError("{0}(): input should be an array or sequence"
+        raise TypeError("{}(): input should be an array or sequence"
                         .format(func_name))
 
 
@@ -3923,7 +3923,7 @@ def _gen_np_machar():
     @overload(np_MachAr)
     def MachAr_impl():
         f = np_MachAr()
-        _mach_ar_data = tuple([getattr(f, x) for x in _mach_ar_supported])
+        _mach_ar_data = tuple(getattr(f, x) for x in _mach_ar_supported)
 
         if np122plus and w:
             wmsg = w[0]
@@ -3950,7 +3950,7 @@ def generate_xinfo(np_func, container, attr):
         except ValueError: # This exception instance comes from NumPy
             # The np function might not support the dtype
             return None
-        data = tuple([getattr(f, x) for x in attr])
+        data = tuple(getattr(f, x) for x in attr)
 
         def impl(arg):
             return container(*data)
@@ -4561,19 +4561,19 @@ def np_cross(a, b):
         a_ = np.asarray(a)
         b_ = np.asarray(b)
         if a_.shape[-1] not in (2, 3) or b_.shape[-1] not in (2, 3):
-            raise ValueError((
+            raise ValueError(
                 "Incompatible dimensions for cross product\n"
                 "(dimension must be 2 or 3)"
-            ))
+            )
 
         if a_.shape[-1] == 3 or b_.shape[-1] == 3:
             return _cross_impl(a_, b_)
         else:
-            raise ValueError((
+            raise ValueError(
                 "Dimensions for both inputs is 2.\n"
                 "Please replace your numpy.cross(a, b) call with "
                 "a call to `cross2d(a, b)` from `numba.np.extensions`."
-            ))
+            )
     return impl
 
 
@@ -4606,10 +4606,10 @@ def cross2d(a, b):
         a_ = np.asarray(a)
         b_ = np.asarray(b)
         if a_.shape[-1] != 2 or b_.shape[-1] != 2:
-            raise ValueError((
+            raise ValueError(
                 "Incompatible dimensions for 2D cross product\n"
                 "(dimension must be 2 for both inputs)"
-            ))
+            )
         return _cross2d_operation(a_, b_)
 
     return impl

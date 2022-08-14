@@ -40,7 +40,7 @@ def gen(x):
     yield x + 1
 
 
-class Dummy(object):
+class Dummy:
     pass
 
 
@@ -79,11 +79,11 @@ class TestTypes(TestCase):
         self.assertNotEqual(a, b)
 
         # Different template classes bearing the same name
-        class DummyTemplate(object):
+        class DummyTemplate:
             key = "foo"
         a = types.BoundFunction(DummyTemplate, types.int32)
 
-        class DummyTemplate(object):
+        class DummyTemplate:
             key = "bar"
         b = types.BoundFunction(DummyTemplate, types.int32)
         self.assertNotEqual(a, b)
@@ -121,7 +121,7 @@ class TestTypes(TestCase):
         self.assertTrue(b != z)
         self.assertTrue(c != z)
         # Hashing and mappings
-        s = set([a, b, c])
+        s = {a, b, c}
         self.assertEqual(len(s), 2)
         self.assertIn(a, s)
         self.assertIn(b, s)
@@ -674,7 +674,7 @@ class FooType(types.Type):
             self.assertFalse(FooType().is_internal)
 
             # set up an extension type
-            class Foo(object):
+            class Foo:
                 pass
 
             register_model(FooType)(models.OpaqueModel)
@@ -747,7 +747,7 @@ class FooType(types.Type):
             self.assertFalse(FooType().is_internal)
 
             # set up an extension type
-            class Foo(object):
+            class Foo:
                 pass
 
             register_model(FooType)(models.OpaqueModel)
@@ -838,7 +838,7 @@ class TestIssues(TestCase):
         # issue https://github.com/numba/numba/issues/6336
         class NoUniqueNameType(types.Dummy):
             def __init__(self, param):
-                super(NoUniqueNameType, self).__init__('NoUniqueNameType')
+                super().__init__('NoUniqueNameType')
                 self.param = param
 
             @property
@@ -857,7 +857,7 @@ class TestIssues(TestCase):
         # https://github.com/numba/numba/issues/6397
         class NoUniqueNameType(types.Dummy):
             def __init__(self, param):
-                super(NoUniqueNameType, self).__init__('NoUniqueNameType')
+                super().__init__('NoUniqueNameType')
                 self.param = param
 
             @property

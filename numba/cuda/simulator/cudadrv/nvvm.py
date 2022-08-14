@@ -8,7 +8,7 @@ class NvvmSupportError(ImportError):
     pass
 
 
-class NVVM(object):
+class NVVM:
     def __init__(self):
         raise NvvmSupportError('NVVM not supported in the simulator')
 

@@ -39,7 +39,7 @@ def get_itemsize(context, list_type):
     return context.get_abi_sizeof(llty)
 
 
-class _ListPayloadMixin(object):
+class _ListPayloadMixin:
 
     @property
     def size(self):
@@ -283,7 +283,7 @@ class ListInstance(_ListPayloadMixin):
         # Declare dtor
         fnty = ir.FunctionType(ir.VoidType(), [cgutils.voidptr_t])
         fn = cgutils.get_or_insert_function(mod, fnty,
-                                            '.dtor.list.{}'.format(self.dtype))
+                                            f'.dtor.list.{self.dtype}')
         if not fn.is_declaration:
             # End early if the dtor is already defined
             return fn

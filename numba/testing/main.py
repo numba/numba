@@ -36,7 +36,7 @@ def make_tag_decorator(known_tags):
         """
         for t in tags:
             if t not in known_tags:
-                raise ValueError("unknown tag: %r" % (t,))
+                raise ValueError("unknown tag: {!r}".format(t))
 
         def decorate(func):
             if (not callable(func) or isinstance(func, type)
@@ -66,7 +66,7 @@ def cuda_sensitive_mtime(x):
 
     from numba.cuda.testing import CUDATestCase
     if CUDATestCase in cls.mro():
-        key = "%s.%s %s" % (str(cls.__module__), str(cls.__name__), key)
+        key = "{}.{} {}".format(str(cls.__module__), str(cls.__name__), key)
 
     return key
 
@@ -86,7 +86,7 @@ def parse_slice(useslice):
         raise ValueError(msg)
 
 
-class TestLister(object):
+class TestLister:
     """Simply list available tests rather than running them."""
 
     def __init__(self, useslice):
@@ -122,7 +122,7 @@ class SerialSuite(unittest.TestSuite):
         else:
             # It's a test case, mark it serial
             test._numba_parallel_test_ = False
-            super(SerialSuite, self).addTest(test)
+            super().addTest(test)
 
 
 class BasicTestRunner(runner.TextTestRunner):
@@ -134,7 +134,7 @@ class BasicTestRunner(runner.TextTestRunner):
         run = _flatten_suite(test)[self.useslice]
         run.sort(key=cuda_sensitive_mtime)
         wrapped = unittest.TestSuite(run)
-        return super(BasicTestRunner, self).run(wrapped)
+        return super().run(wrapped)
 
 
 # "unittest.main" is really the TestProgram class!
@@ -169,13 +169,13 @@ class NumbaTestProgram(unittest.main):
         # (so that NumbaWarnings don't appear all over the place)
         sys.warnoptions.append(':x')
         self.nomultiproc = kwargs.pop('nomultiproc', False)
-        super(NumbaTestProgram, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def _getParentArgParser(self):
         # NOTE: this hook only exists on Python 3.4+. The options won't be
         # added in earlier versions (which use optparse - 3.3 - or getopt()
         # - 2.x).
-        parser = super(NumbaTestProgram, self)._getParentArgParser()
+        parser = super()._getParentArgParser()
         if self.testRunner is None:
             parser.add_argument('-R', '--refleak', dest='refleak',
                                 action='store_true',
@@ -257,7 +257,7 @@ class NumbaTestProgram(unittest.main):
             argv.remove('-l')
             self.list = True
 
-        super(NumbaTestProgram, self).parseArgs(argv)
+        super().parseArgs(argv)
 
         # If at this point self.test doesn't exist, it is because
         # no test ID was given in argv. Use the default instead.
@@ -337,7 +337,7 @@ class NumbaTestProgram(unittest.main):
                 p.runcall(run_tests_real)
             finally:
                 p.disable()
-                print("Writing test profile data into %r" % (filename,))
+                print("Writing test profile data into {!r}".format(filename))
                 p.dump_stats(filename)
         else:
             run_tests_real()
@@ -551,7 +551,7 @@ class RefleakTestResult(runner.TextTestResult):
             if 3 * deltas.count(0) < len(deltas):
                 return True
             # Nothing else than 1s, 0s and -1s
-            if not set(deltas) <= set((1, 0, -1)):
+            if not set(deltas) <= {1, 0, -1}:
                 return True
             return False
 
@@ -561,7 +561,7 @@ class RefleakTestResult(runner.TextTestResult):
             (rc_deltas, 'references', check_rc_deltas),
                 (alloc_deltas, 'memory blocks', check_alloc_deltas)]:
             if checker(deltas):
-                msg = '%s leaked %s %s, sum=%s' % (
+                msg = '{} leaked {} {}, sum={}'.format(
                     test, deltas, item_name, sum(deltas))
                 failed = True
                 try:
@@ -569,11 +569,11 @@ class RefleakTestResult(runner.TextTestResult):
                 except Exception:
                     exc_info = sys.exc_info()
                 if self.showAll:
-                    self.stream.write("%s = %r " % (item_name, deltas))
+                    self.stream.write("{} = {!r} ".format(item_name, deltas))
                 self.addFailure(test, exc_info)
 
         if not failed:
-            super(RefleakTestResult, self).addSuccess(test)
+            super().addSuccess(test)
 
 
 class RefleakTestRunner(runner.TextTestRunner):
@@ -599,7 +599,7 @@ class ParallelTestResult(runner.TextTestResult):
         self.unexpectedSuccesses.extend(result.unexpectedSuccesses)
 
 
-class _MinimalResult(object):
+class _MinimalResult:
     """
     A minimal, picklable TestResult-alike object.
     """
@@ -628,7 +628,7 @@ class _MinimalResult(object):
         self.test_id = test_id
 
 
-class _FakeStringIO(object):
+class _FakeStringIO:
     """
     A trivial picklable StringIO-alike for Python 2.
     """
@@ -640,7 +640,7 @@ class _FakeStringIO(object):
         return self._value
 
 
-class _MinimalRunner(object):
+class _MinimalRunner:
     """
     A minimal picklable object able to instantiate a runner in a
     child process and run a test case with it.
@@ -770,7 +770,7 @@ class ParallelTestRunner(runner.TextTestRunner):
             return result
 
     def _run_parallel_tests(self, result, pool, child_runner, tests):
-        remaining_ids = set(t.id() for t in tests)
+        remaining_ids = {t.id() for t in tests}
         tests.sort(key=cuda_sensitive_mtime)
         it = pool.imap_unordered(child_runner, tests)
         while True:
@@ -795,8 +795,8 @@ class ParallelTestRunner(runner.TextTestRunner):
     def run(self, test):
         self._ptests, self._stests = _split_nonparallel_tests(test,
                                                               sliced=self.useslice)
-        print("Parallel: %s. Serial: %s" % (len(self._ptests),
-                                            len(self._stests)))
+        print("Parallel: {}. Serial: {}".format(len(self._ptests),
+                                                len(self._stests)))
         # This will call self._run_inner() on the created result object,
         # and print out the detailed test results at the end.
-        return super(ParallelTestRunner, self).run(self._run_inner)
+        return super().run(self._run_inner)

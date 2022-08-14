@@ -49,7 +49,7 @@ EXTENDED_ARG = dis.EXTENDED_ARG
 HAVE_ARGUMENT = dis.HAVE_ARGUMENT
 
 
-class ByteCodeInst(object):
+class ByteCodeInst:
     '''
     Attributes
     ----------
@@ -170,7 +170,7 @@ def _patched_opargs(bc_stream):
         yield offset + _FIXED_OFFSET, opcode, arg, nextoffset + _FIXED_OFFSET
 
 
-class ByteCodeIter(object):
+class ByteCodeIter:
     def __init__(self, code):
         self.code = code
         self.iter = iter(_patched_opargs(_unpack_opargs(self.code.co_code)))
@@ -196,7 +196,7 @@ class ByteCodeIter(object):
         return buf
 
 
-class ByteCode(object):
+class ByteCode:
     """
     The decoded bytecode of a function, and related information.
     """
@@ -206,7 +206,7 @@ class ByteCode(object):
     def __init__(self, func_id):
         code = func_id.code
 
-        labels = set(x + _FIXED_OFFSET for x in dis.findlabels(code.co_code))
+        labels = {x + _FIXED_OFFSET for x in dis.findlabels(code.co_code)}
         labels.add(0)
 
         # A map of {offset: ByteCodeInst}
@@ -345,7 +345,7 @@ class FunctionIdentity(serialize.ReduceMixin):
         # several different function objects with distinct closure
         # variables, so we make sure to disambiguate using an unique id.
         uid = next(cls._unique_ids)
-        self.unique_name = '{}${}'.format(self.func_qualname, uid)
+        self.unique_name = f'{self.func_qualname}${uid}'
         self.unique_id = uid
 
         return self

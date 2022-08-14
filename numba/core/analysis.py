@@ -37,9 +37,9 @@ def compute_use_defs(blocks):
                 continue
             if isinstance(stmt, ir.Assign):
                 if isinstance(stmt.value, ir.Inst):
-                    rhs_set = set(var.name for var in stmt.value.list_vars())
+                    rhs_set = {var.name for var in stmt.value.list_vars()}
                 elif isinstance(stmt.value, ir.Var):
-                    rhs_set = set([stmt.value.name])
+                    rhs_set = {stmt.value.name}
                 elif isinstance(stmt.value, (ir.Arg, ir.Const, ir.Global,
                                              ir.FreeVar)):
                     rhs_set = ()
@@ -135,11 +135,11 @@ def compute_dead_maps(cfg, blocks, live_map, var_def_map):
         # defined variables
         cur_live_set = live_map[offset] | var_def_map[offset]
         # vars alive in the outgoing blocks
-        outgoing_live_map = dict((out_blk, live_map[out_blk])
-                                 for out_blk, _data in cfg.successors(offset))
+        outgoing_live_map = {out_blk: live_map[out_blk]
+                             for out_blk, _data in cfg.successors(offset)}
         # vars to keep alive for the terminator
-        terminator_liveset = set(v.name
-                                 for v in ir_block.terminator.list_vars())
+        terminator_liveset = {v.name
+                              for v in ir_block.terminator.list_vars()}
         # vars to keep alive in the successors
         combined_liveset = reduce(operator.or_, outgoing_live_map.values(),
                                   set())
@@ -176,11 +176,11 @@ def compute_dead_maps(cfg, blocks, live_map, var_def_map):
             # We won't be able to verify this
             pass
         else:
-            msg = 'liveness info missing for vars: {0}'.format(missing_vars)
+            msg = f'liveness info missing for vars: {missing_vars}'
             raise RuntimeError(msg)
 
-    combined = dict((k, internal_dead_map[k] | escaping_dead_map[k])
-                    for k in blocks)
+    combined = {k: internal_dead_map[k] | escaping_dead_map[k]
+                for k in blocks}
 
     return _dead_maps_result(internal=internal_dead_map,
                              escaping=escaping_dead_map,
@@ -372,7 +372,7 @@ def dead_branch_prune(func_ir, called_args):
         taken = do_prune(take_truebr, blk)
         return True, taken
 
-    class Unknown(object):
+    class Unknown:
         pass
 
     def resolve_input_arg_const(input_arg_idx):

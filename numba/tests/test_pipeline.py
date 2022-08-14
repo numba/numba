@@ -11,7 +11,7 @@ from numba.tests.support import TestCase
 
 class TestCustomPipeline(TestCase):
     def setUp(self):
-        super(TestCustomPipeline, self).setUp()
+        super().setUp()
 
         # Define custom pipeline class
         class CustomPipeline(Compiler):
@@ -20,12 +20,12 @@ class TestCustomPipeline(TestCase):
             def compile_extra(self, func):
                 # Store the compiled function
                 self.custom_pipeline_cache.append(func)
-                return super(CustomPipeline, self).compile_extra(func)
+                return super().compile_extra(func)
 
             def compile_ir(self, func_ir, *args, **kwargs):
                 # Store the compiled function
                 self.custom_pipeline_cache.append(func_ir)
-                return super(CustomPipeline, self).compile_ir(
+                return super().compile_ir(
                     func_ir, *args, **kwargs)
 
         self.pipeline_class = CustomPipeline

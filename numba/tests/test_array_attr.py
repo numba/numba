@@ -92,7 +92,7 @@ def array_imag(arr):
 class TestArrayAttr(MemoryLeakMixin, TestCase):
 
     def setUp(self):
-        super(TestArrayAttr, self).setUp()
+        super().setUp()
         self.ccache = CompilationCache()
         self.a = np.arange(20, dtype=np.int32).reshape(4, 5)
 
@@ -173,7 +173,7 @@ class TestArrayAttr(MemoryLeakMixin, TestCase):
 
 class TestNestedArrayAttr(MemoryLeakMixin, unittest.TestCase):
     def setUp(self):
-        super(TestNestedArrayAttr, self).setUp()
+        super().setUp()
         dtype = np.dtype([('a', np.int32), ('f', np.int32, (2, 5))])
         self.a = np.recarray(1, dtype)[0]
         self.nbrecord = from_dtype(self.a.dtype)
@@ -377,7 +377,7 @@ class TestJitclassFlagsSegfault(MemoryLeakMixin, TestCase):
     def test(self):
 
         @jitclass(dict())
-        class B(object):
+        class B:
 
             def __init__(self):
                 pass

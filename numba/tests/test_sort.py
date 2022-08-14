@@ -98,7 +98,7 @@ def list_sort_reverse_usecase(n, b):
     return l, ll
 
 
-class BaseSortingTest(object):
+class BaseSortingTest:
 
     def random_list(self, n, offset=10):
         random.seed(42)
@@ -521,7 +521,7 @@ class TestTimsortArraysPurePython(BaseTimsortTest, TestCase):
         return np.array(lst, dtype=np.int32)
 
 
-class JITTimsortMixin(object):
+class JITTimsortMixin:
 
     timsort = jit_array_timsort
 

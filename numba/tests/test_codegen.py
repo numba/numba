@@ -222,7 +222,7 @@ class TestWrappers(TestCase):
 
         ol = foo.overloads[sig]
         name = ol.fndesc.mangled_name.replace("$", r"\$")
-        p1 = r".*call.*{}".format(name)
+        p1 = fr".*call.*{name}"
         p2 = r".*(#[0-9]+).*"
         call_site = re.compile(p1 + p2)
 
@@ -238,7 +238,7 @@ class TestWrappers(TestCase):
         # both calls should refer to the same metadata item
         self.assertEqual(meta_data_idx[0], meta_data_idx[1])
 
-        p1 = r"^attributes\s+{}".format(meta_data_idx[0])
+        p1 = fr"^attributes\s+{meta_data_idx[0]}"
         p2 = r"\s+=\s+{(.*)}.*$"
         attr_site = re.compile(p1 + p2)
 

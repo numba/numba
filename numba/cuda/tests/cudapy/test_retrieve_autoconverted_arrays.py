@@ -6,7 +6,7 @@ from numba.cuda.testing import CUDATestCase
 import unittest
 
 
-class DefaultIn(object):
+class DefaultIn:
     def prepare_args(self, ty, val, **kwargs):
         return ty, wrap_arg(val, default=cuda.In)
 

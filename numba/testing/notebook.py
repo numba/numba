@@ -146,7 +146,7 @@ class NotebookTest(TestCase):
         }
 
         output = {
-            u"output_type": msg["msg_type"]
+            "output_type": msg["msg_type"]
         }
         output.update(msg["content"])
 

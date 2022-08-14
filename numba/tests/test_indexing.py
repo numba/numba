@@ -367,7 +367,7 @@ class TestGetItem(TestCase):
         for args in [(0, 10, 1), (2, 3, 1), (10, 0, 1),
                      (0, 10, -1), (0, 10, 2)]:
             self.assertPreciseEqual(pyfunc(a, *args), cfunc(a, *args),
-                                    msg="for args %s" % (args,))
+                                    msg="for args {}".format(args))
 
     def test_2d_slicing_npm(self):
         self.test_2d_slicing(flags=Noflags)

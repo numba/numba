@@ -4,7 +4,7 @@ import numba.core.event as ev
 
 
 # Lock for the preventing multiple compiler execution
-class _CompilerLock(object):
+class _CompilerLock:
     def __init__(self):
         self._lock = threading.RLock()
 

@@ -45,7 +45,7 @@ def verify_cuda_ndarray_interface(obj):
         if not hasattr(obj, attr):
             raise AttributeError(attr)
         if not isinstance(getattr(obj, attr), typ):
-            raise AttributeError('%s must be of type %s' % (attr, typ))
+            raise AttributeError('{} must be of type {}'.format(attr, typ))
 
     requires_attr('shape', tuple)
     requires_attr('strides', tuple)
@@ -157,7 +157,7 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
             msg = "transposing a non-2D DeviceNDArray isn't supported"
             raise NotImplementedError(msg)
         elif axes is not None and set(axes) != set(range(self.ndim)):
-            raise ValueError("invalid axes list %r" % (axes,))
+            raise ValueError("invalid axes list {!r}".format(axes))
         else:
             from numba.cuda.kernels.transpose import transpose
             return transpose(self)
@@ -404,8 +404,8 @@ class DeviceRecord(DeviceNDArrayBase):
     def __init__(self, dtype, stream=0, gpu_data=None):
         shape = ()
         strides = ()
-        super(DeviceRecord, self).__init__(shape, strides, dtype, stream,
-                                           gpu_data)
+        super().__init__(shape, strides, dtype, stream,
+                         gpu_data)
 
     @property
     def flags(self):
@@ -709,7 +709,7 @@ class DeviceNDArray(DeviceNDArrayBase):
 
         rhs, _ = auto_device(value, stream=stream, user_explicit=True)
         if rhs.ndim > lhs.ndim:
-            raise ValueError("Can't assign %s-D array to %s-D self" % (
+            raise ValueError("Can't assign {}-D array to {}-D self".format(
                 rhs.ndim,
                 lhs.ndim))
         rhs_shape = np.ones(lhs.ndim, dtype=np.int64)
@@ -729,7 +729,7 @@ class DeviceNDArray(DeviceNDArrayBase):
             stream.synchronize()
 
 
-class IpcArrayHandle(object):
+class IpcArrayHandle:
     """
     An IPC array handle that can be serialized and transfer to another process
     in the same machine for share a GPU allocation.

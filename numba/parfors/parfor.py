@@ -128,7 +128,7 @@ def init_prange_overload():
     return no_op
 
 
-class internal_prange(object):
+class internal_prange:
 
     def __new__(cls, *args):
         return range(*args)
@@ -432,7 +432,7 @@ def arange_parallel_impl(return_type, *args):
     elif len(args) == 4:
         return arange_4
     else:
-        raise ValueError("parallel arange with types {}".format(args))
+        raise ValueError(f"parallel arange with types {args}")
 
 
 def linspace_parallel_impl(return_type, *args):
@@ -456,7 +456,7 @@ def linspace_parallel_impl(return_type, *args):
     elif len(args) == 3:
         return linspace_3
     else:
-        raise ValueError("parallel linspace with types {}".format(args))
+        raise ValueError(f"parallel linspace with types {args}")
 
 
 swap_functions_map = {
@@ -505,15 +505,15 @@ replace_functions_ndarray = {
 @register_jitable
 def max_checker(arr_size):
     if arr_size == 0:
-        raise ValueError(("zero-size array to reduction operation "
-                          "maximum which has no identity"))
+        raise ValueError("zero-size array to reduction operation "
+                         "maximum which has no identity")
 
 
 @register_jitable
 def min_checker(arr_size):
     if arr_size == 0:
-        raise ValueError(("zero-size array to reduction operation "
-                          "minimum which has no identity"))
+        raise ValueError("zero-size array to reduction operation "
+                         "minimum which has no identity")
 
 
 @register_jitable
@@ -540,7 +540,7 @@ replace_functions_checkers_map = {
 }
 
 
-class LoopNest(object):
+class LoopNest:
 
     '''The LoopNest class holds information of a single loop including
     the index variable (of a non-negative integer value), and the
@@ -586,7 +586,7 @@ class Parfor(ir.Expr, ir.Stmt):
             *,  #only specify the options below by keyword
             no_sequential_lowering=False,
             races=set()):
-        super(Parfor, self).__init__(
+        super().__init__(
             op='parfor',
             loc=loc
         )
@@ -659,7 +659,7 @@ class Parfor(ir.Expr, ir.Stmt):
 
     def dump(self, file=None):
         file = file or sys.stdout
-        print(("begin parfor {}".format(self.id)).center(20, '-'), file=file)
+        print((f"begin parfor {self.id}").center(20, '-'), file=file)
         print("index_var = ", self.index_var, file=file)
         print("params = ", self.params, file=file)
         print("races = ", self.races, file=file)
@@ -668,9 +668,9 @@ class Parfor(ir.Expr, ir.Stmt):
         print("init block:", file=file)
         self.init_block.dump(file)
         for offset, block in sorted(self.loop_body.items()):
-            print('label %s:' % (offset,), file=file)
+            print('label {}:'.format(offset), file=file)
             block.dump(file)
-        print(("end parfor {}".format(self.id)).center(20, '-'), file=file)
+        print((f"end parfor {self.id}").center(20, '-'), file=file)
 
     def validate_params(self, typemap):
         """
@@ -722,7 +722,7 @@ def _analyze_parfor(parfor, equiv_set, typemap, array_analysis):
 array_analysis.array_analysis_extensions[Parfor] = _analyze_parfor
 
 
-class ParforDiagnostics(object):
+class ParforDiagnostics:
     """Holds parfor diagnostic info, this is accumulated throughout the
     PreParforPass and ParforPass, also in the closure inlining!
     """
@@ -748,7 +748,7 @@ class ParforDiagnostics(object):
         if self.internal_name in self.name:
             self.purpose = 'Internal parallel function'
         else:
-            self.purpose = 'Function %s, %s' % (self.name, self.line)
+            self.purpose = 'Function {}, {}'.format(self.name, self.line)
         # we store a reference to the parfors prior to fusion etc, the parfors
         # do get mangled in the fusion process but in a predetermined manner
         # and by holding a reference here the "before" state can be printed
@@ -940,7 +940,7 @@ class ParforDiagnostics(object):
                     if pattern[1] == 'internal':
                         replfn = '.'.join(reversed(list(pattern[2][0])))
                         loc = pattern[2][1]
-                        r_pattern = '%s %s' % (
+                        r_pattern = '{} {}'.format(
                             replfn, '(internal parallel version)')
                     elif pattern[1] == 'user':
                         r_pattern = "user defined prange"
@@ -1007,7 +1007,7 @@ class ParforDiagnostics(object):
         except OSError: # generated function
             lines = None
         if lines and parfors_simple:
-            src_width = max([len(x) for x in lines])
+            src_width = max(len(x) for x in lines)
             map_line_to_pf = defaultdict(list) # parfors can alias lines
             for k, v in parfors_simple.items():
                 # TODO: do a better job of tracking parfors that are not in
@@ -1072,7 +1072,7 @@ class ParforDiagnostics(object):
                             fused = self.reachable_nodes(fadj_, k)
                             for i in fused:
                                 msg.append(fac * (depth + 1) * ' ' +
-                                           '%s%s %s' % (sword, i, '(parallel)'))
+                                           '{}{} {}'.format(sword, i, '(parallel)'))
                         reported.append(k)
                         print_wrapped('\n'.join(msg))
                     else:
@@ -1136,7 +1136,8 @@ class ParforDiagnostics(object):
         def print_nest(fadj_, nadj_, theroot, reported, region_id):
             def print_g(fadj_, nadj_, nroot, depth):
                 for k in nadj_[nroot]:
-                    msg = fac * depth * ' ' + '%s%s %s' % (sword, k, '(serial')
+                    msg = fac * depth * ' ' + \
+                        '{}{} {}'.format(sword, k, '(serial')
                     if nadj_[k] == []:
                         fused = []
                         if fadj_[k] != [] and k not in reported:
@@ -1154,7 +1155,7 @@ class ParforDiagnostics(object):
 
             if nadj_[theroot] != []:
                 print_wrapped("Parallel region %s:" % region_id)
-                print_wrapped('%s%s %s' % (sword, theroot, '(parallel)'))
+                print_wrapped('{}{} {}'.format(sword, theroot, '(parallel)'))
                 summary[region_id] = {'root': theroot,
                                       'fused': 0, 'serialized': 0}
                 print_g(fadj_, nadj_, theroot, 1)
@@ -1164,7 +1165,8 @@ class ParforDiagnostics(object):
 
         def print_fuse(ty, pf_id, adj, depth, region_id):
             print_wrapped("Parallel region %s:" % region_id)
-            msg = fac * depth * ' ' + '%s%s %s' % (sword, pf_id, '(parallel')
+            msg = fac * depth * ' ' + \
+                '{}{} {}'.format(sword, pf_id, '(parallel')
             fused = []
             if adj[pf_id] != []:
                 fused = sorted(self.reachable_nodes(adj, pf_id))
@@ -1263,7 +1265,7 @@ class ParforDiagnostics(object):
                     hoist_info_printed = True
                 if not_hoisted:
                     print("  Failed to hoist the following:")
-                    [print("    %s: %s" % (y, x)) for x, y in not_hoisted]
+                    [print("    {}: {}".format(y, x)) for x, y in not_hoisted]
                     hoist_info_printed = True
         if not hoist_info_printed:
             print_wrapped('No instruction hoisting found')
@@ -1278,7 +1280,7 @@ class ParforDiagnostics(object):
             purpose_str = 'Internal parallel functions '
             purpose = 'internal'
         else:
-            purpose_str = ' Function %s, %s ' % (name, line)
+            purpose_str = ' Function {}, {} '.format(name, line)
             purpose = 'user'
 
         print_loop_search = False
@@ -1376,11 +1378,11 @@ class ParforDiagnostics(object):
                     def print_g(adj, root, depth):
                         for k in adj[root]:
                             print_wrapped(fac * depth * ' ' +
-                                          '%s%s %s' % (sword, k, node_msg))
+                                          '{}{} {}'.format(sword, k, node_msg))
                             if adj[k] != []:
                                 print_g(adj, k, depth + 1)
                     for r in roots:
-                        print_wrapped('%s%s %s' % (sword, r, root_msg))
+                        print_wrapped('{}{} {}'.format(sword, r, root_msg))
                         print_g(l, r, 1)
                         print_wrapped("")
                 l, roots = self.compute_graph_info(a)
@@ -1390,7 +1392,7 @@ class ParforDiagnostics(object):
                 for report in self.fusion_reports:
                     l1, l2, msg = report
                     print_wrapped(
-                        "  Trying to fuse loops #%s and #%s:" % (l1, l2))
+                        "  Trying to fuse loops #{} and #{}:".format(l1, l2))
                     print_wrapped("    %s" % msg)
 
             if self.fusion_info != {}:
@@ -1453,7 +1455,7 @@ class ParforDiagnostics(object):
 
         else: # there are no parfors
             print_wrapped(
-                'Function %s, %s, has no parallel for-loops.'.format(name, line))
+                f'Function %s, %s, has no parallel for-loops.')
 
     def __str__(self):
         r = "ParforDiagnostics:\n"
@@ -1465,7 +1467,7 @@ class ParforDiagnostics(object):
         return r
 
 
-class PreParforPass(object):
+class PreParforPass:
     """Preprocessing for the Parfor pass. It mostly inlines parallel
     implementations of numpy functions if available.
     """
@@ -2159,7 +2161,7 @@ class ConvertNumpyPass:
                 index_vars,
                 avail_vars))
 
-        pat = ('array expression {}'.format(repr_arrayexpr(arrayexpr.expr)),)
+        pat = (f'array expression {repr_arrayexpr(arrayexpr.expr)}',)
 
         parfor = Parfor(loopnests, init_block, {}, loc, index_var,
                         equiv_set, pat[0], pass_states.flags)
@@ -2249,7 +2251,7 @@ class ConvertNumpyPass:
             value = expr
         else:
             raise NotImplementedError(
-                "Map of numpy.{} to parfor is not implemented".format(call_name))
+                f"Map of numpy.{call_name} to parfor is not implemented")
 
         value_assign = ir.Assign(value, expr_out_var, loc)
         body_block.body.append(value_assign)
@@ -2260,7 +2262,7 @@ class ConvertNumpyPass:
         body_block.body.append(setitem_node)
 
         parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set,
-                        ('{} function'.format(call_name,), 'NumPy mapping'),
+                        (f'{call_name} function', 'NumPy mapping'),
                         pass_states.flags)
         parfor.loop_body = {body_label: body_block}
         if config.DEBUG_ARRAY_OPT >= 1:
@@ -2372,7 +2374,7 @@ class ConvertReducePass:
             ])
 
         parfor = Parfor(loopnests, init_block, loop_body, loc, index_var,
-                        equiv_set, ('{} function'.format(call_name),
+                        equiv_set, (f'{call_name} function',
                                     'reduction'), pass_states.flags)
         if config.DEBUG_ARRAY_OPT >= 1:
             print("parfor from reduction")
@@ -2488,7 +2490,7 @@ class ConvertLoopPass:
                     cps, _ = get_block_copies({0: blocks[loop.header]},
                                               pass_states.typemap)
                     cps = cps[0]
-                    loop_index_vars = set(t for t, v in cps if v == loop_index)
+                    loop_index_vars = {t for t, v in cps if v == loop_index}
                     loop_index_vars.add(loop_index)
 
                     scope = blocks[entry].scope
@@ -2541,7 +2543,7 @@ class ConvertLoopPass:
                         exprs = []
                         for block in loop_body.values():
                             for inst in block.body:
-                                lv = set(x.name for x in inst.list_vars())
+                                lv = {x.name for x in inst.list_vars()}
                                 if lv & indices:
                                     if lv.issubset(indices):
                                         continue
@@ -3106,7 +3108,7 @@ class ParforPass(ParforPassStates):
                            '{} parallel for-loop(s) #{}.').format(
                         after_fusion, name, n_parfors, parfor_ids))
                 else:
-                    print('Function {} has no Parfor.'.format(name))
+                    print(f'Function {name} has no Parfor.')
 
         return
 
@@ -3847,7 +3849,7 @@ def get_reduce_nodes(reduction_node, nodes, func_ir):
         if isinstance(rhs, ir.Var) and rhs.name in defs:
             rhs = lookup(rhs)
         if isinstance(rhs, ir.Expr):
-            in_vars = set(lookup(v, True).name for v in rhs.list_vars())
+            in_vars = {lookup(v, True).name for v in rhs.list_vars()}
             if name in in_vars:
                 # reductions like sum have an assignment afterwards
                 # e.g. $2 = a + $1; a = $2
@@ -3863,8 +3865,8 @@ def get_reduce_nodes(reduction_node, nodes, func_ir):
                     )
 
                 if not supported_reduction(rhs, func_ir):
-                    raise ValueError(("Use of reduction variable " + unversioned_name +
-                                      " in an unsupported reduction function."))
+                    raise ValueError("Use of reduction variable " + unversioned_name +
+                                     " in an unsupported reduction function.")
                 args = [ (x.name, lookup(x, True)) for x in get_expr_args(rhs) ]
                 non_red_args = [ x for (x, y) in args if y.name != name ]
                 assert len(non_red_args) == 1
@@ -3886,7 +3888,7 @@ def get_expr_args(expr):
         return [expr.lhs, expr.rhs]
     if expr.op == 'call':
         return [v for v in expr.args]
-    raise NotImplementedError("get arguments for expression {}".format(expr))
+    raise NotImplementedError(f"get arguments for expression {expr}")
 
 
 def visit_parfor_pattern_vars(parfor, callback, cbdata):
@@ -4033,7 +4035,7 @@ def parfor_insert_dels(parfor, curr_dead_set):
         dead_set |= dead_map.escaping[label]
 
     # dummy class to replace func_ir. _patch_var_dels only accesses blocks
-    class DummyFuncIR(object):
+    class DummyFuncIR:
 
         def __init__(self, blocks):
             self.blocks = blocks
@@ -4197,10 +4199,10 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata, func_ir, typemap):
                 is_equiv(nest1.step, nest2.step)):
             dprint("try_fuse: parfor dimension correlation mismatch", i)
             msg = "- fusion failed: loop dimension mismatched in axis %s. "
-            msg += "slice(%s, %s, %s) != " % (get_user_varname(nest1.start),
-                                              get_user_varname(nest1.stop), get_user_varname(nest1.step))
-            msg += "slice(%s, %s, %s)" % (get_user_varname(nest2.start),
-                                          get_user_varname(nest2.stop), get_user_varname(nest2.step))
+            msg += "slice({}, {}, {}) != ".format(get_user_varname(nest1.start),
+                                                  get_user_varname(nest1.stop), get_user_varname(nest1.step))
+            msg += "slice({}, {}, {})".format(get_user_varname(nest2.start),
+                                              get_user_varname(nest2.stop), get_user_varname(nest2.step))
             report = FusionReport(parfor1.id, parfor2.id, msg % i)
             return None, report
 
@@ -4275,7 +4277,7 @@ def fuse_parfors_inner(parfor1, parfor2):
     blocks = rename_labels(blocks)
     unwrap_parfor_blocks(parfor1, blocks)
 
-    nameset = set(x.name for x in index_dict.values())
+    nameset = {x.name for x in index_dict.values()}
     remove_duplicate_definitions(parfor1.loop_body, nameset)
     parfor1.patterns.extend(parfor2.patterns)
     if config.DEBUG_ARRAY_OPT_STATS:
@@ -4592,7 +4594,7 @@ def remove_dead_parfor(parfor, lives, lives_n_aliases, arg_aliases, alias_map, f
                     and stmt.value.op == 'getitem'
                     and stmt.value.index.name == parfor.index_var.name):
                 continue
-            varnames = set(v.name for v in stmt.list_vars())
+            varnames = {v.name for v in stmt.list_vars()}
             rm_arrs = varnames & saved_arrs
             for a in rm_arrs:
                 first_block_saved_values.pop(a, None)
@@ -5012,10 +5014,10 @@ def repr_arrayexpr(arrayexpr):
                 opr = '_'  # can return dummy since repr is not critical
         args = arrayexpr[1]
         if len(args) == 1:
-            return '({}({}))'.format(opr, repr_arrayexpr(args[0]))
+            return f'({opr}({repr_arrayexpr(args[0])}))'
         else:
             opr = ' ' + opr + ' '
-            return '({})'.format(opr.join([ repr_arrayexpr(x) for x in args ]))
+            return f'({opr.join([ repr_arrayexpr(x) for x in args ])})'
     elif isinstance(arrayexpr, numba.core.ir.Var):
         name = arrayexpr.name
         if name.startswith('$'):

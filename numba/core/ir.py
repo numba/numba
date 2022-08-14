@@ -22,7 +22,7 @@ from numba.core import consts
 _termcolor = errors.termcolor()
 
 
-class Loc(object):
+class Loc:
     """Source location
 
     """
@@ -61,14 +61,14 @@ class Loc(object):
         return cls(func_id.filename, func_id.firstlineno, maybe_decorator=True)
 
     def __repr__(self):
-        return "Loc(filename=%s, line=%s, col=%s)" % (self.filename,
-                                                      self.line, self.col)
+        return "Loc(filename={}, line={}, col={})".format(self.filename,
+                                                          self.line, self.col)
 
     def __str__(self):
         if self.col is not None:
-            return "%s (%s:%s)" % (self.filename, self.line, self.col)
+            return "{} ({}:{})".format(self.filename, self.line, self.col)
         else:
-            return "%s (%s)" % (self.filename, self.line)
+            return "{} ({})".format(self.filename, self.line)
 
     def _find_definition(self):
         # try and find a def, go backwards from error line
@@ -200,7 +200,7 @@ class Loc(object):
         Returns a short string
         """
         shortfilename = os.path.basename(self.filename)
-        return "%s:%s" % (shortfilename, self.line)
+        return "{}:{}".format(shortfilename, self.line)
 
 
 # Used for annotating errors when source location is unknown.
@@ -208,7 +208,7 @@ unknown_loc = Loc("unknown location", 0, 0)
 
 
 @total_ordering
-class SlotEqualityCheckMixin(object):
+class SlotEqualityCheckMixin:
     # some ir nodes are __dict__ free using __slots__ instead, this mixin
     # should not trigger the unintended creation of __dict__.
     __slots__ = tuple()
@@ -230,7 +230,7 @@ class SlotEqualityCheckMixin(object):
 
 
 @total_ordering
-class EqualityCheckMixin(object):
+class EqualityCheckMixin:
     """ Mixin for basic equality checking """
 
     def __eq__(self, other):
@@ -254,7 +254,7 @@ class EqualityCheckMixin(object):
         return id(self)
 
 
-class VarMap(object):
+class VarMap:
     def __init__(self):
         self._con = {}
 
@@ -295,7 +295,7 @@ class VarMap(object):
         return not self.__eq__(other)
 
 
-class AbstractRHS(object):
+class AbstractRHS:
     """Abstract base class for anything that can be the RHS of an assignment.
     This class **does not** define any methods.
     """
@@ -578,20 +578,20 @@ class Expr(Inst):
         if self.op == 'call':
             args = ', '.join(str(a) for a in self.args)
             pres_order = self._kws.items() if config.DIFF_IR == 0 else sorted(self._kws.items())
-            kws = ', '.join('%s=%s' % (k, v) for k, v in pres_order)
-            vararg = '*%s' % (self.vararg,) if self.vararg is not None else ''
+            kws = ', '.join('{}={}'.format(k, v) for k, v in pres_order)
+            vararg = '*{}'.format(self.vararg) if self.vararg is not None else ''
             arglist = ', '.join(filter(None, [args, vararg, kws]))
-            return 'call %s(%s)' % (self.func, arglist)
+            return 'call {}({})'.format(self.func, arglist)
         elif self.op == 'binop':
             lhs, rhs = self.lhs, self.rhs
             if self.fn == operator.contains:
                 lhs, rhs = rhs, lhs
             fn = OPERATORS_TO_BUILTINS.get(self.fn, self.fn)
-            return '%s %s %s' % (lhs, fn, rhs)
+            return '{} {} {}'.format(lhs, fn, rhs)
         else:
             pres_order = self._kws.items() if config.DIFF_IR == 0 else sorted(self._kws.items())
-            args = ('%s=%s' % (k, v) for k, v in pres_order)
-            return '%s(%s)' % (self.op, ', '.join(args))
+            args = ('{}={}'.format(k, v) for k, v in pres_order)
+            return '{}({})'.format(self.op, ', '.join(args))
 
     def list_vars(self):
         return self._rec_list_vars(self._kws)
@@ -616,7 +616,7 @@ class SetItem(Stmt):
         self.loc = loc
 
     def __repr__(self):
-        return '%s[%s] = %s' % (self.target, self.index, self.value)
+        return '{}[{}] = {}'.format(self.target, self.index, self.value)
 
 
 class StaticSetItem(Stmt):
@@ -637,7 +637,7 @@ class StaticSetItem(Stmt):
         self.loc = loc
 
     def __repr__(self):
-        return '%s[%r] = %s' % (self.target, self.index, self.value)
+        return '{}[{!r}] = {}'.format(self.target, self.index, self.value)
 
 
 class DelItem(Stmt):
@@ -654,7 +654,7 @@ class DelItem(Stmt):
         self.loc = loc
 
     def __repr__(self):
-        return 'del %s[%s]' % (self.target, self.index)
+        return 'del {}[{}]'.format(self.target, self.index)
 
 
 class SetAttr(Stmt):
@@ -669,7 +669,7 @@ class SetAttr(Stmt):
         self.loc = loc
 
     def __repr__(self):
-        return '(%s).%s = %s' % (self.target, self.attr, self.value)
+        return '({}).{} = {}'.format(self.target, self.attr, self.value)
 
 
 class DelAttr(Stmt):
@@ -682,7 +682,7 @@ class DelAttr(Stmt):
         self.loc = loc
 
     def __repr__(self):
-        return 'del (%s).%s' % (self.target, self.attr)
+        return 'del ({}).{}'.format(self.target, self.attr)
 
 
 class StoreMap(Stmt):
@@ -697,7 +697,7 @@ class StoreMap(Stmt):
         self.loc = loc
 
     def __repr__(self):
-        return '%s[%s] = %s' % (self.dct, self.key, self.value)
+        return '{}[{}] = {}'.format(self.dct, self.key, self.value)
 
 
 class Del(Stmt):
@@ -747,10 +747,10 @@ class StaticRaise(Terminator):
         if self.exc_class is None:
             return "<static> raise"
         elif self.exc_args is None:
-            return "<static> raise %s" % (self.exc_class,)
+            return "<static> raise {}".format(self.exc_class)
         else:
-            return "<static> raise %s(%s)" % (self.exc_class,
-                                              ", ".join(map(repr, self.exc_args)))
+            return "<static> raise {}({})".format(self.exc_class,
+                                                  ", ".join(map(repr, self.exc_args)))
 
     def get_targets(self):
         return []
@@ -788,10 +788,10 @@ class StaticTryRaise(Stmt):
         if self.exc_class is None:
             return "static_try_raise"
         elif self.exc_args is None:
-            return "static_try_raise %s" % (self.exc_class,)
+            return "static_try_raise {}".format(self.exc_class)
         else:
-            return "static_try_raise %s(%s)" % (self.exc_class,
-                                                ", ".join(map(repr, self.exc_args)))
+            return "static_try_raise {}({})".format(self.exc_class,
+                                                    ", ".join(map(repr, self.exc_args)))
 
 
 class Return(Terminator):
@@ -844,7 +844,7 @@ class Branch(Terminator):
         self.loc = loc
 
     def __str__(self):
-        return 'branch %s, %s, %s' % (self.cond, self.truebr, self.falsebr)
+        return 'branch {}, {}, {}'.format(self.cond, self.truebr, self.falsebr)
 
     def get_targets(self):
         return [self.truebr, self.falsebr]
@@ -864,7 +864,7 @@ class Assign(Stmt):
         self.loc = loc
 
     def __str__(self):
-        return '%s = %s' % (self.target, self.value)
+        return '{} = {}'.format(self.target, self.value)
 
 
 class Print(Stmt):
@@ -895,7 +895,7 @@ class Yield(Inst):
         self.index = index
 
     def __str__(self):
-        return 'yield %s' % (self.value,)
+        return 'yield {}'.format(self.value)
 
     def list_vars(self):
         return [self.value]
@@ -923,7 +923,7 @@ class EnterWith(Stmt):
         self.loc = loc
 
     def __str__(self):
-        return 'enter_with {}'.format(self.contextmanager)
+        return f'enter_with {self.contextmanager}'
 
     def list_vars(self):
         return [self.contextmanager]
@@ -965,7 +965,7 @@ class Const(EqualityCheckMixin, AbstractRHS):
         self.use_literal_type = use_literal_type
 
     def __repr__(self):
-        return 'const(%s, %s)' % (type(self.value).__name__, self.value)
+        return 'const({}, {})'.format(type(self.value).__name__, self.value)
 
     def infer_constant(self):
         return self.value
@@ -986,7 +986,7 @@ class Global(EqualityCheckMixin, AbstractRHS):
         self.loc = loc
 
     def __str__(self):
-        return 'global(%s: %s)' % (self.name, self.value)
+        return 'global({}: {})'.format(self.name, self.value)
 
     def infer_constant(self):
         return self.value
@@ -1016,7 +1016,7 @@ class FreeVar(EqualityCheckMixin, AbstractRHS):
         self.loc = loc
 
     def __str__(self):
-        return 'freevar(%s: %s)' % (self.name, self.value)
+        return 'freevar({}: {})'.format(self.name, self.value)
 
     def infer_constant(self):
         return self.value
@@ -1049,7 +1049,7 @@ class Var(EqualityCheckMixin, AbstractRHS):
         self.loc = loc
 
     def __repr__(self):
-        return 'Var(%s, %s)' % (self.name, self.loc.short())
+        return 'Var({}, {})'.format(self.name, self.loc.short())
 
     def __str__(self):
         return self.name
@@ -1298,7 +1298,7 @@ class Block(EqualityCheckMixin):
         self.body.insert(-1, stmt)
 
     def __repr__(self):
-        return "<ir.Block at %s>" % (self.loc,)
+        return "<ir.Block at {}>".format(self.loc)
 
 
 class Loop(SlotEqualityCheckMixin):
@@ -1329,7 +1329,7 @@ class With(SlotEqualityCheckMixin):
         return "With(entry=%s, exit=%s)" % args
 
 
-class FunctionIR(object):
+class FunctionIR:
 
     def __init__(self, blocks, is_generator, func_id, loc,
                  definitions, arg_count, arg_names):
@@ -1415,9 +1415,9 @@ class FunctionIR(object):
                             _block.dump(file=buf)
                             stmts = buf.getvalue().splitlines()
                             pad = get_pad(_block.body, min_stmt_len)
-                            title = ("%s: block %s" % (name, label))
+                            title = ("{}: block {}".format(name, label))
                             msg.append(title.center(80, '-'))
-                            msg.extend(["{0}{1}".format(a, b) for a, b in
+                            msg.extend([f"{a}{b}" for a, b in
                                         zip(pad, stmts)])
         if msg == []:
             msg.append("IR is considered equivalent.")
@@ -1536,7 +1536,7 @@ class FunctionIR(object):
         # Avoid early bind of sys.stdout as default value
         file = file or StringIO()
         for offset, block in sorted(self.blocks.items()):
-            print('label %s:' % (offset,), file=file)
+            print('label {}:'.format(offset), file=file)
             block.dump(file=file)
         if nofile:
             text = file.getvalue()
@@ -1600,12 +1600,12 @@ class FunctionIR(object):
                 label = sb.getvalue()
             if include_ir:
                 label = ''.join(
-                    [r'  {}\l'.format(x) for x in label.splitlines()],
+                    [fr'  {x}\l' for x in label.splitlines()],
                 )
-                label = r"block {}\l".format(k) + label
+                label = fr"block {k}\l" + label
                 g.node(str(k), label=label, shape='rect')
             else:
-                label = r"{}\l".format(k)
+                label = fr"{k}\l"
                 g.node(str(k), label=label, shape='circle')
         # Populate the edges
         for src, blk in self.blocks.items():

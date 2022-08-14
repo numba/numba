@@ -3,7 +3,7 @@ from collections import defaultdict
 from numba.core import config
 
 
-class Rewrite(object):
+class Rewrite:
     '''Defines the abstract base class for Numba rewrites.
     '''
 
@@ -25,7 +25,7 @@ class Rewrite(object):
         raise NotImplementedError("Abstract Rewrite.apply() called!")
 
 
-class RewriteRegistry(object):
+class RewriteRegistry:
     '''Defines a registry for Numba rewrites.
     '''
     _kinds = frozenset(['before-inference', 'after-inference'])
@@ -42,11 +42,11 @@ class RewriteRegistry(object):
         the given *kind*.
         """
         if kind not in self._kinds:
-            raise KeyError("invalid kind %r" % (kind,))
+            raise KeyError("invalid kind {!r}".format(kind))
 
         def do_register(rewrite_cls):
             if not issubclass(rewrite_cls, Rewrite):
-                raise TypeError('{0} is not a subclass of Rewrite'.format(
+                raise TypeError('{} is not a subclass of Rewrite'.format(
                     rewrite_cls))
             self.rewrites[kind].append(rewrite_cls)
             return rewrite_cls

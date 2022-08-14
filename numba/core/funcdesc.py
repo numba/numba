@@ -18,10 +18,10 @@ def qualifying_prefix(modname, qualname):
     Returns a new string that is used for the first half of the mangled name.
     """
     # XXX choose a different convention for object mode
-    return '{}.{}'.format(modname, qualname) if modname else qualname
+    return f'{modname}.{qualname}' if modname else qualname
 
 
-class FunctionDescriptor(object):
+class FunctionDescriptor:
     """
     Base class for function descriptors: an object used to carry
     useful metadata about a natively callable function.
@@ -69,7 +69,7 @@ class FunctionDescriptor(object):
             qualprefix, self.argtypes, abi_tags=abi_tags, uid=uid,
         )
         if env_name is None:
-            env_name = mangler(".NumbaEnv.{}".format(qualprefix),
+            env_name = mangler(f".NumbaEnv.{qualprefix}",
                                self.argtypes, abi_tags=abi_tags, uid=uid)
         self.env_name = env_name
         self.inline = inline
@@ -221,8 +221,7 @@ class ExternalFunctionDescriptor(FunctionDescriptor):
 
         def mangler(a, x, abi_tags, uid=None):
             return a
-        super(ExternalFunctionDescriptor, self
-              ).__init__(native=True, modname=None, qualname=name,
+        super().__init__(native=True, modname=None, qualname=name,
                          unique_name=name, doc='', typemap=None,
                          restype=restype, calltypes=None, args=args,
                          kws=None,

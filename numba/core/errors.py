@@ -34,10 +34,10 @@ class NumbaWarning(Warning):
             def highlight(x):
                 return x
         if loc:
-            super(NumbaWarning, self).__init__(
-                highlight("%s\n%s\n" % (msg, loc.strformat())))
+            super().__init__(
+                highlight("{}\n{}\n".format(msg, loc.strformat())))
         else:
-            super(NumbaWarning, self).__init__(highlight("%s" % (msg,)))
+            super().__init__(highlight("{}".format(msg)))
 
 
 class NumbaPerformanceWarning(NumbaWarning):
@@ -169,7 +169,7 @@ try:
     # the user is warned. Note that early versions did not have a __version__.
     colorama_version = getattr(colorama, '__version__', '0.0.0')
 
-    if tuple([int(x) for x in colorama_version.split('.')]) < (0, 3, 9):
+    if tuple(int(x) for x in colorama_version.split('.')) < (0, 3, 9):
         msg = ("Insufficiently recent colorama version found. "
                "Numba requires colorama >= 0.3.9")
         # warn the user
@@ -219,7 +219,7 @@ else:
 
     from colorama import init, reinit, deinit, Fore, Style
 
-    class ColorShell(object):
+    class ColorShell:
         _has_initialized = False
 
         def __init__(self):
@@ -234,7 +234,7 @@ else:
             Style.RESET_ALL
             deinit()
 
-    class reset_terminal(object):
+    class reset_terminal:
         def __init__(self):
             self._buf = bytearray(b'')
 
@@ -411,9 +411,9 @@ https://github.com/numba/numba/issues/new?template=bug_report.md
 reportable_issue_info = """
 -------------------------------------------------------------------------------
 This should not have happened, a problem has occurred in Numba's internals.
-You are currently using Numba version %s.
-%s
-""" % (numba.__version__, feedback_details)
+You are currently using Numba version {}.
+{}
+""".format(numba.__version__, feedback_details)
 
 error_extras = dict()
 error_extras['unsupported_error'] = unsupported_error_info
@@ -453,7 +453,7 @@ def deprecated(arg):
         return decorator
 
 
-class WarningsFixer(object):
+class WarningsFixer:
     """
     An object "fixing" warnings of a given category caught during
     certain phases.  The warnings can have their filename and lineno fixed,
@@ -516,10 +516,10 @@ class NumbaError(Exception):
                 return x
 
         if loc:
-            new_msg = "%s\n%s\n" % (msg, loc.strformat())
+            new_msg = "{}\n{}\n".format(msg, loc.strformat())
         else:
-            new_msg = "%s" % (msg,)
-        super(NumbaError, self).__init__(highlight(new_msg))
+            new_msg = "{}".format(msg)
+        super().__init__(highlight(new_msg))
 
     @property
     def contexts(self):
@@ -583,7 +583,7 @@ class NotDefinedError(IRError):
         self.name = name
         msg = ("The compiler failed to analyze the bytecode. "
                "Variable '%s' is not defined." % name)
-        super(NotDefinedError, self).__init__(msg, loc=loc)
+        super().__init__(msg, loc=loc)
 
 
 class VerificationError(IRError):
@@ -610,7 +610,7 @@ class LoweringError(NumbaError):
     """
 
     def __init__(self, msg, loc=None):
-        super(LoweringError, self).__init__(msg, loc=loc)
+        super().__init__(msg, loc=loc)
 
 
 class UnsupportedParforsError(NumbaError):
@@ -644,7 +644,7 @@ class UntypedAttributeError(TypingError):
         else:
             msg = "Unknown attribute '{attr}' of type {type}"
             msg = msg.format(type=value, attr=attr)
-        super(UntypedAttributeError, self).__init__(msg, loc=loc)
+        super().__init__(msg, loc=loc)
 
 
 class ByteCodeSupportError(NumbaError):
@@ -653,7 +653,7 @@ class ByteCodeSupportError(NumbaError):
     """
 
     def __init__(self, msg, loc=None):
-        super(ByteCodeSupportError, self).__init__(msg, loc=loc)
+        super().__init__(msg, loc=loc)
 
 
 class CompilerError(NumbaError):
@@ -669,7 +669,7 @@ class ConstantInferenceError(NumbaError):
     """
 
     def __init__(self, value, loc=None):
-        super(ConstantInferenceError, self).__init__(value, loc=loc)
+        super().__init__(value, loc=loc)
 
 
 class InternalError(NumbaError):
@@ -678,7 +678,7 @@ class InternalError(NumbaError):
     """
 
     def __init__(self, exception):
-        super(InternalError, self).__init__(str(exception))
+        super().__init__(str(exception))
         self.old_exception = exception
 
 
@@ -722,7 +722,7 @@ class ForceLiteralArg(NumbaError):
             the ``args`` and ``kwargs``.
         loc : numba.ir.Loc or None
         """
-        super(ForceLiteralArg, self).__init__(
+        super().__init__(
             "Pseudo-exception to force literal arguments in the dispatcher",
             loc=loc,
         )

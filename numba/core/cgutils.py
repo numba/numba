@@ -87,7 +87,7 @@ def copy_struct(dst, src, repl={}):
     return dst
 
 
-class _StructProxy(object):
+class _StructProxy:
     """
     Creates a `Structure` like interface that is constructed with information
     from DataModel instance.  FE type must have a data model that is a
@@ -101,7 +101,7 @@ class _StructProxy(object):
         self._datamodel = self._context.data_model_manager[self._fe_type]
         if not isinstance(self._datamodel, numba.core.datamodel.StructModel):
             raise TypeError(
-                "Not a structure model: {0}".format(self._datamodel))
+                f"Not a structure model: {self._datamodel}")
         self._builder = builder
 
         self._be_type = self._get_be_type(self._datamodel)
@@ -160,7 +160,7 @@ class _StructProxy(object):
         Store the LLVM *value* into the named *field*.
         """
         if field.startswith('_'):
-            return super(_StructProxy, self).__setattr__(field, value)
+            return super().__setattr__(field, value)
         self[self._datamodel.get_field_position(field)] = value
 
     def __getitem__(self, index):
@@ -253,7 +253,7 @@ class DataStructProxy(_StructProxy):
         return model.as_data(self._builder, val)
 
 
-class Structure(object):
+class Structure:
     """
     A high-level object wrapping a alloca'ed LLVM structure, including
     named fields and attribute access.
@@ -312,7 +312,7 @@ class Structure(object):
         Store the LLVM *value* into the named *field*.
         """
         if field.startswith('_'):
-            return super(Structure, self).__setattr__(field, value)
+            return super().__setattr__(field, value)
         self[self._namemap[field]] = value
 
     def __getitem__(self, index):
@@ -800,7 +800,7 @@ def _scalar_pred_against_zero(builder, value, fpred, icond):
     elif isinstance(value.type, ir.IntType):
         isnull = builder.icmp_signed(icond, value, nullval)
     else:
-        raise TypeError("unexpected value type %s" % (value.type,))
+        raise TypeError("unexpected value type {}".format(value.type))
     return isnull
 
 

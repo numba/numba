@@ -44,7 +44,7 @@ class _TypeMetaclass(ABCMeta):
         # Numba internal type (one which is defined somewhere under the `numba`
         # module) or an external type (one which is defined elsewhere, for
         # example a user defined type).
-        super(_TypeMetaclass, cls).__init__(name, bases, orig_vars)
+        super().__init__(name, bases, orig_vars)
         root = (cls.__module__.split('.'))[0]
         cls._is_internal = root == "numba"
 
@@ -127,7 +127,7 @@ class Type(metaclass=_TypeMetaclass):
         return not (self == other)
 
     def __reduce__(self):
-        reconstructor, args, state = super(Type, self).__reduce__()
+        reconstructor, args, state = super().__reduce__()
         return (_type_reconstructor, (reconstructor, args, state))
 
     def unify(self, typingctx, other):
@@ -337,7 +337,7 @@ class IteratorType(IterableType):
     """
 
     def __init__(self, name, **kwargs):
-        super(IteratorType, self).__init__(name, **kwargs)
+        super().__init__(name, **kwargs)
 
     @abstractproperty
     def yield_type(self):
@@ -429,7 +429,7 @@ class Literal(Type):
             )
         self._literal_init(value)
         fmt = "Literal[{}]({})"
-        super(Literal, self).__init__(fmt.format(type(value).__name__, value))
+        super().__init__(fmt.format(type(value).__name__, value))
 
     def _literal_init(self, value):
         self._literal_value = value
@@ -459,7 +459,7 @@ class Literal(Type):
                 # resolved to a type, for example, LiteralStrKeyDict has a
                 # literal_value that is a python dict for which there's no
                 # `typeof` support.
-                msg = "{} has no attribute 'literal_type'".format(self)
+                msg = f"{self} has no attribute 'literal_type'"
                 raise AttributeError(msg)
             self._literal_type_cache = res
 
@@ -474,14 +474,14 @@ class TypeRef(Dummy):
 
     def __init__(self, instance_type):
         self.instance_type = instance_type
-        super(TypeRef, self).__init__('typeref[{}]'.format(self.instance_type))
+        super().__init__(f'typeref[{self.instance_type}]')
 
     @property
     def key(self):
         return self.instance_type
 
 
-class InitialValue(object):
+class InitialValue:
     """
     Used as a mixin for a type will potentially have an initial value that will
     be carried in the .initial_value attribute.
@@ -505,7 +505,7 @@ class Poison(Type):
 
     def __init__(self, ty):
         self.ty = ty
-        super(Poison, self).__init__(name="Poison<%s>" % ty)
+        super().__init__(name="Poison<%s>" % ty)
 
     def __unliteral__(self):
         return Poison(self)

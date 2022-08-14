@@ -29,8 +29,7 @@ def make_consumer(gen_func):
 
 
 def gen1(x):
-    for i in range(x):
-        yield i
+    yield from range(x)
 
 
 def gen2(x):
@@ -97,18 +96,15 @@ def return_generator_expr(x):
 
 
 def gen_ndindex(shape):
-    for ind in np.ndindex(shape):
-        yield ind
+    yield from np.ndindex(shape)
 
 
 def gen_flat(arr):
-    for val in arr.flat:
-        yield val
+    yield from arr.flat
 
 
 def gen_ndenumerate(arr):
-    for tup in np.ndenumerate(arr):
-        yield tup
+    yield from np.ndenumerate(arr)
 
 
 def gen_bool():
@@ -369,8 +365,7 @@ class TestGenerators(MemoryLeakMixin, TestCase):
 
 
 def nrt_gen0(ary):
-    for elem in ary:
-        yield elem
+    yield from ary
 
 
 def nrt_gen1(ary1, ary2):

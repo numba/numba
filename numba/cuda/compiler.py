@@ -310,7 +310,7 @@ def declare_device_function(name, restype, argtypes):
     return extfn
 
 
-class ExternFunction(object):
+class ExternFunction:
     def __init__(self, name, sig):
         self.name = name
         self.sig = sig

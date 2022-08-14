@@ -28,7 +28,7 @@ def _broadcast_axis(a, b):
     elif b == 1:
         return a
     else:
-        raise ValueError("failed to broadcast {0} and {1}".format(a, b))
+        raise ValueError(f"failed to broadcast {a} and {b}")
 
 
 def _pairwise_broadcast(shape1, shape2):
@@ -62,12 +62,12 @@ def _multi_broadcast(*shapelist):
         for i, each in enumerate(others, start=1):
             result = _pairwise_broadcast(result, each)
     except ValueError:
-        raise ValueError("failed to broadcast argument #{0}".format(i))
+        raise ValueError(f"failed to broadcast argument #{i}")
     else:
         return result
 
 
-class UFuncMechanism(object):
+class UFuncMechanism:
     """
     Prepare ufunc arguments for vectorize.
     """
@@ -477,7 +477,7 @@ class DeviceGUFuncVectorize(_BaseUFuncBuilder):
         glbls = self._get_globals(sig)
 
         exec(src, glbls)
-        fnobj = glbls['__gufunc_{name}'.format(name=funcname)]
+        fnobj = glbls[f'__gufunc_{funcname}']
 
         outertys = list(_determine_gufunc_outer_types(args, indims + outdims))
         kernel = self._compile_kernel(fnobj, sig=tuple(outertys))
@@ -506,9 +506,9 @@ def expand_gufunc_template(template, indims, outdims, funcname, argtypes):
     """Expand gufunc source template
     """
     argdims = indims + outdims
-    argnames = ["arg{0}".format(i) for i in range(len(argdims))]
-    checkedarg = "min({0})".format(', '.join(["{0}.shape[0]".format(a)
-                                              for a in argnames]))
+    argnames = [f"arg{i}" for i in range(len(argdims))]
+    checkedarg = "min({})".format(', '.join([f"{a}.shape[0]"
+                                             for a in argnames]))
     inputs = [_gen_src_for_indexing(aref, adims, atype)
               for aref, adims, atype in zip(argnames, indims, argtypes)]
     outputs = [_gen_src_for_indexing(aref, adims, atype)
@@ -538,7 +538,7 @@ def _gen_src_index(adims, atype):
         return '__tid__'
 
 
-class GUFuncEngine(object):
+class GUFuncEngine:
     '''Determine how to broadcast and execute a gufunc
     base on input shape and signature
     '''
@@ -613,7 +613,7 @@ class GUFuncEngine(object):
         return GUFuncSchedule(self, inner_shapes, oshapes, loopdims, pinned)
 
 
-class GUFuncSchedule(object):
+class GUFuncSchedule:
     def __init__(self, parent, ishapes, oshapes, loopdims, pinned):
         self.parent = parent
         # core shapes
@@ -635,7 +635,7 @@ class GUFuncSchedule(object):
         return pprint.pformat(dict(values))
 
 
-class GeneralizedUFunc(object):
+class GeneralizedUFunc:
     def __init__(self, kernelmap, engine):
         self.kernelmap = kernelmap
         self.engine = engine
@@ -732,7 +732,7 @@ class GeneralizedUFunc(object):
         raise NotImplementedError
 
 
-class GUFuncCallSteps(object):
+class GUFuncCallSteps:
     __slots__ = [
         'args',
         'kwargs',
@@ -789,7 +789,7 @@ class GUFuncCallSteps(object):
             if ity != val.dtype:
                 if not hasattr(val, 'astype'):
                     msg = ("compatible signature is possible by casting but "
-                           "{0} does not support .astype()").format(type(val))
+                           "{} does not support .astype()").format(type(val))
                     raise TypeError(msg)
                 # Cast types
                 self.norm_inputs[i] = val.astype(ity)

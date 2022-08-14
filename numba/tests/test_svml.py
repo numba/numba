@@ -100,16 +100,15 @@ def func_patterns(func, args, res, dtype, mode, vlen, fastmath, pad=' ' * 8):
     # generate a function call according to the usecase
     if mode == "scalar":
         arg_list = ','.join([a + '[0]' for a in args])
-        body = '%s%s[0] += math.%s(%s)\n' % (pad, res, func, arg_list)
+        body = '{}{}[0] += math.{}({})\n'.format(pad, res, func, arg_list)
     elif mode == "numpy":
-        body = '%s%s += np.%s(%s)' % (pad, res, func, ','.join(args))
+        body = '{}{} += np.{}({})'.format(pad, res, func, ','.join(args))
         body += '.astype(np.%s)\n' % dtype if dtype.startswith('int') else '\n'
     else:
         assert mode == "range" or mode == "prange"
         arg_list = ','.join([a + '[i]' for a in args])
-        body = '{pad}for i in {mode}({res}.size):\n' \
-               '{pad}{pad}{res}[i] += math.{func}({arg_list})\n'. \
-               format(**locals())
+        body = f'{pad}for i in {mode}({res}.size):\n' \
+               f'{pad}{pad}{res}[i] += math.{func}({arg_list})\n'
     # TODO: refactor so this for-loop goes into umbrella function,
     #       'mode' can be 'numpy', '0', 'i' instead
     # TODO: it will enable mixed usecases like prange + numpy
@@ -153,9 +152,9 @@ def combo_svml_usecase(dtype, mode, vlen, fastmath, name):
     """ Combine multiple function calls under single umbrella usecase """
 
     name = usecase_name(dtype, mode, vlen, name)
-    body = """def {name}(n):
+    body = f"""def {name}(n):
         x   = np.empty(n*8, dtype=np.{dtype})
-        ret = np.empty_like(x)\n""".format(**locals())
+        ret = np.empty_like(x)\n"""
     funcs = set(numpy_funcs if mode == "numpy" else other_funcs)
     if dtype.startswith('complex'):
         funcs = funcs.difference(complex_funcs_exclude)
@@ -182,7 +181,7 @@ class TestSVMLGeneration(TestCase):
     # env mutating, must not run in parallel
     _numba_parallel_test_ = False
     # RE for a generic symbol reference and for each particular SVML function
-    asm_filter = re.compile('|'.join(['\$[a-z_]\w+,'] + list(svml_funcs)))
+    asm_filter = re.compile('|'.join([r'\$[a-z_]\w+,'] + list(svml_funcs)))
 
     @classmethod
     def mp_runner(cls, testname, outqueue):
@@ -307,11 +306,11 @@ class TestSVML(TestCase):
         self.fastflags = Flags()
         self.fastflags.nrt = True
         self.fastflags.fastmath = cpu.FastMathOptions(True)
-        super(TestSVML, self).__init__(*args)
+        super().__init__(*args)
 
     def compile(self, func, *args, **kwargs):
         assert not kwargs
-        sig = tuple([numba.typeof(x) for x in args])
+        sig = tuple(numba.typeof(x) for x in args)
 
         std = compile_isolated(func, sig, flags=self.flags)
         fast = compile_isolated(func, sig, flags=self.fastflags)

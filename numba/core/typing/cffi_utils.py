@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Support for CFFI. Allows checking whether objects are CFFI functions and
 obtaining the pointer and numba signature.

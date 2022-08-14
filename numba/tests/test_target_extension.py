@@ -231,7 +231,7 @@ class DPUContext(BaseContext):
 
         # Note: we avoid reusing the original docstring to avoid encoding
         # issues on Python 2, see issue #1908
-        doc = "compiled wrapper for %r" % (fndesc.qualname,)
+        doc = "compiled wrapper for {!r}".format(fndesc.qualname)
         cfunc = _dynfunc.make_function(
             fndesc.lookup_module(),
             fndesc.qualname.split(".")[-1],
@@ -246,7 +246,7 @@ class DPUContext(BaseContext):
 
 
 # Nested contexts to help with isolatings bits of compilations
-class _NestedContext(object):
+class _NestedContext:
     _typing_context = None
     _target_context = None
 

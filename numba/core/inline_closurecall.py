@@ -65,7 +65,7 @@ def _created_inlined_var_name(function_name, var_name):
     return new_name
 
 
-class InlineClosureCallPass(object):
+class InlineClosureCallPass:
     """InlineClosureCallPass class looks for direct calls to locally defined
     closures, and inlines the body of the closure function to the call site.
     """
@@ -291,7 +291,7 @@ def check_reduce_func(func_ir, func_var):
     return reduce_func
 
 
-class InlineWorker(object):
+class InlineWorker:
     """ A worker class for inlining, this is a more advanced version of
     `inline_closure_call` in that it permits inlining from function type, Numba
     IR and code object. It also, runs the entire untyped compiler pipeline on
@@ -319,7 +319,7 @@ class InlineWorker(object):
         """
         def check(arg, name):
             if arg is None:
-                raise TypeError("{} must not be None".format(name))
+                raise TypeError(f"{name} must not be None")
 
         from numba.core.compiler import DefaultPassBuilder
 
@@ -743,7 +743,7 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
     elif ir_utils.is_operator_or_getitem(call_expr):
         args = call_expr.list_vars()
     else:
-        raise TypeError("Unsupported ir.Expr.{}".format(call_expr.op))
+        raise TypeError(f"Unsupported ir.Expr.{call_expr.op}")
 
     debug_print = _make_debug_print("inline_closure_call default handling")
 
@@ -1044,9 +1044,9 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
     # by checking if the predecessor set of the header block is the same
     # as loop_entries plus append_block, which is certainly more restrictive
     # than necessary, and can be relaxed if needed.
-    preds = set(l for l, b in cfg.predecessors(loop.header))
-    debug_print("preds = ", preds, (loop.entries | set([append_block_label])))
-    require(preds == (loop.entries | set([append_block_label])))
+    preds = {l for l, b in cfg.predecessors(loop.header)}
+    debug_print("preds = ", preds, (loop.entries | {append_block_label}))
+    require(preds == (loop.entries | {append_block_label}))
 
     # Find iterator in loop header
     iter_vars = []
@@ -1262,7 +1262,7 @@ def _fix_nested_array(func_ir):
     blocks = func_ir.blocks
     cfg = compute_cfg_from_blocks(blocks)
     usedefs = compute_use_defs(blocks)
-    empty_deadmap = dict([(label, set()) for label in blocks.keys()])
+    empty_deadmap = {label: set() for label in blocks.keys()}
     livemap = compute_live_variables(cfg, blocks, usedefs.defmap, empty_deadmap)
 
     def find_array_def(arr):
@@ -1396,7 +1396,7 @@ class RewriteArrayOfConsts(rewrites.Rewrite):
 
     def __init__(self, state, *args, **kws):
         self.typingctx = state.typingctx
-        super(RewriteArrayOfConsts, self).__init__(*args, **kws)
+        super().__init__(*args, **kws)
 
     def match(self, func_ir, block, typemap, calltypes):
         if len(calltypes) == 0:
@@ -1518,7 +1518,7 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
         stmts.extend(dels)
         return True
 
-    class State(object):
+    class State:
         """
         This class is used to hold the state in the following loop so as to make
         it easy to reset the state of the variables tracking the various

@@ -15,7 +15,7 @@ from numba.core.unsafe import eh
 from numba.cpython.unsafe.tuple import unpack_single_tuple
 
 
-class _UNKNOWN_VALUE(object):
+class _UNKNOWN_VALUE:
     """Represents an unknown value, this is for ease of debugging purposes only.
     """
 
@@ -23,13 +23,13 @@ class _UNKNOWN_VALUE(object):
         self._varname = varname
 
     def __repr__(self):
-        return "_UNKNOWN_VALUE({})".format(self._varname)
+        return f"_UNKNOWN_VALUE({self._varname})"
 
 
 _logger = logging.getLogger(__name__)
 
 
-class Assigner(object):
+class Assigner:
     """
     This object keeps track of potential assignment simplifications
     inside a code block.
@@ -884,8 +884,8 @@ def peep_hole_list_to_tuple(func_ir):
                                 if fname in extends or fname in appends:
                                     arg = expr.args[0]
                                     if isinstance(arg, ir.Var):
-                                        tmp_name = "%s_var_%s" % (fname,
-                                                                  arg.name)
+                                        tmp_name = "{}_var_{}".format(fname,
+                                                                      arg.name)
                                         if fname in appends:
                                             bt = ir.Expr.build_tuple([arg,],
                                                                      expr.loc)
@@ -1277,7 +1277,7 @@ def _build_new_build_map(func_ir, name, old_body, old_lineno, new_items):
     )
 
 
-class Interpreter(object):
+class Interpreter:
     """A bytecode interpreter that builds up the IR.
     """
 
@@ -1464,7 +1464,7 @@ class Interpreter(object):
         gv_fn = ir.Global(gv_name, func, loc=self.loc)
         self.store(value=gv_fn, name=gv_name, redefine=True)
         callres = ir.Expr.call(self.get(gv_name), (), (), loc=self.loc)
-        res_name = res_name or '$callres_{}'.format(gv_name)
+        res_name = res_name or f'$callres_{gv_name}'
         self.store(value=callres, name=res_name, redefine=True)
 
     def _insert_try_block_begin(self):
@@ -1684,7 +1684,7 @@ class Interpreter(object):
         # Implicit argument for comprehension starts with '.'
         # See Parameter class in inspect.py (from Python source)
         if name[0] == '.' and name[1:].isdigit():
-            name = 'implicit{}'.format(name[1:])
+            name = f'implicit{name[1:]}'
 
         # Try to simplify the variable lookup by returning an earlier
         # variable assigned to *name*.
@@ -2732,7 +2732,7 @@ class Interpreter(object):
             raise NotImplementedError(msg)
         if defaults:
             if isinstance(defaults, tuple):
-                defaults = tuple([self.get(name) for name in defaults])
+                defaults = tuple(self.get(name) for name in defaults)
             else:
                 defaults = self.get(defaults)
 

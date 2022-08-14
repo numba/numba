@@ -96,8 +96,7 @@ def check_dict_cache():
 
 
 def generator_cache():
-    for v in (1, 2, 3):
-        yield v
+    yield from (1, 2, 3)
 
 
 def check_generator_cache():
@@ -237,8 +236,8 @@ class BaseCacheTest(TestCase):
             return []
 
     def get_cache_mtimes(self):
-        return dict((fn, os.path.getmtime(os.path.join(self.cache_dir, fn)))
-                    for fn in sorted(self.cache_contents()))
+        return {fn: os.path.getmtime(os.path.join(self.cache_dir, fn))
+                for fn in sorted(self.cache_contents())}
 
     def check_pycache(self, n):
         c = self.cache_contents()
@@ -417,7 +416,7 @@ class TestCache(DispatcherCacheUsecasesTest):
 
             self.assertEqual(len(w), 1)
             self.assertIn(
-                'Cannot cache compiled function "{}"'.format(f.__name__),
+                f'Cannot cache compiled function "{f.__name__}"',
                 str(w[0].message),
             )
 
@@ -706,12 +705,12 @@ class TestCache(DispatcherCacheUsecasesTest):
 @skip_parfors_unsupported
 class TestSequentialParForsCache(DispatcherCacheUsecasesTest):
     def setUp(self):
-        super(TestSequentialParForsCache, self).setUp()
+        super().setUp()
         # Turn on sequential parfor lowering
         parfor.sequential_parfor_lowering = True
 
     def tearDown(self):
-        super(TestSequentialParForsCache, self).tearDown()
+        super().tearDown()
         # Turn off sequential parfor lowering
         parfor.sequential_parfor_lowering = False
 

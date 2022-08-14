@@ -231,7 +231,7 @@ class TestDispatcher(BaseTest):
             f(1.0, 2.0)
         # The two best matches are output in the error message, as well
         # as the actual argument types.
-        self.assertRegexpMatches(
+        self.assertRegex(
             str(cm.exception),
             r"Ambiguous overloading for <function add [^>]*> "
             r"\(float64, float64\):\n"
@@ -780,13 +780,13 @@ class TestDispatcherMethods(TestCase):
     def _check_cfg_display(self, cfg, wrapper=''):
         # simple stringify test
         if wrapper:
-            wrapper = "{}{}".format(len(wrapper), wrapper)
+            wrapper = f"{len(wrapper)}{wrapper}"
         module_name = __name__.split('.', 1)[0]
         module_len = len(module_name)
         prefix = r'^digraph "CFG for \'_ZN{}{}{}'.format(wrapper,
                                                          module_len,
                                                          module_name)
-        self.assertRegexpMatches(str(cfg), prefix)
+        self.assertRegex(str(cfg), prefix)
         # .display() requires an optional dependency on `graphviz`.
         # just test for the attribute without running it.
         self.assertTrue(callable(cfg.display))
@@ -814,7 +814,7 @@ class TestDispatcherMethods(TestCase):
 
         # Makes sure all the signatures are correct
         [s1, s2, s3] = cfgs.keys()
-        self.assertEqual(set([s1, s2, s3]),
+        self.assertEqual({s1, s2, s3},
                          set(map(lambda x: (typeof(x),), [a1, a2, a3])))
 
         for cfg in cfgs.values():
@@ -1048,7 +1048,7 @@ class TestBoxingDefaultError(unittest.TestCase):
             # without checking the input value.
             cres.entry_point()
         pat = "cannot convert native Module.* to Python object"
-        self.assertRegexpMatches(str(raises.exception), pat)
+        self.assertRegex(str(raises.exception), pat)
 
 
 class TestNoRetryFailedSignature(unittest.TestCase):

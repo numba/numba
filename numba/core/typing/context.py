@@ -16,7 +16,7 @@ from .typeof import typeof, Purpose
 from numba.core import utils
 
 
-class Rating(object):
+class Rating:
     __slots__ = 'promote', 'safe_convert', "unsafe_convert"
 
     def __init__(self):
@@ -101,7 +101,7 @@ class CallStack(Sequence):
                 return frame
 
 
-class CallFrame(object):
+class CallFrame:
     """
     A compile-time call frame
     """
@@ -114,7 +114,7 @@ class CallFrame(object):
         self._inferred_retty = set()
 
     def __repr__(self):
-        return "CallFrame({}, {})".format(self.func_id, self.args)
+        return f"CallFrame({self.func_id}, {self.args})"
 
     def add_return_type(self, return_type):
         """Add *return_type* to the list of inferred return-types.
@@ -129,7 +129,7 @@ class CallFrame(object):
             raise errors.TypingError(m)
 
 
-class BaseContext(object):
+class BaseContext:
     """A typing context for storing function typing constrain template.
     """
 
@@ -183,7 +183,7 @@ class BaseContext(object):
         if defns:
             desc = ['Known signatures:']
             for sig in defns:
-                desc.append(' * {0}'.format(sig))
+                desc.append(f' * {sig}')
 
         return '\n'.join(desc)
 
@@ -253,13 +253,11 @@ class BaseContext(object):
         Get matching AttributeTemplates for the Numba type.
         """
         if typ in self._attributes:
-            for attrinfo in self._attributes[typ]:
-                yield attrinfo
+            yield from self._attributes[typ]
         else:
             for cls in type(typ).__mro__:
                 if cls in self._attributes:
-                    for attrinfo in self._attributes[cls]:
-                        yield attrinfo
+                    yield from self._attributes[cls]
 
     def resolve_getattr(self, typ, attr):
         """

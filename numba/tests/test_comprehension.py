@@ -473,7 +473,7 @@ class TestArrayComprehension(unittest.TestCase):
             cfunc = jit(nopython=True)(array_comp)
             cfunc(10, 2.3j)
         self.assertIn(
-            _header_lead + " Function({})".format(operator.setitem),
+            _header_lead + f" Function({operator.setitem})",
             str(raises.exception),
         )
         self.assertIn(
@@ -502,7 +502,7 @@ class TestArrayComprehension(unittest.TestCase):
         # For a large enough array, the chances of shuffle to not move any
         # element is tiny enough.
         self.assertNotEqual(got, expect)
-        self.assertRegexpMatches(got, r'\[(\s*\d+)+\]')
+        self.assertRegex(got, r'\[(\s*\d+)+\]')
 
     def test_empty_list_not_removed(self):
         # see issue #3724

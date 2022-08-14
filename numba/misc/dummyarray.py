@@ -26,7 +26,7 @@ attempt_nocopy_reshape = ctypes.CFUNCTYPE(
 )(_helperlib.c_helpers['attempt_nocopy_reshape'])
 
 
-class Dim(object):
+class Dim:
     """A single dimension of the array
 
     Attributes
@@ -112,7 +112,7 @@ def compute_index(indices, dims):
     return sum(d.get_offset(i) for i, d in zip(indices, dims))
 
 
-class Element(object):
+class Element:
     is_array = False
 
     def __init__(self, extent):
@@ -122,7 +122,7 @@ class Element(object):
         yield self.extent
 
 
-class Array(object):
+class Array:
     """A dummy numpy array-like object.  Consider it an array without the
     actual data, but offset from the base data pointer.
 
@@ -215,7 +215,7 @@ class Array(object):
         return Extent(start, stop)
 
     def __repr__(self):
-        return '<Array dims=%s itemsize=%s>' % (self.dims, self.itemsize)
+        return '<Array dims={} itemsize={}>'.format(self.dims, self.itemsize)
 
     def __getitem__(self, item):
         if not isinstance(item, tuple):
@@ -424,8 +424,7 @@ def iter_strides_c_contig(arr, shape=None):
             sum *= s
             yield sum * itemsize
 
-    for i in reversed(list(gen())):
-        yield i
+    yield from reversed(list(gen()))
 
 
 def is_element_indexing(item, ndim):

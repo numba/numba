@@ -40,7 +40,7 @@ def _confirm_gdb(need_ptrace_attach=True):
                                      'ptrace_scope')
     has_ptrace_scope = os.path.exists(ptrace_scope_file)
     if has_ptrace_scope:
-        with open(ptrace_scope_file, 'rt') as f:
+        with open(ptrace_scope_file) as f:
             value = f.readline().strip()
         if need_ptrace_attach and value not in ("0", "1"):
             msg = ("gdb can launch but cannot attach to the executing program"

@@ -132,17 +132,17 @@ class TestInlining(TestCase):
         Make regexpr to match mangled name
         """
         parts = fullname.split('.')
-        return r'_ZN?' + r''.join([r'\d+{}'.format(p) for p in parts])
+        return r'_ZN?' + r''.join([fr'\d+{p}' for p in parts])
 
     def assert_has_pattern(self, fullname, text):
         pat = self.make_pattern(fullname)
         self.assertIsNotNone(re.search(pat, text),
-                             msg='expected {}'.format(pat))
+                             msg=f'expected {pat}')
 
     def assert_not_has_pattern(self, fullname, text):
         pat = self.make_pattern(fullname)
         self.assertIsNone(re.search(pat, text),
-                          msg='unexpected {}'.format(pat))
+                          msg=f'unexpected {pat}')
 
     def test_inner_function(self):
         with override_config('DUMP_ASSEMBLY', True):

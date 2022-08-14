@@ -40,7 +40,7 @@ def _check_arity_and_homogeneity(sig, args, arity, return_type=None):
     if not ( all(arg == ty for arg in sig.args) and sig.return_type == return_type):
         import inspect
         fname = inspect.currentframe().f_back.f_code.co_name
-        msg = '{0} called with invalid types: {1}'.format(fname, sig)
+        msg = f'{fname} called with invalid types: {sig}'
         assert False, msg
 
 
@@ -73,7 +73,7 @@ def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
     try:
         func_name = table[ty]
     except KeyError as e:
-        msg = "No {0} function for real type {1}".format(user_name, str(e))
+        msg = f"No {user_name} function for real type {str(e)}"
         raise errors.LoweringError(msg)
 
     mod = builder.module
@@ -297,8 +297,8 @@ def np_complex_div_impl(context, builder, sig, args):
     #   R.L. Smith. Algorithm 116: Complex division.
     #   Communications of the ACM, 5(8):435, 1962
 
-    in1, in2 = [context.make_complex(builder, sig.args[0], value=arg)
-                for arg in args]
+    in1, in2 = (context.make_complex(builder, sig.args[0], value=arg)
+                for arg in args)
 
     in1r = in1.real  # numerator.real
     in1i = in1.imag  # numerator.imag
@@ -439,8 +439,8 @@ def np_complex_floor_div_impl(context, builder, sig, args):
     float_kind = sig.args[0].underlying_float
     floor_sig = typing.signature(float_kind, float_kind)
 
-    in1, in2 = [context.make_complex(builder, sig.args[0], value=arg)
-                for arg in args]
+    in1, in2 = (context.make_complex(builder, sig.args[0], value=arg)
+                for arg in args)
 
     in1r = in1.real
     in1i = in1.imag
@@ -1151,7 +1151,7 @@ def np_complex_ge_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
 
     ty = sig.args[0]
-    in1, in2 = [context.make_complex(builder, ty, value=arg) for arg in args]
+    in1, in2 = (context.make_complex(builder, ty, value=arg) for arg in args)
     xr = in1.real
     xi = in1.imag
     yr = in2.real
@@ -1172,7 +1172,7 @@ def np_complex_le_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
 
     ty = sig.args[0]
-    in1, in2 = [context.make_complex(builder, ty, value=arg) for arg in args]
+    in1, in2 = (context.make_complex(builder, ty, value=arg) for arg in args)
     xr = in1.real
     xi = in1.imag
     yr = in2.real
@@ -1193,7 +1193,7 @@ def np_complex_gt_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
 
     ty = sig.args[0]
-    in1, in2 = [context.make_complex(builder, ty, value=arg) for arg in args]
+    in1, in2 = (context.make_complex(builder, ty, value=arg) for arg in args)
     xr = in1.real
     xi = in1.imag
     yr = in2.real
@@ -1214,7 +1214,7 @@ def np_complex_lt_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
 
     ty = sig.args[0]
-    in1, in2 = [context.make_complex(builder, ty, value=arg) for arg in args]
+    in1, in2 = (context.make_complex(builder, ty, value=arg) for arg in args)
     xr = in1.real
     xi = in1.imag
     yr = in2.real
@@ -1235,7 +1235,7 @@ def np_complex_eq_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
 
     ty = sig.args[0]
-    in1, in2 = [context.make_complex(builder, ty, value=arg) for arg in args]
+    in1, in2 = (context.make_complex(builder, ty, value=arg) for arg in args)
     xr = in1.real
     xi = in1.imag
     yr = in2.real
@@ -1252,7 +1252,7 @@ def np_complex_ne_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
 
     ty = sig.args[0]
-    in1, in2 = [context.make_complex(builder, ty, value=arg) for arg in args]
+    in1, in2 = (context.make_complex(builder, ty, value=arg) for arg in args)
     xr = in1.real
     xi = in1.imag
     yr = in2.real

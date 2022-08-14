@@ -1259,7 +1259,7 @@ class TestIsinstanceBuiltin(TestCase):
             1j,             # complex
             [1, 2, 3],      # list
             (1, 3, 3, 3),   # UniTuple
-            set([1, 2]),    # set
+            {1, 2},    # set
             (1, 'nba', 2),  # Heterogeneous Tuple
             # {'hello': 2},   # dict - doesn't work as input
             None,

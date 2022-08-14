@@ -26,7 +26,7 @@ class FakeCUDAContext:
         pass
 
     def __str__(self):
-        return "<Managed Device {self.id}>".format(self=self)
+        return f"<Managed Device {self.id}>"
 
     @property
     def id(self):

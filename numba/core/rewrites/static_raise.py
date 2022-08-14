@@ -56,7 +56,7 @@ class RewriteConstRaises(Rewrite):
             elif isinstance(inst, ir.TryRaise):
                 tryraises[inst] = exc_type, exc_args
             else:
-                raise ValueError('unexpected: {}'.format(type(inst)))
+                raise ValueError(f'unexpected: {type(inst)}')
         return (len(raises) + len(tryraises)) > 0
 
     def apply(self):

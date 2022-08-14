@@ -27,13 +27,13 @@ def dump_refcount(typingctx, obj):
         if meminfos:
             pyapi = context.get_python_api(builder)
             gil_state = pyapi.gil_ensure()
-            pyapi.print_string("dump refct of {}".format(ty))
+            pyapi.print_string(f"dump refct of {ty}")
             for ty, mi in meminfos:
                 miptr = builder.bitcast(mi, _meminfo_struct_type.as_pointer())
                 refctptr = cgutils.gep_inbounds(builder, miptr, 0, 0)
                 refct = builder.load(refctptr)
 
-                pyapi.print_string(" | {} refct=".format(ty))
+                pyapi.print_string(f" | {ty} refct=")
                 # "%zu" is not portable.  just truncate refcount to 32-bit.
                 # that's good enough for a debugging util.
                 refct_32bit = builder.trunc(refct, ir.IntType(32))

@@ -200,10 +200,10 @@ class TestBuiltins(unittest.TestCase):
                 foo()
             for x in w:
                 if x.category == numba.errors.NumbaPerformanceWarning:
-                    if "%s" in str(x.message):
-                        exit(%s)
-            exit(%s)
-        """ % (expected, found_ret_code, not_found_ret_code)
+                    if "{}" in str(x.message):
+                        exit({})
+            exit({})
+        """.format(expected, found_ret_code, not_found_ret_code)
 
         # run in the standard env, warning should raise
         popen = subprocess.Popen([sys.executable, "-c", parallel_code])

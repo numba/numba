@@ -117,7 +117,7 @@ class TestArgInfo(unittest.TestCase):
         asargs = fi.from_arguments(builder, values)
 
         self.assertEqual(len(asargs), len(fe_args))
-        valtys = tuple([v.type for v in values])
+        valtys = tuple(v.type for v in values)
         self.assertEqual(valtys, fi.argument_types)
 
         expect_types = [a.type for a in args]

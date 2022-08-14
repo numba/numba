@@ -58,7 +58,7 @@ class ListModel(models.StructModel):
             ('meminfo', _meminfo_listptr),
             ('data', types.voidptr),   # ptr to the C list
         ]
-        super(ListModel, self).__init__(dmm, fe_type, members)
+        super().__init__(dmm, fe_type, members)
 
 
 @register_model(ListTypeIterableType)
@@ -70,7 +70,7 @@ class ListIterModel(models.StructModel):
             ('parent', fe_type.parent), # the parent list
             ('index', types.EphemeralPointer(types.intp)), # current index
         ]
-        super(ListIterModel, self).__init__(dmm, fe_type, members)
+        super().__init__(dmm, fe_type, members)
 
 
 class ListStatus(IntEnum):
@@ -84,7 +84,7 @@ class ListStatus(IntEnum):
     LIST_ERR_IMMUTABLE = -5
 
 
-class ErrorHandler(object):
+class ErrorHandler:
     """ErrorHandler for calling codegen functions from this file.
 
     Stores the state needed to raise an exception from nopython mode.
@@ -136,7 +136,7 @@ def _from_meminfo(typingctx, mi, listtyperef):
         raise TypingError('expected a MemInfoPointer for list.')
     listtype = listtyperef.instance_type
     if not isinstance(listtype, ListType):
-        raise TypingError('expected a {}'.format(ListType))
+        raise TypingError(f'expected a {ListType}')
 
     def codegen(context, builder, sig, args):
         [tmi, tdref] = sig.args
@@ -1436,7 +1436,7 @@ def impl_greater_than_or_equal(this, other):
     return compare_helper(this, other, (0, 1))
 
 
-class ListIterInstance(object):
+class ListIterInstance:
 
     def __init__(self, context, builder, iter_type, iter_val):
         self._context = context

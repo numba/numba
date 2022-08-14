@@ -347,7 +347,7 @@ else:
             y = hash(tup[i])
             xxory = (x ^ y)
             x = xxory * mult
-            mult += _Py_hash_t((_Py_uhash_t(82520) + l + l))
+            mult += _Py_hash_t(_Py_uhash_t(82520) + l + l)
         x += _Py_uhash_t(97531)
         return process_return(x)
 
@@ -489,7 +489,7 @@ def _build_hashsecret():
     info = {}
 
     def inject(name, val):
-        symbol_name = "_numba_hashsecret_{}".format(name)
+        symbol_name = f"_numba_hashsecret_{name}"
         val = ctypes.c_uint64(val)
         addr = ctypes.addressof(val)
         ll.add_symbol(symbol_name, addr)

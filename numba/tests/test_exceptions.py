@@ -24,7 +24,7 @@ class OtherError(Exception):
 
 class UDEArgsToSuper(Exception):
     def __init__(self, arg, value0):
-        super(UDEArgsToSuper, self).__init__(arg)
+        super().__init__(arg)
         self.value0 = value0
 
     def __eq__(self, other):
@@ -41,7 +41,7 @@ class UDEArgsToSuper(Exception):
 
 class UDENoArgSuper(Exception):
     def __init__(self, arg, value0):
-        super(UDENoArgSuper, self).__init__()
+        super().__init__()
         self.deferarg = arg
         self.value0 = value0
 

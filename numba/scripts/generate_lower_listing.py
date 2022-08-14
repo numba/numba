@@ -60,7 +60,7 @@ def format_signature(sig):
         except AttributeError:
             return repr(c).strip('\'"')
     out = tuple(map(fmt, sig))
-    return '`({0})`'.format(', '.join(out))
+    return '`({})`'.format(', '.join(out))
 
 
 github_url = ('https://github.com/numba/numba/blob/'
@@ -90,14 +90,14 @@ def format_function_infos(fninfos):
 
         def format_fname(fn):
             try:
-                fname = "{0}.{1}".format(fn.__module__, get_func_name(fn))
+                fname = f"{fn.__module__}.{get_func_name(fn)}"
             except AttributeError:
                 fname = repr(fn)
             return fn, fname
 
         for fn, fname in sorted(map(format_fname, fninfos), key=lambda x: x[1]):
             impinfos = fninfos[fn]
-            header_line = "``{0}``".format(fname)
+            header_line = f"``{fname}``"
             print(header_line)
             print('-' * len(header_line))
             print()
@@ -117,10 +117,10 @@ def format_function_infos(fninfos):
                 lines = impl['lines']
                 fname = impl['name']
 
-                source = '{0} lines {1}-{2}'.format(filename, *lines)
+                source = '{} lines {}-{}'.format(filename, *lines)
                 link = github_url.format(commit=commit, path=filename,
                                          firstline=lines[0], lastline=lines[1])
-                url = '``{0}`` `{1} <{2}>`_'.format(fname, source, link)
+                url = f'``{fname}`` `{source} <{link}>`_'
 
                 col_signatures.append(fmtsig)
                 col_urls.append(url)

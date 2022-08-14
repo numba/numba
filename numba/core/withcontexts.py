@@ -5,7 +5,7 @@ from numba.core.ir_utils import build_definitions
 import numba
 
 
-class WithContext(object):
+class WithContext:
     """A dummy object for use as contextmanager.
     This can be used as a contextmanager.
     """

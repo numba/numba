@@ -19,7 +19,7 @@ PY_UNICODE_4BYTE_KIND = _helperlib.py_unicode_4byte_kind
 PY_UNICODE_WCHAR_KIND = _helperlib.py_unicode_wchar_kind
 
 
-class _Registry(object):
+class _Registry:
 
     def __init__(self):
         self.functions = {}
@@ -29,7 +29,8 @@ class _Registry(object):
 
         def decorator(func):
             if typeclass in self.functions:
-                raise KeyError("duplicate registration for %s" % (typeclass,))
+                raise KeyError(
+                    "duplicate registration for {}".format(typeclass))
             self.functions[typeclass] = func
             return func
         return decorator
@@ -94,7 +95,7 @@ class _ReflectContext(namedtuple("_ReflectContext",
         return self.pyapi.reflect_native_value(typ, val, self.env_manager)
 
 
-class NativeValue(object):
+class NativeValue:
     """
     Encapsulate the result of converting a Python object to a native value,
     recording whether the conversion was successful and how to cleanup.
@@ -106,7 +107,7 @@ class NativeValue(object):
         self.cleanup = cleanup
 
 
-class EnvironmentManager(object):
+class EnvironmentManager:
 
     def __init__(self, pyapi, env, env_body, env_ptr):
         assert isinstance(env, lowering.Environment)
@@ -161,7 +162,7 @@ class EnvironmentManager(object):
 _IteratorLoop = namedtuple('_IteratorLoop', ('value', 'do_break'))
 
 
-class PythonAPI(object):
+class PythonAPI:
     """
     Code generation facilities to call into the CPython C API (and related
     helpers).
@@ -355,8 +356,8 @@ class PythonAPI(object):
         raises a new error, the new error is kept, otherwise the old
         error indicator is restored at the end of the block.
         """
-        pty, pval, ptb = [cgutils.alloca_once(self.builder, self.pyobj)
-                          for i in range(3)]
+        pty, pval, ptb = (cgutils.alloca_once(self.builder, self.pyobj)
+                          for i in range(3))
         self.err_fetch(pty, pval, ptb)
         yield
         ty = self.builder.load(pty)
