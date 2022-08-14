@@ -1149,7 +1149,7 @@ def dprint_func_ir(func_ir, title, blocks=None):
     """
     if config.DEBUG_ARRAY_OPT >= 1:
         ir_blocks = func_ir.blocks
-        func_ir.blocks = ir_blocks if blocks == None else blocks
+        func_ir.blocks = ir_blocks if blocks is None else blocks
         name = func_ir.func_id.func_qualname
         print((f"IR {title}: {name}").center(80, "-"))
         func_ir.dump()
