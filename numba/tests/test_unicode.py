@@ -438,12 +438,12 @@ class TestUnicode(BaseTest):
         for a in UNICODE_EXAMPLES:
             for b in reversed(UNICODE_EXAMPLES):
                 self.assertEqual(pyfunc(a, b),
-                                 cfunc(a, b), '{}, {}'.format(a, b))
+                                 cfunc(a, b), f'{a}, {b}')
                 # comparing against something that's not unicode
                 self.assertEqual(pyfunc(a, 1),
-                                 cfunc(a, 1), '{}, {}'.format(a, 1))
+                                 cfunc(a, 1), f'{a}, {1}')
                 self.assertEqual(pyfunc(1, b),
-                                 cfunc(1, b), '{}, {}'.format(1, b))
+                                 cfunc(1, b), f'{1}, {b}')
 
     def test_eq_optional(self):
         # See issue #7474
@@ -476,7 +476,7 @@ class TestUnicode(BaseTest):
             self.assertEqual(
                 pyfunc(a, a),
                 cfunc(a, a),
-                '{}: "{}", "{}"'.format(usecase.__name__, a, a),
+                f'{usecase.__name__}: "{a}", "{a}"',
             )
 
         # Check comparison to adjacent
@@ -484,13 +484,13 @@ class TestUnicode(BaseTest):
             self.assertEqual(
                 pyfunc(a, b),
                 cfunc(a, b),
-                '{}: "{}", "{}"'.format(usecase.__name__, a, b),
+                f'{usecase.__name__}: "{a}", "{b}"',
             )
             # and reversed
             self.assertEqual(
                 pyfunc(b, a),
                 cfunc(b, a),
-                '{}: "{}", "{}"'.format(usecase.__name__, b, a),
+                f'{usecase.__name__}: "{b}", "{a}"',
             )
 
     def test_lt(self, flags=no_pyobj_flags):
@@ -560,7 +560,7 @@ class TestUnicode(BaseTest):
             for b in ['', 'x', a[:-2], a[3:], a, a + a]:
                 self.assertEqual(pyfunc(a, b),
                                  cfunc(a, b),
-                                 '{}, {}'.format(a, b))
+                                 f'{a}, {b}')
 
     def test_endswith(self, flags=no_pyobj_flags):
         pyfunc = endswith_usecase
@@ -569,7 +569,7 @@ class TestUnicode(BaseTest):
             for b in ['', 'x', a[:-2], a[3:], a, a + a]:
                 self.assertEqual(pyfunc(a, b),
                                  cfunc(a, b),
-                                 '{}, {}'.format(a, b))
+                                 f'{a}, {b}')
 
     def test_endswith_default(self):
         pyfunc = endswith_usecase
@@ -688,7 +688,7 @@ class TestUnicode(BaseTest):
             for substr in extras:
                 self.assertEqual(pyfunc(substr, a),
                                  cfunc(substr, a),
-                                 "'{}' in '{}'?".format(substr, a))
+                                 f"'{substr}' in '{a}'?")
 
     def test_partition_exception_invalid_sep(self):
         self.disable_leak_check()
@@ -1366,7 +1366,7 @@ class TestUnicode(BaseTest):
             for b in UNICODE_EXAMPLES[::-1]:
                 self.assertEqual(pyfunc(a, b),
                                  cfunc(a, b),
-                                 "'{}' + '{}'?".format(a, b))
+                                 f"'{a}' + '{b}'?")
 
     def test_repeat(self, flags=no_pyobj_flags):
         pyfunc = repeat_usecase
@@ -1429,7 +1429,7 @@ class TestUnicode(BaseTest):
         for test_str, splitter in CASES:
             self.assertEqual(pyfunc(test_str, splitter),
                              cfunc(test_str, splitter),
-                             "'{}'.split('{}')?".format(test_str, splitter))
+                             f"'{test_str}'.split('{splitter}')?")
 
     def test_split_with_maxsplit(self):
         CASES = [
@@ -1483,7 +1483,7 @@ class TestUnicode(BaseTest):
         for test_str in CASES:
             self.assertEqual(pyfunc(test_str),
                              cfunc(test_str),
-                             "'{}'.split()?".format(test_str))
+                             f"'{test_str}'.split()?")
 
     def test_split_exception_invalid_keepends(self):
         pyfunc = splitlines_with_keepends_usecase
@@ -1637,7 +1637,7 @@ class TestUnicode(BaseTest):
         for sep in CASES:
             self.assertEqual(pyfunc(sep),
                              cfunc(sep),
-                             "'{}'.join([])?".format(sep))
+                             f"'{sep}'.join([])?")
 
     def test_join_non_string_exception(self):
         # Verify that join of list of integers raises typing exception
@@ -1672,7 +1672,7 @@ class TestUnicode(BaseTest):
         for sep, parts in CASES:
             self.assertEqual(pyfunc(sep, parts),
                              cfunc(sep, parts),
-                             "'{}'.join('{}')?".format(sep, parts))
+                             f"'{sep}'.join('{parts}')?")
 
     def test_join_interleave_str(self):
         # can pass a string as the parts iterable
@@ -1687,7 +1687,7 @@ class TestUnicode(BaseTest):
         for sep, parts in CASES:
             self.assertEqual(pyfunc(sep, parts),
                              cfunc(sep, parts),
-                             "'{}'.join('{}')?".format(sep, parts))
+                             f"'{sep}'.join('{parts}')?")
 
     def test_justification(self):
         for pyfunc, case_name in [(center_usecase, 'center'),
@@ -1755,7 +1755,7 @@ class TestUnicode(BaseTest):
             for b in UNICODE_EXAMPLES[::-1]:
                 self.assertEqual(pyfunc(a, b),
                                  cfunc(a, b),
-                                 "'{}' + '{}'?".format(a, b))
+                                 f"'{a}' + '{b}'?")
 
     def test_isidentifier(self):
         def pyfunc(s):
@@ -1818,7 +1818,7 @@ class TestUnicode(BaseTest):
             for string, chars in STRIP_CASES:
                 self.assertEqual(pyfunc(string),
                                  cfunc(string),
-                                 "'{}'.{}()?".format(string, case_name))
+                                 f"'{string}'.{case_name}()?")
         # parametrized form
         for pyfunc, case_name in [(strip_usecase_chars, 'strip'),
                                   (lstrip_usecase_chars, 'lstrip'),

@@ -1151,7 +1151,7 @@ def dprint_func_ir(func_ir, title, blocks=None):
         ir_blocks = func_ir.blocks
         func_ir.blocks = ir_blocks if blocks == None else blocks
         name = func_ir.func_id.func_qualname
-        print(("IR {}: {}".format(title, name)).center(80, "-"))
+        print((f"IR {title}: {name}").center(80, "-"))
         func_ir.dump()
         print("-" * 40)
         func_ir.blocks = ir_blocks
@@ -2322,7 +2322,7 @@ def convert_code_obj_to_function(code_obj, caller_ir):
 
     func_arg = ",".join(["%s" % (co_varnames[i]) for i in range(nargs)])
     if n_kwargs:
-        kw_const = ["{} = {}".format(co_varnames[i + nargs], kwarg_defaults_tup[i])
+        kw_const = [f"{co_varnames[i + nargs]} = {kwarg_defaults_tup[i]}"
                     for i in range(n_kwargs)]
         func_arg += ", "
         func_arg += ", ".join(kw_const)

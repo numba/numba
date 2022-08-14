@@ -435,7 +435,7 @@ def get_sysinfo():
             path, problem, symbol = (x.strip() for x in e.msg.split(':'))
             extn_dso = os.path.split(path)[1]
             if backend in extn_dso:
-                return "{}: {}".format(problem, symbol)
+                return f"{problem}: {symbol}"
         except Exception:
             pass
         return "Unknown import problem."

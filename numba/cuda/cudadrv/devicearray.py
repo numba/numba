@@ -45,7 +45,7 @@ def verify_cuda_ndarray_interface(obj):
         if not hasattr(obj, attr):
             raise AttributeError(attr)
         if not isinstance(getattr(obj, attr), typ):
-            raise AttributeError('{} must be of type {}'.format(attr, typ))
+            raise AttributeError(f'{attr} must be of type {typ}')
 
     requires_attr('shape', tuple)
     requires_attr('strides', tuple)
@@ -157,7 +157,7 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
             msg = "transposing a non-2D DeviceNDArray isn't supported"
             raise NotImplementedError(msg)
         elif axes is not None and set(axes) != set(range(self.ndim)):
-            raise ValueError("invalid axes list {!r}".format(axes))
+            raise ValueError(f"invalid axes list {axes!r}")
         else:
             from numba.cuda.kernels.transpose import transpose
             return transpose(self)

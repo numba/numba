@@ -301,7 +301,7 @@ def _arr_expr_to_ast(expr):
     elif isinstance(expr, ir.Const):
         return ast.Num(expr.value), {}
     raise NotImplementedError(
-        "Don't know how to translate array expression '{!r}'".format(expr))
+        f"Don't know how to translate array expression '{expr!r}'")
 
 
 @contextlib.contextmanager

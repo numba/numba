@@ -65,7 +65,7 @@ class Buffer(IterableType, ArrayCompatible):
             type_name = self.__class__.__name__.lower()
             if readonly:
                 type_name = "readonly %s" % type_name
-            name = "{}({}, {}d, {})".format(type_name, dtype, ndim, layout)
+            name = f"{type_name}({dtype}, {ndim}d, {layout})"
         super().__init__(name)
 
     @property

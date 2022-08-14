@@ -99,7 +99,7 @@ class CudaAPIError(CudaDriverError):
         super().__init__(code, msg)
 
     def __str__(self):
-        return "[{}] {}".format(self.code, self.msg)
+        return f"[{self.code}] {self.msg}"
 
 
 def find_driver():
@@ -381,7 +381,7 @@ class Driver:
     def _check_ctypes_error(self, fname, retcode):
         if retcode != enums.CUDA_SUCCESS:
             errname = ERROR_MAP.get(retcode, "UNKNOWN_CUDA_ERROR")
-            msg = "Call to {} results in {}".format(fname, errname)
+            msg = f"Call to {fname} results in {errname}"
             _logger.error(msg)
             if retcode == enums.CUDA_ERROR_NOT_INITIALIZED:
                 self._detect_fork()
@@ -394,7 +394,7 @@ class Driver:
             retval = retval[0]
 
         if retcode != binding.CUresult.CUDA_SUCCESS:
-            msg = "Call to {} results in {}".format(fname, retcode.name)
+            msg = f"Call to {fname} results in {retcode.name}"
             _logger.error(msg)
             if retcode == binding.CUresult.CUDA_ERROR_NOT_INITIALIZED:
                 self._detect_fork()
@@ -2711,7 +2711,7 @@ class CtypesLinker(Linker):
             driver.cuLinkAddData(self.handle, enums.CU_JIT_INPUT_PTX,
                                  ptxbuf, len(ptx), namebuf, 0, None, None)
         except CudaAPIError as e:
-            raise LinkerError("{}\n{}".format(e, self.error_log))
+            raise LinkerError(f"{e}\n{self.error_log}")
 
     def add_file(self, path, kind):
         pathbuf = c_char_p(path.encode("utf8"))
@@ -2723,7 +2723,7 @@ class CtypesLinker(Linker):
             if e.code == enums.CUDA_ERROR_FILE_NOT_FOUND:
                 msg = f'{path} not found'
             else:
-                msg = "{}\n{}".format(e, self.error_log)
+                msg = f"{e}\n{self.error_log}"
             raise LinkerError(msg)
 
     def add_cu(self, path, name):
@@ -2737,7 +2737,7 @@ class CtypesLinker(Linker):
         try:
             driver.cuLinkComplete(self.handle, byref(cubin), byref(size))
         except CudaAPIError as e:
-            raise LinkerError("{}\n{}".format(e, self.error_log))
+            raise LinkerError(f"{e}\n{self.error_log}")
 
         size = size.value
         assert size > 0, 'linker returned a zero sized cubin'
@@ -2889,7 +2889,7 @@ class CudaPythonLinker(Linker):
             driver.cuLinkAddData(self.handle, input_ptx, ptx, len(ptx),
                                  namebuf, 0, [], [])
         except CudaAPIError as e:
-            raise LinkerError("{}\n{}".format(e, self.error_log))
+            raise LinkerError(f"{e}\n{self.error_log}")
 
     def add_cu(self, cu, name):
         program = NvrtcProgram(cu, name)
@@ -2913,14 +2913,14 @@ class CudaPythonLinker(Linker):
             if e.code == binding.CUresult.CUDA_ERROR_FILE_NOT_FOUND:
                 msg = f'{path} not found'
             else:
-                msg = "{}\n{}".format(e, self.error_log)
+                msg = f"{e}\n{self.error_log}"
             raise LinkerError(msg)
 
     def complete(self):
         try:
             cubin, size = driver.cuLinkComplete(self.handle)
         except CudaAPIError as e:
-            raise LinkerError("{}\n{}".format(e, self.error_log))
+            raise LinkerError(f"{e}\n{self.error_log}")
 
         assert size > 0, 'linker returned a zero sized cubin'
         del self._keep_alive[:]

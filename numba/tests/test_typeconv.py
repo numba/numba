@@ -62,7 +62,7 @@ class CompatibilityTestMixin(unittest.TestCase):
             if ta in types.complex_domain and tb not in types.complex_domain:
                 continue
             self.assertTrue(check_compatible(ta, tb) is not None,
-                            msg="No cast from {} to {}".format(ta, tb))
+                            msg=f"No cast from {ta} to {tb}")
 
 
 class TestTypeConv(CompatibilityTestMixin, unittest.TestCase):

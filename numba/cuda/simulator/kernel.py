@@ -193,9 +193,9 @@ class BlockThread(threading.Thread):
             tid = 'tid=%s' % list(self.threadIdx)
             ctaid = 'ctaid=%s' % list(self.blockIdx)
             if str(e) == '':
-                msg = '{} {}'.format(tid, ctaid)
+                msg = f'{tid} {ctaid}'
             else:
-                msg = '{} {}: {}'.format(tid, ctaid, e)
+                msg = f'{tid} {ctaid}: {e}'
             tb = sys.exc_info()[2]
             # Using `with_traceback` here would cause it to be mutated by
             # future raise statements, which may or may not matter.
@@ -238,7 +238,7 @@ class BlockThread(threading.Thread):
         return 1 if test else 0
 
     def __str__(self):
-        return 'Thread <<<{}, {}>>>'.format(self.blockIdx, self.threadIdx)
+        return f'Thread <<<{self.blockIdx}, {self.threadIdx}>>>'
 
 
 class BlockManager:

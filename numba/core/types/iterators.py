@@ -6,7 +6,7 @@ class RangeType(SimpleIterableType):
 
     def __init__(self, dtype):
         self.dtype = dtype
-        name = "range_state_{}".format(dtype)
+        name = f"range_state_{dtype}"
         super(SimpleIterableType, self).__init__(name)
         self._iterator_type = RangeIteratorType(self.dtype)
 
@@ -20,7 +20,7 @@ class RangeType(SimpleIterableType):
 class RangeIteratorType(SimpleIteratorType):
 
     def __init__(self, dtype):
-        name = "range_iter_{}".format(dtype)
+        name = f"range_iter_{dtype}"
         super(SimpleIteratorType, self).__init__(name)
         self._yield_type = dtype
 
@@ -96,7 +96,7 @@ class ArrayIterator(SimpleIteratorType):
 
     def __init__(self, array_type):
         self.array_type = array_type
-        name = "iter({})".format(self.array_type)
+        name = f"iter({self.array_type})"
         nd = array_type.ndim
         if nd == 0:
             raise TypingError("iteration over a 0-d array")

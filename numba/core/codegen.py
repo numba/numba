@@ -557,7 +557,7 @@ class CodeLibrary(metaclass=ABCMeta):
         return self._name
 
     def __repr__(self):
-        return "<Library {!r} at 0x{:x}>".format(self.name, id(self))
+        return f"<Library {self.name!r} at 0x{id(self):x}>"
 
     def _raise_if_finalized(self):
         if self._finalized:
@@ -626,16 +626,16 @@ class CodeLibrary(metaclass=ABCMeta):
 
     def _get_compiled_object(self):
         if not self._object_caching_enabled:
-            raise ValueError("object caching not enabled in {}".format(self))
+            raise ValueError(f"object caching not enabled in {self}")
         if self._compiled_object is None:
-            raise RuntimeError("no compiled object yet for {}".format(self))
+            raise RuntimeError(f"no compiled object yet for {self}")
         return self._compiled_object
 
     def _set_compiled_object(self, value):
         if not self._object_caching_enabled:
-            raise ValueError("object caching not enabled in {}".format(self))
+            raise ValueError(f"object caching not enabled in {self}")
         if self._compiled:
-            raise ValueError("library already compiled: {}".format(self))
+            raise ValueError(f"library already compiled: {self}")
         self._compiled_object = value
         self._disable_inspection = True
 
@@ -946,7 +946,7 @@ class CPUCodeLibrary(CodeLibrary):
             self._codegen._engine._load_defined_symbols(self._shared_module)
             return self
         else:
-            raise ValueError("unsupported serialization kind {!r}".format(kind))
+            raise ValueError(f"unsupported serialization kind {kind!r}")
 
 
 class AOTCodeLibrary(CPUCodeLibrary):
@@ -1291,7 +1291,7 @@ class CPUCodegen(Codegen):
                 "https://numba.readthedocs.io/en/stable/user/faq.html#llvm-locale-bug "
                 "for more information."
                 % (loc,))
-        raise AssertionError("Unexpected IR:\n{}\n".format(ir_out))
+        raise AssertionError(f"Unexpected IR:\n{ir_out}\n")
 
     def magic_tuple(self):
         """

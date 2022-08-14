@@ -66,9 +66,9 @@ class Loc:
 
     def __str__(self):
         if self.col is not None:
-            return "{} ({}:{})".format(self.filename, self.line, self.col)
+            return f"{self.filename} ({self.line}:{self.col})"
         else:
-            return "{} ({})".format(self.filename, self.line)
+            return f"{self.filename} ({self.line})"
 
     def _find_definition(self):
         # try and find a def, go backwards from error line
@@ -200,7 +200,7 @@ class Loc:
         Returns a short string
         """
         shortfilename = os.path.basename(self.filename)
-        return "{}:{}".format(shortfilename, self.line)
+        return f"{shortfilename}:{self.line}"
 
 
 # Used for annotating errors when source location is unknown.
@@ -578,19 +578,19 @@ class Expr(Inst):
         if self.op == 'call':
             args = ', '.join(str(a) for a in self.args)
             pres_order = self._kws.items() if config.DIFF_IR == 0 else sorted(self._kws.items())
-            kws = ', '.join('{}={}'.format(k, v) for k, v in pres_order)
-            vararg = '*{}'.format(self.vararg) if self.vararg is not None else ''
+            kws = ', '.join(f'{k}={v}' for k, v in pres_order)
+            vararg = f'*{self.vararg}' if self.vararg is not None else ''
             arglist = ', '.join(filter(None, [args, vararg, kws]))
-            return 'call {}({})'.format(self.func, arglist)
+            return f'call {self.func}({arglist})'
         elif self.op == 'binop':
             lhs, rhs = self.lhs, self.rhs
             if self.fn == operator.contains:
                 lhs, rhs = rhs, lhs
             fn = OPERATORS_TO_BUILTINS.get(self.fn, self.fn)
-            return '{} {} {}'.format(lhs, fn, rhs)
+            return f'{lhs} {fn} {rhs}'
         else:
             pres_order = self._kws.items() if config.DIFF_IR == 0 else sorted(self._kws.items())
-            args = ('{}={}'.format(k, v) for k, v in pres_order)
+            args = (f'{k}={v}' for k, v in pres_order)
             return '{}({})'.format(self.op, ', '.join(args))
 
     def list_vars(self):
@@ -616,7 +616,7 @@ class SetItem(Stmt):
         self.loc = loc
 
     def __repr__(self):
-        return '{}[{}] = {}'.format(self.target, self.index, self.value)
+        return f'{self.target}[{self.index}] = {self.value}'
 
 
 class StaticSetItem(Stmt):
@@ -637,7 +637,7 @@ class StaticSetItem(Stmt):
         self.loc = loc
 
     def __repr__(self):
-        return '{}[{!r}] = {}'.format(self.target, self.index, self.value)
+        return f'{self.target}[{self.index!r}] = {self.value}'
 
 
 class DelItem(Stmt):
@@ -654,7 +654,7 @@ class DelItem(Stmt):
         self.loc = loc
 
     def __repr__(self):
-        return 'del {}[{}]'.format(self.target, self.index)
+        return f'del {self.target}[{self.index}]'
 
 
 class SetAttr(Stmt):
@@ -669,7 +669,7 @@ class SetAttr(Stmt):
         self.loc = loc
 
     def __repr__(self):
-        return '({}).{} = {}'.format(self.target, self.attr, self.value)
+        return f'({self.target}).{self.attr} = {self.value}'
 
 
 class DelAttr(Stmt):
@@ -682,7 +682,7 @@ class DelAttr(Stmt):
         self.loc = loc
 
     def __repr__(self):
-        return 'del ({}).{}'.format(self.target, self.attr)
+        return f'del ({self.target}).{self.attr}'
 
 
 class StoreMap(Stmt):
@@ -697,7 +697,7 @@ class StoreMap(Stmt):
         self.loc = loc
 
     def __repr__(self):
-        return '{}[{}] = {}'.format(self.dct, self.key, self.value)
+        return f'{self.dct}[{self.key}] = {self.value}'
 
 
 class Del(Stmt):
@@ -747,7 +747,7 @@ class StaticRaise(Terminator):
         if self.exc_class is None:
             return "<static> raise"
         elif self.exc_args is None:
-            return "<static> raise {}".format(self.exc_class)
+            return f"<static> raise {self.exc_class}"
         else:
             return "<static> raise {}({})".format(self.exc_class,
                                                   ", ".join(map(repr, self.exc_args)))
@@ -788,7 +788,7 @@ class StaticTryRaise(Stmt):
         if self.exc_class is None:
             return "static_try_raise"
         elif self.exc_args is None:
-            return "static_try_raise {}".format(self.exc_class)
+            return f"static_try_raise {self.exc_class}"
         else:
             return "static_try_raise {}({})".format(self.exc_class,
                                                     ", ".join(map(repr, self.exc_args)))
@@ -844,7 +844,7 @@ class Branch(Terminator):
         self.loc = loc
 
     def __str__(self):
-        return 'branch {}, {}, {}'.format(self.cond, self.truebr, self.falsebr)
+        return f'branch {self.cond}, {self.truebr}, {self.falsebr}'
 
     def get_targets(self):
         return [self.truebr, self.falsebr]
@@ -864,7 +864,7 @@ class Assign(Stmt):
         self.loc = loc
 
     def __str__(self):
-        return '{} = {}'.format(self.target, self.value)
+        return f'{self.target} = {self.value}'
 
 
 class Print(Stmt):
@@ -895,7 +895,7 @@ class Yield(Inst):
         self.index = index
 
     def __str__(self):
-        return 'yield {}'.format(self.value)
+        return f'yield {self.value}'
 
     def list_vars(self):
         return [self.value]
@@ -965,7 +965,7 @@ class Const(EqualityCheckMixin, AbstractRHS):
         self.use_literal_type = use_literal_type
 
     def __repr__(self):
-        return 'const({}, {})'.format(type(self.value).__name__, self.value)
+        return f'const({type(self.value).__name__}, {self.value})'
 
     def infer_constant(self):
         return self.value
@@ -986,7 +986,7 @@ class Global(EqualityCheckMixin, AbstractRHS):
         self.loc = loc
 
     def __str__(self):
-        return 'global({}: {})'.format(self.name, self.value)
+        return f'global({self.name}: {self.value})'
 
     def infer_constant(self):
         return self.value
@@ -1016,7 +1016,7 @@ class FreeVar(EqualityCheckMixin, AbstractRHS):
         self.loc = loc
 
     def __str__(self):
-        return 'freevar({}: {})'.format(self.name, self.value)
+        return f'freevar({self.name}: {self.value})'
 
     def infer_constant(self):
         return self.value
@@ -1049,7 +1049,7 @@ class Var(EqualityCheckMixin, AbstractRHS):
         self.loc = loc
 
     def __repr__(self):
-        return 'Var({}, {})'.format(self.name, self.loc.short())
+        return f'Var({self.name}, {self.loc.short()})'
 
     def __str__(self):
         return self.name
@@ -1298,7 +1298,7 @@ class Block(EqualityCheckMixin):
         self.body.insert(-1, stmt)
 
     def __repr__(self):
-        return "<ir.Block at {}>".format(self.loc)
+        return f"<ir.Block at {self.loc}>"
 
 
 class Loop(SlotEqualityCheckMixin):
@@ -1415,7 +1415,7 @@ class FunctionIR:
                             _block.dump(file=buf)
                             stmts = buf.getvalue().splitlines()
                             pad = get_pad(_block.body, min_stmt_len)
-                            title = ("{}: block {}".format(name, label))
+                            title = (f"{name}: block {label}")
                             msg.append(title.center(80, '-'))
                             msg.extend([f"{a}{b}" for a, b in
                                         zip(pad, stmts)])
@@ -1536,7 +1536,7 @@ class FunctionIR:
         # Avoid early bind of sys.stdout as default value
         file = file or StringIO()
         for offset, block in sorted(self.blocks.items()):
-            print('label {}:'.format(offset), file=file)
+            print(f'label {offset}:', file=file)
             block.dump(file=file)
         if nofile:
             text = file.getvalue()

@@ -1688,7 +1688,7 @@ class TestManyStencils(TestStencilBase):
                     self.assertEqual(expected.dtype, njit_output.dtype)
             except Exception as e:
                 should_not_fail.append(
-                    ('njit', "{}: {}".format(type(e), str(e))))
+                    ('njit', f"{type(e)}: {str(e)}"))
                 print("@njit failed: %s" % str(e))
 
             try:

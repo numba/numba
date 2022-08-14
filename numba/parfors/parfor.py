@@ -668,7 +668,7 @@ class Parfor(ir.Expr, ir.Stmt):
         print("init block:", file=file)
         self.init_block.dump(file)
         for offset, block in sorted(self.loop_body.items()):
-            print('label {}:'.format(offset), file=file)
+            print(f'label {offset}:', file=file)
             block.dump(file)
         print((f"end parfor {self.id}").center(20, '-'), file=file)
 
@@ -748,7 +748,7 @@ class ParforDiagnostics:
         if self.internal_name in self.name:
             self.purpose = 'Internal parallel function'
         else:
-            self.purpose = 'Function {}, {}'.format(self.name, self.line)
+            self.purpose = f'Function {self.name}, {self.line}'
         # we store a reference to the parfors prior to fusion etc, the parfors
         # do get mangled in the fusion process but in a predetermined manner
         # and by holding a reference here the "before" state can be printed
@@ -1265,7 +1265,7 @@ class ParforDiagnostics:
                     hoist_info_printed = True
                 if not_hoisted:
                     print("  Failed to hoist the following:")
-                    [print("    {}: {}".format(y, x)) for x, y in not_hoisted]
+                    [print(f"    {y}: {x}") for x, y in not_hoisted]
                     hoist_info_printed = True
         if not hoist_info_printed:
             print_wrapped('No instruction hoisting found')
@@ -1280,7 +1280,7 @@ class ParforDiagnostics:
             purpose_str = 'Internal parallel functions '
             purpose = 'internal'
         else:
-            purpose_str = ' Function {}, {} '.format(name, line)
+            purpose_str = f' Function {name}, {line} '
             purpose = 'user'
 
         print_loop_search = False
@@ -1378,11 +1378,11 @@ class ParforDiagnostics:
                     def print_g(adj, root, depth):
                         for k in adj[root]:
                             print_wrapped(fac * depth * ' ' +
-                                          '{}{} {}'.format(sword, k, node_msg))
+                                          f'{sword}{k} {node_msg}')
                             if adj[k] != []:
                                 print_g(adj, k, depth + 1)
                     for r in roots:
-                        print_wrapped('{}{} {}'.format(sword, r, root_msg))
+                        print_wrapped(f'{sword}{r} {root_msg}')
                         print_g(l, r, 1)
                         print_wrapped("")
                 l, roots = self.compute_graph_info(a)
@@ -1392,7 +1392,7 @@ class ParforDiagnostics:
                 for report in self.fusion_reports:
                     l1, l2, msg = report
                     print_wrapped(
-                        "  Trying to fuse loops #{} and #{}:".format(l1, l2))
+                        f"  Trying to fuse loops #{l1} and #{l2}:")
                     print_wrapped("    %s" % msg)
 
             if self.fusion_info != {}:

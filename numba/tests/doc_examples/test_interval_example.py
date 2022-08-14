@@ -21,7 +21,7 @@ class IntervalExampleTest(unittest.TestCase):
                 self.hi = hi
 
             def __repr__(self):
-                return 'Interval({:f}, {:f})'.format(self.lo, self.hi)
+                return f'Interval({self.lo:f}, {self.hi:f})'
 
             @property
             def width(self):

@@ -393,7 +393,7 @@ def verify_cuda_ndarray_interface(obj):
         if not hasattr(obj, attr):
             raise AttributeError(attr)
         if not isinstance(getattr(obj, attr), typ):
-            raise AttributeError('{} must be of type {}'.format(attr, typ))
+            raise AttributeError(f'{attr} must be of type {typ}')
 
     requires_attr('shape', tuple)
     requires_attr('strides', tuple)

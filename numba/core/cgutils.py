@@ -800,7 +800,7 @@ def _scalar_pred_against_zero(builder, value, fpred, icond):
     elif isinstance(value.type, ir.IntType):
         isnull = builder.icmp_signed(icond, value, nullval)
     else:
-        raise TypeError("unexpected value type {}".format(value.type))
+        raise TypeError(f"unexpected value type {value.type}")
     return isnull
 
 

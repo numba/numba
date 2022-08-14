@@ -28,7 +28,7 @@ class CudaRuntimeAPIError(CudaRuntimeError):
         super().__init__(code, msg)
 
     def __str__(self):
-        return "[{}] {}".format(self.code, self.msg)
+        return f"[{self.code}] {self.msg}"
 
 
 class Runtime:
@@ -85,7 +85,7 @@ class Runtime:
     def _check_error(self, fname, retcode):
         if retcode != enums.CUDA_SUCCESS:
             errname = ERROR_MAP.get(retcode, "cudaErrorUnknown")
-            msg = "Call to {} results in {}".format(fname, errname)
+            msg = f"Call to {fname} results in {errname}"
             _logger.error(msg)
             raise CudaRuntimeAPIError(retcode, msg)
 

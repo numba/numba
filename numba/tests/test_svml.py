@@ -100,7 +100,7 @@ def func_patterns(func, args, res, dtype, mode, vlen, fastmath, pad=' ' * 8):
     # generate a function call according to the usecase
     if mode == "scalar":
         arg_list = ','.join([a + '[0]' for a in args])
-        body = '{}{}[0] += math.{}({})\n'.format(pad, res, func, arg_list)
+        body = f'{pad}{res}[0] += math.{func}({arg_list})\n'
     elif mode == "numpy":
         body = '{}{} += np.{}({})'.format(pad, res, func, ','.join(args))
         body += '.astype(np.%s)\n' % dtype if dtype.startswith('int') else '\n'

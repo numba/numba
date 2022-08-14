@@ -801,7 +801,7 @@ def _atomic_dispatcher(dispatch_fn):
         indty, indices = _normalize_indices(context, builder, indty, inds)
 
         if dtype != valty:
-            raise TypeError("expect {} but got {}".format(dtype, valty))
+            raise TypeError(f"expect {dtype} but got {valty}")
 
         if aryty.ndim != len(indty):
             raise TypeError("indexing %d-D array with %d-D index" %

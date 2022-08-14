@@ -334,7 +334,7 @@ class PassManager:
         # inject runtimes
         pt = pass_timings(init_time.elapsed, pass_time.elapsed,
                           finalize_time.elapsed)
-        self.exec_times["{}_{}".format(index, pss.name())] = pt
+        self.exec_times[f"{index}_{pss.name()}"] = pt
 
         # debug print after this pass?
         debug_print(pss.name(), self._print_after + self._print_wrap, "AFTER")
@@ -449,7 +449,7 @@ class PassRegistry:
 
     def dump(self):
         for k, v in self._registry.items():
-            print("{}: {}".format(k, v))
+            print(f"{k}: {v}")
 
 
 _pass_registry = PassRegistry()

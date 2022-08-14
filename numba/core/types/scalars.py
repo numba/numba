@@ -157,7 +157,7 @@ class _NPDatetimeBase(Type):
     """
 
     def __init__(self, unit, *args, **kws):
-        name = '{}[{}]'.format(self.type_name, unit)
+        name = f'{self.type_name}[{unit}]'
         self.unit = unit
         self.unit_code = npdatetime_helpers.DATETIME_UNITS[self.unit]
         super().__init__(name, *args, **kws)

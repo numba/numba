@@ -135,7 +135,7 @@ def as_dtype(nbtype):
     if isinstance(nbtype, (types.NPDatetime, types.NPTimedelta)):
         letter = _as_dtype_letters[type(nbtype)]
         if nbtype.unit:
-            return np.dtype('{}[{}]'.format(letter, nbtype.unit))
+            return np.dtype(f'{letter}[{nbtype.unit}]')
         else:
             return np.dtype(letter)
     if isinstance(nbtype, (types.CharSeq, types.UnicodeCharSeq)):
@@ -269,7 +269,7 @@ def resolve_output_type(context, inputs, formal_output):
             # (we can't define __array_wrap__ explicitly for types.Buffer,
             #  as that would be inherited by most array-compatible objects)
             return formal_output
-        raise errors.TypingError("__array_wrap__ failed for {}".format(args))
+        raise errors.TypingError(f"__array_wrap__ failed for {args}")
     return sig.return_type
 
 
@@ -620,7 +620,7 @@ def carray(ptr, shape, dtype=None):
         dtype = ptr_dtype
         p = ctypes.cast(ptr, ctypes.c_void_p)
     else:
-        raise TypeError("expected a ctypes pointer, got {!r}".format(ptr))
+        raise TypeError(f"expected a ctypes pointer, got {ptr!r}")
 
     nbytes = dtype.itemsize * np.product(shape, dtype=np.intp)
     return _get_array_from_ptr(p, nbytes, dtype).reshape(shape)

@@ -51,7 +51,7 @@ class ConstantInference:
         # (the message) are captured and then raised again but with the location
         # set to the expression that caused the constant inference error.
         raise ConstantInferenceError(
-            "Constant inference not possible for: {}".format(val), loc=None)
+            f"Constant inference not possible for: {val}", loc=None)
 
     def _do_infer(self, name):
         if not isinstance(name, str):
@@ -61,7 +61,7 @@ class ConstantInference:
             defn = self._func_ir.get_definition(name)
         except KeyError:
             raise ConstantInferenceError(
-                "no single definition for {!r}".format(name))
+                f"no single definition for {name!r}")
         try:
             const = defn.infer_constant()
         except ConstantInferenceError:

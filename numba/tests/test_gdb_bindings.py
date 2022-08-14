@@ -188,7 +188,7 @@ class TestGdbBinding(TestCase):
         # strip impl
         assert name.endswith('_impl')
         methname = name.replace('_impl', '')
-        injected_method = '{}.{}.{}'.format(themod, thecls, name)
+        injected_method = f'{themod}.{thecls}.{name}'
 
         def test_template(self):
             o, e = self.run_test_in_separate_process(injected_method)

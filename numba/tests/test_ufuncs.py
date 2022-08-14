@@ -1396,7 +1396,7 @@ class _LoopTypesTester(TestCase):
             return np.array([negzero, 1.5 + 1.5j, 1j * float('nan'), 0j],
                             dtype=a_letter_type)
         else:
-            raise RuntimeError("type {!r} not understood".format(a_letter_type))
+            raise RuntimeError(f"type {a_letter_type!r} not understood")
 
     def _check_loop(self, fn, ufunc, loop):
         # the letter types for the args

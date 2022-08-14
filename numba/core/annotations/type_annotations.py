@@ -103,7 +103,7 @@ class TypeAnnotation:
                         inst.target, inst.value, atype)
                 elif isinstance(inst, ir.SetItem):
                     atype = self.calltypes[inst]
-                    aline = "{}  :: {}".format(inst, atype)
+                    aline = f"{inst}  :: {atype}"
                 else:
                     aline = "%s" % inst
                 groupedinst[lineno].append("  %s" % aline)
@@ -126,7 +126,7 @@ class TypeAnnotation:
                     ind = _getindent(srcline)
                     print("%s# --- LINE %d --- " % (ind, num), file=io)
                     for inst in groupedinst[num]:
-                        print('{}# {}'.format(ind, inst), file=io)
+                        print(f'{ind}# {inst}', file=io)
                     print(file=io)
                     print(srcline, file=io)
                     print(file=io)
@@ -143,7 +143,7 @@ class TypeAnnotation:
                 print("# Source code unavailable", file=io)
                 for num in groupedinst:
                     for inst in groupedinst[num]:
-                        print('{}'.format(inst), file=io)
+                        print(f'{inst}', file=io)
                     print(file=io)
 
             return io.getvalue()

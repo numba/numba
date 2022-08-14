@@ -34,7 +34,7 @@ class Pair(Type):
     def __init__(self, first_type, second_type):
         self.first_type = first_type
         self.second_type = second_type
-        name = "pair<{}, {}>".format(first_type, second_type)
+        name = f"pair<{first_type}, {second_type}>"
         super().__init__(name=name)
 
     @property
@@ -421,7 +421,7 @@ class List(MutableSequence, InitialValue):
         self.dtype = dtype
         self.reflected = reflected
         cls_name = "reflected list" if reflected else "list"
-        name = "{}({})<iv={}>".format(cls_name, self.dtype, initial_value)
+        name = f"{cls_name}({self.dtype})<iv={initial_value}>"
         super().__init__(name=name)
         InitialValue.__init__(self, initial_value)
 
@@ -550,7 +550,7 @@ class Set(Container):
         self.dtype = dtype
         self.reflected = reflected
         cls_name = "reflected set" if reflected else "set"
-        name = "{}({})".format(cls_name, self.dtype)
+        name = f"{cls_name}({self.dtype})"
         super().__init__(name=name)
 
     @property

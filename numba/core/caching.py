@@ -343,7 +343,7 @@ class CacheImpl(metaclass=ABCMeta):
         # foo/__init__.py and foo/foo.py
         filename = inspect.getfile(py_func)
         modname = os.path.splitext(os.path.basename(filename))[0]
-        fullname = "{}.{}".format(modname, qualname)
+        fullname = f"{modname}.{qualname}"
         abiflags = getattr(sys, 'abiflags', '')
         self._filename_base = self.get_filename_base(fullname, abiflags)
 
@@ -453,9 +453,9 @@ class IndexDataCacheFile:
 
     def __init__(self, cache_path, filename_base, source_stamp):
         self._cache_path = cache_path
-        self._index_name = '{}.nbi'.format(filename_base)
+        self._index_name = f'{filename_base}.nbi'
         self._index_path = os.path.join(self._cache_path, self._index_name)
-        self._data_name_pattern = '{}.{{number:d}}.nbc'.format(filename_base)
+        self._data_name_pattern = f'{filename_base}.{{number:d}}.nbc'
         self._source_stamp = source_stamp
         self._version = numba.__version__
 
@@ -559,7 +559,7 @@ class IndexDataCacheFile:
         uuid4 is used to try and avoid name collisions on a shared filesystem.
         """
         uid = uuid.uuid4().hex[:16]  # avoid long paths
-        tmpname = '{}.tmp.{}'.format(filepath, uid)
+        tmpname = f'{filepath}.tmp.{uid}'
         try:
             with open(tmpname, "wb") as f:
                 yield f
@@ -612,7 +612,7 @@ class Cache(_Cache):
         self.enable()
 
     def __repr__(self):
-        return "<{} py_func={!r}>".format(self.__class__.__name__, self._name)
+        return f"<{self.__class__.__name__} py_func={self._name!r}>"
 
     @property
     def cache_path(self):

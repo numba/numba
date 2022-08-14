@@ -256,7 +256,7 @@ class BaseFunction(Callable):
             self.templates = (template,)
             self.typing_key = template.key
         self._impl_keys = {}
-        name = "{}({})".format(self.__class__.__name__, self.typing_key)
+        name = f"{self.__class__.__name__}({self.typing_key})"
         self._depth = 0
         super().__init__(name)
 
@@ -683,7 +683,7 @@ class NumberClass(Callable, DTypeSpec, Opaque):
 
     def __init__(self, instance_type):
         self.instance_type = instance_type
-        name = "class({})".format(instance_type)
+        name = f"class({instance_type})"
         super().__init__(name)
 
     def get_call_type(self, context, args, kws):
@@ -717,7 +717,7 @@ class RecursiveCall(Opaque):
     def __init__(self, dispatcher_type):
         assert isinstance(dispatcher_type, Dispatcher)
         self.dispatcher_type = dispatcher_type
-        name = "recursive({})".format(dispatcher_type)
+        name = f"recursive({dispatcher_type})"
         super().__init__(name)
         # Initializing for the first time
         if self._overloads is None:

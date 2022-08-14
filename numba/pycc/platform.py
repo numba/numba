@@ -119,7 +119,7 @@ class Toolchain:
             msg = "{} {}".format(basemsg, conda_msg % ' '.join(compilers))
         elif plt.startswith('win32'):
             winmsg = "Cannot find suitable msvc."
-            msg = "{} {}".format(basemsg, winmsg)
+            msg = f"{basemsg} {winmsg}"
         else:
             msg = "Unknown platform %s" % plt
         raise RuntimeError(msg)

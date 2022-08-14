@@ -211,7 +211,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
         this DUFunc.
         """
         if self._frozen:
-            raise RuntimeError("compilation disabled for {}".format(self))
+            raise RuntimeError(f"compilation disabled for {self}")
         assert isinstance(argtys, tuple)
         if return_type is None:
             sig = argtys

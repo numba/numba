@@ -321,7 +321,7 @@ def run_command(commands, args, cwd=None, verbose=False, hide_stderr=False):
             return None
     else:
         if verbose:
-            print("unable to find command, tried {}".format(commands))
+            print(f"unable to find command, tried {commands}")
         return None
     stdout = p.communicate()[0].strip()
     if sys.version_info[0] >= 3:
@@ -810,7 +810,7 @@ def get_root():
 
 
 def vcs_function(vcs, suffix):
-    return getattr(sys.modules[__name__], '{}_{}'.format(vcs, suffix), None)
+    return getattr(sys.modules[__name__], f'{vcs}_{suffix}', None)
 
 
 def get_versions(default=DEFAULT, verbose=False):
@@ -849,7 +849,7 @@ def get_versions(default=DEFAULT, verbose=False):
     ver = versions_from_file(versionfile_abs)
     if ver:
         if verbose:
-            print("got version from file {} {}".format(versionfile_abs, ver))
+            print(f"got version from file {versionfile_abs} {ver}")
         return ver
 
     versions_from_vcs_f = vcs_function(VCS, "versions_from_vcs")

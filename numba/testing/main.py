@@ -36,7 +36,7 @@ def make_tag_decorator(known_tags):
         """
         for t in tags:
             if t not in known_tags:
-                raise ValueError("unknown tag: {!r}".format(t))
+                raise ValueError(f"unknown tag: {t!r}")
 
         def decorate(func):
             if (not callable(func) or isinstance(func, type)
@@ -66,7 +66,7 @@ def cuda_sensitive_mtime(x):
 
     from numba.cuda.testing import CUDATestCase
     if CUDATestCase in cls.mro():
-        key = "{}.{} {}".format(str(cls.__module__), str(cls.__name__), key)
+        key = f"{str(cls.__module__)}.{str(cls.__name__)} {key}"
 
     return key
 
@@ -337,7 +337,7 @@ class NumbaTestProgram(unittest.main):
                 p.runcall(run_tests_real)
             finally:
                 p.disable()
-                print("Writing test profile data into {!r}".format(filename))
+                print(f"Writing test profile data into {filename!r}")
                 p.dump_stats(filename)
         else:
             run_tests_real()
@@ -569,7 +569,7 @@ class RefleakTestResult(runner.TextTestResult):
                 except Exception:
                     exc_info = sys.exc_info()
                 if self.showAll:
-                    self.stream.write("{} = {!r} ".format(item_name, deltas))
+                    self.stream.write(f"{item_name} = {deltas!r} ")
                 self.addFailure(test, exc_info)
 
         if not failed:

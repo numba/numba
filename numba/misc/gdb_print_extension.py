@@ -117,7 +117,7 @@ class NumbaArrayPrinter:
                                                               strides=strides,)
                     return '\n' + str(new_arr)
                 # Catch all for no NumPy
-                return "array([...], dtype={}, shape={})".format(dtype_str, shape)
+                return f"array([...], dtype={dtype_str}, shape={shape})"
             else:
                 # Not yet initialized or NULLed out data
                 buf = list(["NULL/Uninitialized"])

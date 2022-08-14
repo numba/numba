@@ -30,7 +30,7 @@ class _Registry:
         def decorator(func):
             if typeclass in self.functions:
                 raise KeyError(
-                    "duplicate registration for {}".format(typeclass))
+                    f"duplicate registration for {typeclass}")
             self.functions[typeclass] = func
             return func
         return decorator

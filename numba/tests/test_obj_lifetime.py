@@ -33,7 +33,7 @@ class _Dummy:
 
     def __add__(self, other):
         assert isinstance(other, _Dummy)
-        return _Dummy(self.recorder, "{} + {}".format(self.name, other.name))
+        return _Dummy(self.recorder, f"{self.name} + {other.name}")
 
     def __iter__(self):
         return _DummyIterator(self.recorder, "iter(%s)" % self.name)
@@ -47,7 +47,7 @@ class _DummyIterator(_Dummy):
         if self.count >= 3:
             raise StopIteration
         self.count += 1
-        return _Dummy(self.recorder, "{}#{}".format(self.name, self.count))
+        return _Dummy(self.recorder, f"{self.name}#{self.count}")
 
     next = __next__
 
@@ -284,7 +284,7 @@ class TestObjLifetime(TestCase):
                 # User may or may not expect duplicates, handle them properly
                 remaining.remove(d)
         self.assertEqual(actual, expected,
-                         "the full list of recorded events is: {!r}".format(recorded))
+                         f"the full list of recorded events is: {recorded!r}")
 
     def test_simple1(self):
         rec = self.compile_and_record(simple_usecase1)

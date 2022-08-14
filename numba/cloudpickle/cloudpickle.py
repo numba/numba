@@ -637,7 +637,7 @@ def _fill_function(*args):
         keys = ['globals', 'defaults', 'dict', 'module', 'closure_values']
         state = dict(zip(keys, args[1:]))
     else:
-        raise ValueError('Unexpected _fill_value arguments: {!r}'.format(args))
+        raise ValueError(f'Unexpected _fill_value arguments: {args!r}')
 
     # - At pickling time, any dynamic global variable used by func is
     #   serialized by value (in state['globals']).

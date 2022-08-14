@@ -222,7 +222,7 @@ class TestEntrypoints(TestCase):
         themod = self.__module__
         thecls = type(self).__name__
         methname = 'test_entrypoint_handles_type_extensions'
-        injected_method = '{}.{}.{}'.format(themod, thecls, methname)
+        injected_method = f'{themod}.{thecls}.{methname}'
         cmdline = [sys.executable, "-m", "numba.runtests", injected_method]
         out, err = self.run_cmd(cmdline, env_copy)
         _DEBUG = False

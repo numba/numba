@@ -96,7 +96,7 @@ class SeriesType(types.ArrayCompatible):
         self.dtype = dtype
         self.index = index
         self.values = types.Array(self.dtype, 1, 'C')
-        name = "series({}, {})".format(dtype, index)
+        name = f"series({dtype}, {index})"
         super().__init__(name)
 
     @property

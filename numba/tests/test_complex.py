@@ -50,7 +50,7 @@ class BaseComplexTest:
                     self.assertIn("math domain error", str(e))
                     continue
                 got = cfunc(vx)
-                msg = 'for input {!r} with prec {!r}'.format(vx, prec)
+                msg = f'for input {vx!r} with prec {prec!r}'
                 self.assertPreciseEqual(got, expected, prec=prec,
                                         ulps=ulps, abs_tol=abs_tol, msg=msg)
 
@@ -71,7 +71,7 @@ class BaseComplexTest:
                 except ZeroDivisionError:
                     continue
                 got = cfunc(vx, vy)
-                msg = 'for input {!r} with prec {!r}'.format((vx, vy), prec)
+                msg = f'for input {(vx, vy)!r} with prec {prec!r}'
                 self.assertPreciseEqual(got, expected, prec=prec,
                                         ulps=ulps, msg=msg)
 

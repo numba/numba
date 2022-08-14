@@ -215,7 +215,7 @@ class Array:
         return Extent(start, stop)
 
     def __repr__(self):
-        return '<Array dims={} itemsize={}>'.format(self.dims, self.itemsize)
+        return f'<Array dims={self.dims} itemsize={self.itemsize}>'
 
     def __getitem__(self, item):
         if not isinstance(item, tuple):

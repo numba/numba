@@ -110,7 +110,7 @@ def unbox_complex(typ, obj, c):
 
     with cgutils.if_unlikely(c.builder, failed):
         c.pyapi.err_set_string("PyExc_TypeError",
-                               "conversion to {} failed".format(typ))
+                               f"conversion to {typ} failed")
 
     if typ == types.complex64:
         # Downcast to complex64 if necessary
@@ -1123,7 +1123,7 @@ def unbox_unsupported(typ, obj, c):
 
 
 def box_unsupported(typ, val, c):
-    msg = "cannot convert native {} to Python object".format(typ)
+    msg = f"cannot convert native {typ} to Python object"
     c.pyapi.err_set_string("PyExc_TypeError", msg)
     res = c.pyapi.get_null_object()
     return res

@@ -654,7 +654,7 @@ class TestCFGraph(TestCase):
         self.assertEqual(sorted(got), sorted(expected))
         for node in sorted(got):
             self.assertEqual(sorted(got[node]), sorted(expected[node]),
-                             "mismatch for {!r}".format(node))
+                             f"mismatch for {node!r}")
 
     def test_dominators_loopless(self):
         def eq_(d, l):

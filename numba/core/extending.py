@@ -40,7 +40,7 @@ def type_callable(func):
         def generic(self):
             return typing_func(self.context)
 
-        name = "{}_CallableTemplate".format(func_name)
+        name = f"{func_name}_CallableTemplate"
         bases = (CallableTemplate,)
         class_dict = dict(key=func, generic=generic)
         template = type(name, bases, class_dict)

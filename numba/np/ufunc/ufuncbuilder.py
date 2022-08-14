@@ -223,7 +223,7 @@ def parse_identity(identity):
     try:
         identity = _identities[identity]
     except KeyError:
-        raise ValueError("Invalid identity value {!r}".format(identity))
+        raise ValueError(f"Invalid identity value {identity!r}")
     return identity
 
 

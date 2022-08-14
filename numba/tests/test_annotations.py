@@ -116,7 +116,7 @@ class TestAnnotation(TestCase):
         self.assertEqual(output.count(sigfmt.format(sig_i64)), 1)
         # Ensure the loop is tagged
         self.assertEqual(len(re.findall(re_lifted_tag, output)), 1,
-                         msg='{} not found in {}'.format(re_lifted_tag, output))
+                         msg=f'{re_lifted_tag} not found in {output}')
 
         # Compile float64 version
         sig_f64 = (types.float64,)

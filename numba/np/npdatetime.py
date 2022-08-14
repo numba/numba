@@ -73,7 +73,7 @@ def normalize_timedeltas(context, builder, left, right, leftty, rightty):
     if factor is not None:
         return left, scale_by_constant(builder, right, factor)
     # Typing should not let this happen, except on == and != operators
-    raise RuntimeError("cannot normalize {!r} and {!r}".format(leftty, rightty))
+    raise RuntimeError(f"cannot normalize {leftty!r} and {rightty!r}")
 
 
 def alloc_timedelta_result(builder, name='ret'):

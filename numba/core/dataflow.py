@@ -828,7 +828,7 @@ class BlockInfo:
 
     def make_temp(self, prefix=''):
         self.tempct += 1
-        name = '${}{}.{}'.format(prefix, self.offset, self.tempct)
+        name = f'${prefix}{self.offset}.{self.tempct}'
         return name
 
     def push(self, val):

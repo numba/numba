@@ -167,7 +167,7 @@ class TestScalarNumberCtor(TestCase):
             expected = np_converter(val)
             got = cfunc(val)
             self.assertPreciseEqual(got, expected,
-                                    msg="for type {} with arg {}".format(np_type, val))
+                                    msg=f"for type {np_type} with arg {val}")
 
     def check_number_types(self, tp_factory):
         values = [0, 1, -1, 100003, 10000000000007, -100003, -10000000000007,

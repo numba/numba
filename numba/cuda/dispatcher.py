@@ -230,7 +230,7 @@ class _Kernel(serialize.ReduceMixin):
         if file is None:
             file = sys.stdout
 
-        print("{} {}".format(self.entry_name, self.argument_types), file=file)
+        print(f"{self.entry_name} {self.argument_types}", file=file)
         print('-' * 80, file=file)
         print(self._type_annotation, file=file)
         print('=' * 80, file=file)
@@ -317,9 +317,9 @@ class _Kernel(serialize.ReduceMixin):
                                                                             filepath,
                                                                             lineno)
                 # Prefix the exception message with the thread position
-                prefix = "{}tid={} ctaid={}".format(locinfo, tid, ctaid)
+                prefix = f"{locinfo}tid={tid} ctaid={ctaid}"
                 if exc_args:
-                    exc_args = ("{}: {}".format(prefix, exc_args[0]),) + \
+                    exc_args = (f"{prefix}: {exc_args[0]}",) + \
                         exc_args[1:]
                 else:
                     exc_args = prefix,

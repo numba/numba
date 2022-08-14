@@ -510,7 +510,7 @@ class BaseContext:
             return impl(self, builder, ty, val)
         except NotImplementedError:
             raise NotImplementedError(
-                "Cannot lower constant of type '{}'".format(ty))
+                f"Cannot lower constant of type '{ty}'")
 
     def get_constant(self, ty, val):
         """
@@ -561,7 +561,7 @@ class BaseContext:
             return self.get_function(fn, sig, _firstcall=False)
 
         raise NotImplementedError(
-            "No definition for lowering {}{}".format(key, sig))
+            f"No definition for lowering {key}{sig}")
 
     def get_generator_desc(self, genty):
         """
@@ -618,7 +618,7 @@ class BaseContext:
             pass
 
         raise NotImplementedError(
-            "No definition for lowering {}.{}".format(typ, attr))
+            f"No definition for lowering {typ}.{attr}")
 
     def get_setattr(self, attr, sig):
         """
@@ -707,7 +707,7 @@ class BaseContext:
             return impl(self, builder, fromty, toty, val)
         except errors.NumbaNotImplementedError:
             raise errors.NumbaNotImplementedError(
-                "Cannot cast {} to {}: {}".format(fromty, toty, val))
+                f"Cannot cast {fromty} to {toty}: {val}")
 
     def generic_compare(self, builder, key, argtypes, args):
         """

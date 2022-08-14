@@ -218,7 +218,7 @@ class TestDynamicGUFunc(TestCase):
         for attr in attrs:
             contains = hasattr(gufunc, attr)
             self.assertTrue(
-                contains, 'dynamic gufunc not exporting "{}"'.format(attr))
+                contains, f'dynamic gufunc not exporting "{attr}"')
 
         a = np.array([1, 2, 3, 4])
         res = np.array([0, 0, 0, 0])

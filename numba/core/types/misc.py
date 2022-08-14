@@ -92,7 +92,7 @@ class Omitted(Opaque):
         # Use helper function to support both hashable and non-hashable
         # values. See discussion in gh #6957.
         self._value_key = get_hashable_key(value)
-        super().__init__("omitted(default={!r})".format(value))
+        super().__init__(f"omitted(default={value!r})")
 
     @property
     def key(self):
@@ -162,7 +162,7 @@ class CPointer(Type):
         self.dtype = dtype
         self.addrspace = addrspace
         if addrspace is not None:
-            name = "{}_{}*".format(dtype, addrspace)
+            name = f"{dtype}_{addrspace}*"
         else:
             name = "%s*" % dtype
         super().__init__(name)
@@ -313,7 +313,7 @@ class ExceptionInstance(Phantom):
 
     def __init__(self, exc_class):
         assert issubclass(exc_class, BaseException)
-        name = "{}(...)".format(exc_class.__name__)
+        name = f"{exc_class.__name__}(...)"
         self.exc_class = exc_class
         super().__init__(name)
 

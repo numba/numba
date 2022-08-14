@@ -535,7 +535,7 @@ class TestLinalgBase(EnableNRTStatsMixin, TestCase):
 
     def assert_wrong_dimensions(self, name, cfunc, args, la_prefix=True):
         prefix = "np.linalg" if la_prefix else "np"
-        msg = "{}.{}() only supported on 2-D arrays".format(prefix, name)
+        msg = f"{prefix}.{name}() only supported on 2-D arrays"
         self.assert_error(cfunc, args, msg, errors.TypingError)
 
     def assert_no_nan_or_inf(self, cfunc, args):
@@ -1371,7 +1371,7 @@ class TestLinalgSystems(TestLinalgBase):
     # check for RHS with dimension > 2 raises
     def assert_wrong_dimensions_1D(self, name, cfunc, args, la_prefix=True):
         prefix = "np.linalg" if la_prefix else "np"
-        msg = "{}.{}() only supported on 1 and 2-D arrays".format(prefix, name)
+        msg = f"{prefix}.{name}() only supported on 1 and 2-D arrays"
         self.assert_error(cfunc, args, msg, errors.TypingError)
 
     # check that a dimensionally invalid system raises

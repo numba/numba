@@ -43,7 +43,7 @@ def decode_pep3118_format(fmt, itemsize):
         # in front of the PEP 3118 format string.
         return _pep3118_scalar_map[fmt.lstrip('=')]
     except KeyError:
-        raise ValueError("unsupported PEP 3118 format {!r}".format(fmt))
+        raise ValueError(f"unsupported PEP 3118 format {fmt!r}")
 
 
 def get_type_class(typ):

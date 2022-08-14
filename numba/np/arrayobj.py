@@ -383,7 +383,7 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices,
                 cgutils.do_boundscheck(context, builder, ind, shapes[ax], ax)
             output_indices.append(ind)
         else:
-            raise NotImplementedError("unexpected index type: {}".format(idxty))
+            raise NotImplementedError(f"unexpected index type: {idxty}")
         ax += 1
 
     # Fill up missing dimensions at the end
@@ -960,7 +960,7 @@ class FancyIndexer:
                     assert 0
                 indexers.append(indexer)
             else:
-                raise AssertionError("unexpected index type: {}".format(idxty))
+                raise AssertionError(f"unexpected index type: {idxty}")
             ax += 1
 
         # Fill up missing dimensions at the end

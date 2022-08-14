@@ -453,7 +453,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 prec = ('single'
                         if scalty in (types.float32, types.complex64)
                         else 'double')
-                msg = 'for input {!r} with prec {!r}'.format(vx, prec)
+                msg = f'for input {vx!r} with prec {prec!r}'
                 self.assertPreciseEqual(got, expected,
                                         prec=prec,
                                         msg=msg,

@@ -578,7 +578,7 @@ class TestOperators(TestCase):
         for usecase in usecases:
             for tp_name, runner_name in tp_runners.items():
                 for nopython in (False, True):
-                    test_name = "test_{}_{}".format(usecase, tp_name)
+                    test_name = f"test_{usecase}_{tp_name}"
                     if nopython:
                         test_name += "_npm"
                     flags = Noflags if nopython else force_pyobj_flags

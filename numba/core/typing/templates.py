@@ -96,7 +96,7 @@ class Signature:
         return not (self == other)
 
     def __repr__(self):
-        return "{} -> {}".format(self.args, self.return_type)
+        return f"{self.args} -> {self.return_type}"
 
     @property
     def is_method(self):
@@ -175,7 +175,7 @@ def make_callable_template(key, typer, recvr=None):
     def generic(self):
         return typer
 
-    name = "{}_CallableTemplate".format(key)
+    name = f"{key}_CallableTemplate"
     bases = (CallableTemplate,)
     class_dict = dict(key=key, generic=generic, recvr=recvr)
     return type(name, bases, class_dict)
@@ -893,7 +893,7 @@ def make_overload_template(func, overload_func, jit_options, strict,
     Compiler options are passed as a dictionary to *jit_options*.
     """
     func_name = getattr(func, '__name__', str(func))
-    name = "OverloadTemplate_{}".format(func_name)
+    name = f"OverloadTemplate_{func_name}"
     base = _OverloadFunctionTemplate
     dct = dict(key=func, _overload_func=staticmethod(overload_func),
                _impl_cache={}, _compiled_overloads={}, _jit_options=jit_options,
@@ -1159,7 +1159,7 @@ def make_overload_attribute_template(typ, attr, overload_func, inline,
     *overload_func*.
     """
     assert isinstance(typ, types.Type) or issubclass(typ, types.Type)
-    name = "OverloadAttributeTemplate_{}_{}".format(typ, attr)
+    name = f"OverloadAttributeTemplate_{typ}_{attr}"
     # Note the implementation cache is subclass-specific
     dct = dict(key=typ, _attr=attr, _impl_cache={},
                _inline=staticmethod(InlineOptions(inline)),

@@ -130,7 +130,7 @@ class JitClassType(type):
 def _validate_spec(spec):
     for k, v in spec.items():
         if not isinstance(k, str):
-            raise TypeError("spec keys should be strings, got {!r}".format(k))
+            raise TypeError(f"spec keys should be strings, got {k!r}")
         if not isinstance(v, types.Type):
             raise TypeError("spec values should be Numba type instances, got %r"
                             % (v,))

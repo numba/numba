@@ -190,7 +190,7 @@ class TestMathLib(TestCase):
             got = cfunc(vx)
             expected = pyfunc(vx)
             actual_prec = 'single' if tx is types.float32 else prec
-            msg = 'for input {!r}'.format(vx)
+            msg = f'for input {vx!r}'
             self.assertPreciseEqual(got, expected, prec=actual_prec, msg=msg,
                                     **kwargs)
 
@@ -202,7 +202,7 @@ class TestMathLib(TestCase):
             got = cfunc(x, y)
             expected = pyfunc(x, y)
             actual_prec = 'single' if ty is types.float32 else prec
-            msg = 'for inputs ({!r}, {!r})'.format(x, y)
+            msg = f'for inputs ({x!r}, {y!r})'
             self.assertPreciseEqual(got, expected, prec=actual_prec, msg=msg)
 
     def check_predicate_func(self, pyfunc, flags=enable_pyobj_flags):
@@ -646,7 +646,7 @@ class TestMathLib(TestCase):
                          (-0.0, 0), (-0.0, 1),
                          (float('inf'), 0), (float('-inf'), 0),
                          (float('nan'), 0)]:
-                msg = 'for input {!r}'.format(args)
+                msg = f'for input {args!r}'
                 self.assertPreciseEqual(cfunc(*args), pyfunc(*args))
 
     def test_ldexp_npm(self):

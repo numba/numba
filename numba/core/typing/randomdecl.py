@@ -37,7 +37,7 @@ def normalize_shape(shape):
         ndim = len(shape)
         return types.UniTuple(types.intp, ndim), ndim
     else:
-        raise TypeError("invalid size type {}".format(shape))
+        raise TypeError(f"invalid size type {shape}")
 
 
 class RandomTemplate(CallableTemplate):

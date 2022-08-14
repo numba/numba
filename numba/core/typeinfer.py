@@ -623,7 +623,7 @@ class CallConstraint:
             # Arguments are invalid => explain why
             headtemp = "Invalid use of {0} with parameters ({1})"
             args = [str(a) for a in pos_args]
-            args += ["{}={}".format(k, v) for k, v in sorted(kw_args.items())]
+            args += [f"{k}={v}" for k, v in sorted(kw_args.items())]
             head = headtemp.format(fnty, ', '.join(map(str, args)))
             desc = context.explain_function_type(fnty)
             msg = '\n'.join([head, desc])
@@ -1004,7 +1004,7 @@ class TypeInferer:
 
     def _mangle_arg_name(self, name):
         # Disambiguise argument name
-        return "arg.{}".format(name)
+        return f"arg.{name}"
 
     def _get_return_vars(self):
         rets = []

@@ -593,13 +593,13 @@ class TestNumThreadsBackends(TestInSubprocess, TestCase):
     def _inject(cls, name, backend, backend_guard, num_threads):
         themod = cls.__module__
         thecls = cls._class.__name__
-        injected_method = '{}.{}.{}'.format(themod, thecls, name)
+        injected_method = f'{themod}.{thecls}.{name}'
 
         def test_template(self):
             o, e = self.run_test_in_separate_process(injected_method, backend,
                                                      num_threads)
             if self._DEBUG:
-                print('stdout:\n "{}"\n stderr:\n "{}"'.format(o, e))
+                print(f'stdout:\n "{o}"\n stderr:\n "{e}"')
             self.assertIn('OK', e)
             self.assertTrue('FAIL' not in e)
             self.assertTrue('ERROR' not in e)

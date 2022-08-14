@@ -768,7 +768,7 @@ request more memory than can be provided###\n")
     def _test_compare(self, pyfunc):
         def eq(args):
             self.assertIs(cfunc(*args), pyfunc(*args),
-                          "mismatch for arguments {}".format(args))
+                          f"mismatch for arguments {args}")
 
         cfunc = jit(nopython=True)(pyfunc)
         eq(((1, 2), (1, 2)))

@@ -113,7 +113,7 @@ class NamedTupleClassAttribute(AttributeTemplate):
             try:
                 bound = pysig.bind(*args, **kws)
             except TypeError as e:
-                msg = "In '{}': {}".format(instance_class, e)
+                msg = f"In '{instance_class}': {e}"
                 e.args = (msg,)
                 raise
             assert not bound.kwargs

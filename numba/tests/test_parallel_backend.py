@@ -389,16 +389,16 @@ class TestSpecificBackend(TestInSubprocess, TestParallelBackendBase):
         themod = cls.__module__
         thecls = TestParallelBackend.__name__
         methname = "test_" + p + '_' + name
-        injected_method = '{}.{}.{}'.format(themod, thecls, methname)
+        injected_method = f'{themod}.{thecls}.{methname}'
 
         def test_template(self):
             o, e = self.run_test_in_separate_process(injected_method, backend)
             if self._DEBUG:
-                print('stdout:\n "{}"\n stderr:\n "{}"'.format(o, e))
+                print(f'stdout:\n "{o}"\n stderr:\n "{e}"')
             self.assertIn('OK', e)
             self.assertTrue('FAIL' not in e)
             self.assertTrue('ERROR' not in e)
-        injected_test = "test_{}_{}_{}".format(p, name, backend)
+        injected_test = f"test_{p}_{name}_{backend}"
         # Mark as long_running
         setattr(cls, injected_test,
                 tag('long_running')(backend_guard(test_template)))

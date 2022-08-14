@@ -26,10 +26,10 @@ class Dim3:
         self.z = z
 
     def __str__(self):
-        return '({}, {}, {})'.format(self.x, self.y, self.z)
+        return f'({self.x}, {self.y}, {self.z})'
 
     def __repr__(self):
-        return 'Dim3({}, {}, {})'.format(self.x, self.y, self.z)
+        return f'Dim3({self.x}, {self.y}, {self.z})'
 
     def __iter__(self):
         yield self.x

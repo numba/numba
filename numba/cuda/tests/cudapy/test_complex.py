@@ -102,7 +102,7 @@ class BaseComplexTest(CUDATestCase):
                     continue
             got_list = cudafunc(ok_values)
             for got, expected, args in zip(got_list, expected_list, ok_values):
-                msg = 'for input {!r} with prec {!r}'.format(args, prec)
+                msg = f'for input {args!r} with prec {prec!r}'
                 self.assertPreciseEqual(got, expected, prec=prec,
                                         ulps=ulps,
                                         ignore_sign_on_zero=ignore_sign_on_zero,

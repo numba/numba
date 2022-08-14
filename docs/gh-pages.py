@@ -79,7 +79,7 @@ def sh3(cmd):
 
 def init_repo(path):
     """clone the gh-pages repo if we haven't already."""
-    sh("git clone {} {}".format(pages_repo, path))
+    sh(f"git clone {pages_repo} {path}")
     here = os.getcwd()
     cd(path)
     sh('git checkout gh-pages')

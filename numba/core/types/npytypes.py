@@ -246,7 +246,7 @@ class DType(DTypeSpec, Opaque):
     def __init__(self, dtype):
         assert isinstance(dtype, Type)
         self._dtype = dtype
-        name = "dtype({})".format(dtype)
+        name = f"dtype({dtype})"
         super(DTypeSpec, self).__init__(name)
 
     @property
@@ -437,7 +437,7 @@ class Array(Buffer):
                 type_name = "readonly " + type_name
             if not self.aligned:
                 type_name = "unaligned " + type_name
-            name = "{}({}, {}d, {})".format(type_name, dtype, ndim, layout)
+            name = f"{type_name}({dtype}, {ndim}d, {layout})"
         super().__init__(dtype, ndim, layout, name=name)
 
     @property
@@ -562,7 +562,7 @@ class NestedArray(Array):
         assert dtype.bitwidth % 8 == 0, \
             "Dtype bitwidth must be a multiple of bytes"
         self._shape = shape
-        name = "nestedarray({}, {})".format(dtype, shape)
+        name = f"nestedarray({dtype}, {shape})"
         ndim = len(shape)
         super().__init__(dtype, ndim, 'C', name=name)
 

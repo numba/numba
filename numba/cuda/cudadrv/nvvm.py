@@ -308,7 +308,7 @@ class CompilationUnit:
         return ptxbuf[:]
 
     def _try_error(self, err, msg):
-        self.driver.check_error(err, "{}\n{}".format(msg, self.get_log()))
+        self.driver.check_error(err, f"{msg}\n{self.get_log()}")
 
     def get_log(self):
         reslen = c_size_t()
@@ -755,7 +755,7 @@ def llvm100_to_34_ir(ir):
             m = re_type_tok.search(s, pos)
             if m is None:
                 # End of line
-                raise RuntimeError("failed parsing leading type: {}".format(s))
+                raise RuntimeError(f"failed parsing leading type: {s}")
                 break
             pos = m.end()
             tok = m.group(0)
@@ -813,7 +813,7 @@ def llvm100_to_34_ir(ir):
             m = re_getelementptr.search(line)
             if m is None:
                 raise RuntimeError(
-                    "failed parsing getelementptr: {}".format(line))
+                    f"failed parsing getelementptr: {line}")
             pos = m.end()
             line = line[:pos] + parse_out_leading_type(line[pos:])
         if 'load ' in line:

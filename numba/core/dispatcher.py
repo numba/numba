@@ -74,7 +74,7 @@ class OmittedArg:
         self.value = value
 
     def __repr__(self):
-        return "omitted arg({!r})".format(self.value)
+        return f"omitted arg({self.value!r})"
 
     @property
     def _numba_type_(self):
@@ -569,7 +569,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                 file = sys.stdout
 
             for ver, res in overloads.items():
-                print("{} {}".format(self.py_func.__name__, ver), file=file)
+                print(f"{self.py_func.__name__} {ver}", file=file)
                 print('-' * 80, file=file)
                 print(res.type_annotation, file=file)
                 print('=' * 80, file=file)
@@ -716,7 +716,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         return found
 
     def __repr__(self):
-        return "{}({})".format(type(self).__name__, self.py_func)
+        return f"{type(self).__name__}({self.py_func})"
 
     def typeof_pyval(self, val):
         """

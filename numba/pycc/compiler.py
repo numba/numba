@@ -72,7 +72,7 @@ class ExportEntry:
         self.function = function
 
     def __repr__(self):
-        return "ExportEntry({!r}, {!r})".format(self.symbol, self.signature)
+        return f"ExportEntry({self.symbol!r}, {self.signature!r})"
 
 
 class _ModuleCompiler:
@@ -116,7 +116,7 @@ class _ModuleCompiler:
             self.module_name, **aot_options)
 
     def _mangle_method_symbol(self, func_name):
-        return "._pycc_method_{}".format(func_name)
+        return f"._pycc_method_{func_name}"
 
     def _emit_python_wrapper(self, llvm_module):
         """Emit generated Python wrapper and extension module code.
@@ -217,7 +217,7 @@ class _ModuleCompiler:
                 restype = self.emit_type(export_entry.signature.return_type)
                 args = ", ".join(self.emit_type(argtype)
                                  for argtype in export_entry.signature.args)
-                fout.write("extern {} {}({});\n".format(restype, name, args))
+                fout.write(f"extern {restype} {name}({args});\n")
 
     def _emit_method_array(self, llvm_module):
         """

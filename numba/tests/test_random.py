@@ -361,7 +361,7 @@ class TestRandom(BaseTest):
             pyresults = [(pyfunc(*args, dtype=pydtype) if pydtype else pyfunc(*args))
                          for i in range(niters)]
             self.assertPreciseEqual(results, pyresults, prec=prec, ulps=ulps,
-                                    msg="for arguments {}".format(args))
+                                    msg=f"for arguments {args}")
 
     def _check_gauss(self, func2, func1, func0, ptr):
         """
@@ -971,7 +971,7 @@ class TestRandomArrays(BaseTest):
     """
 
     def _compile_array_dist(self, funcname, nargs):
-        qualname = "np.random.{}".format(funcname)
+        qualname = f"np.random.{funcname}"
         argstring = ', '.join('abcd'[:nargs])
         return jit_with_args(qualname, argstring)
 
@@ -1691,7 +1691,7 @@ class TestProcesses(ConcurrencyBaseTest):
         results.append(target_inner())
         for res in results:
             if isinstance(res, Exception):
-                self.fail("Exception in child: {}".format(res))
+                self.fail(f"Exception in child: {res}")
 
         return results
 

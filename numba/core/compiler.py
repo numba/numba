@@ -477,7 +477,7 @@ class CompilerBase:
                 func_name = "{}.{}".format(self.state.func_id.modname,
                                            self.state.func_id.func_qualname)
 
-                event("Pipeline: {} for {}".format(pipeline_name, func_name))
+                event(f"Pipeline: {pipeline_name} for {func_name}")
                 self.state.metadata['pipeline_times'] = {pipeline_name:
                                                          pm.exec_times}
                 is_final_pipeline = pm == pms[-1]

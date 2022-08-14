@@ -1142,7 +1142,7 @@ class IndexValue:
         self.value = val
 
     def __repr__(self):
-        return 'IndexValue({:f}, {:f})'.format(self.index, self.value)
+        return f'IndexValue({self.index:f}, {self.value:f})'
 
 
 class IndexValueType(types.Type):

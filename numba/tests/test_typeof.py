@@ -109,7 +109,7 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         a5 = a1.astype(a1.dtype.newbyteorder())
         with self.assertRaises(NumbaValueError) as raises:
             typeof(a5)
-        self.assertIn("Unsupported array dtype: {}".format(a5.dtype),
+        self.assertIn(f"Unsupported array dtype: {a5.dtype}",
                       str(raises.exception))
 
     def test_structured_arrays(self):
@@ -327,7 +327,7 @@ class DistinctChecker:
     def add(self, obj):
         if obj in self._distinct:
             raise AssertionError(
-                "{!r} already in {!r}".format(obj, self._distinct))
+                f"{obj!r} already in {self._distinct!r}")
         self._distinct.add(obj)
 
 

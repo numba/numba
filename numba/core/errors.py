@@ -35,9 +35,9 @@ class NumbaWarning(Warning):
                 return x
         if loc:
             super().__init__(
-                highlight("{}\n{}\n".format(msg, loc.strformat())))
+                highlight(f"{msg}\n{loc.strformat()}\n"))
         else:
-            super().__init__(highlight("{}".format(msg)))
+            super().__init__(highlight(f"{msg}"))
 
 
 class NumbaPerformanceWarning(NumbaWarning):
@@ -516,9 +516,9 @@ class NumbaError(Exception):
                 return x
 
         if loc:
-            new_msg = "{}\n{}\n".format(msg, loc.strformat())
+            new_msg = f"{msg}\n{loc.strformat()}\n"
         else:
-            new_msg = "{}".format(msg)
+            new_msg = f"{msg}"
         super().__init__(highlight(new_msg))
 
     @property

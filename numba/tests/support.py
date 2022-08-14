@@ -418,7 +418,7 @@ class TestCase(unittest.TestCase):
         assertion_message = "Type Family mismatch. ({} != {})".format(first_family,
                                                                       second_family)
         if msg:
-            assertion_message += ': {}'.format(msg)
+            assertion_message += f': {msg}'
         self.assertEqual(first_family, second_family, msg=assertion_message)
 
         # We now know they are in the same comparison family
@@ -486,7 +486,7 @@ class TestCase(unittest.TestCase):
             assertion_message = ("Mismatching return types (%s vs. %s)"
                                  % (first.__class__, second.__class__))
             if msg:
-                assertion_message += ': {}'.format(msg)
+                assertion_message += f': {msg}'
             self.fail(assertion_message)
 
         try:
@@ -517,7 +517,7 @@ class TestCase(unittest.TestCase):
             elif prec == 'double':
                 bits = 53
             else:
-                raise ValueError("unsupported precision {!r}".format(prec))
+                raise ValueError(f"unsupported precision {prec!r}")
             k = 2 ** (ulps - bits - 1)
             delta = k * (abs(first) + abs(second))
         else:
@@ -706,7 +706,7 @@ else:
     # Mix the UID into the directory name to allow different users to
     # run the test suite without permission errors (issue #1586)
     _trashcan_dir = os.path.join(tempfile.gettempdir(),
-                                 "{}.{}".format(_trashcan_dir, os.getuid()))
+                                 f"{_trashcan_dir}.{os.getuid()}")
 
 # Stale temporary directories are deleted after they are older than this value.
 # The test suite probably won't ever take longer than this...

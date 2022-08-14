@@ -236,7 +236,7 @@ class CPUContext(BaseContext):
 
         # Note: we avoid reusing the original docstring to avoid encoding
         # issues on Python 2, see issue #1908
-        doc = "compiled wrapper for {!r}".format(fndesc.qualname)
+        doc = f"compiled wrapper for {fndesc.qualname!r}"
         cfunc = _dynfunc.make_function(fndesc.lookup_module(),
                                        fndesc.qualname.split('.')[-1],
                                        doc, fnptr, env,

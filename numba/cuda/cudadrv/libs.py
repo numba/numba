@@ -96,7 +96,7 @@ def test(_platform=None, print_paths=True):
                 open_cudalib(lib)
                 print('\tok')
             except OSError as e:
-                print('\tERROR: failed to open {}:\n{}'.format(lib, e))
+                print(f'\tERROR: failed to open {lib}:\n{e}')
                 failed = True
 
     # Check for cudadevrt (the only static library)
@@ -111,7 +111,7 @@ def test(_platform=None, print_paths=True):
     try:
         check_static_lib(lib)
     except FileNotFoundError as e:
-        print('\tERROR: failed to find {}:\n{}'.format(lib, e))
+        print(f'\tERROR: failed to find {lib}:\n{e}')
         failed = True
 
     # Check for libdevice

@@ -42,7 +42,7 @@ def fallback_context(state, msg):
             msg_rewrite = ("\nCompilation is falling back to object mode "
                            "WITH%s looplifting enabled because %s"
                            % (loop_lift, msg))
-            warnings.warn_explicit('{} due to: {}'.format(msg_rewrite, e),
+            warnings.warn_explicit(f'{msg_rewrite} due to: {e}',
                                    errors.NumbaWarning,
                                    state.func_id.filename,
                                    state.func_id.firstlineno)

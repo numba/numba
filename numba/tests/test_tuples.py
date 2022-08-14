@@ -367,7 +367,7 @@ class TestOperations(TestCase):
     def _test_compare(self, pyfunc):
         def eq(pyfunc, cfunc, args):
             self.assertIs(cfunc(*args), pyfunc(*args),
-                          "mismatch for arguments {}".format(args))
+                          f"mismatch for arguments {args}")
 
         # Same-sized tuples
         argtypes = [types.Tuple((types.int64, types.float32)),
@@ -462,7 +462,7 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
     def _test_compare(self, pyfunc):
         def eq(pyfunc, cfunc, args):
             self.assertIs(cfunc(*args), pyfunc(*args),
-                          "mismatch for arguments {}".format(args))
+                          f"mismatch for arguments {args}")
 
         cfunc = jit(nopython=True)(pyfunc)
 

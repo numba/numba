@@ -117,7 +117,7 @@ def typeof_ta_ndarray(val, c):
     try:
         dtype = numpy_support.from_dtype(val.dtype)
     except NotImplementedError:
-        raise ValueError("Unsupported array dtype: {}".format(val.dtype))
+        raise ValueError(f"Unsupported array dtype: {val.dtype}")
     layout = numpy_support.map_layout(val)
     readonly = not val.flags.writeable
     return MyArrayType(dtype, val.ndim, layout, readonly=readonly)

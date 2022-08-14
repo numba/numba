@@ -288,7 +288,7 @@ class ConfigOptions:
             self._values[name] = value
 
     def __repr__(self):
-        return "Flags(%s)" % ', '.join('{}={}'.format(k, v)
+        return "Flags(%s)" % ', '.join(f'{k}={v}'
                                        for k, v in self._values.items()
                                        if v is not False)
 
@@ -372,7 +372,7 @@ class SortedMap(Mapping):
 class UniqueDict(dict):
     def __setitem__(self, key, value):
         if key in self:
-            raise AssertionError("key already in dictionary: {!r}".format(key))
+            raise AssertionError(f"key already in dictionary: {key!r}")
         super().__setitem__(key, value)
 
 
@@ -504,7 +504,7 @@ def format_time(tm):
         base /= 1000
     else:
         unit = units[-1]
-    return "{:.1f}{}".format(tm / base, unit)
+    return f"{tm / base:.1f}{unit}"
 
 
 def benchmark(func, maxsec=1):
