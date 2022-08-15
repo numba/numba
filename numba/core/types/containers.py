@@ -682,7 +682,6 @@ def _sentry_forbidden_types(key, value):
     # Forbids List and Set for now
     if isinstance(key, (Set, List)):
         raise TypingError("{} as key is forbidden".format(key))
-    print(value, value.reflected)
     if isinstance(value, (Set, List)) and value.reflected:
         raise TypingError("{} as value is forbidden".format(value))
 
