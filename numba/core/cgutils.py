@@ -843,7 +843,7 @@ def is_scalar_neg(builder, value):
 @contextmanager
 def early_exit_if(builder, stack: ExitStack, cond):
     """
-    The python code::
+    The Python code::
 
         with contextlib.ExitStack() as stack:
             with early_exit_if(builder, stack, cond):
