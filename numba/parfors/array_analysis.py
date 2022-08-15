@@ -1669,7 +1669,7 @@ class ArrayAnalysis(object):
     ):
         assert not isinstance(size_typ, int)
         # Create var to hold the calculated slice size.
-        explicit_neg_var = scope.redefine('explicit_neg', loc)
+        explicit_neg_var = scope.redefine("explicit_neg", loc)
         explicit_neg_val = ir.Expr.binop(operator.add, dsize, arg, loc=loc)
         # Determine the type of that var.  Can be literal if we know the
         # literal size of the dimension.
@@ -1819,7 +1819,8 @@ class ArrayAnalysis(object):
         # Fill in the left side of the slice's ":" with 0 if it wasn't
         # specified.
         if isinstance(lhs_typ, types.NoneType):
-            zero_var = scope.redefine('zero', loc)
+            zero_var = scope.make_temp(loc)
+            # zero_var = scope.redefine("zero", loc)
             zero = ir.Const(0, loc)
             stmts.append(ir.Assign(value=zero, target=zero_var, loc=loc))
             self._define(equiv_set, zero_var, types.IntegerLiteral(0), zero)
@@ -1904,7 +1905,8 @@ class ArrayAnalysis(object):
             replacement_slice_var = None
         else:
             # Create a new var for the replacement slice.
-            replacement_slice_var = scope.redefine('replacement_slice', loc)
+            # replacement_slice_var = scope.redefine("replacement_slice", loc)
+            replacement_slice_var = scope.make_temp(loc)
             # Create a deepcopy of slice calltype so that when we change it
             # below the original isn't changed.  Make the types of the parts of
             # the slice intp.
