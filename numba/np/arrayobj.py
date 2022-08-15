@@ -2405,6 +2405,38 @@ def array_repeat(a, repeats):
     return array_repeat_impl
 
 
+@intrinsic
+def _intrin_get_itemsize(tyctx, dtype):
+    """Computes the itemsize of the dtype"""
+    sig = types.intp(dtype)
+
+    def codegen(cgctx, builder, sig, llargs):
+        llty = cgctx.get_data_type(sig.args[0].dtype)
+        llintp = cgctx.get_data_type(sig.return_type)
+        return llintp(cgctx.get_abi_sizeof(llty))
+    return sig, codegen
+
+
+def _compatible_view(a, dtype):
+    pass
+
+
+@overload(_compatible_view)
+def ol_compatible_view(a, dtype):
+    """Determines if the array and dtype are compatible for forming a view."""
+    # NOTE: NumPy 1.23+ uses this check
+    def impl(a, dtype):
+        flag_f = a.flags.f_contiguous
+        flag_c = a.flags.c_contiguous
+        # if just F ordered
+        if flag_f and not flag_c:
+            dtype_size = _intrin_get_itemsize(dtype)
+            if a.itemsize != dtype_size:
+                return False
+        return True
+    return impl
+
+
 @lower_builtin('array.view', types.Array, types.DTypeSpec)
 def array_view(context, builder, sig, args):
     aryty = sig.args[0]
@@ -2428,6 +2460,24 @@ def array_view(context, builder, sig, args):
     with builder.if_then(fail):
         msg = "new type not compatible with array"
         context.call_conv.return_user_exc(builder, ValueError, (msg,))
+
+    if numpy_version >= (1, 23):
+        # NumPy 1.23+ bans views using a dtype that is a different size to that
+        # of the array when the last axis is not contiguous. For example, this
+        # manifests at runtime when a dtype size altering view is requested
+        # on a Fortran ordered array.
+
+        tyctx = context.typing_context
+        fnty = tyctx.resolve_value_type(_compatible_view)
+        _compatible_view_sig = fnty.get_call_type(tyctx, (*sig.args,), {})
+        impl = context.get_function(fnty, _compatible_view_sig)
+        is_compatible_result = impl(builder, args)
+        is_compatible_pred = builder.icmp_unsigned('==', is_compatible_result,
+                                                   is_compatible_result.type(0))
+        with builder.if_then(is_compatible_pred):
+            msg = ("To change to a dtype of a different size, the last axis "
+                   "must be contiguous")
+            context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
     res = ret._getvalue()
     return impl_ret_borrowed(context, builder, sig.return_type, res)
