@@ -1432,9 +1432,11 @@ class TestDictForbiddenTypes(TestCase):
 
     def test_disallow_list(self):
         self.assert_disallow_key(types.List(types.intp))
+        self.assert_disallow_value(types.List(types.intp))
 
     def test_disallow_set(self):
         self.assert_disallow_key(types.Set(types.intp))
+        self.assert_disallow_value(types.Set(types.intp))
 
 
 class TestDictInferred(TestCase):
