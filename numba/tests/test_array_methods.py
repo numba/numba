@@ -383,6 +383,17 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                 run(arr, dtype)
             self.assertEqual(str(raises.exception),
                              "new type not compatible with array")
+        def check_err_noncontig_last_axis(arr, dtype):
+            # check NumPy interpreted version raises
+            msg = ("To change to a dtype of a different size, the last axis "
+                   "must be contiguous")
+            with self.assertRaises(ValueError) as raises:
+                make_array_view(dtype)(arr)
+            self.assertEqual(str(raises.exception), msg)
+            # check Numba version raises
+            with self.assertRaises(ValueError) as raises:
+                run(arr, dtype)
+            self.assertEqual(str(raises.exception), msg)
 
         dt1 = np.dtype([('a', np.int8), ('b', np.int8)])
         dt2 = np.dtype([('u', np.int16), ('v', np.int8)])
@@ -411,9 +422,16 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # F-contiguous
         arr = np.arange(24, dtype=np.int8).reshape((3, 8)).T
         check(arr, np.int8)
-        check(arr, np.float32)
-        check(arr, np.complex64)
-        check(arr, dt1)
+        # NumPy 1.23 does not allow views with different size dtype for
+        # non-contiguous last axis.
+        if numpy_version >= (1, 23):
+            check_err_noncontig_last_axis(arr, np.float32)
+            check_err_noncontig_last_axis(arr, np.complex64)
+            check_err_noncontig_last_axis(arr, dt1)
+        else:
+            check(arr, np.float32)
+            check(arr, np.complex64)
+            check(arr, dt1)
         check_err(arr, dt2)
         check_err(arr, np.complex128)
 
