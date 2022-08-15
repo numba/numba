@@ -215,8 +215,10 @@ class IntervalExampleTest(unittest.TestCase):
             def __float__(self):
                 raise RuntimeError("I am not a float")
 
-        # TODO: the float unboxer swallows our error and converts it to a `TypeError`. This should
-        # be `RuntimeError`, but isn't the fault of the `Interval` integration were are testing.
+        # TODO: This should produce a `RuntimeError`, but the `unbox` handler for `float` ignores
+        # the error raised by `__float__`, leading to a subsequent `TypeError` cause by passing
+        # `NULL` to `PyFloat_AsDouble`.
+        # This isn't the fault of the `Interval` extension were are testing in this file.
         with self.assertRaises(TypeError):
             interval_width(Interval(2, NotAFloat()))
 
