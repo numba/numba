@@ -240,15 +240,9 @@ def get_ext_modules():
     # Set various flags for use in TBB and openmp. On OSX, also find OpenMP!
     have_openmp = True
     if sys.platform.startswith('win'):
-        if 'MSC' in sys.version:
-            cpp11flags = []
-            ompcompileflags = ['-openmp']
-            omplinkflags = []
-        else:
-            # For non-MSVC toolchain e.g. gcc and clang with mingw
-            cpp11flags = ['-std=c++11']
-            ompcompileflags = ['-fopenmp']
-            omplinkflags = ['-fopenmp']
+        cpp11flags = []
+        ompcompileflags = ['-openmp']
+        omplinkflags = []
     elif sys.platform.startswith('darwin'):
         cpp11flags = ['-std=c++11']
         # This is a bit unusual but necessary...

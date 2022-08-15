@@ -16,7 +16,7 @@ race conditions.
 #undef _XOPEN_SOURCE
 #endif
 
-#ifdef _WIN32
+#ifdef _MSC_VER
 /* Windows */
 #include <windows.h>
 #include <process.h>
