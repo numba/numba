@@ -66,12 +66,9 @@ versioneer.parentdir_prefix = 'numba-'
 cmdclass = versioneer.get_cmdclass()
 cmdclass['build_doc'] = build_doc
 
-extra_link_args = []
 install_name_tool_fixer = []
 if sys.platform == 'darwin':
     install_name_tool_fixer += ['-headerpad_max_install_names']
-if platform.machine() == 'ppc64le':
-    extra_link_args += ['-pthread']
 
 build_ext = cmdclass.get('build_ext', build_ext)
 
@@ -175,9 +172,7 @@ def get_ext_modules():
                                        "numba/cext/dictobject.c",
                                        "numba/cext/listobject.c",
                                        ],
-                              # numba/_random.c needs pthreads
-                              extra_link_args=install_name_tool_fixer +
-                              extra_link_args,
+                              extra_link_args=install_name_tool_fixer,
                               depends=["numba/_pymodule.h",
                                        "numba/_helperlib.c",
                                        "numba/_lapack.c",
@@ -283,7 +278,6 @@ def get_ext_modules():
                 depends=['numba/np/ufunc/workqueue.h'],
                 include_dirs=[os.path.join(tbb_root, 'include')],
                 extra_compile_args=cpp11flags,
-                extra_link_args=extra_link_args,
                 libraries=['tbb'],  # TODO: if --debug or -g, use 'tbb_debug'
                 library_dirs=[
                     # for Linux
@@ -325,8 +319,7 @@ def get_ext_modules():
         name='numba.np.ufunc.workqueue',
         sources=['numba/np/ufunc/workqueue.c',
                  'numba/np/ufunc/gufunc_scheduler.cpp'],
-        depends=['numba/np/ufunc/workqueue.h'],
-        extra_link_args=extra_link_args)
+        depends=['numba/np/ufunc/workqueue.h'])
     ext_np_ufunc_backends.append(ext_np_ufunc_workqueue_backend)
 
     ext_mviewbuf = Extension(name='numba.mviewbuf',
