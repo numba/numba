@@ -1351,9 +1351,11 @@ def get_readonly_array(typingctx, arr):
 
         dest = make_array(srcty)(context, builder, src)
         # Hack to return a read-only array
-        setattr(dest, 'parent', Constant(
-                context.get_value_type(dest._datamodel.get_type('parent')),
-                None))
+        # breakpoint()
+        dest.parent = cgutils.get_null_value(dest.parent.type)
+        # setattr(dest, 'parent', Constant(
+        #         context.get_value_type(dest._datamodel.get_type('parent')),
+        #         None))
         res = dest._getvalue()
         return impl_ret_borrowed(context, builder, sig.return_type, res)
     return sig, codegen
@@ -1409,13 +1411,13 @@ def numpy_broadcast_to(array, shape):
     elif isinstance(shape, types.Integer):
         def impl(array, shape):
             return np.broadcast_to(array, (shape,))
-    elif isinstance(shape, types.Tuple):
+    elif isinstance(shape, types.Tuple) and shape.count == 0:
         if array.ndim == 0:
             # broadcast_to(0d_array, )
             def impl(array, shape):
                 return get_readonly_array(array)
         else:
-            msg = 'cannot broadcast a non-scalar to a scalar array'
+            msg = 'Cannot broadcast a non-scalar to a scalar array'
             raise errors.TypingError(msg)
     else:
         msg = ('The argument "shape" must be a tuple or an integer. '
