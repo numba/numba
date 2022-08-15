@@ -326,6 +326,26 @@ class TestDispatcher(CUDATestCase):
         self.assertIsInstance(shared_mem_per_block, int)
         self.assertEqual(shared_mem_per_block, 400)
 
+    def test_get_max_threads_per_block_unspecialized(self):
+        N = 10
+
+        @cuda.jit
+        def simple_maxthreads(ary):
+            i = cuda.grid(1)
+            cuda.syncthreads()
+            ary[i] = i
+
+        arr_f32 = np.zeros(N, dtype=np.float32)
+        simple_maxthreads[1, 1](arr_f32)
+        sig_f32 = void(float32[::1])
+        max_threads_f32 = simple_maxthreads.get_max_threads_per_block(sig_f32)
+
+        self.assertIsInstance(max_threads_f32, int)
+        self.assertGreater(max_threads_f32, 0)
+
+        max_threads_f32_all = simple_maxthreads.get_max_threads_per_block()
+        self.assertEqual(max_threads_f32_all[sig_f32.args], max_threads_f32)
+
     def test_dispatcher_docstring(self):
         # Ensure that CUDA-jitting a function preserves its docstring. See
         # Issue #5902: https://github.com/numba/numba/issues/5902
