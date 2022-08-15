@@ -826,11 +826,11 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         # https://github.com/numpy/numpy/blob/75f852edf94a7293e7982ad516bee314d7187c2d/numpy/lib/tests/test_stride_tricks.py#L260-L276  # noqa: E501
         data = [
             [np.zeros((0,)), (), TypingError,
-             'cannot broadcast a non-scalar to a scalar array'],
+             'Cannot broadcast a non-scalar to a scalar array'],
             [np.zeros((1,)), (), TypingError,
-             'cannot broadcast a non-scalar to a scalar array'],
+             'Cannot broadcast a non-scalar to a scalar array'],
             [np.zeros((3,)), (), TypingError,
-             'cannot broadcast a non-scalar to a scalar array'],
+             'Cannot broadcast a non-scalar to a scalar array'],
             [np.zeros((3,)), (1,), ValueError,
              'operands could not be broadcast together with remapped shapes'],
             [np.zeros((3,)), (2,), ValueError,
