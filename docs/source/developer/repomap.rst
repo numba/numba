@@ -22,8 +22,6 @@ Build and Packaging
 - :ghfile:`.pre-commit-config.yaml` - Configuration file for pre-commit hooks.
 - :ghfile:`.readthedocs.yml` - Configuration file for Read the Docs.
 - :ghfile:`buildscripts/condarecipe.local` - Conda build recipe
-- :ghfile:`buildscripts/condarecipe_clone_icc_rt` - Recipe to build a
-  standalone icc_rt package.
 
 
 Continuous Integration
@@ -32,7 +30,6 @@ Continuous Integration
   Win/Mac/Linux)
 - :ghfile:`buildscripts/azure/` - Azure Pipeline configuration for specific
   platforms
-- :ghfile:`buildscripts/appveyor/` - Appveyor build scripts
 - :ghfile:`buildscripts/incremental/` - Generic scripts for building Numba
   on various CI systems
 - :ghfile:`codecov.yml` - Codecov.io coverage reporting
