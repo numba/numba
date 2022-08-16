@@ -3829,6 +3829,10 @@ def make_array_nditer(context, builder, sig, args):
     nditerty = sig.return_type
     arrtys = nditerty.arrays
 
+    if any(_arrty.layout not in 'CF' for _arrty in arrtys):
+        raise TypeError('Only C or F contiguous arrays are '
+                        'accepted by Numba implementation of np.nditer')
+
     if isinstance(sig.args[0], types.BaseTuple):
         arrays = cgutils.unpack_tuple(builder, args[0])
     else:
