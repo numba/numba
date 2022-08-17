@@ -304,6 +304,10 @@ class TestCUDAGufunc(CUDATestCase):
              np.asarray((4.5, 5.5, 6.5)))
         self.check_tuple_arg(a, b)
 
+    def test_gufunc_name(self):
+        gufunc = _get_matmulcore_gufunc(max_blocksize=512)
+        self.assertEqual(gufunc.__name__, 'matmulcore')
+
 
 if __name__ == '__main__':
     unittest.main()

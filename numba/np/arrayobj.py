@@ -1627,7 +1627,8 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
     dest_ptr = cgutils.get_item_pointer2(context, builder, dest_data,
                                          dest_shapes, dest_strides,
                                          aryty.layout, dest_indices,
-                                         wraparound=False)
+                                         wraparound=False,
+                                         boundscheck=context.enable_boundscheck)
     store_item(context, builder, aryty, val, dest_ptr)
 
     indexer.end_loops()

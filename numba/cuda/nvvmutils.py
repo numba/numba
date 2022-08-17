@@ -22,14 +22,9 @@ def atomic_cmpxchg(builder, lmod, isize, ptr, cmp, val):
         return builder.call(declare_atomic_cas_int(lmod, isize),
                             (ptr, cmp, val))
 
-# For atomic intrinsics, "numba_nvvm" prevents LLVM 9 onwards auto-upgrading
-# them into atomicrmw instructions that are not recognized by NVVM. It is
-# replaced with "nvvm" in llvm_to_ptx later, after the module has been parsed
-# and dumped by LLVM.
-
 
 def declare_atomic_add_float32(lmod):
-    fname = 'llvm.numba_nvvm.atomic.load.add.f32.p0f32'
+    fname = 'llvm.nvvm.atomic.load.add.f32.p0f32'
     fnty = ir.FunctionType(ir.FloatType(),
                            (ir.PointerType(ir.FloatType(), 0), ir.FloatType()))
     return cgutils.get_or_insert_function(lmod, fnty, fname)
@@ -37,7 +32,7 @@ def declare_atomic_add_float32(lmod):
 
 def declare_atomic_add_float64(lmod):
     if current_context().device.compute_capability >= (6, 0):
-        fname = 'llvm.numba_nvvm.atomic.load.add.f64.p0f64'
+        fname = 'llvm.nvvm.atomic.load.add.f64.p0f64'
     else:
         fname = '___numba_atomic_double_add'
     fnty = ir.FunctionType(ir.DoubleType(),
