@@ -145,26 +145,23 @@ class TestOperatorModule(CUDATestCase):
             with self.subTest(op=op):
                 kernel = cuda.jit("void(f2[:], f2, f2)")(fn)
 
-                expected = np.zeros(1, dtype=np.float16)
                 got = np.zeros(1, dtype=np.float16)
                 arg1 = np.random.random(1).astype(np.float16)
                 arg2 = np.random.random(1).astype(np.float16)
 
                 kernel[1, 1](got, arg1[0], arg2[0])
                 expected = op(arg1, arg2)
-                np.testing.assert_allclose(got[0], expected)
+                np.testing.assert_allclose(got, expected)
 
     @skip_on_cudasim('Compilation unsupported in the simulator')
     def test_fp16_binary_ptx(self):
         functions = (simple_fp16add, simple_fp16sub, simple_fp16mul)
-        ops = (operator.add, operator.sub, operator.mul)
-        opstring = ('add.f16', 'sub.f16', 'mul.f16')
+        instrs = ('add.f16', 'sub.f16', 'mul.f16')
         args = (f2[:], f2, f2)
-
-        for fn, op, s in zip(functions, ops, opstring):
-            with self.subTest(op=op):
+        for fn, instr in zip(functions, instrs):
+            with self.subTest(instr=instr):
                 ptx, _ = compile_ptx(fn, args, cc=(5, 3))
-                self.assertIn(s, ptx)
+                self.assertIn(instr, ptx)
 
     @skip_unless_cc_53
     def test_mixed_fp16_binary_arithmetic(self):
@@ -178,27 +175,23 @@ class TestOperatorModule(CUDATestCase):
 
                 arg1 = np.random.random(1).astype(np.float16)
                 arg2 = (np.random.random(1) * 100).astype(ty)
-                arg2_ty = np.result_type(np.float16, ty)
+                res_ty = np.result_type(np.float16, ty)
 
-                expected = np.zeros(1, dtype=arg2_ty)
-                got = np.zeros(1, dtype=arg2_ty)
-
+                got = np.zeros(1, dtype=res_ty)
                 kernel[1, 1](got, arg1[0], arg2[0])
                 expected = op(arg1, arg2)
-                np.testing.assert_allclose(got[0], expected)
+                np.testing.assert_allclose(got, expected)
 
     @skip_on_cudasim('Compilation unsupported in the simulator')
     def test_fp16_inplace_binary_ptx(self):
         functions = (simple_fp16_iadd, simple_fp16_isub, simple_fp16_imul)
-        ops = (operator.iadd, operator.isub, operator.imul)
-
-        opstring = ('add.f16', 'sub.f16', 'mul.f16')
+        instrs = ('add.f16', 'sub.f16', 'mul.f16')
         args = (f2[:], f2)
 
-        for fn, op, s in zip(functions, ops, opstring):
-            with self.subTest(op=op):
+        for fn, instr in zip(functions, instrs):
+            with self.subTest(instr=instr):
                 ptx, _ = compile_ptx(fn, args, cc=(5, 3))
-                self.assertIn(s, ptx)
+                self.assertIn(instr, ptx)
 
     @skip_unless_cc_53
     def test_fp16_inplace_binary(self):
@@ -209,13 +202,12 @@ class TestOperatorModule(CUDATestCase):
             with self.subTest(op=op):
                 kernel = cuda.jit("void(f2[:], f2)")(fn)
 
-                expected = np.zeros(1, dtype=np.float16)
-                got_in_out = np.random.random(1).astype(np.float16)
-                arg1 = np.random.random(1).astype(np.float16)
-
-                kernel[1, 1](got_in_out, arg1[0])
-                expected = op(got_in_out, arg1)
-                np.testing.assert_allclose(got_in_out[0], expected)
+                got = np.random.random(1).astype(np.float16)
+                expected = got.copy()
+                arg = np.random.random(1).astype(np.float16)[0]
+                kernel[1, 1](got, arg)
+                op(expected, arg)
+                np.testing.assert_allclose(got, expected)
 
     @skip_unless_cc_53
     def test_fp16_unary(self):
@@ -226,13 +218,12 @@ class TestOperatorModule(CUDATestCase):
             with self.subTest(op=op):
                 kernel = cuda.jit("void(f2[:], f2)")(fn)
 
-                expected = np.zeros(1, dtype=np.float16)
                 got = np.zeros(1, dtype=np.float16)
                 arg1 = np.random.random(1).astype(np.float16)
 
                 kernel[1, 1](got, arg1[0])
                 expected = op(arg1)
-                np.testing.assert_allclose(got[0], expected)
+                np.testing.assert_allclose(got, expected)
 
     @skip_on_cudasim('Compilation unsupported in the simulator')
     def test_fp16_neg_ptx(self):
@@ -244,10 +235,8 @@ class TestOperatorModule(CUDATestCase):
     def test_fp16_abs_ptx(self):
         args = (f2[:], f2)
         ptx, _ = compile_ptx(simple_fp16abs, args, cc=(5, 3))
-        if cuda.runtime.get_version() < (10, 2):
-            self.assertRegex(ptx, r'and\.b16.*0x7FFF;')
-        else:
-            self.assertIn('abs.f16', ptx)
+
+        self.assertIn('abs.f16', ptx)
 
     def test_fp16_comparison(self):
         functions = (simple_fp16_gt, simple_fp16_ge,

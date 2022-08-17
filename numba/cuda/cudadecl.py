@@ -397,13 +397,13 @@ def _genfp16_binary_operator(l_key):
                 else:
                     convertible = self.context.can_convert(args[0], args[1])
 
-                # We allow three cases here:
+                # We allow three cases here on binary operators:
                 #
-                # 1. Comparing fp16 to fp16 - Conversion.exact
-                # 2. Comparing fp16 to types fp16 can be promoted to
-                # - Conversion.promote
-                # 3. Comparing fp16 to int8 (safe conversion) -
-                # Conversion.safe
+                # 1. Binary operator on two fp16 args - Conversion.exact
+                # 2. Binary op where a fp16 can be promoted
+                #    - Conversion.promote
+                # 3. Binary op of fp16 and int8, where int8 is converted to
+                #    fp16 - Conversion.safe
                 if (convertible == Conversion.exact) or \
                    (convertible == Conversion.promote) or \
                    (convertible == Conversion.safe):
