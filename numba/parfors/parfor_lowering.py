@@ -246,6 +246,7 @@ def _lower_parfor_parallel(lowerer, parfor):
                         typ=redvar_typ,
                         name="redtoset",
                     )
+                    # rettoset is an array from np.full() and must be released
                     to_cleanup.append(redtoset)
                 else:
                     redtoset = pfbdr.make_const_variable(
