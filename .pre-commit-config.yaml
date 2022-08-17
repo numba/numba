@@ -3,3 +3,8 @@ repos:
   rev: 3.7.8
   hooks:
   - id: flake8
+
+- repo: https://github.com/pre-commit/mirrors-autopep8
+  rev: v1.7.0
+  hooks:
+  - id: autopep8
