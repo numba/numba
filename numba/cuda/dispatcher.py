@@ -194,7 +194,7 @@ class _Kernel(serialize.ReduceMixin):
     @property
     def const_mem_size(self):
         '''
-        The amount of const memory used by this kernel.
+        The amount of constant memory used by this kernel.
         '''
         return self._codelibrary.get_cufunc().attrs.const
 
