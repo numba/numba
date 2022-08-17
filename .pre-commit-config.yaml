@@ -1,4 +1,22 @@
 repos:
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v4.3.0
+  hooks:
+  - id: check-ast
+    exclude: ^docs/source/extending/template.py
+  - id: trailing-whitespace
+    exclude_types:
+      - svg
+    exclude: |
+      (?x)(
+          ^LICENSES.third-party
+      )
+  - id: check-added-large-files
+    args: ['--maxkb=1024']
+  - id: check-case-conflict
+  - id: check-merge-conflict
+  - id: check-symlinks
+
 - repo: https://github.com/PyCQA/flake8
   rev: 5.0.4
   hooks:
