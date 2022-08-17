@@ -44,7 +44,8 @@ def outer_explicit(a, b):
     return inner_explicit(a, b)
 
 
-class Dummy: pass
+class Dummy:
+    pass
 
 
 def guadd_obj(a, b, c):

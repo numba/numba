@@ -32,7 +32,8 @@ class TestMulti3(unittest.TestCase):
             x_cases.append(random.randint(0, 0xffffffff))
 
         def expected(x):
-            if x <= 0: return 0
+            if x <= 0:
+                return 0
             return ((x * (x - 1)) // 2) & (2**64 - 1)
 
         for x in x_cases:

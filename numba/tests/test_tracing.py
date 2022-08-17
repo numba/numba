@@ -94,8 +94,10 @@ class Class2(object):
 def test(x, y, z = True):
     a = x + y
     b = x * y
-    if z: return a
-    else: return b
+    if z:
+        return a
+    else:
+        return b
 
 class TestTracing(unittest.TestCase):
 

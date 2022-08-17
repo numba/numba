@@ -43,10 +43,14 @@ class Loc(object):
 
     def __eq__(self, other):
         # equivalence is solely based on filename, line and col
-        if type(self) is not type(other): return False
-        if self.filename != other.filename: return False
-        if self.line != other.line: return False
-        if self.col != other.col: return False
+        if type(self) is not type(other):
+            return False
+        if self.filename != other.filename:
+            return False
+        if self.line != other.line:
+            return False
+        if self.col != other.col:
+            return False
         return True
 
     def __ne__(self, other):

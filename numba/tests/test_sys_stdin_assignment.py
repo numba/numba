@@ -11,7 +11,8 @@ def f0(a, b):
 
 @njit
 def f1(begin1, end1, begin2, end2):
-    if begin1 > begin2: return f1(begin2, end2, begin1, end1)
+    if begin1 > begin2:
+        return f1(begin2, end2, begin1, end1)
     return end1 + 1 >= begin2
 
 
@@ -22,7 +23,8 @@ def f0_2(a, b):
 
 @njit
 def f1_2(begin1, end1, begin2, end2):
-    if begin1 > begin2: return f1_2(begin2, end2, begin1, end1)
+    if begin1 > begin2:
+        return f1_2(begin2, end2, begin1, end1)
     return end1 + 1 >= begin2
 
 

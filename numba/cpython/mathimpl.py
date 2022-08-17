@@ -430,8 +430,10 @@ def gcd_impl(context, builder, sig, args):
         Stein's algorithm, heavily cribbed from Julia implementation.
         """
         T = type(a)
-        if a == 0: return abs(b)
-        if b == 0: return abs(a)
+        if a == 0:
+            return abs(b)
+        if b == 0:
+            return abs(a)
         za = trailing_zeros(a)
         zb = trailing_zeros(b)
         k = min(za, zb)

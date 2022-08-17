@@ -158,7 +158,8 @@ class MulList(AbstractTemplate):
 
 
 @infer_global(operator.imul)
-class InplaceMulList(MulList): pass
+class InplaceMulList(MulList):
+    pass
     #key = operator.imul
 
 
@@ -174,25 +175,31 @@ class ListCompare(AbstractTemplate):
                 return signature(types.boolean, lhs, rhs)
 
 @infer_global(operator.eq)
-class ListEq(ListCompare): pass
+class ListEq(ListCompare):
+    pass
     #key = operator.eq
 
 @infer_global(operator.ne)
-class ListNe(ListCompare): pass
+class ListNe(ListCompare):
+    pass
     #key = operator.ne
 
 @infer_global(operator.lt)
-class ListLt(ListCompare): pass
+class ListLt(ListCompare):
+    pass
     #key = operator.lt
 
 @infer_global(operator.le)
-class ListLe(ListCompare): pass
+class ListLe(ListCompare):
+    pass
     #key = operator.le
 
 @infer_global(operator.gt)
-class ListGt(ListCompare): pass
+class ListGt(ListCompare):
+    pass
     #key = operator.gt
 
 @infer_global(operator.ge)
-class ListGe(ListCompare): pass
+class ListGe(ListCompare):
+    pass
     #key = operator.ge
