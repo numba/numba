@@ -513,8 +513,6 @@ Command Line Utilities
   standalone Python extension modules
 - :ghfile:`numba/pycc/llvm_types.py` - Aliases to LLVM data types used by
   ``compiler.py``
-- :ghfile:`numba/pycc/pycc` - Stub to call main function.  Is this still
-  used?
 - :ghfile:`numba/pycc/modulemixin.c` - C file compiled into every compiled
   extension.  Pulls in C source from Numba core that is needed to make
   extension standalone
