@@ -677,7 +677,7 @@ class StencilFunc(object):
         reserved_names = ([sentinel_name, out_name, neighborhood_name,
                            shape_name] + kernel_copy.arg_names + index_vars)
         for name, var in var_table.items():
-            if not name in reserved_names:
+            if name not in reserved_names:
                 assert isinstance(var, ir.Var)
                 new_var = var.scope.redefine(var.name, var.loc)
                 new_var_dict[name] = new_var.name

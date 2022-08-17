@@ -692,7 +692,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
         def check_arr(arr, layout=False):
             np.random.shuffle(_types)
-            if layout != False:
+            if layout is not False:
                 x = np.zeros_like(arr, dtype=_types[0], order=layout)
                 y = np.zeros_like(arr, dtype=_types[1], order=layout)
                 arr = arr.copy(order=layout)

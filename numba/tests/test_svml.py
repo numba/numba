@@ -217,12 +217,12 @@ class TestSVMLGeneration(TestCase):
                 except:
                     raise Exception("raised while compiling "+fn.__doc__)
             asm = jitted_fn.inspect_asm(sig)
-            missed = [pattern for pattern in contains if not pattern in asm]
+            missed = [pattern for pattern in contains if pattern not in asm]
             found = [pattern for pattern in avoids if pattern in asm]
             ok = not missed and not found
             detail = '\n'.join(
                 [line for line in asm.split('\n')
-                 if cls.asm_filter.search(line) and not '"' in line])
+                 if cls.asm_filter.search(line) and '"' not in line])
             msg = (
                 f"While expecting {missed} and not {found},\n"
                 f"it contains:\n{detail}\n"

@@ -34,21 +34,21 @@ def abs_usecase(x):
     return abs(x)
 
 def all_usecase(x, y):
-    if x == None and y == None:
+    if x is None and y is None:
         return all([])
-    elif x == None:
+    elif x is None:
         return all([y])
-    elif y == None:
+    elif y is None:
         return all([x])
     else:
         return all([x, y])
 
 def any_usecase(x, y):
-    if x == None and y == None:
+    if x is None and y is None:
         return any([])
-    elif x == None:
+    elif x is None:
         return any([y])
-    elif y == None:
+    elif y is None:
         return any([x])
     else:
         return any([x, y])
