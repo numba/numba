@@ -199,7 +199,7 @@ a file-based cache.  This is done by passing ``cache=True``::
       This carries the risk that "old" function code might be used in the
       calculations.
     - Global variables are treated as constants. The cache will remember the value
-      in the global variable used at compilation. On cache load, the cached
+      of the global variable at compilation time. On cache load, the cached
       function will not rebind to the new value of the global variable.
 
 .. _parallel_jit_option:
