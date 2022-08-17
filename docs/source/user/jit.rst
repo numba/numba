@@ -192,7 +192,7 @@ a file-based cache.  This is done by passing ``cache=True``::
       function-by-function basis. The cached function is the the main jit
       function, and all secondary functions (those called by the main
       function) are incorporated in the cache of the main function.
-    - Cache invalidation fails to recognize changes in symbols defined in a
+    - Cache invalidation fails to recognize changes in functions defined in a
       different file. This means that when a main jit function calls
       functions that were imported from a different module, a change in those
       other modules will not be detected and the cache will not be updated.
