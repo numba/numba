@@ -14,7 +14,17 @@ ignore =
     # line break before binary operator
     W503,
     # line break after binary operator
-    W504
+    W504,
+    E1,
+    E2,
+    E3,
+    E4,
+    E5,
+    E7,
+    E9,
+    W,
+    F,
+    C
 max-line-length = 80
 
 exclude =
