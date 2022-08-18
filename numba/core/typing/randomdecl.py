@@ -180,6 +180,15 @@ class Numpy_normal(ConcreteRandomTemplate):
 
 
 @glue_typing(np.random.uniform, typing_key="np.random.uniform")
+class Numpy_uniform(ConcreteRandomTemplate):
+    cases = [signature(tp, tp, tp) for tp in _float_types]
+
+    def generic(self):
+        def typer(low, high, size=None):
+            return self.array_typer(size)(low, high)
+        return typer
+
+
 @glue_typing(random.gauss, typing_key="random.gauss")
 @glue_typing(random.normalvariate, typing_key="random.normalvariate")
 @glue_typing(random.uniform, typing_key="random.uniform")
