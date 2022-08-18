@@ -53,7 +53,7 @@ def typeof_impl(val, c):
         return tp
 
     tp = getattr(val, "_numba_type_", None)
-    if(tp is not None):
+    if tp is not None:
         return tp
 
     # cffi is handled here as it does not expose a public base class
