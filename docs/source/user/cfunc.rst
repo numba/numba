@@ -234,7 +234,7 @@ integers and calling it within Numba ``@jit`` code
    }
 
 
-Compile the code with ``gcc lib.c -fpic -shared -o lib.so`` to generate a
+Compile the code with ``gcc lib.c -fPIC -shared -o shared_library.so`` to generate a
 shared library.
 
 .. code-block:: python
@@ -245,7 +245,7 @@ shared library.
    import os
 
    # load the library into LLVM
-   path = os.path.abspath('.//path/to/shared_library.so')
+   path = os.path.abspath('./shared_library.so')
    binding.load_library_permanently(path)
 
    # Adds typing information
