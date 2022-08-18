@@ -1104,35 +1104,14 @@ class TraceRunner(object):
         name = state.pop()
         code = state.pop()
         closure = annotations = kwdefaults = defaults = None
-        if PYVERSION < (3, 6):
-            num_posdefaults = inst.arg & 0xFF
-            num_kwdefaults = (inst.arg >> 8) & 0xFF
-            num_annotations = (inst.arg >> 16) & 0x7FFF
-            if MAKE_CLOSURE:
-                closure = state.pop()
-            if num_annotations > 0:
-                annotations = state.pop()
-            if num_kwdefaults > 0:
-                kwdefaults = []
-                for i in range(num_kwdefaults):
-                    v = state.pop()
-                    k = state.pop()
-                    kwdefaults.append((k, v))
-                kwdefaults = tuple(kwdefaults)
-            if num_posdefaults:
-                defaults = []
-                for i in range(num_posdefaults):
-                    defaults.append(state.pop())
-                defaults = tuple(defaults)
-        else:
-            if inst.arg & 0x8:
-                closure = state.pop()
-            if inst.arg & 0x4:
-                annotations = state.pop()
-            if inst.arg & 0x2:
-                kwdefaults = state.pop()
-            if inst.arg & 0x1:
-                defaults = state.pop()
+        if inst.arg & 0x8:
+            closure = state.pop()
+        if inst.arg & 0x4:
+            annotations = state.pop()
+        if inst.arg & 0x2:
+            kwdefaults = state.pop()
+        if inst.arg & 0x1:
+            defaults = state.pop()
         res = state.make_temp()
         state.append(
             inst,
