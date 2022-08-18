@@ -1072,5 +1072,118 @@ class TestCFuncCache(BaseCacheTest):
         self.run_in_separate_process()
 
 
+class TestCachingModifiedFiles(DispatcherCacheUsecasesTest):
+    """
+    Test cache invalidation rules when external files are modified
+    """
+
+
+    def cache_contents(self):
+        try:
+            return [fn for fn in os.listdir(self.cache_dir)
+                    if not fn.endswith(('.pyc', ".pyo"))]
+        except FileNotFoundError:
+            return []
+
+    def alter_modfile(self):
+        self.altfile = os.path.join(self.tempdir, self.modname + "_alt.py")
+        shutil.copy(self.altfile, self.modfile)
+
+    def check_pycache(self, n):
+        c = self.cache_contents()
+        self.assertEqual(len(c), n, c)
+
+    def test_caching(self):
+        self.check_pycache(0)
+        mod = self.import_module()
+        self.check_pycache(0)
+
+        @njit(cache=True)
+        def foo(x):
+            return mod.simple_usecase(x)
+
+        self.assertPreciseEqual(foo(2), 2)
+        self.check_pycache(2)  # 1 index, 1 data
+        self.assertPreciseEqual(foo(2.5), 2.5)
+        self.check_pycache(3)  # 1 index, 2 data
+        self.check_hits(foo, 0, 2)
+
+        # Reload module to hit the cache
+        mod = self.import_module()
+        self.check_pycache(6)  # 3 index, 3 data
+
+        self.assertPreciseEqual(foo(2), 2)
+        self.check_pycache(2)  # 1 index, 1 data
+        self.assertPreciseEqual(foo(2.5), 2.5)
+        self.check_pycache(3)  # 1 index, 2 data
+        self.check_hits(foo, 0, 2)
+
+
+class TestCachingModifiedFiles2(TestCacheMultipleFilesWithSignature, DispatcherCacheUsecasesTest):
+    source_text_file1 = """
+from numba import njit
+from file2 import function2
+
+@njit(cache=True)
+def foo(x):
+    return function2(x)
+"""
+    source_text_file2 = """
+from numba import njit
+
+@njit(cache=True)
+def function1(x):
+    return x
+
+@njit(cache=True)
+def function2(x):
+    return x
+"""
+
+    source_text_file2_alt = """
+from numba import njit
+
+@njit('float64(float64)', cache=True)
+def function1(x):
+    return x + 1
+
+@njit('float64(float64)', cache=True)
+def function2(x):
+    return x + 1
+    """
+    def test_invalidation(self):
+        # test cache is invalidated after source file modification
+
+        self.modname = "file1"
+        self.modfile = self.file1
+        self.cache_dir = os.path.join(self.tempdir, "__pycache__")
+        # execute original files once to populate cache
+        self.test_caching_mutliple_files_with_signature()
+        # import function and verify cache is being used
+        import sys
+        sys.path.insert(0, self.tempdir)
+        file1 = self.import_module()
+        fc = file1.foo
+        self.assertPreciseEqual(fc(2), 2)
+        self.check_pycache(4)  # 2 index, 2 data for each function
+        self.assertPreciseEqual(fc(2.5), 2.5)
+        self.check_pycache(6)  # 1 index, 2 data for each function
+        self.check_hits(fc, 0, 2)
+
+        # modify file and reload
+        self.file2_alt = os.path.join(self.tempdir, 'file2.py')
+        with open(self.file2_alt, 'w') as fout:
+            print(self.source_text_file2_alt, file=fout)
+
+
+        file1 = self.import_module()
+        fc = file1.foo
+        self.assertPreciseEqual(fc(2), 3)
+        self.check_pycache(4)  # 2 index, 2 data for each function
+        self.assertPreciseEqual(fc(2.5), 3.5)
+        self.check_pycache(6)  # 1 index, 2 data for each function
+        self.check_hits(fc, 0, 2)
+
+
 if __name__ == '__main__':
     unittest.main()
