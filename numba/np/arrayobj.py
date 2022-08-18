@@ -2186,18 +2186,25 @@ def array_clip(a, a_min=None, a_max=None, out=None):
     return impl
 
 
-def _arr_contig(a):
+def _arr_c_contig(a):
     pass
 
 
-@overload(_arr_contig)
-def ol_arr_contig(a):
+def _arr_f_contig(a):
+    pass
+
+
+@overload(_arr_c_contig)
+def ol_arr__ccontig(a):
     def impl(a):
-        flag_f = a.flags.f_contiguous
-        flag_c = a.flags.c_contiguous
-        if flag_f or flag_c:
-            return True
-        return False
+        return a.flags.c_contiguous
+    return impl
+
+
+@overload(_arr_f_contig)
+def ol_arr_f_contig(a):
+    def impl(a):
+        return a.flags.f_contiguous
     return impl
 
 
@@ -3217,7 +3224,7 @@ def make_nditer_cls(nditerty):
                     # XXX as_data()?
                     slot = cgutils.alloca_once_value(builder, arrays[i])
                     setattr(self, member_name, slot)
-
+            orig_arrays = arrays
             arrays = self._arrays_or_scalars(context, builder, arrtys, arrays)
 
             # Extract iterator shape (the shape of the most-dimensional input)
@@ -3243,7 +3250,12 @@ def make_nditer_cls(nditerty):
                         raise ValueError("nditer(): operands could not be "
                                          "broadcast together")
 
-            for arrty, arr in zip(arrtys, arrays):
+            if layout == 'C':
+                _arr_contig = _arr_c_contig
+            else:
+                _arr_contig = _arr_f_contig
+
+            for i, (arrty, arr) in enumerate(zip(arrtys, arrays)):
                 if isinstance(arrty, types.Array) and arrty.ndim > 0:
                     sig = signature(types.none,
                                     types.UniTuple(types.intp, arrty.ndim),
@@ -3254,14 +3266,15 @@ def make_nditer_cls(nditerty):
                     fnty = tyctx.resolve_value_type(_arr_contig)
                     _arr_contig_sig = fnty.get_call_type(tyctx, (arrty,), {})
                     impl = context.get_function(fnty, _arr_contig_sig)
-                    _arr_contig_result = impl(builder, (arr,))
+                    _arr_contig_result = impl(builder, (orig_arrays[i],))
                     _arr_contig_pred = builder.icmp_unsigned('==',
                                                              _arr_contig_result,
                                                              _arr_contig_result
                                                              .type(0))
                     with builder.if_then(_arr_contig_pred):
-                        msg = ('Only C or F contiguous arrays are '
-                               'accepted by Numba implementation of np.nditer')
+                        msg = ('Unexpected contiguity during runtime, '
+                               'this happened because np.nditer was'
+                               ' compiled for a different contiguity.')
                         context.call_conv.return_user_exc(builder,
                                                           TypeError,
                                                           (msg,))
