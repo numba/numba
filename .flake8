@@ -15,7 +15,8 @@ ignore =
     W503,
     # line break after binary operator
     W504,
-    E1,
+    E12,
+    E13,
     E2,
     E3,
     E4,
