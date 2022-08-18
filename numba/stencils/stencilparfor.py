@@ -75,7 +75,7 @@ class StencilPass(object):
                     arg_typemap = tuple(self.typemap[i.name] for i in in_args)
                     for arg_type in arg_typemap:
                         if isinstance(arg_type, types.BaseTuple):
-                            raise ValueError("Tuple parameters not supported " \
+                            raise ValueError("Tuple parameters not supported "
                                 "for stencil kernels in parallel=True mode.")
 
                     out_arr = kws.get('out')
@@ -552,7 +552,7 @@ class StencilPass(object):
         if "standard_indexing" in stencil_func.options:
             for x in stencil_func.options["standard_indexing"]:
                 if x not in arg_to_arr_dict:
-                    raise ValueError("Standard indexing requested for an array " \
+                    raise ValueError("Standard indexing requested for an array "
                         "name not present in the stencil kernel definition.")
             standard_indexed = [arg_to_arr_dict[x] for x in
                                      stencil_func.options["standard_indexing"]]
@@ -560,7 +560,7 @@ class StencilPass(object):
             standard_indexed = []
 
         if in_arr.name in standard_indexed:
-            raise ValueError("The first argument to a stencil kernel must use " \
+            raise ValueError("The first argument to a stencil kernel must use "
                 "relative indexing, not standard indexing.")
 
         ndims = self.typemap[in_arr.name].ndim
@@ -675,7 +675,7 @@ class StencilPass(object):
                 new_body.append(stmt)
             block.body = new_body
         if need_to_calc_kernel and not found_relative_index:
-            raise ValueError("Stencil kernel with no accesses to " \
+            raise ValueError("Stencil kernel with no accesses to "
                 "relatively indexed arrays.")
 
         return start_lengths, end_lengths

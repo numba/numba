@@ -819,7 +819,7 @@ def ol_isinstance(var, typs):
                     numba_typ.key[0] == types.undefined:
                 # check for containers (list, tuple, set, ...)
                 if isinstance(var_ty, numba_typ.__class__) or \
-                    (isinstance(var_ty, types.BaseTuple) and \
+                    (isinstance(var_ty, types.BaseTuple) and
                         isinstance(numba_typ, types.BaseTuple)):
                     return true_impl
 

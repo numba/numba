@@ -148,7 +148,7 @@ class StencilFunc(object):
         else:
             need_to_calc_kernel = False
             if len(neighborhood) != ndim:
-                raise ValueError("%d dimensional neighborhood specified for %d " \
+                raise ValueError("%d dimensional neighborhood specified for %d "
                     "dimensional input array" % (len(neighborhood), ndim))
 
         tuple_table = ir_utils.get_tuple_table(kernel.blocks)
@@ -173,7 +173,7 @@ class StencilFunc(object):
                         and stmt.value.value.name in kernel.arg_names) or
                    (isinstance(stmt, ir.SetItem)
                         and stmt.target.name in kernel.arg_names)):
-                    raise ValueError("Assignments to arrays passed to stencil " \
+                    raise ValueError("Assignments to arrays passed to stencil "
                         "kernels is not allowed.")
                 if (isinstance(stmt, ir.Assign)
                         and isinstance(stmt.value, ir.Expr)

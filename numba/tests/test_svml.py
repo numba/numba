@@ -84,9 +84,9 @@ complex_funcs_exclude = ["sqrt", "tan", "log10", "expm1", "log1p", "tanh", "log"
 # remove untested entries
 svml_funcs = {k: v for k, v in svml_funcs.items() if len(v) > 0}
 # lists for functions which belong to numpy and math modules correpondently
-numpy_funcs = [f for f, v in svml_funcs.items() if "<ufunc" in \
+numpy_funcs = [f for f, v in svml_funcs.items() if "<ufunc" in
                   [str(p).split(' ')[0] for p in v]]
-other_funcs = [f for f, v in svml_funcs.items() if "<built-in" in \
+other_funcs = [f for f, v in svml_funcs.items() if "<built-in" in
                   [str(p).split(' ')[0] for p in v]]
 
 
