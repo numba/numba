@@ -1351,11 +1351,7 @@ def get_readonly_array(typingctx, arr):
 
         dest = make_array(srcty)(context, builder, src)
         # Hack to return a read-only array
-        # breakpoint()
         dest.parent = cgutils.get_null_value(dest.parent.type)
-        # setattr(dest, 'parent', Constant(
-        #         context.get_value_type(dest._datamodel.get_type('parent')),
-        #         None))
         res = dest._getvalue()
         return impl_ret_borrowed(context, builder, sig.return_type, res)
     return sig, codegen
