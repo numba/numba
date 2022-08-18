@@ -98,19 +98,19 @@ _Py_slist_remove(_Py_slist_t *list, _Py_slist_item_t *previous,
         list->head = item->next;
 }
 
-Py_uhash_t
+extern "C" Py_uhash_t
 _Numba_hashtable_hash_int(const void *key)
 {
     return (Py_uhash_t)key;
 }
 
-Py_uhash_t
+extern "C" Py_uhash_t
 _Numba_hashtable_hash_ptr(const void *key)
 {
     return (Py_uhash_t)_Py_HashPointer((void *)key);
 }
 
-int
+extern "C" int
 _Numba_hashtable_compare_direct(const void *key, const _Numba_hashtable_entry_t *entry)
 {
     return entry->key == key;
@@ -129,7 +129,7 @@ round_size(size_t s)
     return i;
 }
 
-_Numba_hashtable_t *
+extern "C" _Numba_hashtable_t *
 _Numba_hashtable_new_full(size_t data_size, size_t init_size,
                        _Numba_hashtable_hash_func hash_func,
                        _Numba_hashtable_compare_func compare_func,
@@ -158,7 +158,7 @@ _Numba_hashtable_new_full(size_t data_size, size_t init_size,
     ht->data_size = data_size;
 
     buckets_size = ht->num_buckets * sizeof(ht->buckets[0]);
-    ht->buckets = alloc.malloc(buckets_size);
+    ht->buckets = (_Py_slist_t *) alloc.malloc(buckets_size);
     if (ht->buckets == NULL) {
         alloc.free(ht);
         return NULL;
@@ -174,7 +174,7 @@ _Numba_hashtable_new_full(size_t data_size, size_t init_size,
     return ht;
 }
 
-_Numba_hashtable_t *
+extern "C" _Numba_hashtable_t *
 _Numba_hashtable_new(size_t data_size,
                   _Numba_hashtable_hash_func hash_func,
                   _Numba_hashtable_compare_func compare_func)
@@ -184,7 +184,7 @@ _Numba_hashtable_new(size_t data_size,
                                   NULL, NULL, NULL, NULL);
 }
 
-size_t
+extern "C" size_t
 _Numba_hashtable_size(_Numba_hashtable_t *ht)
 {
     size_t size;
@@ -215,7 +215,7 @@ _Numba_hashtable_size(_Numba_hashtable_t *ht)
 }
 
 #ifdef Py_DEBUG
-void
+extern "C" void
 _Numba_hashtable_print_stats(_Numba_hashtable_t *ht)
 {
     size_t size;
@@ -255,7 +255,7 @@ _Numba_hashtable_print_stats(_Numba_hashtable_t *ht)
 #endif
 
 /* Get an entry. Return NULL if the key does not exist. */
-_Numba_hashtable_entry_t *
+extern "C" _Numba_hashtable_entry_t *
 _Numba_hashtable_get_entry(_Numba_hashtable_t *ht, const void *key)
 {
     Py_uhash_t key_hash;
@@ -308,7 +308,7 @@ _hashtable_pop_entry(_Numba_hashtable_t *ht, const void *key, void *data, size_t
 
 /* Add a new entry to the hash. The key must not be present in the hash table.
    Return 0 on success, -1 on memory error. */
-int
+extern "C" int
 _Numba_hashtable_set(_Numba_hashtable_t *ht, const void *key,
                   void *data, size_t data_size)
 {
@@ -328,7 +328,7 @@ _Numba_hashtable_set(_Numba_hashtable_t *ht, const void *key,
     key_hash = ht->hash_func(key);
     index = key_hash & (ht->num_buckets - 1);
 
-    entry = ht->alloc.malloc(HASHTABLE_ITEM_SIZE(ht));
+    entry = (_Numba_hashtable_entry_t *) ht->alloc.malloc(HASHTABLE_ITEM_SIZE(ht));
     if (entry == NULL) {
         /* memory allocation failed */
         return -1;
@@ -350,7 +350,7 @@ _Numba_hashtable_set(_Numba_hashtable_t *ht, const void *key,
 
 /* Get data from an entry. Copy entry data into data and return 1 if the entry
    exists, return 0 if the entry does not exist. */
-int
+extern "C" int
 _Numba_hashtable_get(_Numba_hashtable_t *ht, const void *key, void *data, size_t data_size)
 {
     _Numba_hashtable_entry_t *entry;
@@ -364,7 +364,7 @@ _Numba_hashtable_get(_Numba_hashtable_t *ht, const void *key, void *data, size_t
     return 1;
 }
 
-int
+extern "C" int
 _Numba_hashtable_pop(_Numba_hashtable_t *ht, const void *key, void *data, size_t data_size)
 {
     assert(data != NULL);
@@ -373,7 +373,7 @@ _Numba_hashtable_pop(_Numba_hashtable_t *ht, const void *key, void *data, size_t
 }
 
 /* Delete an entry. The entry must exist. */
-void
+extern "C" void
 _Numba_hashtable_delete(_Numba_hashtable_t *ht, const void *key)
 {
 #ifndef NDEBUG
@@ -387,7 +387,7 @@ _Numba_hashtable_delete(_Numba_hashtable_t *ht, const void *key)
 /* Prototype for a pointer to a function to be called foreach
    key/value pair in the hash by hashtable_foreach().  Iteration
    stops if a non-zero value is returned. */
-int
+extern "C" int
 _Numba_hashtable_foreach(_Numba_hashtable_t *ht,
                       int (*func) (_Numba_hashtable_entry_t *entry, void *arg),
                       void *arg)
@@ -420,7 +420,7 @@ hashtable_rehash(_Numba_hashtable_t *ht)
 
     buckets_size = new_size * sizeof(ht->buckets[0]);
     old_buckets = ht->buckets;
-    ht->buckets = ht->alloc.malloc(buckets_size);
+    ht->buckets = (_Py_slist_t *) ht->alloc.malloc(buckets_size);
     if (ht->buckets == NULL) {
         /* cancel rehash on memory allocation failure */
         ht->buckets = old_buckets ;
@@ -447,7 +447,7 @@ hashtable_rehash(_Numba_hashtable_t *ht)
     ht->alloc.free(old_buckets);
 }
 
-void
+extern "C" void
 _Numba_hashtable_clear(_Numba_hashtable_t *ht)
 {
     _Numba_hashtable_entry_t *entry, *next;
@@ -466,7 +466,7 @@ _Numba_hashtable_clear(_Numba_hashtable_t *ht)
     hashtable_rehash(ht);
 }
 
-void
+extern "C" void
 _Numba_hashtable_destroy(_Numba_hashtable_t *ht)
 {
     size_t i;
@@ -487,7 +487,7 @@ _Numba_hashtable_destroy(_Numba_hashtable_t *ht)
 }
 
 /* Return a copy of the hash table */
-_Numba_hashtable_t *
+extern "C" _Numba_hashtable_t *
 _Numba_hashtable_copy(_Numba_hashtable_t *src)
 {
     _Numba_hashtable_t *dst;
