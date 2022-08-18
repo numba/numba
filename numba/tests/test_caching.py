@@ -1072,54 +1072,9 @@ class TestCFuncCache(BaseCacheTest):
         self.run_in_separate_process()
 
 
-class TestCachingModifiedFiles(DispatcherCacheUsecasesTest):
-    """
-    Test cache invalidation rules when external files are modified
-    """
-
-
-    def cache_contents(self):
-        try:
-            return [fn for fn in os.listdir(self.cache_dir)
-                    if not fn.endswith(('.pyc', ".pyo"))]
-        except FileNotFoundError:
-            return []
-
-    def alter_modfile(self):
-        self.altfile = os.path.join(self.tempdir, self.modname + "_alt.py")
-        shutil.copy(self.altfile, self.modfile)
-
-    def check_pycache(self, n):
-        c = self.cache_contents()
-        self.assertEqual(len(c), n, c)
-
-    def test_caching(self):
-        self.check_pycache(0)
-        mod = self.import_module()
-        self.check_pycache(0)
-
-        @njit(cache=True)
-        def foo(x):
-            return mod.simple_usecase(x)
-
-        self.assertPreciseEqual(foo(2), 2)
-        self.check_pycache(2)  # 1 index, 1 data
-        self.assertPreciseEqual(foo(2.5), 2.5)
-        self.check_pycache(3)  # 1 index, 2 data
-        self.check_hits(foo, 0, 2)
-
-        # Reload module to hit the cache
-        mod = self.import_module()
-        self.check_pycache(6)  # 3 index, 3 data
-
-        self.assertPreciseEqual(foo(2), 2)
-        self.check_pycache(2)  # 1 index, 1 data
-        self.assertPreciseEqual(foo(2.5), 2.5)
-        self.check_pycache(3)  # 1 index, 2 data
-        self.check_hits(foo, 0, 2)
-
-
-class TestCachingModifiedFiles2(TestCacheMultipleFilesWithSignature, DispatcherCacheUsecasesTest):
+class TestCachingModifiedFiles2(
+    TestCacheMultipleFilesWithSignature, DispatcherCacheUsecasesTest
+):
     source_text_file1 = """
 from numba import njit
 from file2 import function2
