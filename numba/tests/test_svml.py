@@ -127,7 +127,7 @@ def func_patterns(func, args, res, dtype, mode, vlen, fastmath, pad=' '*8):
     else:            # will vectorize
         contains = [svml_func]
         avoids = []  # [scalar_func] - TODO: if possible, force LLVM to prevent
-                     #                     generating the failsafe scalar paths
+        #                     generating the failsafe scalar paths
         if vlen != 8 and (is_f32 or dtype == 'int32'):  # Issue #3016
             avoids += ['%zmm', '__svml_%s%d%s,' % (f, v*2, prec_suff)]
     # special handling
@@ -444,7 +444,7 @@ class TestSVML(TestCase):
             x   = np.empty(n * 8, dtype=np.float64)
             ret = np.empty_like(x)
             for i in range(ret.size):
-                    ret[i] += math.cosh(x[i])
+                ret[i] += math.cosh(x[i])
             return ret
         impl(1)
         self.assertTrue('intel_svmlcc' in impl.inspect_llvm(impl.signatures[0]))

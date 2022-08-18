@@ -240,7 +240,7 @@ class TestCC(BasePYCCTest):
             self.assertPreciseEqual(res, hash("A"))
             res = lib.hash_str("A")
             self.assertPreciseEqual(res, hash("A"))
-            
+
             code = """if 1:
                 from numpy.testing import assert_equal
                 res = lib.hash_literal_str_A()

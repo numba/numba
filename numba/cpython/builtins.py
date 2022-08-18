@@ -48,20 +48,20 @@ def generic_is(context, builder, sig, args):
     lhs_type, rhs_type = sig.args
     # the lhs and rhs have the same type
     if lhs_type == rhs_type:
-            # mutable types
-            if lhs_type.mutable:
-                msg = 'no default `is` implementation'
-                raise LoweringError(msg)
-            # immutable types
+        # mutable types
+        if lhs_type.mutable:
+            msg = 'no default `is` implementation'
+            raise LoweringError(msg)
+        # immutable types
+        else:
+            # fallbacks to `==`
+            try:
+                eq_impl = context.get_function(operator.eq, sig)
+            except NotImplementedError:
+                # no `==` implemented for this type
+                return cgutils.false_bit
             else:
-                # fallbacks to `==`
-                try:
-                    eq_impl = context.get_function(operator.eq, sig)
-                except NotImplementedError:
-                    # no `==` implemented for this type
-                    return cgutils.false_bit
-                else:
-                    return eq_impl(builder, args)
+                return eq_impl(builder, args)
     else:
         return cgutils.false_bit
 

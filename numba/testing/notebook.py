@@ -86,7 +86,7 @@ class NotebookTest(TestCase):
             #print('output=%s'%outputs)
             #print('expected=%s'%expected)
             #self.assertEqual(scrubbed, expected, "\n{}\n\n{}".format(scrubbed, expected))
-        
+
     def dump_canonical(self, obj):
         return json.dumps(obj, indent=2, sort_keys=True)
 

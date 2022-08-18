@@ -661,9 +661,9 @@ def _create_shape_signature(
     # TODO: use prefix + class number instead of single char
     alphabet = ord('a')
     for n in class_set:
-       if n >= 0:
-           class_map[n] = chr(alphabet)
-           alphabet += 1
+        if n >= 0:
+            class_map[n] = chr(alphabet)
+            alphabet += 1
     threadcount_ordinal = chr(alphabet)
 
     alpha_dict = {'latest_alpha' : alphabet}

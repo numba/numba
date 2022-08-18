@@ -15,7 +15,7 @@ Dagmap = collections.namedtuple('Dagmap',
 def parse_yaml(filename):
     with open(filename, 'r') as f:
         contents = yaml.safe_load(f)
-    
+
     meta = contents['meta']
     version = meta['version']
     if version > 1:

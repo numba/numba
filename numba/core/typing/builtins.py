@@ -387,7 +387,7 @@ class UnaryNegate(UnaryOp):
 
 @infer_global(operator.pos)
 class UnaryPositive(UnaryOp):
-   pass
+    pass
 
 
 @infer_global(operator.not_)
@@ -808,8 +808,8 @@ class NumberClassAttribute(AttributeTemplate):
                                          {})
                 return sig.return_type
             elif isinstance(val, (types.Number, types.Boolean, types.IntEnumMember)):
-                 # Scalar constructor, e.g. np.int32(42)
-                 return ty
+                # Scalar constructor, e.g. np.int32(42)
+                return ty
             elif isinstance(val, (types.NPDatetime, types.NPTimedelta)):
                 # Constructor cast from datetime-like, e.g.
                 # > np.int64(np.datetime64("2000-01-01"))

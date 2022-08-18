@@ -539,8 +539,8 @@ class TestLiftObj(MemoryLeak, TestCase):
             # pattern useful?
             with objmode_context():
                 #with npmmode_context(): not implemented yet
-                    with objmode_context():
-                        print(x)
+                with objmode_context():
+                    print(x)
             return x
 
         with self.assertRaises(errors.TypingError) as raises:

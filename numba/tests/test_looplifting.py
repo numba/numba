@@ -479,7 +479,7 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
             y = 0
             for i in range(2):
                 if i > 0:
-                   x = 6
+                    x = 6
                 y += x
             return y, x
 

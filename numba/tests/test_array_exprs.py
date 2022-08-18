@@ -187,8 +187,8 @@ class TestArrayExpressions(MemoryLeakMixin, TestCase):
     def _test_root_function(self, fn=pos_root):
         A = np.random.random(10)
         B = np.random.random(10) + 1. # Increase likelihood of real
-                                      # root (could add 2 to force all
-                                      # roots to be real).
+        # root (could add 2 to force all
+        # roots to be real).
         C = np.random.random(10)
         arg_tys = [typeof(arg) for arg in (A, B, C)]
 

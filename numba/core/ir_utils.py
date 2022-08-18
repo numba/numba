@@ -103,7 +103,7 @@ def mk_alloc(typingctx, typemap, calltypes, lhs, size_var, dtype, scope, loc,
     if typemap:
         typemap[attr_var.name] = get_np_ufunc_typ(numpy.empty)
     attr_assign = ir.Assign(empty_attr_call, attr_var, loc)
-     # Assume str(dtype) returns a valid type
+    # Assume str(dtype) returns a valid type
     dtype_str = str(dtype)
     # alloc call: lhs = empty_attr(size_var, typ_var)
     typ_var = ir.Var(scope, mk_unique_var("$np_typ_var"), loc)
@@ -114,8 +114,8 @@ def mk_alloc(typingctx, typemap, calltypes, lhs, size_var, dtype, scope, loc,
     # with a string. i.e. "datetime64[ns]")
     if (isinstance(dtype, (types.NPDatetime, types.NPTimedelta)) and
         dtype.unit != ''):
-            typename_const = ir.Const(dtype_str, loc)
-            typ_var_assign = ir.Assign(typename_const, typ_var, loc)
+        typename_const = ir.Const(dtype_str, loc)
+        typ_var_assign = ir.Assign(typename_const, typ_var, loc)
     else:
         if dtype_str=='bool':
             # empty doesn't like 'bool' sometimes (e.g. kmeans example)
@@ -1495,7 +1495,7 @@ def simplify(func_ir, typemap, calltypes, metadata):
         calltypes)
     var_rename_map = restore_copy_var_names(func_ir.blocks, save_copies, typemap)
     if "var_rename_map" not in metadata:
-            metadata["var_rename_map"] = {}
+        metadata["var_rename_map"] = {}
     metadata["var_rename_map"].update(var_rename_map)
     # remove dead code to enable fusion
     if config.DEBUG_ARRAY_OPT >= 1:
@@ -1515,7 +1515,7 @@ def require(cond):
     Raise GuardException if the given condition is False.
     """
     if not cond:
-       raise GuardException
+        raise GuardException
 
 def guard(func, *args, **kwargs):
     """

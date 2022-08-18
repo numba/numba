@@ -2539,10 +2539,10 @@ class TestParforsOptions(TestParforsBase):
         #with no fusion, comprehension, setitem
         self.assertEqual(countParfors(test_impl, args, fusion=False,
                          comprehension=False, setitem=False), 4)
-         # with no fusion, comprehension, prange
+        # with no fusion, comprehension, prange
         self.assertEqual(countParfors(test_impl, args, fusion=False,
                          comprehension=False, setitem=False, prange=False), 3)
-         # with no fusion, comprehension, prange, reduction
+        # with no fusion, comprehension, prange, reduction
         self.assertEqual(countParfors(test_impl, args, fusion=False,
                          comprehension=False, setitem=False, prange=False,
                          reduction=False), 2)
@@ -3979,9 +3979,9 @@ class TestPrangeSpecific(TestPrangeBase):
         def test_impl(n):
             b = np.zeros((n, n))
             for i in range(n):
-              a = b[i]
-              for j in range(n):
-                a[j] = i + j
+                a = b[i]
+                for j in range(n):
+                    a[j] = i + j
             return b.sum()
         self.prange_tester(test_impl, 4)
 
@@ -3989,11 +3989,11 @@ class TestPrangeSpecific(TestPrangeBase):
         def test_impl(n):
             b = np.zeros((n, n, n))
             for i in range(n):
-              a = b[i]
-              for j in range(n):
-                c = a[j]
-                for k in range(n):
-                  c[k] = i + j + k
+                a = b[i]
+                for j in range(n):
+                    c = a[j]
+                    for k in range(n):
+                        c[k] = i + j + k
             return b.sum()
         self.prange_tester(test_impl, 4)
 
@@ -4532,7 +4532,7 @@ class TestParforsVectorizer(TestPrangeBase):
                                      or spd.startswith('_')
                                      or spd.startswith('"')
                                      or '__numba_parfor_gufunc' in spd):
-                        acc.append(re.sub('[\t]', '', spd))
+                    acc.append(re.sub('[\t]', '', spd))
             return acc
 
         for k, v in signed_asm.items():

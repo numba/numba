@@ -730,7 +730,7 @@ class TestDebugInfoEmission(TestCase):
 
         @njit(debug=True)
         def foo():
-# NOTE: THIS COMMENT MUST START AT COLUMN 0 FOR THIS SAMPLE CODE TO BE VALID # noqa: E115, E501
+            # NOTE: THIS COMMENT MUST START AT COLUMN 0 FOR THIS SAMPLE CODE TO BE VALID # noqa: E115, E501
             return 1
 
         with warnings.catch_warnings(record=True) as w:

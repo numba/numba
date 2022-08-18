@@ -66,41 +66,41 @@ class InlineTestPass(FunctionPass):
 
 
 def gen_pipeline(state, test_pass):
-        name = 'inline_test'
-        pm = PassManager(name)
-        pm.add_pass(TranslateByteCode, "analyzing bytecode")
-        pm.add_pass(FixupArgs, "fix up args")
-        pm.add_pass(IRProcessing, "processing IR")
-        pm.add_pass(WithLifting, "Handle with contexts")
-        # pre typing
-        if not state.flags.no_rewrites:
-            pm.add_pass(GenericRewrites, "nopython rewrites")
-            pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
-            pm.add_pass(DeadBranchPrune, "dead branch pruning")
-        pm.add_pass(InlineClosureLikes,
-                    "inline calls to locally defined closures")
-        # typing
-        pm.add_pass(NopythonTypeInference, "nopython frontend")
+    name = 'inline_test'
+    pm = PassManager(name)
+    pm.add_pass(TranslateByteCode, "analyzing bytecode")
+    pm.add_pass(FixupArgs, "fix up args")
+    pm.add_pass(IRProcessing, "processing IR")
+    pm.add_pass(WithLifting, "Handle with contexts")
+    # pre typing
+    if not state.flags.no_rewrites:
+        pm.add_pass(GenericRewrites, "nopython rewrites")
+        pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
+        pm.add_pass(DeadBranchPrune, "dead branch pruning")
+    pm.add_pass(InlineClosureLikes,
+                "inline calls to locally defined closures")
+    # typing
+    pm.add_pass(NopythonTypeInference, "nopython frontend")
 
-        if state.flags.auto_parallel.enabled:
-            pm.add_pass(PreParforPass, "Preprocessing for parfors")
-        if not state.flags.no_rewrites:
-            pm.add_pass(NopythonRewrites, "nopython rewrites")
-        if state.flags.auto_parallel.enabled:
-            pm.add_pass(ParforPass, "convert to parfors")
+    if state.flags.auto_parallel.enabled:
+        pm.add_pass(PreParforPass, "Preprocessing for parfors")
+    if not state.flags.no_rewrites:
+        pm.add_pass(NopythonRewrites, "nopython rewrites")
+    if state.flags.auto_parallel.enabled:
+        pm.add_pass(ParforPass, "convert to parfors")
 
-        pm.add_pass(test_pass, "inline test")
+    pm.add_pass(test_pass, "inline test")
 
-        # legalise
-        pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
-        pm.add_pass(AnnotateTypes, "annotate types")
-        pm.add_pass(PreserveIR, "preserve IR")
+    # legalise
+    pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
+    pm.add_pass(AnnotateTypes, "annotate types")
+    pm.add_pass(PreserveIR, "preserve IR")
 
-        # lower
-        pm.add_pass(NativeLowering, "native lowering")
-        pm.add_pass(NoPythonBackend, "nopython mode backend")
-        pm.add_pass(DumpParforDiagnostics, "dump parfor diagnostics")
-        return pm
+    # lower
+    pm.add_pass(NativeLowering, "native lowering")
+    pm.add_pass(NoPythonBackend, "nopython mode backend")
+    pm.add_pass(DumpParforDiagnostics, "dump parfor diagnostics")
+    return pm
 
 class InlineTestPipeline(compiler.CompilerBase):
     """compiler pipeline for testing inlining after optimization

@@ -1944,28 +1944,28 @@ def noncentral_chisquare(df, nonc):
 
 @overload(np.random.noncentral_chisquare)
 def noncentral_chisquare(df, nonc, size=None):
-     if size in (None, types.none):
-         def noncentral_chisquare_impl(df, nonc, size=None):
-             validate_noncentral_chisquare_input(df, nonc)
-             return noncentral_chisquare_single(df, nonc)
-         return noncentral_chisquare_impl
-     elif isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
-                                              and isinstance(size.dtype,
-                                                             types.Integer)):
+    if size in (None, types.none):
+        def noncentral_chisquare_impl(df, nonc, size=None):
+            validate_noncentral_chisquare_input(df, nonc)
+            return noncentral_chisquare_single(df, nonc)
+        return noncentral_chisquare_impl
+    elif isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
+                                             and isinstance(size.dtype,
+                                                            types.Integer)):
 
-         def noncentral_chisquare_impl(df, nonc, size=None):
-             validate_noncentral_chisquare_input(df, nonc)
-             out = np.empty(size)
-             out_flat = out.flat
-             for idx in range(out.size):
-                 out_flat[idx] = noncentral_chisquare_single(df, nonc)
-             return out
-         return noncentral_chisquare_impl
-     else:
-         raise NumbaTypeError(
-             "np.random.noncentral_chisquare(): size should be int or "
-             "tuple of ints or None, got %s" % size
-         )
+        def noncentral_chisquare_impl(df, nonc, size=None):
+            validate_noncentral_chisquare_input(df, nonc)
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = noncentral_chisquare_single(df, nonc)
+            return out
+        return noncentral_chisquare_impl
+    else:
+        raise NumbaTypeError(
+            "np.random.noncentral_chisquare(): size should be int or "
+            "tuple of ints or None, got %s" % size
+        )
 
 
 @register_jitable

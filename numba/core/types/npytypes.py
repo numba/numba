@@ -583,8 +583,8 @@ class NestedArray(Array):
         stride = self.size
         strides = []
         for i in reversed(self._shape):
-             strides.append(stride)
-             stride *= i
+            strides.append(stride)
+            stride *= i
         return tuple(reversed(strides))
 
     @property

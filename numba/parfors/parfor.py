@@ -530,15 +530,15 @@ class LoopNest(object):
                 format(self.index_variable, self.start, self.stop, self.step))
 
     def list_vars(self):
-       all_uses = []
-       all_uses.append(self.index_variable)
-       if isinstance(self.start, ir.Var):
-           all_uses.append(self.start)
-       if isinstance(self.stop, ir.Var):
-           all_uses.append(self.stop)
-       if isinstance(self.step, ir.Var):
-           all_uses.append(self.step)
-       return all_uses
+        all_uses = []
+        all_uses.append(self.index_variable)
+        if isinstance(self.start, ir.Var):
+            all_uses.append(self.start)
+        if isinstance(self.stop, ir.Var):
+            all_uses.append(self.stop)
+        if isinstance(self.step, ir.Var):
+            all_uses.append(self.step)
+        return all_uses
 
 class Parfor(ir.Expr, ir.Stmt):
 
@@ -3191,12 +3191,12 @@ def _arrayexpr_tree_to_ir(
                 typemap[func_var.name] = typemap[func_var_name]
                 func_var_def = copy.deepcopy(func_ir.get_definition(func_var_name))
                 if isinstance(func_var_def, ir.Expr) and func_var_def.op == 'getattr' and func_var_def.attr == 'sqrt':
-                     g_math_var = ir.Var(scope, mk_unique_var("$math_g_var"), loc)
-                     typemap[g_math_var.name] = types.misc.Module(math)
-                     g_math = ir.Global('math', math, loc)
-                     g_math_assign = ir.Assign(g_math, g_math_var, loc)
-                     func_var_def = ir.Expr.getattr(g_math_var, 'sqrt', loc)
-                     out_ir.append(g_math_assign)
+                    g_math_var = ir.Var(scope, mk_unique_var("$math_g_var"), loc)
+                    typemap[g_math_var.name] = types.misc.Module(math)
+                    g_math = ir.Global('math', math, loc)
+                    g_math_assign = ir.Assign(g_math, g_math_var, loc)
+                    func_var_def = ir.Expr.getattr(g_math_var, 'sqrt', loc)
+                    out_ir.append(g_math_assign)
 #                     out_ir.append(func_var_def)
                 ir_expr = ir.Expr.call(func_var, arg_vars, (), loc)
                 call_typ = typemap[func_var.name].get_call_type(

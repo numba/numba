@@ -159,7 +159,7 @@ class MulList(AbstractTemplate):
 
 @infer_global(operator.imul)
 class InplaceMulList(MulList): pass
-    #key = operator.imul
+#key = operator.imul
 
 
 class ListCompare(AbstractTemplate):
@@ -175,24 +175,24 @@ class ListCompare(AbstractTemplate):
 
 @infer_global(operator.eq)
 class ListEq(ListCompare): pass
-    #key = operator.eq
+#key = operator.eq
 
 @infer_global(operator.ne)
 class ListNe(ListCompare): pass
-    #key = operator.ne
+#key = operator.ne
 
 @infer_global(operator.lt)
 class ListLt(ListCompare): pass
-    #key = operator.lt
+#key = operator.lt
 
 @infer_global(operator.le)
 class ListLe(ListCompare): pass
-    #key = operator.le
+#key = operator.le
 
 @infer_global(operator.gt)
 class ListGt(ListCompare): pass
-    #key = operator.gt
+#key = operator.gt
 
 @infer_global(operator.ge)
 class ListGe(ListCompare): pass
-    #key = operator.ge
+#key = operator.ge

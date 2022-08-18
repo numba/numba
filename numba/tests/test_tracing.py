@@ -53,7 +53,7 @@ class Class(object):
         self.__test = value
 
     test = tracing.trace(property(_test_get, _test_set))
-        
+
     @tracing.trace
     def method(self, some, other='value', *args, **kwds):
         pass
@@ -107,7 +107,7 @@ class TestTracing(unittest.TestCase):
 
     def tearDown(self):
         del self.capture
-        
+
     def test_method(self):
 
         with self.capture:
@@ -174,7 +174,7 @@ class TestTracing(unittest.TestCase):
                          ">> static_method()\n"
                          "<< static_method\n")
 
-            
+
 # Reset tracing to its original value
 tracing.trace = orig_trace
 

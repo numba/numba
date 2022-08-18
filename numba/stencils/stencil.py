@@ -606,7 +606,7 @@ class StencilFunc(object):
                     msg = "cval type does not match stencil return type."
                     raise NumbaValueError(msg)
             else:
-                 cval = 0
+                cval = 0
             func_text += "    " + out_init
             for dim in range(the_array.ndim):
                 start_items = [":"] * the_array.ndim

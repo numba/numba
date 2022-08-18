@@ -1130,9 +1130,9 @@ class SetInstance(object):
         )
         # create type-specific name
         fname = f".dtor.set.{self._ty.dtype}"
-    
+
         fn = cgutils.get_or_insert_function(module, fnty, name=fname)
-    
+
         if fn.is_declaration:
             # Set linkage
             fn.linkage = 'linkonce_odr'
@@ -1143,7 +1143,7 @@ class SetInstance(object):
                 entry = loop.entry
                 context.nrt.decref(builder, self._ty.dtype, entry.key)
             builder.ret_void()
-    
+
         return fn
 
     def incref_value(self, val):
