@@ -182,7 +182,7 @@ dufunc_init(PyDUFuncObject *self, PyObject *args, PyObject *kws)
     PyObject *dispatcher=NULL, *keepalive=NULL, *py_func_obj=NULL, *tmp;
     PyUFuncObject *ufunc=NULL;
     int identity=PyUFunc_None;
-    int nin=-1, nout=1;
+    int nin=-1, nout=1, idx;
     const char *name=NULL, *doc=NULL;
 
     static char * kwlist[] = {"dispatcher", "identity", "_keepalive", "nin",
@@ -229,6 +229,10 @@ dufunc_init(PyDUFuncObject *self, PyObject *args, PyObject *kws)
                                                      name, doc, 0);
     if (!ufunc) {
         return -1;
+    }
+
+    for (idx = 0; idx < nout; idx++) {
+        ufunc->op_flags[idx + nin] |= NPY_ITER_READWRITE | NPY_ITER_UPDATEIFCOPY | NPY_ITER_ALLOCATE;
     }
 
     /* Construct a keepalive list if none was given. */

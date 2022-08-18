@@ -316,13 +316,6 @@ _unsupported = set([ 'frexp',
                      'modf',
                  ])
 
-# A list of ufuncs that are in fact aliases of other ufuncs. They need to insert the
-# resolve method, but not register the ufunc itself
-_aliases = set(["bitwise_not", "mod", "abs"])
-
-# In python3 np.divide is mapped to np.true_divide
-if np.divide == np.true_divide:
-    _aliases.add("divide")
 
 def _numpy_ufunc(name):
     func = getattr(np, name)
@@ -331,7 +324,11 @@ def _numpy_ufunc(name):
 
     typing_class.__name__ = "resolve_{0}".format(name)
 
-    if not name in _aliases:
+    # A list of ufuncs that are in fact aliases of other ufuncs. They need to
+    # insert the resolve method, but not register the ufunc itself
+    aliases = ("abs", "bitwise_not", "divide", "abs")
+
+    if name not in aliases:
         infer_global(func, types.Function(typing_class))
 
 all_ufuncs = sum([_math_operations, _trigonometric_functions,
@@ -360,7 +357,7 @@ supported_array_operators = set(
 
 del _math_operations, _trigonometric_functions, _bit_twiddling_functions
 del _comparison_functions, _floating_functions, _unsupported
-del _aliases, _numpy_ufunc
+del _numpy_ufunc
 
 
 # -----------------------------------------------------------------------------
@@ -491,7 +488,7 @@ def _parse_nested_sequence(context, typ):
         return n + 1, dtype
     elif isinstance(typ, (types.BaseTuple,)):
         if typ.count == 0:
-            # Mimick Numpy's behaviour
+            # Mimic Numpy's behaviour
             return 1, types.float64
         n, dtype = _parse_nested_sequence(context, typ[0])
         dtypes = [dtype]
@@ -529,59 +526,6 @@ class NpArray(CallableTemplate):
             return types.Array(dtype, ndim, 'C')
 
         return typer
-
-
-@glue_typing(np.empty)
-@glue_typing(np.zeros)
-@glue_typing(np.ones)
-class NdConstructor(CallableTemplate):
-    """
-    Typing template for np.empty(), .zeros(), .ones().
-    """
-
-    def generic(self):
-        def typer(shape, dtype=None):
-            if dtype is None:
-                nb_dtype = types.double
-            else:
-                nb_dtype = parse_dtype(dtype)
-
-            ndim = parse_shape(shape)
-            if nb_dtype is not None and ndim is not None:
-                return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
-
-        return typer
-
-
-@glue_typing(np.empty_like)
-@glue_typing(np.zeros_like)
-@glue_typing(np.ones_like)
-class NdConstructorLike(CallableTemplate):
-    """
-    Typing template for np.empty_like(), .zeros_like(), .ones_like().
-    """
-
-    def generic(self):
-        """
-        np.empty_like(array) -> empty array of the same shape and layout
-        np.empty_like(scalar) -> empty 0-d array of the scalar type
-        """
-        def typer(arg, dtype=None):
-            if dtype is not None:
-                nb_dtype = parse_dtype(dtype)
-            elif isinstance(arg, types.Array):
-                nb_dtype = arg.dtype
-            else:
-                nb_dtype = arg
-            if nb_dtype is not None:
-                if isinstance(arg, types.Array):
-                    layout = arg.layout if arg.layout != 'A' else 'C'
-                    return arg.copy(dtype=nb_dtype, layout=layout, readonly=False)
-                else:
-                    return types.Array(nb_dtype, 0, 'C')
-
-        return typer
-
 
 @glue_typing(np.full)
 class NdFull(CallableTemplate):
@@ -693,7 +637,7 @@ class NdSort(CallableTemplate):
 
     def generic(self):
         def typer(a):
-            if isinstance(a, types.Array) and a.ndim == 1:
+            if isinstance(a, types.Array):
                 return a
 
         return typer
@@ -1254,7 +1198,7 @@ class NumbaCArray(CallableTemplate):
     def generic(self):
         func_name = self.key.__name__
 
-        def typer(ptr, shape, dtype=types.none):
+        def typer(ptr, shape, dtype=None):
             if ptr is types.voidptr:
                 ptr_dtype = None
             elif isinstance(ptr, types.CPointer):
@@ -1263,7 +1207,7 @@ class NumbaCArray(CallableTemplate):
                 raise NumbaTypeError("%s(): pointer argument expected, got '%s'"
                                      % (func_name, ptr))
 
-            if dtype is types.none:
+            if dtype is None:
                 if ptr_dtype is None:
                     raise NumbaTypeError("%s(): explicit dtype required for void* argument"
                                          % (func_name,))

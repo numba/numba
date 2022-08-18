@@ -418,8 +418,7 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_sort(self, ary, args, kws):
         assert not args
         assert not kws
-        if ary.ndim == 1:
-            return signature(types.none)
+        return signature(types.none)
 
     @bound_function("array.argsort")
     def resolve_argsort(self, ary, args, kws):

@@ -131,7 +131,7 @@ def collect_gdbinfo():
 
 
 def display_gdbinfo(sep_pos=45):
-    """Displays the infomation collected by collect_gdbinfo.
+    """Displays the information collected by collect_gdbinfo.
     """
     gdb_info = collect_gdbinfo()
     print('-' * 80)

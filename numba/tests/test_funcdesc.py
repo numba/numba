@@ -25,10 +25,7 @@ def f(x):
         exec(compiled, objs)
 
         compiled_f = njit(objs['f'])
-        with self.assertRaises(ModuleNotFoundError) as raises:
-            compiled_f(0)
-        msg = "can't compile f: import of module mypackage failed"
-        self.assertIn(msg, str(raises.exception))
+        self.assertEqual(compiled_f(3), 3)
 
 
 class TestFuncDescMangledName(unittest.TestCase):

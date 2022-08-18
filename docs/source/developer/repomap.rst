@@ -22,8 +22,6 @@ Build and Packaging
 - :ghfile:`.pre-commit-config.yaml` - Configuration file for pre-commit hooks.
 - :ghfile:`.readthedocs.yml` - Configuration file for Read the Docs.
 - :ghfile:`buildscripts/condarecipe.local` - Conda build recipe
-- :ghfile:`buildscripts/condarecipe_clone_icc_rt` - Recipe to build a
-  standalone icc_rt package.
 
 
 Continuous Integration
@@ -32,7 +30,6 @@ Continuous Integration
   Win/Mac/Linux)
 - :ghfile:`buildscripts/azure/` - Azure Pipeline configuration for specific
   platforms
-- :ghfile:`buildscripts/appveyor/` - Appveyor build scripts
 - :ghfile:`buildscripts/incremental/` - Generic scripts for building Numba
   on various CI systems
 - :ghfile:`codecov.yml` - Codecov.io coverage reporting
@@ -477,7 +474,6 @@ CPU unit tests (GPU target unit tests listed in later sections
 
 - :ghfile:`runtests.py` - Convenience script that launches test runner and
   turns on full compiler tracebacks
-- :ghfile:`run_coverage.py` - Runs test suite with coverage tracking enabled
 - :ghfile:`.coveragerc` - Coverage.py configuration
 - :ghfile:`numba/runtests.py` - Entry point to unittest runner
 - :ghfile:`numba/testing/_runtests.py` - Implementation of custom test runner
@@ -512,8 +508,6 @@ Command Line Utilities
   standalone Python extension modules
 - :ghfile:`numba/pycc/llvm_types.py` - Aliases to LLVM data types used by
   ``compiler.py``
-- :ghfile:`numba/pycc/pycc` - Stub to call main function.  Is this still
-  used?
 - :ghfile:`numba/pycc/modulemixin.c` - C file compiled into every compiled
   extension.  Pulls in C source from Numba core that is needed to make
   extension standalone
@@ -541,9 +535,9 @@ Note that the CUDA target does reuse some parts of the CPU target.
 - :ghfile:`numba/cuda/compiler.py` - Compiler pipeline for CUDA target
 - :ghfile:`numba/cuda/intrinsic_wrapper.py` - CUDA device intrinsics
   (shuffle, ballot, etc)
-- :ghfile:`numba/cuda/initialize.py` - Defered initialization of the CUDA
+- :ghfile:`numba/cuda/initialize.py` - Deferred initialization of the CUDA
   device and subsystem.  Called only when user imports ``numba.cuda``
-- :ghfile:`numba/cuda/simulator_init.py` - Initalizes the CUDA simulator
+- :ghfile:`numba/cuda/simulator_init.py` - Initializes the CUDA simulator
   subsystem (only when user requests it with env var)
 - :ghfile:`numba/cuda/random.py` - Implementation of random number generator
 - :ghfile:`numba/cuda/api.py` - User facing APIs imported into ``numba.cuda.*``

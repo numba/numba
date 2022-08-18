@@ -40,13 +40,14 @@ from numba.cuda.cudadrv import enums, drvapi, _extras
 USE_NV_BINDING = config.CUDA_USE_NVIDIA_BINDING
 
 if USE_NV_BINDING:
-    from cuda import cuda as binding
+    from cuda import cuda as binding, nvrtc
     # There is no definition of the default stream in the Nvidia bindings (nor
     # is there at the C/C++ level), so we define it here so we don't need to
     # use a magic number 0 in places where we want the default stream.
     CU_STREAM_DEFAULT = 0
 
-MIN_REQUIRED_CC = (3, 0)
+MIN_REQUIRED_CC = (3, 5)
+SUPPORTS_IPC = sys.platform.startswith('linux')
 
 
 _py_decref = ctypes.pythonapi.Py_DecRef
@@ -84,6 +85,10 @@ class DeadMemoryError(RuntimeError):
 
 
 class LinkerError(RuntimeError):
+    pass
+
+
+class NvrtcError(RuntimeError):
     pass
 
 
@@ -195,10 +200,6 @@ def _getpid():
 
 
 ERROR_MAP = _build_reverse_error_map()
-
-MISSING_FUNCTION_ERRMSG = """driver missing function: %s.
-Requires CUDA 9.2 or above.
-"""
 
 
 class Driver(object):
@@ -366,7 +367,7 @@ class Driver(object):
         # Not found.
         # Delay missing function error to use
         def absent_function(*args, **kws):
-            raise CudaDriverError(MISSING_FUNCTION_ERRMSG % fname)
+            raise CudaDriverError(f'Driver missing function: {fname}')
 
         setattr(self, fname, absent_function)
         return absent_function
@@ -1372,8 +1373,10 @@ class Context(object):
 
     def get_ipc_handle(self, memory):
         """
-        Returns a *IpcHandle* from a GPU allocation.
+        Returns an *IpcHandle* from a GPU allocation.
         """
+        if not SUPPORTS_IPC:
+            raise OSError('OS does not support CUDA IPC')
         return self.memory_manager.get_ipc_handle(memory)
 
     def open_ipc_handle(self, handle, size):
@@ -2282,8 +2285,7 @@ class Stream(object):
         Return an awaitable that resolves once all preceding stream operations
         are complete. The result of the awaitable is the current stream.
         """
-        loop = asyncio.get_running_loop() if utils.PYVERSION >= (3, 7) \
-            else asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         future = loop.create_future()
 
         def resolver(future, status):
@@ -2606,14 +2608,32 @@ class Linker(metaclass=ABCMeta):
         """Add PTX source in a string to the link"""
 
     @abstractmethod
+    def add_cu(self, cu, name):
+        """Add CUDA source in a string to the link. The name of the source
+        file should be specified in `name`."""
+
+    @abstractmethod
     def add_file(self, path, kind):
         """Add code from a file to the link"""
 
+    def add_cu_file(self, path):
+        with open(path, 'rb') as f:
+            cu = f.read()
+        self.add_cu(cu, os.path.basename(path))
+
     def add_file_guess_ext(self, path):
         """Add a file to the link, guessing its type from its extension."""
-        ext = path.rsplit('.', 1)[1]
-        kind = FILE_EXTENSION_MAP[ext]
-        self.add_file(path, kind)
+        ext = os.path.splitext(path)[1][1:]
+        if ext == '':
+            raise RuntimeError("Don't know how to link file with no extension")
+        elif ext == 'cu':
+            self.add_cu_file(path)
+        else:
+            kind = FILE_EXTENSION_MAP.get(ext, None)
+            if kind is None:
+                raise RuntimeError("Don't know how to link file with extension "
+                                   f".{ext}")
+            self.add_file(path, kind)
 
     @abstractmethod
     def complete(self):
@@ -2700,6 +2720,10 @@ class CtypesLinker(Linker):
                 msg = "%s\n%s" % (e, self.error_log)
             raise LinkerError(msg)
 
+    def add_cu(self, path, name):
+        raise NotImplementedError("Linking CUDA source files is not supported "
+                                  "with the ctypes binding. ")
+
     def complete(self):
         cubin = c_void_p(0)
         size = c_size_t(0)
@@ -2713,6 +2737,89 @@ class CtypesLinker(Linker):
         assert size > 0, 'linker returned a zero sized cubin'
         del self._keep_alive[:]
         return cubin, size
+
+
+class NvrtcProgram:
+    """NvrtcProgram is for the managing the lifetime of nvrtcProgram objects.
+
+    If an error occurs during an NVRTC call, an exception is raised. When an
+    instance of this class is deleted, it attempts to delete the underlying
+    nvrtcProgram."""
+
+    def __init__(self, src, name):
+        # Create an nvrtcProgram
+        err, program = nvrtc.nvrtcCreateProgram(src, name.encode(), 0, [], [])
+        self.check(err)
+        self._program = program
+
+        with driver.get_active_context() as ac:
+            dev = driver.get_device(ac.devnum)
+            major, minor = dev.compute_capability
+
+        # Compilation options:
+        # - Compile for the current device's compute capability.
+        # - The CUDA include path is added.
+        # - Relocatable Device Code (rdc) is needed to prevent device functions
+        #   being optimized away.
+        arch = f'--gpu-architecture=compute_{major}{minor}'.encode()
+        include = f'-I{config.CUDA_INCLUDE_PATH}'.encode()
+        opts = [arch, include, b'-rdc', b'true']
+
+        # Compile the program
+        err, = nvrtc.nvrtcCompileProgram(self._program, len(opts), opts)
+
+        # First check whether the call failed due to a "normal" compiler error
+        compile_error = (err == nvrtc.nvrtcResult.NVRTC_ERROR_COMPILATION)
+        if not compile_error:
+            # Check for any other error
+            self.check(err)
+
+        # Get log from compilation
+        err, log_size = nvrtc.nvrtcGetProgramLogSize(self._program)
+        self.check(err)
+        log = b' ' * log_size
+        err, = nvrtc.nvrtcGetProgramLog(self._program, log)
+        self.check(err)
+
+        # If the compile failed, provide the log in an exception
+        if compile_error:
+            msg = (f'NVRTC Compilation failure whilst compiling {name}:\n\n'
+                   f'{log.decode()}')
+            raise NvrtcError(msg)
+
+        # Otherwise, if there's any content in the log, present it as a warning
+        if log_size > 1:
+            msg = (f"NVRTC log messages whilst compiling {name}:\n\n"
+                   f"{log.decode()}")
+            warnings.warn(msg)
+
+        # Get and cache the PTX
+        err, ptx_len = nvrtc.nvrtcGetPTXSize(self._program)
+        self.check(err)
+        ptx = b' ' * ptx_len
+        err, = nvrtc.nvrtcGetPTX(self._program, ptx)
+        self.check(err)
+
+        self._ptx = ptx
+
+    def __del__(self):
+        if self._program:
+            err, = nvrtc.nvrtcDestroyProgram(self._program)
+            self.check(err)
+
+    @property
+    def ptx(self):
+        return self._ptx
+
+    def check(self, err):
+        if isinstance(err, binding.CUresult):
+            if err != binding.CUresult.CUDA_SUCCESS:
+                raise RuntimeError('CUDA Error calling NVRTC: {}'.format(err))
+        elif isinstance(err, nvrtc.nvrtcResult):
+            if err != nvrtc.nvrtcResult.NVRTC_SUCCESS:
+                raise RuntimeError('NVRTC Error: {}'.format(err))
+        else:
+            raise RuntimeError('Unknown error type: {}'.format(err))
 
 
 class CudaPythonLinker(Linker):
@@ -2776,6 +2883,18 @@ class CudaPythonLinker(Linker):
                                  namebuf, 0, [], [])
         except CudaAPIError as e:
             raise LinkerError("%s\n%s" % (e, self.error_log))
+
+    def add_cu(self, cu, name):
+        program = NvrtcProgram(cu, name)
+
+        if config.DUMP_ASSEMBLY:
+            print(("ASSEMBLY %s" % name).center(80, '-'))
+            print(program.ptx.decode())
+            print('=' * 80)
+
+        # Link the program's PTX using the normal linker mechanism
+        ptx_name = os.path.splitext(name)[0] + ".ptx"
+        self.add_ptx(program.ptx, ptx_name)
 
     def add_file(self, path, kind):
         pathbuf = path.encode("utf8")

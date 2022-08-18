@@ -28,6 +28,7 @@ class TestNvvmDriver(unittest.TestCase):
 
     def test_nvvm_from_llvm(self):
         m = ir.Module("test_nvvm_from_llvm")
+        m.triple = 'nvptx64-nvidia-cuda'
         fty = ir.FunctionType(ir.VoidType(), [ir.IntType(32)])
         kernel = ir.Function(m, fty, name='mycudakernel')
         bldr = ir.IRBuilder(kernel.append_basic_block('entry'))
@@ -41,6 +42,13 @@ class TestNvvmDriver(unittest.TestCase):
             self.assertTrue('.address_size 64' in ptx)
         else:
             self.assertTrue('.address_size 32' in ptx)
+
+    def test_nvvm_ir_verify_fail(self):
+        m = ir.Module("test_bad_ir")
+        m.triple = "unknown-unknown-unknown"
+        fix_data_layout(m)
+        with self.assertRaisesRegex(NvvmError, 'Invalid target triple'):
+            llvm_to_ptx(str(m))
 
     def _test_nvvm_support(self, arch):
         compute_xx = 'compute_{0}{1}'.format(*arch)
@@ -76,9 +84,9 @@ class TestNvvmDriver(unittest.TestCase):
 class TestArchOption(unittest.TestCase):
     def test_get_arch_option(self):
         # Test returning the nearest lowest arch.
-        self.assertEqual(get_arch_option(5, 0), 'compute_50')
-        self.assertEqual(get_arch_option(5, 1), 'compute_50')
-        self.assertEqual(get_arch_option(3, 7), 'compute_35')
+        self.assertEqual(get_arch_option(5, 3), 'compute_53')
+        self.assertEqual(get_arch_option(7, 5), 'compute_75')
+        self.assertEqual(get_arch_option(7, 7), 'compute_75')
         # Test known arch.
         supported_cc = get_supported_ccs()
         for arch in supported_cc:
@@ -89,20 +97,14 @@ class TestArchOption(unittest.TestCase):
 
 @skip_on_cudasim('NVVM Driver unsupported in the simulator')
 class TestLibDevice(unittest.TestCase):
-    def _libdevice_load(self, arch, expect):
-        libdevice = LibDevice(arch=arch)
-        self.assertEqual(libdevice.arch, expect)
-
-    def test_libdevice_arch_fix(self):
-        self._libdevice_load('compute_20', 'compute_20')
-        self._libdevice_load('compute_21', 'compute_20')
-        self._libdevice_load('compute_30', 'compute_30')
-        self._libdevice_load('compute_35', 'compute_35')
-        self._libdevice_load('compute_52', 'compute_50')
+    def test_libdevice_load(self):
+        # Test that constructing LibDevice gives a bitcode file
+        libdevice = LibDevice()
+        self.assertEqual(libdevice.bc[:4], b'BC\xc0\xde')
 
 
 nvvmir_generic = '''\
-target triple="nvptx64-"
+target triple="nvptx64-nvidia-cuda"
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64"
 
 define i32 @ave(i32 %a, i32 %b) {

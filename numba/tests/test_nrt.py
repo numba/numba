@@ -23,8 +23,9 @@ import llvmlite.binding as llvm
 import numba.core.typing.cffi_utils as cffi_support
 from numba.core.unsafe.nrt import NRT_get_api
 
-from numba.tests.support import (MemoryLeakMixin, TestCase, temp_directory,
-                                 import_dynamic)
+from numba.tests.support import (EnableNRTStatsMixin, TestCase, temp_directory,
+                                 import_dynamic, skip_if_32bit,
+                                 run_in_subprocess)
 from numba.core.registry import cpu_target
 import unittest
 
@@ -219,6 +220,26 @@ class TestNrtMemInfo(unittest.TestCase):
         # We can't check this deterministically because the memory could be
         # consumed by another thread.
 
+    @skip_if_32bit
+    def test_allocate_invalid_size(self):
+        # Checks that attempting to allocate too big a region fails gracefully.
+        size = types.size_t.maxval // 8 // 2
+        for pred in (True, False):
+            with self.assertRaises(MemoryError) as raises:
+                rtsys.meminfo_alloc(size, safe=pred)
+            self.assertIn(f"Requested allocation of {size} bytes failed.",
+                          str(raises.exception))
+
+    def test_allocate_negative_size(self):
+        # Checks that attempting to allocate negative number of bytes fails
+        # gracefully.
+        size = -10
+        for pred in (True, False):
+            with self.assertRaises(ValueError) as raises:
+                rtsys.meminfo_alloc(size, safe=pred)
+            msg = f"Cannot allocate a negative number of bytes: {size}."
+            self.assertIn(msg, str(raises.exception))
+
 
 class TestTracemalloc(unittest.TestCase):
     """
@@ -284,7 +305,7 @@ class TestTracemalloc(unittest.TestCase):
         self.assertLess(stat.size, N * 0.01)
 
 
-class TestNRTIssue(MemoryLeakMixin, TestCase):
+class TestNRTIssue(TestCase):
     def test_issue_with_refct_op_pruning(self):
         """
         GitHub Issue #1244 https://github.com/numba/numba/issues/1244
@@ -554,13 +575,13 @@ br i1 %.294, label %B42, label %B160
 
 
 @unittest.skipUnless(cffi_support.SUPPORTED, "cffi required")
-class TestNrtExternalCFFI(MemoryLeakMixin, TestCase):
+class TestNrtExternalCFFI(EnableNRTStatsMixin, TestCase):
     """Testing the use of externally compiled C code that use NRT
     """
     def setUp(self):
         # initialize the NRT (in case the tests are run in isolation)
-        super(TestNrtExternalCFFI, self).setUp()
         cpu_target.target_context
+        super(TestNrtExternalCFFI, self).setUp()
 
     def compile_cffi_module(self, name, source, cdef):
         from cffi import FFI
@@ -610,7 +631,7 @@ NRT_MemInfo* test_nrt_api(NRT_api_functions *nrt) {
         """
         cdef = """
 void* test_nrt_api(void *nrt);
-int status;
+extern int status;
         """
 
         ffi, mod = self.compile_cffi_module(name, source, cdef)
@@ -670,6 +691,145 @@ NRT_MemInfo* test_nrt_api(NRT_api_functions *nrt, size_t n) {
         expect = int(ffi.cast('size_t', self.get_nrt_api_table()))
         got = test_nrt_api()
         self.assertEqual(expect, got)
+
+
+class TestNrtStatistics(TestCase):
+
+    def setUp(self):
+        # Store the current stats state
+        self.__stats_state = _nrt_python.memsys_stats_enabled()
+
+    def tearDown(self):
+        # Set stats state back to whatever it was before the test ran
+        if self.__stats_state:
+            _nrt_python.memsys_enable_stats()
+        else:
+            _nrt_python.memsys_disable_stats()
+
+    def test_stats_env_var_explicit_on(self):
+        # Checks that explicitly turning the stats on via the env var works.
+        src = """if 1:
+        from numba import njit
+        import numpy as np
+        from numba.core.runtime import rtsys, _nrt_python
+
+        @njit
+        def foo():
+            return np.arange(10)[0]
+
+        assert _nrt_python.memsys_stats_enabled()
+        orig_stats = rtsys.get_allocation_stats()
+        foo()
+        new_stats = rtsys.get_allocation_stats()
+        total_alloc = new_stats.alloc - orig_stats.alloc
+        total_free = new_stats.free - orig_stats.free
+        total_mi_alloc = new_stats.mi_alloc - orig_stats.mi_alloc
+        total_mi_free = new_stats.mi_free - orig_stats.mi_free
+
+        expected = 1
+        assert total_alloc == expected
+        assert total_free == expected
+        assert total_mi_alloc == expected
+        assert total_mi_free == expected
+        """
+        # Check env var explicitly being set works
+        env = os.environ.copy()
+        env['NUMBA_NRT_STATS'] = "1"
+        run_in_subprocess(src, env=env)
+
+    def check_env_var_off(self, env):
+
+        src = """if 1:
+        from numba import njit
+        import numpy as np
+        from numba.core.runtime import rtsys, _nrt_python
+
+        @njit
+        def foo():
+            return np.arange(10)[0]
+
+        assert _nrt_python.memsys_stats_enabled() == False
+        try:
+            rtsys.get_allocation_stats()
+        except RuntimeError as e:
+            assert "NRT stats are disabled." in str(e)
+        """
+        run_in_subprocess(src, env=env)
+
+    def test_stats_env_var_explicit_off(self):
+        # Checks that explicitly turning the stats off via the env var works.
+        env = os.environ.copy()
+        env['NUMBA_NRT_STATS'] = "0"
+        self.check_env_var_off(env)
+
+    def test_stats_env_var_default_off(self):
+        # Checks that the env var not being set is the same as "off", i.e.
+        # default for Numba is off.
+        env = os.environ.copy()
+        env.pop('NUMBA_NRT_STATS', None)
+        self.check_env_var_off(env)
+
+    def test_stats_status_toggle(self):
+
+        @njit
+        def foo():
+            tmp = np.ones(3)
+            return np.arange(5 * tmp[0])
+
+        # Switch on stats
+        _nrt_python.memsys_enable_stats()
+        # check the stats are on
+        self.assertTrue(_nrt_python.memsys_stats_enabled())
+
+        for i in range(2):
+            # capture the stats state
+            stats_1 = rtsys.get_allocation_stats()
+            # Switch off stats
+            _nrt_python.memsys_disable_stats()
+            # check the stats are off
+            self.assertFalse(_nrt_python.memsys_stats_enabled())
+            # run something that would move the counters were they enabled
+            foo()
+            # Switch on stats
+            _nrt_python.memsys_enable_stats()
+            # check the stats are on
+            self.assertTrue(_nrt_python.memsys_stats_enabled())
+            # capture the stats state (should not have changed)
+            stats_2 = rtsys.get_allocation_stats()
+            # run something that will move the counters
+            foo()
+            # capture the stats state (should have changed)
+            stats_3 = rtsys.get_allocation_stats()
+            # check stats_1 == stats_2
+            self.assertEqual(stats_1, stats_2)
+            # check stats_2 < stats_3
+            self.assertLess(stats_2, stats_3)
+
+    def test_rtsys_stats_query_raises_exception_when_disabled(self):
+        # Checks that the standard rtsys.get_allocation_stats() query raises
+        # when stats counters are turned off.
+
+        _nrt_python.memsys_disable_stats()
+        self.assertFalse(_nrt_python.memsys_stats_enabled())
+
+        with self.assertRaises(RuntimeError) as raises:
+            rtsys.get_allocation_stats()
+
+        self.assertIn("NRT stats are disabled.", str(raises.exception))
+
+    def test_nrt_explicit_stats_query_raises_exception_when_disabled(self):
+        # Checks the various memsys_get_stats functions raise if queried when
+        # the stats counters are disabled.
+        method_variations = ('alloc', 'free', 'mi_alloc', 'mi_free')
+        for meth in method_variations:
+            stats_func = getattr(_nrt_python, f'memsys_get_stats_{meth}')
+            with self.subTest(stats_func=stats_func):
+                # Turn stats off
+                _nrt_python.memsys_disable_stats()
+                self.assertFalse(_nrt_python.memsys_stats_enabled())
+                with self.assertRaises(RuntimeError) as raises:
+                    stats_func()
+                self.assertIn("NRT stats are disabled.", str(raises.exception))
 
 
 if __name__ == '__main__':

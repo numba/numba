@@ -158,10 +158,6 @@ class _TestModule(TestCase):
         aligned_rec = mod.record_return(mod.aligned_arr, 1)
         self.assertPreciseEqual(tuple(aligned_rec), (2, 43.5))
 
-    # For 2.x
-    def runTest(self):
-        raise NotImplementedError
-
 
 @jit(cache=True)
 def first_class_function_mul(x):

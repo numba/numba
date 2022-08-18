@@ -738,7 +738,7 @@ def impl_get(dct, key, default=None):
 
     def impl(dct, key, default=None):
         castedkey = _cast(key, keyty)
-        ix, val = _dict_lookup(dct, key, hash(castedkey))
+        ix, val = _dict_lookup(dct, castedkey, hash(castedkey))
         if ix > DKIX.EMPTY:
             return val
         return default
@@ -909,6 +909,19 @@ def impl_values(d):
     def impl(d):
         return _dict_values(d)
 
+    return impl
+
+
+@overload_method(types.DictType, 'update')
+def ol_dict_update(d, other):
+    if not isinstance(d, types.DictType):
+        return
+    if not isinstance(other, types.DictType):
+        return
+
+    def impl(d, other):
+        for k, v in other.items():
+            d[k] = v
     return impl
 
 
@@ -1299,6 +1312,7 @@ def literalstrkeydict_banned_impl_delitem(d, k):
 @overload_method(types.LiteralStrKeyDict, 'pop')
 @overload_method(types.LiteralStrKeyDict, 'clear')
 @overload_method(types.LiteralStrKeyDict, 'setdefault')
+@overload_method(types.LiteralStrKeyDict, 'update')
 def literalstrkeydict_banned_impl_mutators(d, *args):
     if not isinstance(d, types.LiteralStrKeyDict):
         return

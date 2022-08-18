@@ -2648,7 +2648,7 @@ def _kron_normaliser_impl(x):
     if isinstance(x, types.Array):
         if x.layout not in ('C', 'F'):
             raise TypingError("np.linalg.kron only supports 'C' or 'F' layout "
-                              "input arrays. Receieved an input of "
+                              "input arrays. Received an input of "
                               "layout '{}'.".format(x.layout))
         elif x.ndim == 2:
             @register_jitable

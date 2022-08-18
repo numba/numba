@@ -16,7 +16,7 @@ from numba import pndindex, literal_unroll
 from numba.core import types, utils, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, carray, farray, is_contiguous,
                                     is_fortran, check_is_integer)
-from numba.np.numpy_support import type_can_asarray, is_nonelike
+from numba.np.numpy_support import type_can_asarray, is_nonelike, numpy_version
 from numba.core.imputils import (lower_builtin, lower_getattr,
                                  lower_getattr_generic,
                                  lower_setattr_generic,
@@ -32,6 +32,8 @@ from numba.cpython import slicing
 from numba.cpython.unsafe.tuple import tuple_setitem, build_full_slice_tuple
 from numba.core.overload_glue import glue_lowering
 from numba.core.extending import overload_classmethod
+from numba.core.typing.npydecl import (parse_dtype as ty_parse_dtype,
+                                       parse_shape as ty_parse_shape)
 
 
 def set_range_metadata(builder, load, lower_bound, upper_bound):
@@ -187,7 +189,19 @@ def populate_array(array, data, shape, strides, itemsize, meminfo,
     context = array._context
     builder = array._builder
     datamodel = array._datamodel
-    required_fields = set(datamodel._fields)
+    # doesn't matter what this array type instance is, it's just to get the
+    # fields for the datamodel of the standard array type in this context
+    standard_array = types.Array(types.float64, 1, 'C')
+    standard_array_type_datamodel = context.data_model_manager[standard_array]
+    required_fields = set(standard_array_type_datamodel._fields)
+    datamodel_fields = set(datamodel._fields)
+    # Make sure that the presented array object has a data model that is close
+    # enough to an array for this function to proceed.
+    if (required_fields & datamodel_fields) != required_fields:
+        missing = required_fields - datamodel_fields
+        msg = (f"The datamodel for type {array._fe_type} is missing "
+               f"field{'s' if len(missing) > 1 else ''} {missing}.")
+        raise ValueError(msg)
 
     if meminfo is None:
         meminfo = Constant(context.get_value_type(
@@ -1086,7 +1100,7 @@ def offset_bounds_from_strides(context, builder, arrty, arr, shapes, strides):
     Compute a half-open range [lower, upper) of byte offsets from the
     array's data pointer, that bound the in-memory extent of the array.
 
-    This mimicks offset_bounds_from_strides() from
+    This mimics offset_bounds_from_strides() from
     numpy/core/src/private/mem_overlap.c
     """
     itemsize = arr.itemsize
@@ -1382,6 +1396,125 @@ def numpy_broadcast_to(array, shape):
     return impl
 
 
+@register_jitable
+def numpy_broadcast_shapes_list(r, m, shape):
+    for i in range(len(shape)):
+        k = m - len(shape) + i
+        tmp = shape[i]
+        if tmp < 0:
+            raise ValueError("negative dimensions are not allowed")
+        if tmp == 1:
+            continue
+        if r[k] == 1:
+            r[k] = tmp
+        elif r[k] != tmp:
+            raise ValueError("shape mismatch: objects"
+                             " cannot be broadcast"
+                             " to a single shape")
+
+
+def ol_numpy_broadcast_shapes(*args):
+    # Based on https://github.com/numpy/numpy/blob/f702b26fff3271ba6a6ba29a021fc19051d1f007/numpy/core/src/multiarray/iterators.c#L1129-L1212  # noqa
+    for idx, arg in enumerate(args):
+        is_int = isinstance(arg, types.Integer)
+        is_int_tuple = isinstance(arg, types.UniTuple) and \
+            isinstance(arg.dtype, types.Integer)
+        is_empty_tuple = isinstance(arg, types.Tuple) and len(arg.types) == 0
+        if not (is_int or is_int_tuple or is_empty_tuple):
+            msg = (f'Argument {idx} must be either an int or tuple[int]. '
+                   f'Got {arg}')
+            raise errors.TypingError(msg)
+
+    # discover the number of dimensions
+    m = 0
+    for arg in args:
+        if isinstance(arg, types.Integer):
+            m = max(m, 1)
+        elif isinstance(arg, types.BaseTuple):
+            m = max(m, len(arg))
+
+    if m == 0:
+        return lambda *args: ()
+    else:
+        tup_init = (1,) * m
+
+        def impl(*args):
+            # propagate args
+            r = [1] * m
+            tup = tup_init
+            for arg in literal_unroll(args):
+                if isinstance(arg, tuple) and len(arg) > 0:
+                    numpy_broadcast_shapes_list(r, m, arg)
+                elif isinstance(arg, int):
+                    numpy_broadcast_shapes_list(r, m, (arg,))
+            for idx, elem in enumerate(r):
+                tup = tuple_setitem(tup, idx, elem)
+            return tup
+        return impl
+
+
+if numpy_version >= (1, 20):
+    overload(np.broadcast_shapes)(ol_numpy_broadcast_shapes)
+
+
+@overload(np.broadcast_arrays)
+def numpy_broadcast_arrays(*args):
+
+    for idx, arg in enumerate(args):
+        if not type_can_asarray(arg):
+            raise errors.TypingError(f'Argument "{idx}" must '
+                                     'be array-like')
+
+    unified_dtype = None
+    dt = None
+    for arg in args:
+        if isinstance(arg, (types.Array, types.BaseTuple)):
+            dt = arg.dtype
+        else:
+            dt = arg
+
+        if unified_dtype is None:
+            unified_dtype = dt
+        elif unified_dtype != dt:
+            raise errors.TypingError('Mismatch of argument types. Numba cannot '
+                                     'broadcast arrays with different types. '
+                                     f'Got {args}')
+
+    # number of dimensions
+    m = 0
+    for idx, arg in enumerate(args):
+        if isinstance(arg, types.ArrayCompatible):
+            m = max(m, arg.ndim)
+        elif isinstance(arg, (types.Number, types.Boolean, types.BaseTuple)):
+            m = max(m, 1)
+        else:
+            raise errors.TypingError(f'Unhandled type {arg}')
+
+    tup_init = (0,) * m
+
+    def impl(*args):
+        # find out the output shape
+        # we can't call np.broadcast_shapes here since args may have arrays
+        # with different shapes and it is not possible to create a list
+        # with those shapes dynamically
+        shape = [1] * m
+        for array in literal_unroll(args):
+            numpy_broadcast_shapes_list(shape, m, np.asarray(array).shape)
+
+        tup = tup_init
+
+        for i in range(m):
+            tup = tuple_setitem(tup, i, shape[i])
+
+        # numpy checks if the input arrays have the same shape as `shape`
+        outs = []
+        for array in literal_unroll(args):
+            outs.append(np.broadcast_to(np.asarray(array), tup))
+        return outs
+
+    return impl
+
+
 def fancy_setslice(context, builder, sig, args, index_types, indices):
     """
     Implement slice assignment for arrays.  This implementation works for
@@ -1486,7 +1619,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
     source_indices = tuple(c for c in counts if c is not None)
     val = src_getitem(source_indices)
 
-    # Cast to the destination dtype (cross-dtype slice assignement is allowed)
+    # Cast to the destination dtype (cross-dtype slice assignment is allowed)
     val = context.cast(builder, val, src_dtype, aryty.dtype)
 
     # No need to check for wraparound, as the indexers all ensure
@@ -1494,7 +1627,8 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
     dest_ptr = cgutils.get_item_pointer2(context, builder, dest_data,
                                          dest_shapes, dest_strides,
                                          aryty.layout, dest_indices,
-                                         wraparound=False)
+                                         wraparound=False,
+                                         boundscheck=context.enable_boundscheck)
     store_item(context, builder, aryty, val, dest_ptr)
 
     indexer.end_loops()
@@ -1897,16 +2031,46 @@ def array_flatten(context, builder, sig, args):
     return res
 
 
+@register_jitable
+def _np_clip_impl(a, a_min, a_max, out):
+    # Both a_min and a_max are numpy arrays
+    ret = np.empty_like(a) if out is None else out
+    a_b, a_min_b, a_max_b = np.broadcast_arrays(a, a_min, a_max)
+    for index in np.ndindex(a_b.shape):
+        val_a = a_b[index]
+        val_a_min = a_min_b[index]
+        val_a_max = a_max_b[index]
+        ret[index] = min(max(val_a, val_a_min), val_a_max)
+
+    return ret
+
+
+@register_jitable
+def _np_clip_impl_none(a, b, use_min, out):
+    for index in np.ndindex(a.shape):
+        val_a = a[index]
+        val_b = b[index]
+        if use_min:
+            out[index] = min(val_a, val_b)
+        else:
+            out[index] = max(val_a, val_b)
+    return out
+
+
 @overload(np.clip)
 def np_clip(a, a_min, a_max, out=None):
     if not type_can_asarray(a):
         raise errors.TypingError('The argument "a" must be array-like')
 
-    if not isinstance(a_min, (types.NoneType, types.Number)):
-        raise errors.TypingError('The argument "a_min" must be a number')
+    if (not isinstance(a_min, types.NoneType) and
+            not type_can_asarray(a_min)):
+        raise errors.TypingError(('The argument "a_min" must be a number '
+                                 'or an array-like'))
 
-    if not isinstance(a_max, (types.NoneType, types.Number)):
-        raise errors.TypingError('The argument "a_max" must be a number')
+    if (not isinstance(a_max, types.NoneType) and
+            not type_can_asarray(a_max)):
+        raise errors.TypingError('The argument "a_max" must be a number '
+                                 'or an array-like')
 
     if not (isinstance(out, types.Array) or is_nonelike(out)):
         msg = 'The argument "out" must be an array if it is provided'
@@ -1916,28 +2080,103 @@ def np_clip(a, a_min, a_max, out=None):
     a_min_is_none = a_min is None or isinstance(a_min, types.NoneType)
     a_max_is_none = a_max is None or isinstance(a_max, types.NoneType)
 
-    def np_clip_impl(a, a_min, a_max, out=None):
-        if a_min_is_none and a_max_is_none:
+    if a_min_is_none and a_max_is_none:
+        # Raises value error when both a_min and a_max are None
+        def np_clip_nn(a, a_min, a_max, out=None):
             raise ValueError("array_clip: must set either max or min")
 
-        ret = np.empty_like(a) if out is None else out
+        return np_clip_nn
 
-        for index, val in np.ndenumerate(a):
-            if a_min_is_none:
-                if val > a_max:
-                    ret[index] = a_max
-                else:
-                    ret[index] = val
-            elif a_max_is_none:
-                if val < a_min:
-                    ret[index] = a_min
-                else:
-                    ret[index] = val
-            else:
-                ret[index] = min(max(val, a_min), a_max)
-        return ret
+    a_min_is_scalar = isinstance(a_min, types.Number)
+    a_max_is_scalar = isinstance(a_max, types.Number)
 
-    return np_clip_impl
+    if a_min_is_scalar and a_max_is_scalar:
+        def np_clip_ss(a, a_min, a_max, out=None):
+            # a_min and a_max are scalars
+            # since their shape will be empty
+            # so broadcasting is not needed at all
+            ret = np.empty_like(a) if out is None else out
+            for index in np.ndindex(a.shape):
+                val_a = a[index]
+                ret[index] = min(max(val_a, a_min), a_max)
+
+            return ret
+
+        return np_clip_ss
+    elif a_min_is_scalar and not a_max_is_scalar:
+        if a_max_is_none:
+            def np_clip_sn(a, a_min, a_max, out=None):
+                # a_min is a scalar
+                # since its shape will be empty
+                # so broadcasting is not needed at all
+                ret = np.empty_like(a) if out is None else out
+                for index in np.ndindex(a.shape):
+                    val_a = a[index]
+                    ret[index] = max(val_a, a_min)
+
+                return ret
+
+            return np_clip_sn
+        else:
+            def np_clip_sa(a, a_min, a_max, out=None):
+                # a_min is a scalar
+                # since its shape will be empty
+                # broadcast it to shape of a
+                # by using np.full_like
+                a_min_full = np.full_like(a, a_min)
+                return _np_clip_impl(a, a_min_full, a_max, out)
+
+            return np_clip_sa
+    elif not a_min_is_scalar and a_max_is_scalar:
+        if a_min_is_none:
+            def np_clip_ns(a, a_min, a_max, out=None):
+                # a_max is a scalar
+                # since its shape will be empty
+                # so broadcasting is not needed at all
+                ret = np.empty_like(a) if out is None else out
+                for index in np.ndindex(a.shape):
+                    val_a = a[index]
+                    ret[index] = min(val_a, a_max)
+
+                return ret
+
+            return np_clip_ns
+        else:
+            def np_clip_as(a, a_min, a_max, out=None):
+                # a_max is a scalar
+                # since its shape will be empty
+                # broadcast it to shape of a
+                # by using np.full_like
+                a_max_full = np.full_like(a, a_max)
+                return _np_clip_impl(a, a_min, a_max_full, out)
+
+            return np_clip_as
+    else:
+        # Case where exactly one of a_min or a_max is None
+        if a_min_is_none:
+            def np_clip_na(a, a_min, a_max, out=None):
+                # a_max is a numpy array but a_min is None
+                ret = np.empty_like(a) if out is None else out
+                a_b, a_max_b = np.broadcast_arrays(a, a_max)
+                return _np_clip_impl_none(a_b, a_max_b, True, ret)
+
+            return np_clip_na
+        elif a_max_is_none:
+            def np_clip_an(a, a_min, a_max, out=None):
+                # a_min is a numpy array but a_max is None
+                ret = np.empty_like(a) if out is None else out
+                a_b, a_min_b = np.broadcast_arrays(a, a_min)
+                return _np_clip_impl_none(a_b, a_min_b, False, ret)
+
+            return np_clip_an
+        else:
+            def np_clip_aa(a, a_min, a_max, out=None):
+                # Both a_min and a_max are clearly arrays
+                # because none of the above branches
+                # returned
+                return _np_clip_impl(a, a_min, a_max, out)
+
+            return np_clip_aa
 
 
 @overload_method(types.Array, 'clip')
@@ -2352,7 +2591,7 @@ def array_flags(context, builder, typ, value):
 @lower_getattr(types.ArrayFlags, "c_contiguous")
 def array_flags_c_contiguous(context, builder, typ, value):
     if typ.array_type.layout != 'C':
-        # any layout can stil be contiguous
+        # any layout can still be contiguous
         flagsobj = context.make_helper(builder, typ, value=value)
         res = _call_contiguous_check(is_contiguous, context, builder,
                                      typ.array_type, flagsobj.parent)
@@ -2365,7 +2604,7 @@ def array_flags_c_contiguous(context, builder, typ, value):
 @lower_getattr(types.ArrayFlags, "f_contiguous")
 def array_flags_f_contiguous(context, builder, typ, value):
     if typ.array_type.layout != 'F':
-        # any layout can stil be contiguous
+        # any layout can still be contiguous
         flagsobj = context.make_helper(builder, typ, value=value)
         res = _call_contiguous_check(is_fortran, context, builder,
                                      typ.array_type, flagsobj.parent)
@@ -2397,17 +2636,14 @@ def array_imag_part(context, builder, typ, value):
     elif typ.dtype in types.number_domain:
         # return a readonly zero array
         sig = signature(typ.copy(readonly=True), typ)
-        return numpy_zeros_like_nd(context, builder, sig, [value])
+        arrtype, shapes = _parse_empty_like_args(context, builder, sig, [value])
+        ary = _empty_nd_impl(context, builder, arrtype, shapes)
+        cgutils.memset(builder, ary.data, builder.mul(ary.itemsize,
+                                                      ary.nitems), 0)
+        return impl_ret_new_ref(context, builder, sig.return_type,
+                                ary._getvalue())
     else:
         raise NotImplementedError('unsupported .imag for {}'.format(type.dtype))
-
-
-@overload_method(types.Array, 'conj')
-@overload_method(types.Array, 'conjugate')
-def array_conj(arr):
-    def impl(arr):
-        return np.conj(arr)
-    return impl
 
 
 def array_complex_attr(context, builder, typ, value, attr):
@@ -2465,8 +2701,16 @@ def array_complex_attr(context, builder, typ, value, attr):
     return impl_ret_borrowed(context, builder, resultty, result._getvalue())
 
 
+@overload_method(types.Array, 'conj')
+@overload_method(types.Array, 'conjugate')
+def array_conj(arr):
+    def impl(arr):
+        return np.conj(arr)
+    return impl
+
 # ------------------------------------------------------------------------------
 # DType attribute
+
 
 def dtype_type(context, builder, dtypety, dtypeval):
     # Just return a dummy opaque value
@@ -3678,13 +3922,6 @@ def intrin_alloc(typingctx, allocsize, align):
     return sig, codegen
 
 
-def _zero_fill_array(context, builder, ary):
-    """
-    Zero-fill an array.  The array must be contiguous.
-    """
-    cgutils.memset(builder, ary.data, builder.mul(ary.itemsize, ary.nitems), 0)
-
-
 def _parse_shape(context, builder, ty, val):
     """
     Parse the shape argument to an array constructor.
@@ -3757,40 +3994,137 @@ def _parse_empty_like_args(context, builder, sig, args):
         return sig.return_type, ()
 
 
-@glue_lowering(np.empty, types.Any)
-@glue_lowering(np.empty, types.Any, types.Any)
-def numpy_empty_nd(context, builder, sig, args):
-    arrtype, shapes = _parse_empty_args(context, builder, sig, args)
-    ary = _empty_nd_impl(context, builder, arrtype, shapes)
-    return impl_ret_new_ref(context, builder, sig.return_type, ary._getvalue())
+def _check_const_str_dtype(fname, dtype):
+    if isinstance(dtype, types.UnicodeType):
+        msg = f"If np.{fname} dtype is a string it must be a string constant."
+        raise errors.TypingError(msg)
 
 
-@glue_lowering(np.empty_like, types.Any)
-@glue_lowering(np.empty_like, types.Any, types.DTypeSpec)
-@glue_lowering(np.empty_like, types.Any, types.StringLiteral)
-def numpy_empty_like_nd(context, builder, sig, args):
-    arrtype, shapes = _parse_empty_like_args(context, builder, sig, args)
-    ary = _empty_nd_impl(context, builder, arrtype, shapes)
-    return impl_ret_new_ref(context, builder, sig.return_type, ary._getvalue())
+@intrinsic
+def numpy_empty_nd(tyctx, ty_shape, ty_dtype, ty_retty_ref):
+    ty_retty = ty_retty_ref.instance_type
+    sig = ty_retty(ty_shape, ty_dtype, ty_retty_ref)
+
+    def codegen(cgctx, builder, sig, llargs):
+        arrtype, shapes = _parse_empty_args(cgctx, builder, sig, llargs)
+        ary = _empty_nd_impl(cgctx, builder, arrtype, shapes)
+        return ary._getvalue()
+    return sig, codegen
 
 
-@glue_lowering(np.zeros, types.Any)
-@glue_lowering(np.zeros, types.Any, types.Any)
-def numpy_zeros_nd(context, builder, sig, args):
-    arrtype, shapes = _parse_empty_args(context, builder, sig, args)
-    ary = _empty_nd_impl(context, builder, arrtype, shapes)
-    _zero_fill_array(context, builder, ary)
-    return impl_ret_new_ref(context, builder, sig.return_type, ary._getvalue())
+@overload(np.empty)
+def ol_np_empty(shape, dtype=float):
+    _check_const_str_dtype("empty", dtype)
+    if (dtype is float or
+        (isinstance(dtype, types.Function) and dtype.typing_key is float) or
+            is_nonelike(dtype)): #default
+        nb_dtype = types.double
+    else:
+        nb_dtype = ty_parse_dtype(dtype)
+
+    ndim = ty_parse_shape(shape)
+    if nb_dtype is not None and ndim is not None:
+        retty = types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
+
+        def impl(shape, dtype=float):
+            return numpy_empty_nd(shape, dtype, retty)
+        return impl
+    else:
+        msg = f"Cannot parse input types to function np.empty({shape}, {dtype})"
+        raise errors.TypingError(msg)
 
 
-@glue_lowering(np.zeros_like, types.Any)
-@glue_lowering(np.zeros_like, types.Any, types.DTypeSpec)
-@glue_lowering(np.zeros_like, types.Any, types.StringLiteral)
-def numpy_zeros_like_nd(context, builder, sig, args):
-    arrtype, shapes = _parse_empty_like_args(context, builder, sig, args)
-    ary = _empty_nd_impl(context, builder, arrtype, shapes)
-    _zero_fill_array(context, builder, ary)
-    return impl_ret_new_ref(context, builder, sig.return_type, ary._getvalue())
+@intrinsic
+def numpy_empty_like_nd(tyctx, ty_prototype, ty_dtype, ty_retty_ref):
+    ty_retty = ty_retty_ref.instance_type
+    sig = ty_retty(ty_prototype, ty_dtype, ty_retty_ref)
+
+    def codegen(cgctx, builder, sig, llargs):
+        arrtype, shapes = _parse_empty_like_args(cgctx, builder, sig, llargs)
+        ary = _empty_nd_impl(cgctx, builder, arrtype, shapes)
+        return ary._getvalue()
+    return sig, codegen
+
+
+@overload(np.empty_like)
+def ol_np_empty_like(arr, dtype=None):
+    _check_const_str_dtype("empty_like", dtype)
+    if not is_nonelike(dtype):
+        nb_dtype = ty_parse_dtype(dtype)
+    elif isinstance(arr, types.Array):
+        nb_dtype = arr.dtype
+    else:
+        nb_dtype = arr
+    if nb_dtype is not None:
+        if isinstance(arr, types.Array):
+            layout = arr.layout if arr.layout != 'A' else 'C'
+            retty = arr.copy(dtype=nb_dtype, layout=layout, readonly=False)
+        else:
+            retty = types.Array(nb_dtype, 0, 'C')
+    else:
+        msg = ("Cannot parse input types to function "
+               f"np.empty_like({arr}, {dtype})")
+        raise errors.TypingError(msg)
+
+    def impl(arr, dtype=None):
+        return numpy_empty_like_nd(arr, dtype, retty)
+    return impl
+
+
+@intrinsic
+def _zero_fill_array_method(tyctx, self):
+    sig = types.none(self)
+
+    def codegen(cgctx, builder, sig, llargs):
+        ary = make_array(sig.args[0])(cgctx, builder, llargs[0])
+        cgutils.memset(builder, ary.data, builder.mul(ary.itemsize, ary.nitems),
+                       0)
+    return sig, codegen
+
+
+@overload_method(types.Array, '_zero_fill')
+def ol_array_zero_fill(self):
+    """Adds a `._zero_fill` method to zero fill an array using memset."""
+    def impl(self):
+        _zero_fill_array_method(self)
+    return impl
+
+
+@overload(np.zeros)
+def ol_np_zeros(shape, dtype=float):
+    _check_const_str_dtype("zeros", dtype)
+
+    def impl(shape, dtype=float):
+        arr = np.empty(shape, dtype=dtype)
+        arr._zero_fill()
+        return arr
+    return impl
+
+
+@overload(np.zeros_like)
+def ol_np_zeros_like(a, dtype=None):
+    _check_const_str_dtype("zeros_like", dtype)
+
+    # NumPy uses 'a' as the arg name for the array-like
+    def impl(a, dtype=None):
+        arr = np.empty_like(a, dtype=dtype)
+        arr._zero_fill()
+        return arr
+    return impl
+
+
+@overload(np.ones_like)
+def ol_np_ones_like(a, dtype=None):
+    _check_const_str_dtype("ones_like", dtype)
+
+    # NumPy uses 'a' as the arg name for the array-like
+    def impl(a, dtype=None):
+        arr = np.empty_like(a, dtype=dtype)
+        arr_flat = arr.flat
+        for idx in range(len(arr_flat)):
+            arr_flat[idx] = 1
+        return arr
+    return impl
 
 
 @glue_lowering(np.full, types.Any, types.Any)
@@ -3851,64 +4185,19 @@ def numpy_full_like_nd_type_spec(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
-@glue_lowering(np.ones, types.Any)
-def numpy_ones_nd(context, builder, sig, args):
+@overload(np.ones)
+def ol_np_ones(shape, dtype=None):
+    # for some reason the NumPy default for dtype is None in the source but
+    # ends up as np.float64 by definition.
+    _check_const_str_dtype("ones", dtype)
 
-    def ones(shape):
-        arr = np.empty(shape)
+    def impl(shape, dtype=None):
+        arr = np.empty(shape, dtype=dtype)
         arr_flat = arr.flat
         for idx in range(len(arr_flat)):
             arr_flat[idx] = 1
         return arr
-
-    valty = sig.return_type.dtype
-    res = context.compile_internal(builder, ones, sig, args,
-                                   locals={'c': valty})
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-
-@glue_lowering(np.ones, types.Any, types.DTypeSpec)
-@glue_lowering(np.ones, types.Any, types.StringLiteral)
-def numpy_ones_dtype_nd(context, builder, sig, args):
-
-    def ones(shape, dtype):
-        arr = np.empty(shape, dtype)
-        arr_flat = arr.flat
-        for idx in range(len(arr_flat)):
-            arr_flat[idx] = 1
-        return arr
-
-    res = context.compile_internal(builder, ones, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-
-@glue_lowering(np.ones_like, types.Any)
-def numpy_ones_like_nd(context, builder, sig, args):
-
-    def ones_like(arr):
-        arr = np.empty_like(arr)
-        arr_flat = arr.flat
-        for idx in range(len(arr_flat)):
-            arr_flat[idx] = 1
-        return arr
-
-    res = context.compile_internal(builder, ones_like, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-
-@glue_lowering(np.ones_like, types.Any, types.DTypeSpec)
-@glue_lowering(np.ones_like, types.Any, types.StringLiteral)
-def numpy_ones_like_dtype_nd(context, builder, sig, args):
-
-    def ones_like(arr, dtype):
-        arr = np.empty_like(arr, dtype)
-        arr_flat = arr.flat
-        for idx in range(len(arr_flat)):
-            arr_flat[idx] = 1
-        return arr
-
-    res = context.compile_internal(builder, ones_like, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
+    return impl
 
 
 @glue_lowering(np.identity, types.Integer)
@@ -5390,7 +5679,8 @@ def get_sort_func(kind, is_float, is_argsort=False):
         if kind == 'quicksort':
             sort = quicksort.make_jit_quicksort(
                 lt=lt_floats if is_float else None,
-                is_argsort=is_argsort)
+                is_argsort=is_argsort,
+                is_np_array=True)
             func = sort.run_quicksort
         elif kind == 'mergesort':
             sort = mergesort.make_jit_mergesort(

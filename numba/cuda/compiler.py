@@ -196,6 +196,9 @@ def compile_cuda(pyfunc, return_type, args, debug=False, lineinfo=False,
         # later want to overload some other behavior on the debug flag.
         # In particular, -opt=3 is not supported with -g.
         flags.debuginfo = True
+        flags.error_model = 'python'
+    else:
+        flags.error_model = 'numpy'
     if inline:
         flags.forceinline = True
     if fastmath:
@@ -241,7 +244,7 @@ def compile_ptx(pyfunc, args, debug=False, lineinfo=False, device=False,
                      prec_div=, and fma=1)
     :type fastmath: bool
     :param cc: Compute capability to compile for, as a tuple ``(MAJOR, MINOR)``.
-               Defaults to ``(5, 2)``.
+               Defaults to ``(5, 3)``.
     :type cc: tuple
     :param opt: Enable optimizations. Defaults to ``True``.
     :type opt: bool
@@ -262,14 +265,17 @@ def compile_ptx(pyfunc, args, debug=False, lineinfo=False, device=False,
     }
 
     cres = compile_cuda(pyfunc, None, args, debug=debug, lineinfo=lineinfo,
+                        fastmath=fastmath,
                         nvvm_options=nvvm_options)
     resty = cres.signature.return_type
     if device:
         lib = cres.library
     else:
         tgt = cres.target_context
-        filename = cres.type_annotation.filename
-        linenum = int(cres.type_annotation.linenum)
+        code = pyfunc.__code__
+        filename = code.co_filename
+        linenum = code.co_firstlineno
+
         lib, kernel = tgt.prepare_cuda_kernel(cres.library, cres.fndesc, debug,
                                               nvvm_options, filename, linenum)
 

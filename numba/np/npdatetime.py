@@ -296,79 +296,74 @@ def timedelta_over_timedelta(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-if numpy_support.numpy_version >= (1, 16):
-    # np 1.16 added support for:
-    # * np.floor_divide on mm->q
-    # * np.remainder on mm->m
+@lower_builtin(operator.floordiv, *TIMEDELTA_BINOP_SIG)
+def timedelta_floor_div_timedelta(context, builder, sig, args):
+    [va, vb] = args
+    [ta, tb] = sig.args
+    ll_ret_type = context.get_value_type(sig.return_type)
+    not_nan = are_not_nat(builder, [va, vb])
+    ret = cgutils.alloca_once(builder, ll_ret_type, name='ret')
+    zero = Constant(ll_ret_type, 0)
+    one = Constant(ll_ret_type, 1)
+    builder.store(zero, ret)
+    with cgutils.if_likely(builder, not_nan):
+        va, vb = normalize_timedeltas(context, builder, va, vb, ta, tb)
+        # is the denominator zero or NaT?
+        denom_ok = builder.not_(builder.icmp_signed('==', vb, zero))
+        with cgutils.if_likely(builder, denom_ok):
+            # is either arg negative?
+            vaneg = builder.icmp_signed('<', va, zero)
+            neg = builder.or_(vaneg, builder.icmp_signed('<', vb, zero))
+            with builder.if_else(neg) as (then, otherwise):
+                with then:  # one or more value negative
+                    with builder.if_else(vaneg) as (negthen, negotherwise):
+                        with negthen:
+                            top = builder.sub(va, one)
+                            div = builder.sdiv(top, vb)
+                            builder.store(div, ret)
+                        with negotherwise:
+                            top = builder.add(va, one)
+                            div = builder.sdiv(top, vb)
+                            builder.store(div, ret)
+                with otherwise:
+                    div = builder.sdiv(va, vb)
+                    builder.store(div, ret)
+    res = builder.load(ret)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
-    @lower_builtin(operator.floordiv, *TIMEDELTA_BINOP_SIG)
-    def timedelta_floor_div_timedelta(context, builder, sig, args):
-        [va, vb] = args
-        [ta, tb] = sig.args
-        ll_ret_type = context.get_value_type(sig.return_type)
-        not_nan = are_not_nat(builder, [va, vb])
-        ret = cgutils.alloca_once(builder, ll_ret_type, name='ret')
-        zero = Constant(ll_ret_type, 0)
-        one = Constant(ll_ret_type, 1)
-        builder.store(zero, ret)
-        with cgutils.if_likely(builder, not_nan):
-            va, vb = normalize_timedeltas(context, builder, va, vb, ta, tb)
-            # is the denominator zero or NaT?
-            denom_ok = builder.not_(builder.icmp_signed('==', vb, zero))
-            with cgutils.if_likely(builder, denom_ok):
-                # is either arg negative?
-                vaneg = builder.icmp_signed('<', va, zero)
-                neg = builder.or_(vaneg, builder.icmp_signed('<', vb, zero))
-                with builder.if_else(neg) as (then, otherwise):
-                    with then:  # one or more value negative
-                        with builder.if_else(vaneg) as (negthen, negotherwise):
-                            with negthen:
-                                top = builder.sub(va, one)
-                                div = builder.sdiv(top, vb)
-                                builder.store(div, ret)
-                            with negotherwise:
-                                top = builder.add(va, one)
-                                div = builder.sdiv(top, vb)
-                                builder.store(div, ret)
-                    with otherwise:
-                        div = builder.sdiv(va, vb)
-                        builder.store(div, ret)
-        res = builder.load(ret)
-        return impl_ret_untracked(context, builder, sig.return_type, res)
+def timedelta_mod_timedelta(context, builder, sig, args):
+    # inspired by https://github.com/numpy/numpy/blob/fe8072a12d65e43bd2e0b0f9ad67ab0108cc54b3/numpy/core/src/umath/loops.c.src#L1424
+    # alg is basically as `a % b`:
+    # if a or b is NaT return NaT
+    # elseif b is 0 return NaT
+    # else pretend a and b are int and do pythonic int modulus
 
-    def timedelta_mod_timedelta(context, builder, sig, args):
-        # inspired by https://github.com/numpy/numpy/blob/fe8072a12d65e43bd2e0b0f9ad67ab0108cc54b3/numpy/core/src/umath/loops.c.src#L1424
-        # alg is basically as `a % b`:
-        # if a or b is NaT return NaT
-        # elseif b is 0 return NaT
-        # else pretend a and b are int and do pythonic int modulus
+    [va, vb] = args
+    [ta, tb] = sig.args
+    not_nan = are_not_nat(builder, [va, vb])
+    ll_ret_type = context.get_value_type(sig.return_type)
+    ret = alloc_timedelta_result(builder)
+    builder.store(NAT, ret)
+    zero = Constant(ll_ret_type, 0)
+    with cgutils.if_likely(builder, not_nan):
+        va, vb = normalize_timedeltas(context, builder, va, vb, ta, tb)
+        # is the denominator zero or NaT?
+        denom_ok = builder.not_(builder.icmp_signed('==', vb, zero))
+        with cgutils.if_likely(builder, denom_ok):
+            # is either arg negative?
+            vapos = builder.icmp_signed('>', va, zero)
+            vbpos = builder.icmp_signed('>', vb, zero)
+            rem = builder.srem(va, vb)
+            cond = builder.or_(builder.and_(vapos, vbpos),
+                               builder.icmp_signed('==', rem, zero))
+            with builder.if_else(cond) as (then, otherwise):
+                with then:
+                    builder.store(rem, ret)
+                with otherwise:
+                    builder.store(builder.add(rem, vb), ret)
 
-        [va, vb] = args
-        [ta, tb] = sig.args
-        not_nan = are_not_nat(builder, [va, vb])
-        ll_ret_type = context.get_value_type(sig.return_type)
-        ret = alloc_timedelta_result(builder)
-        builder.store(NAT, ret)
-        zero = Constant(ll_ret_type, 0)
-        with cgutils.if_likely(builder, not_nan):
-            va, vb = normalize_timedeltas(context, builder, va, vb, ta, tb)
-            # is the denominator zero or NaT?
-            denom_ok = builder.not_(builder.icmp_signed('==', vb, zero))
-            with cgutils.if_likely(builder, denom_ok):
-                # is either arg negative?
-                vapos = builder.icmp_signed('>', va, zero)
-                vbpos = builder.icmp_signed('>', vb, zero)
-                rem = builder.srem(va, vb)
-                cond = builder.or_(builder.and_(vapos, vbpos),
-                                   builder.icmp_signed('==', rem, zero))
-                with builder.if_else(cond) as (then, otherwise):
-                    with then:
-                        builder.store(rem, ret)
-                    with otherwise:
-                        builder.store(builder.add(rem, vb), ret)
-
-        res = builder.load(ret)
-        return impl_ret_untracked(context, builder, sig.return_type, res)
+    res = builder.load(ret)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 # Comparison operators on timedelta64
 
@@ -847,3 +842,9 @@ def ol_hash_npdatetime(x):
                 return np.int64(-2)
             return np.int64(x)
     return impl
+
+
+lower_builtin(npdatetime_helpers.datetime_minimum, types.NPDatetime, types.NPDatetime)(datetime_minimum_impl)
+lower_builtin(npdatetime_helpers.datetime_minimum, types.NPTimedelta, types.NPTimedelta)(datetime_minimum_impl)
+lower_builtin(npdatetime_helpers.datetime_maximum, types.NPDatetime, types.NPDatetime)(datetime_maximum_impl)
+lower_builtin(npdatetime_helpers.datetime_maximum, types.NPTimedelta, types.NPTimedelta)(datetime_maximum_impl)
