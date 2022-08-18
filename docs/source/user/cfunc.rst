@@ -223,7 +223,11 @@ Calling C code from Numba
 
 It is also possible to call C code from Numba ``@jit`` functions. In this
 example, we are going to be compiling a simple function ``sum`` that adds two
-integers and calling it within Numba ``@jit`` code
+integers and calling it within Numba ``@jit`` code.
+
+.. note::
+   The example below was tested on Linux and will likely work on Unix-like
+   Operating Systems.
 
 .. code-block:: C
 
@@ -234,8 +238,8 @@ integers and calling it within Numba ``@jit`` code
    }
 
 
-Compile the code with ``gcc lib.c -fPIC -shared -o shared_library.so`` to generate a
-shared library.
+Compile the code with ``gcc lib.c -fPIC -shared -o shared_library.so`` to
+generate a shared library.
 
 .. code-block:: python
 
@@ -259,4 +263,26 @@ shared library.
    def example(x, y):
       return c_func(x, y)
 
-   print(example(3, 4))
+   print(example(3, 4)) # 7
+
+
+It is also possible to use ``ctypes`` as well to call C functions. The advantage
+of using ``ctypes`` is that it is invariant to the usage of JIT decorators.
+
+.. code-block:: python
+
+   from numba import njit
+   import ctypes
+   DSO = ctypes.CDLL('./shared_library.so')
+
+   # Add typing information
+   c_func = DSO.sum
+   c_func.restype = ctypes.c_int
+   c_func.argtypes = [ctypes.c_int, ctypes.c_int]
+
+   @njit
+   def example(x, y):
+      return c_func(x, y)
+
+   print(example(3, 4)) # 7
+   print(example.py_func(3, 4)) # 7
