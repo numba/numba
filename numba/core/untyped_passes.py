@@ -1043,8 +1043,8 @@ class MixedContainerUnroller(FunctionPass):
             # scan loop header
             iternexts = [_ for _ in
                          func_ir.blocks[loop.header].find_exprs('iternext')]
-            if len(iternexts) != 1:
-                return False
+            if len(iternexts) != 1: # needs to be an single iternext driven loop
+                continue
             for iternext in iternexts:
                 # Walk the canonicalised loop structure and check it
                 # Check loop form range(literal_unroll(container)))

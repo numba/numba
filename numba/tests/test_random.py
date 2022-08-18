@@ -12,6 +12,8 @@ import itertools
 import numpy as np
 
 import unittest
+
+import numba
 from numba import jit, _helperlib
 from numba.core import types
 from numba.core.compiler import compile_isolated
@@ -1000,7 +1002,7 @@ class TestRandomArrays(BaseTest):
         argstring = ', '.join('abcd'[:nargs])
         return jit_with_args(qualname, argstring)
 
-    def _check_array_dist(self, funcname, scalar_args):
+    def _check_array_dist(self, funcname, scalar_args, old=False):
         """
         Check returning an array according to a given distribution.
         """
@@ -1016,6 +1018,77 @@ class TestRandomArrays(BaseTest):
                 and got.dtype == np.dtype('int64')):
                 expected = expected.astype(got.dtype)
             self.assertPreciseEqual(expected, got, prec='double', ulps=5)
+        # The old glue lowering for array randomness didn't handle None
+        # properly, so it fails on unmigrated distributions. Once migrated,
+        # remove this logic.
+        if not old:
+            args = scalar_args + (None,)
+            expected = pyfunc(*args)
+            got = cfunc(*args)
+            self.assertPreciseEqual(expected, got, prec='double', ulps=5)
+
+    def _check_array_dist_gamma(self, funcname,  scalar_args, extra_pyfunc_args):
+        """
+        Check returning an array according to a given gamma distribution,
+        where we use CPython's implementation rather than NumPy's.
+        """
+        cfunc = self._compile_array_dist(funcname, len(scalar_args) + 1)
+        r = self._follow_cpython(get_np_state_ptr())
+        pyfunc = getattr(r, "gammavariate")
+        pyfunc_args = scalar_args + extra_pyfunc_args
+        pyrandom = lambda *_args: pyfunc(*pyfunc_args)
+
+        args = scalar_args + (None,)
+        expected = pyrandom()
+        got = cfunc(*args)
+        self.assertPreciseEqual(expected, got, prec='double', ulps=5)
+        for size in (8, (2, 3)):
+            args = scalar_args + (size,)
+            expected = np.empty(size)
+            expected_flat = expected.flat
+            for idx in range(expected.size):
+                expected_flat[idx] = pyrandom()
+            got = cfunc(*args)
+            self.assertPreciseEqual(expected, got, prec='double', ulps=5)
+
+    def _check_array_dist_self(self, funcname, scalar_args):
+        """
+        Check function returning an array against its scalar implementation.
+        Because we use the CPython gamma distribution rather than the NumPy one,
+        distributions which use the gamma distribution vary in ways that are
+        difficult to compare. Instead, we compile both the array and scalar
+        versions and check that the array is filled with the same values as
+        we would expect from the scalar version.
+        """
+        @numba.njit
+        def reset():
+            np.random.seed(1234)
+
+        array_func = self._compile_array_dist(funcname, len(scalar_args) + 1)
+
+        qualname = "np.random.%s" % (funcname,)
+        argstring = ', '.join('abcd'[:len(scalar_args)])
+        scalar_func = jit_with_args(qualname, argstring)
+
+        for size in (8, (2, 3)):
+            args = scalar_args + (size,)
+            reset()
+            got = array_func(*args)
+            reset()
+            # We're just going to go with whatever type the array version
+            # gives us and hope it's not Boolean or something useless.
+            expected = np.empty(size, dtype=got.dtype)
+            flat = expected.flat
+            for idx in range(expected.size):
+                flat[idx] = scalar_func(*scalar_args)
+            self.assertPreciseEqual(expected, got, prec='double', ulps=5)
+
+        reset()
+        args = scalar_args + (None,)
+        expected = scalar_func(*scalar_args)
+        reset()
+        got = array_func(*args)
+        self.assertPreciseEqual(expected, got, prec='double', ulps=5)
 
     def test_numpy_randint(self):
         cfunc = self._compile_array_dist("randint", 3)
@@ -1053,14 +1126,32 @@ class TestRandomArrays(BaseTest):
     # Sanity-check various distributions.  For convenience, we only check
     # those distributions that produce the exact same values as Numpy's.
 
+    def test_numpy_beta(self):
+        self._check_array_dist_self("beta", (0.5, 2.5))
+
     def test_numpy_binomial(self):
         self._check_array_dist("binomial", (20, 0.5))
+
+    def test_numpy_chisquare(self):
+        self._check_array_dist_self("chisquare", (1.5,))
 
     def test_numpy_exponential(self):
         self._check_array_dist("exponential", (1.5,))
 
+    def test_numpy_f(self):
+        self._check_array_dist_self("f", (0.5, 1.5))
+
+    def test_numpy_gamma(self):
+        self._check_array_dist_gamma("gamma", (2.0, 1.0), ())
+
+    def test_numpy_geometric(self):
+        self._check_array_dist("geometric", (1.0,))
+
     def test_numpy_gumbel(self):
         self._check_array_dist("gumbel", (1.5, 0.5))
+
+    def test_numpy_hypergeometric(self):
+        self._check_array_dist("hypergeometric", (1000, 5000, 10))
 
     def test_numpy_laplace(self):
         self._check_array_dist("laplace", (1.5, 0.5))
@@ -1075,10 +1166,13 @@ class TestRandomArrays(BaseTest):
         self._check_array_dist("logseries", (0.8,))
 
     def test_numpy_normal(self):
-        self._check_array_dist("normal", (0.5, 2.0))
+        self._check_array_dist("normal", (0.5, 2.0), old=True)
+
+    def test_numpy_pareto(self):
+        self._check_array_dist("pareto", (0.5,))
 
     def test_numpy_poisson(self):
-        self._check_array_dist("poisson", (0.8,))
+        self._check_array_dist("poisson", (0.8,), old=True)
 
     def test_numpy_power(self):
         self._check_array_dist("power", (0.8,))
@@ -1104,14 +1198,23 @@ class TestRandomArrays(BaseTest):
     def test_numpy_standard_exponential(self):
         self._check_array_dist("standard_exponential", ())
 
+    def test_numpy_standard_gamma(self):
+        self._check_array_dist_gamma("standard_gamma", (2.0,), (1.0,))
+
     def test_numpy_standard_normal(self):
-        self._check_array_dist("standard_normal", ())
+        self._check_array_dist("standard_normal", (), old=True)
+
+    def test_numpy_triangular(self):
+        self._check_array_dist("triangular", (1.5, 2.2, 3.5))
 
     def test_numpy_uniform(self):
-        self._check_array_dist("uniform", (0.1, 0.4))
+        self._check_array_dist("uniform", (0.1, 0.4), old=True)
 
     def test_numpy_wald(self):
         self._check_array_dist("wald", (0.1, 0.4))
+
+    def test_numpy_vonmises(self):
+        self._check_array_dist_self("vonmises", (0.5, 2.5))
 
     def test_numpy_zipf(self):
         self._check_array_dist("zipf", (2.5,))
