@@ -9,7 +9,6 @@ dependencies:
   - llvmlite=0.40
   - numpy
   - numpydoc
-  - setuptools<60
   # https://stackoverflow.com/questions/67542699/readthedocs-sphinx-not-rendering-bullet-list-from-rst-fileA
   - docutils==0.16
   # The following is needed to fix RTD.
