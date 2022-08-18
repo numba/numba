@@ -2186,6 +2186,21 @@ def array_clip(a, a_min=None, a_max=None, out=None):
     return impl
 
 
+def _arr_contig(a):
+    pass
+
+
+@overload(_arr_contig)
+def ol_arr_contig(a):
+    def impl(a):
+        flag_f = a.flags.f_contiguous
+        flag_c = a.flags.c_contiguous
+        if flag_f or flag_c:
+            return True
+        return False
+    return impl
+
+
 def _change_dtype(context, builder, oldty, newty, ary):
     """
     Attempt to fix up *ary* for switching from *oldty* to *newty*.
@@ -3235,7 +3250,21 @@ def make_nditer_cls(nditerty):
                                     main_shape_ty)
                     context.compile_internal(builder, check_shape,
                                              sig, (arr.shape, main_shape))
-
+                    tyctx = context.typing_context
+                    fnty = tyctx.resolve_value_type(_arr_contig)
+                    _arr_contig_sig = fnty.get_call_type(tyctx, (arrty,), {})
+                    impl = context.get_function(fnty, _arr_contig_sig)
+                    _arr_contig_result = impl(builder, (arr,))
+                    _arr_contig_pred = builder.icmp_unsigned('==',
+                                                             _arr_contig_result,
+                                                             _arr_contig_result
+                                                             .type(0))
+                    with builder.if_then(_arr_contig_pred):
+                        msg = ('Only C or F contiguous arrays are '
+                               'accepted by Numba implementation of np.nditer')
+                        context.call_conv.return_user_exc(builder,
+                                                          TypeError,
+                                                          (msg,))
             # Compute shape and size
             shapes = cgutils.unpack_tuple(builder, main_shape)
             if layout == 'F':
@@ -3828,10 +3857,6 @@ def make_array_nditer(context, builder, sig, args):
     """
     nditerty = sig.return_type
     arrtys = nditerty.arrays
-
-    if any(_arrty.layout not in 'CF' for _arrty in arrtys):
-        raise TypeError('Only C or F contiguous arrays are '
-                        'accepted by Numba implementation of np.nditer')
 
     if isinstance(sig.args[0], types.BaseTuple):
         arrays = cgutils.unpack_tuple(builder, args[0])

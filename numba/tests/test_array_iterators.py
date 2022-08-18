@@ -2,7 +2,7 @@ import itertools
 
 import numpy as np
 
-from numba import jit, typeof
+from numba import njit, jit, typeof
 from numba.core import types
 from numba.core.compiler import compile_isolated
 from numba.tests.support import TestCase, CompilationCache, MemoryLeakMixin, tag
@@ -544,6 +544,18 @@ class TestNdIter(MemoryLeakMixin, TestCase):
         b = np.arange(3)
         check_incompatible(a, b)
 
+        a = np.arange(12).reshape((3, 4)).T
+
+        @njit((float64[:,:],))
+        def foo(x):
+            for i in np.nditer(x):
+                pass
+
+        with self.assertRaises(TypeError) as raises:
+            foo(a)
+        self.assertIn('Only C or F contiguous arrays are '
+                      'accepted by Numba implementation of np.nditer',
+                      str(raises.exception))        
 
 if __name__ == '__main__':
     unittest.main()
