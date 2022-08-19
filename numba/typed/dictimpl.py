@@ -12,19 +12,19 @@ The only supported uses are `dict()` or `dict(*iterable)`.
 
 
 @lower_builtin(dict, types.IterableType)
-def list_constructor(context, builder, sig, args):
+def dict_constructor(context, builder, sig, args):
     from numba.typed import Dict
 
     dicttype = sig.return_type
     kt, vt = dicttype.key_type, dicttype.value_type
 
-    def list_impl(iterable):
+    def dict_impl(iterable):
         res = Dict.empty(kt, vt)
         for k, v in iterable:
             res[k] = v
         return res
 
-    return context.compile_internal(builder, list_impl, sig, args)
+    return context.compile_internal(builder, dict_impl, sig, args)
 
 
 @lower_builtin(dict)
