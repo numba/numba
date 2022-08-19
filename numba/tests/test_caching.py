@@ -1138,11 +1138,11 @@ def function2(x):
         sys.path.insert(0, self.tempdir)
         file1 = self.import_module()
         fc = file1.foo
-        import inspect
-        print(fc.cache_index_key, fc(2))
-        print(inspect.getsource(fc.py_func.__globals__['function2']))
-        print("functio2 cache",
-              (fc.py_func.__globals__['function2'].cache_index_key))
+        # import inspect
+        # print(fc.cache_index_key, fc(2))
+        # print(inspect.getsource(fc.py_func.__globals__['function2']))
+        # print("functio2 cache",
+        #       (fc.py_func.__globals__['function2'].cache_index_key))
         self.assertPreciseEqual(fc(2), 2)
         self.check_pycache(4)  # 2 index, 2 data for each function
         self.assertPreciseEqual(fc(2.5), 2.5)
@@ -1168,14 +1168,14 @@ def function2(x):
             print(self.source_text_file2_alt, file=fout)
 
 
-        print("### importing module #")
+        # print("### importing module #")
         file1, file2 = self.import_modules(
             ["file1", "file2"], [self.file1, self.file2]
         )
         fc = file1.foo
 
-        print(inspect.getsource(fc.py_func.__globals__['function2']))
-        print("function2 cache", (fc.py_func.__globals__['function2'].cache_index_key))
+        # print(inspect.getsource(fc.py_func.__globals__['function2']))
+        # print("function2 cache", (fc.py_func.__globals__['function2'].cache_index_key))
         # print(fc.cache_index_key, fc(2))
         self.assertPreciseEqual(fc(2), 3)
         # 2 index, 3 data for foo function (2 from previous function2 versions
@@ -1235,18 +1235,18 @@ def function2(x):
         sys.path.insert(0, self.tempdir)
         file1 = self.import_module()
         fc = file1.foo
-        import inspect
-        print(fc.cache_index_key, fc(2))
-        print(inspect.getsource(fc.py_func.__globals__['function2']))
-        print("functio2 cache",
-              (fc.py_func.__globals__['function2'].cache_index_key))
+        # import inspect
+        # print(fc.cache_index_key, fc(2))
+        # print(inspect.getsource(fc.py_func.__globals__['function2']))
+        # print("functio2 cache",
+        #       (fc.py_func.__globals__['function2'].cache_index_key))
         self.assertPreciseEqual(fc(2), 2)
         self.check_pycache(2)  # 1 index, 1 data only for foo
         self.assertPreciseEqual(fc(2.5), 2.5)
         self.check_pycache(3)  # 1 index, 2 data for foo
         self.check_hits(fc, 0, 2)
 
-        print("### importing module #")
+        # print("### importing module #")
         del fc
         del file1
         file1, file2 = self.import_modules(
@@ -1265,14 +1265,14 @@ def function2(x):
             print(self.source_text_file2_alt, file=fout)
 
 
-        print("### importing module #")
+        # print("### importing module #")
         file1, file2 = self.import_modules(
             ["file1", "file2"], [self.file1, self.file2]
         )
         fc = file1.foo
 
-        print(inspect.getsource(fc.py_func.__globals__['function2']))
-        print("function2 cache", (fc.py_func.__globals__['function2'].cache_index_key))
+        # print(inspect.getsource(fc.py_func.__globals__['function2']))
+        # print("function2 cache", (fc.py_func.__globals__['function2'].cache_index_key))
         # print(fc.cache_index_key, fc(2))
         self.assertPreciseEqual(fc(2), 3)
         # 1 index, 3 data for foo function (2 from previous function2 versions
