@@ -1,4 +1,6 @@
 import inspect
+from typing import Iterable, List
+
 import llvmlite.binding as ll
 import multiprocessing
 import numpy as np
@@ -216,18 +218,35 @@ class BaseCacheTest(TestCase):
         # Import a fresh version of the test module.  All jitted functions
         # in the test module will start anew and load overloads from
         # the on-disk cache if possible.
-        old = sys.modules.pop(self.modname, None)
-        if old is not None:
-            # Make sure cached bytecode is removed
-            cached = [old.__cached__]
-            for fn in cached:
-                try:
-                    os.unlink(fn)
-                except FileNotFoundError:
-                    pass
-        mod = import_dynamic(self.modname)
+        mods = self.import_modules([self.modname], [self.modfile])
+        mod = mods[0]
         self.assertEqual(mod.__file__.rstrip('co'), self.modfile)
         return mod
+
+    @staticmethod
+    def import_modules(modnames: Iterable, modfiles: Iterable) -> List:
+        # Import a fresh version of the test modules.  All jitted functions
+        # in the test module will start anew and load overloads from
+        # the on-disk cache if possible.
+
+        assert len(modnames) == len(modfiles)
+        # all modules must be removed first
+        for modname in modnames:
+            old = sys.modules.pop(modname, None)
+            if old is not None:
+                # Make sure cached bytecode is removed
+                cached = [old.__cached__]
+                for fn in cached:
+                    try:
+                        os.unlink(fn)
+                    except FileNotFoundError:
+                        pass
+
+        mods = []
+        for modname, modfile in zip(modnames, modfiles):
+            mod = import_dynamic(modname)
+            mods.append(mod)
+        return mods
 
     def cache_contents(self):
         try:
@@ -1098,11 +1117,11 @@ def function2(x):
     source_text_file2_alt = """
 from numba import njit
 
-@njit('float64(float64)', cache=True)
+@njit(cache=True)
 def function1(x):
     return x + 1
 
-@njit('float64(float64)', cache=True)
+@njit(cache=True)
 def function2(x):
     return x + 1
     """
@@ -1119,11 +1138,29 @@ def function2(x):
         sys.path.insert(0, self.tempdir)
         file1 = self.import_module()
         fc = file1.foo
+        import inspect
+        print(fc.cache_index_key, fc(2))
+        print(inspect.getsource(fc.py_func.__globals__['function2']))
+        print("functio2 cache",
+              (fc.py_func.__globals__['function2'].cache_index_key))
         self.assertPreciseEqual(fc(2), 2)
         self.check_pycache(4)  # 2 index, 2 data for each function
         self.assertPreciseEqual(fc(2.5), 2.5)
-        self.check_pycache(6)  # 1 index, 2 data for each function
+        self.check_pycache(6)  # 2 index, 2 data for each function
         self.check_hits(fc, 0, 2)
+
+        print("### importing module #")
+        del fc
+        del file1
+        file1, file2 = self.import_modules(
+            ["file1", "file2"], [self.file1, self.file2]
+        )
+        fc = file1.foo
+        self.assertPreciseEqual(fc(2), 2)
+        self.check_pycache(6)  # 2 index, 2 data for each function
+        self.assertPreciseEqual(fc(2.5), 2.5)
+        self.check_pycache(6)  # 2 index, 2 data for each function
+        self.check_hits(fc, 2, 0)
 
         # modify file and reload
         self.file2_alt = os.path.join(self.tempdir, 'file2.py')
@@ -1131,14 +1168,120 @@ def function2(x):
             print(self.source_text_file2_alt, file=fout)
 
 
-        file1 = self.import_module()
+        print("### importing module #")
+        file1, file2 = self.import_modules(
+            ["file1", "file2"], [self.file1, self.file2]
+        )
         fc = file1.foo
+
+        print(inspect.getsource(fc.py_func.__globals__['function2']))
+        print("function2 cache", (fc.py_func.__globals__['function2'].cache_index_key))
+        # print(fc.cache_index_key, fc(2))
         self.assertPreciseEqual(fc(2), 3)
-        self.check_pycache(4)  # 2 index, 2 data for each function
+        # 2 index, 3 data for foo function (2 from previous function2 versions
+        # and 1 from the new version), 2 for function2.
+        # Function2 has restarted its cache after
+        # the change and it only has 2 files (1 new, 1 stale but out of the index
+        # which will be eventually overwriten)
+        expected_files = 7
+        self.check_pycache(expected_files)
         self.assertPreciseEqual(fc(2.5), 3.5)
-        self.check_pycache(6)  # 1 index, 2 data for each function
+        self.check_pycache(8)  # 2 index, 4 data for foo, 2 for function2
         self.check_hits(fc, 0, 2)
 
+class TestCachingModifiedFiles3(TestCacheMultipleFilesWithSignature, DispatcherCacheUsecasesTest
+):
+    source_text_file1 = """
+from numba import njit
+from file2 import function2
+
+@njit(cache=True)
+def foo(x):
+    return function2(x)
+"""
+    source_text_file2 = """
+from numba import njit
+
+@njit()
+def function1(x):
+    return x
+
+@njit()
+def function2(x):
+    return x
+"""
+
+    source_text_file2_alt = """
+from numba import njit
+
+@njit()
+def function1(x):
+    return x + 1
+
+@njit()
+def function2(x):
+    return x + 1
+    """
+    def test_invalidation(self):
+        # test cache is invalidated after source file modification
+
+        self.modname = "file1"
+        self.modfile = self.file1
+        self.cache_dir = os.path.join(self.tempdir, "__pycache__")
+        # execute original files once to populate cache
+        self.test_caching_mutliple_files_with_signature()
+        # import function and verify cache is being used
+        import sys
+        sys.path.insert(0, self.tempdir)
+        file1 = self.import_module()
+        fc = file1.foo
+        import inspect
+        print(fc.cache_index_key, fc(2))
+        print(inspect.getsource(fc.py_func.__globals__['function2']))
+        print("functio2 cache",
+              (fc.py_func.__globals__['function2'].cache_index_key))
+        self.assertPreciseEqual(fc(2), 2)
+        self.check_pycache(2)  # 1 index, 1 data only for foo
+        self.assertPreciseEqual(fc(2.5), 2.5)
+        self.check_pycache(3)  # 1 index, 2 data for foo
+        self.check_hits(fc, 0, 2)
+
+        print("### importing module #")
+        del fc
+        del file1
+        file1, file2 = self.import_modules(
+            ["file1", "file2"], [self.file1, self.file2]
+        )
+        fc = file1.foo
+        self.assertPreciseEqual(fc(2), 2)
+        self.check_pycache(3)  # 2 index, 2 data for each function
+        self.assertPreciseEqual(fc(2.5), 2.5)
+        self.check_pycache(3)  # 2 index, 2 data for each function
+        self.check_hits(fc, 2, 0)
+
+        # modify file and reload
+        self.file2_alt = os.path.join(self.tempdir, 'file2.py')
+        with open(self.file2_alt, 'w') as fout:
+            print(self.source_text_file2_alt, file=fout)
+
+
+        print("### importing module #")
+        file1, file2 = self.import_modules(
+            ["file1", "file2"], [self.file1, self.file2]
+        )
+        fc = file1.foo
+
+        print(inspect.getsource(fc.py_func.__globals__['function2']))
+        print("function2 cache", (fc.py_func.__globals__['function2'].cache_index_key))
+        # print(fc.cache_index_key, fc(2))
+        self.assertPreciseEqual(fc(2), 3)
+        # 1 index, 3 data for foo function (2 from previous function2 versions
+        # and 1 from the new version),
+        expected_files = 4
+        self.check_pycache(expected_files)
+        self.assertPreciseEqual(fc(2.5), 3.5)
+        self.check_pycache(5)  # 1 index, 4 data for foo
+        self.check_hits(fc, 0, 2)
 
 if __name__ == '__main__':
     unittest.main()
