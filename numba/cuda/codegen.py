@@ -305,7 +305,6 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
             codegen=None,
             name=self.name,
             entry_name=self._entry_name,
-            module=self._module,
             linking_libraries=self._linking_libraries,
             ptx_cache=self._ptx_cache,
             cubin_cache=self._cubin_cache,
@@ -315,9 +314,8 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         )
 
     @classmethod
-    def _rebuild(cls, codegen, name, entry_name, module, linking_libraries,
-                 ptx_cache, cubin_cache, linkerinfo_cache, max_registers,
-                 nvvm_options):
+    def _rebuild(cls, codegen, name, entry_name, linking_libraries, ptx_cache,
+                 cubin_cache, linkerinfo_cache, max_registers, nvvm_options):
         """
         Rebuild an instance.
         """
@@ -325,7 +323,6 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         super(cls, instance).__init__(codegen, name)
         instance._entry_name = entry_name
 
-        instance._module = module
         instance._linking_libraries = linking_libraries
         instance._linking_files = set()
 

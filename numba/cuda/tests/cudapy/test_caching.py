@@ -58,6 +58,18 @@ class CUDACachingTest(SerialMixin, DispatcherCacheUsecasesTest):
         self.assertPreciseEqual(f(2, 3), 6)
         self.check_pycache(0)
 
+    def test_many_locals(self):
+        # Declaring many local arrays creates a very large LLVM IR, which
+        # cannot be pickled due to the level of recursion it requires to
+        # pickle. This test ensures that kernels with many locals (and
+        # therefore large IR) can be cached. See Issue #8373:
+        # https://github.com/numba/numba/issues/8373
+        self.check_pycache(0)
+        mod = self.import_module()
+        f = mod.many_locals
+        f[1, 1]()
+        self.check_pycache(2) # 1 index, 1 data
+
     def test_closure(self):
         mod = self.import_module()
 
