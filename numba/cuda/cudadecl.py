@@ -368,50 +368,6 @@ def _genfp16_binary(l_key):
 
     return Cuda_fp16_binary
 
-# If multiple ConcreteTemplates provide typing for a single function, then
-# function resolution will pick the first compatible typing it finds even if it
-# involves inserting a cast that would be considered undesirable (in this
-# specific case, float16s could be cast to float32s for comparisons).
-#
-# To work around this, we instead use an AbstractTemplate that implements
-# exactly the casting logic that we desire. The AbstractTemplate gets
-# considered in preference to ConcreteTemplates during typing.
-#
-# This is tracked as Issue #7863 (https://github.com/numba/numba/issues/7863) -
-# once this is resolved it should be possible to replace this AbstractTemplate
-# with a ConcreteTemplate to simplify the logic.
-
-
-def _genfp16_binary_operator(l_key):
-    @register_global(l_key)
-    class Cuda_fp16_binary2(AbstractTemplate):
-        key = l_key
-
-        def generic(self, args, kws):
-            assert not kws
-
-            if len(args) == 2 and \
-                    (args[0] == types.float16 or args[1] == types.float16):
-                if (args[0] == types.float16):
-                    convertible = self.context.can_convert(args[1], args[0])
-                else:
-                    convertible = self.context.can_convert(args[0], args[1])
-
-                # We allow three cases here on binary operators:
-                #
-                # 1. Binary operator on two fp16 args - Conversion.exact
-                # 2. Binary op where a fp16 can be promoted
-                #    - Conversion.promote
-                # 3. Binary op of fp16 and int8, where int8 is converted to
-                #    fp16 - Conversion.safe
-                if (convertible == Conversion.exact) or \
-                   (convertible == Conversion.promote) or \
-                   (convertible == Conversion.safe):
-                    return signature(types.float16, types.float16,
-                                     types.float16)
-
-    return Cuda_fp16_binary2
-
 
 @register_global(float)
 class Float(AbstractTemplate):
@@ -448,9 +404,9 @@ def _genfp16_binary_comparison(l_key):
 # This is tracked as Issue #7863 (https://github.com/numba/numba/issues/7863) -
 # once this is resolved it should be possible to replace this AbstractTemplate
 # with a ConcreteTemplate to simplify the logic.
-def _genfp16_comparison_operator(l_key):
+def _fp16_binary_operator(l_key, retty):
     @register_global(l_key)
-    class Cuda_fp16_operator_cmp(AbstractTemplate):
+    class Cuda_fp16_operator(AbstractTemplate):
         key = l_key
 
         def generic(self, args, kws):
@@ -465,16 +421,26 @@ def _genfp16_comparison_operator(l_key):
 
                 # We allow three cases here:
                 #
-                # 1. Comparing fp16 to fp16 - Conversion.exact
-                # 2. Comparing fp16 to types fp16 can be promoted to
+                # 1. fp16 to fp16 - Conversion.exact
+                # 2. fp16 to other types fp16 can be promoted to
                 #  - Conversion.promote
-                # 3. Comparing fp16 to int8 (safe conversion) -
+                # 3. fp16 to int8 (safe conversion) -
                 #  - Conversion.safe
 
                 if (convertible == Conversion.exact) or \
                    (convertible == Conversion.promote) or \
                    (convertible == Conversion.safe):
-                    return signature(types.b1, types.float16, types.float16)
+                    return signature(retty, types.float16, types.float16)
+
+    return Cuda_fp16_operator
+
+
+def _genfp16_comparison_operator(op):
+    return _fp16_binary_operator(op, types.b1)
+
+
+def _genfp16_binary_operator(op):
+    return _fp16_binary_operator(op, types.float16)
 
 
 Cuda_hadd = _genfp16_binary(cuda.fp16.hadd)
