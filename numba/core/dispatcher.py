@@ -3,17 +3,21 @@
 
 import collections
 import functools
+import hashlib
 import sys
 import types as pytypes
 import uuid
 import weakref
 from contextlib import ExitStack
+# Importing python typing, not to be confused with numba.core.typing
+import typing as pt
 
 from numba import _dispatcher
 from numba.core import (
     utils, types, errors, typing, serialize, config, compiler, sigutils
 )
 from numba.core.compiler_lock import global_compiler_lock
+from numba.core.serialize import dumps
 from numba.core.typeconv.rules import default_type_manager
 from numba.core.typing.templates import fold_arguments
 from numba.core.typing.typeof import Purpose, typeof
@@ -21,6 +25,7 @@ from numba.core.bytecode import get_code_object
 from numba.core.caching import NullCache, FunctionCache
 from numba.core import entrypoints
 from numba.core.retarget import BaseRetarget
+from numba.core.utils import cached_property
 import numba.core.event as ev
 
 
@@ -860,7 +865,37 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         return types.Dispatcher(self)
 
     def enable_caching(self):
-        self._cache = FunctionCache(self.py_func)
+        self._cache = FunctionCache(self.py_func, self.cache_index_key)
+
+    @cached_property
+    def cache_index_key(self,) -> pt.Tuple[str, str]:
+        """
+        Compute index key for the given signature and codegen.
+        It includes a description of the OS, target architecture and hashes of
+        the bytecode for the function and, if the function has a __closure__,
+        a hash of the cell_contents.
+        """
+        # retrieve codebytes and cvarbytes of this function
+        codebytes = self.py_func.__code__.co_code
+        if self.py_func.__closure__ is not None:
+            cvars = tuple([x.cell_contents for x in self._py_func.__closure__])
+            # Note: cloudpickle serializes a function differently depending
+            #       on how the process is launched; e.g. multiprocessing.Process
+            cvarbytes = dumps(cvars)
+        else:
+            cvarbytes = b''
+        # retrieve codebytes and cvarbytes of each dispatcher used in py_func
+        fc_globals = self.py_func.__globals__
+        for var_name in self.py_func.__code__.co_names:
+            var_obj = fc_globals[var_name]
+            if isinstance(var_obj, Dispatcher):
+                index_key = var_obj.cache_index_key
+                codebytes += index_key[0].encode()
+                cvarbytes += index_key[1].encode()
+
+        hasher = lambda x: hashlib.sha256(x).hexdigest()
+
+        return hasher(codebytes), hasher(cvarbytes)
 
     def __get__(self, obj, objtype=None):
         '''Allow a JIT function to be bound as a method to an object'''

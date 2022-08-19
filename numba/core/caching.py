@@ -15,6 +15,7 @@ import sys
 import tempfile
 import uuid
 import warnings
+import typing as pt
 
 from numba.misc.appdirs import AppDirs
 
@@ -595,7 +596,10 @@ class Cache(_Cache):
     # The following class variables must be overridden by subclass.
     _impl_class = None
 
-    def __init__(self, py_func):
+    def __init__(self, py_func, index_key: pt.Tuple[str, str]):
+        # self._dispatcher_index_key is a tuple of hashed code and
+        # hashed content of closure variables
+        self._dispatcher_index_key = index_key
         self._name = repr(py_func)
         self._py_func = py_func
         self._impl = self._impl_class(py_func)
@@ -682,18 +686,9 @@ class Cache(_Cache):
         the bytecode for the function and, if the function has a __closure__,
         a hash of the cell_contents.
         """
-        codebytes = self._py_func.__code__.co_code
-        if self._py_func.__closure__ is not None:
-            cvars = tuple([x.cell_contents for x in self._py_func.__closure__])
-            # Note: cloudpickle serializes a function differently depending
-            #       on how the process is launched; e.g. multiprocessing.Process
-            cvarbytes = dumps(cvars)
-        else:
-            cvarbytes = b''
-
-        hasher = lambda x: hashlib.sha256(x).hexdigest()
-        return (sig, codegen.magic_tuple(), (hasher(codebytes),
-                                             hasher(cvarbytes),))
+        # self._dispatcher_index_key is a tuple of hashed code and
+        # hashed content of closure variables
+        return (sig, codegen.magic_tuple(), self._dispatcher_index_key)
 
 
 class FunctionCache(Cache):
