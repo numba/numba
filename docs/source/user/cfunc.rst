@@ -227,7 +227,7 @@ integers and calling it within Numba ``@jit`` code.
 
 .. note::
    The example below was tested on Linux and will likely work on Unix-like
-   Operating Systems.
+   operating systems.
 
 .. code-block:: C
 
