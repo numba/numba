@@ -259,5 +259,38 @@ class TestCMath(BaseComplexTest):
                               ignore_sign_on_zero=True)
 
 
+class TestAtomicOnComplexComponents(CUDATestCase):
+    # Based on the reproducer from Issue #8309. array.real and array.imag could
+    # not be used because they required returning an array from a generated
+    # function, and even if this was permitted, they could not be resolved from
+    # the atomic lowering when they were overloads.
+    #
+    # See https://github.com/numba/numba/issues/8309
+
+    def test_atomic_on_real(self):
+        @cuda.jit
+        def atomic_add_one(values):
+            i = cuda.grid(1)
+            cuda.atomic.add(values.real, i, 1)
+
+        N = 32
+        arr1 = np.arange(N) + np.arange(N) * 1j
+        arr2 = arr1.copy()
+        atomic_add_one[1, N](arr2)
+        np.testing.assert_equal(arr1 + 1, arr2)
+
+    def test_atomic_on_imag(self):
+        @cuda.jit
+        def atomic_add_one_j(values):
+            i = cuda.grid(1)
+            cuda.atomic.add(values.imag, i, 1)
+
+        N = 32
+        arr1 = np.arange(N) + np.arange(N) * 1j
+        arr2 = arr1.copy()
+        atomic_add_one_j[1, N](arr2)
+        np.testing.assert_equal(arr1 + 1j, arr2)
+
+
 if __name__ == '__main__':
     unittest.main()

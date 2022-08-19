@@ -22,8 +22,6 @@ Build and Packaging
 - :ghfile:`.pre-commit-config.yaml` - Configuration file for pre-commit hooks.
 - :ghfile:`.readthedocs.yml` - Configuration file for Read the Docs.
 - :ghfile:`buildscripts/condarecipe.local` - Conda build recipe
-- :ghfile:`buildscripts/condarecipe_clone_icc_rt` - Recipe to build a
-  standalone icc_rt package.
 
 
 Continuous Integration
@@ -32,7 +30,6 @@ Continuous Integration
   Win/Mac/Linux)
 - :ghfile:`buildscripts/azure/` - Azure Pipeline configuration for specific
   platforms
-- :ghfile:`buildscripts/appveyor/` - Appveyor build scripts
 - :ghfile:`buildscripts/incremental/` - Generic scripts for building Numba
   on various CI systems
 - :ghfile:`codecov.yml` - Codecov.io coverage reporting
@@ -513,8 +510,6 @@ Command Line Utilities
   standalone Python extension modules
 - :ghfile:`numba/pycc/llvm_types.py` - Aliases to LLVM data types used by
   ``compiler.py``
-- :ghfile:`numba/pycc/pycc` - Stub to call main function.  Is this still
-  used?
 - :ghfile:`numba/pycc/modulemixin.c` - C file compiled into every compiled
   extension.  Pulls in C source from Numba core that is needed to make
   extension standalone

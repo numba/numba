@@ -2902,6 +2902,20 @@ class ParforPass(ParforPassStates):
             self.func_ir._definitions = build_definitions(self.func_ir.blocks)
             self.array_analysis.equiv_sets = dict()
             self.array_analysis.run(self.func_ir.blocks)
+
+            # Get parfor params to calculate reductions below.
+            _, parfors = get_parfor_params(self.func_ir.blocks,
+                                           self.options.fusion,
+                                           self.nested_fusion_info)
+
+            # Find reductions so that fusion can be disallowed if a
+            # subsequent parfor read a reduction variable.
+            for p in parfors:
+                p.redvars, p.reddict = get_parfor_reductions(self.func_ir,
+                                                             p,
+                                                             p.params,
+                                                             self.calltypes)
+
             # reorder statements to maximize fusion
             # push non-parfors down
             maximize_fusion(self.func_ir, self.func_ir.blocks, self.typemap,
@@ -2977,7 +2991,10 @@ class ParforPass(ParforPassStates):
 
             # Validate reduction in parfors.
             for p in parfors:
-                p.redvars, p.reddict = get_parfor_reductions(self.func_ir, p, p.params, self.calltypes)
+                p.redvars, p.reddict = get_parfor_reductions(self.func_ir,
+                                                             p,
+                                                             p.params,
+                                                             self.calltypes)
 
             # Validate parameters:
             for p in parfors:
@@ -4091,6 +4108,9 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata, func_ir, typemap):
     p1_body_defs = set()
     for defs in p1_body_usedefs.defmap.values():
         p1_body_defs |= defs
+    # Add reduction variables from parfor1 to the set of body defs
+    # so that if parfor2 reads the reduction variable it won't fuse.
+    p1_body_defs |= set(parfor1.redvars)
 
     p2_usedefs = compute_use_defs(parfor2.loop_body)
     p2_uses = compute_use_defs({0: parfor2.init_block}).usemap[0]
