@@ -21,12 +21,19 @@ def _nvvm_options_type(x):
         assert isinstance(x, dict)
         return x
 
+def _tuple_type(x):
+    return x
 
 class CUDAFlags(Flags):
     nvvm_options = Option(
         type=_nvvm_options_type,
         default=None,
         doc="NVVM options",
+    )
+    compute_capability = Option(
+        type=_tuple_type,
+        default=None,
+        doc="Compute Capability",
     )
 
 
@@ -180,7 +187,8 @@ class CUDACompiler(CompilerBase):
 
 @global_compiler_lock
 def compile_cuda(pyfunc, return_type, args, debug=False, lineinfo=False,
-                 inline=False, fastmath=False, nvvm_options=None):
+                 inline=False, fastmath=False, nvvm_options=None,
+                 cc=None):
     from .descriptor import cuda_target
     typingctx = cuda_target.typing_context
     targetctx = cuda_target.target_context
@@ -205,6 +213,7 @@ def compile_cuda(pyfunc, return_type, args, debug=False, lineinfo=False,
         flags.fastmath = True
     if nvvm_options:
         flags.nvvm_options = nvvm_options
+    flags.compute_capability = cc or get_current_device().compute_capability
 
     # Run compilation pipeline
     cres = compiler.compile_extra(typingctx=typingctx,
@@ -266,7 +275,7 @@ def compile_ptx(pyfunc, args, debug=False, lineinfo=False, device=False,
 
     cres = compile_cuda(pyfunc, None, args, debug=debug, lineinfo=lineinfo,
                         fastmath=fastmath,
-                        nvvm_options=nvvm_options)
+                        nvvm_options=nvvm_options, cc=cc)
     resty = cres.signature.return_type
     if device:
         lib = cres.library
