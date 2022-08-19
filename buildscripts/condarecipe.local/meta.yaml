@@ -75,6 +75,7 @@ test:
     # temporarily disable scipy testing on ARM, need to build out more packages
     - scipy                    # [not (armv6l or armv7l)]
     - ipython                  # [not (armv6l or armv7l or aarch64)]
+    - setuptools <60
     - tbb  >=2021              # [not (armv6l or armv7l or aarch64 or linux32 or ppc64le)]
     - llvm-openmp              # [osx]
     # This is for driving gdb tests
