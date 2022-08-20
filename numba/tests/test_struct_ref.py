@@ -235,7 +235,7 @@ class TestStructRefBasic(MemoryLeakMixin, TestCase):
         st = MyStruct(1, 2)
         typeof(st)
 
-        assert hash(st) == 3
+        self.assertEqual(hash(st), 3)
 
 
 @overload_method(MyStructType, "testme")
