@@ -230,8 +230,8 @@ class TestStructRefBasic(MemoryLeakMixin, TestCase):
             td['b'] = MyStruct(2.3, 1)
 
     def test_MyStructType_hash_no_typeof_recursion(self):
-        '''Tests that __hash__ is not called prematurely in typeof 
-           causing infinite recursion (see #8241).'''
+        # Tests that __hash__ is not called prematurely in typeof
+        # causing infinite recursion (see #8241).
         st = MyStruct(1, 2)
         typeof(st)
 
