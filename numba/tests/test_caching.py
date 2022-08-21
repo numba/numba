@@ -1093,8 +1093,7 @@ class TestCFuncCache(BaseCacheTest):
         self.run_in_separate_process()
 
 
-class TestCachingModifiedFiles2(
-    TestCacheMultipleFilesWithSignature, DispatcherCacheUsecasesTest
+class TestCachingModifiedFiles2(DispatcherCacheUsecasesTest
 ):
     source_text_file1 = """
 from numba import njit
@@ -1127,10 +1126,37 @@ def function1(x):
 def function2(x):
     return x + 1
     """
+    def setUp(self):
+        self.tempdir = temp_directory('test_cache_file_loc')
+
+        self.file1 = os.path.join(self.tempdir, 'file1.py')
+        with open(self.file1, 'w') as fout:
+            print(self.source_text_file1, file=fout)
+
+        self.file2 = os.path.join(self.tempdir, 'file2.py')
+        with open(self.file2, 'w') as fout:
+            print(self.source_text_file2, file=fout)
+
     def tearDown(self):
         sys.modules.pop(self.modname, None)
         sys.path.remove(self.tempdir)
         shutil.rmtree(self.tempdir)
+
+    def run_fc_in_separate_process(self):
+        # Execute file1.py
+        popen = subprocess.Popen([sys.executable, self.file1],
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE)
+        out, err = popen.communicate()
+        msg = f"stdout:\n{out.decode()}\n\nstderr:\n{err.decode()}"
+        self.assertEqual(popen.returncode, 0, msg=msg)
+
+        # Execute file2.py
+        popen = subprocess.Popen([sys.executable, self.file2],
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE)
+        out, err = popen.communicate()
+        msg = f"stdout:\n{out.decode()}\n\nstderr:\n{err.decode()}"
 
     def test_invalidation(self):
         # test cache is invalidated after source file modification
@@ -1139,7 +1165,7 @@ def function2(x):
         self.modfile = self.file1
         self.cache_dir = os.path.join(self.tempdir, "__pycache__")
         # execute original files once to populate cache
-        self.test_caching_mutliple_files_with_signature()
+        self.run_fc_in_separate_process()
         # import function and verify cache is being used
         import sys
         sys.path.insert(0, self.tempdir)
@@ -1197,7 +1223,7 @@ def function2(x):
         self.check_hits(fc, 0, 2)
 
 
-class TestCachingModifiedFiles3(TestCacheMultipleFilesWithSignature, DispatcherCacheUsecasesTest
+class TestCachingModifiedFiles3(DispatcherCacheUsecasesTest
 ):
     source_text_file1 = """
 from numba import njit
@@ -1230,12 +1256,37 @@ def function1(x):
 def function2(x):
     return x + 1
     """
+    def setUp(self):
+        self.tempdir = temp_directory('test_cache_file_loc')
+
+        self.file1 = os.path.join(self.tempdir, 'file1.py')
+        with open(self.file1, 'w') as fout:
+            print(self.source_text_file1, file=fout)
+
+        self.file2 = os.path.join(self.tempdir, 'file2.py')
+        with open(self.file2, 'w') as fout:
+            print(self.source_text_file2, file=fout)
 
     def tearDown(self):
         sys.modules.pop(self.modname, None)
         sys.path.remove(self.tempdir)
         shutil.rmtree(self.tempdir)
 
+    def run_fc_in_separate_process(self):
+        # Execute file1.py
+        popen = subprocess.Popen([sys.executable, self.file1],
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE)
+        out, err = popen.communicate()
+        msg = f"stdout:\n{out.decode()}\n\nstderr:\n{err.decode()}"
+        self.assertEqual(popen.returncode, 0, msg=msg)
+
+        # Execute file2.py
+        popen = subprocess.Popen([sys.executable, self.file2],
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE)
+        out, err = popen.communicate()
+        msg = f"stdout:\n{out.decode()}\n\nstderr:\n{err.decode()}"
 
     def test_invalidation(self):
         # test cache is invalidated after source file modification
@@ -1244,7 +1295,7 @@ def function2(x):
         self.modfile = self.file1
         self.cache_dir = os.path.join(self.tempdir, "__pycache__")
         # execute original files once to populate cache
-        self.test_caching_mutliple_files_with_signature()
+        self.run_fc_in_separate_process()
         # import function and verify cache is being used
         import sys
         sys.path.insert(0, self.tempdir)
