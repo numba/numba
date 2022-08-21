@@ -23,6 +23,9 @@ def simple_usecase(x):
 def simple_usecase_caller(x):
     return simple_usecase(x)
 
+def simple_usecase_caller2(x):
+    fc = simple_usecase
+    return fc(x)
 
 @jit(cache=True, nopython=True)
 def add_usecase(x, y):
@@ -97,6 +100,11 @@ def ambiguous_function(x):
     return x + 6
 
 renamed_function2 = ambiguous_function
+
+
+@jit(nopython=True)
+def call_ambiguous(x):
+    return renamed_function1(x)
 
 
 def make_closure(x):
@@ -182,3 +190,16 @@ def self_test():
 @jit(parallel=True, cache=True, nopython=True)
 def parfor_usecase(ary):
     return ary * ary + ary
+
+
+fc_tuple = (simple_usecase, )
+
+@jit(nopython=True)
+def call_tuple_member(x):
+    fc = fc_tuple[0]
+    return fc(x)
+
+class FcContainer:
+    fc = simple_usecase
+
+fc_container = FcContainer
