@@ -181,6 +181,7 @@ class Numpy_normal(ConcreteRandomTemplate):
 
 @glue_typing(np.random.uniform, typing_key="np.random.uniform")
 class Numpy_uniform(ConcreteRandomTemplate):
+    #
     cases = [signature(tp, tp, tp) for tp in _float_types]
 
     def generic(self):
