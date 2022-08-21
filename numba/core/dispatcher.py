@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
-
-
+import ast
 import collections
 import functools
 import hashlib
+import inspect
 import sys
+import textwrap
 import types as pytypes
 import uuid
+import warnings
 import weakref
 from contextlib import ExitStack
 # Importing python typing, not to be confused with numba.core.typing
@@ -865,7 +867,10 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         return types.Dispatcher(self)
 
     def enable_caching(self):
-        self._cache = FunctionCache(self.py_func, self.cache_index_key)
+
+        def get_cache_index_key():
+            return self.cache_index_key
+        self._cache = FunctionCache(self.py_func, get_cache_index_key)
 
     @cached_property
     def cache_index_key(self,) -> pt.Tuple[str, str]:
@@ -878,7 +883,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         # retrieve codebytes and cvarbytes of this function
         codebytes = self.py_func.__code__.co_code
         if self.py_func.__closure__ is not None:
-            cvars = tuple([x.cell_contents for x in self._py_func.__closure__])
+            cvars = tuple([x.cell_contents for x in self.py_func.__closure__])
             # Note: cloudpickle serializes a function differently depending
             #       on how the process is launched; e.g. multiprocessing.Process
             cvarbytes = dumps(cvars)
@@ -887,6 +892,9 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         # retrieve codebytes and cvarbytes of each dispatcher used in py_func
         fc_globals = self.py_func.__globals__
         for var_name in self.py_func.__code__.co_names:
+            if (var_name in self.py_func.__builtins__
+                    or var_name in self.py_func.__builtins__):
+                continue
             var_obj = fc_globals[var_name]
             if isinstance(var_obj, Dispatcher):
                 index_key = var_obj.cache_index_key
@@ -1355,3 +1363,102 @@ class ObjModeLiftedWith(LiftedWith):
 _dispatcher.typeof_init(
     OmittedArg,
     dict((str(t), t._code) for t in types.number_domain))
+
+
+def get_function_dependencies2(py_func):
+    """ given a py func, will return all dispatchers on which this depends
+
+    this function supports the cache mechanism, so it ignores dependencies
+    that are not cached
+    The following cases are planned, but not all of them implemented
+    - the called function is a global: implemented. The dependency is returned.
+    - the called function is a builtin: implemented. The dependency is ignored.
+    - the called function is a local: not implemented
+
+    :return:
+    """
+    deps = []
+    # case: dependency is a global
+    pending = []
+    names = py_func.__code__.co_names
+    fc_globals = py_func.__globals__
+    for var_name in names:
+        if var_name in fc_globals:
+            var_obj = fc_globals[var_name]
+            if isinstance(var_obj, Dispatcher):
+                deps.append(var_obj)
+            # else ignore, not a Dispatcher
+        else:
+            pending.append(var_name)
+
+    if not pending:
+        return deps
+    # Those pending names are now filtered if they are builtins
+    builtin_names = py_func.__builtins__
+    pending = [name for name in pending if name not in builtin_names]
+    if not pending:
+        return deps
+    # Those pending names (not globals) are now filtered to only keep
+    # function calls
+    ast_walker = ast.walk(ast.parse(inspect.getsource(py_func)))
+    fc_calls = [op.func.id for op in ast_walker if isinstance(op, ast.Call)]
+    pending = [name for name in pending if name in fc_calls]
+    if pending:
+        warnings.warn(f"Functions {pending} will be cached but changes made to "
+                      f"them might not be detected, resulting in possible use"
+                      f"of stale cached versions")
+    if not pending:
+        return deps
+    # case: function is a getitem or attribute of a global
+    # not yet implemented
+    return deps
+
+def get_function_dependencies(py_func):
+    """ given a py func, will return all dispatchers on which this depends
+
+    this function supports the cache mechanism, so it ignores dependencies
+    that are not cached
+    The following cases are planned, but not all of them implemented
+    - the called function is a global: implemented. The dependency is returned.
+    - the called function is a builtin: implemented. The dependency is ignored.
+    - the called function is a local: not implemented
+
+    :return:
+    """
+    deps = []
+    unknown = []
+    # Retrieve all function calls
+    source = textwrap.dedent(inspect.getsource(py_func))
+    ast_parsed = ast.parse(source)
+    ast_walker = ast.walk(ast_parsed)
+    # we create a list of all function calls, which is filtered in several
+    # steps so only dispatchers remain
+    disp_calls = (op.func.id for op in ast_walker if isinstance(op, ast.Call))
+    disp_calls = set(disp_calls)
+    # filter out builtins
+    builtin_names = py_func.__builtins__
+    disp_calls = (name for name in disp_calls if name not in builtin_names)
+    # filter out input parameters
+    sig_params = list(inspect.signature(py_func).parameters.keys())
+    disp_calls = (name for name in disp_calls if name not in sig_params)
+    # filter out globals if not a Dispatcher
+    # retrieve object from globals if a Dispatcher
+    fc_globals = py_func.__globals__
+    for var_name in disp_calls:
+        if var_name in fc_globals:
+            var_obj = fc_globals[var_name]
+            if isinstance(var_obj, Dispatcher):
+                deps.append(var_obj)
+            # else ignore, not a Dispatcher
+        else:
+            unknown.append(var_name)
+
+    if unknown:
+        warnings.warn(f"Functions {unknown} will be cached but changes made to "
+                      f"them might not be detected, resulting in possible use"
+                      f"of stale cached versions")
+    if not unknown:
+        return deps
+    # case: function is a getitem or attribute of a global
+    # not yet implemented
+    return deps
