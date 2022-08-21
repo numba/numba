@@ -15,6 +15,7 @@ from numba import njit
 from numba.core import codegen
 from numba.core.caching import _UserWideCacheLocator
 from numba.core.errors import NumbaWarning
+from numba.core.dispatcher import get_function_dependencies
 from numba.parfors import parfor
 from numba.tests.support import (
     TestCase,
@@ -1149,7 +1150,7 @@ def function2(x):
         self.check_pycache(6)  # 2 index, 2 data for each function
         self.check_hits(fc, 0, 2)
 
-        print("### importing module #")
+        # print("### importing module #")
         del fc
         del file1
         file1, file2 = self.import_modules(
@@ -1188,6 +1189,7 @@ def function2(x):
         self.assertPreciseEqual(fc(2.5), 3.5)
         self.check_pycache(8)  # 2 index, 4 data for foo, 2 for function2
         self.check_hits(fc, 0, 2)
+
 
 class TestCachingModifiedFiles3(TestCacheMultipleFilesWithSignature, DispatcherCacheUsecasesTest
 ):
@@ -1236,7 +1238,7 @@ def function2(x):
         file1 = self.import_module()
         fc = file1.foo
         # import inspect
-        # print(fc.cache_index_key, fc(2))
+        # print("foo cache key", fc.cache_index_key, fc(2))
         # print(inspect.getsource(fc.py_func.__globals__['function2']))
         # print("functio2 cache",
         #       (fc.py_func.__globals__['function2'].cache_index_key))
@@ -1271,7 +1273,7 @@ def function2(x):
         )
         fc = file1.foo
 
-        # print(inspect.getsource(fc.py_func.__globals__['function2']))
+        # print(inspect.getsource(fc.py_func.__globals__['function2']), fc.py_func.__globals__['function2'](2))
         # print("function2 cache", (fc.py_func.__globals__['function2'].cache_index_key))
         # print(fc.cache_index_key, fc(2))
         self.assertPreciseEqual(fc(2), 3)
@@ -1282,6 +1284,115 @@ def function2(x):
         self.assertPreciseEqual(fc(2.5), 3.5)
         self.check_pycache(5)  # 1 index, 4 data for foo
         self.check_hits(fc, 0, 2)
+
+
+class TestFunctionDependencies(TestCase):
+
+    def setUp(self) -> None:
+        self.use_cases_mod = import_dynamic("cache_usecases")
+
+    def test_simple1(self):
+        # no dependencies, no variables
+        fc = self.use_cases_mod.simple_usecase
+        expected = []
+        self.assertEqual(expected, get_function_dependencies(fc.py_func))
+
+    def test_simple2(self):
+        # 1 dependency on a simple function, no other variables.
+        # dependency is declared on the same file
+        fc = self.use_cases_mod.simple_usecase_caller
+        expected = ['simple_usecase']
+        res = [fc.py_func.__name__ for fc in get_function_dependencies(fc)]
+        self.assertEqual(expected, res)
+
+    def test_simple3(self):
+        # no function dependency, one variable with delayed binding
+        fc = self.use_cases_mod.add_usecase
+        expected = []
+        res = [fc.py_func.__name__ for fc in get_function_dependencies(fc.py_func)]
+        print(get_function_dependencies(fc.py_func))
+        self.assertEqual(expected, res)
+
+    def test_simple4(self):
+        # 1 dependency on a simple function but not a dispatcher.
+        fc = self.use_cases_mod.use_c_sin
+        expected = []
+        res = [fc.py_func.__name__ for fc in get_function_dependencies(fc.py_func)]
+        self.assertEqual(expected, res)
+
+    @unittest.expectedFailure
+    def test_simple5(self):
+        # 1 dependency on a simple function, the call is on a local variable
+        # which in turn depends on a global
+        fc = self.use_cases_mod.simple_usecase_caller2
+        expected = ['simple_usecase']
+        res = [fc.py_func.__name__ for fc in get_function_dependencies(fc)]
+        print(res)
+        self.assertEqual(expected, res)
+
+    def test_builtin_call(self):
+        # one fc call to a builtin function
+        fc = self.use_cases_mod.add_objmode_usecase
+        expected = []
+        res = [fc.py_func.__name__ for fc in get_function_dependencies(fc.py_func)]
+        self.assertEqual(expected, res)
+
+    def test_generated_jit(self):
+        # one fc call to a builtin function
+        fc = self.use_cases_mod.generated_usecase
+        expected = []
+        res = [fc.py_func.__name__ for fc in get_function_dependencies(fc.py_func)]
+        self.assertEqual(expected, res)
+
+    def test_ambiguous(self):
+        # one fc call to a builtin function
+        fc = self.use_cases_mod.call_ambiguous
+        expected = ['ambiguous_function']
+        deps = get_function_dependencies(fc.py_func)
+        res = [fc.py_func.__name__ for fc in deps]
+        self.assertEqual(expected, res)
+        self.assertEqual(3, deps[0](1))
+
+    def test_closure(self):
+        # 1 dependency on a closure
+        fc = self.use_cases_mod.closure4
+        expected = []
+        res = [fc.py_func.__name__ for fc in get_function_dependencies(fc.py_func)]
+        self.assertEqual(expected, res)
+
+    def test_first_class_function(self):
+        # 1 dependency, a function on a function argument
+        fc = self.use_cases_mod.first_class_function_usecase
+        expected = []
+        res = [fc.py_func.__name__ for fc in get_function_dependencies(fc.py_func)]
+        self.assertEqual(expected, res)
+
+    @unittest.expectedFailure
+    def test_getitem(self):
+        # 1 dependency, a function which comes from a getitem on a tuple
+        # this is expected to fail because the indirection from the getitem
+        # is not yet supported
+        fc = self.use_cases_mod.call_tuple_member
+        expected = ['simple_usecase']
+        with warnings.catch_warnings(UserWarning):
+            res = [fc.py_func.__name__
+                   for fc in get_function_dependencies(fc.py_func)]
+        self.assertEqual(expected, res)
+
+    def test_getitem_warning(self):
+        # since test_getitem is an expected failure, it's also expected to
+        # produce a warning. it can be deleted once test_getitem passes.
+        fc = self.use_cases_mod.call_tuple_member
+        expected = ['simple_usecase']
+        with self.assertWarns(UserWarning) as uw:
+            get_function_dependencies(fc.py_func)
+
+        self.assertIn("Functions ['fc'] will be cached", str(uw.warning))
+
+    def test_global(self):
+        pass
+
+
 
 if __name__ == '__main__':
     unittest.main()
