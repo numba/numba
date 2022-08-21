@@ -1290,7 +1290,7 @@ class TestFunctionDependencies(TestCase):
 
     def setUp(self) -> None:
         # self.use_cases_mod = import_dynamic("cache_usecases")
-
+        self.use_cases_mod = sys.modules["cache_usecases"]
     def test_simple1(self):
         # no dependencies, no variables
         fc = self.use_cases_mod.simple_usecase
