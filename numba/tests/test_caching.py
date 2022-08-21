@@ -1289,9 +1289,11 @@ def function2(x):
 class TestFunctionDependencies(TestCase):
 
     def setUp(self) -> None:
-        __import__("cache_usecases")
+        # __import__("cache_usecases")
+        import cache_usecases
         # self.use_cases_mod = import_dynamic("cache_usecases")
         self.use_cases_mod = sys.modules["cache_usecases"]
+
     def test_simple1(self):
         # no dependencies, no variables
         fc = self.use_cases_mod.simple_usecase
