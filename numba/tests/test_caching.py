@@ -1285,11 +1285,11 @@ def function2(x):
         self.check_pycache(5)  # 1 index, 4 data for foo
         self.check_hits(fc, 0, 2)
 
-
+import cache_usecases
 class TestFunctionDependencies(TestCase):
 
     def setUp(self) -> None:
-        self.use_cases_mod = import_dynamic("cache_usecases")
+        # self.use_cases_mod = import_dynamic("cache_usecases")
 
     def test_simple1(self):
         # no dependencies, no variables

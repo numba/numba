@@ -1432,7 +1432,6 @@ def get_function_dependencies(py_func) -> pt.List[Dispatcher]:
     disp_calls = set(disp_calls)
     # filter out builtins
     if not hasattr(py_func, "__builtins__"):
-        print("function without builtins", type(py_func), dir(py_func))
         builtin_names = __builtins__
         disp_calls = (name for name in disp_calls if name not in builtin_names)
     else:
