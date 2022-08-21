@@ -1127,6 +1127,11 @@ def function1(x):
 def function2(x):
     return x + 1
     """
+    def tearDown(self):
+        sys.modules.pop(self.modname, None)
+        sys.path.remove(self.tempdir)
+        shutil.rmtree(self.tempdir)
+
     def test_invalidation(self):
         # test cache is invalidated after source file modification
 
@@ -1225,6 +1230,13 @@ def function1(x):
 def function2(x):
     return x + 1
     """
+
+    def tearDown(self):
+        sys.modules.pop(self.modname, None)
+        sys.path.remove(self.tempdir)
+        shutil.rmtree(self.tempdir)
+
+
     def test_invalidation(self):
         # test cache is invalidated after source file modification
 
