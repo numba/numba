@@ -1431,8 +1431,11 @@ def get_function_dependencies(py_func) -> pt.List[Dispatcher]:
     disp_calls = (op.func.id for op in ast_walker if isinstance(op, ast.Call))
     disp_calls = set(disp_calls)
     # filter out builtins
-    builtin_names = py_func.__builtins__
-    disp_calls = (name for name in disp_calls if name not in builtin_names)
+    if not hasattr(py_func, "__builtins__"):
+        print("function without builtins", type(py_func), dir(py_func))
+    else:
+        builtin_names = py_func.__builtins__
+        disp_calls = (name for name in disp_calls if name not in builtin_names)
     # filter out input parameters
     sig_params = list(inspect.signature(py_func).parameters.keys())
     disp_calls = (name for name in disp_calls if name not in sig_params)
