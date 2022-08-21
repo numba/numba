@@ -481,7 +481,7 @@ class ArrayAttribute(AttributeTemplate):
         # Only support no argument version (default order='C')
         assert not kws
         assert not args
-        return signature(ary.copy(ndim=1, layout='C'))
+        return signature(ary.copy(ndim=1, layout='C', readonly=False))
 
     @bound_function("array.take")
     def resolve_take(self, ary, args, kws):
