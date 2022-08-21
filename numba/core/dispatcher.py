@@ -890,16 +890,10 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         else:
             cvarbytes = b''
         # retrieve codebytes and cvarbytes of each dispatcher used in py_func
-        fc_globals = self.py_func.__globals__
-        for var_name in self.py_func.__code__.co_names:
-            if (var_name in self.py_func.__builtins__
-                    or var_name in self.py_func.__builtins__):
-                continue
-            var_obj = fc_globals[var_name]
-            if isinstance(var_obj, Dispatcher):
-                index_key = var_obj.cache_index_key
-                codebytes += index_key[0].encode()
-                cvarbytes += index_key[1].encode()
+        for dep in get_function_dependencies(self.py_func):
+            index_key = dep.cache_index_key
+            codebytes += index_key[0].encode()
+            cvarbytes += index_key[1].encode()
 
         hasher = lambda x: hashlib.sha256(x).hexdigest()
 
@@ -1413,7 +1407,8 @@ def get_function_dependencies2(py_func):
     # not yet implemented
     return deps
 
-def get_function_dependencies(py_func):
+
+def get_function_dependencies(py_func) -> pt.List[Dispatcher]:
     """ given a py func, will return all dispatchers on which this depends
 
     this function supports the cache mechanism, so it ignores dependencies

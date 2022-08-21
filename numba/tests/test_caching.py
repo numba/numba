@@ -1392,7 +1392,5 @@ class TestFunctionDependencies(TestCase):
     def test_global(self):
         pass
 
-
-
 if __name__ == '__main__':
     unittest.main()
