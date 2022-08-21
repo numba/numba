@@ -596,9 +596,11 @@ class Cache(_Cache):
     # The following class variables must be overridden by subclass.
     _impl_class = None
 
-    def __init__(self, py_func, index_key: pt.Tuple[str, str]):
-        # self._dispatcher_index_key is a tuple of hashed code and
-        # hashed content of closure variables
+    def __init__(self, py_func, index_key: pt.Callable[[], pt.Tuple[str, str]]):
+        # self._dispatcher_index_key is function that returns
+        # a tuple of hashed code and hashed content of closure variables
+        # it's a callable instead of a tuple to delay the calculation of the
+        # index key until all globals have been linked to the function
         self._dispatcher_index_key = index_key
         self._name = repr(py_func)
         self._py_func = py_func
@@ -686,9 +688,9 @@ class Cache(_Cache):
         the bytecode for the function and, if the function has a __closure__,
         a hash of the cell_contents.
         """
-        # self._dispatcher_index_key is a tuple of hashed code and
-        # hashed content of closure variables
-        return (sig, codegen.magic_tuple(), self._dispatcher_index_key)
+        # self._dispatcher_index_key is a function that returns a tuple of
+        # hashed code and hashed content of closure variables
+        return (sig, codegen.magic_tuple(), self._dispatcher_index_key())
 
 
 class FunctionCache(Cache):
