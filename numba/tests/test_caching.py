@@ -1,3 +1,4 @@
+import importlib
 import inspect
 from typing import Iterable, List
 
@@ -1290,7 +1291,9 @@ class TestFunctionDependencies(TestCase):
 
     def setUp(self) -> None:
         # __import__("cache_usecases")
-        import cache_usecases
+        # import cache_usecases
+        importlib.invalidate_caches()
+        importlib.import_module("cache_usecases")
         # self.use_cases_mod = import_dynamic("cache_usecases")
         self.use_cases_mod = sys.modules["cache_usecases"]
 
