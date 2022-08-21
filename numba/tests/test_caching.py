@@ -1286,34 +1286,32 @@ def function2(x):
         self.check_pycache(5)  # 1 index, 4 data for foo
         self.check_hits(fc, 0, 2)
 
-# import cache_usecases
-class TestFunctionDependencies(TestCase):
 
-    def setUp(self) -> None:
-        # __import__("cache_usecases")
-        # import cache_usecases
-        importlib.invalidate_caches()
-        importlib.import_module("cache_usecases")
-        # self.use_cases_mod = import_dynamic("cache_usecases")
-        self.use_cases_mod = sys.modules["cache_usecases"]
+class TestFunctionDependencies(BaseCacheTest):
+    here = os.path.dirname(__file__)
+    usecases_file = os.path.join(here, "cache_usecases.py")
+    modname = "caching_file_dep_fodder"
 
     def test_simple1(self):
         # no dependencies, no variables
-        fc = self.use_cases_mod.simple_usecase
+        mod = self.import_module()
+        fc = mod.simple_usecase
         expected = []
         self.assertEqual(expected, get_function_dependencies(fc.py_func))
 
     def test_simple2(self):
         # 1 dependency on a simple function, no other variables.
         # dependency is declared on the same file
-        fc = self.use_cases_mod.simple_usecase_caller
+        mod = self.import_module()
+        fc = mod.simple_usecase_caller
         expected = ['simple_usecase']
         res = [fc.py_func.__name__ for fc in get_function_dependencies(fc)]
         self.assertEqual(expected, res)
 
     def test_simple3(self):
         # no function dependency, one variable with delayed binding
-        fc = self.use_cases_mod.add_usecase
+        mod = self.import_module()
+        fc = mod.add_usecase
         expected = []
         res = [fc.py_func.__name__ for fc in get_function_dependencies(fc.py_func)]
         print(get_function_dependencies(fc.py_func))
@@ -1321,7 +1319,8 @@ class TestFunctionDependencies(TestCase):
 
     def test_simple4(self):
         # 1 dependency on a simple function but not a dispatcher.
-        fc = self.use_cases_mod.use_c_sin
+        mod = self.import_module()
+        fc = mod.use_c_sin
         expected = []
         res = [fc.py_func.__name__ for fc in get_function_dependencies(fc.py_func)]
         self.assertEqual(expected, res)
@@ -1330,7 +1329,8 @@ class TestFunctionDependencies(TestCase):
     def test_simple5(self):
         # 1 dependency on a simple function, the call is on a local variable
         # which in turn depends on a global
-        fc = self.use_cases_mod.simple_usecase_caller2
+        mod = self.import_module()
+        fc = mod.simple_usecase_caller2
         expected = ['simple_usecase']
         res = [fc.py_func.__name__ for fc in get_function_dependencies(fc)]
         print(res)
@@ -1338,21 +1338,24 @@ class TestFunctionDependencies(TestCase):
 
     def test_builtin_call(self):
         # one fc call to a builtin function
-        fc = self.use_cases_mod.add_objmode_usecase
+        mod = self.import_module()
+        fc = mod.add_objmode_usecase
         expected = []
         res = [fc.py_func.__name__ for fc in get_function_dependencies(fc.py_func)]
         self.assertEqual(expected, res)
 
     def test_generated_jit(self):
         # one fc call to a builtin function
-        fc = self.use_cases_mod.generated_usecase
+        mod = self.import_module()
+        fc = mod.generated_usecase
         expected = []
         res = [fc.py_func.__name__ for fc in get_function_dependencies(fc.py_func)]
         self.assertEqual(expected, res)
 
     def test_ambiguous(self):
         # one fc call to a builtin function
-        fc = self.use_cases_mod.call_ambiguous
+        mod = self.import_module()
+        fc = mod.call_ambiguous
         expected = ['ambiguous_function']
         deps = get_function_dependencies(fc.py_func)
         res = [fc.py_func.__name__ for fc in deps]
@@ -1361,14 +1364,16 @@ class TestFunctionDependencies(TestCase):
 
     def test_closure(self):
         # 1 dependency on a closure
-        fc = self.use_cases_mod.closure4
+        mod = self.import_module()
+        fc = mod.closure4
         expected = []
         res = [fc.py_func.__name__ for fc in get_function_dependencies(fc.py_func)]
         self.assertEqual(expected, res)
 
     def test_first_class_function(self):
         # 1 dependency, a function on a function argument
-        fc = self.use_cases_mod.first_class_function_usecase
+        mod = self.import_module()
+        fc = mod.first_class_function_usecase
         expected = []
         res = [fc.py_func.__name__ for fc in get_function_dependencies(fc.py_func)]
         self.assertEqual(expected, res)
@@ -1378,7 +1383,8 @@ class TestFunctionDependencies(TestCase):
         # 1 dependency, a function which comes from a getitem on a tuple
         # this is expected to fail because the indirection from the getitem
         # is not yet supported
-        fc = self.use_cases_mod.call_tuple_member
+        mod = self.import_module()
+        fc = mod.call_tuple_member
         expected = ['simple_usecase']
         with warnings.catch_warnings(UserWarning):
             res = [fc.py_func.__name__
@@ -1388,7 +1394,8 @@ class TestFunctionDependencies(TestCase):
     def test_getitem_warning(self):
         # since test_getitem is an expected failure, it's also expected to
         # produce a warning. it can be deleted once test_getitem passes.
-        fc = self.use_cases_mod.call_tuple_member
+        mod = self.import_module()
+        fc = mod.call_tuple_member
         expected = ['simple_usecase']
         with self.assertWarns(UserWarning) as uw:
             get_function_dependencies(fc.py_func)
