@@ -1250,6 +1250,25 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
                 self.assertIn("shape mismatch: objects cannot be broadcast to a single shape",
                               str(raises.exception))
 
+    def test_readonly_after_flatten(self):
+        # Reproduces Issue #8370
+        def unfold_flatten(x, y):
+            r, c = x.shape
+            a = np.broadcast_to(x, (y, r, c))
+            b = np.swapaxes(a, 0, 1)
+            cc = b.flatten()
+            d = np.reshape(cc, (-1, c))
+            d[y - 1:, :] = d[: 1 - y]
+            return d
+
+        pyfunc = unfold_flatten
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # If issue #8370 is not fixed: This will fail with "NumbaTypeError:
+        # Cannot modify readonly array of type: readonly array(int32, 2d, C)"
+        cfunc(np.array([[1, 1, 1], [2, 2, 2], [3, 3, 3]]), 2)
+
+
 
 
 if __name__ == '__main__':
