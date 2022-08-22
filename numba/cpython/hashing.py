@@ -39,7 +39,7 @@ _PyHASH_MULTIPLIER = 0xf4243  # 1000003UL
 _PyHASH_IMAG = _PyHASH_MULTIPLIER
 _PyLong_SHIFT = sys.int_info.bits_per_digit
 _Py_HASH_CUTOFF = sys.hash_info.cutoff
-_Py_hashfunc_name = sys.hash_info.algorithm
+_Py_hashfunc_name = "siphash24"
 
 
 # hash(obj) is implemented by calling obj.__hash__()

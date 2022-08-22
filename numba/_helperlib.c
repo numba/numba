@@ -819,7 +819,7 @@ static void traceback_add(const char *funcname, const char *filename, int lineno
     Py_DECREF(code);
     if (!frame)
         goto error;
-    frame->f_lineno = lineno;
+    //frame->f_lineno = lineno;
 
     PyErr_Restore(exc, val, tb);
     PyTraceBack_Here(frame);
@@ -872,9 +872,9 @@ int reraise_exc_is_none(void) {
 #else
     PyThreadState *tstate_exc = tstate;
 #endif
-    type = tstate_exc->exc_type;
-    value = tstate_exc->exc_value;
-    tb = tstate_exc->exc_traceback;
+    type = tstate->curexc_type;
+    value = tstate->curexc_value;
+    tb = tstate->curexc_traceback;
     if (type == Py_None) {
         PyErr_SetString(PyExc_RuntimeError,
                         "No active exception to reraise");
