@@ -22,6 +22,7 @@ from numba.np.random.distributions import \
      random_geometric, random_zipf, random_triangular,
      random_poisson, random_negative_binomial)
 from numba.np.random import random_methods
+from numba.cpython.unsafe.tuple import tuple_setitem
 
 
 def _get_proper_func(func_32, func_64, dtype, dist_name="the given"):
@@ -168,31 +169,34 @@ def NumPyRandomGeneratorType_integers(inst, low, high, size=None,
 
 # Overload the Generator().shuffle()
 @overload_method(types.NumPyRandomGeneratorType, 'shuffle')
-def NumPyRandomGeneratorType_shuffle(inst, arr):
+def NumPyRandomGeneratorType_shuffle(inst, arr, axis=0):
     check_types(arr, [types.Array], 'arr')
+    check_types(axis, [int, types.Integer], 'axis')
 
-    def impl(inst, arr):
-        for i in range(arr.shape[0] - 1, 0, -1):
+    axis_impl = tuple([slice(None, None)] * arr.ndim)
+
+    def impl(inst, arr, axis=0):
+
+        for i in range(arr.shape[axis] - 1, 0, -1):
             j = types.intp(random_methods.random_interval(inst.bit_generator,
                                                           i))
             if i == j:
                 continue
-            if arr.ndim != 1:
-                buffer = np.copy(arr[j])
-                arr[j] = np.copy(arr[i])
-                arr[i] = buffer
-            else:
-                buffer = arr[j]
-                arr[j] = arr[i]
-                arr[i] = buffer
+            axis_impl1 = tuple_setitem(axis_impl, axis, slice(i, i + 1))
+            axis_impl2 = tuple_setitem(axis_impl, axis, slice(j, j + 1))
+
+            buffer = np.copy(arr[axis_impl2])
+            arr[axis_impl2] = np.copy(arr[axis_impl1])
+            arr[axis_impl1] = buffer
 
     return impl
 
 
 # Overload the Generator().permutation()
 @overload_method(types.NumPyRandomGeneratorType, 'permutation')
-def NumPyRandomGeneratorType_permutation(inst, arr):
+def NumPyRandomGeneratorType_permutation(inst, arr, axis=0):
     check_types(arr, [types.Array], 'arr')
+    check_types(axis, [int, types.Integer], 'axis')
 
     if isinstance(arr, types.Integer):
         @register_jitable
@@ -203,10 +207,11 @@ def NumPyRandomGeneratorType_permutation(inst, arr):
         def array_maker(arr):
             return arr.copy()
 
-    def impl(inst, arr):
+    def impl(inst, arr, axis=0):
         new_arr = array_maker(arr)
-        inst.shuffle(new_arr)
+        inst.shuffle(new_arr, axis=axis)
         return new_arr
+
     return impl
 
 

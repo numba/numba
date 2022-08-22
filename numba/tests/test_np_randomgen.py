@@ -947,12 +947,12 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                                   [1, 0.75, (1,)], ['x', 'x', ('x',)])
 
     def test_shuffle(self):
-        test_sizes = [(100,), (10, 20, 30)]
+        test_sizes = [(10, 20, 30)]
         bitgen_types = [None, MT19937]
 
         def dist_func(x, size, dtype):
             arr = x.random(size=size)
-            x.shuffle(arr)
+            x.shuffle(arr, axis=1)
             return arr
 
         for _size in test_sizes:
@@ -962,20 +962,20 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                                             None, _size, None,
                                             adjusted_ulp_prec)
 
-        def dist_func(x, arr):
-            x.shuffle(arr)
+        def dist_func(x, arr, axis):
+            x.shuffle(arr, axis=axis)
             return arr
 
-        self._check_invalid_types(dist_func, ['arr'],
-                                  [np.array([3,4,5])], ['x'])
+        self._check_invalid_types(dist_func, ['arr', 'axis'],
+                                  [np.array([3,4,5]), 0], ['x', 'x'])
 
     def test_permutation(self):
-        test_sizes = [(100,), (10, 20, 30)]
+        test_sizes = [(10, 20, 30)]
         bitgen_types = [None, MT19937]
 
         def dist_func(x, size, dtype):
             arr = x.random(size=size)
-            return x.permutation(arr)
+            return x.permutation(arr, axis=1)
 
         for _size in test_sizes:
             for _bitgen in bitgen_types:
@@ -984,11 +984,11 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                                             None, _size, None,
                                             adjusted_ulp_prec)
 
-        def dist_func(x, arr):
-            return x.permutation(arr)
+        def dist_func(x, arr, axis):
+            return x.permutation(arr, axis=axis)
 
-        self._check_invalid_types(dist_func, ['arr'],
-                                  [np.array([3,4,5])], ['x'])
+        self._check_invalid_types(dist_func, ['arr', 'axis'],
+                                  [np.array([3,4,5]), 0], ['x', 'x'])
 
 
 class TestGeneratorCaching(TestCase, SerialMixin):
