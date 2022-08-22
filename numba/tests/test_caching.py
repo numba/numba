@@ -15,8 +15,8 @@ import warnings
 from numba import njit
 from numba.core import codegen
 from numba.core.caching import _UserWideCacheLocator
+from numba.core.caching_utils import get_function_dependencies
 from numba.core.errors import NumbaWarning
-from numba.core.dispatcher import get_function_dependencies
 from numba.parfors import parfor
 from numba.tests.support import (
     TestCase,
@@ -1093,8 +1093,7 @@ class TestCFuncCache(BaseCacheTest):
         self.run_in_separate_process()
 
 
-class TestCachingModifiedFiles2(DispatcherCacheUsecasesTest
-):
+class TestCachingModifiedFiles2(DispatcherCacheUsecasesTest):
     source_text_file1 = """
 from numba import njit
 from file2 import function2
@@ -1127,7 +1126,8 @@ def function2(x):
     return x + 1
     """
     def setUp(self):
-        self.tempdir = temp_directory('test_cache_file_loc')
+        self.tempdir = temp_directory('test_cache_file_modfiles2')
+        self.cache_dir = os.path.join(self.tempdir, "__pycache__")
 
         self.file1 = os.path.join(self.tempdir, 'file1.py')
         with open(self.file1, 'w') as fout:
@@ -1139,6 +1139,7 @@ def function2(x):
 
     def tearDown(self):
         sys.modules.pop(self.modname, None)
+        sys.modules.pop("file2", None)
         sys.path.remove(self.tempdir)
         shutil.rmtree(self.tempdir)
 
@@ -1223,8 +1224,7 @@ def function2(x):
         self.check_hits(fc, 0, 2)
 
 
-class TestCachingModifiedFiles3(DispatcherCacheUsecasesTest
-):
+class TestCachingModifiedFiles3(DispatcherCacheUsecasesTest):
     source_text_file1 = """
 from numba import njit
 from file2 import function2
@@ -1257,7 +1257,8 @@ def function2(x):
     return x + 1
     """
     def setUp(self):
-        self.tempdir = temp_directory('test_cache_file_loc')
+        self.tempdir = temp_directory('test_cache_file_modfiles3')
+        self.cache_dir = os.path.join(self.tempdir, "__pycache__")
 
         self.file1 = os.path.join(self.tempdir, 'file1.py')
         with open(self.file1, 'w') as fout:
@@ -1269,6 +1270,7 @@ def function2(x):
 
     def tearDown(self):
         sys.modules.pop(self.modname, None)
+        sys.modules.pop("file2", None)
         sys.path.remove(self.tempdir)
         shutil.rmtree(self.tempdir)
 

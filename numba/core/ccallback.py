@@ -4,14 +4,17 @@ Implementation of compiled C callbacks (@cfunc).
 
 
 import ctypes
+import typing as pt
 
+from numba.core.utils import cached_property
 from numba.core import utils, compiler, registry
 from numba.core.caching import NullCache, FunctionCache
+from numba.core.caching_utils import get_index_key
 from numba.core.dispatcher import _FunctionCompiler
 from numba.core.typing import signature
 from numba.core.typing.ctypes_utils import to_ctypes
 from numba.core.compiler_lock import global_compiler_lock
-
+from numba.core.types.function_type import FunctionType
 
 class _CFuncCompiler(_FunctionCompiler):
 
@@ -56,7 +59,18 @@ class CFunc(object):
         self._cache_hits = 0
 
     def enable_caching(self):
-        self._cache = FunctionCache(self._pyfunc)
+        # provide a function for delayed calculation of the index key
+        def get_cache_index_key():
+            return self.cache_index_key
+
+        self._cache = FunctionCache(self._pyfunc, get_cache_index_key)
+
+    @cached_property
+    def cache_index_key(self,) -> pt.Tuple[str, str]:
+        """Hash the code of its function, the closure variables and add them
+        to the respective hashes of all its function dependencies
+        """
+        return get_index_key(self._pyfunc, FunctionType)
 
     @global_compiler_lock
     def compile(self):
