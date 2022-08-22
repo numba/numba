@@ -923,54 +923,6 @@ class MatMulTyperMixin(object):
             return a.dtype
 
 
-@glue_typing(np.dot)
-class Dot(MatMulTyperMixin, CallableTemplate):
-    func_name = "np.dot()"
-
-    def generic(self):
-        def typer(a, b, out=None):
-            # NOTE: np.dot() and the '@' operator have distinct semantics
-            # for >2-D arrays, but we don't support them.
-            return self.matmul_typer(a, b, out)
-
-        return typer
-
-
-@glue_typing(np.vdot)
-class VDot(CallableTemplate):
-
-    def generic(self):
-        def typer(a, b):
-            if not isinstance(a, types.Array) or not isinstance(b, types.Array):
-                return
-            if not all(x.ndim == 1 for x in (a, b)):
-                raise TypingError("np.vdot() only supported on 1-D arrays")
-            if not all(x.layout in 'CF' for x in (a, b)):
-                warnings.warn("np.vdot() is faster on contiguous arrays, called on %s"
-                              % ((a, b),), NumbaPerformanceWarning)
-            if not all(x.dtype == a.dtype for x in (a, b)):
-                raise TypingError("np.vdot() arguments must all have "
-                                  "the same dtype")
-            if not isinstance(a.dtype, (types.Float, types.Complex)):
-                raise TypingError("np.vdot() only supported on "
-                                  "float and complex arrays")
-            return a.dtype
-
-        return typer
-
-
-@infer_global(operator.matmul)
-class MatMul(MatMulTyperMixin, AbstractTemplate):
-    key = operator.matmul
-    func_name = "'@'"
-
-    def generic(self, args, kws):
-        assert not kws
-        restype = self.matmul_typer(*args)
-        if restype is not None:
-            return signature(restype, *args)
-
-
 def _check_linalg_matrix(a, func_name):
     if not isinstance(a, types.Array):
         return
