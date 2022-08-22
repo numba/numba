@@ -135,7 +135,6 @@ class IntervalExampleTest(unittest.TestCase):
 
                 interval.lo = lo_native.value
                 interval.hi = hi_native.value
-                c.builder.store(cgutils.false_bit, is_error_ptr)
 
             return NativeValue(interval._getvalue(), is_error=c.builder.load(is_error_ptr))
         # magictoken.interval_unbox.end
@@ -158,7 +157,7 @@ class IntervalExampleTest(unittest.TestCase):
                     c.builder.store(fail_obj, ret_ptr)
 
                 hi_obj = c.box(types.float64, interval.hi)
-                with cgutils.early_exit_if_null(c.builder, stack, lo_obj):
+                with cgutils.early_exit_if_null(c.builder, stack, hi_obj):
                     c.pyapi.decref(lo_obj)
                     c.builder.store(fail_obj, ret_ptr)
 
@@ -218,7 +217,8 @@ class IntervalExampleTest(unittest.TestCase):
         # TODO: This should produce a `RuntimeError`, but the `unbox` handler for `float` ignores
         # the error raised by `__float__`, leading to a subsequent `TypeError` cause by passing
         # `NULL` to `PyFloat_AsDouble`.
-        # This isn't the fault of the `Interval` extension were are testing in this file.
+        # This isn't the fault of the `Interval` extension that is being testing
+        # in this file.
         with self.assertRaises(TypeError):
             interval_width(Interval(2, NotAFloat()))
 
