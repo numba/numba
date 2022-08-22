@@ -474,7 +474,12 @@ class ArrayAttribute(AttributeTemplate):
         # Only support no argument version (default order='C')
         assert not kws
         assert not args
-        return signature(ary.copy(ndim=1, layout='C', readonly=False))
+        copy_will_be_made = ary.layout != 'C'
+        if copy_will_be_made:
+            readonly = False
+        else:
+            readonly = None
+        return signature(ary.copy(ndim=1, layout='C', readonly=readonly))
 
     @bound_function("array.flatten")
     def resolve_flatten(self, ary, args, kws):
