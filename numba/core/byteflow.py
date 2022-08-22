@@ -287,6 +287,9 @@ class TraceRunner(object):
     def op_NOP(self, state, inst):
         state.append(inst)
 
+    def op_RESUME(self, state, inst):
+        state.append(inst)
+
     def op_FORMAT_VALUE(self, state, inst):
         """
         FORMAT_VALUE(flags): flags argument specifies format spec which is

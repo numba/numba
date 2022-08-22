@@ -1709,6 +1709,9 @@ class Interpreter(object):
     def op_NOP(self, inst):
         pass
 
+    def op_RESUME(self, inst):
+        pass
+
     def op_PRINT_ITEM(self, inst, item, printvar, res):
         item = self.get(item)
         printgv = ir.Global("print", print, loc=self.loc)
