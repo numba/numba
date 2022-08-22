@@ -2,7 +2,6 @@
 import ast
 import collections
 import functools
-import hashlib
 import inspect
 import sys
 import types as pytypes
@@ -878,7 +877,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         """Hash the code of its function, the closure variables and add them
         to the respective hashes of all its function dependencies
         """
-        return get_index_key(self.py_func, types.Dispatcher)
+        return get_index_key(self.py_func, Dispatcher)
 
     def __get__(self, obj, objtype=None):
         '''Allow a JIT function to be bound as a method to an object'''

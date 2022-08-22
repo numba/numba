@@ -4,17 +4,20 @@ import inspect
 import textwrap
 import typing as pt
 import warnings
-from types import FunctionType
+from typing import TYPE_CHECKING
 
-from numba.core import types
 from numba.core.serialize import dumps
 
+
+if TYPE_CHECKING:
+    from numba.core import dispatcher, ccallback
+
 DispatcherOrFunctionType = pt.TypeVar(
-    'DispatcherOrFunctionType', type[FunctionType], type[types.Dispatcher]
+    'DispatcherOrFunctionType', type["ccallback.CFunc"], type["dispatcher.Dispatcher"]
 )
 
 
-def get_index_key(py_func, caller_class: DispatcherOrFunctionType):
+def get_index_key(py_func, caller_class: "DispatcherOrFunctionType"):
     """
     Compute index key for the given signature and codegen.
     It includes a description of the OS, target architecture and hashes of
@@ -32,7 +35,6 @@ def get_index_key(py_func, caller_class: DispatcherOrFunctionType):
         cvarbytes = b''
     # retrieve codebytes and cvarbytes of each dispatcher used in py_func
     for dep in get_function_dependencies(py_func, (caller_class,)):
-        print(dep)
         index_key = dep.cache_index_key
         codebytes += index_key[0].encode()
         cvarbytes += index_key[1].encode()
