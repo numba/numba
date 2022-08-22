@@ -867,6 +867,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield 4.234
             yield True
             yield None
+            yield np.timedelta64(10, 'Y')
+            yield np.datetime64('nat')
+            yield np.datetime64(1, 'Y')
 
         pyfunc = isscalar
         cfunc = jit(nopython=True)(pyfunc)

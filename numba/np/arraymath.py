@@ -16,9 +16,9 @@ import numpy as np
 from numba import generated_jit
 from numba.core import types, cgutils
 from numba.core.extending import overload, overload_method, register_jitable
-from numba.np.numpy_support import as_dtype, type_can_asarray
-from numba.np.numpy_support import numpy_version
-from numba.np.numpy_support import is_nonelike, check_is_integer
+from numba.np.numpy_support import (as_dtype, type_can_asarray, type_is_scalar,
+                                    numpy_version, is_nonelike,
+                                    check_is_integer)
 from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
                                  impl_ret_new_ref, impl_ret_untracked)
 from numba.core.typing import signature
@@ -1044,7 +1044,7 @@ def isrealobj(x):
 
 @overload(np.isscalar)
 def np_isscalar(num):
-    res = isinstance(num, (types.Number, types.UnicodeType, types.Boolean))
+    res = type_is_scalar(num)
 
     def impl(num):
         return res

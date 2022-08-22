@@ -15,7 +15,8 @@ import numpy as np
 from numba import pndindex, literal_unroll
 from numba.core import types, utils, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, carray, farray, is_contiguous,
-                                    is_fortran, check_is_integer)
+                                    is_fortran, check_is_integer,
+                                    type_is_scalar)
 from numba.np.numpy_support import type_can_asarray, is_nonelike, numpy_version
 from numba.core.imputils import (lower_builtin, lower_getattr,
                                  lower_getattr_generic,
@@ -1408,9 +1409,11 @@ def numpy_broadcast_to(array, shape):
         def impl(array, shape):
             return np.broadcast_to(array, (shape,))
     elif isinstance(shape, types.Tuple) and shape.count == 0:
-        if array.ndim == 0:
-            # broadcast_to(0d_array, )
+        is_scalar_array = isinstance(array, types.Array) and array.ndim == 0
+        if type_is_scalar(array) or is_scalar_array:
+            # broadcast_to(scalar, ())
             def impl(array, shape):
+                array = np.asarray(array)
                 return get_readonly_array(array)
         else:
             msg = 'Cannot broadcast a non-scalar to a scalar array'

@@ -714,6 +714,17 @@ def type_can_asarray(arr):
     return isinstance(arr, ok)
 
 
+def type_is_scalar(typ):
+    """ Returns True if the type of 'typ' is a scalar type, according to
+    NumPy rules. False otherwise.
+    https://numpy.org/doc/stable/reference/arrays.scalars.html#built-in-scalar-types
+    """
+
+    ok = (types.Boolean, types.Number, types.UnicodeType, types.StringLiteral,
+          types.NPTimedelta, types.NPDatetime)
+    return isinstance(typ, ok)
+
+
 def check_is_integer(v, name):
     """Raises TypingError if the value is not an integer."""
     if not isinstance(v, (int, types.Integer)):

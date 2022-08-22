@@ -810,13 +810,23 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         pyfunc = numpy_broadcast_to
         cfunc = jit(nopython=True)(pyfunc)
 
-        arr = np.array(123)
+        inputs = [
+            np.array(123),
+            123,
+            True,
+            # can't do np.asarray() on the types below
+            # 'hello',
+            # np.timedelta64(10, 'Y'),
+            # np.datetime64(10, 'Y'),
+        ]
+
         shape = ()
-        expected = pyfunc(arr, shape)
-        got = cfunc(arr, shape)
-        self.assertPreciseEqual(expected, got)
-        # ensure that np.broadcast_to returned a read-only array
-        self.assertFalse(got.flags['WRITEABLE'])
+        for arr in inputs:
+            expected = pyfunc(arr, shape)
+            got = cfunc(arr, shape)
+            self.assertPreciseEqual(expected, got)
+            # ensure that np.broadcast_to returned a read-only array
+            self.assertFalse(got.flags['WRITEABLE'])
 
     def test_broadcast_to_raises(self):
         pyfunc = numpy_broadcast_to
@@ -830,6 +840,10 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             [np.zeros((1,)), (), TypingError,
              'Cannot broadcast a non-scalar to a scalar array'],
             [np.zeros((3,)), (), TypingError,
+             'Cannot broadcast a non-scalar to a scalar array'],
+            [(), (), TypingError,
+             'Cannot broadcast a non-scalar to a scalar array'],
+            [(123,), (), TypingError,
              'Cannot broadcast a non-scalar to a scalar array'],
             [np.zeros((3,)), (1,), ValueError,
              'operands could not be broadcast together with remapped shapes'],
