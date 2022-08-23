@@ -1186,10 +1186,7 @@ class TestTypedDict(MemoryLeakMixin, TestCase):
         self.check_stringify(str)
 
 
-class DictIterableCtor(TestCase):
-
-    def setUp(self) -> None:
-        self.jit_enabled = None
+class DictIterableCtor:
 
     def test_iterable_type_constructor(self):
         # https://docs.python.org/3/library/stdtypes.html#dict
@@ -1223,20 +1220,35 @@ class DictIterableCtor(TestCase):
 
         @njit
         def func7(k, v):
-            return Dict({k: v})
+            return Dict({k: v})  # mapping - not supported
+
+        @njit
+        def func8(k, v):
+            d = Dict()
+            d[k] = v
+            return d
+
+        def _get_dict(py_dict):
+            d = Dict()
+            for k, v in py_dict.items():
+                d[k] = v
+            return d
 
         vals = (
-            (func1, [(0, 1, 2), 'abc'], Dict({0: 'a', 1: 'b', 2: 'c'})),
-            (func2, [(0, 1, 2), 'abc'], Dict({0: 'a', 1: 'b', 2: 'c'})),
-            (func3, [(0, 1, 2), 'abc'], Dict({0: 'a', 1: 'b', 2: 'c'})),
-            (func4, [(0, 1, 2), 'abc'], Dict(
+            (func1, [(0, 1, 2), 'abc'], _get_dict({0: 'a', 1: 'b', 2: 'c'})),
+            (func2, [(0, 1, 2), 'abc'], _get_dict({0: 'a', 1: 'b', 2: 'c'})),
+            (func3, [(0, 1, 2), 'abc'], _get_dict({0: 'a', 1: 'b', 2: 'c'})),
+            (func4, [(0, 1, 2), 'abc'], _get_dict(
                 {0: ((0, 'a'), 0), 1: ((1, 'b'), 1), 2: ((2, 'c'), 2)})),
-            (func5, [(0, 1, 2), 'abc'], Dict(
+            (func5, [(0, 1, 2), 'abc'], _get_dict(
                 {(0, 'a'): 'a', (1, 'b'): 'b', (2, 'c'): 'c'})),
-            (func6, [(),], Dict({})),
-            (func6, [((1, 'a'), (3, 'b')),], Dict({1: 'a', 3: 'b'})),
-            (func7, ['key', Dict({1: 'abc'})], Dict({'key': Dict({1: 'abc'})})),
-            (func7, ['key', List([1, 2, 3])], Dict({'key': List([1, 2, 3])})),
+            # (func6, [(),], Dict({})),
+            (func6, [((1, 'a'), (3, 'b')),], _get_dict({1: 'a', 3: 'b'})),
+            (func1, ['key', _get_dict({1: 'abc'})], _get_dict({'k': 1})),
+            (func8, ['key', _get_dict({1: 'abc'})], _get_dict(
+                {'key': _get_dict({1: 'abc'})})),
+            (func8, ['key', List([1, 2, 3])], _get_dict(
+                {'key': List([1, 2, 3])})),
         )
 
         for func, args, expected in vals:
@@ -1247,9 +1259,9 @@ class DictIterableCtor(TestCase):
             self.assertPreciseEqual(expected, got)
 
 
-class TestDictIterableCtorJit(DictIterableCtor):
+class TestDictIterableCtorJit(TestCase, DictIterableCtor):
 
-    def setup(self):
+    def setUp(self):
         self.jit_enabled = True
 
     def test_exception_no_iterable_arg(self):
@@ -1261,10 +1273,10 @@ class TestDictIterableCtorJit(DictIterableCtor):
         with self.assertRaisesRegex(TypingError, msg):
             ctor()
 
-    def test_exception_mapping_arg(self):
+    def test_exception_dict_mapping(self):
         @njit
         def ctor():
-            return Dict({1: 2})
+            return Dict({1: 2, 3: 4})
 
         msg = ".*No implementation of function.*"
         with self.assertRaisesRegex(TypingError, msg):
@@ -1280,38 +1292,30 @@ class TestDictIterableCtorJit(DictIterableCtor):
             ctor()
 
 
-class TestDictIterableCtorNoJit(DictIterableCtor):
+class TestDictIterableCtorNoJit(TestCase, DictIterableCtor):
 
-    def setup(self):
+    def setUp(self):
         self.jit_enabled = False
 
     def test_exception_nargs(self):
         msg = 'Dict expect at most 1 argument, got 2'
-        with self.assertRaisesRegex(TypeError, msg):
+        with self.assertRaisesRegex(TypingError, msg):
             Dict(1, 2)
+
+    def test_exception_mapping_ctor(self):
+        msg = '.*dict\(mapping\) is not supported.*'  # noqa: W605
+        with self.assertRaisesRegex(TypingError, msg):
+            Dict({1: 2})
 
     def test_exception_non_iterable_arg(self):
         msg = '.*object is not iterable.*'
-        with self.assertRaisesRegex(TypeError, msg):
+        with self.assertRaisesRegex(TypingError, msg):
             Dict(3)
 
     def test_exception_setitem(self):
         msg = ".*dictionary update sequence element #1 has length 3.*"
         with self.assertRaisesRegex(ValueError, msg):
             Dict(((1, 'a'), (2, 'b', 3)))
-
-
-class TestDictMappingCtor(TestCase):
-
-    def test_basic(self):
-        d = Dict({1: 2, 3: 4, 5: 6})
-        self.assertEqual(len(d), 3)
-        self.assertEqual(len(d.values()), 3)
-
-    def test_exception(self):
-        msg = '.*No implementation of function.*'
-        with self.assertRaisesRegex(TypingError, msg):
-            Dict({1: 2, 'a': 'b'})
 
 
 class TestDictRefctTypes(MemoryLeakMixin, TestCase):

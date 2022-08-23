@@ -122,27 +122,25 @@ class Dict(MutableMapping):
             # https://github.com/python/cpython/blob/f215d7cac9a6f9b51ba864e4252686dee4e45d64/Objects/dictobject.c#L2693-L2695
             _len = len(args)
             if _len > 1:
-                raise TypeError(f"Dict expect at most 1 argument, got {_len}")
+                raise errors.TypingError("Dict expect at most 1 argument, "
+                                         f"got {_len}")
 
             # check if argument is iterable
             arg = args[0]
             if not isinstance(arg, Iterable):
                 msg = (f"'{type(arg)}' object is not iterable. Supported type "
-                       "constructor is Dict(iterable)")
-                raise TypeError(msg)
+                       "constructor are Dict() and Dict(iterable)")
+                raise errors.TypingError(msg)
+            elif isinstance(arg, Mapping):
+                raise errors.TypingError("dict(mapping) is not supported")
 
-            if isinstance(arg, Mapping):
-                for k, v in arg.items():
-                    self.__setitem__(k, v)
-            else:
-                # unpack two args at a time
-                for idx, item in enumerate(arg):
-                    if len(item) != 2:
-                        msg = (f"dictionary update sequence element #{idx} has "
-                               f"length {len(item)}; 2 is required")
-                        raise ValueError(msg)
-                    k, v = item
-                    self.__setitem__(k, v)
+            for idx, item in enumerate(arg):
+                if len(item) != 2:
+                    msg = (f"dictionary update sequence element #{idx} has "
+                           f"length {len(item)}; 2 is required")
+                    raise ValueError(msg)
+                k, v = item
+                self.__setitem__(k, v)
 
     def _parse_arg(self, dcttype, meminfo=None):
         if not isinstance(dcttype, DictType):
@@ -349,6 +347,11 @@ def typeddict_call(context):
     def typer(arg=None):
         if arg is None:
             return types.DictType(types.undefined, types.undefined)
+        elif isinstance(arg, types.DictType):
+            return arg
+        elif isinstance(arg, types.Tuple) and len(arg) == 0:  # Dict(())
+            msg = "non-precise type 'dict(())'"
+            raise errors.TypingError(msg)
         elif isinstance(arg, types.IterableType):
             dtype = arg.iterator_type.yield_type
             if isinstance(dtype, types.UniTuple):
@@ -393,14 +396,14 @@ def impl_numba_typeref_ctor(cls, *args):
     value_type = types.TypeRef(dict_ty.value_type)
 
     if args:
-        def impl(cls, *args):
-            # Instantiate an empty dict and populate it with values from
-            # the iterable.
-            d = Dict.empty(key_type, value_type)
-            for k, v in args[0]:
-                d[k] = v
-            return d
-
+        if isinstance(args[0], types.IterableType):
+            def impl(cls, *args):
+                # Instantiate an empty dict and populate it with values from
+                # the iterable.
+                d = Dict.empty(key_type, value_type)
+                for k, v in args[0]:
+                    d[k] = v
+                return d
     else:
         def impl(cls, *args):
             # Simply call .empty() with the key/value types from *cls*
