@@ -1527,16 +1527,19 @@ def replace_var_with_array_in_block(vars, block, typemap, calltypes):
     new_block = []
     for inst in block.body:
         if isinstance(inst, ir.Assign) and inst.target.name in vars:
-            const_node = ir.Const(0, inst.loc)
-            const_var = inst.target.scope.make_temp(inst.loc)
+            loc = inst.loc
+            scope = inst.target.scope
+
+            const_node = ir.Const(0, loc)
+            const_var = scope.get_or_define("$const_ind_0", loc)
             typemap[const_var.name] = types.uintp
-            const_assign = ir.Assign(const_node, const_var, inst.loc)
+            const_assign = ir.Assign(const_node, const_var, loc)
             new_block.append(const_assign)
 
-            val_var = inst.target.scope.make_temp(inst.loc)
+            val_var = scope.get_or_define("$val", loc)
             typemap[val_var.name] = typemap[inst.target.name]
-            new_block.append(ir.Assign(inst.value, val_var, inst.loc))
-            setitem_node = ir.SetItem(inst.target, const_var, val_var, inst.loc)
+            new_block.append(ir.Assign(inst.value, val_var, loc))
+            setitem_node = ir.SetItem(inst.target, const_var, val_var, loc)
             calltypes[setitem_node] = signature(
                 types.none, types.npytypes.Array(typemap[inst.target.name], 1, "C"), types.intp, typemap[inst.target.name])
             new_block.append(setitem_node)
