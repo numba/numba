@@ -73,7 +73,10 @@ def get_function_dependencies(
     ast_walker = ast.walk(ast_parsed)
     # we create a list of all function calls, which is filtered in several
     # steps so only dispatchers remain
-    disp_calls = (op.func.id for op in ast_walker if isinstance(op, ast.Call))
+    disp_calls = (op.func.id
+                  for op in ast_walker
+                  if isinstance(op, ast.Call) and hasattr(op.func, 'id')
+                  )
     disp_calls = set(disp_calls)
     # filter out builtins
     if not hasattr(py_func, "__builtins__"):
