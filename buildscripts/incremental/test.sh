@@ -109,7 +109,7 @@ fi
 python -m numba.tests.test_runtests -v
 
 # Now run tests based on the changes identified via git
-NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -g -m $TEST_NPROCS -- numba.tests
+NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -v -g -m $TEST_NPROCS -- numba.tests
 
 # List the tests found
 echo "INFO: All discovered tests:"
@@ -122,10 +122,10 @@ echo "INFO: Running slice of discovered tests: ($TEST_START_INDEX,None,$TEST_COU
 if [ "$RUN_COVERAGE" == "yes" ]; then
     export PYTHONPATH=.
     coverage erase
-    $SEGVCATCH coverage run runtests.py -b -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
+    $SEGVCATCH coverage run runtests.py -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
 elif [ "$RUN_TYPEGUARD" == "yes" ]; then
     echo "INFO: Running with typeguard"
-    NUMBA_USE_TYPEGUARD=1 NUMBA_ENABLE_CUDASIM=1 PYTHONWARNINGS="ignore:::typeguard" $SEGVCATCH python runtests.py -v -b -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
+    NUMBA_USE_TYPEGUARD=1 NUMBA_ENABLE_CUDASIM=1 PYTHONWARNINGS="ignore:::typeguard" $SEGVCATCH python runtests.py -v -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
 else
-    NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -v -b -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
+    NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -v -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
 fi
