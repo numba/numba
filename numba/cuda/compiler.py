@@ -21,8 +21,10 @@ def _nvvm_options_type(x):
         assert isinstance(x, dict)
         return x
 
+
 def _tuple_type(x):
     return x
+
 
 class CUDAFlags(Flags):
     nvvm_options = Option(
