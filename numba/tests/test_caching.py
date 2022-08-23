@@ -1357,12 +1357,19 @@ class TestFunctionDependencies(BaseCacheTest):
     usecases_file = os.path.join(here, "cache_usecases.py")
     modname = "caching_file_dep_fodder"
 
+    @staticmethod
+    def get_dep_disp(fc):
+        """ Retrieve all dispatchers on which the python function depends on
+        """
+        return get_function_dependencies(fc, (dispatcher.Dispatcher,))
+
     def test_simple1(self):
         # no dependencies, no variables
         mod = self.import_module()
         fc = mod.simple_usecase
         expected = []
-        self.assertEqual(expected, get_function_dependencies(fc.py_func, (dispatcher.Dispatcher,)))
+        deps = self.get_dep_disp(fc.py_func)
+        self.assertEqual(expected, deps)
 
     def test_simple2(self):
         # 1 dependency on a simple function, no other variables.
@@ -1370,7 +1377,7 @@ class TestFunctionDependencies(BaseCacheTest):
         mod = self.import_module()
         fc = mod.simple_usecase_caller
         expected = ['simple_usecase']
-        res = [fc.py_func.__name__ for fc in get_function_dependencies(fc)]
+        res = [fc.py_func.__name__ for fc in self.get_dep_disp(fc)]
         self.assertEqual(expected, res)
 
     def test_simple3(self):
@@ -1378,8 +1385,7 @@ class TestFunctionDependencies(BaseCacheTest):
         mod = self.import_module()
         fc = mod.add_usecase
         expected = []
-        res = [fc.py_func.__name__ for fc in get_function_dependencies(fc.py_func, (dispatcher.Dispatcher,))]
-        print(get_function_dependencies(fc.py_func, (dispatcher.Dispatcher,)))
+        res = [fc.py_func.__name__ for fc in self.get_dep_disp(fc.py_func)]
         self.assertEqual(expected, res)
 
     def test_simple4(self):
@@ -1387,7 +1393,7 @@ class TestFunctionDependencies(BaseCacheTest):
         mod = self.import_module()
         fc = mod.use_c_sin
         expected = []
-        res = [fc.py_func.__name__ for fc in get_function_dependencies(fc.py_func, (dispatcher.Dispatcher,))]
+        res = [fc.py_func.__name__ for fc in self.get_dep_disp(fc.py_func)]
         self.assertEqual(expected, res)
 
     @unittest.expectedFailure
@@ -1397,8 +1403,7 @@ class TestFunctionDependencies(BaseCacheTest):
         mod = self.import_module()
         fc = mod.simple_usecase_caller2
         expected = ['simple_usecase']
-        res = [fc.py_func.__name__ for fc in get_function_dependencies(fc)]
-        print(res)
+        res = [fc.py_func.__name__ for fc in self.get_dep_disp(fc)]
         self.assertEqual(expected, res)
 
     def test_builtin_call(self):
@@ -1406,7 +1411,7 @@ class TestFunctionDependencies(BaseCacheTest):
         mod = self.import_module()
         fc = mod.add_objmode_usecase
         expected = []
-        res = [fc.py_func.__name__ for fc in get_function_dependencies(fc.py_func, (dispatcher.Dispatcher,))]
+        res = [fc.py_func.__name__ for fc in self.get_dep_disp(fc.py_func)]
         self.assertEqual(expected, res)
 
     def test_generated_jit(self):
@@ -1414,7 +1419,7 @@ class TestFunctionDependencies(BaseCacheTest):
         mod = self.import_module()
         fc = mod.generated_usecase
         expected = []
-        res = [fc.py_func.__name__ for fc in get_function_dependencies(fc.py_func, (dispatcher.Dispatcher,))]
+        res = [fc.py_func.__name__ for fc in self.get_dep_disp(fc.py_func)]
         self.assertEqual(expected, res)
 
     def test_ambiguous(self):
@@ -1422,7 +1427,7 @@ class TestFunctionDependencies(BaseCacheTest):
         mod = self.import_module()
         fc = mod.call_ambiguous
         expected = ['ambiguous_function']
-        deps = get_function_dependencies(fc.py_func, (dispatcher.Dispatcher,))
+        deps = self.get_dep_disp(fc.py_func)
         res = [fc.py_func.__name__ for fc in deps]
         self.assertEqual(expected, res)
         self.assertEqual(3, deps[0](1))
@@ -1432,7 +1437,7 @@ class TestFunctionDependencies(BaseCacheTest):
         mod = self.import_module()
         fc = mod.closure4
         expected = []
-        res = [fc.py_func.__name__ for fc in get_function_dependencies(fc.py_func, (dispatcher.Dispatcher,))]
+        res = [fc.py_func.__name__ for fc in self.get_dep_disp(fc.py_func)]
         self.assertEqual(expected, res)
 
     def test_first_class_function(self):
@@ -1440,7 +1445,7 @@ class TestFunctionDependencies(BaseCacheTest):
         mod = self.import_module()
         fc = mod.first_class_function_usecase
         expected = []
-        res = [fc.py_func.__name__ for fc in get_function_dependencies(fc.py_func, (dispatcher.Dispatcher,))]
+        res = [fc.py_func.__name__ for fc in self.get_dep_disp(fc.py_func)]
         self.assertEqual(expected, res)
 
     @unittest.expectedFailure
@@ -1453,7 +1458,7 @@ class TestFunctionDependencies(BaseCacheTest):
         expected = ['simple_usecase']
         with warnings.catch_warnings():
             res = [fc.py_func.__name__
-                   for fc in get_function_dependencies(fc.py_func, (dispatcher.Dispatcher,))]
+                   for fc in self.get_dep_disp(fc.py_func)]
         self.assertEqual(expected, res)
 
     def test_getitem_warning(self):
@@ -1463,7 +1468,7 @@ class TestFunctionDependencies(BaseCacheTest):
         fc = mod.call_tuple_member
         expected = ['simple_usecase']
         with self.assertWarns(UserWarning) as uw:
-            get_function_dependencies(fc.py_func, (dispatcher.Dispatcher,))
+            self.get_dep_disp(fc.py_func)
 
         self.assertIn("Functions ['fc'] will be cached", str(uw.warning))
 
