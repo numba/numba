@@ -285,8 +285,8 @@ In some cases it may be beneficial to have access to a unique identifier for the
 current thread that is executing a parallel region in Numba. For that purpose,
 Numba provides the :func:`numba.get_thread_id` function. This function is the
 corollary of OpenMP's function ``omp_get_thread_num`` and returns an integer
-between ``0`` (inclusive) and the number of configured threads as described
-above (exclusive).
+between 0 (inclusive) and the number of configured threads as described above
+(exclusive).
 
 API Reference
 ~~~~~~~~~~~~~
