@@ -12,8 +12,11 @@ from numba.core.serialize import dumps
 if TYPE_CHECKING:
     from numba.core import dispatcher, ccallback
 
+
 DispatcherOrFunctionType = pt.TypeVar(
-    'DispatcherOrFunctionType', type["ccallback.CFunc"], type["dispatcher.Dispatcher"]
+    'DispatcherOrFunctionType',
+    pt.Type["ccallback.CFunc"],
+    pt.Type["dispatcher.Dispatcher"]
 )
 
 
