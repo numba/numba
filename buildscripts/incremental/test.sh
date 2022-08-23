@@ -106,7 +106,7 @@ if [[ $(uname) == "Darwin" ]]; then
 fi
 
 # First check that the test discovery works
-python -m numba.tests.test_runtests
+python -m numba.tests.test_runtests -v
 
 # Now run tests based on the changes identified via git
 NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -g -m $TEST_NPROCS -- numba.tests
