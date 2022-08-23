@@ -1092,7 +1092,7 @@ def strace(work, syscalls, timeout=10):
     return strace_data
 
 
-def _strace_supported():
+def strace_supported():
     """Checks if strace is supported and working"""
 
     # Only support this on linux where the `strace` binary is likely to be the
@@ -1109,12 +1109,6 @@ def _strace_supported():
     except Exception:
         return False
     return syscall in ''.join(trace)
-
-
-_HAVE_STRACE = _strace_supported()
-
-
-needs_strace = unittest.skipUnless(_HAVE_STRACE, "needs working strace")
 
 
 class IRPreservingTestPipeline(CompilerBase):
