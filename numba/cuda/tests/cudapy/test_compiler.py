@@ -7,7 +7,7 @@ from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
 
 
 @skip_on_cudasim('Compilation unsupported in the simulator')
-class TestCompileToPTX(unittest.TestCase):
+class TestCompileToPTX(CUDATestCase):
     def test_global_kernel(self):
         def f(r, x, y):
             i = cuda.grid(1)
@@ -135,7 +135,7 @@ class TestCompileToPTXForCurrentDevice(CUDATestCase):
 
 
 @skip_on_cudasim('Compilation unsupported in the simulator')
-class TestCompileOnlyTests(unittest.TestCase):
+class TestCompileOnlyTests(CUDATestCase):
     '''For tests where we can only check correctness by examining the compiler
     output rather than observing the effects of execution.'''
 

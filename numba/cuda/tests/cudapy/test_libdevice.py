@@ -168,7 +168,7 @@ def make_test_call(libname):
 
 
 @skip_on_cudasim('Compilation to PTX is not supported on cudasim')
-class TestLibdeviceCompilation(unittest.TestCase):
+class TestLibdeviceCompilation(CUDATestCase):
     """
     Class for holding all tests of compiling calls to libdevice functions. We
     generate the actual tests in this class (as opposed to using subTest and
