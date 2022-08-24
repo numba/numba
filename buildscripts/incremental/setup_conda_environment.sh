@@ -23,7 +23,7 @@ PIP_INSTALL="pip install -q"
 
 EXTRA_CHANNELS=""
 if [ "${USE_C3I_TEST_CHANNEL}" == "yes" ]; then
-    EXTRA_CHANNELS="${EXTRA_CHANNELS} -c c3i_test"
+    EXTRA_CHANNELS="${EXTRA_CHANNELS} -c c3i_test2"
 fi
 
 
