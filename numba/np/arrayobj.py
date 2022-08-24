@@ -2424,16 +2424,31 @@ def _compatible_view(a, dtype):
 @overload(_compatible_view)
 def ol_compatible_view(a, dtype):
     """Determines if the array and dtype are compatible for forming a view."""
-    # NOTE: NumPy 1.23+ uses this check
+    # NOTE: NumPy 1.23+ uses this check.
+    # Code based on:
+    # https://github.com/numpy/numpy/blob/750ad21258cfc00663586d5a466e24f91b48edc7/numpy/core/src/multiarray/getset.c#L500-L525  # noqa: E501
     def impl(a, dtype):
-        flag_f = a.flags.f_contiguous
-        flag_c = a.flags.c_contiguous
-        # if just F ordered
-        if flag_f and not flag_c:
-            dtype_size = _intrin_get_itemsize(dtype)
-            if a.itemsize != dtype_size:
-                return False
-        return True
+        dtype_size = _intrin_get_itemsize(dtype)
+        if dtype_size != a.itemsize:
+            # catch forbidden cases
+            if a.ndim == 0:
+                msg1 = ("Changing the dtype of a 0d array is only supported "
+                        "if the itemsize is unchanged")
+                raise ValueError(msg1)
+            else:
+                # NumPy has a check here for subarray type conversion which
+                # Numba doesn't support
+                pass
+
+            # Resize on last axis only
+            axis = a.ndim - 1
+            p1 = a.shape[axis] != 1
+            p2 = a.size != 0
+            p3 = a.strides[axis] != a.itemsize
+            if (p1 and p2 and p3):
+                msg2 = ("To change to a dtype of a different size, the last "
+                        "axis must be contiguous")
+                raise ValueError(msg2)
     return impl
 
 
@@ -2454,13 +2469,6 @@ def array_view(context, builder, sig, args):
         else:
             setattr(ret, k, val)
 
-    ok = _change_dtype(context, builder, aryty, retty, ret)
-    fail = builder.icmp_unsigned('==', ok, Constant(ok.type, 0))
-
-    with builder.if_then(fail):
-        msg = "new type not compatible with array"
-        context.call_conv.return_user_exc(builder, ValueError, (msg,))
-
     if numpy_version >= (1, 23):
         # NumPy 1.23+ bans views using a dtype that is a different size to that
         # of the array when the last axis is not contiguous. For example, this
@@ -2471,13 +2479,14 @@ def array_view(context, builder, sig, args):
         fnty = tyctx.resolve_value_type(_compatible_view)
         _compatible_view_sig = fnty.get_call_type(tyctx, (*sig.args,), {})
         impl = context.get_function(fnty, _compatible_view_sig)
-        is_compatible_result = impl(builder, args)
-        is_compatible_pred = builder.icmp_unsigned('==', is_compatible_result,
-                                                   is_compatible_result.type(0))
-        with builder.if_then(is_compatible_pred):
-            msg = ("To change to a dtype of a different size, the last axis "
-                   "must be contiguous")
-            context.call_conv.return_user_exc(builder, ValueError, (msg,))
+        impl(builder, args)
+
+    ok = _change_dtype(context, builder, aryty, retty, ret)
+    fail = builder.icmp_unsigned('==', ok, Constant(ok.type, 0))
+
+    with builder.if_then(fail):
+        msg = "new type not compatible with array"
+        context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
     res = ret._getvalue()
     return impl_ret_borrowed(context, builder, sig.return_type, res)

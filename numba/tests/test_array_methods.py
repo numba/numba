@@ -395,6 +395,18 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                 run(arr, dtype)
             self.assertEqual(str(raises.exception), msg)
 
+        def check_err_0d(arr, dtype):
+            # check NumPy interpreted version raises
+            msg = ("Changing the dtype of a 0d array is only supported "
+                   "if the itemsize is unchanged")
+            with self.assertRaises(ValueError) as raises:
+                make_array_view(dtype)(arr)
+            self.assertEqual(str(raises.exception), msg)
+            # check Numba version raises
+            with self.assertRaises(ValueError) as raises:
+                run(arr, dtype)
+            self.assertEqual(str(raises.exception), msg)
+
         dt1 = np.dtype([('a', np.int8), ('b', np.int8)])
         dt2 = np.dtype([('u', np.int16), ('v', np.int8)])
         dt3 = np.dtype([('x', np.int16), ('y', np.int16)])
@@ -420,42 +432,52 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check_err(arr, np.complex128)
 
         # F-contiguous
-        arr = np.arange(24, dtype=np.int8).reshape((3, 8)).T
-        check(arr, np.int8)
+        f_arr = np.arange(24, dtype=np.int8).reshape((3, 8)).T
+        # neither F or C contiguous
+        not_f_or_c_arr = np.zeros((4, 4)).T[::2, ::2]
+
         # NumPy 1.23 does not allow views with different size dtype for
         # non-contiguous last axis.
         if numpy_version >= (1, 23):
-            check_err_noncontig_last_axis(arr, np.float32)
-            check_err_noncontig_last_axis(arr, np.complex64)
-            check_err_noncontig_last_axis(arr, dt1)
+            check_error = check_err_noncontig_last_axis
         else:
-            check(arr, np.float32)
-            check(arr, np.complex64)
-            check(arr, dt1)
-        check_err(arr, dt2)
-        check_err(arr, np.complex128)
+            check_error = check_err
+
+        check(f_arr, np.int8)
+        check(not_f_or_c_arr, np.uint64)
+        check_error(f_arr, np.float32)
+        check_error(f_arr, np.complex64)
+        check_error(f_arr, dt1)
+        check_error(f_arr, dt2)
+        check_error(f_arr, np.complex128)
+        check_error(not_f_or_c_arr, np.int8)
 
         # Non-contiguous: only a type with the same itemsize can be used
         arr = np.arange(16, dtype=np.int32)[::2]
         check(arr, np.uint32)
         check(arr, np.float32)
         check(arr, dt3)
-        check_err(arr, np.int8)
-        check_err(arr, np.int16)
-        check_err(arr, np.int64)
-        check_err(arr, dt1)
-        check_err(arr, dt2)
+        check_error(arr, np.int8)
+        check_error(arr, np.int16)
+        check_error(arr, np.int64)
+        check_error(arr, dt1)
+        check_error(arr, dt2)
 
-        # Zero-dim array: only a type with the same itemsize can be used
+        ## Zero-dim array: only a type with the same itemsize can be used
+        if numpy_version >= (1, 23):
+            check_0d_error = check_err_0d
+        else:
+            check_0d_error = check_err
+
         arr = np.array([42], dtype=np.int32).reshape(())
         check(arr, np.uint32)
         check(arr, np.float32)
         check(arr, dt3)
-        check_err(arr, np.int8)
-        check_err(arr, np.int16)
-        check_err(arr, np.int64)
-        check_err(arr, dt1)
-        check_err(arr, dt2)
+        check_0d_error(arr, np.int8)
+        check_0d_error(arr, np.int16)
+        check_0d_error(arr, np.int64)
+        check_0d_error(arr, dt1)
+        check_0d_error(arr, dt2)
 
         # Exceptions leak references
         self.disable_leak_check()
