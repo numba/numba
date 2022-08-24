@@ -1712,6 +1712,12 @@ class Interpreter(object):
     def op_RESUME(self, inst):
         pass
 
+    def op_CACHE(self, inst):
+        pass
+
+    def op_PRECALL(self, inst):
+        pass
+
     def op_PRINT_ITEM(self, inst, item, printvar, res):
         item = self.get(item)
         printgv = ir.Global("print", print, loc=self.loc)
@@ -2054,11 +2060,18 @@ class Interpreter(object):
             const = ir.Const(value, loc=self.loc)
         self.store(const, res)
 
-    def op_LOAD_GLOBAL(self, inst, res):
-        name = self.code_names[inst.arg]
-        value = self.get_global_value(name)
-        gl = ir.Global(name, value, loc=self.loc)
-        self.store(gl, res)
+    if PYVERSION == (3, 11):
+        def op_LOAD_GLOBAL(self, inst, idx, res):
+            name = self.code_names[idx]
+            value = self.get_global_value(name)
+            gl = ir.Global(name, value, loc=self.loc)
+            self.store(gl, res)
+    else:
+        def op_LOAD_GLOBAL(self, inst, res):
+            name = self.code_names[inst.arg]
+            value = self.get_global_value(name)
+            gl = ir.Global(name, value, loc=self.loc)
+            self.store(gl, res)
 
     def op_LOAD_DEREF(self, inst, res):
         n_cellvars = len(self.code_cellvars)
@@ -2127,6 +2140,12 @@ class Interpreter(object):
             # Set to None for now
             self.store(const_none, name=tmp)
             self._exception_vars.add(tmp)
+
+    def op_CALL(self, inst, func, args, res):
+        func = self.get(func)
+        args = [self.get(x) for x in args]
+        expr = ir.Expr.call(func, args, (), loc=self.loc)
+        self.store(expr, res)
 
     if PYVERSION < (3, 6):
 
@@ -2487,6 +2506,12 @@ class Interpreter(object):
                                      loc=self.loc)
         self.store(expr, res)
 
+    def op_BINARY_OP(self, inst, op, lhs, rhs, res):
+        if "=" in op:
+            self._inplace_binop(op[:1], lhs, rhs, res)
+        else:
+            self._binop(op, lhs, rhs, res)
+
     def op_BINARY_ADD(self, inst, lhs, rhs, res):
         self._binop('+', lhs, rhs, res)
 
@@ -2576,6 +2601,10 @@ class Interpreter(object):
         self.current_block.append(jmp)
 
     def op_JUMP_FORWARD(self, inst):
+        jmp = ir.Jump(inst.get_jump_target(), loc=self.loc)
+        self.current_block.append(jmp)
+
+    def op_JUMP_BACKWARD(self, inst):
         jmp = ir.Jump(inst.get_jump_target(), loc=self.loc)
         self.current_block.append(jmp)
 

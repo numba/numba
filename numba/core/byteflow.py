@@ -1,7 +1,7 @@
 """
 Implement python 3.8+ bytecode analysis
 """
-
+import dis
 from pprint import pformat
 import logging
 from collections import namedtuple, defaultdict, deque
@@ -290,6 +290,12 @@ class TraceRunner(object):
     def op_RESUME(self, state, inst):
         state.append(inst)
 
+    def op_CACHE(self, state, inst):
+        state.append(inst)
+
+    def op_PRECALL(self, state, inst):
+        state.append(inst)
+
     def op_FORMAT_VALUE(self, state, inst):
         """
         FORMAT_VALUE(flags): flags argument specifies format spec which is
@@ -327,10 +333,19 @@ class TraceRunner(object):
     def op_POP_TOP(self, state, inst):
         state.pop()
 
-    def op_LOAD_GLOBAL(self, state, inst):
-        res = state.make_temp()
-        state.append(inst, res=res)
-        state.push(res)
+    if PYVERSION == (3, 11):
+        def op_LOAD_GLOBAL(self, state, inst):
+            res = state.make_temp()
+            idx = inst.arg >> 1
+            state.append(inst, idx=idx, res=res)
+            if inst.arg & 1:
+                state.push(state.make_temp())
+            state.push(res)
+    else:
+        def op_LOAD_GLOBAL(self, state, inst):
+            res = state.make_temp()
+            state.append(inst, res=res)
+            state.push(res)
 
     def op_LOAD_DEREF(self, state, inst):
         res = state.make_temp()
@@ -633,6 +648,11 @@ class TraceRunner(object):
         state.append(inst)
         state.fork(pc=inst.get_jump_target())
 
+    def op_JUMP_BACKWARD(self, state, inst):
+        state.append(inst)
+        print(inst)
+        state.fork(pc=inst.get_jump_target())
+
     def op_JUMP_ABSOLUTE(self, state, inst):
         state.append(inst)
         state.fork(pc=inst.get_jump_target())
@@ -809,6 +829,16 @@ class TraceRunner(object):
         index = state.pop()
         target = state.pop()
         state.append(inst, target=target, index=index)
+
+
+    def op_CALL(self, state, inst):
+        narg = inst.arg
+        args = list(reversed([state.pop() for _ in range(narg)]))
+        func = state.pop()
+
+        res = state.make_temp()
+        state.append(inst, func=func, args=args, res=res)
+        state.push(res)
 
     def op_CALL_FUNCTION(self, state, inst):
         narg = inst.arg
@@ -1048,6 +1078,14 @@ class TraceRunner(object):
         """
         # no-op in Numba
         pass
+
+    def op_BINARY_OP(self, state, inst):
+        op = dis._nb_ops[inst.arg][1]
+        rhs = state.pop()
+        lhs = state.pop()
+        res = state.make_temp()
+        state.append(inst, op=op, lhs=lhs, rhs=rhs, res=res)
+        state.push(res)
 
     def _unaryop(self, state, inst):
         val = state.pop()
