@@ -2426,7 +2426,7 @@ def ol_compatible_view(a, dtype):
     """Determines if the array and dtype are compatible for forming a view."""
     # NOTE: NumPy 1.23+ uses this check.
     # Code based on:
-    # https://github.com/numpy/numpy/blob/750ad21258cfc00663586d5a466e24f91b48edc7/numpy/core/src/multiarray/getset.c#L500-L525  # noqa: E501
+    # https://github.com/numpy/numpy/blob/750ad21258cfc00663586d5a466e24f91b48edc7/numpy/core/src/multiarray/getset.c#L500-L555  # noqa: E501
     def impl(a, dtype):
         dtype_size = _intrin_get_itemsize(dtype)
         if dtype_size != a.itemsize:
@@ -2449,6 +2449,19 @@ def ol_compatible_view(a, dtype):
                 msg2 = ("To change to a dtype of a different size, the last "
                         "axis must be contiguous")
                 raise ValueError(msg2)
+
+            if dtype_size < a.itemsize:
+                if dtype_size == 0 or a.itemsize % dtype_size != 0:
+                    msg3 = ("When changing to a smaller dtype, its size must "
+                            "be a divisor of the size of original dtype")
+                    raise ValueError(msg3)
+            else:
+                newdim = a.shape[axis] * a.itemsize
+                if newdim % dtype_size != 0:
+                    msg4 = ("When changing to a larger dtype, its size must be "
+                            "a divisor of the total size in bytes of the last "
+                            "axis of the array.")
+                    raise ValueError(msg4)
     return impl
 
 
