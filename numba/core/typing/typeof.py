@@ -12,11 +12,14 @@ from numba.np.numpy_support import numpy_version
 _termcolor = errors.termcolor()
 
 # Note that the BitGenerator class exists in _bit_generator.pxd in
-# NumPy 1.18 (has underscore) and then bit_generator.pxd in NumPy 1.19
-if numpy_version < (1, 19):
-    from numpy.random._bit_generator import BitGenerator
-else:
+# NumPy 1.18 (has underscore) only 
+# in  NumPy 1.17 and Numpy 1.19 onward(not in 1.18), it is with underscore bit_generator
+# the change history for this function is a bit complicated.
+# it will be better using try except
+try:
     from numpy.random.bit_generator import BitGenerator
+except:
+    from numpy.random._bit_generator import BitGenerator
 
 
 class Purpose(enum.Enum):
