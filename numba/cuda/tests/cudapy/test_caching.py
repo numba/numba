@@ -379,6 +379,37 @@ class TestMultiCCCaching(SerialMixin, DispatcherCacheUsecasesTest):
             self.check_pycache(10)  # 2 index, 8 data
             self.check_hits(f.func, 0, 2)
 
+        # Third try to check generation for uncached CC
+
+        mod3 = self.import_module()
+        self.assertIsNot(mod, mod3)
+
+        with gpus[1]:
+            f = mod3.add_usecase
+            self.assertPreciseEqual(f(2, 3), 6)
+            self.assertPreciseEqual(f(2.5, 3), 6.5)
+
+            f = mod3.record_return_aligned
+            rec = f(mod.aligned_arr, 1)
+            self.assertPreciseEqual(tuple(rec), (2, 43.5))
+
+            f = mod3.record_return_packed
+            rec = f(mod.packed_arr, 1)
+            self.assertPreciseEqual(tuple(rec), (2, 43.5))
+
+        with gpus[0]:
+            f = mod3.add_usecase
+            self.assertPreciseEqual(f(2, 3), 6)
+            self.assertPreciseEqual(f(2.5, 3), 6.5)
+
+            f = mod3.record_return_aligned
+            rec = f(mod.aligned_arr, 1)
+            self.assertPreciseEqual(tuple(rec), (2, 43.5))
+
+            f = mod3.record_return_packed
+            rec = f(mod.packed_arr, 1)
+            self.assertPreciseEqual(tuple(rec), (2, 43.5))
+
 
 def child_initializer():
     # Disable occupancy and implicit copy warnings in processes in a
