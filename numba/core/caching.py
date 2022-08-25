@@ -15,6 +15,7 @@ import sys
 import tempfile
 import uuid
 import warnings
+import typing as pt
 
 from numba.misc.appdirs import AppDirs
 
@@ -23,9 +24,20 @@ from numba.core.errors import NumbaWarning
 from numba.core.base import BaseContext
 from numba.core.codegen import CodeLibrary
 from numba.core.compiler import CompileResult
-from numba.core import config, compiler
+from numba.core import config, compiler, types
 from numba.core.serialize import dumps
 
+
+MagicTuple = pt.Tuple
+# IndexKey : sig, codege.magictuple, hashed code, hashed cells
+IndexKey = pt.Tuple["sig", MagicTuple, pt.Tuple[str, str]]
+# FileStamp: tuple of file timestamp and file size
+FileStamp = pt.Tuple[float, int]
+# IndexData: Tuple[ filename for cached code, Dict of file names to FileStamps
+IndexOverloadData = pt.Tuple[str, pt.Dict[str, FileStamp]]
+# Index data: what gets pickled and saved.
+# Tuple of Timestamp and size of main file + IndexOverloadData
+IndexData = pt.Tuple[pt.Tuple[float, int], IndexOverloadData]
 
 def _cache_log(msg, *args):
     if config.DEBUG_CACHE:
@@ -158,7 +170,7 @@ class _SourceFileBackedLocatorMixin(object):
     Python source file.
     """
 
-    def get_source_stamp(self):
+    def get_source_stamp(self) -> FileStamp:
         if getattr(sys, 'frozen', False):
             st = os.stat(sys.executable)
         else:
@@ -459,14 +471,18 @@ class IndexDataCacheFile(object):
     def flush(self):
         self._save_index({})
 
-    def save(self, key, data):
+    def save(self,
+             key: IndexKey,
+             data: "ReducedCompileResult",
+             deps_filestamps: pt.Dict[str, FileStamp]
+             ):
         """
         Save a new cache entry with *key* and *data*.
         """
         overloads = self._load_index()
         try:
             # If key already exists, we will overwrite the file
-            data_name = overloads[key]
+            data_name, deps_filestamps = overloads[key]
         except KeyError:
             # Find an available name for the data file
             existing = set(overloads.values())
@@ -474,17 +490,19 @@ class IndexDataCacheFile(object):
                 data_name = self._data_name(i)
                 if data_name not in existing:
                     break
-            overloads[key] = data_name
+            overloads[key] = data_name, deps_filestamps
             self._save_index(overloads)
         self._save_data(data_name, data)
 
-    def load(self, key):
+    def load(self, key: IndexKey):
         """
         Load a cache entry with *key*.
         """
         overloads = self._load_index()
-        data_name = overloads.get(key)
+        data_name, deps_filestamps = overloads.get(key, (None, None))
         if data_name is None:
+            return
+        if not are_filestamps_valid(deps_filestamps):
             return
         try:
             return self._load_data(data_name)
@@ -492,7 +510,7 @@ class IndexDataCacheFile(object):
             # File could have been removed while the index still refers it.
             return
 
-    def _load_index(self):
+    def _load_index(self) -> pt.Dict[IndexKey, IndexOverloadData]:
         """
         Load the cache index and return it as a dictionary (possibly
         empty if cache is empty or obsolete).
@@ -517,8 +535,8 @@ class IndexDataCacheFile(object):
         else:
             return overloads
 
-    def _save_index(self, overloads):
-        data = self._source_stamp, overloads
+    def _save_index(self, overloads: pt.Dict[IndexKey, IndexOverloadData]):
+        data: IndexData = self._source_stamp, overloads
         data = self._dump(data)
         with self._open_for_write(self._index_path) as f:
             pickle.dump(self._version, f, protocol=-1)
@@ -644,7 +662,7 @@ class Cache(_Cache):
             data = self._impl.rebuild(target_context, data)
         return data
 
-    def save_overload(self, sig, data):
+    def save_overload(self, sig, data: "CompileResult"):
         """
         Save the data for the given signature in the cache.
         """
@@ -657,9 +675,12 @@ class Cache(_Cache):
         if not self._impl.check_cachable(data):
             return
         self._impl.locator.ensure_cache_path()
+        # get timestamps of all dependency files
+        deps_filestamps = get_function_dependencies(data)
+        # get index key and reduce CompileResult
         key = self._index_key(sig, data.codegen)
         data = self._impl.reduce(data)
-        self._cache_file.save(key, data)
+        self._cache_file.save(key, data, deps_filestamps)
 
     @contextlib.contextmanager
     def _guard_against_spurious_io_errors(self):
@@ -675,7 +696,7 @@ class Cache(_Cache):
             # No such conditions under non-Windows OSes
             yield
 
-    def _index_key(self, sig, codegen):
+    def _index_key(self, sig, codegen) -> IndexKey:
         """
         Compute index key for the given signature and codegen.
         It includes a description of the OS, target architecture and hashes of
@@ -729,3 +750,50 @@ def make_library_cache(prefix):
 
     return LibraryCache
 
+
+dep_types = (types.Dispatcher, )
+
+
+def get_function_dependencies(overload: "CompileResult"
+                              ) -> pt.Dict[str, FileStamp]:
+    deps = {}
+    # for ty in overload.type_annotation.typemap.values():
+    #     if not isinstance(ty, dep_types):
+    #         continue
+    #     if isinstance(ty, types.Dispatcher):
+    #         py_func = ty.dispatcher.py_func
+    #         py_file = py_func.__code__.co_filename
+    #         deps[py_file] = get_source_stamp(py_file)
+    #
+    #         deps.update(ty.dispatcher.cache_index_key())
+    typemap = overload.type_annotation.typemap
+    calltypes = overload.type_annotation.calltypes
+    for call_op in calltypes:
+        name = call_op.list_vars()[0].name
+        fc_ty = typemap[name]
+        sig = calltypes[call_op]
+        if not isinstance(fc_ty, dep_types):
+            continue
+        if isinstance(fc_ty, types.Dispatcher):
+            py_func = fc_ty.dispatcher.py_func
+            py_file = py_func.__code__.co_filename
+            deps[py_file] = get_source_stamp(py_file)
+            deps.update(fc_ty.dispatcher.cache_deps_info(sig.args))
+    return deps
+
+
+def are_filestamps_valid(filestamps: pt.Dict[str, FileStamp]) -> bool:
+    for filename, source_stamp in filestamps.items():
+        if get_source_stamp(filename) != source_stamp:
+            return False
+    return True
+
+
+def get_source_stamp(py_file: str) -> pt.Tuple[float, int]:
+    if getattr(sys, 'frozen', False):
+        st = os.stat(sys.executable)
+    else:
+        st = os.stat(py_file)
+    # We use both timestamp and size as some filesystems only have second
+    # granularity.
+    return st.st_mtime, st.st_size
