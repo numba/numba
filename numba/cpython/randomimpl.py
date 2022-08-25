@@ -1782,6 +1782,13 @@ def multinomial(n, pvals, size=None):
         fl = out.flat
         sz = out.size
         plen = len(pvals)
+        
+        psum = 0.0
+        for i in range(plen):
+            psum += pvals[i]
+        if psum > 1 + 1e-10:
+            raise AssertionError("np.random.multinomial(): Sum of probabilities "
+                                 "cannot exceed 1.")
 
         for i in range(0, sz, plen):
             # Loop body: take a set of n experiments and fill up
@@ -1797,7 +1804,7 @@ def multinomial(n, pvals, size=None):
             # distribution over the remaining number of experiments.
             for j in range(0, plen - 1):
                 p_j = pvals[j]
-                n_j = fl[i + j] = np.random.binomial(n_experiments, p_j / p_sum)
+                n_j = fl[i + j] = np.random.binomial(n_experiments, min(p_j / p_sum, 1))
                 n_experiments -= n_j
                 if n_experiments <= 0:
                     # Note the output was initialized to zero
