@@ -215,7 +215,7 @@ def compile_cuda(pyfunc, return_type, args, debug=False, lineinfo=False,
         flags.fastmath = True
     if nvvm_options:
         flags.nvvm_options = nvvm_options
-    flags.compute_capability = cc or get_current_device().compute_capability
+    flags.compute_capability = cc or config.CUDA_DEFAULT_PTX_CC
 
     # Run compilation pipeline
     cres = compiler.compile_extra(typingctx=typingctx,

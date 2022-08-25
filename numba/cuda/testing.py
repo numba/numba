@@ -128,6 +128,9 @@ def skip_unless_cc_53(fn):
 def skip_unless_cc_60(fn):
     return unittest.skipUnless(cc_X_or_above(6, 0), "requires cc >= 6.0")(fn)
 
+def skip_unless_cc_75(fn):
+    return unittest.skipUnless(cc_X_or_above(7, 5), "requires cc >= 7.5")(fn)
+
 
 def xfail_unless_cudasim(fn):
     if config.ENABLE_CUDASIM:

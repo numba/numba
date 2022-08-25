@@ -1,8 +1,8 @@
 from numba import cuda
-from numba.cuda.testing import unittest, CUDATestCase
+from numba.cuda.testing import unittest
 
 
-class TestCudaMandel(CUDATestCase):
+class TestCudaMandel(unittest.TestCase):
     def test_mandel(self):
         """Just make sure we can compile this
         """
