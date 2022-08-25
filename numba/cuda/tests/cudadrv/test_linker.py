@@ -69,6 +69,8 @@ def simple_smem(ary, dty):
     cuda.syncthreads()
     ary[i] = sm[i]
 
+def empty_func():
+    pass
 
 LMEM_SIZE = 1000
 
