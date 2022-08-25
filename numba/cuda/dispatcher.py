@@ -72,12 +72,14 @@ class _Kernel(serialize.ReduceMixin):
             'opt': 3 if opt else 0
         }
 
+        cc = get_current_device().compute_capability
         cres = compile_cuda(self.py_func, types.void, self.argtypes,
                             debug=self.debug,
                             lineinfo=self.lineinfo,
                             inline=inline,
                             fastmath=fastmath,
-                            nvvm_options=nvvm_options)
+                            nvvm_options=nvvm_options,
+                            cc=cc)
         tgt_ctx = cres.target_context
         code = self.py_func.__code__
         filename = code.co_filename
@@ -797,11 +799,13 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
                     'fastmath': fastmath
                 }
 
+                cc = get_current_device().compute_capability
                 cres = compile_cuda(self.py_func, None, args,
                                     debug=debug,
                                     inline=inline,
                                     fastmath=fastmath,
-                                    nvvm_options=nvvm_options)
+                                    nvvm_options=nvvm_options,
+                                    cc=cc)
                 self.overloads[args] = cres
 
                 cres.target_context.insert_user_function(cres.entry_point,
