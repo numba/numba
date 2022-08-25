@@ -29,7 +29,6 @@ class TestFastMathOption(CUDATestCase):
 
         # Test jit code path
         fastver = cuda.jit(sig, device=device, fastmath=True)(pyfunc)
-        print(fastver.inspect_asm(sig))
         precver = cuda.jit(sig, device=device)(pyfunc)
         criterion.check(
             self, fastver.inspect_asm(sig), precver.inspect_asm(sig)
