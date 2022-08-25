@@ -80,6 +80,8 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         # Driver API at link time.
         self._linking_files = set()
 
+        # Cache the LLVM IR string
+        self._llvm_str = None
         # Maps CC -> PTX string
         self._ptx_cache = {}
         # Maps CC -> cubin
@@ -95,8 +97,14 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         self._nvvm_options = nvvm_options
         self._entry_name = entry_name
 
+    @property
+    def llvm_str(self):
+        if self._llvm_str is None:
+            self._llvm_str = str(self._module)
+        return self._llvm_str
+
     def get_llvm_str(self):
-        return str(self._module)
+        return self.llvm_str
 
     def get_asm_str(self, cc=None):
         return self._join_ptxes(self._get_ptxes(cc=cc))
@@ -305,6 +313,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
             codegen=None,
             name=self.name,
             entry_name=self._entry_name,
+            llvm_str=self.llvm_str,
             linking_libraries=self._linking_libraries,
             ptx_cache=self._ptx_cache,
             cubin_cache=self._cubin_cache,
@@ -314,8 +323,9 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         )
 
     @classmethod
-    def _rebuild(cls, codegen, name, entry_name, linking_libraries, ptx_cache,
-                 cubin_cache, linkerinfo_cache, max_registers, nvvm_options):
+    def _rebuild(cls, codegen, name, entry_name, llvm_str, linking_libraries,
+                 ptx_cache, cubin_cache, linkerinfo_cache, max_registers,
+                 nvvm_options):
         """
         Rebuild an instance.
         """
@@ -323,6 +333,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         super(cls, instance).__init__(codegen, name)
         instance._entry_name = entry_name
 
+        instance._llvm_str = llvm_str
         instance._linking_libraries = linking_libraries
         instance._linking_files = set()
 
