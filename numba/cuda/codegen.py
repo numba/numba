@@ -81,7 +81,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         self._linking_files = set()
 
         # Cache the LLVM IR string
-        self._llvm_str = None
+        self._llvm_strs = None
         # Maps CC -> PTX string
         self._ptx_cache = {}
         # Maps CC -> cubin
@@ -98,13 +98,13 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         self._entry_name = entry_name
 
     @property
-    def llvm_str(self):
-        if self._llvm_str is None:
-            self._llvm_str = str(self._module)
-        return self._llvm_str
+    def llvm_strs(self):
+        if self._llvm_strs is None:
+            self._llvm_strs = [str(mod) for mod in self.modules]
+        return self._llvm_strs
 
     def get_llvm_str(self):
-        return self.llvm_str
+        return self.llvm_strs[0]
 
     def get_asm_str(self, cc=None):
         return self._join_ptxes(self._get_ptxes(cc=cc))
@@ -134,7 +134,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
                     warn(NumbaInvalidConfigWarning(msg))
             options['debug'] = False
 
-        irs = [str(mod) for mod in self.modules]
+        irs = self.llvm_strs
 
         if options.get('debug', False):
             # If we're compiling with debug, we need to compile modules with
@@ -313,7 +313,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
             codegen=None,
             name=self.name,
             entry_name=self._entry_name,
-            llvm_str=self.llvm_str,
+            llvm_strs=self.llvm_strs,
             linking_libraries=self._linking_libraries,
             ptx_cache=self._ptx_cache,
             cubin_cache=self._cubin_cache,
@@ -323,7 +323,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         )
 
     @classmethod
-    def _rebuild(cls, codegen, name, entry_name, llvm_str, linking_libraries,
+    def _rebuild(cls, codegen, name, entry_name, llvm_strs, linking_libraries,
                  ptx_cache, cubin_cache, linkerinfo_cache, max_registers,
                  nvvm_options):
         """
@@ -333,7 +333,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         super(cls, instance).__init__(codegen, name)
         instance._entry_name = entry_name
 
-        instance._llvm_str = llvm_str
+        instance._llvm_strs = llvm_strs
         instance._linking_libraries = linking_libraries
         instance._linking_files = set()
 
