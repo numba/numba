@@ -2197,14 +2197,20 @@ def _arr_f_contig(a):
 @overload(_arr_c_contig)
 def ol_arr__ccontig(a):
     def impl(a):
-        return a.flags.c_contiguous
+        # Ignore cases where array is discontinous,
+        # no iterator optimizations are applied in
+        # those cases
+        return not a.flags.f_contiguous or a.flags.c_contiguous
     return impl
 
 
 @overload(_arr_f_contig)
 def ol_arr_f_contig(a):
     def impl(a):
-        return a.flags.f_contiguous
+        # Ignore cases where array is discontinous,
+        # no iterator optimizations are applied in
+        # those cases
+        return not a.flags.c_contiguous or a.flags.f_contiguous
     return impl
 
 
@@ -3250,11 +3256,6 @@ def make_nditer_cls(nditerty):
                         raise ValueError("nditer(): operands could not be "
                                          "broadcast together")
 
-            if layout == 'C':
-                _arr_contig = _arr_c_contig
-            else:
-                _arr_contig = _arr_f_contig
-
             for i, (arrty, arr) in enumerate(zip(arrtys, arrays)):
                 if isinstance(arrty, types.Array) and arrty.ndim > 0:
                     sig = signature(types.none,
@@ -3262,6 +3263,17 @@ def make_nditer_cls(nditerty):
                                     main_shape_ty)
                     context.compile_internal(builder, check_shape,
                                              sig, (arr.shape, main_shape))
+                    # We need to check for undefined contiguity
+                    # during compile time.
+                    if not arrty.layout == 'A':
+                        continue
+                    # If undefined, array's runtime contiguity should match
+                    # default contiguity of NdIter object (Either of C or F).
+                    if layout == 'C':
+                        _arr_contig = _arr_c_contig
+                    else:
+                        _arr_contig = _arr_f_contig
+
                     tyctx = context.typing_context
                     fnty = tyctx.resolve_value_type(_arr_contig)
                     _arr_contig_sig = fnty.get_call_type(tyctx, (arrty,), {})

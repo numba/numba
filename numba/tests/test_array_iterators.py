@@ -546,15 +546,16 @@ class TestNdIter(MemoryLeakMixin, TestCase):
 
         a = np.arange(12).reshape((3, 4)).T
 
-        @njit((float64[:,:],))
+        @njit((types.intp[:,:],))
         def foo(x):
             for i in np.nditer(x):
                 pass
 
         with self.assertRaises(TypeError) as raises:
             foo(a)
-        self.assertIn('Only C or F contiguous arrays are '
-                      'accepted by Numba implementation of np.nditer',
+        self.assertIn('Unexpected contiguity during runtime,'
+                      ' this happened because np.nditer was '
+                      'compiled for a different contiguity.',
                       str(raises.exception))        
 
 if __name__ == '__main__':
