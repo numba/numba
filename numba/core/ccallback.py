@@ -9,7 +9,7 @@ import typing as pt
 from numba.core.utils import cached_property
 from numba.core import utils, compiler, registry
 from numba.core.caching import NullCache, FunctionCache
-from numba.core.caching_utils import get_index_key
+from numba.core.caching_utils import get_index_info
 from numba.core.dispatcher import _FunctionCompiler
 from numba.core.typing import signature
 from numba.core.typing.ctypes_utils import to_ctypes
@@ -70,7 +70,7 @@ class CFunc(object):
         """Hash the code of its function, the closure variables and add them
         to the respective hashes of all its function dependencies
         """
-        return get_index_key(self._pyfunc, CFunc)
+        return get_index_info(self._pyfunc, (CFunc,))
 
     @global_compiler_lock
     def compile(self):
