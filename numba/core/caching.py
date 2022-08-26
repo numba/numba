@@ -544,7 +544,8 @@ class IndexDataCacheFile(object):
             return overloads
 
     def _save_index(self, overloads: pt.Dict[IndexKey, IndexOverloadData]):
-        data: IndexData = self._source_stamp, overloads
+        data: IndexData # for python 3.7, otherwise put in next line
+        data = self._source_stamp, overloads
         data = self._dump(data)
         with self._open_for_write(self._index_path) as f:
             pickle.dump(self._version, f, protocol=-1)
