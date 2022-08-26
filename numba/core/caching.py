@@ -780,6 +780,8 @@ def get_function_dependencies(overload: "CompileResult"
     #         deps[py_file] = get_source_stamp(py_file)
     #
     #         deps.update(ty.dispatcher.cache_index_key())
+    if not isinstance(overload, CompileResult):
+        return {}
     typemap = overload.type_annotation.typemap
     calltypes = overload.type_annotation.calltypes
     for call_op in calltypes:
