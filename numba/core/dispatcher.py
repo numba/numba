@@ -1329,6 +1329,18 @@ class ObjModeLiftedWith(LiftedWith):
         sig = (types.ffi_forced_object,) * len(args)
         return super().compile(sig)
 
+    @functools.lru_cache()
+    def cache_deps_info(self, sig_args) -> pt.Dict[str, FileStamp]:
+        """Hash the code of its function, the closure variables and add them
+        to the respective hashes of all its function dependencies
+        """
+        if isinstance(self.overloads[sig_args].type_annotation, str):
+            # we assume this is because the function was loaded from cache
+            deps = self._cache.load_cached_deps(sig_args, self.targetctx)
+        else:
+            deps = get_function_dependencies(self.overloads[sig_args])
+        return deps
+
 
 # Initialize typeof machinery
 _dispatcher.typeof_init(
