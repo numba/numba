@@ -306,15 +306,15 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         after deserialization.
         """
         if self._linking_files:
-            msg = ('cannot pickle CUDACodeLibrary function with additional '
-                   'libraries to link against')
+            msg = 'Cannot pickle CUDACodeLibrary with linking files'
             raise RuntimeError(msg)
+        if not self._finalized:
+            raise RuntimeError('Cannot pickle unfinalized CUDACodeLibrary')
         return dict(
             codegen=None,
             name=self.name,
             entry_name=self._entry_name,
             llvm_strs=self.llvm_strs,
-            linking_libraries=self._linking_libraries,
             ptx_cache=self._ptx_cache,
             cubin_cache=self._cubin_cache,
             linkerinfo_cache=self._linkerinfo_cache,
@@ -323,9 +323,8 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         )
 
     @classmethod
-    def _rebuild(cls, codegen, name, entry_name, llvm_strs, linking_libraries,
-                 ptx_cache, cubin_cache, linkerinfo_cache, max_registers,
-                 nvvm_options):
+    def _rebuild(cls, codegen, name, entry_name, llvm_strs, ptx_cache,
+                 cubin_cache, linkerinfo_cache, max_registers, nvvm_options):
         """
         Rebuild an instance.
         """
@@ -334,9 +333,6 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         instance._entry_name = entry_name
 
         instance._llvm_strs = llvm_strs
-        instance._linking_libraries = linking_libraries
-        instance._linking_files = set()
-
         instance._ptx_cache = ptx_cache
         instance._cubin_cache = cubin_cache
         instance._linkerinfo_cache = linkerinfo_cache
@@ -344,6 +340,8 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
 
         instance._max_registers = max_registers
         instance._nvvm_options = nvvm_options
+
+        instance._finalized = True
 
         return instance
 
