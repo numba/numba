@@ -10,6 +10,7 @@ from numba.cuda.testing import CUDATestCase, skip_on_cudasim
 from numba.tests.support import SerialMixin
 from numba.tests.test_caching import (DispatcherCacheUsecasesTest,
                                       skip_bad_access)
+from pathlib import Path
 
 
 @skip_on_cudasim('Simulator does not implement caching')
@@ -201,6 +202,15 @@ class CUDACachingTest(SerialMixin, DispatcherCacheUsecasesTest):
         self.addCleanup(os.chmod, pycache, old_perms)
 
         self._test_pycache_fallback()
+
+    def test_cannot_cache_linking_libraries(self):
+        link = os.path.join(Path(__file__).parent.parent,
+                            'cudadrv', 'data', 'jitlink.ptx')
+        msg = 'Cannot pickle CUDACodeLibrary with linking files'
+        with self.assertRaisesRegex(RuntimeError, msg):
+            @cuda.jit('void()', cache=True, link=[link])
+            def f():
+                pass
 
 
 @skip_on_cudasim('Simulator does not implement caching')
