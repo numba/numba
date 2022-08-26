@@ -485,7 +485,7 @@ class IndexDataCacheFile(object):
             data_name, deps_filestamps = overloads[key]
         except KeyError:
             # Find an available name for the data file
-            existing = set(overloads.values())
+            existing = set((name for name, filestamp in overloads.values()))
             for i in itertools.count(1):
                 data_name = self._data_name(i)
                 if data_name not in existing:
@@ -509,6 +509,14 @@ class IndexDataCacheFile(object):
         except OSError:
             # File could have been removed while the index still refers it.
             return
+
+    def load_deps(self,  key: IndexKey) ->  pt.Dict[str, FileStamp]:
+        """
+        Load the cached dependencies' FileStamps for the given key
+        """
+        overloads = self._load_index()
+        data_name, deps_filestamps = overloads.get(key, (None, None))
+        return deps_filestamps
 
     def _load_index(self) -> pt.Dict[IndexKey, IndexOverloadData]:
         """
@@ -715,6 +723,11 @@ class Cache(_Cache):
         hasher = lambda x: hashlib.sha256(x).hexdigest()
         return (sig, codegen.magic_tuple(), (hasher(codebytes),
                                              hasher(cvarbytes),))
+
+    def load_cached_deps(self, sig_args, target_context) -> pt.Dict[str, FileStamp]:
+        key = self._index_key(sig_args, target_context.codegen())
+        deps = self._cache_file.load_deps(key)
+        return deps
 
 
 class FunctionCache(Cache):

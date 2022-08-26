@@ -869,7 +869,12 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         """Hash the code of its function, the closure variables and add them
         to the respective hashes of all its function dependencies
         """
-        return get_function_dependencies(self.overloads[sig_args])
+        if isinstance(self.overloads[sig_args].type_annotation, str):
+            # we assume this is because the function was loaded from cache
+            deps = self._cache.load_cached_deps(sig_args, self.targetctx)
+        else:
+            deps = get_function_dependencies(self.overloads[sig_args])
+        return deps
 
     def __get__(self, obj, objtype=None):
         '''Allow a JIT function to be bound as a method to an object'''
