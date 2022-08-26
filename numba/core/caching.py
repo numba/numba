@@ -786,6 +786,9 @@ def get_function_dependencies(overload: "CompileResult"
     calltypes = overload.type_annotation.calltypes
     for call_op in calltypes:
         name = call_op.list_vars()[0].name
+        if name not in typemap:
+            # for parfor generated callsites which do not have a type
+            continue
         fc_ty = typemap[name]
         sig = calltypes[call_op]
         if not isinstance(fc_ty, dep_types):
