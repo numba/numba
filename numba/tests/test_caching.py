@@ -1099,6 +1099,7 @@ def function1(x):
 def function2(x):
     return x + 1
     """
+
     def setUp(self):
         self.tempdir = temp_directory('test_cache_file_modfiles2')
         self.cache_dir = os.path.join(self.tempdir, "__pycache__")
@@ -1200,21 +1201,17 @@ def function2(x):
         with open(self.file2_alt, 'w') as fout:
             print(self.source_text_file2_alt, file=fout)
 
-
         # print("### importing module #")
         file1, file2 = self.import_modules(
             ["file1", "file2"], [self.file1, self.file2]
         )
         fc = file1.foo
 
-        # print(inspect.getsource(fc.py_func.__globals__['function2']))
-        # print("function2 cache", (fc.py_func.__globals__['function2'].cache_index_key))
-        # print(fc.cache_index_key, fc(2))
         self.assertPreciseEqual(fc(2), 3)
         # 2 index, 2 data for foo function (2 from previous function2 versions
         # one of which is overwritten by the new version), 2 for function2.
-        # Function2 has restarted its cache after
-        # the change and it only has 2 files (1 new, 1 stale but out of the index
+        # Function2 has restarted its cache after the change
+        # and it has 2 files (1 new, 1 stale but out of the index
         # which will be eventually overwriten)
         expected_files = 6
         self.check_pycache(expected_files)
@@ -1250,6 +1247,7 @@ def function1(x):
 def function2(x):
     return x + 1
     """
+
     def setUp(self):
         self.tempdir = temp_directory('test_cache_file_modfiles3')
         self.cache_dir = os.path.join(self.tempdir, "__pycache__")
@@ -1351,16 +1349,11 @@ def function2(x):
         with open(self.file2_alt, 'w') as fout:
             print(self.source_text_file2_alt, file=fout)
 
-
-        # print("### importing module #")
         file1, file2 = self.import_modules(
             ["file1", "file2"], [self.file1, self.file2]
         )
         fc = file1.foo
 
-        # print(inspect.getsource(fc.py_func.__globals__['function2']), fc.py_func.__globals__['function2'](2))
-        # print("function2 cache", (fc.py_func.__globals__['function2'].cache_index_key))
-        # print(fc.cache_index_key, fc(2))
         self.assertPreciseEqual(fc(2), 3)
         # 1 index, 3 data for foo function (2 from previous function2 versions
         # one of which has been overwritten by the new function),
@@ -1369,6 +1362,7 @@ def function2(x):
         self.assertPreciseEqual(fc(2.5), 3.5)
         self.check_pycache(3)  # 1 index, 2 data for foo
         self.check_hits(fc, 0, 2)
+
 
 if __name__ == '__main__':
     unittest.main()
