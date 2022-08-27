@@ -1072,33 +1072,13 @@ class TestCFuncCache(BaseCacheTest):
         self.run_in_separate_process()
 
 
-class TestCachingModifiedFiles2(DispatcherCacheUsecasesTest):
-    source_text_file1 = """
-from numba import njit
-from file2 import function2
-@njit(cache=True)
-def foo(x):
-    return function2(x)
-"""
-    source_text_file2 = """
-from numba import njit
-@njit(cache=True)
-def function1(x):
-    return x
-@njit(cache=True)
-def function2(x):
-    return x
-"""
-
-    source_text_file2_alt = """
-from numba import njit
-@njit(cache=True)
-def function1(x):
-    return x + 1
-@njit(cache=True)
-def function2(x):
-    return x + 1
-    """
+class TestCachingModifiedFiles(DispatcherCacheUsecasesTest):
+    # the file with a main function that will call another one
+    source_text_file1: str = ""
+    # the file with a secondary function which is called from the main
+    source_text_file2: str = ""
+    # an alternative version of the file with the secondary function
+    source_text_file2_alt: str = ""
 
     def setUp(self):
         self.tempdir = temp_directory('test_cache_file_modfiles2')
@@ -1165,25 +1145,22 @@ def function2(x):
         self.modname = "file1"
         self.modfile = self.file1
         self.cache_dir = os.path.join(self.tempdir, "__pycache__")
-        # execute original files once to populate cache
+
+        # 1. execute original files once to populate cache
         self.run_fc_in_separate_process()
         # import function and verify cache is being used
         import sys
         sys.path.insert(0, self.tempdir)
         file1 = self.import_module()
         fc = file1.foo
-        # import inspect
-        # print(fc.cache_index_key, fc(2))
-        # print(inspect.getsource(fc.py_func.__globals__['function2']))
-        # print("functio2 cache",
-        #       (fc.py_func.__globals__['function2'].cache_index_key))
+        # First round of execution to populate cache
         self.assertPreciseEqual(fc(2), 2)
         self.check_pycache(4)  # 2 index, 2 data for each function
         self.assertPreciseEqual(fc(2.5), 2.5)
         self.check_pycache(6)  # 2 index, 2 data for each function
         self.check_hits(fc, 0, 2)
 
-        # print("### importing module #")
+        # 2. Re-import module ane execute again, cached version should be used
         del fc
         del file1
         file1, file2 = self.import_modules(
@@ -1196,17 +1173,16 @@ def function2(x):
         self.check_pycache(6)  # 2 index, 2 data for each function
         self.check_hits(fc, 2, 0)
 
-        # modify file and reload
+        # 3. modify file and reload
         self.file2_alt = os.path.join(self.tempdir, 'file2.py')
         with open(self.file2_alt, 'w') as fout:
             print(self.source_text_file2_alt, file=fout)
 
-        # print("### importing module #")
         file1, file2 = self.import_modules(
             ["file1", "file2"], [self.file1, self.file2]
         )
         fc = file1.foo
-
+        # 4. Run again, results should change, cache should not be hit
         self.assertPreciseEqual(fc(2), 3)
         # 2 index, 2 data for foo function (2 from previous function2 versions
         # one of which is overwritten by the new version), 2 for function2.
@@ -1220,7 +1196,41 @@ def function2(x):
         self.check_hits(fc, 0, 2)
 
 
-class TestCachingModifiedFiles3(DispatcherCacheUsecasesTest):
+class TestCachingModifiedFiles2(TestCachingModifiedFiles):
+    # This class tests a dispatcher calling another dispatcher which later
+    # changes. Both functions have cache=True
+
+    source_text_file1 = """
+from numba import njit
+from file2 import function2
+@njit(cache=True)
+def foo(x):
+    return function2(x)
+"""
+    source_text_file2 = """
+from numba import njit
+@njit(cache=True)
+def function1(x):
+    return x
+@njit(cache=True)
+def function2(x):
+    return x
+"""
+
+    source_text_file2_alt = """
+from numba import njit
+@njit(cache=True)
+def function1(x):
+    return x + 1
+@njit(cache=True)
+def function2(x):
+    return x + 1
+    """
+
+
+class TestCachingModifiedFiles3(TestCachingModifiedFiles):
+    # This class tests a dispatcher calling another dispatcher which later
+    # changes. Only the main function has cache=True
     source_text_file1 = """
 from numba import njit
 from file2 import function2
