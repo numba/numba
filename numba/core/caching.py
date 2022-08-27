@@ -17,6 +17,7 @@ import uuid
 import warnings
 import typing as pt
 
+from numba.core.typing import Signature
 from numba.misc.appdirs import AppDirs
 
 import numba
@@ -30,7 +31,9 @@ from numba.core.serialize import dumps
 
 MagicTuple = pt.Tuple
 # IndexKey : sig, codege.magictuple, hashed code, hashed cells
-IndexKey = pt.Tuple[pt.Tuple[types.Type], MagicTuple, pt.Tuple[str, str]]
+# IndexKey = pt.Tuple[pt.Tuple[types.Type], MagicTuple, pt.Tuple[str, str]]
+IndexKey = pt.Tuple[Signature, MagicTuple, pt.Tuple[str, str]]
+
 # FileStamp: tuple of file timestamp and file size
 FileStamp = pt.Tuple[float, int]
 # IndexData: Tuple[ filename for cached code, Dict of file names to FileStamps
