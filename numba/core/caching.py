@@ -30,7 +30,7 @@ from numba.core.serialize import dumps
 
 MagicTuple = pt.Tuple
 # IndexKey : sig, codege.magictuple, hashed code, hashed cells
-IndexKey = pt.Tuple["sig", MagicTuple, pt.Tuple[str, str]]
+IndexKey = pt.Tuple[pt.Tuple[types.Type], MagicTuple, pt.Tuple[str, str]]
 # FileStamp: tuple of file timestamp and file size
 FileStamp = pt.Tuple[float, int]
 # IndexData: Tuple[ filename for cached code, Dict of file names to FileStamps
