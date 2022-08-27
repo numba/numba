@@ -1139,8 +1139,10 @@ class TestCachingModifiedFiles(DispatcherCacheUsecasesTest):
         out, err = popen.communicate()
         msg = f"stdout:\n{out.decode()}\n\nstderr:\n{err.decode()}"
 
-    def test_invalidation(self):
+    def execute_fc_and_change_it(self, inner_cached):
         # test cache is invalidated after source file modification
+        # inner_cached: boolean, whether the inner function is cached. This
+        # changes the number of cache files that are expected
 
         self.modname = "file1"
         self.modfile = self.file1
@@ -1155,9 +1157,9 @@ class TestCachingModifiedFiles(DispatcherCacheUsecasesTest):
         fc = file1.foo
         # First round of execution to populate cache
         self.assertPreciseEqual(fc(2), 2)
-        self.check_pycache(4)  # 2 index, 2 data for each function
+        self.check_pycache(2+2*inner_cached)  # 1 index + 1 data for each function
         self.assertPreciseEqual(fc(2.5), 2.5)
-        self.check_pycache(6)  # 2 index, 2 data for each function
+        self.check_pycache(3+3*inner_cached)  # 2 index, 2 data for each function
         self.check_hits(fc, 0, 2)
 
         # 2. Re-import module ane execute again, cached version should be used
@@ -1168,9 +1170,9 @@ class TestCachingModifiedFiles(DispatcherCacheUsecasesTest):
         )
         fc = file1.foo
         self.assertPreciseEqual(fc(2), 2)
-        self.check_pycache(6)  # 2 index, 2 data for each function
+        self.check_pycache(3+3*inner_cached)  # 2 index, 2 data for each function
         self.assertPreciseEqual(fc(2.5), 2.5)
-        self.check_pycache(6)  # 2 index, 2 data for each function
+        self.check_pycache(3+3*inner_cached)  # 2 index, 2 data for each function
         self.check_hits(fc, 2, 0)
 
         # 3. modify file and reload
@@ -1189,10 +1191,9 @@ class TestCachingModifiedFiles(DispatcherCacheUsecasesTest):
         # Function2 has restarted its cache after the change
         # and it has 2 files (1 new, 1 stale but out of the index
         # which will be eventually overwriten)
-        expected_files = 6
-        self.check_pycache(expected_files)
+        self.check_pycache(3+3*inner_cached)
         self.assertPreciseEqual(fc(2.5), 3.5)
-        self.check_pycache(6)  # 2 index, 2 data for foo, 2 for function2
+        self.check_pycache(3+3*inner_cached)  # 2 index, 2 data for foo, 2 for function2
         self.check_hits(fc, 0, 2)
 
 
@@ -1225,7 +1226,10 @@ def function1(x):
 @njit(cache=True)
 def function2(x):
     return x + 1
-    """
+"""
+
+    def test_invalidation(self, ):
+        self.execute_fc_and_change_it(inner_cached=True)
 
 
 class TestCachingModifiedFiles3(TestCachingModifiedFiles):
@@ -1258,120 +1262,9 @@ def function2(x):
     return x + 1
     """
 
-    def setUp(self):
-        self.tempdir = temp_directory('test_cache_file_modfiles3')
-        self.cache_dir = os.path.join(self.tempdir, "__pycache__")
-
-        self.file1 = os.path.join(self.tempdir, 'file1.py')
-        with open(self.file1, 'w') as fout:
-            print(self.source_text_file1, file=fout)
-
-        self.file2 = os.path.join(self.tempdir, 'file2.py')
-        with open(self.file2, 'w') as fout:
-            print(self.source_text_file2, file=fout)
-
-    def tearDown(self):
-        sys.modules.pop(self.modname, None)
-        sys.modules.pop("file2", None)
-        sys.path.remove(self.tempdir)
-        shutil.rmtree(self.tempdir)
-
-    @staticmethod
-    def import_modules(modnames, modfiles):
-        # Import a fresh version of the test modules.  All jitted functions
-        # in the test module will start anew and load overloads from
-        # the on-disk cache if possible.
-
-        assert len(modnames) == len(modfiles)
-        # all modules must be removed first
-        for modname in modnames:
-            old = sys.modules.pop(modname, None)
-            if old is not None:
-                # Make sure cached bytecode is removed
-                cached = [old.__cached__]
-                for fn in cached:
-                    try:
-                        os.unlink(fn)
-                    except FileNotFoundError:
-                        pass
-
-        mods = []
-        for modname, modfile in zip(modnames, modfiles):
-            mod = import_dynamic(modname)
-            mods.append(mod)
-        return mods
-
-    def run_fc_in_separate_process(self):
-        # Execute file1.py
-        popen = subprocess.Popen([sys.executable, self.file1],
-                                 stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE)
-        out, err = popen.communicate()
-        msg = f"stdout:\n{out.decode()}\n\nstderr:\n{err.decode()}"
-        self.assertEqual(popen.returncode, 0, msg=msg)
-
-        # Execute file2.py
-        popen = subprocess.Popen([sys.executable, self.file2],
-                                 stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE)
-        out, err = popen.communicate()
-        msg = f"stdout:\n{out.decode()}\n\nstderr:\n{err.decode()}"
-
     def test_invalidation(self):
         # test cache is invalidated after source file modification
-
-        self.modname = "file1"
-        self.modfile = self.file1
-        self.cache_dir = os.path.join(self.tempdir, "__pycache__")
-        # execute original files once to populate cache
-        self.run_fc_in_separate_process()
-        # import function and verify cache is being used
-        import sys
-        sys.path.insert(0, self.tempdir)
-        file1 = self.import_module()
-        fc = file1.foo
-        # import inspect
-        # print("foo cache key", fc.cache_index_key, fc(2))
-        # print(inspect.getsource(fc.py_func.__globals__['function2']))
-        # print("functio2 cache",
-        #       (fc.py_func.__globals__['function2'].cache_index_key))
-        self.assertPreciseEqual(fc(2), 2)
-        self.check_pycache(2)  # 1 index, 1 data only for foo
-        self.assertPreciseEqual(fc(2.5), 2.5)
-        self.check_pycache(3)  # 1 index, 2 data for foo
-        self.check_hits(fc, 0, 2)
-
-        # print("### importing module #")
-        del fc
-        del file1
-        file1, file2 = self.import_modules(
-            ["file1", "file2"], [self.file1, self.file2]
-        )
-        fc = file1.foo
-        self.assertPreciseEqual(fc(2), 2)
-        self.check_pycache(3)  # 2 index, 2 data for each function
-        self.assertPreciseEqual(fc(2.5), 2.5)
-        self.check_pycache(3)  # 2 index, 2 data for each function
-        self.check_hits(fc, 2, 0)
-
-        # modify file and reload
-        self.file2_alt = os.path.join(self.tempdir, 'file2.py')
-        with open(self.file2_alt, 'w') as fout:
-            print(self.source_text_file2_alt, file=fout)
-
-        file1, file2 = self.import_modules(
-            ["file1", "file2"], [self.file1, self.file2]
-        )
-        fc = file1.foo
-
-        self.assertPreciseEqual(fc(2), 3)
-        # 1 index, 3 data for foo function (2 from previous function2 versions
-        # one of which has been overwritten by the new function),
-        expected_files = 3
-        self.check_pycache(expected_files)
-        self.assertPreciseEqual(fc(2.5), 3.5)
-        self.check_pycache(3)  # 1 index, 2 data for foo
-        self.check_hits(fc, 0, 2)
+        self.execute_fc_and_change_it(inner_cached=False)
 
 
 if __name__ == '__main__':
