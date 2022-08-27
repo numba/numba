@@ -129,6 +129,7 @@ xorlock = threading.Lock()
 maxlock = threading.Lock()
 minlock = threading.Lock()
 caslock = threading.Lock()
+caseltlock = threading.Lock()
 inclock = threading.Lock()
 declock = threading.Lock()
 exchlock = threading.Lock()
@@ -216,6 +217,14 @@ class FakeCUDAAtomic(object):
     def compare_and_swap(self, array, old, val):
         with caslock:
             index = (0,) * array.ndim
+            loaded = array[index]
+            if loaded == old:
+                array[index] = val
+            return loaded
+
+    def cas(self, array, idx, old, val):
+        with caseltlock:
+            index = (idx,) * array.ndim
             loaded = array[index]
             if loaded == old:
                 array[index] = val
