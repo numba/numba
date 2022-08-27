@@ -1157,9 +1157,11 @@ class TestCachingModifiedFiles(DispatcherCacheUsecasesTest):
         fc = file1.foo
         # First round of execution to populate cache
         self.assertPreciseEqual(fc(2), 2)
-        self.check_pycache(2+2*inner_cached)  # 1 index + 1 data for each function
+        # expected files: 1 index + 1 data for each function
+        self.check_pycache(2 + 2 * inner_cached)
         self.assertPreciseEqual(fc(2.5), 2.5)
-        self.check_pycache(3+3*inner_cached)  # 2 index, 2 data for each function
+        # expected files: 2 index, 2 data for each function
+        self.check_pycache(3 + 3 * inner_cached)
         self.check_hits(fc, 0, 2)
 
         # 2. Re-import module ane execute again, cached version should be used
@@ -1170,9 +1172,11 @@ class TestCachingModifiedFiles(DispatcherCacheUsecasesTest):
         )
         fc = file1.foo
         self.assertPreciseEqual(fc(2), 2)
-        self.check_pycache(3+3*inner_cached)  # 2 index, 2 data for each function
+        # expected files: 2 index, 2 data for each function
+        self.check_pycache(3 + 3 * inner_cached)
         self.assertPreciseEqual(fc(2.5), 2.5)
-        self.check_pycache(3+3*inner_cached)  # 2 index, 2 data for each function
+        # expected files: 2 index, 2 data for each function
+        self.check_pycache(3 + 3 * inner_cached)
         self.check_hits(fc, 2, 0)
 
         # 3. modify file and reload
@@ -1191,9 +1195,10 @@ class TestCachingModifiedFiles(DispatcherCacheUsecasesTest):
         # Function2 has restarted its cache after the change
         # and it has 2 files (1 new, 1 stale but out of the index
         # which will be eventually overwriten)
-        self.check_pycache(3+3*inner_cached)
+        self.check_pycache(3 + 3 * inner_cached)
         self.assertPreciseEqual(fc(2.5), 3.5)
-        self.check_pycache(3+3*inner_cached)  # 2 index, 2 data for foo, 2 for function2
+        # expected files: 2 index, 2 data for foo, 2 for function2
+        self.check_pycache(3 + 3 * inner_cached)
         self.check_hits(fc, 0, 2)
 
 
