@@ -41,6 +41,8 @@ IndexOverloadData = pt.Tuple[str, pt.Dict[str, FileStamp]]
 # Index data: what gets pickled and saved.
 # Tuple of Timestamp and size of main file + IndexOverloadData
 IndexData = pt.Tuple[pt.Tuple[float, int], IndexOverloadData]
+# This is the output of CompileResult._reduce
+ReducedCompileResult = pt.Tuple
 
 def _cache_log(msg, *args):
     if config.DEBUG_CACHE:
@@ -476,7 +478,7 @@ class IndexDataCacheFile(object):
 
     def save(self,
              key: IndexKey,
-             data: "ReducedCompileResult",
+             data: ReducedCompileResult,
              deps_filestamps: pt.Dict[str, FileStamp]
              ):
         """
