@@ -2,14 +2,10 @@
 
 import inspect
 from contextlib import contextmanager
-import typing as pt
 
-from numba.core.utils import cached_property
 from numba.core import config, targetconfig
-from numba.core.caching_utils import get_index_info
 from numba.core.decorators import jit
 from numba.core.descriptors import TargetDescriptor
-from numba.core.dispatcher import Dispatcher
 from numba.core.extending import is_jitted
 from numba.core.options import TargetOptions, include_default_options
 from numba.core.registry import cpu_target
@@ -103,18 +99,7 @@ class UFuncDispatcher(serialize.ReduceMixin):
         return cls(py_func=pyfunc, locals=locals, targetoptions=targetoptions)
 
     def enable_caching(self):
-        # provide a function for delayed calculation of the index key
-        def get_cache_index_key():
-            return self.cache_index_key
-
-        self.cache = FunctionCache(self.py_func, get_cache_index_key)
-
-    @cached_property
-    def cache_index_key(self,) -> pt.Tuple[str, str]:
-        """Hash the code of its function, the closure variables and add them
-        to the respective hashes of all its function dependencies
-        """
-        return get_index_info(self.py_func, (UFuncDispatcher, Dispatcher))
+        self.cache = FunctionCache(self.py_func)
 
     def compile(self, sig, locals={}, **targetoptions):
         locs = self.locals.copy()

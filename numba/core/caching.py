@@ -592,14 +592,12 @@ class Cache(_Cache):
     # The following class variables must be overridden by subclass.
     _impl_class = None
 
-    def __init__(self, py_func,
-                 index_info_callback: pt.Callable[[], pt.Tuple[str, str]]):
+    def __init__(self, py_func, index_key: pt.Callable[[], pt.Tuple[str, str]]):
         # self._dispatcher_index_key is function that returns
         # a tuple of hashed code and hashed content of closure variables
         # it's a callable instead of a tuple to delay the calculation of the
         # index key until all globals have been linked to the function
-        # If None is provided, the index_key will be based only
-        self._dispatcher_index_info = index_info_callback
+        self._dispatcher_index_key = index_key
         self._name = repr(py_func)
         self._py_func = py_func
         self._impl = self._impl_class(py_func)
@@ -688,8 +686,7 @@ class Cache(_Cache):
         """
         # self._dispatcher_index_key is a function that returns a tuple of
         # hashed code and hashed content of closure variables
-        index_key = self._dispatcher_index_info(sig).index_key
-        return (sig, codegen.magic_tuple(), index_key)
+        return (sig, codegen.magic_tuple(), self._dispatcher_index_key())
 
 
 class FunctionCache(Cache):

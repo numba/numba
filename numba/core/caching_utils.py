@@ -2,16 +2,16 @@ import ast
 import hashlib
 import inspect
 import textwrap
-import warnings
 import typing as pt
-import sys, os
-
+import warnings
+from typing import TYPE_CHECKING
 
 from numba.core.serialize import dumps
-from numba.core import types
 
-if pt.TYPE_CHECKING:
+
+if TYPE_CHECKING:
     from numba.core import dispatcher, ccallback
+
 
 DispatcherOrFunctionType = pt.TypeVar(
     'DispatcherOrFunctionType',
@@ -20,38 +20,12 @@ DispatcherOrFunctionType = pt.TypeVar(
 )
 
 
-class PyFileStats(pt.NamedTuple):
-    mtime: float
-    size: int
-
-
-class IndexKey(pt.NamedTuple):
-    codebytes_hash: str
-    cvarbytes_hash: str
-    dep_files: pt.Dict[str, PyFileStats]
-
-
-class IndexInfo(pt.NamedTuple):
-    index_key: IndexKey
-    dep_files: pt.Dict[str, PyFileStats]
-
-
-def get_index_info(py_func, overload: "CompileResult") -> IndexInfo:
+def get_index_key(py_func, caller_class: "DispatcherOrFunctionType"):
     """
     Compute index key for the given signature and codegen.
-
     It includes a description of the OS, target architecture and hashes of
     the bytecode for the function and, if the function has a __closure__,
     a hash of the cell_contents.
-
-    It will include the hashed bytecode and hashed call_contents of any
-    function that is called, if this function is an instance of caller_classes
-
-    :param py_func: a python function object to be analyzed
-    :param caller_classes: a tuple of Numba Dispatcher classes (or equivalent).
-      Any function call to an object belonging to these classes will be
-      included in the index_key, to figerprint dependencies.
-    :return:
     """
     # retrieve codebytes and cvarbytes of this function
     codebytes = py_func.__code__.co_code
@@ -63,14 +37,18 @@ def get_index_info(py_func, overload: "CompileResult") -> IndexInfo:
     else:
         cvarbytes = b''
     # retrieve codebytes and cvarbytes of each dispatcher used in py_func
-    deps = get_function_dependencies(overload)
+    for dep in get_function_dependencies(py_func, (caller_class,)):
+        index_key = dep.cache_index_key
+        codebytes += index_key[0].encode()
+        cvarbytes += index_key[1].encode()
+
     hasher = lambda x: hashlib.sha256(x).hexdigest()
-    index_key = IndexKey(hasher(codebytes), hasher(cvarbytes))
-    return IndexInfo(index_key, deps)
+
+    return hasher(codebytes), hasher(cvarbytes)
 
 
-def get_function_dependencies2(
-        py_func, fc_classes: pt.Tuple[DispatcherOrFunctionType, ...]
+def get_function_dependencies(
+        py_func, fc_classes: pt.Tuple[DispatcherOrFunctionType]
 ) -> pt.List[DispatcherOrFunctionType]:
     """ given a py func, will return all dispatchers on which this depends
 
@@ -134,44 +112,3 @@ def get_function_dependencies2(
     # case: function is a getitem or attribute of a global
     # not yet implemented
     return deps
-
-# which numba types are considered dependencies to be identified in cache
-dep_types = (types.Dispatcher, )
-dep_object_py_func = []
-
-
-def get_function_dependencies(overload: "CompileResult") -> pt.Dict[str, PyFileStats]:
-    deps = {}
-    # for ty in overload.type_annotation.typemap.values():
-    #     if not isinstance(ty, dep_types):
-    #         continue
-    #     if isinstance(ty, types.Dispatcher):
-    #         py_func = ty.dispatcher.py_func
-    #         py_file = py_func.__code__.co_filename
-    #         deps[py_file] = get_source_stamp(py_file)
-    #
-    #         deps.update(ty.dispatcher.cache_index_key())
-    typemap = overload.type_annotation.typemap
-    calltypes = overload.type_annotation.calltypes
-    for call_op in calltypes:
-        name = call_op.list_vars()[0].name
-        fc_ty = typemap[name]
-        sig = calltypes[call_op]
-        if not isinstance(fc_ty, dep_types):
-            continue
-        if isinstance(fc_ty, types.Dispatcher):
-            py_func = fc_ty.dispatcher.py_func
-            py_file = py_func.__code__.co_filename
-            deps[py_file] = get_source_stamp(py_file)
-            deps.update(fc_ty.dispatcher.cache_index_key(sig.args))
-    return deps
-
-
-def get_source_stamp(py_file) -> PyFileStats:
-    if getattr(sys, 'frozen', False):
-        st = os.stat(sys.executable)
-    else:
-        st = os.stat(py_file)
-    # We use both timestamp and size as some filesystems only have second
-    # granularity.
-    return PyFileStats(st.st_mtime, st.st_size)
