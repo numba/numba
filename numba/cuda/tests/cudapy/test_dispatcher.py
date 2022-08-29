@@ -327,13 +327,11 @@ class TestDispatcher(CUDATestCase):
         self.assertEqual(shared_mem_per_block, 400)
 
     def test_get_local_mem_per_block_unspecialized(self):
-        # NOTE: A large amount of local memory must be allcoated
+        # NOTE: A large amount of local memory must be allocated
         # otherwise the compiler will optimize out the call to
         # cuda.local.array and use local registers instead
         N = 10000
 
-        # A kernel where the local memory per thread is likely to differ
-        # between different specializations
         @cuda.jit
         def simple_lmem(ary):
             lm = cuda.local.array(N, dtype=ary.dtype)
@@ -357,10 +355,10 @@ class TestDispatcher(CUDATestCase):
         self.assertIsInstance(local_mem_f32, int)
         self.assertIsInstance(local_mem_f64, int)
 
-        self.assertEqual(local_mem_f32, N * 4)
-        self.assertEqual(local_mem_f64, N * 8)
+        self.assertGreaterEqual(local_mem_f32, N * 4)
+        self.assertGreaterEqual(local_mem_f64, N * 8)
 
-        # Check that getting the loc al memory per threadfor all signatures
+        # Check that getting the local memory per threadfor all signatures
         # provides the same values as getting the shared mem per block for
         # individual signatures.
         sh_mem_f32_all = simple_lmem.get_local_mem_per_thread()
@@ -369,7 +367,7 @@ class TestDispatcher(CUDATestCase):
         self.assertEqual(sh_mem_f64_all[sig_f64.args], local_mem_f64)
 
     def test_get_local_mem_per_thread_specialized(self):
-        # NOTE: A large amount of local memory must be allcoated
+        # NOTE: A large amount of local memory must be allocated
         # otherwise the compiler will optimize out the call to
         # cuda.local.array and use local registers instead
         N = 10000
@@ -384,7 +382,7 @@ class TestDispatcher(CUDATestCase):
 
         local_mem_per_thread = simple_lmem.get_local_mem_per_thread()
         self.assertIsInstance(local_mem_per_thread, int)
-        self.assertEqual(local_mem_per_thread, N * 4)
+        self.assertGreaterEqual(local_mem_per_thread, N * 4)
 
     def test_dispatcher_docstring(self):
         # Ensure that CUDA-jitting a function preserves its docstring. See
