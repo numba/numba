@@ -113,6 +113,10 @@ class NVVM(object):
         #                           int* minorDbg )
         'nvvmIRVersion': (nvvm_result, POINTER(c_int), POINTER(c_int),
                           POINTER(c_int), POINTER(c_int)),
+        # nvvmResult nvvmVerifyProgram (nvvmProgram prog, int numOptions,
+        #                               const char** options)
+        'nvvmVerifyProgram': (nvvm_result, nvvm_program, c_int,
+                              POINTER(c_char_p))
     }
 
     # Singleton reference
@@ -132,19 +136,7 @@ class NVVM(object):
 
                 # Find & populate functions
                 for name, proto in inst._PROTOTYPES.items():
-                    try:
-                        func = getattr(inst.driver, name)
-                    except AttributeError:
-                        # CUDA 9.2 has no nvvmLazyAddModuleToProgram, but
-                        # nvvmAddModuleToProgram fulfils the same function,
-                        # just less efficiently, so we work around this here.
-                        # This workaround to be removed once support for CUDA
-                        # 9.2 is dropped.
-                        if name == 'nvvmLazyAddModuleToProgram':
-                            func = getattr(inst.driver,
-                                           'nvvmAddModuleToProgram')
-                        else:
-                            raise
+                    func = getattr(inst.driver, name)
                     func.restype = proto[0]
                     func.argtypes = proto[1:]
                     setattr(inst, name, func)
@@ -290,9 +282,13 @@ class CompilationUnit(object):
             optstr = ', '.join(map(repr, options.keys()))
             raise NvvmError("unsupported option {0}".format(optstr))
 
-        # compile
         c_opts = (c_char_p * len(opts))(*[c_char_p(x.encode('utf8'))
                                           for x in opts])
+        # verify
+        err = self.driver.nvvmVerifyProgram(self._handle, len(opts), c_opts)
+        self._try_error(err, 'Failed to verify\n')
+
+        # compile
         err = self.driver.nvvmCompileProgram(self._handle, len(opts), c_opts)
         self._try_error(err, 'Failed to compile\n')
 
@@ -662,12 +658,6 @@ def llvm_replace(llvmir):
 
     for decl, fn in replacements:
         llvmir = llvmir.replace(decl, fn)
-
-    # llvm.numba_nvvm.atomic is used to prevent LLVM 9 onwards auto-upgrading
-    # these intrinsics into atomicrmw instructions, which are not recognized by
-    # NVVM. We can now replace them with the real intrinsic names, ready to
-    # pass to NVVM.
-    llvmir = llvmir.replace('llvm.numba_nvvm.atomic', 'llvm.nvvm.atomic')
 
     if NVVM().is_nvvm70:
         llvmir = llvm100_to_70_ir(llvmir)

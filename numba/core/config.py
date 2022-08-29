@@ -220,8 +220,11 @@ class _EnvReloader(object):
         # (up to and including IR generation)
         DEBUG_FRONTEND = _readenv("NUMBA_DEBUG_FRONTEND", int, 0)
 
-        # Enable debug prints in nrtdynmod
+        # Enable debug prints in nrtdynmod and use of "safe" API functions
         DEBUG_NRT = _readenv("NUMBA_DEBUG_NRT", int, 0)
+
+        # Enable NRT statistics counters
+        NRT_STATS = _readenv("NUMBA_NRT_STATS", int, 0)
 
         # How many recently deserialized functions to retain regardless
         # of external references

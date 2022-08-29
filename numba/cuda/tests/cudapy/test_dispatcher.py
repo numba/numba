@@ -1,12 +1,8 @@
 import numpy as np
 import threading
-import warnings
-from contextlib import contextmanager
 
-from numba import cuda, float32, float64, int32, int64, void
-from numba.core.errors import NumbaDeprecationWarning
+from numba import boolean, cuda, float32, float64, int32, int64, void
 from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
-from numba.tests.support import ignore_internal_warnings
 import math
 
 
@@ -276,6 +272,111 @@ class TestDispatcher(CUDATestCase):
         self.assertIsInstance(regs_per_thread, int)
         self.assertGreater(regs_per_thread, 0)
 
+    def test_get_const_mem_unspecialized(self):
+        @cuda.jit
+        def const_fmt_string(val, to_print):
+            # We guard the print with a conditional to prevent noise from the
+            # test suite
+            if to_print:
+                print(val)
+
+        # Call the kernel with different arguments to create two different
+        # definitions within the Dispatcher object
+        const_fmt_string[1, 1](1, False)
+        const_fmt_string[1, 1](1.0, False)
+
+        # Check we get a positive integer for the two different variations
+        sig_i64 = void(int64, boolean)
+        sig_f64 = void(float64, boolean)
+        const_mem_size_i64 = const_fmt_string.get_const_mem_size(sig_i64)
+        const_mem_size_f64 = const_fmt_string.get_const_mem_size(sig_f64)
+
+        self.assertIsInstance(const_mem_size_i64, int)
+        self.assertIsInstance(const_mem_size_f64, int)
+
+        # 6 bytes for the equivalent of b'%lld\n\0'
+        self.assertGreaterEqual(const_mem_size_i64, 6)
+        # 4 bytes for the equivalent of b'%f\n\0'
+        self.assertGreaterEqual(const_mem_size_f64, 4)
+
+        # Check that getting the const memory size for all signatures
+        # provides the same values as getting the const memory size for
+        # individual signatures.
+
+        const_mem_size_all = const_fmt_string.get_const_mem_size()
+        self.assertEqual(const_mem_size_all[sig_i64.args], const_mem_size_i64)
+        self.assertEqual(const_mem_size_all[sig_f64.args], const_mem_size_f64)
+
+    def test_get_const_mem_specialized(self):
+        arr = np.arange(32, dtype=np.int64)
+        sig = void(int64[::1])
+
+        @cuda.jit(sig)
+        def const_array_use(x):
+            C = cuda.const.array_like(arr)
+            i = cuda.grid(1)
+            x[i] = C[i]
+
+        const_mem_size = const_array_use.get_const_mem_size(sig)
+        self.assertIsInstance(const_mem_size, int)
+        self.assertGreaterEqual(const_mem_size, arr.nbytes)
+
+    def test_get_shared_mem_per_block_unspecialized(self):
+        N = 10
+
+        # A kernel where the shared memory per block is likely to differ
+        # between different specializations
+        @cuda.jit
+        def simple_smem(ary):
+            sm = cuda.shared.array(N, dtype=ary.dtype)
+            for j in range(N):
+                sm[j] = j
+            for j in range(N):
+                ary[j] = sm[j]
+
+        # Call the kernel with different arguments to create two different
+        # definitions within the Dispatcher object
+        arr_f32 = np.zeros(N, dtype=np.float32)
+        arr_f64 = np.zeros(N, dtype=np.float64)
+
+        simple_smem[1, 1](arr_f32)
+        simple_smem[1, 1](arr_f64)
+
+        sig_f32 = void(float32[::1])
+        sig_f64 = void(float64[::1])
+
+        sh_mem_f32 = simple_smem.get_shared_mem_per_block(sig_f32)
+        sh_mem_f64 = simple_smem.get_shared_mem_per_block(sig_f64)
+
+        self.assertIsInstance(sh_mem_f32, int)
+        self.assertIsInstance(sh_mem_f64, int)
+
+        self.assertEqual(sh_mem_f32, N * 4)
+        self.assertEqual(sh_mem_f64, N * 8)
+
+        # Check that getting the shared memory per block for all signatures
+        # provides the same values as getting the shared mem per block for
+        # individual signatures.
+        sh_mem_f32_all = simple_smem.get_shared_mem_per_block()
+        sh_mem_f64_all = simple_smem.get_shared_mem_per_block()
+        self.assertEqual(sh_mem_f32_all[sig_f32.args], sh_mem_f32)
+        self.assertEqual(sh_mem_f64_all[sig_f64.args], sh_mem_f64)
+
+    def test_get_shared_mem_per_block_specialized(self):
+        @cuda.jit(void(float32[::1]))
+        def simple_smem(ary):
+            sm = cuda.shared.array(100, dtype=float32)
+            i = cuda.grid(1)
+            if i == 0:
+                for j in range(100):
+                    sm[j] = j
+            cuda.syncthreads()
+            ary[i] = sm[i]
+
+        shared_mem_per_block = simple_smem.get_shared_mem_per_block()
+        self.assertIsInstance(shared_mem_per_block, int)
+        self.assertEqual(shared_mem_per_block, 400)
+
     def test_dispatcher_docstring(self):
         # Ensure that CUDA-jitting a function preserves its docstring. See
         # Issue #5902: https://github.com/numba/numba/issues/5902
@@ -290,51 +391,6 @@ class TestDispatcher(CUDATestCase):
 
         self.assertEqual("Add two integers, kernel version", add_kernel.__doc__)
         self.assertEqual("Add two integers, device version", add_device.__doc__)
-
-
-@contextmanager
-def deprecation_warning_catcher():
-    with warnings.catch_warnings(record=True) as w:
-        ignore_internal_warnings()
-        warnings.simplefilter("always", category=NumbaDeprecationWarning)
-        yield w
-
-
-@skip_on_cudasim('Dispatcher objects not used in the simulator')
-class TestDispatcherDeprecation(CUDATestCase):
-    def check_warning(self, warnings, expected_str, category):
-        self.assertEqual(len(warnings), 1)
-        for w in warnings:
-            self.assertEqual(w.category, category)
-            self.assertIn(expected_str, str(w.message))
-
-    def test_ptx_deprecation(self):
-        def f(x):
-            x[0] = 42
-
-        msg = "Attribute `ptx` is deprecated and will be removed in the "
-        "future. "
-
-        # Kernel code path
-        with self.subTest(
-            name="DispatcherOnCudaKernel"
-        ), deprecation_warning_catcher() as w:
-            dispatcher = cuda.jit(f)
-            dispatcher.ptx
-            self.check_warning(w, msg, NumbaDeprecationWarning)
-        with self.subTest(
-            name="KernelObjectOnCudaKernel"
-        ), deprecation_warning_catcher() as w:
-            kernel = dispatcher.compile((float32[::1],))
-            kernel.ptx
-            self.check_warning(w, msg, NumbaDeprecationWarning)
-        # Device function code path
-        with self.subTest(
-            name="DispatcherOnDeviceFunction"
-        ), deprecation_warning_catcher() as w:
-            device_f_dispatcher = cuda.jit(f, device=True)
-            device_f_dispatcher.ptx
-            self.check_warning(w, msg, NumbaDeprecationWarning)
 
 
 if __name__ == '__main__':

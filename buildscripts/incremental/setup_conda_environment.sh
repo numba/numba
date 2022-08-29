@@ -43,7 +43,7 @@ conda list
 if [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]]; then
     conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON pip gitpython pyyaml
 else
-    conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml
+    conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml "setuptools<60"
 fi
 
 # Activate first
@@ -86,8 +86,8 @@ if [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]] ; then
     $PIP_INSTALL numpy==$NUMPY
 fi
 
-# Install latest llvmlite build
-$CONDA_INSTALL -c numba/label/dev llvmlite
+# Install latest correct build
+$CONDA_INSTALL -c numba/label/dev llvmlite=0.40
 
 # Install importlib-metadata for Python < 3.9
 if [ $PYTHON \< "3.9" ]; then $CONDA_INSTALL importlib_metadata; fi

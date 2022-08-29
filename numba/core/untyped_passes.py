@@ -13,7 +13,7 @@ from numba.core.analysis import (dead_branch_prune, rewrite_semantic_constants,
                                  compute_use_defs)
 from numba.core.ir_utils import (guard, resolve_func_from_module, simplify_CFG,
                                  GuardException, convert_code_obj_to_function,
-                                 mk_unique_var, build_definitions,
+                                 build_definitions,
                                  replace_var_names, get_name_var_table,
                                  compile_to_numba_ir, get_definition,
                                  find_max_label, rename_labels,
@@ -866,7 +866,9 @@ class MixedContainerUnroller(FunctionPass):
                         if (isinstance(stmt.value, ir.Expr) and
                                 stmt.value.op == "typed_getitem"):
                             if isinstance(branch_ty, types.Literal):
-                                new_const_name = mk_unique_var("branch_const")
+                                scope = switch_ir.blocks[lbl].scope
+                                new_const_name = scope.redefine(
+                                    "branch_const", stmt.loc).name
                                 new_const_var = ir.Var(
                                     blk.scope, new_const_name, stmt.loc)
                                 new_const_val = ir.Const(
@@ -903,7 +905,9 @@ class MixedContainerUnroller(FunctionPass):
 
             new_var_dict = {}
             for name, var in var_table.items():
-                new_var_dict[name] = mk_unique_var(name)
+                scope = switch_ir.blocks[lbl].scope
+                new_var_dict[name] = scope.define(
+                    f"v{branch_ty}_{name}", var.loc).name
             replace_var_names(loop_blocks, new_var_dict)
 
             # clobber the sentinel body and then stuff in the rest
@@ -1043,8 +1047,8 @@ class MixedContainerUnroller(FunctionPass):
             # scan loop header
             iternexts = [_ for _ in
                          func_ir.blocks[loop.header].find_exprs('iternext')]
-            if len(iternexts) != 1:
-                return False
+            if len(iternexts) != 1: # needs to be an single iternext driven loop
+                continue
             for iternext in iternexts:
                 # Walk the canonicalised loop structure and check it
                 # Check loop form range(literal_unroll(container)))
@@ -1358,14 +1362,11 @@ class IterLoopCanonicalization(FunctionPass):
         def get_range(a):
             return range(len(a))
 
-        def tokenise(x):
-            return mk_unique_var("CANONICALISER_%s" % x)
-
         iternext = [_ for _ in
                     func_ir.blocks[loop.header].find_exprs('iternext')][0]
         LOC = func_ir.blocks[loop.header].loc
-        get_range_var = ir.Var(func_ir.blocks[loop.header].scope,
-                               tokenise('get_range_gbl'), LOC)
+        scope = func_ir.blocks[loop.header].scope
+        get_range_var = scope.redefine("CANONICALISER_get_range_gbl", LOC)
         get_range_global = ir.Global('get_range', get_range, LOC)
         assgn = ir.Assign(get_range_global, get_range_var, LOC)
 
@@ -1389,8 +1390,7 @@ class IterLoopCanonicalization(FunctionPass):
             raise ValueError("problem")
 
         # create a range(len(tup)) and inject it
-        call_get_range_var = ir.Var(entry_block.scope,
-                                    tokenise('call_get_range'), LOC)
+        call_get_range_var = scope.redefine('CANONICALISER_call_get_range', LOC)
         make_call = ir.Expr.call(get_range_var, (stmt.value.value,), (), LOC)
         assgn_call = ir.Assign(make_call, call_get_range_var, LOC)
         entry_block.body.insert(idx, assgn_call)

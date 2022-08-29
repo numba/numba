@@ -115,8 +115,7 @@ class StencilFunc(object):
                             index_var = ir.Var(scope, one_var, loc)
                             var_index_vars += [index_var]
 
-                        s_index_name = ir_utils.mk_unique_var("stencil_index")
-                        s_index_var  = ir.Var(scope, s_index_name, loc)
+                        s_index_var = scope.redefine("stencil_index", loc)
                         # Build a tuple from the index ir.Var's.
                         tuple_call = ir.Expr.build_tuple(var_index_vars, loc)
                         new_body.append(ir.Assign(tuple_call, s_index_var, loc))
@@ -210,14 +209,13 @@ class StencilFunc(object):
                         # adding the relative offset in stmt.value.index to
                         # the current absolute location in index0.
                         index_var = ir.Var(scope, index_names[0], loc)
-                        tmpname = ir_utils.mk_unique_var("stencil_index")
-                        tmpvar  = ir.Var(scope, tmpname, loc)
+                        tmpvar = scope.redefine("stencil_index", loc)
                         stmt_index_var_typ = typemap[stmt_index_var.name]
                         # If the array is indexed with a slice then we
                         # have to add the index value with a call to
                         # slice_addition.
                         if isinstance(stmt_index_var_typ, types.misc.SliceType):
-                            sa_var = ir.Var(scope, ir_utils.mk_unique_var("slice_addition"), loc)
+                            sa_var = scope.redefine("slice_addition", loc)
                             sa_func = numba.njit(slice_addition)
                             sa_func_typ = types.functions.Dispatcher(sa_func)
                             typemap[sa_var.name] = sa_func_typ
@@ -239,8 +237,7 @@ class StencilFunc(object):
                     else:
                         index_vars = []
                         sum_results = []
-                        s_index_name = ir_utils.mk_unique_var("stencil_index")
-                        s_index_var  = ir.Var(scope, s_index_name, loc)
+                        s_index_var = scope.redefine("stencil_index", loc)
                         const_index_vars = []
                         ind_stencils = []
 
@@ -251,19 +248,16 @@ class StencilFunc(object):
                         # to them and then reconstitute as a tuple that can
                         # index the array.
                         for dim in range(ndim):
-                            tmpname = ir_utils.mk_unique_var("const_index")
-                            tmpvar  = ir.Var(scope, tmpname, loc)
+                            tmpvar = scope.redefine("const_index", loc)
                             new_body.append(ir.Assign(ir.Const(dim, loc),
                                                       tmpvar, loc))
                             const_index_vars += [tmpvar]
                             index_var = ir.Var(scope, index_names[dim], loc)
                             index_vars += [index_var]
 
-                            tmpname = ir_utils.mk_unique_var("ind_stencil_index")
-                            tmpvar  = ir.Var(scope, tmpname, loc)
+                            tmpvar = scope.redefine("ind_stencil_index", loc)
                             ind_stencils += [tmpvar]
-                            getitemname = ir_utils.mk_unique_var("getitem")
-                            getitemvar  = ir.Var(scope, getitemname, loc)
+                            getitemvar = scope.redefine("getitem", loc)
                             getitemcall = ir.Expr.getitem(stmt_index_var,
                                                        const_index_vars[dim], loc)
                             new_body.append(ir.Assign(getitemcall, getitemvar, loc))
@@ -276,7 +270,7 @@ class StencilFunc(object):
                             # have to add the index value with a call to
                             # slice_addition.
                             if isinstance(one_index_typ, types.misc.SliceType):
-                                sa_var = ir.Var(scope, ir_utils.mk_unique_var("slice_addition"), loc)
+                                sa_var = scope.redefine("slice_addition", loc)
                                 sa_func = numba.njit(slice_addition)
                                 sa_func_typ = types.functions.Dispatcher(sa_func)
                                 typemap[sa_var.name] = sa_func_typ
@@ -602,18 +596,25 @@ class StencilFunc(object):
         if result is None:
             return_type_name = numpy_support.as_dtype(
                                return_type.dtype).type.__name__
+            out_init ="{} = np.empty({}, dtype=np.{})\n".format(
+                        out_name, shape_name, return_type_name)
+
             if "cval" in self.options:
                 cval = self.options["cval"]
-                if return_type.dtype != typing.typeof.typeof(cval):
+                cval_ty = typing.typeof.typeof(cval)
+                if not self._typingctx.can_convert(cval_ty, return_type.dtype):
                     msg = "cval type does not match stencil return type."
                     raise NumbaValueError(msg)
-                out_init ="{} = np.full({}, {}, dtype=np.{})\n".format(
-                            out_name, shape_name, cval_as_str(cval),
-                            return_type_name)
             else:
-                out_init ="{} = np.zeros({}, dtype=np.{})\n".format(
-                            out_name, shape_name, return_type_name)
+                 cval = 0
             func_text += "    " + out_init
+            for dim in range(the_array.ndim):
+                start_items = [":"] * the_array.ndim
+                end_items = [":"] * the_array.ndim
+                start_items[dim] = ":-{}".format(self.neighborhood[dim][0])
+                end_items[dim] = "-{}:".format(self.neighborhood[dim][1])
+                func_text += "    " + "{}[{}] = {}\n".format(out_name, ",".join(start_items), cval_as_str(cval))
+                func_text += "    " + "{}[{}] = {}\n".format(out_name, ",".join(end_items), cval_as_str(cval))
         else: # result is present, if cval is set then use it
             if "cval" in self.options:
                 cval = self.options["cval"]
@@ -677,7 +678,9 @@ class StencilFunc(object):
                            shape_name] + kernel_copy.arg_names + index_vars)
         for name, var in var_table.items():
             if not name in reserved_names:
-                new_var_dict[name] = ir_utils.mk_unique_var(name)
+                assert isinstance(var, ir.Var)
+                new_var = var.scope.redefine(var.name, var.loc)
+                new_var_dict[name] = new_var.name
         ir_utils.replace_var_names(stencil_ir.blocks, new_var_dict)
 
         stencil_stub_last_label = max(stencil_ir.blocks.keys()) + 1

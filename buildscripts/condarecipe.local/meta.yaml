@@ -32,10 +32,10 @@ requirements:
   host:
     - python
     - numpy
-    - setuptools
+    - setuptools <60
     - importlib_metadata       # [py<39]
     # On channel https://anaconda.org/numba/
-    - llvmlite >=0.39.0dev0,<0.39
+    - llvmlite >=0.40.0dev0,<0.40
     # TBB devel version is to match TBB libs.
     # 2020.3 is the last version with the "old" ABI
     # NOTE: 2021.1..2021.5 are API compatible for Numba's purposes.
@@ -44,11 +44,12 @@ requirements:
     - tbb-devel >=2021,<2021.6       # [not (armv6l or armv7l or aarch64 or linux32 or ppc64le)]
   run:
     - python >=3.7
-    - numpy >=1.18
-    - setuptools
+    # NumPy 1.22.0, 1.22.1, 1.22.2 are all broken for ufuncs, see #7756
+    - numpy >=1.18, !=1.22.0, !=1.22.1, !=1.22.2
+    - setuptools <60
     - importlib_metadata       # [py<39]
     # On channel https://anaconda.org/numba/
-    - llvmlite >=0.39.0dev0,<0.39
+    - llvmlite >=0.40.0dev0,<0.40
   run_constrained:
     # If TBB is present it must be at least version 2021
     - tbb >=2021    # [not (armv6l or armv7l or aarch64 or linux32 or ppc64le)]
@@ -60,14 +61,12 @@ requirements:
     # Exclude 0.3.20 too
     # https://github.com/numba/numba/issues/8096
     - libopenblas >=0.3.18, !=0.3.20     # [arm64]
-    # CUDA 9.2 or later is required for CUDA support
-    - cudatoolkit >=9.2
+    # CUDA 10.2 or later is required for CUDA support
+    - cudatoolkit >=10.2
     # scipy 1.0 or later
     - scipy >=1.0
     # CUDA Python 11.6 or later
     - cuda-python >=11.6
-    # NumPy 1.22.0, 1.22.1, 1.22.2 are all broken for ufuncs, see #7756
-    - numpy !=1.22.0, !=1.22.1, !=1.22.2
 
 test:
   requires:
@@ -77,7 +76,7 @@ test:
     # temporarily disable scipy testing on ARM, need to build out more packages
     - scipy                    # [not (armv6l or armv7l)]
     - ipython                  # [not (armv6l or armv7l or aarch64)]
-    - setuptools
+    - setuptools <60
     - tbb  >=2021              # [not (armv6l or armv7l or aarch64 or linux32 or ppc64le)]
     - llvm-openmp              # [osx]
     # This is for driving gdb tests

@@ -1,7 +1,11 @@
 """
 This scripts specifies all PTX special objects.
 """
+import numpy as np
+from collections import defaultdict
 import functools
+import itertools
+from inspect import Signature, Parameter
 
 
 class Stub(object):
@@ -435,7 +439,7 @@ class atomic(Stub):
     class add(Stub):
         """add(ary, idx, val)
 
-        Perform atomic ary[idx] += val. Supported on int32, float32, and
+        Perform atomic ``ary[idx] += val``. Supported on int32, float32, and
         float64 operands only.
 
         Returns the old value at the index location as if it is loaded
@@ -445,7 +449,7 @@ class atomic(Stub):
     class sub(Stub):
         """sub(ary, idx, val)
 
-        Perform atomic ary[idx] -= val. Supported on int32, float32, and
+        Perform atomic ``ary[idx] -= val``. Supported on int32, float32, and
         float64 operands only.
 
         Returns the old value at the index location as if it is loaded
@@ -455,8 +459,8 @@ class atomic(Stub):
     class and_(Stub):
         """and_(ary, idx, val)
 
-        Perform atomic ary[idx] &= val. Supported on int32, int64, uint32 and
-        uint64 operands only.
+        Perform atomic ``ary[idx] &= val``. Supported on int32, int64, uint32
+        and uint64 operands only.
 
         Returns the old value at the index location as if it is loaded
         atomically.
@@ -465,18 +469,18 @@ class atomic(Stub):
     class or_(Stub):
         """or_(ary, idx, val)
 
-        Perform atomic ary[idx] \|= val. Supported on int32, int64, uint32 and
-        uint64 operands only.
+        Perform atomic ``ary[idx] |= val``. Supported on int32, int64, uint32
+        and uint64 operands only.
 
         Returns the old value at the index location as if it is loaded
         atomically.
-        """  # noqa: W605
+        """
 
     class xor(Stub):
         """xor(ary, idx, val)
 
-        Perform atomic ary[idx] ^= val. Supported on int32, int64, uint32 and
-        uint64 operands only.
+        Perform atomic ``ary[idx] ^= val``. Supported on int32, int64, uint32
+        and uint64 operands only.
 
         Returns the old value at the index location as if it is loaded
         atomically.
@@ -485,7 +489,7 @@ class atomic(Stub):
     class inc(Stub):
         """inc(ary, idx, val)
 
-        Perform atomic ary[idx] += 1 up to val, then reset to 0. Supported
+        Perform atomic ``ary[idx] += 1`` up to val, then reset to 0. Supported
         on uint32, and uint64 operands only.
 
         Returns the old value at the index location as if it is loaded
@@ -495,8 +499,10 @@ class atomic(Stub):
     class dec(Stub):
         """dec(ary, idx, val)
 
-        Perform ary[idx] = (value if (array[idx] == 0) or
-        (array[idx] > value) else array[idx] - 1).
+        Performs::
+
+           ary[idx] = (value if (array[idx] == 0) or
+                       (array[idx] > value) else array[idx] - 1)
 
         Supported on uint32, and uint64 operands only.
 
@@ -507,7 +513,7 @@ class atomic(Stub):
     class exch(Stub):
         """exch(ary, idx, val)
 
-        Perform atomic ary[idx] = val. Supported on int32, int64, uint32 and
+        Perform atomic ``ary[idx] = val``. Supported on int32, int64, uint32 and
         uint64 operands only.
 
         Returns the old value at the index location as if it is loaded
@@ -517,7 +523,7 @@ class atomic(Stub):
     class max(Stub):
         """max(ary, idx, val)
 
-        Perform atomic ary[idx] = max(ary[idx], val).
+        Perform atomic ``ary[idx] = max(ary[idx], val)``.
 
         Supported on int32, int64, uint32, uint64, float32, float64 operands
         only.
@@ -529,7 +535,7 @@ class atomic(Stub):
     class min(Stub):
         """min(ary, idx, val)
 
-        Perform atomic ary[idx] = min(ary[idx], val).
+        Perform atomic ``ary[idx] = min(ary[idx], val)``.
 
         Supported on int32, int64, uint32, uint64, float32, float64 operands
         only.
@@ -541,7 +547,7 @@ class atomic(Stub):
     class nanmax(Stub):
         """nanmax(ary, idx, val)
 
-        Perform atomic ary[idx] = max(ary[idx], val).
+        Perform atomic ``ary[idx] = max(ary[idx], val)``.
 
         NOTE: NaN is treated as a missing value such that:
         nanmax(NaN, n) == n, nanmax(n, NaN) == n
@@ -556,7 +562,7 @@ class atomic(Stub):
     class nanmin(Stub):
         """nanmin(ary, idx, val)
 
-        Perform atomic ary[idx] = min(ary[idx], val).
+        Perform atomic ``ary[idx] = min(ary[idx], val)``.
 
         NOTE: NaN is treated as a missing value, such that:
         nanmin(NaN, n) == n, nanmin(n, NaN) == n
@@ -896,3 +902,88 @@ class fp16(Stub):
         Returns a if a is less than b, returns b otherwise.
 
         """
+
+
+#-------------------------------------------------------------------------------
+# vector types
+
+def make_vector_type_stubs():
+    """Make user facing objects for vector types"""
+    vector_type_stubs = []
+    vector_type_prefix = (
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "uint8",
+        "uint16",
+        "uint32",
+        "uint64",
+        "float32",
+        "float64"
+    )
+    vector_type_element_counts = (1, 2, 3, 4)
+    vector_type_attribute_names = ("x", "y", "z", "w")
+
+    for prefix, nelem in itertools.product(
+        vector_type_prefix, vector_type_element_counts
+    ):
+        type_name = f"{prefix}x{nelem}"
+        attr_names = vector_type_attribute_names[:nelem]
+
+        vector_type_stub = type(
+            type_name, (Stub,),
+            {
+                **{attr: lambda self: None for attr in attr_names},
+                **{
+                    "_description_": f"<{type_name}>",
+                    "__signature__": Signature(parameters=[
+                        Parameter(
+                            name=attr_name, kind=Parameter.POSITIONAL_ONLY
+                        ) for attr_name in attr_names[:nelem]
+                    ]),
+                    "__doc__": f"A stub for {type_name} to be used in "
+                    "CUDA kernels."
+                },
+                **{"aliases": []}
+            }
+        )
+        vector_type_stubs.append(vector_type_stub)
+    return vector_type_stubs
+
+
+def map_vector_type_stubs_to_alias(vector_type_stubs):
+    """For each of the stubs, create its aliases.
+
+    For example: float64x3 -> double3
+    """
+    # C-compatible type mapping, see:
+    # https://numpy.org/devdocs/reference/arrays.scalars.html#integer-types
+    base_type_to_alias = {
+        "char": f"int{np.dtype(np.byte).itemsize * 8}",
+        "short": f"int{np.dtype(np.short).itemsize * 8}",
+        "int": f"int{np.dtype(np.intc).itemsize * 8}",
+        "long": f"int{np.dtype(np.int_).itemsize * 8}",
+        "longlong": f"int{np.dtype(np.longlong).itemsize * 8}",
+        "uchar": f"uint{np.dtype(np.ubyte).itemsize * 8}",
+        "ushort": f"uint{np.dtype(np.ushort).itemsize * 8}",
+        "uint": f"uint{np.dtype(np.uintc).itemsize * 8}",
+        "ulong": f"uint{np.dtype(np.uint).itemsize * 8}",
+        "ulonglong": f"uint{np.dtype(np.ulonglong).itemsize * 8}",
+        "float": f"float{np.dtype(np.single).itemsize * 8}",
+        "double": f"float{np.dtype(np.double).itemsize * 8}"
+    }
+
+    base_type_to_vector_type = defaultdict(list)
+    for stub in vector_type_stubs:
+        base_type_to_vector_type[stub.__name__[:-2]].append(stub)
+
+    for alias, base_type in base_type_to_alias.items():
+        vector_type_stubs = base_type_to_vector_type[base_type]
+        for stub in vector_type_stubs:
+            nelem = stub.__name__[-1]
+            stub.aliases.append(f"{alias}{nelem}")
+
+
+_vector_type_stubs = make_vector_type_stubs()
+map_vector_type_stubs_to_alias(_vector_type_stubs)

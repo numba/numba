@@ -336,7 +336,7 @@ def get_sysinfo():
         msg_not_found = "CUDA driver library cannot be found"
         msg_disabled_by_user = "CUDA is disabled"
         msg_end = " or no CUDA enabled devices are present."
-        msg_generic_problem = "CUDA device intialisation problem."
+        msg_generic_problem = "CUDA device initialisation problem."
         msg = getattr(e, 'msg', None)
         if msg is not None:
             if msg_not_found in msg:

@@ -4,6 +4,7 @@ Implementation of linear algebra operations.
 
 
 import contextlib
+import warnings
 
 from llvmlite import ir
 
@@ -13,12 +14,12 @@ import operator
 from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.core.typing import signature
-from numba.core.extending import overload, register_jitable
+from numba.core.extending import intrinsic, overload, register_jitable
 from numba.core import types, cgutils
-from numba.core.errors import TypingError, NumbaTypeError
+from numba.core.errors import TypingError, NumbaTypeError, \
+    NumbaPerformanceWarning
 from .arrayobj import make_array, _empty_nd_impl, array_copy
 from numba.np import numpy_support as np_support
-from numba.core.overload_glue import glue_lowering
 
 ll_char = ir.IntType(8)
 ll_char_p = ll_char.as_pointer()
@@ -521,39 +522,95 @@ def dot_2_vv(context, builder, sig, args, conjugate=False):
     return builder.load(out)
 
 
-@glue_lowering(np.dot, types.Array, types.Array)
-def dot_2(context, builder, sig, args):
+@overload(np.dot)
+def dot_2(left, right):
     """
     np.dot(a, b)
+    """
+    return dot_2_impl('np.dot()', left, right)
+
+
+@overload(operator.matmul)
+def matmul_2(left, right):
+    """
     a @ b
     """
-    ensure_blas()
-
-    with make_contiguous(context, builder, sig, args) as (sig, args):
-        ndims = [x.ndim for x in sig.args[:2]]
-        if ndims == [2, 2]:
-            return dot_2_mm(context, builder, sig, args)
-        elif ndims == [2, 1]:
-            return dot_2_mv(context, builder, sig, args)
-        elif ndims == [1, 2]:
-            return dot_2_vm(context, builder, sig, args)
-        elif ndims == [1, 1]:
-            return dot_2_vv(context, builder, sig, args)
-        else:
-            assert 0
+    return dot_2_impl("'@'", left, right)
 
 
-lower_builtin(operator.matmul, types.Array, types.Array)(dot_2)
+def dot_2_impl(name, left, right):
+    if isinstance(left, types.Array) and isinstance(right, types.Array):
+        @intrinsic
+        def _impl(typingcontext, left, right):
+            ndims = (left.ndim, right.ndim)
 
-@glue_lowering(np.vdot, types.Array, types.Array)
-def vdot(context, builder, sig, args):
+            def _dot2_codegen(context, builder, sig, args):
+                ensure_blas()
+
+                with make_contiguous(context, builder, sig, args) as (sig, args):
+                    if ndims == (2, 2):
+                        return dot_2_mm(context, builder, sig, args)
+                    elif ndims == (2, 1):
+                        return dot_2_mv(context, builder, sig, args)
+                    elif ndims == (1, 2):
+                        return dot_2_vm(context, builder, sig, args)
+                    elif ndims == (1, 1):
+                        return dot_2_vv(context, builder, sig, args)
+                    else:
+                        raise AssertionError('unreachable')
+
+            if left.dtype != right.dtype:
+                raise TypingError(
+                    "%s arguments must all have the same dtype" % name)
+
+            if ndims == (2, 2):
+                return_type = types.Array(left.dtype, 2, 'C')
+            elif ndims == (2, 1) or ndims == (1, 2):
+                return_type = types.Array(left.dtype, 1, 'C')
+            elif ndims == (1, 1):
+                return_type = left.dtype
+            else:
+                raise TypingError(("%s: inputs must have compatible "
+                                   "dimensions") % name)
+            return signature(return_type, left, right), _dot2_codegen
+
+        if left.layout not in 'CF' or right.layout not in 'CF':
+            warnings.warn(
+                "%s is faster on contiguous arrays, called on %s" % (
+                    name, (left, right),), NumbaPerformanceWarning)
+
+        return lambda left, right: _impl(left, right)
+
+
+@overload(np.vdot)
+def vdot(left, right):
     """
     np.vdot(a, b)
     """
-    ensure_blas()
+    if isinstance(left, types.Array) and isinstance(right, types.Array):
+        @intrinsic
+        def _impl(typingcontext, left, right):
+            def codegen(context, builder, sig, args):
+                ensure_blas()
 
-    with make_contiguous(context, builder, sig, args) as (sig, args):
-        return dot_2_vv(context, builder, sig, args, conjugate=True)
+                with make_contiguous(context, builder, sig, args) as\
+                        (sig, args):
+                    return dot_2_vv(context, builder, sig, args, conjugate=True)
+
+            if left.ndim != 1 or right.ndim != 1:
+                raise TypingError("np.vdot() only supported on 1-D arrays")
+
+            if left.dtype != right.dtype:
+                raise TypingError(
+                    "np.vdot() arguments must all have the same dtype")
+            return signature(left.dtype, left, right), codegen
+
+        if left.layout not in 'CF' or right.layout not in 'CF':
+            warnings.warn(
+                "np.vdot() is faster on contiguous arrays, called on %s"
+                % ((left, right),), NumbaPerformanceWarning)
+
+        return lambda left, right: _impl(left, right)
 
 
 def dot_3_vm_check_args(a, b, out):
@@ -724,24 +781,43 @@ def dot_3_mm(context, builder, sig, args):
                              out._getvalue())
 
 
-@glue_lowering(np.dot, types.Array, types.Array, types.Array)
-def dot_3(context, builder, sig, args):
+@overload(np.dot)
+def dot_3(left, right, out):
     """
     np.dot(a, b, out)
     """
-    ensure_blas()
+    if (isinstance(left, types.Array) and isinstance(right, types.Array) and
+            isinstance(out, types.Array)):
+        @intrinsic
+        def _impl(typingcontext, left, right, out):
+            def codegen(context, builder, sig, args):
+                ensure_blas()
 
-    with make_contiguous(context, builder, sig, args) as (sig, args):
-        ndims = set(x.ndim for x in sig.args[:2])
-        if ndims == set([2]):
-            return dot_3_mm(context, builder, sig, args)
-        elif ndims == set([1, 2]):
-            return dot_3_vm(context, builder, sig, args)
-        else:
-            assert 0
+                with make_contiguous(context, builder, sig, args) as (sig,
+                                                                      args):
+                    ndims = set(x.ndim for x in sig.args[:2])
+                    if ndims == {2}:
+                        return dot_3_mm(context, builder, sig, args)
+                    elif ndims == {1, 2}:
+                        return dot_3_vm(context, builder, sig, args)
+                    else:
+                        raise AssertionError('unreachable')
+            if left.dtype != right.dtype or left.dtype != out.dtype:
+                raise TypingError(
+                    "np.dot() arguments must all have the same dtype")
 
-fatal_error_sig = types.intc()
-fatal_error_func = types.ExternalFunction("numba_fatal_error", fatal_error_sig)
+            return signature(out, left, right, out), codegen
+
+        if left.layout not in 'CF' or right.layout not in 'CF' or out.layout\
+            not in 'CF':
+            warnings.warn(
+                "np.vdot() is faster on contiguous arrays, called on %s"
+                % ((left, right),), NumbaPerformanceWarning)
+
+        return lambda left, right, out: _impl(left, right, out)
+
+
+fatal_error_func = types.ExternalFunction("numba_fatal_error", types.intc())
 
 
 @register_jitable
@@ -2648,7 +2724,7 @@ def _kron_normaliser_impl(x):
     if isinstance(x, types.Array):
         if x.layout not in ('C', 'F'):
             raise TypingError("np.linalg.kron only supports 'C' or 'F' layout "
-                              "input arrays. Receieved an input of "
+                              "input arrays. Received an input of "
                               "layout '{}'.".format(x.layout))
         elif x.ndim == 2:
             @register_jitable

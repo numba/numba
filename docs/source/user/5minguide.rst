@@ -149,7 +149,9 @@ For example::
     end = time.perf_counter()
     print("Elapsed (after compilation) = {}s".format((end - start)))
 
-This, for example prints::
+This, for example prints:
+
+.. code-block:: pycon
 
     Elapsed (with compilation) = 0.33030009269714355s
     Elapsed (after compilation) = 6.67572021484375e-06s

@@ -196,6 +196,9 @@ def compile_cuda(pyfunc, return_type, args, debug=False, lineinfo=False,
         # later want to overload some other behavior on the debug flag.
         # In particular, -opt=3 is not supported with -g.
         flags.debuginfo = True
+        flags.error_model = 'python'
+    else:
+        flags.error_model = 'numpy'
     if inline:
         flags.forceinline = True
     if fastmath:
@@ -269,8 +272,10 @@ def compile_ptx(pyfunc, args, debug=False, lineinfo=False, device=False,
         lib = cres.library
     else:
         tgt = cres.target_context
-        filename = cres.type_annotation.filename
-        linenum = int(cres.type_annotation.linenum)
+        code = pyfunc.__code__
+        filename = code.co_filename
+        linenum = code.co_firstlineno
+
         lib, kernel = tgt.prepare_cuda_kernel(cres.library, cres.fndesc, debug,
                                               nvvm_options, filename, linenum)
 
