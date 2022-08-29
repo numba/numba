@@ -271,7 +271,7 @@ class TestLinker(CUDATestCase):
 
     def test_get_no_local_memory(self):
         compiled = cuda.jit(empty_func)
-        compiled = compiled.specialize(np.empty(32), *range(6))
+        compiled = compiled.specialize()
         local_mem_size = compiled.get_local_mem_per_thread()
         self.assertEqual(local_mem_size, 0)
 
