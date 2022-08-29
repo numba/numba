@@ -635,7 +635,7 @@ class GUFuncSchedule(object):
         return pprint.pformat(dict(values))
 
 
-class GenerializedUFunc(object):
+class GeneralizedUFunc(object):
     def __init__(self, kernelmap, engine):
         self.kernelmap = kernelmap
         self.engine = engine

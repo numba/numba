@@ -59,7 +59,9 @@ creating a specialized instance:
 .. autoclass:: numba.cuda.dispatcher.CUDADispatcher
    :members: inspect_asm, inspect_llvm, inspect_sass, inspect_types,
              get_regs_per_thread, specialize, specialized, extensions, forall,
-             get_shared_mem_per_block, get_local_mem_per_thread
+             get_shared_mem_per_block, get_const_mem_size,
+             get_local_mem_per_thread
+
 
 
 Intrinsic Attributes and Functions

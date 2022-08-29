@@ -194,14 +194,14 @@ vary with target operating system and hardware. The following lists them all
 
 * Required build time:
 
-  * ``setuptools``
+  * ``setuptools<60``
   * ``numpy``
   * ``llvmlite``
   * Compiler toolchain mentioned above
 
 * Required run time:
 
-  * ``setuptools``
+  * ``setuptools<60``
   * ``numpy``
   * ``llvmlite``
 
