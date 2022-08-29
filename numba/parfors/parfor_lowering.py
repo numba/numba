@@ -1531,12 +1531,12 @@ def replace_var_with_array_in_block(vars, block, typemap, calltypes):
             scope = inst.target.scope
 
             const_node = ir.Const(0, loc)
-            const_var = scope.get_or_define("$const_ind_0", loc)
+            const_var = scope.redefine("$const_ind_0", loc)
             typemap[const_var.name] = types.uintp
             const_assign = ir.Assign(const_node, const_var, loc)
             new_block.append(const_assign)
 
-            val_var = scope.get_or_define("$val", loc)
+            val_var = scope.redefine("$val", loc)
             typemap[val_var.name] = typemap[inst.target.name]
             new_block.append(ir.Assign(inst.value, val_var, loc))
             setitem_node = ir.SetItem(inst.target, const_var, val_var, loc)
