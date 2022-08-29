@@ -101,6 +101,7 @@ class Flow(object):
             state = runner.pending.popleft()
             if state not in runner.finished:
                 _logger.debug("stack: %s", state._stack)
+                _logger.debug("state.pc_initial: %s", state)
                 first_encounter[state.pc_initial] = state
                 # Loop over the state until it is terminated.
                 while True:
@@ -338,8 +339,9 @@ class TraceRunner(object):
             res = state.make_temp()
             idx = inst.arg >> 1
             state.append(inst, idx=idx, res=res)
-            if inst.arg & 1:
-                state.push(state.make_temp())
+            ## ignoring the NULL
+            # if inst.arg & 1:
+                # state.push(state.make_temp())
             state.push(res)
     else:
         def op_LOAD_GLOBAL(self, state, inst):
