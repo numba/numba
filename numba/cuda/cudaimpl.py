@@ -502,18 +502,8 @@ def ptx_fp16_hneg(context, builder, sig, args):
 
 @lower(stubs.fp16.habs, types.float16)
 def ptx_fp16_habs(context, builder, sig, args):
-    if cuda.runtime.get_version() < (10, 2):
-        # CUDA < 10.2 does not support abs.f16. For these versions, we mask
-        # off the sign bit to compute abs instead. We determine whether or
-        # not to do this based on the runtime version so that our behaviour
-        # is consistent with the version of NVVM we're using to go from
-        # NVVM IR -> PTX.
-        inst = 'and.b16 $0, $1, 0x7FFF;'
-    else:
-        inst = 'abs.f16 $0, $1;'
-
     fnty = ir.FunctionType(ir.IntType(16), [ir.IntType(16)])
-    asm = ir.InlineAsm(fnty, inst, '=h,h')
+    asm = ir.InlineAsm(fnty, 'abs.f16 $0, $1;', '=h,h')
     return builder.call(asm, args)
 
 
