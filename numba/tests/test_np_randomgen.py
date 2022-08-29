@@ -960,7 +960,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                 with self.subTest(_size=_size, _bitgen=_bitgen):
                     self.check_numpy_parity(dist_func, _bitgen,
                                             None, _size, None,
-                                            adjusted_ulp_prec)
+                                            0)
 
         def dist_func(x, arr, axis):
             x.shuffle(arr, axis=axis)
@@ -982,7 +982,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                 with self.subTest(_size=_size, _bitgen=_bitgen):
                     self.check_numpy_parity(dist_func, _bitgen,
                                             None, _size, None,
-                                            adjusted_ulp_prec)
+                                            0)
 
         def dist_func(x, arr, axis):
             return x.permutation(arr, axis=axis)

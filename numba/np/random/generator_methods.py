@@ -176,7 +176,8 @@ def NumPyRandomGeneratorType_shuffle(inst, arr, axis=0):
     axis_impl = tuple([slice(None, None)] * arr.ndim)
 
     def impl(inst, arr, axis=0):
-
+        if axis > arr.ndim - 1:
+            raise IndexError("tuple index out of range")
         for i in range(arr.shape[axis] - 1, 0, -1):
             j = types.intp(random_methods.random_interval(inst.bit_generator,
                                                           i))
