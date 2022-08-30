@@ -23,7 +23,7 @@ min_python_version = "3.7"
 max_python_version = "3.11"  # exclusive
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.18"
-max_numpy_run_version = "1.23"
+max_numpy_run_version = "1.24"
 min_llvmlite_version = "0.39.0dev0"
 max_llvmlite_version = "0.40"
 
