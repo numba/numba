@@ -199,18 +199,6 @@ def get_next_int(context, builder, state_ptr, nbits, is_numpy):
     return builder.load(ret)
 
 
-def _fill_defaults(context, builder, sig, args, defaults):
-    """
-    Assuming a homogeneous signature (same type for result and all arguments),
-    fill in the *defaults* if missing from the arguments.
-    """
-    ty = sig.return_type
-    llty = context.get_data_type(ty)
-    args = tuple(args) + tuple(ir.Constant(llty, d) for d in defaults[len(args):])
-    sig = signature(*(ty,) * (len(args) + 1))
-    return sig, args
-
-
 @overload(random.seed)
 def seed_impl(seed):
     if isinstance(seed, types.Integer):
