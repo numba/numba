@@ -211,12 +211,3 @@ import llvmlite
 Is set to True if Intel SVML is in use.
 """
 config.USING_SVML = _try_enable_svml()
-
-
-# ---------------------- WARNING WARNING WARNING ----------------------------
-# The following imports occur below here (SVML init) because somewhere in their
-# import sequence they have a `@njit` wrapped function. This triggers too early
-# a bind to the underlying LLVM libraries which then irretrievably sets the LLVM
-# SVML state to "no SVML". See https://github.com/numba/numba/issues/4689 for
-# context.
-# ---------------------- WARNING WARNING WARNING ----------------------------
