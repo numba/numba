@@ -6,6 +6,7 @@ import warnings
 
 from numba import cuda
 from numba.core.errors import NumbaWarning
+from numba.cuda.codegen import CUDACodeLibrary
 from numba.cuda.testing import CUDATestCase, skip_on_cudasim
 from numba.tests.support import SerialMixin
 from numba.tests.test_caching import (DispatcherCacheUsecasesTest,
@@ -475,3 +476,18 @@ class TestMultiprocessCache(SerialMixin, DispatcherCacheUsecasesTest):
         finally:
             pool.close()
         self.assertEqual(res, n * (n - 1) // 2)
+
+
+@skip_on_cudasim('Simulator does not implement the CUDACodeLibrary')
+class TestCUDACodeLibrary(CUDATestCase):
+    # For tests of miscellaneous CUDACodeLibrary behaviour that we wish to
+    # explicitly check
+
+    def test_cannot_serialize_unfinalized(self):
+        # Usually a CodeLibrary requires a real CodeGen, but since we don't
+        # interact with it, anything will do
+        codegen = object()
+        name = 'library'
+        cl = CUDACodeLibrary(codegen, name)
+        with self.assertRaisesRegex(RuntimeError, 'Cannot pickle unfinalized'):
+            cl._reduce_states()
