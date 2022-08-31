@@ -31,7 +31,6 @@ void TCCMap::insert(const TypePair &key, TypeCompatibleCode val) {
     data.key = key;
     data.val = val;
     bin.push_back(data);
-//    bin.push_back({key, val});
     nb_records++;
 }
 
