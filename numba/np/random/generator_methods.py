@@ -167,18 +167,21 @@ def NumPyRandomGeneratorType_integers(inst, low, high, size=None,
         return impl
 
 
+# The following `shuffle` implementation is a direct translation from:
+# https://github.com/numpy/numpy/blob/95e3e7f445407e4f355b23d6a9991d8774f0eb0c/numpy/random/_generator.pyx#L4578
+
 # Overload the Generator().shuffle()
 @overload_method(types.NumPyRandomGeneratorType, 'shuffle')
-def NumPyRandomGeneratorType_shuffle(inst, arr, axis=0):
-    check_types(arr, [types.Array], 'arr')
+def NumPyRandomGeneratorType_shuffle(inst, x, axis=0):
+    check_types(x, [types.Array], 'x')
     check_types(axis, [int, types.Integer], 'axis')
 
-    axis_impl = tuple([slice(None, None)] * arr.ndim)
+    axis_impl = tuple([slice(None, None)] * x.ndim)
 
-    def impl(inst, arr, axis=0):
-        if axis > arr.ndim - 1:
-            raise IndexError("tuple index out of range")
-        for i in range(arr.shape[axis] - 1, 0, -1):
+    def impl(inst, x, axis=0):
+        if axis > x.ndim - 1:
+            raise IndexError("Axis is out of bounds for the given array")
+        for i in range(x.shape[axis] - 1, 0, -1):
             j = types.intp(random_methods.random_interval(inst.bit_generator,
                                                           i))
             if i == j:
@@ -186,30 +189,32 @@ def NumPyRandomGeneratorType_shuffle(inst, arr, axis=0):
             axis_impl1 = tuple_setitem(axis_impl, axis, slice(i, i + 1))
             axis_impl2 = tuple_setitem(axis_impl, axis, slice(j, j + 1))
 
-            buffer = np.copy(arr[axis_impl2])
-            arr[axis_impl2] = np.copy(arr[axis_impl1])
-            arr[axis_impl1] = buffer
+            buffer = np.copy(x[axis_impl2])
+            x[axis_impl2] = np.copy(x[axis_impl1])
+            x[axis_impl1] = buffer
 
     return impl
 
 
+# The following `permutation` implementation is a direct translation from:
+# https://github.com/numpy/numpy/blob/95e3e7f445407e4f355b23d6a9991d8774f0eb0c/numpy/random/_generator.pyx#L4710
 # Overload the Generator().permutation()
 @overload_method(types.NumPyRandomGeneratorType, 'permutation')
-def NumPyRandomGeneratorType_permutation(inst, arr, axis=0):
-    check_types(arr, [types.Array], 'arr')
+def NumPyRandomGeneratorType_permutation(inst, x, axis=0):
+    check_types(x, [types.Array, int, types.Integers], 'x')
     check_types(axis, [int, types.Integer], 'axis')
 
-    if isinstance(arr, types.Integer):
+    if isinstance(x, types.Integer):
         @register_jitable
-        def array_maker(arr):
-            return np.arange(arr)
+        def array_maker(x):
+            return np.arange(x)
     else:
         @register_jitable
-        def array_maker(arr):
-            return arr.copy()
+        def array_maker(x):
+            return x.copy()
 
-    def impl(inst, arr, axis=0):
-        new_arr = array_maker(arr)
+    def impl(inst, x, axis=0):
+        new_arr = array_maker(x)
         inst.shuffle(new_arr, axis=axis)
         return new_arr
 
