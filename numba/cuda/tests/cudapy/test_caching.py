@@ -327,7 +327,7 @@ class TestMultiCCCaching(SerialMixin, DispatcherCacheUsecasesTest):
         mod = self.import_module()
         self.check_pycache(0)
 
-        # Populate the cache with the first GPU
+        # Step 1. Populate the cache with the first GPU
         with gpus[0]:
             f = mod.add_usecase
             self.assertPreciseEqual(f(2, 3), 6)
@@ -346,8 +346,8 @@ class TestMultiCCCaching(SerialMixin, DispatcherCacheUsecasesTest):
             self.check_pycache(6)  # 2 index, 4 data
             self.check_hits(f.func, 0, 2)
 
-        # Run with the second GPU - under present behaviour this doesn't
-        # further populate the cache.
+        # Step 2. Run with the second GPU - under present behaviour this
+        # doesn't further populate the cache.
         with gpus[1]:
             f = mod.add_usecase
             self.assertPreciseEqual(f(2, 3), 6)
@@ -366,8 +366,8 @@ class TestMultiCCCaching(SerialMixin, DispatcherCacheUsecasesTest):
             self.check_pycache(6)  # cache unchanged
             self.check_hits(f.func, 0, 2)
 
-        # Run in a separate module with the second GPU - this populates the
-        # cache for the second CC.
+        # Step 3. Run in a separate module with the second GPU - this populates
+        # the cache for the second CC.
         mod2 = self.import_module()
         self.assertIsNot(mod, mod2)
 
@@ -389,11 +389,17 @@ class TestMultiCCCaching(SerialMixin, DispatcherCacheUsecasesTest):
             self.check_pycache(10)  # 2 index, 8 data
             self.check_hits(f.func, 0, 2)
 
-        # Third try to check generation for uncached CC
+        # The following steps check that we can use the NVVM IR loaded from the
+        # cache to generate PTX for a different compute capability to the
+        # cached cubin's CC. To check this, we create another module that loads
+        # the cached version containing a cubin for GPU 1. There will be no
+        # cubin for GPU 0, so when we try to use it the PTX must be generated.
 
         mod3 = self.import_module()
         self.assertIsNot(mod, mod3)
 
+        # Step 4. Run with GPU 1 and get a cache hit, loading the cache created
+        # during Step 3.
         with gpus[1]:
             f = mod3.add_usecase
             self.assertPreciseEqual(f(2, 3), 6)
@@ -407,6 +413,8 @@ class TestMultiCCCaching(SerialMixin, DispatcherCacheUsecasesTest):
             rec = f(mod.packed_arr, 1)
             self.assertPreciseEqual(tuple(rec), (2, 43.5))
 
+        # Step 5. Run with GPU 0 using the module from Step 4, to force PTX
+        # generation from cached NVVM IR.
         with gpus[0]:
             f = mod3.add_usecase
             self.assertPreciseEqual(f(2, 3), 6)
