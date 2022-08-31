@@ -5,7 +5,7 @@ Installation
 Compatibility
 -------------
 
-Numba is compatible with Python 3.7--3.10, and Numpy versions 1.18 up to 1.22.
+Numba is compatible with Python 3.7--3.10, and Numpy versions 1.18 up to 1.23.
 
 Our supported platforms are:
 
