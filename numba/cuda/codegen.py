@@ -328,15 +328,12 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         """
         Rebuild an instance.
         """
-        instance = cls.__new__(cls)
-        super(cls, instance).__init__(codegen, name)
-        instance._entry_name = entry_name
+        instance = cls(codegen, name, entry_name=entry_name)
 
         instance._llvm_strs = llvm_strs
         instance._ptx_cache = ptx_cache
         instance._cubin_cache = cubin_cache
         instance._linkerinfo_cache = linkerinfo_cache
-        instance._cufunc_cache = {}
 
         instance._max_registers = max_registers
         instance._nvvm_options = nvvm_options
