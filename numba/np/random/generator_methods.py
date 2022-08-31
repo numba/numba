@@ -201,7 +201,7 @@ def NumPyRandomGeneratorType_shuffle(inst, x, axis=0):
 # Overload the Generator().permutation()
 @overload_method(types.NumPyRandomGeneratorType, 'permutation')
 def NumPyRandomGeneratorType_permutation(inst, x, axis=0):
-    check_types(x, [types.Array, int, types.Integers], 'x')
+    check_types(x, [types.Array, int, types.Integer], 'x')
     check_types(axis, [int, types.Integer], 'axis')
 
     if isinstance(x, types.Integer):
