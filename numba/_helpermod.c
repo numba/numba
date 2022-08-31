@@ -91,7 +91,7 @@ build_c_helpers_dict(void)
     declmethod(unpack_slice);
     declmethod(do_raise);
     declmethod(unpickle);
-    declmethod(runtime_pickle);
+    declmethod(runtime_serialize_exc_args);
     declmethod(attempt_nocopy_reshape);
     declmethod(get_pyobject_private_data);
     declmethod(set_pyobject_private_data);

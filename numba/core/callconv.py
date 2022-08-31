@@ -125,6 +125,9 @@ class BaseCallConv(object):
             # Make sure another error may not interfere.
             api.err_clear()
             exc = api.unserialize(status.excinfoptr)
+            api.print_object(exc)
+            ptr = builder.bitcast(status.excinfoptr, ir.IntType(8).as_pointer())
+            # self.context.nrt.free(builder, ptr)
             with cgutils.if_likely(builder,
                                    cgutils.is_not_null(builder, exc)):
                 api.raise_object(exc)  # steals ref
@@ -437,26 +440,32 @@ class CPUCallConv(BaseCallConv):
         # a python bytes object
         pickle_buf = builder.extract_value(builder.load(struct_gv_ptr), 0)
         pickle_bufsz = builder.extract_value(builder.load(struct_gv_ptr), 1)
-        py_bytes = pyapi.bytes_from_string_and_size(
+        static_args_as_bytes = pyapi.bytes_from_string_and_size(
             pickle_buf, builder.sext(pickle_bufsz, pyapi.py_ssize_t))
 
-        with builder.if_then(cgutils.is_null(builder, py_bytes)):
+        with builder.if_then(cgutils.is_null(builder, static_args_as_bytes)):
             msg = ('PyBytes_FromStringAndSize return NULL',)
             self.return_user_exc(builder, RuntimeError, msg, loc)
 
-        # serialize returns a pair (data, hash)
-        # "py_bytes" holds arguments that can be serialized at compile-time
-        # as a serialized object. While "runtime_args_tup" are the runtime
-        # arguments. At runtime, in the function "runtime_dumps", both lists
-        # are merged into a single one.
-        runtime_args_tup = pyapi.tuple_pack(exc_args)
-        pair = pyapi.serialize(runtime_args_tup, py_bytes)
+        # * "static_args_as_bytes" holds arguments that are known at
+        #   at compile-time as Python bytes object.
+        # * "runtime_args_as_tuple" are the arguments only known at runtime
+        # When executing the function, those two lists are merged into a single
+        # one at "numba.core.serialize.build_exception_at_runtime"
+        #
+        # "runtime_serialize_exc_args" returns the static + runtime
+        # serialized or None on failure (i.e. cannot serialize one of the args)
+        runtime_args_as_tuple = pyapi.tuple_pack(exc_args)
+        pair = pyapi.runtime_serialize_exc_args(
+            runtime_args_as_tuple, static_args_as_bytes)
         with builder.if_then(builder.icmp_unsigned('==', py_none, pair)):
             msg = ('Failed to serialize exception args at runtime',)
             self.return_user_exc(builder, TypeError, msg, loc)
-        data, _hash = pyapi.tuple_getitem(pair, 0), pyapi.tuple_getitem(pair, 1)
-        ptr = pyapi.bytes_as_string(data)
-        sz = pyapi.bytes_size(data)
+
+        pickled = pyapi.tuple_getitem(pair, 0)
+        _hash = pyapi.tuple_getitem(pair, 1)
+        ptr = pyapi.bytes_as_string(pickled)
+        sz = pyapi.bytes_size(pickled)
 
         # check for overflow
         if pyapi.py_ssize_t.width > 32:

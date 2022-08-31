@@ -1045,28 +1045,30 @@ error:
 #endif
 
 NUMBA_EXPORT_FUNC(PyObject *)
-numba_runtime_pickle(PyObject* runtime_args, PyObject* static_args_bytedata)
+numba_runtime_serialize_exc_args(PyObject* runtime_args,
+                                    PyObject* static_args_bytedata)
 {
     PyObject *obj = NULL;
-    static PyObject *dumps = NULL;
+    static PyObject *func = NULL;
 
-    /* Caching the runtime_dumps function shaves a couple µs here. */
-    if (dumps == NULL)
+    /* Caching the function shaves a couple µs here. */
+    if (func == NULL)
     {
         PyObject *picklemod;
         picklemod = PyImport_ImportModule("numba.core.serialize");
         if (picklemod == NULL)
             return NULL;
-        dumps = PyObject_GetAttrString(picklemod, "runtime_dumps");
+        func = PyObject_GetAttrString(picklemod,
+                                      "runtime_serialize_exc_args");
         Py_DECREF(picklemod);
-        if (dumps == NULL)
+        if (func == NULL)
             return NULL;
     }
 
-    obj = PyObject_CallFunctionObjArgs(dumps, runtime_args,
+    obj = PyObject_CallFunctionObjArgs(func, runtime_args,
                                        static_args_bytedata, NULL);
-    // on failure, runtime_dumps returns None. Is there a better way to handle
-    // this kind of scenario?
+    // func returns None on failure (i.e. can't serialize one of the args).
+    // Is there a better way to handle this? raise an exception here?
     return obj;
 }
 
