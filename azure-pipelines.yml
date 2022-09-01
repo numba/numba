@@ -7,22 +7,22 @@ variables:
 
 jobs:
 # Mac and Linux use the same template with different matrixes
-# - template: buildscripts/azure/azure-linux-macos.yml
-#   parameters:
-#     name: macOS
-#     vmImage: macos-11
-#     matrix:
-#       py37_np118:
-#         PYTHON: '3.7'
-#         NUMPY: '1.18'
-#         CONDA_ENV: 'azure_ci'
-#         TEST_START_INDEX: 0
-#       py310_np122:
-#         PYTHON: '3.10'
-#         NUMPY: '1.22'
-#         CONDA_ENV: 'azure_ci'
-#         TEST_THREADING: 'tbb'
-#         TEST_START_INDEX: 1
+- template: buildscripts/azure/azure-linux-macos.yml
+  parameters:
+    name: macOS
+    vmImage: macos-11
+    matrix:
+      # py37_np118:
+      #   PYTHON: '3.7'
+      #   NUMPY: '1.18'
+      #   CONDA_ENV: 'azure_ci'
+      #   TEST_START_INDEX: 0
+      py310_np122:
+        PYTHON: '3.10'
+        NUMPY: '1.22'
+        CONDA_ENV: 'azure_ci'
+        TEST_THREADING: 'tbb'
+        TEST_START_INDEX: 1
 
 - template: buildscripts/azure/azure-linux-macos.yml
   parameters:
