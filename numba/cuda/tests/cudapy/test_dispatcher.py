@@ -409,7 +409,7 @@ class TestDispatcher(CUDATestCase):
         self.assertGreaterEqual(local_mem_f32, N * 4)
         self.assertGreaterEqual(local_mem_f64, N * 8)
 
-        # Check that getting the local memory per threadfor all signatures
+        # Check that getting the local memory per thread for all signatures
         # provides the same values as getting the shared mem per block for
         # individual signatures.
         sh_mem_f32_all = simple_lmem.get_local_mem_per_thread()
