@@ -6,10 +6,12 @@ import warnings
 
 from numba import cuda
 from numba.core.errors import NumbaWarning
+from numba.cuda.codegen import CUDACodeLibrary
 from numba.cuda.testing import CUDATestCase, skip_on_cudasim
 from numba.tests.support import SerialMixin
 from numba.tests.test_caching import (DispatcherCacheUsecasesTest,
                                       skip_bad_access)
+from pathlib import Path
 
 
 @skip_on_cudasim('Simulator does not implement caching')
@@ -57,6 +59,18 @@ class CUDACachingTest(SerialMixin, DispatcherCacheUsecasesTest):
         f = mod.add_nocache_usecase
         self.assertPreciseEqual(f(2, 3), 6)
         self.check_pycache(0)
+
+    def test_many_locals(self):
+        # Declaring many local arrays creates a very large LLVM IR, which
+        # cannot be pickled due to the level of recursion it requires to
+        # pickle. This test ensures that kernels with many locals (and
+        # therefore large IR) can be cached. See Issue #8373:
+        # https://github.com/numba/numba/issues/8373
+        self.check_pycache(0)
+        mod = self.import_module()
+        f = mod.many_locals
+        f[1, 1]()
+        self.check_pycache(2) # 1 index, 1 data
 
     def test_closure(self):
         mod = self.import_module()
@@ -190,6 +204,15 @@ class CUDACachingTest(SerialMixin, DispatcherCacheUsecasesTest):
 
         self._test_pycache_fallback()
 
+    def test_cannot_cache_linking_libraries(self):
+        link = os.path.join(Path(__file__).parent.parent,
+                            'cudadrv', 'data', 'jitlink.ptx')
+        msg = 'Cannot pickle CUDACodeLibrary with linking files'
+        with self.assertRaisesRegex(RuntimeError, msg):
+            @cuda.jit('void()', cache=True, link=[link])
+            def f():
+                pass
+
 
 @skip_on_cudasim('Simulator does not implement caching')
 class CUDAAndCPUCachingTest(SerialMixin, DispatcherCacheUsecasesTest):
@@ -305,7 +328,7 @@ class TestMultiCCCaching(SerialMixin, DispatcherCacheUsecasesTest):
         mod = self.import_module()
         self.check_pycache(0)
 
-        # Populate the cache with the first GPU
+        # Step 1. Populate the cache with the first GPU
         with gpus[0]:
             f = mod.add_usecase
             self.assertPreciseEqual(f(2, 3), 6)
@@ -324,8 +347,8 @@ class TestMultiCCCaching(SerialMixin, DispatcherCacheUsecasesTest):
             self.check_pycache(6)  # 2 index, 4 data
             self.check_hits(f.func, 0, 2)
 
-        # Run with the second GPU - under present behaviour this doesn't
-        # further populate the cache.
+        # Step 2. Run with the second GPU - under present behaviour this
+        # doesn't further populate the cache.
         with gpus[1]:
             f = mod.add_usecase
             self.assertPreciseEqual(f(2, 3), 6)
@@ -344,8 +367,8 @@ class TestMultiCCCaching(SerialMixin, DispatcherCacheUsecasesTest):
             self.check_pycache(6)  # cache unchanged
             self.check_hits(f.func, 0, 2)
 
-        # Run in a separate module with the second GPU - this populates the
-        # cache for the second CC.
+        # Step 3. Run in a separate module with the second GPU - this populates
+        # the cache for the second CC.
         mod2 = self.import_module()
         self.assertIsNot(mod, mod2)
 
@@ -366,6 +389,45 @@ class TestMultiCCCaching(SerialMixin, DispatcherCacheUsecasesTest):
             self.assertPreciseEqual(tuple(rec), (2, 43.5))
             self.check_pycache(10)  # 2 index, 8 data
             self.check_hits(f.func, 0, 2)
+
+        # The following steps check that we can use the NVVM IR loaded from the
+        # cache to generate PTX for a different compute capability to the
+        # cached cubin's CC. To check this, we create another module that loads
+        # the cached version containing a cubin for GPU 1. There will be no
+        # cubin for GPU 0, so when we try to use it the PTX must be generated.
+
+        mod3 = self.import_module()
+        self.assertIsNot(mod, mod3)
+
+        # Step 4. Run with GPU 1 and get a cache hit, loading the cache created
+        # during Step 3.
+        with gpus[1]:
+            f = mod3.add_usecase
+            self.assertPreciseEqual(f(2, 3), 6)
+            self.assertPreciseEqual(f(2.5, 3), 6.5)
+
+            f = mod3.record_return_aligned
+            rec = f(mod.aligned_arr, 1)
+            self.assertPreciseEqual(tuple(rec), (2, 43.5))
+
+            f = mod3.record_return_packed
+            rec = f(mod.packed_arr, 1)
+            self.assertPreciseEqual(tuple(rec), (2, 43.5))
+
+        # Step 5. Run with GPU 0 using the module from Step 4, to force PTX
+        # generation from cached NVVM IR.
+        with gpus[0]:
+            f = mod3.add_usecase
+            self.assertPreciseEqual(f(2, 3), 6)
+            self.assertPreciseEqual(f(2.5, 3), 6.5)
+
+            f = mod3.record_return_aligned
+            rec = f(mod.aligned_arr, 1)
+            self.assertPreciseEqual(tuple(rec), (2, 43.5))
+
+            f = mod3.record_return_packed
+            rec = f(mod.packed_arr, 1)
+            self.assertPreciseEqual(tuple(rec), (2, 43.5))
 
 
 def child_initializer():
@@ -414,3 +476,18 @@ class TestMultiprocessCache(SerialMixin, DispatcherCacheUsecasesTest):
         finally:
             pool.close()
         self.assertEqual(res, n * (n - 1) // 2)
+
+
+@skip_on_cudasim('Simulator does not implement the CUDACodeLibrary')
+class TestCUDACodeLibrary(CUDATestCase):
+    # For tests of miscellaneous CUDACodeLibrary behaviour that we wish to
+    # explicitly check
+
+    def test_cannot_serialize_unfinalized(self):
+        # Usually a CodeLibrary requires a real CodeGen, but since we don't
+        # interact with it, anything will do
+        codegen = object()
+        name = 'library'
+        cl = CUDACodeLibrary(codegen, name)
+        with self.assertRaisesRegex(RuntimeError, 'Cannot pickle unfinalized'):
+            cl._reduce_states()
