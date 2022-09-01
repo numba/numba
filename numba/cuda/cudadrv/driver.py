@@ -38,7 +38,7 @@ from .drvapi import cu_occupancy_b2d_size, cu_stream_callback_pyobj, cu_uuid
 from numba.cuda.cudadrv import enums, drvapi, _extras
 
 from ptxcompiler import compile_ptx
-from mvclinker import MVCLinker as _MVCLinker, MVCLinkerError
+from cubinlinker import CubinLinker, CubinLinkerError
 
 USE_NV_BINDING = config.CUDA_USE_NVIDIA_BINDING
 
@@ -2668,7 +2668,7 @@ class MVCLinker(Linker):
         self.ptx_compile_options = tuple(ptx_compile_opts)
 
         arch = f"--arch=sm_{sm_ver}"
-        self._linker = _MVCLinker(arch)
+        self._linker = CubinLinker(arch)
 
     @property
     def info_log(self):
@@ -2682,7 +2682,7 @@ class MVCLinker(Linker):
         compile_result = compile_ptx(ptx.decode(), self.ptx_compile_options)
         try:
             self._linker.add_cubin(compile_result.compiled_program, name)
-        except MVCLinkerError as e:
+        except CubinLinkerError as e:
             raise LinkerError from e
 
     def add_file(self, path, kind):
@@ -2706,7 +2706,7 @@ class MVCLinker(Linker):
 
         try:
             fn(data, name)
-        except MVCLinkerError as e:
+        except CubinLinkerError as e:
             raise LinkerError from e
 
     def add_cu(self, cu, name):
@@ -2724,7 +2724,7 @@ class MVCLinker(Linker):
     def complete(self):
         try:
             return self._linker.complete()
-        except MVCLinkerError as e:
+        except CubinLinkerError as e:
             raise LinkerError from e
 
 
