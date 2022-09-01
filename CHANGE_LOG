@@ -15,9 +15,8 @@ Pull-Requests:
 * PR `#8377 <https://github.com/numba/numba/pull/8377>`_: Add support for NumPy 1.23 (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#8384 <https://github.com/numba/numba/pull/8384>`_: Move strace() check into tests that actually need it (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#8386 <https://github.com/numba/numba/pull/8386>`_: Fix the docs for numba.get_thread_id (`stuartarchibald <https://github.com/stuartarchibald>`_)
-* PR `#8407 <https://github.com/numba/numba/pull/8407>`_: Pin NumPy version to 1.18-1.24 (`Andre Masella <https://github.com/apmasell>`_)
-* PR `#8407 <https://github.com/numba/numba/pull/8407>`_: Pin NumPy version to 1.18-1.24 (`Andre Masella <https://github.com/apmasell>`_)
-* PR `#8411 <https://github.com/numba/numba/pull/8411>`_: update version support table for 0.56.1 (`esc <https://github.com/esc>`_)
+* PR `#8407 <https://github.com//pull/8407>`_: Pin NumPy version to 1.18-1.24 (`Andre Masella <https://github.com/apmasell>`_)
+* PR `#8411 <https://github.com//pull/8411>`_: update version support table for 0.56.1 (`esc <https://github.com/esc>`_)
 * PR `#8412 <https://github.com/numba/numba/pull/8412>`_: Create changelog for 0.56.1 (`Andre Masella <https://github.com/apmasell>`_)
 * PR `#8413 <https://github.com//pull/8413>`_: Fix Azure CI for NumPy 1.23 and use conda-forge scipy (`Siu Kwan Lam <https://github.com/sklam>`_)
 
