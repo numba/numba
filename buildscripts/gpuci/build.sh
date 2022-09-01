@@ -24,6 +24,15 @@ else
   export NUMBA_CUDA_USE_NVIDIA_BINDING=0;
 fi;
 
+# Test with Minor Version Compatibility on CUDA 11.7
+if [ $CUDA_TOOLKIT_VER == "11.7" ]
+then
+  export NUMBA_CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY=1;
+else
+  export NUMBA_CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY=0;
+fi;
+
+
 ################################################################################
 # SETUP - Check environment
 ################################################################################
@@ -39,6 +48,7 @@ gpuci_logger "Create testing env"
 gpuci_mamba_retry create -n numba_ci -y \
                   "python=${PYTHON_VER}" \
                   "cudatoolkit=${CUDA_TOOLKIT_VER}" \
+                  "gmarkall::cubinlinker" \
                   "numba/label/dev::llvmlite" \
                   "numpy=1.21" \
                   "scipy" \

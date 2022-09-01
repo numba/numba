@@ -5,10 +5,10 @@ CUDA_VER:
 - "11.2"
 
 CUDA_TOOLKIT_VER:
-- "10.2"
 - "11.1"
 - "11.2"
 - "11.5"
+- "11.7"
 
 LINUX_VER:
 - ubuntu18.04
