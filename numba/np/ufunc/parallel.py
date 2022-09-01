@@ -683,7 +683,7 @@ def _iget_num_threads(typingctx):
 def get_thread_id():
     """
     Returns a unique ID for each thread in the range 0 (inclusive)
-    to `numba.get_num_threads()` (exclusive).
+    to :func:`~.get_num_threads` (exclusive).
     """
     # Called from the interpreter directly, this should return 0
     # Called from a sequential JIT region, this should return 0

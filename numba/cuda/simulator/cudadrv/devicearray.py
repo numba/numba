@@ -233,7 +233,7 @@ def array_core(ary):
     a view without the repeated dimensions.
 
     """
-    if not ary.strides:
+    if not ary.strides or not ary.size:
         return ary
     core_index = []
     for stride in ary.strides:
