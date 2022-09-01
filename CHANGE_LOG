@@ -1,4 +1,4 @@
-Version 0.56.1 (1 September, 2022)
+Version 0.56.2 (1 September, 2022)
 ----------------------------------
 
 This is a bugfix release that supports NumPy 1.23 and fixes CUDA function
@@ -19,6 +19,12 @@ Pull-Requests:
 * PR `#8411 <https://github.com/numba/numba/pull/8411>`_: update version support table for 0.56.1 (`esc <https://github.com/esc>`_)
 * PR `#8412 <https://github.com/numba/numba/pull/8412>`_: Create changelog for 0.56.1 (`Andre Masella <https://github.com/apmasell>`_)
 * PR `#8413 <https://github.com/numba/numba/pull/8413>`_: Fix Azure CI for NumPy 1.23 and use conda-forge scipy (`Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#8414 <https://github.com/numba/numba/pull/8413>`_: Hotfix for 0.56.2 (`Siu Kwan Lam <https://github.com/sklam>`_)
+*
+Version 0.56.1 (1 September, 2022)
+----------------------------------
+
+The release was skipped due to issues during the release process.
 
 Version 0.56.0 (25 July, 2022)
 ------------------------------
