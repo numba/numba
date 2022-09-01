@@ -1,3 +1,25 @@
+Version 0.56.1 (1 September, 2022)
+----------------------------------
+
+This is a bugfix release that supports NumPy 1.23 and fixes CUDA function
+caching.
+
+Pull-Requests:
+
+* PR `#8239 <https://github.com/numba/numba/pull/8239>`_: Add decorator to run a test in a subprocess (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#8276 <https://github.com/numba/numba/pull/8276>`_: Move Azure to use macos-11 (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#8310 <https://github.com/numba/numba/pull/8310>`_: CUDA: Fix Issue #8309 - atomics don't work on complex components (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#8342 <https://github.com/numba/numba/pull/8342>`_: Upgrade to ubuntu-20.04 for azure pipeline CI (`jamesobutler <https://github.com/jamesobutler>`_)
+* PR `#8356 <https://github.com/numba/numba/pull/8356>`_: Update setup.py, buildscripts, CI and docs to require setuptools<60 (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#8374 <https://github.com/numba/numba/pull/8374>`_: Don't pickle LLVM IR for CUDA code libraries (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#8377 <https://github.com/numba/numba/pull/8377>`_: Add support for NumPy 1.23 (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#8384 <https://github.com/numba/numba/pull/8384>`_: Move strace() check into tests that actually need it (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#8386 <https://github.com/numba/numba/pull/8386>`_: Fix the docs for numba.get_thread_id (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#8407 <https://github.com/numba/numba/pull/8407>`_: Pin NumPy version to 1.18-1.24 (`Andre Masella <https://github.com/apmasell>`_)
+* PR `#8407 <https://github.com/numba/numba/pull/8407>`_: Pin NumPy version to 1.18-1.24 (`Andre Masella <https://github.com/apmasell>`_)
+* PR `#8411 <https://github.com/numba/numba/pull/8411>`_: update version support table for 0.56.1 (`esc <https://github.com/esc>`_)
+* PR `#8412 <https://github.com/numba/numba/pull/8412>`_: Create changelog for 0.56.1 (`Andre Masella <https://github.com/apmasell>`_)
+
 Version 0.56.0 (25 July, 2022)
 ------------------------------
 
