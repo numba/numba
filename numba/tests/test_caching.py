@@ -1072,7 +1072,7 @@ class TestCFuncCache(BaseCacheTest):
         self.run_in_separate_process()
 
 
-class TestCachingModifiedFiles(DispatcherCacheUsecasesTest):
+class TestCachingModifiedFilesBase(DispatcherCacheUsecasesTest):
     # the file with a main function that will call another one
     source_text_file1: str = ""
     # the file with a secondary function which is called from the main
@@ -1202,7 +1202,7 @@ class TestCachingModifiedFiles(DispatcherCacheUsecasesTest):
         self.check_hits(fc, 0, 2)
 
 
-class TestCachingModifiedFiles2(TestCachingModifiedFiles):
+class TestCachingModifiedFiles2(TestCachingModifiedFilesBase):
     # This class tests a dispatcher calling another dispatcher which later
     # changes. Both functions have cache=True
 
@@ -1237,7 +1237,7 @@ def function2(x):
         self.execute_fc_and_change_it(inner_cached=True)
 
 
-class TestCachingModifiedFiles3(TestCachingModifiedFiles):
+class TestCachingModifiedFiles3(TestCachingModifiedFilesBase):
     # This class tests a dispatcher calling another dispatcher which later
     # changes. Only the main function has cache=True
     source_text_file1 = """
@@ -1272,7 +1272,7 @@ def function2(x):
         self.execute_fc_and_change_it(inner_cached=False)
 
 
-class TestCachingModifiedFiles4(TestCachingModifiedFiles):
+class TestCachingModifiedFiles4(TestCachingModifiedFilesBase):
     # This class tests a cfunc calling a dispatcher which later
     # changes. Only the main function has cache=True
     source_text_file1 = """
@@ -1343,7 +1343,7 @@ def function2(x):
         self.assertPreciseEqual(fc(2.5), 2.5)
         # expected files: 2 index, 2 data for each function
         self.check_pycache(2 + 2 * inner_cached)
-        self.check_hits(fc, 1, 0)
+        self.check_hits(fc, hits=1, misses=0)
 
         # 2. Re-import module ane execute again, cached version should be used
         del fc
@@ -1358,7 +1358,7 @@ def function2(x):
         self.assertPreciseEqual(fc(2.5), 2.5)
         # expected files: 2 index, 2 data for each function
         self.check_pycache(2 + 2 * inner_cached)
-        self.check_hits(fc, 1, 0)
+        self.check_hits(fc, hits=1, misses=0)
 
         # 3. modify file and reload
         self.file2_alt = os.path.join(self.tempdir, 'file2.py')
@@ -1380,7 +1380,7 @@ def function2(x):
         self.assertPreciseEqual(fc(2.5), 3.5)
         # expected files: 2 index, 2 data for foo, 2 for function2
         self.check_pycache(2 + 2 * inner_cached)
-        self.check_hits(fc, 0, 1)
+        self.check_hits(fc, hits=0, misses=1)
 
 
 if __name__ == '__main__':
