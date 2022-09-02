@@ -363,8 +363,7 @@ class TestCachingModifiedFiles(TestCachingModifiedFilesBase):
 from numba import vectorize
 from file2 import indirect_ufunc_core2
 
-@vectorize(["intp(intp)", "float64(float64)"], 
-    cache=True)
+@vectorize(["intp(intp)", "float64(float64)"], cache=True)
 def ufunc(inp):
     return indirect_ufunc_core2(inp)
 """
@@ -372,11 +371,11 @@ def ufunc(inp):
 from numba import njit
 @njit(cache=True)
 def indirect_ufunc_core1(inp):
-    return inp 
+    return inp
 
 @njit(cache=True)
 def indirect_ufunc_core2(inp):
-    return inp 
+    return inp
 """
 
     source_text_file2_alt = """
@@ -410,11 +409,11 @@ def ufunc(inp):
 from numba import njit
 @njit
 def indirect_ufunc_core1(inp):
-    return inp 
+    return inp
 
 @njit
 def indirect_ufunc_core2(inp):
-    return inp 
+    return inp
 """
 
     source_text_file2_alt = """
@@ -430,6 +429,7 @@ def indirect_ufunc_core2(inp):
 
     def test_invalidation(self, ):
         self.execute_fc_and_change_it(inner_cached=False)
+
 
 if __name__ == '__main__':
     unittest.main()
