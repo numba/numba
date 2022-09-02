@@ -1272,5 +1272,116 @@ def function2(x):
         self.execute_fc_and_change_it(inner_cached=False)
 
 
+class TestCachingModifiedFiles4(TestCachingModifiedFiles):
+    # This class tests a cfunc calling a dispatcher which later
+    # changes. Only the main function has cache=True
+    source_text_file1 = """
+from numba import cfunc
+from file2 import function2
+@cfunc('float64(float64)',cache=True)
+def foo(x):
+    return function2(x)
+"""
+    source_text_file2 = """
+from numba import njit
+@njit()
+def function1(x):
+    return x
+@njit()
+def function2(x):
+    return x
+"""
+
+    source_text_file2_alt = """
+from numba import njit
+@njit()
+def function1(x):
+    return x + 1
+@njit()
+def function2(x):
+    return x + 1
+    """
+
+    def test_invalidation(self):
+        # test cache is invalidated after source file modification
+        self.execute_fc_and_change_it(inner_cached=False)
+
+    def check_hits(self, func, *, hits, misses=None):
+        # check_hits needs to be overriden because dispatchers use Counters
+        # but Cfuncs use plain ints to keep track of misses
+        st = func.stats
+        self.assertEqual(st.cache_hits, hits, st.cache_hits)
+        if misses is not None:
+            self.assertEqual(st.cache_misses, misses,
+                             st.cache_misses)
+
+    def execute_fc_and_change_it(self, inner_cached):
+        # test cache is invalidated after source file modification
+        # inner_cached: boolean, whether the inner function is cached. This
+        # changes the number of cache files that are expected
+
+        # this method needs to be overriden in this class, because CFuncs
+        # have only one signature, which means the number of cache files
+        # and the number of hits and misses are different. Structurally
+        # the code is identical
+
+        self.modname = "file1"
+        self.modfile = self.file1
+        self.cache_dir = os.path.join(self.tempdir, "__pycache__")
+
+        # 1. execute original files once to populate cache
+        self.run_fc_in_separate_process()
+        # import function and verify cache is being used
+        import sys
+        sys.path.insert(0, self.tempdir)
+        file1 = self.import_module()
+        fc = file1.foo
+        # First round of execution to populate cache
+        self.assertPreciseEqual(fc(2), 2)
+        # expected files: 1 index + 1 data for each function
+        self.check_pycache(2 + 2 * inner_cached)
+        self.assertPreciseEqual(fc(2.5), 2.5)
+        # expected files: 2 index, 2 data for each function
+        self.check_pycache(2 + 2 * inner_cached)
+        self.check_hits(fc, 1, 0)
+
+        # 2. Re-import module ane execute again, cached version should be used
+        del fc
+        del file1
+        file1, file2 = self.import_modules(
+            ["file1", "file2"], [self.file1, self.file2]
+        )
+        fc = file1.foo
+        self.assertPreciseEqual(fc(2), 2)
+        # expected files: 2 index, 2 data for each function
+        self.check_pycache(2 + 2 * inner_cached)
+        self.assertPreciseEqual(fc(2.5), 2.5)
+        # expected files: 2 index, 2 data for each function
+        self.check_pycache(2 + 2 * inner_cached)
+        self.check_hits(fc, 1, 0)
+
+        # 3. modify file and reload
+        self.file2_alt = os.path.join(self.tempdir, 'file2.py')
+        with open(self.file2_alt, 'w') as fout:
+            print(self.source_text_file2_alt, file=fout)
+
+        file1, file2 = self.import_modules(
+            ["file1", "file2"], [self.file1, self.file2]
+        )
+        fc = file1.foo
+        # 4. Run again, results should change, cache should not be hit
+        self.assertPreciseEqual(fc(2), 3)
+        # 2 index, 2 data for foo function (2 from previous function2 versions
+        # one of which is overwritten by the new version), 2 for function2.
+        # Function2 has restarted its cache after the change
+        # and it has 2 files (1 new, 1 stale but out of the index
+        # which will be eventually overwriten)
+        self.check_pycache(2 + 2 * inner_cached)
+        self.assertPreciseEqual(fc(2.5), 3.5)
+        # expected files: 2 index, 2 data for foo, 2 for function2
+        self.check_pycache(2 + 2 * inner_cached)
+        self.check_hits(fc, 0, 1)
+
+
 if __name__ == '__main__':
     unittest.main()
