@@ -423,7 +423,7 @@ from numba import njit
 def indirect_ufunc_core1(inp):
     return inp + 1
 
-@nb.njit
+@njit
 def indirect_ufunc_core2(inp):
     return inp + 1
 """
