@@ -4,6 +4,7 @@ Implementation of compiled C callbacks (@cfunc).
 
 
 import ctypes
+import collections
 
 from numba.core import utils, compiler, registry
 from numba.core.caching import NullCache, FunctionCache
@@ -11,6 +12,10 @@ from numba.core.dispatcher import _FunctionCompiler
 from numba.core.typing import signature
 from numba.core.typing.ctypes_utils import to_ctypes
 from numba.core.compiler_lock import global_compiler_lock
+
+
+_CompileStats = collections.namedtuple(
+    '_CompileStats', ('cache_path', 'cache_hits', 'cache_misses'))
 
 
 class _CFuncCompiler(_FunctionCompiler):
@@ -54,6 +59,7 @@ class CFunc(object):
         self._wrapper_address = None
         self._cache = NullCache()
         self._cache_hits = 0
+        self._cache_misses = 0
 
     def enable_caching(self):
         self._cache = FunctionCache(self._pyfunc)
@@ -66,6 +72,7 @@ class CFunc(object):
         if cres is None:
             cres = self._compile_uncached()
             self._cache.save_overload(self._sig, cres)
+            self._cache_misses += 1
         else:
             self._cache_hits += 1
 
@@ -127,8 +134,20 @@ class CFunc(object):
     def cache_hits(self):
         return self._cache_hits
 
+    @property
+    def cache_misses(self):
+        return self._cache_misses
+
     def __repr__(self):
         return "<Numba C callback %r>" % (self.__qualname__,)
 
     def __call__(self, *args, **kwargs):
         return self._pyfunc(*args, **kwargs)
+
+    @property
+    def stats(self):
+        return _CompileStats(
+            cache_path=self._cache.cache_path,
+            cache_hits=self._cache_hits,
+            cache_misses=self._cache_misses,
+        )
