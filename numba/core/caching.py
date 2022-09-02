@@ -770,21 +770,19 @@ def make_library_cache(prefix):
     return LibraryCache
 
 
+# list of types for which the cache invalidatio is extended to their
+# definitions
 dep_types = (types.Dispatcher, )
 
 
 def get_function_dependencies(overload: "CompileResult"
                               ) -> pt.Dict[str, FileStamp]:
+    """ Returns functions on which the overload depends, and their file stamps
+
+    Not every function dependency is returned. The list of types returned
+    if found being called by the overload are in ``dep_types`` global.
+    """
     deps = {}
-    # for ty in overload.type_annotation.typemap.values():
-    #     if not isinstance(ty, dep_types):
-    #         continue
-    #     if isinstance(ty, types.Dispatcher):
-    #         py_func = ty.dispatcher.py_func
-    #         py_file = py_func.__code__.co_filename
-    #         deps[py_file] = get_source_stamp(py_file)
-    #
-    #         deps.update(ty.dispatcher.cache_index_key())
     if not isinstance(overload, CompileResult):
         return {}
     typemap = overload.type_annotation.typemap
@@ -792,7 +790,7 @@ def get_function_dependencies(overload: "CompileResult"
     for call_op in calltypes:
         name = call_op.list_vars()[0].name
         if name not in typemap:
-            # for parfor generated callsites which do not have a type
+            # for parfor generated callables which cannot be found in  typemap
             continue
         fc_ty = typemap[name]
         sig = calltypes[call_op]
