@@ -967,6 +967,22 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                                         None, _size, None,
                                         0)
 
+    def test_shuffle_empty(self):
+        a = np.array([])
+        b = np.array([])
+
+        def dist_func(x, arr):
+            x.shuffle(arr)
+            return arr
+
+        nb_func = numba.njit(dist_func)
+        rng = lambda: np.random.default_rng(1)
+
+        np.testing.assert_equal(dist_func(rng(), a), nb_func(rng(), b))
+
+    def test_shuffle_check(self):
+        self.disable_leak_check()
+
         def dist_func(x, arr, axis):
             x.shuffle(arr, axis=axis)
             return arr
@@ -1001,6 +1017,9 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                                         None, _size, None,
                                         0)
 
+    def test_permutation_exception(self):
+        self.disable_leak_check()
+
         def dist_func(x, arr, axis):
             return x.permutation(arr, axis=axis)
 
@@ -1014,6 +1033,18 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             'Axis is out of bounds for the given array',
             str(raises.exception)
         )
+
+    def test_permutation_empty(self):
+        a = np.array([])
+        b = np.array([])
+
+        def dist_func(x, arr):
+            return x.permutation(arr)
+
+        nb_func = numba.njit(dist_func)
+        rng = lambda: np.random.default_rng(1)
+
+        np.testing.assert_equal(dist_func(rng(), a), nb_func(rng(), b))
 
 
 class TestGeneratorCaching(TestCase, SerialMixin):
