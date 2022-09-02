@@ -1202,7 +1202,7 @@ class TestCachingModifiedFilesBase(DispatcherCacheUsecasesTest):
         self.check_hits(fc, 0, 2)
 
 
-class TestCachingModifiedFiles2(TestCachingModifiedFilesBase):
+class TestCachingModifiedFiles(TestCachingModifiedFilesBase):
     # This class tests a dispatcher calling another dispatcher which later
     # changes. Both functions have cache=True
 
@@ -1237,7 +1237,7 @@ def function2(x):
         self.execute_fc_and_change_it(inner_cached=True)
 
 
-class TestCachingModifiedFiles3(TestCachingModifiedFilesBase):
+class TestCachingModifiedFiles2(TestCachingModifiedFilesBase):
     # This class tests a dispatcher calling another dispatcher which later
     # changes. Only the main function has cache=True
     source_text_file1 = """
@@ -1272,7 +1272,7 @@ def function2(x):
         self.execute_fc_and_change_it(inner_cached=False)
 
 
-class TestCachingModifiedFiles4(TestCachingModifiedFilesBase):
+class TestCachingModifiedFiles3(TestCachingModifiedFilesBase):
     # This class tests a cfunc calling a dispatcher which later
     # changes. Only the main function has cache=True
     source_text_file1 = """

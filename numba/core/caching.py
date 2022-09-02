@@ -31,8 +31,11 @@ from numba.core.serialize import dumps
 
 MagicTuple = pt.Tuple
 # IndexKey : sig, codege.magictuple, hashed code, hashed cells
-# IndexKey = pt.Tuple[pt.Tuple[types.Type], MagicTuple, pt.Tuple[str, str]]
-IndexKey = pt.Tuple[Signature, MagicTuple, pt.Tuple[str, str]]
+# the sig argument sometimes is a Signature and sometimes a tuple of types
+IndexKey = pt.Tuple[pt.Union[Signature, pt.Tuple[types.Type]],
+                    MagicTuple,
+                    pt.Tuple[str, str]
+]
 
 # FileStamp: tuple of file timestamp and file size
 FileStamp = pt.Tuple[float, int]
@@ -515,7 +518,7 @@ class IndexDataCacheFile(object):
             # File could have been removed while the index still refers it.
             return
 
-    def load_deps(self,  key: IndexKey) ->  pt.Dict[str, FileStamp]:
+    def load_deps(self,  key: IndexKey) -> pt.Dict[str, FileStamp]:
         """
         Load the cached dependencies' FileStamps for the given key
         """
