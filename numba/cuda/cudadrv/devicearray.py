@@ -610,6 +610,9 @@ class DeviceNDArray(DeviceNDArrayBase):
         Flatten the array without changing its contents, similar to
         :meth:`numpy.ndarray.ravel`.
         '''
+        if self.ndim <= 1:
+            return self
+
         stream = self._default_stream(stream)
         cls = type(self)
         newarr, extents = self._dummy.ravel(order=order)

@@ -40,6 +40,17 @@ class TestArrayAttr(CUDATestCase):
         self.assertTrue(not dcary.is_f_contiguous())
         self.assertTrue(dfary.is_f_contiguous())
 
+    def test_ravel_1d(self):
+        ary = np.arange(60)
+        dary = cuda.to_device(ary)
+        for order in 'CFA':
+            expect = ary.ravel(order=order)
+            dflat = dary.ravel(order=order)
+            flat = dflat.copy_to_host()
+
+            self.assertEqual(flat.ndim, 1)
+            self.assertPreciseEqual(expect, flat)
+
     def test_ravel_c(self):
         ary = np.arange(60)
         reshaped = ary.reshape(2, 5, 2, 3)
