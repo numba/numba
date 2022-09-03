@@ -356,7 +356,7 @@ class TestCachingModifiedFilesBase(BaseCacheTest):
 
 
 class TestCachingModifiedFiles(TestCachingModifiedFilesBase):
-    # This class tests a dispatcher calling another dispatcher which later
+    # This class tests a ufunc calling a dispatcher which later
     # changes. Both functions have cache=True
 
     source_text_file1 = """
@@ -394,7 +394,7 @@ def indirect_ufunc_core2(inp):
 
 
 class TestCachingModifiedFiles2(TestCachingModifiedFilesBase):
-    # This class tests a dispatcher calling another dispatcher which later
+    # This class tests a ufunc calling a dispatcher which later
     # changes. Only outer function has cache=True
 
     source_text_file1 = """
@@ -423,6 +423,43 @@ def indirect_ufunc_core1(inp):
     return inp + 1
 
 @njit
+def indirect_ufunc_core2(inp):
+    return inp + 1
+"""
+
+    def test_invalidation(self, ):
+        self.execute_fc_and_change_it(inner_cached=False)
+
+class TestCachingModifiedFiles3(TestCachingModifiedFilesBase):
+    # This class tests a ufunc calling another ufunc which later
+    # changes. Only outer function has cache=True
+
+    source_text_file1 = """
+from numba import vectorize
+from file2 import indirect_ufunc_core2
+
+@vectorize(["intp(intp)", "float64(float64)"], cache=True)
+def ufunc(inp):
+    return indirect_ufunc_core2(inp)
+"""
+    source_text_file2 = """
+from numba import vectorize
+@vectorize(["intp(intp)", "float64(float64)"])
+def indirect_ufunc_core1(inp):
+    return inp
+
+@vectorize(["intp(intp)", "float64(float64)"])
+def indirect_ufunc_core2(inp):
+    return inp
+"""
+
+    source_text_file2_alt = """
+from numba import vectorize
+@vectorize(["intp(intp)", "float64(float64)"])
+def indirect_ufunc_core1(inp):
+    return inp + 1
+
+@vectorize(["intp(intp)", "float64(float64)"])
 def indirect_ufunc_core2(inp):
     return inp + 1
 """

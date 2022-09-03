@@ -865,10 +865,11 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         self._cache = FunctionCache(self.py_func)
 
     @functools.lru_cache()
-    def cache_deps_info(self, sig_args) -> pt.Dict[str, FileStamp]:
+    def cache_deps_info(self, sig) -> pt.Dict[str, FileStamp]:
         """Hash the code of its function, the closure variables and add them
         to the respective hashes of all its function dependencies
         """
+        sig_args = sig.args
         if isinstance(self.overloads[sig_args].type_annotation, str):
             # we assume this is because the function was loaded from cache
             deps = self._cache.load_cached_deps(sig_args, self.targetctx)
@@ -1330,10 +1331,10 @@ class ObjModeLiftedWith(LiftedWith):
         return super().compile(sig)
 
     @functools.lru_cache()
-    def cache_deps_info(self, sig_args) -> pt.Dict[str, FileStamp]:
-        """Hash the code of its function, the closure variables and add them
-        to the respective hashes of all its function dependencies
+    def cache_deps_info(self, sig) -> pt.Dict[str, FileStamp]:
+        """ Returns the FileStamp of every dependency of this function
         """
+        sig_args = sig.args
         if isinstance(self.overloads[sig_args].type_annotation, str):
             # we assume this is because the function was loaded from cache
             deps = self._cache.load_cached_deps(sig_args, self.targetctx)

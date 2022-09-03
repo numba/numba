@@ -781,7 +781,26 @@ def make_library_cache(prefix):
 
 # list of types for which the cache invalidatio is extended to their
 # definitions
-dep_types = (types.Dispatcher, )
+dep_types = (types.Dispatcher, types.Function)
+
+
+def get_dispatcher(fc_ty: pt.Union[types.Dispatcher, types.Function]):
+    """ Retrieve the dispatcher out of a function-like numba type
+    :param fc_ty:
+    :return:
+    """
+    if isinstance(fc_ty, types.Dispatcher):
+        dispatcher = fc_ty.dispatcher
+    elif isinstance(fc_ty, types.Function):
+        if hasattr(fc_ty, "key") and hasattr(fc_ty.key[0], "_dispatcher"):
+            dispatcher = fc_ty.key[0]._dispatcher
+        else:
+            # a type of Function with a dispatcher associated. Probably an
+            # overload of a built-in
+            return None
+    else:
+        raise TypeError
+    return dispatcher
 
 
 def get_function_dependencies(overload: OverloadData
@@ -805,11 +824,13 @@ def get_function_dependencies(overload: OverloadData
         sig = calltypes[call_op]
         if not isinstance(fc_ty, dep_types):
             continue
-        if isinstance(fc_ty, types.Dispatcher):
-            py_func = fc_ty.dispatcher.py_func
-            py_file = py_func.__code__.co_filename
-            deps[py_file] = get_source_stamp(py_file)
-            deps.update(fc_ty.dispatcher.cache_deps_info(sig.args))
+        dispatcher = get_dispatcher(fc_ty)
+        if dispatcher is None:
+            continue
+        py_func = dispatcher.py_func
+        py_file = py_func.__code__.co_filename
+        deps[py_file] = get_source_stamp(py_file)
+        deps.update(dispatcher.cache_deps_info(sig))
     return deps
 
 
