@@ -1290,7 +1290,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
     def test_mutability_after_ravel(self):
         # Reproduces another suggested problem in Issue #8370
         # Namely that ravel should only return a writable array
-        # if a copy took place... otherwise leave it as it is
+        # if a copy took place... otherwise leave it as it is.
         self.disable_leak_check()
         a_c = np.arange(9).reshape((3, 3)).copy()
         a_f = a_c.copy(order='F')
