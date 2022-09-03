@@ -16,7 +16,6 @@ import tempfile
 import uuid
 import warnings
 import typing as pt
-from typeguard import typechecked
 
 from numba.core.typing import Signature
 from numba.misc.appdirs import AppDirs
@@ -714,7 +713,6 @@ class Cache(_Cache):
             # No such conditions under non-Windows OSes
             yield
 
-    @typechecked
     def _index_key(self, sig, codegen) -> IndexKey:
         """
         Compute index key for the given signature and codegen.
