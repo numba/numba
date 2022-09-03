@@ -23,7 +23,7 @@ from numba.misc.appdirs import AppDirs
 import numba
 from numba.core.errors import NumbaWarning
 from numba.core.base import BaseContext
-from numba.core.codegen import CodeLibrary
+from numba.core.codegen import CodeLibrary, JITCodeLibrary
 from numba.core.compiler import CompileResult
 from numba.core import config, compiler, types
 from numba.core.serialize import dumps
@@ -32,11 +32,11 @@ from numba.core.serialize import dumps
 MagicTuple = pt.Tuple
 # IndexKey : sig, codege.magictuple, hashed code, hashed cells
 # the sig argument sometimes is a Signature and sometimes a tuple of types
-IndexKey = pt.Tuple[pt.Union[Signature, pt.Tuple[types.Type, ...], str],
+SignatureLike = pt.Union[Signature, pt.Tuple[types.Type, ...], str]
+IndexKey = pt.Tuple[SignatureLike,
                     MagicTuple,
                     pt.Tuple[str, str]
 ]
-
 # FileStamp: tuple of file timestamp and file size
 FileStamp = pt.Tuple[float, int]
 # IndexData: Tuple[ filename for cached code, Dict of file names to FileStamps
@@ -46,6 +46,9 @@ IndexOverloadData = pt.Tuple[str, pt.Dict[str, FileStamp]]
 IndexData = pt.Tuple[pt.Tuple[float, int], IndexOverloadData]
 # This is the output of CompileResult._reduce
 ReducedCompileResult = pt.Tuple
+# CompileResult
+OverloadData = pt.Union[JITCodeLibrary, CompileResult]
+
 
 def _cache_log(msg, *args):
     if config.DEBUG_CACHE:
@@ -679,14 +682,17 @@ class Cache(_Cache):
             data = self._impl.rebuild(target_context, data)
         return data
 
-    def save_overload(self, sig, data: "CompileResult"):
+    def save_overload(self, sig: SignatureLike, data: OverloadData):
         """
         Save the data for the given signature in the cache.
+
+        sig: numba types of input arguments as one of SignatureLike instances
+        data: object containing compiled code to be cached
         """
         with self._guard_against_spurious_io_errors():
             self._save_overload(sig, data)
 
-    def _save_overload(self, sig, data):
+    def _save_overload(self, sig: SignatureLike, data: OverloadData):
         if not self._enabled:
             return
         if not self._impl.check_cachable(data):
@@ -713,7 +719,7 @@ class Cache(_Cache):
             # No such conditions under non-Windows OSes
             yield
 
-    def _index_key(self, sig, codegen) -> IndexKey:
+    def _index_key(self, sig: SignatureLike, codegen) -> IndexKey:
         """
         Compute index key for the given signature and codegen.
         It includes a description of the OS, target architecture and hashes of
@@ -778,7 +784,7 @@ def make_library_cache(prefix):
 dep_types = (types.Dispatcher, )
 
 
-def get_function_dependencies(overload: "CompileResult"
+def get_function_dependencies(overload: OverloadData
                               ) -> pt.Dict[str, FileStamp]:
     """ Returns functions on which the overload depends, and their file stamps
 
