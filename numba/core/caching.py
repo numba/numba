@@ -33,9 +33,8 @@ MagicTuple = pt.Tuple
 # IndexKey : sig, codege.magictuple, hashed code, hashed cells
 # the sig argument sometimes is a Signature and sometimes a tuple of types
 SignatureLike = pt.Union[Signature, pt.Tuple[types.Type, ...], str]
-IndexKey = pt.Tuple[SignatureLike,
-                    MagicTuple,
-                    pt.Tuple[str, str]
+IndexKey = pt.Tuple[
+    SignatureLike, MagicTuple, pt.Tuple[str, str]
 ]
 # FileStamp: tuple of file timestamp and file size
 FileStamp = pt.Tuple[float, int]
@@ -555,7 +554,7 @@ class IndexDataCacheFile(object):
             return overloads
 
     def _save_index(self, overloads: pt.Dict[IndexKey, IndexOverloadData]):
-        data: IndexData # for python 3.7, otherwise put in next line
+        data: IndexData  # for python 3.7, otherwise put in next line
         data = self._source_stamp, overloads
         data = self._dump(data)
         with self._open_for_write(self._index_path) as f:

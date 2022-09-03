@@ -430,6 +430,7 @@ def indirect_ufunc_core2(inp):
     def test_invalidation(self, ):
         self.execute_fc_and_change_it(inner_cached=False)
 
+
 class TestCachingModifiedFiles3(TestCachingModifiedFilesBase):
     # This class tests a ufunc calling another ufunc which later
     # changes. Only outer function has cache=True
