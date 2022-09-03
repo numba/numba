@@ -16,6 +16,7 @@ import tempfile
 import uuid
 import warnings
 import typing as pt
+from typeguard import typechecked
 
 from numba.core.typing import Signature
 from numba.misc.appdirs import AppDirs
@@ -32,7 +33,7 @@ from numba.core.serialize import dumps
 MagicTuple = pt.Tuple
 # IndexKey : sig, codege.magictuple, hashed code, hashed cells
 # the sig argument sometimes is a Signature and sometimes a tuple of types
-IndexKey = pt.Tuple[pt.Union[Signature, pt.Tuple[types.Type, ...]],
+IndexKey = pt.Tuple[pt.Union[Signature, pt.Tuple[types.Type, ...], str],
                     MagicTuple,
                     pt.Tuple[str, str]
 ]
@@ -713,6 +714,7 @@ class Cache(_Cache):
             # No such conditions under non-Windows OSes
             yield
 
+    @typechecked
     def _index_key(self, sig, codegen) -> IndexKey:
         """
         Compute index key for the given signature and codegen.
