@@ -483,6 +483,9 @@ class ArrayAttribute(AttributeTemplate):
         # Only support no argument version (default order='C')
         assert not kws
         assert not args
+        # Just like in Numpy: "np.copy clears previously
+        # set WRITEABLE=False flag"
+        # Numba also sets readonly=False (b/c flatten returns a copy())
         return signature(ary.copy(ndim=1, layout='C', readonly=False))
 
     @bound_function("array.take")
