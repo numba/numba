@@ -475,7 +475,7 @@ class ArrayAttribute(AttributeTemplate):
         assert not kws
         assert not args
         copy_will_be_made = ary.layout != 'C'
-        readonly = not copy_will_be_made
+        readonly = not (copy_will_be_made or ary.mutable)
         return signature(ary.copy(ndim=1, layout='C', readonly=readonly))
 
     @bound_function("array.flatten")
