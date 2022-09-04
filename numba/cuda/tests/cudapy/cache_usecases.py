@@ -135,6 +135,59 @@ def ambiguous_function(r, x):
 renamed_function2 = CUDAUseCase(ambiguous_function)
 
 
+@cuda.jit(cache=True)
+def many_locals():
+    aa = cuda.local.array((1, 1), np.float64)
+    ab = cuda.local.array((1, 1), np.float64)
+    ac = cuda.local.array((1, 1), np.float64)
+    ad = cuda.local.array((1, 1), np.float64)
+    ae = cuda.local.array((1, 1), np.float64)
+    af = cuda.local.array((1, 1), np.float64)
+    ag = cuda.local.array((1, 1), np.float64)
+    ah = cuda.local.array((1, 1), np.float64)
+    ai = cuda.local.array((1, 1), np.float64)
+    aj = cuda.local.array((1, 1), np.float64)
+    ak = cuda.local.array((1, 1), np.float64)
+    al = cuda.local.array((1, 1), np.float64)
+    am = cuda.local.array((1, 1), np.float64)
+    an = cuda.local.array((1, 1), np.float64)
+    ao = cuda.local.array((1, 1), np.float64)
+    ap = cuda.local.array((1, 1), np.float64)
+    ar = cuda.local.array((1, 1), np.float64)
+    at = cuda.local.array((1, 1), np.float64)
+    au = cuda.local.array((1, 1), np.float64)
+    av = cuda.local.array((1, 1), np.float64)
+    aw = cuda.local.array((1, 1), np.float64)
+    ax = cuda.local.array((1, 1), np.float64)
+    ay = cuda.local.array((1, 1), np.float64)
+    az = cuda.local.array((1, 1), np.float64)
+
+    aa[:] = 0
+    ab[:] = 0
+    ac[:] = 0
+    ad[:] = 0
+    ae[:] = 0
+    af[:] = 0
+    ag[:] = 0
+    ah[:] = 0
+    ai[:] = 0
+    aj[:] = 0
+    ak[:] = 0
+    al[:] = 0
+    am[:] = 0
+    an[:] = 0
+    ao[:] = 0
+    ap[:] = 0
+    ar[:] = 0
+    at[:] = 0
+    au[:] = 0
+    av[:] = 0
+    aw[:] = 0
+    ax[:] = 0
+    ay[:] = 0
+    az[:] = 0
+
+
 # Simple use case for multiprocessing test
 
 @cuda.jit(cache=True)
