@@ -445,7 +445,7 @@ def zero_dim_msg(fn_name):
 
 @overload(np.min)
 @overload_method(types.Array, "min")
-def npy_min(x, axis=None):
+def npy_min(x):
     if isinstance(x.dtype, (types.NPDatetime, types.NPTimedelta)):
         pre_return_func = njit(lambda x: np.isnat(x))
         comparator = njit(lambda x, min_val: x < min_val)
@@ -490,7 +490,7 @@ def npy_min(x, axis=None):
 
 @overload(np.max)
 @overload_method(types.Array, "max")
-def npy_max(x, axis=None):
+def npy_max(x):
     if isinstance(x.dtype, (types.NPDatetime, types.NPTimedelta)):
         pre_return_func = njit(lambda x: np.isnat(x))
         comparator = njit(lambda x, max_val: x > max_val)
