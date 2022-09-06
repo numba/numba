@@ -439,7 +439,7 @@ def array_std(x):
 
 def zero_dim_msg(fn_name):
     msg = ("zero-size array to reduction operation "
-           "{0} which has no identity".format(fn_name))
+           f"{fn_name} which has no identity")
     return msg
 
 
@@ -468,9 +468,11 @@ def npy_min(x):
         pre_return_func = njit(lambda x: False)
         comparator = njit(lambda x, min_val: x < min_val)
 
+    fail_str = zero_dim_msg("minimum")
+
     def impl_min(x):
         if x.size == 0:
-            raise ValueError(zero_dim_msg("minimum"))
+            raise ValueError(fail_str)
 
         it = np.nditer(x)
         min_value = next(it).take(0)
@@ -513,9 +515,11 @@ def npy_max(x):
         pre_return_func = njit(lambda x: False)
         comparator = njit(lambda x, max_val: x > max_val)
 
+    fail_str = zero_dim_msg("maximum")
+
     def impl_max(x):
         if x.size == 0:
-            raise ValueError(zero_dim_msg("maximum"))
+            raise ValueError(fail_str)
 
         it = np.nditer(x)
         max_value = next(it).take(0)
