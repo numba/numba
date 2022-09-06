@@ -238,6 +238,7 @@ class TestOperatorModule(CUDATestCase):
 
         self.assertIn('abs.f16', ptx)
 
+    @skip_unless_cc_53
     def test_fp16_comparison(self):
         functions = (simple_fp16_gt, simple_fp16_ge,
                      simple_fp16_lt, simple_fp16_le,
