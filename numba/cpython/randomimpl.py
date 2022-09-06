@@ -193,7 +193,8 @@ def get_next_int(context, builder, state_ptr, nbits, is_numpy):
                 high = get_shifted_int(builder.sub(nbits, c32))
             total = builder.add(
                 builder.zext(low, int64_t),
-                builder.shl(builder.zext(high, int64_t), ir.Constant(int64_t, 32)))
+                builder.shl(builder.zext(high, int64_t),
+                            ir.Constant(int64_t, 32)))
             builder.store(total, ret)
 
     return builder.load(ret)
@@ -247,7 +248,7 @@ def random_impl0():
         def codegen(context, builder, sig, args):
             state_ptr = get_state_ptr(context, builder, "np")
             return get_next_double(context, builder, state_ptr)
-        return signature(types.double), codegen
+        return signature(types.float64), codegen
     return lambda: _impl()
 
 
@@ -273,7 +274,8 @@ def random_impl1(size):
 @overload(random.gauss)
 @overload(random.normalvariate)
 def gauss_impl(loc, scale):
-    if isinstance(loc, types.Number) and isinstance(scale, types.Number):
+    if isinstance(loc, (types.Float, types.Integer)) and isinstance(
+            scale, (types.Float, types.Integer)):
         @intrinsic
         def _impl(typingcontext, loc, scale):
             loc_preprocessor = _double_preprocessor(loc)
@@ -291,13 +293,14 @@ def np_gauss_impl0():
 
 @overload(np.random.normal)
 def np_gauss_impl1(loc):
-    if isinstance(loc, types.Number):
+    if isinstance(loc, (types.Float, types.Integer)):
         return lambda loc: np.random.normal(loc, 1.0)
 
 
 @overload(np.random.normal)
 def np_gauss_impl2(loc, scale):
-    if isinstance(loc, types.Number) and isinstance(scale, types.Number):
+    if isinstance(loc, (types.Float, types.Integer)) and isinstance(
+            scale, (types.Float, types.Integer)):
         @intrinsic
         def _impl(typingcontext, loc, scale):
             loc_preprocessor = _double_preprocessor(loc)
@@ -313,7 +316,7 @@ def standard_normal_impl1(size):
         return lambda size: np.random.standard_normal()
     if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                            isinstance(size.dtype,
-                                                     types.Integer)):
+                                                      types.Integer)):
         def _impl(size):
             out = np.empty(size)
             out_flat = out.flat
@@ -325,10 +328,12 @@ def standard_normal_impl1(size):
 
 @overload(np.random.normal)
 def np_gauss_impl3(loc, scale, size):
-    if (isinstance(loc, types.Number) and isinstance(scale, types.Number) and
+    if (isinstance(loc, (types.Float, types.Integer)) and isinstance(
+            scale, (types.Float, types.Integer)) and
        is_nonelike(size)):
         return lambda loc, scale, size: np.random.normal(loc, scale)
-    if (isinstance(loc, types.Number) and isinstance(scale, types.Number) and
+    if (isinstance(loc, (types.Float, types.Integer)) and isinstance(
+            scale, (types.Float, types.Integer)) and
        (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
                                             and isinstance(size.dtype,
                                                            types.Integer)))):
@@ -601,10 +606,7 @@ def np_randint_impl_3(low, high, size):
                                             and isinstance(size.dtype,
                                                            types.Integer)))):
         bitwidth = max(low.bitwidth, high.bitwidth)
-        result_type = {8: np.int8,
-                       16: np.int16,
-                       32: np.int32,
-                       64: np.int64}[bitwidth]
+        result_type = getattr(np, f'int{bitwidth}')
 
         def _impl(low, high, size):
             out = np.empty(size, dtype=result_type)
@@ -627,19 +629,20 @@ def np_uniform_impl0():
 
 @overload(random.uniform)
 def uniform_impl1(low):
-    if isinstance(low, types.Number):
+    if isinstance(low, (types.Float, types.Integer)):
         return lambda low: random.uniform(low, 1.0)
 
 
 @overload(np.random.uniform)
 def np_uniform_impl1(low):
-    if isinstance(low, types.Number):
+    if isinstance(low, (types.Float, types.Integer)):
         return lambda low: np.random.uniform(low, 1.0)
 
 
 @overload(random.uniform)
 def uniform_impl2(low, high):
-    if isinstance(low, types.Number) and isinstance(high, types.Number):
+    if isinstance(low, (types.Float, types.Integer)) and isinstance(
+            high, (types.Float, types.Integer)):
         @intrinsic
         def _impl(typingcontext, low, high):
             low_preprocessor = _double_preprocessor(low)
@@ -651,7 +654,8 @@ def uniform_impl2(low, high):
 
 @overload(np.random.uniform)
 def np_uniform_impl2(low, high):
-    if isinstance(low, types.Number) and isinstance(high, types.Number):
+    if isinstance(low, (types.Float, types.Integer)) and isinstance(
+            high, (types.Float, types.Integer)):
         @intrinsic
         def _impl(typingcontext, low, high):
             low_preprocessor = _double_preprocessor(low)
@@ -675,10 +679,12 @@ def uniform_impl(state, a_preprocessor, b_preprocessor):
 
 @overload(np.random.uniform)
 def np_uniform_impl3(low, high, size):
-    if (isinstance(low, types.Number) and isinstance(high, types.Number) and
+    if (isinstance(low, (types.Float, types.Integer)) and isinstance(
+            high, (types.Float, types.Integer)) and
        is_nonelike(size)):
         return lambda low, high, size: np.random.uniform(low, high)
-    if (isinstance(low, types.Number) and isinstance(high, types.Number) and
+    if (isinstance(low, (types.Float, types.Integer)) and isinstance(
+            high, (types.Float, types.Integer)) and
        (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
                                             and isinstance(size.dtype,
                                                            types.Integer)))):
@@ -701,14 +707,16 @@ def triangular_impl_2(low, high):
             low, high = high, low
         return low + (high - low) * math.sqrt(u * c)
 
-    if isinstance(low, types.Number) and isinstance(high, types.Number):
+    if isinstance(low, (types.Float, types.Integer)) and isinstance(
+            high, (types.Float, types.Integer)):
         return _impl
 
 
 @overload(random.triangular)
 def triangular_impl_3(low, high, mode):
-    if (isinstance(low, types.Number) and isinstance(high, types.Number) and
-       isinstance(mode, types.Number)):
+    if (isinstance(low, (types.Float, types.Integer)) and isinstance(
+            high, (types.Float, types.Integer)) and
+       isinstance(mode, (types.Float, types.Integer))):
         def _impl(low, high, mode):
             if high == low:
                 return low
@@ -725,8 +733,9 @@ def triangular_impl_3(low, high, mode):
 
 @overload(np.random.triangular)
 def triangular_impl_3(low, mode, high):
-    if (isinstance(low, types.Number) and isinstance(mode, types.Number) and
-            isinstance(high, types.Number)):
+    if (isinstance(low, (types.Float, types.Integer)) and isinstance(
+            mode, (types.Float, types.Integer)) and
+            isinstance(high, (types.Float, types.Integer))):
         def _impl(low, mode, high):
             if high == low:
                 return low
@@ -760,20 +769,22 @@ def triangular_impl(low, high, mode, size):
 
 @overload(random.gammavariate)
 def gammavariate_impl(alpha, beta):
-    if isinstance(alpha, types.Number) and isinstance(beta, types.Number):
+    if isinstance(alpha, (types.Float, types.Integer)) and isinstance(
+            beta, (types.Float, types.Integer)):
         return _gammavariate_impl(random.random)
 
 
 @overload(np.random.standard_gamma)
 @overload(np.random.gamma)
 def gammavariate_impl(alpha):
-    if isinstance(alpha, types.Number):
+    if isinstance(alpha, (types.Float, types.Integer)):
         return lambda alpha: np.random.gamma(alpha, 1.0)
 
 
 @overload(np.random.gamma)
 def gammavariate_impl(alpha, beta):
-    if isinstance(alpha, types.Number) and isinstance(beta, types.Number):
+    if isinstance(alpha, (types.Float, types.Integer)) and isinstance(
+            beta, (types.Float, types.Integer)):
         return _gammavariate_impl(np.random.random)
 
 
@@ -876,13 +887,15 @@ def standard_gamma_impl(alpha, size):
 
 @overload(random.betavariate)
 def betavariate_impl(alpha, beta):
-    if isinstance(alpha, types.Number) and isinstance(beta, types.Number):
+    if isinstance(alpha, (types.Float, types.Integer)) and isinstance(
+            beta, (types.Float, types.Integer)):
         return _betavariate_impl(random.gammavariate)
 
 
 @overload(np.random.beta)
 def betavariate_impl(alpha, beta):
-    if isinstance(alpha, types.Number) and isinstance(beta, types.Number):
+    if isinstance(alpha, (types.Float, types.Integer)) and isinstance(
+            beta, (types.Float, types.Integer)):
         return _betavariate_impl(np.random.gamma)
 
 
@@ -934,7 +947,7 @@ def expovariate_impl(lambd):
 
 @overload(np.random.exponential)
 def exponential_impl(scale):
-    if isinstance(scale, types.Number):
+    if isinstance(scale, (types.Float, types.Integer)):
         def _impl(scale):
             return -math.log(1.0 - np.random.random()) * scale
         return _impl
@@ -988,13 +1001,14 @@ def np_lognormal_impl0():
 
 @overload(np.random.lognormal)
 def np_log_normal_impl1(mu):
-    if isinstance(mu, types.Number):
+    if isinstance(mu, (types.Float, types.Integer)):
         return lambda mu: np.random.lognormal(mu, 1.0)
 
 
 @overload(np.random.lognormal)
 def np_log_normal_impl2(mu, sigma):
-    if isinstance(mu, types.Number) and isinstance(sigma, types.Number):
+    if isinstance(mu, (types.Float, types.Integer)) and isinstance(
+            sigma, (types.Float, types.Integer)):
         return _lognormvariate_impl(np.random.normal)
 
 
@@ -1065,7 +1079,8 @@ def pareto_impl(alpha, size):
 
 @overload(random.weibullvariate)
 def weibullvariate_impl(alpha, beta):
-    if isinstance(alpha, types.Number) and isinstance(beta, types.Number):
+    if isinstance(alpha, (types.Float, types.Integer)) and isinstance(
+            beta, (types.Float, types.Integer)):
         def _impl(alpha, beta):
             """Weibull distribution.  Taken from CPython."""
             # Jain, pg. 499; bug fix courtesy Bill Arms
@@ -1077,7 +1092,7 @@ def weibullvariate_impl(alpha, beta):
 
 @overload(np.random.weibull)
 def weibull_impl(beta):
-    if isinstance(beta, types.Number):
+    if isinstance(beta, (types.Float, types.Integer)):
         def _impl(beta):
             # Same as weibullvariate(1.0, beta)
             u = 1.0 - np.random.random()
@@ -1176,7 +1191,8 @@ def vonmises_impl(mu, kappa, size):
 
 @overload(np.random.binomial)
 def binomial_impl(n, p):
-    if isinstance(n, types.Integer) and isinstance(p, types.Number):
+    if isinstance(n, types.Integer) and isinstance(
+            p, (types.Float, types.Integer)):
         def _impl(n, p):
             """
             Binomial distribution.  Numpy's variant of the BINV algorithm
@@ -1247,7 +1263,7 @@ def binomial_impl(n, p, size):
 
 @overload(np.random.chisquare)
 def chisquare_impl(df):
-    if isinstance(df, types.Number):
+    if isinstance(df, (types.Float, types.Integer)):
         def _impl(df):
             return 2.0 * np.random.standard_gamma(df / 2.0)
 
@@ -1272,7 +1288,8 @@ def chisquare_impl2(p, size):
 
 @overload(np.random.f)
 def f_impl(num, denom):
-    if isinstance(num, types.Number) and isinstance(denom, types.Number):
+    if isinstance(num, (types.Float, types.Integer)) and isinstance(
+            denom, (types.Float, types.Integer)):
         def _impl(num, denom):
             return ((np.random.chisquare(num) * denom) /
                     (np.random.chisquare(denom) * num))
@@ -1282,7 +1299,8 @@ def f_impl(num, denom):
 
 @overload(np.random.f)
 def f_impl(num, denom, size):
-    if (isinstance(num, types.Number) and isinstance(denom, types.Number) and
+    if (isinstance(num, (types.Float, types.Integer)) and isinstance(
+            denom, (types.Float, types.Integer)) and
        is_nonelike(size)):
         return lambda num, denom, size: np.random.f(num, denom)
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
@@ -1299,7 +1317,7 @@ def f_impl(num, denom, size):
 
 @overload(np.random.geometric)
 def geometric_impl(p):
-    if isinstance(p, types.Number):
+    if isinstance(p, (types.Float, types.Integer)):
         def _impl(p):
             # Numpy's algorithm.
             if p <= 0.0 or p > 1.0:
@@ -1339,7 +1357,8 @@ def geometric_impl(p, size):
 
 @overload(np.random.gumbel)
 def gumbel_impl(loc, scale):
-    if isinstance(loc, types.Number) and isinstance(scale, types.Number):
+    if isinstance(loc, (types.Float, types.Integer)) and isinstance(
+            scale, (types.Float, types.Integer)):
         def _impl(loc, scale):
             U = 1.0 - np.random.random()
             return loc - scale * math.log(-math.log(U))
@@ -1365,8 +1384,9 @@ def gumbel_impl3(loc, scale, size):
 
 @overload(np.random.hypergeometric)
 def hypergeometric_impl(ngood, nbad, nsamples):
-    if (isinstance(ngood, types.Number) and isinstance(nbad, types.Number)
-       and isinstance(nsamples, types.Number)):
+    if (isinstance(ngood, (types.Float, types.Integer)) and isinstance(
+            nbad, (types.Float, types.Integer))
+       and isinstance(nsamples, (types.Float, types.Integer))):
         def _impl(ngood, nbad, nsamples):
             """Numpy's algorithm for hypergeometric()."""
             d1 = int(nbad) + int(ngood) - int(nsamples)
@@ -1410,13 +1430,14 @@ def laplace_impl0():
 
 @overload(np.random.laplace)
 def laplace_impl1(loc):
-    if isinstance(loc, types.Number):
+    if isinstance(loc, (types.Float, types.Integer)):
         return lambda loc: np.random.laplace(loc, 1.0)
 
 
 @overload(np.random.laplace)
 def laplace_impl2(loc, scale):
-    if isinstance(loc, types.Number) and isinstance(scale, types.Number):
+    if isinstance(loc, (types.Float, types.Integer)) and isinstance(
+            scale, (types.Float, types.Integer)):
         return laplace_impl
 
 
@@ -1451,13 +1472,14 @@ def logistic_impl0():
 
 @overload(np.random.logistic)
 def logistic_impl1(loc):
-    if isinstance(loc, types.Number):
+    if isinstance(loc, (types.Float, types.Integer)):
         return lambda loc: np.random.logistic(loc, 1.0)
 
 
 @overload(np.random.logistic)
 def logistic_impl2(loc, scale):
-    if isinstance(loc, types.Number) and isinstance(scale, types.Number):
+    if isinstance(loc, (types.Float, types.Integer)) and isinstance(
+            scale, (types.Float, types.Integer)):
         return logistic_impl
 
 
@@ -1505,7 +1527,7 @@ def _logseries_impl(p):
 
 @overload(np.random.logseries)
 def logseries_impl(p):
-    if isinstance(p, types.Number):
+    if isinstance(p, (types.Float, types.Integer)):
         return _logseries_impl
 
 
@@ -1527,7 +1549,8 @@ def logseries_impl(p, size):
 
 @overload(np.random.negative_binomial)
 def negative_binomial_impl(n, p):
-    if isinstance(n, types.Integer) and isinstance(p, types.Number):
+    if isinstance(n, types.Integer) and isinstance(
+            p,(types.Float, types.Integer)):
         def _impl(n, p):
             if n <= 0:
                 raise ValueError("negative_binomial(): n <= 0")
@@ -1546,7 +1569,7 @@ def poisson_impl0():
 
 @overload(np.random.poisson)
 def poisson_impl1(lam):
-    if isinstance(lam, types.Number):
+    if isinstance(lam, (types.Float, types.Integer)):
         @intrinsic
         def _impl(typingcontext, lam):
             lam_preprocessor = _double_preprocessor(lam)
@@ -1560,7 +1583,8 @@ def poisson_impl1(lam):
 
                 lam, = args
                 lam = lam_preprocessor(builder, lam)
-                big_lam = builder.fcmp_ordered('>=', lam, ir.Constant(double, 10.0))
+                big_lam = builder.fcmp_ordered('>=', lam,
+                                               ir.Constant(double, 10.0))
                 with builder.if_then(big_lam):
                     # For lambda >= 10.0, we switch to a more accurate
                     # algorithm (see _random.c).
@@ -1582,9 +1606,9 @@ def poisson_impl1(lam):
                     """Numpy's algorithm for poisson() on small *lam*.
 
                     This method is invoked only if the parameter lambda of the
-                    distribution is small ( < 10 ). The algorithm used is described
-                    in "Knuth, D. 1969. 'Seminumerical Algorithms. The Art of
-                    Computer Programming' vol 2.
+                    distribution is small ( < 10 ). The algorithm used is
+                    described in "Knuth, D. 1969. 'Seminumerical Algorithms.
+                    The Art of Computer Programming' vol 2.
                     """
                     if lam < 0.0:
                         raise ValueError("poisson(): lambda < 0")
@@ -1611,9 +1635,10 @@ def poisson_impl1(lam):
 
 @overload(np.random.poisson)
 def poisson_impl2(lam, size):
-    if isinstance(lam, types.Number) and is_nonelike(size):
+    if isinstance(lam, (types.Float, types.Integer)) and is_nonelike(size):
         return lambda lam, size: np.random.poisson(lam)
-    if isinstance(lam, types.Number) and (isinstance(size, types.Integer) or
+    if isinstance(lam, (types.Float, types.Integer)) and (
+            isinstance(size, types.Integer) or
        (isinstance(size, types.UniTuple) and isinstance(size.dtype,
                                                         types.Integer))
     ):
@@ -1628,7 +1653,7 @@ def poisson_impl2(lam, size):
 
 @overload(np.random.power)
 def power_impl(a):
-    if isinstance(a, types.Number):
+    if isinstance(a, (types.Float, types.Integer)):
         def _impl(a):
             if a <= 0.0:
                 raise ValueError("power(): a <= 0")
@@ -1661,7 +1686,7 @@ def rayleigh_impl0():
 
 @overload(np.random.rayleigh)
 def rayleigh_impl1(mode):
-    if isinstance(mode, types.Number):
+    if isinstance(mode, (types.Float, types.Integer)):
         return rayleigh_impl
 
 
@@ -1713,7 +1738,7 @@ def standard_cauchy_impl(size):
 
 @overload(np.random.standard_t)
 def standard_t_impl(df):
-    if isinstance(df, types.Number):
+    if isinstance(df, (types.Float, types.Integer)):
         def _impl(df):
             N = np.random.standard_normal()
             G = np.random.standard_gamma(df / 2.0)
@@ -2151,7 +2176,8 @@ def dirichlet_arr(alpha, out):
 
 @overload(np.random.noncentral_chisquare)
 def noncentral_chisquare(df, nonc):
-    if isinstance(df, types.Number) and isinstance(nonc, types.Number):
+    if isinstance(df, (types.Float, types.Integer)) and isinstance(
+            nonc, (types.Float, types.Integer)):
         def noncentral_chisquare_impl(df, nonc):
             validate_noncentral_chisquare_input(df, nonc)
             return noncentral_chisquare_single(df, nonc)
