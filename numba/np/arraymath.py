@@ -368,10 +368,15 @@ def array_prod(arr):
 @overload(np.cumsum)
 @overload_method(types.Array, "cumsum")
 def array_cumsum(arr):
+    is_integer = arr.dtype in types.signed_domain | frozenset([types.bool_])
 
     def array_cumsum_impl(arr):
-        out = np.empty(arr.size, arr.dtype)
-        c = 0
+        if is_integer:
+            dtype = np.intp
+        else:
+            dtype = arr.dtype
+        out = np.empty(arr.size, dtype)
+        c = np.zeros(1, dtype)[0]
         for idx, v in enumerate(arr.flat):
             c += v
             out[idx] = c
@@ -383,10 +388,15 @@ def array_cumsum(arr):
 @overload(np.cumprod)
 @overload_method(types.Array, "cumprod")
 def array_cumprod(arr):
+    is_integer = arr.dtype in types.signed_domain | frozenset([types.bool_])
 
     def array_cumprod_impl(arr):
-        out = np.empty(arr.size, arr.dtype)
-        c = 1
+        if is_integer:
+            dtype = np.intp
+        else:
+            dtype = arr.dtype
+        out = np.empty(arr.size, dtype)
+        c = np.ones(1, dtype)[0]
         for idx, v in enumerate(arr.flat):
             c *= v
             out[idx] = c
@@ -398,11 +408,16 @@ def array_cumprod(arr):
 @overload(np.mean)
 @overload_method(types.Array, "mean")
 def array_mean(arr):
+    is_number = arr.dtype in types.integer_domain | frozenset([types.bool_])
 
     def array_mean_impl(arr):
         # Can't use the naive `arr.sum() / arr.size`, as it would return
         # a wrong result on integer sum overflow.
-        c = 0
+        if is_number:
+            dtype = types.float64
+        else:
+            dtype = arr.dtype
+        c = np.zeros(1, dtype)[0]
         for v in np.nditer(arr):
             c += v.item()
         return c / arr.size
@@ -481,8 +496,8 @@ def npy_min(x):
 
         for view in it:
             v = view.item()
-            if pre_return_func(min_value):
-                return min_value
+            if pre_return_func(v):
+                return v
             if comparator(v, min_value):
                 min_value = v
         return min_value
@@ -528,8 +543,8 @@ def npy_max(x):
 
         for view in it:
             v = view.item()
-            if pre_return_func(max_value):
-                return max_value
+            if pre_return_func(v):
+                return v
             if comparator(v, max_value):
                 max_value = v
         return max_value
