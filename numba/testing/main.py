@@ -11,6 +11,7 @@ import time
 import unittest
 import warnings
 
+from functools import cache
 from io import StringIO
 from unittest import result, runner, signals, suite, loader, case
 
@@ -53,6 +54,14 @@ def make_tag_decorator(known_tags):
     return tag
 
 
+@cache
+def _get_mtime(cls):
+    """
+    Gets the mtime of the file in which a test class is defined.
+    """
+    return str(os.path.getmtime(inspect.getfile(cls)))
+
+
 def cuda_sensitive_mtime(x):
     """
     Return a key for sorting tests bases on mtime and test name. For CUDA
@@ -62,7 +71,7 @@ def cuda_sensitive_mtime(x):
     mtime.
     """
     cls = x.__class__
-    key = str(os.path.getmtime(inspect.getfile(cls))) + str(x)
+    key = _get_mtime(cls) + str(x)
 
     from numba.cuda.testing import CUDATestCase
     if CUDATestCase in cls.mro():
