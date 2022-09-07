@@ -172,10 +172,14 @@ class TestCudaNDArray(CUDATestCase):
         array = cuda.to_device(original)[:, ::2]
         with self.assertRaises(ValueError) as e:
             array.view("i4")
-        self.assertEqual(
-            "To change to a dtype of a different size,"
-            " the array must be C-contiguous",
-            str(e.exception))
+
+        msg = str(e.exception)
+        self.assertIn('To change to a dtype of a different size,', msg)
+
+        contiguous_pre_np123 = 'the array must be C-contiguous' in msg
+        contiguous_post_np123 = 'the last axis must be contiguous' in msg
+        self.assertTrue(contiguous_pre_np123 or contiguous_post_np123,
+                        'Expected message to mention contiguity')
 
     def test_devicearray_view_bad_itemsize(self):
         original = np.array(np.arange(12), dtype="i2").reshape(4, 3)

@@ -19,8 +19,8 @@ from numba.core.compiler import compile_ir, DEFAULT_FLAGS
 from numba import njit, typeof, objmode, types
 from numba.core.extending import overload
 from numba.tests.support import (MemoryLeak, TestCase, captured_stdout,
-                                 skip_unless_scipy, needs_strace, linux_only,
-                                 strace)
+                                 skip_unless_scipy, linux_only,
+                                 strace_supported, strace)
 from numba.core.utils import PYVERSION
 from numba.experimental import jitclass
 import unittest
@@ -1226,7 +1226,6 @@ class TestMisc(TestCase):
     _numba_parallel_test_ = False
 
     @linux_only
-    @needs_strace
     @TestCase.run_test_in_subprocess
     def test_no_fork_in_compilation(self):
         # Checks that there is no fork/clone/execve during compilation, see
@@ -1234,6 +1233,10 @@ class TestMisc(TestCase):
         # call that triggered #7881 occurs on the first call to uuid1 as it's
         # part if the initialisation process for that function (gets hardware
         # address of machine).
+
+        if not strace_supported():
+            # Needs strace support.
+            self.skipTest("strace support missing")
 
         def force_compile():
             @njit('void()') # force compilation
