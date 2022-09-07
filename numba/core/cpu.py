@@ -39,14 +39,27 @@ class CPUContext(BaseContext):
     def __init__(self, typingctx, target='cpu'):
         super().__init__(typingctx, target)
 
+    @property
+    def _internal_codegen(self):
+        # Only need the lock whilst this isn't set up
+        if self._internal_codegen_ref is None:
+            with global_compiler_lock:
+                # make sure another thread hasn't set the state whilst the lock
+                # was blocking.
+                if self._internal_codegen_ref is None:
+                    self._internal_codegen_ref = \
+                        codegen.JITCPUCodegen("numba.exec")
+        return self._internal_codegen_ref
+
     # Overrides
     def create_module(self, name):
         return self._internal_codegen._create_empty_module(name)
 
     @global_compiler_lock
     def init(self):
+        self._nrt_initialized = False
         self.is32bit = (utils.MACHINE_BITS == 32)
-        self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
+        self._internal_codegen_ref = None
 
         # Add ARM ABI functions from libgcc_s
         if platform.machine() == 'armv7l':
@@ -54,9 +67,6 @@ class CPUContext(BaseContext):
 
         # Map external C functions.
         externals.c_math_functions.install(self)
-
-        # Initialize NRT runtime
-        rtsys.initialize(self)
 
         # Add lower_extension attribute
         self.lower_extensions = {}
@@ -66,6 +76,15 @@ class CPUContext(BaseContext):
         self.lower_extensions[Parfor] = _lower_parfor_parallel
 
     def load_additional_registries(self):
+        # Only initialize the NRT once something is about to be compiled. The
+        # "initialized" state doesn't need to be threadsafe, there's a lock
+        # around the internal compilation and the rtsys.initialize call can be
+        # made multiple times, worse case this just gets called a bit more often
+        # than optimal.
+        if not self._nrt_initialized:
+            rtsys.initialize(self)
+            self._nrt_initialized = True
+
         # Add implementations that work via import
         from numba.cpython import (builtins, charseq, enumimpl, hashing, heapq,
                                    iterators, listobj, numbers, rangeobj,
