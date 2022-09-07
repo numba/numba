@@ -978,7 +978,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         nb_func = numba.njit(dist_func)
         rng = lambda: np.random.default_rng(1)
 
-        np.testing.assert_equal(dist_func(rng(), a), nb_func(rng(), b))
+        self.assertPreciseEqual(dist_func(rng(), a), nb_func(rng(), b))
 
     def test_shuffle_check(self):
         self.disable_leak_check()
@@ -1017,6 +1017,14 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                                         None, _size, None,
                                         0)
 
+        # Test that permutation is actually done on a copy of the array
+        dist_func = numba.njit(lambda rng, arr: rng.permutation(arr))
+        rng = np.random.default_rng()
+        arr = rng.random(size=(10, 20))
+        arr_cpy = arr.copy()
+        dist_func(rng, arr)
+        self.assertPreciseEqual(arr, arr_cpy)
+
     def test_permutation_exception(self):
         self.disable_leak_check()
 
@@ -1044,7 +1052,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         nb_func = numba.njit(dist_func)
         rng = lambda: np.random.default_rng(1)
 
-        np.testing.assert_equal(dist_func(rng(), a), nb_func(rng(), b))
+        self.assertPreciseEqual(dist_func(rng(), a), nb_func(rng(), b))
 
 
 class TestGeneratorCaching(TestCase, SerialMixin):

@@ -22,7 +22,6 @@ from numba.np.random.distributions import \
      random_geometric, random_zipf, random_triangular,
      random_poisson, random_negative_binomial)
 from numba.np.random import random_methods
-from numba.cpython.unsafe.tuple import tuple_setitem
 
 
 def _get_proper_func(func_32, func_64, dtype, dist_name="the given"):
@@ -175,22 +174,22 @@ def NumPyRandomGeneratorType_integers(inst, low, high, size=None,
 def NumPyRandomGeneratorType_shuffle(inst, x, axis=0):
     check_types(x, [types.Array], 'x')
     check_types(axis, [int, types.Integer], 'axis')
-    axis_impl = tuple([slice(None, None)] * x.ndim)
 
     def impl(inst, x, axis=0):
         if axis > x.ndim - 1:
             raise IndexError("Axis is out of bounds for the given array")
-        for i in range(x.shape[axis] - 1, 0, -1):
+
+        z = np.swapaxes(x, 0, axis)
+        buf = np.empty_like(z[0, ...])
+
+        for i in range(len(z) - 1, 0, -1):
             j = types.intp(random_methods.random_interval(inst.bit_generator,
                                                           i))
             if i == j:
                 continue
-            axis_impl1 = tuple_setitem(axis_impl, axis, slice(i, i + 1))
-            axis_impl2 = tuple_setitem(axis_impl, axis, slice(j, j + 1))
-
-            buffer = np.copy(x[axis_impl2])
-            x[axis_impl2] = np.copy(x[axis_impl1])
-            x[axis_impl1] = buffer
+            buf[...] = z[j, ...]
+            z[j, ...] = z[i, ...]
+            z[i, ...] = buf
 
     return impl
 
