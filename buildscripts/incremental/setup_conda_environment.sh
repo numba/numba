@@ -63,7 +63,11 @@ if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # Only install scipy on 64bit, else it'll pull in NumPy, 32bit linux needs
     # to get scipy from pip
     if [[ "$CONDA_SUBDIR" != "linux-32" && "$BITS32" != "yes" ]] ; then
-        $CONDA_INSTALL ${EXTRA_CHANNELS} scipy
+        if [[ "$NUMPY" == "1.23" ]] ; then
+            $CONDA_INSTALL ${EXTRA_CHANNELS} conda-forge::scipy
+        else
+            $CONDA_INSTALL ${EXTRA_CHANNELS} scipy
+        fi
     fi
 fi
 
