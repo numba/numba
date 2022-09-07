@@ -524,6 +524,15 @@ def ptx_hfma(context, builder, sig, args):
     return builder.call(asm, args)
 
 
+@lower(operator.truediv, types.float16, types.float16)
+@lower(operator.itruediv, types.float16, types.float16)
+def fp16_div_impl(context, builder, sig, args):
+    def fp16_div(x, y):
+        return cuda.fp16.hdiv(x, y)
+
+    return context.compile_internal(builder, fp16_div, sig, args, )
+
+
 _fp16_cmp = """{{
           .reg .pred __$$f16_cmp_tmp;
           setp.{op}.f16 __$$f16_cmp_tmp, $1, $2;
