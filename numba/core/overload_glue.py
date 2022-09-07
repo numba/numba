@@ -253,17 +253,6 @@ class _Gluer:
                 self._registered[key] = wrapper
                 return wrapper
 
-    def defer_lowering(self, key, lower_fn):
-        """Defer lowering of the given key and lowering function.
-        """
-        with self._lock:
-            if key in self._no_defer:
-                # Key is marked as no defer, register lowering now
-                lower_fn()
-            else:
-                # Defer
-                self._deferred[key].append(lower_fn)
-
     def add_no_defer(self, key):
         """Stop lowering to be deferred for the given key.
         """
@@ -288,21 +277,3 @@ def glue_typing(concrete_function, typing_key=None):
     'concrete_function', it's a text-only replacement for '@infer_global'"""
     return _overload_glue(concrete_function,
                           typing_key=typing_key).wrap_typing()
-
-
-def glue_lowering(*args):
-    """This is a decorator for wrapping the implementation (lowering) part for
-    a concrete function. 'args[0]' is the concrete_function, 'args[1:]' are the
-    types the lowering will accept. This acts as a text-only replacement for
-    '@lower/@lower_builtin'"""
-
-    def wrap(fn):
-        key = args[0]
-
-        def real_call():
-            glue = _overload_glue(args[0], typing_key=key)
-            return glue.wrap_impl(*args[1:])(fn)
-
-        _overload_glue.defer_lowering(key, real_call)
-        return fn
-    return wrap
