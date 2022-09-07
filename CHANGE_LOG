@@ -21,6 +21,15 @@ Pull-Requests:
 * PR `#8413 <https://github.com/numba/numba/pull/8413>`_: Fix Azure CI for NumPy 1.23 and use conda-forge scipy (`Siu Kwan Lam <https://github.com/sklam>`_)
 * PR `#8414 <https://github.com/numba/numba/pull/8413>`_: Hotfix for 0.56.2 (`Siu Kwan Lam <https://github.com/sklam>`_)
 
+Authors:
+
+* `Andre Masella <https://github.com/apmasell>`_
+* `esc <https://github.com/esc>`_
+* `Graham Markall <https://github.com/gmarkall>`_
+* `jamesobutler <https://github.com/jamesobutler>`_
+* `Siu Kwan Lam <https://github.com/sklam>`_
+* `stuartarchibald <https://github.com/stuartarchibald>`_
+
 Version 0.56.1 (NO RELEASE)
 ----------------------------------
 
