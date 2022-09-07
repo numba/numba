@@ -717,6 +717,10 @@ class TestNrtStatistics(TestCase):
         def foo():
             return np.arange(10)[0]
 
+        # Need to init the NRT via compilation due to lazy init on jit
+        # decoration.
+        foo()
+
         assert _nrt_python.memsys_stats_enabled()
         orig_stats = rtsys.get_allocation_stats()
         foo()
