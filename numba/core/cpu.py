@@ -51,6 +51,13 @@ class CPUContext(BaseContext):
                         codegen.JITCPUCodegen("numba.exec")
         return self._internal_codegen_ref
 
+    @_internal_codegen.setter
+    def _internal_codegen(self, value):
+        # subtarget creation often replaces the codegen, see the code in
+        # BaseContext.subtarget() which is essentially creating a shallow copy
+        # of this class with given attrs overwritten.
+        self._internal_codegen_ref = value
+
     # Overrides
     def create_module(self, name):
         return self._internal_codegen._create_empty_module(name)
