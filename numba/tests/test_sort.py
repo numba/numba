@@ -831,6 +831,11 @@ class TestNumpySort(TestCase):
             orig = np.random.random(size=size) * 100
             orig[np.random.random(size=size) < 0.1] = float('nan')
             yield orig
+        # 90% of values are NaNs.
+        for size in (50, 500):
+            orig = np.random.random(size=size) * 100
+            orig[np.random.random(size=size) < 0.9] = float('nan')
+            yield orig
 
     def has_duplicates(self, arr):
         """
