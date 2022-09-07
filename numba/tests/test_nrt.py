@@ -83,7 +83,7 @@ class TestNrtMemInfo(unittest.TestCase):
         # Reset the Dummy class
         Dummy.alive = 0
         # initialize the NRT (in case the tests are run in isolation)
-        cpu_target.target_context
+        rtsys.initialize(cpu_target.target_context)
 
     def test_meminfo_refct_1(self):
         d = Dummy()
