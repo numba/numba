@@ -351,14 +351,7 @@ def random_interval(bitgen, max_val):
         return 0
 
     max_val = uint64(max_val)
-    mask = uint64(max_val)
-
-    mask |= mask >> 1
-    mask |= mask >> 2
-    mask |= mask >> 4
-    mask |= mask >> 8
-    mask |= mask >> 16
-    mask |= mask >> 32
+    mask = uint64(gen_mask(max_val))
 
     if (max_val <= 0xffffffff):
         value = uint64(next_uint32(bitgen)) & mask
