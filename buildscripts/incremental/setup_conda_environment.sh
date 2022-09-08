@@ -22,7 +22,7 @@ fi
 
 
 # Deactivate any environment
-conda deactivate
+source deactivate
 # Display root environment (for debugging)
 conda list
 
