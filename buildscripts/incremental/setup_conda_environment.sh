@@ -96,9 +96,12 @@ if [ "${VANILLA_INSTALL}" != "yes" ]; then
     if [ "$RUN_TYPEGUARD" == "yes" ]; then
         EXTRA_CONDA_PACKAGES+=(conda-forge::typeguard)
     fi
-    EXTRA_CONDA_PACKAGES_AS_LIST=$(printf "%s " "${EXTRA_CONDA_PACKAGES[@]}")
-    echo "Running: $CONDA_INSTALL $EXTRA_CHANNELS $EXTRA_CONDA_PACKAGES_AS_LIST"
-    $CONDA_INSTALL $EXTRA_CHANNELS $EXTRA_CONDA_PACKAGES_AS_LIST
+    # If there were some extra packages defined then install them
+    if [[ ${#EXTRA_CONDA_PACKAGES[@]} != 0 ]]; then
+        EXTRA_CONDA_PACKAGES_AS_LIST=$(printf "%s " "${EXTRA_CONDA_PACKAGES[@]}")
+        echo "Running: $CONDA_INSTALL $EXTRA_CHANNELS $EXTRA_CONDA_PACKAGES_AS_LIST"
+        $CONDA_INSTALL $EXTRA_CHANNELS $EXTRA_CONDA_PACKAGES_AS_LIST
+    fi
 fi
 
 # Install rstcheck to check RST file changes
