@@ -11,7 +11,7 @@ import time
 import unittest
 import warnings
 
-from functools import cache
+from functools import lru_cache
 from io import StringIO
 from unittest import result, runner, signals, suite, loader, case
 
@@ -54,7 +54,12 @@ def make_tag_decorator(known_tags):
     return tag
 
 
-@cache
+# Chances are the next queried class is the same as the previous, locally 128
+# entries seems to be fastest.
+# Current number of test classes can be found with:
+# $ ./runtests.py -l|sed -e 's/\(.*\)\..*/\1/'|grep ^numba|sort|uniq|wc -l
+# as of writing it's 658.
+@lru_cache(maxsize=128)
 def _get_mtime(cls):
     """
     Gets the mtime of the file in which a test class is defined.
