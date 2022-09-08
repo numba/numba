@@ -62,7 +62,8 @@ elif  [[ $(uname) == Darwin ]]; then
 fi
 
 # Install latest correct build
-CONDA_INSTALL_ARGS+=(-c numba/label/dev llvmlite=0.40)
+EXTRA_CHANNELS="-c numba/label/dev ${EXTRA_CHANNELS}"
+CONDA_INSTALL_ARGS+=(llvmlite=0.40)
 
 # Install importlib-metadata for Python < 3.9
 if [ $PYTHON \< "3.9" ]; then CONDA_INSTALL_ARGS+=(importlib_metadata); fi
