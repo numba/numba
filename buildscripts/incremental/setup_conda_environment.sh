@@ -82,4 +82,5 @@ if [ "$TEST_PICKLE5" == "yes" ]; then $PIP_INSTALL pickle5; fi
 if [ "$RUN_TYPEGUARD" == "yes" ]; then CONDA_INSTALL_ARGS+=(conda-forge::typeguard); fi
 
 CONDA_ARGS_AS_LIST=$(printf "%s " "${CONDA_INSTALL_ARGS[@]}")
+echo "Running: $CONDA_INSTALL $EXTRA_CHANNELS $CONDA_ARGS_AS_LIST"
 $CONDA_INSTALL $EXTRA_CHANNELS $CONDA_ARGS_AS_LIST
