@@ -13,6 +13,7 @@ conda info
 conda config --show
 
 CONDA_CREATE="conda create -n ${CONDA_ENV} -q -y"
+CONDA_INSTALL="conda install -q -y"
 PIP_INSTALL="pip install -q"
 
 EXTRA_CHANNELS=""
@@ -44,9 +45,8 @@ if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # ipykernel is used for testing ipython behaviours.
     CONDA_PACKAGES+=(cffi jinja2 ipython ipykernel pygments pexpect)
 
-    if [[ "$NUMPY" == "1.23" ]] ; then
-        CONDA_PACKAGES+=(conda-forge::scipy)
-    else
+    # NumPy 1.23 needs a conda-forge SciPy package, this is installed later.
+    if [[ "$NUMPY" != "1.23" ]] ; then
         CONDA_PACKAGES+=(scipy)
     fi
 fi
@@ -81,11 +81,20 @@ CONDA_PACKAGES_AS_LIST=$(printf "%s " "${CONDA_PACKAGES[@]}")
 echo "Running: $CONDA_CREATE $EXTRA_CHANNELS $CONDA_PACKAGES_AS_LIST"
 $CONDA_CREATE $EXTRA_CHANNELS $CONDA_PACKAGES_AS_LIST
 
-# Anything pip related goes last, conda env solution must be installed first
-# Activate env so pip installs things into the right place.
+# Anything pip related goes last, conda env solution must be installed first.
+# Activate env such that installation of extra packages is into the env.
 set +v
 source activate $CONDA_ENV
 set -v
+
+# Install conda-forge packages after the main solve so as to have a more
+# controlled environment.
+if [ "${VANILLA_INSTALL}" != "yes" ]; then
+    if [[ "$NUMPY" == "1.23" ]] ; then
+        $CONDA_INSTALL conda-forge::scipy
+    fi
+fi
+
 # Install rstcheck to check RST file changes
 if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL rstcheck; fi
 # Install dependencies for code coverage (codecov.io)
