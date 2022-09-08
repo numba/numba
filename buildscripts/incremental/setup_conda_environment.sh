@@ -74,8 +74,6 @@ if [ "$BUILD_DOC" == "yes" ]; then CONDA_PACKAGES+=(sphinx=2.4.4 docutils=0.17 s
 if [ "$TEST_SVML" == "yes" ]; then CONDA_PACKAGES+=(icc_rt); fi
 # Install Intel TBB parallel backend
 if [ "$TEST_THREADING" == "tbb" ]; then CONDA_PACKAGES+=(tbb=2021 tbb-devel); fi
-# Install typeguard
-if [ "$RUN_TYPEGUARD" == "yes" ]; then CONDA_PACKAGES+=(conda-forge::typeguard); fi
 
 CONDA_PACKAGES_AS_LIST=$(printf "%s " "${CONDA_PACKAGES[@]}")
 echo "Running: $CONDA_CREATE $EXTRA_CHANNELS $CONDA_PACKAGES_AS_LIST"
@@ -89,10 +87,18 @@ set -v
 
 # Install conda-forge packages after the main solve so as to have a more
 # controlled environment.
+EXTRA_CONDA_PACKAGES=()
 if [ "${VANILLA_INSTALL}" != "yes" ]; then
     if [[ "$NUMPY" == "1.23" ]] ; then
-        $CONDA_INSTALL conda-forge::scipy
+        EXTRA_CONDA_PACKAGES+=(conda-forge::scipy)
     fi
+    # Install typeguard
+    if [ "$RUN_TYPEGUARD" == "yes" ]; then
+        EXTRA_CONDA_PACKAGES+=(conda-forge::typeguard)
+    fi
+    EXTRA_CONDA_PACKAGES_AS_LIST=$(printf "%s " "${EXTRA_CONDA_PACKAGES[@]}")
+    echo "Running: $CONDA_INSTALL $EXTRA_CHANNELS $EXTRA_CONDA_PACKAGES_AS_LIST"
+    $CONDA_INSTALL $EXTRA_CHANNELS $EXTRA_CONDA_PACKAGES_AS_LIST
 fi
 
 # Install rstcheck to check RST file changes
