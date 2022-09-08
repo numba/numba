@@ -22,7 +22,7 @@ fi
 
 
 # Deactivate any environment
-source deactivate
+conda deactivate
 # Display root environment (for debugging)
 conda list
 
@@ -33,11 +33,6 @@ conda list
 # NOTE: gitpython is needed for CI testing to do the test slicing
 # NOTE: pyyaml is used to ensure that the Azure CI config is valid
 CONDA_INSTALL_ARGS=(python=$PYTHON numpy=$NUMPY pip gitpython pyyaml "\"setuptools<60\"")
-
-# Activate first
-set +v
-source activate $CONDA_ENV
-set -v
 
 # Install optional packages into activated env
 echo "PYTHON=$PYTHON"
@@ -88,9 +83,3 @@ if [ "$RUN_TYPEGUARD" == "yes" ]; then CONDA_INSTALL_ARGS+=(conda-forge::typegua
 
 CONDA_ARGS_AS_LIST=$(printf "%s " "${CONDA_INSTALL_ARGS[@]}")
 $CONDA_INSTALL $EXTRA_CHANNELS $CONDA_ARGS_AS_LIST
-
-# environment dump for debug
-# echo "DEBUG ENV:"
-# echo "-------------------------------------------------------------------------"
-# conda env export
-# echo "-------------------------------------------------------------------------"
