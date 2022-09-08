@@ -940,7 +940,7 @@ class TestRandomArrays(BaseTest):
         argstring = ', '.join('abcd'[:nargs])
         return jit_with_args(qualname, argstring)
 
-    def _check_array_dist(self, funcname, scalar_args, old=False):
+    def _check_array_dist(self, funcname, scalar_args):
         """
         Check returning an array according to a given distribution.
         """
@@ -956,14 +956,10 @@ class TestRandomArrays(BaseTest):
                 and got.dtype == np.dtype('int64')):
                 expected = expected.astype(got.dtype)
             self.assertPreciseEqual(expected, got, prec='double', ulps=5)
-        # The old glue lowering for array randomness didn't handle None
-        # properly, so it fails on unmigrated distributions. Once migrated,
-        # remove this logic.
-        if not old:
-            args = scalar_args + (None,)
-            expected = pyfunc(*args)
-            got = cfunc(*args)
-            self.assertPreciseEqual(expected, got, prec='double', ulps=5)
+        args = scalar_args + (None,)
+        expected = pyfunc(*args)
+        got = cfunc(*args)
+        self.assertPreciseEqual(expected, got, prec='double', ulps=5)
 
     def _check_array_dist_gamma(self, funcname,  scalar_args, extra_pyfunc_args):
         """
@@ -1104,13 +1100,13 @@ class TestRandomArrays(BaseTest):
         self._check_array_dist("logseries", (0.8,))
 
     def test_numpy_normal(self):
-        self._check_array_dist("normal", (0.5, 2.0), old=True)
+        self._check_array_dist("normal", (0.5, 2.0))
 
     def test_numpy_pareto(self):
         self._check_array_dist("pareto", (0.5,))
 
     def test_numpy_poisson(self):
-        self._check_array_dist("poisson", (0.8,), old=True)
+        self._check_array_dist("poisson", (0.8,))
 
     def test_numpy_power(self):
         self._check_array_dist("power", (0.8,))
@@ -1140,13 +1136,13 @@ class TestRandomArrays(BaseTest):
         self._check_array_dist_gamma("standard_gamma", (2.0,), (1.0,))
 
     def test_numpy_standard_normal(self):
-        self._check_array_dist("standard_normal", (), old=True)
+        self._check_array_dist("standard_normal", ())
 
     def test_numpy_triangular(self):
         self._check_array_dist("triangular", (1.5, 2.2, 3.5))
 
     def test_numpy_uniform(self):
-        self._check_array_dist("uniform", (0.1, 0.4), old=True)
+        self._check_array_dist("uniform", (0.1, 0.4))
 
     def test_numpy_wald(self):
         self._check_array_dist("wald", (0.1, 0.4))
