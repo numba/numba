@@ -4402,6 +4402,7 @@ def numpy_take(a, indices):
 
     if all(isinstance(arg, types.Array) for arg in [a, indices]):
         F_order = indices.layout == 'F'
+
         def take_impl(a, indices):
             ret = np.empty(indices.size, dtype=a.dtype)
             if F_order:
