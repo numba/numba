@@ -589,30 +589,6 @@ def _infer_dtype_from_inputs(inputs):
     return dtype
 
 
-@glue_typing(np.linspace)
-class NdLinspace(AbstractTemplate):
-
-    def generic(self, args, kws):
-        assert not kws
-        bounds = args[:2]
-        if not all(isinstance(arg, types.Number) for arg in bounds):
-            return
-        if len(args) >= 3:
-            num = args[2]
-            if not isinstance(num, types.Integer):
-                return
-        if len(args) >= 4:
-            # Not supporting the other arguments as it would require
-            # keyword arguments for reasonable use.
-            return
-        if any(isinstance(arg, types.Complex) for arg in bounds):
-            dtype = types.complex128
-        else:
-            dtype = types.float64
-        return_type = types.Array(ndim=1, dtype=dtype, layout='C')
-        return signature(return_type, *args)
-
-
 @glue_typing(np.frombuffer)
 class NdFromBuffer(CallableTemplate):
 
@@ -1118,27 +1094,6 @@ class DiagCtor(CallableTemplate):
         return typer
 
 
-@glue_typing(np.take)
-class Take(AbstractTemplate):
-
-    def generic(self, args, kws):
-        if kws:
-            raise NumbaAssertionError("kws not supported")
-        if len(args) != 2:
-            raise NumbaAssertionError("two arguments are required")
-        arr, ind = args
-        if isinstance(ind, types.Number):
-            retty = arr.dtype
-        elif isinstance(ind, types.Array):
-            retty = types.Array(ndim=ind.ndim, dtype=arr.dtype, layout='C')
-        elif isinstance(ind, types.List):
-            retty = types.Array(ndim=1, dtype=arr.dtype, layout='C')
-        elif isinstance(ind, types.BaseTuple):
-            retty = types.Array(ndim=np.ndim(ind), dtype=arr.dtype, layout='C')
-        else:
-            return None
-
-        return signature(retty, *args)
 
 # -----------------------------------------------------------------------------
 # Numba helpers
