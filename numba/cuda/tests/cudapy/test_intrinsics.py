@@ -281,10 +281,12 @@ class TestCudaIntrinsic(CUDATestCase):
         f_res = f_contigous()
         self.assertTrue(np.all(c_res == f_res))
 
+    @skip_on_cudasim('Cudasim does not check types')
     def test_nonliteral_grid_error(self):
         with self.assertRaisesRegex(TypingError, 'RequireLiteralValue'):
             cuda.jit('void(int32)')(nonliteral_grid)
 
+    @skip_on_cudasim('Cudasim does not check types')
     def test_nonliteral_gridsize_error(self):
         with self.assertRaisesRegex(TypingError, 'RequireLiteralValue'):
             cuda.jit('void(int32)')(nonliteral_gridsize)
