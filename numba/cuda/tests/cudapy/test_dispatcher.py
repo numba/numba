@@ -254,9 +254,9 @@ class TestDispatcher(CUDATestCase):
 
         # Fail to resolve ambiguity between the two best overloads
         # (Also deliberate float64[::1] for the first argument in all cases)
-        f = cuda.jit(["(float64[::1], float32,float64)",
-                      "(float64[::1], float64,float32)",
-                      "(float64[::1], int64,int64)"])(add_kernel)
+        f = cuda.jit(["(float64[::1], float32, float64)",
+                      "(float64[::1], float64, float32)",
+                      "(float64[::1], int64, int64)"])(add_kernel)
         with self.assertRaises(TypeError) as cm:
             r = np.zeros(1, dtype=np.float64)
             f[1, 1](r, 1.0, 2.0)
@@ -278,7 +278,7 @@ class TestDispatcher(CUDATestCase):
         # These tests are from test_explicit_signatures, but have to be xfail
         # at present because _prepare_args in the CUDA target cannot handle
         # unsafe conversions of arguments.
-        f = cuda.jit("(int64[::1], int64,int64)")(add_kernel)
+        f = cuda.jit("(int64[::1], int64, int64)")(add_kernel)
         r = np.zeros(1, dtype=np.int64)
 
         # Approximate match (unsafe conversion)
@@ -286,7 +286,7 @@ class TestDispatcher(CUDATestCase):
         self.assertPreciseEqual(r[0], 3)
         self.assertEqual(len(f.overloads), 1, f.overloads)
 
-        sigs = ["(int64[::1], int64,int64)", "(float64[::1], float64, float64)"]
+        sigs = ["(int64[::1], int64, int64)", "(float64[::1], float64, float64)"]
         f = cuda.jit(sigs)(add_kernel)
         r = np.zeros(1, dtype=np.float64)
         # Approximate match (int32 -> float64 is a safe conversion)
@@ -350,7 +350,7 @@ class TestDispatcher(CUDATestCase):
         # overloads when launching a kernel, but seems to be the general
         # behaviour of Numba (See Issue #8307:
         # https://github.com/numba/numba/issues/8307).
-        sigs = ["(float32,float64)", "(float64,float32)", "(int64,int64)"]
+        sigs = ["(float32, float64)", "(float64, float32)", "(int64, int64)"]
         f = self.add_device_usecase(sigs)
 
         r = np.zeros(1, dtype=np.float64)
