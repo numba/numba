@@ -1718,6 +1718,9 @@ class Interpreter(object):
     def op_PRECALL(self, inst):
         pass
 
+    def op_PUSH_NULL(self, inst):
+        pass
+
     def op_PRINT_ITEM(self, inst, item, printvar, res):
         item = self.get(item)
         printgv = ir.Global("print", print, loc=self.loc)
@@ -2698,6 +2701,15 @@ class Interpreter(object):
 
     def op_POP_JUMP_FORWARD_IF_FALSE(self, inst, pred):
         self._op_JUMP_IF(inst, pred=pred, iftrue=False)
+
+    def op_POP_JUMP_FORWARD_IF_TRUE(self, inst, pred):
+        self._op_JUMP_IF(inst, pred=pred, iftrue=True)
+
+    def op_POP_JUMP_BACKWARD_IF_FALSE(self, inst, pred):
+        self._op_JUMP_IF(inst, pred=pred, iftrue=False)
+
+    def op_POP_JUMP_BACKWARD_IF_TRUE(self, inst, pred):
+        self._op_JUMP_IF(inst, pred=pred, iftrue=True)
 
     def op_POP_JUMP_IF_FALSE(self, inst, pred):
         self._op_JUMP_IF(inst, pred=pred, iftrue=False)

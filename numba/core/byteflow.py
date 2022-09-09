@@ -297,6 +297,9 @@ class TraceRunner(object):
     def op_PRECALL(self, state, inst):
         state.append(inst)
 
+    def op_PUSH_NULL(self, state, inst):
+        state.append(inst)
+
     def op_FORMAT_VALUE(self, state, inst):
         """
         FORMAT_VALUE(flags): flags argument specifies format spec which is
@@ -649,13 +652,21 @@ class TraceRunner(object):
     def op_POP_JUMP_FORWARD_IF_FALSE(self, state, inst):
         self._op_POP_JUMP_IF(state, inst)
 
+    def op_POP_JUMP_FORWARD_IF_TRUE(self, state, inst):
+        self._op_POP_JUMP_IF(state, inst)
+
+    def op_POP_JUMP_BACKWARD_IF_FALSE(self, state, inst):
+        self._op_POP_JUMP_IF(state, inst)
+
+    def op_POP_JUMP_BACKWARD_IF_TRUE(self, state, inst):
+        self._op_POP_JUMP_IF(state, inst)
+
     def op_JUMP_FORWARD(self, state, inst):
         state.append(inst)
         state.fork(pc=inst.get_jump_target())
 
     def op_JUMP_BACKWARD(self, state, inst):
         state.append(inst)
-        print(inst)
         state.fork(pc=inst.get_jump_target())
 
     def op_JUMP_ABSOLUTE(self, state, inst):

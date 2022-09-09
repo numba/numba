@@ -91,7 +91,10 @@ class ByteCodeInst(object):
         # https://github.com/python/cpython/pull/25069
         assert self.is_jump
         if PYVERSION >= (3, 11):
-            if self.opcode == dis.opmap["JUMP_BACKWARD"]:
+            if self.opcode in (dis.opmap[k]
+                               for k in ("JUMP_BACKWARD",
+                                         "POP_JUMP_BACKWARD_IF_TRUE",
+                                         "POP_JUMP_BACKWARD_IF_FALSE")):
                 return self.offset - self.arg * 2
         if PYVERSION >= (3, 10):
             if self.opcode in JREL_OPS:
