@@ -17,8 +17,8 @@ class TestFunctionResolution(unittest.TestCase):
             typingctx.refresh()
             fnty = typingctx.resolve_value_type(op)
             out = typingctx.resolve_function_type(fnty, (fp16, fp16), {})
-            if out != typing.signature(fp16, fp16, fp16):
-                raise AssertionError(out)
+            self.assertEqual(out, typing.signature(fp16, fp16, fp16),
+                             msg=str(out))
 
     def test_fp16_unary_operators(self):
         from numba.cuda.descriptor import cuda_target
@@ -29,8 +29,7 @@ class TestFunctionResolution(unittest.TestCase):
             typingctx.refresh()
             fnty = typingctx.resolve_value_type(op)
             out = typingctx.resolve_function_type(fnty, (fp16,), {})
-            if out != typing.signature(fp16, fp16):
-                raise AssertionError(out)
+            self.assertEqual(out, typing.signature(fp16, fp16), msg=str(out))
 
 
 if __name__ == '__main__':
