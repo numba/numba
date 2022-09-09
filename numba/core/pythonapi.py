@@ -1360,12 +1360,7 @@ class PythonAPI(object):
         hashed = self.builder.extract_value(self.builder.load(structptr), 2)
         return self.builder.call(fn, (ptr, n, hashed))
 
-    def runtime_serialize(self, py_tuple):
-        fnty = ir.FunctionType(self.pyobj, (self.pyobj,))
-        fn = self._get_function(fnty, name="numba_pickle")
-        return self.builder.call(fn, (py_tuple,))
-
-    def runtime_serialize_exc_args(self, runtime_args, static_args):
+    def runtime_build_excinfo_struct(self, struct_gv, exc_args):
         """
         Serialize some data at runtime. Returns a pointer to a python tuple
         (bytes_data, hash) where the first element is the serialized data as
@@ -1374,8 +1369,8 @@ class PythonAPI(object):
         # Should one move this function to outside this file? Since this is not
         # actually part of the Python API
         fnty = ir.FunctionType(self.pyobj, (self.pyobj, self.pyobj))
-        fn = self._get_function(fnty, name="numba_runtime_serialize_exc_args")
-        return self.builder.call(fn, (runtime_args, static_args))
+        fn = self._get_function(fnty, name="numba_runtime_build_excinfo_struct")
+        return self.builder.call(fn, (struct_gv, exc_args))
 
     def serialize_uncached(self, obj):
         """

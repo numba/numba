@@ -1045,8 +1045,7 @@ error:
 #endif
 
 NUMBA_EXPORT_FUNC(PyObject *)
-numba_runtime_serialize_exc_args(PyObject* runtime_args,
-                                    PyObject* static_args_bytedata)
+numba_runtime_build_excinfo_struct(PyObject* struct_gv, PyObject* exc_args)
 {
     PyObject *obj = NULL;
     static PyObject *func = NULL;
@@ -1059,14 +1058,13 @@ numba_runtime_serialize_exc_args(PyObject* runtime_args,
         if (picklemod == NULL)
             return NULL;
         func = PyObject_GetAttrString(picklemod,
-                                      "runtime_serialize_exc_args");
+                                      "runtime_build_excinfo_struct");
         Py_DECREF(picklemod);
         if (func == NULL)
             return NULL;
     }
 
-    obj = PyObject_CallFunctionObjArgs(func, runtime_args,
-                                       static_args_bytedata, NULL);
+    obj = PyObject_CallFunctionObjArgs(func, struct_gv, exc_args, NULL);
     // func returns None on failure (i.e. can't serialize one of the args).
     // Is there a better way to handle this? raise an exception here?
     return obj;

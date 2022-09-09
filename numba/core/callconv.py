@@ -125,7 +125,7 @@ class BaseCallConv(object):
             # Make sure another error may not interfere.
             api.err_clear()
             exc = api.unserialize(status.excinfoptr)
-            api.print_object(exc)
+            # api.print_object(exc)
             ptr = builder.bitcast(status.excinfoptr, ir.IntType(8).as_pointer())
             # self.context.nrt.free(builder, ptr)
             with cgutils.if_likely(builder,
@@ -429,7 +429,7 @@ class CPUCallConv(BaseCallConv):
         pyapi = self.context.get_python_api(builder)
         exc = self.build_excinfo_struct(exc, exc_args, loc, func_name)
         excptr = self._get_excinfo_argument(builder.function)
-        struct_gv_ptr = pyapi.serialize_object(exc)  # {i8*, i32, i8*}*
+        struct_gv = builder.load(pyapi.serialize_object(exc)) # {i8*, i32, i8*}
 
         # serialize constant arguments as None
         py_none = pyapi.make_none()
@@ -438,26 +438,18 @@ class CPUCallConv(BaseCallConv):
 
         # load the serialized exception buffer from the module and create
         # a python bytes object
-        pickle_buf = builder.extract_value(builder.load(struct_gv_ptr), 0)
-        pickle_bufsz = builder.extract_value(builder.load(struct_gv_ptr), 1)
-        static_args_as_bytes = pyapi.bytes_from_string_and_size(
+        pickle_buf = builder.extract_value(struct_gv, 0)
+        pickle_bufsz = builder.extract_value(struct_gv, 1)
+        struct_gv = pyapi.bytes_from_string_and_size(
             pickle_buf, builder.sext(pickle_bufsz, pyapi.py_ssize_t))
 
-        with builder.if_then(cgutils.is_null(builder, static_args_as_bytes)):
+        with builder.if_then(cgutils.is_null(builder, struct_gv)):
             msg = ('PyBytes_FromStringAndSize return NULL',)
             self.return_user_exc(builder, RuntimeError, msg, loc)
 
-        # * "static_args_as_bytes" holds arguments that are known at
-        #   at compile-time as Python bytes object.
-        # * "runtime_args_as_tuple" are the arguments only known at runtime
-        # When executing the function, those two lists are merged into a single
-        # one at "numba.core.serialize.build_exception_at_runtime"
-        #
-        # "runtime_serialize_exc_args" returns the static + runtime
-        # serialized or None on failure (i.e. cannot serialize one of the args)
-        runtime_args_as_tuple = pyapi.tuple_pack(exc_args)
-        pair = pyapi.runtime_serialize_exc_args(
-            runtime_args_as_tuple, static_args_as_bytes)
+        tup_exc_args = pyapi.tuple_pack(exc_args)
+        pair = pyapi.runtime_build_excinfo_struct(
+            struct_gv, tup_exc_args)
         with builder.if_then(builder.icmp_unsigned('==', py_none, pair)):
             msg = ('Failed to serialize exception args at runtime',)
             self.return_user_exc(builder, TypeError, msg, loc)
