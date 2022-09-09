@@ -2,7 +2,6 @@ import numpy as np
 from numba import cuda, int32, float32
 from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
 from numba.core.config import ENABLE_CUDASIM
-from numba.core.errors import TypingError
 
 
 def useless_syncthreads(ary):
@@ -224,12 +223,8 @@ class TestCudaSync(CUDATestCase):
     def test_syncthreads_count_upcast(self):
         self._test_syncthreads_count(np.int16)
 
-    @skip_on_cudasim('Simulator is not rigorous about type checking')
     def test_syncthreads_count_downcast(self):
-        with self.assertRaises(TypingError) as raises:
-            self._test_syncthreads_count(np.int64)
-
-        self.assertIn("With argument(s): '(int64)'", str(raises.exception))
+        self._test_syncthreads_count(np.int64)
 
     def _test_syncthreads_and(self, in_dtype):
         compiled = cuda.jit(use_syncthreads_and)
@@ -248,12 +243,8 @@ class TestCudaSync(CUDATestCase):
     def test_syncthreads_and_upcast(self):
         self._test_syncthreads_and(np.int16)
 
-    @skip_on_cudasim('Simulator is not rigorous about type checking')
     def test_syncthreads_and_downcast(self):
-        with self.assertRaises(TypingError) as raises:
-            self._test_syncthreads_and(np.int64)
-
-        self.assertIn("With argument(s): '(int64)'", str(raises.exception))
+        self._test_syncthreads_and(np.int64)
 
     def _test_syncthreads_or(self, in_dtype):
         compiled = cuda.jit(use_syncthreads_or)
@@ -272,12 +263,8 @@ class TestCudaSync(CUDATestCase):
     def test_syncthreads_or_upcast(self):
         self._test_syncthreads_or(np.int16)
 
-    @skip_on_cudasim('Simulator is not rigorous about type checking')
     def test_syncthreads_or_downcast(self):
-        with self.assertRaises(TypingError) as raises:
-            self._test_syncthreads_or(np.int64)
-
-        self.assertIn("With argument(s): '(int64)'", str(raises.exception))
+        self._test_syncthreads_or(np.int64)
 
 
 if __name__ == '__main__':

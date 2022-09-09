@@ -150,11 +150,6 @@ def _syncthreads_predicate(typingctx, predicate, fname):
     if not isinstance(predicate, types.Integer):
         return None
 
-    # Don't allow larger ints to be downcast automatically - force the user to
-    # think about what they want instead
-    if predicate.bitwidth > 32:
-        return None
-
     sig = signature(types.i4, types.i4)
 
     def codegen(context, builder, sig, args):
