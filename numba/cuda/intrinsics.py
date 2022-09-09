@@ -2,6 +2,7 @@ from llvmlite import ir
 
 from numba import cuda, types
 from numba.core import cgutils
+from numba.core.errors import RequireLiteralValue
 from numba.core.typing import signature
 from numba.core.extending import overload_attribute
 from numba.cuda import nvvmutils
@@ -41,7 +42,7 @@ def grid(typingctx, ndim):
     '''
 
     if not isinstance(ndim, types.IntegerLiteral):
-        return None
+        raise RequireLiteralValue(ndim)
 
     sig = _type_grid_function(ndim)
 
@@ -74,7 +75,7 @@ def gridsize(typingctx, ndim):
     '''
 
     if not isinstance(ndim, types.IntegerLiteral):
-        return None
+        raise RequireLiteralValue(ndim)
 
     sig = _type_grid_function(ndim)
 
