@@ -95,7 +95,7 @@ class ByteCodeInst(object):
                                for k in ("JUMP_BACKWARD",
                                          "POP_JUMP_BACKWARD_IF_TRUE",
                                          "POP_JUMP_BACKWARD_IF_FALSE")):
-                return self.offset - self.arg * 2
+                return self.offset - (self.arg - 1) * 2
         if PYVERSION >= (3, 10):
             if self.opcode in JREL_OPS:
                 return self.next + self.arg * 2

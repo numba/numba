@@ -628,7 +628,6 @@ class TraceRunner(object):
     def _op_POP_JUMP_IF(self, state, inst):
         pred = state.pop()
         state.append(inst, pred=pred)
-
         target_inst = inst.get_jump_target()
         next_inst = inst.next
         # if the next inst and the jump target are the same location, issue one
