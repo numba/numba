@@ -27,6 +27,7 @@ from numba import _dispatcher
 
 from warnings import warn
 
+helper_functions = ['nocopy_empty_reshape', 'numba_attempt_nocopy_reshape']
 
 class _Kernel(serialize.ReduceMixin):
     '''
@@ -95,6 +96,17 @@ class _Kernel(serialize.ReduceMixin):
         # We need to link against cudadevrt if grid sync is being used.
         if self.cooperative:
             link.append(get_cudalib('cudadevrt', static=True))
+
+        helper_found = [ele for ele in helper_functions
+               if(f'{ele}' in lib.get_asm_str())]
+
+        if helper_found:
+            # Path to the source containing the foreign function
+
+            basedir = os.path.dirname(os.path.abspath(__file__))
+            helper_cu_path = os.path.join(basedir,
+                                             'cuda_helperlib.cu')
+            link.append(helper_cu_path)
 
         for filepath in link:
             lib.add_linking_file(filepath)
