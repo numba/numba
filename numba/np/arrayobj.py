@@ -4532,28 +4532,21 @@ def np_arange(start, stop=None, step=None, dtype=None):
 
 
 @overload(np.linspace)
-def numpy_linspace_2(start, stop):
-    if isinstance(start, types.Number) and isinstance(stop, types.Number):
-        def impl(start, stop):
-            return np.linspace(start, stop, 50)
-        return impl
-
-
-@overload(np.linspace)
-def numpy_linspace_3(start, stop, num):
+def numpy_linspace(start, stop, num=50):
     if not all(isinstance(arg, types.Number) for arg in [start, stop]):
         return
 
-    if not isinstance(num, types.Integer):
-        return
+    if not isinstance(num, (int, types.Integer)):
+        msg = 'The argument "num" must be an integer'
+        raise errors.TypingError(msg)
 
     if any(isinstance(arg, types.Complex) for arg in [start, stop]):
         dtype = types.complex128
     else:
         dtype = types.float64
-    dtype = as_dtype(dtype)
 
-    def linspace(start, stop, num):
+    # Implementation based on https://github.com/numpy/numpy/blob/v1.20.0/numpy/core/function_base.py#L24 # noqa: E501
+    def linspace(start, stop, num=50):
         arr = np.empty(num, dtype)
         # The multiply by 1.0 mirrors
         # https://github.com/numpy/numpy/blob/v1.20.0/numpy/core/function_base.py#L125-L128  # noqa: E501
