@@ -1084,8 +1084,6 @@ class TestLiftObj(MemoryLeak, TestCase):
 
         with self.assertRaises(TypeError) as raises:
             test4()
-        # Note: in python3.6, the Generic[T] on typedlist is causing it to
-        #       format differently.
         self.assertRegex(
             str(raises.exception),
             (r"can't unbox a <class 'list'> "
