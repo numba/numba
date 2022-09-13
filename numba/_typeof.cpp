@@ -843,8 +843,8 @@ int typecode_devicendarray(PyObject *dispatcher, PyObject *ary)
     int ndim;
     int layout = 0;
     PyObject *ndim_obj = nullptr;
-    PyObject* num_obj = nullptr;
-    PyObject* dtype_obj = nullptr;
+    PyObject *num_obj = nullptr;
+    PyObject *dtype_obj = nullptr;
     int dtype_num = 0;
 
     PyObject* flags = PyObject_GetAttrString(ary, "flags");
