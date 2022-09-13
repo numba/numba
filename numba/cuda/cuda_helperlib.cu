@@ -1,6 +1,8 @@
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
-#include <numpy/ndarrayobject.h>
 
+#define NPY_MAXDIMS 32
+
+typedef long int npy_intp;
 /*
  * Handle reshaping of zero-sized array.
  * See numba_attempt_nocopy_reshape() below.
