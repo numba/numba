@@ -40,6 +40,7 @@ import unittest
 from numba.core.runtime import rtsys
 from numba.np import numpy_support
 from numba.pycc.platform import _external_compiler_ok
+from numba.core.runtime import _nrt_python as _nrt
 
 
 try:
@@ -801,6 +802,16 @@ def capture_cache_log():
             yield out
 
 
+class EnableNRTStatsMixin(object):
+    """Mixin to enable the NRT statistics counters."""
+
+    def setUp(self):
+        _nrt.memsys_enable_stats()
+
+    def tearDown(self):
+        _nrt.memsys_disable_stats()
+
+
 class MemoryLeak(object):
 
     __enable_leak_check = True
@@ -829,16 +840,16 @@ class MemoryLeak(object):
         self.__enable_leak_check = False
 
 
-class MemoryLeakMixin(MemoryLeak):
+class MemoryLeakMixin(EnableNRTStatsMixin, MemoryLeak):
 
     def setUp(self):
         super(MemoryLeakMixin, self).setUp()
         self.memory_leak_setup()
 
     def tearDown(self):
-        super(MemoryLeakMixin, self).tearDown()
         gc.collect()
         self.memory_leak_teardown()
+        super(MemoryLeakMixin, self).tearDown()
 
 
 @contextlib.contextmanager
@@ -1118,7 +1129,7 @@ def strace(work, syscalls, timeout=10):
     return strace_data
 
 
-def _strace_supported():
+def strace_supported():
     """Checks if strace is supported and working"""
 
     # Only support this on linux where the `strace` binary is likely to be the
@@ -1135,12 +1146,6 @@ def _strace_supported():
     except Exception:
         return False
     return syscall in ''.join(trace)
-
-
-_HAVE_STRACE = _strace_supported()
-
-
-needs_strace = unittest.skipUnless(_HAVE_STRACE, "needs working strace")
 
 
 class IRPreservingTestPipeline(CompilerBase):

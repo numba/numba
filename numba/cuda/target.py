@@ -86,7 +86,7 @@ class CUDATargetContext(BaseContext):
 
     def init(self):
         self._internal_codegen = codegen.JITCUDACodegen("numba.cuda.jit")
-        self._target_data = ll.create_target_data(nvvm.data_layout)
+        self._target_data = None
 
     def load_additional_registries(self):
         # side effect of import needed for numba.cpython.*, the builtins
@@ -113,6 +113,8 @@ class CUDATargetContext(BaseContext):
 
     @property
     def target_data(self):
+        if self._target_data is None:
+            self._target_data = ll.create_target_data(nvvm.NVVM().data_layout)
         return self._target_data
 
     @cached_property
@@ -295,9 +297,8 @@ class CUDATargetContext(BaseContext):
         gv.align = 2 ** (align - 1).bit_length()
 
         # Convert to generic address-space
-        conv = nvvmutils.insert_addrspace_conv(lmod, ir.IntType(8), addrspace)
-        addrspaceptr = gv.bitcast(ir.PointerType(ir.IntType(8), addrspace))
-        genptr = builder.call(conv, [addrspaceptr])
+        ptrty = ir.PointerType(ir.IntType(8))
+        genptr = builder.addrspacecast(gv, ptrty, 'generic')
 
         # Create array object
         ary = self.make_array(aryty)(self, builder)
@@ -342,17 +343,8 @@ class CUDATargetContext(BaseContext):
         """
         lmod = builder.module
         gv = self.insert_const_string(lmod, string)
-        return self.insert_addrspace_conv(builder, gv,
-                                          nvvm.ADDRSPACE_CONSTANT)
-
-    def insert_addrspace_conv(self, builder, ptr, addrspace):
-        """
-        Perform addrspace conversion according to the NVVM spec
-        """
-        lmod = builder.module
-        base_type = ptr.type.pointee
-        conv = nvvmutils.insert_addrspace_conv(lmod, base_type, addrspace)
-        return builder.call(conv, [ptr])
+        charptrty = ir.PointerType(ir.IntType(8))
+        return builder.addrspacecast(gv, charptrty, 'generic')
 
     def optimize_function(self, func):
         """Run O1 function passes

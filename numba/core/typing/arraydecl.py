@@ -280,7 +280,23 @@ class ArrayAttribute(AttributeTemplate):
             retty = ary.copy(layout=layout)
         return retty
 
-    # NOTE: .imag and .real are implemented with @overload_attribute
+    def resolve_real(self, ary):
+        return self._resolve_real_imag(ary, attr='real')
+
+    def resolve_imag(self, ary):
+        return self._resolve_real_imag(ary, attr='imag')
+
+    def _resolve_real_imag(self, ary, attr):
+        if ary.dtype in types.complex_domain:
+            return ary.copy(dtype=ary.dtype.underlying_float, layout='A')
+        elif ary.dtype in types.number_domain:
+            res = ary.copy(dtype=ary.dtype)
+            if attr == 'imag':
+                res = res.copy(readonly=True)
+            return res
+        else:
+            msg = "cannot access .{} of array of {}"
+            raise TypingError(msg.format(attr, ary.dtype))
 
     @bound_function("array.transpose")
     def resolve_transpose(self, ary, args, kws):

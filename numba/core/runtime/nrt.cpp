@@ -48,7 +48,13 @@ struct NRT_MemSys {
     /* Shutdown flag */
     int shutting;
     /* Stats */
-    std::atomic_size_t stats_alloc, stats_free, stats_mi_alloc, stats_mi_free;
+    struct {
+        bool enabled;
+        std::atomic_size_t alloc;
+        std::atomic_size_t free;
+        std::atomic_size_t mi_alloc;
+        std::atomic_size_t mi_free;
+    } stats;
     /* System allocation functions */
     struct {
         NRT_malloc_func malloc;
@@ -64,10 +70,12 @@ static NRT_MemSys TheMSys;
 
 extern "C" void NRT_MemSys_init(void) {
     TheMSys.shutting = 0;
-    TheMSys.stats_alloc = 0;
-    TheMSys.stats_free = 0;
-    TheMSys.stats_mi_alloc = 0;
-    TheMSys.stats_mi_free = 0;
+    // Stats are off by default, call NRT_MemSys_enable_stats to enable
+    TheMSys.stats.enabled = false;
+    TheMSys.stats.alloc = 0;
+    TheMSys.stats.free = 0;
+    TheMSys.stats.mi_alloc = 0;
+    TheMSys.stats.mi_free = 0;
     /* Bind to libc allocator */
     TheMSys.allocator.malloc = malloc;
     TheMSys.allocator.realloc = realloc;
@@ -78,15 +86,32 @@ extern "C" void NRT_MemSys_shutdown(void) {
     TheMSys.shutting = 1;
 }
 
+extern "C" void NRT_MemSys_enable_stats(void) {
+    TheMSys.stats.enabled = true;
+}
+
+extern "C" void NRT_MemSys_disable_stats(void) {
+    TheMSys.stats.enabled = false;
+}
+
+extern "C" size_t NRT_MemSys_stats_enabled(void) {
+    return (size_t)TheMSys.stats.enabled;
+}
+
 extern "C" void NRT_MemSys_set_allocator(NRT_malloc_func malloc_func,
                               NRT_realloc_func realloc_func,
                               NRT_free_func free_func)
 {
+    bool stats_cond = false;
+    if (TheMSys.stats.enabled)
+    {
+        stats_cond = (TheMSys.stats.alloc != TheMSys.stats.free ||
+                      TheMSys.stats.mi_alloc != TheMSys.stats.mi_free);
+    }
     if ((malloc_func != TheMSys.allocator.malloc ||
          realloc_func != TheMSys.allocator.realloc ||
          free_func != TheMSys.allocator.free) &&
-         (TheMSys.stats_alloc != TheMSys.stats_free ||
-          TheMSys.stats_mi_alloc != TheMSys.stats_mi_free)) {
+         stats_cond) {
         nrt_fatal_error("cannot change allocator while blocks are allocated");
     }
     TheMSys.allocator.malloc = malloc_func;
@@ -94,20 +119,43 @@ extern "C" void NRT_MemSys_set_allocator(NRT_malloc_func malloc_func,
     TheMSys.allocator.free = free_func;
 }
 
+/* This value is used as a marker for "stats are disabled", it's ASCII "AAAA" */
+static size_t _DISABLED_STATS_VALUE = 0x41414141;
+
 extern "C" size_t NRT_MemSys_get_stats_alloc() {
-    return TheMSys.stats_alloc;
+    if (TheMSys.stats.enabled)
+    {
+        return TheMSys.stats.alloc.load();
+    } else  {
+        return _DISABLED_STATS_VALUE;
+    }
 }
 
 extern "C" size_t NRT_MemSys_get_stats_free() {
-    return TheMSys.stats_free;
+    if (TheMSys.stats.enabled)
+    {
+        return TheMSys.stats.free.load();
+    } else  {
+        return _DISABLED_STATS_VALUE;
+    }
 }
 
 extern "C" size_t NRT_MemSys_get_stats_mi_alloc() {
-    return TheMSys.stats_mi_alloc;
+    if (TheMSys.stats.enabled)
+    {
+        return TheMSys.stats.mi_alloc.load();
+    } else  {
+        return _DISABLED_STATS_VALUE;
+    }
 }
 
 extern "C" size_t NRT_MemSys_get_stats_mi_free() {
-    return TheMSys.stats_mi_free;
+    if (TheMSys.stats.enabled)
+    {
+        return TheMSys.stats.mi_free.load();
+    } else  {
+        return _DISABLED_STATS_VALUE;
+    }
 }
 
 /*
@@ -126,7 +174,10 @@ extern "C" void NRT_MemInfo_init(NRT_MemInfo *mi,void *data, size_t size,
     mi->external_allocator = external_allocator;
     NRT_Debug(nrt_debug_print("NRT_MemInfo_init mi=%p external_allocator=%p\n", mi, external_allocator));
     /* Update stats */
-    TheMSys.stats_mi_alloc++;
+    if (TheMSys.stats.enabled)
+    {
+        TheMSys.stats.mi_alloc++;
+    }
 }
 
 NRT_MemInfo *NRT_MemInfo_new(void *data, size_t size,
@@ -319,7 +370,10 @@ extern "C" void NRT_dealloc(NRT_MemInfo *mi) {
     NRT_Debug(nrt_debug_print("NRT_dealloc meminfo: %p external_allocator: %p\n", mi, mi->external_allocator));
     if (mi->external_allocator) {
         mi->external_allocator->free(mi, mi->external_allocator->opaque_data);
-        TheMSys.stats_free++;;
+        if (TheMSys.stats.enabled)
+        {
+            TheMSys.stats.free++;
+        }
     } else {
         NRT_Free(mi);
     }
@@ -327,7 +381,10 @@ extern "C" void NRT_dealloc(NRT_MemInfo *mi) {
 
 extern "C" void NRT_MemInfo_destroy(NRT_MemInfo *mi) {
     NRT_dealloc(mi);
-    TheMSys.stats_mi_free++;
+    if (TheMSys.stats.enabled)
+    {
+        TheMSys.stats.mi_free++;
+    }
 }
 
 extern "C" void NRT_MemInfo_acquire(NRT_MemInfo *mi) {
@@ -471,7 +528,10 @@ extern "C" void* NRT_Allocate_External(size_t size, NRT_ExternalAllocator *alloc
         ptr = TheMSys.allocator.malloc(size);
         NRT_Debug(nrt_debug_print("NRT_Allocate_External bytes=%zu ptr=%p\n", size, ptr));
     }
-    TheMSys.stats_alloc++;
+    if (TheMSys.stats.enabled)
+    {
+        TheMSys.stats.alloc++;
+    }
     return ptr;
 }
 
@@ -485,7 +545,10 @@ extern "C" void *NRT_Reallocate(void *ptr, size_t size) {
 extern "C" void NRT_Free(void *ptr) {
     NRT_Debug(nrt_debug_print("NRT_Free %p\n", ptr));
     TheMSys.allocator.free(ptr);
-    TheMSys.stats_free++;;
+    if (TheMSys.stats.enabled)
+    {
+        TheMSys.stats.free++;
+    }
 }
 
 /*

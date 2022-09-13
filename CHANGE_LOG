@@ -1,11 +1,48 @@
-Version 0.56.0 RC1 (28 June, 2022)
+Version 0.56.2 (1 September, 2022)
 ----------------------------------
+
+This is a bugfix release that supports NumPy 1.23 and fixes CUDA function
+caching.
+
+Pull-Requests:
+
+* PR `#8239 <https://github.com/numba/numba/pull/8239>`_: Add decorator to run a test in a subprocess (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#8276 <https://github.com/numba/numba/pull/8276>`_: Move Azure to use macos-11 (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#8310 <https://github.com/numba/numba/pull/8310>`_: CUDA: Fix Issue #8309 - atomics don't work on complex components (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#8342 <https://github.com/numba/numba/pull/8342>`_: Upgrade to ubuntu-20.04 for azure pipeline CI (`jamesobutler <https://github.com/jamesobutler>`_)
+* PR `#8356 <https://github.com/numba/numba/pull/8356>`_: Update setup.py, buildscripts, CI and docs to require setuptools<60 (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#8374 <https://github.com/numba/numba/pull/8374>`_: Don't pickle LLVM IR for CUDA code libraries (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#8377 <https://github.com/numba/numba/pull/8377>`_: Add support for NumPy 1.23 (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#8384 <https://github.com/numba/numba/pull/8384>`_: Move strace() check into tests that actually need it (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#8386 <https://github.com/numba/numba/pull/8386>`_: Fix the docs for numba.get_thread_id (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#8407 <https://github.com/numba/numba/pull/8407>`_: Pin NumPy version to 1.18-1.24 (`Andre Masella <https://github.com/apmasell>`_)
+* PR `#8411 <https://github.com/numba/numba/pull/8411>`_: update version support table for 0.56.1 (`esc <https://github.com/esc>`_)
+* PR `#8412 <https://github.com/numba/numba/pull/8412>`_: Create changelog for 0.56.1 (`Andre Masella <https://github.com/apmasell>`_)
+* PR `#8413 <https://github.com/numba/numba/pull/8413>`_: Fix Azure CI for NumPy 1.23 and use conda-forge scipy (`Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#8414 <https://github.com/numba/numba/pull/8413>`_: Hotfix for 0.56.2 (`Siu Kwan Lam <https://github.com/sklam>`_)
+
+Authors:
+
+* `Andre Masella <https://github.com/apmasell>`_
+* `esc <https://github.com/esc>`_
+* `Graham Markall <https://github.com/gmarkall>`_
+* `jamesobutler <https://github.com/jamesobutler>`_
+* `Siu Kwan Lam <https://github.com/sklam>`_
+* `stuartarchibald <https://github.com/stuartarchibald>`_
+
+Version 0.56.1 (NO RELEASE)
+---------------------------
+
+The release was skipped due to issues during the release process.
+
+Version 0.56.0 (25 July, 2022)
+------------------------------
 
 This release continues to add new features, bug fixes and stability improvements
 to Numba. Please note that this will be the last release that has support for
 Python 3.7 as the next release series (Numba 0.57) will support Python 3.11!
-Also note that, this will be the last release to support linux-32 packages produced
-by the Numba team.
+Also note that, this will be the last release to support linux-32 packages
+produced by the Numba team.
 
 Python language support enhancements:
 
@@ -104,8 +141,8 @@ General Enhancements:
   it now uses ``importlib-metadata`` for querying other packages.
 * Emission of chrome tracing output is now supported for the internal
   compilation event handling system.
-* This release is tested and known to work when using the `Pyston <https://www.pyston.org/>`_ Python
-  interpreter.
+* This release is tested and known to work when using the
+  `Pyston <https://www.pyston.org/>`_ Python interpreter.
 
 Pull-Requests:
 
@@ -265,11 +302,14 @@ Pull-Requests:
 * PR `#8187 <https://github.com/numba/numba/pull/8187>`_: Update CHANGE_LOG for 0.55.2 (`stuartarchibald <https://github.com/stuartarchibald>`_ `esc <https://github.com/esc>`_)
 * PR `#8189 <https://github.com/numba/numba/pull/8189>`_: updated version support information for 0.55.2/0.57 (`esc <https://github.com/esc>`_)
 * PR `#8191 <https://github.com/numba/numba/pull/8191>`_: CUDA: Update deprecation notes for 0.56. (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#8192 <https://github.com/numba/numba/pull/8192>`_: Update CHANGE_LOG for 0.56.0 (`stuartarchibald <https://github.com/stuartarchibald>`_ `esc <https://github.com/esc>`_ `Siu Kwan Lam <https://github.com/sklam>`_)
 * PR `#8195 <https://github.com/numba/numba/pull/8195>`_: Make the workqueue threading backend once again fork safe. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#8196 <https://github.com/numba/numba/pull/8196>`_: Fix numerical tolerance in parfors caching test. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#8197 <https://github.com/numba/numba/pull/8197>`_: Fix `isinstance` warning check test. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#8203 <https://github.com/numba/numba/pull/8203>`_: pin llvmlite 0.39 for public CI builds (`esc <https://github.com/esc>`_)
-* PR `#8192 <https://github.com/numba/numba/pull/8192>`_:  Update CHANGE_LOG for 0.56.0 (`stuartarchibald <https://github.com/stuartarchibald>`_ `esc <https://github.com/esc>`_ `Siu Kwan Lam <https://github.com/sklam>`_)
+* PR `#8255 <https://github.com/numba/numba/pull/8255>`_: CUDA: Make numba.cuda.tests.doc_examples.ffi a module to fix #8252 (`Graham Markall <https://github.com/gmarkall>`_)
+* PR `#8274 <https://github.com/numba/numba/pull/8274>`_: Update version support table doc for 0.56. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#8275 <https://github.com/numba/numba/pull/8275>`_: Update CHANGE_LOG for 0.56.0 final (`stuartarchibald <https://github.com/stuartarchibald>`_)
 
 Authors:
 

@@ -221,6 +221,13 @@ class TestCUDAVectorize(CUDATestCase):
         b = Points(xs=xs2, ys=ys2)
         self.check_tuple_arg(a, b)
 
+    def test_name_attribute(self):
+        @vectorize('f8(f8)', target='cuda')
+        def bar(x):
+            return x ** 2
+
+        self.assertEqual(bar.__name__, 'bar')
+
 
 if __name__ == '__main__':
     unittest.main()

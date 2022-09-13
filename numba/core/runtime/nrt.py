@@ -6,7 +6,7 @@ from llvmlite import binding as ll
 
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.typing.typeof import typeof_impl
-from numba.core import types
+from numba.core import types, config
 from numba.core.runtime import _nrt_python as _nrt
 
 _nrt_mstats = namedtuple("nrt_mstats", ["alloc", "free", "mi_alloc", "mi_free"])
@@ -26,6 +26,10 @@ class _Runtime(object):
         if self._init:
             # Already initialized
             return
+
+        # Switch stats on if the config requests them.
+        if config.NRT_STATS:
+            _nrt.memsys_enable_stats()
 
         # Register globals into the system
         for py_name in _nrt.c_helpers:

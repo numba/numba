@@ -1,12 +1,13 @@
-from numba.core import types, errors
+from numba.core import types
 from numba.core.typing.npydecl import (parse_dtype, parse_shape,
                                        register_number_classes)
 from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          AbstractTemplate, CallableTemplate,
                                          signature, Registry)
 from numba.cuda.types import dim3, grid_group
+from numba.core.typeconv import Conversion
 from numba import cuda
-
+import operator
 
 registry = Registry()
 register = registry.register
@@ -14,32 +15,6 @@ register_attr = registry.register_attr
 register_global = registry.register_global
 
 register_number_classes(register_global)
-
-
-class GridFunction(CallableTemplate):
-    def generic(self):
-        def typer(ndim):
-            if not isinstance(ndim, types.IntegerLiteral):
-                raise errors.RequireLiteralValue(ndim)
-            val = ndim.literal_value
-            if val == 1:
-                restype = types.int32
-            elif val in (2, 3):
-                restype = types.UniTuple(types.int32, val)
-            else:
-                raise ValueError('argument can only be 1, 2, 3')
-            return signature(restype, types.int32)
-        return typer
-
-
-@register
-class Cuda_grid(GridFunction):
-    key = cuda.grid
-
-
-@register
-class Cuda_gridsize(GridFunction):
-    key = cuda.gridsize
 
 
 class Cuda_array_decl(CallableTemplate):
@@ -84,30 +59,6 @@ class Cuda_const_array_like(CallableTemplate):
         def typer(ndarray):
             return ndarray
         return typer
-
-
-@register
-class Cuda_syncthreads(ConcreteTemplate):
-    key = cuda.syncthreads
-    cases = [signature(types.none)]
-
-
-@register
-class Cuda_syncthreads_count(ConcreteTemplate):
-    key = cuda.syncthreads_count
-    cases = [signature(types.i4, types.i4)]
-
-
-@register
-class Cuda_syncthreads_and(ConcreteTemplate):
-    key = cuda.syncthreads_and
-    cases = [signature(types.i4, types.i4)]
-
-
-@register
-class Cuda_syncthreads_or(ConcreteTemplate):
-    key = cuda.syncthreads_or
-    cases = [signature(types.i4, types.i4)]
 
 
 @register
@@ -378,6 +329,47 @@ def _genfp16_binary_comparison(l_key):
     return Cuda_fp16_cmp
 
 
+# If multiple ConcreteTemplates provide typing for a single function, then
+# function resolution will pick the first compatible typing it finds even if it
+# involves inserting a cast that would be considered undesirable (in this
+# specific case, float16s could be cast to float32s for comparisons).
+#
+# To work around this, we instead use an AbstractTemplate that implements
+# exactly the casting logic that we desire. The AbstractTemplate gets
+# considered in preference to ConcreteTemplates during typing.
+#
+# This is tracked as Issue #7863 (https://github.com/numba/numba/issues/7863) -
+# once this is resolved it should be possible to replace this AbstractTemplate
+# with a ConcreteTemplate to simplify the logic.
+def _genfp16_comparison_operator(l_key):
+    @register_global(l_key)
+    class Cuda_fp16_operator_cmp(AbstractTemplate):
+        key = l_key
+
+        def generic(self, args, kws):
+            assert not kws
+
+            if len(args) == 2 and \
+                    (args[0] == types.float16 or args[1] == types.float16):
+                if (args[0] == types.float16):
+                    convertible = self.context.can_convert(args[1], args[0])
+                else:
+                    convertible = self.context.can_convert(args[0], args[1])
+
+                # We allow three cases here:
+                #
+                # 1. Comparing fp16 to fp16 - Conversion.exact
+                # 2. Comparing fp16 to types fp16 can be promoted to
+                #  - Conversion.promote
+                # 3. Comparing fp16 to int8 (safe conversion) -
+                #  - Conversion.safe
+
+                if (convertible == Conversion.exact) or \
+                   (convertible == Conversion.promote) or \
+                   (convertible == Conversion.safe):
+                    return signature(types.b1, types.float16, types.float16)
+
+
 Cuda_hadd = _genfp16_binary(cuda.fp16.hadd)
 Cuda_hsub = _genfp16_binary(cuda.fp16.hsub)
 Cuda_hmul = _genfp16_binary(cuda.fp16.hmul)
@@ -386,11 +378,17 @@ Cuda_hmin = _genfp16_binary(cuda.fp16.hmin)
 Cuda_hneg = _genfp16_unary(cuda.fp16.hneg)
 Cuda_habs = _genfp16_unary(cuda.fp16.habs)
 Cuda_heq = _genfp16_binary_comparison(cuda.fp16.heq)
+_genfp16_comparison_operator(operator.eq)
 Cuda_hne = _genfp16_binary_comparison(cuda.fp16.hne)
+_genfp16_comparison_operator(operator.ne)
 Cuda_hge = _genfp16_binary_comparison(cuda.fp16.hge)
+_genfp16_comparison_operator(operator.ge)
 Cuda_hgt = _genfp16_binary_comparison(cuda.fp16.hgt)
+_genfp16_comparison_operator(operator.gt)
 Cuda_hle = _genfp16_binary_comparison(cuda.fp16.hle)
+_genfp16_comparison_operator(operator.le)
 Cuda_hlt = _genfp16_binary_comparison(cuda.fp16.hlt)
+_genfp16_comparison_operator(operator.lt)
 
 
 # generate atomic operations
@@ -589,12 +587,6 @@ class CudaFp16Template(AttributeTemplate):
 class CudaModuleTemplate(AttributeTemplate):
     key = types.Module(cuda)
 
-    def resolve_grid(self, mod):
-        return types.Function(Cuda_grid)
-
-    def resolve_gridsize(self, mod):
-        return types.Function(Cuda_gridsize)
-
     def resolve_cg(self, mod):
         return types.Module(cuda.cg)
 
@@ -609,9 +601,6 @@ class CudaModuleTemplate(AttributeTemplate):
 
     def resolve_gridDim(self, mod):
         return dim3
-
-    def resolve_warpsize(self, mod):
-        return types.int32
 
     def resolve_laneid(self, mod):
         return types.int32
@@ -636,18 +625,6 @@ class CudaModuleTemplate(AttributeTemplate):
 
     def resolve_cbrt(self, mod):
         return types.Function(Cuda_cbrt)
-
-    def resolve_syncthreads(self, mod):
-        return types.Function(Cuda_syncthreads)
-
-    def resolve_syncthreads_count(self, mod):
-        return types.Function(Cuda_syncthreads_count)
-
-    def resolve_syncthreads_and(self, mod):
-        return types.Function(Cuda_syncthreads_and)
-
-    def resolve_syncthreads_or(self, mod):
-        return types.Function(Cuda_syncthreads_or)
 
     def resolve_threadfence(self, mod):
         return types.Function(Cuda_threadfence_device)

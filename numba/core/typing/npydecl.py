@@ -316,13 +316,6 @@ _unsupported = set([ 'frexp',
                      'modf',
                  ])
 
-# A list of ufuncs that are in fact aliases of other ufuncs. They need to insert the
-# resolve method, but not register the ufunc itself
-_aliases = set(["bitwise_not", "mod", "abs"])
-
-# In python3 np.divide is mapped to np.true_divide
-if np.divide == np.true_divide:
-    _aliases.add("divide")
 
 def _numpy_ufunc(name):
     func = getattr(np, name)
@@ -331,7 +324,11 @@ def _numpy_ufunc(name):
 
     typing_class.__name__ = "resolve_{0}".format(name)
 
-    if not name in _aliases:
+    # A list of ufuncs that are in fact aliases of other ufuncs. They need to
+    # insert the resolve method, but not register the ufunc itself
+    aliases = ("abs", "bitwise_not", "divide", "abs")
+
+    if name not in aliases:
         infer_global(func, types.Function(typing_class))
 
 all_ufuncs = sum([_math_operations, _trigonometric_functions,
@@ -360,7 +357,7 @@ supported_array_operators = set(
 
 del _math_operations, _trigonometric_functions, _bit_twiddling_functions
 del _comparison_functions, _floating_functions, _unsupported
-del _aliases, _numpy_ufunc
+del _numpy_ufunc
 
 
 # -----------------------------------------------------------------------------
@@ -924,54 +921,6 @@ class MatMulTyperMixin(object):
             return types.Array(a.dtype, out_ndim, 'C')
         else:
             return a.dtype
-
-
-@glue_typing(np.dot)
-class Dot(MatMulTyperMixin, CallableTemplate):
-    func_name = "np.dot()"
-
-    def generic(self):
-        def typer(a, b, out=None):
-            # NOTE: np.dot() and the '@' operator have distinct semantics
-            # for >2-D arrays, but we don't support them.
-            return self.matmul_typer(a, b, out)
-
-        return typer
-
-
-@glue_typing(np.vdot)
-class VDot(CallableTemplate):
-
-    def generic(self):
-        def typer(a, b):
-            if not isinstance(a, types.Array) or not isinstance(b, types.Array):
-                return
-            if not all(x.ndim == 1 for x in (a, b)):
-                raise TypingError("np.vdot() only supported on 1-D arrays")
-            if not all(x.layout in 'CF' for x in (a, b)):
-                warnings.warn("np.vdot() is faster on contiguous arrays, called on %s"
-                              % ((a, b),), NumbaPerformanceWarning)
-            if not all(x.dtype == a.dtype for x in (a, b)):
-                raise TypingError("np.vdot() arguments must all have "
-                                  "the same dtype")
-            if not isinstance(a.dtype, (types.Float, types.Complex)):
-                raise TypingError("np.vdot() only supported on "
-                                  "float and complex arrays")
-            return a.dtype
-
-        return typer
-
-
-@infer_global(operator.matmul)
-class MatMul(MatMulTyperMixin, AbstractTemplate):
-    key = operator.matmul
-    func_name = "'@'"
-
-    def generic(self, args, kws):
-        assert not kws
-        restype = self.matmul_typer(*args)
-        if restype is not None:
-            return signature(restype, *args)
 
 
 def _check_linalg_matrix(a, func_name):

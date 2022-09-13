@@ -1,4 +1,3 @@
-from llvmlite import binding as ll
 from llvmlite import ir
 from warnings import warn
 
@@ -78,6 +77,8 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         # Driver API at link time.
         self._linking_files = set()
 
+        # Cache the LLVM IR string
+        self._llvm_strs = None
         # Maps CC -> PTX string
         self._ptx_cache = {}
         # Maps CC -> cubin
@@ -93,8 +94,14 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         self._nvvm_options = nvvm_options
         self._entry_name = entry_name
 
+    @property
+    def llvm_strs(self):
+        if self._llvm_strs is None:
+            self._llvm_strs = [str(mod) for mod in self.modules]
+        return self._llvm_strs
+
     def get_llvm_str(self):
-        return str(self._module)
+        return self.llvm_strs[0]
 
     def get_asm_str(self, cc=None):
         return self._join_ptxes(self._get_ptxes(cc=cc))
@@ -124,7 +131,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
                     warn(NumbaInvalidConfigWarning(msg))
             options['debug'] = False
 
-        irs = [str(mod) for mod in self.modules]
+        irs = self.llvm_strs
 
         if options.get('debug', False):
             # If we're compiling with debug, we need to compile modules with
@@ -292,15 +299,15 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         after deserialization.
         """
         if self._linking_files:
-            msg = ('cannot pickle CUDACodeLibrary function with additional '
-                   'libraries to link against')
+            msg = 'Cannot pickle CUDACodeLibrary with linking files'
             raise RuntimeError(msg)
+        if not self._finalized:
+            raise RuntimeError('Cannot pickle unfinalized CUDACodeLibrary')
         return dict(
             codegen=None,
             name=self.name,
             entry_name=self._entry_name,
-            module=self._module,
-            linking_libraries=self._linking_libraries,
+            llvm_strs=self.llvm_strs,
             ptx_cache=self._ptx_cache,
             cubin_cache=self._cubin_cache,
             linkerinfo_cache=self._linkerinfo_cache,
@@ -309,27 +316,22 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         )
 
     @classmethod
-    def _rebuild(cls, codegen, name, entry_name, module, linking_libraries,
-                 ptx_cache, cubin_cache, linkerinfo_cache, max_registers,
-                 nvvm_options):
+    def _rebuild(cls, codegen, name, entry_name, llvm_strs, ptx_cache,
+                 cubin_cache, linkerinfo_cache, max_registers, nvvm_options):
         """
         Rebuild an instance.
         """
-        instance = cls.__new__(cls)
-        super(cls, instance).__init__(codegen, name)
-        instance._entry_name = entry_name
+        instance = cls(codegen, name, entry_name=entry_name)
 
-        instance._module = module
-        instance._linking_libraries = linking_libraries
-        instance._linking_files = set()
-
+        instance._llvm_strs = llvm_strs
         instance._ptx_cache = ptx_cache
         instance._cubin_cache = cubin_cache
         instance._linkerinfo_cache = linkerinfo_cache
-        instance._cufunc_cache = {}
 
         instance._max_registers = max_registers
         instance._nvvm_options = nvvm_options
+
+        instance._finalized = True
 
         return instance
 
@@ -343,14 +345,12 @@ class JITCUDACodegen(Codegen):
     _library_class = CUDACodeLibrary
 
     def __init__(self, module_name):
-        self._data_layout = nvvm.data_layout
-        self._target_data = ll.create_target_data(self._data_layout)
+        pass
 
     def _create_empty_module(self, name):
         ir_module = ir.Module(name)
         ir_module.triple = CUDA_TRIPLE
-        if self._data_layout:
-            ir_module.data_layout = self._data_layout
+        ir_module.data_layout = nvvm.NVVM().data_layout
         nvvm.add_ir_version(ir_module)
         return ir_module
 

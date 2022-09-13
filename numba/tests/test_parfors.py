@@ -1405,6 +1405,13 @@ class TestParfors(TestParforsBase):
         # this doesn't fuse due to mixed indices
         self.assertEqual(countParfors(test_impl, (numba.float64[:,:],)), 2)
 
+        def test_impl(A):
+            min_val = np.amin(A)
+            return A - min_val
+        self.check(test_impl, A)
+        # this doesn't fuse due to use of reduction variable
+        self.assertEqual(countParfors(test_impl, (numba.float64[:],)), 2)
+
     def test_use_of_reduction_var1(self):
         def test_impl():
             acc = 0

@@ -620,6 +620,8 @@ The following :py:class:`Generator` methods are supported:
 * :func:`numpy.random.Generator().f()` (*)
 * :func:`numpy.random.Generator().gamma()` (*)
 * :func:`numpy.random.Generator().geometric()` (*)
+* :func:`numpy.random.Generator().integers()` (Both `low` and `high` are required
+  arguments. Array values for low and high are currently not supported.)
 * :func:`numpy.random.Generator().laplace()` (*)
 * :func:`numpy.random.Generator().logistic()` (*)
 * :func:`numpy.random.Generator().lognormal()` (*)

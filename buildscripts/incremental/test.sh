@@ -11,9 +11,10 @@ if [ "$BUILD_DOC" == "yes" ]; then rstcheck README.rst; fi
 pushd docs
 if [ "$BUILD_DOC" == "yes" ]; then make SPHINXOPTS=-W clean html; fi
 popd
-# Run system info tool
+# Run system and gdb info tools
 pushd bin
 numba -s
+numba -g
 popd
 
 # switch off color messages

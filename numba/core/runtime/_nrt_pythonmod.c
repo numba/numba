@@ -19,24 +19,60 @@ memsys_use_cpython_allocator(PyObject *self, PyObject *args) {
 
 static PyObject *
 memsys_get_stats_alloc(PyObject *self, PyObject *args) {
+    if(!NRT_MemSys_stats_enabled()) {
+        PyErr_SetString(PyExc_RuntimeError, "NRT stats are disabled.");
+        return NULL;
+    }
     return PyLong_FromSize_t(NRT_MemSys_get_stats_alloc());
 }
 
 static PyObject *
 memsys_get_stats_free(PyObject *self, PyObject *args) {
+    if(!NRT_MemSys_stats_enabled()) {
+        PyErr_SetString(PyExc_RuntimeError, "NRT stats are disabled.");
+        return NULL;
+    }
     return PyLong_FromSize_t(NRT_MemSys_get_stats_free());
 }
 
 static PyObject *
 memsys_get_stats_mi_alloc(PyObject *self, PyObject *args) {
+    if(!NRT_MemSys_stats_enabled()) {
+        PyErr_SetString(PyExc_RuntimeError, "NRT stats are disabled.");
+        return NULL;
+    }
     return PyLong_FromSize_t(NRT_MemSys_get_stats_mi_alloc());
 }
 
 static PyObject *
 memsys_get_stats_mi_free(PyObject *self, PyObject *args) {
+    if(!NRT_MemSys_stats_enabled()) {
+        PyErr_SetString(PyExc_RuntimeError, "NRT stats are disabled.");
+        return NULL;
+    }
     return PyLong_FromSize_t(NRT_MemSys_get_stats_mi_free());
 }
 
+static PyObject *
+memsys_stats_enabled(PyObject *self, PyObject *args) {
+    if (NRT_MemSys_stats_enabled()) {
+        Py_RETURN_TRUE;
+    } else {
+        Py_RETURN_FALSE;
+    }
+}
+
+static PyObject *
+memsys_enable_stats(PyObject *self, PyObject *args) {
+    NRT_MemSys_enable_stats();
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+memsys_disable_stats(PyObject *self, PyObject *args) {
+    NRT_MemSys_disable_stats();
+    Py_RETURN_NONE;
+}
 
 /*
  * Create a new MemInfo with a owner PyObject
@@ -95,6 +131,9 @@ static PyMethodDef ext_methods[] = {
     declmethod_noargs(memsys_get_stats_free),
     declmethod_noargs(memsys_get_stats_mi_alloc),
     declmethod_noargs(memsys_get_stats_mi_free),
+    declmethod_noargs(memsys_stats_enabled),
+    declmethod_noargs(memsys_enable_stats),
+    declmethod_noargs(memsys_disable_stats),
     declmethod(meminfo_new),
     declmethod(meminfo_alloc),
     declmethod(meminfo_alloc_safe),
