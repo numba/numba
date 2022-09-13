@@ -1,5 +1,3 @@
-#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
-
 #define NPY_MAXDIMS 32
 
 typedef long int npy_intp;

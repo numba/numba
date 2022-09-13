@@ -4,8 +4,6 @@ import os
 import re
 import shutil
 import warnings
-import numpy as np
-from sysconfig import get_paths
 
 # YAML needed to use file based Numba config
 try:
