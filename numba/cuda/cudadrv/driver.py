@@ -2763,11 +2763,7 @@ class NvrtcProgram:
         #   being optimized away.
         arch = f'--gpu-architecture=compute_{major}{minor}'.encode()
         include = f'-I{config.CUDA_INCLUDE_PATH}'.encode()
-        print(include)
-        numpy_include = f'-I{config.NUMPY_INCLUDE_PATH}'.encode()
-        print(numpy_include)
-        python_include = f'-I{config.PYTHON_INCLUDE_PATH}'.encode()
-        opts = [arch, include, numpy_include, python_include, b'-rdc', b'true']
+        opts = [arch, include, b'-rdc', b'true']
 
         # Compile the program
         err, = nvrtc.nvrtcCompileProgram(self._program, len(opts), opts)

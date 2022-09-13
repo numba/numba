@@ -433,11 +433,6 @@ class _EnvReloader(object):
                                                      'cuda', 'include')
         CUDA_INCLUDE_PATH = _readenv("NUMBA_CUDA_INCLUDE_PATH", str,
                                      default_cuda_include_path)
-        NUMPY_INCLUDE_PATH = np.get_include()
-        
-        python_includes = get_paths()
-        PYTHON_INCLUDE_PATH = python_includes['include']
-
 
         # Threading settings
 
