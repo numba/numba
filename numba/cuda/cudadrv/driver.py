@@ -37,8 +37,14 @@ from .drvapi import API_PROTOTYPES
 from .drvapi import cu_occupancy_b2d_size, cu_stream_callback_pyobj, cu_uuid
 from numba.cuda.cudadrv import enums, drvapi, _extras
 
-from ptxcompiler import compile_ptx
-from cubinlinker import CubinLinker, CubinLinkerError
+if config.CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY:
+    try:
+        from ptxcompiler import compile_ptx
+        from cubinlinker import CubinLinker, CubinLinkerError
+    except ImportError as ie:
+        msg = ("Minor version compatiblity requires ptxcompiler and "
+               "cubinlinker to be available")
+        raise ImportError(msg) from ie
 
 USE_NV_BINDING = config.CUDA_USE_NVIDIA_BINDING
 
