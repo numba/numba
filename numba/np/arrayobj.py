@@ -3967,7 +3967,8 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
 
 @overload_classmethod(types.Array, "_allocate")
 def _ol_array_allocate(cls, allocsize, align):
-    """Implements a Numba-only default target (cpu) classmethod on the array type.
+    """Implements a Numba-only default target (cpu) classmethod on the array
+    type.
     """
     def impl(cls, allocsize, align):
         return intrin_alloc(allocsize, align)
@@ -4789,10 +4790,74 @@ def np_frombuffer(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-@glue_lowering(carray, types.Any, types.Any)
-@glue_lowering(carray, types.Any, types.Any, types.DTypeSpec)
-@glue_lowering(farray, types.Any, types.Any)
-@glue_lowering(farray, types.Any, types.Any, types.DTypeSpec)
+@overload(carray)
+def impl_carray(ptr, shape, dtype=None):
+    if is_nonelike(dtype):
+        intrinsic_cfarray = get_cfarray_intrinsic('C', None)
+
+        def impl(ptr, shape, dtype=None):
+            return intrinsic_cfarray(ptr, shape)
+        return impl
+    elif isinstance(dtype, types.DTypeSpec):
+        intrinsic_cfarray = get_cfarray_intrinsic('C', dtype)
+
+        def impl(ptr, shape, dtype=None):
+            return intrinsic_cfarray(ptr, shape)
+        return impl
+
+
+@overload(farray)
+def impl_farray(ptr, shape, dtype=None):
+    if is_nonelike(dtype):
+        intrinsic_cfarray = get_cfarray_intrinsic('F', None)
+
+        def impl(ptr, shape, dtype=None):
+            return intrinsic_cfarray(ptr, shape)
+        return impl
+    elif isinstance(dtype, types.DTypeSpec):
+        intrinsic_cfarray = get_cfarray_intrinsic('F', dtype)
+
+        def impl(ptr, shape, dtype=None):
+            return intrinsic_cfarray(ptr, shape)
+        return impl
+
+
+def get_cfarray_intrinsic(layout, dtype_):
+    @intrinsic
+    def intrinsic_cfarray(typingctx, ptr, shape):
+        if ptr is types.voidptr:
+            ptr_dtype = None
+        elif isinstance(ptr, types.CPointer):
+            ptr_dtype = ptr.dtype
+        else:
+            msg = f"pointer argument expected, got '{ptr}'"
+            raise errors.NumbaTypeError(msg)
+
+        if dtype_ is None:
+            if ptr_dtype is None:
+                msg = "explicit dtype required for void* argument"
+                raise errors.NumbaTypeError(msg)
+            dtype = ptr_dtype
+        elif isinstance(dtype_, types.DTypeSpec):
+            dtype = dtype_.dtype
+            if ptr_dtype is not None and dtype != ptr_dtype:
+                msg = f"mismatching dtype '{dtype}' for pointer type '{ptr}'"
+                raise errors.NumbaTypeError(msg)
+        else:
+            msg = f"invalid dtype spec '{dtype_}'"
+            raise errors.NumbaTypeError(msg)
+
+        ndim = ty_parse_shape(shape)
+        if ndim is None:
+            msg = f"invalid shape '{shape}'"
+            raise errors.NumbaTypeError(msg)
+
+        retty = types.Array(dtype, ndim, layout)
+        sig = signature(retty, ptr, shape)
+        return sig, np_cfarray
+    return intrinsic_cfarray
+
+
 def np_cfarray(context, builder, sig, args):
     """
     numba.numpy_support.carray(...) and
