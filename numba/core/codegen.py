@@ -18,7 +18,7 @@ from numba.core.runtime.nrtopt import remove_redundant_nrt_refct
 from numba.core.runtime import rtsys
 from numba.core.compiler_lock import require_global_compiler_lock
 from numba.core.errors import NumbaInvalidConfigWarning
-from numba.core.opt_info import global_processors, Missed, Passed
+from numba.core.opt_info import *
 from numba.misc.inspection import disassemble_elf_to_cfg
 from numba.misc.llvm_pass_timings import PassTimingsCollection
 
@@ -1496,6 +1496,16 @@ def _llvm_yaml():
                                info=loader.construct_mapping(node)))
     Loader.add_constructor("!Passed",
                            lambda loader, node: Passed(
+                               info=loader.construct_mapping(node)))
+    Loader.add_constructor("!Analysis", lambda loader, node: Analysis(
+                               info=loader.construct_mapping(node)))
+    Loader.add_constructor("!AnalysisFPCommute", lambda loader, node:
+                           AnalysisFPCommute(info=loader.construct_mapping(
+                               node)))
+    Loader.add_constructor("!AnalysisAliasing", lambda loader, node:
+                           AnalysisAliasing(info=loader.construct_mapping(
+                               node)))
+    Loader.add_constructor("!Failure", lambda loader, node: Failure(
                                info=loader.construct_mapping(node)))
     setattr(_llvm_yaml, 'loader', Loader)
     return Loader

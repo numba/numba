@@ -14,6 +14,16 @@ class OptimizationProcessor:
         """
         pass
 
+    def needs_debug_info(self) -> bool:
+        """
+        Determines if the processor requires debugging information (file and
+        line numbers) or not.
+
+        The default is to require it, but, if overridden to false, this can
+        save time at compilation.
+        """
+        return True
+
     def process(self, remarks_data: List[Any], full_name: str) ->\
             Iterable[Tuple[str, Any]]:
         """
@@ -48,6 +58,9 @@ class RawOptimizationRemarks(OptimizationProcessor):
     def filters(self) -> Iterable[str]:
         return self.filter_names
 
+    def needs_debug_info(self) -> bool:
+        return False
+
     def process(self, remarks_data: Any, function) -> Iterable[Tuple[str, Any]]:
         return ('raw', remarks_data),
 
@@ -69,6 +82,14 @@ def register_processor(processor: OptimizationProcessor):
 Missed = namedtuple("Missed", ("info",))
 
 Passed = namedtuple("Passed", ("info",))
+
+Analysis = namedtuple("Analysis", ("info", ))
+
+AnalysisFPCommute = namedtuple("AnalysisFPCommute", ("info", ))
+
+AnalysisAliasing = namedtuple("AnalysisAliasing", ("info", ))
+
+Failure = namedtuple("Failure", ("info", ))
 
 
 def global_processors() -> Iterable[OptimizationProcessor]:

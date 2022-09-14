@@ -10,6 +10,7 @@ from numba.core.base import BaseContext, PYOBJECT
 from numba.core import utils, types, config, cgutils, callconv, codegen, externals, fastmathpass, intrinsics
 from numba.core.utils import cached_property
 from numba.core.options import TargetOptions, include_default_options
+from numba.core.opt_info import global_processors
 from numba.core.runtime import rtsys
 from numba.core.compiler_lock import global_compiler_lock
 import numba.core.entrypoints
@@ -289,6 +290,11 @@ class CPUTargetOptions(_options_mixin, TargetOptions):
             flags.enable_looplift = True
 
         flags.inherit_if_not_set("nrt", default=True)
+
+        if ((flags.is_set("opt_info") and any(p.needs_debug_info() for p in
+                                              flags.opt_info))
+                or any(p.needs_debug_info() for p in global_processors())):
+            flags.debuginfo = True
 
         if not flags.is_set("debuginfo"):
             flags.debuginfo = config.DEBUGINFO_DEFAULT
