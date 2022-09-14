@@ -53,11 +53,6 @@ def cuda_laneid(context, builder, sig, args):
     return nvvmutils.call_sreg(builder, 'laneid')
 
 
-@lower_attr(types.Module(cuda), 'warpsize')
-def cuda_warpsize(context, builder, sig, args):
-    return nvvmutils.call_sreg(builder, 'warpsize')
-
-
 @lower_attr(dim3, 'x')
 def dim3_x(context, builder, sig, args):
     return builder.extract_value(args, 0)
@@ -89,46 +84,6 @@ def ptx_sync_group(context, builder, sig, args):
     return builder.call(
         nvvmutils.declare_cudaCGSynchronize(lmod),
         (*args, flags))
-
-
-# -----------------------------------------------------------------------------
-
-@lower(cuda.grid, types.int32)
-def cuda_grid(context, builder, sig, args):
-    restype = sig.return_type
-    if restype == types.int32:
-        return nvvmutils.get_global_id(builder, dim=1)
-    elif isinstance(restype, types.UniTuple):
-        ids = nvvmutils.get_global_id(builder, dim=restype.count)
-        return cgutils.pack_array(builder, ids)
-    else:
-        raise ValueError('Unexpected return type %s from cuda.grid' % restype)
-
-
-def _nthreads_for_dim(builder, dim):
-    ntid = nvvmutils.call_sreg(builder, f"ntid.{dim}")
-    nctaid = nvvmutils.call_sreg(builder, f"nctaid.{dim}")
-    return builder.mul(ntid, nctaid)
-
-
-@lower(cuda.gridsize, types.int32)
-def cuda_gridsize(context, builder, sig, args):
-    restype = sig.return_type
-    nx = _nthreads_for_dim(builder, 'x')
-
-    if restype == types.int32:
-        return nx
-    elif isinstance(restype, types.UniTuple):
-        ny = _nthreads_for_dim(builder, 'y')
-
-        if restype.count == 2:
-            return cgutils.pack_array(builder, (nx, ny))
-        elif restype.count == 3:
-            nz = _nthreads_for_dim(builder, 'z')
-            return cgutils.pack_array(builder, (nx, ny, nz))
-
-    # Fallthrough to here indicates unexpected return type or tuple length
-    raise ValueError('Unexpected return type %s of cuda.gridsize' % restype)
 
 
 # -----------------------------------------------------------------------------
@@ -193,44 +148,6 @@ def ptx_lmem_alloc_array(context, builder, sig, args):
                           symbol_name='_cudapy_lmem',
                           addrspace=nvvm.ADDRSPACE_LOCAL,
                           can_dynsized=False)
-
-
-@lower(stubs.syncthreads)
-def ptx_syncthreads(context, builder, sig, args):
-    assert not args
-    fname = 'llvm.nvvm.barrier0'
-    lmod = builder.module
-    fnty = ir.FunctionType(ir.VoidType(), ())
-    sync = cgutils.get_or_insert_function(lmod, fnty, fname)
-    builder.call(sync, ())
-    return context.get_dummy_value()
-
-
-@lower(stubs.syncthreads_count, types.i4)
-def ptx_syncthreads_count(context, builder, sig, args):
-    fname = 'llvm.nvvm.barrier0.popc'
-    lmod = builder.module
-    fnty = ir.FunctionType(ir.IntType(32), (ir.IntType(32),))
-    sync = cgutils.get_or_insert_function(lmod, fnty, fname)
-    return builder.call(sync, args)
-
-
-@lower(stubs.syncthreads_and, types.i4)
-def ptx_syncthreads_and(context, builder, sig, args):
-    fname = 'llvm.nvvm.barrier0.and'
-    lmod = builder.module
-    fnty = ir.FunctionType(ir.IntType(32), (ir.IntType(32),))
-    sync = cgutils.get_or_insert_function(lmod, fnty, fname)
-    return builder.call(sync, args)
-
-
-@lower(stubs.syncthreads_or, types.i4)
-def ptx_syncthreads_or(context, builder, sig, args):
-    fname = 'llvm.nvvm.barrier0.or'
-    lmod = builder.module
-    fnty = ir.FunctionType(ir.IntType(32), (ir.IntType(32),))
-    sync = cgutils.get_or_insert_function(lmod, fnty, fname)
-    return builder.call(sync, args)
 
 
 @lower(stubs.threadfence_block)
@@ -489,8 +406,14 @@ def lower_fp16_binary(fn, op):
 
 
 lower_fp16_binary(stubs.fp16.hadd, 'add')
+lower_fp16_binary(operator.add, 'add')
+lower_fp16_binary(operator.iadd, 'add')
 lower_fp16_binary(stubs.fp16.hsub, 'sub')
+lower_fp16_binary(operator.sub, 'sub')
+lower_fp16_binary(operator.isub, 'sub')
 lower_fp16_binary(stubs.fp16.hmul, 'mul')
+lower_fp16_binary(operator.mul, 'mul')
+lower_fp16_binary(operator.imul, 'mul')
 
 
 @lower(stubs.fp16.hneg, types.float16)
@@ -500,11 +423,21 @@ def ptx_fp16_hneg(context, builder, sig, args):
     return builder.call(asm, args)
 
 
+@lower(operator.neg, types.float16)
+def operator_hneg(context, builder, sig, args):
+    return ptx_fp16_hneg(context, builder, sig, args)
+
+
 @lower(stubs.fp16.habs, types.float16)
 def ptx_fp16_habs(context, builder, sig, args):
     fnty = ir.FunctionType(ir.IntType(16), [ir.IntType(16)])
     asm = ir.InlineAsm(fnty, 'abs.f16 $0, $1;', '=h,h')
     return builder.call(asm, args)
+
+
+@lower(abs, types.float16)
+def operator_habs(context, builder, sig, args):
+    return ptx_fp16_habs(context, builder, sig, args)
 
 
 @lower(stubs.fp16.hfma, types.float16, types.float16, types.float16)
@@ -1059,11 +992,10 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
             gvmem.initializer = ir.Constant(laryty, ir.Undefined)
 
         # Convert to generic address-space
-        conv = nvvmutils.insert_addrspace_conv(lmod, ir.IntType(8), addrspace)
-        addrspaceptr = gvmem.bitcast(ir.PointerType(ir.IntType(8), addrspace))
-        dataptr = builder.call(conv, [addrspaceptr])
+        dataptr = builder.addrspacecast(gvmem, ir.PointerType(ir.IntType(8)),
+                                        'generic')
 
-    targetdata = ll.create_target_data(nvvm.data_layout)
+    targetdata = ll.create_target_data(nvvm.NVVM().data_layout)
     lldtype = context.get_data_type(dtype)
     itemsize = lldtype.get_abi_size(targetdata)
 

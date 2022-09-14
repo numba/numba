@@ -4390,66 +4390,52 @@ def numpy_diag_kwarg(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
-@lower_builtin('array.take', types.Array, types.Integer)
-@glue_lowering(np.take, types.Array, types.Integer)
-def numpy_take_1(context, builder, sig, args):
+@overload(np.take)
+@overload_method(types.Array, 'take')
+def numpy_take(a, indices):
 
-    def take_impl(a, indices):
-        if indices > (a.size - 1) or indices < -a.size:
-            raise IndexError("Index out of bounds")
-        return a.ravel()[indices]
-
-    res = context.compile_internal(builder, take_impl, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-
-@lower_builtin('array.take', types.Array, types.Array)
-@glue_lowering(np.take, types.Array, types.Array)
-def numpy_take_2(context, builder, sig, args):
-
-    F_order = sig.args[1].layout == 'F'
-
-    def take_impl(a, indices):
-        ret = np.empty(indices.size, dtype=a.dtype)
-        if F_order:
-            walker = indices.copy()  # get C order
-        else:
-            walker = indices
-        it = np.nditer(walker)
-        i = 0
-        flat = a.ravel()
-        for x in it:
-            if x > (a.size - 1) or x < -a.size:
+    if isinstance(a, types.Array) and isinstance(indices, types.Integer):
+        def take_impl(a, indices):
+            if indices > (a.size - 1) or indices < -a.size:
                 raise IndexError("Index out of bounds")
-            ret[i] = flat[x]
-            i = i + 1
-        return ret.reshape(indices.shape)
+            return a.ravel()[indices]
+        return take_impl
 
-    res = context.compile_internal(builder, take_impl, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
+    if all(isinstance(arg, types.Array) for arg in [a, indices]):
+        F_order = indices.layout == 'F'
 
+        def take_impl(a, indices):
+            ret = np.empty(indices.size, dtype=a.dtype)
+            if F_order:
+                walker = indices.copy()  # get C order
+            else:
+                walker = indices
+            it = np.nditer(walker)
+            i = 0
+            flat = a.ravel()
+            for x in it:
+                if x > (a.size - 1) or x < -a.size:
+                    raise IndexError("Index out of bounds")
+                ret[i] = flat[x]
+                i = i + 1
+            return ret.reshape(indices.shape)
+        return take_impl
 
-@lower_builtin('array.take', types.Array, types.List)
-@glue_lowering(np.take, types.Array, types.List)
-@lower_builtin('array.take', types.Array, types.BaseTuple)
-@glue_lowering(np.take, types.Array, types.BaseTuple)
-def numpy_take_3(context, builder, sig, args):
-
-    def take_impl(a, indices):
-        convert = np.array(indices)
-        ret = np.empty(convert.size, dtype=a.dtype)
-        it = np.nditer(convert)
-        i = 0
-        flat = a.ravel()
-        for x in it:
-            if x > (a.size - 1) or x < -a.size:
-                raise IndexError("Index out of bounds")
-            ret[i] = flat[x]
-            i = i + 1
-        return ret.reshape(convert.shape)
-
-    res = context.compile_internal(builder, take_impl, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
+    if isinstance(a, types.Array) and \
+            isinstance(indices, (types.List, types.BaseTuple)):
+        def take_impl(a, indices):
+            convert = np.array(indices)
+            ret = np.empty(convert.size, dtype=a.dtype)
+            it = np.nditer(convert)
+            i = 0
+            flat = a.ravel()
+            for x in it:
+                if x > (a.size - 1) or x < -a.size:
+                    raise IndexError("Index out of bounds")
+                ret[i] = flat[x]
+                i = i + 1
+            return ret.reshape(convert.shape)
+        return take_impl
 
 
 def _arange_dtype(*args):
@@ -4546,22 +4532,22 @@ def np_arange(start, stop=None, step=None, dtype=None):
     return impl
 
 
-@glue_lowering(np.linspace, types.Number, types.Number)
-def numpy_linspace_2(context, builder, sig, args):
+@overload(np.linspace)
+def numpy_linspace(start, stop, num=50):
+    if not all(isinstance(arg, types.Number) for arg in [start, stop]):
+        return
 
-    def linspace(start, stop):
-        return np.linspace(start, stop, 50)
+    if not isinstance(num, (int, types.Integer)):
+        msg = 'The argument "num" must be an integer'
+        raise errors.TypingError(msg)
 
-    res = context.compile_internal(builder, linspace, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-
-@glue_lowering(np.linspace, types.Number, types.Number, types.Integer)
-def numpy_linspace_3(context, builder, sig, args):
-    dtype = as_dtype(sig.return_type.dtype)
+    if any(isinstance(arg, types.Complex) for arg in [start, stop]):
+        dtype = types.complex128
+    else:
+        dtype = types.float64
 
     # Implementation based on https://github.com/numpy/numpy/blob/v1.20.0/numpy/core/function_base.py#L24 # noqa: E501
-    def linspace(start, stop, num):
+    def linspace(start, stop, num=50):
         arr = np.empty(num, dtype)
         # The multiply by 1.0 mirrors
         # https://github.com/numpy/numpy/blob/v1.20.0/numpy/core/function_base.py#L125-L128  # noqa: E501
@@ -4583,9 +4569,7 @@ def numpy_linspace_3(context, builder, sig, args):
         if num > 1:
             arr[-1] = stop
         return arr
-
-    res = context.compile_internal(builder, linspace, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
+    return linspace
 
 
 def _array_copy(context, builder, sig, args):
