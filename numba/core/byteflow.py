@@ -300,6 +300,19 @@ class TraceRunner(object):
     def op_PUSH_NULL(self, state, inst):
         state.append(inst)
 
+    def op_RETURN_GENERATOR(self, state, inst):
+        # This impl doesn't follow what CPython does. CPython is hacking
+        # the frame stack in the interpreter. We cannot. From usage, it always
+        # have a POP_TOP after it so we push a dummy value to the stack.
+        #
+        # Example bytecode:
+        # >          0	NOP(arg=None, lineno=80)
+        #            2	RETURN_GENERATOR(arg=None, lineno=80)
+        #            4	POP_TOP(arg=None, lineno=80)
+        #            6	RESUME(arg=0, lineno=80)
+        state.push(state.make_temp())
+        state.append(inst)
+
     def op_FORMAT_VALUE(self, state, inst):
         """
         FORMAT_VALUE(flags): flags argument specifies format spec which is
@@ -351,6 +364,9 @@ class TraceRunner(object):
             res = state.make_temp()
             state.append(inst, res=res)
             state.push(res)
+
+    def op_COPY_FREE_VARS(self, state, inst):
+        state.append(inst)
 
     def op_LOAD_DEREF(self, state, inst):
         res = state.make_temp()
@@ -915,6 +931,12 @@ class TraceRunner(object):
     def op_DUP_TOP_TWO(self, state, inst):
         self._dup_topx(state, inst, count=2)
 
+    def op_COPY(self, state, inst):
+        state.push(state.peek(inst.arg))
+
+    def op_SWAP(self, state, inst):
+        state.swap(inst.arg)
+
     def op_ROT_TWO(self, state, inst):
         first = state.pop()
         second = state.pop()
@@ -1402,6 +1424,11 @@ class State(object):
     def pop(self):
         """Pop the stack"""
         return self._stack.pop()
+
+    def swap(self, idx):
+        """Swap stack[idx] with the tos"""
+        s = self._stack
+        s[-1], s[-idx] = s[-idx], s[-1]
 
     def push_block(self, synblk):
         """Push a block to blockstack

@@ -1721,6 +1721,9 @@ class Interpreter(object):
     def op_PUSH_NULL(self, inst):
         pass
 
+    def op_RETURN_GENERATOR(self, inst):
+        pass
+
     def op_PRINT_ITEM(self, inst, item, printvar, res):
         item = self.get(item)
         printgv = ir.Global("print", print, loc=self.loc)
@@ -2076,17 +2079,33 @@ class Interpreter(object):
             gl = ir.Global(name, value, loc=self.loc)
             self.store(gl, res)
 
-    def op_LOAD_DEREF(self, inst, res):
-        n_cellvars = len(self.code_cellvars)
-        if inst.arg < n_cellvars:
-            name = self.code_cellvars[inst.arg]
-            gl = self.get(name)
-        else:
-            idx = inst.arg - n_cellvars
-            name = self.code_freevars[idx]
-            value = self.get_closure_value(idx)
-            gl = ir.FreeVar(idx, name, value, loc=self.loc)
-        self.store(gl, res)
+    def op_COPY_FREE_VARS(self, inst):
+        pass
+
+    if PYVERSION < (3, 11):
+        def op_LOAD_DEREF(self, inst, res):
+            n_cellvars = len(self.code_cellvars)
+            if inst.arg < n_cellvars:
+                name = self.code_cellvars[inst.arg]
+                gl = self.get(name)
+            else:
+                idx = inst.arg - n_cellvars
+                name = self.code_freevars[idx]
+                value = self.get_closure_value(idx)
+                gl = ir.FreeVar(idx, name, value, loc=self.loc)
+            self.store(gl, res)
+    else:
+        def op_LOAD_DEREF(self, inst, res):
+            n_cellvars = len(self.code_cellvars)
+            if inst.arg < n_cellvars:
+                name = self.code_cellvars[inst.arg]
+                gl = self.get(name)
+            else:
+                idx = inst.arg - len(self.code_locals)
+                name = self.code_freevars[idx]
+                value = self.get_closure_value(idx)
+                gl = ir.FreeVar(idx, name, value, loc=self.loc)
+            self.store(gl, res)
 
     def op_STORE_DEREF(self, inst, value):
         n_cellvars = len(self.code_cellvars)
