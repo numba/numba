@@ -61,8 +61,32 @@ class RawOptimizationRemarks(OptimizationProcessor):
     def needs_debug_info(self) -> bool:
         return False
 
-    def process(self, remarks_data: Any, function) -> Iterable[Tuple[str, Any]]:
+    def process(self, remarks_data: List[Any], function) -> Iterable[
+          Tuple[str, Any]]:
         return ('raw', remarks_data),
+
+
+class LoopDeLoop(OptimizationProcessor):
+    """
+    Tries to score which loop vectorizations happened.
+    """
+
+    def filters(self) -> Iterable[str]:
+        return 'loop-vectorize',
+
+    def process(self, remarks_data: List[Any], function) -> Iterable[
+           Tuple[str, Any]]:
+        loops = {}
+        for remarks in remarks_data:
+            for entry in remarks:
+                if isinstance(entry, (Missed, Passed)) and entry.info['Pass']\
+                        == 'loop-vectorize' and 'DebugLoc' in entry.info:
+                    location = (entry.info['DebugLoc']['File'],
+                                entry.info['DebugLoc']['Line'],
+                                entry.info['DebugLoc']['Column'])
+                    loops[location] = (loops.get(location, False) or
+                                       isinstance(entry, Passed))
+        return ('loop_vectorization', loops),
 
 
 _global_processors: Set[OptimizationProcessor] = set()
