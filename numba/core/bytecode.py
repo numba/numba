@@ -264,7 +264,8 @@ class ByteCode(object):
                 return ' '
 
         return '\n'.join('%s %10s\t%s' % ((label_marker(i),) + i)
-                         for i in self.table.items())
+                         for i in self.table.items()
+                         if i[1].opname != "CACHE")
 
     @classmethod
     def _compute_used_globals(cls, func, table, co_consts, co_names):
