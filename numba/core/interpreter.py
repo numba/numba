@@ -2144,10 +2144,16 @@ class Interpreter(object):
             self.store(const_none, name=tmp)
             self._exception_vars.add(tmp)
 
-    def op_CALL(self, inst, func, args, res):
+    def op_CALL(self, inst, func, args, kw_names, res):
         func = self.get(func)
         args = [self.get(x) for x in args]
-        expr = ir.Expr.call(func, args, (), loc=self.loc)
+        if kw_names is not None:
+            names = self.code_consts[kw_names]
+            kwargs = list(zip(names, args[-len(names):]))
+            args = args[:-len(names)]
+        else:
+            kwargs = ()
+        expr = ir.Expr.call(func, args, kwargs, loc=self.loc)
         self.store(expr, res)
 
     if PYVERSION < (3, 6):

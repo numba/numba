@@ -845,15 +845,19 @@ class TraceRunner(object):
         target = state.pop()
         state.append(inst, target=target, index=index)
 
-
     def op_CALL(self, state, inst):
         narg = inst.arg
         args = list(reversed([state.pop() for _ in range(narg)]))
         func = state.pop()
 
         res = state.make_temp()
-        state.append(inst, func=func, args=args, res=res)
+
+        kw_names = state.pop_kw_names()
+        state.append(inst, func=func, args=args, kw_names=kw_names, res=res)
         state.push(res)
+
+    def op_KW_NAMES(self, state, inst):
+        state.set_kw_names(inst.arg)
 
     def op_CALL_FUNCTION(self, state, inst):
         narg = inst.arg
@@ -1519,6 +1523,25 @@ class State(object):
 
         return {edge.pc: tuple(edge.stack[-edge.npush:])
                 for edge in self._outedges}
+
+
+class StatePy311(State):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._kw_names = None
+
+    def pop_kw_names(self):
+        out = self._kw_names
+        self._kw_names = None
+        return out
+
+    def set_kw_names(self, val):
+        assert self._kw_names is None
+        self._kw_names = val
+
+
+if PYVERSION >= (3, 11):
+    State = StatePy311
 
 
 Edge = namedtuple("Edge", ["pc", "stack", "blockstack", "npush"])
