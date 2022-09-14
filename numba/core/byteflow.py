@@ -1184,6 +1184,8 @@ class TraceRunner(object):
 
     def op_MAKE_FUNCTION(self, state, inst, MAKE_CLOSURE=False):
         if PYVERSION >= (3, 11):
+            # https://github.com/python/cpython/commit/2f180ce
+            # name set via co_qualname
             name = None
         else:
             name = state.pop()
