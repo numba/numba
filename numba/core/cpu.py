@@ -48,6 +48,7 @@ class CPUContext(BaseContext):
 
     @global_compiler_lock
     def init(self):
+        self._nrt_initialized = False
         self.is32bit = (utils.MACHINE_BITS == 32)
         self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
 
@@ -58,10 +59,16 @@ class CPUContext(BaseContext):
         # Map external C functions.
         externals.c_math_functions.install(self)
 
-        # Initialize NRT runtime
-        rtsys.initialize(self)
-
     def load_additional_registries(self):
+        # Only initialize the NRT once something is about to be compiled. The
+        # "initialized" state doesn't need to be threadsafe, there's a lock
+        # around the internal compilation and the rtsys.initialize call can be
+        # made multiple times, worse case this just gets called a bit more often
+        # than optimal.
+        if not self._nrt_initialized:
+            rtsys.initialize(self)
+            self._nrt_initialized = True
+
         # Add implementations that work via import
         from numba.cpython import (builtins, charseq, enumimpl, # noqa F401
                                    hashing, heapq, iterators, # noqa F401
