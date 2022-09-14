@@ -1183,7 +1183,10 @@ class TraceRunner(object):
     op_BINARY_XOR = _binaryop
 
     def op_MAKE_FUNCTION(self, state, inst, MAKE_CLOSURE=False):
-        name = state.pop()
+        if PYVERSION >= (3, 11):
+            name = None
+        else:
+            name = state.pop()
         code = state.pop()
         closure = annotations = kwdefaults = defaults = None
         if PYVERSION < (3, 6):
