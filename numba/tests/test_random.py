@@ -98,6 +98,16 @@ def jit_with_args(name, argstring):
     pyfunc = compile_function("func", code, globals())
     return jit(nopython=True)(pyfunc)
 
+def jit_with_kwargs(name, kwarg_list):
+    # Similar to jit_with_args, but uses keyword arguments
+    call_args_with_kwargs = ','.join([f'{kw}={kw}' for kw in kwarg_list])
+    signature = ','.join(kwarg_list)
+    code = f"""def func({signature}):
+        return {name}({call_args_with_kwargs})
+"""
+    pyfunc = compile_function("func", code, globals())
+    return jit(nopython=True)(pyfunc)
+
 def jit_nullary(name):
     return jit_with_args(name, "")
 
@@ -336,6 +346,16 @@ class TestRandom(BaseTest):
             self.assertPreciseEqual(results, pyresults, prec=prec, ulps=ulps,
                                     msg="for arguments %s" % (args,))
 
+    def _check_dist_kwargs(self, func, pyfunc, kwargslist, niters=3,
+                           prec='double', ulps=12, pydtype=None):
+        assert len(kwargslist)
+        for kwargs in kwargslist:
+            results = [func(**kwargs) for i in range(niters)]
+            pyresults = [(pyfunc(**kwargs, dtype=pydtype) if pydtype else pyfunc(**kwargs))
+                         for i in range(niters)]
+            self.assertPreciseEqual(results, pyresults, prec=prec, ulps=ulps,
+                                    msg="for arguments %s" % (kwargs,))
+
     def _check_gauss(self, func2, func1, func0, ptr):
         """
         Check a gauss()-like function.
@@ -485,11 +505,32 @@ class TestRandom(BaseTest):
         self._check_dist(func, r.uniform,
                          [(1.5, 1e6), (-2.5, 1e3), (1.5, -2.5)])
 
+    def _check_any_distrib_kwargs(self, func, ptr, distrib, paramlist):
+        """
+        Check any numpy distribution function. Does Numba use the same keyword
+        argument names as Numpy?
+        And given a fixed seed, do they both return the same samples?
+        """
+        # Our implementation follows Numpy's (not Python's)
+        r = self._follow_numpy(ptr)
+        distrib_method_of_numpy = getattr(r, distrib)
+        self._check_dist_kwargs(func, distrib_method_of_numpy, paramlist)
+
+
     def test_random_uniform(self):
         self._check_uniform(jit_binary("random.uniform"), get_py_state_ptr())
 
     def test_numpy_uniform(self):
         self._check_uniform(jit_binary("np.random.uniform"), get_np_state_ptr())
+
+    def test_numpy_uniform_kwargs(self):
+        self._check_any_distrib_kwargs(
+            jit_with_kwargs("np.random.uniform", ['low', 'high']),
+            get_np_state_ptr(),
+            'uniform',
+            paramlist=[{'low': 1.5, 'high': 1e6},
+                       {'low': -2.5, 'high': 1e3},
+                       {'low': 1.5, 'high': -2.5}])
 
     def _check_triangular(self, func2, func3, ptr):
         """
@@ -715,6 +756,15 @@ class TestRandom(BaseTest):
         r = self._follow_numpy(get_np_state_ptr())
         self._check_dist(gumbel, r.gumbel, [(0.0, 1.0), (-1.5, 3.5)])
 
+    def test_numpy_gumbel_kwargs(self):
+        self._check_any_distrib_kwargs(
+            jit_with_kwargs("np.random.gumbel", ['loc', 'scale']),
+            get_np_state_ptr(),
+            distrib="gumbel",
+            paramlist=[{'loc': 0.0, 'scale': 1.0},
+                       {'loc': -1.5, 'scale': 3.5}])
+
+
     def test_numpy_hypergeometric(self):
         # Our implementation follows Numpy's up to nsamples = 10.
         hg = jit_ternary("np.random.hypergeometric")
@@ -836,6 +886,18 @@ class TestRandom(BaseTest):
         self.assertRaises(ValueError, wald, 1.0, 0.0)
         self.assertRaises(ValueError, wald, 1.0, -0.1)
 
+    def test_numpy_wald_kwargs(self):
+        numba_version = jit_with_kwargs("np.random.wald", ['mean', 'scale'])
+        self._check_any_distrib_kwargs(numba_version,
+                                       get_np_state_ptr(),
+                                       distrib="wald",
+                                       paramlist=[{'mean': 1.0, 'scale': 1.0},
+                                                  {'mean': 2.0, 'scale': 5.0}])
+        self.assertRaises(ValueError, numba_version, 0.0, 1.0)
+        self.assertRaises(ValueError, numba_version, -0.1, 1.0)
+        self.assertRaises(ValueError, numba_version, 1.0, 0.0)
+        self.assertRaises(ValueError, numba_version, 1.0, -0.1)
+
     def test_numpy_zipf(self):
         r = self._follow_numpy(get_np_state_ptr())
         zipf = jit_unary("np.random.zipf")
@@ -940,7 +1002,7 @@ class TestRandomArrays(BaseTest):
         argstring = ', '.join('abcd'[:nargs])
         return jit_with_args(qualname, argstring)
 
-    def _check_array_dist(self, funcname, scalar_args, old=False):
+    def _check_array_dist(self, funcname, scalar_args):
         """
         Check returning an array according to a given distribution.
         """
@@ -956,14 +1018,10 @@ class TestRandomArrays(BaseTest):
                 and got.dtype == np.dtype('int64')):
                 expected = expected.astype(got.dtype)
             self.assertPreciseEqual(expected, got, prec='double', ulps=5)
-        # The old glue lowering for array randomness didn't handle None
-        # properly, so it fails on unmigrated distributions. Once migrated,
-        # remove this logic.
-        if not old:
-            args = scalar_args + (None,)
-            expected = pyfunc(*args)
-            got = cfunc(*args)
-            self.assertPreciseEqual(expected, got, prec='double', ulps=5)
+        args = scalar_args + (None,)
+        expected = pyfunc(*args)
+        got = cfunc(*args)
+        self.assertPreciseEqual(expected, got, prec='double', ulps=5)
 
     def _check_array_dist_gamma(self, funcname,  scalar_args, extra_pyfunc_args):
         """
@@ -1104,13 +1162,13 @@ class TestRandomArrays(BaseTest):
         self._check_array_dist("logseries", (0.8,))
 
     def test_numpy_normal(self):
-        self._check_array_dist("normal", (0.5, 2.0), old=True)
+        self._check_array_dist("normal", (0.5, 2.0))
 
     def test_numpy_pareto(self):
         self._check_array_dist("pareto", (0.5,))
 
     def test_numpy_poisson(self):
-        self._check_array_dist("poisson", (0.8,), old=True)
+        self._check_array_dist("poisson", (0.8,))
 
     def test_numpy_power(self):
         self._check_array_dist("power", (0.8,))
@@ -1140,13 +1198,13 @@ class TestRandomArrays(BaseTest):
         self._check_array_dist_gamma("standard_gamma", (2.0,), (1.0,))
 
     def test_numpy_standard_normal(self):
-        self._check_array_dist("standard_normal", (), old=True)
+        self._check_array_dist("standard_normal", ())
 
     def test_numpy_triangular(self):
         self._check_array_dist("triangular", (1.5, 2.2, 3.5))
 
     def test_numpy_uniform(self):
-        self._check_array_dist("uniform", (0.1, 0.4), old=True)
+        self._check_array_dist("uniform", (0.1, 0.4))
 
     def test_numpy_wald(self):
         self._check_array_dist("wald", (0.1, 0.4))

@@ -2,9 +2,9 @@ import numpy as np
 from numba.cuda.testing import (unittest, CUDATestCase, skip_unless_cc_53,
                                 skip_on_cudasim, skip_unless_cuda_python)
 from numba import cuda
-from numba.core.types import f2,b1
-import operator
+from numba.core.types import f2, b1
 from numba.cuda import compile_ptx
+import operator
 import itertools
 from numba.np.numpy_support import from_dtype
 
@@ -19,6 +19,42 @@ def simple_fp16_div_kernel(ary, array_a, array_b):
         a = array_a[i]
         b = array_b[i]
         ary[i] = a / b
+
+
+def simple_fp16add(ary, a, b):
+    ary[0] = a + b
+
+
+def simple_fp16_iadd(ary, a):
+    ary[0] += a
+
+
+def simple_fp16_isub(ary, a):
+    ary[0] -= a
+
+
+def simple_fp16_imul(ary, a):
+    ary[0] *= a
+
+
+def simple_fp16_idiv(ary, a):
+    ary[0] /= a
+
+
+def simple_fp16sub(ary, a, b):
+    ary[0] = a - b
+
+
+def simple_fp16mul(ary, a, b):
+    ary[0] = a * b
+
+
+def simple_fp16neg(ary, a):
+    ary[0] = -a
+
+
+def simple_fp16abs(ary, a):
+    ary[0] = abs(a)
 
 
 def simple_fp16_gt(ary, a, b):
@@ -115,6 +151,114 @@ class TestOperatorModule(CUDATestCase):
 
     def test_floordiv(self):
         self.operator_template(operator.floordiv)
+
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
+    @skip_unless_cc_53
+    def test_fp16_binary(self):
+        functions = (simple_fp16add, simple_fp16sub, simple_fp16mul,
+                     simple_fp16_div_scalar)
+        ops = (operator.add, operator.sub, operator.mul, operator.truediv)
+
+        for fn, op in zip(functions, ops):
+            with self.subTest(op=op):
+                kernel = cuda.jit("void(f2[:], f2, f2)")(fn)
+
+                got = np.zeros(1, dtype=np.float16)
+                arg1 = np.random.random(1).astype(np.float16)
+                arg2 = np.random.random(1).astype(np.float16)
+
+                kernel[1, 1](got, arg1[0], arg2[0])
+                expected = op(arg1, arg2)
+                np.testing.assert_allclose(got, expected)
+
+    @skip_on_cudasim('Compilation unsupported in the simulator')
+    def test_fp16_binary_ptx(self):
+        functions = (simple_fp16add, simple_fp16sub, simple_fp16mul)
+        instrs = ('add.f16', 'sub.f16', 'mul.f16')
+        args = (f2[:], f2, f2)
+        for fn, instr in zip(functions, instrs):
+            with self.subTest(instr=instr):
+                ptx, _ = compile_ptx(fn, args, cc=(5, 3))
+                self.assertIn(instr, ptx)
+
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
+    @skip_unless_cc_53
+    def test_mixed_fp16_binary_arithmetic(self):
+        functions = (simple_fp16add, simple_fp16sub, simple_fp16mul,
+                     simple_fp16_div_scalar)
+        ops = (operator.add, operator.sub, operator.mul, operator.truediv)
+        types = (np.int8, np.int16, np.int32, np.int64,
+                 np.float32, np.float64)
+        for (fn, op), ty in itertools.product(zip(functions, ops), types):
+            with self.subTest(op=op, ty=ty):
+                kernel = cuda.jit(fn)
+
+                arg1 = np.random.random(1).astype(np.float16)
+                arg2 = (np.random.random(1) * 100).astype(ty)
+                res_ty = np.result_type(np.float16, ty)
+
+                got = np.zeros(1, dtype=res_ty)
+                kernel[1, 1](got, arg1[0], arg2[0])
+                expected = op(arg1, arg2)
+                np.testing.assert_allclose(got, expected)
+
+    @skip_on_cudasim('Compilation unsupported in the simulator')
+    def test_fp16_inplace_binary_ptx(self):
+        functions = (simple_fp16_iadd, simple_fp16_isub, simple_fp16_imul)
+        instrs = ('add.f16', 'sub.f16', 'mul.f16')
+        args = (f2[:], f2)
+
+        for fn, instr in zip(functions, instrs):
+            with self.subTest(instr=instr):
+                ptx, _ = compile_ptx(fn, args, cc=(5, 3))
+                self.assertIn(instr, ptx)
+
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
+    @skip_unless_cc_53
+    def test_fp16_inplace_binary(self):
+        functions = (simple_fp16_iadd, simple_fp16_isub, simple_fp16_imul,
+                     simple_fp16_idiv)
+        ops = (operator.iadd, operator.isub, operator.imul, operator.itruediv)
+
+        for fn, op in zip(functions, ops):
+            with self.subTest(op=op):
+                kernel = cuda.jit("void(f2[:], f2)")(fn)
+
+                got = np.random.random(1).astype(np.float16)
+                expected = got.copy()
+                arg = np.random.random(1).astype(np.float16)[0]
+                kernel[1, 1](got, arg)
+                op(expected, arg)
+                np.testing.assert_allclose(got, expected)
+
+    @skip_unless_cc_53
+    def test_fp16_unary(self):
+        functions = (simple_fp16neg, simple_fp16abs)
+        ops = (operator.neg, operator.abs)
+
+        for fn, op in zip(functions, ops):
+            with self.subTest(op=op):
+                kernel = cuda.jit("void(f2[:], f2)")(fn)
+
+                got = np.zeros(1, dtype=np.float16)
+                arg1 = np.random.random(1).astype(np.float16)
+
+                kernel[1, 1](got, arg1[0])
+                expected = op(arg1)
+                np.testing.assert_allclose(got, expected)
+
+    @skip_on_cudasim('Compilation unsupported in the simulator')
+    def test_fp16_neg_ptx(self):
+        args = (f2[:], f2)
+        ptx, _ = compile_ptx(simple_fp16neg, args, cc=(5, 3))
+        self.assertIn('neg.f16', ptx)
+
+    @skip_on_cudasim('Compilation unsupported in the simulator')
+    def test_fp16_abs_ptx(self):
+        args = (f2[:], f2)
+        ptx, _ = compile_ptx(simple_fp16abs, args, cc=(5, 3))
+
+        self.assertIn('abs.f16', ptx)
 
     @skip_unless_cc_53
     def test_fp16_comparison(self):

@@ -15,6 +15,7 @@ labels: task
   * [ ] Make, approve and merge a PR against the `main` branch.
   * [ ] Create a cherry-pick from the merge and include in the cherry-pick-PR
     for the `releaseX.Y` branch.
+* [ ] Check if any dependency pinnings need an update (e.g. NumPy)
 * [ ] Approve change log modifications and cherry-pick.
 * [ ] Merge change log modifications and cherry-picks to X.Y release branch.
   * [ ] https://github.com/numba/numba/pull/XXXX

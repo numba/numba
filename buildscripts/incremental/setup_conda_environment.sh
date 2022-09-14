@@ -71,12 +71,12 @@ if [ "${VANILLA_INSTALL}" != "yes" ]; then
     fi
 fi
 
-# Install the compiler toolchain
+# Install the compiler toolchain and gdb (if available)
 if [[ $(uname) == Linux ]]; then
     if [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]] ; then
         $CONDA_INSTALL gcc_linux-32 gxx_linux-32
     else
-        $CONDA_INSTALL gcc_linux-64 gxx_linux-64
+        $CONDA_INSTALL gcc_linux-64 gxx_linux-64 gdb gdb-pretty-printer
     fi
 elif  [[ $(uname) == Darwin ]]; then
     $CONDA_INSTALL clang_osx-64 clangxx_osx-64
