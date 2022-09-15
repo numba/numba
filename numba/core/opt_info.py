@@ -89,6 +89,30 @@ class LoopDeLoop(OptimizationProcessor):
         return ('loop_vectorization', loops),
 
 
+class SuperWorldLevelParallelismDetector(OptimizationProcessor):
+    """
+    Determines locations where the SLP detector found a way to turn scalar
+    operations into vector operations.
+
+    https://llvm.org/docs/Vectorizers.html#the-slp-vectorizer
+    """
+
+    def filters(self) -> Iterable[str]:
+        return 'slp-vectorizer',
+
+    def process(self, remarks_data: List[Any], function) -> Iterable[
+           Tuple[str, Any]]:
+        slps = set()
+        for remarks in remarks_data:
+            for entry in remarks:
+                if isinstance(entry,  Passed) and entry.info['Pass']\
+                        == 'slp-vectorizer' and 'DebugLoc' in entry.info:
+                    slps.add((entry.info['DebugLoc']['File'],
+                              entry.info['DebugLoc']['Line'],
+                              entry.info['DebugLoc']['Column']))
+        return ('slp_vectorization', slps),
+
+
 _global_processors: Set[OptimizationProcessor] = set()
 
 

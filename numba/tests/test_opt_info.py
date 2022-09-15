@@ -4,7 +4,8 @@ import unittest
 
 from numba import njit
 from numba.tests.support import TestCase
-from numba.core.opt_info import RawOptimizationRemarks, LoopDeLoop
+from numba.core.opt_info import RawOptimizationRemarks, LoopDeLoop,\
+    SuperWorldLevelParallelismDetector
 
 
 class TestOptimizationInfo(TestCase):
@@ -41,6 +42,23 @@ class TestOptimizationInfo(TestCase):
         self.assertTrue(all(v for metadata in foo.get_metadata().values() for v
                             in metadata['opt_info']['loop_vectorization']
                             .values()))
+
+    def test_slp(self):
+        # Sample translated from:
+        # https://www.llvm.org/docs/Vectorizers.html#the-slp-vectorizer
+
+        @njit(opt_info=[SuperWorldLevelParallelismDetector()])
+        def foo(a1, a2, b1, b2):
+            A = np.empty(4)
+            A[0] = a1 * (a1 + b1)
+            A[1] = a2 * (a2 + b2)
+            A[2] = a1 * (a1 + b1)
+            A[3] = a2 * (a2 + b2)
+            return A
+
+        foo(3.0, 4.0, 5.0, 6.0)
+        self.assertTrue(all(metadata['opt_info']['slp_vectorization'] for
+                            metadata in foo.get_metadata().values()))
 
 
 if __name__ == "__main__":
