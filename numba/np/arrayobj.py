@@ -26,7 +26,7 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
                                  RefType)
 from numba.core.typing import signature
 from numba.core.extending import (register_jitable, overload, overload_method,
-                                  intrinsic, overload_attribute)
+                                  intrinsic)
 from numba.misc import quicksort, mergesort
 from numba.cpython import slicing
 from numba.cpython.unsafe.tuple import tuple_setitem, build_full_slice_tuple
@@ -1627,7 +1627,8 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
     dest_ptr = cgutils.get_item_pointer2(context, builder, dest_data,
                                          dest_shapes, dest_strides,
                                          aryty.layout, dest_indices,
-                                         wraparound=False)
+                                         wraparound=False,
+                                         boundscheck=context.enable_boundscheck)
     store_item(context, builder, aryty, val, dest_ptr)
 
     indexer.end_loops()
@@ -2404,6 +2405,66 @@ def array_repeat(a, repeats):
     return array_repeat_impl
 
 
+@intrinsic
+def _intrin_get_itemsize(tyctx, dtype):
+    """Computes the itemsize of the dtype"""
+    sig = types.intp(dtype)
+
+    def codegen(cgctx, builder, sig, llargs):
+        llty = cgctx.get_data_type(sig.args[0].dtype)
+        llintp = cgctx.get_data_type(sig.return_type)
+        return llintp(cgctx.get_abi_sizeof(llty))
+    return sig, codegen
+
+
+def _compatible_view(a, dtype):
+    pass
+
+
+@overload(_compatible_view)
+def ol_compatible_view(a, dtype):
+    """Determines if the array and dtype are compatible for forming a view."""
+    # NOTE: NumPy 1.23+ uses this check.
+    # Code based on:
+    # https://github.com/numpy/numpy/blob/750ad21258cfc00663586d5a466e24f91b48edc7/numpy/core/src/multiarray/getset.c#L500-L555  # noqa: E501
+    def impl(a, dtype):
+        dtype_size = _intrin_get_itemsize(dtype)
+        if dtype_size != a.itemsize:
+            # catch forbidden cases
+            if a.ndim == 0:
+                msg1 = ("Changing the dtype of a 0d array is only supported "
+                        "if the itemsize is unchanged")
+                raise ValueError(msg1)
+            else:
+                # NumPy has a check here for subarray type conversion which
+                # Numba doesn't support
+                pass
+
+            # Resize on last axis only
+            axis = a.ndim - 1
+            p1 = a.shape[axis] != 1
+            p2 = a.size != 0
+            p3 = a.strides[axis] != a.itemsize
+            if (p1 and p2 and p3):
+                msg2 = ("To change to a dtype of a different size, the last "
+                        "axis must be contiguous")
+                raise ValueError(msg2)
+
+            if dtype_size < a.itemsize:
+                if dtype_size == 0 or a.itemsize % dtype_size != 0:
+                    msg3 = ("When changing to a smaller dtype, its size must "
+                            "be a divisor of the size of original dtype")
+                    raise ValueError(msg3)
+            else:
+                newdim = a.shape[axis] * a.itemsize
+                if newdim % dtype_size != 0:
+                    msg4 = ("When changing to a larger dtype, its size must be "
+                            "a divisor of the total size in bytes of the last "
+                            "axis of the array.")
+                    raise ValueError(msg4)
+    return impl
+
+
 @lower_builtin('array.view', types.Array, types.DTypeSpec)
 def array_view(context, builder, sig, args):
     aryty = sig.args[0]
@@ -2420,6 +2481,18 @@ def array_view(context, builder, sig, args):
             ret.data = builder.bitcast(val, ptrty)
         else:
             setattr(ret, k, val)
+
+    if numpy_version >= (1, 23):
+        # NumPy 1.23+ bans views using a dtype that is a different size to that
+        # of the array when the last axis is not contiguous. For example, this
+        # manifests at runtime when a dtype size altering view is requested
+        # on a Fortran ordered array.
+
+        tyctx = context.typing_context
+        fnty = tyctx.resolve_value_type(_compatible_view)
+        _compatible_view_sig = fnty.get_call_type(tyctx, (*sig.args,), {})
+        impl = context.get_function(fnty, _compatible_view_sig)
+        impl(builder, args)
 
     ok = _change_dtype(context, builder, aryty, retty, ret)
     fail = builder.icmp_unsigned('==', ok, Constant(ok.type, 0))
@@ -2617,127 +2690,87 @@ def array_flags_f_contiguous(context, builder, typ, value):
 # ------------------------------------------------------------------------------
 # .real / .imag
 
-@overload_attribute(types.Array, 'real')
-def ol_array_real(arr):
-    typ = arr
+@lower_getattr(types.Array, "real")
+def array_real_part(context, builder, typ, value):
     if typ.dtype in types.complex_domain:
-        def impl(arr):
-            return _array_real_attr(arr)
-        return impl
+        return array_complex_attr(context, builder, typ, value, attr='real')
     elif typ.dtype in types.number_domain:
-        def impl(arr):
-            return arr
-        return impl
+        # as an identity function
+        return impl_ret_borrowed(context, builder, typ, value)
     else:
-        msg = f"cannot access .real of array of {arr.dtype}"
-        raise errors.TypingError(msg)
+        raise NotImplementedError('unsupported .real for {}'.format(type.dtype))
 
 
-@intrinsic
-def _force_readonly(tyctx, arr):
-    """Takes an array, and returns it with the readonly bit set through
-    typing"""
-    sig = arr.copy(readonly=True)(arr)
-
-    def impl(cgctx, builder, sig, llargs):
-        arrayty = make_array(arr)
-        array = arrayty(cgctx, builder, llargs[0])
-        return impl_ret_borrowed(cgctx, builder, sig.return_type,
-                                 array._getvalue())
-    return sig, impl
-
-
-@overload_attribute(types.Array, 'imag')
-def ol_array_imag(arr):
-    typ = arr
+@lower_getattr(types.Array, "imag")
+def array_imag_part(context, builder, typ, value):
     if typ.dtype in types.complex_domain:
-        def impl(arr):
-            return _array_imag_attr(arr)
-        return impl
+        return array_complex_attr(context, builder, typ, value, attr='imag')
     elif typ.dtype in types.number_domain:
-        def impl(arr):
-            # .imag on a real domain dtype is a readonly zeros array
-            tmp = np.zeros_like(arr)
-            rotmp = _force_readonly(tmp)
-            return rotmp
-        return impl
+        # return a readonly zero array
+        sig = signature(typ.copy(readonly=True), typ)
+        arrtype, shapes = _parse_empty_like_args(context, builder, sig, [value])
+        ary = _empty_nd_impl(context, builder, arrtype, shapes)
+        cgutils.memset(builder, ary.data, builder.mul(ary.itemsize,
+                                                      ary.nitems), 0)
+        return impl_ret_new_ref(context, builder, sig.return_type,
+                                ary._getvalue())
     else:
-        msg = f"cannot access .imag of array of {arr.dtype}"
-        raise errors.TypingError(msg)
+        raise NotImplementedError('unsupported .imag for {}'.format(type.dtype))
 
 
-def _generate_real_imag_attr(attr):
+def array_complex_attr(context, builder, typ, value, attr):
     """
-    Generates intrinsics for obtaining the real/imaginary part of complex array
+    Given a complex array, it's memory layout is:
+
+        R C R C R C
+        ^   ^   ^
+
+    (`R` indicates a float for the real part;
+     `C` indicates a float for the imaginary part;
+     the `^` indicates the start of each element)
+
+    To get the real part, we can simply change the dtype and itemsize to that
+    of the underlying float type.  The new layout is:
+
+        R x R x R x
+        ^   ^   ^
+
+    (`x` indicates unused)
+
+    A load operation will use the dtype to determine the number of bytes to
+    load.
+
+    To get the imaginary part, we shift the pointer by 1 float offset and
+    change the dtype and itemsize.  The new layout is:
+
+        x C x C x C
+          ^   ^   ^
     """
+    if attr not in ['real', 'imag'] or typ.dtype not in types.complex_domain:
+        raise NotImplementedError("cannot get attribute `{}`".format(attr))
 
-    @intrinsic
-    def intrin_typing(tyctx, arr):
-        sig = arr.copy(dtype=arr.dtype.underlying_float, layout='A')(arr)
+    arrayty = make_array(typ)
+    array = arrayty(context, builder, value)
 
-        def codegen(cgctx, builder, sig, llargs):
-            value = llargs[0]
-            typ = sig.args[0]
-            """
-            Given a complex array, it's memory layout is:
+    # sizeof underlying float type
+    flty = typ.dtype.underlying_float
+    sizeof_flty = context.get_abi_sizeof(context.get_data_type(flty))
+    itemsize = array.itemsize.type(sizeof_flty)
 
-                R C R C R C
-                ^   ^   ^
+    # cast data pointer to float type
+    llfltptrty = context.get_value_type(flty).as_pointer()
+    dataptr = builder.bitcast(array.data, llfltptrty)
 
-            (`R` indicates a float for the real part;
-            `C` indicates a float for the imaginary part;
-            the `^` indicates the start of each element)
+    # add offset
+    if attr == 'imag':
+        dataptr = builder.gep(dataptr, [ir.IntType(32)(1)])
 
-            To get the real part, we can simply change the dtype and itemsize to
-            that of the underlying float type.  The new layout is:
-
-                R x R x R x
-                ^   ^   ^
-
-            (`x` indicates unused)
-
-            A load operation will use the dtype to determine the number of bytes
-            to load.
-
-            To get the imaginary part, we shift the pointer by 1 float offset
-            and change the dtype and itemsize.  The new layout is:
-
-                x C x C x C
-                ^   ^   ^
-            """
-            if (attr not in ['real', 'imag'] or
-                    typ.dtype not in types.complex_domain):
-                raise NotImplementedError(f"cannot get attribute `{attr}`")
-
-            arrayty = make_array(typ)
-            array = arrayty(cgctx, builder, value)
-
-            # sizeof underlying float type
-            flty = typ.dtype.underlying_float
-            sizeof_flty = cgctx.get_abi_sizeof(cgctx.get_data_type(flty))
-            itemsize = array.itemsize.type(sizeof_flty)
-
-            # cast data pointer to float type
-            llfltptrty = cgctx.get_value_type(flty).as_pointer()
-            dataptr = builder.bitcast(array.data, llfltptrty)
-
-            # add offset
-            if attr == 'imag':
-                dataptr = builder.gep(dataptr, [ir.IntType(32)(1)])
-
-            # make result
-            resultty = typ.copy(dtype=flty, layout='A')
-            result = make_array(resultty)(cgctx, builder)
-            repl = dict(data=dataptr, itemsize=itemsize)
-            cgutils.copy_struct(result, array, repl)
-            return impl_ret_borrowed(cgctx, builder, resultty,
-                                     result._getvalue())
-        return sig, codegen
-    return intrin_typing
-
-
-_array_real_attr = _generate_real_imag_attr("real")
-_array_imag_attr = _generate_real_imag_attr("imag")
+    # make result
+    resultty = typ.copy(dtype=flty, layout='A')
+    result = make_array(resultty)(context, builder)
+    repl = dict(data=dataptr, itemsize=itemsize)
+    cgutils.copy_struct(result, array, repl)
+    return impl_ret_borrowed(context, builder, resultty, result._getvalue())
 
 
 @overload_method(types.Array, 'conj')
@@ -3934,7 +3967,8 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
 
 @overload_classmethod(types.Array, "_allocate")
 def _ol_array_allocate(cls, allocsize, align):
-    """Implements a Numba-only default target (cpu) classmethod on the array type.
+    """Implements a Numba-only default target (cpu) classmethod on the array
+    type.
     """
     def impl(cls, allocsize, align):
         return intrin_alloc(allocsize, align)
@@ -4356,66 +4390,52 @@ def numpy_diag_kwarg(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
-@lower_builtin('array.take', types.Array, types.Integer)
-@glue_lowering(np.take, types.Array, types.Integer)
-def numpy_take_1(context, builder, sig, args):
+@overload(np.take)
+@overload_method(types.Array, 'take')
+def numpy_take(a, indices):
 
-    def take_impl(a, indices):
-        if indices > (a.size - 1) or indices < -a.size:
-            raise IndexError("Index out of bounds")
-        return a.ravel()[indices]
-
-    res = context.compile_internal(builder, take_impl, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-
-@lower_builtin('array.take', types.Array, types.Array)
-@glue_lowering(np.take, types.Array, types.Array)
-def numpy_take_2(context, builder, sig, args):
-
-    F_order = sig.args[1].layout == 'F'
-
-    def take_impl(a, indices):
-        ret = np.empty(indices.size, dtype=a.dtype)
-        if F_order:
-            walker = indices.copy()  # get C order
-        else:
-            walker = indices
-        it = np.nditer(walker)
-        i = 0
-        flat = a.ravel()
-        for x in it:
-            if x > (a.size - 1) or x < -a.size:
+    if isinstance(a, types.Array) and isinstance(indices, types.Integer):
+        def take_impl(a, indices):
+            if indices > (a.size - 1) or indices < -a.size:
                 raise IndexError("Index out of bounds")
-            ret[i] = flat[x]
-            i = i + 1
-        return ret.reshape(indices.shape)
+            return a.ravel()[indices]
+        return take_impl
 
-    res = context.compile_internal(builder, take_impl, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
+    if all(isinstance(arg, types.Array) for arg in [a, indices]):
+        F_order = indices.layout == 'F'
 
+        def take_impl(a, indices):
+            ret = np.empty(indices.size, dtype=a.dtype)
+            if F_order:
+                walker = indices.copy()  # get C order
+            else:
+                walker = indices
+            it = np.nditer(walker)
+            i = 0
+            flat = a.ravel()
+            for x in it:
+                if x > (a.size - 1) or x < -a.size:
+                    raise IndexError("Index out of bounds")
+                ret[i] = flat[x]
+                i = i + 1
+            return ret.reshape(indices.shape)
+        return take_impl
 
-@lower_builtin('array.take', types.Array, types.List)
-@glue_lowering(np.take, types.Array, types.List)
-@lower_builtin('array.take', types.Array, types.BaseTuple)
-@glue_lowering(np.take, types.Array, types.BaseTuple)
-def numpy_take_3(context, builder, sig, args):
-
-    def take_impl(a, indices):
-        convert = np.array(indices)
-        ret = np.empty(convert.size, dtype=a.dtype)
-        it = np.nditer(convert)
-        i = 0
-        flat = a.ravel()
-        for x in it:
-            if x > (a.size - 1) or x < -a.size:
-                raise IndexError("Index out of bounds")
-            ret[i] = flat[x]
-            i = i + 1
-        return ret.reshape(convert.shape)
-
-    res = context.compile_internal(builder, take_impl, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
+    if isinstance(a, types.Array) and \
+            isinstance(indices, (types.List, types.BaseTuple)):
+        def take_impl(a, indices):
+            convert = np.array(indices)
+            ret = np.empty(convert.size, dtype=a.dtype)
+            it = np.nditer(convert)
+            i = 0
+            flat = a.ravel()
+            for x in it:
+                if x > (a.size - 1) or x < -a.size:
+                    raise IndexError("Index out of bounds")
+                ret[i] = flat[x]
+                i = i + 1
+            return ret.reshape(convert.shape)
+        return take_impl
 
 
 def _arange_dtype(*args):
@@ -4512,22 +4532,22 @@ def np_arange(start, stop=None, step=None, dtype=None):
     return impl
 
 
-@glue_lowering(np.linspace, types.Number, types.Number)
-def numpy_linspace_2(context, builder, sig, args):
+@overload(np.linspace)
+def numpy_linspace(start, stop, num=50):
+    if not all(isinstance(arg, types.Number) for arg in [start, stop]):
+        return
 
-    def linspace(start, stop):
-        return np.linspace(start, stop, 50)
+    if not isinstance(num, (int, types.Integer)):
+        msg = 'The argument "num" must be an integer'
+        raise errors.TypingError(msg)
 
-    res = context.compile_internal(builder, linspace, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-
-@glue_lowering(np.linspace, types.Number, types.Number, types.Integer)
-def numpy_linspace_3(context, builder, sig, args):
-    dtype = as_dtype(sig.return_type.dtype)
+    if any(isinstance(arg, types.Complex) for arg in [start, stop]):
+        dtype = types.complex128
+    else:
+        dtype = types.float64
 
     # Implementation based on https://github.com/numpy/numpy/blob/v1.20.0/numpy/core/function_base.py#L24 # noqa: E501
-    def linspace(start, stop, num):
+    def linspace(start, stop, num=50):
         arr = np.empty(num, dtype)
         # The multiply by 1.0 mirrors
         # https://github.com/numpy/numpy/blob/v1.20.0/numpy/core/function_base.py#L125-L128  # noqa: E501
@@ -4549,9 +4569,7 @@ def numpy_linspace_3(context, builder, sig, args):
         if num > 1:
             arr[-1] = stop
         return arr
-
-    res = context.compile_internal(builder, linspace, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
+    return linspace
 
 
 def _array_copy(context, builder, sig, args):
@@ -4772,10 +4790,74 @@ def np_frombuffer(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-@glue_lowering(carray, types.Any, types.Any)
-@glue_lowering(carray, types.Any, types.Any, types.DTypeSpec)
-@glue_lowering(farray, types.Any, types.Any)
-@glue_lowering(farray, types.Any, types.Any, types.DTypeSpec)
+@overload(carray)
+def impl_carray(ptr, shape, dtype=None):
+    if is_nonelike(dtype):
+        intrinsic_cfarray = get_cfarray_intrinsic('C', None)
+
+        def impl(ptr, shape, dtype=None):
+            return intrinsic_cfarray(ptr, shape)
+        return impl
+    elif isinstance(dtype, types.DTypeSpec):
+        intrinsic_cfarray = get_cfarray_intrinsic('C', dtype)
+
+        def impl(ptr, shape, dtype=None):
+            return intrinsic_cfarray(ptr, shape)
+        return impl
+
+
+@overload(farray)
+def impl_farray(ptr, shape, dtype=None):
+    if is_nonelike(dtype):
+        intrinsic_cfarray = get_cfarray_intrinsic('F', None)
+
+        def impl(ptr, shape, dtype=None):
+            return intrinsic_cfarray(ptr, shape)
+        return impl
+    elif isinstance(dtype, types.DTypeSpec):
+        intrinsic_cfarray = get_cfarray_intrinsic('F', dtype)
+
+        def impl(ptr, shape, dtype=None):
+            return intrinsic_cfarray(ptr, shape)
+        return impl
+
+
+def get_cfarray_intrinsic(layout, dtype_):
+    @intrinsic
+    def intrinsic_cfarray(typingctx, ptr, shape):
+        if ptr is types.voidptr:
+            ptr_dtype = None
+        elif isinstance(ptr, types.CPointer):
+            ptr_dtype = ptr.dtype
+        else:
+            msg = f"pointer argument expected, got '{ptr}'"
+            raise errors.NumbaTypeError(msg)
+
+        if dtype_ is None:
+            if ptr_dtype is None:
+                msg = "explicit dtype required for void* argument"
+                raise errors.NumbaTypeError(msg)
+            dtype = ptr_dtype
+        elif isinstance(dtype_, types.DTypeSpec):
+            dtype = dtype_.dtype
+            if ptr_dtype is not None and dtype != ptr_dtype:
+                msg = f"mismatching dtype '{dtype}' for pointer type '{ptr}'"
+                raise errors.NumbaTypeError(msg)
+        else:
+            msg = f"invalid dtype spec '{dtype_}'"
+            raise errors.NumbaTypeError(msg)
+
+        ndim = ty_parse_shape(shape)
+        if ndim is None:
+            msg = f"invalid shape '{shape}'"
+            raise errors.NumbaTypeError(msg)
+
+        retty = types.Array(dtype, ndim, layout)
+        sig = signature(retty, ptr, shape)
+        return sig, np_cfarray
+    return intrinsic_cfarray
+
+
 def np_cfarray(context, builder, sig, args):
     """
     numba.numpy_support.carray(...) and
@@ -5704,7 +5786,11 @@ _sorts = {}
 
 
 def lt_floats(a, b):
-    return math.isnan(b) or a < b
+    # Adapted from NumPy commit 717c7acf which introduced the behavior of
+    # putting NaNs at the end.
+    # The code is later moved to numpy/core/src/npysort/npysort_common.h
+    # This info is gathered as of NumPy commit d8c09c50
+    return a < b or (np.isnan(b) and not np.isnan(a))
 
 
 def get_sort_func(kind, is_float, is_argsort=False):

@@ -45,7 +45,8 @@ gpuci_mamba_retry create -n numba_ci -y \
                   "cffi" \
                   "psutil" \
                   "gcc_linux-64=7" \
-                  "gxx_linux-64=7"
+                  "gxx_linux-64=7" \
+                  "setuptools<60"
 
 conda activate numba_ci
 

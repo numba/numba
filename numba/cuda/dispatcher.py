@@ -191,6 +191,20 @@ class _Kernel(serialize.ReduceMixin):
         '''
         return self._codelibrary.get_cufunc().attrs.regs
 
+    @property
+    def const_mem_size(self):
+        '''
+        The amount of constant memory used by this kernel.
+        '''
+        return self._codelibrary.get_cufunc().attrs.const
+
+    @property
+    def shared_mem_per_block(self):
+        '''
+        The amount of shared memory used per block for this kernel.
+        '''
+        return self._codelibrary.get_cufunc().attrs.shared
+
     def inspect_llvm(self):
         '''
         Returns the LLVM IR for this kernel.
@@ -694,6 +708,45 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
             return next(iter(self.overloads.values())).regs_per_thread
         else:
             return {sig: overload.regs_per_thread
+                    for sig, overload in self.overloads.items()}
+
+    def get_const_mem_size(self, signature=None):
+        '''
+        Returns the size in bytes of constant memory used by this kernel for
+        the device in the current context.
+
+        :param signature: The signature of the compiled kernel to get constant
+                          memory usage for. This may be omitted for a
+                          specialized kernel.
+        :return: The size in bytes of constant memory allocated by the
+                 compiled variant of the kernel for the given signature and
+                 current device.
+        '''
+        if signature is not None:
+            return self.overloads[signature.args].const_mem_size
+        if self.specialized:
+            return next(iter(self.overloads.values())).const_mem_size
+        else:
+            return {sig: overload.const_mem_size
+                    for sig, overload in self.overloads.items()}
+
+    def get_shared_mem_per_block(self, signature=None):
+        '''
+        Returns the size in bytes of statically allocated shared memory
+        for this kernel.
+
+        :param signature: The signature of the compiled kernel to get shared
+                          memory usage for. This may be omitted for a
+                          specialized kernel.
+        :return: The amount of shared memory allocated by the compiled variant
+                 of the kernel for the given signature and current device.
+        '''
+        if signature is not None:
+            return self.overloads[signature.args].shared_mem_per_block
+        if self.specialized:
+            return next(iter(self.overloads.values())).shared_mem_per_block
+        else:
+            return {sig: overload.shared_mem_per_block
                     for sig, overload in self.overloads.items()}
 
     def get_call_template(self, args, kws):

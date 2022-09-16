@@ -18,7 +18,7 @@ from numba.core.config import IS_WIN32, IS_32BITS
 from numba.core.utils import pysignature
 from numba.np.extensions import cross2d
 from numba.tests.support import (TestCase, CompilationCache, MemoryLeakMixin,
-                                 needs_blas, needs_subprocess)
+                                 needs_blas)
 import unittest
 
 
@@ -4818,8 +4818,8 @@ def foo():
             cfunc(np.float64(7))
 
     @unittest.skipUnless(numpy_version >= (1, 22), "Needs NumPy >= 1.22")
-    @needs_subprocess
-    def test_np_MachAr_deprecation_np122_impl(self):
+    @TestCase.run_test_in_subprocess
+    def test_np_MachAr_deprecation_np122(self):
         # Tests that Numba is replaying the NumPy 1.22 deprecation warning
         # raised on the getattr of 'MachAr' on the NumPy module.
         # Needs to be run in a subprocess as the warning is generated from the
@@ -4835,13 +4835,6 @@ def foo():
 
         self.assertEqual(len(w), 1)
         self.assertIn('`np.MachAr` is deprecated', str(w[0]))
-
-    @unittest.skipUnless(numpy_version >= (1, 22), "Needs NumPy >= 1.22")
-    def test_np_MachAr_deprecation_np122(self):
-        test_name = 'test_np_MachAr_deprecation_np122_impl'
-        self.subprocess_test_runner(test_module=self.__module__,
-                                    test_class=type(self).__name__,
-                                    test_name=test_name,)
 
 
 if __name__ == '__main__':

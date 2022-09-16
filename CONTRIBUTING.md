@@ -39,8 +39,8 @@ changes, see **contributing patches** below.
   and [`good second issue's`](https://github.com/numba/numba/labels/good%20first%20issue).
   For implementing new features/functionality, the extension API is the best
   thing to use and a guide to using `@overload` in particular is
-  [here](https://numba.pydata.org/numba-doc/dev/extending/overloading-guide.html)
-  and the API documentation is [here](https://numba.pydata.org/numba-doc/latest/extending/high-level.html#implementing-functions).
+  [here](https://numba.readthedocs.io/en/latest/extending/overloading-guide.html)
+  and the API documentation is [here](https://numba.readthedocs.io/en/latest/extending/high-level.html#implementing-functions).
 
 ## Contributing patches
 
@@ -50,4 +50,4 @@ containing your work.  When you are done, open a pull request.
 # Further reading
 
 Please read the [contributing guide](
-https://numba.pydata.org/numba-doc/dev/developer/contributing.html).
+https://numba.readthedocs.io/en/latest/developer/contributing.html).
