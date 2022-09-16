@@ -933,6 +933,7 @@ The following built-in functions are supported:
 * :func:`getattr`: the attribute must be a string literal and the return type
   cannot be a function type (e.g. ``getattr(numpy, 'cos')`` is not supported as
   it returns a function type).
+* :func:`hasattr`
 * :func:`hash` (see :ref:`pysupported-hashing` below)
 * :class:`int`: only the one-argument form
 * :func:`iter`: only the one-argument form
@@ -947,9 +948,11 @@ The following built-in functions are supported:
 * :class:`range`: The only permitted use of range is as a callable function
   (cannot pass range as an argument to a jitted function or return a range from
   a jitted function).
+* :func:`repr`
 * :func:`round`
 * :func:`sorted`: the ``key`` argument is not supported
 * :func:`sum`
+* :func:`str`
 * :func:`type`: only the one-argument form, and only on some types
   (e.g. numbers and named tuples)
 * :func:`zip`
