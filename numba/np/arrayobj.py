@@ -3026,6 +3026,14 @@ def array_is(context, builder, sig, args):
 
     return context.compile_internal(builder, array_is_impl, sig, args)
 
+# ------------------------------------------------------------------------------
+# Hash
+
+
+@overload_method(types.Array, "__hash__")
+def ol_array_hash(arr):
+    return lambda arr: None
+
 
 # ------------------------------------------------------------------------------
 # builtin `np.flat` implementation

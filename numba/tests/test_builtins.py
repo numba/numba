@@ -14,6 +14,7 @@ from numba import jit, typeof, njit, typed
 from numba.core import errors, types, utils, config
 from numba.tests.support import (TestCase, tag, ignore_internal_warnings,
                                  MemoryLeakMixin)
+from numba.core.extending import overload_method, box
 
 
 py38orlater = utils.PYVERSION >= (3, 8)
@@ -1496,6 +1497,127 @@ class TestGetattrBuiltin(MemoryLeakMixin, TestCase):
             return hash_func() # Optionals have no call support
 
         self.assertPreciseEqual(foo(), foo.py_func())
+
+
+class TestHasattrBuiltin(MemoryLeakMixin, TestCase):
+    # Tests the hasattr() builtin
+
+    def test_hasattr(self):
+
+        @njit
+        def foo(x):
+            return hasattr(x, '__hash__'), hasattr(x, '__not_a_valid_attr__')
+
+        ty = types.int64
+        for x in (1, 2.34, (5, 6, 7), typed.Dict.empty(ty, ty),
+                  typed.List.empty_list(ty), np.ones(4), 'ABC'):
+            self.assertPreciseEqual(foo(x), foo.py_func(x))
+
+
+class TestStrAndReprBuiltin(MemoryLeakMixin, TestCase):
+
+    def test_str_default(self):
+
+        @njit
+        def foo():
+            return str()
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_str_object_kwarg(self):
+
+        @njit
+        def foo(x):
+            return str(object=x)
+
+        value = "a string"
+        self.assertEqual(foo(value), foo.py_func(value))
+
+    def test_str_calls_dunder_str(self):
+
+        @njit
+        def foo(x):
+            return str(x)
+
+        Dummy, DummyType = self.make_dummy_type()
+        dummy = Dummy()
+        string_repr = "this is the dummy object str"
+        Dummy.__str__= lambda inst: string_repr
+
+        @overload_method(DummyType, "__str__")
+        def ol_dummy_string(dummy):
+            def impl(dummy):
+                return string_repr
+            return impl
+
+        @overload_method(DummyType, "__repr__")
+        def ol_dummy_repr(dummy):
+            def impl(dummy):
+                return "SHOULD NOT BE CALLED"
+            return impl
+
+        self.assertEqual(foo(dummy), foo.py_func(dummy))
+
+    def test_str_falls_back_to_repr(self):
+
+        @njit
+        def foo(x):
+            return str(x)
+
+        Dummy, DummyType = self.make_dummy_type()
+        dummy = Dummy()
+        string_repr = "this is the dummy object repr"
+        Dummy.__repr__= lambda inst: string_repr
+
+        @overload_method(DummyType, "__repr__")
+        def ol_dummy_repr(dummy):
+            def impl(dummy):
+                return string_repr
+            return impl
+
+        self.assertEqual(foo(dummy), foo.py_func(dummy))
+
+    def test_repr(self):
+        @njit
+        def foo(x):
+            return repr(x), x
+
+        for x in ("abc", False, 123):
+            self.assertEqual(foo(x), foo.py_func(x))
+
+    def test_repr_fallback(self):
+        # checks objmode str/repr call fallback, there's no overloaded
+        # __str__ or __repr__ for the dummy type so it has to use the objmode
+        # `repr` call.
+
+        Dummy, DummyType = self.make_dummy_type()
+        string_repr = "this is the dummy object Python side repr"
+        Dummy.__repr__= lambda inst: string_repr
+        dummy = Dummy()
+
+        @box(DummyType)
+        def box_dummy(typ, obj, c):
+            clazobj = c.pyapi.unserialize(c.pyapi.serialize_object(Dummy))
+            return c.pyapi.call_function_objargs(clazobj, ())
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', errors.NumbaPerformanceWarning)
+            ignore_internal_warnings()
+
+            @njit
+            def foo(x):
+                return str(x)
+
+            self.assertEqual(foo(dummy), foo.py_func(dummy))
+
+            self.assertEqual(len(w), 1)
+
+            self.assertEqual(w[0].category,
+                             errors.NumbaPerformanceWarning)
+
+            msg = ("There is no '__repr__' specialisation defined for the "
+                   f"type '{typeof(dummy)}'")
+            self.assertIn(msg, str(w[0].message))
 
 
 if __name__ == '__main__':

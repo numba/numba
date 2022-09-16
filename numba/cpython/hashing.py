@@ -47,8 +47,23 @@ _Py_hashfunc_name = sys.hash_info.algorithm
 
 @overload(hash)
 def hash_overload(obj):
+    objty = obj
+    err_msg = f"unhashable type: '{objty}'"
+    attempt_generic_msg = ("No __hash__ is defined for object of type "
+                           f"'{objty}' and a generic hash() cannot be "
+                           "performed as there is no suitable object "
+                           "represention in Numba compiled code!")
+
     def impl(obj):
-        return obj.__hash__()
+        if hasattr(obj, '__hash__'):
+            hash_func = getattr(obj, '__hash__')
+            hash_value = hash_func()
+            if hash_value is not None:
+                return hash_value
+            else:
+                raise TypeError(err_msg)
+        else:
+            raise TypeError(attempt_generic_msg)
     return impl
 
 

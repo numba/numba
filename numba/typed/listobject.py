@@ -1309,6 +1309,13 @@ def ol_getitem_unchecked(lst, index):
     return impl
 
 
+@overload_method(types.ListType, '__hash__')
+def ol_list_hash(lst):
+    if not isinstance(lst, types.ListType):
+        return
+    return lambda lst: None
+
+
 @overload_attribute(types.ListType, '_dtype')
 def impl_dtype(l):
     if not isinstance(l, types.ListType):

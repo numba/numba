@@ -29,7 +29,7 @@ import types as pytypes
 
 import numpy as np
 
-from numba import testing
+from numba import testing, types
 from numba.core import errors, typing, utils, config, cpu
 from numba.core.compiler import (compile_extra, compile_isolated, Flags,
                                  DEFAULT_FLAGS, CompilerBase,
@@ -41,6 +41,15 @@ from numba.core.runtime import rtsys
 from numba.np import numpy_support
 from numba.pycc.platform import _external_compiler_ok
 from numba.core.runtime import _nrt_python as _nrt
+from numba.core.extending import (
+    overload_method,
+    typeof_impl,
+    register_model,
+    unbox,
+    NativeValue,
+    models,
+)
+from numba.core.datamodel.models import OpaqueModel
 
 
 try:
@@ -612,6 +621,30 @@ class TestCase(unittest.TestCase):
             return wrapper(maybefunc)
         else:
             return wrapper
+
+    def make_dummy_type(self):
+        """Use to generate a dummy type unique to this test. Returns a python
+        Dummy class and a corresponding Numba type DummyType."""
+
+        # Use test_id to make sure no collision is possible.
+        test_id = self.id()
+        DummyType = type('DummyTypeFor{}'.format(test_id), (types.Opaque,), {})
+
+        dummy_type = DummyType("my_dummy")
+        register_model(DummyType)(OpaqueModel)
+
+        class Dummy(object):
+            pass
+
+        @typeof_impl.register(Dummy)
+        def typeof_dummy(val, c):
+            return dummy_type
+
+        @unbox(DummyType)
+        def unbox_dummy(typ, obj, c):
+            return NativeValue(c.context.get_dummy_value())
+
+        return Dummy, DummyType
 
 
 class SerialMixin(object):

@@ -746,6 +746,13 @@ def impl_get(dct, key, default=None):
     return impl
 
 
+@overload_method(types.DictType, '__hash__')
+def impl_hash(dct):
+    if not isinstance(dct, types.DictType):
+        return
+    return lambda dct: None
+
+
 @overload(operator.getitem)
 def impl_getitem(d, key):
     if not isinstance(d, types.DictType):

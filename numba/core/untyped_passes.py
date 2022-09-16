@@ -1480,6 +1480,8 @@ class PropagateLiterals(FunctionPass):
         typemap = state.typemap
         flags = state.flags
 
+        accepted_functions = ('isinstance', 'hasattr')
+
         if not hasattr(func_ir, '_definitions') \
                 and not flags.enable_ssa:
             func_ir._definitions = build_definitions(func_ir.blocks)
@@ -1529,7 +1531,8 @@ class PropagateLiterals(FunctionPass):
                     fn = guard(get_definition, func_ir, value.func.name)
                     if fn is None:
                         continue
-                    if not (isinstance(fn, ir.Global) and fn.name == 'isinstance'):  # noqa: E501
+                    if not (isinstance(fn, ir.Global) and fn.name in
+                            accepted_functions):  # noqa: E501
                         continue
 
                     for arg in value.args:
@@ -1582,7 +1585,7 @@ class LiteralPropagationSubPipelinePass(FunctionPass):
         for blk in func_ir.blocks.values():
             for asgn in blk.find_insts(ir.Assign):
                 if isinstance(asgn.value, (ir.Global, ir.FreeVar)):
-                    if asgn.value.value is isinstance:
+                    if asgn.value.value in (isinstance, hasattr):
                         found = True
                         break
             if found:
