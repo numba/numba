@@ -114,6 +114,9 @@ class BaseCallConv(object):
     def _get_call_helper(self, builder):
         return builder.__call_helper
 
+    def _free_allocated_excinfo_memory(self, builder, status):
+        raise NotImplementedError
+
     def raise_error(self, builder, api, status):
         """
         Given a non-ok *status*, raise the corresponding Python exception.
@@ -125,9 +128,7 @@ class BaseCallConv(object):
             # Make sure another error may not interfere.
             api.err_clear()
             exc = api.unserialize(status.excinfoptr)
-            # api.print_object(exc)
-            ptr = builder.bitcast(status.excinfoptr, ir.IntType(8).as_pointer())
-            # self.context.nrt.free(builder, ptr)
+            self._free_allocated_excinfo_memory(builder, status)
             with cgutils.if_likely(builder,
                                    cgutils.is_not_null(builder, exc)):
                 api.raise_object(exc)  # steals ref
@@ -337,8 +338,9 @@ class _MinimalCallHelper(object):
             return exc, exc_args, locinfo
 
 # The structure type constructed by PythonAPI.serialize_uncached()
-# i.e a {i8* pickle_buf, i32 pickle_bufsz, i8* hash_buf}
-excinfo_t = ir.LiteralStructType([GENERIC_POINTER, int32_t, GENERIC_POINTER])
+# i.e a {i8* pickle_buf, i32 pickle_bufsz, i8* hash_buf, i32 alloc_flag}
+excinfo_t = ir.LiteralStructType(
+    [GENERIC_POINTER, int32_t, GENERIC_POINTER, int32_t])
 excinfo_ptr_t = ir.PointerType(excinfo_t)
 
 
@@ -358,6 +360,14 @@ class CPUCallConv(BaseCallConv):
     respectively).
     """
     _status_ids = itertools.count(1)
+
+    def __init__(self, context):
+        # Question for the reviewer << this should be removed before merging!
+        # Some tests at numba.tests.test_exceptions have the NRT disabled. But
+        # NRT is required to free memory when there's a dynamic exception in use
+        # Is there a better way to do this?
+        self.contains_dynamic_exception_ = False
+        super().__init__(context)
 
     def _make_call_helper(self, builder):
         return None
@@ -385,6 +395,27 @@ class CPUCallConv(BaseCallConv):
 
         exc = (exc, exc_args, locinfo)
         return exc
+
+    def _free_allocated_excinfo_memory(self, builder, status):
+        # There are two approaches for dealing with exceptions in Numba. If all
+        # arguments are known at compile-time, Numba will serialize the
+        # arguments to the LLVM module and create a global variable to
+        # represent the exception info struct. This is referred to as the
+        # static version. Another way is the dynamic version, where some
+        # arguments are only known at runtime. In Order to accomplish this,
+        # the JIT must reserve memory for the excinfo struct whenever it raises
+        # a dynamic exception. The alloc_mem flag is used to indicate if an
+        # allocation occurred.
+        if not self.contains_dynamic_exception_:
+            return
+
+        i8p = ir.IntType(8).as_pointer()
+        one = int32_t(1)
+
+        alloc_flag = builder.extract_value(builder.load(status.excinfoptr), 3)
+        ptr = builder.bitcast(status.excinfoptr, i8p)
+        with builder.if_then(builder.icmp_signed('==', alloc_flag, one)):
+            self.context.nrt.free(builder, ptr)
 
     def set_static_user_exc(self, builder, exc, exc_args=None, loc=None,
                             func_name=None):
@@ -425,13 +456,21 @@ class CPUCallConv(BaseCallConv):
         if not issubclass(exc, BaseException):
             raise TypeError("exc should be an exception class, got %r"
                             % (exc,))
+        if exc_args is not None and not isinstance(exc_args, tuple):
+            raise TypeError("exc_args should be None or tuple, got %r"
+                            % (exc_args,))
+
+        # set that a dynamic exception was inserted
+        self.contains_dynamic_exception_ = True
 
         pyapi = self.context.get_python_api(builder)
         exc = self.build_excinfo_struct(exc, exc_args, loc, func_name)
         excptr = self._get_excinfo_argument(builder.function)
-        struct_gv = builder.load(pyapi.serialize_object(exc)) # {i8*, i32, i8*}
+        # {i8*, i32, i8*, i32}
+        struct_gv = builder.load(pyapi.serialize_object(exc))
 
-        # serialize constant arguments as None
+        # Constant arguments are serialized as `None` and replaced by the
+        # correct arguments at runtime
         py_none = pyapi.make_none()
         exc_args = [e if isinstance(e, ir.Instruction) else
                     py_none for e in exc_args]
@@ -472,13 +511,15 @@ class CPUCallConv(BaseCallConv):
                                   excinfo_ptr_t)
 
         # hash is computed at runtime, after all arguments are known
-        zero, one, two = int32_t(0), int32_t(1), int32_t(2)
+        zero, one, two, three = int32_t(0), int32_t(1), int32_t(2), int32_t(3)
         builder.store(ptr, builder.gep(excinfo, [zero, zero]))
         # truncating sz to i32 is safe as long sz < MAXVAL(int32_t)
         builder.store(builder.trunc(sz, int32_t), builder.gep(excinfo,
                                                               [zero, one]))
         builder.store(pyapi.bytes_as_string(_hash), builder.gep(excinfo,
                                                                 [zero, two]))
+        # set the alloc_flag flag to 1
+        builder.store(one, builder.gep(excinfo, [zero, three]))
         builder.store(excinfo, excptr)
 
     def return_non_const_user_exc(self, builder, exc, exc_args, loc=None,

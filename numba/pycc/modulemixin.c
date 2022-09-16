@@ -66,6 +66,7 @@ typedef struct {
     const char *data;
     int len;
     const char *hashbuf;
+    int alloc_flag;
 } env_def_t;
 
 /* Environment GlobalVariable address type */

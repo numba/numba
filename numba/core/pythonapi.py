@@ -1350,7 +1350,7 @@ class PythonAPI(object):
     def unserialize(self, structptr):
         """
         Unserialize some data.  *structptr* should be a pointer to
-        a {i8* data, i32 length, i8* hashbuf} structure.
+        a {i8* data, i32 length, i8* hashbuf, i32 alloc_flag} structure.
         """
         fnty = ir.FunctionType(self.pyobj,
                              (self.voidptr, ir.IntType(32), self.voidptr))
@@ -1375,7 +1375,7 @@ class PythonAPI(object):
     def serialize_uncached(self, obj):
         """
         Same as serialize_object(), but don't create a global variable,
-        simply return a literal {i8* data, i32 length, i8* hashbuf} structure.
+        simply return a literal for {i8* data, i32 length, i8* hashbuf, i32 alloc_flag}
         """
         # First make the array constant
         data = serialize.dumps(obj)
@@ -1395,6 +1395,7 @@ class PythonAPI(object):
             arr.bitcast(self.voidptr),
             Constant(ir.IntType(32), arr.type.pointee.count),
             hasharr.bitcast(self.voidptr),
+            Constant(ir.IntType(32), 0),
             ])
         return struct
 
