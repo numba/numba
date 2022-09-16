@@ -986,9 +986,10 @@ def ol_repr_generic(obj):
         else:
             # There's no __str__ or __repr__ defined for this object, go via
             # the interpreter.
+            pyrepr = ""
             with objmode(pyrepr='unicode_type'):
                 pyrepr = _get_py_repr_and_warn(obj)
-                return pyrepr
+            return pyrepr
     return impl
 
 
