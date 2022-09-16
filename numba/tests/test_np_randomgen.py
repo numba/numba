@@ -1004,7 +1004,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
     def test_permutation(self):
         test_sizes = [(10, 20, 30)]
         bitgen_types = [None, MT19937]
-        axes = [0, 1, 2]
+        axes = [0, 1, 2, -1, -2]
 
         for _size, _bitgen, _axis in itertools.product(test_sizes,
                                                        bitgen_types,
@@ -1037,6 +1037,12 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         rng = np.random.default_rng(1)
         with self.assertRaises(IndexError) as raises:
             numba.njit(dist_func)(rng, np.array([3,4,5]), 2)
+        self.assertIn(
+            'Axis is out of bounds for the given array',
+            str(raises.exception)
+        )
+        with self.assertRaises(IndexError) as raises:
+            numba.njit(dist_func)(rng, np.array([3,4,5]), -2)
         self.assertIn(
             'Axis is out of bounds for the given array',
             str(raises.exception)

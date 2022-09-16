@@ -4,7 +4,7 @@ Implementation of method overloads for Generator objects.
 
 import numpy as np
 from numba.core import types
-from numba.core.extending import overload_method, register_jitable
+from numba.core.extending import overload_method
 from numba.np.numpy_support import as_dtype, from_dtype
 from numba.np.random.generator_core import next_float, next_double
 from numba.np.numpy_support import is_nonelike
@@ -176,7 +176,9 @@ def NumPyRandomGeneratorType_shuffle(inst, x, axis=0):
     check_types(axis, [int, types.Integer], 'axis')
 
     def impl(inst, x, axis=0):
-        if axis > x.ndim - 1:
+        if axis < 0:
+            axis = axis + x.ndim
+        if axis > x.ndim - 1 or axis < 0:
             raise IndexError("Axis is out of bounds for the given array")
 
         z = np.swapaxes(x, 0, axis)
@@ -202,18 +204,16 @@ def NumPyRandomGeneratorType_permutation(inst, x, axis=0):
     check_types(x, [types.Array, types.Integer], 'x')
     check_types(axis, [int, types.Integer], 'axis')
 
-    if isinstance(x, types.Integer):
-        @register_jitable
-        def array_maker(x):
-            return np.arange(x)
-    else:
-        @register_jitable
-        def array_maker(x):
-            return x.copy()
+    IS_INT = isinstance(x, types.Integer)
 
     def impl(inst, x, axis=0):
-        new_arr = array_maker(x)
-        inst.shuffle(new_arr, axis=axis)
+        if IS_INT:
+            new_arr = np.arange(x)
+            # NumPy ignores the axis argument when x is an integer
+            inst.shuffle(new_arr)
+        else:
+            new_arr = x.copy()
+            inst.shuffle(new_arr, axis=axis)
         return new_arr
 
     return impl
