@@ -193,19 +193,24 @@ Intel SVML
 
 Intel provides a short vector math library (SVML) that contains a large number
 of optimised transcendental functions available for use as compiler
-intrinsics. If the ``intel-cmplr-lib-rt`` package is present in the environment (or the SVML
-libraries are simply locatable!) then Numba automatically configures the LLVM
-back end to use the SVML intrinsic functions where ever possible. SVML provides
-both high and low accuracy versions of each intrinsic and the version that is
-used is determined through the use of the ``fastmath`` keyword. The default is
-to use high accuracy which is accurate to within ``1 ULP``, however if
-``fastmath`` is set to ``True`` then the lower accuracy versions of the
-intrinsics are used (answers to within ``4 ULP``).
+intrinsics. If the ``intel-cmplr-lib-rt`` package is present in the
+environment (or the SVML libraries are simply locatable!) then Numba
+automatically configures the LLVM back end to use the SVML intrinsic functions
+where ever possible. SVML provides both high and low accuracy versions of each
+intrinsic and the version that is used is determined through the use of the
+``fastmath`` keyword. The default is to use high accuracy which is accurate to
+within ``1 ULP``, however if ``fastmath`` is set to ``True`` then the lower
+accuracy versions of the intrinsics are used (answers to within ``4 ULP``).
 
 
 First obtain SVML, using conda for example::
 
     conda install intel-cmplr-lib-rt
+
+Note that SVML library was previously provided through `icc_rt` conda package,
+but `icc_rt` became a meta-package as of version 2021.1.1 which pulls
+`intel-cmplr-lib-rt` amongst other packages as a dependency. Installing
+the recommended package directly results in fewer installed packages.
 
 Rerunning the identity function example ``ident_np`` from above with various
 combinations of options to ``@njit`` and with/without SVML yields the following

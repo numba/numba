@@ -43,8 +43,8 @@ additional functionality:
 * ``colorama`` - enables support for color highlighting in backtraces/error
   messages.
 * ``pyyaml`` - enables configuration of Numba via a YAML config file.
-* ``intel-cmplr-lib-rt`` - allows the use of the Intel SVML (high performance short vector
-  math library, x86_64 only). Installation instructions are in the
+* ``intel-cmplr-lib-rt`` - allows the use of the Intel SVML (high performance
+  short vector math library, x86_64 only). Installation instructions are in the
   :ref:`performance tips <intel-svml>`.
 
 Will Numba work for my code?
