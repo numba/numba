@@ -13,7 +13,6 @@ import warnings
 import llvmlite.ir
 import numpy as np
 
-from numba import njit
 from numba import generated_jit
 from numba.core import types, cgutils
 from numba.core.extending import overload, overload_method, register_jitable
@@ -355,117 +354,133 @@ def array_sum_axis(context, builder, sig, args):
 @overload(np.prod)
 @overload_method(types.Array, "prod")
 def array_prod(arr):
+    if isinstance(arr, types.Array):
+        def array_prod_impl(arr):
+            c = 1
+            for v in np.nditer(arr):
+                c *= v.item()
+            return c
 
-    def array_prod_impl(arr):
-        c = 1
-        for v in np.nditer(arr):
-            c *= v.item()
-        return c
-
-    return array_prod_impl
+        return array_prod_impl
 
 
 @overload(np.cumsum)
 @overload_method(types.Array, "cumsum")
 def array_cumsum(arr):
-    is_integer = arr.dtype in types.signed_domain | frozenset([types.bool_])
+    if isinstance(arr, types.Array):
+        is_integer = arr.dtype in types.signed_domain | frozenset([types.bool_])
 
-    def array_cumsum_impl(arr):
-        if is_integer:
-            dtype = np.intp
-        else:
-            dtype = arr.dtype
-        out = np.empty(arr.size, dtype)
-        c = np.zeros(1, dtype)[0]
-        for idx, v in enumerate(arr.flat):
-            c += v
-            out[idx] = c
-        return out
+        def array_cumsum_impl(arr):
+            if is_integer:
+                dtype = np.intp
+            else:
+                dtype = arr.dtype
+            out = np.empty(arr.size, dtype)
+            c = np.zeros(1, dtype)[0]
+            for idx, v in enumerate(arr.flat):
+                c += v
+                out[idx] = c
+            return out
 
-    return array_cumsum_impl
+        return array_cumsum_impl
 
 
 @overload(np.cumprod)
 @overload_method(types.Array, "cumprod")
 def array_cumprod(arr):
-    is_integer = arr.dtype in types.signed_domain | frozenset([types.bool_])
+    if isinstance(arr, types.Array):
+        is_integer = arr.dtype in types.signed_domain | frozenset([types.bool_])
 
-    def array_cumprod_impl(arr):
-        if is_integer:
-            dtype = np.intp
-        else:
-            dtype = arr.dtype
-        out = np.empty(arr.size, dtype)
-        c = np.ones(1, dtype)[0]
-        for idx, v in enumerate(arr.flat):
-            c *= v
-            out[idx] = c
-        return out
+        def array_cumprod_impl(arr):
+            if is_integer:
+                dtype = np.intp
+            else:
+                dtype = arr.dtype
+            out = np.empty(arr.size, dtype)
+            c = np.ones(1, dtype)[0]
+            for idx, v in enumerate(arr.flat):
+                c *= v
+                out[idx] = c
+            return out
 
-    return array_cumprod_impl
+        return array_cumprod_impl
 
 
 @overload(np.mean)
 @overload_method(types.Array, "mean")
 def array_mean(arr):
-    is_number = arr.dtype in types.integer_domain | frozenset([types.bool_])
+    if isinstance(arr, types.Array):
+        is_number = arr.dtype in types.integer_domain | frozenset([types.bool_])
 
-    def array_mean_impl(arr):
-        # Can't use the naive `arr.sum() / arr.size`, as it would return
-        # a wrong result on integer sum overflow.
-        if is_number:
-            dtype = types.float64
-        else:
-            dtype = arr.dtype
-        c = np.zeros(1, dtype)[0]
-        for v in np.nditer(arr):
-            c += v.item()
-        return c / arr.size
+        def array_mean_impl(arr):
+            # Can't use the naive `arr.sum() / arr.size`, as it would return
+            # a wrong result on integer sum overflow.
+            if is_number:
+                dtype = types.float64
+            else:
+                dtype = arr.dtype
+            c = np.zeros(1, dtype)[0]
+            for v in np.nditer(arr):
+                c += v.item()
+            return c / arr.size
 
-    return array_mean_impl
+        return array_mean_impl
 
 
 @overload(np.var)
 @overload_method(types.Array, "var")
 def array_var(arr):
-    def array_var_impl(arr):
-        # Compute the mean
-        m = arr.mean()
+    if isinstance(arr, types.Array):
+        def array_var_impl(arr):
+            # Compute the mean
+            m = arr.mean()
 
-        # Compute the sum of square diffs
-        ssd = 0
-        for v in np.nditer(arr):
-            val = (v.item() - m)
-            ssd += np.real(val * np.conj(val))
-        return ssd / arr.size
+            # Compute the sum of square diffs
+            ssd = 0
+            for v in np.nditer(arr):
+                val = (v.item() - m)
+                ssd += np.real(val * np.conj(val))
+            return ssd / arr.size
 
-    return array_var_impl
+        return array_var_impl
 
 
 @overload(np.std)
 @overload_method(types.Array, "std")
 def array_std(x):
+    if isinstance(x, types.Array):
+        def array_std_impl(x):
+            return x.var() ** 0.5
 
-    def array_std_impl(x):
-        return x.var() ** 0.5
-
-    return array_std_impl
+        return array_std_impl
 
 
-def zero_dim_msg(fn_name):
-    msg = ("zero-size array to reduction operation "
-           f"{fn_name} which has no identity")
-    return msg
+@register_jitable
+def min_comparator(x, min_val):
+    return x < min_val
+
+
+@register_jitable
+def max_comparator(x, min_val):
+    return x > min_val
+
+
+@register_jitable
+def return_false(x):
+    return False
 
 
 @overload(np.min)
 @overload_method(types.Array, "min")
 def npy_min(x):
+    if not isinstance(x, types.Array):
+        return
+
     if isinstance(x.dtype, (types.NPDatetime, types.NPTimedelta)):
-        pre_return_func = njit(lambda x: np.isnat(x))
-        comparator = njit(lambda x, min_val: x < min_val)
+        pre_return_func = np.isnat
+        comparator = min_comparator
     elif isinstance(x.dtype, types.Complex):
-        pre_return_func = njit(lambda x: False)
+        pre_return_func = return_false
 
         def comp_func(x, min_val):
             if x.real < min_val.real:
@@ -475,19 +490,18 @@ def npy_min(x):
                     return True
             return False
 
-        comparator = njit(comp_func)
+        comparator = register_jitable(comp_func)
     elif isinstance(x.dtype, types.Float):
-        pre_return_func = njit(lambda x: np.isnan(x))
-        comparator = njit(lambda x, min_val: x < min_val)
+        pre_return_func = np.isnan
+        comparator = min_comparator
     else:
-        pre_return_func = njit(lambda x: False)
-        comparator = njit(lambda x, min_val: x < min_val)
-
-    fail_str = zero_dim_msg("minimum")
+        pre_return_func = return_false
+        comparator = min_comparator
 
     def impl_min(x):
         if x.size == 0:
-            raise ValueError(fail_str)
+            raise ValueError("zero-size array to reduction operation "
+                             "minimum which has no identity")
 
         it = np.nditer(x)
         min_value = next(it).take(0)
@@ -508,11 +522,14 @@ def npy_min(x):
 @overload(np.max)
 @overload_method(types.Array, "max")
 def npy_max(x):
+    if not isinstance(x, types.Array):
+        return
+
     if isinstance(x.dtype, (types.NPDatetime, types.NPTimedelta)):
-        pre_return_func = njit(lambda x: np.isnat(x))
-        comparator = njit(lambda x, max_val: x > max_val)
+        pre_return_func = np.isnat
+        comparator = max_comparator
     elif isinstance(x.dtype, types.Complex):
-        pre_return_func = njit(lambda x: False)
+        pre_return_func = return_false
 
         def comp_func(x, max_val):
             if x.real > max_val.real:
@@ -522,19 +539,18 @@ def npy_max(x):
                     return True
             return False
 
-        comparator = njit(comp_func)
+        comparator = register_jitable(comp_func)
     elif isinstance(x.dtype, types.Float):
-        pre_return_func = njit(lambda x: np.isnan(x))
-        comparator = njit(lambda x, max_val: x > max_val)
+        pre_return_func = np.isnan
+        comparator = max_comparator
     else:
-        pre_return_func = njit(lambda x: False)
-        comparator = njit(lambda x, max_val: x > max_val)
-
-    fail_str = zero_dim_msg("maximum")
+        pre_return_func = return_false
+        comparator = max_comparator
 
     def impl_max(x):
         if x.size == 0:
-            raise ValueError(fail_str)
+            raise ValueError("zero-size array to reduction operation "
+                             "maximum which has no identity")
 
         it = np.nditer(x)
         max_value = next(it).take(0)
