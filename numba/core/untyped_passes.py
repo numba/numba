@@ -1585,7 +1585,8 @@ class LiteralPropagationSubPipelinePass(FunctionPass):
         for blk in func_ir.blocks.values():
             for asgn in blk.find_insts(ir.Assign):
                 if isinstance(asgn.value, (ir.Global, ir.FreeVar)):
-                    if asgn.value.value in (isinstance, hasattr):
+                    value = asgn.value.value
+                    if value is isinstance or value is hasattr:
                         found = True
                         break
             if found:
