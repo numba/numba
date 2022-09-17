@@ -463,3 +463,92 @@ This cast_ptr intrinsic may be also used with the function pointer technique abo
    y = add_one.ctypes
    r = my_callback_fnptr.ctypes(1.0, y)
    print(r)  # 2.0
+
+
+Receiving output values by reference
+====================================
+
+It is sometimes necessary to deal with APIs that pass back values by address.
+For example, it is common for a function exported from FORTRAN to have an interface that uses only reference arguments, such as::
+   
+   fortran_add_x_y(double * x, double *y, double *z)  // z = x + y
+   
+To use this in a numba cfunc (or njit) there are a couple of techniques that are useful. First, create the equivalent cfunc.
+
+.. code-block:: python
+
+   import numpy as np
+   from numba import cfunc, float64, void, intc, types
+
+   CPointer = types.CPointer
+   
+   p_double = CPointer(float64)
+   
+   @cfunc(void(p_double, p_double, p_double))
+   def fortran_add_x_y(px, py, pz):
+      pz[0] = px[0] + py[0]
+
+Now suppose we want to convert this into a cfunc by value
+
+.. code-block:: python
+
+   @cfunc(float64(float64, float64))
+   def add_x_y(x, y):
+      # use fortran_add_x_y somehow
+      
+The first technique is to use numpy arrays as temporary storage
+
+.. code-block:: python
+
+   @cfunc(float64(float64, float64))
+   def add_x_y(x, y):
+      x_arr = np.array([x])
+      y_arr = np.array([y])
+      z_arr = np.empty(1)
+      fortran_add_x_y(x_arr.ctypes, y_arr.ctypes, z_arr.ctypes)
+      return z_arr[0]
+      
+However, this is somewhat wasteful in overhead to create all the arrays. A better solution is to use intrinsics which allocate stack memory directly.
+
+.. code-block:: python
+
+   from numba.core import cgutils
+
+   @intrinsic
+   def alloca(typingctx, obj_type):
+       """
+       Allocate stack memory for an object of given type and return pointer to it.
+       """
+       def impl(context, builder, signature, args):
+           llvm_type = context.get_value_type(obj_type.instance_type)
+           val = cgutils.alloca_once(builder, llvm_type)
+           return val
+       sig = CPointer(obj_type.instance_type)(obj_type)
+       return sig, impl
+
+
+   @intrinsic
+   def alloca_value(typingctx, data):
+       """
+       Allocate stack memory for an object of type of given value, fill it with given value and return pointer to it.
+       """
+       def impl(context, builder, signature, args):
+           val = cgutils.alloca_once_value(builder, args[0])
+           return val
+       sig = CPointer(data)(data)
+       return sig, impl
+       
+We can make use of these intrinsics to greatly streamline the solution.
+
+.. code-block:: python
+
+   @cfunc(float64(float64, float64))
+   def add_x_y(x, y):
+      px = alloca_value(x)
+      py = alloca_value(y)
+      pz = alloca(float64)
+      fortran_add_x_y(px, py, pz)
+      return pz[0]
+      
+   print(add_x_y.ctypes(10.0, 2.0))  # 12.0
+   
