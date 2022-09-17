@@ -286,3 +286,79 @@ of using ``ctypes`` is that it is invariant to the usage of JIT decorators.
 
    print(example(3, 4)) # 7
    print(example.py_func(3, 4)) # 7
+
+Implementing function pointer arguments
+===============================
+We can pass in other C compiled functions to a cfunc as a function pointer argument.
+In order to do this, we include the type ExternalFunctionPointer in the function signature.
+
+ExternalFunctionPointer is originally designed to handle functions imported from e.g. ctypes.
+It expects a method which returns the value of the pointer to be passed to the constructor.
+We can simply pass a lambda to zero, since using ExternalFunctionPointer in the function signature will result
+in the value of the pointer coming from the function argument.
+
+Here is a working (contrived) example which uses a callback function to apply a generic operation to every element of an array.
+
+.. code-block:: python
+
+   import numpy as np
+   from numba import cfunc, float64, void, intc, types
+
+   CPointer = types.CPointer
+   ExternalFunctionPointer = types.ExternalFunctionPointer
+
+We first define the Callback type function signature and a pointer type to the callback.
+
+.. code-block:: python
+
+   CallbackSignature = float64(float64)
+   CallbackType = ExternalFunctionPointer(CallbackSignature, get_pointer=lambda x: 0)
+   
+.. note:: **get_pointer=lambda x: 0** is needed since numba will try to
+    evaluate the value of this pointer and needs some stand-in value.
+    The value will not actually be used since the type only appears in a signature.
+
+We now can write the driver function which consumes the function pointer. Note the use of the CallbackType in the signature.
+
+.. code-block:: python
+
+   @cfunc(void(CPointer(float64), intc, CallbackType))
+   def apply_to_array(x, n, callback):
+      for i in range(n):
+         x[i] = callback(x[i])
+
+For this example, we will implement a callback that simply adds one to each array element.
+
+.. code-block:: python
+
+   @cfunc(CallbackSignature)
+   def add_one(x):
+      return x + 1.0
+
+To demonstrate this example, we need to use ctypes to call the compiled function from Python.
+Normally numba can provide the equivalent ctypes pointer interface using ``function.ctypes``.
+However, this mechanism does not know how to translate the function pointer type.
+Therefore, we must do the translation manually.
+
+.. code-block:: python
+
+   import ctypes
+
+   p_double = ctypes.POINTER(ctypes.c_double)
+
+   # type of the callback in ctypes
+   CallbackCtypes = ctypes.CFUNCTYPE(ctypes.c_double, ctypes.c_double)
+
+   # create ctypes function pointer of correct type from the compiled function address
+   apply_to_array_ctypes = ctypes.CFUNCTYPE(
+      None, p_double, ctypes.c_int, CallbackCtypes
+   )(apply_to_array.address)
+
+Now we can call this example function from Python
+
+.. code-block:: python
+
+   x = np.arange(6.0)
+   apply_to_array_ctypes(x.ctypes.data_as(p_double), x.size, add_one.ctypes)
+   print(x)  # [1. 2. 3. 4. 5. 6.]
+
