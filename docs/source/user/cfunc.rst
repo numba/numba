@@ -362,3 +362,104 @@ Now we can call this example function from Python
    apply_to_array_ctypes(x.ctypes.data_as(p_double), x.size, add_one.ctypes)
    print(x)  # [1. 2. 3. 4. 5. 6.]
 
+Note this example could also have been handled with a decorator pattern thusly:
+
+.. code-block:: python
+
+   def get_apply_to_array(callback):
+       @cfunc(void(CPointer(float64), intc))
+       def apply_to_array(x, n):
+           for i in range(n):
+               x[i] = callback(x[i])
+
+       return apply_to_array
+       
+   x = np.arange(6.0)
+   get_apply_to_array(add_one)(x.ctypes.data_as(p_double), x.size)
+   print(x)  # [1. 2. 3. 4. 5. 6.]
+
+This design pattern eliminates the problem of the function pointer altogether.
+
+The disadvantage of this approach is that the compilation of apply_to_array cannot be cached.
+For a small function such as in this example, this is not an issue.
+However, if the driver function were a complex algorithm, it would be desirable to cache the compiled implementation.
+
+Dealing with void pointer arguments
+===============================
+It may be the case that optional parameters are passed to a callback function
+as ``void *`` or ``void * []``.
+For example, scipy.integrate.quad accepts a C function input (through LowLevelCallable object) that has the following signature::
+
+   double func(double x, void *user_data)
+   
+It is useful to be able to cast these pointer arguments to arbitrary types for use.
+The following intrinsic implementation will cast any pointer type to any other pointer type (including function pointers).
+
+.. code-block:: python
+
+   from numba.extending import intrinsic
+   from numba import types
+   
+   @intrinsic
+   def cast_ptr(_typingctx, input_ptr, ptr_type):
+       def impl(context, builder, _signature, args):
+           llvm_type = context.get_value_type(target_type)
+           val = builder.bitcast(args[0], llvm_type)
+           return val
+
+       if isinstance(ptr_type, types.TypeRef):
+           target_type = ptr_type.instance_type
+       else:
+           target_type = ptr_type
+
+       sig = target_type(input_ptr, ptr_type)
+       return sig, impl
+       
+You may now use this in a callback function like the scipy example.
+
+.. code-block:: python
+
+   from numba import cfunc, float64, types
+   
+   CPointer = types.CPointer
+   voidptr = types.voidptr
+   
+   p_double = CPointer(float64)
+
+   @cfunc(float64(float64, voidptr))
+   def my_callback(x, user_data):
+       y = cast_ptr(user_data, p_double)
+       return x + y[0]
+
+To demonstrate:
+
+.. code-block:: python
+
+   import ctypes
+
+   y = ctypes.c_double(2.0)
+   r = my_callback.ctypes(1.0, ctypes.pointer(y))
+   print(r)  # 3.0
+
+This cast_ptr intrinsic may be also used with the function pointer technique above.
+
+.. code-block:: python
+
+   ExternalFunctionPointer = types.ExternalFunctionPointer
+
+   CallbackSignature = float64(float64)
+   CallbackType = ExternalFunctionPointer(CallbackSignature, get_pointer=lambda x: 0)
+   
+   
+   @cfunc(float64(float64, voidptr))
+   def my_callback_fnptr(x, user_data):
+       y = cast_ptr(user_data, CallbackType)
+       return y(x)
+       
+   @cfunc(CallbackSignature)
+   def add_one(x):
+     return x + 1.0
+
+   y = add_one.ctypes
+   r = my_callback_fnptr.ctypes(1.0, y)
+   print(r)  # 2.0
