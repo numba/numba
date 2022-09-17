@@ -288,7 +288,8 @@ of using ``ctypes`` is that it is invariant to the usage of JIT decorators.
    print(example.py_func(3, 4)) # 7
 
 Implementing function pointer arguments
-===============================
+=======================================
+
 We can pass in other C compiled functions to a cfunc as a function pointer argument.
 In order to do this, we include the type ExternalFunctionPointer in the function signature.
 
@@ -385,7 +386,8 @@ For a small function such as in this example, this is not an issue.
 However, if the driver function were a complex algorithm, it would be desirable to cache the compiled implementation.
 
 Dealing with void pointer arguments
-===============================
+===================================
+
 It may be the case that optional parameters are passed to a callback function
 as ``void *`` or ``void * []``.
 For example, scipy.integrate.quad accepts a C function input (through LowLevelCallable object) that has the following signature::
