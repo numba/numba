@@ -522,13 +522,13 @@ These functions return a 16-bit floating point result.
 
 .. function:: numba.cuda.fp16.hsin (a)
 
-   Calculates the trig sine function on the 16-bit floating point argument.
+   Calculates the trigonometry sine function on the 16-bit floating point argument.
 
-   Returns the 16-bit floating point result of the sin operation.
+   Returns the 16-bit floating point result of the sine operation.
 
 .. function:: numba.cuda.fp16.hcos (a)
 
-   Calculates the trig cosine function on the 16-bit floating point argument.
+   Calculates the trigonometry cosine function on the 16-bit floating point argument.
 
    Returns the 16-bit floating point result of the cosine operation.
 
@@ -540,13 +540,13 @@ These functions return a 16-bit floating point result.
 
 .. function:: numba.cuda.fp16.hlog10 (a)
 
-   Calculates the log base 10 operation on the 16-bit floating point argument.
+   CCalculates the base 10 logarithm on the 16-bit floating point argument.
 
    Returns the 16-bit floating point result of the log base 10 operation.
 
 .. function:: numba.cuda.fp16.hlog2 (a)
 
-   Calculates the log base 2 operation on the 16-bit floating point argument.
+   Calculates the base 2 logarithm on the 16-bit floating point argument.
 
    Returns the 16-bit floating point result of the log base 2 operation.
 
@@ -558,13 +558,13 @@ These functions return a 16-bit floating point result.
 
 .. function:: numba.cuda.fp16.hexp10 (a)
 
-   Calculates the exponential base 10 operation on the 16-bit floating point argument.
+   Calculates the base 10 exponential on the 16-bit floating point argument.
 
    Returns the 16-bit floating point result of the exponential operation.
 
 .. function:: numba.cuda.fp16.hexp2 (a)
 
-   Calculates the exponential base 2 operation on the 16-bit floating point argument.
+   Calculates the base 2 exponential on the 16-bit floating point argument.
 
    Returns the 16-bit floating point result of the exponential operation.
 
