@@ -106,8 +106,8 @@ class _Kernel(serialize.ReduceMixin):
         if self.cooperative:
             link.append(get_cudalib('cudadevrt', static=True))
 
-        res = [ele for ele in cuda_fp16_math_funcs
-               if(f'__numba_wrapper_{ele}' in lib.get_asm_str())]
+        res = [fn for fn in cuda_fp16_math_funcs
+               if(f'__numba_wrapper_{fn}' in lib.get_asm_str())]
 
         if res:
             # Path to the source containing the foreign function
