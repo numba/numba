@@ -160,10 +160,10 @@ def _ensure_critical_deps():
     from numba.core.utils import PYVERSION
 
     if PYVERSION < (3, 7):
-        raise ImportError(f"Numba needs Python 3.7 or greater. Got {PYVERSION}")
+        raise ImportError(f"Numba needs Python 3.7 or greater. Got {PYVERSION}.")
 
     if numpy_version < (1, 18):
-        raise ImportError(f"Numba needs NumPy 1.18 or greater. Got {numpy_version}")
+        raise ImportError(f"Numba needs NumPy 1.18 or greater. Got {numpy_version}.")
 
     try:
         import scipy
@@ -173,7 +173,7 @@ def _ensure_critical_deps():
         sp_version = tuple(map(int, scipy.__version__.split(".")[:2]))
         if sp_version < (1, 0):
             raise ImportError(
-                f"Numba requires SciPy version 1.0 or greater. Got {sp_version}"
+                f"Numba requires SciPy version 1.0 or greater. Got {sp_version}."
             )
 
 
