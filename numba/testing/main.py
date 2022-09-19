@@ -11,6 +11,7 @@ import time
 import unittest
 import warnings
 
+from functools import lru_cache
 from io import StringIO
 from unittest import result, runner, signals, suite, loader, case
 
@@ -53,6 +54,19 @@ def make_tag_decorator(known_tags):
     return tag
 
 
+# Chances are the next queried class is the same as the previous, locally 128
+# entries seems to be fastest.
+# Current number of test classes can be found with:
+# $ ./runtests.py -l|sed -e 's/\(.*\)\..*/\1/'|grep ^numba|sort|uniq|wc -l
+# as of writing it's 658.
+@lru_cache(maxsize=128)
+def _get_mtime(cls):
+    """
+    Gets the mtime of the file in which a test class is defined.
+    """
+    return str(os.path.getmtime(inspect.getfile(cls)))
+
+
 def cuda_sensitive_mtime(x):
     """
     Return a key for sorting tests bases on mtime and test name. For CUDA
@@ -62,7 +76,7 @@ def cuda_sensitive_mtime(x):
     mtime.
     """
     cls = x.__class__
-    key = str(os.path.getmtime(inspect.getfile(cls))) + str(x)
+    key = _get_mtime(cls) + str(x)
 
     from numba.cuda.testing import CUDATestCase
     if CUDATestCase in cls.mro():
