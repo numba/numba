@@ -297,10 +297,10 @@ def compile_ptx_for_current_device(pyfunc, args, debug=False, lineinfo=False,
 
 
 def declare_device_function(name, restype, argtypes):
-    return _declare_device_function(name, restype, argtypes)
+    return declare_device_function_template(name, restype, argtypes).key
 
 
-def _declare_device_function(name, restype, argtypes, ret_template=False):
+def declare_device_function_template(name, restype, argtypes):
     from .descriptor import cuda_target
     typingctx = cuda_target.typing_context
     targetctx = cuda_target.target_context
@@ -316,10 +316,7 @@ def _declare_device_function(name, restype, argtypes, ret_template=False):
     typingctx.insert_user_function(extfn, device_function_template)
     targetctx.insert_user_function(extfn, fndesc)
 
-    if (not ret_template):
-        return extfn
-    else:
-        return types.Function(device_function_template)
+    return device_function_template
 
 
 class ExternFunction(object):

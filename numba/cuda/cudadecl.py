@@ -8,7 +8,7 @@ from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
 from numba.cuda.types import dim3, grid_group
 from numba.core.typeconv import Conversion
 from numba import cuda
-from numba.cuda.compiler import _declare_device_function
+from numba.cuda.compiler import declare_device_function_template
 
 registry = Registry()
 register = registry.register
@@ -427,17 +427,17 @@ _genfp16_binary_operator(operator.itruediv)
 
 
 def _resolve_wrapped_unary(fname):
-    decl = _declare_device_function(f'__numba_wrapper_{fname}',
-                                    types.float16,
-                                    (types.float16,), True)
-    return decl
+    decl = declare_device_function_template(f'__numba_wrapper_{fname}',
+                                            types.float16,
+                                            (types.float16,))
+    return types.Function(decl)
 
 
 def _resolve_wrapped_binary(fname):
-    decl = _declare_device_function(f'__numba_wrapper_{fname}',
-                                    types.float16,
-                                    (types.float16, types.float16,), True)
-    return decl
+    decl = declare_device_function_template(f'__numba_wrapper_{fname}',
+                                            types.float16,
+                                            (types.float16, types.float16,))
+    return types.Function(decl)
 
 
 hsin_device = _resolve_wrapped_unary('hsin')
