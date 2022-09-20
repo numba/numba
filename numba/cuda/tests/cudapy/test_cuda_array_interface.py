@@ -430,6 +430,18 @@ class TestCudaArrayInterface(ContextResettingTestCase):
             # Ensure that synchronize was not called
             mock_sync.assert_not_called()
 
+    def test_cuda_reshape(self):
+        @cuda.jit('void()')
+        def f():
+            x = cuda.shared.array(0, dtype=np.int32)
+            x[0] = 11
+            x[1] = 12
+            x[2] = 21
+            x[3] = 22
+            x.reshape(2, 2)
+
+        f[1,1]()
+
 
 if __name__ == "__main__":
     unittest.main()
