@@ -763,6 +763,30 @@ class TraceRunner(object):
             )
         )
 
+    def op_BEFORE_WITH(self, state, inst):
+        # Almost the same as py3.10 SETUP_WITH just lacking the finally block.
+        cm = state.pop()    # the context-manager
+
+        yielded = state.make_temp()
+        exitfn = state.make_temp(prefix='setup_with_exitfn')
+        state.append(inst, contextmanager=cm, exitfn=exitfn)
+
+        state.push(exitfn)
+        state.push(yielded)
+
+        end = state._bytecode.get_exception_entry(inst.next).target
+
+
+        state.push_block(
+            state.make_block(
+                kind='WITH',
+                end=end,
+            )
+        )
+        # Forces a new block
+        state.fork(pc=inst.next)
+
+
     def op_SETUP_WITH(self, state, inst):
         cm = state.pop()    # the context-manager
 

@@ -2136,6 +2136,23 @@ class Interpreter(object):
         exit_fn_obj = ir.Const(None, loc=self.loc)
         self.store(value=exit_fn_obj, name=exitfn)
 
+    def op_BEFORE_WITH(self, inst, contextmanager, exitfn=None):
+        assert self.blocks[inst.offset] is self.current_block
+        # use EH entry to determine the end of the with
+        exitpt = self.bytecode.get_exception_entry(inst.next).target
+        # Handle with
+        wth = ir.With(inst.offset, exit=exitpt)
+        self.syntax_blocks.append(wth)
+        ctxmgr = self.get(contextmanager)
+        self.current_block.append(ir.EnterWith(contextmanager=ctxmgr,
+                                               begin=inst.offset,
+                                               end=exitpt, loc=self.loc,))
+
+        # Store exit fn
+        exit_fn_obj = ir.Const(None, loc=self.loc)
+        self.store(value=exit_fn_obj, name=exitfn)
+
+
     def op_SETUP_EXCEPT(self, inst):
         # Removed since python3.8
         self._insert_try_block_begin()

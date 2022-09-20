@@ -172,10 +172,13 @@ gv_type = types.intp
 class TestWithFinding(TestCase):
     def check_num_of_with(self, func, expect_count):
         the_ir = get_func_ir(func)
+        the_ir.dump()
         ct = len(find_setupwiths(the_ir)[0])
         self.assertEqual(ct, expect_count)
 
     def test_lift1(self):
+        import dis
+        dis.dis(lift1)
         self.check_num_of_with(lift1, expect_count=1)
 
     def test_lift2(self):

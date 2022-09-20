@@ -207,7 +207,8 @@ class ByteCode(object):
     The decoded bytecode of a function, and related information.
     """
     __slots__ = ('func_id', 'co_names', 'co_varnames', 'co_consts',
-                 'co_cellvars', 'co_freevars', 'table', 'labels')
+                 'co_cellvars', 'co_freevars', 'exception_entries',
+                 'table', 'labels')
 
     def __init__(self, func_id):
         code = func_id.code
@@ -225,6 +226,7 @@ class ByteCode(object):
         self.co_consts = code.co_consts
         self.co_cellvars = code.co_cellvars
         self.co_freevars = code.co_freevars
+        self.exception_entries = dis.Bytecode(code).exception_entries
         self.table = table
         self.labels = sorted(labels)
 
@@ -304,6 +306,13 @@ class ByteCode(object):
         return self._compute_used_globals(self.func_id.func, self.table,
                                           self.co_consts, self.co_names)
 
+    def get_exception_entry(self, offset):
+        """
+        Returns the exception entry for the given instruction offset
+        """
+        for ent in self.exception_entries:
+            if offset in range(ent.start, ent.end):
+                return ent
 
 class FunctionIdentity(serialize.ReduceMixin):
     """
