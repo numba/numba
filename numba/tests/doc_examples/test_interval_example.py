@@ -106,21 +106,37 @@ class IntervalExampleTest(unittest.TestCase):
 
         # magictoken.interval_unbox.begin
         from numba.extending import unbox, NativeValue
+        from contextlib import ExitStack
 
         @unbox(IntervalType)
         def unbox_interval(typ, obj, c):
             """
             Convert a Interval object to a native interval structure.
             """
-            lo_obj = c.pyapi.object_getattr_string(obj, "lo")
-            hi_obj = c.pyapi.object_getattr_string(obj, "hi")
+            is_error_ptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
             interval = cgutils.create_struct_proxy(typ)(c.context, c.builder)
-            interval.lo = c.pyapi.float_as_double(lo_obj)
-            interval.hi = c.pyapi.float_as_double(hi_obj)
-            c.pyapi.decref(lo_obj)
-            c.pyapi.decref(hi_obj)
-            is_error = cgutils.is_not_null(c.builder, c.pyapi.err_occurred())
-            return NativeValue(interval._getvalue(), is_error=is_error)
+
+            with ExitStack() as stack:
+                lo_obj = c.pyapi.object_getattr_string(obj, "lo")
+                with cgutils.early_exit_if_null(c.builder, stack, lo_obj):
+                    c.builder.store(cgutils.true_bit, is_error_ptr)
+                lo_native = c.unbox(types.float64, lo_obj)
+                c.pyapi.decref(lo_obj)
+                with cgutils.early_exit_if(c.builder, stack, lo_native.is_error):
+                    c.builder.store(cgutils.true_bit, is_error_ptr)
+
+                hi_obj = c.pyapi.object_getattr_string(obj, "hi")
+                with cgutils.early_exit_if_null(c.builder, stack, hi_obj):
+                    c.builder.store(cgutils.true_bit, is_error_ptr)
+                hi_native = c.unbox(types.float64, hi_obj)
+                c.pyapi.decref(hi_obj)
+                with cgutils.early_exit_if(c.builder, stack, hi_native.is_error):
+                    c.builder.store(cgutils.true_bit, is_error_ptr)
+
+                interval.lo = lo_native.value
+                interval.hi = hi_native.value
+
+            return NativeValue(interval._getvalue(), is_error=c.builder.load(is_error_ptr))
         # magictoken.interval_unbox.end
 
         # magictoken.interval_box.begin
@@ -131,17 +147,36 @@ class IntervalExampleTest(unittest.TestCase):
             """
             Convert a native interval structure to an Interval object.
             """
-            interval = cgutils.create_struct_proxy(typ)(c.context,
-                                                        c.builder,
-                                                        value=val)
-            lo_obj = c.pyapi.float_from_double(interval.lo)
-            hi_obj = c.pyapi.float_from_double(interval.hi)
-            class_obj = c.pyapi.unserialize(c.pyapi.serialize_object(Interval))
-            res = c.pyapi.call_function_objargs(class_obj, (lo_obj, hi_obj))
-            c.pyapi.decref(lo_obj)
-            c.pyapi.decref(hi_obj)
-            c.pyapi.decref(class_obj)
-            return res
+            ret_ptr = cgutils.alloca_once(c.builder, c.pyapi.pyobj)
+            fail_obj = c.pyapi.get_null_object()
+
+            with ExitStack() as stack:
+                interval = cgutils.create_struct_proxy(typ)(c.context, c.builder, value=val)
+                lo_obj = c.box(types.float64, interval.lo)
+                with cgutils.early_exit_if_null(c.builder, stack, lo_obj):
+                    c.builder.store(fail_obj, ret_ptr)
+
+                hi_obj = c.box(types.float64, interval.hi)
+                with cgutils.early_exit_if_null(c.builder, stack, hi_obj):
+                    c.pyapi.decref(lo_obj)
+                    c.builder.store(fail_obj, ret_ptr)
+
+                class_obj = c.pyapi.unserialize(c.pyapi.serialize_object(Interval))
+                with cgutils.early_exit_if_null(c.builder, stack, class_obj):
+                    c.pyapi.decref(lo_obj)
+                    c.pyapi.decref(hi_obj)
+                    c.builder.store(fail_obj, ret_ptr)
+
+                # NOTE: The result of this call is not checked as the clean up
+                # has to occur regardless of whether it is successful. If it
+                # fails `res` is set to NULL and a Python exception is set.
+                res = c.pyapi.call_function_objargs(class_obj, (lo_obj, hi_obj))
+                c.pyapi.decref(lo_obj)
+                c.pyapi.decref(hi_obj)
+                c.pyapi.decref(class_obj)
+                c.builder.store(res, ret_ptr)
+
+            return c.builder.load(ret_ptr)
         # magictoken.interval_box.end
 
         # magictoken.interval_usage.begin
@@ -177,7 +212,26 @@ class IntervalExampleTest(unittest.TestCase):
         # Test .width attribute
         self.assertEqual(a.width, interval_width(a))
 
-        # Test .low and .high usage
+        # Test exceptions
+        class NotAFloat:
+            def __float__(self):
+                raise RuntimeError("I am not a float")
+
+        # TODO: This should produce a `RuntimeError`, but the `unbox` handler for `float` ignores
+        # the error raised by `__float__`, leading to a subsequent `TypeError` cause by passing
+        # `NULL` to `PyFloat_AsDouble`.
+        # This isn't the fault of the `Interval` extension that is being testing
+        # in this file.
+        with self.assertRaises(TypeError):
+            interval_width(Interval(2, NotAFloat()))
+
+        bad_interval = Interval(1, 2)
+        del bad_interval.hi
+
+        with self.assertRaises(AttributeError):
+            interval_width(bad_interval)
+
+        # Test .lo and .hi usage
         self.assertFalse(inside_interval(a, 5))
 
         # Test native Interval constructor
