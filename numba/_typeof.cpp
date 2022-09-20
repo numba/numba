@@ -101,9 +101,9 @@ string_writer_ensure(string_writer_t *w, size_t bytes)
     if (newsize < bytes)
         newsize = bytes;
     if (w->buf == w->static_buf)
-        w->buf = malloc(newsize);
+        w->buf = (char *) malloc(newsize);
     else
-        w->buf = realloc(w->buf, newsize);
+        w->buf = (char *) realloc(w->buf, newsize);
     if (w->buf) {
         w->allocated = newsize;
         return 0;
@@ -842,6 +842,10 @@ int typecode_devicendarray(PyObject *dispatcher, PyObject *ary)
     int dtype;
     int ndim;
     int layout = 0;
+    PyObject *ndim_obj = nullptr;
+    PyObject *num_obj = nullptr;
+    PyObject *dtype_obj = nullptr;
+    int dtype_num = 0;
 
     PyObject* flags = PyObject_GetAttrString(ary, "flags");
     if (flags == NULL)
@@ -858,7 +862,7 @@ int typecode_devicendarray(PyObject *dispatcher, PyObject *ary)
 
     Py_DECREF(flags);
 
-    PyObject *ndim_obj = PyObject_GetAttrString(ary, "ndim");
+    ndim_obj = PyObject_GetAttrString(ary, "ndim");
     if (ndim_obj == NULL) {
         /* If there's no ndim, try to proceed by clearing the error and using the
          * fallback. */
@@ -879,14 +883,14 @@ int typecode_devicendarray(PyObject *dispatcher, PyObject *ary)
     if (ndim <= 0 || ndim > N_NDIM)
         goto FALLBACK;
 
-    PyObject* dtype_obj = PyObject_GetAttrString(ary, "dtype");
+    dtype_obj = PyObject_GetAttrString(ary, "dtype");
     if (dtype_obj == NULL) {
         /* No dtype: try the fallback. */
         PyErr_Clear();
         goto FALLBACK;
     }
 
-    PyObject* num_obj = PyObject_GetAttrString(dtype_obj, "num");
+    num_obj = PyObject_GetAttrString(dtype_obj, "num");
     Py_DECREF(dtype_obj);
 
     if (num_obj == NULL) {
@@ -895,7 +899,7 @@ int typecode_devicendarray(PyObject *dispatcher, PyObject *ary)
         goto FALLBACK;
     }
 
-    int dtype_num = PyLong_AsLong(num_obj);
+    dtype_num = PyLong_AsLong(num_obj);
     Py_DECREF(num_obj);
 
     if (PyErr_Occurred()) {
@@ -934,7 +938,7 @@ FALLBACK:
     return typecode_using_fingerprint(dispatcher, (PyObject *) ary);
 }
 
-int
+extern "C" int
 typeof_typecode(PyObject *dispatcher, PyObject *val)
 {
     PyTypeObject *tyobj = Py_TYPE(val);
@@ -1051,7 +1055,7 @@ int init_numpy(void) {
  * typeof_init(omittedarg_type, typecode_dict)
  * (called from dispatcher.py to fill in missing information)
  */
-PyObject *
+extern "C" PyObject *
 typeof_init(PyObject *self, PyObject *args)
 {
     PyObject *tmpobj;

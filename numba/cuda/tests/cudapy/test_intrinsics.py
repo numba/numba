@@ -4,6 +4,7 @@ import operator
 import re
 from numba import cuda, int64
 from numba.cuda import compile_ptx
+from numba.core.errors import TypingError
 from numba.core.types import f2
 from numba.cuda.testing import (unittest, CUDATestCase, skip_on_cudasim,
                                 skip_unless_cc_53)
@@ -238,6 +239,14 @@ def simple_warpsize(ary):
     ary[0] = cuda.warpsize
 
 
+def nonliteral_grid(x):
+    cuda.grid(x)
+
+
+def nonliteral_gridsize(x):
+    cuda.gridsize(x)
+
+
 class TestCudaIntrinsic(CUDATestCase):
     def test_simple_threadidx(self):
         compiled = cuda.jit("void(int32[:])")(simple_threadidx)
@@ -271,6 +280,16 @@ class TestCudaIntrinsic(CUDATestCase):
         c_res = c_contigous()
         f_res = f_contigous()
         self.assertTrue(np.all(c_res == f_res))
+
+    @skip_on_cudasim('Cudasim does not check types')
+    def test_nonliteral_grid_error(self):
+        with self.assertRaisesRegex(TypingError, 'RequireLiteralValue'):
+            cuda.jit('void(int32)')(nonliteral_grid)
+
+    @skip_on_cudasim('Cudasim does not check types')
+    def test_nonliteral_gridsize_error(self):
+        with self.assertRaisesRegex(TypingError, 'RequireLiteralValue'):
+            cuda.jit('void(int32)')(nonliteral_gridsize)
 
     def test_simple_grid1d(self):
         compiled = cuda.jit("void(int32[::1])")(simple_grid1d)

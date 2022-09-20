@@ -12,7 +12,7 @@ import threading
 
 from llvmlite import ir
 
-from .error import NvvmError, NvvmSupportError
+from .error import NvvmError, NvvmSupportError, NvvmWarning
 from .libs import get_libdevice, open_libdevice, open_cudalib
 from numba.core import cgutils, config
 
@@ -46,6 +46,15 @@ NVVM_ERROR_COMPILATION
 
 for i, k in enumerate(RESULT_CODE_NAMES):
     setattr(sys.modules[__name__], k, i)
+
+# Data layouts. NVVM IR 1.8 (CUDA 11.6) introduced 128-bit integer support.
+
+_datalayout_original = ('e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-'
+                        'i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-'
+                        'v64:64:64-v128:128:128-n16:32:64')
+_datalayout_i128 = ('e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-'
+                    'i128:128:128-f32:32:32-f64:64:64-v16:16:16-v32:32:32-'
+                    'v64:64:64-v128:128:128-n16:32:64')
 
 
 def is_available():
@@ -156,6 +165,13 @@ class NVVM(object):
         # nvvmAddModuleToProgram in
         # https://docs.nvidia.com/cuda/libnvvm-api/group__compilation.html
         return (self._majorIR, self._minorIR) >= (1, 6)
+
+    @property
+    def data_layout(self):
+        if (self._majorIR, self._minorIR) < (1, 8):
+            return _datalayout_original
+        else:
+            return _datalayout_i128
 
     def get_version(self):
         major = c_int()
@@ -304,6 +320,8 @@ class CompilationUnit(object):
 
         # get log
         self.log = self.get_log()
+        if self.log:
+            warnings.warn(self.log, category=NvvmWarning)
 
         return ptxbuf[:]
 
@@ -323,12 +341,6 @@ class CompilationUnit(object):
             return logbuf.value.decode('utf8')  # populate log attribute
 
         return ''
-
-
-data_layout = (
-    'e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-'
-    'f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64'
-)
 
 
 _supported_cc = None
@@ -594,7 +606,7 @@ def _replace_datalayout(llvmir):
     for i, ln in enumerate(lines):
         if ln.startswith("target datalayout"):
             tmp = 'target datalayout = "{0}"'
-            lines[i] = tmp.format(data_layout)
+            lines[i] = tmp.format(NVVM().data_layout)
             break
     return '\n'.join(lines)
 
@@ -882,20 +894,15 @@ def set_cuda_kernel(lfunc):
     nmd = cgutils.get_or_insert_named_metadata(mod, 'nvvm.annotations')
     nmd.add(md)
 
+    # Marking a kernel 'noinline' causes NVVM to generate a warning, so remove
+    # it if it is present.
+    lfunc.attributes.discard('noinline')
+
 
 def add_ir_version(mod):
     """Add NVVM IR version to module"""
+    # We specify the IR version to match the current NVVM's IR version
     i32 = ir.IntType(32)
-    if NVVM().is_nvvm70:
-        # NVVM IR 1.6, DWARF 3.0
-        ir_versions = [i32(1), i32(6), i32(3), i32(0)]
-    else:
-        # NVVM IR 1.1, DWARF 2.0
-        ir_versions = [i32(1), i32(2), i32(2), i32(0)]
-
+    ir_versions = [i32(v) for v in NVVM().get_ir_version()]
     md_ver = mod.add_metadata(ir_versions)
     mod.add_named_metadata('nvvmir.version', md_ver)
-
-
-def fix_data_layout(module):
-    module.data_layout = data_layout
