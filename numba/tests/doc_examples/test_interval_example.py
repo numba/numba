@@ -167,6 +167,9 @@ class IntervalExampleTest(unittest.TestCase):
                     c.pyapi.decref(hi_obj)
                     c.builder.store(fail_obj, ret_ptr)
 
+                # NOTE: The result of this call is not checked as the clean up
+                # has to occur regardless of whether it is successful. If it
+                # fails `res` is set to NULL and a Python exception is set.
                 res = c.pyapi.call_function_objargs(class_obj, (lo_obj, hi_obj))
                 c.pyapi.decref(lo_obj)
                 c.pyapi.decref(hi_obj)
