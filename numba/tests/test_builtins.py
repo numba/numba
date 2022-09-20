@@ -330,6 +330,11 @@ def invalid_isinstance_unsupported_type_usecase():
         return isinstance(inst, ntpl)
     return impl
 
+
+def reversed_usecase(x):
+    return reversed(x)
+
+
 class TestBuiltins(TestCase):
 
     def run_nullary_func(self, pyfunc, flags):
@@ -1172,6 +1177,23 @@ class TestBuiltins(TestCase):
 
         for fn in sample_functions(op=max):
             self._check_min_max(fn)
+
+    def test_reversed(self):
+        # generic tests for reversed
+        pyfunc = reversed_usecase
+        cfunc = jit(forceobj=True)(pyfunc)
+        samples = [
+            'hello world',
+            (42,),
+            (1, 2, 3),
+            (1, 'hello', 3),
+            ((), ()),
+            (1, 2.0, 'numba', range(4)),
+        ]
+        for arg in samples:
+            expected = list(pyfunc(arg))
+            got = list(cfunc(arg))
+            self.assertPreciseEqual(expected, got)
 
 
 class TestOperatorMixedTypes(TestCase):

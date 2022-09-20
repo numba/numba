@@ -103,6 +103,9 @@ def tuple_unpack_static_getitem_err():
     b.append(1)
     return
 
+def tuple_reversed(tup):
+    return tuple(reversed(tup))
+
 
 class TestTupleLengthError(unittest.TestCase):
 
@@ -309,6 +312,19 @@ class TestOperations(TestCase):
 
     def test_slice3(self):
         self.check_slice(tuple_slice3)
+
+    def test_reversed(self):
+        pyfunc = tuple_reversed
+        samples = [(types.Tuple(()), ()),
+                   (types.UniTuple(types.int32, 0), ()),
+                   (types.UniTuple(types.int32, 1), (42,)),
+                   (types.Tuple((types.int64, types.float32)), (3, 4.5)),
+                   ]
+        for (typ, tup) in samples:
+            cr = compile_isolated(pyfunc, (typ,))
+            expected = pyfunc(tup,)
+            got = cr.entry_point(tup,)
+            self.assertPreciseEqual(got, expected, msg=(typ))
 
     def test_bool(self):
         pyfunc = bool_usecase

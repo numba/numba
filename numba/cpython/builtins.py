@@ -700,7 +700,7 @@ def ol_sum(iterable, start=0):
 
 
 # ------------------------------------------------------------------------------
-# map, filter, reduce
+# map, filter, reduce, reversed
 
 
 @overload(map)
@@ -724,6 +724,23 @@ def ol_filter(func, iterable):
                 if func(x):
                     yield x
     return impl
+
+
+@overload(reversed)
+def ol_reversed(seq):
+    """
+    "reversed" requires the object to either implement the __reversed__()
+    method or support the Sequence protocol (__getitem__, __len__)
+    """
+
+    # After https://github.com/numba/numba/pull/8442 gets merged, one can update
+    # the current impl. to use hasattr(seq, attr)
+    if isinstance(seq, types.IterableType):
+        def impl_reversed(seq):
+            seq_len = len(seq)
+            for i in range(seq_len):
+                yield seq[seq_len - 1 - i]
+        return impl_reversed
 
 
 @overload(isinstance)
@@ -927,4 +944,3 @@ def ol_getattr(obj, name, default):
     def impl(obj, name, default):
         return resolve_getattr(obj, name, default)
     return impl
-

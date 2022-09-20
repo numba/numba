@@ -278,10 +278,24 @@ def list_reverse(n):
     l.reverse()
     return l
 
-def list_reversed(n):
-    l = list(range(n))
+def list_reversed_1(stop):
+    l = list(range(stop))
     rev = reversed(l)
     return list(rev)
+
+def list_reversed_2(start, stop):
+    l = list(range(start, stop))
+    rev = reversed(l)
+    return list(rev)
+
+def list_reversed_3(start, stop, step):
+    l = list(range(start, stop, step))
+    rev = reversed(l)
+    return list(rev)
+
+def list_reversed_iter(stop):
+    l = list(range(stop))
+    return reversed(l)  # returns a generator
 
 def list_add(m, n):
     a = list(range(0, m))
@@ -563,12 +577,36 @@ class TestLists(MemoryLeakMixin, TestCase):
     def test_reverse(self):
         self.check_unary_with_size(list_reverse)
 
-    def test_reversed(self):
-        self.disable_leak_check()
-        pyfunc = list_reversed
+    def _test_reversed(self, pyfunc, select):
         cfunc = jit(nopython=True)(pyfunc)
-        self.assertEqual(pyfunc(4), cfunc(4))
+        sizes = [5, 40]
+        steps = [1, 2]
+        for n, step in zip(sizes, steps):
+            indices = [0, 1, n - 2, -1, -2, -n + 3, -n - 1, -n]
+            for start, stop in itertools.product(indices, indices):
+                _args = select(start, stop, step)
+                expected = pyfunc(*_args)
+                got = cfunc(*_args)
+                self.assertPreciseEqual(expected, got)
 
+    def test_reversed_1(self):
+        self.disable_leak_check()
+        self._test_reversed(list_reversed_1, lambda a, b, c: (b,))
+
+    def test_reversed_2(self):
+        self.disable_leak_check()
+        self._test_reversed(list_reversed_2, lambda a, b, c: (a, b))
+
+    def test_reversed_3(self):
+        self.disable_leak_check()
+        self._test_reversed(list_reversed_3, lambda a, b, c: (a, b, c))
+
+    def test_reversed_iter(self):
+        pyfunc = list_reversed_iter
+        cfunc = jit(forceobj=True)(pyfunc)
+        expected = pyfunc(4)
+        got = cfunc(4)
+        self.assertPreciseEqual(list(expected), list(got))
 
     def test_contains(self):
         self.check_unary_with_size(list_contains)

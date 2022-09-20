@@ -30,9 +30,14 @@ def loop3(a, b, c):
         s += i
     return s
 
-def range_rev(n):
-    rev_range = reversed(range(n))
-    return list(rev_range)
+def range_rev_1(stop):
+    return reversed(range(stop))
+
+def range_rev_2(start, stop):
+    return reversed(range(start, stop))
+
+def range_rev_3(start, stop, step):
+    return range(start, stop, step)
 
 def range_len1(n):
     return len(range(n))
@@ -91,15 +96,42 @@ class TestRange(unittest.TestCase):
         for args in arglist:
             self.assertEqual(cfunc(*args), pyfunc(*args))
 
+    def _test_range_reversed(self, pyfunc, arglist):
+        cfunc = jit(forceobj=True)(pyfunc)
+        for _args in arglist:
+            expected = pyfunc(*_args)
+            got = cfunc(*_args)
+            self.assertEqual(list(expected), list(got))
 
-    def test_range_reversed(self):
-        pyfunc = range_rev
-        cres = compile_isolated(pyfunc, [types.int64])
-        cfunc = cres.entry_point
-        arglist = [5, 0, -5]
-        for arg in arglist:
-            self.assertEqual(cfunc(types.int64(arg)), pyfunc(types.int64(arg)))
+    def test_range_reversed1(self):
+        pyfunc = range_rev_1
+        arglist = [
+            (-5,),
+            (0,),
+            (5,),
+        ]
+        self._test_range_reversed(pyfunc, arglist)
 
+    def test_range_reversed2(self):
+        pyfunc = range_rev_2
+        arglist = [
+            (0, 5),
+            (-5, 0),
+            (0, 5),
+            (5, 10),
+        ]
+        self._test_range_reversed(pyfunc, arglist)
+
+    def test_range_reversed3(self):
+        pyfunc = range_rev_3
+        arglist = [
+            (0, 5, 1),
+            (5, 0, -1),
+            (-5, 0, 2),
+            (0, 5, 2),
+            (5, 10, 1),
+        ]
+        self._test_range_reversed(pyfunc, arglist)
 
     def test_range_len1(self):
         pyfunc = range_len1

@@ -307,6 +307,6 @@ def range_reverse(A):
     if isinstance(A, types.RangeType):
         def range_impl(A):
             n = len(A)
-            return range(A.start + (n-1) * A.step, A.start - A.step, -A.step)
+            return range(A.start + (n - 1) * A.step, A.start - A.step, -A.step)
 
         return range_impl
