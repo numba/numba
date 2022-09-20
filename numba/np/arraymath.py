@@ -369,12 +369,12 @@ def array_prod(arr):
 def array_cumsum(arr):
     if isinstance(arr, types.Array):
         is_integer = arr.dtype in types.signed_domain | frozenset([types.bool_])
+        if is_integer:
+            dtype = np.intp
+        else:
+            dtype = arr.dtype
 
         def array_cumsum_impl(arr):
-            if is_integer:
-                dtype = np.intp
-            else:
-                dtype = arr.dtype
             out = np.empty(arr.size, dtype)
             c = np.zeros(1, dtype)[0]
             for idx, v in enumerate(arr.flat):
@@ -390,12 +390,12 @@ def array_cumsum(arr):
 def array_cumprod(arr):
     if isinstance(arr, types.Array):
         is_integer = arr.dtype in types.signed_domain | frozenset([types.bool_])
+        if is_integer:
+            dtype = np.intp
+        else:
+            dtype = arr.dtype
 
         def array_cumprod_impl(arr):
-            if is_integer:
-                dtype = np.intp
-            else:
-                dtype = arr.dtype
             out = np.empty(arr.size, dtype)
             c = np.ones(1, dtype)[0]
             for idx, v in enumerate(arr.flat):
@@ -411,14 +411,14 @@ def array_cumprod(arr):
 def array_mean(arr):
     if isinstance(arr, types.Array):
         is_number = arr.dtype in types.integer_domain | frozenset([types.bool_])
+        if is_number:
+            dtype = types.float64
+        else:
+            dtype = arr.dtype
 
         def array_mean_impl(arr):
             # Can't use the naive `arr.sum() / arr.size`, as it would return
             # a wrong result on integer sum overflow.
-            if is_number:
-                dtype = types.float64
-            else:
-                dtype = arr.dtype
             c = np.zeros(1, dtype)[0]
             for v in np.nditer(arr):
                 c += v.item()
