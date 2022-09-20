@@ -208,11 +208,11 @@ First obtain SVML, using conda for example::
     conda install intel-cmplr-lib-rt
 
 .. note::
-    The SVML library was previously provided through the `icc_rt` conda package.
-    The `icc_rt` package has since become a meta-package and as of version
-    `2021.1.1` it has `intel-cmplr-lib-rt` amongst other packages as a
-    dependency. Installing the recommended `intel-cmplr-lib-rt` package directly
-    results in fewer installed packages.
+    The SVML library was previously provided through the ``icc_rt`` conda
+    package. The ``icc_rt`` package has since become a meta-package and as of
+    version ``2021.1.1`` it has ``intel-cmplr-lib-rt`` amongst other packages as
+    a dependency. Installing the recommended ``intel-cmplr-lib-rt`` package
+    directly results in fewer installed packages.
 
 Rerunning the identity function example ``ident_np`` from above with various
 combinations of options to ``@njit`` and with/without SVML yields the following
