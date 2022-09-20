@@ -2,6 +2,9 @@
 
 set -v -e
 
+CONDA_INSTALL="conda install -q -y"
+PIP_INSTALL="pip install -q"
+
 # first configure conda to have more tolerance of network problems, these
 # numbers are not scientifically chosen, just merely larger than defaults
 conda config --write-default
@@ -9,11 +12,11 @@ conda config --set remote_connect_timeout_secs 30.15
 conda config --set remote_max_retries 10
 conda config --set remote_read_timeout_secs 120.2
 conda config --set show_channel_urls true
+# install conda-libmamba-solver into the base env and set in config
+$CONDA_INSTALL conda-libmamba-solver
+conda config --set experimental_solver libmamba
 conda info
 conda config --show
-
-CONDA_INSTALL="conda install -q -y"
-PIP_INSTALL="pip install -q"
 
 
 EXTRA_CHANNELS=""
