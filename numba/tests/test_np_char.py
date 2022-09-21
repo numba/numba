@@ -19,7 +19,7 @@ def _pack_arguments(main_args: (list, tuple), args: (list, tuple)):
     arg_product = tuple(product(*args))
     for a in main_args:
         for args in arg_product:
-            yield *a, *args
+            yield (*a, *args)
 
 
 def _arguments_as_bytes(args: (list, tuple)):
@@ -75,10 +75,12 @@ class TestComparisonOperators(TestCase):
     @classmethod
     def set_arguments(cls):
         length = 500
-        # 500 UTF-32 strings of length 1 to 200 in range(1, sys.maxunicode)
         np.random.seed(42)
-        q = np.array([''.join([chr(np.random.randint(maxunicode))
-                               for _ in range(np.random.randint(1, 200))])
+        # 500 UTF-32 strings of length 1 to 200 in range(1, sys.maxunicode)
+        # Python 3.7 can not decode unicode in range(55296, 57344)
+        q = np.array([''.join([chr(np.random.randint(1, 55295)) if i % 2
+                               else chr(np.random.randint(57345, maxunicode))
+                               for i in range(np.random.randint(1, 200))])
                       for _ in range(length)])
         # 500 ASCII strings of length 0 to 50
         r = np.array([''.join([chr(np.random.randint(1, 127))
