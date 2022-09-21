@@ -411,6 +411,19 @@ The following reduction functions are supported:
 * :func:`numpy.quantile` (only the 2 first arguments, complex dtypes
   unsupported)
 
+String Operations
+-----------------
+
+Comparison operators are supported on 1-D contiguous arrays of strings or bytes:
+
+* :func:`numpy.char.compare_chararrays`
+* :func:`numpy.char.equal`
+* :func:`numpy.char.greater_equal`
+* :func:`numpy.char.greater`
+* :func:`numpy.char.less_equal`
+* :func:`numpy.char.less`
+* :func:`numpy.char.not_equal`
+
 Other functions
 ---------------
 
