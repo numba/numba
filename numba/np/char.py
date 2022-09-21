@@ -10,14 +10,10 @@ import numpy as np
 
 
 @register_jitable
-def _register_bytes(b, rstrip=True):
-    """Expose the numerical representation of ASCII bytes."""
-    if isinstance(b, bytes):
-        len_chr = 1
-        size_chr = len(b)
-    else:
-        len_chr = b.size
-        size_chr = b.itemsize
+def _register_scalar_bytes(b, rstrip=True):
+    """Expose the numerical representation of scalar ASCII bytes."""
+    len_chr = 1
+    size_chr = len(b)
     if rstrip and size_chr > 1:
         return (
             _rstrip_inner(np.frombuffer(b, 'uint8').copy(), size_chr),
@@ -28,18 +24,38 @@ def _register_bytes(b, rstrip=True):
 
 
 @register_jitable
-def _register_strings(s, rstrip=True):
-    """Expose the numerical representation of UTF-32 strings."""
-    if isinstance(s, str):
-        len_chr = 1
-        size_chr = len(s)
-        chr_array = np.empty(size_chr, 'int32')
-        for i in range(size_chr):
-            chr_array[i] = ord(s[i])
-    else:
-        len_chr = s.size
-        size_chr = s.itemsize // 4
-        chr_array = np.ravel(s).view(np.dtype('int32'))
+def _register_array_bytes(b, rstrip=True):
+    """Expose the numerical representation of ASCII array bytes."""
+    len_chr = b.size
+    size_chr = b.itemsize
+    if rstrip and size_chr > 1:
+        return (
+            _rstrip_inner(np.frombuffer(b, 'uint8').copy(), size_chr),
+            len_chr,
+            size_chr
+        )
+    return np.frombuffer(b, 'uint8'), len_chr, size_chr
+
+
+@register_jitable
+def _register_scalar_strings(s, rstrip=True):
+    """Expose the numerical representation of scalar UTF-32 strings."""
+    len_chr = 1
+    size_chr = len(s)
+    chr_array = np.empty(size_chr, 'int32')
+    for i in range(size_chr):
+        chr_array[i] = ord(s[i])
+    if rstrip and size_chr > 1:
+        return _rstrip_inner(chr_array, size_chr), len_chr, size_chr
+    return chr_array, len_chr, size_chr
+
+
+@register_jitable
+def _register_array_strings(s, rstrip=True):
+    """Expose the numerical representation of UTF-32 array strings."""
+    len_chr = s.size
+    size_chr = s.itemsize // 4
+    chr_array = np.ravel(s).view(np.dtype('int32'))
     if rstrip and size_chr > 1:
         return _rstrip_inner(chr_array, size_chr), len_chr, size_chr
     return chr_array, len_chr, size_chr
@@ -242,9 +258,8 @@ def compare_chararrays(chr_array, len_chr, size_chr,
     raise ValueError("comparison must be '==', '!=', '<', '>', '<=', '>='")
 
 
-@register_jitable
 def _ensure_type(x):
-    ndim = 0
+    ndim = -1
     if isinstance(x, types.Array):
         ndim = x.ndim
         if ndim > 1 or x.layout != 'C':
@@ -260,139 +275,146 @@ def _ensure_type(x):
     return x, ndim
 
 
-@register_jitable
 def _get_register_type(x1, x2):
 
     (x1_type, x1_dim), (x2_type, x2_dim) = _ensure_type(x1), _ensure_type(x2)
     byte_types = (types.Bytes, types.CharSeq)
     str_types = (types.UnicodeType, types.UnicodeCharSeq)
 
-    register_type = cmp_type = None
-    if isinstance(x1_type, byte_types) and isinstance(x2_type, byte_types):
-        register_type = _register_bytes
-        cmp_type = bytes
-    elif isinstance(x1_type, str_types) and isinstance(x2_type, str_types):
-        register_type = _register_strings
-        cmp_type = str
+    register_x1 = register_x2 = None
 
-    if not register_type:
+    if isinstance(x1_type, byte_types) and isinstance(x2_type, byte_types):
+        register_x1 = _register_array_bytes if x1_dim >= 0 \
+            else _register_scalar_bytes
+        register_x2 = _register_array_bytes if x2_dim >= 0 \
+            else _register_scalar_bytes
+    elif isinstance(x1_type, str_types) and isinstance(x2_type, str_types):
+        register_x1 = _register_array_strings if x1_dim >= 0 \
+            else _register_scalar_strings
+        register_x2 = _register_array_strings if x2_dim >= 0 \
+            else _register_scalar_strings
+
+    if not register_x1:
         raise NotImplementedError('NotImplemented')
-    return register_type, cmp_type, x1_dim, x2_dim
+    return register_x1, register_x2, x1_dim, x2_dim
 
 
 @overload(np.char.equal)
 def ov_char_equal(x1, x2):
-    register_type, cmp_type, x1_dim, x2_dim = _get_register_type(x1, x2)
+    """Native Overload of np.char.equal"""
+    register_x1, register_x2, x1_dim, x2_dim = _get_register_type(x1, x2)
 
-    if x1_dim or x2_dim:
+    if x1_dim > 0 or x2_dim > 0:
         def impl(x1, x2):
-            if isinstance(x1, cmp_type) and not isinstance(x2, cmp_type):
-                return equal(*register_type(x2), *register_type(x1))
-            return equal(*register_type(x1), *register_type(x2))
+            if x1_dim < 0 <= x2_dim:
+                return equal(*register_x2(x2), *register_x1(x1))
+            return equal(*register_x1(x1), *register_x2(x2))
     else:
         def impl(x1, x2):
-            return np.array(equal(*register_type(x1), *register_type(x2))[0])
+            return np.array(equal(*register_x1(x1), *register_x2(x2))[0])
     return impl
 
 
 @overload(np.char.not_equal)
 def ov_char_not_equal(x1, x2):
-    register_type, cmp_type, x1_dim, x2_dim = _get_register_type(x1, x2)
+    """Native Overload of np.char.not_equal"""
+    register_x1, register_x2, x1_dim, x2_dim = _get_register_type(x1, x2)
 
-    if x1_dim or x2_dim:
+    if x1_dim > 0 or x2_dim > 0:
         def impl(x1, x2):
-            if isinstance(x1, cmp_type) and not isinstance(x2, cmp_type):
-                return ~equal(*register_type(x2), *register_type(x1))
-            return ~equal(*register_type(x1), *register_type(x2))
+            if x1_dim < 0 <= x2_dim:
+                return ~equal(*register_x2(x2), *register_x1(x1))
+            return ~equal(*register_x1(x1), *register_x2(x2))
     else:
         def impl(x1, x2):
-            return np.array(~equal(*register_type(x1), *register_type(x2))[0])
+            return np.array(~equal(*register_x1(x1), *register_x2(x2))[0])
     return impl
 
 
 @overload(np.char.greater_equal)
 def ov_char_greater_equal(x1, x2):
-    register_type, cmp_type, x1_dim, x2_dim = _get_register_type(x1, x2)
+    """Native Overload of np.char.greater_equal"""
+    register_x1, register_x2, x1_dim, x2_dim = _get_register_type(x1, x2)
 
-    if x1_dim or x2_dim:
+    if x1_dim > 0 or x2_dim > 0:
         def impl(x1, x2):
-            if isinstance(x1, cmp_type) and not isinstance(x2, cmp_type):
-                return greater_equal(*register_type(x2),
-                                     *register_type(x1), True)
-            return greater_equal(*register_type(x1), *register_type(x2))
+            if x1_dim < 0 <= x2_dim:
+                return greater_equal(*register_x2(x2), *register_x1(x1), True)
+            return greater_equal(*register_x1(x1), *register_x2(x2))
     else:
         def impl(x1, x2):
-            return np.array(greater_equal(*register_type(x1),
-                                          *register_type(x2))[0])
+            return np.array(greater_equal(*register_x1(x1), *register_x2(x2))[0])
     return impl
 
 
 @overload(np.char.greater)
 def ov_char_greater(x1, x2):
-    register_type, cmp_type, x1_dim, x2_dim = _get_register_type(x1, x2)
+    """Native Overload of np.char.greater"""
+    register_x1, register_x2, x1_dim, x2_dim = _get_register_type(x1, x2)
 
-    if x1_dim or x2_dim:
+    if x1_dim > 0 or x2_dim > 0:
         def impl(x1, x2):
-            if isinstance(x1, cmp_type) and not isinstance(x2, cmp_type):
-                return greater(*register_type(x2), *register_type(x1), True)
-            return greater(*register_type(x1), *register_type(x2))
+            if x1_dim < 0 <= x2_dim:
+                return greater(*register_x2(x2), *register_x1(x1), True)
+            return greater(*register_x1(x1), *register_x2(x2))
     else:
         def impl(x1, x2):
-            return np.array(greater(*register_type(x1), *register_type(x2))[0])
+            return np.array(greater(*register_x1(x1), *register_x2(x2))[0])
     return impl
 
 
 @overload(np.char.less)
 def ov_char_less(x1, x2):
-    register_type, cmp_type, x1_dim, x2_dim = _get_register_type(x1, x2)
+    """Native Overload of np.char.less"""
+    register_x1, register_x2, x1_dim, x2_dim = _get_register_type(x1, x2)
 
-    if x1_dim or x2_dim:
+    if x1_dim > 0 or x2_dim > 0:
         def impl(x1, x2):
-            if isinstance(x1, cmp_type) and not isinstance(x2, cmp_type):
-                return ~greater_equal(*register_type(x2),
-                                      *register_type(x1), True)
-            return ~greater_equal(*register_type(x1), *register_type(x2))
+            if x1_dim < 0 <= x2_dim:
+                return ~greater_equal(*register_x2(x2), *register_x1(x1), True)
+            return ~greater_equal(*register_x1(x1), *register_x2(x2))
     else:
         def impl(x1, x2):
-            return np.array(~greater_equal(*register_type(x1),
-                                           *register_type(x2))[0])
+            return np.array(~greater_equal(*register_x1(x1),
+                                           *register_x2(x2))[0])
     return impl
 
 
 @overload(np.char.less_equal)
 def ov_char_less_equal(x1, x2):
-    register_type, cmp_type, x1_dim, x2_dim = _get_register_type(x1, x2)
+    """Native Overload of np.char.less_equal"""
+    register_x1, register_x2, x1_dim, x2_dim = _get_register_type(x1, x2)
 
-    if x1_dim or x2_dim:
+    if x1_dim > 0 or x2_dim > 0:
         def impl(x1, x2):
-            if isinstance(x1, cmp_type) and not isinstance(x2, cmp_type):
-                return ~greater(*register_type(x2), *register_type(x1), True)
-            return ~greater(*register_type(x1), *register_type(x2))
+            if x1_dim < 0 <= x2_dim:
+                return ~greater(*register_x2(x2), *register_x1(x1), True)
+            return ~greater(*register_x1(x1), *register_x2(x2))
     else:
         def impl(x1, x2):
-            return np.array(~greater(*register_type(x1), *register_type(x2))[0])
+            return np.array(~greater(*register_x1(x1), *register_x2(x2))[0])
     return impl
 
 
-@register_jitable
 @overload(np.char.compare_chararrays)
 def ov_char_compare_chararrays(a1, a2, cmp, rstrip):
+    """Native Overload of np.char.compare_chararrays"""
     if not isinstance(cmp, (types.Bytes, types.UnicodeType)):
         raise TypeError(f'a bytes-like object is required, not {cmp.name}')
 
-    register_type, cmp_type, a1_dim, a2_dim = _get_register_type(a1, a2)
+    register_a1, register_a2, a1_dim, a2_dim = _get_register_type(a1, a2)
 
-    if a1_dim or a2_dim:
+    if a1_dim > 0 or a2_dim > 0:
         def impl(a1, a2, cmp, rstrip):
-            if isinstance(a1, cmp_type) and not isinstance(a2, cmp_type):
-                return compare_chararrays(*register_type(a2, rstrip),
-                                          *register_type(a1, rstrip), True, cmp)
-            return compare_chararrays(*register_type(a1, rstrip),
-                                      *register_type(a2, rstrip), False, cmp)
+            if a1_dim < 0 <= a2_dim:
+                return compare_chararrays(*register_a2(a2, rstrip),
+                                          *register_a1(a1, rstrip), True, cmp)
+            return compare_chararrays(*register_a1(a1, rstrip),
+                                      *register_a2(a2, rstrip), False, cmp)
     else:
         def impl(a1, a2, cmp, rstrip):
-            return np.array(compare_chararrays(*register_type(a1, rstrip),
-                                               *register_type(a2, rstrip),
+            return np.array(compare_chararrays(*register_a1(a1, rstrip),
+                                               *register_a2(a2, rstrip),
                                                False, cmp)[0])
     return impl
 
