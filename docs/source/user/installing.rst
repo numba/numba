@@ -234,7 +234,7 @@ vary with target operating system and hardware. The following lists them all
   * ``pyyaml`` - permits the use of a ``.numba_config.yaml``
     file for storing per project configuration options
   * ``colorama`` - makes error message highlighting work
-  * ``icc_rt`` - (numba channel) allows Numba to use Intel SVML for extra
+  * ``intel-cmplr-lib-rt`` - allows Numba to use Intel SVML for extra
     performance
   * ``pygments`` - for "pretty" type annotation
   * ``gdb`` as an executable on the ``$PATH`` - if you would like to use the gdb
