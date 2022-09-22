@@ -44,6 +44,25 @@ class OptimizationProcessor:
         pass
 
 
+class Aggregate(OptimizationProcessor):
+    """
+    A processor which is a collection of other processors
+    """
+    def __init__(self, *processors):
+        self._processors = processors
+
+    def filters(self) -> Iterable[str]:
+        return (f for p in self._processors for f in p.filters())
+
+    def needs_debug_info(self) -> bool:
+        return any(p.needs_debug_info() for p in self._processors)
+
+    def process(self, remarks_data: List[Any], full_name: str) ->\
+            Iterable[Tuple[str, Any]]:
+        return (o for p in self._processors for o in p.process(remarks_data,
+                                                               full_name))
+
+
 class RawOptimizationRemarks(OptimizationProcessor):
     """
     This stores raw optimisation remarks
