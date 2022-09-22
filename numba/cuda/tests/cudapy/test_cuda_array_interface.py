@@ -244,6 +244,7 @@ class TestCudaArrayInterface(ContextResettingTestCase):
 
         d_arr = ForeignArray(c_arr)
         add_one[1, 10](d_arr)  # this should pass
+        print(c_arr.copy_to_host())
 
     def test_strides(self):
         # for #4175
@@ -431,16 +432,31 @@ class TestCudaArrayInterface(ContextResettingTestCase):
             mock_sync.assert_not_called()
 
     def test_cuda_reshape(self):
-        @cuda.jit('void()')
-        def f():
+        NX = 2
+        NY = 2
+
+        @cuda.jit('void(int32[:,::1])')
+        def f(arr):
             x = cuda.shared.array(0, dtype=np.int32)
             x[0] = 11
             x[1] = 12
             x[2] = 21
             x[3] = 22
-            x.reshape(2, 2)
+            y = x.reshape(NX, NY)
 
-        f[1,1]()
+            arr[0, 0] = y[0, 0]
+            arr[0, 1] = y[0, 1]
+            arr[1, 0] = y[1, 0]
+            arr[1, 1] = y[1, 1]
+
+        DYNSMEM = NX * NY * np.dtype(np.int32).itemsize
+        data = np.zeros((NX, NY), dtype=np.int32)
+
+        f[1, 1, 0, DYNSMEM](data)
+        self.assertEqual(data[0,0], 11)
+        self.assertEqual(data[0,1], 12)
+        self.assertEqual(data[1,0], 21)
+        self.assertEqual(data[1,1], 22)
 
 
 if __name__ == "__main__":
