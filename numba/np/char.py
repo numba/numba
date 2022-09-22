@@ -106,6 +106,9 @@ def _rstrip_inner(chr_array, size_chr):
 
 @register_jitable
 def _cast_comparison(size_chr, len_chr, len_cmp, size_cmp):
+    """
+    Determines the character offsets used to align the comparison to the target.
+    """
     if len_cmp > 1 and len_cmp != len_chr:
         raise ValueError('shape mismatch: objects cannot be broadcast to a '
                          'single shape.  Mismatch is between arg 0 and arg 1.')
@@ -301,7 +304,6 @@ def _get_register_type(x1, x2):
 
 @overload(np.char.equal)
 def ov_char_equal(x1, x2):
-    """Native Overload of np.char.equal"""
     register_x1, register_x2, x1_dim, x2_dim = _get_register_type(x1, x2)
 
     if x1_dim > 0 or x2_dim > 0:
@@ -317,7 +319,6 @@ def ov_char_equal(x1, x2):
 
 @overload(np.char.not_equal)
 def ov_char_not_equal(x1, x2):
-    """Native Overload of np.char.not_equal"""
     register_x1, register_x2, x1_dim, x2_dim = _get_register_type(x1, x2)
 
     if x1_dim > 0 or x2_dim > 0:
@@ -333,7 +334,6 @@ def ov_char_not_equal(x1, x2):
 
 @overload(np.char.greater_equal)
 def ov_char_greater_equal(x1, x2):
-    """Native Overload of np.char.greater_equal"""
     register_x1, register_x2, x1_dim, x2_dim = _get_register_type(x1, x2)
 
     if x1_dim > 0 or x2_dim > 0:
@@ -343,13 +343,13 @@ def ov_char_greater_equal(x1, x2):
             return greater_equal(*register_x1(x1), *register_x2(x2))
     else:
         def impl(x1, x2):
-            return np.array(greater_equal(*register_x1(x1), *register_x2(x2))[0])
+            return np.array(greater_equal(*register_x1(x1),
+                                          *register_x2(x2))[0])
     return impl
 
 
 @overload(np.char.greater)
 def ov_char_greater(x1, x2):
-    """Native Overload of np.char.greater"""
     register_x1, register_x2, x1_dim, x2_dim = _get_register_type(x1, x2)
 
     if x1_dim > 0 or x2_dim > 0:
@@ -365,7 +365,6 @@ def ov_char_greater(x1, x2):
 
 @overload(np.char.less)
 def ov_char_less(x1, x2):
-    """Native Overload of np.char.less"""
     register_x1, register_x2, x1_dim, x2_dim = _get_register_type(x1, x2)
 
     if x1_dim > 0 or x2_dim > 0:
@@ -382,7 +381,6 @@ def ov_char_less(x1, x2):
 
 @overload(np.char.less_equal)
 def ov_char_less_equal(x1, x2):
-    """Native Overload of np.char.less_equal"""
     register_x1, register_x2, x1_dim, x2_dim = _get_register_type(x1, x2)
 
     if x1_dim > 0 or x2_dim > 0:
@@ -398,7 +396,6 @@ def ov_char_less_equal(x1, x2):
 
 @overload(np.char.compare_chararrays)
 def ov_char_compare_chararrays(a1, a2, cmp, rstrip):
-    """Native Overload of np.char.compare_chararrays"""
     if not isinstance(cmp, (types.Bytes, types.UnicodeType)):
         raise TypeError(f'a bytes-like object is required, not {cmp.name}')
 
