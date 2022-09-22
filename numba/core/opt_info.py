@@ -32,7 +32,7 @@ class OptimizationProcessor:
         Parameters
         ----------
         remarks_data : a list of the parsed YAML provided by LLVM; there may
-        be multiple complilation passes and remarks will be generated for
+        be multiple compilation passes and remarks will be generated for
         each pass. Note that this data is shared and must not be mutated.
         full_name : the complete Numba name for the function being compiled
 
@@ -49,7 +49,8 @@ class RawOptimizationRemarks(OptimizationProcessor):
     This stores raw optimisation remarks
 
     It is almost certainly a bad idea to use as the remarks are large and
-    inefficient.
+    inefficient. This is intended as a utility for viewing remarks
+    information when developing new processors.
     """
 
     def __init__(self, *filter_names):
@@ -68,7 +69,15 @@ class RawOptimizationRemarks(OptimizationProcessor):
 
 class LoopDeLoop(OptimizationProcessor):
     """
-    Tries to score which loop vectorizations happened.
+    Indicates whether a loop vectorization happened.
+
+    Vectorization replaces loops with CPU instructions that can do operations in
+    parallel. The resulting loop will be much faster. Not all loops can be
+    vectorized as the set of CPU instructions is limited to "pure arithmetic"
+    operations.
+
+    The output of this processor will be a dictionary with a (file, line,
+    column) tuple and a true if the loop was vectorized; false otherwise.
     """
 
     def filters(self) -> Iterable[str]:
@@ -93,6 +102,14 @@ class SuperWorldLevelParallelismDetector(OptimizationProcessor):
     """
     Determines locations where the SLP detector found a way to turn scalar
     operations into vector operations.
+
+    CPUs have some operations that are meant for doing arithmetic operations
+    over vectors quickly. Sometimes, even though code is being done over scalar
+    values, it has a structure that looks like a vector, so it can be more
+    efficient to convert the data into a vector and use the special operations.
+
+    The output of this processor is a set of (file, line, column) tuples where
+    scalar operations were successfully converted to a faster vector operation.
 
     https://llvm.org/docs/Vectorizers.html#the-slp-vectorizer
     """

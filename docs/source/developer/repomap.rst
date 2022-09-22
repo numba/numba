@@ -326,6 +326,8 @@ Debugging Support
   mode
 - :ghfile:`numba/misc/cmdlang.gdb` - Commands to setup GDB for setting
   explicit breakpoints from Python
+- :ghfile:`numba/core/opt_info.py` - Processors for optimization remarks, to help
+  understand the LLVM optimizations on a particular function
 
 
 Type Signatures (CPU)

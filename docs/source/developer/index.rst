@@ -27,6 +27,7 @@ Developer Manual
    literal.rst
    llvm_timings.rst
    debugging.rst
+   opt_info.rst
    event_api.rst
    target_extension.rst
    mission.rst
