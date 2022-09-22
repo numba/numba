@@ -142,15 +142,18 @@ class TestComparisonOperators(TestCase):
             self.assertPreciseEqual(expected, got)
 
         def check_exceptions(cfunc_, x1, x2):
-            with self.assertRaisesRegex(ValueError, 'shape mismatch'):
+            em = ".*shape mismatch: objects cannot be broadcast to.*"
+            with self.assertRaisesRegex(ValueError, em):
                 cfunc_(x1, np.empty_like(x1[:1]))
                 cfunc_(x1[:10], x2[:5])
 
-            with self.assertRaisesRegex(TypingError, 'non-string arrays'):
+            em = ".*comparison of non-string arrays.*"
+            with self.assertRaisesRegex((TypingError, TypeError), em):
                 cfunc_(x1[:5], None)
                 cfunc_('abc', 123)
 
-            with self.assertRaisesRegex(TypingError, 'NotImplemented'):
+            em = ".*NotImplemented.*"
+            with self.assertRaisesRegex((TypingError, NotImplementedError), em):
                 cfunc_(x1.astype('U'), x1.astype('S'))
                 cfunc_('abc', b'abc')
 
@@ -184,9 +187,14 @@ class TestComparisonOperators(TestCase):
         def check_compare_chararrays(a1, a2, cmp, rstrip):
             pyfunc_ = np_char_compare_chararrays
             cfunc_ = jit(nopython=True)(pyfunc_)
+
             expected = pyfunc_(a1, a2, cmp, rstrip)
             got = cfunc_(a1, a2, cmp, rstrip)
             self.assertPreciseEqual(expected, got)
+
+            em = ".*a bytes-like object is required.*"
+            with self.assertRaisesRegex((TypingError, TypeError), em):
+                cfunc_(a1, a2, 123, rstrip)
 
         for args in byte_args:
             check_compare_chararrays(*args)
