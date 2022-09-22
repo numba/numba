@@ -417,19 +417,28 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         # 1d
         arr = np.arange(5)
         check_all_axes(arr)
+        check(arr, (1, 2))
+        check(arr, ())
         # 3d (C, F, A)
         arr = np.arange(24).reshape((2, 3, 4))
         check_all_axes(arr)
         check_all_axes(arr.T)
         check_all_axes(arr[::-1])
+        check(arr, (1, 3))
         # 0d
         arr = np.array(42)
         check_all_axes(arr)
+        # 7d (C, F, A)
+        arr = np.arange(720).reshape((1, 2, 3, 4, 5, 6))
+        check(arr, (1, 2, 3, 4, 5, 6))
+        check(arr.T, (5, -6))
+        check(arr[::-1], (1, 3, 4, -2, -4))
 
     def test_expand_dims_exceptions(self):
+        self.disable_leak_check()
         pyfunc = expand_dims
         cfunc = jit(nopython=True)(pyfunc)
-        arr = np.arange(5)
+        arr = np.arange(20).reshape((4, 5))
 
         with self.assertTypingError() as raises:
             cfunc('hello', 3)
@@ -439,6 +448,13 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             cfunc(arr, 'hello')
         self.assertIn('Argument "axis" must be an integer', str(raises.exception))
 
+        with self.assertRaises(ValueError) as raises:
+            cfunc(arr, (1, 1))
+        self.assertIn('An axis is being repeated', str(raises.exception))
+
+        with self.assertRaises(IndexError) as raises:
+            cfunc(arr, (4,))
+        self.assertIn('axis out of bounds', str(raises.exception))
 
     def check_atleast_nd(self, pyfunc, cfunc):
         def check_result(got, expected):
