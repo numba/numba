@@ -73,67 +73,65 @@ class TestComparisonOperators(TestCase):
 
     @classmethod
     def set_arguments(cls):
-        length = 300
+        length = 100
         np.random.seed(42)
-        # 300 UTF-32 strings of length 1 to 200 in range(1, sys.maxunicode)
+        # 100 ASCII strings of length 0 to 50
+        s = np.array([''.join([chr(np.random.randint(1, 127))
+                               for _ in range(np.random.randint(0, 50))])
+                      for _ in range(length)])
+        # 100 UTF-32 strings of length 1 to 200 in range(1, sys.maxunicode)
         # Python 3.7 can not decode unicode in range(55296, 57344)
-        q = np.array([''.join([chr(np.random.randint(1, 55295)) if i % 2
+        u = np.array([''.join([chr(np.random.randint(1, 55295)) if i % 2
                                else chr(np.random.randint(57345, maxunicode))
                                for i in range(np.random.randint(1, 200))])
                       for _ in range(length)])
-        # 300 ASCII strings of length 0 to 50
-        r = np.array([''.join([chr(np.random.randint(1, 127))
-                               for _ in range(np.random.randint(0, 50))])
-                      for _ in range(length)])
-        s: tuple = (np.array(['abc', 'def'] * 2),
-                    np.array(['cba', 'fed'] * 2))
-        t: tuple = (np.array(['ab', 'bc'] * 2),
-                    np.array(['bc', 'ab'] * 2))
-        u: tuple = (np.array(['ba', 'cb'] * 2),
-                    np.array(['cb', 'ba'] * 2))
-        v = np.random.choice(['abcd', 'abc', 'abcde'], length)
-
         # Whitespace to end of strings & single ASCII characters in range(0, 33)
         w = [chr(i) for i in range(33)]
-        x = np.concatenate([w, np.char.add(r, np.random.choice(w, length))])
+        x = np.concatenate([w, np.char.add(s, np.random.choice(w, length))])
 
         # Single ASCII characters
-        c = np.random.choice([chr(__i) for __i in range(128)], length)
+        c = np.random.choice([chr(i) for i in range(128)], length)
 
-        arrays = [
-            s, t, u,
+        generics = [
             (c, np.random.choice(c, c.size)),
-            (v, np.random.choice(v, v.size)),
-            (x, x),
             (x, np.random.choice(x, x.size)),
-            (x, 'abcdefg'), (x, 'abcdefg' * 50),
-            ('abc', 'abc'), ('abc', 'abd'), ('abc', 'abb'),
-            ('abc', 'abc' * 100), ('ab', 'ba'),
+            (x[:2], x[:2]),
+        ]
+
+        # Scalar Comparisons
+        scalars = [
+            (x, 'abcd ' * 20),
+            ('abc', 'abc '), ('abc', 'abc' * 2),
+            ('abc', 'abd'), ('abc', 'abb'), ('ab', 'ba'),
         ]
 
         # Character buffers of different length
-        arrays += [
-            (x, x.astype('U200')),
-            (s[0].astype('U20'), s[1].astype('U40')),
-            (x.astype('U60'), x.astype('U61')),
-            (np.array('hello' * 100, dtype='U200'),
-             np.array('hello' * 100, dtype='U100'))
+        buffers = [
+            (s[:1].astype('U20'), s[:1].astype('U40')),
+            (x[:5].astype('U60'), x[:5].astype('U61')),
+            (x[:5], x[:5].astype('U100')),
+            (np.array('hello ' * 5, dtype='U30'),
+             np.array('hello ' * 10, dtype='U60')),
         ]
 
         # UTF-32
-        arrays += [
-            (q, np.random.choice(q)),
-            (q, np.random.choice(q, len(q))),
-            (q, np.char.add(q, np.random.choice(w, len(q))))
+        utf32 = [
+            (u, np.random.choice(u)),
+            (u, np.random.choice(u, len(u))),
+            (u, np.char.add(u, np.random.choice(w, len(u))))
         ]
 
-        byte_args = list(_arguments_as_bytes(arrays[:-3]))
-        string_args = arrays
+        byte_args = generics + scalars + buffers
+        string_args = byte_args + utf32
 
-        setattr(cls, 'byte_args', byte_args)
+        setattr(cls, 'byte_args', list(_arguments_as_bytes(byte_args)))
         setattr(cls, 'string_args', string_args)
 
     def test_comparisons(self):
+
+        pyfuncs = (np_char_equal, np_char_not_equal,
+                   np_char_greater_equal, np_char_greater,
+                   np_char_less_equal, np_char_less)
 
         def check_output(pyfunc_, cfunc_, x1, x2):
             expected = pyfunc_(x1, x2)
@@ -161,10 +159,6 @@ class TestComparisonOperators(TestCase):
             with self.assertRaisesRegex(accepted_errors, error_msg):
                 cfunc_('abc', b'abc')
 
-        pyfuncs = (np_char_equal, np_char_not_equal,
-                   np_char_greater_equal, np_char_greater,
-                   np_char_less_equal, np_char_less)
-
         arg = np.array(['abc', 'def', 'hij'], 'S')
         for pyfunc in pyfuncs:
             cfunc = jit(nopython=True)(pyfunc)
@@ -184,6 +178,9 @@ class TestComparisonOperators(TestCase):
 
     def test_compare_chararrays(self):
 
+        pyfunc = np_char_compare_chararrays
+        cfunc = jit(nopython=True)(pyfunc)
+
         def check_output(a1, a2, cmp, rstrip):
             expected = pyfunc(a1, a2, cmp, rstrip)
             got = cfunc(a1, a2, cmp, rstrip)
@@ -196,19 +193,14 @@ class TestComparisonOperators(TestCase):
             with self.assertRaisesRegex(accepted_errors, error_msg):
                 cfunc('abc', 'abc', cmp, True)
 
-        pyfunc = np_char_compare_chararrays
-        cfunc = jit(nopython=True)(pyfunc)
-
-        byte_args = _pack_arguments(self.byte_args[:1],
-                                    [('==', '!=', '>=', '>', '<', '<='),
-                                     (True, False)])
-
-        string_args = _pack_arguments(self.string_args[:1],
-                                      [('==', '!=', '>=', '>', '<', '<='),
-                                       (True, False)])
-
         check_cmp_exception()
 
+        byte_args = _pack_arguments(self.byte_args[:2],
+                                    [('==', '!=', '>=', '>', '<', '<='),
+                                     (True, False)])
+        string_args = _pack_arguments(self.string_args[:2],
+                                      [('==', '!=', '>=', '>', '<', '<='),
+                                       (True, False)])
         for args in byte_args:
             check_output(*args)
 
