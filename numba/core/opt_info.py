@@ -82,7 +82,7 @@ class RawOptimizationRemarks(OptimizationProcessor):
         return False
 
     def process(self, remarks_data: List[Any], function) -> Iterable[
-          Tuple[str, Any]]:
+            Tuple[str, Any]]:
         return ('raw', remarks_data),
 
 
@@ -103,7 +103,7 @@ class LoopDeLoop(OptimizationProcessor):
         return 'loop-vectorize',
 
     def process(self, remarks_data: List[Any], function) -> Iterable[
-           Tuple[str, Any]]:
+            Tuple[str, Any]]:
         loops = {}
         for remarks in remarks_data:
             for entry in remarks:
@@ -137,7 +137,7 @@ class SuperWorldLevelParallelismDetector(OptimizationProcessor):
         return 'slp-vectorizer',
 
     def process(self, remarks_data: List[Any], function) -> Iterable[
-           Tuple[str, Any]]:
+            Tuple[str, Any]]:
         slps = set()
         for remarks in remarks_data:
             for entry in remarks:

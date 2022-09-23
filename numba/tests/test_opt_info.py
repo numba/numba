@@ -38,10 +38,6 @@ class TestOptimizationInfo(TestCase):
         # Check that there is data for the loop
         self.assertTrue(all(metadata['opt_info']['loop_vectorization']
                             for metadata in foo.get_metadata().values()))
-        # Check that all the loops got vectorized
-        self.assertTrue(all(v for metadata in foo.get_metadata().values() for v
-                            in metadata['opt_info']['loop_vectorization']
-                            .values()))
 
     def test_slp(self):
         # Sample translated from:
