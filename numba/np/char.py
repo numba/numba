@@ -16,7 +16,7 @@ def _register_scalar_bytes(b, rstrip=True):
     size_chr = len(b)
     if rstrip and size_chr > 1:
         return (
-            _rstrip_inner(np.frombuffer(b, 'uint8').copy(), size_chr),
+            _rstrip_inner(np.frombuffer(b, 'uint8').copy(), size_chr, True),
             len_chr,
             size_chr
         )
@@ -46,7 +46,7 @@ def _register_scalar_strings(s, rstrip=True):
     for i in range(size_chr):
         chr_array[i] = ord(s[i])
     if rstrip and size_chr > 1:
-        return _rstrip_inner(chr_array, size_chr), len_chr, size_chr
+        return _rstrip_inner(chr_array, size_chr, True), len_chr, size_chr
     return chr_array, len_chr, size_chr
 
 
@@ -62,7 +62,7 @@ def _register_array_strings(s, rstrip=True):
 
 
 @register_jitable
-def _rstrip_inner(chr_array, size_chr):
+def _rstrip_inner(chr_array, size_chr, is_scalar=False):
     r"""
     Removes trailing \t\n\r\f\v\s characters.
     As is the case when used on character comparison operators, this variation
@@ -71,32 +71,34 @@ def _rstrip_inner(chr_array, size_chr):
     if size_chr == 1:
         return chr_array
 
+    whitespace = {0, 9, 10, 11, 12, 13, 32}
+    size_stride = size_chr - 1
+
+    if is_scalar or size_chr < 9:
+        for i in range(size_stride, chr_array.size, size_chr):
+            for p in range(i, i - size_stride, -1):
+                if chr_array[p] not in whitespace:
+                    break
+                chr_array[p] = 0
+        return chr_array
+
     def bisect_null(a, j, k):
         """Bisect null right-padded strings with the form '\x00'."""
         while j < k:
             m = (k + j) // 2
-            c = a[m]
-            if c != 0:
+            if a[m]:
                 j = m + 1
-            elif c == 0:
-                k = m
             else:
-                return m
+                k = m
         return j
 
-    whitespace = {0, 9, 10, 11, 12, 13, 32}
-    size_stride = size_chr - 1
-
     for i in range(size_stride, chr_array.size, size_chr):
-        if chr_array[i] not in whitespace:
-            continue
-
-        o = i - size_stride
-        p = bisect_null(chr_array, o, i - 1)
-        while p > o and chr_array[p] in whitespace:
-            p -= 1
-        chr_array[p + 1: i + 1] = 0
-
+        if chr_array[i] in whitespace:
+            o = i - size_stride
+            p = bisect_null(chr_array, o, i - 1)
+            while p > o and chr_array[p] in whitespace:
+                p -= 1
+            chr_array[p + 1: i + 1] = 0
     return chr_array
 
 
@@ -190,10 +192,10 @@ def equal(chr_array, len_chr, size_chr, cmp_array, len_cmp, size_cmp):
                 break
         else:
             equal_to[i] = (
-                    not size_margin
-                    or (size_margin > 0 and not chr_array[stride + size_stride])
-                    or (size_margin < 0
-                        and not cmp_array[stride_cmp + size_stride])
+                not size_margin
+                or (size_margin > 0 and not chr_array[stride + size_stride])
+                or (size_margin < 0
+                    and not cmp_array[stride_cmp + size_stride])
             )
         stride += size_chr
         stride_cmp += size_cmp
@@ -233,6 +235,7 @@ def compare_chararrays(chr_array, len_chr, size_chr,
 
 
 def _ensure_type(x):
+    """Ensure argument is a character type with appropriate layout and shape."""
     ndim = -1
     if isinstance(x, types.Array):
         ndim = x.ndim
@@ -250,7 +253,7 @@ def _ensure_type(x):
 
 
 def _get_register_type(x1, x2):
-    """Determines the call function for the comparison pair based on type."""
+    """Determines the call function for the comparison pair, based on type."""
     (x1_type, x1_dim), (x2_type, x2_dim) = _ensure_type(x1), _ensure_type(x2)
     byte_types = (types.Bytes, types.CharSeq)
     str_types = (types.UnicodeType, types.UnicodeCharSeq)
