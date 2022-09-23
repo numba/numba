@@ -105,7 +105,7 @@ def _rstrip_inner(chr_array, size_chr):
 
 
 @register_jitable
-def _cast_comparison(size_chr, len_chr, len_cmp, size_cmp):
+def _cast_comparison(size_chr, len_chr, size_cmp, len_cmp):
     """
     Determines the character offsets used to align the comparison to the target.
     """
@@ -121,14 +121,6 @@ def _cast_comparison(size_chr, len_chr, len_cmp, size_cmp):
     return size_cmp, size_stride, size_margin
 
 
-@register_jitable
-def _compare_any(x1: np.ndarray, x2: np.ndarray) -> bool:
-    for i in range(x1.size):
-        if x1[i] != x2[i]:
-            return True
-    return False
-
-
 @register_jitable(locals={'cmp_ord': types.int32})
 def greater_equal(chr_array, len_chr, size_chr,
                   cmp_array, len_cmp, size_cmp, inv=False):
@@ -137,7 +129,7 @@ def greater_equal(chr_array, len_chr, size_chr,
         return cmp_array >= chr_array if inv else chr_array >= cmp_array
 
     size_cmp, size_stride, size_margin = _cast_comparison(size_chr, len_chr,
-                                                          len_cmp, size_cmp)
+                                                          size_cmp, len_cmp)
     greater_equal_than = np.zeros(len_chr, 'bool')
     stride = stride_cmp = 0
     for i in range(len_chr):
@@ -147,8 +139,8 @@ def greater_equal(chr_array, len_chr, size_chr,
                 greater_equal_than[i] = ((inv and -cmp_ord) or cmp_ord) >= 0
                 break
         else:
-            greater_equal_than[i] = (size_margin >= 0
-                                     or not cmp_array[stride_cmp + size_stride])
+            greater_equal_than[i] = size_margin >= 0 \
+                or not cmp_array[stride_cmp + size_stride]
         stride += size_chr
         stride_cmp += size_cmp
     return greater_equal_than
@@ -162,7 +154,7 @@ def greater(chr_array, len_chr, size_chr,
         return cmp_array > chr_array if inv else chr_array > cmp_array
 
     size_cmp, size_stride, size_margin = _cast_comparison(size_chr, len_chr,
-                                                          len_cmp, size_cmp)
+                                                          size_cmp, len_cmp)
     greater_than = np.zeros(len_chr, 'bool')
     stride = stride_cmp = 0
     for i in range(len_chr):
@@ -182,50 +174,29 @@ def greater(chr_array, len_chr, size_chr,
 @register_jitable
 def equal(chr_array, len_chr, size_chr, cmp_array, len_cmp, size_cmp):
     """Native Implementation of np.char.equal"""
-    ix = 0
-    if len_cmp == 1:
-        if size_chr < size_cmp:
-            return np.zeros(len_chr, 'bool')
-        equal_to = np.empty(len_chr, 'bool')
-        if size_chr > size_cmp:
-            for i in range(len_chr):
-                equal_to[i] = chr_array[ix + size_cmp] == 0 \
-                    and not _compare_any(cmp_array,
-                                         chr_array[ix:ix + size_cmp])
-                ix += size_chr
+    if 1 == size_chr == size_cmp:
+        return chr_array == cmp_array
+
+    if 1 == len_cmp and size_chr < size_cmp and cmp_array[size_chr]:
+        return np.zeros(len_chr, 'bool')
+
+    size_cmp, size_stride, size_margin = _cast_comparison(size_chr, len_chr,
+                                                          size_cmp, len_cmp)
+    equal_to = np.zeros(len_chr, 'bool')
+    stride = stride_cmp = 0
+    for i in range(len_chr):
+        for j in range(size_stride):
+            if chr_array[stride + j] != cmp_array[stride_cmp + j]:
+                break
         else:
-            for i in range(len_chr):
-                equal_to[i] = not _compare_any(cmp_array,
-                                               chr_array[ix:ix + size_cmp])
-                ix += size_chr
-    elif len_chr == len_cmp:
-        iy = 0
-        equal_to = np.empty(len_chr, 'bool')
-        if size_chr < size_cmp:
-            for i in range(len_chr):
-                equal_to[i] = cmp_array[iy + size_chr] == 0 \
-                    and not _compare_any(chr_array[ix:ix + size_chr],
-                                         cmp_array[iy:iy + size_chr])
-                ix += size_chr
-                iy += size_cmp
-        elif size_chr > size_cmp:
-            for i in range(len_chr):
-                equal_to[i] = chr_array[ix + size_cmp] == 0 \
-                    and not _compare_any(chr_array[ix:ix + size_cmp],
-                                         cmp_array[iy:iy + size_cmp])
-                ix += size_chr
-                iy += size_cmp
-        else:
-            if size_chr == 1:
-                return chr_array == cmp_array
-            for i in range(len_chr):
-                equal_to[i] = not _compare_any(chr_array[ix:ix + size_chr],
-                                               cmp_array[ix:ix + size_chr])
-                ix += size_chr
-    else:
-        msg = 'shape mismatch: objects cannot be broadcast to a single shape.' \
-              '  Mismatch is between arg 0 and arg 1.'
-        raise ValueError(msg)
+            equal_to[i] = (
+                    not size_margin
+                    or (size_margin > 0 and not chr_array[stride + size_stride])
+                    or (size_margin < 0
+                        and not cmp_array[stride_cmp + size_stride])
+            )
+        stride += size_chr
+        stride_cmp += size_cmp
     return equal_to
 
 
@@ -279,12 +250,10 @@ def _ensure_type(x):
 
 
 def _get_register_type(x1, x2):
-
+    """Determines the call function for the comparison pair based on type."""
     (x1_type, x1_dim), (x2_type, x2_dim) = _ensure_type(x1), _ensure_type(x2)
     byte_types = (types.Bytes, types.CharSeq)
     str_types = (types.UnicodeType, types.UnicodeCharSeq)
-
-    register_x1 = register_x2 = None
 
     if isinstance(x1_type, byte_types) and isinstance(x2_type, byte_types):
         register_x1 = _register_array_bytes if x1_dim >= 0 \
@@ -296,8 +265,7 @@ def _get_register_type(x1, x2):
             else _register_scalar_strings
         register_x2 = _register_array_strings if x2_dim >= 0 \
             else _register_scalar_strings
-
-    if not register_x1:
+    else:
         raise NotImplementedError('NotImplemented')
     return register_x1, register_x2, x1_dim, x2_dim
 
