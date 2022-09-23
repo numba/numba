@@ -3,11 +3,10 @@
 from itertools import product
 from numba import jit
 from numba.core.errors import TypingError
-from numba.np import char
+from numba.np.char import np
 from numba.tests.support import TestCase
 from sys import maxunicode
 
-import numpy as np
 import unittest
 
 

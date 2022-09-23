@@ -147,8 +147,8 @@ def greater_equal(chr_array, len_chr, size_chr,
                 greater_equal_than[i] = ((inv and -cmp_ord) or cmp_ord) >= 0
                 break
         else:
-            greater_equal_than[i] = size_margin >= 0 \
-                                    or not cmp_array[stride_cmp + size_stride]
+            greater_equal_than[i] = (size_margin >= 0
+                                     or not cmp_array[stride_cmp + size_stride])
         stride += size_chr
         stride_cmp += size_cmp
     return greater_equal_than
@@ -173,7 +173,7 @@ def greater(chr_array, len_chr, size_chr,
                 break
         else:
             greater_than[i] = size_margin > 0 \
-                              and chr_array[stride + size_stride]
+                and chr_array[stride + size_stride]
         stride += size_chr
         stride_cmp += size_cmp
     return greater_than
@@ -190,8 +190,8 @@ def equal(chr_array, len_chr, size_chr, cmp_array, len_cmp, size_cmp):
         if size_chr > size_cmp:
             for i in range(len_chr):
                 equal_to[i] = chr_array[ix + size_cmp] == 0 \
-                              and not _compare_any(cmp_array,
-                                                   chr_array[ix:ix + size_cmp])
+                    and not _compare_any(cmp_array,
+                                         chr_array[ix:ix + size_cmp])
                 ix += size_chr
         else:
             for i in range(len_chr):
@@ -204,15 +204,15 @@ def equal(chr_array, len_chr, size_chr, cmp_array, len_cmp, size_cmp):
         if size_chr < size_cmp:
             for i in range(len_chr):
                 equal_to[i] = cmp_array[iy + size_chr] == 0 \
-                              and not _compare_any(chr_array[ix:ix + size_chr],
-                                                   cmp_array[iy:iy + size_chr])
+                    and not _compare_any(chr_array[ix:ix + size_chr],
+                                         cmp_array[iy:iy + size_chr])
                 ix += size_chr
                 iy += size_cmp
         elif size_chr > size_cmp:
             for i in range(len_chr):
                 equal_to[i] = chr_array[ix + size_cmp] == 0 \
-                              and not _compare_any(chr_array[ix:ix + size_cmp],
-                                                   cmp_array[iy:iy + size_cmp])
+                    and not _compare_any(chr_array[ix:ix + size_cmp],
+                                         cmp_array[iy:iy + size_cmp])
                 ix += size_chr
                 iy += size_cmp
         else:
