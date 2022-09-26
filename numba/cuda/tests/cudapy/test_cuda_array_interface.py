@@ -3,7 +3,7 @@ import numpy as np
 from numba import vectorize, guvectorize
 from numba import cuda
 from numba.cuda.cudadrv import driver
-from numba.cuda.testing import unittest, ContextResettingTestCase, ForeignArray
+from numba.cuda.testing import skip_unless_cuda_python, unittest, ContextResettingTestCase, ForeignArray
 from numba.cuda.testing import skip_on_cudasim, skip_if_external_memmgr
 from numba.tests.support import linux_only, override_config
 from unittest.mock import call, patch
@@ -431,6 +431,7 @@ class TestCudaArrayInterface(ContextResettingTestCase):
             # Ensure that synchronize was not called
             mock_sync.assert_not_called()
 
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_cuda_reshape(self):
         NX = 2
         NY = 2
