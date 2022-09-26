@@ -76,8 +76,8 @@ Installing on Linux ARMv8 (AArch64) Platforms
 We build and test conda packages on the `NVIDIA Jetson TX2
 <https://www.nvidia.com/en-us/autonomous-machines/embedded-systems-dev-kits-modules/>`_,
 but they are likely to work for other AArch64 platforms.  (Note that while the
-Raspberry Pi CPU is 64-bit, depending on configuration Raspbian may be running
-it in 32-bit mode).
+CPUs in the Raspberry Pi 3, 4, and Zero 2 W are 64-bit, Raspberry Pi OS may be
+running in 32-bit mode depending on the OS image in use).
 
 Conda-forge support for AArch64 is still quite experimental and packages are limited,
 but it does work enough for Numba to build and pass tests.  To set up the environment:
