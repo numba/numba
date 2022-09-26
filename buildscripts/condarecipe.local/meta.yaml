@@ -9,7 +9,6 @@ build:
   number: {{ GIT_DESCRIBE_NUMBER|int }}
   string: np{{ NPY_VER }}py{{ PY_VER }}h{{ PKG_HASH }}_{{GIT_DESCRIBE_HASH}}_{{ GIT_DESCRIBE_NUMBER }}
   entry_points:
-    - pycc = numba.pycc:main
     - numba = numba.misc.numba_entry:main
   script_env:
     - PY_VCRUNTIME_REDIST
