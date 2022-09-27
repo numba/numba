@@ -5718,7 +5718,6 @@ def impl_np_vstack(tup):
         return impl
 
 
-# @glue_lowering(np.dstack, types.BaseTuple)
 @intrinsic
 def _np_dstack(typingctx, tup):
     ret = NdStack_typer(typingctx, "np.dstack", tup, 3)
