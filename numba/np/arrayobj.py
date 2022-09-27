@@ -2020,15 +2020,13 @@ def ol_np_ravel(a):
         return np_ravel_impl
 
 
-@lower_builtin('array.flatten', types.Array)
-def array_flatten(context, builder, sig, args):
+@overload_method(types.Array, "flatten")
+def ol_array_flatten(arr, order='C'):
     # Only support flattening to C layout currently.
-    def imp(ary):
-        return ary.copy().reshape(ary.size)
-
-    res = context.compile_internal(builder, imp, sig, args)
-    res = impl_ret_new_ref(context, builder, sig.return_type, res)
-    return res
+    if order == 'C' or isinstance(order, types.Omitted):
+        def imp(arr, order='C'):
+            return arr.copy().reshape(arr.size)
+        return imp
 
 
 @register_jitable

@@ -469,13 +469,6 @@ class ArrayAttribute(AttributeTemplate):
         retty = ary.copy(dtype=dtype, layout=layout, readonly=False)
         return signature(retty, *args)
 
-    @bound_function("array.flatten")
-    def resolve_flatten(self, ary, args, kws):
-        # Only support no argument version (default order='C')
-        assert not kws
-        assert not args
-        return signature(ary.copy(ndim=1, layout='C'))
-
     def generic_resolve(self, ary, attr):
         # Resolution of other attributes, for record arrays
         if isinstance(ary.dtype, types.Record):
