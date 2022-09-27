@@ -5,7 +5,7 @@ import operator
 import logging
 import textwrap
 
-from numba.core import errors, dataflow, controlflow, ir, config
+from numba.core import errors, ir, config
 from numba.core.errors import NotDefinedError, UnsupportedError, error_extras
 from numba.core.ir_utils import get_definition, guard
 from numba.core.utils import (PYVERSION, BINOPS_TO_OPERATORS,
@@ -1306,23 +1306,12 @@ class Interpreter(object):
         global_scope = ir.Scope(parent=None, loc=self.loc)
         self.scopes.append(global_scope)
 
-        if PYVERSION < (3, 7):
-            # Control flow analysis
-            self.cfa = controlflow.ControlFlowAnalysis(bytecode)
-            self.cfa.run()
-            if config.DUMP_CFG:
-                self.cfa.dump()
-
-            # Data flow analysis
-            self.dfa = dataflow.DataFlowAnalysis(self.cfa)
-            self.dfa.run()
-        else:
-            flow = Flow(bytecode)
-            flow.run()
-            self.dfa = AdaptDFA(flow)
-            self.cfa = AdaptCFA(flow)
-            if config.DUMP_CFG:
-                self.cfa.dump()
+        flow = Flow(bytecode)
+        flow.run()
+        self.dfa = AdaptDFA(flow)
+        self.cfa = AdaptCFA(flow)
+        if config.DUMP_CFG:
+            self.cfa.dump()
 
         # Temp states during interpretation
         self.current_block = None
@@ -2125,77 +2114,49 @@ class Interpreter(object):
             self.store(const_none, name=tmp)
             self._exception_vars.add(tmp)
 
-    if PYVERSION < (3, 6):
+    def op_CALL_FUNCTION(self, inst, func, args, res):
+        func = self.get(func)
+        args = [self.get(x) for x in args]
+        expr = ir.Expr.call(func, args, (), loc=self.loc)
+        self.store(expr, res)
 
-        def op_CALL_FUNCTION(self, inst, func, args, kws, res, vararg):
-            func = self.get(func)
-            args = [self.get(x) for x in args]
-            if vararg is not None:
-                vararg = self.get(vararg)
-
-            # Process keywords
-            keyvalues = []
-            removethese = []
-            for k, v in kws:
-                k, v = self.get(k), self.get(v)
-                for inst in self.current_block.body:
-                    if isinstance(inst, ir.Assign) and inst.target is k:
-                        removethese.append(inst)
-                        keyvalues.append((inst.value.value, v))
-
-            # Remove keyword constant statements
-            for inst in removethese:
+    def op_CALL_FUNCTION_KW(self, inst, func, args, names, res):
+        func = self.get(func)
+        args = [self.get(x) for x in args]
+        # Find names const
+        names = self.get(names)
+        for inst in self.current_block.body:
+            if isinstance(inst, ir.Assign) and inst.target is names:
                 self.current_block.remove(inst)
+                # scan up the block looking for the values, remove them
+                # and find their name strings
+                named_items = []
+                for x in inst.value.items:
+                    for y in self.current_block.body[::-1]:
+                        if x == y.target:
+                            self.current_block.remove(y)
+                            named_items.append(y.value.value)
+                            break
+                keys = named_items
+                break
 
-            expr = ir.Expr.call(func, args, keyvalues, loc=self.loc,
-                                vararg=vararg)
-            self.store(expr, res)
+        nkeys = len(keys)
+        posvals = args[:-nkeys]
+        kwvals = args[-nkeys:]
+        keyvalues = list(zip(keys, kwvals))
 
-        op_CALL_FUNCTION_VAR = op_CALL_FUNCTION
-    else:
-        def op_CALL_FUNCTION(self, inst, func, args, res):
-            func = self.get(func)
-            args = [self.get(x) for x in args]
-            expr = ir.Expr.call(func, args, (), loc=self.loc)
-            self.store(expr, res)
+        expr = ir.Expr.call(func, posvals, keyvalues, loc=self.loc)
+        self.store(expr, res)
 
-        def op_CALL_FUNCTION_KW(self, inst, func, args, names, res):
-            func = self.get(func)
-            args = [self.get(x) for x in args]
-            # Find names const
-            names = self.get(names)
-            for inst in self.current_block.body:
-                if isinstance(inst, ir.Assign) and inst.target is names:
-                    self.current_block.remove(inst)
-                    # scan up the block looking for the values, remove them
-                    # and find their name strings
-                    named_items = []
-                    for x in inst.value.items:
-                        for y in self.current_block.body[::-1]:
-                            if x == y.target:
-                                self.current_block.remove(y)
-                                named_items.append(y.value.value)
-                                break
-                    keys = named_items
-                    break
-
-            nkeys = len(keys)
-            posvals = args[:-nkeys]
-            kwvals = args[-nkeys:]
-            keyvalues = list(zip(keys, kwvals))
-
-            expr = ir.Expr.call(func, posvals, keyvalues, loc=self.loc)
-            self.store(expr, res)
-
-        def op_CALL_FUNCTION_EX(self, inst, func, vararg, varkwarg, res):
-            func = self.get(func)
-            vararg = self.get(vararg)
-            if varkwarg is not None:
-                varkwarg = self.get(varkwarg)
-            expr = ir.Expr.call(
-                func, [], [], loc=self.loc, vararg=vararg, varkwarg=varkwarg
-            )
-            self.store(expr, res)
+    def op_CALL_FUNCTION_EX(self, inst, func, vararg, varkwarg, res):
+        func = self.get(func)
+        vararg = self.get(vararg)
+        if varkwarg is not None:
+            varkwarg = self.get(varkwarg)
+        expr = ir.Expr.call(
+            func, [], [], loc=self.loc, vararg=vararg, varkwarg=varkwarg
+        )
+        self.store(expr, res)
 
     def _build_tuple_unpack(self, inst, tuples, temps, is_assign):
         first = self.get(tuples[0])

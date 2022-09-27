@@ -11,7 +11,7 @@ import numpy as np
 from numba import jit, njit, typeof
 from numba.core import errors
 from numba.tests.support import (TestCase, tag, needs_lapack, needs_blas,
-                                 _is_armv7l)
+                                 _is_armv7l, EnableNRTStatsMixin)
 from .matmul_usecase import matmul_usecase
 import unittest
 
@@ -28,7 +28,7 @@ def vdot(a, b):
     return np.vdot(a, b)
 
 
-class TestProduct(TestCase):
+class TestProduct(EnableNRTStatsMixin, TestCase):
     """
     Tests for dot products.
     """
@@ -38,6 +38,7 @@ class TestProduct(TestCase):
     def setUp(self):
         # Collect leftovers from previous test cases before checking for leaks
         gc.collect()
+        super(TestProduct, self).setUp()
 
     def sample_vector(self, n, dtype):
         # Be careful to generate only exactly representable float values,
@@ -414,7 +415,7 @@ def kron_matrix(a, b):
     return np.kron(a, b)
 
 
-class TestLinalgBase(TestCase):
+class TestLinalgBase(EnableNRTStatsMixin, TestCase):
     """
     Provides setUp and common data/error modes for testing np.linalg functions.
     """
@@ -425,6 +426,7 @@ class TestLinalgBase(TestCase):
     def setUp(self):
         # Collect leftovers from previous test cases before checking for leaks
         gc.collect()
+        super(TestLinalgBase, self).setUp()
 
     def sample_vector(self, n, dtype):
         # Be careful to generate only exactly representable float values,

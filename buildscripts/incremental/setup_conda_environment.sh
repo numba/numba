@@ -43,7 +43,7 @@ conda list
 if [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]]; then
     conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON pip gitpython pyyaml
 else
-    conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml
+    conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml "setuptools<60"
 fi
 
 # Activate first
@@ -63,16 +63,20 @@ if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # Only install scipy on 64bit, else it'll pull in NumPy, 32bit linux needs
     # to get scipy from pip
     if [[ "$CONDA_SUBDIR" != "linux-32" && "$BITS32" != "yes" ]] ; then
-        $CONDA_INSTALL ${EXTRA_CHANNELS} scipy
+        if [[ "$NUMPY" == "1.23" ]] ; then
+            $CONDA_INSTALL ${EXTRA_CHANNELS} conda-forge::scipy
+        else
+            $CONDA_INSTALL ${EXTRA_CHANNELS} scipy
+        fi
     fi
 fi
 
-# Install the compiler toolchain
+# Install the compiler toolchain and gdb (if available)
 if [[ $(uname) == Linux ]]; then
     if [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]] ; then
         $CONDA_INSTALL gcc_linux-32 gxx_linux-32
     else
-        $CONDA_INSTALL gcc_linux-64 gxx_linux-64
+        $CONDA_INSTALL gcc_linux-64 gxx_linux-64 gdb gdb-pretty-printer
     fi
 elif  [[ $(uname) == Darwin ]]; then
     $CONDA_INSTALL clang_osx-64 clangxx_osx-64

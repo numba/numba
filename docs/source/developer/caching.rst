@@ -69,7 +69,7 @@ This is a list of known limitation of the cache:
 - Cache invalidation fails to recognize changes in symbols defined in a
   different file.
 - Global variables are treated as constants. The cache will remember the value
-  in the global variable used at compilation. On cache load, the cached
+  of the global variable at compilation time. On cache load, the cached
   function will not rebind to the new value of the global variable.
 
 

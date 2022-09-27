@@ -316,13 +316,6 @@ _unsupported = set([ 'frexp',
                      'modf',
                  ])
 
-# A list of ufuncs that are in fact aliases of other ufuncs. They need to insert the
-# resolve method, but not register the ufunc itself
-_aliases = set(["bitwise_not", "mod", "abs"])
-
-# In python3 np.divide is mapped to np.true_divide
-if np.divide == np.true_divide:
-    _aliases.add("divide")
 
 def _numpy_ufunc(name):
     func = getattr(np, name)
@@ -331,7 +324,11 @@ def _numpy_ufunc(name):
 
     typing_class.__name__ = "resolve_{0}".format(name)
 
-    if not name in _aliases:
+    # A list of ufuncs that are in fact aliases of other ufuncs. They need to
+    # insert the resolve method, but not register the ufunc itself
+    aliases = ("abs", "bitwise_not", "divide", "abs")
+
+    if name not in aliases:
         infer_global(func, types.Function(typing_class))
 
 all_ufuncs = sum([_math_operations, _trigonometric_functions,
@@ -360,7 +357,7 @@ supported_array_operators = set(
 
 del _math_operations, _trigonometric_functions, _bit_twiddling_functions
 del _comparison_functions, _floating_functions, _unsupported
-del _aliases, _numpy_ufunc
+del _numpy_ufunc
 
 
 # -----------------------------------------------------------------------------
@@ -515,30 +512,6 @@ def _infer_dtype_from_inputs(inputs):
     return dtype
 
 
-@glue_typing(np.linspace)
-class NdLinspace(AbstractTemplate):
-
-    def generic(self, args, kws):
-        assert not kws
-        bounds = args[:2]
-        if not all(isinstance(arg, types.Number) for arg in bounds):
-            return
-        if len(args) >= 3:
-            num = args[2]
-            if not isinstance(num, types.Integer):
-                return
-        if len(args) >= 4:
-            # Not supporting the other arguments as it would require
-            # keyword arguments for reasonable use.
-            return
-        if any(isinstance(arg, types.Complex) for arg in bounds):
-            dtype = types.complex128
-        else:
-            dtype = types.float64
-        return_type = types.Array(ndim=1, dtype=dtype, layout='C')
-        return signature(return_type, *args)
-
-
 class BaseAtLeastNdTemplate(AbstractTemplate):
 
     def generic(self, args, kws):
@@ -683,54 +656,6 @@ class MatMulTyperMixin(object):
             return a.dtype
 
 
-@glue_typing(np.dot)
-class Dot(MatMulTyperMixin, CallableTemplate):
-    func_name = "np.dot()"
-
-    def generic(self):
-        def typer(a, b, out=None):
-            # NOTE: np.dot() and the '@' operator have distinct semantics
-            # for >2-D arrays, but we don't support them.
-            return self.matmul_typer(a, b, out)
-
-        return typer
-
-
-@glue_typing(np.vdot)
-class VDot(CallableTemplate):
-
-    def generic(self):
-        def typer(a, b):
-            if not isinstance(a, types.Array) or not isinstance(b, types.Array):
-                return
-            if not all(x.ndim == 1 for x in (a, b)):
-                raise TypingError("np.vdot() only supported on 1-D arrays")
-            if not all(x.layout in 'CF' for x in (a, b)):
-                warnings.warn("np.vdot() is faster on contiguous arrays, called on %s"
-                              % ((a, b),), NumbaPerformanceWarning)
-            if not all(x.dtype == a.dtype for x in (a, b)):
-                raise TypingError("np.vdot() arguments must all have "
-                                  "the same dtype")
-            if not isinstance(a.dtype, (types.Float, types.Complex)):
-                raise TypingError("np.vdot() only supported on "
-                                  "float and complex arrays")
-            return a.dtype
-
-        return typer
-
-
-@infer_global(operator.matmul)
-class MatMul(MatMulTyperMixin, AbstractTemplate):
-    key = operator.matmul
-    func_name = "'@'"
-
-    def generic(self, args, kws):
-        assert not kws
-        restype = self.matmul_typer(*args)
-        if restype is not None:
-            return signature(restype, *args)
-
-
 def _check_linalg_matrix(a, func_name):
     if not isinstance(a, types.Array):
         return
@@ -833,73 +758,3 @@ class Where(AbstractTemplate):
                 if not isinstance(x, types.Array):
                     retty = types.Array(retdty, 0, 'C')
                     return signature(retty, *args)
-
-
-@glue_typing(np.take)
-class Take(AbstractTemplate):
-
-    def generic(self, args, kws):
-        if kws:
-            raise NumbaAssertionError("kws not supported")
-        if len(args) != 2:
-            raise NumbaAssertionError("two arguments are required")
-        arr, ind = args
-        if isinstance(ind, types.Number):
-            retty = arr.dtype
-        elif isinstance(ind, types.Array):
-            retty = types.Array(ndim=ind.ndim, dtype=arr.dtype, layout='C')
-        elif isinstance(ind, types.List):
-            retty = types.Array(ndim=1, dtype=arr.dtype, layout='C')
-        elif isinstance(ind, types.BaseTuple):
-            retty = types.Array(ndim=np.ndim(ind), dtype=arr.dtype, layout='C')
-        else:
-            return None
-
-        return signature(retty, *args)
-
-# -----------------------------------------------------------------------------
-# Numba helpers
-
-@glue_typing(carray)
-class NumbaCArray(CallableTemplate):
-    layout = 'C'
-
-    def generic(self):
-        func_name = self.key.__name__
-
-        def typer(ptr, shape, dtype=None):
-            if ptr is types.voidptr:
-                ptr_dtype = None
-            elif isinstance(ptr, types.CPointer):
-                ptr_dtype = ptr.dtype
-            else:
-                raise NumbaTypeError("%s(): pointer argument expected, got '%s'"
-                                     % (func_name, ptr))
-
-            if dtype is None:
-                if ptr_dtype is None:
-                    raise NumbaTypeError("%s(): explicit dtype required for void* argument"
-                                         % (func_name,))
-                dtype = ptr_dtype
-            elif isinstance(dtype, types.DTypeSpec):
-                dtype = dtype.dtype
-                if ptr_dtype is not None and dtype != ptr_dtype:
-                    raise NumbaTypeError("%s(): mismatching dtype '%s' for pointer type '%s'"
-                                         % (func_name, dtype, ptr))
-            else:
-                raise NumbaTypeError("%s(): invalid dtype spec '%s'"
-                                     % (func_name, dtype))
-
-            ndim = parse_shape(shape)
-            if ndim is None:
-                raise NumbaTypeError("%s(): invalid shape '%s'"
-                                     % (func_name, shape))
-
-            return types.Array(dtype, ndim, self.layout)
-
-        return typer
-
-
-@glue_typing(farray)
-class NumbaFArray(NumbaCArray):
-    layout = 'F'
