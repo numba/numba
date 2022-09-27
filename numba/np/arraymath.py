@@ -4620,7 +4620,7 @@ def cross2d(a, b):
     pass
 
 
-@overload
+@overload(cross2d)
 def cross2d_impl(a, b):
     if not type_can_asarray(a) or not type_can_asarray(b):
         raise TypingError("Inputs must be array-like.")
