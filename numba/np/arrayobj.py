@@ -1992,35 +1992,32 @@ def np_append(arr, values, axis=None):
     return impl
 
 
-@lower_builtin('array.ravel', types.Array)
-def array_ravel(context, builder, sig, args):
+@overload_method(types.Array, "ravel")
+def ol_array_ravel(arr):
     # Only support no argument version (default order='C')
-    def imp_nocopy(ary):
+    def imp_nocopy(arr):
         """No copy version"""
-        return ary.reshape(ary.size)
+        return arr.reshape(arr.size)
 
-    def imp_copy(ary):
+    def imp_copy(arr):
         """Copy version"""
-        return ary.flatten()
+        return arr.flatten()
 
     # If the input array is C layout already, use the nocopy version
-    if sig.args[0].layout == 'C':
+    if arr.layout == 'C':
         imp = imp_nocopy
     # otherwise, use flatten under-the-hood
     else:
         imp = imp_copy
-
-    res = context.compile_internal(builder, imp, sig, args)
-    res = impl_ret_new_ref(context, builder, sig.return_type, res)
-    return res
+    return imp
 
 
-@lower_builtin(np.ravel, types.Array)
-def np_ravel(context, builder, sig, args):
-    def np_ravel_impl(a):
-        return a.ravel()
-
-    return context.compile_internal(builder, np_ravel_impl, sig, args)
+@overload(np.ravel)
+def ol_np_ravel(a):
+    if isinstance(a, types.Array):
+        def np_ravel_impl(a):
+            return a.ravel()
+        return np_ravel_impl
 
 
 @lower_builtin('array.flatten', types.Array)
