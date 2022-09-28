@@ -172,13 +172,10 @@ gv_type = types.intp
 class TestWithFinding(TestCase):
     def check_num_of_with(self, func, expect_count):
         the_ir = get_func_ir(func)
-        the_ir.dump()
         ct = len(find_setupwiths(the_ir)[0])
         self.assertEqual(ct, expect_count)
 
     def test_lift1(self):
-        import dis
-        dis.dis(lift1)
         self.check_num_of_with(lift1, expect_count=1)
 
     def test_lift2(self):
@@ -1186,7 +1183,6 @@ class TestLiftObjCaching(MemoryLeak, TestCase):
 class TestBogusContext(BaseTestWithLifting):
     def test_undefined_global(self):
         the_ir = get_func_ir(lift_undefiend)
-
         with self.assertRaises(errors.CompilerError) as raises:
             with_lifting(
                 the_ir, self.typingctx, self.targetctx, self.flags, locals={},
@@ -1197,6 +1193,8 @@ class TestBogusContext(BaseTestWithLifting):
             )
 
     def test_invalid(self):
+        import dis
+        dis.dis(lift_invalid)
         the_ir = get_func_ir(lift_invalid)
 
         with self.assertRaises(errors.CompilerError) as raises:
@@ -1214,6 +1212,8 @@ class TestBogusContext(BaseTestWithLifting):
             with open('') as f:
                 pass
 
+        import dis
+        dis.dis(foo)
         with self.assertRaises(errors.UnsupportedError) as raises:
             foo()
 

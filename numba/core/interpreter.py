@@ -2787,6 +2787,33 @@ class Interpreter(object):
     def op_JUMP_IF_TRUE(self, inst, pred):
         self._op_JUMP_IF(inst, pred=pred, iftrue=True)
 
+    def _jump_if_none(self, inst, pred, iftrue):
+        brs = {
+            True: inst.get_jump_target(),
+            False: inst.next,
+        }
+        truebr = brs[iftrue]
+        falsebr = brs[not iftrue]
+
+        op = BINOPS_TO_OPERATORS["is"]
+
+        lhs = self.store(value=ir.Const(None, loc=self.loc),
+                            name="${inst.offset}constnone")
+        rhs = self.get(pred)
+        isnone = ir.Expr.binop(op, lhs=lhs, rhs=rhs, loc=self.loc)
+
+        pname = "$%spred" % (inst.offset)
+        predicate = self.store(value=isnone, name=pname)
+        bra = ir.Branch(cond=predicate, truebr=truebr, falsebr=falsebr,
+                        loc=self.loc)
+        self.current_block.append(bra)
+
+    def op_POP_JUMP_FORWARD_IF_NONE(self, inst, pred):
+        self._jump_if_none(inst, pred, True)
+
+    def op_POP_JUMP_FORWARD_IF_NOT_NONE(self, inst, pred):
+        self._jump_if_none(inst, pred, False)
+
     def op_POP_JUMP_FORWARD_IF_FALSE(self, inst, pred):
         self._op_JUMP_IF(inst, pred=pred, iftrue=False)
 

@@ -678,6 +678,12 @@ class TraceRunner(object):
     op_JUMP_IF_FALSE_OR_POP = _op_JUMP_IF_OR_POP
     op_JUMP_IF_TRUE_OR_POP = _op_JUMP_IF_OR_POP
 
+    def op_POP_JUMP_FORWARD_IF_NONE(self, state, inst):
+        self._op_POP_JUMP_IF(state, inst)
+
+    def op_POP_JUMP_FORWARD_IF_NOT_NONE(self, state, inst):
+        self._op_POP_JUMP_IF(state, inst)
+
     def op_POP_JUMP_FORWARD_IF_FALSE(self, state, inst):
         self._op_POP_JUMP_IF(state, inst)
 
