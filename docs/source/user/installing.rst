@@ -9,7 +9,7 @@ Numba is compatible with Python 3.7--3.10, and NumPy versions 1.18 or later.
 
 Our supported platforms are:
 
-* Linux x86 (32-bit and 64-bit)
+* Linux x86_64
 * Linux ppcle64 (POWER8, POWER9)
 * Windows 7 and later (32-bit and 64-bit)
 * OS X 10.9 and later (64-bit and unofficial support on M1/Arm64)
@@ -17,7 +17,6 @@ Our supported platforms are:
 * NVIDIA GPUs of compute capability 5.3 and later
 
   * Compute capabilities 3.5 - 5.2 are supported, but deprecated.
-* ARMv7 (32-bit little-endian, such as Raspberry Pi 2 and 3)
 * ARMv8 (64-bit little-endian, such as the NVIDIA Jetson)
 
 :ref:`numba-parallel` is only available on 64-bit platforms.
@@ -71,32 +70,14 @@ To use CUDA with Numba installed by `pip`, you need to install the `CUDA SDK
 installed system-wide on Linux.
 
 
-.. _numba-install-armv7:
-
-Installing on Linux ARMv7 Platforms
------------------------------------
-
-`Berryconda <https://github.com/jjhelmus/berryconda>`_ is a
-conda-based Python distribution for the Raspberry Pi.  We are now uploading
-packages to the ``numba`` channel on Anaconda Cloud for 32-bit little-endian,
-ARMv7-based boards, which currently includes the Raspberry Pi 2 and 3,
-but not the Pi 1 or Zero.  These can be installed using conda from the
-``numba`` channel::
-
-    $ conda install -c numba numba
-
-Berryconda and Numba may work on other Linux-based ARMv7 systems, but this has
-not been tested.
-
-
 Installing on Linux ARMv8 (AArch64) Platforms
 ---------------------------------------------
 
 We build and test conda packages on the `NVIDIA Jetson TX2
 <https://www.nvidia.com/en-us/autonomous-machines/embedded-systems-dev-kits-modules/>`_,
 but they are likely to work for other AArch64 platforms.  (Note that while the
-Raspberry Pi CPU is 64-bit, Raspbian runs it in 32-bit mode, so look at
-:ref:`numba-install-armv7` instead.)
+CPUs in the Raspberry Pi 3, 4, and Zero 2 W are 64-bit, Raspberry Pi OS may be
+running in 32-bit mode depending on the OS image in use).
 
 Conda-forge support for AArch64 is still quite experimental and packages are limited,
 but it does work enough for Numba to build and pass tests.  To set up the environment:
@@ -136,7 +117,6 @@ Source archives of the latest release can also be found on
 * A C compiler compatible with your Python installation.  If you are using
   Anaconda, you can use the following conda packages:
 
-  * Linux ``x86``: ``gcc_linux-32`` and ``gxx_linux-32``
   * Linux ``x86_64``: ``gcc_linux-64`` and ``gxx_linux-64``
   * Linux ``POWER``: ``gcc_linux-ppc64le`` and ``gxx_linux-ppc64le``
   * Linux ``ARM``: no conda packages, use the system compiler
