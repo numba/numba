@@ -10,11 +10,11 @@ from functools import total_ordering
 from numba.core.utils import UniqueDict, PYVERSION
 from numba.core.controlflow import NEW_BLOCKERS, CFGraph
 from numba.core.ir import Loc
-from numba.core.errors import UnsupportedError
+from numba.core.errors import UnsupportedError, CompilerError
 
 
 _logger = logging.getLogger(__name__)
-
+# logging.basicConfig(level=logging.DEBUG)
 
 _EXCEPT_STACK_OFFSET = 6
 _FINALLY_POP = _EXCEPT_STACK_OFFSET if PYVERSION >= (3, 8) else 1
@@ -254,13 +254,17 @@ class Flow(object):
         than a POP_TOP, if it is something else it'll be some sort of store
         which is not supported (this corresponds to `with CTXMGR as VAR(S)`)."""
         current_inst = state.get_inst()
-        if current_inst.opname == "SETUP_WITH":
+        if current_inst.opname in {"SETUP_WITH", "BEFORE_WITH"}:
             next_op = self._bytecode[current_inst.next].opname
             if next_op != "POP_TOP":
                 msg = ("The 'with (context manager) as "
                        "(variable):' construct is not "
                        "supported.")
                 raise UnsupportedError(msg)
+
+
+def _is_null_temp_reg(reg):
+    return reg.startswith("$null$")
 
 
 class TraceRunner(object):
@@ -275,9 +279,18 @@ class TraceRunner(object):
         return Loc(self.debug_filename, lineno)
 
     def dispatch(self, state):
+        if PYVERSION == (3, 11) and state._blockstack:
+            state: State
+            while state._blockstack:
+                topblk = state._blockstack[-1]
+                if topblk['end'] <= state.pc_initial:
+                    state._blockstack.pop()
+                else:
+                    break
         inst = state.get_inst()
-        _logger.debug("dispatch pc=%s, inst=%s", state._pc, inst)
-        _logger.debug("stack %s", state._stack)
+        if inst.opname != "CACHE":
+            _logger.debug("dispatch pc=%s, inst=%s", state._pc, inst)
+            _logger.debug("stack %s", state._stack)
         fn = getattr(self, "op_{}".format(inst.opname), None)
         if fn is not None:
             fn(state, inst)
@@ -298,6 +311,7 @@ class TraceRunner(object):
         state.append(inst)
 
     def op_PUSH_NULL(self, state, inst):
+        state.push(state.make_null())
         state.append(inst)
 
     def op_RETURN_GENERATOR(self, state, inst):
@@ -355,9 +369,9 @@ class TraceRunner(object):
             res = state.make_temp()
             idx = inst.arg >> 1
             state.append(inst, idx=idx, res=res)
-            ## ignoring the NULL
-            # if inst.arg & 1:
-                # state.push(state.make_temp())
+            # ignoring the NULL
+            if inst.arg & 1:
+                state.push(state.make_null())
             state.push(res)
     else:
         def op_LOAD_GLOBAL(self, state, inst):
@@ -769,13 +783,20 @@ class TraceRunner(object):
 
         yielded = state.make_temp()
         exitfn = state.make_temp(prefix='setup_with_exitfn')
-        state.append(inst, contextmanager=cm, exitfn=exitfn)
 
         state.push(exitfn)
         state.push(yielded)
 
-        end = state._bytecode.get_exception_entry(inst.next).target
-
+        # Gather all exception entries for this WITH. There maybe multiple
+        # entries; esp. for nested WITHs.
+        bc = state._bytecode
+        ehhead = bc.find_exception_entry(inst.next)
+        ehrelated = [ehhead]
+        for eh in bc.exception_entries:
+            if eh.target == ehhead.target:
+                ehrelated.append(eh)
+        end = max(eh.end for eh in ehrelated)
+        state.append(inst, contextmanager=cm, exitfn=exitfn, end=end)
 
         state.push_block(
             state.make_block(
@@ -889,7 +910,10 @@ class TraceRunner(object):
         narg = inst.arg
         args = list(reversed([state.pop() for _ in range(narg)]))
         func = state.pop()
-
+        extra = state.pop()  # XXX need to see if it's NULL
+        if not _is_null_temp_reg(extra):
+            func = extra
+            args = [extra, *args]
         res = state.make_temp()
 
         kw_names = state.pop_kw_names()
@@ -1290,7 +1314,12 @@ class TraceRunner(object):
     # of LOAD_METHOD and CALL_METHOD.
 
     def op_LOAD_METHOD(self, state, inst):
-        self.op_LOAD_ATTR(state, inst)
+        item = state.pop()
+        extra = state.make_null()
+        state.push(extra)
+        res = state.make_temp()
+        state.append(inst, item=item, res=res)
+        state.push(res)
 
     def op_CALL_METHOD(self, state, inst):
         self.op_CALL_FUNCTION(state, inst)
@@ -1432,6 +1461,9 @@ class State(object):
 
         self._temp_registers.append(name)
         return name
+
+    def make_null(self):
+        return self.make_temp(prefix="null$")
 
     def append(self, inst, **kwargs):
         """Append new inst"""

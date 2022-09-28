@@ -1224,6 +1224,44 @@ def peep_hole_fuse_dict_add_updates(func_ir):
     return func_ir
 
 
+def peep_hole_split_at_pop_block(func_ir):
+    """
+    Split blocks that contain ir.PopBlock
+    """
+    newblocks = {}
+    for label, blk in func_ir.blocks.items():
+        for i, inst in enumerate(blk.body):
+            if isinstance(inst, ir.PopBlock):
+                head = blk.body[:i]
+                mid = blk.body[i:i + 1]
+                tail = blk.body[i + 1:]
+                if head:
+                    blk.body.clear()
+                    blk.body.extend(head)
+
+                    midblk = ir.Block(blk.scope, loc=blk.loc)
+                    midblk.body.extend(mid)
+
+                    midlabel = label + i * 2
+                    newblocks[midlabel] = midblk
+
+                    blk.body.append(ir.Jump(midlabel, loc=blk.loc))
+                else:
+                    blk.body.clear()
+                    blk.body.extend(mid)
+                    midblk = blk
+
+                tailblk = ir.Block(blk.scope, loc=blk.loc)
+                tailblk.body.extend(tail)
+                taillabel = label + (i + 1) * 2
+                newblocks[taillabel] = tailblk
+
+                midblk.append(ir.Jump(taillabel, loc=blk.loc))
+
+    func_ir.blocks.update(newblocks)
+    return func_ir
+
+
 def _build_new_build_map(func_ir, name, old_body, old_lineno, new_items):
     """
     Create a new build_map with a new set of key/value items
@@ -1344,6 +1382,8 @@ class Interpreter(object):
         # post process the IR to rewrite opcodes/byte sequences that are too
         # involved to risk handling as part of direct interpretation
         peepholes = []
+        if PYVERSION == (3, 11):
+            peepholes.append(peep_hole_split_at_pop_block)
         if PYVERSION in [(3, 9), (3, 10)]:
             peepholes.append(peep_hole_list_to_tuple)
         peepholes.append(peep_hole_delete_with_exit)
@@ -1434,7 +1474,9 @@ class Interpreter(object):
         # Check out-of-scope syntactic-block
         while self.syntax_blocks:
             if offset >= self.syntax_blocks[-1].exit:
-                self.syntax_blocks.pop()
+                synblk = self.syntax_blocks.pop()
+                if isinstance(synblk, ir.With):
+                    self.current_block.append(ir.PopBlock(self.loc))
             else:
                 break
 
@@ -1637,6 +1679,13 @@ class Interpreter(object):
 
     def _dispatch(self, inst, kws):
         assert self.current_block is not None
+        if self.syntax_blocks:
+            top = self.syntax_blocks[-1]
+            if isinstance(top, ir.With) :
+                if inst.offset >= top.exit:
+                    self.current_block.append(ir.PopBlock(loc=self.loc))
+                    self.syntax_blocks.pop()
+
         fname = "op_%s" % inst.opname.replace('+', '_')
         try:
             fn = getattr(self, fname)
@@ -2136,22 +2185,19 @@ class Interpreter(object):
         exit_fn_obj = ir.Const(None, loc=self.loc)
         self.store(value=exit_fn_obj, name=exitfn)
 
-    def op_BEFORE_WITH(self, inst, contextmanager, exitfn=None):
+    def op_BEFORE_WITH(self, inst, contextmanager, exitfn=None, end=None):
         assert self.blocks[inst.offset] is self.current_block
-        # use EH entry to determine the end of the with
-        exitpt = self.bytecode.get_exception_entry(inst.next).target
         # Handle with
-        wth = ir.With(inst.offset, exit=exitpt)
+        wth = ir.With(inst.offset, exit=end)
         self.syntax_blocks.append(wth)
         ctxmgr = self.get(contextmanager)
         self.current_block.append(ir.EnterWith(contextmanager=ctxmgr,
                                                begin=inst.offset,
-                                               end=exitpt, loc=self.loc,))
+                                               end=end, loc=self.loc,))
 
-        # Store exit fn
+        # Store exit f
         exit_fn_obj = ir.Const(None, loc=self.loc)
         self.store(value=exit_fn_obj, name=exitfn)
-
 
     def op_SETUP_EXCEPT(self, inst):
         # Removed since python3.8

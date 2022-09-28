@@ -226,7 +226,17 @@ class ByteCode(object):
         self.co_consts = code.co_consts
         self.co_cellvars = code.co_cellvars
         self.co_freevars = code.co_freevars
-        self.exception_entries = dis.Bytecode(code).exception_entries
+
+        def fixup_eh(ent):
+            from dis import _ExceptionTableEntry
+            out = _ExceptionTableEntry(
+                start=ent.start + 2, end=ent.end + 2, target=ent.target + 2,
+                depth=ent.depth, lasti=ent.lasti,
+            )
+            return out
+
+        entries = dis.Bytecode(code).exception_entries
+        self.exception_entries = tuple(map(fixup_eh, entries))
         self.table = table
         self.labels = sorted(labels)
 
@@ -306,13 +316,16 @@ class ByteCode(object):
         return self._compute_used_globals(self.func_id.func, self.table,
                                           self.co_consts, self.co_names)
 
-    def get_exception_entry(self, offset):
+    def find_exception_entry(self, offset):
         """
         Returns the exception entry for the given instruction offset
         """
+        candidates = []
         for ent in self.exception_entries:
-            if offset in range(ent.start, ent.end):
-                return ent
+            if ent.start <= offset <= ent.end:
+                candidates.append((ent.depth, ent))
+        ent = max(candidates)[1]
+        return ent
 
 class FunctionIdentity(serialize.ReduceMixin):
     """

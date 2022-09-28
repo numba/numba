@@ -588,7 +588,6 @@ def find_setupwiths(func_ir):
     # rewrite the CFG in case there are multiple POP_BLOCK statements for one
     # with
     func_ir = consolidate_multi_exit_withs(with_ranges_dict, blocks, func_ir)
-
     # here we need to turn the withs back into a list of tuples so that the
     # rest of the code can cope
     with_ranges_tuple = [(s, list(p)[0])
@@ -619,7 +618,7 @@ def find_setupwiths(func_ir):
     # now we need to rewrite the tuple such that we have SETUP_WITH matching the
     # successor of the block that contains the POP_BLOCK.
     with_ranges_tuple = [(s, func_ir.blocks[p].terminator.get_targets()[0])
-             for (s, p) in with_ranges_tuple]
+                         for (s, p) in with_ranges_tuple]
 
     # finally we check for nested with statements and reject them
     with_ranges_tuple = _eliminate_nested_withs(with_ranges_tuple)
@@ -754,7 +753,6 @@ def _eliminate_nested_withs(with_ranges):
 def consolidate_multi_exit_withs(withs: dict, blocks, func_ir):
     """Modify the FunctionIR to merge the exit blocks of with constructs.
     """
-    out = []
     for k in withs:
         vs : set = withs[k]
         if len(vs) > 1:
