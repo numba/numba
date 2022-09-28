@@ -13,7 +13,6 @@ import warnings
 import llvmlite.ir
 import numpy as np
 
-from numba import generated_jit
 from numba.core import types, cgutils
 from numba.core.extending import overload, overload_method, register_jitable
 from numba.np.numpy_support import as_dtype, type_can_asarray
@@ -1316,34 +1315,50 @@ def prepare_ptp_input(a):
         return arr
 
 
-def _compute_current_val_impl_gen(op):
-    def _compute_current_val_impl(current_val, val):
-        if isinstance(current_val, types.Complex):
-            # The sort order for complex numbers is lexicographic. If both the
-            # real and imaginary parts are non-nan then the order is determined
-            # by the real parts except when they are equal, in which case the
-            # order is determined by the imaginary parts.
-            # https://github.com/numpy/numpy/blob/577a86e/numpy/core/fromnumeric.py#L874-L877    # noqa: E501
-            def impl(current_val, val):
-                if op(val.real, current_val.real):
-                    return val
-                elif (val.real == current_val.real
-                        and op(val.imag, current_val.imag)):
-                    return val
-                return current_val
-        else:
-            def impl(current_val, val):
-                return val if op(val, current_val) else current_val
-        return impl
-    return _compute_current_val_impl
+def _compute_current_val_impl_gen(op, current_val, val):
+    if isinstance(current_val, types.Complex):
+        # The sort order for complex numbers is lexicographic. If both the
+        # real and imaginary parts are non-nan then the order is determined
+        # by the real parts except when they are equal, in which case the
+        # order is determined by the imaginary parts.
+        # https://github.com/numpy/numpy/blob/577a86e/numpy/core/fromnumeric.py#L874-L877    # noqa: E501
+        def impl(current_val, val):
+            if op(val.real, current_val.real):
+                return val
+            elif (val.real == current_val.real
+                    and op(val.imag, current_val.imag)):
+                return val
+            return current_val
+    else:
+        def impl(current_val, val):
+            return val if op(val, current_val) else current_val
+    return impl
 
 
-_compute_a_max = generated_jit(_compute_current_val_impl_gen(greater_than))
-_compute_a_min = generated_jit(_compute_current_val_impl_gen(less_than))
+def _compute_a_max(current_val, val):
+    pass
 
 
-@generated_jit
+def _compute_a_min(current_val, val):
+    pass
+
+
+@overload(_compute_a_max)
+def _compute_a_max_impl(current_val, val):
+    return _compute_current_val_impl_gen(operator.gt, current_val, val)
+
+
+@overload(_compute_a_min)
+def _compute_a_min_impl(current_val, val):
+    return _compute_current_val_impl_gen(operator.lt, current_val, val)
+
+
 def _early_return(val):
+    pass
+
+
+@overload(_early_return)
+def _early_return_impl(val):
     UNUSED = 0
     if isinstance(val, types.Complex):
         def impl(val):
@@ -4527,7 +4542,11 @@ def _cross_operation(a, b, out):
     out[..., 2] = cp2
 
 
-@generated_jit
+def _cross(a, b):
+    pass
+
+
+@overload(_cross)
 def _cross_impl(a, b):
     dtype = np.promote_types(as_dtype(a.dtype), as_dtype(b.dtype))
     if a.ndim == 1 and b.ndim == 1:
@@ -4559,7 +4578,7 @@ def np_cross(a, b):
             ))
 
         if a_.shape[-1] == 3 or b_.shape[-1] == 3:
-            return _cross_impl(a_, b_)
+            return _cross(a_, b_)
         else:
             raise ValueError((
                 "Dimensions for both inputs is 2.\n"
@@ -4589,8 +4608,12 @@ def _cross2d_operation(a, b):
     return np.asarray(cp)
 
 
-@generated_jit
 def cross2d(a, b):
+    pass
+
+
+@overload(cross2d)
+def cross2d_impl(a, b):
     if not type_can_asarray(a) or not type_can_asarray(b):
         raise TypingError("Inputs must be array-like.")
 

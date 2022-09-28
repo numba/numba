@@ -382,6 +382,10 @@ def np_cross(a, b):
     return np.cross(a, b)
 
 
+def nb_cross2d(a, b):
+    return cross2d(a, b)
+
+
 def flip_lr(a):
     return np.fliplr(a)
 
@@ -4450,7 +4454,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def test_cross2d(self):
         pyfunc = np_cross
-        cfunc = cross2d
+        cfunc = njit(nb_cross2d)
         pairs = [
             # 2x2 (n-dims)
             (
@@ -4495,7 +4499,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(expected, got)
 
     def test_cross2d_exceptions(self):
-        cfunc = cross2d
+        cfunc = njit(nb_cross2d)
         self.disable_leak_check()
 
         # test incompatible dimensions for ndim == 1
