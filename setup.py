@@ -371,11 +371,13 @@ def get_ext_modules():
 
 packages = find_packages(include=["numba", "numba.*"])
 
-build_requires = ['numpy >={}'.format(min_numpy_build_version)]
+build_requires = [
+    'numpy >={}'.format(min_numpy_build_version),
+    'setuptools <60',
+]
 install_requires = [
     'llvmlite >={},<{}'.format(min_llvmlite_version, max_llvmlite_version),
     'numpy >={}'.format(min_numpy_run_version),
-    'setuptools <60',
     'importlib_metadata; python_version < "3.9"',
 ]
 
