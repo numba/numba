@@ -10,7 +10,7 @@ import warnings
 from ._version import get_versions
 from numba.misc.init_utils import generate_version_info
 
-__version__ = get_versions()["version"]
+__version__ = get_versions()['version']
 version_info = generate_version_info(__version__)
 del get_versions
 del generate_version_info
@@ -21,14 +21,8 @@ from numba.core import types, errors
 
 # Re-export typeof
 from numba.misc.special import (
-    typeof,
-    prange,
-    pndindex,
-    gdb,
-    gdb_breakpoint,
-    gdb_init,
-    literally,
-    literal_unroll,
+    typeof, prange, pndindex, gdb, gdb_breakpoint, gdb_init,
+    literally, literal_unroll,
 )
 
 # Re-export error classes
@@ -41,19 +35,14 @@ import numba.core.types as types
 from numba.core.types import *
 
 # Re-export decorators
-from numba.core.decorators import cfunc, generated_jit, jit, njit, stencil, jit_module
+from numba.core.decorators import (cfunc, generated_jit, jit, njit, stencil,
+                                   jit_module)
 
 # Re-export vectorize decorators and the thread layer querying function
-from numba.np.ufunc import (
-    vectorize,
-    guvectorize,
-    threading_layer,
-    get_num_threads,
-    set_num_threads,
-    set_parallel_chunksize,
-    get_parallel_chunksize,
-    get_thread_id,
-)
+from numba.np.ufunc import (vectorize, guvectorize, threading_layer,
+                            get_num_threads, set_num_threads,
+                            set_parallel_chunksize, get_parallel_chunksize,
+                            get_thread_id)
 
 # Re-export Numpy helpers
 from numba.np.numpy_support import carray, farray, from_dtype
@@ -77,12 +66,9 @@ def test(argv, **kwds):
     # To speed up the import time, avoid importing `unittest` and other test
     # dependencies unless the user is actually trying to run tests.
     from numba.testing import _runtests as runtests
-
     return runtests.main(argv, **kwds)
 
-
-__all__ = (
-    """
+__all__ = """
     cfunc
     from_dtype
     guvectorize
@@ -104,15 +90,11 @@ __all__ = (
     set_parallel_chunksize
     get_parallel_chunksize
     parallel_chunksize
-    """.split()
-    + types.__all__
-    + errors.__all__
-)
+    """.split() + types.__all__ + errors.__all__
 
 
 _min_llvmlite_version = (0, 40, 0)
 _min_llvm_version = (11, 0, 0)
-
 
 def _ensure_llvm():
     """
@@ -123,17 +105,15 @@ def _ensure_llvm():
 
     # Only look at the the major, minor and bugfix version numbers.
     # Ignore other stuffs
-    regex = re.compile(r"(\d+)\.(\d+).(\d+)")
+    regex = re.compile(r'(\d+)\.(\d+).(\d+)')
     m = regex.match(llvmlite.__version__)
     if m:
         ver = tuple(map(int, m.groups()))
         if ver < _min_llvmlite_version:
-            msg = (
-                "Numba requires at least version %d.%d.%d of llvmlite.\n"
-                "Installed version is %s.\n"
-                "Please update llvmlite."
-                % (_min_llvmlite_version + (llvmlite.__version__,))
-            )
+            msg = ("Numba requires at least version %d.%d.%d of llvmlite.\n"
+                   "Installed version is %s.\n"
+                   "Please update llvmlite." %
+                   (_min_llvmlite_version + (llvmlite.__version__,)))
             raise ImportError(msg)
     else:
         # Not matching?
@@ -142,15 +122,13 @@ def _ensure_llvm():
     from llvmlite.binding import llvm_version_info, check_jit_execution
 
     if llvm_version_info < _min_llvm_version:
-        msg = (
-            "Numba requires at least version %d.%d.%d of LLVM.\n"
-            "Installed llvmlite is built against version %d.%d.%d.\n"
-            "Please update llvmlite." % (_min_llvm_version + llvm_version_info)
-        )
+        msg = ("Numba requires at least version %d.%d.%d of LLVM.\n"
+               "Installed llvmlite is built against version %d.%d.%d.\n"
+               "Please update llvmlite." %
+               (_min_llvm_version + llvm_version_info))
         raise ImportError(msg)
 
     check_jit_execution()
-
 
 def _ensure_critical_deps():
     """
@@ -170,7 +148,7 @@ def _ensure_critical_deps():
     except ImportError:
         pass
     else:
-        sp_version = tuple(map(int, scipy.__version__.split(".")[:2]))
+        sp_version = tuple(map(int, scipy.__version__.split('.')[:2]))
         if sp_version < (1, 0):
             raise ImportError(
                 f"Numba requires SciPy version 1.0 or greater. Got {sp_version}."
@@ -183,11 +161,11 @@ def _try_enable_svml():
     """
     if not config.DISABLE_INTEL_SVML:
         try:
-            if sys.platform.startswith("linux"):
+            if sys.platform.startswith('linux'):
                 llvmlite.binding.load_library_permanently("libsvml.so")
-            elif sys.platform.startswith("darwin"):
+            elif sys.platform.startswith('darwin'):
                 llvmlite.binding.load_library_permanently("libsvml.dylib")
-            elif sys.platform.startswith("win"):
+            elif sys.platform.startswith('win'):
                 llvmlite.binding.load_library_permanently("svml_dispmd")
             else:
                 return False
@@ -207,11 +185,9 @@ def _try_enable_svml():
                     # disable SVML
                     return False
             except AttributeError:
-                if platform.machine() == "x86_64" and config.DEBUG:
-                    msg = (
-                        "SVML was found but llvmlite >= 0.23.2 is "
-                        "needed to support it."
-                    )
+                if platform.machine() == 'x86_64' and config.DEBUG:
+                    msg = ("SVML was found but llvmlite >= 0.23.2 is "
+                           "needed to support it.")
                     warnings.warn(msg)
                 # does not have detection function, cannot detect reliably,
                 # disable SVML.
@@ -219,13 +195,12 @@ def _try_enable_svml():
 
             # All is well, detection function present and reports SVML is
             # compiled in, set the vector library to SVML.
-            llvmlite.binding.set_option("SVML", "-vector-library=SVML")
+            llvmlite.binding.set_option('SVML', '-vector-library=SVML')
             return True
         except:
-            if platform.machine() == "x86_64" and config.DEBUG:
+            if platform.machine() == 'x86_64' and config.DEBUG:
                 warnings.warn("SVML was not found/could not be loaded.")
     return False
-
 
 _ensure_llvm()
 _ensure_critical_deps()
