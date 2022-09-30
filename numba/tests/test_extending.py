@@ -5,7 +5,6 @@ import pickle
 import multiprocessing
 import ctypes
 import warnings
-from setuptools import distutils
 import re
 
 import numpy as np

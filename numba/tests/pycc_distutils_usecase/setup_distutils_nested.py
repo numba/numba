@@ -1,5 +1,5 @@
 from setuptools import distutils
-from source_module import cc
+
 from nested.source_module import cc
 
 
