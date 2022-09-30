@@ -92,11 +92,13 @@ class Toolchain(object):
         self._py_include_dirs = self._build_ext.include_dirs
         np_include_dir = np.get_include()
         np_lib_dir = os.path.abspath(os.path.join(np_include_dir, '..', 'lib'))
+        np_libraries = ['npymath',]
+        if sys.platform != 'win32':
+            np_libraries.append('m')
+
         self._math_info = {'include_dirs': [np_include_dir,],
                            'library_dirs': [np_lib_dir,],
-                           # NOTE: might need to exclude libm on platforms
-                           # that don't have it.
-                           'libraries': ['npymath', 'm']}
+                           'libraries': np_libraries}
 
     @property
     def verbose(self):
