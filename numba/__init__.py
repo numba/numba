@@ -152,9 +152,9 @@ def _ensure_critical_deps():
     else:
         sp_version = tuple(map(int, scipy.__version__.split('.')[:2]))
         if sp_version < (1, 0):
-            raise ImportError(
-                f"Numba requires SciPy version 1.0 or greater. Got {sp_version}."
-            )
+            msg = ("Numba requires SciPy version 1.0 or greater. Got SciPy "
+                   f"{scipy.__version__}.")
+            raise ImportError(msg)
 
 
 def _try_enable_svml():
