@@ -1,6 +1,9 @@
-from distutils import dir_util, log
-from distutils.command import build_ext
-from distutils.extension import Extension
+from setuptools import distutils as dutils
+dir_util = dutils.dir_util
+log = dutils.log
+from setuptools.command import build_ext
+from setuptools.extension import Extension
+
 import os
 import shutil
 import sys

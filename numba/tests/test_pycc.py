@@ -18,7 +18,8 @@ from numba.pycc.platform import find_shared_ending, find_pyext_ending
 from numba.pycc.platform import _external_compiler_ok
 
 from numba.tests.support import (TestCase, tag, import_dynamic, temp_directory,
-                                 has_blas, needs_external_compilers)
+                                 has_blas, needs_external_compilers,
+                                 needs_setuptools)
 import unittest
 
 
@@ -84,6 +85,7 @@ class BasePYCCTest(TestCase):
             sys.modules.pop(name, None)
 
 
+@needs_setuptools
 @needs_external_compilers
 class TestCC(BasePYCCTest):
 

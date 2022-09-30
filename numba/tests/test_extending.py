@@ -5,7 +5,7 @@ import pickle
 import multiprocessing
 import ctypes
 import warnings
-from distutils.version import LooseVersion
+from setuptools import distutils
 import re
 
 import numpy as np
@@ -61,12 +61,7 @@ from .pdlike_usecase import Index, Series
 
 
 try:
-    import scipy
-
-    if LooseVersion(scipy.__version__) < "0.19":
-        sc = None
-    else:
-        import scipy.special.cython_special as sc
+    import scipy.special.cython_special as sc
 except ImportError:
     sc = None
 

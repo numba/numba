@@ -1,9 +1,7 @@
-from distutils.ccompiler import CCompiler, new_compiler
-from distutils.command.build_ext import build_ext
-from distutils.sysconfig import customize_compiler
-from distutils import log
-
-import numpy.distutils.misc_util as np_misc
+import setuptools
+from setuptools.command.build_ext import build_ext
+from setuptools.dist import Distribution
+import numpy as np
 
 import functools
 import os
@@ -12,6 +10,13 @@ import sys
 from tempfile import mkdtemp
 from contextlib import contextmanager
 from pathlib import Path
+
+# Wire in distutils components from setuptools
+CCompiler =  setuptools.distutils.ccompiler.CCompiler
+new_compiler =  setuptools.distutils.ccompiler.new_compiler
+customize_compiler = setuptools.distutils.sysconfig.customize_compiler
+log = setuptools.distutils.log
+
 
 _configs = {
     # DLL suffix, Python C extension suffix
@@ -78,8 +83,6 @@ class Toolchain(object):
         if not _external_compiler_ok:
             self._raise_external_compiler_error()
 
-        # Need to import it here since setuptools may monkeypatch it
-        from distutils.dist import Distribution
         self._verbose = False
         self._compiler = new_compiler()
         customize_compiler(self._compiler)
@@ -87,7 +90,13 @@ class Toolchain(object):
         self._build_ext.finalize_options()
         self._py_lib_dirs = self._build_ext.library_dirs
         self._py_include_dirs = self._build_ext.include_dirs
-        self._math_info = np_misc.get_info('npymath')
+        np_include_dir = np.get_include()
+        np_lib_dir = os.path.abspath(os.path.join(np_include_dir, '..', 'lib'))
+        self._math_info = {'include_dirs': [np_include_dir,],
+                           'library_dirs': [np_lib_dir,],
+                           # NOTE: might need to exclude libm on platforms
+                           # that don't have it.
+                           'libraries': ['npymath', 'm']}
 
     @property
     def verbose(self):
@@ -187,70 +196,6 @@ class Toolchain(object):
         Given a C extension's module name, return its intended filename.
         """
         return self._build_ext.get_ext_filename(ext_name)
-
-
-#
-# Patch Numpy's exec_command() to avoid random crashes on Windows in test_pycc
-# see https://github.com/numpy/numpy/pull/7614
-# and https://github.com/numpy/numpy/pull/7862
-#
-
-def _patch_exec_command():
-    # Patch the internal worker _exec_command()
-    import numpy.distutils.exec_command as mod
-    orig_exec_command = mod._exec_command
-    mod._exec_command = _exec_command
-
-
-def _exec_command(command, use_shell=None, use_tee=None, **env):
-    """
-    Internal workhorse for exec_command().
-    Code from https://github.com/numpy/numpy/pull/7862
-    """
-    if use_shell is None:
-        use_shell = os.name == 'posix'
-    if use_tee is None:
-        use_tee = os.name == 'posix'
-
-    executable = None
-
-    if os.name == 'posix' and use_shell:
-        # On POSIX, subprocess always uses /bin/sh, override
-        sh = os.environ.get('SHELL', '/bin/sh')
-        if _is_sequence(command):
-            command = [sh, '-c', ' '.join(command)]
-        else:
-            command = [sh, '-c', command]
-        use_shell = False
-
-    elif os.name == 'nt' and _is_sequence(command):
-        # On Windows, join the string for CreateProcess() ourselves as
-        # subprocess does it a bit differently
-        command = ' '.join(_quote_arg(arg) for arg in command)
-
-    # Inherit environment by default
-    env = env or None
-    try:
-        proc = subprocess.Popen(command, shell=use_shell, env=env,
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE,
-                                universal_newlines=True)
-    except OSError:
-        # Return 127, as os.spawn*() and /bin/sh do
-        return '', 127
-    text, err = proc.communicate()
-    # Only append stderr if the command failed, as otherwise
-    # the output may become garbled for parsing
-    if proc.returncode:
-        if text:
-            text += "\n"
-        text += err
-    # Another historical oddity
-    if text[-1:] == '\n':
-        text = text[:-1]
-    if use_tee:
-        print(text)
-    return proc.returncode, text
 
 
 def _quote_arg(arg):
