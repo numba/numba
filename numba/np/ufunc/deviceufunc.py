@@ -429,9 +429,13 @@ class DeviceVectorize(_BaseUFuncBuilder):
 
 
 class DeviceGUFuncVectorize(_BaseUFuncBuilder):
-    def __init__(self, func, sig, identity=None, cache=False, targetoptions={}):
+    def __init__(self, func, sig, identity=None, cache=False, targetoptions={},
+                 writable_args=()):
         if cache:
             raise TypeError("caching is not supported")
+        if writable_args:
+            raise TypeError("writable_args are not supported")
+
         # Allow nopython flag to be set.
         if not targetoptions.pop('nopython', True):
             raise TypeError("nopython flag must be True")
