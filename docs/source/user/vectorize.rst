@@ -258,6 +258,27 @@ demonstrate, we can  use an array of `float32` with the `init_values` function::
 In this case, there is no change to the `invals` array because the temporary
 casted array was mutated instead.
 
+.. note::
+   To ensure that ``@guvectorize`` updates `n`-th and `m`-th input arguments pass 
+   ``writable_args=(n, m)``.
+
+To solve this problem, one needs to tell the GUFunc engine that 0-th
+argument is writable. This can be achieved by passing ``writable_args=(0,)``
+to ``@guvectorize``.  Now, the code above works as expected::
+
+   @guvectorize([(float64[:], float64[:])], '()->()', writable_args=(0,))
+   def init_values(invals, outvals):
+       invals[0] = 6.5
+       outvals[0] = 4.2
+
+   >>> invals = np.zeros(shape=(3, 3), dtype=np.float32)
+   >>> outvals = init_values(invals)
+   >>> invals
+   array([[6.5, 6.5, 6.5],
+          [6.5, 6.5, 6.5],
+          [6.5, 6.5, 6.5]], dtype=float32)
+
+
 .. _dynamic-universal-functions:
 
 Dynamic universal functions
