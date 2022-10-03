@@ -69,7 +69,6 @@ class TestSelfRecursion(CUDATestCase):
 
         self.assertPreciseEqual(actual, expected)
 
-    @unittest.expectedFailure
     def test_raise(self):
         # This is an expected failure because reporting of exceptions raised in
         # device functions does not work correctly - see Issue #8036:
@@ -77,7 +76,7 @@ class TestSelfRecursion(CUDATestCase):
         with self.assertRaises(ValueError) as raises:
             self.mod.raise_self_kernel[1, 1](3)
 
-        self.assertEqual(str(raises.exception), "raise_self")
+        self.assertIn("raise_self", str(raises.exception))
 
     @unittest.skip('Needs insert_unresolved_ref support in target')
     def test_optional_return(self):

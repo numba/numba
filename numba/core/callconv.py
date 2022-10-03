@@ -286,6 +286,14 @@ class MinimalCallConv(BaseCallConv):
 
 
 class _MinimalCallHelper(object):
+    _instance = None
+    exceptions = {}
+    def __new__(cls, *args, **kwargs):
+        if not cls._instance:
+            cls._instance = super(_MinimalCallHelper, cls).__new__(
+                                cls, *args, **kwargs)
+        return cls._instance
+
     """
     A call helper object for the "minimal" calling convention.
     User exceptions are represented as integer codes and stored in
@@ -293,8 +301,8 @@ class _MinimalCallHelper(object):
     """
 
     def __init__(self):
-        self.exceptions = {}
-
+        pass
+ 
     def _add_exception(self, exc, exc_args, locinfo):
         """
         Add a new user exception to this helper. Returns an integer that can be
@@ -310,7 +318,7 @@ class _MinimalCallHelper(object):
             location information
         """
         exc_id = len(self.exceptions) + FIRST_USEREXC
-        self.exceptions[exc_id] = exc, exc_args, locinfo
+        _MinimalCallHelper.exceptions[exc_id] = exc, exc_args, locinfo
         return exc_id
 
     def get_exception(self, exc_id):
@@ -324,7 +332,8 @@ class _MinimalCallHelper(object):
             The ID of the exception to look up
         """
         try:
-            return self.exceptions[exc_id]
+            #return self.exceptions[exc_id]
+            return _MinimalCallHelper.exceptions[exc_id]
         except KeyError:
             msg = "unknown error %d in native function" % exc_id
             exc = SystemError
