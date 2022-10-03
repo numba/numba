@@ -428,19 +428,31 @@ class TestCudaNDArray(CUDATestCase):
         # https://github.com/numba/numba/issues/8477.
 
         # Create a device array with shape (0,) and strides (8,)
-        src = devicearray.DeviceNDArray(shape=(0,), strides=(8,), dtype=np.int8)
+        dev_array = devicearray.DeviceNDArray(shape=(0,), strides=(8,),
+                                              dtype=np.int8)
 
         # Create a host array with shape (0,) and strides (0,)
-        dest = np.ndarray(shape=(0,), strides=(0,), dtype=np.int8)
+        host_array = np.ndarray(shape=(0,), strides=(0,), dtype=np.int8)
 
         # Sanity check for this test - ensure our destination has the strides
         # we expect, because strides can be ignored in some cases by the
         # ndarray constructor - checking here ensures that we haven't failed to
         # account for unexpected behaviour across different versions of NumPy
-        self.assertEqual(dest.strides, (0,))
+        self.assertEqual(host_array.strides, (0,))
 
-        # Ensure that the copy succeeds
-        src.copy_to_host(dest)
+        # Ensure that the copy succeeds in both directions
+        dev_array.copy_to_host(host_array)
+        dev_array.copy_to_device(host_array)
+
+        # Ensure that a device-to-device copy also succeeds when the strides
+        # differ - one way of doing this is to copy the host array across and
+        # use that for copies in both directions.
+        dev_array_from_host = cuda.to_device(host_array)
+        self.assertEqual(dev_array_from_host.shape, (0,))
+        self.assertEqual(dev_array_from_host.strides, (0,))
+
+        dev_array.copy_to_device(dev_array_from_host)
+        dev_array_from_host.copy_to_device(dev_array)
 
 
 class TestRecarray(CUDATestCase):
