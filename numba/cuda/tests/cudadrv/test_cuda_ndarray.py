@@ -420,6 +420,7 @@ class TestCudaNDArray(CUDATestCase):
         got = np.asarray(dary)
         self.assertEqual(got.dtype, dary.dtype)
 
+    @skip_on_cudasim('DeviceNDArray class not present in simulator')
     def test_issue_8477(self):
         # Ensure that we can copy a zero-length device array to a zero-length
         # host array when the strides of the device and host arrays differ -
