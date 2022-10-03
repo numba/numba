@@ -368,8 +368,10 @@ def array_prod(arr):
 @overload_method(types.Array, "cumsum")
 def array_cumsum(arr):
     if isinstance(arr, types.Array):
-        is_integer = arr.dtype in types.signed_domain | frozenset([types.bool_])
-        if is_integer:
+        is_integer = arr.dtype in types.signed_domain
+        is_bool = arr.dtype == types.bool_
+        if (is_integer and arr.dtype.bitwidth < types.intp.bitwidth)\
+                or is_bool:
             dtype = np.intp
         else:
             dtype = arr.dtype
@@ -389,8 +391,10 @@ def array_cumsum(arr):
 @overload_method(types.Array, "cumprod")
 def array_cumprod(arr):
     if isinstance(arr, types.Array):
-        is_integer = arr.dtype in types.signed_domain | frozenset([types.bool_])
-        if is_integer:
+        is_integer = arr.dtype in types.signed_domain
+        is_bool = arr.dtype == types.bool_
+        if (is_integer and arr.dtype.bitwidth < types.intp.bitwidth)\
+                or is_bool:
             dtype = np.intp
         else:
             dtype = arr.dtype
