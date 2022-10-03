@@ -420,6 +420,28 @@ class TestCudaNDArray(CUDATestCase):
         got = np.asarray(dary)
         self.assertEqual(got.dtype, dary.dtype)
 
+    def test_issue_8477(self):
+        # Ensure that we can copy a zero-length device array to a zero-length
+        # host array when the strides of the device and host arrays differ -
+        # this should be possible because the strides are irrelevant when the
+        # length is zero. For more info see
+        # https://github.com/numba/numba/issues/8477.
+
+        # Create a device array with shape (0,) and strides (8,)
+        src = devicearray.DeviceNDArray(shape=(0,), strides=(8,), dtype=np.int8)
+
+        # Create a host array with shape (0,) and strides (0,)
+        dest = np.ndarray(shape=(0,), strides=(0,), dtype=np.int8)
+
+        # Sanity check for this test - ensure our destination has the strides
+        # we expect, because strides can be ignored in some cases by the
+        # ndarray constructor - checking here ensures that we haven't failed to
+        # account for unexpected behaviour across different versions of NumPy
+        self.assertEqual(dest.strides, (0,))
+
+        # Ensure that the copy succeeds
+        src.copy_to_host(dest)
+
 
 class TestRecarray(CUDATestCase):
     def test_recarray(self):
