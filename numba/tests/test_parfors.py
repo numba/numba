@@ -1405,6 +1405,13 @@ class TestParfors(TestParforsBase):
         # this doesn't fuse due to mixed indices
         self.assertEqual(countParfors(test_impl, (numba.float64[:,:],)), 2)
 
+        def test_impl(A):
+            min_val = np.amin(A)
+            return A - min_val
+        self.check(test_impl, A)
+        # this doesn't fuse due to use of reduction variable
+        self.assertEqual(countParfors(test_impl, (numba.float64[:],)), 2)
+
     def test_use_of_reduction_var1(self):
         def test_impl():
             acc = 0
@@ -2180,6 +2187,55 @@ class TestParfors(TestParforsBase):
             return x
 
         self.check(test_impl, np.zeros((3, 1)))
+
+    def test_1array_control_flow(self):
+        # issue8146
+        def test_impl(arr, flag1, flag2):
+            inv = np.arange(arr.size)
+            if flag1:
+                return inv.astype(np.float64)
+            if flag2:
+                ret = inv[inv]
+            else:
+                ret = inv[inv - 1]
+            return ret / arr.size
+
+        arr = np.arange(100)
+        self.check(test_impl, arr, True, False)
+        self.check(test_impl, arr, True, True)
+        self.check(test_impl, arr, False, False)
+
+    def test_2array_1_control_flow(self):
+        # issue8146
+        def test_impl(arr, l, flag):
+            inv1 = np.arange(arr.size)
+            inv2 = np.arange(l, arr.size + l)
+            if flag:
+                ret = inv1[inv1]
+            else:
+                ret = inv1[inv1 - 1]
+            return ret / inv2
+
+        arr = np.arange(100)
+        self.check(test_impl, arr, 10, True)
+        self.check(test_impl, arr, 10, False)
+
+    def test_2array_2_control_flow(self):
+        # issue8146
+        def test_impl(arr, l, flag):
+            inv1 = np.arange(arr.size)
+            inv2 = np.arange(l, arr.size + l)
+            if flag:
+                ret1 = inv1[inv1]
+                ret2 = inv2[inv1]
+            else:
+                ret1 = inv1[inv1 - 1]
+                ret2 = inv2[inv1 - 1]
+            return ret1 / ret2
+
+        arr = np.arange(100)
+        self.check(test_impl, arr, 10, True)
+        self.check(test_impl, arr, 10, False)
 
 @skip_parfors_unsupported
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):

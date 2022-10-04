@@ -161,12 +161,13 @@ def get_ext_modules():
 
     ext_dispatcher = Extension(name="numba._dispatcher",
                                sources=['numba/_dispatcher.cpp',
-                                        'numba/_typeof.c',
-                                        'numba/_hashtable.c',
+                                        'numba/_typeof.cpp',
+                                        'numba/_hashtable.cpp',
                                         'numba/core/typeconv/typeconv.cpp'],
                                depends=["numba/_pymodule.h",
                                         "numba/_typeof.h",
                                         "numba/_hashtable.h"],
+                               extra_compile_args=['-std=c++11'],
                                **np_compile_args)
 
     ext_helperlib = Extension(name="numba._helperlib",
@@ -191,6 +192,7 @@ def get_ext_modules():
                              sources=["numba/core/typeconv/typeconv.cpp",
                                       "numba/core/typeconv/_typeconv.cpp"],
                              depends=["numba/_pymodule.h"],
+                             extra_compile_args=['-std=c++11'],
                              )
 
     ext_np_ufunc = Extension(name="numba.np.ufunc._internal",
@@ -410,7 +412,7 @@ metadata = dict(
         "numba.misc": ["cmdlang.gdb"],
         "numba.typed": ["py.typed"],
     },
-    scripts=["numba/pycc/pycc", "bin/numba"],
+    scripts=["bin/numba"],
     url="https://numba.pydata.org",
     packages=packages,
     setup_requires=build_requires,
