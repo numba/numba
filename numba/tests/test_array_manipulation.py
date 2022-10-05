@@ -867,12 +867,23 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
              'The second argument "shape" must be a tuple of integers'],
             ['hello', (3,), TypingError,
              'The first argument "array" must be array-like'],
+            [3, (2, 'a'), TypingError,
+             'object cannot be interpreted as an integer'],
         ]
         self.disable_leak_check()
         for arr, target_shape, err, msg in data:
             with self.assertRaises(err) as raises:
                 cfunc(arr, target_shape)
             self.assertIn(msg, str(raises.exception))
+
+    def test_broadcast_to_corner_cases(self):
+        @njit
+        def _broadcast_to_1():
+            return np.broadcast_to('a', (2, 3))
+
+        expected = _broadcast_to_1.py_func()
+        got = _broadcast_to_1()
+        self.assertPreciseEqual(expected, got)
 
     def test_broadcast_to_change_view(self):
         pyfunc = numpy_broadcast_to

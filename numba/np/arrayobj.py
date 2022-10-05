@@ -1390,31 +1390,46 @@ def _can_broadcast(array, dest_shape):
                              'with remapped shapes')
 
 
+def _default_broadcast_to_impl(array, shape):
+    array = np.asarray(array)
+    _can_broadcast(array, shape)
+    return _numpy_broadcast_to(array, shape)
+
+
 @overload(np.broadcast_to)
 def numpy_broadcast_to(array, shape):
     if not type_can_asarray(array):
         raise errors.TypingError('The first argument "array" must '
                                  'be array-like')
 
-    if isinstance(shape, types.UniTuple):
-        if not isinstance(shape.dtype, types.Integer):
-            raise errors.TypingError('The second argument "shape" must '
-                                     'be a tuple of integers')
-
-        def impl(array, shape):
-            array = np.asarray(array)
-            _can_broadcast(array, shape)
-            return _numpy_broadcast_to(array, shape)
-    elif isinstance(shape, types.Integer):
+    if isinstance(shape, types.Integer):
         def impl(array, shape):
             return np.broadcast_to(array, (shape,))
+        return impl
+
+    elif isinstance(shape, types.UniTuple):
+        if not isinstance(shape.dtype, types.Integer):
+            msg = 'The second argument "shape" must be a tuple of integers'
+            raise errors.TypingError(msg)
+        return _default_broadcast_to_impl
+
+    elif isinstance(shape, types.Tuple) and shape.count > 0:
+        # check if all types are integers
+        if not all([isinstance(typ, types.IntegerLiteral) for typ in shape]):
+            msg = f'"{shape}" object cannot be interpreted as an integer'
+            raise errors.TypingError(msg)
+        return _default_broadcast_to_impl
     elif isinstance(shape, types.Tuple) and shape.count == 0:
         is_scalar_array = isinstance(array, types.Array) and array.ndim == 0
         if type_is_scalar(array) or is_scalar_array:
-            # broadcast_to(scalar, ())
-            def impl(array, shape):
+
+            def impl(array, shape):  # broadcast_to(array, ())
+                # Array type must be supported by "type_can_asarray"
+                # Quick note that unicode types are not supported!
                 array = np.asarray(array)
                 return get_readonly_array(array)
+            return impl
+
         else:
             msg = 'Cannot broadcast a non-scalar to a scalar array'
             raise errors.TypingError(msg)
@@ -1422,7 +1437,6 @@ def numpy_broadcast_to(array, shape):
         msg = ('The argument "shape" must be a tuple or an integer. '
                'Got %s' % shape)
         raise errors.TypingError(msg)
-    return impl
 
 
 @register_jitable
