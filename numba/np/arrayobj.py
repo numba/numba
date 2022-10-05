@@ -739,15 +739,33 @@ class IntegerArrayIndexer(Indexer):
     def __init__(self, context, builder, idxty, idxary, size):
         self.context = context
         self.builder = builder
-        self.idxty = idxty
-        self.idxary = idxary
+
+        self.idx_shape = cgutils.unpack_tuple(builder, idxary.shape)
         self.size = size
-        assert idxty.ndim == 1
         self.ll_intp = self.context.get_value_type(types.intp)
+
+        if idxty.ndim > 1:
+            def flat_imp(ary):
+                # TODO: Make sure this operation is being done in-place
+                return ary.reshape(ary.size)
+
+            retty = types.Array(idxty.dtype, 1, idxty.layout, readonly=True)
+            sig = signature(retty, idxty)
+            res = context.compile_internal(builder, flat_imp, sig,
+                                           (idxary._getvalue(),))
+            self.idxty = retty
+            self.idxary = make_array(retty)(context, builder, res)
+        else:
+            self.idxty = idxty
+            self.idxary = idxary
+
+        assert self.idxty.ndim == 1
 
     def prepare(self):
         builder = self.builder
-        self.idx_size = cgutils.unpack_tuple(builder, self.idxary.shape)[0]
+        self.idx_size = self.ll_intp(1)
+        for _shape in self.idx_shape:
+            self.idx_size = self.builder.mul(self.idx_size, _shape)
         self.idx_index = cgutils.alloca_once(builder, self.ll_intp)
         self.bb_start = builder.append_basic_block()
         self.bb_end = builder.append_basic_block()
@@ -756,7 +774,7 @@ class IntegerArrayIndexer(Indexer):
         return self.idx_size
 
     def get_shape(self):
-        return (self.idx_size,)
+        return tuple(self.idx_shape)
 
     def get_index_bounds(self):
         # Pessimal heuristic, as we don't want to scan for the min and max
@@ -1236,7 +1254,6 @@ def maybe_copy_source(context, builder, use_copy,
             builder.store(builder.load(src_ptr), dest_ptr)
 
     def src_getitem(source_indices):
-        assert len(source_indices) == srcty.ndim
         src_ptr = cgutils.alloca_once(builder, ptrty)
         with builder.if_else(use_copy, likely=False) as (if_copy, otherwise):
             with if_copy:
