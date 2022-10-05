@@ -236,6 +236,8 @@ class TestParforsBase(TestCase):
                     new_args.append(x.copy())
                 elif isinstance(x, numbers.Number):
                     new_args.append(x)
+                elif x is None:
+                    new_args.append(x)
                 elif isinstance(x, tuple):
                     new_args.append(copy.deepcopy(x))
                 elif isinstance(x, list):
@@ -2129,6 +2131,18 @@ class TestParfors(TestParforsBase):
         cptypes = (numba.float64[:], numba.float64[:], types.int64)
         self.assertEqual(countParfors(test_impl, cptypes), 2)
         self.check(test_impl, a, b, size)
+
+    def test_prange_optional(self):
+        def test_impl(arr, pred=None):
+            for i in prange(1):
+                if pred is not None:
+                    arr[i] = 0.0
+
+        arr = np.ones(10)
+        self.check(test_impl, arr, None,
+                   check_arg_equality=[np.testing.assert_almost_equal,
+                                       lambda x, y: x == y])
+        self.assertEqual(arr.sum(), 10.0)
 
     def test_untraced_value_tuple(self):
         # This is a test for issue #6478.
