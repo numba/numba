@@ -87,9 +87,7 @@ def get_array_index_type(ary, idx):
         elif (isinstance(ty, types.Array)
               and isinstance(ty.dtype, (types.Integer, types.Boolean))):
             if ty.ndim > 1:
-                # Advanced indexing limitation # 1
-                raise NumbaTypeError(
-                    "Multi-dimensional indices are not supported.")
+                ndim += ty.ndim - 1
             array_indices += 1
             # The condition for activating advanced indexing is simply
             # having at least one array with size > 1.
