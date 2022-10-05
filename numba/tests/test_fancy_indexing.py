@@ -264,14 +264,20 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
         # Slices + Integers
         (slice(4, 5), 3, np.array([0,1,3,4,2]), 1),
         (3, np.array([0,1,3,4,2]), slice(None), slice(4)),
+        (3, np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]]),
+         slice(None), slice(4)), # multidimensional
 
         # Ellipsis + Integers
         (Ellipsis, 1, np.array([0,1,3,4,2])),
         (np.array([0,1,3,4,2]), 3, Ellipsis),
+        (np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]]),
+         3, Ellipsis), # multidimensional
 
         # Ellipsis + Slices + Integers
         (Ellipsis, 1, np.array([0,1,3,4,2]), 3, slice(1,5)),
         (np.array([0,1,3,4,2]), 3, Ellipsis, slice(1,5)),
+        (np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]]),
+         3, Ellipsis, slice(1,5)), # multidimensional
 
         # Boolean Arrays + Integers
         (slice(4, 5), 3,
@@ -414,15 +420,6 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
                 self.check_setitem_indices(self.shape, idx)
 
     def test_unsupported_condition_exceptions(self):
-        # Cases with multi-dimensional indexing array
-        idx = (0, 3, np.array([[1, 2], [2, 3]]))
-        with self.assertRaises(TypingError) as raises:
-            self.check_getitem_indices(self.shape, idx)
-        self.assertIn(
-            'Multi-dimensional indices are not supported.',
-            str(raises.exception)
-        )
-
         # Cases with more than one indexing array
         idx = (0, 3, np.array([1, 2]), np.array([1, 2]))
         with self.assertRaises(TypingError) as raises:
