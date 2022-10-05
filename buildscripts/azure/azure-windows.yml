@@ -30,12 +30,6 @@ jobs:
       displayName: 'Before Install'
 
     - script: |
-        # use TBB
-        call activate %CONDA_ENV%
-        conda install -y -c numba tbb=2021 tbb-devel
-      displayName: 'Add in TBB'
-
-    - script: |
         buildscripts\\incremental\\build.cmd
       displayName: 'Build'
 
