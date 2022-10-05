@@ -48,12 +48,7 @@ if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # dependencies, but exercised in the test suite
     # pexpect is used to run the gdb tests.
     # ipykernel is used for testing ipython behaviours.
-    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel pygments pexpect
-    if [[ "$NUMPY" == "1.23" ]] ; then
-        $CONDA_INSTALL ${EXTRA_CHANNELS} conda-forge::scipy
-    else
-        $CONDA_INSTALL ${EXTRA_CHANNELS} scipy
-    fi
+    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel scipy pygments pexpect
 fi
 
 # Install the compiler toolchain and gdb (if available)
