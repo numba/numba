@@ -411,8 +411,11 @@ def acos_impl(context, builder, sig, args):
     res = context.compile_internal(builder, acos_impl, sig, args)
     return impl_ret_untracked(context, builder, sig, res)
 
-@lower(cmath.acosh, types.Complex)
-def acosh_impl(context, builder, sig, args):
+@overload(cmath.acosh)
+def impl_cmath_acosh(z):
+    if not isinstance(z, types.Complex):
+        return
+
     LN_4 = math.log(4)
     THRES = mathimpl.FLT_MAX / 4
 
@@ -434,8 +437,8 @@ def acosh_impl(context, builder, sig, args):
         # Condensed formula (NumPy)
         #return cmath.log(z + cmath.sqrt(z + 1.) * cmath.sqrt(z - 1.))
 
-    res = context.compile_internal(builder, acosh_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig, res)
+    return acosh_impl
+
 
 @lower(cmath.asinh, types.Complex)
 def asinh_impl(context, builder, sig, args):
