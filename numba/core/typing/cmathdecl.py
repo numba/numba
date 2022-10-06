@@ -63,10 +63,3 @@ class Cmath_polar(AbstractTemplate):
         if tp in types.complex_domain:
             float_type = tp.underlying_float
             return signature(types.UniTuple(float_type, 2), tp)
-
-
-@infer_global(cmath.rect)
-class Cmath_rect(ConcreteTemplate):
-    cases = [signature(types.complex128, tp, tp)
-             for tp in [types.float64]]
-    cases += [signature(types.complex64, types.float32, types.float32)]

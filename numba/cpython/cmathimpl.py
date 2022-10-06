@@ -10,6 +10,7 @@ from numba.core.imputils import Registry, impl_ret_untracked
 from numba.core import types, cgutils
 from numba.core.typing import signature
 from numba.cpython import builtins, mathimpl
+from numba.core.extending import overload
 
 registry = Registry('cmathimpl')
 lower = registry.lower
@@ -53,39 +54,32 @@ def isfinite_float_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower(cmath.rect, types.Float, types.Float)
-def rect_impl(context, builder, sig, args):
-    [r, phi] = args
-    # We can't call math.isfinite() inside rect() below because it
-    # only exists on 3.2+.
-    phi_is_finite = mathimpl.is_finite(builder, phi)
+@overload(cmath.rect)
+def impl_cmath_rect(r, phi):
+    if all([isinstance(typ, types.Float) for typ in [r, phi]]):
+        def impl(r, phi):
+            if not math.isfinite(phi):
+                if not r:
+                    # cmath.rect(0, phi={inf, nan}) = 0
+                    return abs(r)
+                if math.isinf(r):
+                    # cmath.rect(inf, phi={inf, nan}) = inf + j phi
+                    return complex(r, phi)
+            real = math.cos(phi)
+            imag = math.sin(phi)
+            if real == 0. and math.isinf(r):
+                # 0 * inf would return NaN, we want to keep 0 but xor the sign
+                real /= r
+            else:
+                real *= r
+            if imag == 0. and math.isinf(r):
+                # ditto
+                imag /= r
+            else:
+                imag *= r
+            return complex(real, imag)
+        return impl
 
-    def rect(r, phi, phi_is_finite):
-        if not phi_is_finite:
-            if not r:
-                # cmath.rect(0, phi={inf, nan}) = 0
-                return abs(r)
-            if math.isinf(r):
-                # cmath.rect(inf, phi={inf, nan}) = inf + j phi
-                return complex(r, phi)
-        real = math.cos(phi)
-        imag = math.sin(phi)
-        if real == 0. and math.isinf(r):
-            # 0 * inf would return NaN, we want to keep 0 but xor the sign
-            real /= r
-        else:
-            real *= r
-        if imag == 0. and math.isinf(r):
-            # ditto
-            imag /= r
-        else:
-            imag *= r
-        return complex(real, imag)
-
-    inner_sig = signature(sig.return_type, *sig.args + (types.boolean,))
-    res = context.compile_internal(builder, rect, inner_sig,
-                                    args + [phi_is_finite])
-    return impl_ret_untracked(context, builder, sig, res)
 
 def intrinsic_complex_unary(inner_func):
     def wrapper(context, builder, sig, args):
