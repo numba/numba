@@ -6008,21 +6008,22 @@ def impl_np_sort(a):
     return np_sort_impl
 
 
-@lower_builtin("array.argsort", types.Array, types.StringLiteral)
-@lower_builtin(np.argsort, types.Array, types.StringLiteral)
-def array_argsort(context, builder, sig, args):
-    arytype, kind = sig.args
+@overload(np.argsort)
+@overload_method(types.Array, "argsort")
+def impl_arr_argsort(arr, kind=None):
+    if kind is None or isinstance(kind, types.Omitted):
+        kind = types.StringLiteral(value='quicksort')
+    if not isinstance(kind, types.StringLiteral):
+        msg = '"kind" must be a string literal'
+        raise errors.RequireLiteralValue(msg)
+
     sort_func = get_sort_func(kind=kind.literal_value,
-                              is_float=isinstance(arytype.dtype, types.Float),
+                              is_float=isinstance(arr.dtype, types.Float),
                               is_argsort=True)
 
-    def array_argsort_impl(arr):
+    def impl(arr, kind=None):
         return sort_func(arr)
-
-    innersig = sig.replace(args=sig.args[:1])
-    innerargs = args[:1]
-    return context.compile_internal(builder, array_argsort_impl,
-                                    innersig, innerargs)
+    return impl
 
 
 # ------------------------------------------------------------------------------

@@ -935,7 +935,7 @@ class TestNumpySort(TestCase):
         check(argsort_usecase)
         check(np_argsort_usecase)
 
-    def test_argsort_float(self):
+    def test_argsort_float_stable(self):
         def check(pyfunc, is_stable):
             cfunc = jit(nopython=True)(pyfunc)
             for orig in self.float_arrays():
@@ -1193,16 +1193,6 @@ class TestArrayArgsort(MemoryLeakMixin, TestCase):
             nonliteral_kind('quicksort')
 
         expect = '"kind" must be a string literal'
-        self.assertIn(expect, str(raises.exception))
-
-        @njit
-        def unsupported_kwarg():
-            np.arange(5).argsort(foo='')
-
-        with self.assertRaises(errors.TypingError) as raises:
-            unsupported_kwarg()
-
-        expect = "Unsupported keywords: ['foo']"
         self.assertIn(expect, str(raises.exception))
 
 
