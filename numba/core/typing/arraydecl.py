@@ -414,12 +414,6 @@ class ArrayAttribute(AttributeTemplate):
             retty = ary.copy(ndim=len(args))
             return signature(retty, *args)
 
-    @bound_function("array.sort")
-    def resolve_sort(self, ary, args, kws):
-        assert not args
-        assert not kws
-        return signature(types.none)
-
     @bound_function("array.argsort")
     def resolve_argsort(self, ary, args, kws):
         assert not args

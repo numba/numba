@@ -5966,9 +5966,9 @@ def get_sort_func(kind, is_float, is_argsort=False):
     Get a sort implementation of the given kind.
     """
     key = kind, is_float, is_argsort
-    try:
+    if key in _sorts:
         return _sorts[key]
-    except KeyError:
+    else:
         if kind == 'quicksort':
             sort = quicksort.make_jit_quicksort(
                 lt=lt_floats if is_float else None,
@@ -5984,17 +5984,15 @@ def get_sort_func(kind, is_float, is_argsort=False):
         return func
 
 
-@lower_builtin("array.sort", types.Array)
-def array_sort(context, builder, sig, args):
-    arytype = sig.args[0]
+@overload_method(types.Array, "sort")
+def impl_array_sort(arr):
     sort_func = get_sort_func(kind='quicksort',
-                              is_float=isinstance(arytype.dtype, types.Float))
+                              is_float=isinstance(arr.dtype, types.Float))
 
-    def array_sort_impl(arr):
+    def impl(arr):
         # Note we clobber the return value
         sort_func(arr)
-
-    return context.compile_internal(builder, array_sort_impl, sig, args)
+    return impl
 
 
 @overload(np.sort)
