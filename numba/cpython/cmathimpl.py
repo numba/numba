@@ -277,8 +277,11 @@ def cos_impl(context, builder, sig, args):
     res = context.compile_internal(builder, cos_impl, sig, args)
     return impl_ret_untracked(context, builder, sig, res)
 
-@lower(cmath.cosh, types.Complex)
-def cosh_impl(context, builder, sig, args):
+@overload(cmath.cosh)
+def impl_cmath_cosh(z):
+    if not isinstance(z, types.Complex):
+        return
+
     def cosh_impl(z):
         """cmath.cosh(z)"""
         x = z.real
@@ -300,10 +303,8 @@ def cosh_impl(context, builder, sig, args):
                 imag = -imag
             return complex(real, imag)
         return complex(math.cos(y) * math.cosh(x),
-                       math.sin(y) * math.sinh(x))
-
-    res = context.compile_internal(builder, cosh_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig, res)
+                    math.sin(y) * math.sinh(x))
+    return cosh_impl
 
 
 @lower(cmath.sin, types.Complex)
