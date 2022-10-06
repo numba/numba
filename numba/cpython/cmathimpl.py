@@ -317,8 +317,11 @@ def sin_impl(context, builder, sig, args):
     res = context.compile_internal(builder, sin_impl, sig, args)
     return impl_ret_untracked(context, builder, sig, res)
 
-@lower(cmath.sinh, types.Complex)
-def sinh_impl(context, builder, sig, args):
+@overload(cmath.sinh)
+def impl_cmath_sinh(z):
+    if not isinstance(z, types.Complex):
+        return
+
     def sinh_impl(z):
         """cmath.sinh(z)"""
         x = z.real
@@ -338,9 +341,7 @@ def sinh_impl(context, builder, sig, args):
             return complex(real, imag)
         return complex(math.cos(y) * math.sinh(x),
                        math.sin(y) * math.cosh(x))
-
-    res = context.compile_internal(builder, sinh_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig, res)
+    return sinh_impl
 
 
 @lower(cmath.tan, types.Complex)
