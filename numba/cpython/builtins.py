@@ -250,13 +250,16 @@ def round_impl_unary(context, builder, sig, args):
     res = builder.fptosi(res, context.get_value_type(sig.return_type))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower_builtin(round, types.Float, types.Integer)
-def round_impl_binary(context, builder, sig, args):
-    fltty = sig.args[0]
+
+@overload(round)
+def round_impl_binary(x, ndigits):
+    if not (isinstance(x, types.Float) and isinstance(ndigits, types.Integer)):
+        return
+
     # Allow calling the intrinsic from the Python implementation below.
     # This avoids the conversion to an int in Python 3's unary round().
     _round = types.ExternalFunction(
-        _round_intrinsic(fltty), typing.signature(fltty, fltty))
+        _round_intrinsic(x), typing.signature(x, x))
 
     def round_ndigits(x, ndigits):
         if math.isinf(x) or math.isnan(x):
@@ -281,8 +284,7 @@ def round_impl_binary(context, builder, sig, args):
             y = x / pow1
             return _round(y) * pow1
 
-    res = context.compile_internal(builder, round_ndigits, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+    return round_ndigits
 
 
 #-------------------------------------------------------------------------------
