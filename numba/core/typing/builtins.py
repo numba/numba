@@ -654,17 +654,6 @@ class StaticGetItemLiteralStrKeyDict(AbstractTemplate):
             sig = signature(ret, *args)
             return sig
 
-# Generic implementation for "not in"
-
-@infer
-class GenericNotIn(AbstractTemplate):
-    key = "not in"
-
-    def generic(self, args, kws):
-        args = args[::-1]
-        sig = self.context.resolve_function_type(operator.contains, args, kws)
-        return signature(sig.return_type, *sig.args[::-1])
-
 
 #-------------------------------------------------------------------------------
 

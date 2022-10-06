@@ -403,13 +403,11 @@ def next_impl(context, builder, sig, args):
 
 # -----------------------------------------------------------------------------
 
-@lower_builtin("not in", types.Any, types.Any)
-def not_in(context, builder, sig, args):
-    def in_impl(a, b):
+@overload("not in")
+def impl_not_in(a, b):
+    def impl(a, b):
         return operator.contains(b, a)
-
-    res = context.compile_internal(builder, in_impl, sig, args)
-    return builder.not_(res)
+    return impl
 
 
 # -----------------------------------------------------------------------------
