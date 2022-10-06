@@ -46,13 +46,3 @@ class Cmath_log(ConcreteTemplate):
     cases = [signature(tp, tp) for tp in sorted(types.complex_domain)]
     # binary cmath.log()
     cases += [signature(tp, tp, tp) for tp in sorted(types.complex_domain)]
-
-
-@infer_global(cmath.polar)
-class Cmath_polar(AbstractTemplate):
-    def generic(self, args, kws):
-        assert not kws
-        [tp] = args
-        if tp in types.complex_domain:
-            float_type = tp.underlying_float
-            return signature(types.UniTuple(float_type, 2), tp)

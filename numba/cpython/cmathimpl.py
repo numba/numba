@@ -196,11 +196,15 @@ def phase_impl(x):
     return impl
 
 
-@lower(cmath.polar, types.Complex)
-@intrinsic_complex_unary
-def polar_impl(x, y, x_is_finite, y_is_finite):
-    """cmath.polar(x + y j)"""
-    return math.hypot(x, y), math.atan2(y, x)
+@overload(cmath.polar)
+def polar_impl(x):
+    if not isinstance(x, types.Complex):
+        return
+
+    def impl(x):
+        r, i = x.real, x.imag
+        return math.hypot(r, i), math.atan2(i, r)
+    return impl
 
 
 @lower(cmath.sqrt, types.Complex)
