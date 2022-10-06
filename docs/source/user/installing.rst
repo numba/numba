@@ -132,6 +132,9 @@ Then you can build and install Numba from the top level of the source tree::
 
     $ python setup.py install
 
+If you wish to run the test suite, see the instructions in the
+:ref:`developer documentation <running-tests>`.
+
 .. _numba-source-install-env_vars:
 
 Build time environment variables and configuration of optional components
