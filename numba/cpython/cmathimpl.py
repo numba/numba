@@ -183,11 +183,18 @@ def impl_cmath_log10(z):
     return log10_impl
 
 
-@lower(cmath.phase, types.Complex)
-@intrinsic_complex_unary
-def phase_impl(x, y, x_is_finite, y_is_finite):
+@overload(cmath.phase)
+def phase_impl(x):
     """cmath.phase(x + y j)"""
-    return math.atan2(y, x)
+
+    if not isinstance(x, types.Complex):
+        return
+
+    def impl(x):
+        r, i = x.real, x.imag
+        return math.atan2(i, r)
+    return impl
+
 
 @lower(cmath.polar, types.Complex)
 @intrinsic_complex_unary

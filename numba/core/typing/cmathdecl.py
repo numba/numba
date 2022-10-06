@@ -48,12 +48,6 @@ class Cmath_log(ConcreteTemplate):
     cases += [signature(tp, tp, tp) for tp in sorted(types.complex_domain)]
 
 
-@infer_global(cmath.phase)
-class Cmath_phase(ConcreteTemplate):
-    cases = [signature(tp, types.complex128) for tp in [types.float64]]
-    cases += [signature(types.float32, types.complex64)]
-
-
 @infer_global(cmath.polar)
 class Cmath_polar(AbstractTemplate):
     def generic(self, args, kws):
