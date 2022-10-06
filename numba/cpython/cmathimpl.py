@@ -166,8 +166,11 @@ def log_base_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig, res)
 
 
-@lower(cmath.log10, types.Complex)
-def log10_impl(context, builder, sig, args):
+@overload(cmath.log10)
+def impl_cmath_log10(z):
+    if not isinstance(z, types.Complex):
+        return
+
     LN_10 = 2.302585092994045684
 
     def log10_impl(z):
@@ -177,8 +180,7 @@ def log10_impl(context, builder, sig, args):
         # See http://bugs.python.org/issue22544
         return complex(z.real / LN_10, z.imag / LN_10)
 
-    res = context.compile_internal(builder, log10_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig, res)
+    return log10_impl
 
 
 @lower(cmath.phase, types.Complex)
