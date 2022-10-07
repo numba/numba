@@ -888,8 +888,9 @@ def list_copy(lst):
 
     return list_copy_impl
 
-@lower_builtin("list.count", types.List, types.Any)
-def list_count(context, builder, sig, args):
+
+@overload_method(types.List, "count")
+def list_count(lst, value):
 
     def list_count_impl(lst, value):
         res = 0
@@ -898,7 +899,8 @@ def list_count(context, builder, sig, args):
                 res += 1
         return res
 
-    return context.compile_internal(builder, list_count_impl, sig, args)
+    return list_count_impl
+
 
 def _list_extend_list(context, builder, sig, args):
     src = ListInstance(context, builder, sig.args[1], args[1])

@@ -49,12 +49,6 @@ class ListAttribute(AttributeTemplate):
         assert not kws
         return signature(types.none)
 
-    @bound_function("list.count")
-    def resolve_count(self, list, args, kws):
-        item, = args
-        assert not kws
-        return signature(types.intp, list.dtype)
-
     @bound_function("list.extend")
     def resolve_extend(self, list, args, kws):
         iterable, = args
