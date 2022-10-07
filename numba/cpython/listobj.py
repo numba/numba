@@ -846,13 +846,15 @@ def list_ge(context, builder, sig, args):
 
     return context.compile_internal(builder, list_ge_impl, sig, args)
 
-@lower_builtin(operator.gt, types.List, types.List)
-def list_gt(context, builder, sig, args):
+@overload(operator.gt)
+def impl_list_gt(a, b):
+    if not all([isinstance(typ, types.List) for typ in [a, b]]):
+        return
 
     def list_gt_impl(a, b):
         return b < a
 
-    return context.compile_internal(builder, list_gt_impl, sig, args)
+    return list_gt_impl
 
 #-------------------------------------------------------------------------------
 # Methods
