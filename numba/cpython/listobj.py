@@ -838,13 +838,15 @@ def impl_list_lt(a, b):
 
     return list_lt_impl
 
-@lower_builtin(operator.ge, types.List, types.List)
-def list_ge(context, builder, sig, args):
+@overload(operator.ge)
+def impl_list_ge(a, b):
+    if not all([isinstance(typ, types.List) for typ in [a, b]]):
+        return
 
     def list_ge_impl(a, b):
         return b <= a
 
-    return context.compile_internal(builder, list_ge_impl, sig, args)
+    return list_ge_impl
 
 @overload(operator.gt)
 def impl_list_gt(a, b):

@@ -170,7 +170,3 @@ class ListCompare(AbstractTemplate):
 @infer_global(operator.eq)
 class ListEq(ListCompare): pass
     #key = operator.eq
-
-@infer_global(operator.ge)
-class ListGe(ListCompare): pass
-    #key = operator.ge
