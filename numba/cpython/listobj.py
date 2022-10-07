@@ -794,13 +794,15 @@ def list_eq(context, builder, sig, args):
 
     return builder.load(res)
 
-@lower_builtin(operator.ne, types.List, types.List)
-def list_ne(context, builder, sig, args):
+@overload(operator.ne)
+def impl_list_ne(a, b):
+    if not all([isinstance(typ, types.List) for typ in [a, b]]):
+        return
 
     def list_ne_impl(a, b):
         return not (a == b)
 
-    return context.compile_internal(builder, list_ne_impl, sig, args)
+    return list_ne_impl
 
 @lower_builtin(operator.le, types.List, types.List)
 def list_le(context, builder, sig, args):

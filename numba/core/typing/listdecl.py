@@ -171,10 +171,6 @@ class ListCompare(AbstractTemplate):
 class ListEq(ListCompare): pass
     #key = operator.eq
 
-@infer_global(operator.ne)
-class ListNe(ListCompare): pass
-    #key = operator.ne
-
 @infer_global(operator.lt)
 class ListLt(ListCompare): pass
     #key = operator.lt
