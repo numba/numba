@@ -17,6 +17,7 @@ from numba.core.utils import cached_property
 from numba.misc import quicksort
 from numba.cpython import slicing
 from numba import literal_unroll
+from numba.np.numpy_support import is_nonelike
 
 
 def get_list_payload(context, builder, list_type, value):
@@ -934,57 +935,49 @@ def list_extend(context, builder, sig, args):
 
     return context.compile_internal(builder, list_extend, sig, args)
 
-@lower_builtin("list.index", types.List, types.Any)
-def list_index(context, builder, sig, args):
 
-    def list_index_impl(lst, value):
-        for i in range(len(lst)):
-            if lst[i] == value:
-                return i
-        # XXX references are leaked when raising
-        raise ValueError("value not in list")
+@overload_method(types.List, "index")
+def list_index(lst, value, start=None, end=None):
 
-    return context.compile_internal(builder, list_index_impl, sig, args)
-
-@lower_builtin("list.index", types.List, types.Any,
-           types.Integer)
-def list_index(context, builder, sig, args):
-
-    def list_index_impl(lst, value, start):
-        n = len(lst)
-        if start < 0:
-            start += n
+    if is_nonelike(start) and is_nonelike(end):
+        def list_index_impl(lst, value, start=None, end=None):
+            for i in range(len(lst)):
+                if lst[i] == value:
+                    return i
+            # XXX references are leaked when raising
+            raise ValueError("value not in list")
+        return list_index_impl
+    elif is_nonelike(end) and isinstance(start, types.Integer):
+        def list_index_impl(lst, value, start=None, end=None):
+            n = len(lst)
             if start < 0:
-                start = 0
-        for i in range(start, len(lst)):
-            if lst[i] == value:
-                return i
-        # XXX references are leaked when raising
-        raise ValueError("value not in list")
-
-    return context.compile_internal(builder, list_index_impl, sig, args)
-
-@lower_builtin("list.index", types.List, types.Any,
-           types.Integer, types.Integer)
-def list_index(context, builder, sig, args):
-
-    def list_index_impl(lst, value, start, stop):
-        n = len(lst)
-        if start < 0:
-            start += n
+                start += n
+                if start < 0:
+                    start = 0
+            for i in range(start, len(lst)):
+                if lst[i] == value:
+                    return i
+            # XXX references are leaked when raising
+            raise ValueError("value not in list")
+        return list_index_impl
+    elif all([isinstance(typ, types.Integer) for typ in (start, end)]):
+        def list_index_impl(lst, value, start=None, end=None):
+            n = len(lst)
             if start < 0:
-                start = 0
-        if stop < 0:
-            stop += n
-        if stop > n:
-            stop = n
-        for i in range(start, stop):
-            if lst[i] == value:
-                return i
-        # XXX references are leaked when raising
-        raise ValueError("value not in list")
+                start += n
+                if start < 0:
+                    start = 0
+            if end < 0:
+                end += n
+            if end > n:
+                end = n
+            for i in range(start, end):
+                if lst[i] == value:
+                    return i
+            # XXX references are leaked when raising
+            raise ValueError("value not in list")
+        return list_index_impl
 
-    return context.compile_internal(builder, list_index_impl, sig, args)
 
 @lower_builtin("list.insert", types.List, types.Integer,
            types.Any)

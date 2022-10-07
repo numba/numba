@@ -63,19 +63,6 @@ class ListAttribute(AttributeTemplate):
             sig = sig.replace(recvr = list.copy(dtype=unified))
             return sig
 
-    @bound_function("list.index")
-    def resolve_index(self, list, args, kws):
-        assert not kws
-        if len(args) == 1:
-            return signature(types.intp, list.dtype)
-        elif len(args) == 2:
-            if isinstance(args[1], types.Integer):
-                return signature(types.intp, list.dtype, types.intp)
-        elif len(args) == 3:
-            if (isinstance(args[1], types.Integer)
-                and isinstance(args[2], types.Integer)):
-                return signature(types.intp, list.dtype, types.intp, types.intp)
-
     @bound_function("list.insert")
     def resolve_insert(self, list, args, kws):
         idx, item = args
