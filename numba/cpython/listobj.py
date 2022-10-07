@@ -804,8 +804,10 @@ def impl_list_ne(a, b):
 
     return list_ne_impl
 
-@lower_builtin(operator.le, types.List, types.List)
-def list_le(context, builder, sig, args):
+@overload(operator.le)
+def impl_list_le(a, b):
+    if not all([isinstance(typ, types.List) for typ in [a, b]]):
+        return
 
     def list_le_impl(a, b):
         m = len(a)
@@ -817,7 +819,7 @@ def list_le(context, builder, sig, args):
                 return False
         return m <= n
 
-    return context.compile_internal(builder, list_le_impl, sig, args)
+    return list_le_impl
 
 @overload(operator.lt)
 def impl_list_lt(a, b):
