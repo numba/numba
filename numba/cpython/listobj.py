@@ -819,8 +819,10 @@ def list_le(context, builder, sig, args):
 
     return context.compile_internal(builder, list_le_impl, sig, args)
 
-@lower_builtin(operator.lt, types.List, types.List)
-def list_lt(context, builder, sig, args):
+@overload(operator.lt)
+def impl_list_lt(a, b):
+    if not all([isinstance(typ, types.List) for typ in [a, b]]):
+        return
 
     def list_lt_impl(a, b):
         m = len(a)
@@ -832,7 +834,7 @@ def list_lt(context, builder, sig, args):
                 return False
         return m < n
 
-    return context.compile_internal(builder, list_lt_impl, sig, args)
+    return list_lt_impl
 
 @lower_builtin(operator.ge, types.List, types.List)
 def list_ge(context, builder, sig, args):
