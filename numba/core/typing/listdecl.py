@@ -109,13 +109,6 @@ class ListAttribute(AttributeTemplate):
         if len(args) == 1:
             return signature(types.none, list.dtype)
 
-    @bound_function("list.reverse")
-    def resolve_reverse(self, list, args, kws):
-        assert not args
-        assert not kws
-        return signature(types.none)
-
-
 @infer_global(operator.add)
 class AddList(AbstractTemplate):
 

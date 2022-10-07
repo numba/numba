@@ -1046,16 +1046,15 @@ def list_remove(context, builder, sig, args):
 
     return context.compile_internal(builder, list_remove_impl, sig, args)
 
-@lower_builtin("list.reverse", types.List)
-def list_reverse(context, builder, sig, args):
+@overload_method(types.List, "reverse")
+def list_reverse(lst):
 
     def list_reverse_impl(lst):
         for a in range(0, len(lst) // 2):
             b = -a - 1
             lst[a], lst[b] = lst[b], lst[a]
 
-    return context.compile_internal(builder, list_reverse_impl, sig, args)
-
+    return list_reverse_impl
 
 # -----------------------------------------------------------------------------
 # Sorting
