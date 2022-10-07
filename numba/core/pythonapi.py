@@ -1164,7 +1164,7 @@ class PythonAPI(object):
         fname = "PyBytes_AsStringAndSize"
         fn = self._get_function(fnty, name=fname)
         result = self.builder.call(fn, [obj, p_buffer, p_length])
-        ok = self.builder.icmp_unsigned("!=", Constant(result.type, -1), result)
+        ok = self.builder.icmp_signed("!=", Constant(result.type, -1), result)
         return ok
 
     def bytes_from_string_and_size(self, string, size):
