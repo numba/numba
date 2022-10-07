@@ -1028,8 +1028,8 @@ def list_pop(context, builder, sig, args):
     inst.resize(n)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-@lower_builtin("list.remove", types.List, types.Any)
-def list_remove(context, builder, sig, args):
+@overload_method(types.List, "remove")
+def list_remove(lst, value):
 
     def list_remove_impl(lst, value):
         for i in range(len(lst)):
@@ -1039,7 +1039,7 @@ def list_remove(context, builder, sig, args):
         # XXX references are leaked when raising
         raise ValueError("list.remove(x): x not in list")
 
-    return context.compile_internal(builder, list_remove_impl, sig, args)
+    return list_remove_impl
 
 @overload_method(types.List, "reverse")
 def list_reverse(lst):
