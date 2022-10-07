@@ -49,12 +49,6 @@ class ListAttribute(AttributeTemplate):
         assert not kws
         return signature(types.none)
 
-    @bound_function("list.copy")
-    def resolve_copy(self, list, args, kws):
-        assert not args
-        assert not kws
-        return signature(list)
-
     @bound_function("list.count")
     def resolve_count(self, list, args, kws):
         item, = args

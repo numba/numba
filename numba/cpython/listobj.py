@@ -870,12 +870,13 @@ def list_clear(context, builder, sig, args):
 
     return context.get_dummy_value()
 
-@lower_builtin("list.copy", types.List)
-def list_copy(context, builder, sig, args):
+
+@overload_method(types.List, "copy")
+def list_copy(lst):
     def list_copy_impl(lst):
         return list(lst)
 
-    return context.compile_internal(builder, list_copy_impl, sig, args)
+    return list_copy_impl
 
 @lower_builtin("list.count", types.List, types.Any)
 def list_count(context, builder, sig, args):
