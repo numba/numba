@@ -1,3 +1,4 @@
+import operator
 from numba.core import types
 from numba.core.typing.npydecl import (parse_dtype, parse_shape,
                                        register_number_classes)
@@ -7,7 +8,6 @@ from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
 from numba.cuda.types import dim3, grid_group
 from numba.core.typeconv import Conversion
 from numba import cuda
-import operator
 
 registry = Registry()
 register = registry.register
@@ -297,6 +297,19 @@ def _genfp16_unary(l_key):
     return Cuda_fp16_unary
 
 
+def _genfp16_unary_operator(l_key):
+    @register_global(l_key)
+    class Cuda_fp16_unary(AbstractTemplate):
+        key = l_key
+
+        def generic(self, args, kws):
+            assert not kws
+            if len(args) == 1 and args[0] == types.float16:
+                return signature(types.float16, types.float16)
+
+    return Cuda_fp16_unary
+
+
 def _genfp16_binary(l_key):
     @register
     class Cuda_fp16_binary(ConcreteTemplate):
@@ -341,9 +354,9 @@ def _genfp16_binary_comparison(l_key):
 # This is tracked as Issue #7863 (https://github.com/numba/numba/issues/7863) -
 # once this is resolved it should be possible to replace this AbstractTemplate
 # with a ConcreteTemplate to simplify the logic.
-def _genfp16_comparison_operator(l_key):
+def _fp16_binary_operator(l_key, retty):
     @register_global(l_key)
-    class Cuda_fp16_operator_cmp(AbstractTemplate):
+    class Cuda_fp16_operator(AbstractTemplate):
         key = l_key
 
         def generic(self, args, kws):
@@ -358,25 +371,43 @@ def _genfp16_comparison_operator(l_key):
 
                 # We allow three cases here:
                 #
-                # 1. Comparing fp16 to fp16 - Conversion.exact
-                # 2. Comparing fp16 to types fp16 can be promoted to
+                # 1. fp16 to fp16 - Conversion.exact
+                # 2. fp16 to other types fp16 can be promoted to
                 #  - Conversion.promote
-                # 3. Comparing fp16 to int8 (safe conversion) -
+                # 3. fp16 to int8 (safe conversion) -
                 #  - Conversion.safe
 
                 if (convertible == Conversion.exact) or \
                    (convertible == Conversion.promote) or \
                    (convertible == Conversion.safe):
-                    return signature(types.b1, types.float16, types.float16)
+                    return signature(retty, types.float16, types.float16)
+
+    return Cuda_fp16_operator
+
+
+def _genfp16_comparison_operator(op):
+    return _fp16_binary_operator(op, types.b1)
+
+
+def _genfp16_binary_operator(op):
+    return _fp16_binary_operator(op, types.float16)
 
 
 Cuda_hadd = _genfp16_binary(cuda.fp16.hadd)
+Cuda_add = _genfp16_binary_operator(operator.add)
+Cuda_iadd = _genfp16_binary_operator(operator.iadd)
 Cuda_hsub = _genfp16_binary(cuda.fp16.hsub)
+Cuda_sub = _genfp16_binary_operator(operator.sub)
+Cuda_isub = _genfp16_binary_operator(operator.isub)
 Cuda_hmul = _genfp16_binary(cuda.fp16.hmul)
+Cuda_mul = _genfp16_binary_operator(operator.mul)
+Cuda_imul = _genfp16_binary_operator(operator.imul)
 Cuda_hmax = _genfp16_binary(cuda.fp16.hmax)
 Cuda_hmin = _genfp16_binary(cuda.fp16.hmin)
 Cuda_hneg = _genfp16_unary(cuda.fp16.hneg)
+Cuda_neg = _genfp16_unary_operator(operator.neg)
 Cuda_habs = _genfp16_unary(cuda.fp16.habs)
+Cuda_abs = _genfp16_unary_operator(abs)
 Cuda_heq = _genfp16_binary_comparison(cuda.fp16.heq)
 _genfp16_comparison_operator(operator.eq)
 Cuda_hne = _genfp16_binary_comparison(cuda.fp16.hne)

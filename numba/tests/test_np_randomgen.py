@@ -2,6 +2,7 @@ import numba
 import numpy as np
 import sys
 import platform
+import itertools
 
 from numba import types
 from numba.core.config import IS_32BITS
@@ -945,6 +946,119 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             x.negative_binomial(n=n, p=p, size=size)
         self._check_invalid_types(dist_func, ['n', 'p', 'size'],
                                   [1, 0.75, (1,)], ['x', 'x', ('x',)])
+
+    # NumPy tests at:
+    # https://github.com/numpy/numpy/blob/95e3e7f445407e4f355b23d6a9991d8774f0eb0c/numpy/random/tests/test_generator_mt19937.py#L936
+    # Written in following format for semblance with existing Generator tests.
+    def test_shuffle(self):
+        test_sizes = [(10, 20, 30)]
+        bitgen_types = [None, MT19937]
+        axes = [0, 1, 2]
+
+        for _size, _bitgen, _axis in itertools.product(test_sizes,
+                                                       bitgen_types,
+                                                       axes):
+            with self.subTest(_size=_size, _bitgen=_bitgen, _axis=_axis):
+                def dist_func(x, size, dtype):
+                    arr = x.random(size=size)
+                    x.shuffle(arr, axis=_axis)
+                    return arr
+                self.check_numpy_parity(dist_func, _bitgen,
+                                        None, _size, None,
+                                        0)
+
+    def test_shuffle_empty(self):
+        a = np.array([])
+        b = np.array([])
+
+        def dist_func(x, arr):
+            x.shuffle(arr)
+            return arr
+
+        nb_func = numba.njit(dist_func)
+        rng = lambda: np.random.default_rng(1)
+
+        self.assertPreciseEqual(dist_func(rng(), a), nb_func(rng(), b))
+
+    def test_shuffle_check(self):
+        self.disable_leak_check()
+
+        def dist_func(x, arr, axis):
+            x.shuffle(arr, axis=axis)
+            return arr
+
+        self._check_invalid_types(dist_func, ['x', 'axis'],
+                                  [np.array([3,4,5]), 0], ['x', 'x'])
+
+        rng = np.random.default_rng(1)
+        with self.assertRaises(IndexError) as raises:
+            numba.njit(dist_func)(rng, np.array([3,4,5]), 2)
+        self.assertIn(
+            'Axis is out of bounds for the given array',
+            str(raises.exception)
+        )
+
+    # NumPy tests at:
+    # https://github.com/numpy/numpy/blob/95e3e7f445407e4f355b23d6a9991d8774f0eb0c/numpy/random/tests/test_generator_mt19937.py#L1030
+    # Written in following format for semblance with existing Generator tests.
+    def test_permutation(self):
+        test_sizes = [(10, 20, 30)]
+        bitgen_types = [None, MT19937]
+        axes = [0, 1, 2, -1, -2]
+
+        for _size, _bitgen, _axis in itertools.product(test_sizes,
+                                                       bitgen_types,
+                                                       axes):
+            with self.subTest(_size=_size, _bitgen=_bitgen, _axis=_axis):
+                def dist_func(x, size, dtype):
+                    arr = x.random(size=size)
+                    return x.permutation(arr, axis=1)
+                self.check_numpy_parity(dist_func, _bitgen,
+                                        None, _size, None,
+                                        0)
+
+        # Test that permutation is actually done on a copy of the array
+        dist_func = numba.njit(lambda rng, arr: rng.permutation(arr))
+        rng = np.random.default_rng()
+        arr = rng.random(size=(10, 20))
+        arr_cpy = arr.copy()
+        dist_func(rng, arr)
+        self.assertPreciseEqual(arr, arr_cpy)
+
+    def test_permutation_exception(self):
+        self.disable_leak_check()
+
+        def dist_func(x, arr, axis):
+            return x.permutation(arr, axis=axis)
+
+        self._check_invalid_types(dist_func, ['x', 'axis'],
+                                  [np.array([3,4,5]), 0], ['x', 'x'])
+
+        rng = np.random.default_rng(1)
+        with self.assertRaises(IndexError) as raises:
+            numba.njit(dist_func)(rng, np.array([3,4,5]), 2)
+        self.assertIn(
+            'Axis is out of bounds for the given array',
+            str(raises.exception)
+        )
+        with self.assertRaises(IndexError) as raises:
+            numba.njit(dist_func)(rng, np.array([3,4,5]), -2)
+        self.assertIn(
+            'Axis is out of bounds for the given array',
+            str(raises.exception)
+        )
+
+    def test_permutation_empty(self):
+        a = np.array([])
+        b = np.array([])
+
+        def dist_func(x, arr):
+            return x.permutation(arr)
+
+        nb_func = numba.njit(dist_func)
+        rng = lambda: np.random.default_rng(1)
+
+        self.assertPreciseEqual(dist_func(rng(), a), nb_func(rng(), b))
 
 
 class TestGeneratorCaching(TestCase, SerialMixin):
