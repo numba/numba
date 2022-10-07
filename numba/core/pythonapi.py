@@ -1158,7 +1158,7 @@ class PythonAPI(object):
 
     def bytes_as_string_and_size(self, obj, p_buffer, p_length):
         fnty = ir.FunctionType(
-            self.pyobj,
+            ir.IntType(32),
             [self.pyobj, self.cstring.as_pointer(), self.py_ssize_t.as_pointer()],
         )
         fname = "PyBytes_AsStringAndSize"
