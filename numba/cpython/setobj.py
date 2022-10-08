@@ -1316,7 +1316,7 @@ def set_pop(context, builder, sig, args):
 
     return inst.pop()
 
-@lower_builtin("set.remove", types.Set, types.Any)
+
 def set_remove(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
     item = args[1]
@@ -1326,6 +1326,18 @@ def set_remove(context, builder, sig, args):
                                           ("set.remove(): key not in set",))
 
     return context.get_dummy_value()
+
+
+@intrinsic
+def _set_remove(typingctx, s, item):
+    sig = types.none(s, item)
+    return sig, set_remove
+
+
+@overload_method(types.Set, "remove")
+def ol_set_remove(s, item):
+    # XXX: should item have the same type as s.dtype?
+    return lambda s, item: _set_remove(s, item)
 
 
 # Mutating set operations
