@@ -117,10 +117,6 @@ class SetAttribute(AttributeTemplate):
         if isinstance(iterable, types.Set) and iterable.dtype == set.dtype:
             return signature(set, iterable)
 
-    @bound_function("set.union")
-    def resolve_union(self, set, args, kws):
-        return self._resolve_operator(set, args, kws)
-
     def _resolve_comparator(self, set, args, kws):
         assert not kws
         arg, = args
@@ -161,7 +157,7 @@ class SetComparison(AbstractTemplate):
             return signature(types.boolean, *args)
 
 
-for op_key in (operator.add, operator.or_, operator.invert):
+for op_key in (operator.add, operator.invert):
     @infer_global(op_key)
     class ConcreteSetOperator(SetOperator):
         key = op_key

@@ -1463,10 +1463,12 @@ def set_symmetric_difference(a, b):
 
     return symmetric_difference_impl
 
+@overload(operator.or_)
+@overload_method(types.Set, "union")
+def set_union(a, b):
+    if not all([isinstance(typ, types.Set) for typ in (a, b)]):
+        return
 
-@lower_builtin(operator.or_, types.Set, types.Set)
-@lower_builtin("set.union", types.Set, types.Set)
-def set_union(context, builder, sig, args):
     def union_impl(a, b):
         if len(a) > len(b):
             s = a.copy()
@@ -1477,7 +1479,7 @@ def set_union(context, builder, sig, args):
             s.update(a)
             return s
 
-    return context.compile_internal(builder, union_impl, sig, args)
+    return union_impl
 
 
 # Predicates
