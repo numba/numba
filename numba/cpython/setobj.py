@@ -1445,10 +1445,12 @@ def set_intersection(a, b):
 
     return intersection_impl
 
+@overload(operator.xor)
+@overload_method(types.Set, "symmetric_difference")
+def set_symmetric_difference(a, b):
+    if not all([isinstance(typ, types.Set) for typ in (a, b)]):
+        return
 
-@lower_builtin(operator.xor, types.Set, types.Set)
-@lower_builtin("set.symmetric_difference", types.Set, types.Set)
-def set_symmetric_difference(context, builder, sig, args):
     def symmetric_difference_impl(a, b):
         if len(a) > len(b):
             s = a.copy()
@@ -1459,8 +1461,8 @@ def set_symmetric_difference(context, builder, sig, args):
             s.symmetric_difference_update(a)
             return s
 
-    return context.compile_internal(builder, symmetric_difference_impl,
-                                    sig, args)
+    return symmetric_difference_impl
+
 
 @lower_builtin(operator.or_, types.Set, types.Set)
 @lower_builtin("set.union", types.Set, types.Set)
