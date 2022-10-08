@@ -117,10 +117,6 @@ class SetAttribute(AttributeTemplate):
         if isinstance(iterable, types.Set) and iterable.dtype == set.dtype:
             return signature(set, iterable)
 
-    @bound_function("set.difference")
-    def resolve_difference(self, set, args, kws):
-        return self._resolve_operator(set, args, kws)
-
     @bound_function("set.intersection")
     def resolve_intersection(self, set, args, kws):
         return self._resolve_operator(set, args, kws)
@@ -173,7 +169,7 @@ class SetComparison(AbstractTemplate):
             return signature(types.boolean, *args)
 
 
-for op_key in (operator.add, operator.sub, operator.and_, operator.or_, operator.xor, operator.invert):
+for op_key in (operator.add, operator.and_, operator.or_, operator.xor, operator.invert):
     @infer_global(op_key)
     class ConcreteSetOperator(SetOperator):
         key = op_key

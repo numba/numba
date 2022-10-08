@@ -17,8 +17,8 @@ from numba.core.imputils import (lower_builtin, lower_cast,
 from numba.core.utils import cached_property
 from numba.misc import quicksort
 from numba.cpython import slicing
-from numba.extending import intrinsic
 from numba.core.errors import NumbaValueError
+from numba.core.extending import overload, overload_method, intrinsic
 
 
 def get_payload_struct(context, builder, set_type, ptr):
@@ -1414,15 +1414,19 @@ for op_, op_impl in [
 
 # Set operations creating a new set
 
-@lower_builtin(operator.sub, types.Set, types.Set)
-@lower_builtin("set.difference", types.Set, types.Set)
-def set_difference(context, builder, sig, args):
+@overload(operator.sub)
+@overload_method(types.Set, "difference")
+def impl_set_difference(a, b):
+    if not all([isinstance(typ, types.Set) for typ in (a, b)]):
+        return
+
     def difference_impl(a, b):
         s = a.copy()
         s.difference_update(b)
         return s
 
-    return context.compile_internal(builder, difference_impl, sig, args)
+    return difference_impl
+
 
 @lower_builtin(operator.and_, types.Set, types.Set)
 @lower_builtin("set.intersection", types.Set, types.Set)
