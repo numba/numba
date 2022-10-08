@@ -1369,9 +1369,17 @@ class Interpreter(object):
         self.dfainfo = None
 
         self.scopes.append(ir.Scope(parent=self.current_scope, loc=self.loc))
+
+        # Gather exception info block info
+
+        # for block in self.cfa.iterliveblocks():
+        #     dfainfo = self.dfa.infos[block.offset]
+        #     print('---', block.offset, '[[[[', dfainfo.blockstack)
+
         # Interpret loop
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
+        self._end_try_blocks()
         self._legalize_exception_vars()
         # Prepare FunctionIR
         func_ir = ir.FunctionIR(self.blocks, self.is_generator, self.func_id,
@@ -1396,12 +1404,48 @@ class Interpreter(object):
             peepholes.append(peep_hole_fuse_dict_add_updates)
 
         post_processed_ir = self.post_process(peepholes, func_ir)
+
         return post_processed_ir
 
     def post_process(self, peepholes, func_ir):
         for peep in peepholes:
             func_ir = peep(func_ir)
         return func_ir
+
+    def _end_try_blocks(self):
+        graph = self.cfa.graph
+        for offset, block in self.blocks.items():
+            cur_bs = inc_bs = self.dfa.infos[offset].blockstack
+            for inc, _ in graph.predecessors(offset):
+                inc_bs = self.dfa.infos[inc].blockstack
+
+                # find first diff
+                for i, (x, y) in enumerate(zip(cur_bs, inc_bs)):
+                    if x != y:
+                        # print(f"mismatch {x} != {y}")
+                        break
+                else:
+                    i = min(len(cur_bs), len(inc_bs))
+
+                remain = list(inc_bs[i:])
+
+                # print("==", offset, "|", remain)
+
+                def do_change(remain):
+                    if remain:
+                        while remain:
+                            ent = remain.pop()
+                            from .byteflow import BlockKind
+                            if ent['kind'] == BlockKind('TRY'):
+                                self.current_block = block
+                                oldbody = list(block.body)
+                                block.body.clear()
+                                self._insert_try_block_end()
+                                block.body.extend(oldbody)
+                                return True
+
+                if do_change(remain):
+                    break
 
     def _legalize_exception_vars(self):
         """Search for unsupported use of exception variables.
@@ -1448,15 +1492,16 @@ class Interpreter(object):
     def _start_new_block(self, offset):
         oldblock = self.current_block
         self.insert_block(offset)
+
+        tryblk = self.dfainfo.active_try_block if self.dfainfo else None
         # Ensure the last block is terminated
         if oldblock is not None and not oldblock.is_terminated:
             # Handle ending try block.
-            tryblk = self.dfainfo.active_try_block
             # If there's an active try-block and the handler block is live.
             if tryblk is not None and tryblk['end'] in self.cfa.graph.nodes():
                 # We are in a try-block, insert a branch to except-block.
                 # This logic cannot be in self._end_current_block()
-                # because we the non-raising next block-offset.
+                # because we don't know the non-raising next block-offset.
                 branch = ir.Branch(
                     cond=self.get('$exception_check'),
                     truebr=tryblk['end'],
@@ -1468,6 +1513,7 @@ class Interpreter(object):
             else:
                 jmp = ir.Jump(offset, loc=self.loc)
                 oldblock.append(jmp)
+
         # Get DFA block info
         self.dfainfo = self.dfa.infos[self.current_block_offset]
         self.assigner = Assigner()
@@ -1479,6 +1525,12 @@ class Interpreter(object):
                     self.current_block.append(ir.PopBlock(self.loc))
             else:
                 break
+        # inject try block:
+        newtryblk = self.dfainfo.active_try_block
+        if newtryblk is not None:
+            if newtryblk is not tryblk:
+                self._insert_try_block_begin()
+
 
     def _end_current_block(self):
         # Handle try block
@@ -1624,7 +1676,12 @@ class Interpreter(object):
         for phiname, varname in self.dfainfo.outgoing_phis.items():
             target = self.current_scope.get_or_define(phiname,
                                                       loc=self.loc)
-            stmt = ir.Assign(value=self.get(varname), target=target,
+            try:
+                val = self.get(varname)
+            except ir.NotDefinedError:
+                # Hack to make sure exception variables are defined
+                val = ir.Const(value=None, loc=self.loc)
+            stmt = ir.Assign(value=val, target=target,
                              loc=self.loc)
             self.definitions[target.name].append(stmt.value)
             if not self.current_block.is_terminated:
@@ -2838,6 +2895,19 @@ class Interpreter(object):
     def op_JUMP_IF_TRUE_OR_POP(self, inst, pred):
         self._op_JUMP_IF(inst, pred=pred, iftrue=True)
 
+    def op_CHECK_EXC_MATCH(self, inst, pred, tos, tos1):
+        gv_fn = ir.Global(
+            "exception_match", eh.exception_match, loc=self.loc,
+        )
+        exc_match_name = '$exc_match'
+        self.store(value=gv_fn, name=exc_match_name, redefine=True)
+        lhs = self.get(tos1)
+        rhs = self.get(tos)
+        exc = ir.Expr.call(
+            self.get(exc_match_name), args=(lhs, rhs), kws=(), loc=self.loc,
+        )
+        self.store(exc, pred)
+
     def op_JUMP_IF_NOT_EXC_MATCH(self, inst, pred, tos, tos1):
         truebr = inst.next
         falsebr = inst.get_jump_target()
@@ -2857,12 +2927,19 @@ class Interpreter(object):
         self.current_block.append(bra)
 
     def op_RERAISE(self, inst, exc):
-        # Numba can't handle this case and it's caught else where, this is a
-        # runtime guard in case this is reached by unknown means.
-        msg = (f"Unreachable condition reached (op code RERAISE executed)"
-               f"{error_extras['reportable']}")
-        stmt = ir.StaticRaise(AssertionError, (msg,), self.loc)
-        self.current_block.append(stmt)
+        tryblk = self.dfainfo.active_try_block
+        if tryblk is not None:
+            stmt = ir.TryRaise(exception=None, loc=self.loc)
+            self.current_block.append(stmt)
+            self._insert_try_block_end()
+            self.current_block.append(ir.Jump(tryblk['end'], loc=self.loc))
+        else:
+            # Numba can't handle this case and it's caught else where, this is a
+            # runtime guard in case this is reached by unknown means.
+            msg = (f"Unreachable condition reached (op code RERAISE executed)"
+                f"{error_extras['reportable']}")
+            stmt = ir.StaticRaise(AssertionError, (msg,), self.loc)
+            self.current_block.append(stmt)
 
     def op_RAISE_VARARGS(self, inst, exc):
         if exc is not None:

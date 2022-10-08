@@ -20,7 +20,6 @@ from numba.misc.firstlinefinder import get_func_body_first_lineno
 
 _VarArgItem = namedtuple("_VarArgItem", ("vararg", "index"))
 
-
 class BaseLower(object):
     """
     Lower IR to LLVM
@@ -248,6 +247,7 @@ class BaseLower(object):
         for offset, block in sorted(self.blocks.items()):
             bb = self.blkmap[offset]
             self.builder.position_at_end(bb)
+            self.debug_print(f"# lower block: {offset}")
             self.lower_block(block)
         self.post_lower()
         return entry_block_tail
@@ -304,7 +304,7 @@ class BaseLower(object):
 
     def debug_print(self, msg):
         if config.DEBUG_JIT:
-            self.context.debug_print(self.builder, "DEBUGJIT: {0}".format(msg))
+            self.context.debug_print(self.builder, f"DEBUGJIT [{self.fndesc.qualname}]: {msg}")
 
     def print_variable(self, msg, varname):
         """Helper to emit ``print(msg, varname)`` for debugging.
@@ -560,6 +560,9 @@ class Lower(BaseLower):
         elif isinstance(inst, ir.StaticTryRaise):
             self.lower_static_try_raise(inst)
 
+        elif isinstance(inst, ir.StaticReraise):
+            self.lower_static_reraise(inst)
+
         else:
             if hasattr(self.context, "lower_extensions"):
                 for _class, func in self.context.lower_extensions.items():
@@ -612,6 +615,11 @@ class Lower(BaseLower):
             self.set_exception(None, loc=self.loc)
         else:
             self.set_exception(inst.exc_class, inst.exc_args, loc=self.loc)
+
+    def lower_static_reraise(self, inst):
+        self.call_conv.return_reraise(
+            self.builder
+        )
 
     def lower_assign(self, ty, inst):
         value = inst.value

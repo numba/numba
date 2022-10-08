@@ -405,8 +405,8 @@ class NRTContext(object):
         trystatus = cc.check_try_status(builder)
         excinfo = trystatus.excinfo
         has_raised = builder.not_(cgutils.is_null(builder, excinfo))
-        with builder.if_then(has_raised):
-            self.eh_end_try(builder)
+        # with builder.if_then(has_raised):
+        #     self.eh_end_try(builder)
         return has_raised
 
     def eh_try(self, builder):

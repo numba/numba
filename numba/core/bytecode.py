@@ -324,8 +324,9 @@ class ByteCode(object):
         for ent in self.exception_entries:
             if ent.start <= offset <= ent.end:
                 candidates.append((ent.depth, ent))
-        ent = max(candidates)[1]
-        return ent
+        if candidates:
+            ent = max(candidates)[1]
+            return ent
 
 class FunctionIdentity(serialize.ReduceMixin):
     """

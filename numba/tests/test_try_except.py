@@ -110,6 +110,7 @@ class TestTryBareExcept(TestCase):
         with self.assertRaises(MyError) as raises:
             with captured_stdout() as stdout:
                 udt(1, 2, 3)
+
         self.assertEqual(
             stdout.getvalue().split(),
             ["A", "call_one", "C", "call_two", "E", "call_three"],

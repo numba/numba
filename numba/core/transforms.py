@@ -482,12 +482,12 @@ def _legalize_with_head(blk):
     for stmt in blk.body:
         counters[type(stmt)] += 1
 
-    if counters.pop(ir.EnterWith) != 1:
+    if counters.pop(ir.EnterWith, 0) != 1:
         raise errors.CompilerError(
             "with's head-block must have exactly 1 ENTER_WITH",
             loc=blk.loc,
             )
-    if counters.pop(ir.Jump) != 1:
+    if counters.pop(ir.Jump, 0) != 1:
         raise errors.CompilerError(
             "with's head-block must have exactly 1 JUMP",
             loc=blk.loc,
@@ -509,12 +509,14 @@ def _cfg_nodes_in_region(cfg, region_begin, region_end):
     stack = [region_begin]
     while stack:
         tos = stack.pop()
-        succs, _ = zip(*cfg.successors(tos))
-        nodes = set([node for node in succs
-                     if node not in region_nodes and
-                     node != region_end])
-        stack.extend(nodes)
-        region_nodes |= nodes
+        succlist = list(cfg.successors(tos))
+        if succlist:
+            succs, _ = zip(*succlist)
+            nodes = set([node for node in succs
+                        if node not in region_nodes and
+                        node != region_end])
+            stack.extend(nodes)
+            region_nodes |= nodes
 
     return region_nodes
 
