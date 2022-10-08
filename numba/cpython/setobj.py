@@ -1306,7 +1306,6 @@ def set_discard(context, builder, sig, args):
 
     return context.get_dummy_value()
 
-@lower_builtin("set.pop", types.Set)
 def set_pop(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
     used = inst.payload.used
@@ -1315,6 +1314,17 @@ def set_pop(context, builder, sig, args):
                                           ("set.pop(): empty set",))
 
     return inst.pop()
+
+
+@intrinsic
+def _set_pop(typingctx, s):
+    sig = s.dtype(s)
+    return sig, set_pop
+
+
+@overload_method(types.Set, "pop")
+def ol_set_pop(s):
+    return lambda s: _set_pop(s)
 
 
 def set_remove(context, builder, sig, args):

@@ -63,12 +63,6 @@ class SetAttribute(AttributeTemplate):
         assert not kws
         return signature(types.none, set.dtype)
 
-    @bound_function("set.pop")
-    def resolve_pop(self, set, args, kws):
-        assert not kws
-        if not args:
-            return signature(set.dtype)
-
     @bound_function("set.update")
     def resolve_update(self, set, args, kws):
         iterable, = args
