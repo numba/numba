@@ -123,10 +123,6 @@ class SetAttribute(AttributeTemplate):
         if arg == set:
             return signature(types.boolean, arg)
 
-    @bound_function("set.isdisjoint")
-    def resolve_isdisjoint(self, set, args, kws):
-        return self._resolve_comparator(set, args, kws)
-
 
 class SetOperator(AbstractTemplate):
 

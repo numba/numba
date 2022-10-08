@@ -1484,12 +1484,25 @@ def set_union(a, b):
 
 # Predicates
 
-@lower_builtin("set.isdisjoint", types.Set, types.Set)
-def set_isdisjoint(context, builder, sig, args):
-    inst = SetInstance(context, builder, sig.args[0], args[0])
-    other = SetInstance(context, builder, sig.args[1], args[1])
+@intrinsic
+def _set_isdisjoint(typingctx, a, b):
+    sig = types.boolean(a, b)
 
-    return inst.isdisjoint(other)
+    def codegen(context, builder, sig, args):
+        inst = SetInstance(context, builder, sig.args[0], args[0])
+        other = SetInstance(context, builder, sig.args[1], args[1])
+
+        return inst.isdisjoint(other)
+
+    return sig, codegen
+
+
+@overload_method(types.Set, "isdisjoint")
+def set_isdisjoint(a, b):
+    if not all([isinstance(typ, types.Set) for typ in (a, b)]):
+        return
+
+    return lambda a, b: _set_isdisjoint(a, b)
 
 
 @intrinsic
