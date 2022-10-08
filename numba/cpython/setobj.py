@@ -1558,13 +1558,15 @@ def set_lt(a, b):
 
     return lambda a, b: _set_lt(a, b)
 
+@overload(operator.gt)
+def set_gt(a, b):
+    if not all([isinstance(typ, types.Set) for typ in (a, b)]):
+        return
 
-@lower_builtin(operator.gt, types.Set, types.Set)
-def set_gt(context, builder, sig, args):
     def gt_impl(a, b):
         return b < a
 
-    return context.compile_internal(builder, gt_impl, sig, args)
+    return gt_impl
 
 @lower_builtin(operator.is_, types.Set, types.Set)
 def set_is(context, builder, sig, args):

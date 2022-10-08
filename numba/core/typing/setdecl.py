@@ -165,7 +165,7 @@ for op_key in (operator.iadd, operator.isub, operator.iand, operator.ior, operat
         key = op_key
 
 
-for op_key in (operator.le, operator.gt):
+for op_key in (operator.le,):
     @infer_global(op_key)
     class ConcreteSetComparison(SetComparison):
         key = op_key
