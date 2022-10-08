@@ -1491,13 +1491,27 @@ def set_isdisjoint(context, builder, sig, args):
 
     return inst.isdisjoint(other)
 
-@lower_builtin(operator.le, types.Set, types.Set)
-@lower_builtin("set.issubset", types.Set, types.Set)
-def set_issubset(context, builder, sig, args):
-    inst = SetInstance(context, builder, sig.args[0], args[0])
-    other = SetInstance(context, builder, sig.args[1], args[1])
 
-    return inst.issubset(other)
+@intrinsic
+def _set_issubset(typingctx, a, b):
+    sig = types.boolean(a, b)
+
+    def codegen(context, builder, sig, args):
+        inst = SetInstance(context, builder, sig.args[0], args[0])
+        other = SetInstance(context, builder, sig.args[1], args[1])
+
+        return inst.issubset(other)
+
+    return sig, codegen
+
+@overload(operator.le)
+@overload_method(types.Set, "issubset")
+def set_issubset(a, b):
+    if not all([isinstance(typ, types.Set) for typ in (a, b)]):
+        return
+
+    return lambda a, b: _set_issubset(a, b)
+
 
 @overload(operator.ge)
 @overload_method(types.Set, "issuperset")

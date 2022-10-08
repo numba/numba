@@ -127,10 +127,6 @@ class SetAttribute(AttributeTemplate):
     def resolve_isdisjoint(self, set, args, kws):
         return self._resolve_comparator(set, args, kws)
 
-    @bound_function("set.issubset")
-    def resolve_issubset(self, set, args, kws):
-        return self._resolve_comparator(set, args, kws)
-
 
 class SetOperator(AbstractTemplate):
 
@@ -163,10 +159,3 @@ for op_key in (operator.iadd, operator.isub, operator.iand, operator.ior, operat
     @infer_global(op_key)
     class ConcreteInplaceSetOperator(SetOperator):
         key = op_key
-
-
-for op_key in (operator.le,):
-    @infer_global(op_key)
-    class ConcreteSetComparison(SetComparison):
-        key = op_key
-
