@@ -1499,13 +1499,16 @@ def set_issubset(context, builder, sig, args):
 
     return inst.issubset(other)
 
-@lower_builtin(operator.ge, types.Set, types.Set)
-@lower_builtin("set.issuperset", types.Set, types.Set)
-def set_issuperset(context, builder, sig, args):
+@overload(operator.ge)
+@overload_method(types.Set, "issuperset")
+def set_issuperset(a, b):
+    if not all([isinstance(typ, types.Set) for typ in (a, b)]):
+        return
+
     def superset_impl(a, b):
         return b.issubset(a)
 
-    return context.compile_internal(builder, superset_impl, sig, args)
+    return superset_impl
 
 @lower_builtin(operator.eq, types.Set, types.Set)
 def set_isdisjoint(context, builder, sig, args):

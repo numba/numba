@@ -131,10 +131,6 @@ class SetAttribute(AttributeTemplate):
     def resolve_issubset(self, set, args, kws):
         return self._resolve_comparator(set, args, kws)
 
-    @bound_function("set.issuperset")
-    def resolve_issuperset(self, set, args, kws):
-        return self._resolve_comparator(set, args, kws)
-
 
 class SetOperator(AbstractTemplate):
 
@@ -169,7 +165,7 @@ for op_key in (operator.iadd, operator.isub, operator.iand, operator.ior, operat
         key = op_key
 
 
-for op_key in (operator.eq, operator.ne, operator.lt, operator.le, operator.ge, operator.gt):
+for op_key in (operator.eq, operator.ne, operator.lt, operator.le, operator.gt):
     @infer_global(op_key)
     class ConcreteSetComparison(SetComparison):
         key = op_key
