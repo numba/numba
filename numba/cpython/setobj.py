@@ -1510,12 +1510,25 @@ def set_issuperset(a, b):
 
     return superset_impl
 
-@lower_builtin(operator.eq, types.Set, types.Set)
-def set_isdisjoint(context, builder, sig, args):
-    inst = SetInstance(context, builder, sig.args[0], args[0])
-    other = SetInstance(context, builder, sig.args[1], args[1])
+@intrinsic
+def _set_eq(typingctx, a, b):
+    sig = types.boolean(a, b)
 
-    return inst.equals(other)
+    def codegen(context, builder, sig, args):
+        inst = SetInstance(context, builder, sig.args[0], args[0])
+        other = SetInstance(context, builder, sig.args[1], args[1])
+
+        return inst.equals(other)
+
+    return sig, codegen
+
+@overload(operator.eq)
+def set_eq(a, b):
+    if not all([isinstance(typ, types.Set) for typ in (a, b)]):
+        return
+
+    return lambda a, b: _set_eq(a, b)
+
 
 @lower_builtin(operator.ne, types.Set, types.Set)
 def set_ne(context, builder, sig, args):
