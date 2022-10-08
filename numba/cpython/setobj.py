@@ -1364,11 +1364,21 @@ def ol_set_remove(s, item):
 
 # Mutating set operations
 
-@lower_builtin("set.clear", types.Set)
 def set_clear(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
     inst.clear()
     return context.get_dummy_value()
+
+
+@intrinsic
+def _set_clear(typingctx, s):
+    sig = types.none(s)
+    return sig, set_clear
+
+
+@overload_method(types.Set, "clear")
+def ol_set_clear(s):
+    return lambda s: _set_clear(s)
 
 @lower_builtin("set.copy", types.Set)
 def set_copy(context, builder, sig, args):
