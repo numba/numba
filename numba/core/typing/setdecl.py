@@ -139,7 +139,7 @@ for op_key in (operator.add, operator.invert):
         key = op_key
 
 
-for op_key in (operator.iadd, operator.isub, operator.iand, operator.ior, operator.ixor):
+for op_key in (operator.iadd,):
     @infer_global(op_key)
     class ConcreteInplaceSetOperator(SetOperator):
         key = op_key

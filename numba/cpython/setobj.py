@@ -1343,72 +1343,65 @@ def set_copy(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, other.value)
 
 
+def set_difference_update(context, builder, sig, args):
+    inst = SetInstance(context, builder, sig.args[0], args[0])
+    other = SetInstance(context, builder, sig.args[1], args[1])
+
+    inst.difference(other)
+
+    return context.get_dummy_value()
+
+
 @intrinsic
 def _set_difference_update(typingctx, a, b):
     sig = types.none(a, b)
-
-    def codegen(context, builder, sig, args):
-        inst = SetInstance(context, builder, sig.args[0], args[0])
-        other = SetInstance(context, builder, sig.args[1], args[1])
-
-        inst.difference(other)
-
-        return context.get_dummy_value()
-
-    return sig, codegen
+    return sig, set_difference_update
 
 
 @overload_method(types.Set, "difference_update")
-def set_difference_update(a, b):
+def set_difference_update_impl(a, b):
     if not all([isinstance(typ, types.Set) for typ in (a, b)]):
         return
-
     return lambda a, b: _set_difference_update(a, b)
+
+
+def set_intersection_update(context, builder, sig, args):
+    inst = SetInstance(context, builder, sig.args[0], args[0])
+    other = SetInstance(context, builder, sig.args[1], args[1])
+    inst.intersect(other)
+    return context.get_dummy_value()
 
 
 @intrinsic
 def _set_intersection_update(typingctx, a, b):
     sig = types.none(a, b)
-
-    def codegen(context, builder, sig, args):
-        inst = SetInstance(context, builder, sig.args[0], args[0])
-        other = SetInstance(context, builder, sig.args[1], args[1])
-
-        inst.intersect(other)
-
-        return context.get_dummy_value()
-
-    return sig, codegen
+    return sig, set_intersection_update
 
 
 @overload_method(types.Set, "intersection_update")
-def set_intersection_update(a, b):
+def set_intersection_update_impl(a, b):
     if not all([isinstance(typ, types.Set) for typ in (a, b)]):
         return
-
     return lambda a, b: _set_intersection_update(a, b)
+
+
+def set_symmetric_difference_update(context, builder, sig, args):
+    inst = SetInstance(context, builder, sig.args[0], args[0])
+    other = SetInstance(context, builder, sig.args[1], args[1])
+    inst.symmetric_difference(other)
+    return context.get_dummy_value()
 
 
 @intrinsic
 def _set_symmetric_difference_update(typingctx, a, b):
     sig = types.none(a, b)
-
-    def codegen(context, builder, sig, args):
-        inst = SetInstance(context, builder, sig.args[0], args[0])
-        other = SetInstance(context, builder, sig.args[1], args[1])
-
-        inst.symmetric_difference(other)
-
-        return context.get_dummy_value()
-
-    return sig, codegen
+    return sig, set_symmetric_difference_update
 
 
 @overload_method(types.Set, "symmetric_difference_update")
-def set_symmetric_difference_update(a, b):
+def set_symmetric_difference_update_impl(a, b):
     if not all([isinstance(typ, types.Set) for typ in (a, b)]):
         return
-
     return lambda a, b: _set_symmetric_difference_update(a, b)
 
 
@@ -1442,17 +1435,30 @@ def set_update(context, builder, sig, args):
 
     return context.get_dummy_value()
 
+def gen_operator_impl(op, impl):
+    @intrinsic
+    def _set_operator_intr(typingctx, a, b):
+        sig = a(a, b)
+        def codegen(context, builder, sig, args):
+            assert sig.return_type == sig.args[0]
+            impl(context, builder, sig, args)
+            return impl_ret_borrowed(context, builder, sig.args[0], args[0])
+        return sig, codegen
+
+    @overload(op)
+    def _ol_set_operator(a, b):
+        if all([isinstance(typ, types.Set) for typ in (a, b)]) and \
+                (a.dtype == b.dtype):
+            return lambda a, b: _set_operator_intr(a, b)
+
+
 for op_, op_impl in [
     (operator.iand, set_intersection_update),
     (operator.ior, set_update),
     (operator.isub, set_difference_update),
     (operator.ixor, set_symmetric_difference_update),
     ]:
-    @lower_builtin(op_, types.Set, types.Set)
-    def set_inplace(context, builder, sig, args, op_impl=op_impl):
-        assert sig.return_type == sig.args[0]
-        op_impl(context, builder, sig, args)
-        return impl_ret_borrowed(context, builder, sig.args[0], args[0])
+    gen_operator_impl(op_, op_impl)
 
 
 # Set operations creating a new set
