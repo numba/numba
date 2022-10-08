@@ -1360,14 +1360,28 @@ def set_intersection_update(context, builder, sig, args):
 
     return context.get_dummy_value()
 
-@lower_builtin("set.symmetric_difference_update", types.Set, types.Set)
-def set_symmetric_difference_update(context, builder, sig, args):
-    inst = SetInstance(context, builder, sig.args[0], args[0])
-    other = SetInstance(context, builder, sig.args[1], args[1])
+@intrinsic
+def _set_symmetric_difference_update(typingctx, a, b):
+    sig = types.none(a, b)
 
-    inst.symmetric_difference(other)
+    def codegen(context, builder, sig, args):
+        inst = SetInstance(context, builder, sig.args[0], args[0])
+        other = SetInstance(context, builder, sig.args[1], args[1])
 
-    return context.get_dummy_value()
+        inst.symmetric_difference(other)
+
+        return context.get_dummy_value()
+
+    return sig, codegen
+
+
+@overload_method(types.Set, "symmetric_difference_update")
+def set_symmetric_difference_update(a, b):
+    if not all([isinstance(typ, types.Set) for typ in (a, b)]):
+        return
+
+    return lambda a, b: _set_symmetric_difference_update(a, b)
+
 
 @lower_builtin("set.update", types.Set, types.IterableType)
 def set_update(context, builder, sig, args):
