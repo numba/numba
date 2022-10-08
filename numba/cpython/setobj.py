@@ -1529,13 +1529,15 @@ def set_eq(a, b):
 
     return lambda a, b: _set_eq(a, b)
 
+@overload(operator.ne)
+def set_ne(a, b):
+    if not all([isinstance(typ, types.Set) for typ in (a, b)]):
+        return
 
-@lower_builtin(operator.ne, types.Set, types.Set)
-def set_ne(context, builder, sig, args):
     def ne_impl(a, b):
         return not a == b
 
-    return context.compile_internal(builder, ne_impl, sig, args)
+    return ne_impl
 
 @lower_builtin(operator.lt, types.Set, types.Set)
 def set_lt(context, builder, sig, args):
