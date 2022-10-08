@@ -45,12 +45,6 @@ class SetAttribute(AttributeTemplate):
             sig = sig.replace(recvr=set.copy(dtype=unified))
             return sig
 
-    @bound_function("set.copy")
-    def resolve_copy(self, set, args, kws):
-        assert not kws
-        if not args:
-            return signature(set)
-
     @bound_function("set.update")
     def resolve_update(self, set, args, kws):
         iterable, = args

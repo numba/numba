@@ -1380,11 +1380,22 @@ def _set_clear(typingctx, s):
 def ol_set_clear(s):
     return lambda s: _set_clear(s)
 
-@lower_builtin("set.copy", types.Set)
+
 def set_copy(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
     other = inst.copy()
     return impl_ret_new_ref(context, builder, sig.return_type, other.value)
+
+
+@intrinsic
+def _set_copy(typingctx, s):
+    sig = s(s)
+    return sig, set_copy
+
+
+@overload_method(types.Set, "copy")
+def ol_set_copy(s):
+    return lambda s: _set_copy(s)
 
 
 def set_difference_update(context, builder, sig, args):
