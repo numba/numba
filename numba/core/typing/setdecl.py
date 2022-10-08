@@ -97,10 +97,6 @@ class SetAttribute(AttributeTemplate):
         if isinstance(iterable, types.Set) and iterable.dtype == set.dtype:
             return signature(types.none, iterable)
 
-    @bound_function("set.difference_update")
-    def resolve_difference_update(self, set, args, kws):
-        return self._resolve_xxx_update(set, args, kws)
-
     def _resolve_operator(self, set, args, kws):
         assert not kws
         iterable, = args

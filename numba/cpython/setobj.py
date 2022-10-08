@@ -1342,14 +1342,28 @@ def set_copy(context, builder, sig, args):
     other = inst.copy()
     return impl_ret_new_ref(context, builder, sig.return_type, other.value)
 
-@lower_builtin("set.difference_update", types.Set, types.IterableType)
-def set_difference_update(context, builder, sig, args):
-    inst = SetInstance(context, builder, sig.args[0], args[0])
-    other = SetInstance(context, builder, sig.args[1], args[1])
 
-    inst.difference(other)
+@intrinsic
+def _set_difference_update(typingctx, a, b):
+    sig = types.none(a, b)
 
-    return context.get_dummy_value()
+    def codegen(context, builder, sig, args):
+        inst = SetInstance(context, builder, sig.args[0], args[0])
+        other = SetInstance(context, builder, sig.args[1], args[1])
+
+        inst.difference(other)
+
+        return context.get_dummy_value()
+
+    return sig, codegen
+
+
+@overload_method(types.Set, "difference_update")
+def set_difference_update(a, b):
+    if not all([isinstance(typ, types.Set) for typ in (a, b)]):
+        return
+
+    return lambda a, b: _set_difference_update(a, b)
 
 
 @intrinsic
