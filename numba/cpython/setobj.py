@@ -1539,12 +1539,25 @@ def set_ne(a, b):
 
     return ne_impl
 
-@lower_builtin(operator.lt, types.Set, types.Set)
-def set_lt(context, builder, sig, args):
-    inst = SetInstance(context, builder, sig.args[0], args[0])
-    other = SetInstance(context, builder, sig.args[1], args[1])
+@intrinsic
+def _set_lt(typingctx, a, b):
+    sig = types.boolean(a, b)
 
-    return inst.issubset(other, strict=True)
+    def codegen(context, builder, sig, args):
+        inst = SetInstance(context, builder, sig.args[0], args[0])
+        other = SetInstance(context, builder, sig.args[1], args[1])
+
+        return inst.issubset(other, strict=True)
+
+    return sig, codegen
+
+@overload(operator.lt)
+def set_lt(a, b):
+    if not all([isinstance(typ, types.Set) for typ in (a, b)]):
+        return
+
+    return lambda a, b: _set_lt(a, b)
+
 
 @lower_builtin(operator.gt, types.Set, types.Set)
 def set_gt(context, builder, sig, args):
