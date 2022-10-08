@@ -1298,13 +1298,25 @@ def set_add(context, builder, sig, args):
 
     return context.get_dummy_value()
 
-@lower_builtin("set.discard", types.Set, types.Any)
+
 def set_discard(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
     item = args[1]
     inst.discard(item)
 
     return context.get_dummy_value()
+
+
+@intrinsic
+def _set_discard(typingctx, s, item):
+    sig = types.none(s, item)
+    return sig, set_discard
+
+
+@overload_method(types.Set, "discard")
+def ol_set_discard(s, item):
+    return lambda s, item: _set_discard(s, item)
+
 
 def set_pop(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
