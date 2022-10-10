@@ -2021,12 +2021,11 @@ def ol_np_ravel(a):
 
 
 @overload_method(types.Array, "flatten")
-def ol_array_flatten(arr, order='C'):
+def ol_array_flatten(arr):
     # Only support flattening to C layout currently.
-    if order == 'C' or isinstance(order, types.Omitted):
-        def imp(arr, order='C'):
-            return arr.copy().reshape(arr.size)
-        return imp
+    def imp(arr):
+        return arr.copy().reshape(arr.size)
+    return imp
 
 
 @register_jitable
@@ -5969,6 +5968,7 @@ def get_sort_func(kind, is_float, is_argsort=False):
     if key in _sorts:
         return _sorts[key]
     else:
+        _supported_kind_values = ('quicksort', 'mergesort')
         if kind == 'quicksort':
             sort = quicksort.make_jit_quicksort(
                 lt=lt_floats if is_float else None,
@@ -5980,6 +5980,10 @@ def get_sort_func(kind, is_float, is_argsort=False):
                 lt=lt_floats if is_float else None,
                 is_argsort=is_argsort)
             func = sort.run_mergesort
+        else:
+            msg = (f'sort func "{kind}" is not supported. Allowed values '
+                   f'are {_supported_kind_values}')
+            raise errors.TypingError(msg)
         _sorts[key] = func
         return func
 
@@ -6011,7 +6015,7 @@ def impl_np_sort(a):
 @overload(np.argsort)
 @overload_method(types.Array, "argsort")
 def impl_arr_argsort(arr, kind=None):
-    if kind is None or isinstance(kind, types.Omitted):
+    if is_nonelike(kind):
         kind = types.StringLiteral(value='quicksort')
     if not isinstance(kind, types.StringLiteral):
         msg = '"kind" must be a string literal'

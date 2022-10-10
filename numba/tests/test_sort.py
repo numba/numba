@@ -953,6 +953,16 @@ class TestNumpySort(TestCase):
         with self.assertRaisesRegex(errors.TypingError, msg) as raises:
             cfunc(None)
 
+    def test_argsort_bad_kind(self):
+        def func(val):
+            return val.argsort(kind='somesort')
+
+        cfunc = jit(nopython=True)(func)
+        msg = '.*sort func "somesort" is not supported.*'
+        with self.assertRaisesRegex(errors.TypingError, msg) as raises:
+            arr = np.arange(10, dtype=float)
+            cfunc(arr)
+
 
 class TestPythonSort(TestCase):
 
