@@ -333,7 +333,7 @@ def _lower_array_expr(lowerer, expr):
     '''Lower an array expression built by RewriteArrayExprs.
     '''
     expr_name = "__numba_array_expr_%s" % (hex(hash(expr)).replace("-", "_"))
-    expr_filename = f"__numba_array_expr_synthetic_module_{expr.loc.filename}"
+    expr_filename = expr.loc.filename
     expr_var_list = expr.list_vars()
     # The expression may use a given variable several times, but we
     # should only create one parameter for it.

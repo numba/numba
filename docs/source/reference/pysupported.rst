@@ -918,6 +918,10 @@ Built-in functions
 
 The following built-in functions are supported:
 
+.. warning::
+  Support for ``isinstance`` is an experimental feature. This feature is
+  automatically enabled by simply using ``isinstance`` in JIT compiled code.
+
 * :func:`abs`
 * :class:`bool`
 * :func:`chr`
@@ -926,9 +930,13 @@ The following built-in functions are supported:
 * :func:`enumerate`
 * :func:`filter`
 * :class:`float`
+* :func:`getattr`: the attribute must be a string literal and the return type
+  cannot be a function type (e.g. ``getattr(numpy, 'cos')`` is not supported as
+  it returns a function type).
 * :func:`hash` (see :ref:`pysupported-hashing` below)
 * :class:`int`: only the one-argument form
 * :func:`iter`: only the one-argument form
+* :func:`isinstance` (experimental support only)
 * :func:`len`
 * :func:`min`
 * :func:`map`

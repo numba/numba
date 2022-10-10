@@ -4,11 +4,12 @@ LLVM or low level inlining.
 """
 
 import operator
+import warnings
 from itertools import product
 import numpy as np
 
-from numba import njit, typeof, literally
-from numba.core import types, ir, ir_utils, cgutils
+from numba import njit, typeof, literally, prange
+from numba.core import types, ir, ir_utils, cgutils, errors
 from numba.core.extending import (
     overload,
     overload_method,
@@ -25,29 +26,12 @@ from numba.core.extending import (
 from numba.core.datamodel.models import OpaqueModel
 from numba.core.cpu import InlineOptions
 from numba.core.compiler import DefaultPassBuilder, CompilerBase
-from numba.core.typed_passes import IRLegalization, InlineOverloads
-from numba.core.untyped_passes import PreserveIR
+from numba.core.typed_passes import InlineOverloads
 from numba.core.typing import signature
 from numba.tests.support import (TestCase, unittest, skip_py38_or_later,
-                                 MemoryLeakMixin)
-
-
-class InlineTestPipeline(CompilerBase):
-    """ Same as the standard pipeline, but preserves the func_ir into the
-    metadata store"""
-
-    def define_pipelines(self):
-        pipeline = DefaultPassBuilder.define_nopython_pipeline(
-            self.state, "inliner_custom_pipe")
-        # mangle the default pipeline and inject DCE and IR preservation ahead
-        # of legalisation
-
-        # TODO: add a way to not do this! un-finalizing is not a good idea
-        pipeline._finalized = False
-        pipeline.add_pass_after(PreserveIR, IRLegalization)
-
-        pipeline.finalize()
-        return [pipeline]
+                                 MemoryLeakMixin, IRPreservingTestPipeline,
+                                 skip_parfors_unsupported,
+                                 ignore_internal_warnings)
 
 
 # this global has the same name as the global in inlining_usecases.py, it
@@ -101,7 +85,7 @@ class InliningBase(TestCase):
             assert isinstance(k, str)
             assert isinstance(v, bool)
 
-        j_func = njit(pipeline_class=InlineTestPipeline)(test_impl)
+        j_func = njit(pipeline_class=IRPreservingTestPipeline)(test_impl)
 
         # check they produce the same answer first!
         self.assertEqual(test_impl(*args), j_func(*args))
@@ -490,6 +474,43 @@ class TestFunctionInlining(MemoryLeakMixin, InliningBase):
         self.check(impl, inline_expect={'foo': True, 'boz': True,
                                         'fortran': True}, block_count=37)
 
+    def test_inline_renaming_scheme(self):
+        # See #7380, this checks that inlined variables have a name derived from
+        # the function they were defined in.
+
+        @njit(inline="always")
+        def bar(z):
+            x = 5
+            y = 10
+            return x + y + z
+
+        @njit(pipeline_class=IRPreservingTestPipeline)
+        def foo(a, b):
+            return bar(a), bar(b)
+
+        self.assertEqual(foo(10, 20), (25, 35))
+
+        # check IR. Look for the `x = 5`... there should be
+        # Two lots of `const(int, 5)`, one for each inline
+        # The LHS of the assignment will have a name like:
+        # TestFunctionInlining_test_inline_renaming_scheme__locals__bar_v2.x
+        # Ensure that this is the case!
+        func_ir = foo.overloads[foo.signatures[0]].metadata['preserved_ir']
+        store = []
+        for blk in func_ir.blocks.values():
+            for stmt in blk.body:
+                if isinstance(stmt, ir.Assign):
+                    if isinstance(stmt.value, ir.Const):
+                        if stmt.value.value == 5:
+                            store.append(stmt)
+
+        self.assertEqual(len(store), 2)
+        for i in store:
+            name = i.target.name
+            basename = self.id().lstrip(self.__module__)
+            regex = rf'{basename}__locals__bar_v[0-9]+.x'
+            self.assertRegex(name, regex)
+
 
 class TestRegisterJitableInlining(MemoryLeakMixin, InliningBase):
 
@@ -686,7 +707,7 @@ class TestOverloadInlining(MemoryLeakMixin, InliningBase):
             if isinstance(obj, DummyType):
                 return dummy_getitem_impl
 
-        # noth getitem and static_getitem Exprs refer to opertor.getitem
+        # both getitem and static_getitem Exprs refer to operator.getitem
         # hence they are checked using the same expect key
         self.check(impl, Dummy(), 1, inline_expect={'getitem': False})
         self.check(impl_static_getitem, Dummy(),
@@ -1025,8 +1046,7 @@ class TestOverloadInlining(MemoryLeakMixin, InliningBase):
         self.check(test_impl, dtype, inline_expect={'foo': True})
 
     def test_inline_always_ssa(self):
-        """make sure IR inlining uses SSA properly. Test for #6721.
-        """
+        # Make sure IR inlining uses SSA properly. Test for #6721.
 
         dummy_true = True
 
@@ -1051,6 +1071,33 @@ class TestOverloadInlining(MemoryLeakMixin, InliningBase):
 
         self.check(impl, block_count='SKIP', inline_expect={'foo': True})
 
+    def test_inline_always_ssa_scope_validity(self):
+        # Make sure IR inlining correctly updates the scope(s). See #7802
+
+        def bar():
+            b = 5
+            while b > 1:
+                b //= 2
+
+            return 10
+
+        @overload(bar, inline="always")
+        def bar_impl():
+            return bar
+
+        @njit
+        def foo():
+            bar()
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', errors.NumbaIRAssumptionWarning)
+            ignore_internal_warnings()
+            self.assertEqual(foo(), foo.py_func())
+
+        # There should be no warnings as the IR scopes should be consistent with
+        # the IR involved.
+        self.assertEqual(len(w), 0)
+
 
 class TestOverloadMethsAttrsInlining(InliningBase):
     def setUp(self):
@@ -1059,7 +1106,7 @@ class TestOverloadMethsAttrsInlining(InliningBase):
 
     def check_method(self, test_impl, args, expected, block_count,
                      expects_inlined=True):
-        j_func = njit(pipeline_class=InlineTestPipeline)(test_impl)
+        j_func = njit(pipeline_class=IRPreservingTestPipeline)(test_impl)
         # check they produce the same answer first!
         self.assertEqual(j_func(*args), expected)
 
@@ -1081,7 +1128,7 @@ class TestOverloadMethsAttrsInlining(InliningBase):
 
     def check_getattr(self, test_impl, args, expected, block_count,
                       expects_inlined=True):
-        j_func = njit(pipeline_class=InlineTestPipeline)(test_impl)
+        j_func = njit(pipeline_class=IRPreservingTestPipeline)(test_impl)
         # check they produce the same answer first!
         self.assertEqual(j_func(*args), expected)
 
@@ -1454,6 +1501,43 @@ class TestInlineMiscIssues(TestCase):
             return bar(z), bar(z)
 
         self.assertEqual(foo(10), (11.3, 11.3))
+
+    @skip_parfors_unsupported
+    def test_issue7380(self):
+        # This checks that inlining a function containing a loop into another
+        # loop where the induction variable in both loops is the same doesn't
+        # end up with a name collision. Parfors can detect this so it is used.
+        # See: https://github.com/numba/numba/issues/7380
+
+        # Check Numba inlined function passes
+
+        @njit(inline="always")
+        def bar(x):
+            for i in range(x.size):
+                x[i] += 1
+
+        @njit(parallel=True)
+        def foo(a):
+            for i in prange(a.shape[0]):
+                bar(a[i])
+
+        a = np.ones((10, 10))
+        foo(a) # run
+        # check mutation of data is correct
+        self.assertPreciseEqual(a, 2 * np.ones_like(a))
+
+        # Check manually inlined equivalent function fails
+        @njit(parallel=True)
+        def foo_bad(a):
+            for i in prange(a.shape[0]):
+                x = a[i]
+                for i in range(x.size):
+                    x[i] += 1
+
+        with self.assertRaises(errors.UnsupportedRewriteError) as e:
+            foo_bad(a)
+
+        self.assertIn("Overwrite of parallel loop index", str(e.exception))
 
 
 if __name__ == '__main__':

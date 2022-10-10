@@ -33,6 +33,7 @@ class TestSysInfo(TestCase):
                 nsi._python_impl,
                 nsi._python_version,
                 nsi._llvm_version,
+                nsi._numpy_version,
             ),
             bool: (
                 nsi._cu_dev_init,
@@ -43,6 +44,7 @@ class TestSysInfo(TestCase):
                 nsi._tbb_thread,
                 nsi._openmp_thread,
                 nsi._wkq_thread,
+                nsi._numpy_AVX512_SKX_detected,
             ),
             list: (
                 nsi._errors,

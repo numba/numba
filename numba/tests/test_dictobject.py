@@ -357,6 +357,26 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             keys,
         )
 
+    def test_dict_keys_len(self):
+        """
+        Exercise len(dict.keys())
+        """
+        @njit
+        def foo(keys, vals):
+            d = dictobject.new_dict(int32, float64)
+            # insertion
+            for k, v in zip(keys, vals):
+                d[k] = v
+            return len(d.keys())
+
+        keys = [1, 2, 3]
+        vals = [0.1, 0.2, 0.3]
+
+        self.assertEqual(
+            foo(keys, vals),
+            len(keys),
+        )
+
     def test_dict_values(self):
         """
         Exercise dict.values
@@ -378,6 +398,45 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         self.assertEqual(
             foo(keys, vals),
             vals,
+        )
+
+    def test_dict_values_len(self):
+        """
+        Exercise len(dict.values())
+        """
+        @njit
+        def foo(keys, vals):
+            d = dictobject.new_dict(int32, float64)
+            # insertion
+            for k, v in zip(keys, vals):
+                d[k] = v
+            return len(d.values())
+
+        keys = [1, 2, 3]
+        vals = [0.1, 0.2, 0.3]
+
+        self.assertEqual(
+            foo(keys, vals),
+            len(vals),
+        )
+
+    def test_dict_items_len(self):
+        """
+        Exercise len(dict.items())
+        """
+        @njit
+        def foo(keys, vals):
+            d = dictobject.new_dict(int32, float64)
+            # insertion
+            for k, v in zip(keys, vals):
+                d[k] = v
+            return len(d.items())
+
+        keys = [1, 2, 3]
+        vals = [0.1, 0.2, 0.3]
+        self.assertPreciseEqual(
+            foo(keys, vals),
+            len(vals),
         )
 
     def test_dict_iter(self):
@@ -948,6 +1007,47 @@ class TestDictObject(MemoryLeakMixin, TestCase):
 
         self.assertTrue(foo())
 
+    def test_dict_update(self):
+        """
+        Tests dict.update works with various dictionaries.
+        """
+        n = 10
+
+        def f1(n):
+            """
+            Test update with a regular dictionary.
+            """
+            d1 = {i: i + 1 for i in range(n)}
+            d2 = {3 * i: i for i in range(n)}
+            d1.update(d2)
+            return d1
+
+        py_func = f1
+        cfunc = njit()(f1)
+        a = py_func(n)
+        b = cfunc(n)
+        self.assertEqual(a, b)
+
+        def f2(n):
+            """
+            Test update where one of the dictionaries
+            is created as a Python literal.
+            """
+            d1 = {
+                1: 2,
+                3: 4,
+                5: 6
+            }
+            d2 = {3 * i: i for i in range(n)}
+            d1.update(d2)
+            return d1
+
+        py_func = f2
+        cfunc = njit()(f2)
+        a = py_func(n)
+        b = cfunc(n)
+        self.assertEqual(a, b)
+
 
 class TestDictTypeCasting(TestCase):
     def check_good(self, fromty, toty):
@@ -1052,6 +1152,15 @@ class TestTypedDict(MemoryLeakMixin, TestCase):
         d = producer()
         val = consumer(d)
         self.assertEqual(val, 1.23)
+
+    def test_gh7908(self):
+        d = Dict.empty(
+            key_type=types.Tuple([types.uint32,
+                                  types.uint32]),
+            value_type=int64)
+
+        d[(1, 1)] = 12345
+        self.assertEqual(d[(1, 1)], d.get((1, 1)))
 
     def check_stringify(self, strfn, prefix=False):
         nbd = Dict.empty(int32, int32)
@@ -2122,6 +2231,11 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
                 a = {'BAD_KEY': 2j, 'c': 'd', 'e': np.zeros(4)}
             else:
                 a = {'a': 5j, 'c': 'CAT', 'e': np.zeros((5,))}
+            # prevents inline of return on py310
+            py310_defeat1 = 1  # noqa
+            py310_defeat2 = 2  # noqa
+            py310_defeat3 = 3  # noqa
+            py310_defeat4 = 4  # noqa
             return a['a']
 
         with self.assertRaises(TypingError) as raises:
@@ -2135,6 +2249,11 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
                 a = {'a': 2j, 'c': 'd', 'e': np.zeros((4, 3))}
             else:
                 a = {'a': 5j, 'c': 'CAT', 'e': np.zeros((5,))}
+            # prevents inline of return on py310
+            py310_defeat1 = 1  # noqa
+            py310_defeat2 = 2  # noqa
+            py310_defeat3 = 3  # noqa
+            py310_defeat4 = 4  # noqa
             return a['a']
 
         with self.assertRaises(TypingError) as raises:
@@ -2145,10 +2264,10 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
     def test_dict_value_coercion(self):
         # checks that things coerce or not!
 
-        #    safe convertible: TypedDict
-        p = {(np.int32, np.int32): types.DictType,
-             # unsafe but convertible: TypedDict
-             (np.int8, np.int32): types.DictType,
+        p = {# safe and no conversion: TypedDict
+             (np.int32, np.int32): types.DictType,
+             # safe and convertible: TypedDict
+             (np.int32, np.int8): types.DictType,
              # safe convertible: TypedDict
              (np.complex128, np.int32): types.DictType,
              # unsafe not convertible: LiteralStrKey
@@ -2156,7 +2275,11 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
              # unsafe not convertible: LiteralStrKey
              (np.int32, np.array): types.LiteralStrKeyDict,
              # unsafe not convertible: LiteralStrKey
-             (np.array, np.int32): types.LiteralStrKeyDict,}
+             (np.array, np.int32): types.LiteralStrKeyDict,
+             # unsafe not convertible: LiteralStrKey
+             (np.int8, np.int32): types.LiteralStrKeyDict,
+             # unsafe not convertible: LiteralStrKey (issue #6420 case)
+             (np.int64, np.float64): types.LiteralStrKeyDict,}
 
         def bar(x):
             pass
@@ -2246,6 +2369,60 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
             bar(d)
 
         foo()
+
+    def test_const_key_not_in_dict(self):
+
+        @njit
+        def foo():
+            a = {'not_a': 2j, 'c': 'd', 'e': np.zeros(4)}
+            return a['a']
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+
+        self.assertIn("Key 'a' is not in dict.", str(raises.exception))
+
+    def test_uncommon_identifiers(self):
+        # Tests uncommon identifiers like numerical values and operators in
+        # the key fields. See #6518 and #7416.
+
+        # Numerical values in keys
+        @njit
+        def foo():
+            d = {'0': np.ones(5), '1': 4}
+            return len(d)
+
+        self.assertPreciseEqual(foo(), foo.py_func())
+
+        # operators in keys
+        @njit
+        def bar():
+            d = {'+': np.ones(5), 'x--': 4}
+            return len(d)
+
+        self.assertPreciseEqual(bar(), bar.py_func())
+
+    def test_update_error(self):
+        # Tests that dict.update produces a reasonable
+        # error with a LiteralStrKeyDict input.
+        @njit
+        def foo():
+
+            d1 = {
+                'a': 2,
+                'b': 4,
+                'c': 'a'
+            }
+            d1.update({'x': 3})
+            return d1
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+
+        self.assertIn(
+            "Cannot mutate a literal dictionary",
+            str(raises.exception)
+        )
 
 
 if __name__ == '__main__':

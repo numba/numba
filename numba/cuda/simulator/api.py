@@ -44,7 +44,7 @@ def declare_device(*args, **kwargs):
 def detect():
     print('Found 1 CUDA devices')
     print('id %d    %20s %40s' % (0, 'SIMULATOR', '[SUPPORTED]'))
-    print('%40s: 5.2' % 'compute capability')
+    print('%40s: 5.3' % 'compute capability')
 
 
 def list_devices():
@@ -77,7 +77,7 @@ event = Event
 
 def jit(func_or_sig=None, device=False, debug=False, argtypes=None,
         inline=False, restype=None, fastmath=False, link=None,
-        boundscheck=None,
+        boundscheck=None, opt=True, cache=None
         ):
     # Here for API compatibility
     if boundscheck:
@@ -91,9 +91,10 @@ def jit(func_or_sig=None, device=False, debug=False, argtypes=None,
         def jitwrapper(fn):
             return FakeCUDAKernel(fn,
                                   device=device,
-                                  fastmath=fastmath)
+                                  fastmath=fastmath,
+                                  debug=debug)
         return jitwrapper
-    return FakeCUDAKernel(func_or_sig, device=device)
+    return FakeCUDAKernel(func_or_sig, device=device, debug=debug)
 
 
 @contextmanager

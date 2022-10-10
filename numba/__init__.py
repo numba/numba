@@ -17,7 +17,6 @@ del generate_version_info
 
 
 from numba.core import config
-from numba.testing import _runtests as runtests
 from numba.core import types, errors
 
 # Re-export typeof
@@ -41,7 +40,9 @@ from numba.core.decorators import (cfunc, generated_jit, jit, njit, stencil,
 
 # Re-export vectorize decorators and the thread layer querying function
 from numba.np.ufunc import (vectorize, guvectorize, threading_layer,
-                            get_num_threads, set_num_threads)
+                            get_num_threads, set_num_threads,
+                            set_parallel_chunksize, get_parallel_chunksize,
+                            get_thread_id)
 
 # Re-export Numpy helpers
 from numba.np.numpy_support import carray, farray, from_dtype
@@ -52,6 +53,7 @@ from numba import experimental
 # Initialize withcontexts
 import numba.core.withcontexts
 from numba.core.withcontexts import objmode_context as objmode
+from numba.core.withcontexts import parallel_chunksize
 
 # Initialize target extensions
 import numba.core.target_extension
@@ -60,8 +62,11 @@ import numba.core.target_extension
 import numba.typed
 
 # Keep this for backward compatibility.
-test = runtests.main
-
+def test(argv, **kwds):
+    # To speed up the import time, avoid importing `unittest` and other test
+    # dependencies unless the user is actually trying to run tests.
+    from numba.testing import _runtests as runtests
+    return runtests.main(argv, **kwds)
 
 __all__ = """
     cfunc
@@ -82,10 +87,13 @@ __all__ = """
     literal_unroll
     get_num_threads
     set_num_threads
+    set_parallel_chunksize
+    get_parallel_chunksize
+    parallel_chunksize
     """.split() + types.__all__ + errors.__all__
 
 
-_min_llvmlite_version = (0, 38, 0)
+_min_llvmlite_version = (0, 40, 0)
 _min_llvm_version = (11, 0, 0)
 
 def _ensure_llvm():
@@ -130,10 +138,14 @@ def _ensure_critical_deps():
     from numba.core.utils import PYVERSION
 
     if PYVERSION < (3, 7):
-        raise ImportError("Numba needs Python 3.7 or greater")
+        msg = ("Numba needs Python 3.7 or greater. Got Python "
+               f"{PYVERSION[0]}.{PYVERSION[1]}.")
+        raise ImportError(msg)
 
-    if numpy_version < (1, 17):
-        raise ImportError("Numba needs NumPy 1.17 or greater")
+    if numpy_version < (1, 18):
+        msg = (f"Numba needs NumPy 1.18 or greater. Got NumPy "
+               f"{numpy_version[0]}.{numpy_version[1]}.")
+        raise ImportError(msg)
 
     try:
         import scipy
@@ -142,7 +154,9 @@ def _ensure_critical_deps():
     else:
         sp_version = tuple(map(int, scipy.__version__.split('.')[:2]))
         if sp_version < (1, 0):
-            raise ImportError("Numba requires SciPy version 1.0 or greater")
+            msg = ("Numba requires SciPy version 1.0 or greater. Got SciPy "
+                   f"{scipy.__version__}.")
+            raise ImportError(msg)
 
 
 def _try_enable_svml():

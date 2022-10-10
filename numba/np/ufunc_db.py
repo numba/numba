@@ -230,9 +230,12 @@ def _fill_ufunc_db(ufunc_db):
         'QQ->Q': npyfuncs.np_int_udiv_impl,
         'ff->f': npyfuncs.np_real_floor_div_impl,
         'dd->d': npyfuncs.np_real_floor_div_impl,
-        'FF->F': npyfuncs.np_complex_floor_div_impl,
-        'DD->D': npyfuncs.np_complex_floor_div_impl,
     }
+    if numpy_version < (1, 22): # removed in 1.22+
+        ufunc_db[np.floor_divide].update({
+            'FF->F': npyfuncs.np_complex_floor_div_impl,
+            'DD->D': npyfuncs.np_complex_floor_div_impl,
+        })
 
     ufunc_db[np.remainder] = {
         'bb->b': npyfuncs.np_int_srem_impl,

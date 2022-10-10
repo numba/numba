@@ -6,8 +6,9 @@ same name in CPython.
 """
 from collections import namedtuple
 from enum import IntEnum
+
+import llvmlite.ir
 import numpy as np
-import llvmlite.llvmpy.core as lc
 
 from numba.core import types, cgutils
 from numba.core.imputils import (impl_ret_untracked)
@@ -95,7 +96,7 @@ def _gettyperecord_impl(typingctx, codepoint):
         ll_uchar_ptr = ll_uchar.as_pointer()
         ll_ushort = context.get_value_type(types.ushort)
         ll_ushort_ptr = ll_ushort.as_pointer()
-        fnty = lc.Type.function(ll_void, [
+        fnty = llvmlite.ir.FunctionType(ll_void, [
             ll_Py_UCS4,    # code
             ll_intc_ptr,   # upper
             ll_intc_ptr,   # lower
@@ -164,7 +165,7 @@ def _PyUnicode_ExtendedCase(typingctx, index):
     def details(context, builder, signature, args):
         ll_Py_UCS4 = context.get_value_type(_Py_UCS4)
         ll_intc = context.get_value_type(types.intc)
-        fnty = lc.Type.function(ll_Py_UCS4, [ll_intc])
+        fnty = llvmlite.ir.FunctionType(ll_Py_UCS4, [ll_intc])
         fn = cgutils.get_or_insert_function(
             builder.module,
             fnty, name="numba_get_PyUnicode_ExtendedCase")

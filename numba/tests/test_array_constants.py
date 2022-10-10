@@ -143,7 +143,7 @@ class TestConstantArray(unittest.TestCase):
     def test_too_big_to_freeze(self):
         """
         Test issue https://github.com/numba/numba/issues/2188 where freezing
-        a constant array into the code thats prohibitively long and consume
+        a constant array into the code that's prohibitively long and consumes
         too much RAM.
         """
         def test(biggie):

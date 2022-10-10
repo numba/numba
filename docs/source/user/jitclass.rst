@@ -84,8 +84,8 @@ Note that only type annotations on the class will be used to infer spec
 elements.  Method type annotations (e.g. those of ``__init__`` above) are
 ignored.
 
-Numba requires knowing the dtype and rank of numpy arrays, which cannot
-currently be expressed with type annotations. Because of this, numpy arrays need
+Numba requires knowing the dtype and rank of NumPy arrays, which cannot
+currently be expressed with type annotations. Because of this, NumPy arrays need
 to be included in the ``spec`` explicitly.
 
 
@@ -182,6 +182,7 @@ compiled functions:
 * calling methods (e.g. ``mybag.increment(3)``);
 * calling static methods as instance attributes (e.g. ``mybag.add(1, 1)``);
 * calling static methods as class attributes (e.g. ``Bag.add(1, 2)``);
+* using select dunder methods (e.g. ``__add__`` with ``mybag + otherbag``);
 
 Using jitclasses in Numba compiled function is more efficient.
 Short methods can be inlined (at the discretion of LLVM inliner).
@@ -195,6 +196,61 @@ access to the field values that they are boxed.
 Calling static methods as class attributes is only supported outside of the
 class definition (i.e. code cannot call ``Bag.add()`` from within another method
 of ``Bag``).
+
+
+Supported dunder methods
+------------------------
+
+The following dunder methods may be defined for jitclasses:
+
+* ``__abs__``
+* ``__bool__``
+* ``__complex__``
+* ``__contains__``
+* ``__float__``
+* ``__getitem__``
+* ``__hash__``
+* ``__index__``
+* ``__int__``
+* ``__len__``
+* ``__setitem__``
+* ``__str__``
+* ``__eq__``
+* ``__ne__``
+* ``__ge__``
+* ``__gt__``
+* ``__le__``
+* ``__lt__``
+* ``__add__``
+* ``__floordiv__``
+* ``__lshift__``
+* ``__mod__``
+* ``__mul__``
+* ``__neg__``
+* ``__pos__``
+* ``__pow__``
+* ``__rshift__``
+* ``__sub__``
+* ``__truediv__``
+* ``__and__``
+* ``__or__``
+* ``__xor__``
+* ``__iadd__``
+* ``__ifloordiv__``
+* ``__ilshift__``
+* ``__imod__``
+* ``__imul__``
+* ``__ipow__``
+* ``__irshift__``
+* ``__isub__``
+* ``__itruediv__``
+* ``__iand__``
+* ``__ior__``
+* ``__ixor__``
+
+Refer to the `Python Data Model documentation
+<https://docs.python.org/3/reference/datamodel.html>`_ for descriptions of
+these methods.
 
 
 Limitations

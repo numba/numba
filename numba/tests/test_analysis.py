@@ -4,13 +4,18 @@ import types as pytypes
 
 import numpy as np
 from numba.core.compiler import compile_isolated, run_frontend, Flags, StateDict
-from numba import jit, njit
+from numba import jit, njit, literal_unroll
 from numba.core import types, errors, ir, rewrites, ir_utils, utils, cpu
 from numba.core import postproc
 from numba.core.inline_closurecall import InlineClosureCallPass
-from numba.tests.support import TestCase, MemoryLeakMixin, SerialMixin
-
+from numba.tests.support import (TestCase, MemoryLeakMixin, SerialMixin,
+                                 IRPreservingTestPipeline)
 from numba.core.analysis import dead_branch_prune, rewrite_semantic_constants
+from numba.core.untyped_passes import (ReconstructSSA, TranslateByteCode,
+                                       IRProcessing, DeadBranchPrune,
+                                       PreserveIR)
+from numba.core.compiler import DefaultPassBuilder, CompilerBase, PassManager
+
 
 _GLOBAL = 123
 
@@ -24,7 +29,8 @@ def compile_to_ir(func):
     state.func_ir = func_ir
     state.typemap = None
     state.calltypes = None
-
+    # Transform to SSA
+    ReconstructSSA().run_pass(state)
     # call this to get print etc rewrites
     rewrites.rewrite_registry.apply('before-inference', state)
     return func_ir
@@ -169,15 +175,14 @@ class TestBranchPrune(TestBranchPruneBase, SerialMixin):
         self.assert_prune(impl, (types.NoneType('none'),), [True], None)
         self.assert_prune(impl, (types.IntegerLiteral(10),), [None], 10)
 
-        # TODO: cannot handle this without const prop
-        # def impl(x):
-        #     z = None
-        #     y = z
-        #     if x == y:
-        #         print("x is 10")
+        def impl(x):
+            z = None
+            y = z
+            if x == y:
+                return 100
 
-        # self.assert_prune(impl, (types.NoneType('none'),), [None], None)
-        # self.assert_prune(impl, (types.IntegerLiteral(10),), [None], 10)
+        self.assert_prune(impl, (types.NoneType('none'),), [False], None)
+        self.assert_prune(impl, (types.IntegerLiteral(10),), [True], 10)
 
     def test_single_if_else(self):
 
@@ -247,7 +252,7 @@ class TestBranchPrune(TestBranchPruneBase, SerialMixin):
             if x is None:
                 x_is_none_work = True
             else:
-                pass  # force the True branch exit to be on backbone
+                pass
 
             if x_is_none_work:
                 y = 10
@@ -255,7 +260,15 @@ class TestBranchPrune(TestBranchPruneBase, SerialMixin):
                 y = -3
             return y
 
-        self.assert_prune(impl, (types.NoneType('none'),), [None, None], None)
+        if utils.PYVERSION >= (3, 10):
+            # Python 3.10 creates a block with a NOP in it for the `pass` which
+            # means it gets pruned.
+            self.assert_prune(impl, (types.NoneType('none'),), [False, None],
+                              None)
+        else:
+            self.assert_prune(impl, (types.NoneType('none'),), [None, None],
+                              None)
+
         self.assert_prune(impl, (types.IntegerLiteral(10),), [True, None], 10)
 
     def test_double_if_else_rt_const(self):
@@ -509,21 +522,21 @@ class TestBranchPrune(TestBranchPruneBase, SerialMixin):
         # break
 
         def impl(array, x, a=None):
-            b = 0
+            b = 2
             if x < 4:
                 b = 12
-            if a is None:
-                a = 0
+            if a is None: # known true
+                a = 7 # live
             else:
-                b = 12
-            if a < 0:
+                b = 15 # dead
+            if a < 0: # valid as a result of the redefinition of 'a'
                 return 10
             return 30 + b + a
 
         self.assert_prune(impl,
                           (types.Array(types.float64, 2, 'C'),
                            types.float64, types.NoneType('none'),),
-                          [None, None, None],
+                          [None, False, None],
                           np.zeros((2, 3)), 1., None)
 
     def test_redefinition_analysis_different_block_can_exec(self):
@@ -866,6 +879,72 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
         self.assertPreciseEqual(foo()[0], 666.)
 
 
+class TestBranchPruneSSA(MemoryLeakMixin, TestCase):
+    # Tests SSA rewiring of phi nodes after branch pruning.
+
+    class SSAPrunerCompiler(CompilerBase):
+        def define_pipelines(self):
+            # This is a simple pipeline that does branch pruning on IR in SSA
+            # form, then types and lowers as per the standard nopython pipeline.
+            pm = PassManager("testing pm")
+            pm.add_pass(TranslateByteCode, "analyzing bytecode")
+            pm.add_pass(IRProcessing, "processing IR")
+            # SSA early
+            pm.add_pass(ReconstructSSA, "ssa")
+            pm.add_pass(DeadBranchPrune, "dead branch pruning")
+            # type and then lower as usual
+            pm.add_pass(PreserveIR, "preserves the IR as metadata")
+            dpb = DefaultPassBuilder
+            typed_passes = dpb.define_typed_pipeline(self.state)
+            pm.passes.extend(typed_passes.passes)
+            lowering_passes = dpb.define_nopython_lowering_pipeline(self.state)
+            pm.passes.extend(lowering_passes.passes)
+            pm.finalize()
+            return [pm]
+
+    def test_ssa_update_phi(self):
+        # This checks that dead branch pruning is rewiring phi nodes correctly
+        # after a block containing an incoming for a phi is removed.
+
+        @njit(pipeline_class=self.SSAPrunerCompiler)
+        def impl(p=None, q=None):
+            z = 1
+            r = False
+            if p is None:
+                r = True # live
+
+            if r and q is not None:
+                z = 20 # dead
+
+            # one of the incoming blocks for z is dead, the phi needs an update
+            # were this not done, it would refer to variables that do not exist
+            # and result in a lowering error.
+            return z, r
+
+        self.assertPreciseEqual(impl(), impl.py_func())
+
+    def test_ssa_replace_phi(self):
+        # This checks that when a phi only has one incoming, because the other
+        # has been pruned, that a direct assignment is used instead.
+
+        @njit(pipeline_class=self.SSAPrunerCompiler)
+        def impl(p=None):
+            z = 0
+            if p is None:
+                z = 10
+            else:
+                z = 20
+
+            return z
+
+        self.assertPreciseEqual(impl(), impl.py_func())
+        func_ir = impl.overloads[impl.signatures[0]].metadata['preserved_ir']
+
+        # check the func_ir, make sure there's no phi nodes
+        for blk in func_ir.blocks.values():
+            self.assertFalse([*blk.find_exprs('phi')])
+
+
 class TestBranchPrunePostSemanticConstRewrites(TestBranchPruneBase):
     # Tests that semantic constants rewriting works by virtue of branch pruning
 
@@ -947,3 +1026,25 @@ class TestBranchPrunePostSemanticConstRewrites(TestBranchPruneBase):
         args = (np.zeros((5, 4, 3, 2)), np.zeros((1, 1)))
 
         self.assertPreciseEqual(impl(*args), impl.py_func(*args))
+
+    def test_tuple_const_propagation(self):
+        @njit(pipeline_class=IRPreservingTestPipeline)
+        def impl(*args):
+            s = 0
+            for arg in literal_unroll(args):
+                s += len(arg)
+            return s
+
+        inp = ((), (1, 2, 3), ())
+        self.assertPreciseEqual(impl(*inp), impl.py_func(*inp))
+
+        ol = impl.overloads[impl.signatures[0]]
+        func_ir = ol.metadata['preserved_ir']
+        # make sure one of the inplace binop args is a Const
+        binop_consts = set()
+        for blk in func_ir.blocks.values():
+            for expr in blk.find_exprs('inplace_binop'):
+                inst = blk.find_variable_assignment(expr.rhs.name)
+                self.assertIsInstance(inst.value, ir.Const)
+                binop_consts.add(inst.value.value)
+        self.assertEqual(binop_consts, {len(x) for x in inp})

@@ -297,7 +297,7 @@ class TestErrorMessages(unittest.TestCase):
         # hits CallableTemplate
         @njit
         def foo():
-            return np.angle(1)
+            return np.angle(None)
 
         with self.assertRaises(errors.TypingError) as raises:
             foo()

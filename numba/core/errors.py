@@ -97,6 +97,12 @@ class NumbaIRAssumptionWarning(NumbaPedanticWarning):
     Warning category for reporting an IR assumption violation.
     """
 
+
+class NumbaDebugInfoWarning(NumbaWarning):
+    """
+    Warning category for an issue with the emission of debug information.
+    """
+
 # These are needed in the color formatting of errors setup
 
 
@@ -364,9 +370,9 @@ please file a feature request at:
 https://github.com/numba/numba/issues/new?template=feature_request.md
 
 To see Python/NumPy features supported by the latest release of Numba visit:
-https://numba.pydata.org/numba-doc/latest/reference/pysupported.html
+https://numba.readthedocs.io/en/stable/reference/pysupported.html
 and
-https://numba.pydata.org/numba-doc/latest/reference/numpysupported.html
+https://numba.readthedocs.io/en/stable/reference/numpysupported.html
 """
 
 constant_inference_info = """
@@ -375,7 +381,7 @@ a constant. This could well be a current limitation in Numba's internals,
 however please first check that your code is valid for compilation,
 particularly with respect to string interpolation (not supported!) and
 the requirement of compile time constants as arguments to exceptions:
-https://numba.pydata.org/numba-doc/latest/reference/pysupported.html?highlight=exceptions#constructs
+https://numba.readthedocs.io/en/stable/reference/pysupported.html?highlight=exceptions#constructs
 
 If the code is valid and the unsupported functionality is important to you
 please file a feature request at:
@@ -389,12 +395,12 @@ This is not usually a problem with Numba itself but instead often caused by
 the use of unsupported features or an issue in resolving types.
 
 To see Python/NumPy features supported by the latest release of Numba visit:
-https://numba.pydata.org/numba-doc/latest/reference/pysupported.html
+https://numba.readthedocs.io/en/stable/reference/pysupported.html
 and
-https://numba.pydata.org/numba-doc/latest/reference/numpysupported.html
+https://numba.readthedocs.io/en/stable/reference/numpysupported.html
 
 For more information about typing errors and how to debug them visit:
-https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-doesn-t-compile
+https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-doesn-t-compile
 
 If you think your code should work with Numba, please report the error message
 and traceback, along with a minimal reproducer at:
@@ -608,7 +614,7 @@ class LoweringError(NumbaError):
 
 class UnsupportedParforsError(NumbaError):
     """
-    An error ocurred because parfors is not supported on the platform.
+    An error occurred because parfors is not supported on the platform.
     """
     pass
 
@@ -667,7 +673,7 @@ class ConstantInferenceError(NumbaError):
 
 class InternalError(NumbaError):
     """
-    For wrapping internal error occured within the compiler
+    For wrapping internal error occurred within the compiler
     """
 
     def __init__(self, exception):

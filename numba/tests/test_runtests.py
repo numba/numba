@@ -52,7 +52,7 @@ class TestCase(unittest.TestCase):
         number = int(last_line.split(' ')[0])
         # There may be some "skipped" messages at the beginning,
         # so do an approximate check.
-        self.assertIn(len(lines), range(number + 1, number + 10))
+        self.assertIn(len(lines), range(number + 1, number + 20))
         self.assertGreaterEqual(number, minsize)
         return lines
 
@@ -107,14 +107,14 @@ class TestCase(unittest.TestCase):
 
         tags = ['long_running', 'long_running, important']
 
+        total = get_count(['numba.tests'])
+
         for tag in tags:
-            total = get_count(['numba.tests'])
             included = get_count(['--tags', tag, 'numba.tests'])
             excluded = get_count(['--exclude-tags', tag, 'numba.tests'])
             self.assertEqual(total, included + excluded)
 
             # check syntax with `=` sign in
-            total = get_count(['numba.tests'])
             included = get_count(['--tags=%s' % tag, 'numba.tests'])
             excluded = get_count(['--exclude-tags=%s' % tag, 'numba.tests'])
             self.assertEqual(total, included + excluded)

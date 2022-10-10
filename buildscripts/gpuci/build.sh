@@ -16,6 +16,14 @@ cd "$WORKSPACE"
 # Determine CUDA release version
 export CUDA_REL=${CUDA_VERSION%.*}
 
+# Test with NVIDIA Bindings on CUDA 11.5
+if [ $CUDA_TOOLKIT_VER == "11.5" ]
+then
+  export NUMBA_CUDA_USE_NVIDIA_BINDING=1;
+else
+  export NUMBA_CUDA_USE_NVIDIA_BINDING=0;
+fi;
+
 ################################################################################
 # SETUP - Check environment
 ################################################################################
@@ -32,14 +40,21 @@ gpuci_mamba_retry create -n numba_ci -y \
                   "python=${PYTHON_VER}" \
                   "cudatoolkit=${CUDA_TOOLKIT_VER}" \
                   "numba/label/dev::llvmlite" \
-                  "numpy" \
+                  "numpy=1.21" \
                   "scipy" \
                   "cffi" \
                   "psutil" \
                   "gcc_linux-64=7" \
-                  "gxx_linux-64=7"
+                  "gxx_linux-64=7" \
+                  "setuptools"
 
 conda activate numba_ci
+
+if [ $NUMBA_CUDA_USE_NVIDIA_BINDING == "1" ]
+then
+  gpuci_logger "Install NVIDIA CUDA Python bindings";
+  gpuci_mamba_retry install nvidia::cuda-python=11.7.0;
+fi;
 
 gpuci_logger "Install numba"
 python setup.py develop

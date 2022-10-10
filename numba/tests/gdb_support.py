@@ -5,16 +5,24 @@ import sys
 import unittest
 from numba.core import config
 from numba.misc.gdb_hook import _confirm_gdb
+from numba.misc.numba_gdbinfo import collect_gdbinfo
 
 # check if gdb is present and working
 try:
-    _confirm_gdb(need_ptrace_attach=False) # The driver launches as `gdb EXE`.
+    _confirm_gdb(need_ptrace_attach=False)  # The driver launches as `gdb EXE`.
     _HAVE_GDB = True
+    _gdb_info = collect_gdbinfo()
+    _GDB_HAS_PY3 = _gdb_info.py_ver.startswith('3')
 except Exception:
     _HAVE_GDB = False
+    _GDB_HAS_PY3 = False
 
 _msg = "functioning gdb with correct ptrace permissions is required"
 needs_gdb = unittest.skipUnless(_HAVE_GDB, _msg)
+
+_msg = "gdb with python 3 support needed"
+needs_gdb_py3 = unittest.skipUnless(_GDB_HAS_PY3, _msg)
+
 
 try:
     import pexpect
@@ -32,7 +40,7 @@ class GdbMIDriver(object):
     Driver class for the GDB machine interface:
     https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI.html
     """
-    def __init__(self, file_name, debug=False, timeout=120):
+    def __init__(self, file_name, debug=False, timeout=120, init_cmds=None):
         if not _HAVE_PEXPECT:
             msg = ("This driver requires the pexpect module. This can be "
                    "obtained via:\n\n$ conda install pexpect")
@@ -46,16 +54,35 @@ class GdbMIDriver(object):
         self._debug = debug
         self._file_name = file_name
         self._timeout = timeout
+        self._init_cmds = init_cmds
         self._drive()
 
     def _drive(self):
         """This function sets up the caputured gdb instance"""
         assert os.path.isfile(self._file_name)
-        cmd = [self._gdb_binary, '--interpreter', 'mi', '--args', self._python,
-               self._file_name]
+        cmd = [self._gdb_binary, '--interpreter', 'mi']
+        if self._init_cmds is not None:
+            cmd += list(self._init_cmds)
+        cmd += ['--args', self._python, self._file_name]
         self._captured = pexpect.spawn(' '.join(cmd))
         if self._debug:
             self._captured.logfile = sys.stdout.buffer
+
+    def supports_python(self):
+        """Returns True if the underlying gdb implementation has python support
+           False otherwise"""
+        return "python" in self.list_features()
+
+    def supports_numpy(self):
+        """Returns True if the underlying gdb implementation has NumPy support
+           (and by extension Python support) False otherwise"""
+        if not self.supports_python():
+            return False
+        # Some gdb's have python 2!
+        cmd = ('python from __future__ import print_function;'
+               'import numpy; print(numpy)')
+        self.interpreter_exec('console', cmd)
+        return "module \'numpy\' from" in self._captured.before.decode()
 
     def _captured_expect(self, expect):
         try:
@@ -75,7 +102,8 @@ class GdbMIDriver(object):
         regex."""
         output = self._captured.after
         decoded = output.decode('utf-8')
-        found = re.search(expected, decoded)
+        done_str = decoded.splitlines()[0]
+        found = re.match(expected, done_str)
         assert found, f'decoded={decoded}\nexpected={expected})'
 
     def _run_command(self, command, expect=''):
@@ -141,3 +169,29 @@ class GdbMIDriver(object):
         assert isinstance(print_values, int) and print_values in (0, 1, 2)
         cmd = f'-stack-list-variables {print_values}'
         self._run_command(cmd, expect=r'\^done,.*\r\n')
+
+    def interpreter_exec(self, interpreter=None, command=None):
+        """gdb command ~= 'interpreter-exec'"""
+        if interpreter is None:
+            raise ValueError("interpreter cannot be None")
+        if command is None:
+            raise ValueError("command cannot be None")
+        cmd = f'-interpreter-exec {interpreter} "{command}"'
+        self._run_command(cmd, expect=r'\^(done|error).*\r\n')  # NOTE no `,`
+
+    def _list_features_raw(self):
+        cmd = '-list-features'
+        self._run_command(cmd, expect=r'\^done,.*\r\n')
+
+    def list_features(self):
+        """No equivalent gdb command? Returns a list of supported gdb
+           features.
+        """
+        self._list_features_raw()
+        output = self._captured.after
+        decoded = output.decode('utf-8')
+        m = re.match('.*features=\\[(.*)\\].*', decoded)
+        assert m is not None, "No match found for features string"
+        g = m.groups()
+        assert len(g) == 1, "Invalid number of match groups found"
+        return g[0].replace('"', '').split(',')

@@ -350,6 +350,8 @@ class UFuncMechanism(object):
 
 
 def to_dtype(ty):
+    if isinstance(ty, types.EnumMember):
+        ty = ty.dtype
     return np.dtype(str(ty))
 
 
@@ -633,7 +635,7 @@ class GUFuncSchedule(object):
         return pprint.pformat(dict(values))
 
 
-class GenerializedUFunc(object):
+class GeneralizedUFunc(object):
     def __init__(self, kernelmap, engine):
         self.kernelmap = kernelmap
         self.engine = engine
@@ -664,7 +666,7 @@ class GenerializedUFunc(object):
         try:
             outdtype, kernel = self.kernelmap[idtypes]
         except KeyError:
-            # No exact match, then use the first compatbile.
+            # No exact match, then use the first compatible.
             # This does not match the numpy dispatching exactly.
             # Later, we may just jit a new version for the missing signature.
             idtypes = self._search_matching_signature(idtypes)

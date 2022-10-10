@@ -164,7 +164,7 @@ option::
 The neighborhood option is a tuple of tuples.  The outer tuple's
 length is equal to the number of dimensions of the input array.
 The inner tuple's lengths are always two because
-each element of the outer tuple corresponds to minimum and
+each element of the inner tuple corresponds to minimum and
 maximum index offsets used in the corresponding dimension.
 
 If a user specifies a neighborhood but the kernel accesses elements outside the
@@ -243,9 +243,9 @@ to be used for the output of the stencil.  In this case, the
 stencil function will not allocate its own output array.
 Users should assure that the return type of the stencil kernel can
 be safely cast to the element-type of the user-specified output array
-following the `Numpy ufunc casting rules`_.
+following the `NumPy ufunc casting rules`_.
 
-.. _`Numpy ufunc casting rules`: http://docs.scipy.org/doc/numpy/reference/ufuncs.html#casting-rules
+.. _`NumPy ufunc casting rules`: http://docs.scipy.org/doc/numpy/reference/ufuncs.html#casting-rules
 
 An example usage is shown below::
 

@@ -673,7 +673,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             # needs to exist for type resolution
 
             # NOTE: If lowering is failing on a `_EmptyImplementationEntry`,
-            #       the inliner has failed to inline this entry corretly.
+            #       the inliner has failed to inline this entry correctly.
             impl_init = _EmptyImplementationEntry('always inlined')
             self._compiled_overloads[sig.args] = impl_init
             if not self._inline.is_always_inline:
@@ -809,7 +809,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
 
         # Check type of pyfunc
         if not isinstance(pyfunc, FunctionType):
-            msg = ("Implementator function returned by `@overload` "
+            msg = ("Implementation function returned by `@overload` "
                    "has an unexpected type.  Got {}")
             raise AssertionError(msg.format(pyfunc))
 

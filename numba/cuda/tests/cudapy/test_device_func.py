@@ -4,7 +4,7 @@ import types
 import numpy as np
 
 from numba.cuda.testing import unittest, skip_on_cudasim, CUDATestCase
-from numba import cuda, jit, int32
+from numba import cuda, jit, float32, int32
 from numba.core.errors import TypingError
 
 
@@ -191,6 +191,31 @@ class TestDeviceFunc(CUDATestCase):
         rgba_caller[1, 1](x, channels)
 
         self.assertEqual(0x04010203, x[0])
+
+    def _test_declare_device(self, decl):
+        self.assertEqual(decl.name, 'f1')
+        self.assertEqual(decl.sig.args, (float32[:],))
+        self.assertEqual(decl.sig.return_type, int32)
+
+    @skip_on_cudasim('cudasim does not check signatures')
+    def test_declare_device_signature(self):
+        f1 = cuda.declare_device('f1', int32(float32[:]))
+        self._test_declare_device(f1)
+
+    @skip_on_cudasim('cudasim does not check signatures')
+    def test_declare_device_string(self):
+        f1 = cuda.declare_device('f1', 'int32(float32[:])')
+        self._test_declare_device(f1)
+
+    @skip_on_cudasim('cudasim does not check signatures')
+    def test_bad_declare_device_tuple(self):
+        with self.assertRaisesRegex(TypeError, 'Return type'):
+            cuda.declare_device('f1', (float32[:],))
+
+    @skip_on_cudasim('cudasim does not check signatures')
+    def test_bad_declare_device_string(self):
+        with self.assertRaisesRegex(TypeError, 'Return type'):
+            cuda.declare_device('f1', '(float32[:],)')
 
 
 if __name__ == '__main__':

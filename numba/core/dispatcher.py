@@ -658,7 +658,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         if signature is not None:
             cres = self.overloads[signature]
             lib = cres.library
-            return lib.get_disasm_cfg()
+            return lib.get_disasm_cfg(cres.fndesc.mangled_name)
 
         return dict((sig, self.inspect_disasm_cfg(sig))
                     for sig in self.signatures)
@@ -778,7 +778,7 @@ class _MemoMixin:
         """
         u = self.__uuid
         if u is None:
-            u = str(uuid.uuid1())
+            u = str(uuid.uuid4())
             self._set_uuid(u)
         return u
 

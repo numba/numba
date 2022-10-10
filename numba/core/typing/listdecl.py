@@ -153,6 +153,8 @@ class MulList(AbstractTemplate):
         a, b = args
         if isinstance(a, types.List) and isinstance(b, types.Integer):
             return signature(a, a, types.intp)
+        elif isinstance(a, types.Integer) and isinstance(b, types.List):
+            return signature(b, types.intp, b)
 
 
 @infer_global(operator.imul)

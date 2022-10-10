@@ -207,7 +207,7 @@ class DIBuilder(AbstractDIBuilder):
             # Struct type
             meta = []
             offset = 0
-            if datamodel is None:
+            if datamodel is None or not datamodel.inner_models():
                 name = f"Anonymous struct ({str(lltype)})"
                 for field_id, element in enumerate(lltype.elements):
                     size = self.cgctx.get_abi_sizeof(element)
@@ -315,8 +315,11 @@ class DIBuilder(AbstractDIBuilder):
                                        line=line, function=function,
                                        argmap=argmap)
         function.set_metadata("dbg", di_subp)
-        # disable inlining for this function for easier debugging
-        function.attributes.add('noinline')
+
+        # Don't marked alwaysinline functions as noinline.
+        if 'alwaysinline' not in function.attributes:
+            # disable inlining for this function for easier debugging
+            function.attributes.add('noinline')
 
     def finalize(self):
         dbgcu = cgutils.get_or_insert_named_metadata(self.module, self.DBG_CU_NAME)

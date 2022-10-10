@@ -665,6 +665,9 @@ class NamedTupleClass(Callable, Opaque):
     def get_call_signatures(self):
         return (), True
 
+    def get_impl_key(self, sig):
+        return type(self)
+
     @property
     def key(self):
         return self.instance_class
@@ -687,6 +690,9 @@ class NumberClass(Callable, DTypeSpec, Opaque):
     def get_call_signatures(self):
         return (), True
 
+    def get_impl_key(self, sig):
+        return type(self)
+
     @property
     def key(self):
         return self.instance_type
@@ -694,6 +700,9 @@ class NumberClass(Callable, DTypeSpec, Opaque):
     @property
     def dtype(self):
         return self.instance_type
+
+
+_RecursiveCallOverloads = namedtuple("_RecursiveCallOverloads", "qualname,uid")
 
 
 class RecursiveCall(Opaque):
@@ -711,9 +720,25 @@ class RecursiveCall(Opaque):
         if self._overloads is None:
             self._overloads = {}
 
-    @property
-    def overloads(self):
-        return self._overloads
+    def add_overloads(self, args, qualname, uid):
+        """Add an overload of the function.
+
+        Parameters
+        ----------
+        args :
+            argument types
+        qualname :
+            function qualifying name
+        uid :
+            unique id
+        """
+        self._overloads[args] = _RecursiveCallOverloads(qualname, uid)
+
+    def get_overloads(self, args):
+        """Get the qualifying name and unique id for the overload given the
+        argument types.
+        """
+        return self._overloads[args]
 
     @property
     def key(self):

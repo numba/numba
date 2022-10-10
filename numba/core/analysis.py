@@ -402,6 +402,15 @@ def dead_branch_prune(func_ir, called_args):
         print("before".center(80, '-'))
         print(func_ir.dump())
 
+    phi2lbl = dict()
+    phi2asgn = dict()
+    for lbl, blk in func_ir.blocks.items():
+        for stmt in blk.body:
+            if isinstance(stmt, ir.Assign):
+                if isinstance(stmt.value, ir.Expr) and stmt.value.op == 'phi':
+                    phi2lbl[stmt.value] = lbl
+                    phi2asgn[stmt.value] = stmt
+
     # This looks for branches where:
     # at least one arg of the condition is in input args and const
     # at least one an arg of the condition is a const
@@ -492,9 +501,71 @@ def dead_branch_prune(func_ir, called_args):
                         repl_idx = defns.index(cond)
                         defns[repl_idx] = x.value
 
+    # Check post dominators of dead nodes from in the original CFG for use of
+    # vars that are being removed in the dead blocks which might be referred to
+    # by phi nodes.
+    #
+    # Multiple things to fix up:
+    #
+    # 1. Cases like:
+    #
+    # A        A
+    # |\       |
+    # | B  --> B
+    # |/       |
+    # C        C
+    #
+    # i.e. the branch is dead but the block is still alive. In this case CFG
+    # simplification will fuse A-B-C and any phi in C can be updated as an
+    # direct assignment from the last assigned version in the dominators of the
+    # fused block.
+    #
+    # 2. Cases like:
+    #
+    #   A        A
+    #  / \       |
+    # B   C  --> B
+    #  \ /       |
+    #   D        D
+    #
+    # i.e. the block C is dead. In this case the phis in D need updating to
+    # reflect the collapse of the phi condition. This should result in a direct
+    # assignment of the surviving version in B to the LHS of the phi in D.
+
+    new_cfg = compute_cfg_from_blocks(func_ir.blocks)
+    dead_blocks = new_cfg.dead_nodes()
+
+    # for all phis that are still in live blocks.
+    for phi, lbl in phi2lbl.items():
+        if lbl in dead_blocks:
+            continue
+        new_incoming = [x[0] for x in new_cfg.predecessors(lbl)]
+        if set(new_incoming) != set(phi.incoming_blocks):
+            # Something has changed in the CFG...
+            if len(new_incoming) == 1:
+                # There's now just one incoming. Replace the PHI node by a
+                # direct assignment
+                idx = phi.incoming_blocks.index(new_incoming[0])
+                phi2asgn[phi].value = phi.incoming_values[idx]
+            else:
+                # There's more than one incoming still, then look through the
+                # incoming and remove dead
+                ic_val_tmp = []
+                ic_blk_tmp = []
+                for ic_val, ic_blk in zip(phi.incoming_values,
+                                          phi.incoming_blocks):
+                    if ic_blk in dead_blocks:
+                        continue
+                    else:
+                        ic_val_tmp.append(ic_val)
+                        ic_blk_tmp.append(ic_blk)
+                phi.incoming_values.clear()
+                phi.incoming_values.extend(ic_val_tmp)
+                phi.incoming_blocks.clear()
+                phi.incoming_blocks.extend(ic_blk_tmp)
+
     # Remove dead blocks, this is safe as it relies on the CFG only.
-    cfg = compute_cfg_from_blocks(func_ir.blocks)
-    for dead in cfg.dead_nodes():
+    for dead in dead_blocks:
         del func_ir.blocks[dead]
 
     # if conditions were nullified then consts were rewritten, update
@@ -554,6 +625,11 @@ def rewrite_semantic_constants(func_ir, called_args):
                 arg_def = guard(get_definition, func_ir, arg)
                 if isinstance(arg_def, ir.Arg):
                     argty = called_args[arg_def.index]
+                    if isinstance(argty, types.BaseTuple):
+                        rewrite_statement(func_ir, stmt, argty.count)
+                elif (isinstance(arg_def, ir.Expr) and
+                      arg_def.op == 'typed_getitem'):
+                    argty = arg_def.dtype
                     if isinstance(argty, types.BaseTuple):
                         rewrite_statement(func_ir, stmt, argty.count)
 
@@ -618,3 +694,29 @@ def find_literally_calls(func_ir, argtypes):
         if not isinstance(query_arg, (types.Literal, types.InitialValue)):
             loc = first_loc[pos]
             raise errors.ForceLiteralArg(marked_args, loc=loc)
+
+
+ir_extension_use_alloca = {}
+
+
+def must_use_alloca(blocks):
+    """
+    Analyzes a dictionary of blocks to find variables that must be
+    stack allocated with alloca.  For each statement in the blocks,
+    determine if that statement requires certain variables to be
+    stack allocated.  This function uses the extension point
+    ir_extension_use_alloca to allow other IR node types like parfors
+    to register to be processed by this analysis function.  At the
+    moment, parfors are the only IR node types that may require
+    something to be stack allocated.
+    """
+    use_alloca_vars = set()
+
+    for ir_block in blocks.values():
+        for stmt in ir_block.body:
+            if type(stmt) in ir_extension_use_alloca:
+                func = ir_extension_use_alloca[type(stmt)]
+                func(stmt, use_alloca_vars)
+                continue
+
+    return use_alloca_vars
