@@ -414,7 +414,9 @@ The following reduction functions are supported:
 String Operations
 -----------------
 
-Comparison operators are supported on 1-D contiguous arrays of strings or bytes:
+The following functions are supported on scalars and 1-D contiguous arrays of strings or bytes:
+
+Comparison operators:
 
 * :func:`numpy.char.compare_chararrays`
 * :func:`numpy.char.equal`
@@ -423,6 +425,29 @@ Comparison operators are supported on 1-D contiguous arrays of strings or bytes:
 * :func:`numpy.char.less_equal`
 * :func:`numpy.char.less`
 * :func:`numpy.char.not_equal`
+
+Occurrence information:
+
+* :func:`numpy.char.count`
+* :func:`numpy.char.endswith`
+* :func:`numpy.char.find`
+* :func:`numpy.char.index`
+* :func:`numpy.char.rfind`
+* :func:`numpy.char.rindex`
+* :func:`numpy.char.startswith`
+
+Property information:
+
+* :func:`numpy.char.isalnum`
+* :func:`numpy.char.isalpha`
+* :func:`numpy.char.isdecimal`
+* :func:`numpy.char.isdigit`
+* :func:`numpy.char.islower`
+* :func:`numpy.char.isnumeric`
+* :func:`numpy.char.isspace`
+* :func:`numpy.char.istitle`
+* :func:`numpy.char.isupper`
+* :func:`numpy.char.str_len`
 
 Other functions
 ---------------
