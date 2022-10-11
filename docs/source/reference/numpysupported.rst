@@ -438,15 +438,15 @@ Occurrence information:
 
 Property information:
 
-* :func:`numpy.char.isalnum`
-* :func:`numpy.char.isalpha`
-* :func:`numpy.char.isdecimal`
-* :func:`numpy.char.isdigit`
-* :func:`numpy.char.islower`
-* :func:`numpy.char.isnumeric`
+* :func:`numpy.char.isalnum` (up to extended ASCII)
+* :func:`numpy.char.isalpha` (up to extended ASCII)
+* :func:`numpy.char.isdecimal` (up to extended ASCII)
+* :func:`numpy.char.isdigit` (up to extended ASCII)
+* :func:`numpy.char.islower` (up to extended ASCII)
+* :func:`numpy.char.isnumeric` (up to extended ASCII)
 * :func:`numpy.char.isspace`
-* :func:`numpy.char.istitle`
-* :func:`numpy.char.isupper`
+* :func:`numpy.char.istitle` (up to extended ASCII)
+* :func:`numpy.char.isupper` (up to extended ASCII)
 * :func:`numpy.char.str_len`
 
 Other functions
