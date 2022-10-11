@@ -403,14 +403,6 @@ def next_impl(context, builder, sig, args):
 
 # -----------------------------------------------------------------------------
 
-# @overload("not in")
-# def impl_not_in(a, b):
-#     def impl(a, b):
-#         return operator.contains(b, a)
-#     return impl
-
-
-# -----------------------------------------------------------------------------
 
 @lower_builtin(len, types.ConstSized)
 def constsized_len(context, builder, sig, args):
