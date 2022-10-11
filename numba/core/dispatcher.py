@@ -253,8 +253,6 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         self.func_code = get_code_object(py_func)
         # but newer python uses a different name
         self.__code__ = self.func_code
-        # a place to keep an active reference to the types of the active call
-        self._types_active_call = []
         # Default argument values match the py_func
         self.__defaults__ = py_func.__defaults__
 
@@ -485,8 +483,6 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                     e.patch_message('\n'.join((str(e).rstrip(), help_msg)))
             # ignore the FULL_TRACEBACKS config, this needs reporting!
             raise e
-        finally:
-            self._types_active_call = []
         return return_val
 
     def inspect_llvm(self, signature=None):
@@ -736,7 +732,6 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         else:
             if tp is None:
                 tp = types.pyobject
-        self._types_active_call.append(tp)
         return tp
 
     def _callback_add_timer(self, duration, cres, lock_name):
