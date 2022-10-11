@@ -795,9 +795,13 @@ def list_eq(context, builder, sig, args):
 
     return builder.load(res)
 
+
+def all_list(*args):
+    return all([isinstance(typ, types.List) for typ in args])
+
 @overload(operator.ne)
 def impl_list_ne(a, b):
-    if not all([isinstance(typ, types.List) for typ in [a, b]]):
+    if not all_list(a, b):
         return
 
     def list_ne_impl(a, b):
@@ -807,7 +811,7 @@ def impl_list_ne(a, b):
 
 @overload(operator.le)
 def impl_list_le(a, b):
-    if not all([isinstance(typ, types.List) for typ in [a, b]]):
+    if not all_list(a, b):
         return
 
     def list_le_impl(a, b):
@@ -824,7 +828,7 @@ def impl_list_le(a, b):
 
 @overload(operator.lt)
 def impl_list_lt(a, b):
-    if not all([isinstance(typ, types.List) for typ in [a, b]]):
+    if not all_list(a, b):
         return
 
     def list_lt_impl(a, b):
@@ -841,7 +845,7 @@ def impl_list_lt(a, b):
 
 @overload(operator.ge)
 def impl_list_ge(a, b):
-    if not all([isinstance(typ, types.List) for typ in [a, b]]):
+    if not all_list(a, b):
         return
 
     def list_ge_impl(a, b):
@@ -851,7 +855,7 @@ def impl_list_ge(a, b):
 
 @overload(operator.gt)
 def impl_list_gt(a, b):
-    if not all([isinstance(typ, types.List) for typ in [a, b]]):
+    if not all_list(a, b):
         return
 
     def list_gt_impl(a, b):
