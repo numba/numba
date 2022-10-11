@@ -30,7 +30,6 @@ from numba.core.extending import (register_jitable, overload, overload_method,
 from numba.misc import quicksort, mergesort
 from numba.cpython import slicing
 from numba.cpython.unsafe.tuple import tuple_setitem, build_full_slice_tuple
-from numba.core.overload_glue import glue_lowering
 from numba.core.extending import overload_classmethod
 from numba.core.typing.npydecl import (parse_dtype as ty_parse_dtype,
                                        parse_shape as ty_parse_shape,
