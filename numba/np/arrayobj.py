@@ -6016,7 +6016,7 @@ def impl_np_sort(a):
 @overload_method(types.Array, "argsort")
 def impl_arr_argsort(arr, kind=None):
     if is_nonelike(kind):
-        kind = types.StringLiteral(value='quicksort')
+        kind = types.literal('quicksort')
     if not isinstance(kind, types.StringLiteral):
         msg = '"kind" must be a string literal'
         raise errors.RequireLiteralValue(msg)
