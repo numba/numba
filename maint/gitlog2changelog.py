@@ -32,9 +32,7 @@ def get_pr(pr_number):
 
 
 def hyperlink_user(user_obj):
-    return "`%s <%s>`_" % (user_obj.name
-                           if user_obj.name is not None
-                           else user_obj.login, user_obj.html_url)
+    return "`%s <%s>`_" % (user_obj.login, user_obj.html_url)
 
 
 if __name__ == '__main__':

@@ -22,11 +22,9 @@ call deactivate
 @rem Display root environment (for debugging)
 conda list
 @rem Scipy, CFFI, jinja2 and IPython are optional dependencies, but exercised in the test suite
-conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip jinja2 ipython gitpython pyyaml "setuptools<60"
+conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip scipy jinja2 ipython gitpython pyyaml
 
 call activate %CONDA_ENV%
-@rem Scipy comes from conda-forge for NumPy 1.23
-if %NUMPY% == "1.23" (%CONDA_INSTALL% conda-forge::scipy) else (%CONDA_INSTALL% scipy)
 @rem Install latest llvmlite build
 %CONDA_INSTALL% -c numba/label/dev llvmlite=0.40
 @rem Install required backports for older Pythons
@@ -36,7 +34,7 @@ if "%BUILD_DOC%" == "yes" (%CONDA_INSTALL% sphinx sphinx_rtd_theme pygments)
 @rem Install dependencies for code coverage (codecov.io)
 if "%RUN_COVERAGE%" == "yes" (%PIP_INSTALL% codecov)
 @rem Install TBB
-%CONDA_INSTALL% -c numba tbb=2021 tbb-devel
+%CONDA_INSTALL% -c numba tbb=2021 "tbb-devel>=2021,<2021.6"
 if %errorlevel% neq 0 exit /b %errorlevel%
 
 echo "DEBUG ENV:"
