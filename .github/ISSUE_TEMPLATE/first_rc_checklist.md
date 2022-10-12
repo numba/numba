@@ -18,7 +18,7 @@ labels: task
     - [ ] "PR with changelog entries".
 * [ ] Create X.Y release branch.
 * [ ] Create PR against the release branch to make `numba/testing/main.py`
-      to refer to `origin/releaseX.Y`.
+      to refer to `origin/releaseX.Y` instead of `origin/main`.
 * [ ] Dependency version pinning on release branch
   * [ ] Pin llvmlite to `>=0.A.0rc1,<0.A+1.0`.
   * [ ] Pin NumPy if needed
