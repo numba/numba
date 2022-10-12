@@ -15,7 +15,7 @@ import unittest
 
 def _pack_arguments(main_args: (list, tuple), args: (list, tuple)):
     """Generate combinations of arguments for a list of main arguments"""
-    arg_product = tuple(product(*args))
+    arg_product = product(*args)
     for a in main_args:
         for args in arg_product:
             yield (*a, *args)
@@ -295,8 +295,8 @@ class TestStringInformation(TestCase):
         w = [9, 10, 11, 12, 13, 28, 29, 30, 31, 32]
 
         # ASCII word pairs
-        a = np.array(['aAaAaA', '  aA  ', 'abBABba', 'AbbAbbbbAbb',
-                      ' aA Aa aa AA A1 1A 2a 33 Aa-aa '])
+        a = np.array(['aAaAaA', 'abBABba', 'AbbAbbbbAbb', '  aA  ',
+                      'Aa aA ', 'aa aa', 'AA', 'A1 1A', '2a', '33', 'Aa-aa'])
         p = np.array([chr(np.random.choice(w))
                      .join([''.join([chr(np.random.randint(48, 127))
                                      for _ in range(3)]) for _ in range(2)])
@@ -319,7 +319,7 @@ class TestStringInformation(TestCase):
         generics = [
             (c, np.random.choice(c, c.size)),
             (s, np.random.choice(s, s.size)),
-            (np.random.choice(s), np.array(['a', 'b', 'c']), 'U1')
+            (np.random.choice(s), np.array(['a', 'b', 'c', '']), 'U1')
         ]
 
         # Scalar Comparisons
@@ -405,11 +405,11 @@ class TestStringInformation(TestCase):
                 continue
 
             byte_args = _pack_arguments(self.byte_args,
-                                        [(None, 1, 2, -500, 500),
-                                         (0, -1, -2, -500, None)])
+                                        [(None, -2, 1, 2, -500, 500),
+                                         (0, -2, 1, 2, -500, None)])
             string_args = _pack_arguments(self.string_args,
-                                          [(None, 1, 2, -500, 500),
-                                           (0, -1, -2, -500, None)])
+                                          [(None, -2, 1, 2, -500, 500),
+                                           (0, -2, 1, 2, -500, None)])
             for args in byte_args:
                 check_output(pyfunc, cfunc, *args)
 
