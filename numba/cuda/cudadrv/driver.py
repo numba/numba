@@ -2657,7 +2657,7 @@ class Linker(metaclass=ABCMeta):
 
 class MVCLinker(Linker):
     """
-    Linker supporting Minor Version Compatibility, backed by the ptxcompiler
+    Linker supporting Minor Version Compatibility, backed by the cubinlinker
     package.
     """
     def __init__(self, max_registers=None, lineinfo=False, cc=None):
