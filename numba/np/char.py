@@ -1068,14 +1068,18 @@ def ov_char_count(a, sub, start=0, end=None):
 
     if a_dim > 0 or sub_dim > 0:
         def impl(a, sub, start=0, end=None):
+            start = start or s
+            end = e if end is None else end
             return count(*register_a(a, False),
                          *register_sub(sub, False),
-                         start or s, e if end is None else end)
+                         start, end)
     else:
         def impl(a, sub, start=0, end=None):
+            start = start or s
+            end = e if end is None else end
             return np.array(count(*register_a(a, False),
                                   *register_sub(sub, False),
-                                  start or s, e if end is None else end)[0])
+                                  start, end)[0])
     return impl
 
 
@@ -1086,14 +1090,18 @@ def ov_char_endswith(a, sub, start=0, end=None):
 
     if a_dim > 0 or sub_dim > 0:
         def impl(a, sub, start=0, end=None):
+            start = start or s
+            end = e if end is None else end
             return endswith(*register_a(a, False),
                             *register_sub(sub, False),
-                            start or s, e if end is None else end)
+                            start, end)
     else:
         def impl(a, sub, start=0, end=None):
+            start = start or s
+            end = e if end is None else end
             return np.array(endswith(*register_a(a, False),
                                      *register_sub(sub, False),
-                                     start or s, e if end is None else end)[0])
+                                     start, end)[0])
     return impl
 
 
@@ -1104,15 +1112,18 @@ def ov_char_startswith(a, sub, start=0, end=None):
 
     if a_dim > 0 or sub_dim > 0:
         def impl(a, sub, start=0, end=None):
+            start = start or s
+            end = e if end is None else end
             return startswith(*register_a(a, False),
                               *register_sub(sub, False),
-                              start or s, e if end is None else end)
+                              start, end)
     else:
         def impl(a, sub, start=0, end=None):
+            start = start or s
+            end = e if end is None else end
             return np.array(startswith(*register_a(a, False),
                                        *register_sub(sub, False),
-                                       start or s,
-                                       e if end is None else end)[0])
+                                       start, end)[0])
     return impl
 
 
@@ -1123,14 +1134,18 @@ def ov_char_find(a, sub, start=0, end=None):
 
     if a_dim > 0 or sub_dim > 0:
         def impl(a, sub, start=0, end=None):
+            start = start or s
+            end = e if end is None else end
             return find(*register_a(a, False),
                         *register_sub(sub, False),
-                        start or s, e if end is None else end)
+                        start, end)
     else:
         def impl(a, sub, start=0, end=None):
+            start = start or s
+            end = e if end is None else end
             return np.array(find(*register_a(a, False),
                                  *register_sub(sub, False),
-                                 start or s, e if end is None else end)[0])
+                                 start, end)[0])
     return impl
 
 
@@ -1141,14 +1156,18 @@ def ov_char_rfind(a, sub, start=0, end=None):
 
     if a_dim > 0 or sub_dim > 0:
         def impl(a, sub, start=0, end=None):
+            start = start or s
+            end = e if end is None else end
             return rfind(*register_a(a, False),
                          *register_sub(sub, False),
-                         start or s, e if end is None else end)
+                         start, end)
     else:
         def impl(a, sub, start=0, end=None):
+            start = start or s
+            end = e if end is None else end
             return np.array(rfind(*register_a(a, False),
                                   *register_sub(sub, False),
-                                  start or s, e if end is None else end)[0])
+                                  start, end)[0])
     return impl
 
 
@@ -1159,14 +1178,18 @@ def ov_char_index(a, sub, start=0, end=None):
 
     if a_dim > 0 or sub_dim > 0:
         def impl(a, sub, start=0, end=None):
+            start = start or s
+            end = e if end is None else end
             return index(*register_a(a, False),
                          *register_sub(sub, False),
-                         start or s, e if end is None else end)
+                         start, end)
     else:
         def impl(a, sub, start=0, end=None):
+            start = start or s
+            end = e if end is None else end
             return np.array(index(*register_a(a, False),
                                   *register_sub(sub, False),
-                                  start or s, e if end is None else end)[0])
+                                  start, end)[0])
     return impl
 
 
@@ -1177,14 +1200,18 @@ def ov_char_rindex(a, sub, start=0, end=None):
 
     if a_dim > 0 or sub_dim > 0:
         def impl(a, sub, start=0, end=None):
+            start = start or s
+            end = e if end is None else end
             return rindex(*register_a(a, False),
                           *register_sub(sub, False),
-                          start or s, e if end is None else end)
+                          start, end)
     else:
         def impl(a, sub, start=0, end=None):
+            start = start or s
+            end = e if end is None else end
             return np.array(rindex(*register_a(a, False),
                                    *register_sub(sub, False),
-                                   start or s, e if end is None else end)[0])
+                                   start, end)[0])
     return impl
 
 
