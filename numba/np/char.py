@@ -10,20 +10,6 @@ import numpy as np
 
 
 @register_jitable
-def _register_scalar_bytes(b, rstrip=True):
-    """Expose the numerical representation of scalar ASCII bytes."""
-    len_chr = 1
-    size_chr = len(b)
-    if rstrip and size_chr > 1:
-        return (
-            _rstrip_inner(np.frombuffer(b, 'uint8').copy(), size_chr, True),
-            len_chr,
-            size_chr
-        )
-    return np.frombuffer(b, 'uint8'), len_chr, size_chr
-
-
-@register_jitable
 def _register_array_bytes(b, rstrip=True):
     """Expose the numerical representation of ASCII array bytes."""
     len_chr = b.size
@@ -38,16 +24,17 @@ def _register_array_bytes(b, rstrip=True):
 
 
 @register_jitable
-def _register_scalar_strings(s, rstrip=True):
-    """Expose the numerical representation of scalar UTF-32 strings."""
+def _register_scalar_bytes(b, rstrip=True):
+    """Expose the numerical representation of scalar ASCII bytes."""
     len_chr = 1
-    size_chr = len(s)
-    chr_array = np.empty(size_chr, 'int32')
-    for i in range(size_chr):
-        chr_array[i] = ord(s[i])
+    size_chr = len(b)
     if rstrip and size_chr > 1:
-        return _rstrip_inner(chr_array, size_chr, True), len_chr, size_chr
-    return chr_array, len_chr, size_chr
+        return (
+            _rstrip_inner(np.frombuffer(b, 'uint8').copy(), size_chr, True),
+            len_chr,
+            size_chr
+        )
+    return np.frombuffer(b, 'uint8'), len_chr, size_chr
 
 
 @register_jitable
@@ -58,6 +45,19 @@ def _register_array_strings(s, rstrip=True):
     chr_array = np.ravel(s).view(np.dtype('int32'))
     if rstrip and size_chr > 1:
         return _rstrip_inner(chr_array, size_chr), len_chr, size_chr
+    return chr_array, len_chr, size_chr
+
+
+@register_jitable
+def _register_scalar_strings(s, rstrip=True):
+    """Expose the numerical representation of scalar UTF-32 strings."""
+    len_chr = 1
+    size_chr = len(s)
+    chr_array = np.empty(size_chr, 'int32')
+    for i in range(size_chr):
+        chr_array[i] = ord(s[i])
+    if rstrip and size_chr > 1:
+        return _rstrip_inner(chr_array, size_chr, True), len_chr, size_chr
     return chr_array, len_chr, size_chr
 
 
@@ -101,6 +101,15 @@ def bisect_null(a, j, k):
         else:
             k = m
     return j
+
+
+def _ensure_slice(start, end):
+    """Ensure start and end slice argument is an integer type."""
+    slice_types = (types.Integer, types.NoneType)
+    if not (isinstance(start, slice_types) and isinstance(end, slice_types)):
+        raise TypeError("slice indices must be integers or None "
+                        "or have an __index__ method")
+    return 0, np.iinfo(np.int64).max
 
 
 def _ensure_type(x, exception: Exception = None):
@@ -441,15 +450,6 @@ def ov_char_compare_chararrays(a1, a2, cmp, rstrip):
 # String Information
 
 
-def _ensure_slice(start, end):
-    """Ensure start and end slice argument is an integer type."""
-    slice_types = (types.Integer, types.NoneType)
-    if not (isinstance(start, slice_types) and isinstance(end, slice_types)):
-        raise TypeError("slice indices must be integers or None "
-                        "or have an __index__ method")
-    return 0, np.iinfo(np.int64).max
-
-
 @register_jitable
 def _init_sub_indices(start, end, size_chr):
     """Initialize substring start and end indices"""
@@ -474,7 +474,7 @@ def _get_sub_indices(chr_lens, len_chr,
     return n_chr, n_sub, o, n
 
 
-@register_jitable(locals={'end': types.int64})
+@register_jitable
 def count(chr_array, len_chr, size_chr,
           sub_array, len_sub, size_sub, start, end):
     """Native Implementation of np.char.count"""
