@@ -215,12 +215,12 @@ def np_char_count(a, sub, start=0, end=None):
     return np.char.count(a, sub, start, end)
 
 
-def np_char_endswith(a, sub, start=0, end=None):
-    return np.char.endswith(a, sub, start, end)
+def np_char_endswith(a, suffix, start=0, end=None):
+    return np.char.endswith(a, suffix, start, end)
 
 
-def np_char_startswith(a, sub, start=0, end=None):
-    return np.char.startswith(a, sub, start, end)
+def np_char_startswith(a, prefix, start=0, end=None):
+    return np.char.startswith(a, prefix, start, end)
 
 
 def np_char_find(a, sub, start=0, end=None):
