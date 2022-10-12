@@ -48,7 +48,8 @@ gpuci_logger "Create testing env"
 gpuci_mamba_retry create -n numba_ci -y \
                   "python=${PYTHON_VER}" \
                   "cudatoolkit=${CUDA_TOOLKIT_VER}" \
-                  "gmarkall::cubinlinker" \
+                  "rapidsai::cubinlinker" \
+                  "conda-forge::ptxcompiler" \
                   "numba/label/dev::llvmlite" \
                   "numpy=1.21" \
                   "scipy" \
