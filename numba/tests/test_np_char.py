@@ -385,15 +385,22 @@ class TestStringInformation(TestCase):
             with self.assertRaisesRegex(accepted_errors, error_msg):
                 cfunc_(None, 'abc')
 
-        def test_index_exception(cfunc_):
+        def check_index_exception(pyfunc_, cfunc_):
             # A ValueError is raised when the substring argument
             # is unmatched for `index` and `rindex`.
             accepted_errors = ValueError
             error_msg = ".*substring not found.*"
+
+            check_output(pyfunc_, cfunc_, 'abc', 'c', 0, None)
             with self.assertRaisesRegex(accepted_errors, error_msg):
                 cfunc_('abc', 'd')
+
+            check_output(pyfunc_, cfunc_,
+                         np.array([b'abc']), np.array([b'b', b'c', b'c']),
+                         0, None)
             with self.assertRaisesRegex(accepted_errors, error_msg):
-                cfunc_(np.array([b'abc']), np.array([b'b', b'c', b'd']))
+                cfunc_(np.array([b'abc']), np.array([b'b', b'c', b'd']),
+                       0, None)
 
         for pyfunc in pyfuncs:
             cfunc = jit(nopython=True)(pyfunc)
@@ -401,7 +408,7 @@ class TestStringInformation(TestCase):
             check_slice_exception(cfunc)
 
             if cfunc.__name__ in ('np_char_index', 'np_char_rindex'):
-                test_index_exception(cfunc)
+                check_index_exception(pyfunc, cfunc)
                 continue
 
             byte_args = _pack_arguments(self.byte_args,
@@ -436,13 +443,16 @@ class TestStringInformation(TestCase):
             with self.assertRaisesRegex(accepted_errors, error_msg):
                 cfunc_(None)
 
-        def check_isnumeric_exception(cfunc_):
+        def check_isnumeric_exception(pyfunc_, cfunc_):
             # A TypeError with the following 'isnumeric' message
             # is raised with byte arguments for `isnumeric` and `isdecimal`.
             accepted_errors = (TypingError, TypeError)
             error_msg = ".*isnumeric is only available for Unicode strings.*"
+
+            check_output(pyfunc_, cfunc_, '10')
             with self.assertRaisesRegex(accepted_errors, error_msg):
                 cfunc_(b'10')
+            check_output(pyfunc_, cfunc_, np.array(['1', '2'], dtype='U1'))
             with self.assertRaisesRegex(accepted_errors, error_msg):
                 cfunc_(np.array([b'1', b'2'], dtype='S1'))
 
@@ -453,7 +463,7 @@ class TestStringInformation(TestCase):
                 check_output(pyfunc, cfunc, *args)
 
             if cfunc.__name__ in ('np_char_isdecimal', 'np_char_isnumeric'):
-                check_isnumeric_exception(cfunc)
+                check_isnumeric_exception(pyfunc, cfunc)
                 continue
             check_type_exception(cfunc)
 
