@@ -193,7 +193,7 @@ def _register_single(x1, exception: Exception = None):
             else _register_scalar_bytes
         as_bytes = True
     elif isinstance(x1_type, str_types):
-        register_x1 = _register_array_bytes if x1_dim >= 0 \
+        register_x1 = _register_array_strings if x1_dim >= 0 \
             else _register_scalar_strings
         as_bytes = False
     else:

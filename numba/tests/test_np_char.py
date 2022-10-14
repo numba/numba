@@ -15,7 +15,7 @@ import unittest
 
 def _pack_arguments(main_args: (list, tuple), args: (list, tuple)):
     """Generate combinations of arguments for a list of main arguments"""
-    arg_product = product(*args)
+    arg_product = tuple(product(*args))
     for a in main_args:
         for args in arg_product:
             yield (*a, *args)
@@ -319,7 +319,7 @@ class TestStringInformation(TestCase):
         generics = [
             (c, np.random.choice(c, c.size)),
             (s, np.random.choice(s, s.size)),
-            (np.random.choice(s), np.array(['a', 'b', 'c', '']), 'U1')
+            (np.random.choice(s), np.array(['a', 'b', 'c', ''], 'U1'))
         ]
 
         # Scalar Comparisons
@@ -357,9 +357,9 @@ class TestStringInformation(TestCase):
                    np_char_find, np_char_rfind,
                    np_char_index, np_char_rindex)
 
-        def check_output(pyfunc_, cfunc_, x1, x2):
-            expected = pyfunc_(x1, x2)
-            got = cfunc_(x1, x2)
+        def check_output(pyfunc_, cfunc_, a, sub, start, end):
+            expected = pyfunc_(a, sub, start, end)
+            got = cfunc_(a, sub, start, end)
             self.assertPreciseEqual(expected, got)
 
         def check_slice_exception(cfunc_):
@@ -423,9 +423,9 @@ class TestStringInformation(TestCase):
                    np_char_isdecimal, np_char_isdigit, np_char_isnumeric,
                    np_char_istitle, np_char_isupper, np_char_islower)
 
-        def check_output(pyfunc_, cfunc_, x1, x2):
-            expected = pyfunc_(x1, x2)
-            got = cfunc_(x1, x2)
+        def check_output(pyfunc_, cfunc_, a):
+            expected = pyfunc_(a)
+            got = cfunc_(a)
             self.assertPreciseEqual(expected, got)
 
         def check_type_exception(cfunc_):
@@ -461,7 +461,9 @@ class TestStringInformation(TestCase):
                 check_output(pyfunc, cfunc, *args)
 
 
+TestComparisonOperators.set_arguments()
+TestStringInformation.set_arguments()
+
+
 if __name__ == '__main__':
-    TestComparisonOperators.set_arguments()
-    TestStringInformation.set_arguments()
     unittest.main()
