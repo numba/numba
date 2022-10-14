@@ -5,7 +5,6 @@ Support for native homogeneous lists.
 
 import math
 import operator
-import numpy as np
 
 from llvmlite import ir
 from numba.core import types, typing, errors, cgutils
@@ -941,28 +940,28 @@ def list_extend(context, builder, sig, args):
     return context.compile_internal(builder, list_extend, sig, args)
 
 
-intp_max = np.iinfo(as_dtype(types.intp)).max
+intp_max = types.intp.maxval
 
 
 @overload_method(types.List, "index")
-def list_index(lst, value, start=0, end=intp_max):
+def list_index(lst, value, start=0, stop=intp_max):
 
     if not isinstance(start, (int, types.Integer, types.Omitted)):
         raise TypeError(f'arg "start" must be an Integer. Got {start}')
-    if not isinstance(end, (int, types.Integer, types.Omitted)):
+    if not isinstance(stop, (int, types.Integer, types.Omitted)):
         raise TypeError(f'arg "end" must be an Integer. Got {end}')
 
-    def list_index_impl(lst, value, start=0, end=intp_max):
+    def list_index_impl(lst, value, start=0, stop=intp_max):
         n = len(lst)
         if start < 0:
             start += n
             if start < 0:
                 start = 0
-        if end < 0:
-            end += n
-        if end > n:
-            end = n
-        for i in range(start, end):
+        if stop < 0:
+            stop += n
+        if stop > n:
+            stop = n
+        for i in range(start, stop):
             if lst[i] == value:
                 return i
         # XXX references are leaked when raising
