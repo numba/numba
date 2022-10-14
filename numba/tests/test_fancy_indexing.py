@@ -3,7 +3,7 @@ import itertools
 import numpy as np
 
 import unittest
-from numba import jit, typeof
+from numba import jit, typeof, njit
 from numba.core import types
 from numba.core.errors import TypingError
 from numba.tests.support import MemoryLeakMixin, TestCase, tag
@@ -255,6 +255,19 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
 
         #exceptions leak refs
         self.disable_leak_check()
+    
+    def test_newaxis(self):
+        def np_new_axis(a, idx):
+            return a[idx, np.newaxis, :]
+        
+        arr = np.random.randint(0, 10, (4,5,6))
+        idx = np.array([1,2,1])
+        py_func = np_new_axis
+        cfunc = njit(py_func)
+
+        expected = py_func(arr, idx)
+        got = cfunc(arr, idx)
+        np.testing.assert_equal(expected, got)
 
 
 if __name__ == '__main__':

@@ -147,7 +147,7 @@ def as_strided2(a):
     return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
 
 
-def add_axis2(a):
+def np_new_axis(a):
     return a[np.newaxis, :]
 
 
@@ -633,23 +633,15 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
         self.assertIn("squeeze", str(raises.exception))
 
-    def test_add_axis2(self, flags=enable_pyobj_flags):
+    def test_add_axis(self):
         a = np.arange(9).reshape(3, 3)
 
-        pyfunc = add_axis2
-        arraytype1 = typeof(a)
-        cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
-        cfunc = cr.entry_point
+        pyfunc = np_new_axis
+        cfunc = njit(pyfunc)
 
         expected = pyfunc(a)
         got = cfunc(a)
         np.testing.assert_equal(expected, got)
-
-    def test_add_axis2_npm(self):
-        with self.assertTypingError() as raises:
-            self.test_add_axis2(flags=no_pyobj_flags)
-        self.assertIn("unsupported array index type none in",
-                      str(raises.exception))
 
     def test_bad_index_npm(self):
         with self.assertTypingError() as raises:

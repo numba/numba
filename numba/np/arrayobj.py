@@ -351,6 +351,7 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices,
     the corresponding view.
     """
     zero = context.get_constant(types.intp, 0)
+    one = context.get_constant(types.intp, 1)
 
     shapes = cgutils.unpack_tuple(builder, ary.shape, aryty.ndim)
     strides = cgutils.unpack_tuple(builder, ary.strides, aryty.ndim)
@@ -386,6 +387,10 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices,
             if boundscheck:
                 cgutils.do_boundscheck(context, builder, ind, shapes[ax], ax)
             output_indices.append(ind)
+        elif is_nonelike(idxty):
+            output_shapes.append(one)
+            output_strides.append(zero)
+            ax -= 1
         else:
             raise NotImplementedError("unexpected index type: %s" % (idxty,))
         ax += 1
@@ -926,6 +931,7 @@ class FancyIndexer(object):
         self.shapes = cgutils.unpack_tuple(builder, ary.shape, aryty.ndim)
         self.strides = cgutils.unpack_tuple(builder, ary.strides, aryty.ndim)
         self.ll_intp = self.context.get_value_type(types.intp)
+        self.newaxes = []
 
         indexers = []
 
@@ -963,6 +969,9 @@ class FancyIndexer(object):
                 else:
                     assert 0
                 indexers.append(indexer)
+            elif is_nonelike(idxty):
+                self.newaxes.append(ax)
+                ax -= 1
             else:
                 raise AssertionError("unexpected index type: %s" % (idxty,))
             ax += 1
@@ -981,7 +990,11 @@ class FancyIndexer(object):
         for i in self.indexers:
             i.prepare()
         # Compute the resulting shape
-        self.indexers_shape = sum([i.get_shape() for i in self.indexers], ())
+        shape_list = [i.get_shape() for i in self.indexers]
+        one = self.context.get_constant(types.intp, 1)
+        for i in self.newaxes:
+            shape_list.insert(i, (one,))
+        self.indexers_shape = sum(shape_list, ())
 
     def get_shape(self):
         """

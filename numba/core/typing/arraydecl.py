@@ -12,6 +12,7 @@ from numba.core.typing import collections
 from numba.core.errors import (TypingError, RequireLiteralValue, NumbaTypeError,
                                NumbaNotImplementedError, NumbaAssertionError,
                                NumbaKeyError, NumbaIndexError)
+from numba.core.cgutils import is_nonelike
 
 
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
@@ -68,6 +69,8 @@ def get_array_index_type(ary, idx):
                 msg = "only one advanced index supported"
                 raise NumbaNotImplementedError(msg)
             advanced = True
+        elif (is_nonelike(ty)):
+            ndim += 1
         else:
             raise NumbaTypeError("unsupported array index type %s in %s"
                                  % (ty, idx))
