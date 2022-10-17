@@ -76,10 +76,10 @@ typedef struct {
 NUMBA_EXPORT_FUNC(void)
 numba_list_set_method_table(NB_List *lp, list_type_based_methods_table *methods);
 
-NUMBA_EXPORT_FUNC(int)
+int
 numba_list_new(NB_List **out, Py_ssize_t item_size, Py_ssize_t allocated);
 
-NUMBA_EXPORT_FUNC(void)
+void
 numba_list_free(NB_List *lp);
 
 NUMBA_EXPORT_FUNC(char *)
@@ -88,7 +88,7 @@ numba_list_base_ptr(NB_List *lp);
 NUMBA_EXPORT_FUNC(Py_ssize_t)
 numba_list_size_address(NB_List *lp);
 
-NUMBA_EXPORT_FUNC(Py_ssize_t)
+Py_ssize_t
 numba_list_length(NB_List *lp);
 
 NUMBA_EXPORT_FUNC(Py_ssize_t)
@@ -100,13 +100,13 @@ numba_list_is_mutable(NB_List *lp);
 NUMBA_EXPORT_FUNC(void)
 numba_list_set_is_mutable(NB_List *lp, int is_mutable);
 
-NUMBA_EXPORT_FUNC(int)
+int
 numba_list_setitem(NB_List *lp, Py_ssize_t index, const char *item);
 
-NUMBA_EXPORT_FUNC(int)
+int
 numba_list_getitem(NB_List *lp, Py_ssize_t index, char *out);
 
-NUMBA_EXPORT_FUNC(int)
+int
 numba_list_append(NB_List *lp, const char *item);
 
 // FIXME: should this be public?
