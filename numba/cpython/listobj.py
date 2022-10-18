@@ -17,7 +17,6 @@ from numba.core.utils import cached_property
 from numba.misc import quicksort
 from numba.cpython import slicing
 from numba import literal_unroll
-from numba.np.numpy_support import as_dtype
 
 
 def get_list_payload(context, builder, list_type, value):
