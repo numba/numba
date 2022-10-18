@@ -597,6 +597,18 @@ class TestLists(MemoryLeakMixin, TestCase):
             for start, stop in itertools.product(indices, indices):
                 self.check_index_result(pyfunc, cfunc, (16, v, start, stop))
 
+    def test_index_exceptions(self):
+        self.disable_leak_check()
+        pyfunc = list_index3
+        cfunc = jit(nopython=True)(pyfunc)
+        msg = 'arg "start" must be an Integer.'
+        with self.assertRaisesRegex(errors.TypingError, msg):
+            cfunc(10, 0, 'invalid', 5)
+
+        msg = 'arg "stop" must be an Integer.'
+        with self.assertRaisesRegex(errors.TypingError, msg):
+            cfunc(10, 0, 0, 'invalid')
+
     def test_remove(self):
         pyfunc = list_remove
         cfunc = jit(nopython=True)(pyfunc)

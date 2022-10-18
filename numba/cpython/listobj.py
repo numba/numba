@@ -948,7 +948,7 @@ def list_index(lst, value, start=0, stop=intp_max):
     if not isinstance(start, (int, types.Integer, types.Omitted)):
         raise TypeError(f'arg "start" must be an Integer. Got {start}')
     if not isinstance(stop, (int, types.Integer, types.Omitted)):
-        raise TypeError(f'arg "end" must be an Integer. Got {end}')
+        raise TypeError(f'arg "stop" must be an Integer. Got {stop}')
 
     def list_index_impl(lst, value, start=0, stop=intp_max):
         n = len(lst)
