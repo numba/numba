@@ -12,7 +12,7 @@ class TestConstStringCodegen(unittest.TestCase):
     def test_const_string(self):
         # These imports are incompatible with CUDASIM
         from numba.cuda.descriptor import cuda_target
-        from numba.cuda.cudadrv.nvvm import llvm_to_ptx, ADDRSPACE_CONSTANT
+        from numba.cuda.cudadrv.nvvm import llvm_to_ptx
 
         targetctx = cuda_target.target_context
         mod = targetctx.create_module("")
@@ -32,8 +32,8 @@ class TestConstStringCodegen(unittest.TestCase):
         # Using insert_const_string
         fn = ir.Function(mod, fnty, "test_insert_const_string")
         builder = ir.IRBuilder(fn.append_basic_block())
-        res = targetctx.insert_addrspace_conv(builder, gv0,
-                                              addrspace=ADDRSPACE_CONSTANT)
+        res = builder.addrspacecast(gv0, ir.PointerType(ir.IntType(8)),
+                                    'generic')
         builder.ret(res)
 
         matches = re.findall(r"@\"__conststring__.*internal.*constant.*\["

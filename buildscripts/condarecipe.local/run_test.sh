@@ -38,8 +38,7 @@ if [[ "$archstr" == 'ppc64le' ]]; then
     TEST_NPROCS=16
 fi
 
-# Check Numba executables are there
-pycc -h
+# Check Numba executable is there
 numba -h
 
 # run system info tool

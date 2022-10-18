@@ -117,8 +117,6 @@ Compiler Pipeline
   Numba IR
 - :ghfile:`numba/core/analysis.py` - Utility functions to analyze Numba IR
   (variable lifetime, prune branches, etc)
-- :ghfile:`numba/core/dataflow.py` - Dataflow analysis for Python bytecode (used
-  in analysis.py)
 - :ghfile:`numba/core/controlflow.py` - Control flow analysis of Numba IR and
   Python bytecode
 - :ghfile:`numba/core/typeinfer.py` - Type inference algorithm
@@ -201,7 +199,7 @@ with CPython APIs.
 - :ghfile:`numba/_pymodule.h` - C macros for Python 2/3 portable naming of C
   API functions
 - :ghfile:`numba/mviewbuf.c` - Handles Python memoryviews
-- :ghfile:`numba/_typeof.{h,c}` - C implementation of type fingerprinting,
+- :ghfile:`numba/_typeof.{h,cpp}` - C++ implementation of type fingerprinting,
   used by dispatcher
 - :ghfile:`numba/_numba_common.h` - Portable C macro for marking symbols
   that can be shared between object files, but not outside the
@@ -267,7 +265,7 @@ Misc Support
 Core Python Data Types
 ''''''''''''''''''''''
 
-- :ghfile:`numba/_hashtable.{h,c}` - Adaptation of the Python 3.7 hash table
+- :ghfile:`numba/_hashtable.{h,cpp}` - Adaptation of the Python 3.7 hash table
   implementation
 - :ghfile:`numba/cext/dictobject.{h,c}` - C level implementation of typed
   dictionary
@@ -347,8 +345,6 @@ that must be matched during type inference.
 - :ghfile:`numba/core/typing/listdecl.py` - Python lists
 - :ghfile:`numba/core/typing/builtins.py` - Python builtin global functions and
   operators
-- :ghfile:`numba/core/typing/randomdecl.py` - Python and NumPy ``random``
-  modules
 - :ghfile:`numba/core/typing/setdecl.py` - Python sets
 - :ghfile:`numba/core/typing/npydecl.py` - NumPy ndarray (and operators), NumPy
   functions
