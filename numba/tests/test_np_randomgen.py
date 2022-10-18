@@ -1060,6 +1060,64 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
 
         self.assertPreciseEqual(dist_func(rng(), a), nb_func(rng(), b))
 
+    def test_noncentral_chisquare(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:\
+            x.noncentral_chisquare(3.0, 20.0, size=size)
+        for _size, _bitgen in itertools.product(test_sizes, bitgen_types):
+            with self.subTest(_size=_size, _bitgen=_bitgen):
+                self.check_numpy_parity(dist_func, _bitgen,
+                                        None, _size, None)
+
+        dist_func = lambda x, df, nonc, size:\
+            x.noncentral_chisquare(df=df, nonc=nonc, size=size)
+        self._check_invalid_types(dist_func, ['df', 'nonc', 'size'],
+                                  [3.0, 5.0, (1,)], ['x', 'x', ('x',)])
+
+    def test_noncentral_f(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:\
+            x.noncentral_f(3.0, 20.0, 3.0, size=size)
+        for _size, _bitgen in itertools.product(test_sizes, bitgen_types):
+            with self.subTest(_size=_size, _bitgen=_bitgen):
+                self.check_numpy_parity(dist_func, _bitgen,
+                                        None, _size, None)
+
+        dist_func = lambda x, dfnum, dfden, nonc, size:\
+            x.noncentral_f(dfnum=dfnum, dfden=dfden, nonc=nonc, size=size)
+        self._check_invalid_types(dist_func, ['dfnum', 'dfden', 'nonc', 'size'],
+                                  [3.0, 5.0, 3.0, (1,)],
+                                  ['x', 'x', 'x', ('x',)])
+
+    def test_logseries(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:\
+            x.logseries(0.3, size=size)
+        for _size, _bitgen in itertools.product(test_sizes, bitgen_types):
+            with self.subTest(_size=_size, _bitgen=_bitgen):
+                self.check_numpy_parity(dist_func, _bitgen,
+                                        None, _size, None)
+
+        dist_func = lambda x, p, size:\
+            x.logseries(p=p, size=size)
+        self._check_invalid_types(dist_func, ['p', 'size'],
+                                  [0.3, (1,)], ['x', ('x',)])
+
 
 class TestGeneratorCaching(TestCase, SerialMixin):
     def test_randomgen_caching(self):
