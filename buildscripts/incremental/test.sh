@@ -83,15 +83,11 @@ fi
 # Find catchsegv
 unamestr=`uname`
 if [[ "$unamestr" == 'Linux' ]]; then
-    if [[ "${BITS32}" == "yes" ]]; then
-        SEGVCATCH=""
-    else
-        SEGVCATCH=catchsegv
-    fi
+    SEGVCATCH=catchsegv
 elif [[ "$unamestr" == 'Darwin' ]]; then
-  SEGVCATCH=""
+    SEGVCATCH=""
 else
-  echo Error
+    echo Error
 fi
 
 # limit CPUs in use on PPC64LE, fork() issues

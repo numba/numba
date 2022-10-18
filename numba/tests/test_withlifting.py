@@ -665,28 +665,6 @@ class TestLiftObj(MemoryLeak, TestCase):
         x = np.array([1, 2, 3])
         self.assert_equal_return_and_stdout(foo, x)
 
-    def test_case13_branch_to_objmode_ctx(self):
-        # Checks for warning in dataflow.py due to mishandled stack offset
-        # dataflow.py:57: RuntimeWarning: inconsistent stack offset ...
-        def foo(x, wobj):
-            if wobj:
-                with objmode_context(y='int64[:]'):
-                    y = (x + 1).astype('int64')
-            else:
-                y = x + 2
-
-            return x + y
-
-        x = np.array([1, 2, 3], dtype='int64')
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always", RuntimeWarning)
-            self.assert_equal_return_and_stdout(foo, x, True)
-        # Assert no warnings from dataflow.py
-        for each in w:
-            self.assertFalse(each.filename.endswith('dataflow.py'),
-                             msg='there were warnings in dataflow.py')
-
     def test_case14_return_direct_from_objmode_ctx(self):
         def foo(x):
             with objmode_context(x='int64[:]'):
@@ -1106,8 +1084,6 @@ class TestLiftObj(MemoryLeak, TestCase):
 
         with self.assertRaises(TypeError) as raises:
             test4()
-        # Note: in python3.6, the Generic[T] on typedlist is causing it to
-        #       format differently.
         self.assertRegex(
             str(raises.exception),
             (r"can't unbox a <class 'list'> "

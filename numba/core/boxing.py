@@ -1135,18 +1135,6 @@ def box_LiteralStrKeyDict(typ, val, c):
     return box_unsupported(typ, val, c)
 
 
-@contextmanager
-def early_exit_if(builder, stack: ExitStack, cond):
-    then, otherwise = stack.enter_context(builder.if_else(cond, likely=False))
-    with then:
-        yield
-    stack.enter_context(otherwise)
-
-
-def early_exit_if_null(builder, stack, obj):
-    return early_exit_if(builder, stack, cgutils.is_null(builder, obj))
-
-
 # Original implementation at: https://github.com/numba/numba/issues/4499#issuecomment-1063138477
 @unbox(types.NumPyRandomBitGeneratorType)
 def unbox_numpy_random_bitgenerator(typ, obj, c):
@@ -1184,13 +1172,13 @@ def unbox_numpy_random_bitgenerator(typ, obj, c):
 
         # Get the .ctypes attr
         ctypes_binding = object_getattr_safely(obj, 'ctypes')
-        with early_exit_if_null(c.builder, stack, ctypes_binding):
+        with cgutils.early_exit_if_null(c.builder, stack, ctypes_binding):
             handle_failure()
 
         # Look up the "state_address" member and wire it into the struct
         interface_state_address = object_getattr_safely(
             ctypes_binding, 'state_address')
-        with early_exit_if_null(c.builder, stack, interface_state_address):
+        with cgutils.early_exit_if_null(c.builder, stack, interface_state_address):
             handle_failure()
 
         setattr(struct_ptr, 'state_address',
@@ -1198,12 +1186,12 @@ def unbox_numpy_random_bitgenerator(typ, obj, c):
 
         # Look up the "state" member and wire it into the struct
         interface_state = object_getattr_safely(ctypes_binding, 'state')
-        with early_exit_if_null(c.builder, stack, interface_state):
+        with cgutils.early_exit_if_null(c.builder, stack, interface_state):
             handle_failure()
     
         interface_state_value = object_getattr_safely(
             interface_state, 'value')
-        with early_exit_if_null(c.builder, stack, interface_state_value):
+        with cgutils.early_exit_if_null(c.builder, stack, interface_state_value):
             handle_failure()
         setattr(
             struct_ptr,
@@ -1219,15 +1207,15 @@ def unbox_numpy_random_bitgenerator(typ, obj, c):
         ctypes_name = c.context.insert_const_string(c.builder.module, 'ctypes')
         ctypes_module = c.pyapi.import_module_noblock(ctypes_name)
         extra_refs.append(ctypes_module)
-        with early_exit_if_null(c.builder, stack, ctypes_module):
+        with cgutils.early_exit_if_null(c.builder, stack, ctypes_module):
             handle_failure()
 
         ct_cast = object_getattr_safely(ctypes_module, 'cast')
-        with early_exit_if_null(c.builder, stack, ct_cast):
+        with cgutils.early_exit_if_null(c.builder, stack, ct_cast):
             handle_failure()
 
         ct_voidptr_ty = object_getattr_safely(ctypes_module, 'c_void_p')
-        with early_exit_if_null(c.builder, stack, ct_voidptr_ty):
+        with cgutils.early_exit_if_null(c.builder, stack, ct_voidptr_ty):
             handle_failure()
 
         # This wires in the fnptrs referred to by name
@@ -1237,14 +1225,14 @@ def unbox_numpy_random_bitgenerator(typ, obj, c):
                 ctypes_binding, name)
 
             extra_refs.append(interface_next_fn)
-            with early_exit_if_null(c.builder, stack, interface_next_fn):
+            with cgutils.early_exit_if_null(c.builder, stack, interface_next_fn):
                 handle_failure()
 
             # Want to do ctypes.cast(CFunctionType, ctypes.c_void_p), create an
             # args tuple for that.
             extra_refs.append(ct_voidptr_ty)
             args = c.pyapi.tuple_pack([interface_next_fn, ct_voidptr_ty])
-            with early_exit_if_null(c.builder, stack, args):
+            with cgutils.early_exit_if_null(c.builder, stack, args):
                 handle_failure()
             extra_refs.append(ct_voidptr_ty)
 
@@ -1255,7 +1243,7 @@ def unbox_numpy_random_bitgenerator(typ, obj, c):
             # in the function pointer slot.
             interface_next_fn_casted_value = object_getattr_safely(
                 interface_next_fn_casted, 'value')
-            with early_exit_if_null(c.builder, stack, interface_next_fn_casted_value):
+            with cgutils.early_exit_if_null(c.builder, stack, interface_next_fn_casted_value):
                 handle_failure()
 
             # Wire up
@@ -1290,7 +1278,7 @@ def unbox_numpy_random_generator(typ, obj, c):
     with ExitStack() as stack:
         struct_ptr = cgutils.create_struct_proxy(typ)(c.context, c.builder)
         bit_gen_inst = c.pyapi.object_getattr_string(obj, 'bit_generator')
-        with early_exit_if_null(c.builder, stack, bit_gen_inst):
+        with cgutils.early_exit_if_null(c.builder, stack, bit_gen_inst):
             c.builder.store(cgutils.true_bit, is_error_ptr)
         unboxed = c.unbox(_bit_gen_type, bit_gen_inst).value
         struct_ptr.bit_generator = unboxed
