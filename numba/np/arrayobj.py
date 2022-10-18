@@ -31,7 +31,6 @@ from numba.core.extending import (register_jitable, overload, overload_method,
 from numba.misc import quicksort, mergesort
 from numba.cpython import slicing
 from numba.cpython.unsafe.tuple import tuple_setitem, build_full_slice_tuple
-from numba.core.overload_glue import glue_lowering
 from numba.core.extending import overload_classmethod
 from numba.core.typing.npydecl import (parse_dtype as ty_parse_dtype,
                                        parse_shape as ty_parse_shape,
@@ -5286,24 +5285,29 @@ def impl_np_expand_dims(a, axis):
     return impl
 
 
-def _atleast_nd(context, builder, sig, args, transform):
-    arrtys = sig.args
-    arrs = args
+def _atleast_nd(minimum, axes):
+    @intrinsic
+    def impl(typingcontext, *args):
+        arrtys = args
+        rettys = [arg.copy(ndim=max(arg.ndim, minimum)) for arg in args]
 
-    if isinstance(sig.return_type, types.BaseTuple):
-        rettys = list(sig.return_type)
-    else:
-        rettys = [sig.return_type]
-    assert len(rettys) == len(arrtys)
+        def codegen(context, builder, sig, args):
+            transform = _atleast_nd_transform(minimum, axes)
+            arrs = cgutils.unpack_tuple(builder, args[0])
 
-    rets = [transform(context, builder, arr, arrty, retty)
-            for arr, arrty, retty in zip(arrs, arrtys, rettys)]
+            rets = [transform(context, builder, arr, arrty, retty)
+                    for arr, arrty, retty in zip(arrs, arrtys, rettys)]
 
-    if isinstance(sig.return_type, types.BaseTuple):
-        ret = context.make_tuple(builder, sig.return_type, rets)
-    else:
-        ret = rets[0]
-    return impl_ret_borrowed(context, builder, sig.return_type, ret)
+            if len(rets) > 1:
+                ret = context.make_tuple(builder, sig.return_type, rets)
+            else:
+                ret = rets[0]
+            return impl_ret_borrowed(context, builder, sig.return_type, ret)
+
+        return signature(types.Tuple(rettys) if len(rettys) > 1 else rettys[0],
+                         types.StarArgTuple.from_types(args)), codegen
+
+    return lambda *args: impl(*args)
 
 
 def _atleast_nd_transform(min_ndim, axes):
@@ -5329,25 +5333,22 @@ def _atleast_nd_transform(min_ndim, axes):
     return transform
 
 
-@glue_lowering(np.atleast_1d, types.VarArg(types.Array))
-def np_atleast_1d(context, builder, sig, args):
-    transform = _atleast_nd_transform(1, [0])
-
-    return _atleast_nd(context, builder, sig, args, transform)
-
-
-@glue_lowering(np.atleast_2d, types.VarArg(types.Array))
-def np_atleast_2d(context, builder, sig, args):
-    transform = _atleast_nd_transform(2, [0, 0])
-
-    return _atleast_nd(context, builder, sig, args, transform)
+@overload(np.atleast_1d)
+def np_atleast_1d(*args):
+    if all(isinstance(arg, types.Array) for arg in args):
+        return _atleast_nd(1, [0])
 
 
-@glue_lowering(np.atleast_3d, types.VarArg(types.Array))
-def np_atleast_3d(context, builder, sig, args):
-    transform = _atleast_nd_transform(3, [0, 0, 2])
+@overload(np.atleast_2d)
+def np_atleast_2d(*args):
+    if all(isinstance(arg, types.Array) for arg in args):
+        return _atleast_nd(2, [0, 0])
 
-    return _atleast_nd(context, builder, sig, args, transform)
+
+@overload(np.atleast_3d)
+def np_atleast_3d(*args):
+    if all(isinstance(arg, types.Array) for arg in args):
+        return _atleast_nd(3, [0, 0, 2])
 
 
 def _do_concatenate(context, builder, axis,
