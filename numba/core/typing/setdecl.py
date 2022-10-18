@@ -59,14 +59,6 @@ class SetAttribute(AttributeTemplate):
             sig = sig.replace(recvr=set.copy(dtype=unified))
             return sig
 
-    def _resolve_xxx_update(self, set, args, kws):
-        assert not kws
-        iterable, = args
-        # Set arguments only supported for now
-        # (note we can mix non-reflected and reflected arguments)
-        if isinstance(iterable, types.Set) and iterable.dtype == set.dtype:
-            return signature(types.none, iterable)
-
     def _resolve_operator(self, set, args, kws):
         assert not kws
         iterable, = args
