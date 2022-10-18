@@ -79,10 +79,6 @@ def simple_smem(ary, dty):
     ary[i] = sm[i]
 
 
-def empty_func():
-    pass
-
-
 LMEM_SIZE = 1000
 
 
@@ -283,12 +279,6 @@ class TestLinker(CUDATestCase):
             np.zeros(100, dtype=np.int32), np.float64)
         shared_mem_size = compiled_specialized.get_shared_mem_per_block()
         self.assertEqual(shared_mem_size, 800)
-
-    def test_get_no_local_memory(self):
-        compiled = cuda.jit(empty_func)
-        compiled = compiled.specialize()
-        local_mem_size = compiled.get_local_mem_per_thread()
-        self.assertEqual(local_mem_size, 0)
 
     def test_get_local_mem_per_thread(self):
         sig = void(int32[::1], int32[::1], typeof(np.int32))
