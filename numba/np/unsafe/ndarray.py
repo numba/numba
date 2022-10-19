@@ -77,4 +77,3 @@ def to_fixed_tuple(typingctx, array, length):
         return res
 
     return sig, codegen
-

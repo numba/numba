@@ -12,12 +12,17 @@ labels: task
 * [ ] Cherry-pick items from the X.Y.Z milestone into a PR.
 * [ ] Update the "version support table" in the documentation with the final
   release date (FINAL ONLY).
-  * [ ] Make, approve and merge PR against the X.Y release branch.
-  * [ ] Create a cherry-pick PR of the above against `main`.
+  * [ ] Make, approve and merge a PR against the `main` branch.
+  * [ ] Create a cherry-pick from the merge and include in the cherry-pick-PR
+    for the `releaseX.Y` branch.
+* [ ] Check if any dependency pinnings need an update (e.g. NumPy)
 * [ ] Approve change log modifications and cherry-pick.
 * [ ] Merge change log modifications and cherry-picks to X.Y release branch.
   * [ ] https://github.com/numba/numba/pull/XXXX
 * [ ] Review, merge and check execution of release notebook. (FINAL ONLY)
+* [ ] Run the HEAD of the release branch through the build farm and confirm:
+  * [ ] Build farm CPU testing has passed.
+  * [ ] Build farm CUDA testing has passed
 * [ ] Annotated tag X.Y.Z on release branch (no `v` prefix).
 * [ ] Build and upload conda packages on buildfarm (check `upload`).
 * [ ] Build wheels and sdist on the buildfarm (check "upload").

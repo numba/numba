@@ -19,8 +19,8 @@ from numba.core.compiler import compile_ir, DEFAULT_FLAGS
 from numba import njit, typeof, objmode, types
 from numba.core.extending import overload
 from numba.tests.support import (MemoryLeak, TestCase, captured_stdout,
-                                 skip_unless_scipy, needs_strace, linux_only,
-                                 strace, needs_subprocess)
+                                 skip_unless_scipy, linux_only,
+                                 strace_supported, strace)
 from numba.core.utils import PYVERSION
 from numba.experimental import jitclass
 import unittest
@@ -665,28 +665,6 @@ class TestLiftObj(MemoryLeak, TestCase):
         x = np.array([1, 2, 3])
         self.assert_equal_return_and_stdout(foo, x)
 
-    def test_case13_branch_to_objmode_ctx(self):
-        # Checks for warning in dataflow.py due to mishandled stack offset
-        # dataflow.py:57: RuntimeWarning: inconsistent stack offset ...
-        def foo(x, wobj):
-            if wobj:
-                with objmode_context(y='int64[:]'):
-                    y = (x + 1).astype('int64')
-            else:
-                y = x + 2
-
-            return x + y
-
-        x = np.array([1, 2, 3], dtype='int64')
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always", RuntimeWarning)
-            self.assert_equal_return_and_stdout(foo, x, True)
-        # Assert no warnings from dataflow.py
-        for each in w:
-            self.assertFalse(each.filename.endswith('dataflow.py'),
-                             msg='there were warnings in dataflow.py')
-
     def test_case14_return_direct_from_objmode_ctx(self):
         def foo(x):
             with objmode_context(x='int64[:]'):
@@ -1106,8 +1084,6 @@ class TestLiftObj(MemoryLeak, TestCase):
 
         with self.assertRaises(TypeError) as raises:
             test4()
-        # Note: in python3.6, the Generic[T] on typedlist is causing it to
-        #       format differently.
         self.assertRegex(
             str(raises.exception),
             (r"can't unbox a <class 'list'> "
@@ -1226,14 +1202,17 @@ class TestMisc(TestCase):
     _numba_parallel_test_ = False
 
     @linux_only
-    @needs_strace
-    @needs_subprocess
-    def test_no_fork_in_compilation_impl(self):
+    @TestCase.run_test_in_subprocess
+    def test_no_fork_in_compilation(self):
         # Checks that there is no fork/clone/execve during compilation, see
         # issue #7881. This needs running in a subprocess as the offending fork
         # call that triggered #7881 occurs on the first call to uuid1 as it's
         # part if the initialisation process for that function (gets hardware
         # address of machine).
+
+        if not strace_supported():
+            # Needs strace support.
+            self.skipTest("strace support missing")
 
         def force_compile():
             @njit('void()') # force compilation
@@ -1247,16 +1226,6 @@ class TestMisc(TestCase):
         # check that compilation does not trigger fork, clone or execve
         strace_data = strace(force_compile, syscalls)
         self.assertFalse(strace_data)
-
-    @linux_only
-    @needs_strace
-    def test_no_fork_in_compilation(self):
-        # Runs the test_no_fork_in_compilation_impl test in a subprocess
-        themod = f'numba.tests.test_withlifting'
-        testname = 'test_no_fork_in_compilation_impl'
-        self.subprocess_test_runner(test_module=themod,
-                                    test_class='TestMisc',
-                                    test_name=testname,)
 
 
 if __name__ == '__main__':

@@ -71,15 +71,15 @@ typedef struct {
 } _Numba_hashtable_t;
 
 /* hash and compare functions for integers and pointers */
-PyAPI_FUNC(Py_uhash_t) _Numba_hashtable_hash_ptr(const void *key);
-PyAPI_FUNC(Py_uhash_t) _Numba_hashtable_hash_int(const void *key);
-PyAPI_FUNC(int) _Numba_hashtable_compare_direct(const void *key, const _Numba_hashtable_entry_t *entry);
+extern "C" PyAPI_FUNC(Py_uhash_t) _Numba_hashtable_hash_ptr(const void *key);
+extern "C" PyAPI_FUNC(Py_uhash_t) _Numba_hashtable_hash_int(const void *key);
+extern "C" PyAPI_FUNC(int) _Numba_hashtable_compare_direct(const void *key, const _Numba_hashtable_entry_t *entry);
 
-PyAPI_FUNC(_Numba_hashtable_t *) _Numba_hashtable_new(
+extern "C" PyAPI_FUNC(_Numba_hashtable_t *) _Numba_hashtable_new(
     size_t data_size,
     _Numba_hashtable_hash_func hash_func,
     _Numba_hashtable_compare_func compare_func);
-PyAPI_FUNC(_Numba_hashtable_t *) _Numba_hashtable_new_full(
+extern "C" PyAPI_FUNC(_Numba_hashtable_t *) _Numba_hashtable_new_full(
     size_t data_size,
     size_t init_size,
     _Numba_hashtable_hash_func hash_func,
@@ -88,36 +88,36 @@ PyAPI_FUNC(_Numba_hashtable_t *) _Numba_hashtable_new_full(
     _Numba_hashtable_free_data_func free_data_func,
     _Numba_hashtable_get_data_size_func get_data_size_func,
     _Numba_hashtable_allocator_t *allocator);
-PyAPI_FUNC(_Numba_hashtable_t *) _Numba_hashtable_copy(_Numba_hashtable_t *src);
-PyAPI_FUNC(void) _Numba_hashtable_clear(_Numba_hashtable_t *ht);
-PyAPI_FUNC(void) _Numba_hashtable_destroy(_Numba_hashtable_t *ht);
+extern "C" PyAPI_FUNC(_Numba_hashtable_t *) _Numba_hashtable_copy(_Numba_hashtable_t *src);
+extern "C" PyAPI_FUNC(void) _Numba_hashtable_clear(_Numba_hashtable_t *ht);
+extern "C" PyAPI_FUNC(void) _Numba_hashtable_destroy(_Numba_hashtable_t *ht);
 
 typedef int (*_Numba_hashtable_foreach_func) (_Numba_hashtable_entry_t *entry, void *arg);
 
-PyAPI_FUNC(int) _Numba_hashtable_foreach(
+extern "C" PyAPI_FUNC(int) _Numba_hashtable_foreach(
     _Numba_hashtable_t *ht,
     _Numba_hashtable_foreach_func func, void *arg);
-PyAPI_FUNC(size_t) _Numba_hashtable_size(_Numba_hashtable_t *ht);
+extern "C" PyAPI_FUNC(size_t) _Numba_hashtable_size(_Numba_hashtable_t *ht);
 
-PyAPI_FUNC(_Numba_hashtable_entry_t*) _Numba_hashtable_get_entry(
+extern "C" PyAPI_FUNC(_Numba_hashtable_entry_t*) _Numba_hashtable_get_entry(
     _Numba_hashtable_t *ht,
     const void *key);
-PyAPI_FUNC(int) _Numba_hashtable_set(
+extern "C" PyAPI_FUNC(int) _Numba_hashtable_set(
     _Numba_hashtable_t *ht,
     const void *key,
     void *data,
     size_t data_size);
-PyAPI_FUNC(int) _Numba_hashtable_get(
+extern "C" PyAPI_FUNC(int) _Numba_hashtable_get(
     _Numba_hashtable_t *ht,
     const void *key,
     void *data,
     size_t data_size);
-PyAPI_FUNC(int) _Numba_hashtable_pop(
+extern "C" PyAPI_FUNC(int) _Numba_hashtable_pop(
     _Numba_hashtable_t *ht,
     const void *key,
     void *data,
     size_t data_size);
-PyAPI_FUNC(void) _Numba_hashtable_delete(
+extern "C" PyAPI_FUNC(void) _Numba_hashtable_delete(
     _Numba_hashtable_t *ht,
     const void *key);
 

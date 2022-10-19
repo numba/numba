@@ -930,6 +930,9 @@ The following built-in functions are supported:
 * :func:`enumerate`
 * :func:`filter`
 * :class:`float`
+* :func:`getattr`: the attribute must be a string literal and the return type
+  cannot be a function type (e.g. ``getattr(numpy, 'cos')`` is not supported as
+  it returns a function type).
 * :func:`hash` (see :ref:`pysupported-hashing` below)
 * :class:`int`: only the one-argument form
 * :func:`iter`: only the one-argument form

@@ -66,9 +66,12 @@ versioneer.parentdir_prefix = 'numba-'
 cmdclass = versioneer.get_cmdclass()
 cmdclass['build_doc'] = build_doc
 
+extra_link_args = []
 install_name_tool_fixer = []
 if sys.platform == 'darwin':
     install_name_tool_fixer += ['-headerpad_max_install_names']
+if platform.machine() == 'ppc64le':
+    extra_link_args += ['-pthread']
 
 build_ext = cmdclass.get('build_ext', build_ext)
 
@@ -158,12 +161,13 @@ def get_ext_modules():
 
     ext_dispatcher = Extension(name="numba._dispatcher",
                                sources=['numba/_dispatcher.cpp',
-                                        'numba/_typeof.c',
-                                        'numba/_hashtable.c',
+                                        'numba/_typeof.cpp',
+                                        'numba/_hashtable.cpp',
                                         'numba/core/typeconv/typeconv.cpp'],
                                depends=["numba/_pymodule.h",
                                         "numba/_typeof.h",
                                         "numba/_hashtable.h"],
+                               extra_compile_args=['-std=c++11'],
                                **np_compile_args)
 
     ext_helperlib = Extension(name="numba._helperlib",
@@ -172,7 +176,9 @@ def get_ext_modules():
                                        "numba/cext/dictobject.c",
                                        "numba/cext/listobject.c",
                                        ],
-                              extra_link_args=install_name_tool_fixer,
+                              # numba/_random.c needs pthreads
+                              extra_link_args=install_name_tool_fixer +
+                              extra_link_args,
                               depends=["numba/_pymodule.h",
                                        "numba/_helperlib.c",
                                        "numba/_lapack.c",
@@ -186,6 +192,7 @@ def get_ext_modules():
                              sources=["numba/core/typeconv/typeconv.cpp",
                                       "numba/core/typeconv/_typeconv.cpp"],
                              depends=["numba/_pymodule.h"],
+                             extra_compile_args=['-std=c++11'],
                              )
 
     ext_np_ufunc = Extension(name="numba.np.ufunc._internal",
@@ -235,9 +242,15 @@ def get_ext_modules():
     # Set various flags for use in TBB and openmp. On OSX, also find OpenMP!
     have_openmp = True
     if sys.platform.startswith('win'):
-        cpp11flags = []
-        ompcompileflags = ['-openmp']
-        omplinkflags = []
+        if 'MSC' in sys.version:
+            cpp11flags = []
+            ompcompileflags = ['-openmp']
+            omplinkflags = []
+        else:
+            # For non-MSVC toolchain e.g. gcc and clang with mingw
+            cpp11flags = ['-std=c++11']
+            ompcompileflags = ['-fopenmp']
+            omplinkflags = ['-fopenmp']
     elif sys.platform.startswith('darwin'):
         cpp11flags = ['-std=c++11']
         # This is a bit unusual but necessary...
@@ -278,6 +291,7 @@ def get_ext_modules():
                 depends=['numba/np/ufunc/workqueue.h'],
                 include_dirs=[os.path.join(tbb_root, 'include')],
                 extra_compile_args=cpp11flags,
+                extra_link_args=extra_link_args,
                 libraries=['tbb'],  # TODO: if --debug or -g, use 'tbb_debug'
                 library_dirs=[
                     # for Linux
@@ -319,7 +333,8 @@ def get_ext_modules():
         name='numba.np.ufunc.workqueue',
         sources=['numba/np/ufunc/workqueue.c',
                  'numba/np/ufunc/gufunc_scheduler.cpp'],
-        depends=['numba/np/ufunc/workqueue.h'])
+        depends=['numba/np/ufunc/workqueue.h'],
+        extra_link_args=extra_link_args)
     ext_np_ufunc_backends.append(ext_np_ufunc_workqueue_backend)
 
     ext_mviewbuf = Extension(name='numba.mviewbuf',
@@ -328,7 +343,7 @@ def get_ext_modules():
 
     ext_nrt_python = Extension(name='numba.core.runtime._nrt_python',
                                sources=['numba/core/runtime/_nrt_pythonmod.c',
-                                        'numba/core/runtime/nrt.c'],
+                                        'numba/core/runtime/nrt.cpp'],
                                depends=['numba/core/runtime/nrt.h',
                                         'numba/_pymodule.h',
                                         'numba/core/runtime/_nrt_python.c'],
@@ -391,13 +406,13 @@ metadata = dict(
         # Some C files are needed by pycc
         "numba": ["*.c", "*.h"],
         "numba.pycc": ["*.c", "*.h"],
-        "numba.core.runtime": ["*.c", "*.h"],
+        "numba.core.runtime": ["*.cpp", "*.c", "*.h"],
         "numba.cext": ["*.c", "*.h"],
         # numba gdb hook init command language file
         "numba.misc": ["cmdlang.gdb"],
         "numba.typed": ["py.typed"],
     },
-    scripts=["numba/pycc/pycc", "bin/numba"],
+    scripts=["bin/numba"],
     url="https://numba.pydata.org",
     packages=packages,
     setup_requires=build_requires,

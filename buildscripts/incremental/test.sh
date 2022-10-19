@@ -11,9 +11,10 @@ if [ "$BUILD_DOC" == "yes" ]; then rstcheck README.rst; fi
 pushd docs
 if [ "$BUILD_DOC" == "yes" ]; then make SPHINXOPTS=-W clean html; fi
 popd
-# Run system info tool
+# Run system and gdb info tools
 pushd bin
 numba -s
+numba -g
 popd
 
 # switch off color messages
@@ -82,15 +83,11 @@ fi
 # Find catchsegv
 unamestr=`uname`
 if [[ "$unamestr" == 'Linux' ]]; then
-    if [[ "${BITS32}" == "yes" ]]; then
-        SEGVCATCH=""
-    else
-        SEGVCATCH=catchsegv
-    fi
+    SEGVCATCH=catchsegv
 elif [[ "$unamestr" == 'Darwin' ]]; then
-  SEGVCATCH=""
+    SEGVCATCH=""
 else
-  echo Error
+    echo Error
 fi
 
 # limit CPUs in use on PPC64LE, fork() issues

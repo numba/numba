@@ -139,6 +139,21 @@ These variables influence what is printed out during compilation of
    of the compiler frontend, up to and including generation of the Numba
    Intermediate Representation.
 
+.. envvar:: NUMBA_DEBUG_NRT
+
+   If set to non-zero, print out debugging information at runtime about the use
+   of :ref:`Numba run time (NRT) <arch-numba-runtime>` reference count
+   operations. If set to non-zero, this also switches on the filling of all NRT
+   allocated regions with an identifiable "marker" byte pattern, ``0xCB`` on
+   allocation and ``0xDE`` on deallocation, both to help with debugging memory
+   leaks.
+
+.. envvar:: NUMBA_NRT_STATS
+
+   If set to non-zero, enable the
+   :ref:`Numba run time (NRT) <arch-numba-runtime>` statistics counters. These
+   counters are enabled process wide on import of Numba and are atomic.
+
 .. envvar:: NUMBA_DEBUGINFO
 
    If set to non-zero, enable debug for the full application by setting
@@ -441,7 +456,7 @@ GPU support
    The default compute capability (a string of the type ``major.minor``) to
    target when compiling to PTX using ``cuda.compile_ptx``. The default is
    5.2, which is the lowest non-deprecated compute capability in the most
-   recent version of the CUDA toolkit supported (10.2 at present).
+   recent version of the CUDA toolkit supported (11.0 at present).
 
 .. envvar:: NUMBA_ENABLE_CUDASIM
 
