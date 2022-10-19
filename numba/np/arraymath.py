@@ -20,7 +20,8 @@ from numba.np.numpy_support import (as_dtype, type_can_asarray, type_is_scalar,
                                     check_is_integer)
 from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
                                  impl_ret_new_ref, impl_ret_untracked)
-from numba.np.arrayobj import make_array, load_item, store_item, _empty_nd_impl
+from numba.np.arrayobj import (make_array, load_item, store_item,
+                               _empty_nd_impl, numpy_broadcast_shapes_list)
 from numba.np.linalg import ensure_blas
 
 from numba.core.extending import intrinsic
@@ -1136,6 +1137,75 @@ complex_nanmin = register_jitable(
 complex_nanmax = register_jitable(
     nan_min_max_factory(greater_than, is_complex_dtype=True)
 )
+
+
+@register_jitable
+def _isclose_item(x, y, rtol, atol, equal_nan):
+    if np.isnan(x) and np.isnan(y):
+        return equal_nan
+    elif np.isinf(x) and np.isinf(y):
+        return (x > 0) == (y > 0)
+    elif np.isinf(x) or np.isinf(y):
+        return False
+    else:
+        return abs(x - y) <= atol + rtol * abs(y)
+
+
+@overload(np.isclose)
+def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+    if not(type_can_asarray(a) and type_can_asarray(b)):
+        raise TypingError("Inputs for `np.isclose` must be array-like.")
+
+    if isinstance(a, types.Array) and isinstance(b, types.Number):
+        def isclose_impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+            x = a.reshape(-1)
+            y = b
+            out = np.zeros(len(x), np.bool_)
+            for i in range(len(out)):
+                out[i] = _isclose_item(x[i], y, rtol, atol, equal_nan)
+            return out.reshape(a.shape)
+
+    elif isinstance(a, types.Number) and isinstance(b, types.Array):
+        def isclose_impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+            x = a
+            y = b.reshape(-1)
+            out = np.zeros(len(y), np.bool_)
+            for i in range(len(out)):
+                out[i] = _isclose_item(x, y[i], rtol, atol, equal_nan)
+            return out.reshape(b.shape)
+
+    elif isinstance(a, types.Array) and isinstance(b, types.Array):
+        m = max(a.ndim, b.ndim)
+        tup_init = (0,) * m
+
+        def isclose_impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+            # Broadcast arrays of different types - cannot use
+            # np.broadcast_arrays for that
+            # this can be replaced by np.broadcast_shapes once the min NumPy
+            # version is increased to 1.20
+            shape = [1] * m
+            numpy_broadcast_shapes_list(shape, m, a.shape)
+            numpy_broadcast_shapes_list(shape, m, b.shape)
+
+            tup = tup_init  # tup is the final shape
+
+            for i in range(m):
+                tup = tuple_setitem(tup, i, shape[i])
+
+            a_ = np.broadcast_to(a, tup)
+            b_ = np.broadcast_to(b, tup)
+
+            out = np.zeros(len(a_), dtype=np.bool_)
+            for i, (av, bv) in enumerate(np.nditer((a_, b_))):
+                out[i] = _isclose_item(av.item(), bv.item(), rtol, atol,
+                                       equal_nan)
+            return np.broadcast_to(out, tup)
+
+    else:
+        def isclose_impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+            return _isclose_item(a, b, rtol, atol, equal_nan)
+
+    return isclose_impl
 
 
 @overload(np.nanmin)
