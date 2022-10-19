@@ -2774,7 +2774,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(ValueError) as raises:
             njit(split)(np.ones(5), [3], axis=-3)
-        self.assertIn("np.split", str(raises.exception))
+        self.assertIn("np.split: Argument axis out of bounds",
+                      str(raises.exception))
 
     def test_roll_basic(self):
         pyfunc = roll
@@ -4659,12 +4660,14 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as raises:
             cfunc(np.arange(4), 1, 0)
 
-        self.assertIn('np.swapaxes', str(raises.exception))
+        self.assertIn('np.swapaxes: Argument axis1 out of bounds',
+                      str(raises.exception))
 
         with self.assertRaises(ValueError) as raises:
             cfunc(np.arange(8).reshape(2, 4), 0, -3)
 
-        self.assertIn('np.swapaxes', str(raises.exception))
+        self.assertIn('np.swapaxes: Argument axis2 out of bounds',
+                      str(raises.exception))
 
     def test_take_along_axis(self):
         a = np.arange(24).reshape((3, 1, 4, 2))
