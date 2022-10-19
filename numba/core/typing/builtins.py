@@ -909,16 +909,6 @@ class Min(MinMaxBase):
     pass
 
 
-@infer_global(round)
-class Round(ConcreteTemplate):
-    cases = [
-        signature(types.intp, types.float32),
-        signature(types.int64, types.float64),
-        signature(types.float32, types.float32, types.intp),
-        signature(types.float64, types.float64, types.intp),
-    ]
-
-
 #------------------------------------------------------------------------------
 
 

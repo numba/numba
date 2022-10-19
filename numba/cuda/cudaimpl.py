@@ -13,6 +13,7 @@ from .cudadrv import nvvm
 from numba import cuda
 from numba.cuda import nvvmutils, stubs, errors
 from numba.cuda.types import dim3, grid_group, CUDADispatcher
+from numba.cuda.extending import overload, intrinsic
 
 
 registry = Registry()
@@ -627,27 +628,43 @@ def ptx_min_f8(context, builder, sig, args):
     ])
 
 
-@lower(round, types.f4)
-@lower(round, types.f8)
-def ptx_round(context, builder, sig, args):
-    fn = cgutils.get_or_insert_function(
-        builder.module,
-        ir.FunctionType(
-            ir.IntType(64),
-            (ir.DoubleType(),)),
-        '__nv_llrint')
-    return builder.call(fn, [
-        context.cast(builder, args[0], sig.args[0], types.double),
-    ])
+# @lower(round, types.f4)
+# @lower(round, types.f8)
+@intrinsic
+def ptx_round(typingctx, x):
+    sig = types.int64(x)
+
+    def codegen(context, builder, sig, args):
+        fn = cgutils.get_or_insert_function(
+            builder.module,
+            ir.FunctionType(
+                ir.IntType(64),
+                (ir.DoubleType(),)),
+            '__nv_llrint')
+        return builder.call(fn, [
+            context.cast(builder, args[0], sig.args[0], types.double),
+        ])
+
+    return sig, codegen
 
 
 # This rounding implementation follows the algorithm used in the "fallback
 # version" of double_round in CPython.
 # https://github.com/python/cpython/blob/a755410e054e1e2390de5830befc08fe80706c66/Objects/floatobject.c#L964-L1007
+@overload(round)
+def round_to_impl(x):
+    if isinstance(x, types.Float):
+        def impl(x):
+            return ptx_round(x)
+        return impl
 
-@lower(round, types.f4, types.Integer)
-@lower(round, types.f8, types.Integer)
-def round_to_impl(context, builder, sig, args):
+
+@overload(round)
+def round_to_impl2(x, ndigits):
+    # XXX: it doesn't look like the CUDA target supports ndigits=None
+    if not isinstance(x, types.Float) and isinstance(ndigits, types.Integer):
+        return
+
     def round_ndigits(x, ndigits):
         if math.isinf(x) or math.isnan(x):
             return x
@@ -681,7 +698,7 @@ def round_to_impl(context, builder, sig, args):
 
         return z
 
-    return context.compile_internal(builder, round_ndigits, sig, args, )
+    return round_ndigits
 
 
 def gen_deg_rad(const):

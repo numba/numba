@@ -238,21 +238,32 @@ def _round_intrinsic(tp):
     # round() rounds half to even
     return "llvm.rint.f%d" % (tp.bitwidth,)
 
-@lower_builtin(round, types.Float)
-def round_impl_unary(context, builder, sig, args):
-    fltty = sig.args[0]
-    llty = context.get_value_type(fltty)
-    module = builder.module
-    fnty = ir.FunctionType(llty, [llty])
-    fn = cgutils.get_or_insert_function(module, fnty, _round_intrinsic(fltty))
-    res = builder.call(fn, args)
-    # unary round() returns an int
-    res = builder.fptosi(res, context.get_value_type(sig.return_type))
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+@intrinsic
+def round_impl_unary(typingctx, x):
+    sig = types.intp(x)
+
+    def codegen(context, builder, sig, args):
+        fltty = sig.args[0]
+        llty = context.get_value_type(fltty)
+        module = builder.module
+        fnty = ir.FunctionType(llty, [llty])
+        fn = cgutils.get_or_insert_function(module, fnty,
+                                            _round_intrinsic(fltty))
+        res = builder.call(fn, args)
+        # unary round() returns an int
+        res = builder.fptosi(res, context.get_value_type(sig.return_type))
+        return impl_ret_untracked(context, builder, sig.return_type, res)
+    return sig, codegen
 
 
 @overload(round)
-def round_impl_binary(x, ndigits):
+def round_impl_binary(x, ndigits=None):
+    if isinstance(x, types.Float) and cgutils.is_nonelike(ndigits):
+        def impl(x, ndigits=None):
+            return round_impl_unary(x)
+        return impl
+
     if not (isinstance(x, types.Float) and isinstance(ndigits, types.Integer)):
         return
 
@@ -261,7 +272,7 @@ def round_impl_binary(x, ndigits):
     _round = types.ExternalFunction(
         _round_intrinsic(x), typing.signature(x, x))
 
-    def round_ndigits(x, ndigits):
+    def round_ndigits(x, ndigits=None):
         if math.isinf(x) or math.isnan(x):
             return x
 
