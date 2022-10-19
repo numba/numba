@@ -5328,7 +5328,7 @@ def expand_dims(context, builder, sig, args):
                 axis = tuple_setitem(axis, i, axis[i] + ndim)
 
             if axis[i] < 0 or axis[i] >= ndim:
-                raise ValueError("Axis values out of bounds")
+                raise IndexError("axis out of bounds")
         return axis
 
     def _insert_value_in_tuple(_curr_tuple, ndim, axis, value):
@@ -5339,9 +5339,10 @@ def expand_dims(context, builder, sig, args):
 
         # 2. Replace the new tuple with given value using
         # their index array i.e. axis
-        for i in range(ndim):
-            if i in axis:
-                res = tuple_setitem(res, i, value)
+        for i in axis:
+            if res[i] == value:
+                raise ValueError("An axis is being repeated")
+            res = tuple_setitem(res, i, value)
 
         # 3. Incrementally put original tuple values into
         # indices that are -1
@@ -5467,7 +5468,7 @@ def _atleast_nd_transform(min_ndim, axes):
                 newarrty = arrty.copy(ndim=arrty.ndim + 1)
                 arr = expand_dims(context, builder,
                                   typing.signature(newarrty, arrty,
-                                                   types.Integer),
+                                                   types.intp),
                                   (arr, axis))
                 arrty = newarrty
 
@@ -5774,7 +5775,7 @@ def np_column_stack(typingctx, tup):
                 # Convert 1d array to 2d column array: np.expand_dims(a, 1)
                 assert arrty.ndim == 1
                 newty = arrty.copy(ndim=2)
-                expand_sig = typing.signature(newty, arrty, types.Integer)
+                expand_sig = typing.signature(newty, arrty, types.intp)
                 newarr = expand_dims(context, builder, expand_sig, (arr, axis))
 
                 arrtys.append(newty)
@@ -5933,7 +5934,7 @@ def _np_dstack(typingctx, tup):
                                          axis)
 
             axis = context.get_constant(types.intp, 0)
-            expand_sig = typing.signature(retty, stack_retty, types.Integer)
+            expand_sig = typing.signature(retty, stack_retty, types.intp)
             return expand_dims(context, builder, expand_sig, (stack_ret, axis))
 
         elif ndim == 2:
