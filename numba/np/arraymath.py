@@ -355,8 +355,15 @@ def array_sum_axis(context, builder, sig, args):
 @overload_method(types.Array, "prod")
 def array_prod(arr):
     if isinstance(arr, types.Array):
+        dtype = as_dtype(arr.dtype)
+
+        if dtype.type == np.timedelta64:
+            acc_init = np.int64(0).view(dtype)
+        else:
+            acc_init = dtype.type(0)
+
         def array_prod_impl(arr):
-            c = 1
+            c = acc_init
             for v in np.nditer(arr):
                 c *= v.item()
             return c
@@ -372,13 +379,18 @@ def array_cumsum(arr):
         is_bool = arr.dtype == types.bool_
         if (is_integer and arr.dtype.bitwidth < types.intp.bitwidth)\
                 or is_bool:
-            dtype = np.intp
+            dtype = as_dtype(types.intp)
         else:
-            dtype = arr.dtype
+            dtype = as_dtype(arr.dtype)
+
+        if dtype.type == np.timedelta64:
+            acc_init = np.int64(0).view(dtype)
+        else:
+            acc_init = dtype.type(0)
 
         def array_cumsum_impl(arr):
             out = np.empty(arr.size, dtype)
-            c = np.zeros(1, dtype)[0]
+            c = acc_init
             for idx, v in enumerate(arr.flat):
                 c += v
                 out[idx] = c
@@ -395,13 +407,18 @@ def array_cumprod(arr):
         is_bool = arr.dtype == types.bool_
         if (is_integer and arr.dtype.bitwidth < types.intp.bitwidth)\
                 or is_bool:
-            dtype = np.intp
+            dtype = as_dtype(types.intp)
         else:
-            dtype = arr.dtype
+            dtype = as_dtype(arr.dtype)
+
+        if dtype.type == np.timedelta64:
+            acc_init = np.int64(0).view(dtype)
+        else:
+            acc_init = dtype.type(0)
 
         def array_cumprod_impl(arr):
             out = np.empty(arr.size, dtype)
-            c = np.ones(1, dtype)[0]
+            c = acc_init
             for idx, v in enumerate(arr.flat):
                 c *= v
                 out[idx] = c
@@ -416,14 +433,19 @@ def array_mean(arr):
     if isinstance(arr, types.Array):
         is_number = arr.dtype in types.integer_domain | frozenset([types.bool_])
         if is_number:
-            dtype = types.float64
+            dtype = as_dtype(types.float64)
         else:
-            dtype = arr.dtype
+            dtype = as_dtype(arr.dtype)
+
+        if dtype.type == np.timedelta64:
+            acc_init = np.int64(0).view(dtype)
+        else:
+            acc_init = dtype.type(0)
 
         def array_mean_impl(arr):
             # Can't use the naive `arr.sum() / arr.size`, as it would return
             # a wrong result on integer sum overflow.
-            c = np.zeros(1, dtype)[0]
+            c = acc_init
             for v in np.nditer(arr):
                 c += v.item()
             return c / arr.size
