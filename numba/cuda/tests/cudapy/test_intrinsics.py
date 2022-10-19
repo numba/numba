@@ -363,6 +363,10 @@ def nonliteral_gridsize(x):
 
 
 class TestCudaIntrinsic(CUDATestCase):
+    def setUp(self):
+        super().setUp()
+        np.random.seed(0)
+
     def test_simple_threadidx(self):
         compiled = cuda.jit("void(int32[:])")(simple_threadidx)
         ary = np.ones(1, dtype=np.int32)
@@ -716,6 +720,7 @@ class TestCudaIntrinsic(CUDATestCase):
         ptx, _ = compile_ptx(simple_habs_scalar, args, cc=(5, 3))
         self.assertIn('abs.f16', ptx)
 
+    @skip_unless_cc_53
     @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_fp16_intrinsics_common(self):
         kernels = (simple_hsin, simple_hcos,
@@ -739,7 +744,7 @@ class TestCudaIntrinsic(CUDATestCase):
         for kernel, fn in zip(kernels, expected_functions):
             with self.subTest(fn=fn):
                 kernel = cuda.jit("void(f2[:], f2[:])")(kernel)
-                kernel[1,32](r, x)
+                kernel[1,N](r, x)
                 expected = fn(x, dtype=np.float16)
                 np.testing.assert_allclose(r, expected)
 
@@ -747,10 +752,11 @@ class TestCudaIntrinsic(CUDATestCase):
         for kernel, fn in zip(exp_kernels, expected_exp_functions):
             with self.subTest(fn=fn):
                 kernel = cuda.jit("void(f2[:], f2[:])")(kernel)
-                kernel[1,32](r, x2)
+                kernel[1,N](r, x2)
                 expected = fn(x2, dtype=np.float16)
                 np.testing.assert_allclose(r, expected)
 
+    @skip_unless_cc_53
     @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_hexp10(self):
         @cuda.jit()
@@ -767,7 +773,7 @@ class TestCudaIntrinsic(CUDATestCase):
         r = np.zeros_like(x)
 
         # Run the kernel
-        hexp10_vectors[1, 32](r, x)
+        hexp10_vectors[1, N](r, x)
         np.testing.assert_allclose(r, 10 ** x)
 
     @skip_unless_cc_53

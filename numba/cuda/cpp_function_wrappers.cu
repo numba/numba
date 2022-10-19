@@ -45,4 +45,3 @@ UNARY_FUNCTION(hrcp)
 UNARY_FUNCTION(hrint)
 UNARY_FUNCTION(htrunc)
 
-

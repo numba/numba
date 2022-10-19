@@ -647,7 +647,7 @@ class fp16(Stub):
     class hexp(Stub):
         """hexp(a)
 
-        Calculate natural exponential, (2.71828 ** a) in round to nearest mode.
+        Calculate natural exponential, exp(a), in round to nearest mode.
         Supported on fp16 operands only.
 
         Returns the natural exponential result.
@@ -737,7 +737,7 @@ class fp16(Stub):
     class htrunc(Stub):
         """htrunc(a)
 
-        Truncate the input argument to it's integer portion. Supported
+        Truncate the input argument to its integer portion. Supported
         on fp16 operands only.
 
         Returns the truncated result.

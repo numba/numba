@@ -522,25 +522,25 @@ These functions return a 16-bit floating point result.
 
 .. function:: numba.cuda.fp16.hsin (a)
 
-   Calculates the trigonometry sine function on the 16-bit floating point argument.
+   Calculates the trigonometry sine function of the 16-bit floating point argument.
 
    Returns the 16-bit floating point result of the sine operation.
 
 .. function:: numba.cuda.fp16.hcos (a)
 
-   Calculates the trigonometry cosine function on the 16-bit floating point argument.
+   Calculates the trigonometry cosine function of the 16-bit floating point argument.
 
    Returns the 16-bit floating point result of the cosine operation.
 
 .. function:: numba.cuda.fp16.hlog (a)
 
-   Calculates the natural log on the 16-bit floating point argument.
+   Calculates the natural logarithm of the 16-bit floating point argument.
 
    Returns the 16-bit floating point result of the natural log operation.
 
 .. function:: numba.cuda.fp16.hlog10 (a)
 
-   CCalculates the base 10 logarithm on the 16-bit floating point argument.
+   Calculates the base 10 logarithm of the 16-bit floating point argument.
 
    Returns the 16-bit floating point result of the log base 10 operation.
 
@@ -552,19 +552,19 @@ These functions return a 16-bit floating point result.
 
 .. function:: numba.cuda.fp16.hexp (a)
 
-   Calculates the natural exponential operation on the 16-bit floating point argument.
+   Calculates the natural exponential operation of the 16-bit floating point argument.
 
    Returns the 16-bit floating point result of the exponential operation.
 
 .. function:: numba.cuda.fp16.hexp10 (a)
 
-   Calculates the base 10 exponential on the 16-bit floating point argument.
+   Calculates the base 10 exponential of the 16-bit floating point argument.
 
    Returns the 16-bit floating point result of the exponential operation.
 
 .. function:: numba.cuda.fp16.hexp2 (a)
 
-   Calculates the base 2 exponential on the 16-bit floating point argument.
+   Calculates the base 2 exponential of the 16-bit floating point argument.
 
    Returns the 16-bit floating point result of the exponential operation.
 
@@ -577,26 +577,26 @@ These functions return a 16-bit floating point result.
 
 .. function:: numba.cuda.fp16.hceil (a)
 
-   Calculates the floor operation, the smallest integer greater than or equal to ``a``,
+   Calculates the ceiling operation, the smallest integer greater than or equal to ``a``,
    on the 16-bit floating point argument.
 
    Returns the 16-bit floating point result of the ceil operation.
 
 .. function:: numba.cuda.fp16.hsqrt (a)
 
-   Calculates the square root operation on the 16-bit floating point argument.
+   Calculates the square root operation of the 16-bit floating point argument.
 
    Returns the 16-bit floating point result of the square root operation.
 
 .. function:: numba.cuda.fp16.hrsqrt (a)
 
-   Calculates the reciprocal square root operation on the 16-bit floating point argument.
+   Calculates the reciprocal of the square root of the 16-bit floating point argument.
 
    Returns the 16-bit floating point result of the reciprocal square root operation.
 
 .. function:: numba.cuda.fp16.hrcp (a)
 
-   Calculates the reciprocal on the 16-bit floating point argument.
+   Calculates the reciprocal of the 16-bit floating point argument.
 
    Returns the 16-bit floating point result of the reciprocal.
 
@@ -608,7 +608,8 @@ These functions return a 16-bit floating point result.
 
 .. function:: numba.cuda.fp16.htrunc (a)
 
-   Truncate the input 16-bit floating point argument to nearest integer value.
+   Truncate the input 16-bit floating point argument to the nearest integer
+   that does not exceed the input argument in magnitude.
 
    Returns the 16-bit floating point result of the truncation.
 
