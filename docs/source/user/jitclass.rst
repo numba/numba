@@ -99,7 +99,8 @@ First, using explicit Numba types and explicit construction.
 
 .. code-block:: python
 
-    from numba import jitclass, types, typed
+    from numba import types, typed
+    from numba.experimental import jitclass
 
     # key and value types
     kv_ty = (types.int64, types.unicode_type)
@@ -131,7 +132,8 @@ example:
 
 .. code-block:: python
 
-    from numba import jitclass, typed, typeof
+    from numba import typed, typeof
+    from numba.experimental import jitclass
 
     d = typed.Dict()
     d[1] = "apple"
@@ -158,7 +160,8 @@ instance of the type specified.
 
 .. code-block:: python
 
-    from numba import jitclass, types
+    from numba import types
+    from numba.experimental import jitclass
 
     dict_ty = types.DictType(types.int64, types.unicode_type)
 
