@@ -29,6 +29,12 @@ must be installed from the appropriate channels. To install using conda, use:
 
    conda install rapidsai::cubinlinker conda-forge::ptxcompiler
 
+To install with pip, use the NVIDIA package index:
+
+.. code:: bash
+
+   pip install ptxcompiler-cu11 cubinlinker-cu11 --extra-index-url=https://pypi.ngc.nvidia.com
+
 MVC support is enabled by setting the environment variable:
 
 .. code:: bash
