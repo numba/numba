@@ -351,16 +351,21 @@ def array_sum_axis(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
+def get_accumulator(dtype, value):
+    if dtype.type == np.timedelta64:
+        acc_init = np.int64(value).view(dtype)
+    else:
+        acc_init = dtype.type(value)
+    return acc_init
+
+
 @overload(np.prod)
 @overload_method(types.Array, "prod")
 def array_prod(arr):
     if isinstance(arr, types.Array):
         dtype = as_dtype(arr.dtype)
 
-        if dtype.type == np.timedelta64:
-            acc_init = np.int64(1).view(dtype)
-        else:
-            acc_init = dtype.type(1)
+        acc_init = get_accumulator(dtype, 1)
 
         def array_prod_impl(arr):
             c = acc_init
@@ -383,10 +388,7 @@ def array_cumsum(arr):
         else:
             dtype = as_dtype(arr.dtype)
 
-        if dtype.type == np.timedelta64:
-            acc_init = np.int64(0).view(dtype)
-        else:
-            acc_init = dtype.type(0)
+        acc_init = get_accumulator(dtype, 0)
 
         def array_cumsum_impl(arr):
             out = np.empty(arr.size, dtype)
@@ -411,10 +413,7 @@ def array_cumprod(arr):
         else:
             dtype = as_dtype(arr.dtype)
 
-        if dtype.type == np.timedelta64:
-            acc_init = np.int64(1).view(dtype)
-        else:
-            acc_init = dtype.type(1)
+        acc_init = get_accumulator(dtype, 1)
 
         def array_cumprod_impl(arr):
             out = np.empty(arr.size, dtype)
@@ -437,10 +436,7 @@ def array_mean(arr):
         else:
             dtype = as_dtype(arr.dtype)
 
-        if dtype.type == np.timedelta64:
-            acc_init = np.int64(0).view(dtype)
-        else:
-            acc_init = dtype.type(0)
+        acc_init = get_accumulator(dtype, 0)
 
         def array_mean_impl(arr):
             # Can't use the naive `arr.sum() / arr.size`, as it would return
