@@ -1,4 +1,5 @@
 import weakref
+from collections import ChainMap
 
 from numba.core import types
 
@@ -7,9 +8,9 @@ class DataModelManager(object):
     """Manages mapping of FE types to their corresponding data model
     """
 
-    def __init__(self):
+    def __init__(self, handlers=None):
         # { numba type class -> model factory }
-        self._handlers = {}
+        self._handlers = handlers or {}
         # { numba type instance -> model instance }
         self._cache = weakref.WeakKeyDictionary()
 
@@ -44,4 +45,8 @@ class DataModelManager(object):
         dmm = DataModelManager()
         dmm._handlers = self._handlers.copy()
         return dmm
+
+    def chain(self, other_manager):
+        chained = ChainMap(self._handlers, other_manager._handlers)
+        return DataModelManager(chained)
 
