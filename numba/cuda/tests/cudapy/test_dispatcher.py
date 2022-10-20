@@ -377,6 +377,64 @@ class TestDispatcher(CUDATestCase):
         self.assertIsInstance(shared_mem_per_block, int)
         self.assertEqual(shared_mem_per_block, 400)
 
+    def test_get_local_mem_per_block_unspecialized(self):
+        # NOTE: A large amount of local memory must be allocated
+        # otherwise the compiler will optimize out the call to
+        # cuda.local.array and use local registers instead
+        N = 10000
+
+        @cuda.jit
+        def simple_lmem(ary):
+            lm = cuda.local.array(N, dtype=ary.dtype)
+            for j in range(N):
+                lm[j] = j
+            for j in range(N):
+                ary[j] = lm[j]
+
+        # Call the kernel with different arguments to create two different
+        # definitions within the Dispatcher object
+        arr_f32 = np.zeros(N, dtype=np.float32)
+        arr_f64 = np.zeros(N, dtype=np.float64)
+
+        simple_lmem[1, 1](arr_f32)
+        simple_lmem[1, 1](arr_f64)
+
+        sig_f32 = void(float32[::1])
+        sig_f64 = void(float64[::1])
+        local_mem_f32 = simple_lmem.get_local_mem_per_thread(sig_f32)
+        local_mem_f64 = simple_lmem.get_local_mem_per_thread(sig_f64)
+        self.assertIsInstance(local_mem_f32, int)
+        self.assertIsInstance(local_mem_f64, int)
+
+        self.assertGreaterEqual(local_mem_f32, N * 4)
+        self.assertGreaterEqual(local_mem_f64, N * 8)
+
+        # Check that getting the local memory per thread for all signatures
+        # provides the same values as getting the shared mem per block for
+        # individual signatures.
+        sh_mem_f32_all = simple_lmem.get_local_mem_per_thread()
+        sh_mem_f64_all = simple_lmem.get_local_mem_per_thread()
+        self.assertEqual(sh_mem_f32_all[sig_f32.args], local_mem_f32)
+        self.assertEqual(sh_mem_f64_all[sig_f64.args], local_mem_f64)
+
+    def test_get_local_mem_per_thread_specialized(self):
+        # NOTE: A large amount of local memory must be allocated
+        # otherwise the compiler will optimize out the call to
+        # cuda.local.array and use local registers instead
+        N = 10000
+
+        @cuda.jit(void(float32[::1]))
+        def simple_lmem(ary):
+            lm = cuda.local.array(N, dtype=ary.dtype)
+            for j in range(N):
+                lm[j] = j
+            for j in range(N):
+                ary[j] = lm[j]
+
+        local_mem_per_thread = simple_lmem.get_local_mem_per_thread()
+        self.assertIsInstance(local_mem_per_thread, int)
+        self.assertGreaterEqual(local_mem_per_thread, N * 4)
+
     def test_dispatcher_docstring(self):
         # Ensure that CUDA-jitting a function preserves its docstring. See
         # Issue #5902: https://github.com/numba/numba/issues/5902

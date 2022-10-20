@@ -483,23 +483,6 @@ class ArrayAttribute(AttributeTemplate):
         assert not args
         return signature(ary.copy(ndim=1, layout='C'))
 
-    @bound_function("array.take")
-    def resolve_take(self, ary, args, kws):
-        if kws:
-            raise NumbaAssertionError("kws not supported")
-        argty, = args
-        if isinstance(argty, types.Integer):
-            sig = signature(ary.dtype, *args)
-        elif isinstance(argty, types.Array):
-            sig = signature(argty.copy(layout='C', dtype=ary.dtype), *args)
-        elif isinstance(argty, types.List):  # 1d lists only
-            sig = signature(types.Array(ary.dtype, 1, 'C'), *args)
-        elif isinstance(argty, types.BaseTuple):
-            sig = signature(types.Array(ary.dtype, np.ndim(argty), 'C'), *args)
-        else:
-            raise TypeError("take(%s) not supported for %s" % argty)
-        return sig
-
     def generic_resolve(self, ary, attr):
         # Resolution of other attributes, for record arrays
         if isinstance(ary.dtype, types.Record):
