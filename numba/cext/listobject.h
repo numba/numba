@@ -4,7 +4,10 @@
  *
  * https://github.com/python/cpython/blob/51ddab8dae056867f3595ab3400bffc93f67c8d4/Include/listobject.h
  *
- *
+ * WARNING:
+ * Most interfaces listed here are exported, but they're not supported/stable,
+ * and these interfaces or underlying implementations could be changed or
+ * removed in future without notice.
  * */
 
 #ifndef NUMBA_LIST_H
@@ -73,7 +76,7 @@ typedef struct {
     Py_ssize_t       pos;
 } NB_ListIter;
 
-NUMBA_EXPORT_FUNC(void)
+void
 numba_list_set_method_table(NB_List *lp, list_type_based_methods_table *methods);
 
 int
@@ -82,22 +85,22 @@ numba_list_new(NB_List **out, Py_ssize_t item_size, Py_ssize_t allocated);
 void
 numba_list_free(NB_List *lp);
 
-NUMBA_EXPORT_FUNC(char *)
+char *
 numba_list_base_ptr(NB_List *lp);
 
-NUMBA_EXPORT_FUNC(Py_ssize_t)
+Py_ssize_t
 numba_list_size_address(NB_List *lp);
 
 Py_ssize_t
 numba_list_length(NB_List *lp);
 
-NUMBA_EXPORT_FUNC(Py_ssize_t)
+Py_ssize_t
 numba_list_allocated(NB_List *lp);
 
-NUMBA_EXPORT_FUNC(int)
+int
 numba_list_is_mutable(NB_List *lp);
 
-NUMBA_EXPORT_FUNC(void)
+void
 numba_list_set_is_mutable(NB_List *lp, int is_mutable);
 
 int
@@ -109,24 +112,23 @@ numba_list_getitem(NB_List *lp, Py_ssize_t index, char *out);
 int
 numba_list_append(NB_List *lp, const char *item);
 
-// FIXME: should this be public?
-NUMBA_EXPORT_FUNC(int)
+int
 numba_list_resize(NB_List *lp, Py_ssize_t newsize);
 
-NUMBA_EXPORT_FUNC(int)
+int
 numba_list_delitem(NB_List *lp, Py_ssize_t index);
 
-NUMBA_EXPORT_FUNC(int)
+int
 numba_list_delete_slice(NB_List *lp,
                         Py_ssize_t start, Py_ssize_t stop, Py_ssize_t step);
 
-NUMBA_EXPORT_FUNC(size_t)
+size_t
 numba_list_iter_sizeof(void);
 
-NUMBA_EXPORT_FUNC(void)
+void
 numba_list_iter(NB_ListIter *it, NB_List *l);
 
-NUMBA_EXPORT_FUNC(int)
+int
 numba_list_iter_next(NB_ListIter *it, const char **item_ptr);
 
 NUMBA_EXPORT_FUNC(int)
