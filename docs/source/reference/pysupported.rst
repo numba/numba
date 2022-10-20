@@ -552,11 +552,6 @@ Typed List
   functionality or suffer from unexpectedly bad performance, please report
   this, ideally by opening an issue on the Numba issue tracker.
 
-.. warning::
-  Most interfaces listed in ``numba/cext/listobject.h`` are exported,
-  but they're not supported/stable, and these interfaces or underlying
-  implementations could be changed or removed in future without notice.
-
 As of version 0.45.0 a new implementation of the list data type is available,
 the so-called *typed-list*. This is compiled library backed, type-homogeneous
 list data type that is an improvement over the *reflected-list* mentioned
