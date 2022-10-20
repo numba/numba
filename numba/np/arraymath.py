@@ -358,9 +358,9 @@ def array_prod(arr):
         dtype = as_dtype(arr.dtype)
 
         if dtype.type == np.timedelta64:
-            acc_init = np.int64(0).view(dtype)
+            acc_init = np.int64(1).view(dtype)
         else:
-            acc_init = dtype.type(0)
+            acc_init = dtype.type(1)
 
         def array_prod_impl(arr):
             c = acc_init
@@ -412,9 +412,9 @@ def array_cumprod(arr):
             dtype = as_dtype(arr.dtype)
 
         if dtype.type == np.timedelta64:
-            acc_init = np.int64(0).view(dtype)
+            acc_init = np.int64(1).view(dtype)
         else:
-            acc_init = dtype.type(0)
+            acc_init = dtype.type(1)
 
         def array_cumprod_impl(arr):
             out = np.empty(arr.size, dtype)
