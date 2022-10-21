@@ -797,7 +797,7 @@ def isalpha(chr_array, len_chr, size_chr):
             if chr_ord not in alpha:
                 is_alpha[i] = False
                 break
-            is_alpha[i] |= chr_ord in alpha
+            is_alpha[i] = True
         stride += size_chr
     return is_alpha
 
@@ -831,7 +831,7 @@ def isalnum(chr_array, len_chr, size_chr):
             if chr_ord not in alnum:
                 is_alnum[i] = False
                 break
-            is_alnum[i] |= chr_ord in alnum
+            is_alnum[i] = True
         stride += size_chr
     return is_alnum
 
@@ -855,7 +855,7 @@ def isdecimal(chr_array, len_chr, size_chr):
             if chr_ord not in decimal:
                 is_decimal[i] = False
                 break
-            is_decimal[i] |= chr_ord in decimal
+            is_decimal[i] = True
         stride += size_chr
     return is_decimal
 
@@ -879,7 +879,7 @@ def isdigit(chr_array, len_chr, size_chr):
             if chr_ord not in digit:
                 is_digit[i] = False
                 break
-            is_digit[i] |= chr_ord in digit
+            is_digit[i] = True
         stride += size_chr
     return is_digit
 
@@ -905,7 +905,7 @@ def isnumeric(chr_array, len_chr, size_chr):
             if chr_ord not in numeric:
                 is_numeric[i] = False
                 break
-            is_numeric[i] |= chr_ord in numeric
+            is_numeric[i] = True
         stride += size_chr
     return is_numeric
 
@@ -934,7 +934,7 @@ def isspace(chr_array, len_chr, size_chr, as_bytes):
             if chr_ord not in space:
                 is_space[i] = False
                 break
-            is_space[i] |= chr_ord in space
+            is_space[i] = True
         stride += size_chr
     return is_space
 
@@ -969,13 +969,17 @@ def istitle(chr_array, len_chr, size_chr):
         cased_state = False
         for c in range(chr_lens[i]):
             chr_ord = chr_array[stride + c]
-            if (cased_state and chr_ord in upper) \
-                    or (not cased_state and chr_ord in lower):
-                is_title[i] = False
-                break
-            cased_state = chr_ord in upper
-            is_title[i] |= cased_state
-            cased_state |= chr_ord in lower
+            if cased_state:
+                if chr_ord in upper:
+                    is_title[i] = False
+                    break
+                cased_state = chr_ord in lower
+            else:
+                if chr_ord in lower:
+                    is_title[i] = False
+                    break
+                cased_state = chr_ord in upper
+                is_title[i] |= cased_state
         stride += size_chr
     return is_title
 
