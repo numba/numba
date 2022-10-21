@@ -6,6 +6,7 @@ import itertools
 import math
 import random
 import sys
+from numba.core.errors import TypingError
 
 import numpy as np
 
@@ -622,6 +623,19 @@ class TestUnicodeSets(TestSets):
     """
     def _range(self, stop):
         return ['A{}'.format(i) for i in range(int(stop))]
+
+class TestSetsInvalidDtype(TestSets):
+
+    def _test_set_operator(self, pyfunc):
+        # it is invalid to apply some set operations on
+        # sets with different dtype
+        check = self.unordered_checker(pyfunc)
+        a = set([1, 2, 4, 11])
+        b = set(['a', 'b', 'c'])
+
+        msg = 'No implementation of function'
+        with self.assertRaisesRegex(TypingError, msg):
+            check(a, b)
 
 
 class TestUnboxing(BaseTest):
