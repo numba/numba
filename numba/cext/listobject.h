@@ -5,9 +5,10 @@
  * https://github.com/python/cpython/blob/51ddab8dae056867f3595ab3400bffc93f67c8d4/Include/listobject.h
  *
  * WARNING:
- * Most interfaces listed here are exported, but they're not supported/stable,
- * and these interfaces or underlying implementations could be changed or
- * removed in future without notice.
+ * Most interfaces listed here are exported (global), but they are not
+ * supported, stable, or part of Numba's public API. These interfaces and their
+ * underlying implementations may be changed or removed in future without
+ * notice.
  * */
 
 #ifndef NUMBA_LIST_H
