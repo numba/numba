@@ -634,12 +634,9 @@ class Indexer(object):
 
     def loop_head(self):
         """
-        Start indexation loop.  Return a (index, count) tuple.
+        Start indexation loop.  Returns a index.
         *index* is an integer LLVM value representing the index over this
         dimension.
-        *count* is either an integer LLVM value representing the current
-        iteration count, or None if this dimension should be omitted from
-        the indexation result.
         """
         raise NotImplementedError
 
@@ -690,7 +687,7 @@ class EntireIndexer(Indexer):
         with builder.if_then(builder.icmp_signed('>=', cur_index, self.size),
                              likely=False):
             builder.branch(self.bb_end)
-        return cur_index, cur_index
+        return cur_index
 
     def loop_tail(self):
         builder = self.builder
@@ -725,7 +722,7 @@ class IntegerIndexer(Indexer):
         return (self.idx, self.builder.add(self.idx, self.get_size()))
 
     def loop_head(self):
-        return self.idx, None
+        return self.idx
 
     def loop_tail(self):
         pass
@@ -745,9 +742,19 @@ class IntegerArrayIndexer(Indexer):
         self.ll_intp = self.context.get_value_type(types.intp)
 
         if idxty.ndim > 1:
-            def flat_imp(ary):
-                # TODO: Make sure this operation is being done in-place
+            def flat_imp_nocopy(ary):
                 return ary.reshape(ary.size)
+
+            def flat_imp_copy(ary):
+                return ary.copy().reshape(ary.size)
+
+            # If the index array is contigous, use the nocopy version
+            if idxty.is_contig:
+                flat_imp = flat_imp_nocopy
+            # otherwise, use copy version since we don't support
+            # reshaping non-contigous arrays
+            else:
+                flat_imp = flat_imp_copy
 
             retty = types.Array(idxty.dtype, 1, idxty.layout, readonly=True)
             sig = signature(retty, idxty)
@@ -799,7 +806,7 @@ class IntegerArrayIndexer(Indexer):
         )
         index = fix_integer_index(self.context, builder,
                                   self.idxty.dtype, index, self.size)
-        return index, cur_index
+        return index
 
     def loop_tail(self):
         builder = self.builder
@@ -828,7 +835,6 @@ class BooleanArrayIndexer(Indexer):
         builder = self.builder
         self.size = cgutils.unpack_tuple(builder, self.idxary.shape)[0]
         self.idx_index = cgutils.alloca_once(builder, self.ll_intp)
-        self.count = cgutils.alloca_once(builder, self.ll_intp)
         self.bb_start = builder.append_basic_block()
         self.bb_tail = builder.append_basic_block()
         self.bb_end = builder.append_basic_block()
@@ -860,11 +866,9 @@ class BooleanArrayIndexer(Indexer):
         builder = self.builder
         # Initialize loop variable
         self.builder.store(self.zero, self.idx_index)
-        self.builder.store(self.zero, self.count)
         builder.branch(self.bb_start)
         builder.position_at_end(self.bb_start)
         cur_index = builder.load(self.idx_index)
-        cur_count = builder.load(self.count)
         with builder.if_then(builder.icmp_signed('>=', cur_index, self.size),
                              likely=False):
             builder.branch(self.bb_end)
@@ -875,10 +879,7 @@ class BooleanArrayIndexer(Indexer):
         )
         with builder.if_then(builder.not_(pred)):
             builder.branch(self.bb_tail)
-        # Increment the count for next iteration
-        next_count = cgutils.increment_index(builder, cur_count)
-        builder.store(next_count, self.count)
-        return cur_index, cur_count
+        return cur_index
 
     def loop_tail(self):
         builder = self.builder
@@ -917,7 +918,6 @@ class SliceIndexer(Indexer):
         self.is_step_negative = cgutils.is_neg_int(builder, self.slice.step)
         # Create loop entities
         self.index = cgutils.alloca_once(builder, self.ll_intp)
-        self.count = cgutils.alloca_once(builder, self.ll_intp)
         self.bb_start = builder.append_basic_block()
         self.bb_end = builder.append_basic_block()
 
@@ -935,11 +935,9 @@ class SliceIndexer(Indexer):
         builder = self.builder
         # Initialize loop variable
         self.builder.store(self.slice.start, self.index)
-        self.builder.store(self.zero, self.count)
         builder.branch(self.bb_start)
         builder.position_at_end(self.bb_start)
         cur_index = builder.load(self.index)
-        cur_count = builder.load(self.count)
         is_finished = builder.select(self.is_step_negative,
                                      builder.icmp_signed('<=', cur_index,
                                                          self.slice.stop),
@@ -947,15 +945,13 @@ class SliceIndexer(Indexer):
                                                          self.slice.stop))
         with builder.if_then(is_finished, likely=False):
             builder.branch(self.bb_end)
-        return cur_index, cur_count
+        return cur_index
 
     def loop_tail(self):
         builder = self.builder
         next_index = builder.add(builder.load(self.index), self.slice.step,
                                  flags=['nsw'])
         builder.store(next_index, self.index)
-        next_count = cgutils.increment_index(builder, builder.load(self.count))
-        builder.store(next_count, self.count)
         builder.branch(self.bb_start)
         builder.position_at_end(self.bb_end)
 
@@ -1074,8 +1070,8 @@ class FancyIndexer(object):
         return lower, upper
 
     def begin_loops(self):
-        indices, counts = zip(*(i.loop_head() for i in self.indexers))
-        return indices, counts
+        indices = tuple(i.loop_head() for i in self.indexers)
+        return indices
 
     def end_loops(self):
         for i in reversed(self.indexers):
@@ -1103,7 +1099,7 @@ def fancy_getitem(context, builder, sig, args,
                                         context.get_constant(types.intp, 0))
 
     # Loop on source and copy to destination
-    indices, _ = indexer.begin_loops()
+    indices = indexer.begin_loops()
 
     # No need to check for wraparound, as the indexers all ensure
     # a positive index is returned.
@@ -1637,7 +1633,6 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         srcty, src = _broadcast_to_shape(context, builder, srcty, src,
                                          index_shape)
         src_shapes = cgutils.unpack_tuple(builder, src.shape)
-        src_strides = cgutils.unpack_tuple(builder, src.strides)
         src_data = src.data
 
         # Check shapes are equal
@@ -1651,24 +1646,6 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         with builder.if_then(shape_error, likely=False):
             msg = "cannot assign slice from input of different size"
             context.call_conv.return_user_exc(builder, ValueError, (msg,))
-
-        # Check for array overlap
-        src_start, src_end = get_array_memory_extents(context, builder, srcty,
-                                                      src, src_shapes,
-                                                      src_strides, src_data)
-
-        dest_lower, dest_upper = indexer.get_offset_bounds(dest_strides,
-                                                           ary.itemsize)
-        dest_start, dest_end = compute_memory_extents(context, builder,
-                                                      dest_lower, dest_upper,
-                                                      dest_data)
-
-        use_copy = extents_may_overlap(context, builder, src_start, src_end,
-                                       dest_start, dest_end)
-
-        src_getitem, src_cleanup = maybe_copy_source(context, builder, use_copy,
-                                                     srcty, src, src_shapes,
-                                                     src_strides, src_data)
 
     elif isinstance(srcty, types.Sequence):
         src_dtype = srcty.dtype
@@ -1684,51 +1661,54 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         with builder.if_then(shape_error, likely=False):
             msg = "cannot assign slice from input of different size"
             context.call_conv.return_user_exc(builder, ValueError, (msg,))
-
-        def src_getitem(source_indices):
-            idx, = source_indices
-            getitem_impl = context.get_function(
-                operator.getitem,
-                signature(src_dtype, srcty, types.intp),
-            )
-            return getitem_impl(builder, (src, idx))
-
-        def src_cleanup():
-            pass
-
     else:
         # Source is a scalar (broadcast or not, depending on destination
         # shape).
         src_dtype = srcty
 
-        def src_getitem(source_indices):
-            return src
+    def flat_imp_nocopy(ary):
+        return ary.reshape(ary.size)
 
-        def src_cleanup():
-            pass
+    def flat_imp_copy(ary):
+        return ary.copy().reshape(ary.size)
 
+    # If the source array is contigous, use the nocopy version
+    if srcty.is_contig:
+        flat_imp = flat_imp_nocopy
+    # otherwise, use copy version since we don't support
+    # reshaping non-contigous arrays
+    else:
+        flat_imp = flat_imp_copy
+
+    retty = types.Array(srcty.dtype, 1, srcty.layout, readonly=True)
+    sig = signature(retty, srcty)
+    src_flat_instr = context.compile_internal(builder, flat_imp, sig,
+                                              (src._getvalue(),))
+    src_flat = make_array(retty)(context, builder, src_flat_instr)
+    src_data = src_flat.data
+    src_idx = cgutils.alloca_once_value(builder,
+                                        context.get_constant(types.intp, 0))
     # Loop on destination and copy from source to destination
-    dest_indices, counts = indexer.begin_loops()
-
-    # Source is iterated in natural order
-    source_indices = tuple(c for c in counts if c is not None)
-    val = src_getitem(source_indices)
-
-    # Cast to the destination dtype (cross-dtype slice assignment is allowed)
-    val = context.cast(builder, val, src_dtype, aryty.dtype)
+    dest_indices = indexer.begin_loops()
 
     # No need to check for wraparound, as the indexers all ensure
     # a positive index is returned.
     dest_ptr = cgutils.get_item_pointer2(context, builder, dest_data,
                                          dest_shapes, dest_strides,
                                          aryty.layout, dest_indices,
-                                         wraparound=False,
-                                         boundscheck=context.enable_boundscheck)
+                                         wraparound=False)
+
+    cur = builder.load(src_idx)
+    ptr = builder.gep(src_data, [cur])
+    val = builder.load(ptr)
+    val = context.cast(builder, val, src_dtype, aryty.dtype)
     store_item(context, builder, aryty, val, dest_ptr)
+    next_idx = cgutils.increment_index(builder, cur)
+    builder.store(next_idx, src_idx)
 
     indexer.end_loops()
 
-    src_cleanup()
+    context.nrt.decref(builder, retty, src_flat_instr)
 
     return context.get_dummy_value()
 
