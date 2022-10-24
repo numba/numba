@@ -4293,6 +4293,26 @@ class TestPrangeSpecific(TestPrangeBase):
         )
         self.assertIn("TEST PASSED", out.decode())
 
+    def test_issue8515(self):
+        """ issue8515: an array is filled in my one prange and
+            then accessed with c[i - 1] in the next prange which
+            should prevent fusion with the previous prange.
+        """
+        def test_impl(n):
+            r = np.zeros(n, dtype=np.intp)
+            c = np.zeros(n, dtype=np.intp)
+            for i in range(n): # patch_instance will convert this to prange
+                for j in range(i):
+                    c[i] += 1
+
+            for i in range(n): # patch_instance will convert this to prange
+                if i == 0:
+                    continue
+                r[i] = c[i] - c[i - 1]
+            return r[1:]
+
+        self.prange_tester(test_impl, 15, patch_instance=[0,2])
+
 
 @skip_parfors_unsupported
 class TestParforChunksizing(TestCase):
