@@ -360,11 +360,12 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices,
     output_shapes = []
     output_strides = []
 
+    num_newaxes = len([idx for idx in index_types if is_nonelike(idx)])
     ax = 0
     for indexval, idxty in zip(indices, index_types):
         if idxty is types.ellipsis:
             # Fill up missing dimensions at the middle
-            n_missing = aryty.ndim - len(indices) + 1
+            n_missing = aryty.ndim - len(indices) + 1 + num_newaxes
             for i in range(n_missing):
                 output_indices.append(zero)
                 output_shapes.append(shapes[ax])
@@ -934,16 +935,19 @@ class FancyIndexer(object):
         self.newaxes = []
 
         indexers = []
+        num_newaxes = len([idx for idx in index_types if is_nonelike(idx)])
 
-        ax = 0
+        ax = 0 # keeps track of position of original axes
+        new_ax = 0 # keeps track of position for inserting new axes
         for indexval, idxty in zip(indices, index_types):
             if idxty is types.ellipsis:
                 # Fill up missing dimensions at the middle
-                n_missing = aryty.ndim - len(indices) + 1
+                n_missing = aryty.ndim - len(indices) + 1 + num_newaxes
                 for i in range(n_missing):
                     indexer = EntireIndexer(context, builder, aryty, ary, ax)
                     indexers.append(indexer)
                     ax += 1
+                    new_ax += 1
                 continue
 
             # Regular index value
@@ -970,11 +974,12 @@ class FancyIndexer(object):
                     assert 0
                 indexers.append(indexer)
             elif is_nonelike(idxty):
-                self.newaxes.append(ax)
+                self.newaxes.append(new_ax)
                 ax -= 1
             else:
                 raise AssertionError("unexpected index type: %s" % (idxty,))
             ax += 1
+            new_ax += 1
 
         # Fill up missing dimensions at the end
         assert ax <= aryty.ndim, (ax, aryty.ndim)
@@ -1221,7 +1226,6 @@ def maybe_copy_source(context, builder, use_copy,
             builder.store(builder.load(src_ptr), dest_ptr)
 
     def src_getitem(source_indices):
-        assert len(source_indices) == srcty.ndim
         src_ptr = cgutils.alloca_once(builder, ptrty)
         with builder.if_else(use_copy, likely=False) as (if_copy, otherwise):
             with if_copy:

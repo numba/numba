@@ -147,10 +147,6 @@ def as_strided2(a):
     return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
 
 
-def np_new_axis(a):
-    return a[np.newaxis, :]
-
-
 def bad_index(arr, arr2d):
     x = arr.x,
     y = arr.y
@@ -634,14 +630,39 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         self.assertIn("squeeze", str(raises.exception))
 
     def test_add_axis(self):
-        a = np.arange(9).reshape(3, 3)
+        def np_new_axis_getitem(a, idx):
+            return a[idx]
 
-        pyfunc = np_new_axis
-        cfunc = njit(pyfunc)
+        def np_new_axis_setitem(a, idx, item):
+            a[idx] = item
+            return a
 
-        expected = pyfunc(a)
-        got = cfunc(a)
-        np.testing.assert_equal(expected, got)
+        a = np.arange(4*5*6*7).reshape(4, 5, 6, 7)
+        idx_cases = [
+            (np.newaxis, slice(None)),
+            (np.newaxis, 1, slice(None)),
+            (np.newaxis, slice(1), np.newaxis, 1),
+            (np.newaxis, slice(1), Ellipsis, np.newaxis, 1),
+            (np.newaxis, 1, np.newaxis, Ellipsis),
+            (np.newaxis, np.array([1,2,1]), Ellipsis, None)
+        ]
+        pyfunc_getitem = np_new_axis_getitem
+        cfunc_getitem = njit(pyfunc_getitem)
+
+        pyfunc_setitem = np_new_axis_setitem
+        cfunc_setitem = njit(pyfunc_setitem)
+
+        for idx in idx_cases:
+            expected = pyfunc_getitem(a, idx)
+            got = cfunc_getitem(a, idx)
+            np.testing.assert_equal(expected, got)
+
+            a_empty = np.zeros_like(a)
+            item = a[idx]
+
+            expected = pyfunc_setitem(a_empty, idx, item)
+            got = cfunc_setitem(a_empty, idx, item)
+            np.testing.assert_equal(expected, got)
 
     def test_bad_index_npm(self):
         with self.assertTypingError() as raises:

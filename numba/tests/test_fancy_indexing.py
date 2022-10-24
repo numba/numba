@@ -256,18 +256,40 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         #exceptions leak refs
         self.disable_leak_check()
     
-    def test_newaxis(self):
-        def np_new_axis(a, idx):
-            return a[idx, np.newaxis, :]
-        
-        arr = np.random.randint(0, 10, (4,5,6))
-        idx = np.array([1,2,1])
-        py_func = np_new_axis
-        cfunc = njit(py_func)
+    def test_new_axis(self):
+        def np_new_axis_getitem(a, idx):
+            return a[idx]
 
-        expected = py_func(arr, idx)
-        got = cfunc(arr, idx)
-        np.testing.assert_equal(expected, got)
+        def np_new_axis_setitem(a, idx, item):
+            a[idx] = item
+            return a
+
+        a = np.arange(4*5*6*7).reshape(4, 5, 6, 7)
+        idx_cases = [
+            (np.newaxis, slice(None)),
+            (np.newaxis, np.array([1,2,1]), slice(None)),
+            (np.newaxis, slice(1), np.newaxis, np.array([1,2,1])),
+            (np.newaxis, slice(1), Ellipsis, np.newaxis, np.array([1,2,1])),
+            (np.newaxis, np.array([1,2,1]), np.newaxis, Ellipsis)
+            (np.newaxis, np.array([1,2,1]), Ellipsis, None),
+        ]
+        pyfunc_getitem = np_new_axis_getitem
+        cfunc_getitem = njit(pyfunc_getitem)
+
+        pyfunc_setitem = np_new_axis_setitem
+        cfunc_setitem = njit(pyfunc_setitem)
+
+        for idx in idx_cases:
+            expected = pyfunc_getitem(a, idx)
+            got = cfunc_getitem(a, idx)
+            np.testing.assert_equal(expected, got)
+
+            a_empty = np.zeros_like(a)
+            item = a[idx]
+
+            expected = pyfunc_setitem(a_empty, idx, item)
+            got = cfunc_setitem(a_empty, idx, item)
+            np.testing.assert_equal(expected, got)
 
 
 if __name__ == '__main__':
