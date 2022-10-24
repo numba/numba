@@ -118,9 +118,9 @@ class TestRefOpPruning(TestCase):
                     raise ValueError
             return x
 
-        with set_refprune_flags('per_bb,fanout_raise'):
+        with set_refprune_flags('per_bb,fanout'):
             self.check(func, (types.intp), basicblock=True, diamond=False,
-                       fanout=False, fanout_raise=True)
+                       fanout=True, fanout_raise=False)
 
 
 class TestRefPruneFlags(TestCase):

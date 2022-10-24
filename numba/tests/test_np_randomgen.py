@@ -1094,6 +1094,8 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             curr_args[2] = -1
             nb_dist_func(*curr_args)
         self.assertIn('nonc < 0', str(raises.exception))
+        # Exceptions leak references
+        self.disable_leak_check()
 
     def test_noncentral_f(self):
         # For this test dtype argument is never used, so we pass [None] as dtype
@@ -1138,6 +1140,8 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             curr_args[3] = -1
             nb_dist_func(*curr_args)
         self.assertIn('nonc < 0', str(raises.exception))
+        # Exceptions leak references
+        self.disable_leak_check()
 
     def test_logseries(self):
         # For this test dtype argument is never used, so we pass [None] as dtype
@@ -1170,6 +1174,8 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                 curr_args[1] = _p
                 nb_dist_func(*curr_args)
             self.assertIn('p < 0, p >= 1 or p is NaN', str(raises.exception))
+        # Exceptions leak references
+        self.disable_leak_check()
 
 
 class TestGeneratorCaching(TestCase, SerialMixin):

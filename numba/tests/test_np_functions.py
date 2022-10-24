@@ -538,6 +538,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc('str')
         self.assertIn('Argument "x" must be a Number or array-like',
                       str(raises.exception))
+        # Exceptions leak references
+        self.disable_leak_check()
 
     def test_contains(self):
         def arrs():
@@ -642,6 +644,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc('hello')
         self.assertIn('Argument "z" must be a complex or Array[complex]',
                       str(raises.exception))
+        # Exceptions leak references
+        self.disable_leak_check()
 
     def test_array_equal(self):
         def arrays():
@@ -769,6 +773,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             'The third argument "axis" must be an integer',
             str(raises.exception)
         )
+        # Exceptions leak references
+        self.disable_leak_check()
 
     def test_delete(self):
 
@@ -832,6 +838,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             'obj must be less than the len(arr)',
             str(raises.exception),
         )
+        # Exceptions leak references
+        self.disable_leak_check()
 
     def diff_arrays(self):
         """
@@ -885,6 +893,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             with self.assertRaises(ValueError) as raises:
                 cfunc(arr, n)
             self.assertIn("order must be non-negative", str(raises.exception))
+        # Exceptions leak references
+        self.disable_leak_check()
 
     def test_isscalar(self):
         def values():
@@ -1089,6 +1099,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc([2, -1])
         self.assertIn("first argument must be non-negative",
                       str(raises.exception))
+        # Exceptions leak references
+        self.disable_leak_check()
 
     def test_bincount2(self):
         pyfunc = bincount2
@@ -4866,6 +4878,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as raises:
             gen(0)(arr2d, np.ones((2, 3), dtype=np.uint64))
         self.assertIn("dimensions don't match", str(raises.exception))
+        # Exceptions leak references
+        self.disable_leak_check()
 
     def test_nan_to_num(self):
         # Test cases are from

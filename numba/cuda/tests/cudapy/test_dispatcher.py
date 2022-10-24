@@ -312,9 +312,9 @@ class TestDispatcher(CUDATestCase):
         self.assertRegexpMatches(
             str(cm.exception),
             r"Ambiguous overloading for <function add_kernel [^>]*> "
-            r"\(array\(float64, 1d, C\), float64, float64\):\n"
-            r"\(array\(float64, 1d, C\), float32, float64\) -> none\n"
-            r"\(array\(float64, 1d, C\), float64, float32\) -> none"
+            r"\([Aa]rray\(float64, 1d?, [^)]*\), float64, float64\):\n"
+            r"\([Aa]rray\(float64, 1d?, [^)]*\), float32, float64\) -> none\n"
+            r"\([Aa]rray\(float64, 1d?, [^)]*\), float64, float32\) -> none"
         )
         # The integer signature is not part of the best matches
         self.assertNotIn("int64", str(cm.exception))
