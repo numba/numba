@@ -25,7 +25,7 @@ else
 fi;
 
 # Test with different NumPy versions with each toolkit (it's not worth testing
-# the cartesian product of versions here, we just need to test with different
+# the Cartesian product of versions here, we just need to test with different
 # CUDA and NumPy versions).
 declare -A CTK_NUMPY_VMAP=( ["11.0"]="1.19" ["11.1"]="1.21" ["11.2"]="1.22" ["11.5"]="1.23")
 NUMPY_VER="${CTK_NUMPY_VMAP[$CUDA_TOOLKIT_VER]}"
