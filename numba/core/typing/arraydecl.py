@@ -816,8 +816,10 @@ def install_array_method(name, generic, prefer_literal=True):
 
     setattr(ArrayAttribute, "resolve_" + name, array_attribute_attachment)
 
+
 # Functions that return a machine-width type, to avoid overflows
 install_array_method("sum", sum_expand, prefer_literal=True)
+
 
 @infer_global(operator.eq)
 class CmpOpEqArray(AbstractTemplate):
