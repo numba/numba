@@ -6,9 +6,13 @@ CUDA_VER:
 
 CUDA_TOOLKIT_VER:
 - "11.0"
+  NUMPY_VER: "1.19"
 - "11.1"
+  NUMPY_VER: "1.21"
 - "11.2"
+  NUMPY_VER: "1.22"
 - "11.5"
+  NUMPY_VER: "1.23"
 
 LINUX_VER:
 - ubuntu18.04

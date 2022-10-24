@@ -40,7 +40,7 @@ gpuci_mamba_retry create -n numba_ci -y \
                   "python=${PYTHON_VER}" \
                   "cudatoolkit=${CUDA_TOOLKIT_VER}" \
                   "numba/label/dev::llvmlite" \
-                  "numpy=1.21" \
+                  "numpy=${NUMPY_VER}" \
                   "scipy" \
                   "cffi" \
                   "psutil" \
