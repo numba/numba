@@ -637,7 +637,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             a[idx] = item
             return a
 
-        a = np.arange(4*5*6*7).reshape(4, 5, 6, 7)
+        a = np.arange(4*5*6*7).reshape((4, 5, 6, 7))
         idx_cases = [
             (np.newaxis, slice(None)),
             (np.newaxis, 1, slice(None)),
