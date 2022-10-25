@@ -45,8 +45,9 @@ def get_array_index_type(ary, idx):
     for ty in idx:
         if ty is types.ellipsis:
             if ellipsis_met:
-                raise NumbaTypeError("Only one ellipsis allowed in array indices "
-                                     "(got %s)" % (idx,))
+                raise NumbaTypeError(
+                    "Only one ellipsis allowed in array indices "
+                    "(got %s)" % (idx,))
             ellipsis_met = True
             in_subspace = False
         elif isinstance(ty, types.SliceType):
@@ -70,7 +71,8 @@ def get_array_index_type(ary, idx):
               and isinstance(ty.dtype, (types.Integer, types.Boolean))):
             if ty.ndim > 1:
                 # Advanced indexing limitation # 1
-                raise NumbaTypeError("Multi-dimensional indices are not supported.")
+                raise NumbaTypeError(
+                    "Multi-dimensional indices are not supported.")
             array_indices += 1
             advanced = True
             if not in_subspace:
