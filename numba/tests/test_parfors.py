@@ -4311,7 +4311,7 @@ class TestPrangeSpecific(TestPrangeBase):
                 r[i] = c[i] - c[i - 1]
             return r[1:]
 
-        self.prange_tester(test_impl, 15, patch_instance=[0,2])
+        self.prange_tester(test_impl, 15, patch_instance=[0, 2])
 
 
 @skip_parfors_unsupported
