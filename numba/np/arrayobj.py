@@ -1342,9 +1342,13 @@ def _broadcast_to_shape(context, builder, arrtype, arr, target_shape):
     new_arrtype = arrtype.copy(ndim=len(target_shape), layout='A')
     # Create new view
     new_arr = make_array(new_arrtype)(context, builder)
-    repl = dict(shape=cgutils.pack_array(builder, shapes),
-                strides=cgutils.pack_array(builder, strides))
-    cgutils.copy_struct(new_arr, arr, repl)
+    populate_array(new_arr,
+                   data=arr.data,
+                   shape=cgutils.pack_array(builder, shapes),
+                   strides=cgutils.pack_array(builder, strides),
+                   itemsize=arr.itemsize,
+                   meminfo=arr.meminfo,
+                   parent=arr.parent)
     return new_arrtype, new_arr
 
 
