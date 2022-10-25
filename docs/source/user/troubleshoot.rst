@@ -874,12 +874,13 @@ breakpoint was hit, and after a ``continue`` was issued, it broke again at line
 Debugging in parallel regions
 -----------------------------
 
-The following example is quite involved, it executes with ``gdb`` instrumentation
-from the outset as per the example above, but it also uses threads and makes use
-of the breakpoint functionality. Further, the last iteration of the parallel
-section calls the function ``work``, which is actually just a binding to
-``glibc``'s ``free(3)`` in this case, but could equally be some involved
-function that is presenting a segfault for unknown reasons.
+The following example is quite involved, it executes with ``gdb``
+instrumentation from the outset as per the example above, but it also uses
+threads and makes use of the breakpoint functionality. Further, the last
+iteration of the parallel section calls the function ``work``, which is
+actually just a binding to ``glibc``'s ``free(3)`` in this case, but could
+equally be some involved function that is presenting a segfault for unknown
+reasons.
 
 .. code-block:: python
   :linenos:
