@@ -4294,7 +4294,7 @@ class TestPrangeSpecific(TestPrangeBase):
         self.assertIn("TEST PASSED", out.decode())
 
     def test_issue8515(self):
-        """ issue8515: an array is filled in my one prange and
+        """ issue8515: an array is filled in the first prange and
             then accessed with c[i - 1] in the next prange which
             should prevent fusion with the previous prange.
         """
