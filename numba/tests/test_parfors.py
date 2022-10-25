@@ -2252,10 +2252,9 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, arr, 10, False)
 
     def test_issue8515(self):
-        """ issue8515: an array is filled in the first prange and
-            then accessed with c[i - 1] in the next prange which
-            should prevent fusion with the previous prange.
-        """
+        # issue8515: an array is filled in the first prange and
+        # then accessed with c[i - 1] in the next prange which
+        # should prevent fusion with the previous prange.
         def test_impl(n):
             r = np.zeros(n, dtype=np.intp)
             c = np.zeros(n, dtype=np.intp)
