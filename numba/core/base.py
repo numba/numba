@@ -157,10 +157,6 @@ def _load_global_helpers():
             c_name = "numba_" + py_name
             ll.add_symbol(c_name, c_address)
 
-    # Add Numpy C helpers (npy_XXX)
-    for c_name, c_address in _helperlib.npymath_exports.items():
-        ll.add_symbol(c_name, c_address)
-
     # Add all built-in exception classes
     for obj in utils.builtins.__dict__.values():
         if isinstance(obj, type) and issubclass(obj, BaseException):

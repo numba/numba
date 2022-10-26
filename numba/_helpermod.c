@@ -22,9 +22,6 @@ Include C-extension here
 /* Numba C helpers */
 #include "_helperlib.c"
 
-/* Numpy C math function exports */
-#include "_npymath_exports.c"
-
 static PyObject *
 build_c_helpers_dict(void)
 {
@@ -178,37 +175,6 @@ error:
     return NULL;
 }
 
-static int
-register_npymath_exports(PyObject *dct)
-{
-    size_t count = sizeof(npymath_exports) / sizeof(npymath_exports[0]);
-    size_t i;
-
-    for (i = 0; i < count; ++i) {
-        PyObject *ptr = PyLong_FromVoidPtr(npymath_exports[i].func);
-        if (ptr == NULL)
-            return -1;
-        if (PyDict_SetItemString(dct, npymath_exports[i].name, ptr) < 0) {
-            Py_DECREF(ptr);
-            return -1;
-        }
-        Py_DECREF(ptr);
-    }
-
-    return 0;
-}
-
-static PyObject *
-build_npymath_exports_dict(void)
-{
-    PyObject *dct = PyDict_New();
-    if (dct != NULL) {
-        if (register_npymath_exports(dct) < 0)
-            Py_CLEAR(dct);
-    }
-    return dct;
-}
-
 
 /*
  * Helper to deal with flushing stdout
@@ -292,7 +258,6 @@ MOD_INIT(_helperlib) {
     import_array();
 
     PyModule_AddObject(m, "c_helpers", build_c_helpers_dict());
-    PyModule_AddObject(m, "npymath_exports", build_npymath_exports_dict());
     PyModule_AddIntConstant(m, "long_min", LONG_MIN);
     PyModule_AddIntConstant(m, "long_max", LONG_MAX);
     PyModule_AddIntConstant(m, "py_buffer_size", sizeof(Py_buffer));
