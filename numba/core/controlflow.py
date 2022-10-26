@@ -8,7 +8,9 @@ from numba.core.errors import UnsupportedError
 
 # List of bytecodes creating a new block in the control flow graph
 # (in addition to explicit jump labels).
-NEW_BLOCKERS = frozenset(['SETUP_LOOP', 'FOR_ITER', 'SETUP_WITH', 'BEFORE_WITH'])
+NEW_BLOCKERS = frozenset([
+    'SETUP_LOOP', 'FOR_ITER', 'SETUP_WITH', 'BEFORE_WITH'
+])
 
 
 class CFBlock(object):

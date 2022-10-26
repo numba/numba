@@ -328,6 +328,7 @@ class ByteCode(object):
             ent = max(candidates)[1]
             return ent
 
+
 class FunctionIdentity(serialize.ReduceMixin):
     """
     A function's identity and metadata.

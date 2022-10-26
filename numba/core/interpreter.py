@@ -1520,7 +1520,6 @@ class Interpreter(object):
             if newtryblk is not tryblk:
                 self._insert_try_block_begin()
 
-
     def _end_current_block(self):
         # Handle try block
         if not self.current_block.is_terminated:
@@ -2816,7 +2815,7 @@ class Interpreter(object):
         op = BINOPS_TO_OPERATORS["is"]
 
         lhs = self.store(value=ir.Const(None, loc=self.loc),
-                            name="${inst.offset}constnone")
+                         name="${inst.offset}constnone")
         rhs = self.get(pred)
         isnone = ir.Expr.binop(op, lhs=lhs, rhs=rhs, loc=self.loc)
 
@@ -2898,7 +2897,7 @@ class Interpreter(object):
             # Numba can't handle this case and it's caught else where, this is a
             # runtime guard in case this is reached by unknown means.
             msg = (f"Unreachable condition reached (op code RERAISE executed)"
-                f"{error_extras['reportable']}")
+                   f"{error_extras['reportable']}")
             stmt = ir.StaticRaise(AssertionError, (msg,), self.loc)
             self.current_block.append(stmt)
 

@@ -20,6 +20,7 @@ from numba.misc.firstlinefinder import get_func_body_first_lineno
 
 _VarArgItem = namedtuple("_VarArgItem", ("vararg", "index"))
 
+
 class BaseLower(object):
     """
     Lower IR to LLVM
@@ -304,7 +305,8 @@ class BaseLower(object):
 
     def debug_print(self, msg):
         if config.DEBUG_JIT:
-            self.context.debug_print(self.builder, f"DEBUGJIT [{self.fndesc.qualname}]: {msg}")
+            self.context.debug_print(
+                self.builder, f"DEBUGJIT [{self.fndesc.qualname}]: {msg}")
 
     def print_variable(self, msg, varname):
         """Helper to emit ``print(msg, varname)`` for debugging.

@@ -10,7 +10,7 @@ from functools import total_ordering
 from numba.core.utils import UniqueDict, PYVERSION
 from numba.core.controlflow import NEW_BLOCKERS, CFGraph
 from numba.core.ir import Loc
-from numba.core.errors import UnsupportedError, CompilerError
+from numba.core.errors import UnsupportedError
 
 
 _logger = logging.getLogger(__name__)
@@ -113,7 +113,8 @@ class Flow(object):
                     # Terminated?
                     if state.has_terminated():
                         break
-                    elif not state.in_with() and (state.has_active_try() and
+                    elif not state.in_with() and (
+                            state.has_active_try() and
                             state.get_inst().opname not in _NO_RAISE_OPS):
                         # Is in a *try* block
                         state.fork(pc=state.get_inst().next)
@@ -125,18 +126,21 @@ class Flow(object):
                         # Must the new PC be a new block?
                         if PYVERSION == (3, 11):
                             if not state.in_with() and state.is_in_exception():
-                                _logger.debug("3.11 exception %s PC=%s", state.get_exception(), state._pc)
+                                _logger.debug("3.11 exception %s PC=%s",
+                                              state.get_exception(), state._pc)
                                 eh = state.get_exception()
                                 eh_top = state.get_top_block('TRY')
                                 if eh_top and eh_top['end'] == eh.target:
                                     # Same exception
                                     eh_block = None
                                 else:
-                                    eh_block = state.make_block("TRY", end=eh.target)
+                                    eh_block = state.make_block(
+                                        "TRY", end=eh.target)
                                     eh_block['end_offset'] = eh.end
                                     eh_block['stack_depth'] = eh.depth
                                     eh_block['push_lasti'] = eh.lasti
-                                    state.fork(pc=state._pc, extra_block=eh_block)
+                                    state.fork(pc=state._pc,
+                                               extra_block=eh_block)
                                     break
 
                         if self._is_implicit_new_block(state):
@@ -839,7 +843,6 @@ class TraceRunner(object):
         # Forces a new block
         state.fork(pc=inst.next)
 
-
     def op_SETUP_WITH(self, state, inst):
         cm = state.pop()    # the context-manager
 
@@ -891,7 +894,6 @@ class TraceRunner(object):
         state.push(state.make_temp("exception"))
         state.push(tos)
 
-
     def op_SETUP_EXCEPT(self, state, inst):
         # Opcode removed since py3.8
         state.append(inst)
@@ -913,7 +915,7 @@ class TraceRunner(object):
             blk = state.pop_block()
             if blk['kind'] not in {BlockKind('EXCEPT'), BlockKind('FINALLY')}:
                 raise UnsupportedError(
-                    "POP_EXCEPT got an unexpected block: {}".format(blk['kind']),
+                    f"POP_EXCEPT got an unexpected block: {blk['kind']}",
                     loc=self.get_debug_loc(inst.lineno),
                 )
             state.pop()
@@ -1648,7 +1650,8 @@ class State(object):
         for edge in self._outedges:
             state = State(bytecode=self._bytecode, pc=edge.pc,
                           nstack=len(edge.stack), blockstack=edge.blockstack,
-                          nullvals=[i for i, v in enumerate(edge.stack) if _is_null_temp_reg(v)])
+                          nullvals=[i for i, v in enumerate(edge.stack)
+                                    if _is_null_temp_reg(v)])
             ret.append(state)
             # Map outgoing_phis
             for phi, i in state._phis.items():
@@ -1694,6 +1697,7 @@ class StatePy311(State):
         for ent in self._blockstack_initial:
             if ent["kind"] == BlockKind("WITH"):
                 return True
+
 
 if PYVERSION >= (3, 11):
     State = StatePy311
