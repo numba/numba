@@ -710,6 +710,7 @@ class TraceRunner(object):
     def _op_POP_JUMP_IF(self, state, inst):
         pred = state.pop()
         state.append(inst, pred=pred)
+
         target_inst = inst.get_jump_target()
         next_inst = inst.next
         # if the next inst and the jump target are the same location, issue one
@@ -777,22 +778,43 @@ class TraceRunner(object):
         state.append(inst, value=val, res=res)
         state.push(res)
 
-    def op_RAISE_VARARGS(self, state, inst):
-        if inst.arg == 0:
-            exc = None
-            raise UnsupportedError(
-                "The re-raising of an exception is not yet supported.",
-                loc=self.get_debug_loc(inst.lineno),
-            )
-        elif inst.arg == 1:
-            exc = state.pop()
-        else:
-            raise ValueError("Multiple argument raise is not supported.")
-        state.append(inst, exc=exc)
+    if PYVERSION >= (3, 11):
+        def op_RAISE_VARARGS(self, state, inst):
+            if inst.arg == 0:
+                exc = None
+                raise UnsupportedError(
+                    "The re-raising of an exception is not yet supported.",
+                    loc=self.get_debug_loc(inst.lineno),
+                )
+            elif inst.arg == 1:
+                exc = state.pop()
+            else:
+                raise ValueError("Multiple argument raise is not supported.")
+            state.append(inst, exc=exc)
 
-        if state.has_active_try():
-            self.handle_try(state)
-        else:
+            if state.has_active_try():
+                self.handle_try(state)
+            else:
+                state.terminate()
+
+    else:
+        def op_RAISE_VARARGS(self, state, inst):
+            in_exc_block = any([
+                state.get_top_block("EXCEPT") is not None,
+                state.get_top_block("FINALLY") is not None
+            ])
+            if inst.arg == 0:
+                exc = None
+                if in_exc_block:
+                    raise UnsupportedError(
+                        "The re-raising of an exception is not yet supported.",
+                        loc=self.get_debug_loc(inst.lineno),
+                    )
+            elif inst.arg == 1:
+                exc = state.pop()
+            else:
+                raise ValueError("Multiple argument raise is not supported.")
+            state.append(inst, exc=exc)
             state.terminate()
 
     def op_BEGIN_FINALLY(self, state, inst):
@@ -903,6 +925,8 @@ class TraceRunner(object):
             end=None,
             reset_stack=False,
         )
+        # Forces a new block
+        # Fork to the body of the finally
         state.fork(
             pc=next,
             extra_block=state.make_block(
@@ -931,11 +955,12 @@ class TraceRunner(object):
             'FINALLY', state, next=inst.next, end=inst.get_jump_target(),
         )
 
-    def op_POP_EXCEPT(self, state, inst):
-        if PYVERSION == (3, 11):
+    if PYVERSION >= (3, 11):
+        def op_POP_EXCEPT(self, state, inst):
             state.pop()
 
-        else:
+    else:
+        def op_POP_EXCEPT(self, state, inst):
             blk = state.pop_block()
             if blk['kind'] not in {BlockKind('EXCEPT'), BlockKind('FINALLY')}:
                 raise UnsupportedError(
@@ -1358,22 +1383,29 @@ class TraceRunner(object):
         state.fork(pc=inst.next)
         state.fork(pc=inst.get_jump_target())
 
-    def op_RERAISE(self, state, inst):
-        # This isn't handled, but the state is set up anyway
-        exc = state.pop()
-        if inst.arg != 0:
-            state.pop()     # lasti
-        state.append(inst, exc=exc)
+    if PYVERSION >= (3, 11):
+        def op_RERAISE(self, state, inst):
+            # This isn't handled, but the state is set up anyway
+            exc = state.pop()
+            if inst.arg != 0:
+                state.pop()     # lasti
+            state.append(inst, exc=exc)
 
-        if state.has_active_try():
-            self.handle_try(state)
-        else:
+            if state.has_active_try():
+                self.handle_try(state)
+            else:
+                state.terminate()
+    else:
+        def op_RERAISE(self, state, inst):
+            # This isn't handled, but the state is set up anyway
+            exc = state.pop()
+            state.append(inst, exc=exc)
             state.terminate()
 
     # NOTE: Please see notes in `interpreter.py` surrounding the implementation
     # of LOAD_METHOD and CALL_METHOD.
 
-    if PYVERSION == (3, 11):
+    if PYVERSION >= (3, 11):
         def op_LOAD_METHOD(self, state, inst):
             item = state.pop()
             extra = state.make_null()
@@ -1644,14 +1676,15 @@ class State(object):
                 stack.append(self.make_temp())
         # Handle changes on the blockstack
         blockstack = list(self._blockstack)
-        # pop expired block in destination pc
-        while blockstack:
-            top = blockstack[-1]
-            end = top.get('end_offset') or top['end']
-            if pc >= end:
-                blockstack.pop()
-            else:
-                break
+        if PYVERSION >= (3, 11):
+            # pop expired block in destination pc
+            while blockstack:
+                top = blockstack[-1]
+                end = top.get('end_offset') or top['end']
+                if pc >= end:
+                    blockstack.pop()
+                else:
+                    break
 
         if extra_block:
             blockstack.append(extra_block)
