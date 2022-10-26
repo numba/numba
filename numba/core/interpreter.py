@@ -1507,18 +1507,25 @@ class Interpreter(object):
         self.dfainfo = self.dfa.infos[self.current_block_offset]
         self.assigner = Assigner()
         # Check out-of-scope syntactic-block
-        while self.syntax_blocks:
-            if offset >= self.syntax_blocks[-1].exit:
-                synblk = self.syntax_blocks.pop()
-                if isinstance(synblk, ir.With):
-                    self.current_block.append(ir.PopBlock(self.loc))
-            else:
-                break
-        # inject try block:
-        newtryblk = self.dfainfo.active_try_block
-        if newtryblk is not None:
-            if newtryblk is not tryblk:
-                self._insert_try_block_begin()
+        if PYVERSION >= (3, 11):
+            while self.syntax_blocks:
+                if offset >= self.syntax_blocks[-1].exit:
+                    synblk = self.syntax_blocks.pop()
+                    if isinstance(synblk, ir.With):
+                        self.current_block.append(ir.PopBlock(self.loc))
+                else:
+                    break
+            # inject try block:
+            newtryblk = self.dfainfo.active_try_block
+            if newtryblk is not None:
+                if newtryblk is not tryblk:
+                    self._insert_try_block_begin()
+        else:
+            while self.syntax_blocks:
+                if offset >= self.syntax_blocks[-1].exit:
+                    self.syntax_blocks.pop()
+                else:
+                    break
 
     def _end_current_block(self):
         # Handle try block
@@ -1724,12 +1731,13 @@ class Interpreter(object):
 
     def _dispatch(self, inst, kws):
         assert self.current_block is not None
-        if self.syntax_blocks:
-            top = self.syntax_blocks[-1]
-            if isinstance(top, ir.With) :
-                if inst.offset >= top.exit:
-                    self.current_block.append(ir.PopBlock(loc=self.loc))
-                    self.syntax_blocks.pop()
+        if PYVERSION == (3, 11):
+            if self.syntax_blocks:
+                top = self.syntax_blocks[-1]
+                if isinstance(top, ir.With) :
+                    if inst.offset >= top.exit:
+                        self.current_block.append(ir.PopBlock(loc=self.loc))
+                        self.syntax_blocks.pop()
 
         fname = "op_%s" % inst.opname.replace('+', '_')
         try:
