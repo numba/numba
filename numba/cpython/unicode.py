@@ -1919,14 +1919,13 @@ def unicode_isupper(a):
     return impl
 
 
-if utils.PYVERSION >= (3, 7):
-    @overload_method(types.UnicodeType, 'isascii')
-    def unicode_isascii(data):
-        """Implements UnicodeType.isascii()"""
+@overload_method(types.UnicodeType, 'isascii')
+def unicode_isascii(data):
+    """Implements UnicodeType.isascii()"""
 
-        def impl(data):
-            return data._is_ascii
-        return impl
+    def impl(data):
+        return data._is_ascii
+    return impl
 
 
 @overload_method(types.UnicodeType, 'istitle')

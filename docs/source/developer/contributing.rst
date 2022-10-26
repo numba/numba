@@ -150,6 +150,8 @@ Note that Numba's CI and the conda recipe for Linux build with the ``--werror``
 and ``--wall`` flags, so any contributions that change the CPython extensions
 should be tested with these flags too.
 
+.. _running-tests:
+
 Running tests
 '''''''''''''
 

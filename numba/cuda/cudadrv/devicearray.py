@@ -812,7 +812,7 @@ def array_core(ary):
     a view without the repeated dimensions.
 
     """
-    if not ary.strides:
+    if not ary.strides or not ary.size:
         return ary
     core_index = []
     for stride in ary.strides:
@@ -895,6 +895,8 @@ def check_array_compatibility(ary1, ary2):
     if ary1sq.shape != ary2sq.shape:
         raise ValueError('incompatible shape: %s vs. %s' %
                          (ary1.shape, ary2.shape))
-    if ary1sq.strides != ary2sq.strides:
+    # We check strides only if the size is nonzero, because strides are
+    # irrelevant (and can differ) for zero-length copies.
+    if ary1.size and ary1sq.strides != ary2sq.strides:
         raise ValueError('incompatible strides: %s vs. %s' %
                          (ary1.strides, ary2.strides))

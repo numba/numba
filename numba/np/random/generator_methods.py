@@ -166,6 +166,59 @@ def NumPyRandomGeneratorType_integers(inst, low, high, size=None,
         return impl
 
 
+# The following `shuffle` implementation is a direct translation from:
+# https://github.com/numpy/numpy/blob/95e3e7f445407e4f355b23d6a9991d8774f0eb0c/numpy/random/_generator.pyx#L4578
+
+# Overload the Generator().shuffle()
+@overload_method(types.NumPyRandomGeneratorType, 'shuffle')
+def NumPyRandomGeneratorType_shuffle(inst, x, axis=0):
+    check_types(x, [types.Array], 'x')
+    check_types(axis, [int, types.Integer], 'axis')
+
+    def impl(inst, x, axis=0):
+        if axis < 0:
+            axis = axis + x.ndim
+        if axis > x.ndim - 1 or axis < 0:
+            raise IndexError("Axis is out of bounds for the given array")
+
+        z = np.swapaxes(x, 0, axis)
+        buf = np.empty_like(z[0, ...])
+
+        for i in range(len(z) - 1, 0, -1):
+            j = types.intp(random_methods.random_interval(inst.bit_generator,
+                                                          i))
+            if i == j:
+                continue
+            buf[...] = z[j, ...]
+            z[j, ...] = z[i, ...]
+            z[i, ...] = buf
+
+    return impl
+
+
+# The following `permutation` implementation is a direct translation from:
+# https://github.com/numpy/numpy/blob/95e3e7f445407e4f355b23d6a9991d8774f0eb0c/numpy/random/_generator.pyx#L4710
+# Overload the Generator().permutation()
+@overload_method(types.NumPyRandomGeneratorType, 'permutation')
+def NumPyRandomGeneratorType_permutation(inst, x, axis=0):
+    check_types(x, [types.Array, types.Integer], 'x')
+    check_types(axis, [int, types.Integer], 'axis')
+
+    IS_INT = isinstance(x, types.Integer)
+
+    def impl(inst, x, axis=0):
+        if IS_INT:
+            new_arr = np.arange(x)
+            # NumPy ignores the axis argument when x is an integer
+            inst.shuffle(new_arr)
+        else:
+            new_arr = x.copy()
+            inst.shuffle(new_arr, axis=axis)
+        return new_arr
+
+    return impl
+
+
 # Overload the Generator().random()
 @overload_method(types.NumPyRandomGeneratorType, 'random')
 def NumPyRandomGeneratorType_random(inst, size=None, dtype=np.float64):
