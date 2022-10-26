@@ -68,8 +68,8 @@ build_c_helpers_dict(void)
     declmethod(gammaf);
     declmethod(lgamma);
     declmethod(lgammaf);
-    declmethod(signbit);
-    declmethod(signbitf);
+    declmethod(nextafter);
+    declmethod(nextafterf);
     declmethod(complex_adaptor);
     declmethod(adapt_ndarray);
     declmethod(ndarray_new);
