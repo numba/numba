@@ -106,42 +106,15 @@ class Flow(object):
                 _logger.debug("stack: %s", state._stack)
                 _logger.debug("state.pc_initial: %s", state)
                 first_encounter[state.pc_initial] = state
-
                 # Loop over the state until it is terminated.
                 while True:
                     runner.dispatch(state)
                     # Terminated?
                     if state.has_terminated():
                         break
-                    elif not state.in_with() and (
-                            state.has_active_try() and
-                            state.get_inst().opname not in _NO_RAISE_OPS):
-                        # Is in a *try* block
-                        state.fork(pc=state.get_inst().next)
-                        runner.handle_try(state)
-                        break
                     else:
-                        state.advance_pc()
-
-                        # Must the new PC be a new block?
-                        if PYVERSION == (3, 11):
-                            if not state.in_with() and state.is_in_exception():
-                                _logger.debug("3.11 exception %s PC=%s",
-                                              state.get_exception(), state._pc)
-                                eh = state.get_exception()
-                                eh_top = state.get_top_block('TRY')
-                                if eh_top and eh_top['end'] == eh.target:
-                                    # Same exception
-                                    eh_block = None
-                                else:
-                                    eh_block = state.make_block(
-                                        "TRY", end=eh.target)
-                                    eh_block['end_offset'] = eh.end
-                                    eh_block['stack_depth'] = eh.depth
-                                    eh_block['push_lasti'] = eh.lasti
-                                    state.fork(pc=state._pc,
-                                               extra_block=eh_block)
-                                    break
+                        if self._run_handle_exception(runner, state):
+                            break
 
                         if self._is_implicit_new_block(state):
                             # check if this is a with...as, abort if so
@@ -162,6 +135,57 @@ class Flow(object):
         for state in sorted(runner.finished, key=lambda x: x.pc_initial):
             self.block_infos[state.pc_initial] = si = adapt_state_infos(state)
             _logger.debug("block_infos %s:\n%s", state, si)
+
+    if PYVERSION >= (3, 11):
+        def _run_handle_exception(self, runner, state):
+            if not state.in_with() and (
+                    state.has_active_try() and
+                    state.get_inst().opname not in _NO_RAISE_OPS):
+                # Is in a *try* block
+                state.fork(pc=state.get_inst().next)
+                runner.handle_try(state)
+                return True
+            else:
+                state.advance_pc()
+
+                # Must the new PC be a new block?
+                if not state.in_with() and state.is_in_exception():
+                    _logger.debug("3.11 exception %s PC=%s",
+                                  state.get_exception(), state._pc)
+                    eh = state.get_exception()
+                    eh_top = state.get_top_block('TRY')
+                    if eh_top and eh_top['end'] == eh.target:
+                        # Same exception
+                        eh_block = None
+                    else:
+                        eh_block = state.make_block("TRY", end=eh.target)
+                        eh_block['end_offset'] = eh.end
+                        eh_block['stack_depth'] = eh.depth
+                        eh_block['push_lasti'] = eh.lasti
+                        state.fork(pc=state._pc, extra_block=eh_block)
+                        return True
+    else:
+        def _run_handle_exception(self, runner, state):
+            if (state.has_active_try() and
+                    state.get_inst().opname not in _NO_RAISE_OPS):
+                # Is in a *try* block
+                state.fork(pc=state.get_inst().next)
+                tryblk = state.get_top_block('TRY')
+                state.pop_block_and_above(tryblk)
+                nstack = state.stack_depth
+                kwargs = {}
+                if nstack > tryblk['entry_stack']:
+                    kwargs['npop'] = nstack - tryblk['entry_stack']
+                handler = tryblk['handler']
+                kwargs['npush'] = {
+                    BlockKind('EXCEPT'): _EXCEPT_STACK_OFFSET,
+                    BlockKind('FINALLY'): _FINALLY_POP
+                }[handler['kind']]
+                kwargs['extra_block'] = handler
+                state.fork(pc=tryblk['end'], **kwargs)
+                return True
+            else:
+                state.advance_pc()
 
     def _build_cfg(self, all_states):
         graph = CFGraph()
@@ -1349,13 +1373,17 @@ class TraceRunner(object):
     # NOTE: Please see notes in `interpreter.py` surrounding the implementation
     # of LOAD_METHOD and CALL_METHOD.
 
-    def op_LOAD_METHOD(self, state, inst):
-        item = state.pop()
-        extra = state.make_null()
-        state.push(extra)
-        res = state.make_temp()
-        state.append(inst, item=item, res=res)
-        state.push(res)
+    if PYVERSION == (3, 11):
+        def op_LOAD_METHOD(self, state, inst):
+            item = state.pop()
+            extra = state.make_null()
+            state.push(extra)
+            res = state.make_temp()
+            state.append(inst, item=item, res=res)
+            state.push(res)
+    else:
+        def op_LOAD_METHOD(self, state, inst):
+            self.op_LOAD_ATTR(state, inst)
 
     def op_CALL_METHOD(self, state, inst):
         self.op_CALL_FUNCTION(state, inst)
@@ -1500,9 +1528,6 @@ class State(object):
 
         self._temp_registers.append(name)
         return name
-
-    def make_null(self):
-        return self.make_temp(prefix="null$")
 
     def append(self, inst, **kwargs):
         """Append new inst"""
@@ -1697,6 +1722,9 @@ class StatePy311(State):
         for ent in self._blockstack_initial:
             if ent["kind"] == BlockKind("WITH"):
                 return True
+
+    def make_null(self):
+        return self.make_temp(prefix="null$")
 
 
 if PYVERSION >= (3, 11):
