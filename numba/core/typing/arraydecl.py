@@ -81,11 +81,6 @@ def get_array_index_type(ary, idx):
 
     if advanced:
         ndim += max(array_indices)
-        if num_subspaces > 1:
-            # Advanced indexing limitation # 3
-            msg = ("Using more than one indexing subspace (consecutive group "
-                   "of integer or array indices) is unsupported.")
-            raise NumbaTypeError(msg)
 
     # Only Numpy arrays support advanced indexing
     if advanced and not isinstance(ary, types.Array):

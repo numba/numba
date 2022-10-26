@@ -799,6 +799,7 @@ class IntegerArrayIndexer(Indexer):
                 builder.icmp_signed('>=', cur_index, self.idx_size),
                 likely=False
             ):
+                self.builder.store(Constant(self.ll_intp, 0), self.global_ary_idx)
                 builder.branch(self.bb_end)
         # Load the actual index from the array of indices
         index = _getitem_array_single_int(
