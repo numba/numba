@@ -1651,7 +1651,7 @@ def np_real_spacing_impl(context, builder, sig, args):
     # https://github.com/numpy/numpy/blob/12c2b7dd62fc0c14b81c8892ed5f4f59cc94d09c/numpy/core/src/npymath/ieee754.c.src#L32-L38
     # Numba elects to use `nextafter` for a similar behaviour to save
     # translating this very involved function. Further, the NumPy comments note
-    # that there is a lot of redundancy present betwen the two.
+    # that there is a lot of redundancy present between the two.
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {

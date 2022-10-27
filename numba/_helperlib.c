@@ -13,11 +13,11 @@
     #define int64_t signed __int64
     #define uint64_t unsigned __int64
     #define uint32_t unsigned __int32
-    #define _complex_float _Fcomplex
+    #define _complex_float_t _Fcomplex
     #define _complex_float_ctor(r, i) _FCbuild(r, i)
 #else
     #include <stdint.h>
-    #define _complex_float complex float
+    #define _complex_float_t complex float
     #define _complex_float_ctor(r, i) (r + I * i)
 #endif
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
@@ -127,7 +127,7 @@ numba_cpow(Py_complex *a, Py_complex *b, Py_complex *out) {
 }
 
 NUMBA_EXPORT_FUNC(void)
-numba_cpowf(_complex_float *a, _complex_float *b, _complex_float *out) {
+numba_cpowf(_complex_float_t *a, _complex_float_t *b, _complex_float_t *out) {
     Py_complex _a, _b, _out;
     _a.real = crealf(*a);
     _a.imag = cimagf(*a);
