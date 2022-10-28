@@ -427,6 +427,24 @@ UNICODE_COUNT_EXAMPLES = [
 
 
 class TestUnicode(BaseTest):
+    import os
+    os.environ["NUMBA_DUMP_OPTIMIZED"] = "1"
+
+    def test_meminfo_release(self):
+        @njit
+        def f(s, i):
+            return i
+
+        s, i = "lashd", 2
+        ret = f(s, i)
+
+    def test_float_to_int(self):
+        @njit
+        def to_int(f):
+            return int(f)
+
+        f = 1.23
+        ret = to_int(f)
 
     def test_literal(self, flags=no_pyobj_flags):
         pyfunc = literal_usecase

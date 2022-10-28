@@ -2464,6 +2464,16 @@ def integer_str(n):
         return impl
 
 
+@overload(int)
+def str_to_int(s):
+    pass
+
+
+@overload(float)
+def str_to_float(s):
+    pass
+
+
 @overload(str)
 def boolean_str(b):
     if isinstance(b, types.Boolean):
