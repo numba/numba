@@ -339,6 +339,7 @@ class TestParallelBackend(TestParallelBackendBase):
                 fn = methgen(impl, p)
                 fn.__name__ = methname
                 setattr(cls, methname, fn)
+        setattr(cls, "always_test", True)
 
 
 TestParallelBackend.generate()
@@ -404,6 +405,7 @@ class TestSpecificBackend(TestInSubprocess, TestParallelBackendBase):
         # Mark as long_running
         setattr(cls, injected_test,
                 tag('long_running')(backend_guard(test_template)))
+        setattr(cls, "always_test", True)
 
     @classmethod
     def generate(cls):
@@ -514,6 +516,7 @@ class TestThreadingLayerSelection(ThreadLayerTestHelper):
         injected_test = "test_threading_layer_selector_%s" % backend
         setattr(cls, injected_test,
                 tag("important")(backend_guard(test_template)))
+        setattr(cls, "always_test", True)
 
     @classmethod
     def generate(cls):
