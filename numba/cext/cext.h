@@ -9,6 +9,10 @@
 #define NUMBA_EXPORT_FUNC(_rettype) VISIBILITY_HIDDEN _rettype
 #define NUMBA_EXPORT_DATA(_vartype) VISIBILITY_HIDDEN _vartype
 
+/* Define symbols in this C module, and export them outside the
+   shared library in various platforms, including Windows. */
+#define NUMBA_GLOBAL_FUNC(_rettype) VISIBILITY_GLOBAL _rettype
+
 NUMBA_EXPORT_FUNC(Py_ssize_t)
 aligned_size(Py_ssize_t sz);
 

@@ -77,59 +77,59 @@ typedef struct {
     Py_ssize_t       pos;
 } NB_ListIter;
 
-void
+NUMBA_GLOBAL_FUNC(void)
 numba_list_set_method_table(NB_List *lp, list_type_based_methods_table *methods);
 
-int
+NUMBA_GLOBAL_FUNC(int)
 numba_list_new(NB_List **out, Py_ssize_t item_size, Py_ssize_t allocated);
 
-void
+NUMBA_GLOBAL_FUNC(void)
 numba_list_free(NB_List *lp);
 
-char *
+NUMBA_GLOBAL_FUNC(char *)
 numba_list_base_ptr(NB_List *lp);
 
-Py_ssize_t
+NUMBA_GLOBAL_FUNC(Py_ssize_t)
 numba_list_size_address(NB_List *lp);
 
-Py_ssize_t
+NUMBA_GLOBAL_FUNC(Py_ssize_t)
 numba_list_length(NB_List *lp);
 
-Py_ssize_t
+NUMBA_GLOBAL_FUNC(Py_ssize_t)
 numba_list_allocated(NB_List *lp);
 
-int
+NUMBA_GLOBAL_FUNC(int)
 numba_list_is_mutable(NB_List *lp);
 
-void
+NUMBA_GLOBAL_FUNC(void)
 numba_list_set_is_mutable(NB_List *lp, int is_mutable);
 
-int
+NUMBA_GLOBAL_FUNC(int)
 numba_list_setitem(NB_List *lp, Py_ssize_t index, const char *item);
 
-int
+NUMBA_GLOBAL_FUNC(int)
 numba_list_getitem(NB_List *lp, Py_ssize_t index, char *out);
 
-int
+NUMBA_GLOBAL_FUNC(int)
 numba_list_append(NB_List *lp, const char *item);
 
-int
+NUMBA_GLOBAL_FUNC(int)
 numba_list_resize(NB_List *lp, Py_ssize_t newsize);
 
-int
+NUMBA_GLOBAL_FUNC(int)
 numba_list_delitem(NB_List *lp, Py_ssize_t index);
 
-int
+NUMBA_GLOBAL_FUNC(int)
 numba_list_delete_slice(NB_List *lp,
                         Py_ssize_t start, Py_ssize_t stop, Py_ssize_t step);
 
-size_t
+NUMBA_GLOBAL_FUNC(size_t)
 numba_list_iter_sizeof(void);
 
-void
+NUMBA_GLOBAL_FUNC(void)
 numba_list_iter(NB_ListIter *it, NB_List *l);
 
-int
+NUMBA_GLOBAL_FUNC(int)
 numba_list_iter_next(NB_ListIter *it, const char **item_ptr);
 
 NUMBA_EXPORT_FUNC(int)
