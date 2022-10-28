@@ -10,13 +10,12 @@
  * but are not exposed outside of a shared library or executable.
  * Note this is default behaviour for global symbols under Windows.
  */
-#if (__has_attribute(visibility) || (defined(__GNUC__) && __GNUC__ >= 4))
-    #define VISIBILITY_HIDDEN __attribute__ ((visibility("hidden")))
-#ifdef _MSC_VER
+#if defined(_MSC_VER)
+    #define VISIBILITY_HIDDEN
     #define VISIBILITY_GLOBAL __declspec(dllexport)
-#else
+#elif (__has_attribute(visibility) || (defined(__GNUC__) && __GNUC__ >= 4))
+    #define VISIBILITY_HIDDEN __attribute__ ((visibility("hidden")))
     #define VISIBILITY_GLOBAL __attribute__ ((visibility("default")))
-#endif
 #else
     #define VISIBILITY_HIDDEN
     #define VISIBILITY_GLOBAL
