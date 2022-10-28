@@ -48,7 +48,7 @@ if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # dependencies, but exercised in the test suite
     # pexpect is used to run the gdb tests.
     # ipykernel is used for testing ipython behaviours.
-    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2=3.0 ipython ipykernel scipy pygments pexpect
+    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel scipy pygments pexpect
 fi
 
 # Install the compiler toolchain and gdb (if available)
@@ -68,7 +68,7 @@ $CONDA_INSTALL -c numba/label/dev llvmlite=0.40
 if [ $PYTHON \< "3.9" ]; then $CONDA_INSTALL importlib_metadata; fi
 
 # Install dependencies for building the documentation
-if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx=2.4.4 docutils=0.17 sphinx_rtd_theme pygments numpydoc; fi
+if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx docutils sphinx_rtd_theme pygments numpydoc; fi
 if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL rstcheck; fi
 # Install dependencies for code coverage (codecov.io)
 if [ "$RUN_COVERAGE" == "yes" ]; then $PIP_INSTALL codecov; fi
