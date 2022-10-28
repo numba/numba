@@ -130,6 +130,10 @@ def isposinf(x, out=None):
     return np.isposinf(x, out)
 
 
+def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+    return np.isclose(a, b, rtol, atol, equal_nan)
+
+
 def isnat(x):
     return np.isnat(x)
 
@@ -970,6 +974,86 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 expected = pyfunc(x, out)
                 got = cfunc(x, out)
                 self.assertPreciseEqual(expected, got)
+
+    def test_isclose(self):
+        rtol = 1e-5
+        atol = 1e-8
+        arr = np.array([100, 1000])
+        aran = np.arange(8).reshape((2, 2, 2))
+        kw = {'rtol': rtol, 'atol': atol}
+
+        def values():
+            yield 1e10, 1.00001e10, {}
+            yield 1e10, np.nan, {}
+            yield np.array([1e-8, 1e-7]), np.array([0.0, 0.0]), {}
+            yield np.array([1e10, 1e-7]), np.array([1.00001e10, 1e-8]), {}
+            yield np.array([1e10, 1e-8]), np.array([1.00001e10, 1e-9]), {}
+            yield np.array([1e10, 1e-8]), np.array([1.0001e10, 1e-9]), {}
+            yield np.array([1.0, np.nan]), np.array([1.0, np.nan]), {}
+            yield np.array([1.0, np.nan]), np.array([1.0, np.nan]), {'equal_nan': True}  # noqa
+            yield np.array([np.nan, np.nan]), np.array([1.0, np.nan]), {'equal_nan': True}  # noqa
+            yield np.array([1e-100, 1e-7]), np.array([0.0, 0.0]), {'atol': 0.0}
+            yield np.array([1e-10, 1e-10]), np.array([1e-20, 0.0]), {}
+            yield np.array([1e-10, 1e-10]), np.array([1e-20, 0.999999e-10]), {'atol': 0.0}  # noqa
+            yield np.array([1, np.inf, 2]), np.array([3, np.inf, 4]), kw
+            yield np.array([atol, np.inf, -np.inf, np.nan]), np.array([0]), kw
+            yield np.array([atol, np.inf, -np.inf, np.nan]), 0, kw
+            yield 0, np.array([atol, np.inf, -np.inf, np.nan]), kw
+
+            # tests taken from
+            # https://github.com/numpy/numpy/blob/aac965af6032b69d5cb515ad785cc9a331e816f4/numpy/core/tests/test_numeric.py#L2298-L2335  # noqa: E501
+
+            # all close tests
+            yield np.array([0, 1]), np.array([1, 0]), kw
+            yield arr, arr, kw
+            yield np.array([1]), np.array([1 + rtol + atol]), kw
+            yield arr, arr + arr * rtol, kw
+            yield arr, arr + arr * rtol + atol, kw
+            yield aran, aran + aran * rtol, kw
+            yield np.inf, np.inf, kw
+            yield -np.inf, np.inf, kw
+            yield np.inf, np.array([np.inf]), kw
+            yield np.array([np.inf, -np.inf]), np.array([np.inf, -np.inf]), kw
+
+            # none close tests
+            yield np.array([np.inf, 0]), np.array([1, np.inf]), kw
+            yield np.array([np.inf, -np.inf]), np.array([1, 0]), kw
+            yield np.array([np.inf, np.inf]), np.array([1, -np.inf]), kw
+            yield np.array([np.inf, np.inf]), np.array([1, 0]), kw
+            yield np.array([np.nan, 0]), np.array([np.nan, -np.inf]), kw
+            yield np.array([atol * 2]), np.array([0]), kw
+            yield np.array([1]), np.array([1 + rtol + atol * 2]), kw
+            yield aran, aran + rtol * 1.1 * aran + atol * 1.1, kw
+            yield np.array(np.array([np.inf, 1])), np.array(np.array([0, np.inf])), kw  # noqa
+
+            # some close tests
+            yield np.array([np.inf, 0]), np.array([atol * 2, atol * 2]), kw
+            yield np.array([np.inf, 0]), np.array([np.inf, atol * 2]), kw
+            yield np.array([atol, 1, 1e6 * (1 + 2 * rtol) + atol]), np.array([0, np.nan, 1e6]), kw  # noqa
+            yield np.arange(3), np.array([0, 1, 2.1]), kw
+            yield np.nan, np.array([np.nan, np.nan, np.nan]), kw
+            yield np.array([0]), np.array([atol, np.inf, -np.inf, np.nan]), kw
+            yield 0, np.array([atol, np.inf, -np.inf, np.nan]), kw
+
+        pyfunc = isclose
+        cfunc = jit(nopython=True)(pyfunc)
+        for a, b, kwargs in values():
+            expected = pyfunc(a, b, **kwargs)
+            got = cfunc(a, b, **kwargs)
+            if isinstance(expected, np.bool_):
+                self.assertEqual(expected, got)
+            else:
+                self.assertTrue(np.array_equal(expected, got))
+
+    def isclose_exception(self):
+        pyfunc = isclose
+        cfunc = jit(nopython=True)(pyfunc)
+        inputs = [('hello', 'world'), (2.0, None), ('a', 3.0)]
+        for (a, b) in inputs:
+            with self.assertRaises(TypingError) as raises:
+                cfunc(a, b)
+            self.assertIn("Inputs for `np.isclose` must be array-like.",
+                          str(raises.exception))
 
     def bincount_sequences(self):
         """
@@ -2708,6 +2792,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield a, [1, 3]
             yield a, [1, 3], 1
             yield a, [1, 3], 2
+            yield a, [1], -1
+            yield a, [1], -2
+            yield a, [1], -3
+            yield a, np.array([], dtype=np.int64), 0
 
             a = np.arange(100).reshape(2, -1)
             yield a, 1
@@ -2767,6 +2855,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             "array split does not result in an equal division",
             str(raises.exception)
         )
+
+        with self.assertRaises(ValueError) as raises:
+            njit(split)(np.ones(5), [3], axis=-3)
+        self.assertIn("np.split: Argument axis out of bounds",
+                      str(raises.exception))
 
     def test_roll_basic(self):
         pyfunc = roll
@@ -4651,14 +4744,14 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as raises:
             cfunc(np.arange(4), 1, 0)
 
-        self.assertIn('The second argument "axis1" is out of bounds for array'
-                      ' of given dimension', str(raises.exception))
+        self.assertIn('np.swapaxes: Argument axis1 out of bounds',
+                      str(raises.exception))
 
         with self.assertRaises(ValueError) as raises:
             cfunc(np.arange(8).reshape(2, 4), 0, -3)
 
-        self.assertIn('The third argument "axis2" is out of bounds for array'
-                      ' of given dimension', str(raises.exception))
+        self.assertIn('np.swapaxes: Argument axis2 out of bounds',
+                      str(raises.exception))
 
     def test_take_along_axis(self):
         a = np.arange(24).reshape((3, 1, 4, 2))

@@ -921,6 +921,20 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             got = cfunc(input_array, shape, idx)
             self.assertPreciseEqual(got, expected)
 
+    def test_broadcast_to_array_attrs(self):
+        # See issue #8534. This tests that broadcast array attributes have the
+        # correct value when accessed.
+        @njit
+        def foo(arr):
+            ret = np.broadcast_to(arr, (2, 3))
+            return ret, ret.size, ret.shape, ret.strides
+
+        arr = np.arange(3)
+
+        expected = foo.py_func(arr)
+        got = foo(arr)
+        self.assertPreciseEqual(expected, got)
+
     @unittest.skipIf(numpy_version < (1, 20), "requires NumPy 1.20 or newer")
     def test_broadcast_shapes(self):
         pyfunc = numpy_broadcast_shapes
