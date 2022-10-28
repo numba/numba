@@ -137,14 +137,13 @@ def get_ext_modules():
     """
     Return a list of Extension instances for the setup() call.
     """
-    # Note we don't import Numpy at the toplevel, since setup.py
-    # should be able to run without Numpy for pip to discover the
-    # build dependencies
-    import numpy.distutils.misc_util as np_misc
-
-    # Inject required options for extensions compiled against the Numpy
-    # C API (include dirs, library dirs etc.)
-    np_compile_args = np_misc.get_info('npymath')
+    # Note we don't import NumPy at the toplevel, since setup.py
+    # should be able to run without NumPy for pip to discover the
+    # build dependencies. Need NumPy headers and libm linkage.
+    import numpy as np
+    np_compile_args = {'include_dirs': [np.get_include(),],}
+    if sys.platform != 'win32':
+        np_compile_args['libraries'] = ['m',]
 
     ext_devicearray = Extension(name='numba._devicearray',
                                 sources=['numba/_devicearray.cpp'],
