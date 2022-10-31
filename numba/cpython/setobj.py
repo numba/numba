@@ -17,7 +17,7 @@ from numba.core.imputils import (lower_builtin, lower_cast,
 from numba.core.utils import cached_property
 from numba.misc import quicksort
 from numba.cpython import slicing
-from numba.core.errors import NumbaValueError
+from numba.core.errors import NumbaValueError, TypingError
 from numba.core.extending import overload, overload_method, intrinsic
 
 
@@ -103,9 +103,14 @@ def is_hash_used(context, builder, h):
     return builder.icmp_unsigned('<', h, deleted)
 
 
-def all_set(*args):
-    return all([isinstance(typ, types.Set) for typ in args]) and \
-        all([args[0].dtype == s.dtype for s in args])
+def check_all_set(*args):
+    if not all([isinstance(typ, types.Set) for typ in args]):
+        raise TypingError(f"All arguments must be Sets, got {args}")
+
+    if not all([args[0].dtype == s.dtype for s in args]):
+        raise TypingError(f"All Sets must be of the same type, got {args}")
+
+    return True
 
 
 SetLoop = collections.namedtuple('SetLoop', ('index', 'entry', 'do_break'))
@@ -1420,8 +1425,7 @@ def _set_difference_update(typingctx, a, b):
 
 @overload_method(types.Set, "difference_update")
 def set_difference_update_impl(a, b):
-    if not all_set(a, b):
-        return
+    check_all_set(a, b)
     return lambda a, b: _set_difference_update(a, b)
 
 
@@ -1440,8 +1444,7 @@ def _set_intersection_update(typingctx, a, b):
 
 @overload_method(types.Set, "intersection_update")
 def set_intersection_update_impl(a, b):
-    if not all_set(a, b):
-        return
+    check_all_set(a, b)
     return lambda a, b: _set_intersection_update(a, b)
 
 
@@ -1460,8 +1463,7 @@ def _set_symmetric_difference_update(typingctx, a, b):
 
 @overload_method(types.Set, "symmetric_difference_update")
 def set_symmetric_difference_update_impl(a, b):
-    if not all_set(a, b):
-        return
+    check_all_set(a, b)
     return lambda a, b: _set_symmetric_difference_update(a, b)
 
 
@@ -1526,8 +1528,7 @@ for op_, op_impl in [
 @overload(operator.sub)
 @overload_method(types.Set, "difference")
 def impl_set_difference(a, b):
-    if not all_set(a, b):
-        return
+    check_all_set(a, b)
 
     def difference_impl(a, b):
         s = a.copy()
@@ -1539,8 +1540,7 @@ def impl_set_difference(a, b):
 @overload(operator.and_)
 @overload_method(types.Set, "intersection")
 def set_intersection(a, b):
-    if not all_set(a, b):
-        return
+    check_all_set(a, b)
 
     def intersection_impl(a, b):
         if len(a) < len(b):
@@ -1557,8 +1557,7 @@ def set_intersection(a, b):
 @overload(operator.xor)
 @overload_method(types.Set, "symmetric_difference")
 def set_symmetric_difference(a, b):
-    if not all_set(a, b):
-        return
+    check_all_set(a, b)
 
     def symmetric_difference_impl(a, b):
         if len(a) > len(b):
@@ -1575,8 +1574,7 @@ def set_symmetric_difference(a, b):
 @overload(operator.or_)
 @overload_method(types.Set, "union")
 def set_union(a, b):
-    if not all_set(a, b):
-        return
+    check_all_set(a, b)
 
     def union_impl(a, b):
         if len(a) > len(b):
@@ -1608,8 +1606,7 @@ def _set_isdisjoint(typingctx, a, b):
 
 @overload_method(types.Set, "isdisjoint")
 def set_isdisjoint(a, b):
-    if not all_set(a, b):
-        return
+    check_all_set(a, b)
 
     return lambda a, b: _set_isdisjoint(a, b)
 
@@ -1629,8 +1626,7 @@ def _set_issubset(typingctx, a, b):
 @overload(operator.le)
 @overload_method(types.Set, "issubset")
 def set_issubset(a, b):
-    if not all_set(a, b):
-        return
+    check_all_set(a, b)
 
     return lambda a, b: _set_issubset(a, b)
 
@@ -1638,8 +1634,7 @@ def set_issubset(a, b):
 @overload(operator.ge)
 @overload_method(types.Set, "issuperset")
 def set_issuperset(a, b):
-    if not all_set(a, b):
-        return
+    check_all_set(a, b)
 
     def superset_impl(a, b):
         return b.issubset(a)
@@ -1660,15 +1655,13 @@ def _set_eq(typingctx, a, b):
 
 @overload(operator.eq)
 def set_eq(a, b):
-    if not all_set(a, b):
-        return
+    check_all_set(a, b)
 
     return lambda a, b: _set_eq(a, b)
 
 @overload(operator.ne)
 def set_ne(a, b):
-    if not all_set(a, b):
-        return
+    check_all_set(a, b)
 
     def ne_impl(a, b):
         return not a == b
@@ -1689,15 +1682,13 @@ def _set_lt(typingctx, a, b):
 
 @overload(operator.lt)
 def set_lt(a, b):
-    if not all_set(a, b):
-        return
+    check_all_set(a, b)
 
     return lambda a, b: _set_lt(a, b)
 
 @overload(operator.gt)
 def set_gt(a, b):
-    if not all_set(a, b):
-        return
+    check_all_set(a, b)
 
     def gt_impl(a, b):
         return b < a
