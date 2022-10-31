@@ -413,8 +413,7 @@ def _numpy_redirect(fname):
                dict(key=numpy_function, method_name=fname))
     infer_global(numpy_function, types.Function(cls))
 
-
-for func in ['sum', 'argsort', 'nonzero', 'ravel']:
+for func in ['argsort', 'nonzero', 'ravel']:
     _numpy_redirect(func)
 
 
@@ -506,10 +505,6 @@ def _parse_nested_sequence(context, typ):
         # Scalar type => check it's valid as a Numpy array dtype
         as_dtype(typ)
         return 0, typ
-
-
-def _infer_dtype_from_inputs(inputs):
-    return dtype
 
 
 def _homogeneous_dims(context, func_name, arrays):

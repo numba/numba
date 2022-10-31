@@ -14,18 +14,19 @@ import llvmlite.ir
 import numpy as np
 
 from numba.core import types, cgutils
-from numba.core.extending import overload, overload_method, register_jitable
+from numba.core.extending import (overload, overload_method,
+                                  register_jitable, intrinsic)
 from numba.np.numpy_support import (as_dtype, type_can_asarray, type_is_scalar,
                                     numpy_version, is_nonelike,
                                     check_is_integer)
-from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
-                                 impl_ret_new_ref, impl_ret_untracked)
+from numba.core.imputils import (lower_builtin,
+                                 impl_ret_new_ref,
+                                 impl_ret_untracked)
 from numba.np.arrayobj import (make_array, load_item, store_item,
                                _empty_nd_impl, numpy_broadcast_shapes_list)
 from numba.np.linalg import ensure_blas
 
-from numba.core.extending import intrinsic
-from numba.core.errors import (RequireLiteralValue, TypingError,
+from numba.core.errors import (TypingError,
                                NumbaValueError, NumbaNotImplementedError,
                                NumbaTypeError, NumbaDeprecationWarning)
 from numba.core.overload_glue import glue_lowering
@@ -43,311 +44,36 @@ def _check_blas():
 
 _HAVE_BLAS = _check_blas()
 
-
-@intrinsic
-def _create_tuple_result_shape(tyctx, shape_list, shape_tuple):
-    """
-    This routine converts shape list where the axis dimension has already
-    been popped to a tuple for indexing of the same size.  The original shape
-    tuple is also required because it contains a length field at compile time
-    whereas the shape list does not.
-    """
-
-    # The new tuple's size is one less than the original tuple since axis
-    # dimension removed.
-    nd = len(shape_tuple) - 1
-    # The return type of this intrinsic is an int tuple of length nd.
-    tupty = types.UniTuple(types.intp, nd)
-    # The function signature for this intrinsic.
-    function_sig = tupty(shape_list, shape_tuple)
-
-    def codegen(cgctx, builder, signature, args):
-        lltupty = cgctx.get_value_type(tupty)
-        # Create an empty int tuple.
-        tup = cgutils.get_null_value(lltupty)
-
-        # Get the shape list from the args and we don't need shape tuple.
-        [in_shape, _] = args
-
-        def array_indexer(a, i):
-            return a[i]
-
-        # loop to fill the tuple
-        for i in range(nd):
-            dataidx = cgctx.get_constant(types.intp, i)
-            # compile and call array_indexer
-            data = cgctx.compile_internal(builder, array_indexer,
-                                          types.intp(shape_list, types.intp),
-                                          [in_shape, dataidx])
-            tup = builder.insert_value(tup, data, i)
-        return tup
-
-    return function_sig, codegen
-
-
-@intrinsic
-def _gen_index_tuple(tyctx, shape_tuple, value, axis):
-    """
-    Generates a tuple that can be used to index a specific slice from an
-    array for sum with axis.  shape_tuple is the size of the dimensions of
-    the input array.  'value' is the value to put in the indexing tuple
-    in the axis dimension and 'axis' is that dimension.  For this to work,
-    axis has to be a const.
-    """
-    if not isinstance(axis, types.Literal):
-        raise RequireLiteralValue('axis argument must be a constant')
-    # Get the value of the axis constant.
-    axis_value = axis.literal_value
-    # The length of the indexing tuple to be output.
-    nd = len(shape_tuple)
-
-    # If the axis value is impossible for the given size array then
-    # just fake it like it was for axis 0.  This will stop compile errors
-    # when it looks like it could be called from array_sum_axis but really
-    # can't because that routine checks the axis mismatch and raise an
-    # exception.
-    if axis_value >= nd:
-        axis_value = 0
-
-    # Calculate the type of the indexing tuple.  All the non-axis
-    # dimensions have slice2 type and the axis dimension has int type.
-    before = axis_value
-    after = nd - before - 1
-
-    types_list = []
-    types_list += [types.slice2_type] * before
-    types_list += [types.intp]
-    types_list += [types.slice2_type] * after
-
-    # Creates the output type of the function.
-    tupty = types.Tuple(types_list)
-    # Defines the signature of the intrinsic.
-    function_sig = tupty(shape_tuple, value, axis)
-
-    def codegen(cgctx, builder, signature, args):
-        lltupty = cgctx.get_value_type(tupty)
-        # Create an empty indexing tuple.
-        tup = cgutils.get_null_value(lltupty)
-
-        # We only need value of the axis dimension here.
-        # The rest are constants defined above.
-        [_, value_arg, _] = args
-
-        def create_full_slice():
-            return slice(None, None)
-
-        # loop to fill the tuple with slice(None,None) before
-        # the axis dimension.
-
-        # compile and call create_full_slice
-        slice_data = cgctx.compile_internal(builder, create_full_slice,
-                                            types.slice2_type(),
-                                            [])
-        for i in range(0, axis_value):
-            tup = builder.insert_value(tup, slice_data, i)
-
-        # Add the axis dimension 'value'.
-        tup = builder.insert_value(tup, value_arg, axis_value)
-
-        # loop to fill the tuple with slice(None,None) after
-        # the axis dimension.
-        for i in range(axis_value + 1, nd):
-            tup = builder.insert_value(tup, slice_data, i)
-        return tup
-
-    return function_sig, codegen
-
-
 #----------------------------------------------------------------------------
 # Basic stats and aggregates
 
-@lower_builtin(np.sum, types.Array)
-@lower_builtin("array.sum", types.Array)
-def array_sum(context, builder, sig, args):
-    zero = sig.return_type(0)
 
-    def array_sum_impl(arr):
-        c = zero
-        for v in np.nditer(arr):
+@overload(np.sum)
+@overload_method(types.Array, "sum")
+def array_sum(a, axis=None):
+
+    if a.dtype in types.signed_domain:
+        _dtype = np.intp
+    elif a.dtype in types.unsigned_domain:
+        _dtype = np.uintp
+    else:
+        _dtype = a.dtype
+
+    @register_jitable
+    def _array_sum_impl(a):
+        c = np.zeros(1, _dtype)[0]
+        for v in np.nditer(a):
             c += v.item()
         return c
 
-    res = context.compile_internal(builder, array_sum_impl, sig, args,
-                                   locals=dict(c=sig.return_type))
-    return impl_ret_borrowed(context, builder, sig.return_type, res)
-
-
-@register_jitable
-def _array_sum_axis_nop(arr, v):
-    return arr
-
-
-def gen_sum_axis_impl(is_axis_const, const_axis_val, op, zero):
-    def inner(arr, axis):
-        """
-        function that performs sums over one specific axis
-
-        The third parameter to gen_index_tuple that generates the indexing
-        tuples has to be a const so we can't just pass "axis" through since
-        that isn't const.  We can check for specific values and have
-        different instances that do take consts.  Supporting axis summation
-        only up to the fourth dimension for now.
-
-        typing/arraydecl.py:sum_expand defines the return type for sum with
-        axis. It is one dimension less than the input array.
-        """
-        ndim = arr.ndim
-
-        if not is_axis_const:
-            # Catch where axis is negative or greater than 3.
-            if axis < 0 or axis > 3:
-                raise ValueError("Numba does not support sum with axis "
-                                 "parameter outside the range 0 to 3.")
-
-        # Catch the case where the user misspecifies the axis to be
-        # more than the number of the array's dimensions.
-        if axis >= ndim:
-            raise ValueError("axis is out of bounds for array")
-
-        # Convert the shape of the input array to a list.
-        ashape = list(arr.shape)
-        # Get the length of the axis dimension.
-        axis_len = ashape[axis]
-        # Remove the axis dimension from the list of dimensional lengths.
-        ashape.pop(axis)
-        # Convert this shape list back to a tuple using above intrinsic.
-        ashape_without_axis = _create_tuple_result_shape(ashape, arr.shape)
-        # Tuple needed here to create output array with correct size.
-        result = np.full(ashape_without_axis, zero, type(zero))
-
-        # Iterate through the axis dimension.
-        for axis_index in range(axis_len):
-            if is_axis_const:
-                # constant specialized version works for any valid axis value
-                index_tuple_generic = _gen_index_tuple(arr.shape, axis_index,
-                                                       const_axis_val)
-                result += arr[index_tuple_generic]
-            else:
-                # Generate a tuple used to index the input array.
-                # The tuple is ":" in all dimensions except the axis
-                # dimension where it is "axis_index".
-                if axis == 0:
-                    index_tuple1 = _gen_index_tuple(arr.shape, axis_index, 0)
-                    result += arr[index_tuple1]
-                elif axis == 1:
-                    index_tuple2 = _gen_index_tuple(arr.shape, axis_index, 1)
-                    result += arr[index_tuple2]
-                elif axis == 2:
-                    index_tuple3 = _gen_index_tuple(arr.shape, axis_index, 2)
-                    result += arr[index_tuple3]
-                elif axis == 3:
-                    index_tuple4 = _gen_index_tuple(arr.shape, axis_index, 3)
-                    result += arr[index_tuple4]
-        return op(result, 0)
-    return inner
-
-
-@lower_builtin(np.sum, types.Array, types.intp, types.DTypeSpec)
-@lower_builtin(np.sum, types.Array, types.IntegerLiteral, types.DTypeSpec)
-@lower_builtin("array.sum", types.Array, types.intp, types.DTypeSpec)
-@lower_builtin("array.sum", types.Array, types.IntegerLiteral, types.DTypeSpec)
-def array_sum_axis_dtype(context, builder, sig, args):
-    retty = sig.return_type
-    zero = getattr(retty, 'dtype', retty)(0)
-    # if the return is scalar in type then "take" the 0th element of the
-    # 0d array accumulator as the return value
-    if getattr(retty, 'ndim', None) is None:
-        op = np.take
+    if is_nonelike(axis):
+        def array_sum_impl(a, axis=None):
+            return _array_sum_impl(a)
     else:
-        op = _array_sum_axis_nop
-    [ty_array, ty_axis, ty_dtype] = sig.args
-    is_axis_const = False
-    const_axis_val = 0
-    if isinstance(ty_axis, types.Literal):
-        # this special-cases for constant axis
-        const_axis_val = ty_axis.literal_value
-        # fix negative axis
-        if const_axis_val < 0:
-            const_axis_val = ty_array.ndim + const_axis_val
-        if const_axis_val < 0 or const_axis_val > ty_array.ndim:
-            raise ValueError("'axis' entry is out of bounds")
-
-        ty_axis = context.typing_context.resolve_value_type(const_axis_val)
-        axis_val = context.get_constant(ty_axis, const_axis_val)
-        # rewrite arguments
-        args = args[0], axis_val, args[2]
-        # rewrite sig
-        sig = sig.replace(args=[ty_array, ty_axis, ty_dtype])
-        is_axis_const = True
-
-    gen_impl = gen_sum_axis_impl(is_axis_const, const_axis_val, op, zero)
-    compiled = register_jitable(gen_impl)
-
-    def array_sum_impl_axis(arr, axis, dtype):
-        return compiled(arr, axis)
-
-    res = context.compile_internal(builder, array_sum_impl_axis, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-
-@lower_builtin(np.sum, types.Array,  types.DTypeSpec)
-@lower_builtin("array.sum", types.Array, types.DTypeSpec)
-def array_sum_dtype(context, builder, sig, args):
-    zero = sig.return_type(0)
-
-    def array_sum_impl(arr, dtype):
-        c = zero
-        for v in np.nditer(arr):
-            c += v.item()
-        return c
-
-    res = context.compile_internal(builder, array_sum_impl, sig, args,
-                                   locals=dict(c=sig.return_type))
-    return impl_ret_borrowed(context, builder, sig.return_type, res)
-
-
-@lower_builtin(np.sum, types.Array, types.intp)
-@lower_builtin(np.sum, types.Array, types.IntegerLiteral)
-@lower_builtin("array.sum", types.Array, types.intp)
-@lower_builtin("array.sum", types.Array, types.IntegerLiteral)
-def array_sum_axis(context, builder, sig, args):
-    retty = sig.return_type
-    zero = getattr(retty, 'dtype', retty)(0)
-    # if the return is scalar in type then "take" the 0th element of the
-    # 0d array accumulator as the return value
-    if getattr(retty, 'ndim', None) is None:
-        op = np.take
-    else:
-        op = _array_sum_axis_nop
-    [ty_array, ty_axis] = sig.args
-    is_axis_const = False
-    const_axis_val = 0
-    if isinstance(ty_axis, types.Literal):
-        # this special-cases for constant axis
-        const_axis_val = ty_axis.literal_value
-        # fix negative axis
-        if const_axis_val < 0:
-            const_axis_val = ty_array.ndim + const_axis_val
-        if const_axis_val < 0 or const_axis_val > ty_array.ndim:
-            msg = f"'axis' entry ({const_axis_val}) is out of bounds"
-            raise NumbaValueError(msg)
-
-        ty_axis = context.typing_context.resolve_value_type(const_axis_val)
-        axis_val = context.get_constant(ty_axis, const_axis_val)
-        # rewrite arguments
-        args = args[0], axis_val
-        # rewrite sig
-        sig = sig.replace(args=[ty_array, ty_axis])
-        is_axis_const = True
-
-    gen_impl = gen_sum_axis_impl(is_axis_const, const_axis_val, op, zero)
-    compiled = register_jitable(gen_impl)
-
-    def array_sum_impl_axis(arr, axis):
-        return compiled(arr, axis)
-
-    res = context.compile_internal(builder, array_sum_impl_axis, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
+        array_sum_impl = build_with_axis_impl(
+            a, axis, _array_sum_impl, ret_type=_dtype
+        )
+    return array_sum_impl
 
 
 def get_accumulator(dtype, value):
@@ -360,24 +86,33 @@ def get_accumulator(dtype, value):
 
 @overload(np.prod)
 @overload_method(types.Array, "prod")
-def array_prod(a):
+def array_prod(a, axis=None):
     if isinstance(a, types.Array):
         dtype = as_dtype(a.dtype)
 
         acc_init = get_accumulator(dtype, 1)
 
-        def array_prod_impl(a):
+        @register_jitable
+        def _array_prod_impl(a):
             c = acc_init
             for v in np.nditer(a):
                 c *= v.item()
             return c
+
+        if is_nonelike(axis):
+            def array_prod_impl(a, axis=None):
+                return _array_prod_impl(a)
+        else:
+            array_prod_impl = build_with_axis_impl(
+                a, axis, _array_prod_impl
+            )
 
         return array_prod_impl
 
 
 @overload(np.cumsum)
 @overload_method(types.Array, "cumsum")
-def array_cumsum(a):
+def array_cumsum(a, axis=None):
     if isinstance(a, types.Array):
         is_integer = a.dtype in types.signed_domain
         is_bool = a.dtype == types.bool_
@@ -389,7 +124,8 @@ def array_cumsum(a):
 
         acc_init = get_accumulator(dtype, 0)
 
-        def array_cumsum_impl(a):
+        @register_jitable
+        def _array_cumsum_impl(a):
             out = np.empty(a.size, dtype)
             c = acc_init
             for idx, v in enumerate(a.flat):
@@ -397,12 +133,20 @@ def array_cumsum(a):
                 out[idx] = c
             return out
 
+        if is_nonelike(axis):
+            def array_cumsum_impl(a, axis=None):
+                return _array_cumsum_impl(a)
+        else:
+            array_cumsum_impl = build_with_axis_impl(
+                a, axis, _array_cumsum_impl, ret_type=dtype
+            )
+
         return array_cumsum_impl
 
 
 @overload(np.cumprod)
 @overload_method(types.Array, "cumprod")
-def array_cumprod(a):
+def array_cumprod(a, axis=None):
     if isinstance(a, types.Array):
         is_integer = a.dtype in types.signed_domain
         is_bool = a.dtype == types.bool_
@@ -414,7 +158,8 @@ def array_cumprod(a):
 
         acc_init = get_accumulator(dtype, 1)
 
-        def array_cumprod_impl(a):
+        @register_jitable
+        def _array_cumprod_impl(a):
             out = np.empty(a.size, dtype)
             c = acc_init
             for idx, v in enumerate(a.flat):
@@ -422,12 +167,20 @@ def array_cumprod(a):
                 out[idx] = c
             return out
 
+        if is_nonelike(axis):
+            def array_cumprod_impl(a, axis=None):
+                return _array_cumprod_impl(a)
+        else:
+            array_cumprod_impl = build_with_axis_impl(
+                a, axis, _array_cumprod_impl, ret_type=dtype
+            )
+
         return array_cumprod_impl
 
 
 @overload(np.mean)
 @overload_method(types.Array, "mean")
-def array_mean(a):
+def array_mean(a, axis=None):
     if isinstance(a, types.Array):
         is_number = a.dtype in types.integer_domain | frozenset([types.bool_])
         if is_number:
@@ -437,22 +190,31 @@ def array_mean(a):
 
         acc_init = get_accumulator(dtype, 0)
 
-        def array_mean_impl(a):
-            # Can't use the naive `arr.sum() / arr.size`, as it would return
+        @register_jitable
+        def _array_mean_impl(a):
+            # Can't use the naive `a.sum() / a.size`, as it would return
             # a wrong result on integer sum overflow.
             c = acc_init
             for v in np.nditer(a):
                 c += v.item()
             return c / a.size
 
+        if is_nonelike(axis):
+            def array_mean_impl(a, axis=None):
+                return _array_mean_impl(a)
+        else:
+            array_mean_impl = build_with_axis_impl(
+                a, axis, _array_mean_impl, ret_type=dtype
+            )
         return array_mean_impl
 
 
 @overload(np.var)
 @overload_method(types.Array, "var")
-def array_var(a):
+def array_var(a, axis=None):
     if isinstance(a, types.Array):
-        def array_var_impl(a):
+        @register_jitable
+        def _array_var_impl(a):
             # Compute the mean
             m = a.mean()
 
@@ -463,15 +225,32 @@ def array_var(a):
                 ssd += np.real(val * np.conj(val))
             return ssd / a.size
 
+        if is_nonelike(axis):
+            def array_var_impl(a, axis=None):
+                return _array_var_impl(a)
+        else:
+            array_var_impl = build_with_axis_impl(
+                a, axis, _array_var_impl
+            )
+
         return array_var_impl
 
 
 @overload(np.std)
 @overload_method(types.Array, "std")
-def array_std(a):
+def array_std(a, axis=None):
     if isinstance(a, types.Array):
-        def array_std_impl(a):
+        @register_jitable
+        def _array_std_impl(a):
             return a.var() ** 0.5
+
+        if is_nonelike(axis):
+            def array_std_impl(a, axis=None):
+                return _array_std_impl(a)
+        else:
+            array_std_impl = build_with_axis_impl(
+                a, axis, _array_std_impl
+            )
 
         return array_std_impl
 
@@ -493,7 +272,7 @@ def return_false(a):
 
 @overload(np.min)
 @overload_method(types.Array, "min")
-def npy_min(a):
+def npy_min(a, axis=None):
     if not isinstance(a, types.Array):
         return
 
@@ -519,7 +298,8 @@ def npy_min(a):
         pre_return_func = return_false
         comparator = min_comparator
 
-    def impl_min(a):
+    @register_jitable
+    def _impl_min(a):
         if a.size == 0:
             raise ValueError("zero-size array to reduction operation "
                              "minimum which has no identity")
@@ -537,12 +317,20 @@ def npy_min(a):
                 min_value = v
         return min_value
 
+    if is_nonelike(axis):
+        def impl_min(a, axis=None):
+            return _impl_min(a)
+    else:
+        impl_min = build_with_axis_impl(
+            a, axis, _impl_min
+        )
+
     return impl_min
 
 
 @overload(np.max)
 @overload_method(types.Array, "max")
-def npy_max(a):
+def npy_max(a, axis=None):
     if not isinstance(a, types.Array):
         return
 
@@ -568,7 +356,8 @@ def npy_max(a):
         pre_return_func = return_false
         comparator = max_comparator
 
-    def impl_max(a):
+    @register_jitable
+    def _impl_max(a):
         if a.size == 0:
             raise ValueError("zero-size array to reduction operation "
                              "maximum which has no identity")
@@ -585,6 +374,14 @@ def npy_max(a):
             if comparator(v, max_value):
                 max_value = v
         return max_value
+
+    if is_nonelike(axis):
+        def impl_max(a, axis=None):
+            return _impl_max(a)
+    else:
+        impl_max = build_with_axis_impl(
+            a, axis, _impl_max
+        )
 
     return impl_max
 
@@ -671,7 +468,7 @@ def array_argmin(arr, axis=None):
         def array_argmin_impl(arr, axis=None):
             return flatten_impl(arr)
     else:
-        array_argmin_impl = build_argmax_or_argmin_with_axis_impl(
+        array_argmin_impl = build_with_axis_impl(
             arr, axis, flatten_impl
         )
     return array_argmin_impl
@@ -743,13 +540,14 @@ def array_argmax_impl_generic(arry):
     return max_idx
 
 
-def build_argmax_or_argmin_with_axis_impl(arr, axis, flatten_impl):
+def build_with_axis_impl(arr, axis, flatten_impl, ret_type=None):
     """
     Given a function that implements the logic for handling a flattened
     array, return the implementation function.
     """
     check_is_integer(axis, "axis")
-    retty = types.intp
+    if ret_type is None:
+        ret_type = types.intp
 
     tuple_buffer = tuple(range(arr.ndim))
 
@@ -777,7 +575,7 @@ def build_argmax_or_argmin_with_axis_impl(arr, axis, flatten_impl):
         raveled = transposed_arr.ravel()
         assert raveled.size == arr.size
         assert transposed_arr.size % m == 0
-        out = np.empty(transposed_arr.size // m, retty)
+        out = np.empty(transposed_arr.size // m, ret_type)
         for i in range(out.size):
             out[i] = flatten_impl(raveled[i * m:(i + 1) * m])
 
@@ -801,7 +599,7 @@ def array_argmax(arr, axis=None):
         def array_argmax_impl(arr, axis=None):
             return flatten_impl(arr)
     else:
-        array_argmax_impl = build_argmax_or_argmin_with_axis_impl(
+        array_argmax_impl = build_with_axis_impl(
             arr, axis, flatten_impl
         )
     return array_argmax_impl
