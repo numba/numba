@@ -252,14 +252,14 @@ def np_int_fmod_impl(context, builder, sig, args):
     ty = sig.args[0]  # any arg type will do, homogeneous
 
     ZERO = context.get_constant(ty, 0)
-    den_not_zero = builder.icmp(lc.ICMP_NE, ZERO, den)
+    den_not_zero = builder.icmp_signed("!=", ZERO, den)
     bb_no_if = builder.basic_block
     with cgutils.if_unlikely(builder, den_not_zero):
         bb_if = builder.basic_block
 
         # use the abs of the numerator and denominator
-        num_neg = builder.icmp(lc.ICMP_SLT, num, ZERO)
-        den_neg = builder.icmp(lc.ICMP_SLT, den, ZERO)
+        num_neg = builder.icmp_signed("<", num, ZERO)
+        den_neg = builder.icmp_signed("<", den, ZERO)
         num_abs = builder.select(num_neg, builder.neg(num), num)
         den_abs = builder.select(den_neg, builder.neg(den), den)
         mod = builder.urem(num_abs, den_abs)
