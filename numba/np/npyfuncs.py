@@ -269,7 +269,7 @@ def np_int_fmod_impl(context, builder, sig, args):
     result.add_incoming(mod, bb_if)
 
     # set the sign to match the numerator
-    num_gt_zero = builder.icmp(lc.ICMP_SGT, num, ZERO)
+    num_gt_zero = builder.icmp_signed(">", num, ZERO)
 
     return builder.select(num_gt_zero, result, builder.neg(result))
 
