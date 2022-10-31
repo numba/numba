@@ -97,7 +97,6 @@ class CUDATargetContext(BaseContext):
         from numba.cpython import cmathimpl
         from numba.np import arrayobj # noqa: F401
         from numba.np import npdatetime # noqa: F401
-        from numba.cuda import cudacmathimpl # noqa: F401
         from . import (
             cudaimpl, printimpl, libdeviceimpl, mathimpl, vector_types
         )
