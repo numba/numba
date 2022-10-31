@@ -243,9 +243,35 @@ def np_int_udivrem_impl(context, builder, sig, args):
     return context.make_tuple(builder, sig.return_type, [div, rem])
 
 
-# implementation of int_fmod is in fact the same as the unsigned remainder,
-# that is: srem with a special case returning 0 when the denominator is 0.
-np_int_fmod_impl = np_int_urem_impl
+def np_int_fmod_impl(context, builder, sig, args):
+    # implementation will be very similar to np_int_urem_impl, but
+    # the output sign will match the sign of the numerator
+    _check_arity_and_homogeneity(sig, args, 2)
+
+    num, den = args
+    ty = sig.args[0]  # any arg type will do, homogeneous
+
+    ZERO = context.get_constant(ty, 0)
+    den_not_zero = builder.icmp(lc.ICMP_NE, ZERO, den)
+    bb_no_if = builder.basic_block
+    with cgutils.if_unlikely(builder, den_not_zero):
+        bb_if = builder.basic_block
+
+        # use the abs of the numerator and denominator
+        num_neg = builder.icmp(lc.ICMP_SLT, num, ZERO)
+        den_neg = builder.icmp(lc.ICMP_SLT, den, ZERO)
+        num_abs = builder.select(num_neg, builder.neg(num), num)
+        den_abs = builder.select(den_neg, builder.neg(den), den)
+        mod = builder.urem(num_abs, den_abs)
+
+    result = builder.phi(ZERO.type)
+    result.add_incoming(ZERO, bb_no_if)
+    result.add_incoming(mod, bb_if)
+
+    # set the sign to match the numerator
+    num_gt_zero = builder.icmp(lc.ICMP_SGT, num, ZERO)
+
+    return builder.select(num_gt_zero, result, builder.neg(result))
 
 
 def np_real_div_impl(context, builder, sig, args):
