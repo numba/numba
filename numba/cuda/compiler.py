@@ -13,18 +13,9 @@ from warnings import warn
 from numba.cuda.api import get_current_device
 
 
-def _nvvm_options_type(x):
-    if x is None:
-        return None
-
-    else:
-        assert isinstance(x, dict)
-        return x
-
-
 class CUDAFlags(Flags):
     nvvm_options = Option(
-        type=_nvvm_options_type,
+        type=dict,
         default=None,
         doc="NVVM options",
     )
@@ -184,6 +175,8 @@ def compile_cuda(pyfunc, return_type, args, debug=False, lineinfo=False,
     from .descriptor import cuda_target
     typingctx = cuda_target.typing_context
     targetctx = cuda_target.target_context
+
+    nvvm_options = nvvm_options or {}
 
     flags = CUDAFlags()
     # Do not compile (generate native code), just lower (to LLVM)
