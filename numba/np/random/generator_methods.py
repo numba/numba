@@ -865,9 +865,9 @@ def NumPyRandomGeneratorType_noncentral_f(inst, dfnum, dfden, nonc, size=None):
     @register_jitable
     def check_arg_bounds(dfnum, dfden, nonc):
         if dfnum <= 0:
-            raise ValueError("df <= 0")
+            raise ValueError("dfnum <= 0")
         if dfden <= 0:
-            raise ValueError("df <= 0")
+            raise ValueError("dfden <= 0")
         if nonc < 0:
             raise ValueError("nonc < 0")
 
@@ -897,8 +897,8 @@ def NumPyRandomGeneratorType_logseries(inst, p, size=None):
 
     if is_nonelike(size):
         def impl(inst, p, size=None):
-            if p < 0 or p > 1 or np.isnan(p):
-                raise ValueError("p < 0, p > 1 or p is NaN")
+            if p < 0 or p >= 1 or np.isnan(p):
+                raise ValueError("p < 0, p >= 1 or p is NaN")
             return np.int64(random_logseries(inst.bit_generator, p))
         return impl
     else:
