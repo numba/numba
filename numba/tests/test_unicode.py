@@ -427,8 +427,6 @@ UNICODE_COUNT_EXAMPLES = [
 
 
 class TestUnicode(BaseTest):
-    import os
-    os.environ["NUMBA_DUMP_OPTIMIZED"] = "1"
 
     def test_meminfo_release(self):
         @njit
@@ -440,11 +438,36 @@ class TestUnicode(BaseTest):
 
     def test_float_to_int(self):
         @njit
-        def to_int(f):
+        def float_to_int(f):
             return int(f)
 
         f = 1.23
-        ret = to_int(f)
+        ret = float_to_int(f)
+        self.assertEqual(int(f), ret)
+
+    def test_unicode_to_int(self):
+        @njit
+        def uni_to_int(s, base):
+            if base == 10:
+                return int(s)
+            else:
+                return int(s, base)
+
+        s = ["1", "100_00", "00_100",
+             "0b1_1", "0B0_1_01",
+             "0o0_60", "0O00_00_015",
+             "0xaf_dE_939", "0X000_AF11"]
+        for item in s:
+            base = 10
+            if len(item) > 2:
+                if item[1] in "bB":
+                    base = 2
+                if item[1] in "oO":
+                    base = 8
+                if item[1] in "xX":
+                    base = 16
+            ret = uni_to_int(item, base)
+            self.assertEqual(int(item, base), ret)
 
     def test_literal(self, flags=no_pyobj_flags):
         pyfunc = literal_usecase
