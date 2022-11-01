@@ -1,6 +1,6 @@
 import ctypes
 import unittest
-from numba.core.compiler import compile_isolated, Flags
+from numba.core.compiler import Flags
 from numba.core import types
 from numba.core.extending import intrinsic
 from numba import jit
@@ -10,6 +10,7 @@ force_pyobj_flags = Flags()
 force_pyobj_flags.force_pyobject = True
 
 no_pyobj_flags = Flags()
+
 
 @intrinsic
 def _pyapi_bytes_as_string(typingctx, csrc, size):
