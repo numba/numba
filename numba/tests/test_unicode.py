@@ -428,23 +428,6 @@ UNICODE_COUNT_EXAMPLES = [
 
 class TestUnicode(BaseTest):
 
-    def test_meminfo_release(self):
-        @njit
-        def f(s, i):
-            return i
-
-        s, i = "lashd", 2
-        ret = f(s, i)
-
-    def test_float_to_int(self):
-        @njit
-        def float_to_int(f):
-            return int(f)
-
-        f = 1.23
-        ret = float_to_int(f)
-        self.assertEqual(int(f), ret)
-
     def test_unicode_to_int(self):
         @njit
         def uni_to_int(s, base):

@@ -954,7 +954,7 @@ class Int(AbstractTemplate):
         if kws:
             raise errors.NumbaAssertionError('kws not supported')
 
-        [arg] = args
+        arg = args[0]
 
         if isinstance(arg, types.Integer):
             return signature(arg, arg)

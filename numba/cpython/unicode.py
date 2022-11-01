@@ -1704,13 +1704,10 @@ def unicode_getitem(s, idx):
                 idx = normalize_str_idx(idx, len(s))
                 cp = _get_code_point(s, idx)
                 kind = _codepoint_to_kind(cp)
-                if kind == s._kind:
-                    return _get_str_slice_view(s, idx, 1)
-                else:
-                    is_ascii = _codepoint_is_ascii(cp)
-                    ret = _empty_string(kind, 1, is_ascii)
-                    _set_code_point(ret, 0, cp)
-                    return ret
+                is_ascii = _codepoint_is_ascii(cp)
+                ret = _empty_string(kind, 1, is_ascii)
+                _set_code_point(ret, 0, cp)
+                return ret
             return getitem_char
         elif isinstance(idx, types.SliceType):
             def getitem_slice(s, idx):
@@ -2464,14 +2461,55 @@ def integer_str(n):
         return impl
 
 
+@register_jitable
+def _get_integer_with_base(s, base=10):
+    num = 0
+    extra = ord("_")
+
+    range_list = [(ord("0"), ord("9"), 0)]
+    if base == 16:
+        range_list.append((ord("a"), ord("f"), 10))
+        range_list.append((ord("A"), ord("F"), 10))
+
+    for char in s:
+        ord_char = ord(char)
+        if extra > 0 and extra == ord_char:
+            continue
+        else:
+            meet = False
+            for lower_bound, up_bound, add in range_list:
+                if lower_bound <= ord_char <= up_bound:
+                    num = num * base + ord_char - lower_bound + add
+                    meet = True
+                    break
+            if not meet:
+                raise ValueError
+    return num
+
+
 @overload(int)
 def str_to_int(s):
-    pass
+    if isinstance(s, types.UnicodeType):
+
+        def impl(s):
+            return _get_integer_with_base(s, base=10)
+
+        return impl
 
 
-@overload(float)
-def str_to_float(s):
-    pass
+@overload(int)
+def str_to_int(s, base):
+    if isinstance(s, types.UnicodeType) and isinstance(base, types.Integer):
+
+        def impl(s, base):
+            if base == 2:
+                return _get_integer_with_base(s[2:], base=2)
+            if base == 8:
+                return _get_integer_with_base(s[2:], base=8)
+            if base == 16:
+                return _get_integer_with_base(s[2:], base=16)
+
+        return impl
 
 
 @overload(str)
