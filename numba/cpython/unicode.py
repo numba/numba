@@ -813,18 +813,6 @@ def unicode_rpartition(data, sep):
     return impl
 
 
-@overload_method(types.UnicodeType, 'startswith')
-def unicode_startswith(a, b):
-    if isinstance(b, types.UnicodeType):
-        def startswith_impl(a, b):
-            return _cmp_region(a, 0, b, 0, len(b)) == 0
-        return startswith_impl
-    if isinstance(b, types.UnicodeCharSeq):
-        def startswith_impl(a, b):
-            return a.startswith(str(b))
-        return startswith_impl
-
-
 # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9342-L9354    # noqa: E501
 @register_jitable
 def _adjust_indices(length, start, end):
@@ -840,6 +828,56 @@ def _adjust_indices(length, start, end):
             start = 0
 
     return start, end
+
+
+@overload_method(types.UnicodeType, 'startswith')
+def unicode_startswith(s, substr, start=None, end=None):
+    if not (start is None or isinstance(start, (types.Omitted,
+                                                types.Integer,
+                                                types.NoneType))):
+        raise TypingError('The arg must be a Integer or None')
+
+    if not (end is None or isinstance(end, (types.Omitted,
+                                            types.Integer,
+                                            types.NoneType))):
+        raise TypingError('The arg must be a Integer or None')
+
+    if isinstance(substr, (types.Tuple, types.UniTuple)):
+        def startswith_tuple_impl(s, substr, start=None, end=None):
+            for item in substr:
+                if s.startswith(item, start, end):
+                    return True
+            return False
+
+        return startswith_tuple_impl
+
+    if isinstance(substr, types.UnicodeCharSeq):
+        def startswith_char_seq_impl(s, substr, start=None, end=None):
+            return s.startswith(str(substr), start, end)
+
+        return startswith_char_seq_impl
+
+    if isinstance(substr, types.UnicodeType):
+        def startswith_unicode_impl(s, substr, start=None, end=None):
+            length = len(s)
+            sub_length = len(substr)
+            if start is None:
+                start = 0
+            if end is None:
+                end = length
+
+            start, end = _adjust_indices(length, start, end)
+            if end - start < sub_length:
+                return False
+
+            if sub_length == 0:
+                return True
+
+            s = s[start:end]
+
+            return _cmp_region(s, 0, substr, 0, sub_length) == 0
+
+        return startswith_unicode_impl
 
 
 @overload_method(types.UnicodeType, 'endswith')

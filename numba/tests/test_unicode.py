@@ -177,6 +177,14 @@ def expandtabs_with_tabsize_kwarg_usecase(s, tabsize):
     return s.expandtabs(tabsize=tabsize)
 
 
+def startswith_with_start_only_usecase(x, y, start):
+    return x.startswith(y, start)
+
+
+def startswith_with_start_end_usecase(x, y, start, end):
+    return x.startswith(y, start, end)
+
+
 def endswith_with_start_only_usecase(x, y, start):
     return x.endswith(y, start)
 
@@ -551,23 +559,91 @@ class TestUnicode(BaseTest):
         msg = '"tabsize" must be {}, not float'.format(accepted_types)
         self.assertIn(msg, str(raises.exception))
 
-    def test_startswith(self, flags=no_pyobj_flags):
+    def test_startswith_default(self):
         pyfunc = startswith_usecase
         cfunc = njit(pyfunc)
-        for a in UNICODE_EXAMPLES:
-            for b in ['', 'x', a[:-2], a[3:], a, a + a]:
-                self.assertEqual(pyfunc(a, b),
-                                 cfunc(a, b),
-                                 '%s, %s' % (a, b))
 
-    def test_endswith(self, flags=no_pyobj_flags):
-        pyfunc = endswith_usecase
+        cpython_str = ['hello', 'helloworld', '']
+        cpython_subs = [
+            'he', 'hello', 'helloworld', 'ello',
+            '', 'lowo', 'lo', 'he', 'lo', 'o',
+        ]
+        extra_subs = ['hellohellohello', ' ']
+        for s in cpython_str + UNICODE_EXAMPLES:
+            default_subs = ['', 'x', s[:-2], s[3:], s, s + s]
+            for sub_str in cpython_subs + default_subs + extra_subs:
+                self.assertEqual(pyfunc(s, sub_str), cfunc(s, sub_str))
+
+    def test_startswith_with_start(self):
+        pyfunc = startswith_with_start_only_usecase
         cfunc = njit(pyfunc)
-        for a in UNICODE_EXAMPLES:
-            for b in ['', 'x', a[:-2], a[3:], a, a + a]:
-                self.assertEqual(pyfunc(a, b),
-                                 cfunc(a, b),
-                                 '%s, %s' % (a, b))
+
+        cpython_str = ['hello', 'helloworld', '']
+        cpython_subs = [
+            'he', 'hello', 'helloworld', 'ello',
+            '', 'lowo', 'lo', 'he', 'lo', 'o',
+        ]
+        extra_subs = ['hellohellohello', ' ']
+        for s in cpython_str + UNICODE_EXAMPLES:
+            default_subs = ['', 'x', s[:-2], s[3:], s, s + s]
+            for sub_str in cpython_subs + default_subs + extra_subs:
+                for start in list(range(-20, 20)) + [None]:
+                    self.assertEqual(pyfunc(s, sub_str, start),
+                                     cfunc(s, sub_str, start))
+
+    def test_startswith_with_start_end(self):
+        pyfunc = startswith_with_start_end_usecase
+        cfunc = njit(pyfunc)
+
+        cpython_str = ['hello', 'helloworld', '']
+        cpython_subs = [
+            'he', 'hello', 'helloworld', 'ello',
+            '', 'lowo', 'lo', 'he', 'lo', 'o',
+        ]
+        extra_subs = ['hellohellohello', ' ']
+        for s in cpython_str + UNICODE_EXAMPLES:
+            default_subs = ['', 'x', s[:-2], s[3:], s, s + s]
+            for sub_str in cpython_subs + default_subs + extra_subs:
+                for start in list(range(-20, 20)) + [None]:
+                    for end in list(range(-20, 20)) + [None]:
+                        self.assertEqual(pyfunc(s, sub_str, start, end),
+                                         cfunc(s, sub_str, start, end))
+
+    def test_startswith_tuple(self):
+        pyfunc = startswith_usecase
+        cfunc = njit(pyfunc)
+
+        cpython_str = ['hello', 'helloworld', '']
+        cpython_subs = [
+            'he', 'hello', 'helloworld', 'ello',
+            '', 'lowo', 'lo', 'he', 'lo', 'o',
+        ]
+        extra_subs = ['hellohellohello', ' ']
+        for s in cpython_str + UNICODE_EXAMPLES:
+            default_subs = ['', 'x', s[:-2], s[3:], s, s + s]
+            for sub_str in cpython_subs + default_subs + extra_subs:
+                tuple_subs = (sub_str, 'lo')
+                self.assertEqual(pyfunc(s, tuple_subs),
+                                 cfunc(s, tuple_subs))
+
+    def test_startswith_tuple_args(self):
+        pyfunc = startswith_with_start_end_usecase
+        cfunc = njit(pyfunc)
+
+        cpython_str = ['hello', 'helloworld', '']
+        cpython_subs = [
+            'he', 'hello', 'helloworld', 'ello',
+            '', 'lowo', 'lo', 'he', 'lo', 'o',
+        ]
+        extra_subs = ['hellohellohello', ' ']
+        for s in cpython_str + UNICODE_EXAMPLES:
+            default_subs = ['', 'x', s[:-2], s[3:], s, s + s]
+            for sub_str in cpython_subs + default_subs + extra_subs:
+                for start in list(range(-20, 20)) + [None]:
+                    for end in list(range(-20, 20)) + [None]:
+                        tuple_subs = (sub_str, 'lo')
+                        self.assertEqual(pyfunc(s, tuple_subs, start, end),
+                                         cfunc(s, tuple_subs, start, end))
 
     def test_endswith_default(self):
         pyfunc = endswith_usecase
