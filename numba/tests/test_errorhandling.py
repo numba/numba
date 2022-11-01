@@ -453,14 +453,14 @@ class TestDeveloperSpecificErrorMessages(SerialMixin, unittest.TestCase):
     def test_bound_function_error_string(self):
         # See PR #5952
         def foo(x):
-            x.max(-1) # axis not supported
+            x.max(-1)
 
         with override_config('DEVELOPER_MODE', 1):
             with self.assertRaises(errors.TypingError) as raises:
                 njit("void(int64[:,:])")(foo)
 
         excstr = str(raises.exception)
-        self.assertIn("args not supported", excstr)
+        self.assertIn("too many positional arguments", excstr)
 
 
 class TestCapturedErrorHandling(SerialMixin, unittest.TestCase):

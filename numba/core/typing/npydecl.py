@@ -413,8 +413,8 @@ def _numpy_redirect(fname):
                dict(key=numpy_function, method_name=fname))
     infer_global(numpy_function, types.Function(cls))
 
-for func in ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
-             'cumsum', 'cumprod', 'argsort', 'nonzero', 'ravel']:
+
+for func in ['sum', 'argsort', 'nonzero', 'ravel']:
     _numpy_redirect(func)
 
 
