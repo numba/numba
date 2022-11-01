@@ -6,7 +6,7 @@ from numba.core import typing, types, debuginfo, itanium_mangler, cgutils
 from numba.core.dispatcher import Dispatcher
 from numba.core.utils import cached_property
 from numba.core.base import BaseContext
-from numba.core.callconv import MinimalCallConv
+from numba.core.callconv import CPUCallConv, excinfo_ptr_t, excinfo_t
 from numba.core.typing import cmathdecl
 
 from .cudadrv import nvvm
@@ -187,8 +187,8 @@ class CUDATargetContext(BaseContext):
         wrapfnty = ir.FunctionType(ir.VoidType(), argtys)
         wrapper_module = self.create_module("cuda.kernel.wrapper")
         fnty = ir.FunctionType(ir.IntType(32),
-                               [self.call_conv.get_return_type(types.pyobject)]
-                               + argtys)
+                               [self.call_conv.get_return_type(types.pyobject),
+                                ir.PointerType(excinfo_ptr_t)] + argtys)
         func = ir.Function(wrapper_module, fnty, fndesc.llvm_func_name)
 
         prefixed = itanium_mangler.prepend_namespace(func.name, ns='cudapy')
@@ -219,6 +219,15 @@ class CUDATargetContext(BaseContext):
             gv_tid.append(define_error_gv("__tid%s__" % i))
             gv_ctaid.append(define_error_gv("__ctaid%s__" % i))
 
+        def define_error_gv_with_type(postfix, type, init):
+            name = wrapfn.name + postfix
+            gv = cgutils.add_global_variable(wrapper_module, type,
+                                             name)
+            gv.initializer = ir.Constant(gv.type.pointee, init)
+            return gv
+
+        gv_exception = define_error_gv_with_type("__excinfo__", excinfo_t, 0)
+        gv_exc_lock = define_error_gv("__exclock__")
         callargs = arginfo.from_arguments(builder, wrapfn.args)
         status, _ = self.call_conv.call_function(
             builder, func, types.void, argtypes, callargs)
@@ -231,6 +240,8 @@ class CUDATargetContext(BaseContext):
             with builder.if_then(builder.not_(status.is_python_exc)):
                 # User exception raised
                 old = ir.Constant(gv_exc.type.pointee, None)
+                old_exc_unlock = ir.Constant(gv_exc_lock.type.pointee, 0)
+                exc_lock = ir.Constant(gv_exc_lock.type.pointee, 1)
 
                 # Use atomic cmpxchg to prevent rewriting the error status
                 # Only the first error is recorded
@@ -239,6 +250,11 @@ class CUDATargetContext(BaseContext):
                     xchg = builder.cmpxchg(gv_exc, old, status.code,
                                            'monotonic', 'monotonic')
                     changed = builder.extract_value(xchg, 1)
+
+                    xchg_lock = builder.cmpxchg(gv_exc_lock, old_exc_unlock,
+                                                exc_lock, 'monotonic',
+                                                'monotonic')
+                    changed2 = builder.extract_value(xchg_lock, 1)
                 else:
                     casfnty = ir.FunctionType(old.type, [gv_exc.type, old.type,
                                                          old.type])
@@ -247,6 +263,12 @@ class CUDATargetContext(BaseContext):
                     casfn = ir.Function(wrapper_module, casfnty, name=cas_hack)
                     xchg = builder.call(casfn, [gv_exc, old, status.code])
                     changed = builder.icmp_unsigned('==', xchg, old)
+
+                    xchg2 = builder.call(casfn, [gv_exc_lock,
+                                                 old_exc_unlock,
+                                                 exc_lock])
+                    changed2 = builder.icmp_unsigned('==', xchg2,
+                                                     old_exc_unlock)
 
                 # If the xchange is successful, save the thread ID.
                 sreg = nvvmutils.SRegBuilder(builder)
@@ -258,6 +280,17 @@ class CUDATargetContext(BaseContext):
                     for dim, ptr, in zip("xyz", gv_ctaid):
                         val = sreg.ctaid(dim)
                         builder.store(val, ptr)
+
+                with builder.if_then(changed2):
+                    excinfo = builder.load(status.excinfoptr)
+                    pickle_buf = builder.extract_value(excinfo, 0)
+                    pickle_buf_sz = builder.extract_value(excinfo, 1)
+                    hash_buf = builder.extract_value(excinfo, 2)
+
+                    g_excinfo = builder.load(gv_exception)
+                    builder.insert_value(g_excinfo, pickle_buf, 0)
+                    builder.insert_value(g_excinfo, pickle_buf_sz, 1)
+                    builder.insert_value(g_excinfo, hash_buf, 2)
 
         builder.ret_void()
 
@@ -360,5 +393,5 @@ class CUDATargetContext(BaseContext):
         # fpm.finalize()
 
 
-class CUDACallConv(MinimalCallConv):
+class CUDACallConv(CPUCallConv):
     pass
