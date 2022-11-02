@@ -48,7 +48,7 @@ from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                       needs_lapack, disabled_test, skip_unless_scipy,
                       needs_subprocess)
 from numba.core.extending import register_jitable
-import cmath
+import math
 import unittest
 
 # NOTE: Each parfors test class is run in separate subprocess, this is to reduce
@@ -1416,7 +1416,7 @@ class TestParfors(TestParforsBase):
         def test_impl():
             acc = 0
             for i in prange(1):
-                acc = cmath.sqrt(acc)
+                acc = math.sqrt(acc)
             return acc
 
         # checks that invalid use of reduction variable is detected
