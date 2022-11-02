@@ -26,16 +26,6 @@ class CMath_unary(ConcreteTemplate):
     cases = [signature(tp, tp) for tp in sorted(types.complex_domain)]
 
 
-class CMath_predicate(ConcreteTemplate):
-    cases = [signature(types.boolean, tp) for tp in
-             sorted(types.complex_domain)]
-
-
-@infer_global(cmath.isfinite)
-class CMath_isfinite(CMath_predicate):
-    pass
-
-
 @infer_global(cmath.phase)
 class Cmath_phase(ConcreteTemplate):
     cases = [signature(tp, types.complex128) for tp in [types.float64]]

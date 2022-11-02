@@ -14,7 +14,7 @@ from numba.core.imputils import impl_ret_untracked
 from numba.core import typing, types, errors, lowering, cgutils
 from numba.core.extending import register_jitable
 from numba.np import npdatetime
-from numba.cpython import cmathimpl, mathimpl, numbers
+from numba.cpython import mathimpl, numbers
 
 # some NumPy constants. Note that we could generate some of them using
 # the math library, but having the values copied from npy_math seems to
@@ -1558,10 +1558,11 @@ def np_real_isfinite_impl(context, builder, sig, args):
 
 def np_complex_isfinite_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
-    x, = args
-    ty, = sig.args
-    complex_val = context.make_complex(builder, ty, value=x)
-    return cmathimpl.is_finite(builder, complex_val)
+
+    def impl(z):
+        return cmath.isfinite(z)
+
+    return context.compile_internal(builder, impl, sig, args)
 
 
 def np_int_isinf_impl(context, builder, sig, args):
