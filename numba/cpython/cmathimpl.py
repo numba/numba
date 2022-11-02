@@ -28,13 +28,29 @@ def is_finite(builder, z):
                         mathimpl.is_finite(builder, z.imag))
 
 
-@lower(cmath.isnan, types.Complex)
-def isnan_float_impl(context, builder, sig, args):
-    [typ] = sig.args
-    [value] = args
-    z = context.make_complex(builder, typ, value=value)
-    res = is_nan(builder, z)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+@intrinsic
+def _isnan(typingctx, z):
+    sig = types.boolean(z)
+
+    def codegen(context, builder, sig, args):
+        [typ] = sig.args
+        [value] = args
+        z = context.make_complex(builder, typ, value=value)
+        res = is_nan(builder, z)
+        return impl_ret_untracked(context, builder, sig.return_type, res)
+
+    return sig, codegen
+
+
+@overload(cmath.isnan, target='generic')
+def ol_cmath_isnan(z):
+    if not isinstance(z, types.Complex):
+        return
+
+    def impl(z):
+        return _isnan(z)
+    return impl
+
 
 @lower(cmath.isinf, types.Complex)
 def isinf_float_impl(context, builder, sig, args):
