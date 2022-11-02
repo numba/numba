@@ -1576,10 +1576,11 @@ def np_real_isinf_impl(context, builder, sig, args):
 
 def np_complex_isinf_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
-    x, = args
-    ty, = sig.args
-    complex_val = context.make_complex(builder, ty, value=x)
-    return cmathimpl.is_inf(builder, complex_val)
+
+    def impl(z):
+        return cmath.isinf(z)
+
+    return context.compile_internal(builder, impl, sig, args)
 
 
 def np_real_signbit_impl(context, builder, sig, args):

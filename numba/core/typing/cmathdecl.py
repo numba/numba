@@ -26,7 +26,6 @@ class CMath_unary(ConcreteTemplate):
     cases = [signature(tp, tp) for tp in sorted(types.complex_domain)]
 
 
-@infer_global(cmath.isinf)
 class CMath_predicate(ConcreteTemplate):
     cases = [signature(types.boolean, tp) for tp in
              sorted(types.complex_domain)]

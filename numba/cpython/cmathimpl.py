@@ -52,13 +52,28 @@ def ol_cmath_isnan(z):
     return impl
 
 
-@lower(cmath.isinf, types.Complex)
-def isinf_float_impl(context, builder, sig, args):
-    [typ] = sig.args
-    [value] = args
-    z = context.make_complex(builder, typ, value=value)
-    res = is_inf(builder, z)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+@intrinsic
+def _isinf(typingctx, z):
+    sig = types.boolean(z)
+
+    def codegen(context, builder, sig, args):
+        [typ] = sig.args
+        [value] = args
+        z = context.make_complex(builder, typ, value=value)
+        res = is_inf(builder, z)
+        return impl_ret_untracked(context, builder, sig.return_type, res)
+
+    return sig, codegen
+
+
+@overload(cmath.isinf, target='generic')
+def ol_cmath_isnan(z):
+    if not isinstance(z, types.Complex):
+        return
+
+    def impl(z):
+        return _isinf(z)
+    return impl
 
 
 @lower(cmath.isfinite, types.Complex)
