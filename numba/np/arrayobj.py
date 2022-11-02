@@ -762,6 +762,7 @@ class IntegerArrayIndexer(Indexer):
                                            (idxary._getvalue(),))
             self.idxty = retty
             self.idxary = make_array(retty)(context, builder, res)
+            self.idxary_instr = res
         else:
             self.idxty = idxty
             self.idxary = idxary
@@ -1117,6 +1118,12 @@ def fancy_getitem(context, builder, sig, args,
     builder.store(next_idx, out_idx)
 
     indexer.end_loops()
+
+    for _indexer in indexer.indexers:
+        if isinstance(_indexer, IntegerArrayIndexer) \
+           and hasattr(_indexer, "idxary_instr"):
+            context.nrt.decref(builder, _indexer.idxty,
+                               _indexer.idxary_instr)
 
     return impl_ret_new_ref(context, builder, out_ty, out._getvalue())
 
@@ -1707,7 +1714,10 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
     builder.store(next_idx, src_idx)
 
     indexer.end_loops()
-
+    for _indexer in indexer.indexers:
+        if isinstance(_indexer, IntegerArrayIndexer) \
+           and hasattr(_indexer, "idxary_instr"):
+            context.nrt.decref(builder, _indexer.idxty, _indexer.idxary_instr)
     context.nrt.decref(builder, retty, src_flat_instr)
 
     return context.get_dummy_value()
