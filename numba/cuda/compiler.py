@@ -22,10 +22,6 @@ def _nvvm_options_type(x):
         return x
 
 
-def _tuple_type(x):
-    return x
-
-
 class CUDAFlags(Flags):
     nvvm_options = Option(
         type=_nvvm_options_type,
@@ -33,7 +29,7 @@ class CUDAFlags(Flags):
         doc="NVVM options",
     )
     compute_capability = Option(
-        type=_tuple_type,
+        type=tuple,
         default=None,
         doc="Compute Capability",
     )
@@ -191,6 +187,9 @@ class CUDACompiler(CompilerBase):
 def compile_cuda(pyfunc, return_type, args, debug=False, lineinfo=False,
                  inline=False, fastmath=False, nvvm_options=None,
                  cc=None):
+    if cc is None:
+        raise ValueError('Compute Capability must be supplied')
+
     from .descriptor import cuda_target
     typingctx = cuda_target.typing_context
     targetctx = cuda_target.target_context
@@ -215,7 +214,7 @@ def compile_cuda(pyfunc, return_type, args, debug=False, lineinfo=False,
         flags.fastmath = True
     if nvvm_options:
         flags.nvvm_options = nvvm_options
-    flags.compute_capability = cc or config.CUDA_DEFAULT_PTX_CC
+    flags.compute_capability = cc
 
     # Run compilation pipeline
     cres = compiler.compile_extra(typingctx=typingctx,
@@ -275,6 +274,7 @@ def compile_ptx(pyfunc, args, debug=False, lineinfo=False, device=False,
         'opt': 3 if opt else 0
     }
 
+    cc = cc or config.CUDA_DEFAULT_PTX_CC
     cres = compile_cuda(pyfunc, None, args, debug=debug, lineinfo=lineinfo,
                         fastmath=fastmath,
                         nvvm_options=nvvm_options, cc=cc)
@@ -290,7 +290,6 @@ def compile_ptx(pyfunc, args, debug=False, lineinfo=False, device=False,
         lib, kernel = tgt.prepare_cuda_kernel(cres.library, cres.fndesc, debug,
                                               nvvm_options, filename, linenum)
 
-    cc = cc or config.CUDA_DEFAULT_PTX_CC
     ptx = lib.get_asm_str(cc=cc)
     return ptx, resty
 
