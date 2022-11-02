@@ -872,7 +872,11 @@ def np_real_sin_impl(context, builder, sig, args):
 
 def np_complex_sin_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
-    return cmathimpl.sin_impl(context, builder, sig, args)
+
+    def impl(z):
+        return cmath.sin(z)
+
+    return context.compile_internal(builder, impl, sig, args)
 
 
 ########################################################################

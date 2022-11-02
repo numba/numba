@@ -309,15 +309,18 @@ def cosh_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig, res)
 
 
-@lower(cmath.sin, types.Complex)
-def sin_impl(context, builder, sig, args):
+@overload(cmath.sin, target="generic")
+def ol_cmath_sin(z):
+    if not isinstance(z, types.Complex):
+        return
+
     def sin_impl(z):
         """cmath.sin(z) = -j * cmath.sinh(z j)"""
         r = cmath.sinh(complex(-z.imag, z.real))
         return complex(r.imag, -r.real)
 
-    res = context.compile_internal(builder, sin_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig, res)
+    return sin_impl
+
 
 @lower(cmath.sinh, types.Complex)
 def sinh_impl(context, builder, sig, args):

@@ -19,7 +19,6 @@ infer_global = registry.register_global
 @infer_global(cmath.cosh)
 @infer_global(cmath.exp)
 @infer_global(cmath.log10)
-@infer_global(cmath.sin)
 @infer_global(cmath.sinh)
 @infer_global(cmath.tan)
 @infer_global(cmath.tanh)
