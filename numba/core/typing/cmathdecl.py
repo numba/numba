@@ -13,7 +13,6 @@ infer_global = registry.register_global
 @infer_global(cmath.acosh)
 @infer_global(cmath.asin)
 @infer_global(cmath.asinh)
-@infer_global(cmath.atan)
 @infer_global(cmath.atanh)
 @infer_global(cmath.cosh)
 @infer_global(cmath.exp)

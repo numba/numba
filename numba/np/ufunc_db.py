@@ -503,13 +503,11 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': npyfuncs.np_complex_acos_impl,
     }
 
-    arctan_impl = cmathimpl.atan_impl
-
     ufunc_db[np.arctan] = {
         'f->f': npyfuncs.np_real_atan_impl,
         'd->d': npyfuncs.np_real_atan_impl,
-        'F->F': arctan_impl,
-        'D->D': arctan_impl,
+        'F->F': npyfuncs.np_complex_atan_impl,
+        'D->D': npyfuncs.np_complex_atan_impl,
     }
 
     ufunc_db[np.arctan2] = {

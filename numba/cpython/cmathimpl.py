@@ -521,8 +521,12 @@ def asin_impl(context, builder, sig, args):
     res = context.compile_internal(builder, asin_impl, sig, args)
     return impl_ret_untracked(context, builder, sig, res)
 
-@lower(cmath.atan, types.Complex)
-def atan_impl(context, builder, sig, args):
+
+@overload(cmath.atan, target='generic')
+def atan_impl(z):
+    if not isinstance(z, types.Complex):
+        return
+
     def atan_impl(z):
         """cmath.atan(z) = -j * cmath.atanh(z j)"""
         r = cmath.atanh(complex(-z.imag, z.real))
@@ -532,8 +536,8 @@ def atan_impl(context, builder, sig, args):
         else:
             return complex(r.imag, -r.real)
 
-    res = context.compile_internal(builder, atan_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig, res)
+    return atan_impl
+
 
 @lower(cmath.atanh, types.Complex)
 def atanh_impl(context, builder, sig, args):
