@@ -206,13 +206,15 @@ def polar_impl(x, y, x_is_finite, y_is_finite):
     return math.hypot(x, y), math.atan2(y, x)
 
 
-@lower(cmath.sqrt, types.Complex)
-def sqrt_impl(context, builder, sig, args):
-    # We risk spurious overflow for components >= FLT_MAX / (1 + sqrt(2)).
+@overload(cmath.sqrt, target="generic")
+def ol_cmath_sqrt(z):
+    if not isinstance(z, types.Complex):
+        return
 
+    # We risk spurious overflow for components >= FLT_MAX / (1 + sqrt(2)).
     SQRT2 = 1.414213562373095048801688724209698079E0
     ONE_PLUS_SQRT2 = (1. + SQRT2)
-    theargflt = sig.args[0].underlying_float
+    theargflt = z.underlying_float
     # Get a type specific maximum value so scaling for overflow is based on that
     MAX = mathimpl.DBL_MAX if theargflt.bitwidth == 64 else mathimpl.FLT_MAX
     # THRES will be double precision, should not impact typing as it's just
@@ -263,8 +265,7 @@ def sqrt_impl(context, builder, sig, args):
         else:
             return complex(real, imag)
 
-    res = context.compile_internal(builder, sqrt_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig, res)
+    return sqrt_impl
 
 
 @overload(cmath.cos, target="generic")
