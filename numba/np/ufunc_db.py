@@ -555,13 +555,11 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': npyfuncs.np_complex_acosh_impl,
     }
 
-    arctanh_impl = cmathimpl.atanh_impl
-
     ufunc_db[np.arctanh] = {
         'f->f': npyfuncs.np_real_atanh_impl,
         'd->d': npyfuncs.np_real_atanh_impl,
-        'F->F': arctanh_impl,
-        'D->D': arctanh_impl,
+        'F->F': npyfuncs.np_complex_atanh_impl,
+        'D->D': npyfuncs.np_complex_atanh_impl,
     }
 
     ufunc_db[np.deg2rad] = {

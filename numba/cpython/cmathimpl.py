@@ -543,8 +543,11 @@ def atan_impl(z):
     return atan_impl
 
 
-@lower(cmath.atanh, types.Complex)
-def atanh_impl(context, builder, sig, args):
+@overload(cmath.atanh, target='generic')
+def atanh_impl(z):
+    if not isinstance(z, types.Complex):
+        return
+
     LN_4 = math.log(4)
     THRES_LARGE = math.sqrt(mathimpl.FLT_MAX / 4)
     THRES_SMALL = math.sqrt(mathimpl.FLT_MIN)
@@ -594,5 +597,4 @@ def atanh_impl(context, builder, sig, args):
         else:
             return complex(real, imag)
 
-    res = context.compile_internal(builder, atanh_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig, res)
+    return atanh_impl
