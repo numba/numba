@@ -590,6 +590,8 @@ class TestUnicode(BaseTest):
                 for start in list(range(-20, 20)) + [None]:
                     self.assertEqual(pyfunc(s, sub_str, start),
                                      cfunc(s, sub_str, start))
+        with self.assertRaises(TypingError):
+            cfunc('hello', 'he', 0.1)
 
     def test_startswith_with_start_end(self):
         pyfunc = startswith_with_start_end_usecase
@@ -608,6 +610,8 @@ class TestUnicode(BaseTest):
                     for end in list(range(-20, 20)) + [None]:
                         self.assertEqual(pyfunc(s, sub_str, start, end),
                                          cfunc(s, sub_str, start, end))
+        with self.assertRaises(TypingError):
+            cfunc('hello', 'he', 0, 0.1)
 
     def test_startswith_tuple(self):
         pyfunc = startswith_usecase
