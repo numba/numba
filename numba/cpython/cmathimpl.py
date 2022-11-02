@@ -487,8 +487,12 @@ def acosh_impl(context, builder, sig, args):
     res = context.compile_internal(builder, acosh_impl, sig, args)
     return impl_ret_untracked(context, builder, sig, res)
 
-@lower(cmath.asinh, types.Complex)
-def asinh_impl(context, builder, sig, args):
+
+@overload(cmath.asinh, target='generic')
+def asinh_impl(z):
+    if not isinstance(z, types.Complex):
+        return
+
     LN_4 = math.log(4)
     THRES = mathimpl.FLT_MAX / 4
 
@@ -508,8 +512,8 @@ def asinh_impl(context, builder, sig, args):
             imag = math.atan2(z.imag, s1.real * s2.real - s1.imag * s2.imag)
             return complex(real, imag)
 
-    res = context.compile_internal(builder, asinh_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig, res)
+    return asinh_impl
+
 
 @lower(cmath.asin, types.Complex)
 def asin_impl(context, builder, sig, args):

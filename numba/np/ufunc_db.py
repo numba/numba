@@ -541,13 +541,11 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': npyfuncs.np_complex_tanh_impl,
     }
 
-    arcsinh_impl = cmathimpl.asinh_impl
-
     ufunc_db[np.arcsinh] = {
         'f->f': npyfuncs.np_real_asinh_impl,
         'd->d': npyfuncs.np_real_asinh_impl,
-        'F->F': arcsinh_impl,
-        'D->D': arcsinh_impl,
+        'F->F': npyfuncs.np_complex_asinh_impl,
+        'D->D': npyfuncs.np_complex_asinh_impl,
     }
 
     ufunc_db[np.arccosh] = {
