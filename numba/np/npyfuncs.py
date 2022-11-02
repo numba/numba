@@ -904,6 +904,15 @@ def np_real_tan_impl(context, builder, sig, args):
     return mathimpl.tan_impl(context, builder, sig, args)
 
 
+def np_complex_tan_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1)
+
+    def impl(z):
+        return cmath.tan(z)
+
+    return context.compile_internal(builder, impl, sig, args)
+
+
 ########################################################################
 # NumPy asin
 

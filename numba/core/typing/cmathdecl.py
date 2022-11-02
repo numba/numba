@@ -16,7 +16,6 @@ infer_global = registry.register_global
 @infer_global(cmath.exp)
 @infer_global(cmath.log10)
 @infer_global(cmath.sinh)
-@infer_global(cmath.tan)
 @infer_global(cmath.tanh)
 class CMath_unary(ConcreteTemplate):
     cases = [signature(tp, tp) for tp in sorted(types.complex_domain)]

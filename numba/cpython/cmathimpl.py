@@ -394,15 +394,18 @@ def sinh_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig, res)
 
 
-@lower(cmath.tan, types.Complex)
-def tan_impl(context, builder, sig, args):
+@overload(cmath.tan, target='generic')
+def tan_impl(z):
+    if not isinstance(z, types.Complex):
+        return
+
     def tan_impl(z):
         """cmath.tan(z) = -j * cmath.tanh(z j)"""
         r = cmath.tanh(complex(-z.imag, z.real))
         return complex(r.imag, -r.real)
 
-    res = context.compile_internal(builder, tan_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig, res)
+    return tan_impl
+
 
 @lower(cmath.tanh, types.Complex)
 def tanh_impl(context, builder, sig, args):

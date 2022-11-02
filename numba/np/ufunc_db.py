@@ -478,13 +478,11 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': npyfuncs.np_complex_cos_impl,
     }
 
-    tan_impl = cmathimpl.tan_impl
-
     ufunc_db[np.tan] = {
         'f->f': npyfuncs.np_real_tan_impl,
         'd->d': npyfuncs.np_real_tan_impl,
-        'F->F': tan_impl,
-        'D->D': tan_impl,
+        'F->F': npyfuncs.np_complex_tan_impl,
+        'D->D': npyfuncs.np_complex_tan_impl,
     }
 
     arcsin_impl = cmathimpl.asin_impl
