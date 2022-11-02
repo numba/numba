@@ -5,7 +5,9 @@ from numba.cuda.compiler import compile_ptx_for_current_device
 from math import cos, sin, tan, exp, log, log10, log2, pow, tanh
 from operator import truediv
 import numpy as np
-from numba.cuda.testing import CUDATestCase, skip_on_cudasim, skip_unless_cc_75
+from numba.cuda.testing import (CUDATestCase, skip_on_cudasim,
+                                skip_unless_cc_75,
+                                skip_unless_less_cc_75)
 import unittest
 
 
@@ -30,6 +32,7 @@ class TestFastMathOption(CUDATestCase):
         # Test jit code path
         fastver = cuda.jit(sig, device=device, fastmath=True)(pyfunc)
         precver = cuda.jit(sig, device=device)(pyfunc)
+
         criterion.check(
             self, fastver.inspect_asm(sig), precver.inspect_asm(sig)
         )
@@ -41,6 +44,7 @@ class TestFastMathOption(CUDATestCase):
         precptx, _ = compile_ptx_for_current_device(
             pyfunc, sig, device=device
         )
+
         criterion.check(self, fastptx, precptx)
 
     def _test_fast_math_unary(self, op, criterion: FastMathCriterion):
@@ -106,6 +110,17 @@ class TestFastMathOption(CUDATestCase):
             tanh,
             FastMathCriterion(
                 fast_expected=['tanh.approx.f32 '],
+                prec_unexpected=['tanh.approx.f32 ']
+            )
+        )
+
+    @skip_unless_less_cc_75
+    def test_tanhf_no_fastmath(self):
+        self._test_fast_math_unary(
+            tanh,
+            FastMathCriterion(
+                fast_expected=['ex2.approx.ftz.f32 ',
+                               'rcp.approx.ftz.f32 '],
                 prec_unexpected=['tanh.approx.f32 ']
             )
         )
