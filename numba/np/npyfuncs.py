@@ -921,6 +921,15 @@ def np_real_asin_impl(context, builder, sig, args):
     return mathimpl.asin_impl(context, builder, sig, args)
 
 
+def np_complex_asin_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1)
+
+    def impl(z):
+        return cmath.asin(z)
+
+    return context.compile_internal(builder, impl, sig, args)
+
+
 ########################################################################
 # NumPy acos
 

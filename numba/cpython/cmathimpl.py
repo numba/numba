@@ -518,15 +518,17 @@ def asinh_impl(z):
     return asinh_impl
 
 
-@lower(cmath.asin, types.Complex)
-def asin_impl(context, builder, sig, args):
+@overload(cmath.asin, target='generic')
+def asin_impl(z):
+    if not isinstance(z, types.Complex):
+        return
+
     def asin_impl(z):
         """cmath.asin(z) = -j * cmath.asinh(z j)"""
         r = cmath.asinh(complex(-z.imag, z.real))
         return complex(r.imag, -r.real)
 
-    res = context.compile_internal(builder, asin_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig, res)
+    return asin_impl
 
 
 @overload(cmath.atan, target='generic')
