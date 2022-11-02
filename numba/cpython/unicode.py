@@ -835,7 +835,7 @@ def unicode_startswith(s, substr, start=None, end=None):
     if not (start is None or isinstance(start, (types.Omitted,
                                                 types.Integer,
                                                 types.NoneType))):
-        raise TypingError('The arg must be a Integer or None')
+        raise TypingError('When specified, the arg "start" must be an Integer')
 
     if not (end is None or isinstance(end, (types.Omitted,
                                             types.Integer,
