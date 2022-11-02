@@ -840,7 +840,7 @@ def unicode_startswith(s, substr, start=None, end=None):
     if not (end is None or isinstance(end, (types.Omitted,
                                             types.Integer,
                                             types.NoneType))):
-        raise TypingError('The arg must be a Integer or None')
+        raise TypingError('When specified, the arg "end" must be an Integer')
 
     if isinstance(substr, (types.Tuple, types.UniTuple)):
         def startswith_tuple_impl(s, substr, start=None, end=None):
