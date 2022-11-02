@@ -1,5 +1,6 @@
 from functools import reduce
 import operator
+import cmath
 import math
 
 from llvmlite import ir
@@ -13,6 +14,7 @@ from .cudadrv import nvvm
 from numba import cuda
 from numba.cuda import nvvmutils, stubs, errors
 from numba.cuda.types import dim3, grid_group, CUDADispatcher
+from numba.cuda.extending import overload
 
 
 registry = Registry()
@@ -698,6 +700,32 @@ lower(math.radians, types.f4)(gen_deg_rad(_deg2rad))
 lower(math.radians, types.f8)(gen_deg_rad(_deg2rad))
 lower(math.degrees, types.f4)(gen_deg_rad(_rad2deg))
 lower(math.degrees, types.f8)(gen_deg_rad(_rad2deg))
+
+
+@overload(cmath.log)
+def ol_cmath_log(z):
+    if not isinstance(z, types.Complex):
+        return
+
+    def log_impl(z):
+        """cmath.log(x + y j)"""
+        x, y = z.real, z.imag
+        a = math.log(math.hypot(x, y))
+        b = math.atan2(y, x)
+        return complex(a, b)
+
+    return log_impl
+
+
+@overload(cmath.log)
+def ol_cmath_log_base(z, base):
+    if not all([isinstance(typ, types.Complex) for typ in (z, base)]):
+        return
+
+    def impl(z, base):
+        return cmath.log(z) / cmath.log(base)
+
+    return impl
 
 
 def _normalize_indices(context, builder, indty, inds):

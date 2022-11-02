@@ -40,14 +40,6 @@ class CMath_isfinite(CMath_predicate):
     pass
 
 
-@infer_global(cmath.log)
-class Cmath_log(ConcreteTemplate):
-    # unary cmath.log()
-    cases = [signature(tp, tp) for tp in sorted(types.complex_domain)]
-    # binary cmath.log()
-    cases += [signature(tp, tp, tp) for tp in sorted(types.complex_domain)]
-
-
 @infer_global(cmath.phase)
 class Cmath_phase(ConcreteTemplate):
     cases = [signature(tp, types.complex128) for tp in [types.float64]]

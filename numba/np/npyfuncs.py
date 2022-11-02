@@ -630,7 +630,11 @@ def np_real_log_impl(context, builder, sig, args):
 
 def np_complex_log_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
-    return cmathimpl.log_impl(context, builder, sig, args)
+
+    def impl(z):
+        return cmath.log(z)
+
+    return context.compile_internal(builder, impl, sig, args)
 
 ########################################################################
 # NumPy log2

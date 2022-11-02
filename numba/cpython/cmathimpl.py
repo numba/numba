@@ -152,25 +152,30 @@ def exp_impl(x, y, x_is_finite, y_is_finite):
             r = 0
             return complex(r, r)
 
-@lower(cmath.log, types.Complex)
-@intrinsic_complex_unary
-def log_impl(x, y, x_is_finite, y_is_finite):
-    """cmath.log(x + y j)"""
-    a = math.log(math.hypot(x, y))
-    b = math.atan2(y, x)
-    return complex(a, b)
+    return exp_impl
 
 
-@lower(cmath.log, types.Complex, types.Complex)
-def log_base_impl(context, builder, sig, args):
-    """cmath.log(z, base)"""
-    [z, base] = args
+@overload(cmath.log, target="generic")
+def ol_cmath_log(z, base=None):
+    if not isinstance(z, types.Complex):
+        return
 
-    def log_base(z, base):
-        return cmath.log(z) / cmath.log(base)
+    if cgutils.is_nonelike(base):
+        def log_impl(z, base=None):
+            """cmath.log(x + y j)"""
+            x, y = z.real, z.imag
+            a = math.log(math.hypot(x, y))
+            b = math.atan2(y, x)
+            return complex(a, b)
+    else:
+        if isinstance(base, types.Complex):
+            def log_impl(z, base=None):
+                return cmath.log(z) / cmath.log(base)
+        else:
+            msg = f'Argument "base" must be a complex when provided. Got {base}'
+            raise errors.TypingError(msg)
 
-    res = context.compile_internal(builder, log_base, sig, args)
-    return impl_ret_untracked(context, builder, sig, res)
+    return log_impl
 
 
 @lower(cmath.log10, types.Complex)
