@@ -920,6 +920,12 @@ def np_real_acos_impl(context, builder, sig, args):
     return mathimpl.acos_impl(context, builder, sig, args)
 
 
+def np_complex_acos_impl(context, builder, sig, args):
+    def impl(z):
+        return cmath.acos(z)
+    return context.compile_internal(builder, impl, sig, args)
+
+
 ########################################################################
 # NumPy atan
 

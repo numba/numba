@@ -499,8 +499,8 @@ def _fill_ufunc_db(ufunc_db):
     ufunc_db[np.arccos] = {
         'f->f': npyfuncs.np_real_acos_impl,
         'd->d': npyfuncs.np_real_acos_impl,
-        'F->F': cmathimpl.acos_impl,
-        'D->D': cmathimpl.acos_impl,
+        'F->F': npyfuncs.np_complex_acos_impl,
+        'D->D': npyfuncs.np_complex_acos_impl,
     }
 
     arctan_impl = cmathimpl.atan_impl

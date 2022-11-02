@@ -432,8 +432,11 @@ def tanh_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig, res)
 
 
-@lower(cmath.acos, types.Complex)
-def acos_impl(context, builder, sig, args):
+@overload(cmath.acos, target='generic')
+def ol_cmath_acos(z):
+    if not isinstance(z, types.Complex):
+        return
+
     LN_4 = math.log(4)
     THRES = mathimpl.FLT_MAX / 4
 
@@ -455,8 +458,8 @@ def acos_impl(context, builder, sig, args):
             imag = math.asinh(s2.real * s1.imag - s2.imag * s1.real)
             return complex(real, imag)
 
-    res = context.compile_internal(builder, acos_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig, res)
+    return acos_impl
+
 
 @lower(cmath.acosh, types.Complex)
 def acosh_impl(context, builder, sig, args):
