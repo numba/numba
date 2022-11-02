@@ -332,7 +332,10 @@ class TestUFuncs(BaseUFuncTest, TestCase):
             ])
 
     def test_fmod_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.fmod, flags=flags)
+        self.basic_ufunc_test(np.fmod, flags=flags,
+            additional_inputs = [
+                ((np.int64(-4), np.int64(10)), types.uint64)
+            ])
 
     def test_abs_ufunc(self, flags=no_pyobj_flags, ufunc=np.abs):
         self.basic_ufunc_test(ufunc, flags=flags,
