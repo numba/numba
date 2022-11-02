@@ -1368,7 +1368,8 @@ class Interpreter(object):
         # Interpret loop
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
-        self._end_try_blocks()
+        if PYVERSION == (3, 11):
+            self._end_try_blocks()
         self._legalize_exception_vars()
         # Prepare FunctionIR
         func_ir = ir.FunctionIR(self.blocks, self.is_generator, self.func_id,
@@ -1402,6 +1403,7 @@ class Interpreter(object):
         return func_ir
 
     def _end_try_blocks(self):
+        assert PYVERSION == (3, 11)
         graph = self.cfa.graph
         for offset, block in self.blocks.items():
             cur_bs = inc_bs = self.dfa.infos[offset].blockstack
