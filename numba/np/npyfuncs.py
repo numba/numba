@@ -877,7 +877,11 @@ def np_real_cos_impl(context, builder, sig, args):
 
 def np_complex_cos_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
-    return cmathimpl.cos_impl(context, builder, sig, args)
+
+    def impl(z):
+        return cmath.cos(z)
+
+    return context.compile_internal(builder, impl, sig, args)
 
 
 ########################################################################

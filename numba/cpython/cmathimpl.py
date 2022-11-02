@@ -10,6 +10,7 @@ from numba.core.imputils import Registry, impl_ret_untracked
 from numba.core import types, cgutils
 from numba.core.typing import signature
 from numba.cpython import builtins, mathimpl
+from numba.core.extending import overload, intrinsic
 
 registry = Registry('cmathimpl')
 lower = registry.lower
@@ -261,14 +262,17 @@ def sqrt_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig, res)
 
 
-@lower(cmath.cos, types.Complex)
-def cos_impl(context, builder, sig, args):
+@overload(cmath.cos, target="generic")
+def ol_cmath_cos(z):
+    if not isinstance(z, types.Complex):
+        return
+
     def cos_impl(z):
         """cmath.cos(z) = cmath.cosh(z j)"""
         return cmath.cosh(complex(-z.imag, z.real))
 
-    res = context.compile_internal(builder, cos_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig, res)
+    return cos_impl
+
 
 @lower(cmath.cosh, types.Complex)
 def cosh_impl(context, builder, sig, args):
