@@ -831,7 +831,7 @@ def _adjust_indices(length, start, end):
 
 
 @overload_method(types.UnicodeType, 'startswith')
-def unicode_startswith(s, substr, start=None, end=None):
+def unicode_startswith(s, prefix, start=None, end=None):
     if not (start is None or isinstance(start, (types.Omitted,
                                                 types.Integer,
                                                 types.NoneType))):
@@ -842,25 +842,25 @@ def unicode_startswith(s, substr, start=None, end=None):
                                             types.NoneType))):
         raise TypingError('When specified, the arg "end" must be an Integer')
 
-    if isinstance(substr, (types.Tuple, types.UniTuple)):
-        def startswith_tuple_impl(s, substr, start=None, end=None):
-            for item in substr:
+    if isinstance(prefix, (types.Tuple, types.UniTuple)):
+        def startswith_tuple_impl(s, prefix, start=None, end=None):
+            for item in prefix:
                 if s.startswith(item, start, end):
                     return True
             return False
 
         return startswith_tuple_impl
 
-    if isinstance(substr, types.UnicodeCharSeq):
-        def startswith_char_seq_impl(s, substr, start=None, end=None):
-            return s.startswith(str(substr), start, end)
+    if isinstance(prefix, types.UnicodeCharSeq):
+        def startswith_char_seq_impl(s, prefix, start=None, end=None):
+            return s.startswith(str(prefix), start, end)
 
         return startswith_char_seq_impl
 
-    if isinstance(substr, types.UnicodeType):
-        def startswith_unicode_impl(s, substr, start=None, end=None):
+    if isinstance(prefix, types.UnicodeType):
+        def startswith_unicode_impl(s, prefix, start=None, end=None):
             length = len(s)
-            sub_length = len(substr)
+            sub_length = len(prefix)
             if start is None:
                 start = 0
             if end is None:
@@ -875,7 +875,7 @@ def unicode_startswith(s, substr, start=None, end=None):
 
             s = s[start:end]
 
-            return _cmp_region(s, 0, substr, 0, sub_length) == 0
+            return _cmp_region(s, 0, prefix, 0, sub_length) == 0
 
         return startswith_unicode_impl
 

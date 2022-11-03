@@ -571,8 +571,8 @@ class TestUnicode(BaseTest):
         extra_subs = ['hellohellohello', ' ']
         for s in cpython_str + UNICODE_EXAMPLES:
             default_subs = ['', 'x', s[:-2], s[3:], s, s + s]
-            for sub_str in cpython_subs + default_subs + extra_subs:
-                self.assertEqual(pyfunc(s, sub_str), cfunc(s, sub_str))
+            for prefix in cpython_subs + default_subs + extra_subs:
+                self.assertEqual(pyfunc(s, prefix), cfunc(s, prefix))
 
     def test_startswith_with_start(self):
         pyfunc = startswith_with_start_only_usecase
@@ -586,12 +586,10 @@ class TestUnicode(BaseTest):
         extra_subs = ['hellohellohello', ' ']
         for s in cpython_str + UNICODE_EXAMPLES:
             default_subs = ['', 'x', s[:-2], s[3:], s, s + s]
-            for sub_str in cpython_subs + default_subs + extra_subs:
+            for prefix in cpython_subs + default_subs + extra_subs:
                 for start in list(range(-20, 20)) + [None]:
-                    self.assertEqual(pyfunc(s, sub_str, start),
-                                     cfunc(s, sub_str, start))
-        with self.assertRaises(TypingError):
-            cfunc('hello', 'he', 0.1)
+                    self.assertEqual(pyfunc(s, prefix, start),
+                                     cfunc(s, prefix, start))
 
     def test_startswith_with_start_end(self):
         pyfunc = startswith_with_start_end_usecase
@@ -605,13 +603,22 @@ class TestUnicode(BaseTest):
         extra_subs = ['hellohellohello', ' ']
         for s in cpython_str + UNICODE_EXAMPLES:
             default_subs = ['', 'x', s[:-2], s[3:], s, s + s]
-            for sub_str in cpython_subs + default_subs + extra_subs:
+            for prefix in cpython_subs + default_subs + extra_subs:
                 for start in list(range(-20, 20)) + [None]:
                     for end in list(range(-20, 20)) + [None]:
-                        self.assertEqual(pyfunc(s, sub_str, start, end),
-                                         cfunc(s, sub_str, start, end))
-        with self.assertRaises(TypingError):
-            cfunc('hello', 'he', 0, 0.1)
+                        self.assertEqual(pyfunc(s, prefix, start, end),
+                                         cfunc(s, prefix, start, end))
+
+    def test_startswith_exception_invalid_args(self):
+        msg_invalid_start = 'When specified, the arg "start" must be an Integer'
+        with self.assertRaisesRegex(TypingError, msg_invalid_start):
+            cfunc = njit(startswith_with_start_only_usecase)
+            cfunc("hello", "he", "invalid start")
+
+        msg_invalid_end = 'When specified, the arg "end" must be an Integer'
+        with self.assertRaisesRegex(TypingError, msg_invalid_end):
+            cfunc = njit(startswith_with_start_end_usecase)
+            cfunc("hello", "he", 0, "invalid end")
 
     def test_startswith_tuple(self):
         pyfunc = startswith_usecase
@@ -626,9 +633,9 @@ class TestUnicode(BaseTest):
         for s in cpython_str + UNICODE_EXAMPLES:
             default_subs = ['', 'x', s[:-2], s[3:], s, s + s]
             for sub_str in cpython_subs + default_subs + extra_subs:
-                tuple_subs = (sub_str, 'lo')
-                self.assertEqual(pyfunc(s, tuple_subs),
-                                 cfunc(s, tuple_subs))
+                prefix = (sub_str, 'lo')
+                self.assertEqual(pyfunc(s, prefix),
+                                 cfunc(s, prefix))
 
     def test_startswith_tuple_args(self):
         pyfunc = startswith_with_start_end_usecase
@@ -645,9 +652,9 @@ class TestUnicode(BaseTest):
             for sub_str in cpython_subs + default_subs + extra_subs:
                 for start in list(range(-20, 20)) + [None]:
                     for end in list(range(-20, 20)) + [None]:
-                        tuple_subs = (sub_str, 'lo')
-                        self.assertEqual(pyfunc(s, tuple_subs, start, end),
-                                         cfunc(s, tuple_subs, start, end))
+                        prefix = (sub_str, 'lo')
+                        self.assertEqual(pyfunc(s, prefix, start, end),
+                                         cfunc(s, prefix, start, end))
 
     def test_endswith_default(self):
         pyfunc = endswith_usecase
