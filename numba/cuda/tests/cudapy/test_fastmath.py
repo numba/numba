@@ -6,8 +6,7 @@ from math import cos, sin, tan, exp, log, log10, log2, pow, tanh
 from operator import truediv
 import numpy as np
 from numba.cuda.testing import (CUDATestCase, skip_on_cudasim,
-                                skip_unless_cc_75,
-                                skip_unless_less_cc_75)
+                                skip_unless_cc_75)
 import unittest
 
 
@@ -120,21 +119,22 @@ class TestFastMathOption(CUDATestCase):
             r[0] = tanh(x)
 
         def tanh_common_test(cc, criterion):
-            fastptx, _ = compile_ptx(tanh_kernel, (float32[::1], float32), fastmath=True, cc=cc)
-            precptx, _ = compile_ptx(tanh_kernel, (float32[::1], float32), cc=cc)
+            fastptx, _ = compile_ptx(tanh_kernel, (float32[::1], float32),
+                                     fastmath=True, cc=cc)
+            precptx, _ = compile_ptx(tanh_kernel, (float32[::1], float32),
+                                     cc=cc)
             criterion.check(self, fastptx, precptx)
 
-        tanh_common_test(cc=(7,5), criterion=FastMathCriterion(
-                fast_expected=['tanh.approx.f32 '],
-                prec_unexpected=['tanh.approx.f32 ']
-            ))
-        
+        tanh_common_test(cc=(7, 5), criterion=FastMathCriterion(
+            fast_expected=['tanh.approx.f32 '],
+            prec_unexpected=['tanh.approx.f32 ']
+        ))
+
         tanh_common_test(cc=(7, 0),
                          criterion=FastMathCriterion(
             fast_expected=['ex2.approx.ftz.f32 ',
                            'rcp.approx.ftz.f32 '],
             prec_unexpected=['tanh.approx.f32 ']))
-
 
     def test_expf(self):
         self._test_fast_math_unary(
