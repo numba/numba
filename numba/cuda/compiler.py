@@ -16,7 +16,6 @@ from numba.cuda.api import get_current_device
 class CUDAFlags(Flags):
     nvvm_options = Option(
         type=dict,
-        default=None,
         doc="NVVM options",
     )
 
