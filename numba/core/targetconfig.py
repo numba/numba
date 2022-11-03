@@ -15,7 +15,7 @@ class Option:
     """
     __slots__ = "_type", "_default", "_doc"
 
-    def __init__(self, type, *, default, doc):
+    def __init__(self, type, *, default=None, doc=None):
         """
         Parameters
         ----------
@@ -29,6 +29,7 @@ class Option:
         """
         self._type = type
         self._default = default
+        doc = doc or ""
         self._doc = doc
 
     @property
