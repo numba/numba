@@ -456,20 +456,20 @@ def array_argmin_impl_generic(arry):
 
 @overload(np.argmin)
 @overload_method(types.Array, "argmin")
-def array_argmin(arr, axis=None):
-    if isinstance(arr.dtype, (types.NPDatetime, types.NPTimedelta)):
+def array_argmin(a, axis=None):
+    if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
         flatten_impl = array_argmin_impl_datetime
-    elif isinstance(arr.dtype, types.Float):
+    elif isinstance(a.dtype, types.Float):
         flatten_impl = array_argmin_impl_float
     else:
         flatten_impl = array_argmin_impl_generic
 
     if is_nonelike(axis):
-        def array_argmin_impl(arr, axis=None):
-            return flatten_impl(arr)
+        def array_argmin_impl(a, axis=None):
+            return flatten_impl(a)
     else:
         array_argmin_impl = build_with_axis_impl(
-            arr, axis, flatten_impl
+            a, axis, flatten_impl
         )
     return array_argmin_impl
 
@@ -540,7 +540,7 @@ def array_argmax_impl_generic(arry):
     return max_idx
 
 
-def build_with_axis_impl(arr, axis, flatten_impl, ret_type=None):
+def build_with_axis_impl(a, axis, flatten_impl, ret_type=None):
     """
     Given a function that implements the logic for handling a flattened
     array, return the implementation function.
@@ -549,31 +549,31 @@ def build_with_axis_impl(arr, axis, flatten_impl, ret_type=None):
     if ret_type is None:
         ret_type = types.intp
 
-    tuple_buffer = tuple(range(arr.ndim))
+    tuple_buffer = tuple(range(a.ndim))
 
-    def impl(arr, axis=None):
+    def impl(a, axis=None):
         if axis < 0:
-            axis = arr.ndim + axis
+            axis = a.ndim + axis
 
-        if axis < 0 or axis >= arr.ndim:
+        if axis < 0 or axis >= a.ndim:
             raise ValueError("axis is out of bounds")
 
         # Short circuit 1-dimensional arrays:
-        if arr.ndim == 1:
-            return flatten_impl(arr)
+        if a.ndim == 1:
+            return flatten_impl(a)
 
         # Make chosen axis the last axis:
         tmp = tuple_buffer
-        for i in range(axis, arr.ndim - 1):
+        for i in range(axis, a.ndim - 1):
             tmp = tuple_setitem(tmp, i, i + 1)
-        transpose_index = tuple_setitem(tmp, arr.ndim - 1, axis)
-        transposed_arr = arr.transpose(transpose_index)
+        transpose_index = tuple_setitem(tmp, a.ndim - 1, axis)
+        transposed_arr = a.transpose(transpose_index)
 
         # Flatten along that axis; since we've transposed, we can just get
         # batches off the overall flattened array.
         m = transposed_arr.shape[-1]
         raveled = transposed_arr.ravel()
-        assert raveled.size == arr.size
+        assert raveled.size == a.size
         assert transposed_arr.size % m == 0
         out = np.empty(transposed_arr.size // m, ret_type)
         for i in range(out.size):
@@ -587,20 +587,20 @@ def build_with_axis_impl(arr, axis, flatten_impl, ret_type=None):
 
 @overload(np.argmax)
 @overload_method(types.Array, "argmax")
-def array_argmax(arr, axis=None):
-    if isinstance(arr.dtype, (types.NPDatetime, types.NPTimedelta)):
+def array_argmax(a, axis=None):
+    if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
         flatten_impl = array_argmax_impl_datetime
-    elif isinstance(arr.dtype, types.Float):
+    elif isinstance(a.dtype, types.Float):
         flatten_impl = array_argmax_impl_float
     else:
         flatten_impl = array_argmax_impl_generic
 
     if is_nonelike(axis):
-        def array_argmax_impl(arr, axis=None):
-            return flatten_impl(arr)
+        def array_argmax_impl(a, axis=None):
+            return flatten_impl(a)
     else:
         array_argmax_impl = build_with_axis_impl(
-            arr, axis, flatten_impl
+            a, axis, flatten_impl
         )
     return array_argmax_impl
 

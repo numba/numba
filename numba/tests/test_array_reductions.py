@@ -45,11 +45,23 @@ def array_sum(arr):
 def array_sum_global(arr):
     return np.sum(arr)
 
+def array_sum_axis(arr, axis):
+    return arr.sum(axis=axis)
+
+def array_sum_global_axis(arr, axis):
+    return np.sum(arr, axis)
+
 def array_prod(arr):
     return arr.prod()
 
 def array_prod_global(arr):
     return np.prod(arr)
+
+def array_prod_axis(arr, axis):
+    return arr.prod(axis=axis)
+
+def array_prod_global_axis(arr, axis):
+    return np.prod(arr, axis)
 
 def array_mean(arr):
     return arr.mean()
@@ -57,11 +69,23 @@ def array_mean(arr):
 def array_mean_global(arr):
     return np.mean(arr)
 
+def array_mean_axis(arr, axis):
+    return arr.mean(axis=axis)
+
+def array_mean_global_axis(arr, axis):
+    return np.mean(arr, axis)
+
 def array_var(arr):
     return arr.var()
 
 def array_var_global(arr):
     return np.var(arr)
+
+def array_var_axis(arr, axis):
+    return arr.var(axis=axis)
+
+def array_var_global_axis(arr, axis):
+    return np.var(arr, axis)
 
 def array_std(arr):
     return arr.std()
@@ -69,17 +93,35 @@ def array_std(arr):
 def array_std_global(arr):
     return np.std(arr)
 
+def array_std_axis(arr, axis):
+    return arr.std(axis=axis)
+
+def array_std_global_axis(arr, axis):
+    return np.std(arr, axis)
+
 def array_min(arr):
     return arr.min()
 
 def array_min_global(arr):
     return np.min(arr)
 
+def array_min_axis(arr, axis):
+    return arr.min(axis=axis)
+
+def array_min_global_axis(arr, axis):
+    return np.min(arr, axis)
+
 def array_max(arr):
     return arr.max()
 
 def array_max_global(arr):
     return np.max(arr)
+
+def array_max_axis(arr, axis):
+    return arr.max(axis=axis)
+
+def array_max_global_axis(arr, axis):
+    return np.max(arr, axis)
 
 def array_argmin(arr):
     return arr.argmin()
@@ -196,28 +238,46 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def check_reduction_basic(self, pyfunc, **kwargs):
         # Basic reduction checks on 1-d float64 arrays
         cfunc = jit(nopython=True)(pyfunc)
-        def check(arr):
-            self.assertPreciseEqual(pyfunc(arr), cfunc(arr), **kwargs)
+        if "test_axis" in kwargs:
+            test_axis = kwargs.pop("test_axis")    
+        else:
+            test_axis = False
 
-        arr = np.float64([1.0, 2.0, 0.0, -0.0, 1.0, -1.5])
-        check(arr)
-        arr = np.float64([-0.0, -1.5])
-        check(arr)
-        arr = np.float64([-1.5, 2.5, 'inf'])
-        check(arr)
-        arr = np.float64([-1.5, 2.5, '-inf'])
-        check(arr)
-        arr = np.float64([-1.5, 2.5, 'inf', '-inf'])
-        check(arr)
-        arr = np.float64(['nan', -1.5, 2.5, 'nan', 3.0])
-        check(arr)
-        arr = np.float64(['nan', -1.5, 2.5, 'nan', 'inf', '-inf', 3.0])
-        check(arr)
-        arr = np.float64([5.0, 'nan', -1.5, 'nan'])
-        check(arr)
-        # Only NaNs
-        arr = np.float64(['nan', 'nan'])
-        check(arr)
+        def check(arr):
+            if test_axis:
+                for axis in range(arr.ndim):
+                    self.assertPreciseEqual(pyfunc(arr, axis), cfunc(arr, axis), **kwargs)
+            else:
+                self.assertPreciseEqual(pyfunc(arr), cfunc(arr), **kwargs)
+
+        if test_axis:
+            # Multidimensional cases
+            arr_cases = [
+                np.float64([[1.0, 2.0, 0.0], [-0.0, 1.0, -1.5]]),
+                np.float64([[-0.0, -1.5]]),
+                np.float64([[-1.5, 2.5, 'inf']]),
+                np.float64([[-1.5, 2.5, '-inf']]),
+                np.float64([[-1.5, 2.5], ['inf', '-inf']]),
+                np.float64([['nan', -1.5, 1.0], [2.5, 'nan', 3.0]]),
+                np.float64([['nan', -1.5, 2.5, 1.0], ['nan', 'inf', '-inf', 3.0]]),
+                np.float64([[5.0, 'nan'], [-1.5, 'nan']]),
+                np.float64([['nan', 'nan']])
+            ]
+        else:
+            arr_cases = [
+                np.float64([1.0, 2.0, 0.0, -0.0, 1.0, -1.5]),
+                np.float64([-0.0, -1.5]),
+                np.float64([-1.5, 2.5, 'inf']),
+                np.float64([-1.5, 2.5, '-inf']),
+                np.float64([-1.5, 2.5, 'inf', '-inf']),
+                np.float64(['nan', -1.5, 2.5, 'nan', 3.0]),
+                np.float64(['nan', -1.5, 2.5, 'nan', 'inf', '-inf', 3.0]),
+                np.float64([5.0, 'nan', -1.5, 'nan']),
+                np.float64(['nan', 'nan'])
+            ]
+
+        for arr in arr_cases:
+            check(arr)
 
     def test_all_basic(self, pyfunc=array_all):
         cfunc = jit(nopython=True)(pyfunc)
@@ -253,21 +313,27 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     def test_sum_basic(self):
         self.check_reduction_basic(array_sum)
+        self.check_reduction_basic(array_sum_axis, test_axis=True)
 
     def test_mean_basic(self):
         self.check_reduction_basic(array_mean)
+        self.check_reduction_basic(array_mean_axis, test_axis=True)
 
     def test_var_basic(self):
         self.check_reduction_basic(array_var, prec='double')
+        self.check_reduction_basic(array_var_axis, test_axis=True, prec='double')
 
     def test_std_basic(self):
         self.check_reduction_basic(array_std)
+        self.check_reduction_basic(array_std_axis, test_axis=True)
 
     def test_min_basic(self):
         self.check_reduction_basic(array_min)
+        self.check_reduction_basic(array_min_axis, test_axis=True)
 
     def test_max_basic(self):
         self.check_reduction_basic(array_max)
+        self.check_reduction_basic(array_max_axis, test_axis=True)
 
     def test_argmin_basic(self):
         self.check_reduction_basic(array_argmin)
