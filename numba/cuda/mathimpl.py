@@ -251,12 +251,8 @@ impl_ldexp(types.float64, libdevice.ldexp)
 def impl_tanh(ty, libfunc):
     def lower_tanh_impl(context, builder, sig, args):
         def get_compute_capability():
-            cstk = targetconfig.ConfigStack()
-            if cstk:
-                flags = cstk.top()
-                return flags.compute_capability
-            else:
-                return None
+            flags = targetconfig.ConfigStack().top()
+            return flags.compute_capability
 
         def tanh_impl_libdevice():
             tanh_sig = typing.signature(ty, ty)
