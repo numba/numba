@@ -33,6 +33,8 @@ Limitations
 
 #. AOT compilation only allows for regular functions, not :term:`ufuncs <ufunc>`.
 
+#. Compilation of recursive functions is unsupported.
+
 #. You have to specify function signatures explicitly.
 
 #. Each exported function can have only one signature (but you can export
