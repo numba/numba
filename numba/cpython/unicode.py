@@ -1662,10 +1662,13 @@ def unicode_getitem(s, idx):
                 idx = normalize_str_idx(idx, len(s))
                 cp = _get_code_point(s, idx)
                 kind = _codepoint_to_kind(cp)
-                is_ascii = _codepoint_is_ascii(cp)
-                ret = _empty_string(kind, 1, is_ascii)
-                _set_code_point(ret, 0, cp)
-                return ret
+                if kind == s._kind:
+                    return _get_str_slice_view(s, idx, 1)
+                else:
+                    is_ascii = _codepoint_is_ascii(cp)
+                    ret = _empty_string(kind, 1, is_ascii)
+                    _set_code_point(ret, 0, cp)
+                    return ret
             return getitem_char
         elif isinstance(idx, types.SliceType):
             def getitem_slice(s, idx):
