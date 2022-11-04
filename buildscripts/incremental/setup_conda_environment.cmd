@@ -25,7 +25,7 @@ conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip scipy j
 
 call activate %CONDA_ENV%
 @rem Install latest unittest-xml-reporting
-%CONDA_INSTALL% -c conda-forge unittest-xml-reporting
+%CONDA_INSTALL% conda-forge::unittest-xml-reporting
 @rem Install latest llvmlite build
 %CONDA_INSTALL% -c numba/label/dev llvmlite=0.40
 @rem Install required backports for older Pythons
