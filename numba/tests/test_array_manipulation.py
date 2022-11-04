@@ -630,27 +630,36 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         self.assertIn("squeeze", str(raises.exception))
 
     def test_add_axis(self):
+        @njit
         def np_new_axis_getitem(a, idx):
             return a[idx]
 
+        @njit
         def np_new_axis_setitem(a, idx, item):
             a[idx] = item
             return a
 
         a = np.arange(4 * 5 * 6 * 7).reshape((4, 5, 6, 7))
         idx_cases = [
+            (slice(None), np.newaxis),
             (np.newaxis, slice(None)),
-            (np.newaxis, 1, slice(None)),
+            (slice(1), np.newaxis, 1),
+            (np.newaxis, 2, slice(None)),
+            (slice(1), Ellipsis, np.newaxis, 1),
+            (1, np.newaxis, Ellipsis),
             (np.newaxis, slice(1), np.newaxis, 1),
+            (1, Ellipsis, None, np.newaxis),
             (np.newaxis, slice(1), Ellipsis, np.newaxis, 1),
+            (1, np.newaxis, np.newaxis, Ellipsis),
             (np.newaxis, 1, np.newaxis, Ellipsis),
-            (np.newaxis, np.array([1,2,1]), Ellipsis, None)
+            (slice(3), 1, np.newaxis, None),
+            (np.newaxis, 1, Ellipsis, None),
         ]
         pyfunc_getitem = np_new_axis_getitem
-        cfunc_getitem = njit(pyfunc_getitem)
+        cfunc_getitem = np_new_axis_getitem.py_func
 
         pyfunc_setitem = np_new_axis_setitem
-        cfunc_setitem = njit(pyfunc_setitem)
+        cfunc_setitem = np_new_axis_setitem.py_func
 
         for idx in idx_cases:
             expected = pyfunc_getitem(a, idx)
