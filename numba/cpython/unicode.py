@@ -2498,7 +2498,7 @@ def str_to_int(s):
 
 
 @overload(int)
-def str_to_int(s, base):
+def str_to_int_with_base(s, base):
     if isinstance(s, types.UnicodeType) and isinstance(base, types.Integer):
 
         def impl(s, base):
