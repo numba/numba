@@ -255,8 +255,7 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
 
         #exceptions leak refs
         self.disable_leak_check()
-    
-    def test_new_axis(self):
+    def test_newaxis(self):
         def np_new_axis_getitem(a, idx):
             return a[idx]
 
@@ -264,14 +263,14 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
             a[idx] = item
             return a
 
-        a = np.arange(4*5*6*7).reshape((4, 5, 6, 7))
+        a = np.arange(4 * 5 * 6 * 7).reshape((4, 5, 6, 7))
         idx_cases = [
             (np.newaxis, slice(None)),
-            (np.newaxis, np.array([1,2,1]), slice(None)),
-            (np.newaxis, slice(1), np.newaxis, np.array([1,2,1])),
-            (np.newaxis, slice(1), Ellipsis, np.newaxis, np.array([1,2,1])),
-            (np.newaxis, np.array([1,2,1]), np.newaxis, Ellipsis),
-            (np.newaxis, np.array([1,2,1]), Ellipsis, None),
+            (np.newaxis, np.array([1, 2, 1]), slice(None)),
+            (np.newaxis, slice(1), np.newaxis, np.array([1, 2, 1])),
+            (np.newaxis, slice(1), Ellipsis, np.newaxis, np.array([1, 2, 1])),
+            (np.newaxis, np.array([1, 2, 1]), np.newaxis, Ellipsis),
+            (np.newaxis, np.array([1, 2, 1]), Ellipsis, None),
         ]
         pyfunc_getitem = np_new_axis_getitem
         cfunc_getitem = njit(pyfunc_getitem)
