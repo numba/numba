@@ -343,51 +343,69 @@ class CompilationUnit(object):
         return ''
 
 
+COMPUTE_CAPABILITIES = (
+    (3, 5), (3, 7),
+    (5, 0), (5, 2), (5, 3),
+    (6, 0), (6, 1), (6, 2),
+    (7, 0), (7, 2), (7, 5),
+    (8, 0), (8, 6), (8, 7), (8, 9),
+    (9, 0)
+)
+
+# Maps CTK version -> (min supported cc, max supported cc)
+CTK_SUPPORTED = {
+    (11, 0): ((3, 5), (8, 0)),
+    (11, 1): ((3, 5), (8, 6)),
+    (11, 2): ((3, 5), (8, 6)),
+    (11, 3): ((3, 5), (8, 6)),
+    (11, 4): ((3, 5), (8, 7)),
+    (11, 5): ((3, 5), (8, 7)),
+    (11, 6): ((3, 5), (8, 7)),
+    (11, 7): ((3, 5), (8, 7)),
+    (11, 8): ((3, 5), (9, 0)),
+}
+
+
+def ccs_supported_by_ctk(ctk_version):
+    try:
+        # For supported versions, we look up the range of supported CCs
+        min_cc, max_cc = CTK_SUPPORTED[ctk_version]
+        return tuple([cc for cc in COMPUTE_CAPABILITIES
+                      if min_cc <= cc <= max_cc])
+    except KeyError:
+        # For unsupported CUDA toolkit versions, all we can do is assume all
+        # non-deprecated versions we are aware of are supported.
+        return tuple([cc for cc in COMPUTE_CAPABILITIES if cc >= (5, 3)])
+
+
 _supported_cc = None
 
 
 def get_supported_ccs():
+    # Attempt to return cached list
     global _supported_cc
-
-    if _supported_cc:
+    if _supported_cc is not None:
         return _supported_cc
 
     try:
         from numba.cuda.cudadrv.runtime import runtime
         cudart_version = runtime.get_version()
     except: # noqa: E722
-        # The CUDA Runtime may not be present
-        cudart_version = (0, 0)
-
-    ctk_ver = f"{cudart_version[0]}.{cudart_version[1]}"
-    unsupported_ver = f"CUDA Toolkit {ctk_ver} is unsupported by Numba - " \
-                      + "11.0 is the minimum required version."
-
-    # List of supported compute capability in sorted order
-    if cudart_version == (0, 0):
+        # We can't support anything if there's an error getting the runtime
+        # version (e.g. if it's not present or there's another issue)
         _supported_cc = ()
-    elif cudart_version == (11, 0):
-        _supported_cc = ((3, 5), (3, 7),
-                         (5, 0), (5, 2), (5, 3),
-                         (6, 0), (6, 1), (6, 2),
-                         (7, 0), (7, 2), (7, 5),
-                         (8, 0))
-    elif cudart_version > (11, 0):
-        _supported_cc = ((3, 5), (3, 7),
-                         (5, 0), (5, 2), (5, 3),
-                         (6, 0), (6, 1), (6, 2),
-                         (7, 0), (7, 2), (7, 5),
-                         (8, 0), (8, 6))
-    elif cudart_version > (11, 4):
-        _supported_cc = ((3, 5), (3, 7),
-                         (5, 0), (5, 2), (5, 3),
-                         (6, 0), (6, 1), (6, 2),
-                         (7, 0), (7, 2), (7, 5),
-                         (8, 0), (8, 6), (8, 7))
-    else:
+        return _supported_cc
+
+    # Ensure the minimum CTK version requirement is met
+    if cudart_version < (11, 0):
         _supported_cc = ()
+        ctk_ver = f"{cudart_version[0]}.{cudart_version[1]}"
+        unsupported_ver = (f"CUDA Toolkit {ctk_ver} is unsupported by Numba - "
+                           "11.0 is the minimum required version.")
         warnings.warn(unsupported_ver)
+        return _supported_cc
 
+    _supported_cc = ccs_supported_by_ctk(cudart_version)
     return _supported_cc
 
 
