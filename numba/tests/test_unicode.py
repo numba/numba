@@ -610,12 +610,19 @@ class TestUnicode(BaseTest):
                                          cfunc(s, prefix, start, end))
 
     def test_startswith_exception_invalid_args(self):
-        msg_invalid_start = 'When specified, the arg "start" must be an Integer'
+        msg_invalid_prefix = "The arg 'prefix' should a UniTuple of UnicodeType"
+        with self.assertRaisesRegex(TypingError, msg_invalid_prefix):
+            cfunc = njit(startswith_usecase)
+            cfunc("hello", (1, "he"))
+
+        msg_invalid_start = \
+            "When specified, the arg 'start' must be an Integer or nonelike"
         with self.assertRaisesRegex(TypingError, msg_invalid_start):
             cfunc = njit(startswith_with_start_only_usecase)
             cfunc("hello", "he", "invalid start")
 
-        msg_invalid_end = 'When specified, the arg "end" must be an Integer'
+        msg_invalid_end = \
+            "When specified, the arg 'end' must be an Integer or nonelike"
         with self.assertRaisesRegex(TypingError, msg_invalid_end):
             cfunc = njit(startswith_with_start_end_usecase)
             cfunc("hello", "he", 0, "invalid end")

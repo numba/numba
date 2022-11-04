@@ -4,6 +4,7 @@ import operator
 import numpy as np
 from llvmlite.ir import IntType, Constant
 
+from numba.core.cgutils import is_nonelike
 from numba.core.extending import (
     models,
     register_model,
@@ -832,17 +833,20 @@ def _adjust_indices(length, start, end):
 
 @overload_method(types.UnicodeType, 'startswith')
 def unicode_startswith(s, prefix, start=None, end=None):
-    if not (start is None or isinstance(start, (types.Omitted,
-                                                types.Integer,
-                                                types.NoneType))):
-        raise TypingError('When specified, the arg "start" must be an Integer')
+    if not is_nonelike(start) and not isinstance(start, types.Integer):
+        raise TypingError(
+            "When specified, the arg 'start' must be an Integer or nonelike")
 
-    if not (end is None or isinstance(end, (types.Omitted,
-                                            types.Integer,
-                                            types.NoneType))):
-        raise TypingError('When specified, the arg "end" must be an Integer')
+    if not is_nonelike(end) and not isinstance(end, types.Integer):
+        raise TypingError(
+            "When specified, the arg 'end' must be an Integer or nonelike")
 
     if isinstance(prefix, (types.Tuple, types.UniTuple)):
+        if isinstance(prefix, types.Tuple) or \
+                not isinstance(prefix.dtype, types.UnicodeType):
+            raise TypingError(
+                "The arg 'prefix' should a UniTuple of UnicodeType")
+
         def startswith_tuple_impl(s, prefix, start=None, end=None):
             for item in prefix:
                 if s.startswith(item, start, end):
@@ -859,23 +863,22 @@ def unicode_startswith(s, prefix, start=None, end=None):
 
     if isinstance(prefix, types.UnicodeType):
         def startswith_unicode_impl(s, prefix, start=None, end=None):
-            length = len(s)
-            sub_length = len(prefix)
+            length, prefix_length = len(s), len(prefix)
             if start is None:
                 start = 0
             if end is None:
                 end = length
 
             start, end = _adjust_indices(length, start, end)
-            if end - start < sub_length:
+            if end - start < prefix_length:
                 return False
 
-            if sub_length == 0:
+            if prefix_length == 0:
                 return True
 
-            s = s[start:end]
+            s_slice = s[start:end]
 
-            return _cmp_region(s, 0, prefix, 0, sub_length) == 0
+            return _cmp_region(s_slice, 0, prefix, 0, prefix_length) == 0
 
         return startswith_unicode_impl
 
