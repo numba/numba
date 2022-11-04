@@ -412,10 +412,9 @@ class TestDispatcher(CUDATestCase):
         # Check that getting the local memory per thread for all signatures
         # provides the same values as getting the shared mem per block for
         # individual signatures.
-        local_mem_f32_all = simple_lmem.get_local_mem_per_thread()
-        local_mem_f64_all = simple_lmem.get_local_mem_per_thread()
-        self.assertEqual(local_mem_f32_all[sig_f32.args], local_mem_f32)
-        self.assertEqual(local_mem_f64_all[sig_f64.args], local_mem_f64)
+        local_mem_all = simple_lmem.get_local_mem_per_thread()
+        self.assertEqual(local_mem_all[sig_f32.args], local_mem_f32)
+        self.assertEqual(local_mem_all[sig_f64.args], local_mem_f64)
 
     def test_get_local_mem_per_thread_specialized(self):
         # NOTE: A large amount of local memory must be allocated
