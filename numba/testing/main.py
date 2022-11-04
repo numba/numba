@@ -723,10 +723,34 @@ def _split_nonparallel_tests(test, sliced=slice(None)):
 
     return ptests, stests
 
+
 # A test can't run longer than 10 minutes
 _TIMEOUT = 600
 
-class ParallelTestRunner(runner.TextTestRunner):
+
+class ChunkedRunner:
+    def child_runner(self):
+        pass
+
+    def _run_inner(self, result):
+        child_runner = self.child_runner()
+
+        # Split the tests and recycle the worker process to tame memory usage.
+        chunk_size = 100
+        splitted_tests = [self._ptests[i:i + chunk_size]
+                          for i in range(0, len(self._ptests), chunk_size)]
+
+        for tests in splitted_tests:
+            with multiprocessing.Pool(self.nprocs) as pool:
+                self._run_parallel_tests(result, pool, child_runner, tests)
+
+        if not result.shouldStop:
+            stests = SerialSuite(self._stests)
+            stests.run(result)
+            return result
+
+
+class ParallelTestRunner(runner.TextTestRunner, ChunkedRunner):
     """
     A test runner which delegates the actual running to a pool of child
     processes.
@@ -742,39 +766,20 @@ class ParallelTestRunner(runner.TextTestRunner):
         self.useslice = parse_slice(useslice)
         self.runner_args = kwargs
 
-    def _run_inner(self, result):
+    def child_runner(self):
         # We hijack TextTestRunner.run()'s inner logic by passing this
         # method as if it were a test case.
-        child_runner = _MinimalRunner(self.runner_cls, self.runner_args)
+        return _MinimalRunner(self.runner_cls, self.runner_args)
 
-        # Split the tests and recycle the worker process to tame memory usage.
-        chunk_size = 100
-        splitted_tests = [self._ptests[i:i + chunk_size]
-                          for i in range(0, len(self._ptests), chunk_size)]
-
-        for tests in splitted_tests:
-            pool = multiprocessing.Pool(self.nprocs)
-            try:
-                self._run_parallel_tests(result, pool, child_runner, tests)
-            except:
-                # On exception, kill still active workers immediately
-                pool.terminate()
-                # Make sure exception is reported and not ignored
-                raise
-            else:
-                # Close the pool cleanly unless asked to early out
-                if result.shouldStop:
-                    pool.terminate()
-                    break
-                else:
-                    pool.close()
-            finally:
-                # Always join the pool (this is necessary for coverage.py)
-                pool.join()
-        if not result.shouldStop:
-            stests = SerialSuite(self._stests)
-            stests.run(result)
-            return result
+    def run(self, test):
+        self._ptests, self._stests = _split_nonparallel_tests(test,
+                                                              sliced=
+                                                              self.useslice)
+        print("Parallel: %s. Serial: %s" % (len(self._ptests),
+                                            len(self._stests)))
+        # This will call self._run_inner() on the created result object,
+        # and print out the detailed test results at the end.
+        return super(ParallelTestRunner, self).run(self._run_inner)
 
     def _run_parallel_tests(self, result, pool, child_runner, tests):
         remaining_ids = set(t.id() for t in tests)
@@ -799,21 +804,8 @@ class ParallelTestRunner(runner.TextTestRunner):
                     result.shouldStop = True
                     return
 
-    def run(self, test):
-        self._ptests, self._stests = _split_nonparallel_tests(test,
-                                                              sliced=
-                                                              self.useslice)
-        print("Parallel: %s. Serial: %s" % (len(self._ptests),
-                                            len(self._stests)))
-        # This will call self._run_inner() on the created result object,
-        # and print out the detailed test results at the end.
-        return super(ParallelTestRunner, self).run(self._run_inner)
 
-
-
-
-import xmlrunner
-class ParallelXMLTestRunner:
+class ParallelXMLTestRunner(ChunkedRunner):
     """
     A test runner which delegates the actual running to a pool of child
     processes.
@@ -826,6 +818,7 @@ class ParallelXMLTestRunner:
         self._kwargs = kwargs.copy()
 
     def run(self, test):
+        import xmlrunner
         self._ptests, self._stests = _split_nonparallel_tests(test,
                                                               sliced=self.useslice)
         print("Parallel: %s. Serial: %s" % (len(self._ptests),
@@ -833,37 +826,16 @@ class ParallelXMLTestRunner:
         runner = xmlrunner.XMLTestRunner(**self._kwargs)
         return runner.run(self._run_inner)
 
-    def _run_inner(self, result):
-        pool = multiprocessing.get_context("spawn").Pool(self.nprocs)
+    def child_runner(self):
+        import xmlrunner
+        return xmlrunner.XMLTestRunner(output="junit_reports", verbosity=0,
+                                       buffer=1)
 
-        ptests = self._ptests
-        if ptests:
-            chunk_size = (len(ptests) + self.nprocs - 1) // self.nprocs
-            splitted_tests = [ptests[i:i + chunk_size]
-                            for i in range(0, len(self._ptests), chunk_size)]
-            assert sum(map(len, splitted_tests)) == len(ptests)
-
-            for idx, status in pool.imap_unordered(xml_child_runner, enumerate(splitted_tests)):
-                if not status:
-                    case = type(f"ParallelTest{idx}", (_FailedTest,), {})
-                    ss = loader.defaultTestLoader.loadTestsFromTestCase(case)
-                    ss.run(result)
-
-        stests = SerialSuite(self._stests)
-        stests.run(result)
-        return result
+    def _run_parallel_tests(self, result, pool, child_runner, tests):
+        result.shouldStop |= child_runner.run(lambda r: SerialSuite(tests)
+                                              .run(r)).wasSuccessful()
 
 
 class _FailedTest(TestCase):
     def test_parallel_failed(self):
         self.fail("parallel test failed")
-
-
-def xml_child_runner(args):
-    idx, tests = args
-    runner = xmlrunner.XMLTestRunner(output="junit_reports", verbosity=0, buffer=1)
-    def xml_inner_runner(result):
-        SerialSuite(tests).run(result)
-    result = runner.run(xml_inner_runner)
-    return idx, result.wasSuccessful()
-

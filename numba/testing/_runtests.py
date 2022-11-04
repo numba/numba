@@ -10,6 +10,11 @@ def _main(argv, **kwds):
     # The 'main' API function is invoked in-process, and thus
     # will synthesize that name.
 
+    xmloutput = None
+    if '--xmloutput' in argv:
+        xmloutput = "junit_reports"
+        argv.remove('--xmloutput')
+
     if '--log' in argv:
         logging.basicConfig(level=logging.DEBUG)
         argv.remove('--log')
@@ -22,7 +27,7 @@ def _main(argv, **kwds):
         argv.remove('--last-failed')
         return _FailedFirstRunner(last_failed=True).main(argv, kwds)
     else:
-        return run_tests(argv, defaultTest='numba.tests',
+        return run_tests(argv, defaultTest='numba.tests', xmloutput=xmloutput,
                          **kwds).wasSuccessful()
 
 

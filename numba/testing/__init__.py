@@ -34,7 +34,7 @@ def load_testsuite(loader, dir):
 
 
 def run_tests(argv=None, defaultTest=None, topleveldir=None,
-              xmloutput="junit_reports", verbosity=1, nomultiproc=False):
+              xmloutput=None, verbosity=1, nomultiproc=False):
     """
     args
     ----

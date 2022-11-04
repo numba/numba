@@ -4,14 +4,12 @@
 name: rtd
 channels:
   - numba/label/dev
-  - conda-forge
 dependencies:
   - python=3.7
   - llvmlite=0.40
   - numpy
   - numpydoc
   - setuptools
-  - unittest-xml-reporting
   # https://stackoverflow.com/questions/67542699/readthedocs-sphinx-not-rendering-bullet-list-from-rst-fileA
   - docutils==0.16
   # The following is needed to fix RTD.
