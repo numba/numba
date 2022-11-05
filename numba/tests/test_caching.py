@@ -1383,5 +1383,58 @@ def function2(x):
         self.check_hits(fc, hits=0, misses=1)
 
 
+class TestCachingModifiedFiles4(TestCachingModifiedFilesBase):
+    # This class tests a dispatcher calling a user-defined overload which later
+    # changes.
+    source_text_file1 = """
+from numba import njit
+from file2 import function2
+@njit(cache=True)
+def foo(x):
+    return function2(x)
+"""
+    source_text_file2 = """
+from numba import njit
+from numba.core.extending import overload
+@njit()
+def function1(x):
+    return x
+
+def function2(x):
+    return x
+    
+@overload(function2)
+def f2_ovrl(x):
+
+    def f2_impl(x):
+        return x
+
+    return f2_impl
+"""
+
+    source_text_file2_alt = """
+from numba import njit
+from numba.core.extending import overload
+@njit()
+def function1(x):
+    return x + 1
+
+def function2(x):
+    return x + 1
+    
+@overload(function2)
+def f2_ovrl(x):
+
+    def f2_impl(x):
+        return x + 1
+
+    return f2_impl
+    """
+
+    def test_invalidation(self):
+        # test cache is invalidated after source file modification
+        self.execute_fc_and_change_it(inner_cached=False)
+
+
 if __name__ == '__main__':
     unittest.main()

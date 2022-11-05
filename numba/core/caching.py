@@ -17,7 +17,6 @@ import uuid
 import warnings
 import typing as pt
 
-from numba.core.typing import Signature
 from numba.misc.appdirs import AppDirs
 
 import numba
@@ -27,12 +26,14 @@ from numba.core.codegen import CodeLibrary, JITCodeLibrary
 from numba.core.compiler import CompileResult
 from numba.core import config, compiler, types
 from numba.core.serialize import dumps
+if pt.TYPE_CHECKING:
+    from numba.core.typing import Signature
 
 
 MagicTuple = pt.Tuple
 # IndexKey : sig, codege.magictuple, hashed code, hashed cells
 # the sig argument sometimes is a Signature and sometimes a tuple of types
-SignatureLike = pt.Union[Signature, pt.Tuple[types.Type, ...], str]
+SignatureLike = pt.Union["Signature", pt.Tuple[types.Type, ...], str]
 IndexKey = pt.Tuple[
     SignatureLike, MagicTuple, pt.Tuple[str, str]
 ]
@@ -823,14 +824,82 @@ def get_function_dependencies(overload: OverloadData
         sig = calltypes[call_op]
         if not isinstance(fc_ty, dep_types):
             continue
-        dispatcher = get_dispatcher(fc_ty)
-        if dispatcher is None:
-            continue
-        py_func = dispatcher.py_func
-        py_file = py_func.__code__.co_filename
-        deps[py_file] = get_source_stamp(py_file)
-        deps.update(dispatcher.cache_deps_info(sig))
+        # get every file where the function is defined
+        py_files = get_impl_filenames(fc_ty)
+        for py_file in py_files:
+            deps[py_file] = get_source_stamp(py_file)
+        # retrieve all dependencies of the function in fc_ty
+        indirect_deps = get_deps_info(fc_ty, sig)
+        deps.update()
+        deps.update()
     return deps
+
+
+def get_deps_info(fc_ty: pt.Union[types.Dispatcher, types.Function], sig
+                      ) -> pt.Dict[str, FileStamp]:
+    """
+    Retrieve dependency information for the implemention of the function
+    represented in the given function type
+    :param fc_ty:
+    :return: dictionary of filenames to FileStamp
+    """
+    py_files = None
+    if isinstance(fc_ty, types.Dispatcher):
+        dispatcher = fc_ty.dispatcher
+        deps_stamps = dispatcher.cache_deps_info(sig)
+    elif isinstance(fc_ty, types.Function):
+        if hasattr(fc_ty, "key") and hasattr(fc_ty.key[0], "_dispatcher"):
+            # TODO: explain which case is this
+            dispatcher = fc_ty.key[0]._dispatcher
+            deps_stamps = dispatcher.cache_deps_info(sig)
+        else:
+            # a type of Function with a dispatcher associated. Probably an
+            # overload
+            deps_stamps = {}
+    return deps_stamps
+
+
+def get_impl_filenames(fc_ty: pt.Union[types.Dispatcher, types.Function]
+                      ) -> pt.List[str]:
+    """
+    Return the filename where the implementation of the function
+    represented by the function type `fc_ty` is.
+    For dispatchers, this will be a single file, where the function is written.
+    For overloads, this will be one or more files, where *every* overload to
+    that function is written.
+
+    :param func: Dispatcher or FunctionType
+    :return: list of filenames
+    """
+    py_files = None
+    if isinstance(fc_ty, types.Dispatcher):
+        dispatcher = fc_ty.dispatcher
+        py_func = dispatcher.py_func
+        py_files = [py_func.__code__.co_filename]
+    elif isinstance(fc_ty, types.Function):
+        if hasattr(fc_ty, "key") and hasattr(fc_ty.key[0], "_dispatcher"):
+            # TODO: explain which case is this
+            dispatcher = fc_ty.key[0]._dispatcher
+            py_func = dispatcher.py_func
+            py_file = [py_func.__code__.co_filename]
+        else:
+            # a type of Function with a dispatcher associated. Probably an
+            # overload
+            py_files = [tmplt.get_template_info(tmplt)["filename"]
+                        for tmplt in fc_ty.templates]
+            import pathlib
+            # the base path depends on what tmplt.get_template_info is doing
+            # in this case, the filenames returned by get_template_info are
+            # relative to numba.__file__
+            basepath = os.path.dirname(os.path.dirname(numba.__file__))
+
+            def make_abs(basepath, rel_path):
+                return os.path.realpath(os.path.join(basepath, rel_path))
+
+            py_files = [make_abs(basepath, f) for f in py_files]
+    else:
+        raise TypeError
+    return py_files
 
 
 def are_filestamps_valid(filestamps: pt.Dict[str, FileStamp]) -> bool:
