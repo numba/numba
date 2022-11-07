@@ -252,26 +252,17 @@ def np_int_fmod_impl(context, builder, sig, args):
     ty = sig.args[0]  # any arg type will do, homogeneous
 
     ZERO = context.get_constant(ty, 0)
-    den_not_zero = builder.icmp_signed("!=", ZERO, den)
+    den_not_zero = builder.icmp_unsigned('!=', ZERO, den)
     bb_no_if = builder.basic_block
     with cgutils.if_unlikely(builder, den_not_zero):
         bb_if = builder.basic_block
-
-        # use the abs of the numerator and denominator
-        num_neg = builder.icmp_signed("<", num, ZERO)
-        den_neg = builder.icmp_signed("<", den, ZERO)
-        num_abs = builder.select(num_neg, builder.neg(num), num)
-        den_abs = builder.select(den_neg, builder.neg(den), den)
-        mod = builder.urem(num_abs, den_abs)
+        mod = builder.srem(num,den)
 
     result = builder.phi(ZERO.type)
     result.add_incoming(ZERO, bb_no_if)
     result.add_incoming(mod, bb_if)
 
-    # set the sign to match the numerator
-    num_gt_zero = builder.icmp_signed(">", num, ZERO)
-
-    return builder.select(num_gt_zero, result, builder.neg(result))
+    return result
 
 
 def np_real_div_impl(context, builder, sig, args):
