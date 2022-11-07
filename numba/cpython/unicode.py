@@ -835,7 +835,7 @@ def _adjust_indices(length, start, end):
 def unicode_startswith(s, prefix, start=None, end=None):
     if not is_nonelike(start) and not isinstance(start, types.Integer):
         raise TypingError(
-            "When specified, the arg 'start' must be an Integer or nonelike")
+            "When specified, the arg 'start' must be an Integer or None")
 
     if not is_nonelike(end) and not isinstance(end, types.Integer):
         raise TypingError(
