@@ -841,11 +841,8 @@ def unicode_startswith(s, prefix, start=None, end=None):
         raise TypingError(
             "When specified, the arg 'end' must be an Integer or None")
 
-    if isinstance(prefix, (types.Tuple, types.UniTuple)):
-        if isinstance(prefix, types.Tuple) or \
-                not isinstance(prefix.dtype, types.UnicodeType):
-            raise TypingError(
-                "The arg 'prefix' should a UniTuple of UnicodeType")
+    if isinstance(prefix, types.UniTuple) and \
+            isinstance(prefix.dtype, types.UnicodeType):
 
         def startswith_tuple_impl(s, prefix, start=None, end=None):
             for item in prefix:
@@ -881,6 +878,10 @@ def unicode_startswith(s, prefix, start=None, end=None):
             return _cmp_region(s_slice, 0, prefix, 0, prefix_length) == 0
 
         return startswith_unicode_impl
+
+    else:
+        raise TypingError(
+            "The arg 'prefix' should be a string or a tuple of strings")
 
 
 @overload_method(types.UnicodeType, 'endswith')
