@@ -1509,9 +1509,8 @@ def gen_operator_impl(op, impl):
 
     @overload(op)
     def _ol_set_operator(a, b):
-        if all([isinstance(typ, types.Set) for typ in (a, b)]) and \
-                (a.dtype == b.dtype):
-            return lambda a, b: _set_operator_intr(a, b)
+        check_all_set(a, b)
+        return lambda a, b: _set_operator_intr(a, b)
 
 
 for op_, op_impl in [
