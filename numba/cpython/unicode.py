@@ -855,7 +855,7 @@ def unicode_startswith(s, prefix, start=None, end=None):
 
         return startswith_tuple_impl
 
-    if isinstance(prefix, types.UnicodeCharSeq):
+    elif isinstance(prefix, types.UnicodeCharSeq):
         def startswith_char_seq_impl(s, prefix, start=None, end=None):
             return s.startswith(str(prefix), start, end)
 
