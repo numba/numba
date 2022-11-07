@@ -861,7 +861,7 @@ def unicode_startswith(s, prefix, start=None, end=None):
 
         return startswith_char_seq_impl
 
-    if isinstance(prefix, types.UnicodeType):
+    elif isinstance(prefix, types.UnicodeType):
         def startswith_unicode_impl(s, prefix, start=None, end=None):
             length, prefix_length = len(s), len(prefix)
             if start is None:
