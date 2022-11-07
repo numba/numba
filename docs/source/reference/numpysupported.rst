@@ -627,13 +627,16 @@ The following :py:class:`Generator` methods are supported:
 * :func:`numpy.random.Generator().laplace()` (*)
 * :func:`numpy.random.Generator().logistic()` (*)
 * :func:`numpy.random.Generator().lognormal()` (*)
-* :func:`numpy.random.Generator().logseries()` (Accepts float values as well as datatypes
-  that cast to floats. Array values for ``p`` are currently not supported.)
+* :func:`numpy.random.Generator().logseries()` (Accepts float values as well as
+  datatypes that cast to floats. Array values for ``p`` are currently not
+  supported.)
 * :func:`numpy.random.Generator().negative_binomial()` (*)
-* :func:`numpy.random.Generator().noncentral_chisquare()` (Accepts float values as well as datatypes
-  that cast to floats. Array values for ``dfnum`` and ``nonc`` are currently not supported.)
-* :func:`numpy.random.Generator().noncentral_f()` (Accepts float values as well as datatypes
-  that cast to floats. Array values for ``dfnum``, ``dfden`` and ``nonc`` are currently not supported.)
+* :func:`numpy.random.Generator().noncentral_chisquare()` (Accepts float values
+  as well as datatypes that cast to floats. Array values for ``dfnum`` and
+  ``nonc`` are currently not supported.)
+* :func:`numpy.random.Generator().noncentral_f()` (Accepts float values as well
+  as datatypes that cast to floats. Array values for ``dfnum``, ``dfden`` and
+  ``nonc`` are currently not supported.)
 * :func:`numpy.random.Generator().normal()` (*)
 * :func:`numpy.random.Generator().pareto()`
 * :func:`numpy.random.Generator().permutation()` (Only accepts NumPy ndarrays and integers.)

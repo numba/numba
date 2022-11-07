@@ -846,6 +846,7 @@ def NumPyRandomGeneratorType_noncentral_chisquare(inst, df, nonc, size=None):
         check_size(size)
 
         def impl(inst, df, nonc, size=None):
+            check_arg_bounds(df, nonc)
             out = np.empty(size, dtype=np.float64)
             for i in np.ndindex(size):
                 out[i] = random_noncentral_chisquare(inst.bit_generator,
@@ -881,6 +882,7 @@ def NumPyRandomGeneratorType_noncentral_f(inst, dfnum, dfden, nonc, size=None):
         check_size(size)
 
         def impl(inst, dfnum, dfden, nonc, size=None):
+            check_arg_bounds(dfnum, dfden, nonc)
             out = np.empty(size, dtype=np.float64)
             for i in np.ndindex(size):
                 out[i] = random_noncentral_f(inst.bit_generator,
@@ -895,18 +897,21 @@ def NumPyRandomGeneratorType_logseries(inst, p, size=None):
     if isinstance(size, types.Omitted):
         size = size.value
 
+    @register_jitable
+    def check_arg_bounds(p):
+        if p < 0 or p >= 1 or np.isnan(p):
+            raise ValueError("p < 0, p >= 1 or p is NaN")
+
     if is_nonelike(size):
         def impl(inst, p, size=None):
-            if p < 0 or p >= 1 or np.isnan(p):
-                raise ValueError("p < 0, p >= 1 or p is NaN")
+            check_arg_bounds(p)
             return np.int64(random_logseries(inst.bit_generator, p))
         return impl
     else:
         check_size(size)
 
         def impl(inst, p, size=None):
-            if p < 0 or p > 1 or np.isnan(p):
-                raise ValueError("p < 0, p > 1 or p is NaN")
+            check_arg_bounds(p)
             out = np.empty(size, dtype=np.int64)
             for i in np.ndindex(size):
                 out[i] = random_logseries(inst.bit_generator, p)

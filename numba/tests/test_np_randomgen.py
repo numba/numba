@@ -1076,8 +1076,26 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
 
         dist_func = lambda x, df, nonc, size:\
             x.noncentral_chisquare(df=df, nonc=nonc, size=size)
+        valid_args = [3.0, 5.0, (1,)]
         self._check_invalid_types(dist_func, ['df', 'nonc', 'size'],
-                                  [3.0, 5.0, (1,)], ['x', 'x', ('x',)])
+                                  valid_args, ['x', 'x', ('x',)])
+
+        # Test argument bounds
+        rng = np.random.default_rng()
+        valid_args = [rng] + valid_args
+        nb_dist_func = numba.njit(dist_func)
+        with self.assertRaises(ValueError) as raises:
+            curr_args = valid_args.copy()
+            # Change df to an invalid value
+            curr_args[1] = 0
+            nb_dist_func(*curr_args)
+        self.assertIn('df <= 0', str(raises.exception))
+        with self.assertRaises(ValueError) as raises:
+            curr_args = valid_args.copy()
+            # Change nonc to an invalid value
+            curr_args[2] = -1
+            nb_dist_func(*curr_args)
+        self.assertIn('nonc < 0', str(raises.exception))
 
     def test_noncentral_f(self):
         # For this test dtype argument is never used, so we pass [None] as dtype
@@ -1095,9 +1113,32 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
 
         dist_func = lambda x, dfnum, dfden, nonc, size:\
             x.noncentral_f(dfnum=dfnum, dfden=dfden, nonc=nonc, size=size)
+        valid_args = [3.0, 5.0, 3.0, (1,)]
         self._check_invalid_types(dist_func, ['dfnum', 'dfden', 'nonc', 'size'],
-                                  [3.0, 5.0, 3.0, (1,)],
-                                  ['x', 'x', 'x', ('x',)])
+                                  valid_args, ['x', 'x', 'x', ('x',)])
+
+        # Test argument bounds
+        rng = np.random.default_rng()
+        valid_args = [rng] + valid_args
+        nb_dist_func = numba.njit(dist_func)
+        with self.assertRaises(ValueError) as raises:
+            curr_args = valid_args.copy()
+            # Change dfnum to an invalid value
+            curr_args[1] = 0
+            nb_dist_func(*curr_args)
+        self.assertIn('dfnum <= 0', str(raises.exception))
+        with self.assertRaises(ValueError) as raises:
+            curr_args = valid_args.copy()
+            # Change dfden to an invalid value
+            curr_args[2] = 0
+            nb_dist_func(*curr_args)
+        self.assertIn('dfden <= 0', str(raises.exception))
+        with self.assertRaises(ValueError) as raises:
+            curr_args = valid_args.copy()
+            # Change nonc to an invalid value
+            curr_args[3] = -1
+            nb_dist_func(*curr_args)
+        self.assertIn('nonc < 0', str(raises.exception))
 
     def test_logseries(self):
         # For this test dtype argument is never used, so we pass [None] as dtype
@@ -1115,8 +1156,21 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
 
         dist_func = lambda x, p, size:\
             x.logseries(p=p, size=size)
+        valid_args = [0.3, (1,)]
         self._check_invalid_types(dist_func, ['p', 'size'],
-                                  [0.3, (1,)], ['x', ('x',)])
+                                  valid_args, ['x', ('x',)])
+
+        # Test argument bounds
+        rng = np.random.default_rng(1)
+        valid_args = [rng] + valid_args
+        nb_dist_func = numba.njit(dist_func)
+        for _p in [-0.1, 1, np.nan]:
+            with self.assertRaises(ValueError) as raises:
+                curr_args = valid_args.copy()
+                # Change p to an invalid negative, positive and nan value
+                curr_args[1] = _p
+                nb_dist_func(*curr_args)
+            self.assertIn('p < 0, p >= 1 or p is NaN', str(raises.exception))
 
 
 class TestGeneratorCaching(TestCase, SerialMixin):
