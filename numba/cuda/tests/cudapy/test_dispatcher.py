@@ -377,11 +377,11 @@ class TestDispatcher(CUDATestCase):
         self.assertIsInstance(shared_mem_per_block, int)
         self.assertEqual(shared_mem_per_block, 400)
 
-    def test_get_local_mem_per_block_unspecialized(self):
+    def test_get_local_mem_per_thread_unspecialized(self):
         # NOTE: A large amount of local memory must be allocated
         # otherwise the compiler will optimize out the call to
         # cuda.local.array and use local registers instead
-        N = 10000
+        N = 1000
 
         @cuda.jit
         def simple_lmem(ary):
@@ -412,16 +412,15 @@ class TestDispatcher(CUDATestCase):
         # Check that getting the local memory per thread for all signatures
         # provides the same values as getting the shared mem per block for
         # individual signatures.
-        sh_mem_f32_all = simple_lmem.get_local_mem_per_thread()
-        sh_mem_f64_all = simple_lmem.get_local_mem_per_thread()
-        self.assertEqual(sh_mem_f32_all[sig_f32.args], local_mem_f32)
-        self.assertEqual(sh_mem_f64_all[sig_f64.args], local_mem_f64)
+        local_mem_all = simple_lmem.get_local_mem_per_thread()
+        self.assertEqual(local_mem_all[sig_f32.args], local_mem_f32)
+        self.assertEqual(local_mem_all[sig_f64.args], local_mem_f64)
 
     def test_get_local_mem_per_thread_specialized(self):
         # NOTE: A large amount of local memory must be allocated
         # otherwise the compiler will optimize out the call to
         # cuda.local.array and use local registers instead
-        N = 10000
+        N = 1000
 
         @cuda.jit(void(float32[::1]))
         def simple_lmem(ary):
