@@ -125,6 +125,10 @@ skip_ppc64le_issue6465 = unittest.skipIf(platform.machine() == 'ppc64le',
 # https://github.com/numba/numba/issues/7822#issuecomment-1065356758
 _uname = platform.uname()
 IS_OSX_ARM64 = _uname.system == 'Darwin' and _uname.machine == 'arm64'
+skip_m1_llvm_rtdyld_failure  = unittest.skipIf(IS_OSX_ARM64,
+    "skip tests that contributes to trigger LLVM RuntimeDyLd AssertionError on "
+    "OSX arm64. (numba#8567)")
+
 skip_m1_fenv_errors = unittest.skipIf(IS_OSX_ARM64,
     "fenv.h-like functionality unreliable on OSX arm64")
 
