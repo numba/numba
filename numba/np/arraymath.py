@@ -104,7 +104,7 @@ def array_prod(a, axis=None):
                 return _array_prod_impl(a)
         else:
             array_prod_impl = build_with_axis_impl(
-                a, axis, _array_prod_impl
+                a, axis, _array_prod_impl, ret_type=dtype
             )
 
         return array_prod_impl
@@ -213,13 +213,17 @@ def array_mean(a, axis=None):
 @overload_method(types.Array, "var")
 def array_var(a, axis=None):
     if isinstance(a, types.Array):
+        dtype = as_dtype(a.dtype)
+
+        acc_init = get_accumulator(dtype, 0)
+
         @register_jitable
         def _array_var_impl(a):
             # Compute the mean
             m = a.mean()
 
             # Compute the sum of square diffs
-            ssd = 0
+            ssd = acc_init
             for v in np.nditer(a):
                 val = (v.item() - m)
                 ssd += np.real(val * np.conj(val))
@@ -230,7 +234,7 @@ def array_var(a, axis=None):
                 return _array_var_impl(a)
         else:
             array_var_impl = build_with_axis_impl(
-                a, axis, _array_var_impl
+                a, axis, _array_var_impl, ret_type=dtype
             )
 
         return array_var_impl
@@ -240,6 +244,8 @@ def array_var(a, axis=None):
 @overload_method(types.Array, "std")
 def array_std(a, axis=None):
     if isinstance(a, types.Array):
+        dtype = as_dtype(a.dtype)
+
         @register_jitable
         def _array_std_impl(a):
             return a.var() ** 0.5
@@ -249,7 +255,7 @@ def array_std(a, axis=None):
                 return _array_std_impl(a)
         else:
             array_std_impl = build_with_axis_impl(
-                a, axis, _array_std_impl
+                a, axis, _array_std_impl, ret_type=dtype
             )
 
         return array_std_impl
@@ -322,7 +328,7 @@ def npy_min(a, axis=None):
             return _impl_min(a)
     else:
         impl_min = build_with_axis_impl(
-            a, axis, _impl_min
+            a, axis, _impl_min, ret_type=as_dtype(a.dtype)
         )
 
     return impl_min
@@ -380,7 +386,7 @@ def npy_max(a, axis=None):
             return _impl_max(a)
     else:
         impl_max = build_with_axis_impl(
-            a, axis, _impl_max
+            a, axis, _impl_max, ret_type=as_dtype(a.dtype)
         )
 
     return impl_max

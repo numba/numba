@@ -315,6 +315,10 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_reduction_basic(array_sum)
         self.check_reduction_basic(array_sum_axis, test_axis=True)
 
+    def test_prod_basic(self):
+        self.check_reduction_basic(array_prod)
+        self.check_reduction_basic(array_prod_axis, test_axis=True)
+
     def test_mean_basic(self):
         self.check_reduction_basic(array_mean)
         self.check_reduction_basic(array_mean_axis, test_axis=True)
