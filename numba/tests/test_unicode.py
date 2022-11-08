@@ -2669,6 +2669,8 @@ class TestUnicodeAuxillary(BaseTest):
             self.assertEqual(pyfunc(item, base), cfunc(item, base))
 
     def test_int_invalid(self):
+        self.disable_leak_check()
+
         cfunc = njit(int_usecase)
 
         for item, base in zip(["101", "303", "a0a"], [2, 8, 16]):
