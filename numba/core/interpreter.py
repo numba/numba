@@ -2626,7 +2626,7 @@ class Interpreter(object):
 
     def op_BINARY_OP(self, inst, op, lhs, rhs, res):
         if "=" in op:
-            self._inplace_binop(op[:1], lhs, rhs, res)
+            self._inplace_binop(op[:-1], lhs, rhs, res)
         else:
             self._binop(op, lhs, rhs, res)
 
