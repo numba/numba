@@ -60,7 +60,7 @@ class AbstractDIBuilder(metaclass=abc.ABCMeta):
 
 class DummyDIBuilder(AbstractDIBuilder):
 
-    def __init__(self, module, filepath, cgctx):
+    def __init__(self, module, filepath, cgctx, directives_only):
         pass
 
     def mark_variable(self, builder, allocavalue, name, lltype, size, line,
@@ -89,12 +89,18 @@ class DIBuilder(AbstractDIBuilder):
     DBG_CU_NAME = 'llvm.dbg.cu'
     _DEBUG = False
 
-    def __init__(self, module, filepath, cgctx):
+    def __init__(self, module, filepath, cgctx, directives_only):
         self.module = module
         self.filepath = os.path.abspath(filepath)
         self.difile = self._di_file()
         self.subprograms = []
         self.cgctx = cgctx
+
+        if directives_only:
+            self.emission_kind = 'DebugDirectivesOnly'
+        else:
+            self.emission_kind = 'FullDebug'
+
         self.initialize()
 
     def initialize(self):
@@ -404,7 +410,7 @@ class DIBuilder(AbstractDIBuilder):
             'producer': 'clang (Numba)',
             'runtimeVersion': 0,
             'isOptimized': config.OPT != 0,
-            'emissionKind': 1,  # 0-NoDebug, 1-FullDebug
+            'emissionKind': ir.DIToken(self.emission_kind),
         }, is_distinct=True)
 
     def _di_subroutine_type(self, line, function, argmap):

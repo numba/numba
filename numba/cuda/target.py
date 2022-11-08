@@ -143,7 +143,7 @@ class CUDATargetContext(BaseContext):
         return itanium_mangler.mangle(name, argtypes, abi_tags=abi_tags,
                                       uid=uid)
 
-    def prepare_cuda_kernel(self, codelib, fndesc, debug,
+    def prepare_cuda_kernel(self, codelib, fndesc, debug, lineinfo,
                             nvvm_options, filename, linenum,
                             max_registers=None):
         """
@@ -174,11 +174,12 @@ class CUDATargetContext(BaseContext):
                                                 max_registers=max_registers)
         library.add_linking_library(codelib)
         wrapper = self.generate_kernel_wrapper(library, fndesc, kernel_name,
-                                               debug, filename, linenum)
+                                               debug, lineinfo, filename,
+                                               linenum)
         return library, wrapper
 
     def generate_kernel_wrapper(self, library, fndesc, kernel_name, debug,
-                                filename, linenum):
+                                lineinfo, filename, linenum):
         """
         Generate the kernel wrapper in the given ``library``.
         The function being wrapped is described by ``fndesc``.
@@ -199,10 +200,12 @@ class CUDATargetContext(BaseContext):
         wrapfn = ir.Function(wrapper_module, wrapfnty, prefixed)
         builder = ir.IRBuilder(wrapfn.append_basic_block(''))
 
-        if debug:
-            debuginfo = self.DIBuilder(
-                module=wrapper_module, filepath=filename, cgctx=self,
-            )
+        if debug or lineinfo:
+            directives_only = lineinfo and not debug
+            debuginfo = self.DIBuilder(module=wrapper_module,
+                                       filepath=filename,
+                                       cgctx=self,
+                                       directives_only=directives_only)
             debuginfo.mark_subprogram(
                 wrapfn, kernel_name, fndesc.args, argtypes, linenum,
             )
@@ -267,7 +270,7 @@ class CUDATargetContext(BaseContext):
 
         nvvm.set_cuda_kernel(wrapfn)
         library.add_ir_module(wrapper_module)
-        if debug:
+        if debug or lineinfo:
             debuginfo.finalize()
         library.finalize()
         wrapfn = library.get_function(wrapfn.name)

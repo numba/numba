@@ -82,7 +82,7 @@ class _Kernel(serialize.ReduceMixin):
 
         cres = compile_cuda(self.py_func, types.void, self.argtypes,
                             debug=self.debug,
-                            lineinfo=self.lineinfo,
+                            lineinfo=lineinfo,
                             inline=inline,
                             fastmath=fastmath,
                             nvvm_options=nvvm_options)
@@ -91,7 +91,7 @@ class _Kernel(serialize.ReduceMixin):
         filename = code.co_filename
         linenum = code.co_firstlineno
         lib, kernel = tgt_ctx.prepare_cuda_kernel(cres.library, cres.fndesc,
-                                                  debug, nvvm_options,
+                                                  debug, lineinfo, nvvm_options,
                                                   filename, linenum,
                                                   max_registers)
 
@@ -833,6 +833,7 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
             with self._compiling_counter:
 
                 debug = self.targetoptions.get('debug')
+                lineinfo = self.targetoptions.get('lineinfo')
                 inline = self.targetoptions.get('inline')
                 fastmath = self.targetoptions.get('fastmath')
 
@@ -843,6 +844,7 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
 
                 cres = compile_cuda(self.py_func, None, args,
                                     debug=debug,
+                                    lineinfo=lineinfo,
                                     inline=inline,
                                     fastmath=fastmath,
                                     nvvm_options=nvvm_options)
