@@ -2238,7 +2238,7 @@ class Stream(object):
         yield self
         self.synchronize()
 
-    def add_callback(self, callback, arg):
+    def add_callback(self, callback, arg=None):
         """
         Add a callback to a compute stream.
         The user provided function is called from a driver thread once all
@@ -2256,7 +2256,7 @@ class Stream(object):
         eventual deprecation and may be replaced in a future CUDA release.
 
         :param callback: Callback function with arguments (stream, status, arg).
-        :param arg: User data to be passed to the callback function.
+        :param arg: Optional user data to be passed to the callback function.
         """
         data = (self, callback, arg)
         _py_incref(data)

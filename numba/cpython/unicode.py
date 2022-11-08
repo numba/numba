@@ -4,6 +4,7 @@ import operator
 import numpy as np
 from llvmlite.ir import IntType, Constant
 
+from numba.core.cgutils import is_nonelike
 from numba.core.extending import (
     models,
     register_model,
@@ -813,18 +814,6 @@ def unicode_rpartition(data, sep):
     return impl
 
 
-@overload_method(types.UnicodeType, 'startswith')
-def unicode_startswith(a, b):
-    if isinstance(b, types.UnicodeType):
-        def startswith_impl(a, b):
-            return _cmp_region(a, 0, b, 0, len(b)) == 0
-        return startswith_impl
-    if isinstance(b, types.UnicodeCharSeq):
-        def startswith_impl(a, b):
-            return a.startswith(str(b))
-        return startswith_impl
-
-
 # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9342-L9354    # noqa: E501
 @register_jitable
 def _adjust_indices(length, start, end):
@@ -840,6 +829,59 @@ def _adjust_indices(length, start, end):
             start = 0
 
     return start, end
+
+
+@overload_method(types.UnicodeType, 'startswith')
+def unicode_startswith(s, prefix, start=None, end=None):
+    if not is_nonelike(start) and not isinstance(start, types.Integer):
+        raise TypingError(
+            "When specified, the arg 'start' must be an Integer or None")
+
+    if not is_nonelike(end) and not isinstance(end, types.Integer):
+        raise TypingError(
+            "When specified, the arg 'end' must be an Integer or None")
+
+    if isinstance(prefix, types.UniTuple) and \
+            isinstance(prefix.dtype, types.UnicodeType):
+
+        def startswith_tuple_impl(s, prefix, start=None, end=None):
+            for item in prefix:
+                if s.startswith(item, start, end):
+                    return True
+            return False
+
+        return startswith_tuple_impl
+
+    elif isinstance(prefix, types.UnicodeCharSeq):
+        def startswith_char_seq_impl(s, prefix, start=None, end=None):
+            return s.startswith(str(prefix), start, end)
+
+        return startswith_char_seq_impl
+
+    elif isinstance(prefix, types.UnicodeType):
+        def startswith_unicode_impl(s, prefix, start=None, end=None):
+            length, prefix_length = len(s), len(prefix)
+            if start is None:
+                start = 0
+            if end is None:
+                end = length
+
+            start, end = _adjust_indices(length, start, end)
+            if end - start < prefix_length:
+                return False
+
+            if prefix_length == 0:
+                return True
+
+            s_slice = s[start:end]
+
+            return _cmp_region(s_slice, 0, prefix, 0, prefix_length) == 0
+
+        return startswith_unicode_impl
+
+    else:
+        raise TypingError(
+            "The arg 'prefix' should be a string or a tuple of strings")
 
 
 @overload_method(types.UnicodeType, 'endswith')
@@ -1662,10 +1704,13 @@ def unicode_getitem(s, idx):
                 idx = normalize_str_idx(idx, len(s))
                 cp = _get_code_point(s, idx)
                 kind = _codepoint_to_kind(cp)
-                is_ascii = _codepoint_is_ascii(cp)
-                ret = _empty_string(kind, 1, is_ascii)
-                _set_code_point(ret, 0, cp)
-                return ret
+                if kind == s._kind:
+                    return _get_str_slice_view(s, idx, 1)
+                else:
+                    is_ascii = _codepoint_is_ascii(cp)
+                    ret = _empty_string(kind, 1, is_ascii)
+                    _set_code_point(ret, 0, cp)
+                    return ret
             return getitem_char
         elif isinstance(idx, types.SliceType):
             def getitem_slice(s, idx):
