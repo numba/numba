@@ -264,8 +264,6 @@ def compile_ptx(pyfunc, args, debug=False, lineinfo=False, device=False,
         warn(NumbaInvalidConfigWarning(msg))
 
     nvvm_options = {
-        'debug': debug,
-        'lineinfo': lineinfo,
         'fastmath': fastmath,
         'opt': 3 if opt else 0
     }

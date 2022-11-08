@@ -66,8 +66,6 @@ class _Kernel(serialize.ReduceMixin):
         self.extensions = extensions or []
 
         nvvm_options = {
-            'debug': self.debug,
-            'lineinfo': self.lineinfo,
             'fastmath': fastmath,
             'opt': 3 if opt else 0
         }
@@ -739,7 +737,6 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
                 fastmath = self.targetoptions.get('fastmath')
 
                 nvvm_options = {
-                    'debug': debug,
                     'opt': 3 if self.targetoptions.get('opt') else 0,
                     'fastmath': fastmath
                 }

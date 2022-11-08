@@ -1,10 +1,8 @@
 from llvmlite import binding as ll
 from llvmlite import ir
-from warnings import warn
 
 from numba.core import config, serialize
 from numba.core.codegen import Codegen, CodeLibrary
-from numba.core.errors import NumbaInvalidConfigWarning
 from .cudadrv import devices, driver, nvvm, runtime
 
 import ctypes
@@ -122,30 +120,10 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         arch = nvvm.get_arch_option(*cc)
         options = self._nvvm_options.copy()
         options['arch'] = arch
-        if not nvvm.NVVM().is_nvvm70:
-            # Avoid enabling debug for NVVM 3.4 as it has various issues. We
-            # need to warn the user that we're doing this if any of the
-            # functions that they're compiling have `debug=True` set, which we
-            # can determine by checking the NVVM options.
-            for lib in self.linking_libraries:
-                if lib._nvvm_options.get('debug'):
-                    msg = ("debuginfo is not generated for CUDA versions "
-                           f"< 11.2 (debug=True on function: {lib.name})")
-                    warn(NumbaInvalidConfigWarning(msg))
-            options['debug'] = False
 
         irs = self.llvm_strs
 
-        if options.get('debug', False):
-            # If we're compiling with debug, we need to compile modules with
-            # NVVM one at a time, because it does not support multiple modules
-            # with debug enabled:
-            # https://docs.nvidia.com/cuda/nvvm-ir-spec/index.html#source-level-debugging-support
-            ptxes = [nvvm.llvm_to_ptx(ir, **options) for ir in irs]
-        else:
-            # Otherwise, we compile all modules with NVVM at once because this
-            # results in better optimization than separate compilation.
-            ptxes = [nvvm.llvm_to_ptx(irs, **options)]
+        ptxes = [nvvm.llvm_to_ptx(irs, **options)]
 
         # Sometimes the result from NVVM contains trailing whitespace and
         # nulls, which we strip so that the assembly dump looks a little
@@ -284,18 +262,11 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         #
         # See also discussion on PR #890:
         # https://github.com/numba/numba/pull/890
-        #
-        # We don't adjust the linkage of functions when compiling for debug -
-        # because the device functions are in separate modules, we need them to
-        # be externally visible.
         for library in self._linking_libraries:
             for mod in library.modules:
                 for fn in mod.functions:
                     if not fn.is_declaration:
-                        if self._nvvm_options.get('debug', False):
-                            fn.linkage = 'weak_odr'
-                        else:
-                            fn.linkage = 'linkonce_odr'
+                        fn.linkage = 'linkonce_odr'
 
         self._finalized = True
 
