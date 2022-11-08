@@ -64,9 +64,11 @@ class BaseLower(object):
         # debuginfo def location
         self.defn_loc = self._compute_def_location()
 
+        directives_only = self.flags.dbg_directives_only
         self.debuginfo = dibuildercls(module=self.module,
                                       filepath=func_ir.loc.filename,
-                                      cgctx=context)
+                                      cgctx=context,
+                                      directives_only=directives_only)
 
         # Subclass initialization
         self.init()
@@ -344,7 +346,10 @@ class Lower(BaseLower):
         prevent alloca and subsequent load/store for locals) should be disabled.
         Currently, this is conditional solely on the presence of a request for
         the emission of debug information."""
-        return False if self.flags is None else self.flags.debuginfo
+        if self.flags is None:
+            return False
+
+        return self.flags.debuginfo and not self.flags.dbg_directives_only
 
     def _find_singly_assigned_variable(self):
         func_ir = self.func_ir
