@@ -1,6 +1,5 @@
 from numba.cuda.testing import skip_on_cudasim
-from numba import cuda
-from numba.core import types
+from numba import cuda, float32, int32
 from numba.cuda.testing import CUDATestCase
 import re
 import unittest
@@ -29,14 +28,29 @@ class TestCudaLineInfo(CUDATestCase):
         def foo(x):
             x[0] = 1
 
-        self._check(foo, sig=(types.int32[:],), expect=False)
+        self._check(foo, sig=(int32[:],), expect=False)
 
     def test_lineinfo_in_asm(self):
         @cuda.jit(lineinfo=True)
         def foo(x):
             x[0] = 1
 
-        self._check(foo, sig=(types.int32[:],), expect=True)
+        self._check(foo, sig=(int32[:],), expect=True)
+
+    def test_lineinfo_maintains_error_model(self):
+        sig = (float32[::1], float32[::1])
+
+        @cuda.jit(sig, lineinfo=True)
+        def divide_kernel(x, y):
+            x[0] /= y[0]
+
+        llvm = divide_kernel.inspect_llvm(sig)
+
+        # When the error model is Python, the device function returns 1 to
+        # signal an exception (e.g. divide by zero) has occurred. When the
+        # error model is the default NumPy one (as it should be when only
+        # lineinfo is enabled) the device function always returns 0.
+        self.assertNotIn('ret i32 1', llvm)
 
 
 if __name__ == '__main__':

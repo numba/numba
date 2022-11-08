@@ -190,12 +190,16 @@ def compile_cuda(pyfunc, return_type, args, debug=False, lineinfo=False,
     flags.no_compile = True
     flags.no_cpython_wrapper = True
     flags.no_cfunc_wrapper = True
+
+    # Both debug and lineinfo turn on debug information in the compiled code,
+    # but we keep them separate arguments in case we later want to overload
+    # some other behavior on the debug flag. In particular, -opt=3 is not
+    # supported with debug enabled, and enabling only lineinfo should not
+    # affect the error model.
     if debug or lineinfo:
-        # Note both debug and lineinfo turn on debug information in the
-        # compiled code, but we keep them separate arguments in case we
-        # later want to overload some other behavior on the debug flag.
-        # In particular, -opt=3 is not supported with -g.
         flags.debuginfo = True
+
+    if debug:
         flags.error_model = 'python'
     else:
         flags.error_model = 'numpy'
