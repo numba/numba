@@ -103,7 +103,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         return self._llvm_strs
 
     def get_llvm_str(self):
-        return self.llvm_strs[0]
+        return "\n\n".join(self.llvm_strs)
 
     def get_asm_str(self, cc=None):
         return self._join_ptxes(self._get_ptxes(cc=cc))
