@@ -358,6 +358,13 @@ def chr_usecase(x):
     return chr(x)
 
 
+def int_usecase(s, base):
+    if base == 10:
+        return int(s)
+    else:
+        return int(s, base)
+
+
 class BaseTest(MemoryLeakMixin, TestCase):
     def setUp(self):
         super(BaseTest, self).setUp()
@@ -427,30 +434,6 @@ UNICODE_COUNT_EXAMPLES = [
 
 
 class TestUnicode(BaseTest):
-
-    def test_unicode_to_int(self):
-        @njit
-        def uni_to_int(s, base):
-            if base == 10:
-                return int(s)
-            else:
-                return int(s, base)
-
-        s = ["1", "100_00", "00_100",
-             "0b1_1", "0B0_1_01",
-             "0o0_60", "0O00_00_015",
-             "0xaf_dE_939", "0X000_AF11"]
-        for item in s:
-            base = 10
-            if len(item) > 2:
-                if item[1] in "bB":
-                    base = 2
-                if item[1] in "oO":
-                    base = 8
-                if item[1] in "xX":
-                    base = 16
-            ret = uni_to_int(item, base)
-            self.assertEqual(int(item, base), ret)
 
     def test_literal(self, flags=no_pyobj_flags):
         pyfunc = literal_usecase
@@ -2663,6 +2646,30 @@ class TestUnicodeAuxillary(BaseTest):
         with self.assertRaises(TypingError) as raises:
             cfunc('abc')
         self.assertIn(_header_lead, str(raises.exception))
+
+    def test_int(self):
+        pyfunc = int_usecase
+        cfunc = njit(int_usecase)
+
+        # TODO: do we need to copy cpython related tests case for these?
+        s = ["1", "100_00", "00_100",
+             "0b1_1", "0B0_1_01",
+             "0o0_60", "0O00_00_015",
+             "0xaf_dE_939", "0X000_AF11"]
+        for item in s:
+            base = 10
+            if len(item) > 2:
+                if item[1] in "bB":
+                    base = 2
+                if item[1] in "oO":
+                    base = 8
+                if item[1] in "xX":
+                    base = 16
+            self.assertEqual(pyfunc(item, base), cfunc(item, base))
+
+    # TODO: add invalid test cases
+    def test_int_invalid(self):
+        ...
 
     def test_unicode_type_mro(self):
         # see issue #5635
