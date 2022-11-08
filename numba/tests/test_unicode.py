@@ -2669,7 +2669,13 @@ class TestUnicodeAuxillary(BaseTest):
 
     # TODO: add invalid test cases
     def test_int_invalid(self):
-        ...
+        msg_invalid = "str isn't an valid integer, or unmatched with base"
+        for item, base in zip(["0b9", "0o9", "A", "0xG"], [2, 8, 10, 16]):
+            print(f"{item}:{base}")
+            with self.assertRaisesRegex(ValueError, msg_invalid):
+                cfunc = njit(int_usecase)
+                ret = cfunc(item, base=base)
+                print(ret)
 
     def test_unicode_type_mro(self):
         # see issue #5635

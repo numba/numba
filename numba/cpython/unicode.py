@@ -63,7 +63,8 @@ from numba.cpython.unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,
                                            _PyUnicode_IsDigit,
                                            _PyUnicode_IsDecimalDigit)
 from numba.cpython import slicing
-
+from numba.typed import listobject
+from numba.typed.typedlist import List
 
 _py38_or_later = utils.PYVERSION >= (3, 8)
 
@@ -2463,27 +2464,34 @@ def integer_str(n):
 
 @register_jitable
 def _get_integer_with_base(s, base=10):
+    range_list = [(0, 0, 0) for i in range(0)]
+    if base == 2:
+        range_list = [(ord("0"), ord("1"), 0)]
+    elif base == 8:
+        range_list = [(ord("0"), ord("7"), 0)]
+    elif base >= 10:
+        range_list = [(ord("0"), ord("9"), 0)]
+
+    # if base == 16:
+    #     range_list.append((ord("a"), ord("f"), 10))
+    #     range_list.append((ord("A"), ord("F"), 10))
+
     num = 0
-    extra = ord("_")
-
-    range_list = [(ord("0"), ord("9"), 0)]
-    if base == 16:
-        range_list.append((ord("a"), ord("f"), 10))
-        range_list.append((ord("A"), ord("F"), 10))
-
+    underline = ord("_")
     for char in s:
         ord_char = ord(char)
-        if extra > 0 and extra == ord_char:
+        if underline == ord_char:
             continue
         else:
             meet = False
-            for lower_bound, up_bound, add in range_list:
+            for lower_bound, up_bound, extra in range_list:
                 if lower_bound <= ord_char <= up_bound:
-                    num = num * base + ord_char - lower_bound + add
+                    num = num * base + ord_char - lower_bound + extra
                     meet = True
                     break
             if not meet:
-                raise ValueError
+                raise ValueError(
+                    "str isn't an valid integer, or unmatched with base")
     return num
 
 
@@ -2503,10 +2511,19 @@ def str_to_int_with_base(s, base):
 
         def impl(s, base):
             if base == 2:
+                if not s.startswith(("0b", "0B")):
+                    raise ValueError(
+                        "str with base 2 doesn't start with '0b' or '0B'")
                 return _get_integer_with_base(s[2:], base=2)
             if base == 8:
+                if not s.startswith(("0o", "0O")):
+                    raise ValueError(
+                        "str with base 8 doesn't start with '0o' or '0O'")
                 return _get_integer_with_base(s[2:], base=8)
             if base == 16:
+                if not s.startswith(("0x", "0X")):
+                    raise ValueError(
+                        "str with base 16 doesn't start with '0x' or '0X'")
                 return _get_integer_with_base(s[2:], base=16)
 
         return impl
