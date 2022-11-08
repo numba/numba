@@ -9,7 +9,11 @@ import unittest
 from numba.cpython import unicode
 from numba.tests.support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
 from numba.core.errors import TypingError, UnsupportedError
-from numba.cpython.unicode import _MAX_UNICODE
+from numba.cpython.unicode import (
+    _MAX_UNICODE,
+    MSG_INVALID_PREFIX,
+    MSG_INVALID_NUMBER,
+)
 from numba.core.types.functions import _header_lead
 from numba.extending import overload
 
@@ -2674,11 +2678,11 @@ class TestUnicodeAuxillary(BaseTest):
         cfunc = njit(int_usecase)
 
         for item, base in zip(["101", "303", "a0a"], [2, 8, 16]):
-            with self.assertRaisesRegex(ValueError, unicode.msg_invalid_prefix):
+            with self.assertRaisesRegex(ValueError, MSG_INVALID_PREFIX):
                 cfunc(item, base)
 
         for item, base in zip(["0b9", "0o9", "A", "0xG"], [2, 8, 10, 16]):
-            with self.assertRaisesRegex(ValueError, unicode.msg_invalid_number):
+            with self.assertRaisesRegex(ValueError, MSG_INVALID_NUMBER):
                 cfunc(item, base=base)
 
     def test_unicode_type_mro(self):

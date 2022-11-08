@@ -63,8 +63,6 @@ from numba.cpython.unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,
                                            _PyUnicode_IsDigit,
                                            _PyUnicode_IsDecimalDigit)
 from numba.cpython import slicing
-from numba.typed import listobject
-from numba.typed.typedlist import List
 
 _py38_or_later = utils.PYVERSION >= (3, 8)
 
@@ -2462,8 +2460,8 @@ def integer_str(n):
         return impl
 
 
-msg_invalid_prefix = "str doesn't start with a consistent prefix"
-msg_invalid_number = "str isn't a valid integer with base"
+MSG_INVALID_PREFIX = "str doesn't start with a consistent prefix"
+MSG_INVALID_NUMBER = "str isn't a valid integer with base"
 
 
 @register_jitable
@@ -2496,7 +2494,7 @@ def _get_integer_with_base(s, base=10):
                     num = num * base + ord_char - ord("A") + 10
                     meet = True
             if not meet:
-                raise ValueError(msg_invalid_number)
+                raise ValueError(MSG_INVALID_NUMBER)
     return num
 
 
@@ -2517,15 +2515,15 @@ def str_to_int_with_base(s, base):
         def impl(s, base):
             if base == 2:
                 if not s.startswith(("0b", "0B")):
-                    raise ValueError(msg_invalid_prefix)
+                    raise ValueError(MSG_INVALID_PREFIX)
                 return _get_integer_with_base(s[2:], base=2)
             if base == 8:
                 if not s.startswith(("0o", "0O")):
-                    raise ValueError(msg_invalid_prefix)
+                    raise ValueError(MSG_INVALID_PREFIX)
                 return _get_integer_with_base(s[2:], base=8)
             if base == 16:
                 if not s.startswith(("0x", "0X")):
-                    raise ValueError(msg_invalid_prefix)
+                    raise ValueError(MSG_INVALID_PREFIX)
                 return _get_integer_with_base(s[2:], base=16)
 
         return impl
