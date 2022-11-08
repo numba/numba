@@ -5185,14 +5185,16 @@ def expand_dims(context, builder, sig, args):
     @register_jitable
     def normalize_axis(axis, ndim):
         for i in range(len(axis)):
+            # In case of negative axes, we wrap them around
             if axis[i] < 0:
                 axis = tuple_setitem(axis, i, axis[i] + ndim)
 
-            if axis[i] < 0 or axis[i] >= ndim:
+            # Check for out of bound axes
+            if axis[i] >= ndim:
                 raise IndexError("axis out of bounds")
         return axis
 
-    def _insert_value_in_tuple(_curr_tuple, ndim, axis, value):
+    def _build_shape_stride_tuples(_curr_tuple, ndim, axis, value):
         axis = to_tuple(axis)
         axis = normalize_axis(axis, ndim)
         # 1. Initialize new tuple with -1
@@ -5226,11 +5228,13 @@ def expand_dims(context, builder, sig, args):
     ndim_const = context.get_constant(types.intp, ndim)
     zero = context.get_constant(types.intp, 0)
     one = context.get_constant(types.intp, 1)
-    new_shapes = context.compile_internal(builder, _insert_value_in_tuple,
+    new_shapes = context.compile_internal(builder,
+                                          _build_shape_stride_tuples,
                                           temp_sig,
                                           (arr.shape, ndim_const,
                                            args[1], one))
-    new_strides = context.compile_internal(builder, _insert_value_in_tuple,
+    new_strides = context.compile_internal(builder,
+                                           _build_shape_stride_tuples,
                                            temp_sig,
                                            (arr.strides, ndim_const,
                                             args[1], zero))
