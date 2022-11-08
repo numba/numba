@@ -4,6 +4,7 @@ from llvmlite import ir
 
 from numba.core import typing, types, debuginfo, itanium_mangler, cgutils
 from numba.core.dispatcher import Dispatcher
+from numba.core.errors import NumbaInvalidConfigWarning
 from numba.core.utils import cached_property
 from numba.core.base import BaseContext
 from numba.core.callconv import MinimalCallConv
@@ -12,6 +13,7 @@ from numba.core.typing import cmathdecl
 from .cudadrv import nvvm
 from numba.cuda import codegen, nvvmutils
 
+from warnings import warn
 
 # -----------------------------------------------------------------------------
 # Typing
@@ -73,7 +75,9 @@ class CUDATargetContext(BaseContext):
         if nvvm.NVVM().is_nvvm70:
             return debuginfo.DIBuilder
         else:
-            return debuginfo.NvvmDIBuilder
+            msg = "debuginfo is not generated for CUDA toolkits < 11.2"
+            warn(NumbaInvalidConfigWarning(msg))
+            return debuginfo.DummyDIBuilder
 
     @property
     def enable_boundscheck(self):

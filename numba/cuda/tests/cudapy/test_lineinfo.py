@@ -1,6 +1,7 @@
 from numba.cuda.testing import skip_on_cudasim
 from numba import cuda, float32, int32
 from numba.cuda.testing import CUDATestCase
+from numba.cuda.cudadrv.nvvm import NVVM
 import re
 import unittest
 
@@ -31,6 +32,9 @@ class TestCudaLineInfo(CUDATestCase):
         self._check(foo, sig=(int32[:],), expect=False)
 
     def test_lineinfo_in_asm(self):
+        if not NVVM().is_nvvm70:
+            self.skipTest("debuginfo not generated for NVVM 3.4")
+
         @cuda.jit(lineinfo=True)
         def foo(x):
             x[0] = 1

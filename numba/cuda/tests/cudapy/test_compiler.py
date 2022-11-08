@@ -103,6 +103,9 @@ class TestCompileToPTX(unittest.TestCase):
         self.assertRegex(ptx, '\\.file.*test_compiler.py"')
 
     def test_device_function_with_line_info(self):
+        if not NVVM().is_nvvm70:
+            self.skipTest('lineinfo not generated for NVVM 3.4')
+
         def f():
             pass
 
@@ -110,6 +113,9 @@ class TestCompileToPTX(unittest.TestCase):
         self.check_line_info(ptx)
 
     def test_kernel_with_line_info(self):
+        if not NVVM().is_nvvm70:
+            self.skipTest('lineinfo not generated for NVVM 3.4')
+
         def f():
             pass
 
