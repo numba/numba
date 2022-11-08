@@ -391,6 +391,8 @@ Reductions
 The following reduction functions are supported:
 
 * :func:`numpy.diff` (only the 2 first arguments)
+* :func:`numpy.amin` (only the first argument, also aliased as np.min)
+* :func:`numpy.amax` (only the first argument, also aliased as np.max)
 * :func:`numpy.median` (only the first argument)
 * :func:`numpy.nancumprod` (only the first argument)
 * :func:`numpy.nancumsum` (only the first argument)
@@ -479,6 +481,7 @@ The following top-level functions are supported:
 * :func:`numpy.histogram` (only the 3 first arguments)
 * :func:`numpy.hstack`
 * :func:`numpy.identity`
+* :func:`numpy.isclose`
 * :func:`numpy.kaiser`
 * :func:`numpy.iscomplex`
 * :func:`numpy.iscomplexobj`

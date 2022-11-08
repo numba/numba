@@ -1,3 +1,23 @@
+Version 0.56.4 (3 November, 2022)
+---------------------------------
+
+This is a bugfix release to fix a regression in the CUDA target in relation to
+the ``.view()`` method on CUDA device arrays that is present when using NumPy
+version 1.23.0 or later.
+
+Pull-Requests:
+
+* PR `#8537 <https://github.com/numba/numba/pull/8537>`_: Make ol_compatible_view accessible on all targets (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#8552 <https://github.com/numba/numba/pull/8552>`_: Update version support table for 0.56.4. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#8553 <https://github.com/numba/numba/pull/8553>`_: Update CHANGE_LOG for 0.56.4 (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#8570 <https://github.com/numba/numba/pull/8570>`_: Release 0.56 branch: Fix overloads with ``target="generic"`` for CUDA (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#8571 <https://github.com/numba/numba/pull/8571>`_: Additional update to CHANGE_LOG for 0.56.4 (`stuartarchibald <https://github.com/stuartarchibald>`_)
+
+Authors:
+
+* `gmarkall <https://github.com/gmarkall>`_
+* `stuartarchibald <https://github.com/stuartarchibald>`_
+
 Version 0.56.3 (13 October, 2022)
 ---------------------------------
 
