@@ -1436,5 +1436,101 @@ def f2_ovrl(x):
         self.execute_fc_and_change_it(inner_cached=False)
 
 
+class TestCachingModifiedFiles5(TestCachingModifiedFilesBase):
+    # This class tests a user-defined overload calling a  dispatcher which later
+    # changes.
+    source_text_file1 = """
+from numba.core.extending import overload
+from numba import njit
+from file2 import function2
+
+def bar(x):
+    raise NotImplementedError
+    
+@overload(bar)
+def ovrl_bar(x):
+
+    def impl_bar(x):
+        return function2(x)
+        
+    return impl_bar
+    
+@njit(cache=True)
+def foo(x):
+    return bar(x)
+"""
+    source_text_file2 = """
+from numba import njit
+@njit()
+def function1(x):
+    return x
+@njit()
+def function2(x):
+    return x
+    """
+
+    source_text_file2_alt = """
+from numba import njit
+@njit()
+def function1(x):
+    return x + 1
+@njit()
+def function2(x):
+    return x + 1
+        """
+
+    def test_invalidation(self):
+        # test cache is invalidated after source file modification
+        self.execute_fc_and_change_it(inner_cached=False)
+
+
+class TestCachingModifiedFiles6(TestCachingModifiedFilesBase):
+    # This class tests a user-defined overload calling a  dispatcher which later
+    # changes.
+    source_text_file1 = """
+from numba.core.extending import overload
+from numba import njit
+from file2 import function2
+
+def bar(x):
+    raise NotImplementedError
+
+@overload(bar)
+def ovrl_bar(x):
+
+    def impl_bar(x):
+        return function2(x)
+
+    return impl_bar
+
+@njit(cache=True)
+def foo(x):
+    return bar(x)
+"""
+    source_text_file2 = """
+from numba import njit
+@njit()
+def function1(x):
+    return x
+@njit(cache=True)
+def function2(x):
+    return x
+    """
+
+    source_text_file2_alt = """
+from numba import njit
+@njit()
+def function1(x):
+    return x + 1
+@njit(cache=True)
+def function2(x):
+    return x + 1
+        """
+
+    def test_invalidation(self):
+        # test cache is invalidated after source file modification
+        self.execute_fc_and_change_it(inner_cached=True)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -830,8 +830,7 @@ def get_function_dependencies(overload: OverloadData
             deps[py_file] = get_source_stamp(py_file)
         # retrieve all dependencies of the function in fc_ty
         indirect_deps = get_deps_info(fc_ty, sig)
-        deps.update()
-        deps.update()
+        deps.update(indirect_deps)
     return deps
 
 
@@ -855,7 +854,12 @@ def get_deps_info(fc_ty: pt.Union[types.Dispatcher, types.Function], sig
         else:
             # a type of Function with a dispatcher associated. Probably an
             # overload
-            deps_stamps = {}
+            # If the template does not have `get_cache_deps_info` it might be
+            # a generated class for a global value in Registry.register_global
+            deps_stamps = [tmplt.get_cache_deps_info(tmplt, sig)
+                           for tmplt in fc_ty.templates
+                           if hasattr(tmplt, 'get_cache_deps_info')]
+            deps_stamps = {k: v for d in deps_stamps for k, v in d.items()}
     return deps_stamps
 
 
@@ -887,7 +891,8 @@ def get_impl_filenames(fc_ty: pt.Union[types.Dispatcher, types.Function]
             # overload
             py_files = [tmplt.get_template_info(tmplt)["filename"]
                         for tmplt in fc_ty.templates]
-            import pathlib
+            # filter `unknown` a possible return value of `get_template_info`
+            py_files = [file for file in py_files if file != "unknown"]
             # the base path depends on what tmplt.get_template_info is doing
             # in this case, the filenames returned by get_template_info are
             # relative to numba.__file__

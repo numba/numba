@@ -13,7 +13,6 @@ from types import MethodType, FunctionType
 
 import numba
 from numba.core import types, utils, targetconfig
-from numba.core.caching import get_function_dependencies
 from numba.core.errors import (
     TypingError,
     InternalError,
@@ -388,6 +387,14 @@ class AbstractTemplate(FunctionTemplate):
         }
         return info
 
+    def get_cache_deps_info(self, sig):
+        """ default implementation
+
+        Returning an empty dictionary means that the dependencies of this
+        function will not used to determine cache invalidation. This is only
+        valid if not applied to a user-defined function
+        """
+        return {}
 
 class CallableTemplate(FunctionTemplate):
     """
@@ -886,16 +893,22 @@ class _OverloadFunctionTemplate(AbstractTemplate):
 
     @functools.lru_cache()
     def get_cache_deps_info(self, sig):
+        """ return a dictionary with information about other functions this
+        function depends on
+
+        :param sig: signature
+        :return: dictionary of filenames and file stamps
+        """
+        from numba.core.caching import get_function_dependencies
         sig_args = sig.args
-        if isinstance(self.overloads[sig_args].type_annotation, str):
-            # we assume this is because the function was loaded from cache
-            raise NotImplementedError
-            # deps = self._cache.load_cached_deps(sig_args, self.targetctx)
-        else:
-            deps = {}
-            for (_, sig, _), dispatcher in self._impl_cache.items():
-                ovrl = dispatcher.overloads[sig_args]
-                deps.update(get_function_dependencies(ovrl))
+        deps = {}
+        for (_, sig, _, _), (dispatcher, _) in self._impl_cache.items():
+            if sig != sig_args:
+                continue
+            if dispatcher is None:
+                continue
+            ovrl = dispatcher.overloads[sig_args]
+            deps.update(get_function_dependencies(ovrl))
         return deps
 
 def make_overload_template(func, overload_func, jit_options, strict,
