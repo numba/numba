@@ -10,6 +10,7 @@ from numba.core.imputils import Registry, impl_ret_untracked
 from numba.core import types, cgutils
 from numba.core.typing import signature
 from numba.cpython import builtins, mathimpl
+from numba.core.extending import overload
 
 registry = Registry('cmathimpl')
 lower = registry.lower
@@ -109,47 +110,55 @@ def intrinsic_complex_unary(inner_func):
 NAN = float('nan')
 INF = float('inf')
 
-@lower(cmath.exp, types.Complex)
-@intrinsic_complex_unary
-def exp_impl(x, y, x_is_finite, y_is_finite):
-    """cmath.exp(x + y j)"""
-    if x_is_finite:
-        if y_is_finite:
-            c = math.cos(y)
-            s = math.sin(y)
-            r = math.exp(x)
-            return complex(r * c, r * s)
+
+@overload(cmath.exp, target="generic")
+def ol_cmath_exp(z):
+    if not isinstance(z, types.Complex):
+        return
+
+    def exp_impl(z):
+        """cmath.exp(x + y j)"""
+        x, y = z.real, z.imag
+        if math.isfinite(x):
+            if math.isfinite(y):
+                c = math.cos(y)
+                s = math.sin(y)
+                r = math.exp(x)
+                return complex(r * c, r * s)
+            else:
+                return complex(NAN, NAN)
+        elif math.isnan(x):
+            if y:
+                return complex(x, x)  # nan + j nan
+            else:
+                return complex(x, y)  # nan + 0j
+        elif x > 0.0:
+            # x == +inf
+            if math.isfinite(y):
+                real = math.cos(y)
+                imag = math.sin(y)
+                # Avoid NaNs if math.cos(y) or math.sin(y) == 0
+                # (e.g. cmath.exp(inf + 0j) == inf + 0j)
+                if real != 0:
+                    real *= x
+                if imag != 0:
+                    imag *= x
+                return complex(real, imag)
+            else:
+                return complex(x, NAN)
         else:
-            return complex(NAN, NAN)
-    elif math.isnan(x):
-        if y:
-            return complex(x, x)  # nan + j nan
-        else:
-            return complex(x, y)  # nan + 0j
-    elif x > 0.0:
-        # x == +inf
-        if y_is_finite:
-            real = math.cos(y)
-            imag = math.sin(y)
-            # Avoid NaNs if math.cos(y) or math.sin(y) == 0
-            # (e.g. cmath.exp(inf + 0j) == inf + 0j)
-            if real != 0:
-                real *= x
-            if imag != 0:
-                imag *= x
-            return complex(real, imag)
-        else:
-            return complex(x, NAN)
-    else:
-        # x == -inf
-        if y_is_finite:
-            r = math.exp(x)
-            c = math.cos(y)
-            s = math.sin(y)
-            return complex(r * c, r * s)
-        else:
-            r = 0
-            return complex(r, r)
+            # x == -inf
+            if math.isfinite(y):
+                r = math.exp(x)
+                c = math.cos(y)
+                s = math.sin(y)
+                return complex(r * c, r * s)
+            else:
+                r = 0
+                return complex(r, r)
+
+    return exp_impl
+
 
 @lower(cmath.log, types.Complex)
 @intrinsic_complex_unary
