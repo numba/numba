@@ -213,7 +213,11 @@ def array_mean(a, axis=None):
 @overload_method(types.Array, "var")
 def array_var(a, axis=None):
     if isinstance(a, types.Array):
-        dtype = as_dtype(a.dtype)
+        is_number = a.dtype in types.integer_domain | frozenset([types.bool_])
+        if is_number or a.dtype in types.complex_domain:
+            dtype = as_dtype(types.float64)
+        else:
+            dtype = as_dtype(a.dtype)
 
         acc_init = get_accumulator(dtype, 0)
 
@@ -244,7 +248,11 @@ def array_var(a, axis=None):
 @overload_method(types.Array, "std")
 def array_std(a, axis=None):
     if isinstance(a, types.Array):
-        dtype = as_dtype(a.dtype)
+        is_number = a.dtype in types.integer_domain | frozenset([types.bool_])
+        if is_number or a.dtype in types.complex_domain:
+            dtype = as_dtype(types.float64)
+        else:
+            dtype = as_dtype(a.dtype)
 
         @register_jitable
         def _array_std_impl(a):
