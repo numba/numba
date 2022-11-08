@@ -5,6 +5,8 @@ from itertools import permutations
 from numba import njit
 from numba.core import types
 import unittest
+
+from numba.cpython import unicode
 from numba.tests.support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
 from numba.core.errors import TypingError, UnsupportedError
 from numba.cpython.unicode import _MAX_UNICODE
@@ -2651,7 +2653,6 @@ class TestUnicodeAuxillary(BaseTest):
         pyfunc = int_usecase
         cfunc = njit(int_usecase)
 
-        # TODO: do we need to copy cpython related tests case for these?
         s = ["1", "100_00", "00_100",
              "0b1_1", "0B0_1_01",
              "0o0_60", "0O00_00_015",
@@ -2667,15 +2668,16 @@ class TestUnicodeAuxillary(BaseTest):
                     base = 16
             self.assertEqual(pyfunc(item, base), cfunc(item, base))
 
-    # TODO: add invalid test cases
     def test_int_invalid(self):
-        msg_invalid = "str isn't an valid integer, or unmatched with base"
+        cfunc = njit(int_usecase)
+
+        for item, base in zip(["101", "303", "a0a"], [2, 8, 16]):
+            with self.assertRaisesRegex(ValueError, unicode.msg_invalid_prefix):
+                cfunc(item, base)
+
         for item, base in zip(["0b9", "0o9", "A", "0xG"], [2, 8, 10, 16]):
-            print(f"{item}:{base}")
-            with self.assertRaisesRegex(ValueError, msg_invalid):
-                cfunc = njit(int_usecase)
-                ret = cfunc(item, base=base)
-                print(ret)
+            with self.assertRaisesRegex(ValueError, unicode.msg_invalid_number):
+                cfunc(item, base=base)
 
     def test_unicode_type_mro(self):
         # see issue #5635

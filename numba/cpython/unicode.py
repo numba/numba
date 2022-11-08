@@ -2462,19 +2462,20 @@ def integer_str(n):
         return impl
 
 
+msg_invalid_prefix = "str doesn't start with a consistent prefix"
+msg_invalid_number = "str isn't a valid integer with base"
+
+
 @register_jitable
 def _get_integer_with_base(s, base=10):
-    range_list = [(0, 0, 0) for i in range(0)]
+    lower_bound = ord("0")
+    upper_bound = 0
     if base == 2:
-        range_list = [(ord("0"), ord("1"), 0)]
+        upper_bound = ord("1")
     elif base == 8:
-        range_list = [(ord("0"), ord("7"), 0)]
+        upper_bound = ord("7")
     elif base >= 10:
-        range_list = [(ord("0"), ord("9"), 0)]
-
-    # if base == 16:
-    #     range_list.append((ord("a"), ord("f"), 10))
-    #     range_list.append((ord("A"), ord("F"), 10))
+        upper_bound = ord("9")
 
     num = 0
     underline = ord("_")
@@ -2484,14 +2485,18 @@ def _get_integer_with_base(s, base=10):
             continue
         else:
             meet = False
-            for lower_bound, up_bound, extra in range_list:
-                if lower_bound <= ord_char <= up_bound:
-                    num = num * base + ord_char - lower_bound + extra
+            if lower_bound <= ord_char <= upper_bound:
+                num = num * base + ord_char - lower_bound
+                meet = True
+            if base == 16:
+                if ord("a") <= ord_char <= ord("f"):
+                    num = num * base + ord_char - ord("a") + 10
                     meet = True
-                    break
+                elif ord("A") <= ord_char <= ord("F"):
+                    num = num * base + ord_char - ord("A") + 10
+                    meet = True
             if not meet:
-                raise ValueError(
-                    "str isn't an valid integer, or unmatched with base")
+                raise ValueError(msg_invalid_number)
     return num
 
 
@@ -2512,18 +2517,15 @@ def str_to_int_with_base(s, base):
         def impl(s, base):
             if base == 2:
                 if not s.startswith(("0b", "0B")):
-                    raise ValueError(
-                        "str with base 2 doesn't start with '0b' or '0B'")
+                    raise ValueError(msg_invalid_prefix)
                 return _get_integer_with_base(s[2:], base=2)
             if base == 8:
                 if not s.startswith(("0o", "0O")):
-                    raise ValueError(
-                        "str with base 8 doesn't start with '0o' or '0O'")
+                    raise ValueError(msg_invalid_prefix)
                 return _get_integer_with_base(s[2:], base=8)
             if base == 16:
                 if not s.startswith(("0x", "0X")):
-                    raise ValueError(
-                        "str with base 16 doesn't start with '0x' or '0X'")
+                    raise ValueError(msg_invalid_prefix)
                 return _get_integer_with_base(s[2:], base=16)
 
         return impl
