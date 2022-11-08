@@ -2460,6 +2460,7 @@ def integer_str(n):
         return impl
 
 
+MSG_INVALID_BASE = "get an unsupported base, expected 2, 8, or 16"
 MSG_INVALID_PREFIX = "str doesn't start with a consistent prefix"
 MSG_INVALID_NUMBER = "str isn't a valid integer with base"
 
@@ -2525,6 +2526,8 @@ def str_to_int_with_base(s, base):
                 if not s.startswith(("0x", "0X")):
                     raise ValueError(MSG_INVALID_PREFIX)
                 return _get_integer_with_base(s[2:], base=16)
+            else:
+                raise ValueError(MSG_INVALID_BASE)
 
         return impl
 

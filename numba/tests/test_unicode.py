@@ -10,6 +10,7 @@ from numba.tests.support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
 from numba.core.errors import TypingError, UnsupportedError
 from numba.cpython.unicode import (
     _MAX_UNICODE,
+    MSG_INVALID_BASE,
     MSG_INVALID_PREFIX,
     MSG_INVALID_NUMBER,
 )
@@ -2676,9 +2677,12 @@ class TestUnicodeAuxillary(BaseTest):
 
         cfunc = njit(int_usecase)
 
+        with self.assertRaisesRegex(ValueError, MSG_INVALID_BASE):
+            cfunc("0b1", base=3)
+
         for item, base in zip(["101", "303", "a0a"], [2, 8, 16]):
             with self.assertRaisesRegex(ValueError, MSG_INVALID_PREFIX):
-                cfunc(item, base)
+                cfunc(item, base=base)
 
         for item, base in zip(["0b9", "0o9", "A", "0xG"], [2, 8, 10, 16]):
             with self.assertRaisesRegex(ValueError, MSG_INVALID_NUMBER):
