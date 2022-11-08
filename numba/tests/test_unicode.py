@@ -6,7 +6,6 @@ from numba import njit
 from numba.core import types
 import unittest
 
-from numba.cpython import unicode
 from numba.tests.support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
 from numba.core.errors import TypingError, UnsupportedError
 from numba.cpython.unicode import (
