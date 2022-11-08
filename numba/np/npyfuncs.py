@@ -5,7 +5,7 @@ Python builtins
 """
 
 
-import math
+import cmath
 
 import llvmlite.ir
 import numpy as np
