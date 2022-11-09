@@ -129,6 +129,13 @@ _GLOBAL_INT_FOR_TESTING2 = 5
 
 TestNamedTuple = namedtuple('TestNamedTuple', ('part0', 'part1'))
 
+
+def _fix_LOAD_GLOBAL_arg(arg):
+    if utils.PYVERSION >= (3, 11):
+        return arg >> 1
+    return arg
+
+
 def null_comparer(a, b):
     """
     Used with check_arq_equality to indicate that we do not care
@@ -3325,7 +3332,7 @@ class TestPrangeBase(TestParforsBase):
             # look for LOAD_GLOBALs that point to 'range'
             for instr in dis.Bytecode(pyfunc_code):
                 if instr.opname == 'LOAD_GLOBAL':
-                    if instr.arg == range_idx:
+                    if _fix_LOAD_GLOBAL_arg(instr.arg) == range_idx:
                         range_locations.append(instr.offset + 1)
             # add in 'prange' ref
             prange_names.append('prange')
@@ -3353,10 +3360,15 @@ class TestPrangeBase(TestParforsBase):
                         prange_names,
                         pyfunc_code.co_varnames,
                         pyfunc_code.co_filename,
-                        pyfunc_code.co_name,
-                        pyfunc_code.co_firstlineno,
-                        pyfunc_code.co_lnotab,
-                        pyfunc_code.co_freevars,
+                        pyfunc_code.co_name])
+
+        if utils.PYVERSION >= (3, 11):
+            co_args.append(pyfunc_code.co_qualname)
+        co_args.extend([pyfunc_code.co_firstlineno,
+                        pyfunc_code.co_lnotab])
+        if utils.PYVERSION >= (3, 11):
+            co_args.append(pyfunc_code.co_exceptiontable)
+        co_args.extend([pyfunc_code.co_freevars,
                         pyfunc_code.co_cellvars
                         ])
 
