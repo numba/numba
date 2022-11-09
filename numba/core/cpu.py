@@ -13,6 +13,10 @@ from numba.core.options import TargetOptions, include_default_options
 from numba.core.runtime import rtsys
 from numba.core.compiler_lock import global_compiler_lock
 import numba.core.entrypoints
+# Re-export these options, they are used from the cpu module throughout the code
+# base.
+from numba.core.cpu_options import (ParallelOptions, # noqa F401
+                                    FastMathOptions, InlineOptions) # noqa F401
 from numba.np import ufunc_db
 
 # Keep those structures in sync with _dynfunc.c.
