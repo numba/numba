@@ -48,6 +48,7 @@ from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                       needs_lapack, disabled_test, skip_unless_scipy,
                       needs_subprocess)
 from numba.core.extending import register_jitable
+from numba.core.bytecode import _fix_LOAD_GLOBAL_arg
 import cmath
 import unittest
 
@@ -128,12 +129,6 @@ _GLOBAL_INT_FOR_TESTING1 = 17
 _GLOBAL_INT_FOR_TESTING2 = 5
 
 TestNamedTuple = namedtuple('TestNamedTuple', ('part0', 'part1'))
-
-
-def _fix_LOAD_GLOBAL_arg(arg):
-    if utils.PYVERSION >= (3, 11):
-        return arg >> 1
-    return arg
 
 
 def null_comparer(a, b):
