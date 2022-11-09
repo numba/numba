@@ -9,6 +9,7 @@ from numba.core import (errors, types, typing, ir, funcdesc, rewrites,
 from numba.parfors.parfor import PreParforPass as _parfor_PreParforPass
 from numba.parfors.parfor import ParforPass as _parfor_ParforPass
 from numba.parfors.parfor import Parfor
+from numba.parfors.parfor_lowering import ParforLower
 
 from numba.core.compiler_machinery import (FunctionPass, LoweringPass,
                                            AnalysisPass, register_pass)
@@ -352,10 +353,10 @@ class DumpParforDiagnostics(AnalysisPass):
         return True
 
 
-@register_pass(mutates_CFG=True, analysis_only=False)
-class NativeLowering(LoweringPass):
+class BaseNativeLowering(LoweringPass):
 
-    _name = "native_lowering"
+    _name = None
+    _lowering_class = None
 
     def __init__(self):
         LoweringPass.__init__(self)
@@ -389,8 +390,8 @@ class NativeLowering(LoweringPass):
                     noalias=flags.noalias, abi_tags=[flags.get_mangle_string()])
 
             with targetctx.push_code_library(library):
-                lower = lowering.Lower(targetctx, library, fndesc, interp,
-                                       metadata=metadata)
+                lower = self._lowering_class(targetctx, library, fndesc, interp,
+                                             metadata=metadata)
                 lower.lower()
                 if not flags.no_cpython_wrapper:
                     lower.create_cpython_wrapper(flags.release_gil)
@@ -432,6 +433,20 @@ class NativeLowering(LoweringPass):
             # Save the LLVM pass timings
             metadata['llvm_pass_timings'] = library.recorded_timings
         return True
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class NativeLowering(BaseNativeLowering):
+
+    _name = "native_lowering"
+    _lowering_class = lowering.Lower
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class NativeParforLowering(BaseNativeLowering):
+
+    _name = "native_parfor_lowering"
+    _lowering_class = ParforLower
 
 
 @register_pass(mutates_CFG=False, analysis_only=True)
