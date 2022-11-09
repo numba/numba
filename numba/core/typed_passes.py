@@ -1,3 +1,4 @@
+import abc
 from contextlib import contextmanager
 from collections import defaultdict, namedtuple
 from copy import copy
@@ -353,13 +354,22 @@ class DumpParforDiagnostics(AnalysisPass):
         return True
 
 
-class BaseNativeLowering(LoweringPass):
+class BaseNativeLowering(abc.ABC, LoweringPass):
+    """The base class for a lowering pass. The lowering functionality must be
+    specified in inheriting classes by providing an appropriate lowering class
+    implementation in the overridden `lowering_class` property."""
 
     _name = None
-    _lowering_class = None
 
     def __init__(self):
         LoweringPass.__init__(self)
+
+    @property
+    @abc.abstractmethod
+    def lowering_class(self):
+        """Returns the class that performs the lowering of the IR describing the
+        function that is the target of the current compilation."""
+        pass
 
     def run_pass(self, state):
         if state.library is None:
@@ -390,8 +400,8 @@ class BaseNativeLowering(LoweringPass):
                     noalias=flags.noalias, abi_tags=[flags.get_mangle_string()])
 
             with targetctx.push_code_library(library):
-                lower = self._lowering_class(targetctx, library, fndesc, interp,
-                                             metadata=metadata)
+                lower = self.lowering_class(targetctx, library, fndesc, interp,
+                                            metadata=metadata)
                 lower.lower()
                 if not flags.no_cpython_wrapper:
                     lower.create_cpython_wrapper(flags.release_gil)
@@ -437,16 +447,24 @@ class BaseNativeLowering(LoweringPass):
 
 @register_pass(mutates_CFG=True, analysis_only=False)
 class NativeLowering(BaseNativeLowering):
-
+    """Lowering pass for a native function IR described solely in terms of
+     Numba's standard `numba.core.ir` nodes."""
     _name = "native_lowering"
-    _lowering_class = lowering.Lower
+
+    @property
+    def lowering_class(self):
+        return lowering.Lower
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)
 class NativeParforLowering(BaseNativeLowering):
-
+    """Lowering pass for a native function IR described using Numba's standard
+    `numba.core.ir` nodes and also parfor.Parfor nodes."""
     _name = "native_parfor_lowering"
-    _lowering_class = ParforLower
+
+    @property
+    def lowering_class(self):
+        return ParforLower
 
 
 @register_pass(mutates_CFG=False, analysis_only=True)

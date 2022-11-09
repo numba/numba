@@ -43,7 +43,7 @@ from numba.parfors.parfor_lowering_utils import ParforLoweringBuilder
 
 class ParforLower(lowering.Lower):
     """This is a custom lowering class that extends standard lowering so as
-    to accommodate ir.Parfor nodes."""
+    to accommodate parfor.Parfor nodes."""
 
     # custom instruction lowering to handle parfor nodes
     def lower_inst(self, inst):
