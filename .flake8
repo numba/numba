@@ -66,7 +66,6 @@ exclude =
     numba/core/registry.py
     numba/core/imputils.py
     numba/cpython/builtins.py
-    numba/core/cpu.py
     numba/misc/quicksort.py
     numba/core/callconv.py
     numba/cpython/randomimpl.py
