@@ -283,7 +283,7 @@ class _ByteCode(object):
         # Look for LOAD_GLOBALs in the bytecode
         for inst in table.values():
             if inst.opname == 'LOAD_GLOBAL':
-                name = co_names[inst.arg]
+                name = co_names[_fix_LOAD_GLOBAL_arg(inst.arg)]
                 if name not in d:
                     try:
                         value = globs[name]
