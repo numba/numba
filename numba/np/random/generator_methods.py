@@ -4,7 +4,7 @@ Implementation of method overloads for Generator objects.
 
 import numpy as np
 from numba.core import types
-from numba.core.extending import overload_method
+from numba.core.extending import overload_method, register_jitable
 from numba.np.numpy_support import as_dtype, from_dtype
 from numba.np.random.generator_core import next_float, next_double
 from numba.np.numpy_support import is_nonelike
@@ -20,7 +20,8 @@ from numba.np.random.distributions import \
      random_weibull, random_laplace, random_logistic,
      random_lognormal, random_rayleigh, random_standard_t, random_wald,
      random_geometric, random_zipf, random_triangular,
-     random_poisson, random_negative_binomial)
+     random_poisson, random_negative_binomial, random_logseries,
+     random_noncentral_chisquare, random_noncentral_f)
 from numba.np.random import random_methods
 
 
@@ -817,5 +818,102 @@ def NumPyRandomGeneratorType_negative_binomial(inst, n, p, size=None):
             out = np.empty(size, dtype=np.int64)
             for i in np.ndindex(size):
                 out[i] = random_negative_binomial(inst.bit_generator, n, p)
+            return out
+        return impl
+
+
+@overload_method(types.NumPyRandomGeneratorType, 'noncentral_chisquare')
+def NumPyRandomGeneratorType_noncentral_chisquare(inst, df, nonc, size=None):
+    check_types(df, [types.Float, types.Integer, int, float], 'df')
+    check_types(nonc, [types.Float, types.Integer, int, float], 'nonc')
+    if isinstance(size, types.Omitted):
+        size = size.value
+
+    @register_jitable
+    def check_arg_bounds(df, nonc):
+        if df <= 0:
+            raise ValueError("df <= 0")
+        if nonc < 0:
+            raise ValueError("nonc < 0")
+
+    if is_nonelike(size):
+        def impl(inst, df, nonc, size=None):
+            check_arg_bounds(df, nonc)
+            return np.float64(random_noncentral_chisquare(inst.bit_generator,
+                                                          df, nonc))
+        return impl
+    else:
+        check_size(size)
+
+        def impl(inst, df, nonc, size=None):
+            check_arg_bounds(df, nonc)
+            out = np.empty(size, dtype=np.float64)
+            for i in np.ndindex(size):
+                out[i] = random_noncentral_chisquare(inst.bit_generator,
+                                                     df, nonc)
+            return out
+        return impl
+
+
+@overload_method(types.NumPyRandomGeneratorType, 'noncentral_f')
+def NumPyRandomGeneratorType_noncentral_f(inst, dfnum, dfden, nonc, size=None):
+    check_types(dfnum, [types.Float, types.Integer, int, float], 'dfnum')
+    check_types(dfden, [types.Float, types.Integer, int, float], 'dfden')
+    check_types(nonc, [types.Float, types.Integer, int, float], 'nonc')
+    if isinstance(size, types.Omitted):
+        size = size.value
+
+    @register_jitable
+    def check_arg_bounds(dfnum, dfden, nonc):
+        if dfnum <= 0:
+            raise ValueError("dfnum <= 0")
+        if dfden <= 0:
+            raise ValueError("dfden <= 0")
+        if nonc < 0:
+            raise ValueError("nonc < 0")
+
+    if is_nonelike(size):
+        def impl(inst,  dfnum, dfden, nonc, size=None):
+            check_arg_bounds(dfnum, dfden, nonc)
+            return np.float64(random_noncentral_f(inst.bit_generator,
+                                                  dfnum, dfden, nonc))
+        return impl
+    else:
+        check_size(size)
+
+        def impl(inst, dfnum, dfden, nonc, size=None):
+            check_arg_bounds(dfnum, dfden, nonc)
+            out = np.empty(size, dtype=np.float64)
+            for i in np.ndindex(size):
+                out[i] = random_noncentral_f(inst.bit_generator,
+                                             dfnum, dfden, nonc)
+            return out
+        return impl
+
+
+@overload_method(types.NumPyRandomGeneratorType, 'logseries')
+def NumPyRandomGeneratorType_logseries(inst, p, size=None):
+    check_types(p, [types.Float, types.Integer, int, float], 'p')
+    if isinstance(size, types.Omitted):
+        size = size.value
+
+    @register_jitable
+    def check_arg_bounds(p):
+        if p < 0 or p >= 1 or np.isnan(p):
+            raise ValueError("p < 0, p >= 1 or p is NaN")
+
+    if is_nonelike(size):
+        def impl(inst, p, size=None):
+            check_arg_bounds(p)
+            return np.int64(random_logseries(inst.bit_generator, p))
+        return impl
+    else:
+        check_size(size)
+
+        def impl(inst, p, size=None):
+            check_arg_bounds(p)
+            out = np.empty(size, dtype=np.int64)
+            for i in np.ndindex(size):
+                out[i] = random_logseries(inst.bit_generator, p)
             return out
         return impl

@@ -391,6 +391,8 @@ Reductions
 The following reduction functions are supported:
 
 * :func:`numpy.diff` (only the 2 first arguments)
+* :func:`numpy.amin` (only the first argument, also aliased as np.min)
+* :func:`numpy.amax` (only the first argument, also aliased as np.max)
 * :func:`numpy.median` (only the first argument)
 * :func:`numpy.nancumprod` (only the first argument)
 * :func:`numpy.nancumsum` (only the first argument)
@@ -628,7 +630,16 @@ The following :py:class:`Generator` methods are supported:
 * :func:`numpy.random.Generator().laplace()` (*)
 * :func:`numpy.random.Generator().logistic()` (*)
 * :func:`numpy.random.Generator().lognormal()` (*)
+* :func:`numpy.random.Generator().logseries()` (Accepts float values as well as
+  data types that cast to floats. Array values for ``p`` are currently not
+  supported.)
 * :func:`numpy.random.Generator().negative_binomial()` (*)
+* :func:`numpy.random.Generator().noncentral_chisquare()` (Accepts float values
+  as well as data types that cast to floats. Array values for ``dfnum`` and
+  ``nonc`` are currently not supported.)
+* :func:`numpy.random.Generator().noncentral_f()` (Accepts float values as well
+  as data types that cast to floats. Array values for ``dfnum``, ``dfden`` and
+  ``nonc`` are currently not supported.)
 * :func:`numpy.random.Generator().normal()` (*)
 * :func:`numpy.random.Generator().pareto()`
 * :func:`numpy.random.Generator().permutation()` (Only accepts NumPy ndarrays and integers.)

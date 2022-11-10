@@ -1238,29 +1238,29 @@ Third-party modules
 Similarly to ctypes, Numba is able to call into `cffi`_-declared external
 functions, using the following C types and any derived pointer types:
 
-* :c:type:`char`
-* :c:type:`short`
-* :c:type:`int`
-* :c:type:`long`
-* :c:type:`long long`
-* :c:type:`unsigned char`
-* :c:type:`unsigned short`
-* :c:type:`unsigned int`
-* :c:type:`unsigned long`
-* :c:type:`unsigned long long`
-* :c:type:`int8_t`
-* :c:type:`uint8_t`
-* :c:type:`int16_t`
-* :c:type:`uint16_t`
-* :c:type:`int32_t`
-* :c:type:`uint32_t`
-* :c:type:`int64_t`
-* :c:type:`uint64_t`
-* :c:type:`float`
-* :c:type:`double`
-* :c:type:`ssize_t`
-* :c:type:`size_t`
-* :c:type:`void`
+* :c:expr:`char`
+* :c:expr:`short`
+* :c:expr:`int`
+* :c:expr:`long`
+* :c:expr:`long long`
+* :c:expr:`unsigned char`
+* :c:expr:`unsigned short`
+* :c:expr:`unsigned int`
+* :c:expr:`unsigned long`
+* :c:expr:`unsigned long long`
+* :c:expr:`int8_t`
+* :c:expr:`uint8_t`
+* :c:expr:`int16_t`
+* :c:expr:`uint16_t`
+* :c:expr:`int32_t`
+* :c:expr:`uint32_t`
+* :c:expr:`int64_t`
+* :c:expr:`uint64_t`
+* :c:expr:`float`
+* :c:expr:`double`
+* :c:expr:`ssize_t`
+* :c:expr:`size_t`
+* :c:expr:`void`
 
 The ``from_buffer()`` method of ``cffi.FFI`` and ``CompiledFFI`` objects is
 supported for passing Numpy arrays and other buffer-like objects.  Only
