@@ -28,12 +28,14 @@ from numba.core import config, compiler, types
 from numba.core.serialize import dumps
 if pt.TYPE_CHECKING:
     from numba.core.typing import Signature
+else:
+    Signature = pt.Any
 
 
 MagicTuple = pt.Tuple
 # IndexKey : sig, codege.magictuple, hashed code, hashed cells
 # the sig argument sometimes is a Signature and sometimes a tuple of types
-SignatureLike = pt.Union["Signature", pt.Tuple[types.Type, ...], str]
+SignatureLike = pt.Union[Signature, pt.Tuple[types.Type, ...], str]
 IndexKey = pt.Tuple[
     SignatureLike, MagicTuple, pt.Tuple[str, str]
 ]
