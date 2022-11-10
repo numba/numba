@@ -157,6 +157,11 @@ Array types
 of any of the scalar types above are supported, regardless of the shape
 or layout.
 
+.. note::
+   `NumPy MaskedArrays <https://numpy.org/doc/stable/reference/maskedarray.html>`_
+   are not supported.
+
+
 Array access
 ------------
 
