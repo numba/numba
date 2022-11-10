@@ -1,3 +1,4 @@
+from struct import Struct
 import numpy as np
 import os
 import sys
@@ -26,7 +27,7 @@ from numba import cuda
 from numba import _dispatcher
 
 from warnings import warn
-
+from ctypes import *
 
 class _Kernel(serialize.ReduceMixin):
     '''
@@ -281,6 +282,18 @@ class _Kernel(serialize.ReduceMixin):
             assert excsz == ctypes.sizeof(ctypes.c_int)
             excval = ctypes.c_int()
             excmem.memset(0, stream=stream)
+
+            class ExcInfo(Structure):
+                _fields_ = [('pickle_buf', c_void_p),
+                            ('pickle_bufsz', c_int32),
+                            ('hash_buf', c_void_p)]
+            excinfo_sz_ctype = ctypes.sizeof(ExcInfo)
+            excinfo_name = cufunc.name + "__excinfo__"
+            excinfo_mem, excinfo_sz = cufunc.module.get_global_symbol(excinfo_name)
+            assert excinfo_sz == excinfo_sz_ctype 
+            
+            excinfo_val = ExcInfo()
+
 
         # Prepare arguments
         retr = []                       # hold functors for writeback
