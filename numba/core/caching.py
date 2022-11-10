@@ -891,8 +891,12 @@ def get_impl_filenames(fc_ty: pt.Union[types.Dispatcher, types.Function]
             # overload
             py_files = [tmplt.get_template_info(tmplt)["filename"]
                         for tmplt in fc_ty.templates]
-            # filter `unknown` a possible return value of `get_template_info`
-            py_files = [file for file in py_files if file != "unknown"]
+
+            # `get_template_info` can return invalid file paths such as
+            # "unknown" or "<unknown> (built from string?)` so non-paths are
+            # filtered out
+            py_files = [file for file in py_files if os.path.isfile(file)]
+
             # the base path depends on what tmplt.get_template_info is doing
             # in this case, the filenames returned by get_template_info are
             # relative to numba.__file__
