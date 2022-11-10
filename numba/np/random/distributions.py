@@ -574,3 +574,164 @@ def random_logseries(bitgen, p):
             return 1
         else:
             return 2
+
+
+@register_jitable
+def random_binomial_btpe(bitgen, n, p):
+    r = min(p, 1.0 - p)
+    q = 1.0 - r
+    fm = n * r + r
+    m = int(fm)
+    p1 = int(2.195 * np.sqrt(n * r * q) - 4.6 * q) + 0.5
+    xm = m + 0.5
+    xl = xm - p1
+    xr = xm + p1
+    c = 0.134 + 20.5 / (15.3 + m)
+    a = (fm - xl) / (fm - xl * r)
+    laml = a * (1.0 + a / 2.0)
+    a = (xr - fm) / (xr * q)
+    lamr = a * (1.0 + a / 2.0)
+    p2 = p1 * (1.0 + 2.0 * c)
+    p3 = p2 + c / laml
+    p4 = p3 + c / lamr
+
+    case = 0
+    y = k = 0
+    while 1:
+        if case == 0:
+            nrq = n * r * q
+            u = next_double(bitgen) * p4
+            v = next_double(bitgen)
+            if (u > p1):
+                case = 1
+                continue
+            y = int(xm - p1 * v + u)
+            case = 6
+            continue
+        elif case == 1:
+            if (u > p2):
+                case = 2
+                continue
+            x = xl + (u - p1) / c
+            v = v * c + 1.0 - abs(m - x + 0.5) / p1
+            if (v > 1.0):
+                case = 0
+                continue
+            y = int(x)
+            case = 4
+            continue
+        elif case == 2:
+            if (u > p3):
+                case = 3
+                continue
+            y = int(xl + np.log(v) / laml)
+            if ((y < 0) or (v == 0.0)):
+                case = 0
+                continue
+            v = v * (u - p2) * laml
+            case = 4
+            continue
+        elif case == 3:
+            y = int(xr - np.log(v) / lamr)
+            if ((y > n) or (v == 0.0)):
+                case = 0
+                continue
+            v = v * (u - p3) * lamr
+            case = 4
+            continue
+        elif case == 4:
+            k = abs(y - m)
+            if ((k > 20) and (k < ((nrq) / 2.0 - 1))):
+                case = 5
+                continue
+            s = r / q
+            a = s * (n + 1)
+            F = 1.0
+            if (m < y):
+                for i in range(m + 1, y + 1):
+                    F = F * (a / i - s)
+            elif (m > y):
+                for i in range(m + 1, y + 1):
+                    F = F / (a / i - s)
+            if (v > F):
+                case = 0
+                continue
+            case = 6
+            continue
+        elif case == 5:
+            rho = (k / (nrq)) * \
+                  ((k * (k / 3.0 + 0.625) + 0.16666666666666666) /
+                   nrq + 0.5)
+            t = -k * k / (2 * nrq)
+            A = np.log(v)
+            if (A < (t - rho)):
+                case = 6
+                continue
+            if (A > (t + rho)):
+                case = 0
+                continue
+            x1 = y + 1
+            f1 = m + 1
+            z = n + 1 - m
+            w = n - y + 1
+            x2 = x1 * x1
+            f2 = f1 * f1
+            z2 = z * z
+            w2 = w * w
+            if (A > (xm * np.log(f1 / x1) + (n - m + 0.5) * np.log(z / w) +
+                     (y - m) * np.log(w * r / (x1 * q)) +
+                     (13680. - (462. - (132. - (99. - 140. / f2) / f2) / f2)
+                      / f2) / f1 / 166320. +
+                     (13680. - (462. - (132. - (99. - 140. / z2) / z2) / z2)
+                      / z2) / z / 166320. +
+                     (13680. - (462. - (132. - (99. - 140. / x2) / x2) / x2)
+                      / x2) / x1 / 166320. +
+                     (13680. - (462. - (132. - (99. - 140. / w2) / w2) / w2)
+                      / w2) / w / 66320.)):
+                case = 0
+                continue
+        elif case == 6:
+            if (p > 0.5):
+                y = n - y
+            return y
+
+
+@register_jitable
+def random_binomial_inversion(bitgen, n, p):
+    q = 1.0 - p
+    qn = np.exp(n * np.log(q))
+    _np = n * p
+    bound = min(n, _np + 10.0 * np.sqrt(_np * q + 1))
+
+    X = 0
+    px = qn
+    U = next_double(bitgen)
+    while (U > px):
+        X = X + 1
+        if (X > bound):
+            X = 0
+            px = qn
+            U = next_double(bitgen)
+        else:
+            U -= px
+            px = ((n - X + 1) * p * px) / (X * q)
+
+    return X
+
+
+@register_jitable
+def random_binomial(bitgen, n, p):
+    if ((n == 0) or (p == 0.0)):
+        return 0
+
+    if (p <= 0.5):
+        if (p * n <= 30.0):
+            return random_binomial_inversion(bitgen, n, p)
+        else:
+            return random_binomial_btpe(bitgen, n, p)
+    else:
+        q = 1.0 - p
+        if (q * n <= 30.0):
+            return n - random_binomial_inversion(bitgen, n, q)
+        else:
+            return n - random_binomial_btpe(bitgen, n, q)
