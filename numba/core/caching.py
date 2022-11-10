@@ -885,7 +885,7 @@ def get_impl_filenames(fc_ty: pt.Union[types.Dispatcher, types.Function]
             # TODO: explain which case is this
             dispatcher = fc_ty.key[0]._dispatcher
             py_func = dispatcher.py_func
-            py_file = [py_func.__code__.co_filename]
+            py_files = [py_func.__code__.co_filename]
         else:
             # a type of Function with a dispatcher associated. Probably an
             # overload
