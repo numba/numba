@@ -396,6 +396,7 @@ class AbstractTemplate(FunctionTemplate):
         """
         return {}
 
+
 class CallableTemplate(FunctionTemplate):
     """
     Base class for a template defining a ``generic(self)`` method
@@ -910,6 +911,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             ovrl = dispatcher.overloads[sig_args]
             deps.update(get_function_dependencies(ovrl))
         return deps
+
 
 def make_overload_template(func, overload_func, jit_options, strict,
                            inline, prefer_literal=False, **kwargs):

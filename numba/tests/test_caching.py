@@ -1402,7 +1402,7 @@ def function1(x):
 
 def function2(x):
     return x
-    
+
 @overload(function2)
 def f2_ovrl(x):
 
@@ -1421,7 +1421,7 @@ def function1(x):
 
 def function2(x):
     return x + 1
-    
+
 @overload(function2)
 def f2_ovrl(x):
 
@@ -1446,15 +1446,15 @@ from file2 import function2
 
 def bar(x):
     raise NotImplementedError
-    
+
 @overload(bar)
 def ovrl_bar(x):
 
     def impl_bar(x):
         return function2(x)
-        
+
     return impl_bar
-    
+
 @njit(cache=True)
 def foo(x):
     return bar(x)
