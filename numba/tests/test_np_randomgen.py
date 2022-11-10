@@ -1109,7 +1109,8 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         for _size, _bitgen in itertools.product(test_sizes, bitgen_types):
             with self.subTest(_size=_size, _bitgen=_bitgen):
                 self.check_numpy_parity(dist_func, _bitgen,
-                                        None, _size, None)
+                                        None, _size, None,
+                                        adjusted_ulp_prec)
 
         dist_func = lambda x, dfnum, dfden, nonc, size:\
             x.noncentral_f(dfnum=dfnum, dfden=dfden, nonc=nonc, size=size)
