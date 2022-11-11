@@ -131,6 +131,11 @@ class TestCase(unittest.TestCase):
         self.assertLess(abs(len(l2) - len(l1)), len(lAll) / 20)
         self.assertLess(len(l1), len(lAll))
         self.assertLess(len(l2), len(lAll))
+        # Test should always run
+        self.assertIn("numba.tests.test_api.TestNumbaModule.test_numba_module",
+                      l1)
+        self.assertIn("numba.tests.test_api.TestNumbaModule.test_numba_module",
+                      l2)
 
     def test_check_slicing_equivalent(self):
         def filter_test(xs):
