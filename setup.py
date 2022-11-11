@@ -161,12 +161,13 @@ def get_ext_modules():
 
     ext_dispatcher = Extension(name="numba._dispatcher",
                                sources=['numba/_dispatcher.cpp',
-                                        'numba/_typeof.c',
-                                        'numba/_hashtable.c',
+                                        'numba/_typeof.cpp',
+                                        'numba/_hashtable.cpp',
                                         'numba/core/typeconv/typeconv.cpp'],
                                depends=["numba/_pymodule.h",
                                         "numba/_typeof.h",
                                         "numba/_hashtable.h"],
+                               extra_compile_args=['-std=c++11'],
                                **np_compile_args)
 
     ext_helperlib = Extension(name="numba._helperlib",
@@ -191,6 +192,7 @@ def get_ext_modules():
                              sources=["numba/core/typeconv/typeconv.cpp",
                                       "numba/core/typeconv/_typeconv.cpp"],
                              depends=["numba/_pymodule.h"],
+                             extra_compile_args=['-std=c++11'],
                              )
 
     ext_np_ufunc = Extension(name="numba.np.ufunc._internal",
@@ -373,7 +375,7 @@ build_requires = ['numpy >={}'.format(min_numpy_build_version)]
 install_requires = [
     'llvmlite >={},<{}'.format(min_llvmlite_version, max_llvmlite_version),
     'numpy >={}'.format(min_numpy_run_version),
-    'setuptools <60',
+    'setuptools',
     'importlib_metadata; python_version < "3.9"',
 ]
 
@@ -409,8 +411,9 @@ metadata = dict(
         # numba gdb hook init command language file
         "numba.misc": ["cmdlang.gdb"],
         "numba.typed": ["py.typed"],
+        "numba.cuda" : ["cpp_function_wrappers.cu"]
     },
-    scripts=["numba/pycc/pycc", "bin/numba"],
+    scripts=["bin/numba"],
     url="https://numba.pydata.org",
     packages=packages,
     setup_requires=build_requires,

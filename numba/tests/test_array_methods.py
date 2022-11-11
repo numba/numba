@@ -365,6 +365,20 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_around_array(self):
         self.check_round_array(np_around_array)
 
+    def test_around_bad_array(self):
+        for pyfunc in (np_round_unary, np_around_unary):
+            cfunc = jit(nopython=True)(pyfunc)
+            msg = '.*The argument "a" must be array-like.*'
+            with self.assertRaisesRegex(TypingError, msg):
+                cfunc(None)
+
+    def test_around_bad_out(self):
+        for py_func in (np_round_array, np_around_array):
+            cfunc = jit(nopython=True)(py_func)
+            msg = '.*The argument "out" must be an array if it is provided.*'
+            with self.assertRaisesRegex(TypingError, msg):
+                cfunc(5, 0, out=6)
+
     def test_array_view(self):
 
         def run(arr, dtype):
@@ -383,10 +397,72 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                 run(arr, dtype)
             self.assertEqual(str(raises.exception),
                              "new type not compatible with array")
+        def check_err_noncontig_last_axis(arr, dtype):
+            # check NumPy interpreted version raises
+            msg = ("To change to a dtype of a different size, the last axis "
+                   "must be contiguous")
+            with self.assertRaises(ValueError) as raises:
+                make_array_view(dtype)(arr)
+            self.assertEqual(str(raises.exception), msg)
+            # check Numba version raises
+            with self.assertRaises(ValueError) as raises:
+                run(arr, dtype)
+            self.assertEqual(str(raises.exception), msg)
+
+        def check_err_0d(arr, dtype):
+            # check NumPy interpreted version raises
+            msg = ("Changing the dtype of a 0d array is only supported "
+                   "if the itemsize is unchanged")
+            with self.assertRaises(ValueError) as raises:
+                make_array_view(dtype)(arr)
+            self.assertEqual(str(raises.exception), msg)
+            # check Numba version raises
+            with self.assertRaises(ValueError) as raises:
+                run(arr, dtype)
+            self.assertEqual(str(raises.exception), msg)
+
+        def check_err_smaller_dtype(arr, dtype):
+            # check NumPy interpreted version raises
+            msg = ("When changing to a smaller dtype, its size must be a "
+                   "divisor of the size of original dtype")
+            with self.assertRaises(ValueError) as raises:
+                make_array_view(dtype)(arr)
+            self.assertEqual(str(raises.exception), msg)
+            # check Numba version raises
+            with self.assertRaises(ValueError) as raises:
+                run(arr, dtype)
+            self.assertEqual(str(raises.exception), msg)
+
+        def check_err_larger_dtype(arr, dtype):
+            # check NumPy interpreted version raises
+            msg = ("When changing to a larger dtype, its size must be a "
+                   "divisor of the total size in bytes of the last axis "
+                   "of the array.")
+            with self.assertRaises(ValueError) as raises:
+                make_array_view(dtype)(arr)
+            self.assertEqual(str(raises.exception), msg)
+            # check Numba version raises
+            with self.assertRaises(ValueError) as raises:
+                run(arr, dtype)
+            self.assertEqual(str(raises.exception), msg)
 
         dt1 = np.dtype([('a', np.int8), ('b', np.int8)])
         dt2 = np.dtype([('u', np.int16), ('v', np.int8)])
         dt3 = np.dtype([('x', np.int16), ('y', np.int16)])
+
+        # The checking routines are much more specific from NumPy 1.23 onwards
+        # as the granularity of error reporing is improved in Numba to match
+        # that of NumPy.
+        if numpy_version >= (1, 23):
+            check_error_larger_dt = check_err_larger_dtype
+            check_error_smaller_dt = check_err_smaller_dtype
+            check_error_noncontig = check_err_noncontig_last_axis
+            check_error_0d = check_err_0d
+        else:
+            check_error_larger_dt = check_err
+            check_error_smaller_dt = check_err
+            check_error_noncontig = check_err
+            check_error_0d = check_err
 
         # C-contiguous
         arr = np.arange(24, dtype=np.int8)
@@ -397,7 +473,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check(arr, np.complex64)
         check(arr, dt1)
         check(arr, dt2)
-        check_err(arr, np.complex128)
+        check_error_larger_dt(arr, np.complex128)
 
         # Last dimension must have a compatible size
         arr = arr.reshape((3, 8))
@@ -405,39 +481,56 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check(arr, np.float32)
         check(arr, np.complex64)
         check(arr, dt1)
-        check_err(arr, dt2)
-        check_err(arr, np.complex128)
+        check_error_larger_dt(arr, dt2)
+        check_error_larger_dt(arr, np.complex128)
 
         # F-contiguous
-        arr = np.arange(24, dtype=np.int8).reshape((3, 8)).T
-        check(arr, np.int8)
-        check(arr, np.float32)
-        check(arr, np.complex64)
-        check(arr, dt1)
-        check_err(arr, dt2)
-        check_err(arr, np.complex128)
+        f_arr = np.arange(24, dtype=np.int8).reshape((3, 8)).T
+        # neither F or C contiguous
+        not_f_or_c_arr = np.zeros((4, 4)).T[::2, ::2]
+
+        # NumPy 1.23 does not allow views with different size dtype for
+        # non-contiguous last axis.
+        if numpy_version >= (1, 23):
+            check_maybe_error = check_err_noncontig_last_axis
+        else:
+            check_maybe_error = check
+
+        check(f_arr, np.int8)
+        check(not_f_or_c_arr, np.uint64)
+        check_maybe_error(f_arr, np.float32)
+        check_maybe_error(f_arr, np.complex64)
+        check_maybe_error(f_arr, dt1)
+
+        check_error_noncontig(f_arr, dt2)
+        check_error_noncontig(f_arr, np.complex128)
+        check_error_noncontig(not_f_or_c_arr, np.int8)
 
         # Non-contiguous: only a type with the same itemsize can be used
         arr = np.arange(16, dtype=np.int32)[::2]
         check(arr, np.uint32)
         check(arr, np.float32)
         check(arr, dt3)
-        check_err(arr, np.int8)
-        check_err(arr, np.int16)
-        check_err(arr, np.int64)
-        check_err(arr, dt1)
-        check_err(arr, dt2)
+        check_error_noncontig(arr, np.int8)
+        check_error_noncontig(arr, np.int16)
+        check_error_noncontig(arr, np.int64)
+        check_error_noncontig(arr, dt1)
+        check_error_noncontig(arr, dt2)
 
-        # Zero-dim array: only a type with the same itemsize can be used
+        ## Zero-dim array: only a type with the same itemsize can be used
         arr = np.array([42], dtype=np.int32).reshape(())
         check(arr, np.uint32)
         check(arr, np.float32)
         check(arr, dt3)
-        check_err(arr, np.int8)
-        check_err(arr, np.int16)
-        check_err(arr, np.int64)
-        check_err(arr, dt1)
-        check_err(arr, dt2)
+        check_error_0d(arr, np.int8)
+        check_error_0d(arr, np.int16)
+        check_error_0d(arr, np.int64)
+        check_error_0d(arr, dt1)
+        check_error_0d(arr, dt2)
+
+        # Changing to smaller dtype
+        arr = np.array(['abcdef'])
+        check_error_smaller_dt(arr, np.complex128)
 
         # Exceptions leak references
         self.disable_leak_check()
@@ -560,9 +653,18 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             func(bytearray(range(16)), 'int32')
 
         excstr = str(raises.exception)
-        self.assertIn('No match', excstr)
-        self.assertIn('frombuffer(bytearray(uint8, 1d, C), dtype=unicode_type)',
-                      excstr)
+        msg = ("If np.frombuffer dtype is a string it must be a "
+               "string constant.")
+        self.assertIn(msg, excstr)
+
+    def test_np_frombuffer_bad_buffer(self):
+        @jit(nopython=True)
+        def func(buf):
+            return np.frombuffer(buf)
+
+        msg = '.*Argument "buffer" must be buffer-like.*'
+        with self.assertRaisesRegex(TypingError, msg) as raises:
+            func(None)
 
     def check_layout_dependent_func(self, pyfunc, fac=np.arange):
         def is_same(a, b):
@@ -605,12 +707,19 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         for x in [42, 42.0, 42j, np.float32(42), np.float64(42), True]:
             check_scalar(x)
 
+    def check_bad_array(self, pyfunc):
+        msg = '.*The argument "a" must be array-like.*'
+        with self.assertRaisesRegex(TypingError, msg) as raises:
+            cres = compile_isolated(pyfunc, (typeof('hello'), ))
+
     def test_np_asfortranarray(self):
         self.check_layout_dependent_func(np_asfortranarray)
+        self.check_bad_array(np_asfortranarray)
         self.check_ascontiguousarray_scalar(np_asfortranarray)
 
     def test_np_ascontiguousarray(self):
         self.check_layout_dependent_func(np_ascontiguousarray)
+        self.check_bad_array(np_asfortranarray)
         self.check_ascontiguousarray_scalar(np_ascontiguousarray)
 
     def check_np_frombuffer_allocated(self, pyfunc):

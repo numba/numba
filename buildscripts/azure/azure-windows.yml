@@ -8,16 +8,16 @@ jobs:
     vmImage: ${{ parameters.vmImage }}
   strategy:
     matrix:
-      py310_np122:
+      py310_np123:
         PYTHON: '3.10'
-        NUMPY: '1.22'
+        NUMPY: '1.23'
         CONDA_ENV: 'testenv'
-        TEST_START_INDEX: 18
+        TEST_START_INDEX: 17
       py37_np118:
         PYTHON: '3.7'
         NUMPY: '1.18'
         CONDA_ENV: 'testenv'
-        TEST_START_INDEX: 19
+        TEST_START_INDEX: 18
 
   steps:
     - task: CondaEnvironment@1
@@ -28,12 +28,6 @@ jobs:
     - script: |
         buildscripts\\incremental\\setup_conda_environment.cmd
       displayName: 'Before Install'
-
-    - script: |
-        # use TBB
-        call activate %CONDA_ENV%
-        conda install -y -c numba tbb=2021 tbb-devel
-      displayName: 'Add in TBB'
 
     - script: |
         buildscripts\\incremental\\build.cmd
