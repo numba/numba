@@ -14,7 +14,6 @@ from numba import cuda
 from numba.cuda import nvvmutils, stubs, errors
 from numba.cuda.types import dim3, grid_group, CUDADispatcher
 
-
 registry = Registry()
 lower = registry.lower
 lower_attr = registry.lower_getattr
@@ -446,6 +445,15 @@ def ptx_hfma(context, builder, sig, args):
     fnty = ir.FunctionType(ir.IntType(16), argtys)
     asm = ir.InlineAsm(fnty, "fma.rn.f16 $0,$1,$2,$3;", "=h,h,h,h")
     return builder.call(asm, args)
+
+
+@lower(operator.truediv, types.float16, types.float16)
+@lower(operator.itruediv, types.float16, types.float16)
+def fp16_div_impl(context, builder, sig, args):
+    def fp16_div(x, y):
+        return cuda.fp16.hdiv(x, y)
+
+    return context.compile_internal(builder, fp16_div, sig, args, )
 
 
 _fp16_cmp = """{{

@@ -2,6 +2,7 @@ import numba
 import numpy as np
 import sys
 import platform
+import itertools
 
 from numba import types
 from numba.core.config import IS_32BITS
@@ -945,6 +946,232 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             x.negative_binomial(n=n, p=p, size=size)
         self._check_invalid_types(dist_func, ['n', 'p', 'size'],
                                   [1, 0.75, (1,)], ['x', 'x', ('x',)])
+
+    # NumPy tests at:
+    # https://github.com/numpy/numpy/blob/95e3e7f445407e4f355b23d6a9991d8774f0eb0c/numpy/random/tests/test_generator_mt19937.py#L936
+    # Written in following format for semblance with existing Generator tests.
+    def test_shuffle(self):
+        test_sizes = [(10, 20, 30)]
+        bitgen_types = [None, MT19937]
+        axes = [0, 1, 2]
+
+        for _size, _bitgen, _axis in itertools.product(test_sizes,
+                                                       bitgen_types,
+                                                       axes):
+            with self.subTest(_size=_size, _bitgen=_bitgen, _axis=_axis):
+                def dist_func(x, size, dtype):
+                    arr = x.random(size=size)
+                    x.shuffle(arr, axis=_axis)
+                    return arr
+                self.check_numpy_parity(dist_func, _bitgen,
+                                        None, _size, None,
+                                        0)
+
+    def test_shuffle_empty(self):
+        a = np.array([])
+        b = np.array([])
+
+        def dist_func(x, arr):
+            x.shuffle(arr)
+            return arr
+
+        nb_func = numba.njit(dist_func)
+        rng = lambda: np.random.default_rng(1)
+
+        self.assertPreciseEqual(dist_func(rng(), a), nb_func(rng(), b))
+
+    def test_shuffle_check(self):
+        self.disable_leak_check()
+
+        def dist_func(x, arr, axis):
+            x.shuffle(arr, axis=axis)
+            return arr
+
+        self._check_invalid_types(dist_func, ['x', 'axis'],
+                                  [np.array([3,4,5]), 0], ['x', 'x'])
+
+        rng = np.random.default_rng(1)
+        with self.assertRaises(IndexError) as raises:
+            numba.njit(dist_func)(rng, np.array([3,4,5]), 2)
+        self.assertIn(
+            'Axis is out of bounds for the given array',
+            str(raises.exception)
+        )
+
+    # NumPy tests at:
+    # https://github.com/numpy/numpy/blob/95e3e7f445407e4f355b23d6a9991d8774f0eb0c/numpy/random/tests/test_generator_mt19937.py#L1030
+    # Written in following format for semblance with existing Generator tests.
+    def test_permutation(self):
+        test_sizes = [(10, 20, 30)]
+        bitgen_types = [None, MT19937]
+        axes = [0, 1, 2, -1, -2]
+
+        for _size, _bitgen, _axis in itertools.product(test_sizes,
+                                                       bitgen_types,
+                                                       axes):
+            with self.subTest(_size=_size, _bitgen=_bitgen, _axis=_axis):
+                def dist_func(x, size, dtype):
+                    arr = x.random(size=size)
+                    return x.permutation(arr, axis=1)
+                self.check_numpy_parity(dist_func, _bitgen,
+                                        None, _size, None,
+                                        0)
+
+        # Test that permutation is actually done on a copy of the array
+        dist_func = numba.njit(lambda rng, arr: rng.permutation(arr))
+        rng = np.random.default_rng()
+        arr = rng.random(size=(10, 20))
+        arr_cpy = arr.copy()
+        dist_func(rng, arr)
+        self.assertPreciseEqual(arr, arr_cpy)
+
+    def test_permutation_exception(self):
+        self.disable_leak_check()
+
+        def dist_func(x, arr, axis):
+            return x.permutation(arr, axis=axis)
+
+        self._check_invalid_types(dist_func, ['x', 'axis'],
+                                  [np.array([3,4,5]), 0], ['x', 'x'])
+
+        rng = np.random.default_rng(1)
+        with self.assertRaises(IndexError) as raises:
+            numba.njit(dist_func)(rng, np.array([3,4,5]), 2)
+        self.assertIn(
+            'Axis is out of bounds for the given array',
+            str(raises.exception)
+        )
+        with self.assertRaises(IndexError) as raises:
+            numba.njit(dist_func)(rng, np.array([3,4,5]), -2)
+        self.assertIn(
+            'Axis is out of bounds for the given array',
+            str(raises.exception)
+        )
+
+    def test_permutation_empty(self):
+        a = np.array([])
+        b = np.array([])
+
+        def dist_func(x, arr):
+            return x.permutation(arr)
+
+        nb_func = numba.njit(dist_func)
+        rng = lambda: np.random.default_rng(1)
+
+        self.assertPreciseEqual(dist_func(rng(), a), nb_func(rng(), b))
+
+    def test_noncentral_chisquare(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:\
+            x.noncentral_chisquare(3.0, 20.0, size=size)
+        for _size, _bitgen in itertools.product(test_sizes, bitgen_types):
+            with self.subTest(_size=_size, _bitgen=_bitgen):
+                self.check_numpy_parity(dist_func, _bitgen,
+                                        None, _size, None)
+
+        dist_func = lambda x, df, nonc, size:\
+            x.noncentral_chisquare(df=df, nonc=nonc, size=size)
+        valid_args = [3.0, 5.0, (1,)]
+        self._check_invalid_types(dist_func, ['df', 'nonc', 'size'],
+                                  valid_args, ['x', 'x', ('x',)])
+
+        # Test argument bounds
+        rng = np.random.default_rng()
+        valid_args = [rng] + valid_args
+        nb_dist_func = numba.njit(dist_func)
+        with self.assertRaises(ValueError) as raises:
+            curr_args = valid_args.copy()
+            # Change df to an invalid value
+            curr_args[1] = 0
+            nb_dist_func(*curr_args)
+        self.assertIn('df <= 0', str(raises.exception))
+        with self.assertRaises(ValueError) as raises:
+            curr_args = valid_args.copy()
+            # Change nonc to an invalid value
+            curr_args[2] = -1
+            nb_dist_func(*curr_args)
+        self.assertIn('nonc < 0', str(raises.exception))
+
+    def test_noncentral_f(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:\
+            x.noncentral_f(3.0, 20.0, 3.0, size=size)
+        for _size, _bitgen in itertools.product(test_sizes, bitgen_types):
+            with self.subTest(_size=_size, _bitgen=_bitgen):
+                self.check_numpy_parity(dist_func, _bitgen,
+                                        None, _size, None,
+                                        adjusted_ulp_prec)
+
+        dist_func = lambda x, dfnum, dfden, nonc, size:\
+            x.noncentral_f(dfnum=dfnum, dfden=dfden, nonc=nonc, size=size)
+        valid_args = [3.0, 5.0, 3.0, (1,)]
+        self._check_invalid_types(dist_func, ['dfnum', 'dfden', 'nonc', 'size'],
+                                  valid_args, ['x', 'x', 'x', ('x',)])
+
+        # Test argument bounds
+        rng = np.random.default_rng()
+        valid_args = [rng] + valid_args
+        nb_dist_func = numba.njit(dist_func)
+        with self.assertRaises(ValueError) as raises:
+            curr_args = valid_args.copy()
+            # Change dfnum to an invalid value
+            curr_args[1] = 0
+            nb_dist_func(*curr_args)
+        self.assertIn('dfnum <= 0', str(raises.exception))
+        with self.assertRaises(ValueError) as raises:
+            curr_args = valid_args.copy()
+            # Change dfden to an invalid value
+            curr_args[2] = 0
+            nb_dist_func(*curr_args)
+        self.assertIn('dfden <= 0', str(raises.exception))
+        with self.assertRaises(ValueError) as raises:
+            curr_args = valid_args.copy()
+            # Change nonc to an invalid value
+            curr_args[3] = -1
+            nb_dist_func(*curr_args)
+        self.assertIn('nonc < 0', str(raises.exception))
+
+    def test_logseries(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:\
+            x.logseries(0.3, size=size)
+        for _size, _bitgen in itertools.product(test_sizes, bitgen_types):
+            with self.subTest(_size=_size, _bitgen=_bitgen):
+                self.check_numpy_parity(dist_func, _bitgen,
+                                        None, _size, None)
+
+        dist_func = lambda x, p, size:\
+            x.logseries(p=p, size=size)
+        valid_args = [0.3, (1,)]
+        self._check_invalid_types(dist_func, ['p', 'size'],
+                                  valid_args, ['x', ('x',)])
+
+        # Test argument bounds
+        rng = np.random.default_rng(1)
+        valid_args = [rng] + valid_args
+        nb_dist_func = numba.njit(dist_func)
+        for _p in [-0.1, 1, np.nan]:
+            with self.assertRaises(ValueError) as raises:
+                curr_args = valid_args.copy()
+                # Change p to an invalid negative, positive and nan value
+                curr_args[1] = _p
+                nb_dist_func(*curr_args)
+            self.assertIn('p < 0, p >= 1 or p is NaN', str(raises.exception))
 
 
 class TestGeneratorCaching(TestCase, SerialMixin):
