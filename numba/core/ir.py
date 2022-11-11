@@ -1175,8 +1175,11 @@ class Scope(EqualityCheckMixin):
         return vers
 
     def make_temp(self, loc):
+        return self.make_temp_with_prefix('', loc)
+
+    def make_temp_with_prefix(self, prefix, loc):
         n = len(self.localvars)
-        v = Var(scope=self, name='$%d' % n, loc=loc)
+        v = Var(scope=self, name=f'${prefix}.{n}', loc=loc)
         self.localvars.define(v.name, v)
         return v
 
