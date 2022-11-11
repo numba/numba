@@ -375,10 +375,17 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
     // check the nesting level, if it's already 1, abort, workqueue cannot
     // handle nesting.
     if (_nesting_level >= 1){
-        fprintf(stderr, "%s", "Terminating: Nested parallel kernel launch "
-                              "detected, the workqueue threading layer does "
-                              "not supported nested parallelism. Try the TBB "
-                              "threading layer.\n");
+        fprintf(stderr, "%s", "Numba workqueue threading layer is terminating: "
+                              "Concurrent access has been detected.\n\n"
+                              " - The workqueue threading layer is not "
+                              "threadsafe and may not be accessed concurrently "
+                              "by multiple threads. Concurrent access "
+                              "typically occurs through a nested parallel "
+                              "region launch or by calling Numba parallel=True "
+                              "functions from multiple Python threads.\n"
+                              " - Try using the TBB threading layer as an "
+                              "alternative, as it is, itself, threadsafe. "
+                              "Docs: https://numba.readthedocs.io/en/stable/user/threading-layer.html\n\n");
         raise(SIGABRT);
         return;
     }

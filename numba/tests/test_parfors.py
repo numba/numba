@@ -236,6 +236,8 @@ class TestParforsBase(TestCase):
                     new_args.append(x.copy())
                 elif isinstance(x, numbers.Number):
                     new_args.append(x)
+                elif x is None:
+                    new_args.append(x)
                 elif isinstance(x, tuple):
                     new_args.append(copy.deepcopy(x))
                 elif isinstance(x, list):
@@ -2130,6 +2132,18 @@ class TestParfors(TestParforsBase):
         self.assertEqual(countParfors(test_impl, cptypes), 2)
         self.check(test_impl, a, b, size)
 
+    def test_prange_optional(self):
+        def test_impl(arr, pred=None):
+            for i in prange(1):
+                if pred is not None:
+                    arr[i] = 0.0
+
+        arr = np.ones(10)
+        self.check(test_impl, arr, None,
+                   check_arg_equality=[np.testing.assert_almost_equal,
+                                       lambda x, y: x == y])
+        self.assertEqual(arr.sum(), 10.0)
+
     def test_untraced_value_tuple(self):
         # This is a test for issue #6478.
         def test_impl():
@@ -2236,6 +2250,27 @@ class TestParfors(TestParforsBase):
         arr = np.arange(100)
         self.check(test_impl, arr, 10, True)
         self.check(test_impl, arr, 10, False)
+
+    def test_issue8515(self):
+        # issue8515: an array is filled in the first prange and
+        # then accessed with c[i - 1] in the next prange which
+        # should prevent fusion with the previous prange.
+        def test_impl(n):
+            r = np.zeros(n, dtype=np.intp)
+            c = np.zeros(n, dtype=np.intp)
+            for i in prange(n):
+                for j in range(i):
+                    c[i] += 1
+
+            for i in prange(n):
+                if i == 0:
+                    continue
+                r[i] = c[i] - c[i - 1]
+            return r[1:]
+
+        self.check(test_impl, 15)
+        self.assertEqual(countParfors(test_impl, (types.int64, )), 2)
+
 
 @skip_parfors_unsupported
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):

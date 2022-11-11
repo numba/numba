@@ -33,7 +33,7 @@ conda list
 # Create a base env first and then add to it...
 # NOTE: gitpython is needed for CI testing to do the test slicing
 # NOTE: pyyaml is used to ensure that the Azure CI config is valid
-conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml "setuptools<60"
+conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml
 
 # Activate first
 set +v
@@ -48,12 +48,7 @@ if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # dependencies, but exercised in the test suite
     # pexpect is used to run the gdb tests.
     # ipykernel is used for testing ipython behaviours.
-    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel pygments pexpect
-    if [[ "$NUMPY" == "1.23" ]] ; then
-        $CONDA_INSTALL ${EXTRA_CHANNELS} conda-forge::scipy
-    else
-        $CONDA_INSTALL ${EXTRA_CHANNELS} scipy
-    fi
+    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel scipy pygments pexpect
 fi
 
 # Install the compiler toolchain and gdb (if available)
@@ -73,14 +68,14 @@ $CONDA_INSTALL -c numba/label/dev llvmlite=0.40
 if [ $PYTHON \< "3.9" ]; then $CONDA_INSTALL importlib_metadata; fi
 
 # Install dependencies for building the documentation
-if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx=2.4.4 docutils=0.17 sphinx_rtd_theme pygments numpydoc; fi
+if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx docutils sphinx_rtd_theme pygments numpydoc; fi
 if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL rstcheck; fi
 # Install dependencies for code coverage (codecov.io)
 if [ "$RUN_COVERAGE" == "yes" ]; then $PIP_INSTALL codecov; fi
 # Install SVML
 if [ "$TEST_SVML" == "yes" ]; then $CONDA_INSTALL -c numba icc_rt; fi
 # Install Intel TBB parallel backend
-if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL -c numba tbb=2021 tbb-devel; fi
+if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL -c numba tbb=2021 "tbb-devel>=2021,<2021.6"; fi
 # Install pickle5
 if [ "$TEST_PICKLE5" == "yes" ]; then $PIP_INSTALL pickle5; fi
 # Install typeguard

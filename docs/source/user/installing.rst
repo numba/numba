@@ -132,6 +132,9 @@ Then you can build and install Numba from the top level of the source tree::
 
     $ python setup.py install
 
+If you wish to run the test suite, see the instructions in the
+:ref:`developer documentation <running-tests>`.
+
 .. _numba-source-install-env_vars:
 
 Build time environment variables and configuration of optional components
@@ -174,14 +177,14 @@ vary with target operating system and hardware. The following lists them all
 
 * Required build time:
 
-  * ``setuptools<60``
+  * ``setuptools``
   * ``numpy``
   * ``llvmlite``
   * Compiler toolchain mentioned above
 
 * Required run time:
 
-  * ``setuptools<60``
+  * ``setuptools``
   * ``numpy``
   * ``llvmlite``
 
@@ -257,6 +260,10 @@ information.
 | Numba     | Release date | Python                    | NumPy                      | llvmlite                     | LLVM              | TBB                         |
 +===========+==============+===========================+============================+==============================+===================+=============================+
 | 0.57.x    | TBC          | 3.8.x <= version < 3.12   | 1.19 <= version < 1.24     | 0.40.x                       | 11.x              | 2021.x                      |
++-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.56.4    | 2022-11-03   | 3.7.x <= version < 3.11   | 1.18 <= version < 1.24     | 0.39.x                       | 11.x              | 2021.x                      |
++-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.56.3    | 2022-10-13   | 3.7.x <= version < 3.11   | 1.18 <= version < 1.24     | 0.39.x                       | 11.x              | 2021.x                      |
 +-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
 | 0.56.2    | 2022-09-01   | 3.7.x <= version < 3.11   | 1.18 <= version < 1.24     | 0.39.x                       | 11.x              | 2021.x                      |
 +-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+

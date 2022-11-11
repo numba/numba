@@ -375,7 +375,7 @@ build_requires = ['numpy >={}'.format(min_numpy_build_version)]
 install_requires = [
     'llvmlite >={},<{}'.format(min_llvmlite_version, max_llvmlite_version),
     'numpy >={}'.format(min_numpy_run_version),
-    'setuptools <60',
+    'setuptools',
     'importlib_metadata; python_version < "3.9"',
 ]
 
@@ -411,6 +411,7 @@ metadata = dict(
         # numba gdb hook init command language file
         "numba.misc": ["cmdlang.gdb"],
         "numba.typed": ["py.typed"],
+        "numba.cuda" : ["cpp_function_wrappers.cu"]
     },
     scripts=["bin/numba"],
     url="https://numba.pydata.org",
