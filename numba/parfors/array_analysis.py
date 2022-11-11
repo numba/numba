@@ -1883,7 +1883,8 @@ class ArrayAnalysis(object):
             replacement_slice_var = None
         else:
             # Create a new var for the replacement slice.
-            replacement_slice_var = scope.make_temp_with_prefix("replacement_slice", loc)
+            replacement_slice_var = scope.make_temp_with_prefix(
+                "replacement_slice", loc)
             # replacement_slice_var = scope.make_temp(loc)
             # Create a deepcopy of slice calltype so that when we change it
             # below the original isn't changed.  Make the types of the parts of
@@ -2484,7 +2485,8 @@ class ArrayAnalysis(object):
                 # Skip the negative dimension.
                 if arg_index == neg_one_index:
                     continue
-                div_calc_size_var = scope.make_temp_with_prefix("calc_size_var", loc)
+                div_calc_size_var = scope.make_temp_with_prefix(
+                    "calc_size_var", loc)
                 self.typemap[div_calc_size_var.name] = types.intp
                 # Calculate the next size as current size // the current arg's
                 # dimension size.
@@ -3119,7 +3121,8 @@ class ArrayAnalysis(object):
             shape = None
         else:
             shape_attr_call = ir.Expr.getattr(var, "shape", var.loc)
-            attr_var = var.scope.make_temp_with_prefix("{}_shape".format(var.name), var.loc)
+            attr_var = var.scope.make_temp_with_prefix(
+                "{}_shape".format(var.name), var.loc)
             shape_attr_typ = types.containers.UniTuple(types.intp, ndims)
         size_vars = []
         use_attr_var = False
