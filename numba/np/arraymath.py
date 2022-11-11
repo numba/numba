@@ -21,6 +21,7 @@ from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
                                  impl_ret_new_ref, impl_ret_untracked)
 from numba.np.arrayobj import (make_array, load_item, store_item,
                                _empty_nd_impl, numpy_broadcast_shapes_list)
+from numba.np.arrayobj import __broadcast_shapes
 from numba.np.linalg import ensure_blas
 
 from numba.core.extending import intrinsic
