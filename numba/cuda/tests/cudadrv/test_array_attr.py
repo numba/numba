@@ -47,9 +47,18 @@ class TestArrayAttr(CUDATestCase):
             expect = ary.ravel(order=order)
             dflat = dary.ravel(order=order)
             flat = dflat.copy_to_host()
-
+            self.assertTrue(dary is not dflat)  # ravel returns new array
             self.assertEqual(flat.ndim, 1)
             self.assertPreciseEqual(expect, flat)
+
+            # No-copy stride device array
+            darystride = dary[::2]
+            dary_data = dary.__cuda_array_interface__['data'][0]
+            ddarystride_data = darystride.__cuda_array_interface__['data'][0]
+            self.assertEqual(dary_data, ddarystride_data)
+            # Fail on ravel on non-contiguous array
+            with self.assertRaises(NotImplementedError):
+                darystride.ravel()
 
     def test_ravel_c(self):
         ary = np.arange(60)
@@ -59,8 +68,16 @@ class TestArrayAttr(CUDATestCase):
         dary = cuda.to_device(reshaped)
         dflat = dary.ravel()
         flat = dflat.copy_to_host()
+        self.assertTrue(dary is not dflat)
         self.assertEqual(flat.ndim, 1)
         self.assertPreciseEqual(expect, flat)
+
+        darystride = dary[::2, ::2, ::2, ::2]
+        dary_data = dary.__cuda_array_interface__['data'][0]
+        ddarystride_data = darystride.__cuda_array_interface__['data'][0]
+        self.assertEqual(dary_data, ddarystride_data)
+        with self.assertRaises(NotImplementedError):
+            darystride.ravel()
 
         # explicit order kwarg
         for order in 'CA':
@@ -68,8 +85,16 @@ class TestArrayAttr(CUDATestCase):
             dary = cuda.to_device(reshaped)
             dflat = dary.ravel(order=order)
             flat = dflat.copy_to_host()
+            self.assertTrue(dary is not dflat)
             self.assertEqual(flat.ndim, 1)
             self.assertPreciseEqual(expect, flat)
+
+            darystride = dary[::2, ::2, ::2, ::2]
+            dary_data = dary.__cuda_array_interface__['data'][0]
+            ddarystride_data = darystride.__cuda_array_interface__['data'][0]
+            self.assertEqual(dary_data, ddarystride_data)
+            with self.assertRaises(NotImplementedError):
+                darystride.ravel()
 
     def test_ravel_f(self):
         ary = np.arange(60)
@@ -79,8 +104,16 @@ class TestArrayAttr(CUDATestCase):
             dary = cuda.to_device(reshaped)
             dflat = dary.ravel(order=order)
             flat = dflat.copy_to_host()
+            self.assertTrue(dary is not dflat)
             self.assertEqual(flat.ndim, 1)
             self.assertPreciseEqual(expect, flat)
+
+            darystride = dary[::2, ::2, ::2, ::2]
+            dary_data = dary.__cuda_array_interface__['data'][0]
+            ddarystride_data = darystride.__cuda_array_interface__['data'][0]
+            self.assertEqual(dary_data, ddarystride_data)
+            with self.assertRaises(NotImplementedError):
+                darystride.ravel()
 
     def test_reshape_c(self):
         ary = np.arange(10)

@@ -386,7 +386,7 @@ class Array(object):
                 or order in 'FA' and self.is_f_contig):
             newshape = (self.size,)
             newstrides = (self.itemsize,)
-            arr = self.from_desc(self.extent.begin, newshape, newstrides,
+            arr = Array.from_desc(self.extent.begin, newshape, newstrides,
                                   self.itemsize)
             return arr, list(self.iter_contiguous_extent())
 
