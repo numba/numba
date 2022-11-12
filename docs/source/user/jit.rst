@@ -210,6 +210,7 @@ a file-based cache.  This is done by passing ``cache=True``::
          ``inline`` in the :func:`numba.njit` decorator:
        - when working with `parallel=True`
        - for ``guvectorize`` decorator
+
       In these cases, a change in any secondary file will not be detected and the
       cache will not be updated. This carries the risk that "old" function code
       might be used in the calculations.
