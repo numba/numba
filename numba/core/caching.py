@@ -788,8 +788,8 @@ dep_types = (types.Dispatcher, types.Function)
 
 def get_dispatcher(fc_ty: pt.Union[types.Dispatcher, types.Function]):
     """ Retrieve the dispatcher out of a function-like numba type
-    :param fc_ty:
-    :return:
+    :param fc_ty: a function type
+    :return: a dispatcher object
     """
     if isinstance(fc_ty, types.Dispatcher):
         dispatcher = fc_ty.dispatcher
@@ -914,17 +914,26 @@ def get_impl_filenames(fc_ty: pt.Union[types.Dispatcher, types.Function]
 
 
 def are_filestamps_valid(filestamps: pt.Dict[str, FileStamp]) -> bool:
-    for filename, source_stamp in filestamps.items():
-        if get_source_stamp(filename) != source_stamp:
+    """
+    Checks whether the input FileStamps for certain files match freshly
+    calculated FileStamps for those files
+    """
+    for filepath, source_stamp in filestamps.items():
+        if get_source_stamp(filepath) != source_stamp:
             return False
     return True
 
 
-def get_source_stamp(py_file: str) -> pt.Tuple[float, int]:
+def get_source_stamp(filepath: str) -> FileStamp:
+    """
+    Calculates the current FileStamp of a given file
+    :param filepath: full filepath of a file
+    :return: FileStamp (combination of size and timestamp
+    """
     if getattr(sys, 'frozen', False):
         st = os.stat(sys.executable)
     else:
-        st = os.stat(py_file)
+        st = os.stat(filepath)
     # We use both timestamp and size as some filesystems only have second
     # granularity.
     return st.st_mtime, st.st_size
