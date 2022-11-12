@@ -68,7 +68,7 @@ This is a list of known limitation of the cache:
 
 - Cache invalidation recognize changes in symbols defined in a
   different file, for ``jit``, ``njit``, ``overload``, ``vectorize`` and
-      ``generated_jit`` decorators.
+  ``generated_jit`` decorators.
 - Cache invalidation *does not* recognize changes in symbols defined in a
   different file, for ``inline`` in the :func:`numba.njit` decorator, when working
   with `parallel=True`, or for ``guvectorize`` decorator.
