@@ -9,7 +9,18 @@
 #include <cmath>
 #include <iostream>
 #include <stdio.h>
+#include <stdint.h>
 #include "gufunc_scheduler.h"
+
+#ifdef _MSC_VER
+#define THREAD_LOCAL(ty) __declspec(thread) ty
+#else
+/* Non-standard C99 extension that's understood by gcc and clang */
+#define THREAD_LOCAL(ty) __thread ty
+#endif
+
+// Default 0 value means one evenly-sized chunk of work per worker thread.
+static THREAD_LOCAL(uintp) parallel_chunksize = 0;
 
 // round not available on VS2010.
 double guround (double number) {
@@ -68,7 +79,46 @@ public:
         }
         return ret;
     }
+
+    uintp total_size() const {
+        std::vector<intp> per_dim = iters_per_dim();
+        uintp res = 1;
+        for (size_t i = 0; i < per_dim.size(); ++i) {
+            res *= per_dim[i];
+        }
+        return res;
+    }
+
+    void print() const {
+        size_t i;
+        for(i = 0; i < start.size(); ++i) {
+            printf("%td ", start[i]);
+        }
+        for(i = 0; i < end.size(); ++i) {
+            printf("%td ", end[i]);
+        }
+    }
 };
+
+extern "C" uintp set_parallel_chunksize(uintp n) {
+    uintp orig = parallel_chunksize;
+    parallel_chunksize = n;
+    return orig;
+}
+
+extern "C" uintp get_parallel_chunksize() {
+    return parallel_chunksize;
+}
+
+extern "C" uintp get_sched_size(uintp num_threads, uintp num_dim, intp *starts, intp *ends) {
+    if (parallel_chunksize == 0) {
+        return num_threads;
+    }
+    RangeActual ra(num_dim, starts, ends);
+    uintp total_work_size = ra.total_size();
+    uintp num_divisions = total_work_size / parallel_chunksize;
+    return num_divisions < num_threads ? num_threads : num_divisions;
+}
 
 class dimlength {
 public:
@@ -327,6 +377,18 @@ std::vector<RangeActual> create_schedule(const RangeActual &full_space, uintp nu
 }
 
 /*
+ *   Print the calculated schedule when in debug mode.
+ */
+void print_schedule(const std::vector<RangeActual> &vra) {
+    size_t i;
+    for (i = 0; i < vra.size(); ++i) {
+        printf("sched[%td] = ", i);
+        vra[i].print();
+        printf("\n");
+    }
+}
+
+/*
     num_dim (D) is the number of dimensions of the iteration space.
     starts is the range-start of each of those dimensions, inclusive.
     ends is the range-end of each of those dimensions, inclusive.
@@ -350,6 +412,9 @@ extern "C" void do_scheduling_signed(uintp num_dim, intp *starts, intp *ends, ui
 
     RangeActual full_space(num_dim, starts, ends);
     std::vector<RangeActual> ret = create_schedule(full_space, num_threads);
+    if (debug) {
+        print_schedule(ret);
+    }
     flatten_schedule(ret, sched);
 }
 
@@ -369,5 +434,8 @@ extern "C" void do_scheduling_unsigned(uintp num_dim, intp *starts, intp *ends, 
 
     RangeActual full_space(num_dim, starts, ends);
     std::vector<RangeActual> ret = create_schedule(full_space, num_threads);
+    if (debug) {
+        print_schedule(ret);
+    }
     flatten_schedule(ret, sched);
 }

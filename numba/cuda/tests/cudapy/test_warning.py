@@ -19,7 +19,7 @@ class TestWarnings(CUDATestCase):
 
         self.assertEqual(w[0].category, NumbaPerformanceWarning)
         self.assertIn('Grid size', str(w[0].message))
-        self.assertIn('2 * SM count', str(w[0].message))
+        self.assertIn('low occupancy', str(w[0].message))
 
     def test_efficient_launch_configuration(self):
         @cuda.jit

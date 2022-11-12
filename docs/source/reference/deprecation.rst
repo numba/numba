@@ -224,48 +224,146 @@ supply the keyword argument ``forceobj=True`` to ensure the function is always
 compiled in :term:`object mode`.
 
 
-.. _deprecation-strict-strides:
+.. _deprecation-of-generated-jit:
 
+Deprecation of ``generated_jit``
+================================
+The top level API function ``numba.generated_jit`` provides functionality that
+allows users to write JIT compilable functions that have different
+implementations based on the types of the arguments to the function. This is a
+hugely useful concept and is also key to Numba's internal implementation.
 
-Deprecation of the ``inspect_ptx()`` method
-===========================================
+Reason for deprecation
+----------------------
 
-The undocumented ``inspect_ptx()`` method of functions decorated with
-``@cuda.jit(device=True)`` is sometimes used to compile a Python function to
-PTX for use outside of Numba. An interface for this specific purpose is
-provided in the :func:`compile_ptx() <numba.cuda.compile_ptx>` function.
-``inspect_ptx()`` has one or two longstanding issues and presents a maintenance
-burden for upcoming changes in the CUDA target, so it is deprecated and will be
-removed in favor of the use of :func:`compile_ptx() <numba.cuda.compile_ptx>`.
+There are a number of reasons for this deprecation.
 
-Recommendations
----------------
+First, ``generated_jit`` breaks the concept of "JIT transparency" in that if the
+JIT compiler is disabled, the source code does not execute the same way as it
+would were the JIT compiler present.
 
-Replace any code that compiles device functions to PTX using the following
-pattern:
+Second, internally Numba uses the ``numba.extending.overload`` family of
+decorators to access an equivalent functionality to ``generated_jit``. The
+``overload`` family of decorators are more powerful than ``generated_jit`` as
+they support far more options and both the CPU and CUDA targets. Essentially a
+replacement for ``generated_jit`` already exists and has been recommended and
+preferred for a long while.
 
-.. code-block:: python
+Third, the public extension API decorators are far better maintained than
+``generated_jit``. This is an important consideration due to Numba's limited
+resources, fewer duplicated pieces of functionality to maintain will reduce
+pressure on these resources.
 
-    @cuda.jit(signature, device=True)
-    def func(args):
-        ...
+For more information on the ``overload`` family of decorators see the
+:ref:`high level extension API documentation <high-level-extending>`.
 
-    ptx_code = func.inspect_ptx(nvvm_options=nvvm_options).decode()
+Example(s) of the impact
+------------------------
 
-with:
-
-.. code-block:: python
-
-    def func(args):
-        ...
-
-    ptx_code, return_type = compile_ptx(func, signature, device=True, nvvm_options=nvvm_options)
+Any source code using ``generated_jit`` would fail to work once the
+functionality has been removed.
 
 Schedule
 --------
 
-- In Numba 0.54: ``inspect_ptx()`` was deprecated.
-- In Numba 0.55: ``inspect_ptx()`` was removed.
+This feature will be removed with respect to this schedule:
+
+* Deprecation warnings will be issued in version 0.57.0.
+* Removal will take place in version 0.59.0.
+
+Recommendations
+---------------
+
+Projects that need/rely on the deprecated behaviour should pin their dependency
+on Numba to a version prior to removal of this behaviour, or consider following
+replacement instructions below that outline how to adjust to the change.
+
+Replacement
+-----------
+
+The ``overload`` decorator offers a replacement for the functionality available
+through ``generated_jit``. An example follows of translating from one to the
+other. First define a type specialised function dispatch with the
+``generated_jit`` decorator::
+
+  from numba import njit, generated_jit, types
+
+  @generated_jit
+  def select(x):
+      if isinstance(x, types.Float):
+          def impl(x):
+              return x + 1
+          return impl
+      elif isinstance(x, types.UnicodeType):
+          def impl(x):
+              return x + " the number one"
+          return impl
+      else:
+          raise TypeError("Unsupported Type")
+
+  @njit
+  def foo(x):
+      return select(x)
+
+  print(foo(1.))
+  print(foo("a string"))
+
+Conceptually, ``generated_jit`` is like ``overload``, but with ``generated_jit``
+the overloaded function is the decorated function. Taking the example above and
+adjusting it to use the ``overload`` API::
+
+  from numba import njit, types
+  from numba.extending import overload
+
+  # A pure python implementation that will run if the JIT compiler is disabled.
+  def select(x):
+      if isinstance(x, float):
+          return x + 1
+      elif isinstance(x, str):
+          return x + " the number one"
+      else:
+          raise TypeError("Unsupported Type")
+
+  # An overload for the `select` function cf. generated_jit
+  @overload(select)
+  def ol_select(x):
+      if isinstance(x, types.Float):
+          def impl(x):
+              return x + 1
+          return impl
+      elif isinstance(x, types.UnicodeType):
+          def impl(x):
+              return x + " the number one"
+          return impl
+      else:
+          raise TypeError("Unsupported Type")
+
+  @njit
+  def foo(x):
+      return select(x)
+
+  print(foo(1.))
+  print(foo("a string"))
+
+Further, users that are using ``generated_jit`` to dispatch on some of the more
+primitive types may find that Numba's support for ``isinstance`` is sufficient,
+for example::
+
+  @njit # NOTE: standard @njit decorator.
+  def select(x):
+      if isinstance(x, float):
+          return x + 1
+      elif isinstance(x, str):
+          return x + " the number one"
+      else:
+          raise TypeError("Unsupported Type")
+
+  @njit
+  def foo(x):
+      return select(x)
+
+  print(foo(1.))
+  print(foo("a string"))
 
 
 Deprecation of eager compilation of CUDA device functions
@@ -310,13 +408,13 @@ Schedule
   the provision of signatures for device functions will only enforce casting.
 
 
-Deprecation of ``numba.core.base.BaseContext.add_user_function()``
-==================================================================
+Deprecation and removal of ``numba.core.base.BaseContext.add_user_function()``
+==============================================================================
 
-``add_user_function()``  offers the same functionality as
+``add_user_function()``  offered the same functionality as
 ``insert_user_function()``, only with a check that the function has already
-been inserted at least once.  It is now deprecated as it is no longer used
-internally and it is expected that it is not used externally.
+been inserted at least once.  It is now removed as it was no longer used
+internally and it was expected that it was not used externally.
 
 Recommendations
 ---------------
@@ -326,29 +424,29 @@ Replace any uses of ``add_user_function()`` with ``insert_user_function()``.
 Schedule
 --------
 
-- In Numba 0.55: ``add_user_function()`` will be deprecated.
-- In Numba 0.56: ``add_user_function()`` will be removed.
+- In Numba 0.55: ``add_user_function()`` was deprecated.
+- In Numba 0.56: ``add_user_function()`` was removed.
 
 
-Deprecation of CUDA Toolkits < 10.2 and devices with CC < 5.3
-=============================================================
+Deprecation and removal of CUDA Toolkits < 11.0 and devices with CC < 5.3
+=========================================================================
 
-Support for:
+- Support for CUDA toolkits less than 11.0 has been removed.
+- Support for devices with Compute Capability < 5.3 is deprecated and will be
+  removed in the future.
 
-- Devices with Compute Capability < 5.3, and
-- CUDA toolkits less than 10.2
-
-is deprecated and will be removed in future.
 
 Recommendations
 ---------------
 
-- For devices of Compute Capability 3.0 - 5.2, Numba 0.55.1 or earlier will be
-  required.
-- CUDA toolkit 10.2 or later (ideally 11.2 or later) should be installed.
+- For devices of Compute Capability 3.0 and 3.2, Numba 0.55.1 or earlier will
+  be required.
+- CUDA toolkit 11.0 or later (ideally 11.2 or later) should be installed.
 
 Schedule
 --------
 
-- In Numba 0.55.1: support for CC < 5.3 and CUDA toolkits < 10.2 are deprecated.
-- In Numba 0.56: support for CC < 5.3 and CUDA toolkits < 10.2 will be removed.
+- In Numba 0.55.1: support for CC < 5.3 and CUDA toolkits < 10.2 was deprecated.
+- In Numba 0.56: support for CC < 3.5 and CUDA toolkits < 10.2 was removed.
+- In Numba 0.57: Support for CUDA toolkit 10.2 was removed. Support for CC < 5.3
+  will be removed.

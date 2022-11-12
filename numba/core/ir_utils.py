@@ -1920,7 +1920,7 @@ def is_namedtuple_class(c):
 
 def fill_block_with_call(newblock, callee, label_next, inputs, outputs):
     """Fill *newblock* to call *callee* with arguments listed in *inputs*.
-    The returned values are unwraped into variables in *outputs*.
+    The returned values are unwrapped into variables in *outputs*.
     The block would then jump to *label_next*.
     """
     scope = newblock.scope
@@ -1984,16 +1984,16 @@ def fill_callee_epilogue(block, outputs):
     return block
 
 
-def find_global_value(func_ir, var):
+def find_outer_value(func_ir, var):
     """Check if a variable is a global value, and return the value,
     or raise GuardException otherwise.
     """
     dfn = get_definition(func_ir, var)
-    if isinstance(dfn, ir.Global):
+    if isinstance(dfn, (ir.Global, ir.FreeVar)):
         return dfn.value
 
     if isinstance(dfn, ir.Expr) and dfn.op == 'getattr':
-        prev_val = find_global_value(func_ir, dfn.value)
+        prev_val = find_outer_value(func_ir, dfn.value)
         try:
             val = getattr(prev_val, dfn.attr)
             return val

@@ -675,8 +675,8 @@ class TestTupleBuild(TestCase):
             # hard. Should it be reported numerous times, revisit then.
             msg1 = "No implementation of function"
             self.assertIn(msg1, str(raises.exception))
-            msg2 = "add(Tuple()," # ignore the reflected list part, it's repr
-                                  # is quite volatile.
+            msg2 = "tuple(reflected list(" # ignore the rest of reflected list
+                                           # part, it's repr is quite volatile.
             self.assertIn(msg2, str(raises.exception))
         else:
             msg = "Only tuples are supported when unpacking a single item"

@@ -881,7 +881,7 @@ class MinMaxBase(AbstractTemplate):
 
     def _unify_minmax(self, tys):
         for ty in tys:
-            if not isinstance(ty, types.Number):
+            if not isinstance(ty, (types.Number, types.NPDatetime, types.NPTimedelta)):
                 return
         return self.context.unify_types(*tys)
 
@@ -992,7 +992,7 @@ class Complex(AbstractTemplate):
         if len(args) == 1:
             [arg] = args
             if arg not in types.number_domain:
-                raise TypeError("complex() only support for numbers")
+                raise errors.NumbaTypeError("complex() only support for numbers")
             if arg == types.float32:
                 return signature(types.complex64, arg)
             else:
@@ -1002,7 +1002,7 @@ class Complex(AbstractTemplate):
             [real, imag] = args
             if (real not in types.number_domain or
                 imag not in types.number_domain):
-                raise TypeError("complex() only support for numbers")
+                raise errors.NumbaTypeError("complex() only support for numbers")
             if real == imag == types.float32:
                 return signature(types.complex64, real, imag)
             else:
@@ -1103,8 +1103,8 @@ class MinValInfer(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         assert len(args) == 1
-        assert isinstance(args[0], (types.DType, types.NumberClass))
-        return signature(args[0].dtype, *args)
+        if isinstance(args[0], (types.DType, types.NumberClass)):
+            return signature(args[0].dtype, *args)
 
 
 #------------------------------------------------------------------------------

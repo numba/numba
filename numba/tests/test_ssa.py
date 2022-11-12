@@ -503,7 +503,7 @@ class TestSROAIssues(MemoryLeakMixin, TestCase):
     # This tests issues related to the SROA optimization done in lowering, which
     # reduces time spent in the LLVM SROA pass. The optimization is related to
     # SSA and tries to reduce the number of alloca statements for variables with
-    # only a single assignemnt.
+    # only a single assignment.
     def test_issue7258_multiple_assignment_post_SSA(self):
         # This test adds a pass that will duplicate assignment statements to
         # variables named "foobar".

@@ -10,7 +10,6 @@ import warnings
 from collections import namedtuple
 
 import llvmlite.binding as ll
-import llvmlite.llvmpy.core as lc
 from llvmlite import ir
 
 from numba.core.extending import (
@@ -128,7 +127,7 @@ def _Py_HashDouble(v):
 def _fpext(tyctx, val):
     def impl(cgctx, builder, signature, args):
         val = args[0]
-        return builder.fpext(val, lc.Type.double())
+        return builder.fpext(val, ir.DoubleType())
     sig = types.float64(types.float32)
     return sig, impl
 

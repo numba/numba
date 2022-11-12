@@ -180,8 +180,8 @@ class CFGraph(object):
         the nodes in its dominance frontier.
 
         The dominance frontier _df(N) is the set of all nodes that are
-        immediate successors to blocks dominanted by N but which aren't
-        stricly dominanted by N
+        immediate successors to blocks dominated by N but which aren't
+        strictly dominated by N
         """
         return self._df
 

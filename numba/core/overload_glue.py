@@ -27,28 +27,26 @@ class _OverloadWrapper(object):
         # is all lazy.
         self._build()
 
-    def _stub_generator(self, nargs, body_func, kwargs=None):
-        """This generates a function that takes "nargs" count of arguments
-        and the presented kwargs, the "body_func" is the function that'll
-        type the overloaded function and then work out which lowering to
-        return"""
+    def _stub_generator(self, body_func, varnames):
+        """This generates a function based on the argnames provided in
+        "varnames", the "body_func" is the function that'll type the overloaded
+        function and then work out which lowering to return"""
         def stub(tyctx):
             # body is supplied when the function is magic'd into life via glbls
             return body(tyctx)  # noqa: F821
-        if kwargs is None:
-            kwargs = {}
-        # create new code parts
-        stub_code = stub.__code__
-        co_args = [stub_code.co_argcount + nargs + len(kwargs)]
 
+        stub_code = stub.__code__
         new_varnames = [*stub_code.co_varnames]
-        new_varnames.extend([f'tmp{x}' for x in range(nargs)])
-        new_varnames.extend([x for x, _ in kwargs.items()])
+        new_varnames.extend(varnames)
+        co_argcount = len(new_varnames)
+        co_args = [co_argcount]
+        additional_co_nlocals = len(varnames)
+
         from numba.core import utils
         if utils.PYVERSION >= (3, 8):
             co_args.append(stub_code.co_posonlyargcount)
         co_args.append(stub_code.co_kwonlyargcount)
-        co_args.extend([stub_code.co_nlocals + nargs + len(kwargs),
+        co_args.extend([stub_code.co_nlocals + additional_co_nlocals,
                         stub_code.co_stacksize,
                         stub_code.co_flags,
                         stub_code.co_code,
@@ -131,7 +129,6 @@ class _OverloadWrapper(object):
         @overload(self._function, strict=False,
                   jit_options={'forceinline': True})
         def ol_generated(*ol_args, **ol_kwargs):
-
             def body(tyctx):
                 msg = f"No typer registered for {self._function}"
                 if self._TYPER is None:
@@ -151,16 +148,65 @@ class _OverloadWrapper(object):
                     raise errors.InternalError(msg)
                 return sig, lowering
 
-            stub = self._stub_generator(len(ol_args), body, ol_kwargs)
+            # Need a typing context now so as to get a signature and a binding
+            # for the kwarg order.
+            from numba.core.target_extension import (dispatcher_registry,
+                                                     resolve_target_str,
+                                                     current_target)
+            disp = dispatcher_registry[resolve_target_str(current_target())]
+            typing_context = disp.targetdescr.typing_context
+            typing = self._TYPER(typing_context)
+            sig = typing.apply(ol_args, ol_kwargs)
+            if not sig:
+                # No signature is a typing error, there's no match, so report it
+                raise errors.TypingError("No match")
+
+            # The following code branches based on whether the signature has a
+            # "pysig", if it does, it's from a CallableTemplate and
+            # specialisation is required based on precise arg/kwarg names and
+            # default values, if it does not, then it just requires
+            # specialisation based on the arg count.
+            #
+            # The "gen_var_names" function is defined to generate the variable
+            # names at the call site of the intrinsic.
+            #
+            # The "call_str_specific" is the list of args to the function
+            # returned by the @overload, it has to have matching arg names and
+            # kwargs names/defaults if the underlying typing template supports
+            # it (CallableTemplate), else it has to have a matching number of
+            # arguments (AbstractTemplate). The "call_str" is the list of args
+            # that will be passed to the intrinsic that deals with typing and
+            # selection of the lowering etc, so it just needs to be a list of
+            # the argument names.
+
+            if sig.pysig: # CallableTemplate, has pysig
+                pysig_params = sig.pysig.parameters
+
+                # Define the var names
+                gen_var_names = [x for x in pysig_params.keys()]
+                # CallableTemplate, pysig is present so generate the exact thing
+                # this is to permit calling with positional args specified by
+                # name.
+                buf = []
+                for k, v in pysig_params.items():
+                    if v.default is v.empty: # no default ~= positional arg
+                        buf.append(k)
+                    else: # is kwarg, wire in default
+                        buf.append(f'{k} = {v.default}')
+                call_str_specific = ', '.join(buf)
+                call_str = ', '.join(pysig_params.keys())
+            else: # AbstractTemplate, need to bind 1:1 vars to the arg count
+                # Define the var names
+                gen_var_names = [f'tmp{x}' for x in range(len(ol_args))]
+                # Everything is just passed by position, there should be no
+                # kwargs.
+                assert not ol_kwargs
+                call_str_specific = ', '.join(gen_var_names)
+                call_str = call_str_specific
+
+            stub = self._stub_generator(body, gen_var_names)
             intrin = intrinsic(stub)
 
-            # This is horrible, need to generate a jit wrapper function that
-            # walks the ol_kwargs into the intrin with a signature that
-            # matches the lowering sig. The actual kwarg var names matter,
-            # they have to match exactly.
-            arg_str = ','.join([f'tmp{x}' for x in range(len(ol_args))])
-            kws_str = ','.join(ol_kwargs.keys())
-            call_str = ','.join([x for x in (arg_str, kws_str) if x])
             # NOTE: The jit_wrapper functions cannot take `*args`
             # albeit this an obvious choice for accepting an unknown number
             # of arguments. If this is done, `*args` ends up as a cascade of
@@ -174,7 +220,7 @@ class _OverloadWrapper(object):
             gen = textwrap.dedent(("""
             def jit_wrapper_{}({}):
                 return intrin({})
-            """)).format(name, call_str, call_str)
+            """)).format(name, call_str_specific, call_str)
             l = {}
             g = {'intrin': intrin}
             exec(gen, g, l)

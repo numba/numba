@@ -1,14 +1,8 @@
-import contextlib
 import os
 import platform
 import shutil
-import sys
 
-from numba.tests.support import (
-    captured_stdout,
-    SerialMixin,
-    redirect_c_stdout,
-)
+from numba.tests.support import SerialMixin
 from numba.cuda.cuda_paths import get_conda_ctk
 from numba.cuda.cudadrv import driver, devices, libs
 from numba.core import config
@@ -106,16 +100,21 @@ def skip_on_arm(reason):
     return unittest.skipIf(is_arm, reason)
 
 
+def skip_if_cuda_includes_missing(fn):
+    # Skip when cuda.h is not available - generally this should indicate
+    # whether the CUDA includes are available or not
+    cuda_h = os.path.join(config.CUDA_INCLUDE_PATH, 'cuda.h')
+    cuda_h_file = (os.path.exists(cuda_h) and os.path.isfile(cuda_h))
+    reason = 'CUDA include dir not available on this system'
+    return unittest.skipUnless(cuda_h_file, reason)(fn)
+
+
 def cc_X_or_above(major, minor):
     if not config.ENABLE_CUDASIM:
         cc = devices.get_context().device.compute_capability
         return cc >= (major, minor)
     else:
         return True
-
-
-def skip_unless_cc_32(fn):
-    return unittest.skipUnless(cc_X_or_above(3, 2), "requires cc >= 3.2")(fn)
 
 
 def skip_unless_cc_50(fn):
@@ -130,8 +129,19 @@ def skip_unless_cc_60(fn):
     return unittest.skipUnless(cc_X_or_above(6, 0), "requires cc >= 6.0")(fn)
 
 
+def xfail_unless_cudasim(fn):
+    if config.ENABLE_CUDASIM:
+        return fn
+    else:
+        return unittest.expectedFailure(fn)
+
+
 def skip_with_cuda_python(reason):
     return unittest.skipIf(driver.USE_NV_BINDING, reason)
+
+
+def skip_unless_cuda_python(reason):
+    return unittest.skipIf(not driver.USE_NV_BINDING, reason)
 
 
 def cudadevrt_missing():
@@ -146,45 +156,6 @@ def cudadevrt_missing():
 
 def skip_if_cudadevrt_missing(fn):
     return unittest.skipIf(cudadevrt_missing(), 'cudadevrt missing')(fn)
-
-
-class CUDATextCapture(object):
-
-    def __init__(self, stream):
-        self._stream = stream
-
-    def getvalue(self):
-        return self._stream.read()
-
-
-class PythonTextCapture(object):
-
-    def __init__(self, stream):
-        self._stream = stream
-
-    def getvalue(self):
-        return self._stream.getvalue()
-
-
-@contextlib.contextmanager
-def captured_cuda_stdout():
-    """
-    Return a minimal stream-like object capturing the text output of
-    either CUDA or the simulator.
-    """
-    # Prevent accidentally capturing previously output text
-    sys.stdout.flush()
-
-    if config.ENABLE_CUDASIM:
-        # The simulator calls print() on Python stdout
-        with captured_stdout() as stream:
-            yield PythonTextCapture(stream)
-    else:
-        # The CUDA runtime writes onto the system stdout
-        from numba import cuda
-        with redirect_c_stdout() as stream:
-            yield CUDATextCapture(stream)
-            cuda.synchronize()
 
 
 class ForeignArray(object):

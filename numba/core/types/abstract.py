@@ -443,7 +443,13 @@ class Literal(Type):
             ctx = typing.Context()
             try:
                 res = ctx.resolve_value_type(self.literal_value)
-            except ValueError:
+            except ValueError as e:
+
+                if "Int value is too large" in str(e):
+                    # If a string literal cannot create an IntegerLiteral
+                    # because of overflow we generate this message.
+                    msg = f"Cannot create literal type. {str(e)}"
+                    raise TypeError(msg)
                 # Not all literal types have a literal_value that can be
                 # resolved to a type, for example, LiteralStrKeyDict has a
                 # literal_value that is a python dict for which there's no

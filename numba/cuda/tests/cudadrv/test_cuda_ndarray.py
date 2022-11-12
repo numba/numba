@@ -172,10 +172,14 @@ class TestCudaNDArray(CUDATestCase):
         array = cuda.to_device(original)[:, ::2]
         with self.assertRaises(ValueError) as e:
             array.view("i4")
-        self.assertEqual(
-            "To change to a dtype of a different size,"
-            " the array must be C-contiguous",
-            str(e.exception))
+
+        msg = str(e.exception)
+        self.assertIn('To change to a dtype of a different size,', msg)
+
+        contiguous_pre_np123 = 'the array must be C-contiguous' in msg
+        contiguous_post_np123 = 'the last axis must be contiguous' in msg
+        self.assertTrue(contiguous_pre_np123 or contiguous_post_np123,
+                        'Expected message to mention contiguity')
 
     def test_devicearray_view_bad_itemsize(self):
         original = np.array(np.arange(12), dtype="i2").reshape(4, 3)
@@ -415,6 +419,41 @@ class TestCudaNDArray(CUDATestCase):
         dary = cuda.to_device(ary)
         got = np.asarray(dary)
         self.assertEqual(got.dtype, dary.dtype)
+
+    @skip_on_cudasim('DeviceNDArray class not present in simulator')
+    def test_issue_8477(self):
+        # Ensure that we can copy a zero-length device array to a zero-length
+        # host array when the strides of the device and host arrays differ -
+        # this should be possible because the strides are irrelevant when the
+        # length is zero. For more info see
+        # https://github.com/numba/numba/issues/8477.
+
+        # Create a device array with shape (0,) and strides (8,)
+        dev_array = devicearray.DeviceNDArray(shape=(0,), strides=(8,),
+                                              dtype=np.int8)
+
+        # Create a host array with shape (0,) and strides (0,)
+        host_array = np.ndarray(shape=(0,), strides=(0,), dtype=np.int8)
+
+        # Sanity check for this test - ensure our destination has the strides
+        # we expect, because strides can be ignored in some cases by the
+        # ndarray constructor - checking here ensures that we haven't failed to
+        # account for unexpected behaviour across different versions of NumPy
+        self.assertEqual(host_array.strides, (0,))
+
+        # Ensure that the copy succeeds in both directions
+        dev_array.copy_to_host(host_array)
+        dev_array.copy_to_device(host_array)
+
+        # Ensure that a device-to-device copy also succeeds when the strides
+        # differ - one way of doing this is to copy the host array across and
+        # use that for copies in both directions.
+        dev_array_from_host = cuda.to_device(host_array)
+        self.assertEqual(dev_array_from_host.shape, (0,))
+        self.assertEqual(dev_array_from_host.strides, (0,))
+
+        dev_array.copy_to_device(dev_array_from_host)
+        dev_array_from_host.copy_to_device(dev_array)
 
 
 class TestRecarray(CUDATestCase):

@@ -2,8 +2,8 @@ import re
 import llvmlite.binding as ll
 from llvmlite import ir
 
-from numba.core import (typing, types, dispatcher, debuginfo, itanium_mangler,
-                        cgutils)
+from numba.core import typing, types, debuginfo, itanium_mangler, cgutils
+from numba.core.dispatcher import Dispatcher
 from numba.core.utils import cached_property
 from numba.core.base import BaseContext
 from numba.core.callconv import MinimalCallConv
@@ -19,16 +19,21 @@ from numba.cuda import codegen, nvvmutils
 
 class CUDATypingContext(typing.BaseContext):
     def load_additional_registries(self):
-        from . import cudadecl, cudamath, libdevicedecl
+        from . import cudadecl, cudamath, libdevicedecl, vector_types
+        from numba.core.typing import enumdecl
 
         self.install_registry(cudadecl.registry)
         self.install_registry(cudamath.registry)
         self.install_registry(cmathdecl.registry)
         self.install_registry(libdevicedecl.registry)
+        self.install_registry(enumdecl.registry)
+        self.install_registry(vector_types.typing_registry)
 
     def resolve_value_type(self, val):
-        # treat dispatcher object as another device function
-        if isinstance(val, dispatcher.Dispatcher):
+        # treat other dispatcher object as another device function
+        from numba.cuda.dispatcher import CUDADispatcher
+        if (isinstance(val, Dispatcher) and not
+                isinstance(val, CUDADispatcher)):
             try:
                 # use cached device function
                 val = val.__dispatcher
@@ -40,9 +45,7 @@ class CUDATypingContext(typing.BaseContext):
                 targetoptions['device'] = True
                 targetoptions['debug'] = targetoptions.get('debug', False)
                 targetoptions['opt'] = targetoptions.get('opt', True)
-                sigs = None
-                from .compiler import Dispatcher
-                disp = Dispatcher(val, sigs, targetoptions)
+                disp = CUDADispatcher(val.py_func, targetoptions)
                 # cache the device function for future use and to avoid
                 # duplicated copy of the same function.
                 val.__dispatcher = disp
@@ -83,29 +86,35 @@ class CUDATargetContext(BaseContext):
 
     def init(self):
         self._internal_codegen = codegen.JITCUDACodegen("numba.cuda.jit")
-        self._target_data = ll.create_target_data(nvvm.default_data_layout)
+        self._target_data = None
 
     def load_additional_registries(self):
         # side effect of import needed for numba.cpython.*, the builtins
         # registry is updated at import time.
         from numba.cpython import numbers, tupleobj, slicing # noqa: F401
-        from numba.cpython import rangeobj, iterators # noqa: F401
+        from numba.cpython import rangeobj, iterators, enumimpl # noqa: F401
         from numba.cpython import unicode, charseq # noqa: F401
         from numba.cpython import cmathimpl
         from numba.np import arrayobj # noqa: F401
         from numba.np import npdatetime # noqa: F401
-        from . import cudaimpl, printimpl, libdeviceimpl, mathimpl
+        from . import (
+            cudaimpl, printimpl, libdeviceimpl, mathimpl, vector_types
+        )
+
         self.install_registry(cudaimpl.registry)
         self.install_registry(printimpl.registry)
         self.install_registry(libdeviceimpl.registry)
         self.install_registry(cmathimpl.registry)
         self.install_registry(mathimpl.registry)
+        self.install_registry(vector_types.impl_registry)
 
     def codegen(self):
         return self._internal_codegen
 
     @property
     def target_data(self):
+        if self._target_data is None:
+            self._target_data = ll.create_target_data(nvvm.NVVM().data_layout)
         return self._target_data
 
     @cached_property
@@ -288,9 +297,8 @@ class CUDATargetContext(BaseContext):
         gv.align = 2 ** (align - 1).bit_length()
 
         # Convert to generic address-space
-        conv = nvvmutils.insert_addrspace_conv(lmod, ir.IntType(8), addrspace)
-        addrspaceptr = gv.bitcast(ir.PointerType(ir.IntType(8), addrspace))
-        genptr = builder.call(conv, [addrspaceptr])
+        ptrty = ir.PointerType(ir.IntType(8))
+        genptr = builder.addrspacecast(gv, ptrty, 'generic')
 
         # Create array object
         ary = self.make_array(aryty)(self, builder)
@@ -335,17 +343,8 @@ class CUDATargetContext(BaseContext):
         """
         lmod = builder.module
         gv = self.insert_const_string(lmod, string)
-        return self.insert_addrspace_conv(builder, gv,
-                                          nvvm.ADDRSPACE_CONSTANT)
-
-    def insert_addrspace_conv(self, builder, ptr, addrspace):
-        """
-        Perform addrspace conversion according to the NVVM spec
-        """
-        lmod = builder.module
-        base_type = ptr.type.pointee
-        conv = nvvmutils.insert_addrspace_conv(lmod, base_type, addrspace)
-        return builder.call(conv, [ptr])
+        charptrty = ir.PointerType(ir.IntType(8))
+        return builder.addrspacecast(gv, charptrty, 'generic')
 
     def optimize_function(self, func):
         """Run O1 function passes

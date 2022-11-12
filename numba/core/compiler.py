@@ -29,7 +29,7 @@ from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                                      ParforPass, DumpParforDiagnostics,
                                      IRLegalization, NoPythonBackend,
                                      InlineOverloads, PreLowerStripPhis,
-                                     NativeLowering,
+                                     NativeLowering, NativeParforLowering,
                                      NoPythonSupportedFeatureValidation,
                                      )
 
@@ -255,6 +255,10 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
 
         return cr
 
+    @property
+    def codegen(self):
+        return self.target_context.codegen()
+
     def dump(self, tab=''):
         print(f'{tab}DUMP {type(self).__name__} {self.entry_point}')
         self.signature.dump(tab=tab + '  ')
@@ -269,20 +273,25 @@ _LowerResult = namedtuple("_LowerResult", [
 ])
 
 
-def compile_result(**kws):
-    keys = set(kws.keys())
+def sanitize_compile_result_entries(entries):
+    keys = set(entries.keys())
     fieldset = set(CR_FIELDS)
     badnames = keys - fieldset
     if badnames:
         raise NameError(*badnames)
     missing = fieldset - keys
     for k in missing:
-        kws[k] = None
+        entries[k] = None
     # Avoid keeping alive traceback variables
-    err = kws['typing_error']
+    err = entries['typing_error']
     if err is not None:
-        kws['typing_error'] = err.with_traceback(None)
-    return CompileResult(**kws)
+        entries['typing_error'] = err.with_traceback(None)
+    return entries
+
+
+def compile_result(**entries):
+    entries = sanitize_compile_result_entries(entries)
+    return CompileResult(**entries)
 
 
 def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
@@ -575,7 +584,10 @@ class DefaultPassBuilder(object):
         # Annotate only once legalized
         pm.add_pass(AnnotateTypes, "annotate types")
         # lower
-        pm.add_pass(NativeLowering, "native lowering")
+        if state.flags.auto_parallel.enabled:
+            pm.add_pass(NativeParforLowering, "native parfor lowering")
+        else:
+            pm.add_pass(NativeLowering, "native lowering")
         pm.add_pass(NoPythonBackend, "nopython mode backend")
         pm.add_pass(DumpParforDiagnostics, "dump parfor diagnostics")
         pm.finalize()
@@ -660,10 +672,9 @@ class DefaultPassBuilder(object):
             pm.add_pass(PreLowerStripPhis, "remove phis nodes")
         pm.add_pass(IRProcessing, "processing IR")
 
-        if utils.PYVERSION >= (3, 7):
-            # The following passes are needed to adjust for looplifting
-            pm.add_pass(CanonicalizeLoopEntry, "canonicalize loop entry")
-            pm.add_pass(CanonicalizeLoopExit, "canonicalize loop exit")
+        # The following passes are needed to adjust for looplifting
+        pm.add_pass(CanonicalizeLoopEntry, "canonicalize loop entry")
+        pm.add_pass(CanonicalizeLoopExit, "canonicalize loop exit")
 
         pm.add_pass(ObjectModeFrontEnd, "object mode frontend")
         pm.add_pass(InlineClosureLikes,

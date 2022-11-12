@@ -2,11 +2,7 @@ import inspect
 import typing as py_typing
 
 from numba.core.typing.typeof import typeof
-from numba.core import errors, types, utils
-
-
-def _py_version_switch(py_version, new_result, old_result):
-    return new_result if utils.PYVERSION >= py_version else old_result
+from numba.core import errors, types
 
 
 class AsNumbaTypeRegistry:
@@ -40,19 +36,8 @@ class AsNumbaTypeRegistry:
             return py_type
 
     def _builtin_infer(self, py_type):
-        # The type hierarchy of python typing library changes in 3.7.
-        generic_type_check = _py_version_switch(
-            (3, 7),
-            lambda x: isinstance(x, py_typing._GenericAlias),
-            lambda _: True,
-        )
-        if not generic_type_check(py_type):
+        if not isinstance(py_type, py_typing._GenericAlias):
             return
-
-        list_origin = _py_version_switch((3, 7), list, py_typing.List)
-        dict_origin = _py_version_switch((3, 7), dict, py_typing.Dict)
-        set_origin = _py_version_switch((3, 7), set, py_typing.Set)
-        tuple_origin = _py_version_switch((3, 7), tuple, py_typing.Tuple)
 
         if getattr(py_type, "__origin__", None) is py_typing.Union:
             if len(py_type.__args__) != 2:
@@ -70,19 +55,19 @@ class AsNumbaTypeRegistry:
                     "Cannot type Union that is not an Optional "
                     f"(neither type type {arg_2_py} is not NoneType")
 
-        if getattr(py_type, "__origin__", None) is list_origin:
+        if getattr(py_type, "__origin__", None) is list:
             (element_py,) = py_type.__args__
             return types.ListType(self.infer(element_py))
 
-        if getattr(py_type, "__origin__", None) is dict_origin:
+        if getattr(py_type, "__origin__", None) is dict:
             key_py, value_py = py_type.__args__
             return types.DictType(self.infer(key_py), self.infer(value_py))
 
-        if getattr(py_type, "__origin__", None) is set_origin:
+        if getattr(py_type, "__origin__", None) is set:
             (element_py,) = py_type.__args__
             return types.Set(self.infer(element_py))
 
-        if getattr(py_type, "__origin__", None) is tuple_origin:
+        if getattr(py_type, "__origin__", None) is tuple:
             tys = tuple(map(self.infer, py_type.__args__))
             return types.BaseTuple.from_types(tys)
 

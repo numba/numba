@@ -2,7 +2,6 @@
 from collections import namedtuple
 import os
 import re
-import shutil
 import subprocess
 from textwrap import dedent
 from numba import config
@@ -17,7 +16,7 @@ class _GDBTestWrapper():
     has support for (Python and NumPy)."""
 
     def __init__(self,):
-        gdb_binary = shutil.which(config.GDB_BINARY)
+        gdb_binary = config.GDB_BINARY
         if gdb_binary is None:
             msg = ("No valid binary could be found for gdb named: "
                    f"{config.GDB_BINARY}")
@@ -66,42 +65,52 @@ class _GDBTestWrapper():
 def collect_gdbinfo():
     """Prints information to stdout about the gdb setup that Numba has found"""
 
-    # Check gdb exists
-    gdb_wrapper = _GDBTestWrapper()
-
     # State flags:
+    gdb_state = None
     gdb_has_python = False
     gdb_has_numpy = False
     gdb_python_version = 'No Python support'
     gdb_python_numpy_version = "No NumPy support"
 
-    # Check gdb works
-    status = gdb_wrapper.check_launch()
-    if not gdb_wrapper.success(status):
-        msg = (f"gdb at '{gdb_wrapper.gdb_binary}' does not appear to work."
-               f"\nstdout: {status.stdout}\nstderr: {status.stderr}")
-        raise ValueError(msg)
+    # There are so many ways for gdb to not be working as expected. Surround
+    # the "is it working" tests with try/except and if there's an exception
+    # store it for processing later.
+    try:
+        # Check gdb exists
+        gdb_wrapper = _GDBTestWrapper()
 
-    # Got this far, so gdb works, start checking what it supports
-    status = gdb_wrapper.check_python()
-    if gdb_wrapper.success(status):
-        version_match = re.match(r'\((\d+),\s+(\d+)\)', status.stdout.strip())
-        if version_match is not None:
-            pymajor, pyminor = version_match.groups()
-            gdb_python_version = f"{pymajor}.{pyminor}"
-            gdb_has_python = True
+        # Check gdb works
+        status = gdb_wrapper.check_launch()
+        if not gdb_wrapper.success(status):
+            msg = (f"gdb at '{gdb_wrapper.gdb_binary}' does not appear to work."
+                   f"\nstdout: {status.stdout}\nstderr: {status.stderr}")
+            raise ValueError(msg)
+        gdb_state = gdb_wrapper.gdb_binary
+    except Exception as e:
+        gdb_state = f"Testing gdb binary failed. Reported Error: {e}"
+    else:
+        # Got this far, so gdb works, start checking what it supports
+        status = gdb_wrapper.check_python()
+        if gdb_wrapper.success(status):
+            version_match = re.match(r'\((\d+),\s+(\d+)\)',
+                                     status.stdout.strip())
+            if version_match is not None:
+                pymajor, pyminor = version_match.groups()
+                gdb_python_version = f"{pymajor}.{pyminor}"
+                gdb_has_python = True
 
-            status = gdb_wrapper.check_numpy()
-            if gdb_wrapper.success(status):
-                if "Traceback" not in status.stderr.strip():
-                    if status.stdout.strip() == 'True':
-                        gdb_has_numpy = True
-                        gdb_python_numpy_version = "Unknown"
-                        # NumPy is present find the version
-                        status = gdb_wrapper.check_numpy_version()
-                        if gdb_wrapper.success(status):
-                            if "Traceback" not in status.stderr.strip():
-                                gdb_python_numpy_version = status.stdout.strip()
+                status = gdb_wrapper.check_numpy()
+                if gdb_wrapper.success(status):
+                    if "Traceback" not in status.stderr.strip():
+                        if status.stdout.strip() == 'True':
+                            gdb_has_numpy = True
+                            gdb_python_numpy_version = "Unknown"
+                            # NumPy is present find the version
+                            status = gdb_wrapper.check_numpy_version()
+                            if gdb_wrapper.success(status):
+                                if "Traceback" not in status.stderr.strip():
+                                    gdb_python_numpy_version = \
+                                        status.stdout.strip()
 
     # Work out what level of print-extension support is present in this gdb
     if gdb_has_python:
@@ -117,12 +126,12 @@ def collect_gdbinfo():
     print_ext_path = os.path.join(os.path.dirname(__file__), print_ext_file)
 
     # return!
-    return _gdb_info(gdb_wrapper.gdb_binary, print_ext_path, gdb_python_version,
+    return _gdb_info(gdb_state, print_ext_path, gdb_python_version,
                      gdb_python_numpy_version, print_ext_supported)
 
 
 def display_gdbinfo(sep_pos=45):
-    """Displays the infomation collected by collect_gdbinfo.
+    """Displays the information collected by collect_gdbinfo.
     """
     gdb_info = collect_gdbinfo()
     print('-' * 80)

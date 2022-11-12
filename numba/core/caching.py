@@ -13,6 +13,7 @@ import os
 import pickle
 import sys
 import tempfile
+import uuid
 import warnings
 
 from numba.misc.appdirs import AppDirs
@@ -24,20 +25,6 @@ from numba.core.codegen import CodeLibrary
 from numba.core.compiler import CompileResult
 from numba.core import config, compiler
 from numba.core.serialize import dumps
-
-
-def _get_codegen(obj):
-    """
-    Returns the Codegen associated with the given object.
-    """
-    if isinstance(obj, BaseContext):
-        return obj.codegen()
-    elif isinstance(obj, CodeLibrary):
-        return obj.codegen
-    elif isinstance(obj, CompileResult):
-        return obj.target_context.codegen()
-    else:
-        raise TypeError(type(obj))
 
 
 def _cache_log(msg, *args):
@@ -321,7 +308,7 @@ class _IPythonCacheLocator(_CacheLocator):
         return self
 
 
-class _CacheImpl(metaclass=ABCMeta):
+class CacheImpl(metaclass=ABCMeta):
     """
     Provides the core machinery for caching.
     - implement how to serialize and deserialize the data in the cache.
@@ -390,7 +377,7 @@ class _CacheImpl(metaclass=ABCMeta):
         pass
 
 
-class CompileResultCacheImpl(_CacheImpl):
+class CompileResultCacheImpl(CacheImpl):
     """
     Implements the logic to cache CompileResult objects.
     """
@@ -426,7 +413,7 @@ class CompileResultCacheImpl(_CacheImpl):
         return True
 
 
-class CodeLibraryCacheImpl(_CacheImpl):
+class CodeLibraryCacheImpl(CacheImpl):
     """
     Implements the logic to cache CodeLibrary objects.
     """
@@ -560,15 +547,16 @@ class IndexDataCacheFile(object):
         return os.path.join(self._cache_path, name)
 
     def _dump(self, obj):
-        return pickle.dumps(obj, protocol=-1)
+        return dumps(obj)
 
     @contextlib.contextmanager
     def _open_for_write(self, filepath):
         """
-        Open *filepath* for writing in a race condition-free way
-        (hopefully).
+        Open *filepath* for writing in a race condition-free way (hopefully).
+        uuid4 is used to try and avoid name collisions on a shared filesystem.
         """
-        tmpname = '%s.tmp.%d' % (filepath, os.getpid())
+        uid = uuid.uuid4().hex[:16]  # avoid long paths
+        tmpname = '%s.tmp.%s' % (filepath, uid)
         try:
             with open(tmpname, "wb") as f:
                 yield f
@@ -601,7 +589,7 @@ class Cache(_Cache):
 
     Note:
     This contains the driver logic only.  The core logic is provided
-    by a subclass of ``_CacheImpl`` specified as *_impl_class* in the subclass.
+    by a subclass of ``CacheImpl`` specified as *_impl_class* in the subclass.
     """
 
     # The following class variables must be overridden by subclass.
@@ -650,7 +638,7 @@ class Cache(_Cache):
     def _load_overload(self, sig, target_context):
         if not self._enabled:
             return
-        key = self._index_key(sig, _get_codegen(target_context))
+        key = self._index_key(sig, target_context.codegen())
         data = self._cache_file.load(key)
         if data is not None:
             data = self._impl.rebuild(target_context, data)
@@ -669,7 +657,7 @@ class Cache(_Cache):
         if not self._impl.check_cachable(data):
             return
         self._impl.locator.ensure_cache_path()
-        key = self._index_key(sig, _get_codegen(data))
+        key = self._index_key(sig, data.codegen)
         data = self._impl.reduce(data)
         self._cache_file.save(key, data)
 
@@ -697,6 +685,8 @@ class Cache(_Cache):
         codebytes = self._py_func.__code__.co_code
         if self._py_func.__closure__ is not None:
             cvars = tuple([x.cell_contents for x in self._py_func.__closure__])
+            # Note: cloudpickle serializes a function differently depending
+            #       on how the process is launched; e.g. multiprocessing.Process
             cvarbytes = dumps(cvars)
         else:
             cvarbytes = b''

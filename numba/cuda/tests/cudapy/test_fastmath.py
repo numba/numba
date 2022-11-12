@@ -1,123 +1,157 @@
+from typing import List
+from dataclasses import dataclass, field
 from numba import cuda, float32
+from numba.cuda.compiler import compile_ptx_for_current_device
 from math import cos, sin, tan, exp, log, log10, log2, pow
+from operator import truediv
 import numpy as np
 from numba.cuda.testing import CUDATestCase, skip_on_cudasim
 import unittest
 
 
+@dataclass
+class FastMathCriterion:
+    fast_expected: List[str] = field(default_factory=list)
+    fast_unexpected: List[str] = field(default_factory=list)
+    prec_expected: List[str] = field(default_factory=list)
+    prec_unexpected: List[str] = field(default_factory=list)
+
+    def check(self, test: CUDATestCase, fast: str, prec: str):
+        test.assertTrue(all(i in fast for i in self.fast_expected))
+        test.assertTrue(all(i not in fast for i in self.fast_unexpected))
+        test.assertTrue(all(i in prec for i in self.prec_expected))
+        test.assertTrue(all(i not in prec for i in self.prec_unexpected))
+
+
 @skip_on_cudasim('Fastmath and PTX inspection not available on cudasim')
 class TestFastMathOption(CUDATestCase):
-    def test_kernel(self):
-        # Test the cast of an int being used in fastmath divide
-        def foo(arr, val):
-            i = cuda.grid(1)
-            if i < arr.size:
-                arr[i] = float32(i) / val
+    def _test_fast_math_common(self, pyfunc, sig, device, criterion):
 
-        sig = (float32[::1], float32)
-        fastver = cuda.jit(sig, fastmath=True)(foo)
-        precver = cuda.jit(sig)(foo)
+        # Test jit code path
+        fastver = cuda.jit(sig, device=device, fastmath=True)(pyfunc)
+        precver = cuda.jit(sig, device=device)(pyfunc)
+        criterion.check(
+            self, fastver.inspect_asm(sig), precver.inspect_asm(sig)
+        )
 
-        self.assertIn('div.approx.ftz.f32', fastver.ptx[sig])
-        self.assertNotIn('div.approx.ftz.f32', precver.ptx[sig])
+        # Test compile_ptx code path
+        fastptx, _ = compile_ptx_for_current_device(
+            pyfunc, sig, device=device, fastmath=True
+        )
+        precptx, _ = compile_ptx_for_current_device(
+            pyfunc, sig, device=device
+        )
+        criterion.check(self, fastptx, precptx)
+
+    def _test_fast_math_unary(self, op, criterion: FastMathCriterion):
+        def kernel(r, x):
+            r[0] = op(x)
+
+        def device_function(x):
+            return op(x)
+
+        self._test_fast_math_common(
+            kernel, (float32[::1], float32), device=False, criterion=criterion
+        )
+        self._test_fast_math_common(
+            device_function, (float32,), device=True, criterion=criterion
+        )
+
+    def _test_fast_math_binary(self, op, criterion: FastMathCriterion):
+        def kernel(r, x, y):
+            r[0] = op(x, y)
+
+        def device(x, y):
+            return op(x, y)
+
+        self._test_fast_math_common(
+            kernel,
+            (float32[::1], float32, float32), device=False, criterion=criterion
+        )
+        self._test_fast_math_common(
+            device, (float32, float32), device=True, criterion=criterion
+        )
 
     def test_cosf(self):
-        def f1(r, x):
-            r[0] = cos(x)
-
-        sig = (float32[::1], float32)
-        fastver = cuda.jit(sig, fastmath=True)(f1)
-        slowver = cuda.jit(sig)(f1)
-        self.assertIn('cos.approx.ftz.f32 ', fastver.ptx[sig])
-        self.assertNotIn('cos.approx.ftz.f32 ', slowver.ptx[sig])
+        self._test_fast_math_unary(
+            cos,
+            FastMathCriterion(
+                fast_expected=['cos.approx.ftz.f32 '],
+                prec_unexpected=['cos.approx.ftz.f32 ']
+            )
+        )
 
     def test_sinf(self):
-        def f2(r, x):
-            r[0] = sin(x)
-
-        sig = (float32[::1], float32)
-        fastver = cuda.jit(sig, fastmath=True)(f2)
-        slowver = cuda.jit(sig)(f2)
-        self.assertIn('sin.approx.ftz.f32 ', fastver.ptx[sig])
-        self.assertNotIn('sin.approx.ftz.f32 ', slowver.ptx[sig])
+        self._test_fast_math_unary(
+            sin,
+            FastMathCriterion(
+                fast_expected=['sin.approx.ftz.f32 '],
+                prec_unexpected=['sin.approx.ftz.f32 ']
+            )
+        )
 
     def test_tanf(self):
-        def f3(r, x):
-            r[0] = tan(x)
-
-        sig = (float32[::1], float32)
-        fastver = cuda.jit(sig, fastmath=True)(f3)
-        slowver = cuda.jit(sig)(f3)
-        self.assertIn('sin.approx.ftz.f32 ', fastver.ptx[sig])
-        self.assertIn('cos.approx.ftz.f32 ', fastver.ptx[sig])
-        self.assertIn('div.approx.ftz.f32 ', fastver.ptx[sig])
-        self.assertNotIn('sin.approx.ftz.f32 ', slowver.ptx[sig])
+        self._test_fast_math_unary(
+            tan,
+            FastMathCriterion(fast_expected=[
+                'sin.approx.ftz.f32 ',
+                'cos.approx.ftz.f32 ',
+                'div.approx.ftz.f32 '
+            ], prec_unexpected=['sin.approx.ftz.f32 '])
+        )
 
     def test_expf(self):
-        def f4(r, x):
-            r[0] = exp(x)
-
-        sig = (float32[::1], float32)
-        fastver = cuda.jit(sig, fastmath=True)(f4)
-        slowver = cuda.jit(sig)(f4)
-        self.assertNotIn('fma.rn.f32 ', fastver.ptx[sig])
-        self.assertIn('fma.rn.f32 ', slowver.ptx[sig])
+        self._test_fast_math_unary(
+            exp,
+            FastMathCriterion(
+                fast_unexpected=['fma.rn.f32 '],
+                prec_expected=['fma.rn.f32 ']
+            )
+        )
 
     def test_logf(self):
-        def f5(r, x):
-            r[0] = log(x)
-
-        sig = (float32[::1], float32)
-        fastver = cuda.jit(sig, fastmath=True)(f5)
-        slowver = cuda.jit(sig)(f5)
-        self.assertIn('lg2.approx.ftz.f32 ', fastver.ptx[sig])
         # Look for constant used to convert from log base 2 to log base e
-        self.assertIn('0f3F317218', fastver.ptx[sig])
-        self.assertNotIn('lg2.approx.ftz.f32 ', slowver.ptx[sig])
+        self._test_fast_math_unary(
+            log, FastMathCriterion(
+                fast_expected=['lg2.approx.ftz.f32 ', '0f3F317218'],
+                prec_unexpected=['lg2.approx.ftz.f32 '],
+            )
+        )
 
     def test_log10f(self):
-        def f6(r, x):
-            r[0] = log10(x)
-
-        sig = (float32[::1], float32)
-        fastver = cuda.jit(sig, fastmath=True)(f6)
-        slowver = cuda.jit(sig)(f6)
-        self.assertIn('lg2.approx.ftz.f32 ', fastver.ptx[sig])
         # Look for constant used to convert from log base 2 to log base 10
-        self.assertIn('0f3E9A209B', fastver.ptx[sig])
-        self.assertNotIn('lg2.approx.ftz.f32 ', slowver.ptx[sig])
+        self._test_fast_math_unary(
+            log10, FastMathCriterion(
+                fast_expected=['lg2.approx.ftz.f32 ', '0f3E9A209B'],
+                prec_unexpected=['lg2.approx.ftz.f32 ']
+            )
+        )
 
     def test_log2f(self):
-        def f7(r, x):
-            r[0] = log2(x)
-
-        sig = (float32[::1], float32)
-        fastver = cuda.jit(sig, fastmath=True)(f7)
-        slowver = cuda.jit(sig)(f7)
-        self.assertIn('lg2.approx.ftz.f32 ', fastver.ptx[sig])
-        self.assertNotIn('lg2.approx.ftz.f32 ', slowver.ptx[sig])
+        self._test_fast_math_unary(
+            log2, FastMathCriterion(
+                fast_expected=['lg2.approx.ftz.f32 '],
+                prec_unexpected=['lg2.approx.ftz.f32 ']
+            )
+        )
 
     def test_powf(self):
-        def f8(r, x, y):
-            r[0] = pow(x, y)
-
-        sig = (float32[::1], float32, float32)
-        fastver = cuda.jit(sig, fastmath=True)(f8)
-        slowver = cuda.jit(sig)(f8)
-        self.assertIn('lg2.approx.ftz.f32 ', fastver.ptx[sig])
-        self.assertNotIn('lg2.approx.ftz.f32 ', slowver.ptx[sig])
+        self._test_fast_math_binary(
+            pow, FastMathCriterion(
+                fast_expected=['lg2.approx.ftz.f32 '],
+                prec_unexpected=['lg2.approx.ftz.f32 '],
+            )
+        )
 
     def test_divf(self):
-        def f9(r, x, y):
-            r[0] = x / y
-
-        sig = (float32[::1], float32, float32)
-        fastver = cuda.jit(sig, fastmath=True)(f9)
-        slowver = cuda.jit(sig)(f9)
-        self.assertIn('div.approx.ftz.f32 ', fastver.ptx[sig])
-        self.assertNotIn('div.approx.ftz.f32 ', slowver.ptx[sig])
-        self.assertIn('div.rn.f32', slowver.ptx[sig])
-        self.assertNotIn('div.rn.f32', fastver.ptx[sig])
+        self._test_fast_math_binary(
+            truediv, FastMathCriterion(
+                fast_expected=['div.approx.ftz.f32 '],
+                fast_unexpected=['div.rn.f32'],
+                prec_expected=['div.rn.f32'],
+                prec_unexpected=['div.approx.ftz.f32 '],
+            )
+        )
 
     def test_divf_exception(self):
         def f10(r, x, y):
@@ -125,19 +159,22 @@ class TestFastMathOption(CUDATestCase):
 
         sig = (float32[::1], float32, float32)
         fastver = cuda.jit(sig, fastmath=True, debug=True)(f10)
-        slowver = cuda.jit(sig, debug=True)(f10)
+        precver = cuda.jit(sig, debug=True)(f10)
         nelem = 10
         ary = np.empty(nelem, dtype=np.float32)
         with self.assertRaises(ZeroDivisionError):
-            slowver[1, nelem](ary, 10.0, 0.0)
+            precver[1, nelem](ary, 10.0, 0.0)
 
         try:
             fastver[1, nelem](ary, 10.0, 0.0)
         except ZeroDivisionError:
             self.fail("Divide in fastmath should not throw ZeroDivisionError")
 
-    def test_device(self):
-        # fastmath option is ignored for device function
+    @unittest.expectedFailure
+    def test_device_fastmath_propagation(self):
+        # The fastmath option doesn't presently propagate to device functions
+        # from their callees - arguably it should do, so this test is presently
+        # an xfail.
         @cuda.jit("float32(float32, float32)", device=True)
         def foo(a, b):
             return a / b
@@ -151,8 +188,16 @@ class TestFastMathOption(CUDATestCase):
         fastver = cuda.jit(sig, fastmath=True)(bar)
         precver = cuda.jit(sig)(bar)
 
-        self.assertIn('div.full.ftz.f32', fastver.ptx[sig])
-        self.assertNotIn('div.full.ftz.f32', precver.ptx[sig])
+        # Variants of the div instruction are further documented at:
+        # https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-div
+
+        # The fast version should use the "fast, approximate divide" variant
+        self.assertIn('div.approx.f32', fastver.inspect_asm(sig))
+        # The precise version should use the "IEEE 754 compliant rounding"
+        # variant, and neither of the "approximate divide" variants.
+        self.assertIn('div.rn.f32', precver.inspect_asm(sig))
+        self.assertNotIn('div.approx.f32', precver.inspect_asm(sig))
+        self.assertNotIn('div.full.f32', precver.inspect_asm(sig))
 
 
 if __name__ == '__main__':

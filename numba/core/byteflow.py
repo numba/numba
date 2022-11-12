@@ -827,13 +827,17 @@ class TraceRunner(object):
         state.push(res)
 
     def op_CALL_FUNCTION_EX(self, state, inst):
-        if inst.arg & 1:
+        if inst.arg & 1 and PYVERSION != (3, 10):
             errmsg = "CALL_FUNCTION_EX with **kwargs not supported"
             raise UnsupportedError(errmsg)
+        if inst.arg & 1:
+            varkwarg = state.pop()
+        else:
+            varkwarg = None
         vararg = state.pop()
         func = state.pop()
         res = state.make_temp()
-        state.append(inst, func=func, vararg=vararg, res=res)
+        state.append(inst, func=func, vararg=vararg, varkwarg=varkwarg, res=res)
         state.push(res)
 
     def _dup_topx(self, state, inst, count):
@@ -1004,6 +1008,15 @@ class TraceRunner(object):
         state.append(inst, target=target, value=value, updatevar=updatevar,
                      res=res)
 
+    def op_DICT_UPDATE(self, state, inst):
+        value = state.pop()
+        index = inst.arg
+        target = state.peek(index)
+        updatevar = state.make_temp()
+        res = state.make_temp()
+        state.append(inst, target=target, value=value, updatevar=updatevar,
+                     res=res)
+
     def op_GET_ITER(self, state, inst):
         value = state.pop()
         res = state.make_temp()
@@ -1091,35 +1104,14 @@ class TraceRunner(object):
         name = state.pop()
         code = state.pop()
         closure = annotations = kwdefaults = defaults = None
-        if PYVERSION < (3, 6):
-            num_posdefaults = inst.arg & 0xFF
-            num_kwdefaults = (inst.arg >> 8) & 0xFF
-            num_annotations = (inst.arg >> 16) & 0x7FFF
-            if MAKE_CLOSURE:
-                closure = state.pop()
-            if num_annotations > 0:
-                annotations = state.pop()
-            if num_kwdefaults > 0:
-                kwdefaults = []
-                for i in range(num_kwdefaults):
-                    v = state.pop()
-                    k = state.pop()
-                    kwdefaults.append((k, v))
-                kwdefaults = tuple(kwdefaults)
-            if num_posdefaults:
-                defaults = []
-                for i in range(num_posdefaults):
-                    defaults.append(state.pop())
-                defaults = tuple(defaults)
-        else:
-            if inst.arg & 0x8:
-                closure = state.pop()
-            if inst.arg & 0x4:
-                annotations = state.pop()
-            if inst.arg & 0x2:
-                kwdefaults = state.pop()
-            if inst.arg & 0x1:
-                defaults = state.pop()
+        if inst.arg & 0x8:
+            closure = state.pop()
+        if inst.arg & 0x4:
+            annotations = state.pop()
+        if inst.arg & 0x2:
+            kwdefaults = state.pop()
+        if inst.arg & 0x1:
+            defaults = state.pop()
         res = state.make_temp()
         state.append(
             inst,

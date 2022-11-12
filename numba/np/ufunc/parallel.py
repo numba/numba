@@ -14,20 +14,19 @@ import os
 import sys
 import warnings
 from threading import RLock as threadRLock
-from ctypes import CFUNCTYPE, c_int, CDLL
+from ctypes import CFUNCTYPE, c_int, CDLL, POINTER, c_uint
 
 import numpy as np
 
-import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 from llvmlite import ir
 
 from numba.np.numpy_support import as_dtype
 from numba.core import types, cgutils, config, errors
+from numba.core.typing import signature
 from numba.np.ufunc.wrappers import _wrapper_info
 from numba.np.ufunc import ufuncbuilder
-from numba.extending import overload
-
+from numba.extending import overload, intrinsic
 
 _IS_OSX = sys.platform.startswith('darwin')
 _IS_LINUX = sys.platform.startswith('linux')
@@ -97,17 +96,17 @@ def build_gufunc_kernel(library, ctx, info, sig, inner_ndim):
     """
     assert isinstance(info, tuple)  # guard against old usage
     # Declare types and function
-    byte_t = lc.Type.int(8)
-    byte_ptr_t = lc.Type.pointer(byte_t)
-    byte_ptr_ptr_t = lc.Type.pointer(byte_ptr_t)
+    byte_t = ir.IntType(8)
+    byte_ptr_t = ir.PointerType(byte_t)
+    byte_ptr_ptr_t = ir.PointerType(byte_ptr_t)
 
     intp_t = ctx.get_value_type(types.intp)
-    intp_ptr_t = lc.Type.pointer(intp_t)
+    intp_ptr_t = ir.PointerType(intp_t)
 
-    fnty = lc.Type.function(lc.Type.void(), [lc.Type.pointer(byte_ptr_t),
-                                             lc.Type.pointer(intp_t),
-                                             lc.Type.pointer(intp_t),
-                                             byte_ptr_t])
+    fnty = ir.FunctionType(ir.VoidType(), [ir.PointerType(byte_ptr_t),
+                                           ir.PointerType(intp_t),
+                                           ir.PointerType(intp_t),
+                                           byte_ptr_t])
     wrapperlib = ctx.codegen().create_library('parallelgufuncwrapper')
     mod = wrapperlib.create_ir_module('parallel.gufunc.wrapper')
     kernel_name = ".kernel.{}_{}".format(id(info.env), info.name)
@@ -116,7 +115,7 @@ def build_gufunc_kernel(library, ctx, info, sig, inner_ndim):
     bb_entry = lfunc.append_basic_block('')
 
     # Function body starts
-    builder = lc.Builder(bb_entry)
+    builder = ir.IRBuilder(bb_entry)
 
     args, dimensions, steps, data = lfunc.args
 
@@ -130,17 +129,22 @@ def build_gufunc_kernel(library, ctx, info, sig, inner_ndim):
     def as_void_ptr(arg):
         return builder.bitcast(arg, byte_ptr_t)
 
-    # Array count is input signature plus 1 (due to output array)
-    array_count = len(sig.args) + 1
+    # Array count depends on whether an "output" array is needed. In the case
+    # of a void return type cf. gufunc it is the number of args, in the case of
+    # a non-void return type cf. ufunc it is the number of args + 1 so as to
+    # account for the output array.
+    array_count = len(sig.args)
+    if not isinstance(sig.return_type, types.NoneType):
+        array_count += 1
 
-    parallel_for_ty = lc.Type.function(lc.Type.void(),
-                                       [byte_ptr_t] * 5 + [intp_t, ] * 3)
+    parallel_for_ty = ir.FunctionType(ir.VoidType(),
+                                      [byte_ptr_t] * 5 + [intp_t, ] * 3)
     parallel_for = cgutils.get_or_insert_function(mod, parallel_for_ty,
                                                   'numba_parallel_for')
 
     # Reference inner-function and link
-    innerfunc_fnty = lc.Type.function(
-        lc.Type.void(),
+    innerfunc_fnty = ir.FunctionType(
+        ir.VoidType(),
         [byte_ptr_ptr_t, intp_ptr_t, intp_ptr_t, byte_ptr_t],
     )
     tmp_voidptr = cgutils.get_or_insert_function(mod, innerfunc_fnty,
@@ -149,7 +153,7 @@ def build_gufunc_kernel(library, ctx, info, sig, inner_ndim):
 
     get_num_threads = cgutils.get_or_insert_function(
         builder.module,
-        lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
+        ir.FunctionType(ir.IntType(types.intp.bitwidth), []),
         "get_num_threads")
 
     num_threads = builder.call(get_num_threads, [])
@@ -178,7 +182,7 @@ class ParallelUFuncBuilder(ufuncbuilder.UFuncBuilder):
     def build(self, cres, sig):
         _launch_threads()
 
-        # Buider wrapper for ufunc entry point
+        # Builder wrapper for ufunc entry point
         ctx = cres.target_context
         signature = cres.signature
         library = cres.library
@@ -514,7 +518,7 @@ def _launch_threads():
             launch_threads = CFUNCTYPE(None, c_int)(lib.launch_threads)
             launch_threads(NUM_THREADS)
 
-            _load_num_threads_funcs(lib)  # load late
+            _load_threading_functions(lib)  # load late
 
             # set library name so it can be queried
             global _threading_layer
@@ -522,7 +526,7 @@ def _launch_threads():
             _is_initialized = True
 
 
-def _load_num_threads_funcs(lib):
+def _load_threading_functions(lib):
 
     ll.add_symbol('get_num_threads', lib.get_num_threads)
     ll.add_symbol('set_num_threads', lib.set_num_threads)
@@ -537,6 +541,21 @@ def _load_num_threads_funcs(lib):
 
     global _get_thread_id
     _get_thread_id = CFUNCTYPE(c_int)(lib.get_thread_id)
+
+    ll.add_symbol('set_parallel_chunksize', lib.set_parallel_chunksize)
+    ll.add_symbol('get_parallel_chunksize', lib.get_parallel_chunksize)
+    ll.add_symbol('get_sched_size', lib.get_sched_size)
+    global _set_parallel_chunksize
+    _set_parallel_chunksize = CFUNCTYPE(c_uint,
+                                        c_uint)(lib.set_parallel_chunksize)
+    global _get_parallel_chunksize
+    _get_parallel_chunksize = CFUNCTYPE(c_uint)(lib.get_parallel_chunksize)
+    global _get_sched_size
+    _get_sched_size = CFUNCTYPE(c_uint,
+                                c_uint,
+                                c_uint,
+                                POINTER(c_int),
+                                POINTER(c_int))(lib.get_sched_size)
 
 
 # Some helpers to make set_num_threads jittable
@@ -630,7 +649,7 @@ def get_num_threads():
         raise RuntimeError("Invalid number of threads. "
                            "This likely indicates a bug in Numba. "
                            "(thread_id=%s, num_threads=%s)" %
-                           (_get_thread_id(), num_threads))
+                           (get_thread_id(), num_threads))
     return num_threads
 
 
@@ -641,7 +660,7 @@ def ol_get_num_threads():
     def impl():
         num_threads = _get_num_threads()
         if num_threads <= 0:
-            print("Broken thread_id: ", _get_thread_id())
+            print("Broken thread_id: ", get_thread_id())
             print("num_threads: ", num_threads)
             raise RuntimeError("Invalid number of threads. "
                                "This likely indicates a bug in Numba.")
@@ -649,23 +668,48 @@ def ol_get_num_threads():
     return impl
 
 
-def _get_thread_id():
-    """
-    Returns a unique ID for each thread
+@intrinsic
+def _iget_num_threads(typingctx):
+    _launch_threads()
 
-    This function is private and should only be used for testing purposes.
+    def codegen(context, builder, signature, args):
+        mod = builder.module
+        fnty = ir.FunctionType(cgutils.intp_t, [])
+        fn = cgutils.get_or_insert_function(mod, fnty, "get_num_threads")
+        return builder.call(fn, [])
+    return signature(types.intp), codegen
+
+
+def get_thread_id():
     """
+    Returns a unique ID for each thread in the range 0 (inclusive)
+    to :func:`~.get_num_threads` (exclusive).
+    """
+    # Called from the interpreter directly, this should return 0
+    # Called from a sequential JIT region, this should return 0
+    # Called from a parallel JIT region, this should return 0..N
+    # Called from objmode in a parallel JIT region, this should return 0..N
     _launch_threads()
     return _get_thread_id()
 
 
-@overload(_get_thread_id)
+@overload(get_thread_id)
 def ol_get_thread_id():
     _launch_threads()
 
     def impl():
-        return _get_thread_id()
+        return _iget_thread_id()
     return impl
+
+
+@intrinsic
+def _iget_thread_id(typingctx):
+    def codegen(context, builder, signature, args):
+        mod = builder.module
+        fnty = ir.FunctionType(cgutils.intp_t, [])
+        fn = cgutils.get_or_insert_function(mod, fnty, "get_thread_id")
+        return builder.call(fn, [])
+    return signature(types.intp), codegen
 
 
 _DYLD_WORKAROUND_SET = 'NUMBA_DYLD_WORKAROUND' in os.environ
@@ -673,3 +717,42 @@ _DYLD_WORKAROUND_VAL = int(os.environ.get('NUMBA_DYLD_WORKAROUND', 0))
 
 if _DYLD_WORKAROUND_SET and _DYLD_WORKAROUND_VAL:
     _launch_threads()
+
+
+def set_parallel_chunksize(n):
+    _launch_threads()
+    if not isinstance(n, (int, np.integer)):
+        raise TypeError("The parallel chunksize must be an integer")
+    global _set_parallel_chunksize
+    if n < 0:
+        raise ValueError("chunksize must be greater than or equal to zero")
+    return _set_parallel_chunksize(n)
+
+
+def get_parallel_chunksize():
+    _launch_threads()
+    global _get_parallel_chunksize
+    return _get_parallel_chunksize()
+
+
+@overload(set_parallel_chunksize)
+def ol_set_parallel_chunksize(n):
+    _launch_threads()
+    if not isinstance(n, types.Integer):
+        msg = "The parallel chunksize must be an integer"
+        raise errors.TypingError(msg)
+
+    def impl(n):
+        if n < 0:
+            raise ValueError("chunksize must be greater than or equal to zero")
+        return _set_parallel_chunksize(n)
+    return impl
+
+
+@overload(get_parallel_chunksize)
+def ol_get_parallel_chunksize():
+    _launch_threads()
+
+    def impl():
+        return _get_parallel_chunksize()
+    return impl

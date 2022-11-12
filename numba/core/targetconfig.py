@@ -146,7 +146,7 @@ class TargetConfig(metaclass=_MetaTargetConfig):
     >>>     a_bool_option = Option(type=bool, default=False, doc="a bool")
     >>>     an_int_option = Option(type=int, default=0, doc="an int")
 
-    The metaclass will insert properties for each ``Option``. For exapmle:
+    The metaclass will insert properties for each ``Option``. For example:
 
     >>> tc = MyTargetConfig()
     >>> tc.a_bool_option = True  # invokes the setter

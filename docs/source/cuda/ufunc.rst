@@ -123,7 +123,7 @@ the `max_blocksize` attribute on the compiled gufunc object.
         chunksize = 1e+6
         chunkcount = N // chunksize
 
-        # partition numpy arrays into chunks
+        # partition NumPy arrays into chunks
         # no copying is performed
         sA = np.split(A, chunkcount)
         sB = np.split(B, chunkcount)

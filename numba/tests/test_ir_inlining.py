@@ -4,6 +4,7 @@ LLVM or low level inlining.
 """
 
 import operator
+import warnings
 from itertools import product
 import numpy as np
 
@@ -29,7 +30,8 @@ from numba.core.typed_passes import InlineOverloads
 from numba.core.typing import signature
 from numba.tests.support import (TestCase, unittest, skip_py38_or_later,
                                  MemoryLeakMixin, IRPreservingTestPipeline,
-                                 skip_parfors_unsupported)
+                                 skip_parfors_unsupported,
+                                 ignore_internal_warnings)
 
 
 # this global has the same name as the global in inlining_usecases.py, it
@@ -705,7 +707,7 @@ class TestOverloadInlining(MemoryLeakMixin, InliningBase):
             if isinstance(obj, DummyType):
                 return dummy_getitem_impl
 
-        # noth getitem and static_getitem Exprs refer to opertor.getitem
+        # both getitem and static_getitem Exprs refer to operator.getitem
         # hence they are checked using the same expect key
         self.check(impl, Dummy(), 1, inline_expect={'getitem': False})
         self.check(impl_static_getitem, Dummy(),
@@ -1044,8 +1046,7 @@ class TestOverloadInlining(MemoryLeakMixin, InliningBase):
         self.check(test_impl, dtype, inline_expect={'foo': True})
 
     def test_inline_always_ssa(self):
-        """make sure IR inlining uses SSA properly. Test for #6721.
-        """
+        # Make sure IR inlining uses SSA properly. Test for #6721.
 
         dummy_true = True
 
@@ -1069,6 +1070,33 @@ class TestOverloadInlining(MemoryLeakMixin, InliningBase):
             return foo(np.array([True, False, True]))
 
         self.check(impl, block_count='SKIP', inline_expect={'foo': True})
+
+    def test_inline_always_ssa_scope_validity(self):
+        # Make sure IR inlining correctly updates the scope(s). See #7802
+
+        def bar():
+            b = 5
+            while b > 1:
+                b //= 2
+
+            return 10
+
+        @overload(bar, inline="always")
+        def bar_impl():
+            return bar
+
+        @njit
+        def foo():
+            bar()
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', errors.NumbaIRAssumptionWarning)
+            ignore_internal_warnings()
+            self.assertEqual(foo(), foo.py_func())
+
+        # There should be no warnings as the IR scopes should be consistent with
+        # the IR involved.
+        self.assertEqual(len(w), 0)
 
 
 class TestOverloadMethsAttrsInlining(InliningBase):
@@ -1477,7 +1505,7 @@ class TestInlineMiscIssues(TestCase):
     @skip_parfors_unsupported
     def test_issue7380(self):
         # This checks that inlining a function containing a loop into another
-        # loop where the induction variable in boths loops is the same doesn't
+        # loop where the induction variable in both loops is the same doesn't
         # end up with a name collision. Parfors can detect this so it is used.
         # See: https://github.com/numba/numba/issues/7380
 

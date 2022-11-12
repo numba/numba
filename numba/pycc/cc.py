@@ -154,7 +154,7 @@ class CC(object):
         here = os.path.dirname(__file__)
         mixin_sources = self._mixin_sources[:]
         if self._use_nrt:
-            mixin_sources.append('../core/runtime/nrt.c')
+            mixin_sources.append('../core/runtime/nrt.cpp')
         return [os.path.join(here, f) for f in mixin_sources]
 
     def _get_mixin_defines(self):
@@ -174,6 +174,10 @@ class CC(object):
         extra_ldflags = self._extra_ldflags.get(sys.platform, [])
         if not extra_ldflags:
             extra_ldflags = self._extra_ldflags.get(os.name, [])
+        # helperlib uses pthread on linux. make sure we are linking to it.
+        if sys.platform.startswith("linux"):
+            if "-pthread" not in extra_ldflags:
+                extra_ldflags.append('-pthread')
         return extra_ldflags
 
     def _compile_mixins(self, build_dir):

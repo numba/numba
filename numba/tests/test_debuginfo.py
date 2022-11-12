@@ -7,10 +7,10 @@ from textwrap import dedent
 import unittest
 import warnings
 
-from numba.tests.support import (TestCase, override_config, needs_subprocess,
+from numba.tests.support import (TestCase, override_config,
                                  ignore_internal_warnings)
 from numba import jit, njit
-from numba.core import types, utils
+from numba.core import types
 from numba.core.datamodel import default_manager
 from numba.core.errors import NumbaDebugInfoWarning
 import llvmlite.binding as llvm
@@ -139,14 +139,6 @@ class TestDebugInfoEmission(TestCase):
             if meta_re.match(line):
                 metadata.append(line)
         return metadata
-
-    def _subprocess_test_runner(self, test_name):
-        themod = self.__module__
-        thecls = type(self).__name__
-        self.subprocess_test_runner(test_module=themod,
-                                    test_class=thecls,
-                                    test_name=test_name,
-                                    envvars=self._NUMBA_OPT_0_ENV)
 
     def _get_metadata_map(self, metadata):
         """Gets the map of DI label to md, e.g.
@@ -293,21 +285,30 @@ class TestDebugInfoEmission(TestCase):
                 groups = matched.groups()
                 self.assertEqual(len(groups), 1)
                 dbg_line = int(groups[0])
-                # +1 for the decorator on Python 3.8+, `inspect` changed, also
-                # recall that Numba's DWARF refers to the "def" line
-                defline = pysrc_line_start + (utils.PYVERSION >= (3, 8))
+                # +1 for the decorator.
+                # Recall that Numba's DWARF refers to the "def" line, but
+                # `inspect` uses the decorator as the first line.
+                defline = pysrc_line_start + 1
                 self.assertEqual(dbg_line, defline)
                 break
         else:
             self.fail('Assertion on DILocalVariable not made')
 
-    @needs_subprocess
-    def test_DILocation_entry_blk_impl(self):
-        """ This tests that the unconditional jump emitted at the tail of
-        the entry block has no debug metadata associated with it. In practice,
-        if debug metadata is associated with it, it manifests as the
-        prologue_end being associated with the end_sequence or similar (due to
-        the way code gen works for the entry block)."""
+    @TestCase.run_test_in_subprocess(envvars=_NUMBA_OPT_0_ENV)
+    def test_DILocation_entry_blk(self):
+        # Needs a subprocess as jitting literally anything at any point in the
+        # lifetime of the process ends up with a codegen at opt 3. This is not
+        # amenable to this test!
+        # This test relies on the CFG not being simplified as it checks the jump
+        # from the entry block to the first basic block. Force OPT as 0, if set
+        # via the env var the targetmachine and various pass managers all end up
+        # at OPT 0 and the IR is minimally transformed prior to lowering to ELF.
+        #
+        # This tests that the unconditional jump emitted at the tail of
+        # the entry block has no debug metadata associated with it. In practice,
+        # if debug metadata is associated with it, it manifests as the
+        # prologue_end being associated with the end_sequence or similar (due to
+        # the way code gen works for the entry block).
 
         @njit(debug=True)
         def foo(a):
@@ -350,19 +351,8 @@ class TestDebugInfoEmission(TestCase):
         # check the uncondition jump instr itself has no metadata
         self.assertTrue(str(ujmp).endswith(target))
 
-    def test_DILocation_entry_blk(self):
-        # Test runner for test_DILocation_entry_blk_impl, needs a subprocess
-        # as jitting literally anything at any point in the lifetime of the
-        # process ends up with a codegen at opt 3. This is not amenable to this
-        # test!
-        # This test relies on the CFG not being simplified as it checks the jump
-        # from the entry block to the first basic block. Force OPT as 0, if set
-        # via the env var the targetmachine and various pass managers all end up
-        # at OPT 0 and the IR is minimally transformed prior to lowering to ELF.
-        self._subprocess_test_runner('test_DILocation_entry_blk_impl')
-
-    @needs_subprocess
-    def test_DILocation_decref_impl(self):
+    @TestCase.run_test_in_subprocess(envvars=_NUMBA_OPT_0_ENV)
+    def test_DILocation_decref(self):
         """ This tests that decref's generated from `ir.Del`s as variables go
         out of scope do not have debuginfo associated with them (the location of
         `ir.Del` is an implementation detail).
@@ -393,11 +383,6 @@ class TestDebugInfoEmission(TestCase):
                 self.assertRegex(line, r'.*meminfo\.[0-9]+\)$')
                 count += 1
         self.assertGreater(count, 0) # make sure there were some decrefs!
-
-    def test_DILocation_decref(self):
-        # Test runner for test_DILocation_decref_impl, needs a subprocess
-        # with opt=0 to preserve decrefs.
-        self._subprocess_test_runner('test_DILocation_decref_impl')
 
     def test_DILocation_undefined(self):
         """ Tests that DILocation information for undefined vars is associated
@@ -647,7 +632,7 @@ class TestDebugInfoEmission(TestCase):
             must_not_have_attrs=set(),
         )
         expected_info[foo_debug_optnone_inline] = dict(
-            # optnone=True is overriden by forceinline, so this looks like the
+            # optnone=True is overridden by forceinline, so this looks like the
             # foo_debug version
             lines={0, firstline + 5},
             must_have_attrs=set([b"alwaysinline"]),
@@ -741,7 +726,7 @@ class TestDebugInfoEmission(TestCase):
         # and refers to the offending function
         self.assertIn(str(foo.py_func), msg)
 
-    def test_unparsable_indented_source(self):
+    def test_irregularly_indented_source(self):
 
         @njit(debug=True)
         def foo():
@@ -753,14 +738,13 @@ class TestDebugInfoEmission(TestCase):
             ignore_internal_warnings()
             foo()
 
-        self.assertEqual(len(w), 1)
-        found = w[0]
-        self.assertEqual(found.category, NumbaDebugInfoWarning)
-        msg = str(found.message)
-        # make sure the warning contains the right message
-        self.assertIn('Could not parse the source for function', msg)
-        # and refers to the offending function
-        self.assertIn(str(foo.py_func), msg)
+        # No warnings
+        self.assertEqual(len(w), 0)
+
+        metadata = self._get_metadata(foo, foo.signatures[0])
+        lines = self._get_lines_from_debuginfo(metadata)
+        # Only one line
+        self.assertEqual(len(lines), 1)
 
 
 if __name__ == '__main__':

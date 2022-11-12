@@ -10,7 +10,7 @@ from tempfile import TemporaryDirectory
 from unittest import mock
 
 import unittest
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, linux_only
 import numba.misc.numba_sysinfo as nsi
 from numba.tests.gdb_support import needs_gdb
 from numba.misc.numba_gdbinfo import collect_gdbinfo
@@ -184,10 +184,10 @@ class TestGDBCLIInfo(TestCase):
             return CompletedProcess('INVALID_BINARY', 1)
 
         with mock.patch.object(_GDBTestWrapper, 'check_launch', mock_fn):
-            with self.assertRaises(ValueError) as raises:
-                collect_gdbinfo()
-            self.assertRegex(str(raises.exception),
-                             'gdb at.*does not appear to work.')
+            info = collect_gdbinfo()
+            self.assertIn("Testing gdb binary failed.", info.binary_loc)
+            self.assertIn("gdb at 'PATH_TO_GDB' does not appear to work",
+                          info.binary_loc)
 
     def test_no_python(self):
         def mock_fn(self):
@@ -233,6 +233,48 @@ class TestGDBCLIInfo(TestCase):
         with mock.patch.object(_GDBTestWrapper, 'check_numpy_version', mock_fn):
             collected = collect_gdbinfo()
             self.assertEqual(collected.np_ver, 'Unknown')
+
+
+@linux_only
+class TestGDBCLIInfoBrokenGdbs(TestCase):
+    # In these tests, it's necessary to actually run the entry point in an env
+    # with the env var set as it's in part testing the processing of the
+    # handling of consumption of variables by numba.core.config.
+
+    def test_cannot_find_gdb_from_name(self):
+        # Tests that supplying an invalid gdb binary name is handled ok
+        env = os.environ.copy()
+        env['NUMBA_GDB_BINARY'] = 'THIS_IS_NOT_A_VALID_GDB_BINARY_NAME'
+        cmdline = [sys.executable, "-m", "numba", "-g"]
+        stdout, stderr = run_cmd(cmdline, env=env)
+        self.assertIn("Testing gdb binary failed", stdout)
+        self.assertIn("No such file or directory", stdout)
+        self.assertIn("'THIS_IS_NOT_A_VALID_GDB_BINARY_NAME'", stdout)
+
+    def test_cannot_find_gdb_from_path(self):
+        # Tests that an invalid path is handled ok
+        env = os.environ.copy()
+        with TemporaryDirectory() as d:
+            # This wont exist as a path...
+            path = os.path.join(d, 'CANNOT_EXIST')
+            env['NUMBA_GDB_BINARY'] = path
+            cmdline = [sys.executable, "-m", "numba", "-g"]
+            stdout, stderr = run_cmd(cmdline, env=env)
+            self.assertIn("Testing gdb binary failed", stdout)
+            self.assertIn("No such file or directory", stdout)
+            self.assertIn(path, stdout)
+
+    def test_nonsense_gdb_binary(self):
+        # Tests that a nonsense binary specified as gdb it picked up ok
+        env = os.environ.copy()
+        env['NUMBA_GDB_BINARY'] = 'python' # 'python' isn't gdb!
+        cmdline = [sys.executable, "-m", "numba", "-g"]
+        stdout, stderr = run_cmd(cmdline, env=env)
+        self.assertIn("Testing gdb binary failed", stdout)
+        # NOTE: should 'python' ever add support for the same flags as the gdb
+        # commands used in the information gathering code in `numba_gdbinfo`
+        # this test will fail, it's reasonably unlikely.
+        self.assertIn("Unknown option", stdout)
 
 
 if __name__ == '__main__':

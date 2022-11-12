@@ -304,8 +304,8 @@ texinfo_documents = [
 # and the Numpy documentation.
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
-    'numpy': ('http://docs.scipy.org/doc/numpy', None),
-    'llvmlite': ('http://llvmlite.pydata.org/en/latest/', None),
+    'numpy': ('https://numpy.org/doc/stable/', None),
+    'llvmlite': ('https://llvmlite.readthedocs.io/en/latest/', None),
 }
 
 

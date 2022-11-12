@@ -418,12 +418,12 @@ class Expr(Inst):
         return cls(op=op, loc=loc, fn=fn, value=value)
 
     @classmethod
-    def call(cls, func, args, kws, loc, vararg=None, target=None):
+    def call(cls, func, args, kws, loc, vararg=None, varkwarg=None, target=None):
         assert isinstance(func, Var)
         assert isinstance(loc, Loc)
         op = 'call'
         return cls(op=op, loc=loc, func=func, args=args, kws=kws,
-                   vararg=vararg, target=target)
+                   vararg=vararg, varkwarg=varkwarg, target=target)
 
     @classmethod
     def build_tuple(cls, items, loc):

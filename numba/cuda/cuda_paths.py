@@ -1,9 +1,9 @@
 import sys
 import re
 import os
-from collections import defaultdict, namedtuple
+from collections import namedtuple
 
-from numba.core.config import IS_WIN32, IS_OSX
+from numba.core.config import IS_WIN32
 from numba.misc.findlib import find_lib, find_file
 
 
@@ -36,8 +36,6 @@ def _get_libdevice_path_decision():
 def _nvvm_lib_dir():
     if IS_WIN32:
         return 'nvvm', 'bin'
-    elif IS_OSX:
-        return 'nvvm', 'lib'
     else:
         return 'nvvm', 'lib64'
 
@@ -55,24 +53,16 @@ def _get_nvvm_path_decision():
 def _get_libdevice_paths():
     by, libdir = _get_libdevice_path_decision()
     # Search for pattern
-    pat = r'libdevice(\.(?P<arch>compute_\d+))?(\.\d+)*\.bc$'
+    pat = r'libdevice(\.\d+)*\.bc$'
     candidates = find_file(re.compile(pat), libdir)
-    # Grouping
-    out = defaultdict(list)
-    for path in candidates:
-        m = re.search(pat, path)
-        arch = m.group('arch')
-        out[arch].append(path)
     # Keep only the max (most recent version) of the bitcode files.
-    out = {k: max(v) for k, v in out.items()}
+    out = max(candidates, default=None)
     return _env_path_tuple(by, out)
 
 
 def _cudalib_path():
     if IS_WIN32:
         return 'bin'
-    elif IS_OSX:
-        return 'lib'
     else:
         return 'lib64'
 
@@ -110,7 +100,7 @@ def get_conda_ctk():
     is_conda_env = os.path.exists(os.path.join(sys.prefix, 'conda-meta'))
     if not is_conda_env:
         return
-    # Asssume the existence of NVVM to imply cudatoolkit installed
+    # Assume the existence of NVVM to imply cudatoolkit installed
     paths = find_lib('nvvm')
     if not paths:
         return

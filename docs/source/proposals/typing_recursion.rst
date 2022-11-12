@@ -13,7 +13,7 @@ This document proposes an enhancement to the type inference algorithm to
 support recursion without explicitly annotating the function signature.
 As a result, the proposal enables numba to type-infer both self-recursive and
 mutual-recursive functions under some limitations.  In practice, these
-limitions can be easily overcome by specifying a compilation order.
+limitations can be easily overcome by specifying a compilation order.
 
 
 The Current State
@@ -38,7 +38,7 @@ which in turns call ``foo()``::
         return foo(x - 1)
 
 
-The type inferrence process of ``foo()`` depends on that of ``bar()``,
+The type inference process of ``foo()`` depends on that of ``bar()``,
 which depends on ``foo()``.  Therefore ``foo()`` depends on itself and the type
 inference algorithm cannot terminate.
 

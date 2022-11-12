@@ -175,7 +175,7 @@ def shutting_down(globals=globals):
 # which atexit is True. Some of these finalizers may call shutting_down() to
 # check whether the interpreter is shutting down. For this to behave correctly,
 # we need to make sure that _at_shutdown is called before the finalizer exit
-# function. Since atexit operates as a LIFO stack, we first contruct a dummy
+# function. Since atexit operates as a LIFO stack, we first construct a dummy
 # finalizer then register atexit to ensure this ordering.
 weakref.finalize(lambda: None, lambda: None)
 atexit.register(_at_shutdown)

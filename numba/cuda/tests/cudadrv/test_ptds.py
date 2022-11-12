@@ -2,7 +2,8 @@ import multiprocessing as mp
 import logging
 import traceback
 from numba.cuda.testing import unittest, CUDATestCase
-from numba.cuda.testing import skip_on_cudasim, skip_with_cuda_python
+from numba.cuda.testing import (skip_on_cudasim, skip_with_cuda_python,
+                                skip_under_cuda_memcheck)
 
 
 def child_test():
@@ -100,6 +101,7 @@ def child_test_wrapper(result_queue):
     result_queue.put((success, output))
 
 
+@skip_under_cuda_memcheck('Hangs cuda-memcheck')
 @skip_on_cudasim('Streams not supported on the simulator')
 class TestPTDS(CUDATestCase):
     @skip_with_cuda_python('Function names unchanged for PTDS with NV Binding')

@@ -23,7 +23,7 @@ def _get_commit():
             "Cannot find git commit hash. Source links could be inaccurate.",
             category=errors.NumbaWarning,
         )
-        return 'master'
+        return 'main'
     return full
 
 
