@@ -1601,7 +1601,7 @@ class ArrayAnalysis(object):
         name="static_literal_slice_part",
     ):
         # Create var to hold the calculated slice size.
-        static_literal_slice_part_var = scope.make_temp_with_prefix(name, loc)
+        static_literal_slice_part_var = scope.make_temp(loc, name)
         static_literal_slice_part_val = ir.Const(arg_val, loc)
         static_literal_slice_part_typ = types.IntegerLiteral(arg_val)
         # We'll prepend this slice size calculation to the get/setitem.
@@ -1647,7 +1647,7 @@ class ArrayAnalysis(object):
     ):
         assert not isinstance(size_typ, int)
         # Create var to hold the calculated slice size.
-        explicit_neg_var = scope.make_temp_with_prefix("explicit_neg", loc)
+        explicit_neg_var = scope.make_temp(loc, "explicit_neg")
         explicit_neg_val = ir.Expr.binop(operator.add, dsize, arg, loc=loc)
         # Determine the type of that var.  Can be literal if we know the
         # literal size of the dimension.
@@ -1797,8 +1797,7 @@ class ArrayAnalysis(object):
         # Fill in the left side of the slice's ":" with 0 if it wasn't
         # specified.
         if isinstance(lhs_typ, types.NoneType):
-            # zero_var = scope.make_temp(loc)
-            zero_var = scope.make_temp_with_prefix("zero", loc)
+            zero_var = scope.make_temp(loc, "zero")
             zero = ir.Const(0, loc)
             stmts.append(ir.Assign(value=zero, target=zero_var, loc=loc))
             self._define(equiv_set, zero_var, types.IntegerLiteral(0), zero)
@@ -1883,9 +1882,8 @@ class ArrayAnalysis(object):
             replacement_slice_var = None
         else:
             # Create a new var for the replacement slice.
-            replacement_slice_var = scope.make_temp_with_prefix(
-                "replacement_slice", loc)
-            # replacement_slice_var = scope.make_temp(loc)
+            replacement_slice_var = scope.make_temp(
+                loc, "replacement_slice")
             # Create a deepcopy of slice calltype so that when we change it
             # below the original isn't changed.  Make the types of the parts of
             # the slice intp.
@@ -1935,8 +1933,7 @@ class ArrayAnalysis(object):
         slice_typ = types.intp
         orig_slice_typ = slice_typ
 
-        size_var = scope.make_temp_with_prefix("slice_size", loc)
-        print(size_var)
+        size_var = scope.make_temp(loc, "slice_size")
         size_val = ir.Expr.binop(operator.sub, rhs, lhs, loc=loc)
         self.calltypes[size_val] = signature(slice_typ, rhs_typ, lhs_typ)
         self._define(equiv_set, size_var, slice_typ, size_val)
@@ -1944,7 +1941,7 @@ class ArrayAnalysis(object):
         if config.DEBUG_ARRAY_OPT >= 2:
             print("size_rel", size_rel, type(size_rel))
 
-        wrap_var = scope.make_temp_with_prefix("wrap", loc)
+        wrap_var = scope.make_temp(loc, "wrap")
         wrap_def = ir.Global("wrap_index", wrap_index, loc=loc)
         fnty = get_global_func_typ(wrap_index)
         sig = self.context.resolve_function_type(
@@ -1954,7 +1951,7 @@ class ArrayAnalysis(object):
 
         def gen_wrap_if_not_known(val, val_typ, known):
             if not known:
-                var = scope.make_temp_with_prefix("var", loc)
+                var = scope.make_temp(loc, "var")
                 var_typ = types.intp
                 new_value = ir.Expr.call(wrap_var, [val, dsize], {}, loc)
                 # def_res will be False if there is something unanalyzable
@@ -1975,8 +1972,7 @@ class ArrayAnalysis(object):
         if value2 is not None:
             stmts.append(ir.Assign(value=value2, target=var2, loc=loc))
 
-        post_wrap_size_var = scope.make_temp_with_prefix("post_wrap_slice_size",
-                                                         loc)
+        post_wrap_size_var = scope.make_temp(loc, "post_wrap_slice_size")
         post_wrap_size_val = ir.Expr.binop(operator.sub,
                                            var2,
                                            var1,
@@ -2084,8 +2080,8 @@ class ArrayAnalysis(object):
             # Multi-dimensional array access needs a replacement tuple built.
             if len(index_var_list) > 1:
                 # Make a variable to hold the new build_tuple.
-                replacement_build_tuple_var = scope.make_temp_with_prefix(
-                    "replacement_build_tuple", ind_shape[0].loc)
+                replacement_build_tuple_var = scope.make_temp(
+                    ind_shape[0].loc, "replacement_build_tuple")
                 # Create the build tuple from the accumulated index vars above.
                 new_build_tuple = ir.Expr.build_tuple(
                     index_var_list, ind_shape[0].loc
@@ -2471,7 +2467,7 @@ class ArrayAnalysis(object):
             # array has a negative dimension size.
             loc = args[0].loc
             # Create a variable to hold the size of the array being reshaped.
-            calc_size_var = scope.make_temp_with_prefix("calc_size_var", loc)
+            calc_size_var = scope.make_temp(loc, "calc_size_var")
             self.typemap[calc_size_var.name] = types.intp
             # Assign the size of the array calc_size_var.
             init_calc_var = ir.Assign(
@@ -2485,8 +2481,7 @@ class ArrayAnalysis(object):
                 # Skip the negative dimension.
                 if arg_index == neg_one_index:
                     continue
-                div_calc_size_var = scope.make_temp_with_prefix(
-                    "calc_size_var", loc)
+                div_calc_size_var = scope.make_temp(loc, "calc_size_var")
                 self.typemap[div_calc_size_var.name] = types.intp
                 # Calculate the next size as current size // the current arg's
                 # dimension size.
@@ -3079,7 +3074,7 @@ class ArrayAnalysis(object):
         )
         msg_val = ir.Const(msg, loc)
         msg_typ = types.StringLiteral(msg)
-        msg_var = scope.make_temp_with_prefix("msg", loc)
+        msg_var = scope.make_temp(loc, "msg")
         self.typemap[msg_var.name] = msg_typ
         argtyps = tuple([msg_typ] + [self.typemap[x.name] for x in args])
 
@@ -3087,14 +3082,14 @@ class ArrayAnalysis(object):
         tup_typ = types.StarArgTuple.from_types(argtyps)
 
         # prepare function variable whose type may vary since it takes vararg
-        assert_var = scope.make_temp_with_prefix("assert", loc)
+        assert_var = scope.make_temp(loc, "assert")
         assert_def = ir.Global("assert_equiv", assert_equiv, loc=loc)
         fnty = get_global_func_typ(assert_equiv)
         sig = self.context.resolve_function_type(fnty, (tup_typ,), {})
         self._define(equiv_set, assert_var, fnty, assert_def)
 
         # The return value from assert_equiv is always of none type.
-        var = scope.make_temp_with_prefix("ret", loc)
+        var = scope.make_temp(loc, "ret")
         value = ir.Expr.call(assert_var, [msg_var] + args, {}, loc=loc)
         self._define(equiv_set, var, types.none, value)
         self.calltypes[value] = sig
@@ -3121,8 +3116,7 @@ class ArrayAnalysis(object):
             shape = None
         else:
             shape_attr_call = ir.Expr.getattr(var, "shape", var.loc)
-            attr_var = var.scope.make_temp_with_prefix(
-                "{}_shape".format(var.name), var.loc)
+            attr_var = var.scope.make_temp(var.loc, "{}_shape".format(var.name))
             shape_attr_typ = types.containers.UniTuple(types.intp, ndims)
         size_vars = []
         use_attr_var = False
@@ -3145,15 +3139,15 @@ class ArrayAnalysis(object):
                     else:
                         size_val = shape[i]
                     assert isinstance(size_val, ir.Const)
-                    size_var = var.scope.make_temp_with_prefix(
-                        "{}_size{}".format(var.name, i), var.loc)
+                    size_var = var.scope.make_temp(
+                        var.loc, "{}_size{}".format(var.name, i))
                     post.append(ir.Assign(size_val, size_var, var.loc))
                     self._define(equiv_set, size_var, types.intp, size_val)
                     skip = True
             if not skip:
                 # get size: Asize0 = A_sh_attr[0]
-                size_var = var.scope.make_temp_with_prefix(
-                    "{}_size{}".format(var.name, i), var.loc)
+                size_var = var.scope.make_temp(var.loc,
+                                               "{}_size{}".format(var.name, i))
                 getitem = ir.Expr.static_getitem(attr_var, i, None, var.loc)
                 use_attr_var = True
                 self.calltypes[getitem] = None
