@@ -110,8 +110,6 @@ def check_all_set(*args):
     if not all([args[0].dtype == s.dtype for s in args]):
         raise TypingError(f"All Sets must be of the same type, got {args}")
 
-    return True
-
 
 SetLoop = collections.namedtuple('SetLoop', ('index', 'entry', 'do_break'))
 

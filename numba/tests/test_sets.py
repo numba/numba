@@ -171,22 +171,6 @@ def union_usecase(a, b):
     s = sa.union(set(b))
     return list(s)
 
-def difference_usecase__2(a, b):
-    s = a.difference(b)
-    return list(s)
-
-def intersection_usecase__2(a, b):
-    s = a.intersection(b)
-    return list(s)
-
-def symmetric_difference_usecase__2(a, b):
-    s = a.symmetric_difference(b)
-    return list(s)
-
-def union_usecase__2(a, b):
-    s = a.union(b)
-    return list(s)
-
 def set_return_usecase(a):
     s = set(a)
     return s
@@ -645,17 +629,32 @@ class TestSetsInvalidDtype(TestSets):
     def _test_set_operator(self, pyfunc):
         # it is invalid to apply some set operations on
         # sets with different dtype
-        check = self.unordered_checker(pyfunc)
-        # cfunc = jit(nopython=True)(pyfunc)
+        cfunc = jit(nopython=True)(pyfunc)
 
         a = set([1, 2, 4, 11])
         b = set(['a', 'b', 'c'])
         msg = 'All Sets must be of the same type'
         with self.assertRaisesRegex(TypingError, msg):
-            check(a, b)
+            cfunc(a, b)
 
 
 class TestSetsInvalid(TestSets):
+
+    def symmetric_difference_usecase(a, b):
+        s = a.symmetric_difference(b)
+        return list(s)
+
+    def difference_usecase(a, b):
+        s = a.difference(b)
+        return list(s)
+
+    def intersection_usecase(a, b):
+        s = a.intersection(b)
+        return list(s)
+
+    def union_usecase(a, b):
+        s = a.union(b)
+        return list(s)
 
     def _test_set_operator(self, pyfunc):
         # it is invalid to apply some set operations on
@@ -669,16 +668,16 @@ class TestSetsInvalid(TestSets):
             cfunc(a, b)
 
     def test_difference(self):
-        self._test_set_operator(difference_usecase__2)
+        self._test_set_operator(TestSetsInvalid.difference_usecase)
 
     def test_intersection(self):
-        self._test_set_operator(intersection_usecase__2)
+        self._test_set_operator(TestSetsInvalid.intersection_usecase)
 
     def test_symmetric_difference(self):
-        self._test_set_operator(symmetric_difference_usecase__2)
+        self._test_set_operator(TestSetsInvalid.symmetric_difference_usecase)
 
     def test_union(self):
-        self._test_set_operator(union_usecase__2)
+        self._test_set_operator(TestSetsInvalid.union_usecase)
 
     def make_operator_usecase(self, op):
         code = """if 1:
