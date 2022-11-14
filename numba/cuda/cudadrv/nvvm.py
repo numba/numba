@@ -158,6 +158,7 @@ class NVVM(object):
         self._minorIR = ir_versions[1]
         self._majorDbg = ir_versions[2]
         self._minorDbg = ir_versions[3]
+        self._supported_ccs = get_supported_ccs()
 
     @property
     def is_nvvm70(self):
@@ -172,6 +173,10 @@ class NVVM(object):
             return _datalayout_original
         else:
             return _datalayout_i128
+
+    @property
+    def supported_ccs(self):
+        return self._supported_ccs
 
     def get_version(self):
         major = c_int()
@@ -378,15 +383,7 @@ def ccs_supported_by_ctk(ctk_version):
         return tuple([cc for cc in COMPUTE_CAPABILITIES if cc >= (5, 3)])
 
 
-_supported_cc = None
-
-
 def get_supported_ccs():
-    # Attempt to return cached list
-    global _supported_cc
-    if _supported_cc is not None:
-        return _supported_cc
-
     try:
         from numba.cuda.cudadrv.runtime import runtime
         cudart_version = runtime.get_version()
@@ -417,14 +414,14 @@ def find_closest_arch(mycc):
     :param mycc: Compute capability as a tuple ``(MAJOR, MINOR)``
     :return: Closest supported CC as a tuple ``(MAJOR, MINOR)``
     """
-    supported_cc = get_supported_ccs()
+    supported_ccs = NVVM().supported_ccs
 
-    if not supported_cc:
+    if not supported_ccs:
         msg = "No supported GPU compute capabilities found. " \
               "Please check your cudatoolkit version matches your CUDA version."
         raise NvvmSupportError(msg)
 
-    for i, cc in enumerate(supported_cc):
+    for i, cc in enumerate(supported_ccs):
         if cc == mycc:
             # Matches
             return cc
@@ -437,10 +434,10 @@ def find_closest_arch(mycc):
                 raise NvvmSupportError(msg)
             else:
                 # return the previous CC
-                return supported_cc[i - 1]
+                return supported_ccs[i - 1]
 
     # CC higher than supported
-    return supported_cc[-1]  # Choose the highest
+    return supported_ccs[-1]  # Choose the highest
 
 
 def get_arch_option(major, minor):
