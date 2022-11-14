@@ -357,7 +357,7 @@ COMPUTE_CAPABILITIES = (
     (9, 0)
 )
 
-# Maps CTK version -> (min supported cc, max supported cc)
+# Maps CTK version -> (min supported cc, max supported cc) inclusive
 CTK_SUPPORTED = {
     (11, 0): ((3, 5), (8, 0)),
     (11, 1): ((3, 5), (8, 6)),
