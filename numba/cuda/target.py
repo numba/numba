@@ -223,7 +223,7 @@ class CUDATargetContext(BaseContext):
             name = wrapfn.name + postfix
             gv = cgutils.add_global_variable(wrapper_module, type,
                                              name)
-            gv.initializer = ir.Constant(gv.type.pointee, init)
+            gv.initializer = ir.Constant(gv.type.pointee, None)
             return gv
 
         gv_exception = define_error_gv_with_type("__excinfo__", excinfo_t, 0)
