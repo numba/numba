@@ -387,7 +387,7 @@ class Array(object):
             newshape = (self.size,)
             newstrides = (self.itemsize,)
             arr = self.from_desc(self.extent.begin, newshape, newstrides,
-                                  self.itemsize)
+                                 self.itemsize)
             return arr, list(self.iter_contiguous_extent())
 
         else:
