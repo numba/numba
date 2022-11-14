@@ -380,7 +380,8 @@ def ccs_supported_by_ctk(ctk_version):
     except KeyError:
         # For unsupported CUDA toolkit versions, all we can do is assume all
         # non-deprecated versions we are aware of are supported.
-        return tuple([cc for cc in COMPUTE_CAPABILITIES if cc >= (5, 3)])
+        return tuple([cc for cc in COMPUTE_CAPABILITIES
+                      if cc >= config.CUDA_DEFAULT_PTX_CC])
 
 
 def get_supported_ccs():
@@ -394,11 +395,13 @@ def get_supported_ccs():
         return _supported_cc
 
     # Ensure the minimum CTK version requirement is met
-    if cudart_version < (11, 0):
+    min_cudart = min(CTK_SUPPORTED)
+    if cudart_version < min_cudart:
         _supported_cc = ()
         ctk_ver = f"{cudart_version[0]}.{cudart_version[1]}"
         unsupported_ver = (f"CUDA Toolkit {ctk_ver} is unsupported by Numba - "
-                           "11.0 is the minimum required version.")
+                           f"{min_cudart[0]}.{min_cudart[1]} is the minimum "
+                           "required version.")
         warnings.warn(unsupported_ver)
         return _supported_cc
 
