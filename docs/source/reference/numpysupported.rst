@@ -157,6 +157,11 @@ Array types
 of any of the scalar types above are supported, regardless of the shape
 or layout.
 
+.. note::
+   `NumPy MaskedArrays <https://numpy.org/doc/stable/reference/maskedarray.html>`_
+   are not supported.
+
+
 Array access
 ------------
 
@@ -391,6 +396,8 @@ Reductions
 The following reduction functions are supported:
 
 * :func:`numpy.diff` (only the 2 first arguments)
+* :func:`numpy.amin` (only the first argument, also aliased as np.min)
+* :func:`numpy.amax` (only the first argument, also aliased as np.max)
 * :func:`numpy.median` (only the first argument)
 * :func:`numpy.nancumprod` (only the first argument)
 * :func:`numpy.nancumsum` (only the first argument)
@@ -422,11 +429,13 @@ The following top-level functions are supported:
 * :func:`numpy.argsort` (``kind`` key word argument supported for values
   ``'quicksort'`` and ``'mergesort'``)
 * :func:`numpy.argwhere`
+* :func:`numpy.around`
 * :func:`numpy.array` (only the 2 first arguments)
 * :func:`numpy.array_equal`
 * :func:`numpy.array_split`
 * :func:`numpy.asarray` (only the 2 first arguments)
 * :func:`numpy.asarray_chkfinite` (only the 2 first arguments)
+* :func:`numpy.ascontiguousarray` (only the first argument)
 * :func:`numpy.asfarray`
 * :func:`numpy.asfortranarray` (only the first argument)
 * :func:`numpy.atleast_1d`
@@ -477,6 +486,7 @@ The following top-level functions are supported:
 * :func:`numpy.histogram` (only the 3 first arguments)
 * :func:`numpy.hstack`
 * :func:`numpy.identity`
+* :func:`numpy.isclose`
 * :func:`numpy.kaiser`
 * :func:`numpy.iscomplex`
 * :func:`numpy.iscomplexobj`
@@ -513,7 +523,7 @@ The following top-level functions are supported:
 * :func:`numpy.sort` (no optional arguments, quicksort accepts
   multi-dimensional array and sorts its last axis).
 * :func:`numpy.split`
-* :func:`numpy.stack`
+* :func:`numpy.stack` (only the first two arguments are supported)
 * :func:`numpy.swapaxes`
 * :func:`numpy.take` (only the 2 first arguments)
 * :func:`numpy.take_along_axis` (the axis argument must be a literal value)
@@ -620,16 +630,29 @@ The following :py:class:`Generator` methods are supported:
 * :func:`numpy.random.Generator().f()` (*)
 * :func:`numpy.random.Generator().gamma()` (*)
 * :func:`numpy.random.Generator().geometric()` (*)
+* :func:`numpy.random.Generator().integers()` (Both `low` and `high` are required
+  arguments. Array values for low and high are currently not supported.)
 * :func:`numpy.random.Generator().laplace()` (*)
 * :func:`numpy.random.Generator().logistic()` (*)
 * :func:`numpy.random.Generator().lognormal()` (*)
+* :func:`numpy.random.Generator().logseries()` (Accepts float values as well as
+  data types that cast to floats. Array values for ``p`` are currently not
+  supported.)
 * :func:`numpy.random.Generator().negative_binomial()` (*)
+* :func:`numpy.random.Generator().noncentral_chisquare()` (Accepts float values
+  as well as data types that cast to floats. Array values for ``dfnum`` and
+  ``nonc`` are currently not supported.)
+* :func:`numpy.random.Generator().noncentral_f()` (Accepts float values as well
+  as data types that cast to floats. Array values for ``dfnum``, ``dfden`` and
+  ``nonc`` are currently not supported.)
 * :func:`numpy.random.Generator().normal()` (*)
 * :func:`numpy.random.Generator().pareto()`
+* :func:`numpy.random.Generator().permutation()` (Only accepts NumPy ndarrays and integers.)
 * :func:`numpy.random.Generator().poisson()` (*)
 * :func:`numpy.random.Generator().power()`
 * :func:`numpy.random.Generator().random()`
 * :func:`numpy.random.Generator().rayleigh()`
+* :func:`numpy.random.Generator().shuffle()` (Only accepts NumPy ndarrays.)
 * :func:`numpy.random.Generator().standard_cauchy()`
 * :func:`numpy.random.Generator().standard_exponential()`
 * :func:`numpy.random.Generator().standard_gamma()` (*)

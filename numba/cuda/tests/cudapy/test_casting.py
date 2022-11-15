@@ -113,6 +113,7 @@ class TestCasting(CUDATestCase):
 
         return wrapper_fn
 
+    @skip_unless_cc_53
     def test_float_to_int(self):
         pyfuncs = (to_int8, to_int16, to_int32, to_int64)
         totys = (np.int8, np.int16, np.int32, np.int64)
@@ -136,6 +137,7 @@ class TestCasting(CUDATestCase):
             ptx, _ = compile_ptx(pyfunc, [f2], device=True)
             self.assertIn(f"cvt.rni.s{size}.f16", ptx)
 
+    @skip_unless_cc_53
     def test_float_to_uint(self):
         pyfuncs = (to_int8, to_int16, to_int32, to_int64)
         totys = (np.uint8, np.uint16, np.uint32, np.uint64)
@@ -157,6 +159,7 @@ class TestCasting(CUDATestCase):
             ptx, _ = compile_ptx(pyfunc, [f2], device=True)
             self.assertIn(f"cvt.rni.u{size}.f16", ptx)
 
+    @skip_unless_cc_53
     def test_int_to_float(self):
         pyfuncs = (to_float16, to_float32, to_float64)
         totys = (np.float16, np.float32, np.float64)
@@ -196,6 +199,7 @@ class TestCasting(CUDATestCase):
             ptx, _ = compile_ptx(to_float16, [ty], device=True)
             self.assertIn(f"cvt.rn.f16.u{size}", ptx)
 
+    @skip_unless_cc_53
     def test_float_to_float(self):
         pyfuncs = (to_float16, to_float32, to_float64)
         tys = (np.float16, np.float32, np.float64)
@@ -221,6 +225,7 @@ class TestCasting(CUDATestCase):
             ptx, _ = compile_ptx(pyfunc, [f2], device=True)
             self.assertIn(f"cvt.{postfix}.f16", ptx)
 
+    @skip_unless_cc_53
     def test_float_to_complex(self):
         pyfuncs = (to_complex64, to_complex128)
         totys = (np.complex64, np.complex128)

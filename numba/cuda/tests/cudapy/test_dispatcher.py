@@ -1,7 +1,7 @@
 import numpy as np
 import threading
 
-from numba import cuda, float32, float64, int32, int64, void
+from numba import boolean, cuda, float32, float64, int32, int64, void
 from numba.core.errors import TypingError
 from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
 import math
@@ -286,7 +286,8 @@ class TestDispatcher(CUDATestCase):
         self.assertPreciseEqual(r[0], 3)
         self.assertEqual(len(f.overloads), 1, f.overloads)
 
-        sigs = ["(int64[::1], int64, int64)", "(float64[::1], float64, float64)"]
+        sigs = ["(int64[::1], int64, int64)",
+                "(float64[::1], float64, float64)"]
         f = cuda.jit(sigs)(add_kernel)
         r = np.zeros(1, dtype=np.float64)
         # Approximate match (int32 -> float64 is a safe conversion)
@@ -438,6 +439,55 @@ class TestDispatcher(CUDATestCase):
         self.assertIsInstance(regs_per_thread, int)
         self.assertGreater(regs_per_thread, 0)
 
+    def test_get_const_mem_unspecialized(self):
+        @cuda.jit
+        def const_fmt_string(val, to_print):
+            # We guard the print with a conditional to prevent noise from the
+            # test suite
+            if to_print:
+                print(val)
+
+        # Call the kernel with different arguments to create two different
+        # definitions within the Dispatcher object
+        const_fmt_string[1, 1](1, False)
+        const_fmt_string[1, 1](1.0, False)
+
+        # Check we get a positive integer for the two different variations
+        sig_i64 = void(int64, boolean)
+        sig_f64 = void(float64, boolean)
+        const_mem_size_i64 = const_fmt_string.get_const_mem_size(sig_i64)
+        const_mem_size_f64 = const_fmt_string.get_const_mem_size(sig_f64)
+
+        self.assertIsInstance(const_mem_size_i64, int)
+        self.assertIsInstance(const_mem_size_f64, int)
+
+        # 6 bytes for the equivalent of b'%lld\n\0'
+        self.assertGreaterEqual(const_mem_size_i64, 6)
+        # 4 bytes for the equivalent of b'%f\n\0'
+        self.assertGreaterEqual(const_mem_size_f64, 4)
+
+        # Check that getting the const memory size for all signatures
+        # provides the same values as getting the const memory size for
+        # individual signatures.
+
+        const_mem_size_all = const_fmt_string.get_const_mem_size()
+        self.assertEqual(const_mem_size_all[sig_i64.args], const_mem_size_i64)
+        self.assertEqual(const_mem_size_all[sig_f64.args], const_mem_size_f64)
+
+    def test_get_const_mem_specialized(self):
+        arr = np.arange(32, dtype=np.int64)
+        sig = void(int64[::1])
+
+        @cuda.jit(sig)
+        def const_array_use(x):
+            C = cuda.const.array_like(arr)
+            i = cuda.grid(1)
+            x[i] = C[i]
+
+        const_mem_size = const_array_use.get_const_mem_size(sig)
+        self.assertIsInstance(const_mem_size, int)
+        self.assertGreaterEqual(const_mem_size, arr.nbytes)
+
     def test_get_shared_mem_per_block_unspecialized(self):
         N = 10
 
@@ -461,8 +511,10 @@ class TestDispatcher(CUDATestCase):
 
         sig_f32 = void(float32[::1])
         sig_f64 = void(float64[::1])
+
         sh_mem_f32 = simple_smem.get_shared_mem_per_block(sig_f32)
         sh_mem_f64 = simple_smem.get_shared_mem_per_block(sig_f64)
+
         self.assertIsInstance(sh_mem_f32, int)
         self.assertIsInstance(sh_mem_f64, int)
 
@@ -491,6 +543,63 @@ class TestDispatcher(CUDATestCase):
         shared_mem_per_block = simple_smem.get_shared_mem_per_block()
         self.assertIsInstance(shared_mem_per_block, int)
         self.assertEqual(shared_mem_per_block, 400)
+
+    def test_get_local_mem_per_thread_unspecialized(self):
+        # NOTE: A large amount of local memory must be allocated
+        # otherwise the compiler will optimize out the call to
+        # cuda.local.array and use local registers instead
+        N = 1000
+
+        @cuda.jit
+        def simple_lmem(ary):
+            lm = cuda.local.array(N, dtype=ary.dtype)
+            for j in range(N):
+                lm[j] = j
+            for j in range(N):
+                ary[j] = lm[j]
+
+        # Call the kernel with different arguments to create two different
+        # definitions within the Dispatcher object
+        arr_f32 = np.zeros(N, dtype=np.float32)
+        arr_f64 = np.zeros(N, dtype=np.float64)
+
+        simple_lmem[1, 1](arr_f32)
+        simple_lmem[1, 1](arr_f64)
+
+        sig_f32 = void(float32[::1])
+        sig_f64 = void(float64[::1])
+        local_mem_f32 = simple_lmem.get_local_mem_per_thread(sig_f32)
+        local_mem_f64 = simple_lmem.get_local_mem_per_thread(sig_f64)
+        self.assertIsInstance(local_mem_f32, int)
+        self.assertIsInstance(local_mem_f64, int)
+
+        self.assertGreaterEqual(local_mem_f32, N * 4)
+        self.assertGreaterEqual(local_mem_f64, N * 8)
+
+        # Check that getting the local memory per thread for all signatures
+        # provides the same values as getting the shared mem per block for
+        # individual signatures.
+        local_mem_all = simple_lmem.get_local_mem_per_thread()
+        self.assertEqual(local_mem_all[sig_f32.args], local_mem_f32)
+        self.assertEqual(local_mem_all[sig_f64.args], local_mem_f64)
+
+    def test_get_local_mem_per_thread_specialized(self):
+        # NOTE: A large amount of local memory must be allocated
+        # otherwise the compiler will optimize out the call to
+        # cuda.local.array and use local registers instead
+        N = 1000
+
+        @cuda.jit(void(float32[::1]))
+        def simple_lmem(ary):
+            lm = cuda.local.array(N, dtype=ary.dtype)
+            for j in range(N):
+                lm[j] = j
+            for j in range(N):
+                ary[j] = lm[j]
+
+        local_mem_per_thread = simple_lmem.get_local_mem_per_thread()
+        self.assertIsInstance(local_mem_per_thread, int)
+        self.assertGreaterEqual(local_mem_per_thread, N * 4)
 
     def test_dispatcher_docstring(self):
         # Ensure that CUDA-jitting a function preserves its docstring. See

@@ -4,7 +4,7 @@ Implementation of method overloads for Generator objects.
 
 import numpy as np
 from numba.core import types
-from numba.core.extending import overload_method
+from numba.core.extending import overload_method, register_jitable
 from numba.np.numpy_support import as_dtype, from_dtype
 from numba.np.random.generator_core import next_float, next_double
 from numba.np.numpy_support import is_nonelike
@@ -20,7 +20,9 @@ from numba.np.random.distributions import \
      random_weibull, random_laplace, random_logistic,
      random_lognormal, random_rayleigh, random_standard_t, random_wald,
      random_geometric, random_zipf, random_triangular,
-     random_poisson, random_negative_binomial)
+     random_poisson, random_negative_binomial, random_logseries,
+     random_noncentral_chisquare, random_noncentral_f)
+from numba.np.random import random_methods
 
 
 def _get_proper_func(func_32, func_64, dtype, dist_name="the given"):
@@ -78,6 +80,144 @@ def check_types(obj, type_list, arg_name):
     if not any([isinstance(obj, _type) for _type in type_list]):
         raise TypingError(f"Argument {arg_name} is not one of the" +
                           f" expected type(s): {type_list}")
+
+
+# Overload the Generator().integers()
+@overload_method(types.NumPyRandomGeneratorType, 'integers')
+def NumPyRandomGeneratorType_integers(inst, low, high, size=None,
+                                      dtype=np.int64, endpoint=False):
+    check_types(low, [types.Integer,
+                      types.Boolean, bool, int], 'low')
+    check_types(high, [types.Integer, types.Boolean,
+                       bool, int], 'high')
+    check_types(endpoint, [types.Boolean, bool], 'endpoint')
+
+    if isinstance(size, types.Omitted):
+        size = size.value
+
+    if isinstance(dtype, types.Omitted):
+        dtype = dtype.value
+
+    if isinstance(dtype, type):
+        nb_dt = from_dtype(np.dtype(dtype))
+        _dtype = dtype
+    elif isinstance(dtype, types.NumberClass):
+        nb_dt = dtype
+        _dtype = as_dtype(nb_dt)
+    else:
+        raise TypingError("Argument dtype is not one of the" +
+                          " expected type(s): " +
+                          "np.int32, np.int64, np.int16, np.int8, "
+                          "np.uint32, np.uint64, np.uint16, np.uint8, "
+                          "np.bool_")
+
+    if _dtype == np.bool_:
+        int_func = random_methods.random_bounded_bool_fill
+        lower_bound = -1
+        upper_bound = 2
+    else:
+        try:
+            i_info = np.iinfo(_dtype)
+        except ValueError:
+            raise TypingError("Argument dtype is not one of the" +
+                              " expected type(s): " +
+                              "np.int32, np.int64, np.int16, np.int8, "
+                              "np.uint32, np.uint64, np.uint16, np.uint8, "
+                              "np.bool_")
+        int_func = getattr(random_methods,
+                           f'random_bounded_uint{i_info.bits}_fill')
+        lower_bound = i_info.min
+        upper_bound = i_info.max
+
+    if is_nonelike(size):
+        def impl(inst, low, high, size=None,
+                 dtype=np.int64, endpoint=False):
+            random_methods._randint_arg_check(low, high, endpoint,
+                                              lower_bound, upper_bound)
+            if not endpoint:
+                high -= dtype(1)
+                low = dtype(low)
+                high = dtype(high)
+                rng = high - low
+                return int_func(inst.bit_generator, low, rng, 1, dtype)[0]
+            else:
+                low = dtype(low)
+                high = dtype(high)
+                rng = high - low
+                return int_func(inst.bit_generator, low, rng, 1, dtype)[0]
+        return impl
+    else:
+        check_size(size)
+
+        def impl(inst, low, high, size=None,
+                 dtype=np.int64, endpoint=False):
+            random_methods._randint_arg_check(low, high, endpoint,
+                                              lower_bound, upper_bound)
+            if not endpoint:
+                high -= dtype(1)
+                low = dtype(low)
+                high = dtype(high)
+                rng = high - low
+                return int_func(inst.bit_generator, low, rng, size, dtype)
+            else:
+                low = dtype(low)
+                high = dtype(high)
+                rng = high - low
+                return int_func(inst.bit_generator, low, rng, size, dtype)
+        return impl
+
+
+# The following `shuffle` implementation is a direct translation from:
+# https://github.com/numpy/numpy/blob/95e3e7f445407e4f355b23d6a9991d8774f0eb0c/numpy/random/_generator.pyx#L4578
+
+# Overload the Generator().shuffle()
+@overload_method(types.NumPyRandomGeneratorType, 'shuffle')
+def NumPyRandomGeneratorType_shuffle(inst, x, axis=0):
+    check_types(x, [types.Array], 'x')
+    check_types(axis, [int, types.Integer], 'axis')
+
+    def impl(inst, x, axis=0):
+        if axis < 0:
+            axis = axis + x.ndim
+        if axis > x.ndim - 1 or axis < 0:
+            raise IndexError("Axis is out of bounds for the given array")
+
+        z = np.swapaxes(x, 0, axis)
+        buf = np.empty_like(z[0, ...])
+
+        for i in range(len(z) - 1, 0, -1):
+            j = types.intp(random_methods.random_interval(inst.bit_generator,
+                                                          i))
+            if i == j:
+                continue
+            buf[...] = z[j, ...]
+            z[j, ...] = z[i, ...]
+            z[i, ...] = buf
+
+    return impl
+
+
+# The following `permutation` implementation is a direct translation from:
+# https://github.com/numpy/numpy/blob/95e3e7f445407e4f355b23d6a9991d8774f0eb0c/numpy/random/_generator.pyx#L4710
+# Overload the Generator().permutation()
+@overload_method(types.NumPyRandomGeneratorType, 'permutation')
+def NumPyRandomGeneratorType_permutation(inst, x, axis=0):
+    check_types(x, [types.Array, types.Integer], 'x')
+    check_types(axis, [int, types.Integer], 'axis')
+
+    IS_INT = isinstance(x, types.Integer)
+
+    def impl(inst, x, axis=0):
+        if IS_INT:
+            new_arr = np.arange(x)
+            # NumPy ignores the axis argument when x is an integer
+            inst.shuffle(new_arr)
+        else:
+            new_arr = x.copy()
+            inst.shuffle(new_arr, axis=axis)
+        return new_arr
+
+    return impl
 
 
 # Overload the Generator().random()
@@ -678,5 +818,102 @@ def NumPyRandomGeneratorType_negative_binomial(inst, n, p, size=None):
             out = np.empty(size, dtype=np.int64)
             for i in np.ndindex(size):
                 out[i] = random_negative_binomial(inst.bit_generator, n, p)
+            return out
+        return impl
+
+
+@overload_method(types.NumPyRandomGeneratorType, 'noncentral_chisquare')
+def NumPyRandomGeneratorType_noncentral_chisquare(inst, df, nonc, size=None):
+    check_types(df, [types.Float, types.Integer, int, float], 'df')
+    check_types(nonc, [types.Float, types.Integer, int, float], 'nonc')
+    if isinstance(size, types.Omitted):
+        size = size.value
+
+    @register_jitable
+    def check_arg_bounds(df, nonc):
+        if df <= 0:
+            raise ValueError("df <= 0")
+        if nonc < 0:
+            raise ValueError("nonc < 0")
+
+    if is_nonelike(size):
+        def impl(inst, df, nonc, size=None):
+            check_arg_bounds(df, nonc)
+            return np.float64(random_noncentral_chisquare(inst.bit_generator,
+                                                          df, nonc))
+        return impl
+    else:
+        check_size(size)
+
+        def impl(inst, df, nonc, size=None):
+            check_arg_bounds(df, nonc)
+            out = np.empty(size, dtype=np.float64)
+            for i in np.ndindex(size):
+                out[i] = random_noncentral_chisquare(inst.bit_generator,
+                                                     df, nonc)
+            return out
+        return impl
+
+
+@overload_method(types.NumPyRandomGeneratorType, 'noncentral_f')
+def NumPyRandomGeneratorType_noncentral_f(inst, dfnum, dfden, nonc, size=None):
+    check_types(dfnum, [types.Float, types.Integer, int, float], 'dfnum')
+    check_types(dfden, [types.Float, types.Integer, int, float], 'dfden')
+    check_types(nonc, [types.Float, types.Integer, int, float], 'nonc')
+    if isinstance(size, types.Omitted):
+        size = size.value
+
+    @register_jitable
+    def check_arg_bounds(dfnum, dfden, nonc):
+        if dfnum <= 0:
+            raise ValueError("dfnum <= 0")
+        if dfden <= 0:
+            raise ValueError("dfden <= 0")
+        if nonc < 0:
+            raise ValueError("nonc < 0")
+
+    if is_nonelike(size):
+        def impl(inst,  dfnum, dfden, nonc, size=None):
+            check_arg_bounds(dfnum, dfden, nonc)
+            return np.float64(random_noncentral_f(inst.bit_generator,
+                                                  dfnum, dfden, nonc))
+        return impl
+    else:
+        check_size(size)
+
+        def impl(inst, dfnum, dfden, nonc, size=None):
+            check_arg_bounds(dfnum, dfden, nonc)
+            out = np.empty(size, dtype=np.float64)
+            for i in np.ndindex(size):
+                out[i] = random_noncentral_f(inst.bit_generator,
+                                             dfnum, dfden, nonc)
+            return out
+        return impl
+
+
+@overload_method(types.NumPyRandomGeneratorType, 'logseries')
+def NumPyRandomGeneratorType_logseries(inst, p, size=None):
+    check_types(p, [types.Float, types.Integer, int, float], 'p')
+    if isinstance(size, types.Omitted):
+        size = size.value
+
+    @register_jitable
+    def check_arg_bounds(p):
+        if p < 0 or p >= 1 or np.isnan(p):
+            raise ValueError("p < 0, p >= 1 or p is NaN")
+
+    if is_nonelike(size):
+        def impl(inst, p, size=None):
+            check_arg_bounds(p)
+            return np.int64(random_logseries(inst.bit_generator, p))
+        return impl
+    else:
+        check_size(size)
+
+        def impl(inst, p, size=None):
+            check_arg_bounds(p)
+            out = np.empty(size, dtype=np.int64)
+            for i in np.ndindex(size):
+                out[i] = random_logseries(inst.bit_generator, p)
             return out
         return impl

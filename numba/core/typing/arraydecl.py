@@ -280,7 +280,23 @@ class ArrayAttribute(AttributeTemplate):
             retty = ary.copy(layout=layout)
         return retty
 
-    # NOTE: .imag and .real are implemented with @overload_attribute
+    def resolve_real(self, ary):
+        return self._resolve_real_imag(ary, attr='real')
+
+    def resolve_imag(self, ary):
+        return self._resolve_real_imag(ary, attr='imag')
+
+    def _resolve_real_imag(self, ary, attr):
+        if ary.dtype in types.complex_domain:
+            return ary.copy(dtype=ary.dtype.underlying_float, layout='A')
+        elif ary.dtype in types.number_domain:
+            res = ary.copy(dtype=ary.dtype)
+            if attr == 'imag':
+                res = res.copy(readonly=True)
+            return res
+        else:
+            msg = "cannot access .{} of array of {}"
+            raise TypingError(msg.format(attr, ary.dtype))
 
     @bound_function("array.transpose")
     def resolve_transpose(self, ary, args, kws):
@@ -466,23 +482,6 @@ class ArrayAttribute(AttributeTemplate):
         assert not kws
         assert not args
         return signature(ary.copy(ndim=1, layout='C'))
-
-    @bound_function("array.take")
-    def resolve_take(self, ary, args, kws):
-        if kws:
-            raise NumbaAssertionError("kws not supported")
-        argty, = args
-        if isinstance(argty, types.Integer):
-            sig = signature(ary.dtype, *args)
-        elif isinstance(argty, types.Array):
-            sig = signature(argty.copy(layout='C', dtype=ary.dtype), *args)
-        elif isinstance(argty, types.List):  # 1d lists only
-            sig = signature(types.Array(ary.dtype, 1, 'C'), *args)
-        elif isinstance(argty, types.BaseTuple):
-            sig = signature(types.Array(ary.dtype, np.ndim(argty), 'C'), *args)
-        else:
-            raise TypeError("take(%s) not supported for %s" % argty)
-        return sig
 
     def generic_resolve(self, ary, attr):
         # Resolution of other attributes, for record arrays
@@ -800,26 +799,9 @@ def install_array_method(name, generic, prefer_literal=True):
 
     setattr(ArrayAttribute, "resolve_" + name, array_attribute_attachment)
 
-# Functions that return the same type as the array
-for fname in ["min", "max"]:
-    install_array_method(fname, generic_homog)
 
 # Functions that return a machine-width type, to avoid overflows
-install_array_method("prod", generic_expand)
 install_array_method("sum", sum_expand, prefer_literal=True)
-
-# Functions that return a machine-width type, to avoid overflows
-for fname in ["cumsum", "cumprod"]:
-    install_array_method(fname, generic_expand_cumulative)
-
-# Functions that require integer arrays get promoted to float64 return
-for fName in ["mean"]:
-    install_array_method(fName, generic_hetero_real)
-
-# var and std by definition return in real space and int arrays
-# get promoted to float64 return
-for fName in ["var", "std"]:
-    install_array_method(fName, generic_hetero_always_real)
 
 
 @infer_global(operator.eq)

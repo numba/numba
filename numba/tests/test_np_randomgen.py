@@ -2,6 +2,7 @@ import numba
 import numpy as np
 import sys
 import platform
+import itertools
 
 from numba import types
 from numba.core.config import IS_32BITS
@@ -62,6 +63,87 @@ class TestHelperFuncs(TestCase):
             str(raises.exception)
         )
 
+    def test_integers_arg_check(self):
+        rng = np.random.default_rng(1)
+        py_func = lambda x, low, high, dtype: \
+            x.integers(low=low, high=high, dtype=dtype, endpoint=True)
+        numba_func = numba.njit()(py_func)
+        numba_func_low = numba.njit()(py_func)
+
+        py_func = lambda x, low, high, dtype: \
+            x.integers(low=low, high=high, dtype=dtype, endpoint=False)
+        numba_func_endpoint_false = numba.njit()(py_func)
+
+        cases = [
+            # low, high, dtype
+            (np.iinfo(np.uint8).min, np.iinfo(np.uint8).max, np.uint8),
+            (np.iinfo(np.int8).min, np.iinfo(np.int8).max, np.int8),
+            (np.iinfo(np.uint16).min, np.iinfo(np.uint16).max, np.uint16),
+            (np.iinfo(np.int16).min, np.iinfo(np.int16).max, np.int16),
+            (np.iinfo(np.uint32).min, np.iinfo(np.uint32).max, np.uint32),
+            (np.iinfo(np.int32).min, np.iinfo(np.int32).max, np.int32),
+        ]
+        for low, high, dtype in cases:
+            with self.subTest(low=low, high=high, dtype=dtype):
+                with self.assertRaises(ValueError) as raises:
+                    # min - 1
+                    numba_func_low(rng, low - 1, high, dtype)
+                self.assertIn(
+                    'low is out of bounds',
+                    str(raises.exception)
+                )
+
+                with self.assertRaises(ValueError) as raises:
+                    # max + 1, endpoint=True
+                    numba_func(rng, low, high + 1, dtype)
+                self.assertIn(
+                    'high is out of bounds',
+                    str(raises.exception)
+                )
+
+                with self.assertRaises(ValueError) as raises:
+                    # max + 2, endpoint=False
+                    numba_func_endpoint_false(rng, low, high + 2, dtype)
+                self.assertIn(
+                    'high is out of bounds',
+                    str(raises.exception)
+                )
+
+        low, high, dtype = (np.iinfo(np.uint64).min,
+                            np.iinfo(np.uint64).max, np.uint64)
+        with self.assertRaises(ValueError) as raises:
+            # min - 1
+            numba_func_low(rng, low - 1, high, dtype)
+        self.assertIn(
+            'low is out of bounds',
+            str(raises.exception)
+        )
+
+        low, high, dtype = (np.iinfo(np.int64).min,
+                            np.iinfo(np.int64).max, np.int64)
+        with self.assertRaises(ValueError) as raises:
+            # max + 1, endpoint=True
+            numba_func(rng, low, high + 1, dtype)
+        self.assertIn(
+            'high is out of bounds',
+            str(raises.exception)
+        )
+
+        with self.assertRaises(ValueError) as raises:
+            # max + 2, endpoint=False
+            numba_func_endpoint_false(rng, low, high + 2, dtype)
+        self.assertIn(
+            'high is out of bounds',
+            str(raises.exception)
+        )
+
+        with self.assertRaises(ValueError) as raises:
+            numba_func(rng, 105, 100, np.uint32)
+        self.assertIn(
+            'low is greater than high in given interval',
+            str(raises.exception)
+        )
+
 
 def test_generator_caching():
     nb_rng = np.random.default_rng(1)
@@ -93,8 +175,15 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         numpy_res = distribution_func.py_func(numpy_rng_instance,
                                               test_size, test_dtype)
 
-        np.testing.assert_array_max_ulp(numpy_res, numba_res,
-                                        maxulp=ulp_prec, dtype=test_dtype)
+        if (isinstance(numba_res, np.ndarray) and
+            np.issubdtype(numba_res.dtype, np.floating)) \
+                or isinstance(numba_res, float):
+            # Float scalars and arrays
+            np.testing.assert_array_max_ulp(numpy_res, numba_res,
+                                            maxulp=ulp_prec, dtype=test_dtype)
+        else:
+            # Bool/int scalars and arrays
+            np.testing.assert_equal(numba_res, numpy_res)
 
         # Check if the end state of both BitGenerators is same
         # after drawing the distributions
@@ -158,6 +247,115 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         for _func, _func_name in zip(funcs, func_names):
             with self.subTest(_func=_func, _func_name=_func_name):
                 self._test_bitgen_func_parity(_func_name, _func)
+
+    def test_integers(self):
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        test_dtypes = [np.int64, np.int32, np.int16, np.int8,
+                       np.uint64, np.uint32, np.uint16, np.uint8]
+        bitgen_types = [None, MT19937]
+
+        # Test with no arguments
+        dist_func = lambda x, size, dtype:x.integers(0, 100)
+        with self.subTest():
+            self.check_numpy_parity(dist_func, test_size=None,
+                                    test_dtype=None, ulp_prec=0)
+
+        dist_func = lambda x, size, dtype:\
+            x.integers(5, 10, size=size, dtype=dtype)
+        for _size in test_sizes:
+            for _dtype in test_dtypes:
+                for _bitgen in bitgen_types:
+                    with self.subTest(_size=_size, _dtype=_dtype,
+                                      _bitgen=_bitgen):
+                        self.check_numpy_parity(dist_func, _bitgen,
+                                                None, _size, _dtype, 0)
+
+        # Checking dtype = bool seperately
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:\
+            x.integers(False, True, size=size, dtype=np.bool_)
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size,
+                                  _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, np.bool_, 0)
+
+        # Test dtype casting for high and low
+        dist_func = lambda x, size, dtype: \
+            x.integers(np.uint8(0), np.int64(100))
+        with self.subTest():
+            self.check_numpy_parity(dist_func, test_size=None,
+                                    test_dtype=None)
+
+        dist_func = lambda x, low, high, size, dtype, endpoint:\
+            x.integers(low=low, high=high, size=size,
+                       dtype=dtype, endpoint=endpoint)
+        self._check_invalid_types(dist_func,
+                                  ['low', 'high', 'size', 'dtype', 'endpoint'],
+                                  [1, 5, (1,), np.int64, True],
+                                  ['x', 'x', ('x',), np.float64, 'x'])
+
+    # Testing .integers() dtype wise
+    def test_integers_cases(self):
+        cases = [
+            # low, high, dtype
+            (5, 6, np.uint64), # rng == 0 (rng stands for range)
+            (5, 100, np.uint64), # rng <= 0xFFFFFFFF
+            (0, 0xFFFFFFFFFF, np.uint64), # rng > 0xFFFFFFFF
+            (0, 0xFFFFFFFFFFFFFFFF - 1, np.uint64),# rng == 0xFFFFFFFFFFFFFFFF-1
+            (0, 0xFFFFFFFFFFFFFFFF, np.uint64), # rng == 0xFFFFFFFFFFFFFFFF
+
+            (5, 6, np.int64), # rng == 0
+            (5, 100, np.int64), # rng <= 0xFFFFFFFF
+            (0, 0xFFFFFFFFFF, np.int64), # rng > 0xFFFFFFFF
+            (0, 0xFFFFFFFFFFFFFFF - 1, np.int64), # rng == 0xFFFFFFFFFFFFFFF - 1
+            (0, 0xFFFFFFFFFFFFFFF, np.int64), # rng == 0xFFFFFFFFFFFFFFF
+            (-0xFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFF, np.int64), # min/max
+
+            (5, 6, np.uint32), # rng == 0
+            (5, 100, np.uint32), # rng < 0xFFFFFFFF
+            (0, 0xFFFFFFFF - 1, np.uint32), # rng == 0xFFFFFFFF - 1
+            (0, 0xFFFFFFFF, np.uint32), # rng == 0xFFFFFFFF
+
+            (5, 6, np.int32), # rng == 0
+            (5, 100, np.int32), # rng < 0xFFFFFFFF
+            (0, 0xFFFFFFF - 1, np.int32), # rng == 0xFFFFFFF - 1
+            (0, 0xFFFFFFF, np.int32), # rng == 0xFFFFFFF
+            (-0xFFFFFFF, 0xFFFFFFF, np.int32),
+
+            (5, 6, np.uint16), # rng == 0
+            (5, 100, np.uint16), # rng < 0xFFFF
+            (0, 0xFFFF - 1, np.uint16), # rng == 0xFFFF - 1
+            (0, 0xFFFF, np.uint16), # rng == 0xFFFF
+
+            (5, 6, np.int16), # rng == 0
+            (5, 10, np.int16), # rng < 0xFFF
+            (0, 0xFFF - 1, np.int16), # rng == 0xFFF - 1
+            (0, 0xFFF, np.int16), # rng == 0xFFF
+            (-0xFFF, 0xFFF, np.int16),
+
+            (5, 6, np.uint8), # rng == 0
+            (5, 10, np.uint8), # rng < 0xFF
+            (0, 0xFF - 1, np.uint8), # rng == 0xFF - 1
+            (0, 0xFF, np.uint8), # rng == 0xFF
+
+            (5, 6, np.int8), # rng == 0
+            (5, 10, np.int8), # rng < 0xF
+            (0, 0xF - 1, np.int8), # rng == 0xF-1
+            (0, 0xF, np.int8), # rng == 0xF
+            (-0xF, 0xF, np.int8),
+        ]
+        size = (2, 3)
+
+        for low, high, dtype in cases:
+            with self.subTest(low=low, high=high, dtype=dtype):
+                dist_func = lambda x, size, dtype:\
+                    x.integers(low, high, size=size, dtype=dtype)
+                self.check_numpy_parity(dist_func, None,
+                                        None, size, dtype, 0)
 
     def test_random(self):
         test_sizes = [None, (), (100,), (10, 20, 30)]
@@ -748,6 +946,232 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             x.negative_binomial(n=n, p=p, size=size)
         self._check_invalid_types(dist_func, ['n', 'p', 'size'],
                                   [1, 0.75, (1,)], ['x', 'x', ('x',)])
+
+    # NumPy tests at:
+    # https://github.com/numpy/numpy/blob/95e3e7f445407e4f355b23d6a9991d8774f0eb0c/numpy/random/tests/test_generator_mt19937.py#L936
+    # Written in following format for semblance with existing Generator tests.
+    def test_shuffle(self):
+        test_sizes = [(10, 20, 30)]
+        bitgen_types = [None, MT19937]
+        axes = [0, 1, 2]
+
+        for _size, _bitgen, _axis in itertools.product(test_sizes,
+                                                       bitgen_types,
+                                                       axes):
+            with self.subTest(_size=_size, _bitgen=_bitgen, _axis=_axis):
+                def dist_func(x, size, dtype):
+                    arr = x.random(size=size)
+                    x.shuffle(arr, axis=_axis)
+                    return arr
+                self.check_numpy_parity(dist_func, _bitgen,
+                                        None, _size, None,
+                                        0)
+
+    def test_shuffle_empty(self):
+        a = np.array([])
+        b = np.array([])
+
+        def dist_func(x, arr):
+            x.shuffle(arr)
+            return arr
+
+        nb_func = numba.njit(dist_func)
+        rng = lambda: np.random.default_rng(1)
+
+        self.assertPreciseEqual(dist_func(rng(), a), nb_func(rng(), b))
+
+    def test_shuffle_check(self):
+        self.disable_leak_check()
+
+        def dist_func(x, arr, axis):
+            x.shuffle(arr, axis=axis)
+            return arr
+
+        self._check_invalid_types(dist_func, ['x', 'axis'],
+                                  [np.array([3,4,5]), 0], ['x', 'x'])
+
+        rng = np.random.default_rng(1)
+        with self.assertRaises(IndexError) as raises:
+            numba.njit(dist_func)(rng, np.array([3,4,5]), 2)
+        self.assertIn(
+            'Axis is out of bounds for the given array',
+            str(raises.exception)
+        )
+
+    # NumPy tests at:
+    # https://github.com/numpy/numpy/blob/95e3e7f445407e4f355b23d6a9991d8774f0eb0c/numpy/random/tests/test_generator_mt19937.py#L1030
+    # Written in following format for semblance with existing Generator tests.
+    def test_permutation(self):
+        test_sizes = [(10, 20, 30)]
+        bitgen_types = [None, MT19937]
+        axes = [0, 1, 2, -1, -2]
+
+        for _size, _bitgen, _axis in itertools.product(test_sizes,
+                                                       bitgen_types,
+                                                       axes):
+            with self.subTest(_size=_size, _bitgen=_bitgen, _axis=_axis):
+                def dist_func(x, size, dtype):
+                    arr = x.random(size=size)
+                    return x.permutation(arr, axis=1)
+                self.check_numpy_parity(dist_func, _bitgen,
+                                        None, _size, None,
+                                        0)
+
+        # Test that permutation is actually done on a copy of the array
+        dist_func = numba.njit(lambda rng, arr: rng.permutation(arr))
+        rng = np.random.default_rng()
+        arr = rng.random(size=(10, 20))
+        arr_cpy = arr.copy()
+        dist_func(rng, arr)
+        self.assertPreciseEqual(arr, arr_cpy)
+
+    def test_permutation_exception(self):
+        self.disable_leak_check()
+
+        def dist_func(x, arr, axis):
+            return x.permutation(arr, axis=axis)
+
+        self._check_invalid_types(dist_func, ['x', 'axis'],
+                                  [np.array([3,4,5]), 0], ['x', 'x'])
+
+        rng = np.random.default_rng(1)
+        with self.assertRaises(IndexError) as raises:
+            numba.njit(dist_func)(rng, np.array([3,4,5]), 2)
+        self.assertIn(
+            'Axis is out of bounds for the given array',
+            str(raises.exception)
+        )
+        with self.assertRaises(IndexError) as raises:
+            numba.njit(dist_func)(rng, np.array([3,4,5]), -2)
+        self.assertIn(
+            'Axis is out of bounds for the given array',
+            str(raises.exception)
+        )
+
+    def test_permutation_empty(self):
+        a = np.array([])
+        b = np.array([])
+
+        def dist_func(x, arr):
+            return x.permutation(arr)
+
+        nb_func = numba.njit(dist_func)
+        rng = lambda: np.random.default_rng(1)
+
+        self.assertPreciseEqual(dist_func(rng(), a), nb_func(rng(), b))
+
+    def test_noncentral_chisquare(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:\
+            x.noncentral_chisquare(3.0, 20.0, size=size)
+        for _size, _bitgen in itertools.product(test_sizes, bitgen_types):
+            with self.subTest(_size=_size, _bitgen=_bitgen):
+                self.check_numpy_parity(dist_func, _bitgen,
+                                        None, _size, None)
+
+        dist_func = lambda x, df, nonc, size:\
+            x.noncentral_chisquare(df=df, nonc=nonc, size=size)
+        valid_args = [3.0, 5.0, (1,)]
+        self._check_invalid_types(dist_func, ['df', 'nonc', 'size'],
+                                  valid_args, ['x', 'x', ('x',)])
+
+        # Test argument bounds
+        rng = np.random.default_rng()
+        valid_args = [rng] + valid_args
+        nb_dist_func = numba.njit(dist_func)
+        with self.assertRaises(ValueError) as raises:
+            curr_args = valid_args.copy()
+            # Change df to an invalid value
+            curr_args[1] = 0
+            nb_dist_func(*curr_args)
+        self.assertIn('df <= 0', str(raises.exception))
+        with self.assertRaises(ValueError) as raises:
+            curr_args = valid_args.copy()
+            # Change nonc to an invalid value
+            curr_args[2] = -1
+            nb_dist_func(*curr_args)
+        self.assertIn('nonc < 0', str(raises.exception))
+
+    def test_noncentral_f(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:\
+            x.noncentral_f(3.0, 20.0, 3.0, size=size)
+        for _size, _bitgen in itertools.product(test_sizes, bitgen_types):
+            with self.subTest(_size=_size, _bitgen=_bitgen):
+                self.check_numpy_parity(dist_func, _bitgen,
+                                        None, _size, None,
+                                        adjusted_ulp_prec)
+
+        dist_func = lambda x, dfnum, dfden, nonc, size:\
+            x.noncentral_f(dfnum=dfnum, dfden=dfden, nonc=nonc, size=size)
+        valid_args = [3.0, 5.0, 3.0, (1,)]
+        self._check_invalid_types(dist_func, ['dfnum', 'dfden', 'nonc', 'size'],
+                                  valid_args, ['x', 'x', 'x', ('x',)])
+
+        # Test argument bounds
+        rng = np.random.default_rng()
+        valid_args = [rng] + valid_args
+        nb_dist_func = numba.njit(dist_func)
+        with self.assertRaises(ValueError) as raises:
+            curr_args = valid_args.copy()
+            # Change dfnum to an invalid value
+            curr_args[1] = 0
+            nb_dist_func(*curr_args)
+        self.assertIn('dfnum <= 0', str(raises.exception))
+        with self.assertRaises(ValueError) as raises:
+            curr_args = valid_args.copy()
+            # Change dfden to an invalid value
+            curr_args[2] = 0
+            nb_dist_func(*curr_args)
+        self.assertIn('dfden <= 0', str(raises.exception))
+        with self.assertRaises(ValueError) as raises:
+            curr_args = valid_args.copy()
+            # Change nonc to an invalid value
+            curr_args[3] = -1
+            nb_dist_func(*curr_args)
+        self.assertIn('nonc < 0', str(raises.exception))
+
+    def test_logseries(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:\
+            x.logseries(0.3, size=size)
+        for _size, _bitgen in itertools.product(test_sizes, bitgen_types):
+            with self.subTest(_size=_size, _bitgen=_bitgen):
+                self.check_numpy_parity(dist_func, _bitgen,
+                                        None, _size, None)
+
+        dist_func = lambda x, p, size:\
+            x.logseries(p=p, size=size)
+        valid_args = [0.3, (1,)]
+        self._check_invalid_types(dist_func, ['p', 'size'],
+                                  valid_args, ['x', ('x',)])
+
+        # Test argument bounds
+        rng = np.random.default_rng(1)
+        valid_args = [rng] + valid_args
+        nb_dist_func = numba.njit(dist_func)
+        for _p in [-0.1, 1, np.nan]:
+            with self.assertRaises(ValueError) as raises:
+                curr_args = valid_args.copy()
+                # Change p to an invalid negative, positive and nan value
+                curr_args[1] = _p
+                nb_dist_func(*curr_args)
+            self.assertIn('p < 0, p >= 1 or p is NaN', str(raises.exception))
 
 
 class TestGeneratorCaching(TestCase, SerialMixin):
