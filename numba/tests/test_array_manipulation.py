@@ -669,8 +669,8 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             a_empty = np.zeros_like(a)
             item = a[idx]
 
-            expected = pyfunc_setitem(a_empty, idx, item)
-            got = cfunc_setitem(a_empty, idx, item)
+            expected = pyfunc_setitem(a_empty.copy(), idx, item)
+            got = cfunc_setitem(a_empty.copy(), idx, item)
             np.testing.assert_equal(expected, got)
 
     def test_bad_index_npm(self):
