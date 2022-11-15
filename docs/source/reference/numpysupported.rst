@@ -161,7 +161,7 @@ Array access
 ------------
 
 Arrays support normal iteration.  Full basic indexing and slicing is
-supported along with passing ``None``/ ``np.newaxis`` as indices for
+supported along with passing ``None`` / ``np.newaxis`` as indices for
 additional resulting dimensions. A subset of advanced indexing is also
 supported: only one advanced index is allowed, and it has to be a
 one-dimensional array (it can be combined with an arbitrary number
