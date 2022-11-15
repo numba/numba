@@ -6,6 +6,7 @@ import itertools
 import math
 import random
 import sys
+from numba.core.errors import TypingError
 
 import numpy as np
 
@@ -173,33 +174,6 @@ def union_usecase(a, b):
 def set_return_usecase(a):
     s = set(a)
     return s
-
-
-def make_operator_usecase(op):
-    code = """if 1:
-    def operator_usecase(a, b):
-        s = set(a) %(op)s set(b)
-        return list(s)
-    """ % dict(op=op)
-    return compile_function('operator_usecase', code, globals())
-
-def make_inplace_operator_usecase(op):
-    code = """if 1:
-    def inplace_operator_usecase(a, b):
-        sa = set(a)
-        sb = set(b)
-        sc = sa
-        sc %(op)s sb
-        return list(sc), list(sa)
-    """ % dict(op=op)
-    return compile_function('inplace_operator_usecase', code, globals())
-
-def make_comparison_usecase(op):
-    code = """if 1:
-    def comparison_usecase(a, b):
-        return set(a) %(op)s set(b)
-    """ % dict(op=op)
-    return compile_function('comparison_usecase', code, globals())
 
 
 def noop(x):
@@ -538,6 +512,32 @@ class TestSets(BaseTest):
             b = self.sparse_array(nb)
             check(a, b)
 
+    def make_operator_usecase(self, op):
+        code = """if 1:
+        def operator_usecase(a, b):
+            s = set(a) %(op)s set(b)
+            return list(s)
+        """ % dict(op=op)
+        return compile_function('operator_usecase', code, globals())
+
+    def make_inplace_operator_usecase(self, op):
+        code = """if 1:
+        def inplace_operator_usecase(a, b):
+            sa = set(a)
+            sb = set(b)
+            sc = sa
+            sc %(op)s sb
+            return list(sc), list(sa)
+        """ % dict(op=op)
+        return compile_function('inplace_operator_usecase', code, globals())
+
+    def make_comparison_usecase(self, op):
+        code = """if 1:
+        def comparison_usecase(a, b):
+            return set(a) %(op)s set(b)
+        """ % dict(op=op)
+        return compile_function('comparison_usecase', code, globals())
+
     def test_difference(self):
         self._test_set_operator(difference_usecase)
 
@@ -551,46 +551,46 @@ class TestSets(BaseTest):
         self._test_set_operator(union_usecase)
 
     def test_and(self):
-        self._test_set_operator(make_operator_usecase('&'))
+        self._test_set_operator(self.make_operator_usecase('&'))
 
     def test_or(self):
-        self._test_set_operator(make_operator_usecase('|'))
+        self._test_set_operator(self.make_operator_usecase('|'))
 
     def test_sub(self):
-        self._test_set_operator(make_operator_usecase('-'))
+        self._test_set_operator(self.make_operator_usecase('-'))
 
     def test_xor(self):
-        self._test_set_operator(make_operator_usecase('^'))
+        self._test_set_operator(self.make_operator_usecase('^'))
 
     def test_eq(self):
-        self._test_set_operator(make_comparison_usecase('=='))
+        self._test_set_operator(self.make_comparison_usecase('=='))
 
     def test_ne(self):
-        self._test_set_operator(make_comparison_usecase('!='))
+        self._test_set_operator(self.make_comparison_usecase('!='))
 
     def test_le(self):
-        self._test_set_operator(make_comparison_usecase('<='))
+        self._test_set_operator(self.make_comparison_usecase('<='))
 
     def test_lt(self):
-        self._test_set_operator(make_comparison_usecase('<'))
+        self._test_set_operator(self.make_comparison_usecase('<'))
 
     def test_ge(self):
-        self._test_set_operator(make_comparison_usecase('>='))
+        self._test_set_operator(self.make_comparison_usecase('>='))
 
     def test_gt(self):
-        self._test_set_operator(make_comparison_usecase('>'))
+        self._test_set_operator(self.make_comparison_usecase('>'))
 
     def test_iand(self):
-        self._test_set_operator(make_inplace_operator_usecase('&='))
+        self._test_set_operator(self.make_inplace_operator_usecase('&='))
 
     def test_ior(self):
-        self._test_set_operator(make_inplace_operator_usecase('|='))
+        self._test_set_operator(self.make_inplace_operator_usecase('|='))
 
     def test_isub(self):
-        self._test_set_operator(make_inplace_operator_usecase('-='))
+        self._test_set_operator(self.make_inplace_operator_usecase('-='))
 
     def test_ixor(self):
-        self._test_set_operator(make_inplace_operator_usecase('^='))
+        self._test_set_operator(self.make_inplace_operator_usecase('^='))
 
 
 class TestFloatSets(TestSets):
@@ -622,6 +622,88 @@ class TestUnicodeSets(TestSets):
     """
     def _range(self, stop):
         return ['A{}'.format(i) for i in range(int(stop))]
+
+
+class TestSetsInvalidDtype(TestSets):
+
+    def _test_set_operator(self, pyfunc):
+        # it is invalid to apply some set operations on
+        # sets with different dtype
+        cfunc = jit(nopython=True)(pyfunc)
+
+        a = set([1, 2, 4, 11])
+        b = set(['a', 'b', 'c'])
+        msg = 'All Sets must be of the same type'
+        with self.assertRaisesRegex(TypingError, msg):
+            cfunc(a, b)
+
+
+class TestSetsInvalid(TestSets):
+
+    def symmetric_difference_usecase(a, b):
+        s = a.symmetric_difference(b)
+        return list(s)
+
+    def difference_usecase(a, b):
+        s = a.difference(b)
+        return list(s)
+
+    def intersection_usecase(a, b):
+        s = a.intersection(b)
+        return list(s)
+
+    def union_usecase(a, b):
+        s = a.union(b)
+        return list(s)
+
+    def _test_set_operator(self, pyfunc):
+        # it is invalid to apply some set operations on
+        # sets with different dtype
+        cfunc = jit(nopython=True)(pyfunc)
+
+        a = set([1, 2, 4, 11])
+        b = (1, 2, 3)
+        msg = 'All arguments must be Sets'
+        with self.assertRaisesRegex(TypingError, msg):
+            cfunc(a, b)
+
+    def test_difference(self):
+        self._test_set_operator(TestSetsInvalid.difference_usecase)
+
+    def test_intersection(self):
+        self._test_set_operator(TestSetsInvalid.intersection_usecase)
+
+    def test_symmetric_difference(self):
+        self._test_set_operator(TestSetsInvalid.symmetric_difference_usecase)
+
+    def test_union(self):
+        self._test_set_operator(TestSetsInvalid.union_usecase)
+
+    def make_operator_usecase(self, op):
+        code = """if 1:
+        def operator_usecase(a, b):
+            s = a %(op)s b
+            return list(s)
+        """ % dict(op=op)
+        return compile_function('operator_usecase', code, globals())
+
+    def make_inplace_operator_usecase(self, op):
+        code = """if 1:
+        def inplace_operator_usecase(a, b):
+            sa = a
+            sb = b
+            sc = sa
+            sc %(op)s sb
+            return list(sc), list(sa)
+        """ % dict(op=op)
+        return compile_function('inplace_operator_usecase', code, globals())
+
+    def make_comparison_usecase(self, op):
+        code = """if 1:
+        def comparison_usecase(a, b):
+            return set(a) %(op)s b
+        """ % dict(op=op)
+        return compile_function('comparison_usecase', code, globals())
 
 
 class TestUnboxing(BaseTest):
