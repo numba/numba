@@ -994,12 +994,21 @@ class FancyIndexer(object):
     def prepare(self):
         for i in self.indexers:
             i.prepare()
-        # Compute the resulting shape
-        shape_list = [i.get_shape() for i in self.indexers]
+
         one = self.context.get_constant(types.intp, 1)
+
+        # Compute the resulting shape given by the indices
+        res_shape = [i.get_shape() for i in self.indexers]
+
+        # At every position where newaxis/None is present insert
+        # one as a constant shape in the resulting list of shapes.
         for i in self.newaxes:
-            shape_list.insert(i, (one,))
-        self.indexers_shape = sum(shape_list, ())
+            res_shape.insert(i, (one,))
+
+        # Store the shape as a tuple, we can't do a simple
+        # tuple(res_shape) here since res_shape is a list
+        # of tuples which may be differently sized.
+        self.indexers_shape = sum(res_shape, ())
 
     def get_shape(self):
         """
