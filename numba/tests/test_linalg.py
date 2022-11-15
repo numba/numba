@@ -2643,6 +2643,9 @@ class TestBasics(TestLinalgSystems):  # TestLinalgSystems for 1d test
 
         self._assert_wrong_dim("kron", cfunc)
 
+        with self.assertRaises(errors.TypingError):
+            cfunc(np.ones(10, dtype=np.intp), np.ones(10, dtype=np.float32))
+
         args = (np.empty(10)[::2], np.empty(10)[::2])
         msg = "only supports 'C' or 'F' layout"
         self.assert_error(cfunc, args, msg, err=errors.TypingError)

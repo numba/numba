@@ -2792,9 +2792,10 @@ def kron_impl(a, b):
     fix_b = _kron_normaliser_impl(b)
     ret_c = _kron_return(a, b)
 
-    # this is fine because the ufunc for the Hadamard product
-    # will reject differing dtypes in a and b.
     dt = getattr(a, 'dtype', a)
+    if (isinstance(a, types.Array) and isinstance(b, types.Array) and
+       a.dtype != b.dtype):
+        raise NumbaTypeError("Both types must be the same in numpy.kron.")
 
     def kron_impl(a, b):
 
