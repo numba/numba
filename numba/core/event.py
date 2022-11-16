@@ -461,7 +461,7 @@ def _prepare_chrome_trace_data(listener: RecordingListener):
     for ts, rec in listener.buffer:
         data = rec.data
         cat = str(rec.kind)
-        ts_scaled = ts * 10 ** 6   # scale to microseconds
+        ts_scaled = ts * 1_000_000   # scale to seconds
         ph = 'B' if rec.is_start else 'E'
         name = data['name']
         args = data
