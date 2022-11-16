@@ -274,7 +274,7 @@ _options_mixin = include_default_options(
     "error_model",
     "inline",
     "forceinline",
-    "opt_info",
+    "_opt_info",
     # Add "target_backend" as a accepted option for the CPU in @jit(...)
     "target_backend",
     "_dbg_extend_lifetimes",
@@ -291,8 +291,8 @@ class CPUTargetOptions(_options_mixin, TargetOptions):
 
         flags.inherit_if_not_set("nrt", default=True)
 
-        if ((flags.is_set("opt_info") and any(p.needs_debug_info() for p in
-                                              flags.opt_info))
+        if ((flags.is_set("_opt_info") and any(p.needs_debug_info() for p in
+                                               flags._opt_info))
                 or any(p.needs_debug_info() for p in global_processors())):
             flags.debuginfo = True
 

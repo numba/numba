@@ -225,7 +225,7 @@ class BaseContext(object):
     # the function descriptor
     fndesc = None
 
-    opt_info = ()
+    _opt_info = ()
 
     def __init__(self, typing_context, target):
         _load_global_helpers()
@@ -250,7 +250,7 @@ class BaseContext(object):
         self.cached_internal_func = {}
         self._pid = None
         self._codelib_stack = []
-        self.opt_info = ()
+        self._opt_info = ()
 
         self._boundscheck = False
 

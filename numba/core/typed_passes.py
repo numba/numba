@@ -364,8 +364,8 @@ class NativeLowering(LoweringPass):
         if state.library is None:
             codegen = state.targetctx.codegen()
             state.library = codegen.create_library(state.func_id.func_qualname,
-                                                   opt_info=state.targetctx.
-                                                   opt_info)
+                                                   _opt_info=state.targetctx.
+                                                   _opt_info)
             # Enable object caching upfront, so that the library can
             # be later serialized.
             state.library.enable_object_caching()
@@ -434,7 +434,7 @@ class NativeLowering(LoweringPass):
             # Save the LLVM pass timings
             metadata['llvm_pass_timings'] = library.recorded_timings
 
-            metadata['opt_info'] = library.opt_info
+            metadata['_opt_info'] = library._opt_info
         return True
 
 

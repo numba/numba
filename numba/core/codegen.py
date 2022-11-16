@@ -536,7 +536,7 @@ class CodeLibrary(metaclass=ABCMeta):
         self._recorded_timings = PassTimingsCollection(ptc_name)
         # Track names of the dynamic globals
         self._dynamic_globals = []
-        self.opt_info = None
+        self._opt_info = None
 
     @property
     def has_dynamic_globals(self):
@@ -644,14 +644,14 @@ class CodeLibrary(metaclass=ABCMeta):
 
 class CPUCodeLibrary(CodeLibrary):
 
-    def __init__(self, codegen, name, opt_info=()):
+    def __init__(self, codegen, name, _opt_info=()):
         super().__init__(codegen, name)
         self._linking_libraries = []   # maintain insertion order
         self._final_module = ll.parse_assembly(
             str(self._codegen._create_empty_module(self.name)))
         self._final_module.name = cgutils.normalize_ir_text(self.name)
         self._shared_module = None
-        self._opt_info = opt_info
+        self._opt_info = _opt_info
 
     def _optimize_functions(self, ll_module):
         """
@@ -678,7 +678,7 @@ class CPUCodeLibrary(CodeLibrary):
                                    for p in c}
         remarks_filter = None
         remarks_file = None
-        remarks_data = []
+        remarks_data = {}
         try:
             if optimization_processors:
                 remarks_filter = "|".join("(%s)" % f for p in
@@ -689,6 +689,15 @@ class CPUCodeLibrary(CodeLibrary):
                 with os.fdopen(remarkdesc, 'r'):
                     pass
 
+                def handle_remarks(name):
+                    import yaml
+                    with open(remarks_file, 'rt') as f:
+                        remarks_data[name] =\
+                            [*yaml.load_all(f, Loader=_llvm_yaml())]
+            else:
+                def handle_remarks(name):
+                    return
+
             cheap_name = "Module passes (cheap optimization for refprune)"
             with self._recorded_timings.record(cheap_name):
 
@@ -697,11 +706,7 @@ class CPUCodeLibrary(CodeLibrary):
                 self._codegen._mpm_cheap.run(self._final_module,
                                              remarks_file=remarks_file,
                                              remarks_filter=remarks_filter)
-            if remarks_file:
-                import yaml
-                with open(remarks_file, 'rt') as f:
-                    remarks_data.append([*yaml.load_all(f,
-                                                        Loader=_llvm_yaml())])
+            handle_remarks("cheap")
             # Refop pruning is then run on the heavily inlined function
             if not config.LLVM_REFPRUNE_PASS:
                 self._final_module = remove_redundant_nrt_refct(self._final_module)
@@ -711,17 +716,13 @@ class CPUCodeLibrary(CodeLibrary):
                 self._codegen._mpm_full.run(self._final_module,
                                             remarks_file=remarks_file,
                                             remarks_filter=remarks_filter)
-            if remarks_file:
-                import yaml
-                with open(remarks_file, 'rt') as f:
-                    remarks_data.append([*yaml.load_all(f,
-                                                        Loader=_llvm_yaml())])
+            handle_remarks("full")
 
             if remarks_file:
-                self.opt_info = {k: v for p in optimization_processors for
-                                 (k, v) in p.process(remarks_data, self.name)}
+                self._opt_info = {k: v for p in optimization_processors for
+                                  (k, v) in p.process(remarks_data, self.name)}
             else:
-                self.opt_info = None
+                self._opt_info = None
         finally:
             if remarks_file:
                 os.unlink(remarks_file)

@@ -1,4 +1,4 @@
-from typing import Any, Iterable, List, Set, Tuple
+from typing import Any, Dict, Iterable, Set, Tuple
 from collections import namedtuple
 
 
@@ -24,7 +24,7 @@ class OptimizationProcessor:
         """
         return True
 
-    def process(self, remarks_data: List[Any], full_name: str) ->\
+    def process(self, remarks_data: Dict[str, Any], full_name: str) ->\
             Iterable[Tuple[str, Any]]:
         """
         Generate optimisation information from the remarks.
@@ -57,7 +57,7 @@ class Aggregate(OptimizationProcessor):
     def needs_debug_info(self) -> bool:
         return any(p.needs_debug_info() for p in self._processors)
 
-    def process(self, remarks_data: List[Any], full_name: str) ->\
+    def process(self, remarks_data: Dict[str, Any], full_name: str) ->\
             Iterable[Tuple[str, Any]]:
         return (o for p in self._processors for o in p.process(remarks_data,
                                                                full_name))
@@ -81,12 +81,12 @@ class RawOptimizationRemarks(OptimizationProcessor):
     def needs_debug_info(self) -> bool:
         return False
 
-    def process(self, remarks_data: List[Any], function) -> Iterable[
+    def process(self, remarks_data: Dict[str, Any], function) -> Iterable[
             Tuple[str, Any]]:
         return ('raw', remarks_data),
 
 
-class LoopDeLoop(OptimizationProcessor):
+class LoopVectorizationDetector(OptimizationProcessor):
     """
     Indicates whether a loop vectorization happened.
 
@@ -102,10 +102,10 @@ class LoopDeLoop(OptimizationProcessor):
     def filters(self) -> Iterable[str]:
         return 'loop-vectorize',
 
-    def process(self, remarks_data: List[Any], function) -> Iterable[
+    def process(self, remarks_data: Dict[str, Any], function) -> Iterable[
             Tuple[str, Any]]:
         loops = {}
-        for remarks in remarks_data:
+        for remarks in remarks_data.values():
             for entry in remarks:
                 if isinstance(entry, (Missed, Passed)) and entry.info['Pass']\
                         == 'loop-vectorize' and 'DebugLoc' in entry.info:
@@ -136,10 +136,10 @@ class SuperWorldLevelParallelismDetector(OptimizationProcessor):
     def filters(self) -> Iterable[str]:
         return 'slp-vectorizer',
 
-    def process(self, remarks_data: List[Any], function) -> Iterable[
+    def process(self, remarks_data: Dict[str, Any], function) -> Iterable[
             Tuple[str, Any]]:
         slps = set()
-        for remarks in remarks_data:
+        for remarks in remarks_data.values():
             for entry in remarks:
                 if isinstance(entry,  Passed) and entry.info['Pass']\
                         == 'slp-vectorizer' and 'DebugLoc' in entry.info:

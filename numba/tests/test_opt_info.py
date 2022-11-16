@@ -4,14 +4,14 @@ import unittest
 
 from numba import njit
 from numba.tests.support import TestCase
-from numba.core.opt_info import RawOptimizationRemarks, LoopDeLoop,\
-    SuperWorldLevelParallelismDetector
+from numba.core.opt_info import RawOptimizationRemarks,\
+    LoopVectorizationDetector, SuperWorldLevelParallelismDetector
 
 
 class TestOptimizationInfo(TestCase):
 
     def test_usage(self):
-        @njit(opt_info=[RawOptimizationRemarks()])
+        @njit(_opt_info=[RawOptimizationRemarks()])
         def foo(n):
             c = 0
             for i in range(n):
@@ -19,15 +19,15 @@ class TestOptimizationInfo(TestCase):
             return c
 
         foo(3)
-        self.assertTrue(all('raw' in metadata['opt_info'] for metadata in
+        self.assertTrue(all('raw' in metadata['_opt_info'] for metadata in
                             foo.get_metadata().values()))
         # Generate a new signature and make sure that everything still has info
         foo(3.0)
-        self.assertTrue(all('raw' in metadata['opt_info'] for metadata in
+        self.assertTrue(all('raw' in metadata['_opt_info'] for metadata in
                             foo.get_metadata().values()))
 
     def test_loop_vect(self):
-        @njit(opt_info=[LoopDeLoop()])
+        @njit(_opt_info=[LoopVectorizationDetector()])
         def foo(n):
             ret = np.empty(n, dtype=np.float64)
             for x in range(n):
@@ -36,14 +36,14 @@ class TestOptimizationInfo(TestCase):
 
         foo(3)
         # Check that there is data for the loop
-        self.assertTrue(all(metadata['opt_info']['loop_vectorization']
+        self.assertTrue(all(metadata['_opt_info']['loop_vectorization']
                             for metadata in foo.get_metadata().values()))
 
     def test_slp(self):
         # Sample translated from:
         # https://www.llvm.org/docs/Vectorizers.html#the-slp-vectorizer
 
-        @njit(opt_info=[SuperWorldLevelParallelismDetector()])
+        @njit(_opt_info=[SuperWorldLevelParallelismDetector()])
         def foo(a1, a2, b1, b2):
             A = np.empty(4)
             A[0] = a1 * (a1 + b1)
@@ -53,7 +53,7 @@ class TestOptimizationInfo(TestCase):
             return A
 
         foo(3.0, 4.0, 5.0, 6.0)
-        self.assertTrue(all(metadata['opt_info']['slp_vectorization'] for
+        self.assertTrue(all(metadata['_opt_info']['slp_vectorization'] for
                             metadata in foo.get_metadata().values()))
 
 
