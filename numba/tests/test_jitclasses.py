@@ -1154,6 +1154,18 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(pyfunc(Bar(123)), cfunc(Bar(123)))
         self.assertEqual(pyfunc(0), cfunc(0))
 
+    def test_jitclass_unsupported_dunder(self):
+        with self.assertRaises(TypeError) as e:
+            @jitclass
+            class Foo(object):
+                def __init__(self):
+                    return
+
+                def __enter__(self):
+                    return None
+            Foo()
+        self.assertIn("__enter__", str(e.exception))
+
 
 class TestJitClassOverloads(MemoryLeakMixin, TestCase):
 
