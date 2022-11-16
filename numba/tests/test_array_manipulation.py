@@ -446,7 +446,8 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
         with self.assertTypingError() as raises:
             cfunc(arr, 'hello')
-        self.assertIn('Argument "axis" must be an integer', str(raises.exception))
+        self.assertIn('Argument "axis" must be an integer or tuple of integers',
+                      str(raises.exception))
 
         with self.assertRaises(ValueError) as raises:
             cfunc(arr, (1, 1))

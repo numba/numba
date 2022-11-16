@@ -5190,7 +5190,7 @@ def expand_dims(context, builder, sig, args):
                 axis = tuple_setitem(axis, i, axis[i] + ndim)
 
             # Check for out of bound axes
-            if axis[i] >= ndim:
+            if axis[i] < 0 or axis[i] >= ndim:
                 raise IndexError("axis out of bounds")
         return axis
 
@@ -5265,8 +5265,7 @@ def np_expand_dims(typingctx, a, axis):
 
     def codegen(context, builder, sig, args):
         axes_types = sig.args[1]
-        if (
-                isinstance(axes_types, (types.UniTuple, types.Tuple))
+        if (isinstance(axes_types, (types.UniTuple, types.Tuple))
                 and not axes_types.count):
             # An empty tuple
             return impl_ret_borrowed(context, builder,
