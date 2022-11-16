@@ -434,6 +434,9 @@ class TraceRunner(object):
     def op_COPY_FREE_VARS(self, state, inst):
         state.append(inst)
 
+    def op_MAKE_CELL(self, state: "State", inst):
+        state.append(inst)
+
     def op_LOAD_DEREF(self, state, inst):
         res = state.make_temp()
         state.append(inst, res=res)
