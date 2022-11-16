@@ -581,8 +581,8 @@ def random_binomial_btpe(bitgen, n, p):
     r = min(p, 1.0 - p)
     q = 1.0 - r
     fm = n * r + r
-    m = int(fm)
-    p1 = int(2.195 * np.sqrt(n * r * q) - 4.6 * q) + 0.5
+    m = np.floor(fm)
+    p1 = np.floor(2.195 * np.sqrt(n * r * q) - 4.6 * q) + 0.5
     xm = m + 0.5
     xl = xm - p1
     xr = xm + p1
@@ -605,7 +605,7 @@ def random_binomial_btpe(bitgen, n, p):
             if (u > p1):
                 case = 1
                 continue
-            y = int(xm - p1 * v + u)
+            y = np.floor(xm - p1 * v + u)
             case = 6
             continue
         elif case == 1:
@@ -617,14 +617,14 @@ def random_binomial_btpe(bitgen, n, p):
             if (v > 1.0):
                 case = 0
                 continue
-            y = int(x)
+            y = np.floor(x)
             case = 4
             continue
         elif case == 2:
             if (u > p3):
                 case = 3
                 continue
-            y = int(xl + np.log(v) / laml)
+            y = np.floor(xl + np.log(v) / laml)
             if ((y < 0) or (v == 0.0)):
                 case = 0
                 continue
@@ -632,7 +632,7 @@ def random_binomial_btpe(bitgen, n, p):
             case = 4
             continue
         elif case == 3:
-            y = int(xr - np.log(v) / lamr)
+            y = np.floor(xr - np.log(v) / lamr)
             if ((y > n) or (v == 0.0)):
                 case = 0
                 continue
