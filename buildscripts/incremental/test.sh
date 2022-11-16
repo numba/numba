@@ -105,8 +105,8 @@ fi
 # First check that the test discovery works
 python -m numba.tests.test_runtests
 
-# Now run tests based on the changes identified via git
-NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -g -m $TEST_NPROCS -- numba.tests
+# # Now run tests based on the changes identified via git
+# NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -g -m $TEST_NPROCS -- numba.tests
 
 # List the tests found
 echo "INFO: All discovered tests:"
