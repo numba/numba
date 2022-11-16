@@ -86,7 +86,7 @@ class TestRefOpPruning(TestCase):
                 con.append(np.arange(i))
             c = 0.0
             for arr in con:
-                c += arr.sum() / (1 + arr.size)
+                c += arr.prod() / (1 + arr.size)
             return c
 
         # disable fanout pruning

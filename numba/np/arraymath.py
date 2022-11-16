@@ -50,29 +50,38 @@ _HAVE_BLAS = _check_blas()
 
 @overload(np.sum)
 @overload_method(types.Array, "sum")
-def array_sum(a, axis=None):
+def array_sum(a, axis=None, dtype=None):
 
-    if a.dtype in types.signed_domain:
-        _dtype = np.intp
-    elif a.dtype in types.unsigned_domain:
-        _dtype = np.uintp
+    if is_nonelike(dtype):
+        if a.dtype in types.signed_domain:
+            _dtype = as_dtype(types.intp)
+        elif a.dtype in types.unsigned_domain:
+            _dtype = as_dtype(types.uintp)
+        else:
+            _dtype = as_dtype(a.dtype)
     else:
-        _dtype = a.dtype
+        _dtype = as_dtype(dtype)
+
+    acc_init = get_accumulator(_dtype, 0)
 
     @register_jitable
     def _array_sum_impl(a):
-        c = np.zeros(1, _dtype)[0]
+        c = acc_init
         for v in np.nditer(a):
             c += v.item()
         return c
 
     if is_nonelike(axis):
-        def array_sum_impl(a, axis=None):
+        def array_sum_impl(a, axis=None, dtype=None):
             return _array_sum_impl(a)
     else:
-        array_sum_impl = build_with_axis_impl(
+        array_sum_impl_inner = register_jitable(build_with_axis_impl(
             a, axis, _array_sum_impl, ret_type=_dtype
-        )
+        ))
+
+        def array_sum_impl(a, axis=None, dtype=None):
+            return array_sum_impl_inner(a, axis)
+
     return array_sum_impl
 
 
@@ -3228,7 +3237,7 @@ def np_count_nonzero(arr, axis=None):
         return impl
     else:
         def impl(arr, axis=None):
-            arr2 = arr.astype(np.bool_)
+            arr2 = arr.astype(np.bool_).astype(arr.dtype)
             return np.sum(arr2, axis=axis)
         return impl
 
