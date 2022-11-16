@@ -35,6 +35,7 @@ def get_array_index_type(ary, idx):
     ellipsis_met = False
     advanced = False
     has_integer = False
+    num_newaxis = 0
 
     if not isinstance(idx, types.BaseTuple):
         idx = [idx]
@@ -71,6 +72,7 @@ def get_array_index_type(ary, idx):
             advanced = True
         elif (is_nonelike(ty)):
             ndim += 1
+            num_newaxis += 1
         else:
             raise NumbaTypeError("unsupported array index type %s in %s"
                                  % (ty, idx))
@@ -86,7 +88,7 @@ def get_array_index_type(ary, idx):
         assert right_indices[0] is types.ellipsis
         del right_indices[0]
 
-    n_indices = len(all_indices) - ellipsis_met
+    n_indices = len(all_indices) - ellipsis_met - num_newaxis
     if n_indices > ary.ndim:
         raise NumbaTypeError("cannot index %s with %d indices: %s"
                              % (ary, n_indices, idx))

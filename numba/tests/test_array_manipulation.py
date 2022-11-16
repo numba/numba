@@ -655,11 +655,11 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             (slice(3), 1, np.newaxis, None),
             (np.newaxis, 1, Ellipsis, None),
         ]
-        pyfunc_getitem = np_new_axis_getitem
-        cfunc_getitem = np_new_axis_getitem.py_func
+        pyfunc_getitem = np_new_axis_getitem.py_func
+        cfunc_getitem = np_new_axis_getitem
 
-        pyfunc_setitem = np_new_axis_setitem
-        cfunc_setitem = np_new_axis_setitem.py_func
+        pyfunc_setitem = np_new_axis_setitem.py_func
+        cfunc_setitem = np_new_axis_setitem
 
         for idx in idx_cases:
             expected = pyfunc_getitem(a, idx)

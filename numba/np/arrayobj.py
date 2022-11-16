@@ -1684,11 +1684,25 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         def src_cleanup():
             pass
 
+    zero = context.get_constant(types.uintp, 0)
     # Loop on destination and copy from source to destination
     dest_indices, counts = indexer.begin_loops()
 
     # Source is iterated in natural order
-    source_indices = tuple(c for c in counts if c is not None)
+
+    # Counts represent a counter for the number of times a specified axis
+    # is being accessed, during setitem they are used as source
+    # indices
+    counts = list(counts)
+
+    # We need to artifically introduce the index zero wherever a
+    # newaxis is present within the indexer. These always remain
+    # zero.
+    for i in indexer.newaxes:
+        counts.insert(i, zero)
+
+    source_indices = [c for c in counts if c is not None]
+
     val = src_getitem(source_indices)
 
     # Cast to the destination dtype (cross-dtype slice assignment is allowed)
