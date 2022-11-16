@@ -1009,7 +1009,7 @@ class TestRandomArrays(BaseTest):
         cfunc = self._compile_array_dist(funcname, len(scalar_args) + 1)
         r = self._follow_numpy(get_np_state_ptr())
         pyfunc = getattr(r, funcname)
-        for size in (8, (2, 3)):
+        for size in [8, (2, 3), ()]:
             args = scalar_args + (size,)
             expected = pyfunc(*args)
             got = cfunc(*args)
