@@ -15,6 +15,7 @@ from numba.core.untyped_passes import (ReconstructSSA, TranslateByteCode,
                                        IRProcessing, DeadBranchPrune,
                                        PreserveIR)
 from numba.core.compiler import DefaultPassBuilder, CompilerBase, PassManager
+from numba.misc import codetype
 
 
 _GLOBAL = 123
@@ -661,33 +662,8 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
         new_consts = tuple([v for _, v in sorted(co_consts.items())])
 
         # create new code parts
-        co_args = [pyfunc_code.co_argcount]
-
-        if utils.PYVERSION >= (3, 8):
-            co_args.append(pyfunc_code.co_posonlyargcount)
-        co_args.append(pyfunc_code.co_kwonlyargcount)
-        co_args.extend([pyfunc_code.co_nlocals,
-                        pyfunc_code.co_stacksize,
-                        pyfunc_code.co_flags,
-                        pyfunc_code.co_code,
-                        new_consts,
-                        pyfunc_code.co_names,
-                        pyfunc_code.co_varnames,
-                        pyfunc_code.co_filename,
-                        pyfunc_code.co_name])
-
-        if utils.PYVERSION >= (3, 11):
-            co_args.append(pyfunc_code.co_qualname)
-        co_args.extend([pyfunc_code.co_firstlineno,
-                        pyfunc_code.co_lnotab])
-        if utils.PYVERSION >= (3, 11):
-            co_args.append(pyfunc_code.co_exceptiontable)
-        co_args.extend([pyfunc_code.co_freevars,
-                        pyfunc_code.co_cellvars
-                        ])
-
         # create code object with mutation
-        new_code = pytypes.CodeType(*co_args)
+        new_code = codetype.copy_code_type(pyfunc_code, constants=new_consts)
 
         # get function
         return pytypes.FunctionType(new_code, globals())
