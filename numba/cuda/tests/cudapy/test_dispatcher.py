@@ -1,7 +1,7 @@
 import numpy as np
 import threading
 
-from numba import boolean, cuda, float32, float64, int32, int64, void
+from numba import boolean, config, cuda, float32, float64, int32, int64, void
 from numba.core.errors import TypingError
 from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
 import math
@@ -15,8 +15,8 @@ def add_kernel(r, x, y):
     r[0] = x + y
 
 
-@skip_on_cudasim('Dispatcher objects not used in the simulator')
-class TestDispatcher(CUDATestCase):
+@skip_on_cudasim('Specialization not implemented in the simulator')
+class TestDispatcherSpecialization(CUDATestCase):
     def _test_no_double_specialize(self, dispatcher, ty):
 
         with self.assertRaises(RuntimeError) as e:
@@ -106,7 +106,9 @@ class TestDispatcher(CUDATestCase):
         self.assertEqual(len(f.specializations), 2)
         self.assertIs(f_f32c_f32c, f_f32c_f32c_2)
 
-    # The following tests are based on those in numba.tests.test_dispatcher
+
+class TestDispatcher(CUDATestCase):
+    """Most tests based on those in numba.tests.test_dispatcher."""
 
     def test_coerce_input_types(self):
         # Do not allow unsafe conversions if we can still compile other
@@ -136,6 +138,7 @@ class TestDispatcher(CUDATestCase):
         c_add[1, 1](r, 123, 456)
         self.assertPreciseEqual(r[0], add(123, 456))
 
+    @skip_on_cudasim('Simulator ignores signature')
     @unittest.expectedFailure
     def test_coerce_input_types_unsafe(self):
         # Implicit (unsafe) conversion of float to int, originally from
@@ -152,6 +155,7 @@ class TestDispatcher(CUDATestCase):
         c_add[1, 1](r, 12.3, 45.6)
         self.assertPreciseEqual(r[0], add(12, 45))
 
+    @skip_on_cudasim('Simulator ignores signature')
     def test_coerce_input_types_unsafe_complex(self):
         # Implicit conversion of complex to int disallowed
         c_add = cuda.jit('(i4[::1], i4, i4)')(add_kernel)
@@ -160,6 +164,7 @@ class TestDispatcher(CUDATestCase):
         with self.assertRaises(TypeError):
             c_add[1, 1](r, 12.3, 45.6j)
 
+    @skip_on_cudasim('Simulator does not track overloads')
     def test_ambiguous_new_version(self):
         """Test compiling new version in an ambiguous case
         """
@@ -188,6 +193,7 @@ class TestDispatcher(CUDATestCase):
         self.assertEqual(len(c_add.overloads), 4, "didn't compile a new "
                                                   "version")
 
+    @skip_on_cudasim("Simulator doesn't support concurrent kernels")
     def test_lock(self):
         """
         Test that (lazy) compiling from several threads at once doesn't
@@ -228,6 +234,10 @@ class TestDispatcher(CUDATestCase):
         f[1, 1](r, 1.5, 2.5)
         self.assertPreciseEqual(r[0], 4.0)
 
+        if config.ENABLE_CUDASIM:
+            # Pass - we can't check for no conversion on the simulator.
+            return
+
         # No conversion
         with self.assertRaises(TypeError) as cm:
             r = np.zeros(1, dtype=np.complex128)
@@ -235,6 +245,7 @@ class TestDispatcher(CUDATestCase):
         self.assertIn("No matching definition", str(cm.exception))
         self.assertEqual(len(f.overloads), 2, f.overloads)
 
+    def test_explicit_signatures_same_type_class(self):
         # A more interesting one...
         # (Note that the type of r is deliberately float64 in both cases so
         # that dispatch is differentiated on the types of x and y only, to
@@ -252,6 +263,8 @@ class TestDispatcher(CUDATestCase):
         f[1, 1](r, 1, 2**-25)
         self.assertPreciseEqual(r[0], 1.0000000298023224)
 
+    @skip_on_cudasim('No overload resolution in the simulator')
+    def test_explicit_signatures_ambiguous_resolution(self):
         # Fail to resolve ambiguity between the two best overloads
         # (Also deliberate float64[::1] for the first argument in all cases)
         f = cuda.jit(["(float64[::1], float32, float64)",
@@ -273,6 +286,7 @@ class TestDispatcher(CUDATestCase):
         # The integer signature is not part of the best matches
         self.assertNotIn("int64", str(cm.exception))
 
+    @skip_on_cudasim('Simulator does not use _prepare_args')
     @unittest.expectedFailure
     def test_explicit_signatures_unsafe(self):
         # These tests are from test_explicit_signatures, but have to be xfail
@@ -320,6 +334,10 @@ class TestDispatcher(CUDATestCase):
         f[1, 1](r, 1.5, 2.5)
         self.assertPreciseEqual(r[0], 4.0)
 
+        if config.ENABLE_CUDASIM:
+            # Pass - we can't check for no conversion on the simulator.
+            return
+
         # No conversion
         with self.assertRaises(TypingError) as cm:
             r = np.zeros(1, dtype=np.complex128)
@@ -330,6 +348,7 @@ class TestDispatcher(CUDATestCase):
         self.assertIn("with parameters (complex128, complex128)", msg)
         self.assertEqual(len(f.overloads), 2, f.overloads)
 
+    def test_explicit_signatures_device_same_type_class(self):
         # A more interesting one...
         # (Note that the type of r is deliberately float64 in both cases so
         # that dispatch is differentiated on the types of x and y only, to
@@ -346,6 +365,7 @@ class TestDispatcher(CUDATestCase):
         f[1, 1](r, 1, 2**-25)
         self.assertPreciseEqual(r[0], 1.0000000298023224)
 
+    def test_explicit_signatures_device_ambiguous(self):
         # Ambiguity between the two best overloads resolves. This is somewhat
         # surprising given that ambiguity is not permitted for dispatching
         # overloads when launching a kernel, but seems to be the general
@@ -358,6 +378,7 @@ class TestDispatcher(CUDATestCase):
         f[1, 1](r, 1.5, 2.5)
         self.assertPreciseEqual(r[0], 4.0)
 
+    @skip_on_cudasim('CUDA Simulator does not force casting')
     def test_explicit_signatures_device_unsafe(self):
         # These tests are from test_explicit_signatures. The device function
         # variant of these tests can succeed on CUDA because the compilation
@@ -380,6 +401,24 @@ class TestDispatcher(CUDATestCase):
         f[1, 1](r, np.int32(1), 2.5)
         self.assertPreciseEqual(r[0], 3.5)
 
+    def test_dispatcher_docstring(self):
+        # Ensure that CUDA-jitting a function preserves its docstring. See
+        # Issue #5902: https://github.com/numba/numba/issues/5902
+
+        @cuda.jit
+        def add_kernel(a, b):
+            """Add two integers, kernel version"""
+
+        @cuda.jit(device=True)
+        def add_device(a, b):
+            """Add two integers, device version"""
+
+        self.assertEqual("Add two integers, kernel version", add_kernel.__doc__)
+        self.assertEqual("Add two integers, device version", add_device.__doc__)
+
+
+@skip_on_cudasim("CUDA simulator doesn't implement kernel properties")
+class TestDispatcherKernelProperties(CUDATestCase):
     def test_get_regs_per_thread_unspecialized(self):
         # A kernel where the register usage per thread is likely to differ
         # between different specializations
@@ -600,21 +639,6 @@ class TestDispatcher(CUDATestCase):
         local_mem_per_thread = simple_lmem.get_local_mem_per_thread()
         self.assertIsInstance(local_mem_per_thread, int)
         self.assertGreaterEqual(local_mem_per_thread, N * 4)
-
-    def test_dispatcher_docstring(self):
-        # Ensure that CUDA-jitting a function preserves its docstring. See
-        # Issue #5902: https://github.com/numba/numba/issues/5902
-
-        @cuda.jit
-        def add_kernel(a, b):
-            """Add two integers, kernel version"""
-
-        @cuda.jit(device=True)
-        def add_device(a, b):
-            """Add two integers, device version"""
-
-        self.assertEqual("Add two integers, kernel version", add_kernel.__doc__)
-        self.assertEqual("Add two integers, device version", add_device.__doc__)
 
 
 if __name__ == '__main__':
