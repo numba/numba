@@ -3,6 +3,7 @@ import llvmlite.binding as ll
 import multiprocessing
 import numpy as np
 import os
+import stat
 import shutil
 import subprocess
 import sys
@@ -206,6 +207,7 @@ class BaseCacheTest(TestCase):
         self.modfile = os.path.join(self.tempdir, self.modname + ".py")
         self.cache_dir = os.path.join(self.tempdir, "__pycache__")
         shutil.copy(self.usecases_file, self.modfile)
+        os.chmod(self.modfile, stat.S_IREAD | stat.S_IWRITE)
         self.maxDiff = None
 
     def tearDown(self):

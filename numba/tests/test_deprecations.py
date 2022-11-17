@@ -1,11 +1,12 @@
 import warnings
-from numba import jit
+from numba import jit, generated_jit
 from numba.core.errors import (NumbaDeprecationWarning,
                           NumbaPendingDeprecationWarning, NumbaWarning)
+from numba.tests.support import TestCase
 import unittest
 
 
-class TestDeprecation(unittest.TestCase):
+class TestDeprecation(TestCase):
 
     def check_warning(self, warnings, expected_str, category):
         self.assertEqual(len(warnings), 1)
@@ -13,6 +14,7 @@ class TestDeprecation(unittest.TestCase):
         self.assertIn(expected_str, str(warnings[0].message))
         self.assertIn("https://numba.readthedocs.io", str(warnings[0].message))
 
+    @TestCase.run_test_in_subprocess
     def test_jitfallback(self):
         # tests that @jit falling back to object mode raises a
         # NumbaDeprecationWarning
@@ -28,6 +30,7 @@ class TestDeprecation(unittest.TestCase):
                    "mode compilation path")
             self.check_warning(w, msg, NumbaDeprecationWarning)
 
+    @TestCase.run_test_in_subprocess
     def test_reflection_of_mutable_container(self):
         # tests that reflection in list/set warns
         def foo_list(a):
@@ -53,6 +56,26 @@ class TestDeprecation(unittest.TestCase):
                 msg = ("\'reflected %s\' found for argument" % container)
                 self.assertIn(msg, warn_msg)
                 self.assertIn("https://numba.readthedocs.io", warn_msg)
+
+    @TestCase.run_test_in_subprocess
+    def test_generated_jit(self):
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("ignore", category=NumbaWarning)
+            warnings.simplefilter("always", category=NumbaDeprecationWarning)
+
+            @generated_jit
+            def bar():
+                return lambda : None
+
+            @jit(nopython=True)
+            def foo():
+                bar()
+
+            foo()
+
+            self.check_warning(w, "numba.generated_jit is deprecated",
+                               NumbaDeprecationWarning)
 
 
 if __name__ == '__main__':

@@ -4,21 +4,19 @@ Implement the random and np.random module functions.
 
 
 import math
-import os
 import random
 
 import numpy as np
 
 from llvmlite import ir
 
-from numba.core.extending import overload, register_jitable
+from numba.core.cgutils import is_nonelike
+from numba.core.extending import intrinsic, overload, register_jitable
 from numba.core.imputils import (Registry, impl_ret_untracked,
                                     impl_ret_new_ref)
 from numba.core.typing import signature
-from numba import _helperlib
 from numba.core import types, utils, cgutils
 from numba.np import arrayobj
-from numba.core.overload_glue import glue_lowering
 from numba.core.errors import NumbaTypeError
 
 
@@ -52,6 +50,7 @@ rnd_state_t = ir.LiteralStructType([
     int32_t,
     ])
 rnd_state_ptr_t = ir.PointerType(rnd_state_t)
+
 
 def get_state_ptr(context, builder, name):
     """
@@ -160,14 +159,21 @@ def get_next_int(context, builder, state_ptr, nbits, is_numpy):
     def get_shifted_int(nbits):
         shift = builder.sub(c32, nbits)
         y = get_next_int32(context, builder, state_ptr)
+
+        # This truncation/extension is safe because 0 < nbits <= 64
+        if nbits.type.width < y.type.width:
+            shift = builder.zext(shift, y.type)
+        elif nbits.type.width > y.type.width:
+            shift = builder.trunc(shift, y.type)
+
         if is_numpy:
             # Use the last N bits, to match np.random
             mask = builder.not_(ir.Constant(y.type, 0))
-            mask = builder.lshr(mask, builder.zext(shift, y.type))
+            mask = builder.lshr(mask, shift)
             return builder.and_(y, mask)
         else:
             # Use the first N bits, to match CPython random
-            return builder.lshr(y, builder.zext(shift, y.type))
+            return builder.lshr(y, shift)
 
     ret = cgutils.alloca_once_value(builder, ir.Constant(int64_t, 0))
 
@@ -187,75 +193,157 @@ def get_next_int(context, builder, state_ptr, nbits, is_numpy):
                 high = get_shifted_int(builder.sub(nbits, c32))
             total = builder.add(
                 builder.zext(low, int64_t),
-                builder.shl(builder.zext(high, int64_t), ir.Constant(int64_t, 32)))
+                builder.shl(builder.zext(high, int64_t),
+                            ir.Constant(int64_t, 32)))
             builder.store(total, ret)
 
     return builder.load(ret)
 
 
-def _fill_defaults(context, builder, sig, args, defaults):
-    """
-    Assuming a homogeneous signature (same type for result and all arguments),
-    fill in the *defaults* if missing from the arguments.
-    """
-    ty = sig.return_type
-    llty = context.get_data_type(ty)
-    args = tuple(args) + tuple(ir.Constant(llty, d) for d in defaults[len(args):])
-    sig = signature(*(ty,) * (len(args) + 1))
-    return sig, args
+@overload(random.seed)
+def seed_impl(seed):
+    if isinstance(seed, types.Integer):
+        return _seed_impl('py')
 
 
-@glue_lowering("random.seed", types.uint32)
-def seed_impl(context, builder, sig, args):
-    res =  _seed_impl(context, builder, sig, args, get_state_ptr(context,
-                                                                 builder, "py"))
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-@glue_lowering("np.random.seed", types.uint32)
-def seed_impl(context, builder, sig, args):
-    res = _seed_impl(context, builder, sig, args, get_state_ptr(context,
-                                                               builder, "np"))
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-def _seed_impl(context, builder, sig, args, state_ptr):
-    seed_value, = args
-    fnty = ir.FunctionType(ir.VoidType(), (rnd_state_ptr_t, int32_t))
-    fn = cgutils.get_or_insert_function(builder.function.module, fnty,
-                                        "numba_rnd_init")
-    builder.call(fn, (state_ptr, seed_value))
-    return context.get_constant(types.none, None)
-
-@glue_lowering("random.random")
-def random_impl(context, builder, sig, args):
-    state_ptr = get_state_ptr(context, builder, "py")
-    res = get_next_double(context, builder, state_ptr)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-@glue_lowering("np.random.random")
-@glue_lowering("np.random.random_sample")
-@glue_lowering("np.random.sample")
-@glue_lowering("np.random.ranf")
-def random_impl(context, builder, sig, args):
-    state_ptr = get_state_ptr(context, builder, "np")
-    res = get_next_double(context, builder, state_ptr)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+@overload(np.random.seed)
+def seed_impl(seed):
+    if isinstance(seed, types.Integer):
+        return _seed_impl('np')
 
 
-@glue_lowering("random.gauss", types.Float, types.Float)
-@glue_lowering("random.normalvariate", types.Float, types.Float)
-def gauss_impl(context, builder, sig, args):
-    res = _gauss_impl(context, builder, sig, args, "py")
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+def _seed_impl(state_type):
+    @intrinsic
+    def _impl(typingcontext, seed):
+        def codegen(context, builder, sig, args):
+            seed_value, = args
+            fnty = ir.FunctionType(ir.VoidType(), (rnd_state_ptr_t, int32_t))
+            fn = cgutils.get_or_insert_function(builder.function.module, fnty,
+                                                'numba_rnd_init')
+            builder.call(fn, (get_state_ptr(context, builder, state_type),
+                              seed_value))
+            return context.get_constant(types.none, None)
+        return signature(types.void, types.uint32), codegen
+    return lambda seed: _impl(seed)
 
 
-@glue_lowering("np.random.standard_normal")
-@glue_lowering("np.random.normal")
-@glue_lowering("np.random.normal", types.Float)
-@glue_lowering("np.random.normal", types.Float, types.Float)
-def np_gauss_impl(context, builder, sig, args):
-    sig, args = _fill_defaults(context, builder, sig, args, (0.0, 1.0))
-    res = _gauss_impl(context, builder, sig, args, "np")
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+@overload(random.random)
+def random_impl():
+    @intrinsic
+    def _impl(typingcontext):
+        def codegen(context, builder, sig, args):
+            state_ptr = get_state_ptr(context, builder, "py")
+            return get_next_double(context, builder, state_ptr)
+        return signature(types.double), codegen
+    return lambda: _impl()
+
+
+@overload(np.random.random)
+@overload(np.random.random_sample)
+@overload(np.random.sample)
+@overload(np.random.ranf)
+def random_impl0():
+    @intrinsic
+    def _impl(typingcontext):
+        def codegen(context, builder, sig, args):
+            state_ptr = get_state_ptr(context, builder, "np")
+            return get_next_double(context, builder, state_ptr)
+        return signature(types.float64), codegen
+    return lambda: _impl()
+
+
+@overload(np.random.random)
+@overload(np.random.random_sample)
+@overload(np.random.sample)
+@overload(np.random.ranf)
+def random_impl1(size):
+    if is_nonelike(size):
+        return lambda size: np.random.random()
+    if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
+                                           and isinstance(size.dtype,
+                                                          types.Integer)):
+        def _impl(size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.random()
+            return out
+        return _impl
+
+
+@overload(random.gauss)
+@overload(random.normalvariate)
+def gauss_impl(loc, scale):
+    if isinstance(loc, (types.Float, types.Integer)) and isinstance(
+            scale, (types.Float, types.Integer)):
+        @intrinsic
+        def _impl(typingcontext, loc, scale):
+            loc_preprocessor = _double_preprocessor(loc)
+            scale_preprocessor = _double_preprocessor(scale)
+            return signature(types.float64, loc, scale),\
+                   _gauss_impl("py", loc_preprocessor, scale_preprocessor)
+        return lambda loc, scale: _impl(loc, scale)
+
+
+@overload(np.random.standard_normal)
+@overload(np.random.normal)
+def np_gauss_impl0():
+    return lambda: np.random.normal(0.0, 1.0)
+
+
+@overload(np.random.normal)
+def np_gauss_impl1(loc):
+    if isinstance(loc, (types.Float, types.Integer)):
+        return lambda loc: np.random.normal(loc, 1.0)
+
+
+@overload(np.random.normal)
+def np_gauss_impl2(loc, scale):
+    if isinstance(loc, (types.Float, types.Integer)) and isinstance(
+            scale, (types.Float, types.Integer)):
+        @intrinsic
+        def _impl(typingcontext, loc, scale):
+            loc_preprocessor = _double_preprocessor(loc)
+            scale_preprocessor = _double_preprocessor(scale)
+            return signature(types.float64, loc, scale),\
+                   _gauss_impl("np", loc_preprocessor, scale_preprocessor)
+        return lambda loc, scale: _impl(loc, scale)
+
+
+@overload(np.random.standard_normal)
+def standard_normal_impl1(size):
+    if is_nonelike(size):
+        return lambda size: np.random.standard_normal()
+    if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
+                                           isinstance(size.dtype,
+                                                      types.Integer)):
+        def _impl(size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.standard_normal()
+            return out
+        return _impl
+
+
+@overload(np.random.normal)
+def np_gauss_impl3(loc, scale, size):
+    if (isinstance(loc, (types.Float, types.Integer)) and isinstance(
+            scale, (types.Float, types.Integer)) and
+       is_nonelike(size)):
+        return lambda loc, scale, size: np.random.normal(loc, scale)
+    if (isinstance(loc, (types.Float, types.Integer)) and isinstance(
+            scale, (types.Float, types.Integer)) and
+       (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
+                                            and isinstance(size.dtype,
+                                                           types.Integer)))):
+        def _impl(loc, scale, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.normal(loc, scale)
+            return out
+        return _impl
 
 
 def _gauss_pair_impl(_random):
@@ -275,61 +363,91 @@ def _gauss_pair_impl(_random):
         return f * x1, f * x2
     return compute_gauss_pair
 
-def _gauss_impl(context, builder, sig, args, state):
-    # The type for all computations (either float or double)
-    ty = sig.return_type
-    llty = context.get_data_type(ty)
 
+def _gauss_impl(state, loc_preprocessor, scale_preprocessor):
+    def _impl(context, builder, sig, args):
+        # The type for all computations (either float or double)
+        ty = sig.return_type
+        llty = context.get_data_type(ty)
+        _random = {"py": random.random,
+                   "np": np.random.random}[state]
+
+        state_ptr = get_state_ptr(context, builder, state)
+
+        ret = cgutils.alloca_once(builder, llty, name="result")
+
+        gauss_ptr = get_gauss_ptr(builder, state_ptr)
+        has_gauss_ptr = get_has_gauss_ptr(builder, state_ptr)
+        has_gauss = cgutils.is_true(builder, builder.load(has_gauss_ptr))
+        with builder.if_else(has_gauss) as (then, otherwise):
+            with then:
+                # if has_gauss: return it
+                builder.store(builder.load(gauss_ptr), ret)
+                builder.store(const_int(0), has_gauss_ptr)
+            with otherwise:
+                # if not has_gauss: compute a pair of numbers using the Box-Muller
+                # transform; keep one and return the other
+                pair = context.compile_internal(builder,
+                                                _gauss_pair_impl(_random),
+                                                signature(types.UniTuple(ty, 2)),
+                                                ())
+
+                first, second = cgutils.unpack_tuple(builder, pair, 2)
+                builder.store(first, gauss_ptr)
+                builder.store(second, ret)
+                builder.store(const_int(1), has_gauss_ptr)
+
+        mu, sigma = args
+        return builder.fadd(loc_preprocessor(builder, mu),
+                            builder.fmul(scale_preprocessor(builder, sigma),
+                                         builder.load(ret)))
+    return _impl
+
+
+def _double_preprocessor(value):
+    ty = ir.types.DoubleType()
+
+    if isinstance(value, types.Integer):
+        if value.signed:
+            return lambda builder, v: builder.sitofp(v, ty)
+        else:
+            return lambda builder, v: builder.uitofp(v, ty)
+    elif isinstance(value, types.Float):
+        if value.bitwidth != 64:
+            return lambda builder, v: builder.fpext(v, ty)
+        else:
+            return lambda _builder, v: v
+    else:
+        raise TypeError("Cannot convert {} to floating point type" % value)
+
+
+@overload(random.getrandbits)
+def getrandbits_impl(k):
+    if isinstance(k, types.Integer):
+        @intrinsic
+        def _impl(typingcontext, k):
+            def codegen(context, builder, sig, args):
+                nbits, = args
+
+                too_large = builder.icmp_unsigned(">=", nbits, const_int(65))
+                too_small = builder.icmp_unsigned("==", nbits, const_int(0))
+                with cgutils.if_unlikely(builder, builder.or_(too_large,
+                                                              too_small)):
+                    msg = "getrandbits() limited to 64 bits"
+                    context.call_conv.return_user_exc(builder, OverflowError,
+                                                      (msg,))
+                state_ptr = get_state_ptr(context, builder, "py")
+                return get_next_int(context, builder, state_ptr, nbits, False)
+            return signature(types.uint64, k), codegen
+        return lambda k: _impl(k)
+
+
+def _randrange_impl(context, builder, start, stop, step, ty, signed, state):
     state_ptr = get_state_ptr(context, builder, state)
-    _random = {"py": random.random,
-               "np": np.random.random}[state]
-
-    ret = cgutils.alloca_once(builder, llty, name="result")
-
-    gauss_ptr = get_gauss_ptr(builder, state_ptr)
-    has_gauss_ptr = get_has_gauss_ptr(builder, state_ptr)
-    has_gauss = cgutils.is_true(builder, builder.load(has_gauss_ptr))
-    with builder.if_else(has_gauss) as (then, otherwise):
-        with then:
-            # if has_gauss: return it
-            builder.store(builder.load(gauss_ptr), ret)
-            builder.store(const_int(0), has_gauss_ptr)
-        with otherwise:
-            # if not has_gauss: compute a pair of numbers using the Box-Muller
-            # transform; keep one and return the other
-            pair = context.compile_internal(builder,
-                                            _gauss_pair_impl(_random),
-                                            signature(types.UniTuple(ty, 2)),
-                                            ())
-
-            first, second = cgutils.unpack_tuple(builder, pair, 2)
-            builder.store(first, gauss_ptr)
-            builder.store(second, ret)
-            builder.store(const_int(1), has_gauss_ptr)
-
-    mu, sigma = args
-    return builder.fadd(mu,
-                        builder.fmul(sigma, builder.load(ret)))
-
-@glue_lowering("random.getrandbits", types.Integer)
-def getrandbits_impl(context, builder, sig, args):
-    nbits, = args
-    too_large = builder.icmp_unsigned(">=", nbits, const_int(65))
-    too_small = builder.icmp_unsigned("==", nbits, const_int(0))
-    with cgutils.if_unlikely(builder, builder.or_(too_large, too_small)):
-        msg = "getrandbits() limited to 64 bits"
-        context.call_conv.return_user_exc(builder, OverflowError, (msg,))
-    state_ptr = get_state_ptr(context, builder, "py")
-    res = get_next_int(context, builder, state_ptr, nbits, False)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-def _randrange_impl(context, builder, start, stop, step, state):
-    state_ptr = get_state_ptr(context, builder, state)
-    ty = stop.type
     zero = ir.Constant(ty, 0)
     one = ir.Constant(ty, 1)
     nptr = cgutils.alloca_once(builder, ty, name="n")
+
     # n = stop - start
     builder.store(builder.sub(stop, start), nptr)
 
@@ -394,148 +512,287 @@ def _randrange_impl(context, builder, start, stop, step, state):
     return builder.add(start, builder.mul(builder.load(rptr), step))
 
 
-@glue_lowering("random.randrange", types.Integer)
-def randrange_impl_1(context, builder, sig, args):
-    stop, = args
-    start = ir.Constant(stop.type, 0)
-    step = ir.Constant(stop.type, 1)
-    res = _randrange_impl(context, builder, start, stop, step, "py")
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+@overload(random.randrange)
+def randrange_impl_1(stop):
+    if isinstance(stop, types.Integer):
+        return lambda stop: random.randrange(0, stop, 1)
 
-@glue_lowering("random.randrange", types.Integer, types.Integer)
-def randrange_impl_2(context, builder, sig, args):
-    start, stop = args
-    step = ir.Constant(start.type, 1)
-    res = _randrange_impl(context, builder, start, stop, step, "py")
-    return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@glue_lowering("random.randrange", types.Integer,
-               types.Integer, types.Integer)
-def randrange_impl_3(context, builder, sig, args):
-    start, stop, step = args
-    res = _randrange_impl(context, builder, start, stop, step, "py")
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+@overload(random.randrange)
+def randrange_impl_2(start, stop):
+    if isinstance(start, types.Integer) and isinstance(stop, types.Integer):
+        return lambda start, stop: random.randrange(start, stop, 1)
 
-@glue_lowering("random.randint", types.Integer, types.Integer)
-def randint_impl_1(context, builder, sig, args):
-    start, stop = args
-    step = ir.Constant(start.type, 1)
-    stop = builder.add(stop, step)
-    res = _randrange_impl(context, builder, start, stop, step, "py")
-    return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@glue_lowering("np.random.randint", types.Integer)
-def randint_impl_2(context, builder, sig, args):
-    stop, = args
-    start = ir.Constant(stop.type, 0)
-    step = ir.Constant(stop.type, 1)
-    res = _randrange_impl(context, builder, start, stop, step, "np")
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+def _randrange_preprocessor(bitwidth, ty):
+    if ty.bitwidth != bitwidth:
+        return (ir.IRBuilder.sext if ty.signed
+                else ir.IRBuilder.zext)
+    else:
+        return lambda _builder, v, _ty: v
 
-@glue_lowering("np.random.randint", types.Integer, types.Integer)
-def randrange_impl_2(context, builder, sig, args):
-    start, stop = args
-    step = ir.Constant(start.type, 1)
-    res = _randrange_impl(context, builder, start, stop, step, "np")
-    return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@glue_lowering("random.uniform", types.Float, types.Float)
-def uniform_impl(context, builder, sig, args):
-    res = uniform_impl(context, builder, sig, args, "py")
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+@overload(random.randrange)
+def randrange_impl_3(start, stop, step):
+    if (isinstance(start, types.Integer) and isinstance(stop, types.Integer) and
+       isinstance(step, types.Integer)):
+        signed = max(start.signed, stop.signed, step.signed)
+        bitwidth = max(start.bitwidth, stop.bitwidth, step.bitwidth)
+        int_ty = types.Integer.from_bitwidth(bitwidth, signed)
+        llvm_type = ir.IntType(bitwidth)
 
-@glue_lowering("np.random.uniform", types.Float, types.Float)
-def uniform_impl(context, builder, sig, args):
-    res = uniform_impl(context, builder, sig, args, "np")
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+        start_preprocessor = _randrange_preprocessor(bitwidth, start)
+        stop_preprocessor = _randrange_preprocessor(bitwidth, stop)
+        step_preprocessor = _randrange_preprocessor(bitwidth, step)
 
-def uniform_impl(context, builder, sig, args, state):
-    state_ptr = get_state_ptr(context, builder, state)
-    a, b = args
-    width = builder.fsub(b, a)
-    r = get_next_double(context, builder, state_ptr)
-    return builder.fadd(a, builder.fmul(width, r))
+        @intrinsic
+        def _impl(typingcontext, start, stop, step):
+            def codegen(context, builder, sig, args):
+                start, stop, step = args
 
-@glue_lowering("random.triangular", types.Float, types.Float)
-def triangular_impl_2(context, builder, sig, args):
-    fltty = sig.return_type
-    low, high = args
-    state_ptr = get_state_ptr(context, builder, "py")
-    randval = get_next_double(context, builder, state_ptr)
+                start = start_preprocessor(builder, start, llvm_type)
+                stop = stop_preprocessor(builder, stop, llvm_type)
+                step = step_preprocessor(builder, step, llvm_type)
+                return _randrange_impl(context, builder, start, stop, step,
+                                       llvm_type, signed, 'py')
+            return signature(int_ty, start, stop, step), codegen
+        return lambda start, stop, step: _impl(start, stop, step)
 
-    def triangular_impl_2(randval, low, high):
-        u = randval
+
+@overload(random.randint)
+def randint_impl_1(start, stop):
+    if isinstance(start, types.Integer) and isinstance(stop, types.Integer):
+        return lambda start, stop: random.randrange(start, stop + 1, 1)
+
+
+@overload(np.random.randint)
+def np_randint_impl_1(high):
+    if isinstance(high, types.Integer):
+        return lambda high: np.random.randint(0, high)
+
+
+@overload(np.random.randint)
+def np_randint_impl_2(low, high):
+    if isinstance(low, types.Integer) and isinstance(high, types.Integer):
+        signed = max(low.signed, high.signed)
+        bitwidth = max(low.bitwidth, high.bitwidth)
+        int_ty = types.Integer.from_bitwidth(bitwidth, signed)
+        llvm_type = ir.IntType(bitwidth)
+
+        start_preprocessor = _randrange_preprocessor(bitwidth, low)
+        stop_preprocessor = _randrange_preprocessor(bitwidth, high)
+
+        @intrinsic
+        def _impl(typingcontext, low, high):
+            def codegen(context, builder, sig, args):
+                start, stop = args
+
+                start = start_preprocessor(builder, start, llvm_type)
+                stop = stop_preprocessor(builder, stop, llvm_type)
+                step = ir.Constant(llvm_type, 1)
+                return _randrange_impl(context, builder, start, stop, step,
+                                       llvm_type, signed, 'np')
+            return signature(int_ty, low, high), codegen
+        return lambda low, high: _impl(low, high)
+
+
+@overload(np.random.randint)
+def np_randint_impl_3(low, high, size):
+    if (isinstance(low, types.Integer) and isinstance(high, types.Integer) and
+       is_nonelike(size)):
+        return lambda low, high, size: np.random.randint(low, high)
+    if (isinstance(low, types.Integer) and isinstance(high, types.Integer) and
+       (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
+                                            and isinstance(size.dtype,
+                                                           types.Integer)))):
+        bitwidth = max(low.bitwidth, high.bitwidth)
+        result_type = getattr(np, f'int{bitwidth}')
+
+        def _impl(low, high, size):
+            out = np.empty(size, dtype=result_type)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.randint(low, high)
+            return out
+        return _impl
+
+
+@overload(random.uniform)
+def uniform_impl0():
+    return lambda: random.uniform(0.0, 1.0)
+
+
+@overload(np.random.uniform)
+def np_uniform_impl0():
+    return lambda: np.random.uniform(0.0, 1.0)
+
+
+@overload(random.uniform)
+def uniform_impl1(low):
+    if isinstance(low, (types.Float, types.Integer)):
+        return lambda low: random.uniform(low, 1.0)
+
+
+@overload(np.random.uniform)
+def np_uniform_impl1(low):
+    if isinstance(low, (types.Float, types.Integer)):
+        return lambda low: np.random.uniform(low, 1.0)
+
+
+@overload(random.uniform)
+def uniform_impl2(low, high):
+    if isinstance(low, (types.Float, types.Integer)) and isinstance(
+            high, (types.Float, types.Integer)):
+        @intrinsic
+        def _impl(typingcontext, low, high):
+            low_preprocessor = _double_preprocessor(low)
+            high_preprocessor = _double_preprocessor(high)
+            return signature(types.float64, low, high), uniform_impl(
+                'py', low_preprocessor, high_preprocessor)
+        return lambda low, high: _impl(low, high)
+
+
+@overload(np.random.uniform)
+def np_uniform_impl2(low, high):
+    if isinstance(low, (types.Float, types.Integer)) and isinstance(
+            high, (types.Float, types.Integer)):
+        @intrinsic
+        def _impl(typingcontext, low, high):
+            low_preprocessor = _double_preprocessor(low)
+            high_preprocessor = _double_preprocessor(high)
+            return signature(types.float64, low, high), uniform_impl(
+                'np', low_preprocessor, high_preprocessor)
+        return lambda low, high: _impl(low, high)
+
+
+def uniform_impl(state, a_preprocessor, b_preprocessor):
+    def impl(context, builder, sig, args):
+        state_ptr = get_state_ptr(context, builder, state)
+        a, b = args
+        a = a_preprocessor(builder, a)
+        b = b_preprocessor(builder, b)
+        width = builder.fsub(b, a)
+        r = get_next_double(context, builder, state_ptr)
+        return builder.fadd(a, builder.fmul(width, r))
+    return impl
+
+
+@overload(np.random.uniform)
+def np_uniform_impl3(low, high, size):
+    if (isinstance(low, (types.Float, types.Integer)) and isinstance(
+            high, (types.Float, types.Integer)) and
+       is_nonelike(size)):
+        return lambda low, high, size: np.random.uniform(low, high)
+    if (isinstance(low, (types.Float, types.Integer)) and isinstance(
+            high, (types.Float, types.Integer)) and
+       (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
+                                            and isinstance(size.dtype,
+                                                           types.Integer)))):
+        def _impl(low, high, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.uniform(low, high)
+            return out
+        return _impl
+
+
+@overload(random.triangular)
+def triangular_impl_2(low, high):
+    def _impl(low, high):
+        u = random.random()
         c = 0.5
         if u > c:
             u = 1.0 - u
             low, high = high, low
         return low + (high - low) * math.sqrt(u * c)
 
-    res = context.compile_internal(builder, triangular_impl_2,
-                                    signature(*(fltty,) * 4),
-                                    (randval, low, high))
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-@glue_lowering("random.triangular", types.Float, types.Float, types.Float)
-def triangular_impl_3(context, builder, sig, args):
-    low, high, mode = args
-    res = _triangular_impl_3(context, builder, sig, low, high, mode, "py")
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-@glue_lowering("np.random.triangular", types.Float,
-           types.Float, types.Float)
-def triangular_impl_3(context, builder, sig, args):
-    low, mode, high = args
-    res = _triangular_impl_3(context, builder, sig, low, high, mode, "np")
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-def _triangular_impl_3(context, builder, sig, low, high, mode, state):
-    fltty = sig.return_type
-    state_ptr = get_state_ptr(context, builder, state)
-    randval = get_next_double(context, builder, state_ptr)
-
-    def triangular_impl_3(randval, low, high, mode):
-        if high == low:
-            return low
-        u = randval
-        c = (mode - low) / (high - low)
-        if u > c:
-            u = 1.0 - u
-            c = 1.0 - c
-            low, high = high, low
-        return low + (high - low) * math.sqrt(u * c)
-
-    return context.compile_internal(builder, triangular_impl_3,
-                                    signature(*(fltty,) * 5),
-                                    (randval, low, high, mode))
+    if isinstance(low, (types.Float, types.Integer)) and isinstance(
+            high, (types.Float, types.Integer)):
+        return _impl
 
 
-@glue_lowering("random.gammavariate", types.Float, types.Float)
-def gammavariate_impl(context, builder, sig, args):
-    res = _gammavariate_impl(context, builder, sig, args, random.random)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+@overload(random.triangular)
+def triangular_impl_3(low, high, mode):
+    if (isinstance(low, (types.Float, types.Integer)) and isinstance(
+            high, (types.Float, types.Integer)) and
+       isinstance(mode, (types.Float, types.Integer))):
+        def _impl(low, high, mode):
+            if high == low:
+                return low
+            u = random.random()
+            c = (mode - low) / (high - low)
+            if u > c:
+                u = 1.0 - u
+                c = 1.0 - c
+                low, high = high, low
+            return low + (high - low) * math.sqrt(u * c)
 
-@glue_lowering("np.random.standard_gamma", types.Float)
-@glue_lowering("np.random.gamma", types.Float)
-@glue_lowering("np.random.gamma", types.Float, types.Float)
-def gammavariate_impl(context, builder, sig, args):
-    sig, args = _fill_defaults(context, builder, sig, args, (None, 1.0))
-    res = _gammavariate_impl(context, builder, sig, args, np.random.random)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+        return _impl
 
-def _gammavariate_impl(context, builder, sig, args, _random):
-    _exp = math.exp
-    _log = math.log
-    _sqrt = math.sqrt
-    _e = math.e
 
-    TWOPI = 2.0 * math.pi
-    LOG4 = _log(4.0)
-    SG_MAGICCONST = 1.0 + _log(4.5)
+@overload(np.random.triangular)
+def triangular_impl_3(low, mode, high):
+    if (isinstance(low, (types.Float, types.Integer)) and isinstance(
+            mode, (types.Float, types.Integer)) and
+            isinstance(high, (types.Float, types.Integer))):
+        def _impl(low, mode, high):
+            if high == low:
+                return low
+            u = np.random.random()
+            c = (mode - low) / (high - low)
+            if u > c:
+                u = 1.0 - u
+                c = 1.0 - c
+                low, high = high, low
+            return low + (high - low) * math.sqrt(u * c)
 
-    def gammavariate_impl(alpha, beta):
+        return _impl
+
+
+@overload(np.random.triangular)
+def triangular_impl(low, high, mode, size):
+    if is_nonelike(size):
+        return lambda low, high, mode, size: np.random.triangular(low, high,
+                                                                  mode)
+    if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
+                                            isinstance(size.dtype,
+                                                       types.Integer))):
+        def _impl(low, high, mode, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.triangular(low, high, mode)
+            return out
+        return _impl
+
+
+@overload(random.gammavariate)
+def gammavariate_impl(alpha, beta):
+    if isinstance(alpha, (types.Float, types.Integer)) and isinstance(
+            beta, (types.Float, types.Integer)):
+        return _gammavariate_impl(random.random)
+
+
+@overload(np.random.standard_gamma)
+@overload(np.random.gamma)
+def gammavariate_impl(alpha):
+    if isinstance(alpha, (types.Float, types.Integer)):
+        return lambda alpha: np.random.gamma(alpha, 1.0)
+
+
+@overload(np.random.gamma)
+def gammavariate_impl(alpha, beta):
+    if isinstance(alpha, (types.Float, types.Integer)) and isinstance(
+            beta, (types.Float, types.Integer)):
+        return _gammavariate_impl(np.random.random)
+
+
+def _gammavariate_impl(_random):
+    def _impl(alpha, beta):
         """Gamma distribution.  Taken from CPython.
         """
+        SG_MAGICCONST = 1.0 + math.log(4.5)
         # alpha > 0, beta > 0, mean is alpha*beta, variance is alpha*beta**2
 
         # Warning: a few older sources define the gamma distribution in terms
@@ -547,8 +804,8 @@ def _gammavariate_impl(context, builder, sig, args, _random):
             # Uses R.C.H. Cheng, "The generation of Gamma
             # variables with non-integral shape parameters",
             # Applied Statistics, (1977), 26, No. 1, p71-74
-            ainv = _sqrt(2.0 * alpha - 1.0)
-            bbb = alpha - LOG4
+            ainv = math.sqrt(2.0 * alpha - 1.0)
+            bbb = alpha - math.log(4.0)
             ccc = alpha + ainv
 
             while 1:
@@ -556,11 +813,11 @@ def _gammavariate_impl(context, builder, sig, args, _random):
                 if not 1e-7 < u1 < .9999999:
                     continue
                 u2 = 1.0 - _random()
-                v = _log(u1/(1.0-u1))/ainv
-                x = alpha*_exp(v)
+                v = math.log(u1/(1.0-u1))/ainv
+                x = alpha*math.exp(v)
                 z = u1*u1*u2
                 r = bbb+ccc*v-x
-                if r + SG_MAGICCONST - 4.5*z >= 0.0 or r >= _log(z):
+                if r + SG_MAGICCONST - 4.5*z >= 0.0 or r >= math.log(z):
                     return x * beta
 
         elif alpha == 1.0:
@@ -569,51 +826,81 @@ def _gammavariate_impl(context, builder, sig, args, _random):
             if POST_PY38:
                 # Adjust due to cpython
                 # commit 63d152232e1742660f481c04a811f824b91f6790
-                return -_log(1.0 - _random()) * beta
+                return -math.log(1.0 - _random()) * beta
             else:
                 u = _random()
                 while u <= 1e-7:
                     u = _random()
-                return -_log(u) * beta
+                return -math.log(u) * beta
 
         else:   # alpha is between 0 and 1 (exclusive)
             # Uses ALGORITHM GS of Statistical Computing - Kennedy & Gentle
             while 1:
                 u = _random()
-                b = (_e + alpha)/_e
+                b = (math.e + alpha)/math.e
                 p = b*u
                 if p <= 1.0:
                     x = p ** (1.0/alpha)
                 else:
-                    x = -_log((b-p)/alpha)
+                    x = -math.log((b-p)/alpha)
                 u1 = _random()
                 if p > 1.0:
                     if u1 <= x ** (alpha - 1.0):
                         break
-                elif u1 <= _exp(-x):
+                elif u1 <= math.exp(-x):
                     break
             return x * beta
-
-    return context.compile_internal(builder, gammavariate_impl,
-                                    sig, args)
+    return _impl
 
 
-@glue_lowering("random.betavariate", types.Float, types.Float)
-def betavariate_impl(context, builder, sig, args):
-    res = _betavariate_impl(context, builder, sig, args,
-                             random.gammavariate)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+@overload(np.random.gamma)
+def gamma_impl(alpha, beta, size):
+    if is_nonelike(size):
+        return lambda alpha, beta, size: np.random.gamma(alpha, beta)
+    if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
+                                           isinstance(size.dtype,
+                                                      types.Integer)):
+        def _impl(alpha, beta, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.gamma(alpha, beta)
+            return out
+        return _impl
 
-@glue_lowering("np.random.beta",
-           types.Float, types.Float)
-def betavariate_impl(context, builder, sig, args):
-    res = _betavariate_impl(context, builder, sig, args,
-                             np.random.gamma)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
 
-def _betavariate_impl(context, builder, sig, args, gamma):
+@overload(np.random.standard_gamma)
+def standard_gamma_impl(alpha, size):
+    if is_nonelike(size):
+        return lambda alpha, size: np.random.standard_gamma(alpha)
+    if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
+                                            and isinstance(size.dtype,
+                                                           types.Integer))):
+        def _impl(alpha, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.standard_gamma(alpha)
+            return out
+        return _impl
 
-    def betavariate_impl(alpha, beta):
+
+@overload(random.betavariate)
+def betavariate_impl(alpha, beta):
+    if isinstance(alpha, (types.Float, types.Integer)) and isinstance(
+            beta, (types.Float, types.Integer)):
+        return _betavariate_impl(random.gammavariate)
+
+
+@overload(np.random.beta)
+def betavariate_impl(alpha, beta):
+    if isinstance(alpha, (types.Float, types.Integer)) and isinstance(
+            beta, (types.Float, types.Integer)):
+        return _betavariate_impl(np.random.gamma)
+
+
+def _betavariate_impl(gamma):
+    def _impl(alpha, beta):
         """Beta distribution.  Taken from CPython.
         """
         # This version due to Janne Sinkkonen, and matches all the std
@@ -623,156 +910,227 @@ def _betavariate_impl(context, builder, sig, args, gamma):
             return 0.0
         else:
             return y / (y + gamma(beta, 1.))
-
-    return context.compile_internal(builder, betavariate_impl,
-                                    sig, args)
+    return _impl
 
 
-@glue_lowering("random.expovariate", types.Float)
-def expovariate_impl(context, builder, sig, args):
-    _random = random.random
-    _log = math.log
-
-    def expovariate_impl(lambd):
-        """Exponential distribution.  Taken from CPython.
-        """
-        # lambd: rate lambd = 1/mean
-        # ('lambda' is a Python reserved word)
-
-        # we use 1-random() instead of random() to preclude the
-        # possibility of taking the log of zero.
-        return -_log(1.0 - _random()) / lambd
-
-    res = context.compile_internal(builder, expovariate_impl,
-                                    sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-@glue_lowering("np.random.exponential", types.Float)
-def exponential_impl(context, builder, sig, args):
-    _random = np.random.random
-    _log = math.log
-
-    def exponential_impl(scale):
-        return -_log(1.0 - _random()) * scale
-
-    res = context.compile_internal(builder, exponential_impl,
-                                    sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-@glue_lowering("np.random.standard_exponential")
-@glue_lowering("np.random.exponential")
-def exponential_impl(context, builder, sig, args):
-    _random = np.random.random
-    _log = math.log
-
-    def exponential_impl():
-        return -_log(1.0 - _random())
-
-    res = context.compile_internal(builder, exponential_impl,
-                                    sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-@glue_lowering("np.random.lognormal")
-@glue_lowering("np.random.lognormal", types.Float)
-@glue_lowering("np.random.lognormal", types.Float, types.Float)
-def np_lognormal_impl(context, builder, sig, args):
-    sig, args = _fill_defaults(context, builder, sig, args, (0.0, 1.0))
-    res = _lognormvariate_impl(context, builder, sig, args,
-                                np.random.normal)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-@glue_lowering("random.lognormvariate",
-           types.Float, types.Float)
-def lognormvariate_impl(context, builder, sig, args):
-    res = _lognormvariate_impl(context, builder, sig, args, random.gauss)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-def _lognormvariate_impl(context, builder, sig, args, _gauss):
-    _exp = math.exp
-
-    def lognormvariate_impl(mu, sigma):
-        return _exp(_gauss(mu, sigma))
-
-    return context.compile_internal(builder, lognormvariate_impl,
-                                    sig, args)
+@overload(np.random.beta)
+def beta_impl(alpha, beta, size):
+    if is_nonelike(size):
+        return lambda alpha, beta, size: np.random.beta(alpha, beta)
+    if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
+                                            and isinstance(size.dtype,
+                                                           types.Integer))):
+        def _impl(alpha, beta, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.beta(alpha, beta)
+            return out
+        return _impl
 
 
-@glue_lowering("random.paretovariate", types.Float)
-def paretovariate_impl(context, builder, sig, args):
-    _random = random.random
+@overload(random.expovariate)
+def expovariate_impl(lambd):
+    if isinstance(lambd, types.Float):
+        def _impl(lambd):
+            """Exponential distribution.  Taken from CPython.
+            """
+            # lambd: rate lambd = 1/mean
+            # ('lambda' is a Python reserved word)
 
-    def paretovariate_impl(alpha):
-        """Pareto distribution.  Taken from CPython."""
-        # Jain, pg. 495
-        u = 1.0 - _random()
-        return 1.0 / u ** (1.0/alpha)
+            # we use 1-random() instead of random() to preclude the
+            # possibility of taking the log of zero.
+            return -math.log(1.0 - random.random()) / lambd
 
-    res = context.compile_internal(builder, paretovariate_impl,
-                                    sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+        return _impl
 
-@glue_lowering("np.random.pareto", types.Float)
-def pareto_impl(context, builder, sig, args):
-    _random = np.random.random
 
-    def pareto_impl(alpha):
-        # Same as paretovariate() - 1.
-        u = 1.0 - _random()
-        return 1.0 / u ** (1.0/alpha) - 1
+@overload(np.random.exponential)
+def exponential_impl(scale):
+    if isinstance(scale, (types.Float, types.Integer)):
+        def _impl(scale):
+            return -math.log(1.0 - np.random.random()) * scale
+        return _impl
 
-    res = context.compile_internal(builder, pareto_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@glue_lowering("random.weibullvariate",
-           types.Float, types.Float)
-def weibullvariate_impl(context, builder, sig, args):
-    _random = random.random
-    _log = math.log
+@overload(np.random.exponential)
+def exponential_impl(scale, size):
+    if is_nonelike(size):
+        return lambda scale, size: np.random.exponential(scale)
+    if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
+                                            isinstance(size.dtype,
+                                                       types.Integer))):
+        def _impl(scale, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.exponential(scale)
+            return out
+        return _impl
 
-    def weibullvariate_impl(alpha, beta):
-        """Weibull distribution.  Taken from CPython."""
-        # Jain, pg. 499; bug fix courtesy Bill Arms
-        u = 1.0 - _random()
-        return alpha * (-_log(u)) ** (1.0/beta)
 
-    res = context.compile_internal(builder, weibullvariate_impl,
-                                    sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+@overload(np.random.standard_exponential)
+@overload(np.random.exponential)
+def exponential_impl():
+    def _impl():
+        return -math.log(1.0 - np.random.random())
+    return _impl
 
-@glue_lowering("np.random.weibull", types.Float)
-def weibull_impl(context, builder, sig, args):
-    _random = np.random.random
-    _log = math.log
 
-    def weibull_impl(beta):
-        # Same as weibullvariate(1.0, beta)
-        u = 1.0 - _random()
-        return (-_log(u)) ** (1.0/beta)
+@overload(np.random.standard_exponential)
+def standard_exponential_impl(size):
+    if is_nonelike(size):
+        return lambda size: np.random.standard_exponential()
+    if (isinstance(size, types.Integer) or
+       (isinstance(size, types.UniTuple) and isinstance(size.dtype,
+                                                        types.Integer))
+    ):
+        def _impl(size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.standard_exponential()
+            return out
+        return _impl
 
-    res = context.compile_internal(builder, weibull_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@glue_lowering("random.vonmisesvariate",
-           types.Float, types.Float)
-def vonmisesvariate_impl(context, builder, sig, args):
-    res = _vonmisesvariate_impl(context, builder, sig, args, random.random)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+@overload(np.random.lognormal)
+def np_lognormal_impl0():
+    return lambda: np.random.lognormal(0.0, 1.0)
 
-@glue_lowering("np.random.vonmises",
-           types.Float, types.Float)
-def vonmisesvariate_impl(context, builder, sig, args):
-    res = _vonmisesvariate_impl(context, builder, sig, args, np.random.random)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
 
-def _vonmisesvariate_impl(context, builder, sig, args, _random):
-    _exp = math.exp
-    _sqrt = math.sqrt
-    _cos = math.cos
-    _acos = math.acos
-    _pi = math.pi
-    TWOPI = 2.0 * _pi
+@overload(np.random.lognormal)
+def np_log_normal_impl1(mu):
+    if isinstance(mu, (types.Float, types.Integer)):
+        return lambda mu: np.random.lognormal(mu, 1.0)
 
-    def vonmisesvariate_impl(mu, kappa):
+
+@overload(np.random.lognormal)
+def np_log_normal_impl2(mu, sigma):
+    if isinstance(mu, (types.Float, types.Integer)) and isinstance(
+            sigma, (types.Float, types.Integer)):
+        return _lognormvariate_impl(np.random.normal)
+
+
+@overload(np.random.lognormal)
+def lognormal_impl(mu, sigma, size):
+    if is_nonelike(size):
+        return lambda mu, sigma, size: np.random.lognormal(mu, sigma)
+    if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
+                                            isinstance(size.dtype,
+                                                       types.Integer))):
+        def _impl(mu, sigma, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.lognormal(mu, sigma)
+            return out
+        return _impl
+
+
+@overload(random.lognormvariate)
+def lognormvariate_impl(mu, sigma):
+    if isinstance(mu, types.Float) and isinstance(sigma, types.Float):
+        return _lognormvariate_impl(random.gauss)
+
+
+def _lognormvariate_impl(_gauss):
+    return lambda mu, sigma: math.exp(_gauss(mu, sigma))
+
+
+@overload(random.paretovariate)
+def paretovariate_impl(alpha):
+    if isinstance(alpha, types.Float):
+        def _impl(alpha):
+            """Pareto distribution.  Taken from CPython."""
+            # Jain, pg. 495
+            u = 1.0 - random.random()
+            return 1.0 / u ** (1.0/alpha)
+
+        return _impl
+
+
+@overload(np.random.pareto)
+def pareto_impl(alpha):
+    if isinstance(alpha, types.Float):
+        def _impl(alpha):
+            # Same as paretovariate() - 1.
+            u = 1.0 - np.random.random()
+            return 1.0 / u ** (1.0/alpha) - 1
+
+        return _impl
+
+
+@overload(np.random.pareto)
+def pareto_impl(alpha, size):
+    if is_nonelike(size):
+        return lambda alpha, size: np.random.pareto(alpha)
+    if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
+                                            isinstance(size.dtype,
+                                                       types.Integer))):
+        def _impl(alpha, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.pareto(alpha)
+            return out
+        return _impl
+
+
+@overload(random.weibullvariate)
+def weibullvariate_impl(alpha, beta):
+    if isinstance(alpha, (types.Float, types.Integer)) and isinstance(
+            beta, (types.Float, types.Integer)):
+        def _impl(alpha, beta):
+            """Weibull distribution.  Taken from CPython."""
+            # Jain, pg. 499; bug fix courtesy Bill Arms
+            u = 1.0 - random.random()
+            return alpha * (-math.log(u)) ** (1.0/beta)
+
+        return _impl
+
+
+@overload(np.random.weibull)
+def weibull_impl(beta):
+    if isinstance(beta, (types.Float, types.Integer)):
+        def _impl(beta):
+            # Same as weibullvariate(1.0, beta)
+            u = 1.0 - np.random.random()
+            return (-math.log(u)) ** (1.0/beta)
+
+        return _impl
+
+
+@overload(np.random.weibull)
+def weibull_impl2(beta, size):
+    if is_nonelike(size):
+        return lambda beta, size: np.random.weibull(beta)
+    if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
+                                            isinstance(size.dtype,
+                                                       types.Integer))):
+        def _impl(beta, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.weibull(beta)
+            return out
+        return _impl
+
+
+@overload(random.vonmisesvariate)
+def vonmisesvariate_impl(mu, kappa):
+    if isinstance(mu, types.Float) and isinstance(kappa, types.Float):
+        return _vonmisesvariate_impl(random.random)
+
+
+@overload(np.random.vonmises)
+def vonmisesvariate_impl(mu, kappa):
+    if isinstance(mu, types.Float) and isinstance(kappa, types.Float):
+        return _vonmisesvariate_impl(np.random.random)
+
+
+def _vonmisesvariate_impl(_random):
+    def _impl(mu, kappa):
         """Circular data distribution.  Taken from CPython.
         Note the algorithm in Python 2.6 and Numpy is different:
         http://bugs.python.org/issue17141
@@ -788,417 +1146,694 @@ def _vonmisesvariate_impl(context, builder, sig, args, _random):
         # Thanks to Magnus Kessler for a correction to the
         # implementation of step 4.
         if kappa <= 1e-6:
-            return TWOPI * _random()
+            return 2.0 * math.pi * _random()
 
         s = 0.5 / kappa
-        r = s + _sqrt(1.0 + s * s)
+        r = s + math.sqrt(1.0 + s * s)
 
         while 1:
             u1 = _random()
-            z = _cos(_pi * u1)
+            z = math.cos(math.pi * u1)
 
             d = z / (r + z)
             u2 = _random()
-            if u2 < 1.0 - d * d or u2 <= (1.0 - d) * _exp(d):
+            if u2 < 1.0 - d * d or u2 <= (1.0 - d) * math.exp(d):
                 break
 
         q = 1.0 / r
         f = (q + z) / (1.0 + q * z)
         u3 = _random()
         if u3 > 0.5:
-            theta = (mu + _acos(f)) % TWOPI
+            theta = (mu + math.acos(f)) % (2.0 * math.pi)
         else:
-            theta = (mu - _acos(f)) % TWOPI
+            theta = (mu - math.acos(f)) % (2.0 * math.pi)
 
         return theta
 
-    return context.compile_internal(builder, vonmisesvariate_impl,
-                                    sig, args)
+    return _impl
 
 
-@glue_lowering("np.random.binomial", types.Integer, types.Float)
-def binomial_impl(context, builder, sig, args):
-    intty = sig.return_type
-    _random = np.random.random
+@overload(np.random.vonmises)
+def vonmises_impl(mu, kappa, size):
+    if is_nonelike(size):
+        return lambda mu, kappa, size: np.random.vonmises(mu, kappa)
+    if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
+                                            and isinstance(size.dtype,
+                                                           types.Integer))):
+        def _impl(mu, kappa, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.vonmises(mu, kappa)
+            return out
+        return _impl
 
-    def binomial_impl(n, p):
-        """
-        Binomial distribution.  Numpy's variant of the BINV algorithm
-        is used.
-        (Numpy uses BTPE for n*p >= 30, though)
-        """
-        if n < 0:
-            raise ValueError("binomial(): n <= 0")
-        if not (0.0 <= p <= 1.0):
-            raise ValueError("binomial(): p outside of [0, 1]")
-        if p == 0.0:
-            return 0
-        if p == 1.0:
-            return n
 
-        flipped = p > 0.5
-        if flipped:
-            p = 1.0 - p
-        q = 1.0 - p
+@overload(np.random.binomial)
+def binomial_impl(n, p):
+    if isinstance(n, types.Integer) and isinstance(
+            p, (types.Float, types.Integer)):
+        def _impl(n, p):
+            """
+            Binomial distribution.  Numpy's variant of the BINV algorithm
+            is used.
+            (Numpy uses BTPE for n*p >= 30, though)
+            """
+            if n < 0:
+                raise ValueError("binomial(): n <= 0")
+            if not (0.0 <= p <= 1.0):
+                raise ValueError("binomial(): p outside of [0, 1]")
+            if p == 0.0:
+                return 0
+            if p == 1.0:
+                return n
 
-        niters = 1
-        qn = q ** n
-        while qn <= 1e-308:
-            # Underflow => split into several iterations
-            # Note this is much slower than Numpy's BTPE
-            niters <<= 2
-            n >>= 2
+            flipped = p > 0.5
+            if flipped:
+                p = 1.0 - p
+            q = 1.0 - p
+
+            niters = 1
             qn = q ** n
-            assert n > 0
+            while qn <= 1e-308:
+                # Underflow => split into several iterations
+                # Note this is much slower than Numpy's BTPE
+                niters <<= 2
+                n >>= 2
+                qn = q ** n
+                assert n > 0
 
-        np = n * p
-        bound = min(n, np + 10.0 * math.sqrt(np * q + 1))
+            np_prod = n * p
+            bound = min(n, np_prod + 10.0 * math.sqrt(np_prod * q + 1))
 
-        finished = False
-        total = 0
-        while niters > 0:
-            X = 0
-            U = _random()
-            px = qn
-            while X <= bound:
-                if U <= px:
-                    total += n - X if flipped else X
-                    niters -= 1
-                    break
-                U -= px
-                X += 1
-                px = ((n - X + 1) * p * px) / (X * q)
+            total = 0
+            while niters > 0:
+                X = 0
+                U = np.random.random()
+                px = qn
+                while X <= bound:
+                    if U <= px:
+                        total += n - X if flipped else X
+                        niters -= 1
+                        break
+                    U -= px
+                    X += 1
+                    px = ((n - X + 1) * p * px) / (X * q)
 
-        return total
+            return total
 
-    res = context.compile_internal(builder, binomial_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-@glue_lowering("np.random.chisquare", types.Float)
-def chisquare_impl(context, builder, sig, args):
-
-    def chisquare_impl(df):
-        return 2.0 * np.random.standard_gamma(df / 2.0)
-
-    res = context.compile_internal(builder, chisquare_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+        return _impl
 
 
-@glue_lowering("np.random.f", types.Float, types.Float)
-def f_impl(context, builder, sig, args):
-
-    def f_impl(num, denom):
-        return ((np.random.chisquare(num) * denom) /
-                (np.random.chisquare(denom) * num))
-
-    res = context.compile_internal(builder, f_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-@glue_lowering("np.random.geometric", types.Float)
-def geometric_impl(context, builder, sig, args):
-    _random = np.random.random
-    intty = sig.return_type
-
-    def geometric_impl(p):
-        # Numpy's algorithm.
-        if p <= 0.0 or p > 1.0:
-            raise ValueError("geometric(): p outside of (0, 1]")
-        q = 1.0 - p
-        if p >= 0.333333333333333333333333:
-            X = intty(1)
-            sum = prod = p
-            U = _random()
-            while U > sum:
-                prod *= q
-                sum += prod
-                X += 1
-            return X
-        else:
-            return math.ceil(math.log(1.0 - _random()) / math.log(q))
-
-    res = context.compile_internal(builder, geometric_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+@overload(np.random.binomial)
+def binomial_impl(n, p, size):
+    if is_nonelike(size):
+        return lambda n, p, size: np.random.binomial(n, p)
+    if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
+                                            isinstance(size.dtype,
+                                                       types.Integer))):
+        def _impl(n, p, size):
+            out = np.empty(size, dtype=np.intp)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.binomial(n, p)
+            return out
+        return _impl
 
 
-@glue_lowering("np.random.gumbel", types.Float, types.Float)
-def gumbel_impl(context, builder, sig, args):
-    _random = np.random.random
-    _log = math.log
+@overload(np.random.chisquare)
+def chisquare_impl(df):
+    if isinstance(df, (types.Float, types.Integer)):
+        def _impl(df):
+            return 2.0 * np.random.standard_gamma(df / 2.0)
 
-    def gumbel_impl(loc, scale):
-        U = 1.0 - _random()
-        return loc - scale * _log(-_log(U))
-
-    res = context.compile_internal(builder, gumbel_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+        return _impl
 
 
-@glue_lowering("np.random.hypergeometric", types.Integer,
-           types.Integer, types.Integer)
-def hypergeometric_impl(context, builder, sig, args):
-    _random = np.random.random
-    _floor = math.floor
-
-    def hypergeometric_impl(ngood, nbad, nsamples):
-        """Numpy's algorithm for hypergeometric()."""
-        d1 = nbad + ngood - nsamples
-        d2 = float(min(nbad, ngood))
-
-        Y = d2
-        K = nsamples
-        while Y > 0.0 and K > 0:
-            Y -= _floor(_random() + Y / (d1 + K))
-            K -= 1
-        Z = int(d2 - Y)
-        if ngood > nbad:
-            return nsamples - Z
-        else:
-            return Z
-
-    res = context.compile_internal(builder, hypergeometric_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+@overload(np.random.chisquare)
+def chisquare_impl2(p, size):
+    if is_nonelike(size):
+        return lambda p, size: np.random.chisquare(p)
+    if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
+                                            isinstance(size.dtype,
+                                                       types.Integer))):
+        def _impl(p, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.chisquare(p)
+            return out
+        return _impl
 
 
-@glue_lowering("np.random.laplace")
-@glue_lowering("np.random.laplace", types.Float)
-@glue_lowering("np.random.laplace", types.Float, types.Float)
-def laplace_impl(context, builder, sig, args):
-    _random = np.random.random
-    _log = math.log
+@overload(np.random.f)
+def f_impl(num, denom):
+    if isinstance(num, (types.Float, types.Integer)) and isinstance(
+            denom, (types.Float, types.Integer)):
+        def _impl(num, denom):
+            return ((np.random.chisquare(num) * denom) /
+                    (np.random.chisquare(denom) * num))
 
-    def laplace_impl(loc, scale):
-        U = _random()
-        if U < 0.5:
-            return loc + scale * _log(U + U)
-        else:
-            return loc - scale * _log(2.0 - U - U)
-
-    sig, args = _fill_defaults(context, builder, sig, args, (0.0, 1.0))
-    res = context.compile_internal(builder, laplace_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+        return _impl
 
 
-@glue_lowering("np.random.logistic")
-@glue_lowering("np.random.logistic", types.Float)
-@glue_lowering("np.random.logistic", types.Float, types.Float)
-def logistic_impl(context, builder, sig, args):
-    _random = np.random.random
-    _log = math.log
+@overload(np.random.f)
+def f_impl(num, denom, size):
+    if (isinstance(num, (types.Float, types.Integer)) and isinstance(
+            denom, (types.Float, types.Integer)) and
+       is_nonelike(size)):
+        return lambda num, denom, size: np.random.f(num, denom)
+    if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
+                                            and isinstance(size.dtype,
+                                                           types.Integer))):
+        def _impl(num, denom, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.f(num, denom)
+            return out
+        return _impl
 
-    def logistic_impl(loc, scale):
-        U = _random()
-        return loc + scale * _log(U / (1.0 - U))
 
-    sig, args = _fill_defaults(context, builder, sig, args, (0.0, 1.0))
-    res = context.compile_internal(builder, logistic_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-@glue_lowering("np.random.logseries", types.Float)
-def logseries_impl(context, builder, sig, args):
-    intty = sig.return_type
-    _random = np.random.random
-    _log = math.log
-    _exp = math.exp
-
-    def logseries_impl(p):
-        """Numpy's algorithm for logseries()."""
-        if p <= 0.0 or p > 1.0:
-            raise ValueError("logseries(): p outside of (0, 1]")
-        r = _log(1.0 - p)
-
-        while 1:
-            V = _random()
-            if V >= p:
-                return 1
-            U = _random()
-            q = 1.0 - _exp(r * U)
-            if V <= q * q:
-                # XXX what if V == 0.0 ?
-                return intty(1.0 + _log(V) / _log(q))
-            elif V >= q:
-                return 1
+@overload(np.random.geometric)
+def geometric_impl(p):
+    if isinstance(p, (types.Float, types.Integer)):
+        def _impl(p):
+            # Numpy's algorithm.
+            if p <= 0.0 or p > 1.0:
+                raise ValueError("geometric(): p outside of (0, 1]")
+            q = 1.0 - p
+            if p >= 0.333333333333333333333333:
+                X = int(1)
+                sum = prod = p
+                U = np.random.random()
+                while U > sum:
+                    prod *= q
+                    sum += prod
+                    X += 1
+                return X
             else:
-                return 2
+                return math.ceil(math.log(1.0 - np.random.random()) /
+                                 math.log(q))
 
-    res = context.compile_internal(builder, logseries_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-@glue_lowering("np.random.negative_binomial", types.int64, types.Float)
-def negative_binomial_impl(context, builder, sig, args):
-    _gamma = np.random.gamma
-    _poisson = np.random.poisson
-
-    def negative_binomial_impl(n, p):
-        if n <= 0:
-            raise ValueError("negative_binomial(): n <= 0")
-        if p < 0.0 or p > 1.0:
-            raise ValueError("negative_binomial(): p outside of [0, 1]")
-        Y = _gamma(n, (1.0 - p) / p)
-        return _poisson(Y)
-
-    res = context.compile_internal(builder, negative_binomial_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+        return _impl
 
 
-@glue_lowering("np.random.poisson")
-@glue_lowering("np.random.poisson", types.Float)
-def poisson_impl(context, builder, sig, args):
-    state_ptr = get_np_state_ptr(context, builder)
-
-    retptr = cgutils.alloca_once(builder, int64_t, name="ret")
-    bbcont = builder.append_basic_block("bbcont")
-    bbend = builder.append_basic_block("bbend")
-
-    if len(args) == 1:
-        lam, = args
-        big_lam = builder.fcmp_ordered('>=', lam, ir.Constant(double, 10.0))
-        with builder.if_then(big_lam):
-            # For lambda >= 10.0, we switch to a more accurate
-            # algorithm (see _random.c).
-            fnty = ir.FunctionType(int64_t, (rnd_state_ptr_t, double))
-            fn = cgutils.get_or_insert_function(builder.function.module, fnty,
-                                                "numba_poisson_ptrs")
-            ret = builder.call(fn, (state_ptr, lam))
-            builder.store(ret, retptr)
-            builder.branch(bbend)
-
-    builder.branch(bbcont)
-    builder.position_at_end(bbcont)
-
-    _random = np.random.random
-    _exp = math.exp
-
-    def poisson_impl(lam):
-        """Numpy's algorithm for poisson() on small *lam*.
-
-        This method is invoked only if the parameter lambda of the
-        distribution is small ( < 10 ). The algorithm used is described
-        in "Knuth, D. 1969. 'Seminumerical Algorithms. The Art of
-        Computer Programming' vol 2.
-        """
-        if lam < 0.0:
-            raise ValueError("poisson(): lambda < 0")
-        if lam == 0.0:
-            return 0
-        enlam = _exp(-lam)
-        X = 0
-        prod = 1.0
-        while 1:
-            U = _random()
-            prod *= U
-            if prod <= enlam:
-                return X
-            X += 1
-
-    if len(args) == 0:
-        sig = signature(sig.return_type, types.float64)
-        args = (ir.Constant(double, 1.0),)
-
-    ret = context.compile_internal(builder, poisson_impl, sig, args)
-    builder.store(ret, retptr)
-    builder.branch(bbend)
-    builder.position_at_end(bbend)
-    res = builder.load(retptr)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+@overload(np.random.geometric)
+def geometric_impl(p, size):
+    if is_nonelike(size):
+        return lambda p, size: np.random.geometric(p)
+    if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
+                                            isinstance(size.dtype,
+                                                       types.Integer))):
+        def _impl(p, size):
+            out = np.empty(size, dtype=np.int64)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.geometric(p)
+            return out
+        return _impl
 
 
-@glue_lowering("np.random.power", types.Float)
-def power_impl(context, builder, sig, args):
+@overload(np.random.gumbel)
+def gumbel_impl(loc, scale):
+    if isinstance(loc, (types.Float, types.Integer)) and isinstance(
+            scale, (types.Float, types.Integer)):
+        def _impl(loc, scale):
+            U = 1.0 - np.random.random()
+            return loc - scale * math.log(-math.log(U))
 
-    def power_impl(a):
-        if a <= 0.0:
-            raise ValueError("power(): a <= 0")
-        return math.pow(1 - math.exp(-np.random.standard_exponential()),
-                        1./a)
-
-    res = context.compile_internal(builder, power_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+        return _impl
 
 
-@glue_lowering("np.random.rayleigh")
-@glue_lowering("np.random.rayleigh", types.Float)
-def rayleigh_impl(context, builder, sig, args):
-    _random = np.random.random
-
-    def rayleigh_impl(mode):
-        if mode <= 0.0:
-            raise ValueError("rayleigh(): mode <= 0")
-        return mode * math.sqrt(-2.0 * math.log(1.0 - _random()))
-
-    sig, args = _fill_defaults(context, builder, sig, args, (1.0,))
-    res = context.compile_internal(builder, rayleigh_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-@glue_lowering("np.random.standard_cauchy")
-def cauchy_impl(context, builder, sig, args):
-    _gauss = np.random.standard_normal
-
-    def cauchy_impl():
-        return _gauss() / _gauss()
-
-    res = context.compile_internal(builder, cauchy_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+@overload(np.random.gumbel)
+def gumbel_impl3(loc, scale, size):
+    if is_nonelike(size):
+        return lambda loc, scale, size: np.random.gumbel(loc, scale)
+    if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
+                                            and isinstance(size.dtype,
+                                                           types.Integer))):
+        def _impl(loc, scale, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.gumbel(loc, scale)
+            return out
+        return _impl
 
 
-@glue_lowering("np.random.standard_t", types.Float)
-def standard_t_impl(context, builder, sig, args):
+@overload(np.random.hypergeometric)
+def hypergeometric_impl(ngood, nbad, nsamples):
+    if (isinstance(ngood, (types.Float, types.Integer)) and isinstance(
+            nbad, (types.Float, types.Integer))
+       and isinstance(nsamples, (types.Float, types.Integer))):
+        def _impl(ngood, nbad, nsamples):
+            """Numpy's algorithm for hypergeometric()."""
+            d1 = int(nbad) + int(ngood) - int(nsamples)
+            d2 = float(min(nbad, ngood))
 
-    def standard_t_impl(df):
-        N = np.random.standard_normal()
-        G = np.random.standard_gamma(df / 2.0)
-        X = math.sqrt(df / 2.0) * N / math.sqrt(G)
-        return X
+            Y = d2
+            K = int(nsamples)
+            while Y > 0.0 and K > 0:
+                Y -= math.floor(np.random.random() + Y / (d1 + K))
+                K -= 1
+            Z = int(d2 - Y)
+            if ngood > nbad:
+                return int(nsamples) - Z
+            else:
+                return Z
 
-    res = context.compile_internal(builder, standard_t_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+        return _impl
 
 
-@glue_lowering("np.random.wald", types.Float, types.Float)
-def wald_impl(context, builder, sig, args):
+@overload(np.random.hypergeometric)
+def hypergeometric_impl(ngood, nbad, nsamples, size):
+    if is_nonelike(size):
+        return lambda ngood, nbad, nsamples, size:\
+            np.random.hypergeometric(ngood, nbad, nsamples)
+    if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
+                                            and isinstance(size.dtype,
+                                                           types.Integer))):
+        def _impl(ngood, nbad, nsamples, size):
+            out = np.empty(size, dtype=np.intp)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.hypergeometric(ngood, nbad, nsamples)
+            return out
+        return _impl
 
-    def wald_impl(mean, scale):
-        if mean <= 0.0:
-            raise ValueError("wald(): mean <= 0")
-        if scale <= 0.0:
-            raise ValueError("wald(): scale <= 0")
-        mu_2l = mean / (2.0 * scale)
-        Y = np.random.standard_normal()
-        Y = mean * Y * Y
-        X = mean + mu_2l * (Y - math.sqrt(4 * scale * Y + Y * Y))
+
+@overload(np.random.laplace)
+def laplace_impl0():
+    return lambda: np.random.laplace(0.0, 1.0)
+
+
+@overload(np.random.laplace)
+def laplace_impl1(loc):
+    if isinstance(loc, (types.Float, types.Integer)):
+        return lambda loc: np.random.laplace(loc, 1.0)
+
+
+@overload(np.random.laplace)
+def laplace_impl2(loc, scale):
+    if isinstance(loc, (types.Float, types.Integer)) and isinstance(
+            scale, (types.Float, types.Integer)):
+        return laplace_impl
+
+
+@overload(np.random.laplace)
+def laplace_impl3(loc, scale, size):
+    if is_nonelike(size):
+        return lambda loc, scale, size: np.random.laplace(loc, scale)
+    if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
+                                           isinstance(size.dtype,
+                                                      types.Integer)):
+        def _impl(loc, scale, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.laplace(loc, scale)
+            return out
+        return _impl
+
+
+def laplace_impl(loc, scale):
+    U = np.random.random()
+    if U < 0.5:
+        return loc + scale * math.log(U + U)
+    else:
+        return loc - scale * math.log(2.0 - U - U)
+
+
+@overload(np.random.logistic)
+def logistic_impl0():
+    return lambda: np.random.logistic(0.0, 1.0)
+
+
+@overload(np.random.logistic)
+def logistic_impl1(loc):
+    if isinstance(loc, (types.Float, types.Integer)):
+        return lambda loc: np.random.logistic(loc, 1.0)
+
+
+@overload(np.random.logistic)
+def logistic_impl2(loc, scale):
+    if isinstance(loc, (types.Float, types.Integer)) and isinstance(
+            scale, (types.Float, types.Integer)):
+        return logistic_impl
+
+
+@overload(np.random.logistic)
+def logistic_impl3(loc, scale, size):
+    if is_nonelike(size):
+        return lambda loc, scale, size: np.random.logistic(loc, scale)
+    if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
+                                            and isinstance(size.dtype,
+                                                           types.Integer))):
+        def _impl(loc, scale, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.logistic(loc, scale)
+            return out
+        return _impl
+
+
+def logistic_impl(loc, scale):
+    U = np.random.random()
+    return loc + scale * math.log(U / (1.0 - U))
+
+
+def _logseries_impl(p):
+    """Numpy's algorithm for logseries()."""
+    if p <= 0.0 or p > 1.0:
+        raise ValueError("logseries(): p outside of (0, 1]")
+    r = math.log(1.0 - p)
+
+    while 1:
+        V = np.random.random()
+        if V >= p:
+            return 1
         U = np.random.random()
-        if U <= mean / (mean + X):
-            return X
+        q = 1.0 - math.exp(r * U)
+        if V <= q * q:
+            # XXX what if V == 0.0 ?
+            return np.int64(1.0 + math.log(V) / math.log(q))
+        elif V >= q:
+            return 1
         else:
-            return mean * mean / X
-
-    res = context.compile_internal(builder, wald_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+            return 2
 
 
-@glue_lowering("np.random.zipf", types.Float)
-def zipf_impl(context, builder, sig, args):
-    _random = np.random.random
-    intty = sig.return_type
+@overload(np.random.logseries)
+def logseries_impl(p):
+    if isinstance(p, (types.Float, types.Integer)):
+        return _logseries_impl
 
-    def zipf_impl(a):
-        if a <= 1.0:
-            raise ValueError("zipf(): a <= 1")
-        am1 = a - 1.0
-        b = 2.0 ** am1
-        while 1:
-            U = 1.0 - _random()
-            V = _random()
-            X = intty(math.floor(U ** (-1.0 / am1)))
-            T = (1.0 + 1.0 / X) ** am1
-            if X >= 1 and V * X * (T - 1.0) / (b - 1.0) <= (T / b):
+
+@overload(np.random.logseries)
+def logseries_impl(p, size):
+    if is_nonelike(size):
+        return lambda p, size: np.random.logseries(p)
+    if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
+                                           isinstance(size.dtype,
+                                                      types.Integer)):
+        def _impl(p, size):
+            out = np.empty(size, dtype=np.int64)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.logseries(p)
+            return out
+        return _impl
+
+
+@overload(np.random.negative_binomial)
+def negative_binomial_impl(n, p):
+    if isinstance(n, types.Integer) and isinstance(
+            p,(types.Float, types.Integer)):
+        def _impl(n, p):
+            if n <= 0:
+                raise ValueError("negative_binomial(): n <= 0")
+            if p < 0.0 or p > 1.0:
+                raise ValueError("negative_binomial(): p outside of [0, 1]")
+            Y = np.random.gamma(n, (1.0 - p) / p)
+            return np.random.poisson(Y)
+
+        return _impl
+
+
+@overload(np.random.poisson)
+def poisson_impl0():
+    return lambda: np.random.poisson(1.0)
+
+
+@overload(np.random.poisson)
+def poisson_impl1(lam):
+    if isinstance(lam, (types.Float, types.Integer)):
+        @intrinsic
+        def _impl(typingcontext, lam):
+            lam_preprocessor = _double_preprocessor(lam)
+
+            def codegen(context, builder, sig, args):
+                state_ptr = get_np_state_ptr(context, builder)
+
+                retptr = cgutils.alloca_once(builder, int64_t, name="ret")
+                bbcont = builder.append_basic_block("bbcont")
+                bbend = builder.append_basic_block("bbend")
+
+                lam, = args
+                lam = lam_preprocessor(builder, lam)
+                big_lam = builder.fcmp_ordered('>=', lam,
+                                               ir.Constant(double, 10.0))
+                with builder.if_then(big_lam):
+                    # For lambda >= 10.0, we switch to a more accurate
+                    # algorithm (see _random.c).
+                    fnty = ir.FunctionType(int64_t, (rnd_state_ptr_t, double))
+                    fn = cgutils.get_or_insert_function(builder.function.module,
+                                                        fnty,
+                                                        "numba_poisson_ptrs")
+                    ret = builder.call(fn, (state_ptr, lam))
+                    builder.store(ret, retptr)
+                    builder.branch(bbend)
+
+                builder.branch(bbcont)
+                builder.position_at_end(bbcont)
+
+                _random = np.random.random
+                _exp = math.exp
+
+                def poisson_impl(lam):
+                    """Numpy's algorithm for poisson() on small *lam*.
+
+                    This method is invoked only if the parameter lambda of the
+                    distribution is small ( < 10 ). The algorithm used is
+                    described in "Knuth, D. 1969. 'Seminumerical Algorithms.
+                    The Art of Computer Programming' vol 2.
+                    """
+                    if lam < 0.0:
+                        raise ValueError("poisson(): lambda < 0")
+                    if lam == 0.0:
+                        return 0
+                    enlam = _exp(-lam)
+                    X = 0
+                    prod = 1.0
+                    while 1:
+                        U = _random()
+                        prod *= U
+                        if prod <= enlam:
+                            return X
+                        X += 1
+
+                ret = context.compile_internal(builder, poisson_impl, sig, args)
+                builder.store(ret, retptr)
+                builder.branch(bbend)
+                builder.position_at_end(bbend)
+                return builder.load(retptr)
+            return signature(types.int64, lam), codegen
+        return lambda lam: _impl(lam)
+
+
+@overload(np.random.poisson)
+def poisson_impl2(lam, size):
+    if isinstance(lam, (types.Float, types.Integer)) and is_nonelike(size):
+        return lambda lam, size: np.random.poisson(lam)
+    if isinstance(lam, (types.Float, types.Integer)) and (
+            isinstance(size, types.Integer) or
+       (isinstance(size, types.UniTuple) and isinstance(size.dtype,
+                                                        types.Integer))
+    ):
+        def _impl(lam, size):
+            out = np.empty(size, dtype=np.intp)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.poisson(lam)
+            return out
+        return _impl
+
+
+@overload(np.random.power)
+def power_impl(a):
+    if isinstance(a, (types.Float, types.Integer)):
+        def _impl(a):
+            if a <= 0.0:
+                raise ValueError("power(): a <= 0")
+            return math.pow(1 - math.exp(-np.random.standard_exponential()),
+                            1./a)
+
+        return _impl
+
+
+@overload(np.random.power)
+def power_impl(a, size):
+    if is_nonelike(size):
+        return lambda a, size: np.random.power(a)
+    if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
+                                           isinstance(size.dtype,
+                                                      types.Integer)):
+        def _impl(a, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.power(a)
+            return out
+        return _impl
+
+
+@overload(np.random.rayleigh)
+def rayleigh_impl0():
+    return lambda: np.random.rayleigh(1.0)
+
+
+@overload(np.random.rayleigh)
+def rayleigh_impl1(mode):
+    if isinstance(mode, (types.Float, types.Integer)):
+        return rayleigh_impl
+
+
+def rayleigh_impl(mode):
+    if mode <= 0.0:
+        raise ValueError("rayleigh(): mode <= 0")
+    return mode * math.sqrt(-2.0 * math.log(1.0 - np.random.random()))
+
+
+@overload(np.random.rayleigh)
+def rayleigh_impl2(mode, size):
+    if is_nonelike(size):
+        return lambda mode, size: np.random.rayleigh(mode)
+    if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
+                                           isinstance(size.dtype,
+                                                      types.Integer)):
+        def _impl(mode, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.rayleigh(mode)
+            return out
+        return _impl
+
+
+@overload(np.random.standard_cauchy)
+def cauchy_impl():
+    def _impl():
+        return np.random.standard_normal() / np.random.standard_normal()
+
+    return _impl
+
+
+@overload(np.random.standard_cauchy)
+def standard_cauchy_impl(size):
+    if is_nonelike(size):
+        return lambda size: np.random.standard_cauchy()
+    if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
+                                           and isinstance(size.dtype,
+                                                          types.Integer)):
+        def _impl(size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.standard_cauchy()
+            return out
+        return _impl
+
+
+@overload(np.random.standard_t)
+def standard_t_impl(df):
+    if isinstance(df, (types.Float, types.Integer)):
+        def _impl(df):
+            N = np.random.standard_normal()
+            G = np.random.standard_gamma(df / 2.0)
+            X = math.sqrt(df / 2.0) * N / math.sqrt(G)
+            return X
+
+        return _impl
+
+
+@overload(np.random.standard_t)
+def standard_t_impl2(df, size):
+    if is_nonelike(size):
+        return lambda p, size: np.random.standard_t(p)
+    if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
+                                           isinstance(size.dtype,
+                                                      types.Integer)):
+        def _impl(df, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.standard_t(df)
+            return out
+        return _impl
+
+
+@overload(np.random.wald)
+def wald_impl(mean, scale):
+    if isinstance(mean, types.Float) and isinstance(scale, types.Float):
+        def _impl(mean, scale):
+            if mean <= 0.0:
+                raise ValueError("wald(): mean <= 0")
+            if scale <= 0.0:
+                raise ValueError("wald(): scale <= 0")
+            mu_2l = mean / (2.0 * scale)
+            Y = np.random.standard_normal()
+            Y = mean * Y * Y
+            X = mean + mu_2l * (Y - math.sqrt(4 * scale * Y + Y * Y))
+            U = np.random.random()
+            if U <= mean / (mean + X):
                 return X
+            else:
+                return mean * mean / X
 
-    res = context.compile_internal(builder, zipf_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+        return _impl
+
+
+@overload(np.random.wald)
+def wald_impl2(mean, scale, size):
+    if is_nonelike(size):
+        return lambda mean, scale, size: np.random.wald(mean, scale)
+    if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
+                                           isinstance(size.dtype,
+                                                      types.Integer)):
+        def _impl(mean, scale, size):
+            out = np.empty(size)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.wald(mean, scale)
+            return out
+        return _impl
+
+
+@overload(np.random.zipf)
+def zipf_impl(a):
+    if isinstance(a, types.Float):
+        def _impl(a):
+            if a <= 1.0:
+                raise ValueError("zipf(): a <= 1")
+            am1 = a - 1.0
+            b = 2.0 ** am1
+            while 1:
+                U = 1.0 - np.random.random()
+                V = np.random.random()
+                X = int(math.floor(U ** (-1.0 / am1)))
+                T = (1.0 + 1.0 / X) ** am1
+                if X >= 1 and V * X * (T - 1.0) / (b - 1.0) <= (T / b):
+                    return X
+
+        return _impl
+
+
+@overload(np.random.zipf)
+def zipf_impl(a, size):
+    if is_nonelike(size):
+        return lambda a, size: np.random.zipf(a)
+    if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
+                                           isinstance(size.dtype,
+                                                      types.Integer)):
+        def _impl(a, size):
+            out = np.empty(size, dtype=np.intp)
+            out_flat = out.flat
+            for idx in range(out.size):
+                out_flat[idx] = np.random.zipf(a)
+            return out
+        return _impl
 
 def do_shuffle_impl(arr, rng):
 
@@ -1227,13 +1862,16 @@ def do_shuffle_impl(arr, rng):
 
     return impl
 
+
 @overload(random.shuffle)
 def shuffle_impl(arr):
     return do_shuffle_impl(arr, "py")
 
+
 @overload(np.random.shuffle)
 def shuffle_impl(arr):
     return do_shuffle_impl(arr, "np")
+
 
 @overload(np.random.permutation)
 def permutation_impl(x):
@@ -1253,76 +1891,6 @@ def permutation_impl(x):
 
 
 # ------------------------------------------------------------------------
-# Array-producing variants of scalar random functions
-
-for typing_key, arity in [
-    ("np.random.beta", 3),
-    ("np.random.binomial", 3),
-    ("np.random.chisquare", 2),
-    ("np.random.exponential", 2),
-    ("np.random.f", 3),
-    ("np.random.gamma", 3),
-    ("np.random.geometric", 2),
-    ("np.random.gumbel", 3),
-    ("np.random.hypergeometric", 4),
-    ("np.random.laplace", 3),
-    ("np.random.logistic", 3),
-    ("np.random.lognormal", 3),
-    ("np.random.logseries", 2),
-    ("np.random.negative_binomial", 3),
-    ("np.random.normal", 3),
-    ("np.random.pareto", 2),
-    ("np.random.poisson", 2),
-    ("np.random.power", 2),
-    ("np.random.random", 1),
-    ("np.random.random_sample", 1),
-    ("np.random.ranf", 1),
-    ("np.random.sample", 1),
-    ("np.random.randint", 3),
-    ("np.random.rayleigh", 2),
-    ("np.random.standard_cauchy", 1),
-    ("np.random.standard_exponential", 1),
-    ("np.random.standard_gamma", 2),
-    ("np.random.standard_normal", 1),
-    ("np.random.standard_t", 2),
-    ("np.random.triangular", 4),
-    ("np.random.uniform", 3),
-    ("np.random.vonmises", 3),
-    ("np.random.wald", 3),
-    ("np.random.weibull", 2),
-    ("np.random.zipf", 2),
-    ]:
-
-    @glue_lowering(typing_key, *(types.Any,) * arity)
-    def random_arr(context, builder, sig, args, typing_key=typing_key):
-
-        arrty = sig.return_type
-        dtype = arrty.dtype
-        scalar_sig = signature(dtype, *sig.args[:-1])
-        scalar_args = args[:-1]
-
-        # Allocate array...
-        shapes = arrayobj._parse_shape(context, builder, sig.args[-1], args[-1])
-        arr = arrayobj._empty_nd_impl(context, builder, arrty, shapes)
-
-        # ... and populate it in natural order
-        *mod, fname = typing_key.split('.')
-        # Module must be numpy.random
-        assert mod == ['np', 'random']
-        np_func = getattr(np.random, fname)
-        fnty = context.typing_context.resolve_value_type(np_func)
-        resolved_sig = fnty.get_call_type(context.typing_context,
-                                          scalar_sig.args, {})
-        scalar_impl = context.get_function(fnty, resolved_sig)
-        with cgutils.for_range(builder, arr.nitems) as loop:
-            val = scalar_impl(builder, scalar_args)
-            ptr = cgutils.gep(builder, arr.data, loop.index)
-            arrayobj.store_item(context, builder, arrty, val, ptr)
-
-        return impl_ret_new_ref(context, builder, sig.return_type, arr._getvalue())
-
-
-# ------------------------------------------------------------------------
 # Irregular aliases: np.random.rand, np.random.randn
 
 @overload(np.random.rand)
@@ -1338,6 +1906,7 @@ def rand(*size):
             return np.random.random(size)
 
     return rand_impl
+
 
 @overload(np.random.randn)
 def randn(*size):
@@ -1524,29 +2093,19 @@ def multinomial(n, pvals, size=None):
 # ------------------------------------------------------------------------
 # np.random.dirichlet
 
+
+@overload(np.random.dirichlet)
+def dirichlet(alpha):
+    if isinstance(alpha, (types.Sequence, types.Array)):
+        def dirichlet_impl(alpha):
+            out = np.empty(len(alpha))
+            dirichlet_arr(alpha, out)
+            return out
+        return dirichlet_impl
+
+
 @overload(np.random.dirichlet)
 def dirichlet(alpha, size=None):
-    @register_jitable
-    def dirichlet_arr(alpha, out):
-
-        # Gamma distribution method to generate a Dirichlet distribution
-
-        for a_val in iter(alpha):
-            if a_val <= 0:
-                raise ValueError("dirichlet: alpha must be > 0.0")
-
-        a_len = len(alpha)
-        size = out.size
-        flat = out.flat
-        for i in range(0, size, a_len):
-            # calculate gamma random numbers per alpha specifications
-            norm = 0  # use this to normalize every the group total to 1
-            for k, w in enumerate(alpha):
-                flat[i + k] = np.random.gamma(w, 1)
-                norm += flat[i + k].item()
-            for k, w in enumerate(alpha):
-                flat[i + k] /= norm
-
     if not isinstance(alpha, (types.Sequence, types.Array)):
         raise NumbaTypeError(
             "np.random.dirichlet(): alpha should be an "
@@ -1570,7 +2129,8 @@ def dirichlet(alpha, size=None):
             dirichlet_arr(alpha, out)
             return out
 
-    elif isinstance(size, (types.UniTuple)) and isinstance(size.dtype, types.Integer):
+    elif isinstance(size, types.UniTuple) and isinstance(size.dtype,
+                                                         types.Integer):
         def dirichlet_impl(alpha, size=None):
             """
             dirichlet(..., size=tuple)
@@ -1587,58 +2147,91 @@ def dirichlet(alpha, size=None):
 
     return dirichlet_impl
 
+
+@register_jitable
+def dirichlet_arr(alpha, out):
+
+    # Gamma distribution method to generate a Dirichlet distribution
+
+    for a_val in iter(alpha):
+        if a_val <= 0:
+            raise ValueError("dirichlet: alpha must be > 0.0")
+
+    a_len = len(alpha)
+    size = out.size
+    flat = out.flat
+    for i in range(0, size, a_len):
+        # calculate gamma random numbers per alpha specifications
+        norm = 0  # use this to normalize every the group total to 1
+        for k, w in enumerate(alpha):
+            flat[i + k] = np.random.gamma(w, 1)
+            norm += flat[i + k].item()
+        for k, w in enumerate(alpha):
+            flat[i + k] /= norm
+
+
 # ------------------------------------------------------------------------
 # np.random.noncentral_chisquare
 
+
 @overload(np.random.noncentral_chisquare)
-def noncentral_chisquare(df, nonc, size=None):
-
-    @register_jitable
-    def validate_input(df, nonc):
-        if df <= 0:
-            raise ValueError("df <= 0")
-        if nonc < 0:
-            raise ValueError("nonc < 0")
-
-    @register_jitable
-    def noncentral_chisquare_single(df, nonc):
-        # identical to numpy implementation from distributions.c
-        # https://github.com/numpy/numpy/blob/c65bc212ec1987caefba0ea7efe6a55803318de9/numpy/random/src/distributions/distributions.c#L797
-        
-        if np.isnan(nonc):
-            return np.nan
-
-        if 1 < df:
-            chi2 = np.random.chisquare(df-1)
-            n = np.random.standard_normal() + np.sqrt(nonc)
-            return chi2 + n * n
-
-        else:
-            i = np.random.poisson(nonc/2.0)
-            return np.random.chisquare(df + 2 * i)
-
-    if size in (None, types.none):
-        def noncentral_chisquare_impl(df, nonc, size=None):
-            validate_input(df, nonc)
+def noncentral_chisquare(df, nonc):
+    if isinstance(df, (types.Float, types.Integer)) and isinstance(
+            nonc, (types.Float, types.Integer)):
+        def noncentral_chisquare_impl(df, nonc):
+            validate_noncentral_chisquare_input(df, nonc)
             return noncentral_chisquare_single(df, nonc)
 
-    elif isinstance(size, types.Integer) or (
-        (isinstance(size, (types.UniTuple)) and isinstance(size.dtype, types.Integer))
-        ):
+        return noncentral_chisquare_impl
 
-        def noncentral_chisquare_impl(df, nonc, size=None):
-            validate_input(df, nonc)
-            out = np.empty(size)
-            out_flat = out.flat
-            for idx in range(out.size):
-                out_flat[idx] = noncentral_chisquare_single(df, nonc)
-            return out
+
+@overload(np.random.noncentral_chisquare)
+def noncentral_chisquare(df, nonc, size=None):
+     if size in (None, types.none):
+         def noncentral_chisquare_impl(df, nonc, size=None):
+             validate_noncentral_chisquare_input(df, nonc)
+             return noncentral_chisquare_single(df, nonc)
+         return noncentral_chisquare_impl
+     elif isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
+                                              and isinstance(size.dtype,
+                                                             types.Integer)):
+
+         def noncentral_chisquare_impl(df, nonc, size=None):
+             validate_noncentral_chisquare_input(df, nonc)
+             out = np.empty(size)
+             out_flat = out.flat
+             for idx in range(out.size):
+                 out_flat[idx] = noncentral_chisquare_single(df, nonc)
+             return out
+         return noncentral_chisquare_impl
+     else:
+         raise NumbaTypeError(
+             "np.random.noncentral_chisquare(): size should be int or "
+             "tuple of ints or None, got %s" % size
+         )
+
+
+@register_jitable
+def noncentral_chisquare_single(df, nonc):
+    # identical to numpy implementation from distributions.c
+    # https://github.com/numpy/numpy/blob/c65bc212ec1987caefba0ea7efe6a55803318de9/numpy/random/src/distributions/distributions.c#L797
+
+    if np.isnan(nonc):
+        return np.nan
+
+    if 1 < df:
+        chi2 = np.random.chisquare(df-1)
+        n = np.random.standard_normal() + np.sqrt(nonc)
+        return chi2 + n * n
 
     else:
-        raise NumbaTypeError(
-            "np.random.noncentral_chisquare(): size should be int or "
-            "tuple of ints or None, got %s" % size
-        )
+        i = np.random.poisson(nonc/2.0)
+        return np.random.chisquare(df + 2 * i)
 
-    return noncentral_chisquare_impl
 
+@register_jitable
+def validate_noncentral_chisquare_input(df, nonc):
+    if df <= 0:
+        raise ValueError("df <= 0")
+    if nonc < 0:
+        raise ValueError("nonc < 0")
