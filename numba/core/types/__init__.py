@@ -73,7 +73,7 @@ slice3_type = SliceType('slice<a:b:c>', 3)
 signed_domain = frozenset([int8, int16, int32, int64])
 unsigned_domain = frozenset([uint8, uint16, uint32, uint64])
 integer_domain = signed_domain | unsigned_domain
-real_domain = frozenset([float32, float64])
+real_domain = frozenset([float16, float32, float64])
 complex_domain = frozenset([complex64, complex128])
 number_domain = real_domain | integer_domain | complex_domain
 

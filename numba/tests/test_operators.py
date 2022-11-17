@@ -556,7 +556,8 @@ class TestOperators(TestCase):
         y_operands = [-1.5, 0.8, 2.1]
 
         types_list = [(types.float32, types.float32),
-                      (types.float64, types.float64)]
+                      (types.float64, types.float64),
+                      (types.float16, types.float16)]
 
         self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
                              flags=flags)
@@ -567,7 +568,6 @@ class TestOperators(TestCase):
     def run_binop_complex(self, pyfunc, flags=force_pyobj_flags):
         x_operands = [-1.1 + 0.3j, 0.0 + 0.0j, 1.1j]
         y_operands = [-1.5 - 0.7j, 0.8j, 2.1 - 2.0j]
-
         types_list = [(types.complex64, types.complex64),
                       (types.complex128, types.complex128)]
 
@@ -588,6 +588,7 @@ class TestOperators(TestCase):
                               usecase_name=usecase_name, flags=flags):
                         runner = getattr(self, runner_name)
                         op_usecase = getattr(self.op, usecase_name)
+                        print(op_usecase)
                         runner(op_usecase, flags)
 
                     if nopython and 'array' in tp_name and not npm_array:

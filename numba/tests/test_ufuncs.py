@@ -123,6 +123,10 @@ class BaseUFuncTest(MemoryLeakMixin):
             (np.float64(0.0), types.float64),
             (np.float64(0.5), types.float64),
 
+            (np.float16(-0.5), types.float16),
+            (np.float16(0.0), types.float16),
+            (np.float16(0.5), types.float16),
+
             (np.array([0,1], dtype='u4'), types.Array(types.uint32, 1, 'C')),
             (np.array([0,1], dtype='u8'), types.Array(types.uint64, 1, 'C')),
             (np.array([-1,0,1], dtype='i4'), types.Array(types.int32, 1, 'C')),

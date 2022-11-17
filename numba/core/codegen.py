@@ -1429,8 +1429,9 @@ def get_host_cpu_features():
     else:
         if not config.ENABLE_AVX:
             # Disable all features with name starting with 'avx'
+            # except avx512fp16 which enables fp16 support
             for k in features:
-                if k.startswith('avx'):
+                if k.startswith('avx') and (k != 'avx512fp16'):
                     features[k] = False
 
         # Set feature attributes
