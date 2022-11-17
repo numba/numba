@@ -1164,7 +1164,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                 def __enter__(self):
                     return None
             Foo()
-        self.assertIn("__enter__", str(e.exception))
+        self.assertIn("Method '__enter__' is not supported.", str(e.exception))
 
 
 class TestJitClassOverloads(MemoryLeakMixin, TestCase):
