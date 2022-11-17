@@ -151,7 +151,7 @@ def _specialize_box(typ):
             and name.endswith("__")
             and name not in supported_dunders
         ):
-            raise TypeError("Method {0} is not supported".format(name))
+            raise TypeError(f"Method '{name}' is not supported.")
         dct[name] = _generate_method(name, func)
 
     # Inject static methods as class members
