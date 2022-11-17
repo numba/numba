@@ -366,7 +366,7 @@ class FloatModel(PrimitiveModel):
         elif fe_type == types.float64:
             be_type = ir.DoubleType()
         elif fe_type == types.float16:
-            be_type = ir.HalfType
+            be_type = ir.HalfType()
         else:
             raise NotImplementedError(fe_type)
         super(FloatModel, self).__init__(dmm, fe_type, be_type)
