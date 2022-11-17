@@ -92,7 +92,7 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
     else:
         signatures = None
 
-    if signatures:
+    if signatures is not None:
         if config.ENABLE_CUDASIM:
             def jitwrapper(func):
                 return FakeCUDAKernel(func, device=device, fastmath=fastmath)
