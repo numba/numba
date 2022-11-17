@@ -49,6 +49,8 @@ from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                       needs_subprocess)
 from numba.core.extending import register_jitable
 from numba.core.bytecode import _fix_LOAD_GLOBAL_arg
+from numba.misc import codetype
+
 import cmath
 import unittest
 
@@ -3342,33 +3344,9 @@ class TestPrangeBase(TestParforsBase):
             new_code = bytes(new_code)
 
         # create new code parts
-        co_args = [pyfunc_code.co_argcount]
-
-        if utils.PYVERSION >= (3, 8):
-            co_args.append(pyfunc_code.co_posonlyargcount)
-        co_args.append(pyfunc_code.co_kwonlyargcount)
-        co_args.extend([pyfunc_code.co_nlocals,
-                        pyfunc_code.co_stacksize,
-                        pyfunc_code.co_flags,
-                        new_code,
-                        pyfunc_code.co_consts,
-                        prange_names,
-                        pyfunc_code.co_varnames,
-                        pyfunc_code.co_filename,
-                        pyfunc_code.co_name])
-
-        if utils.PYVERSION >= (3, 11):
-            co_args.append(pyfunc_code.co_qualname)
-        co_args.extend([pyfunc_code.co_firstlineno,
-                        pyfunc_code.co_lnotab])
-        if utils.PYVERSION >= (3, 11):
-            co_args.append(pyfunc_code.co_exceptiontable)
-        co_args.extend([pyfunc_code.co_freevars,
-                        pyfunc_code.co_cellvars
-                        ])
-
         # create code object with prange mutation
-        prange_code = pytypes.CodeType(*co_args)
+        prange_code = codetype.copy_code_type(pyfunc_code, codestring=new_code,
+                                              names=prange_names)
 
         # get function
         pfunc = pytypes.FunctionType(prange_code, globals())
