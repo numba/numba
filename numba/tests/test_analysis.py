@@ -674,10 +674,15 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
                         pyfunc_code.co_names,
                         pyfunc_code.co_varnames,
                         pyfunc_code.co_filename,
-                        pyfunc_code.co_name,
-                        pyfunc_code.co_firstlineno,
-                        pyfunc_code.co_lnotab,
-                        pyfunc_code.co_freevars,
+                        pyfunc_code.co_name])
+
+        if utils.PYVERSION >= (3, 11):
+            co_args.append(pyfunc_code.co_qualname)
+        co_args.extend([pyfunc_code.co_firstlineno,
+                        pyfunc_code.co_lnotab])
+        if utils.PYVERSION >= (3, 11):
+            co_args.append(pyfunc_code.co_exceptiontable)
+        co_args.extend([pyfunc_code.co_freevars,
                         pyfunc_code.co_cellvars
                         ])
 
