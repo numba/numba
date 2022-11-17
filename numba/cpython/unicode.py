@@ -31,37 +31,19 @@ from numba._helperlib import c_helpers
 from numba.cpython.hashing import _Py_hash_t
 from numba.core.unsafe.bytes import memcpy_region
 from numba.core.errors import TypingError
-from numba.cpython.unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,
-                                           _Py_ISALNUM,
-                                           _PyUnicode_ToUpperFull,
-                                           _PyUnicode_ToLowerFull,
-                                           _PyUnicode_ToFoldedFull,
-                                           _PyUnicode_ToTitleFull,
-                                           _PyUnicode_IsPrintable,
-                                           _PyUnicode_IsSpace,
-                                           _Py_ISSPACE,
-                                           _PyUnicode_IsXidStart,
-                                           _PyUnicode_IsXidContinue,
-                                           _PyUnicode_IsCased,
-                                           _PyUnicode_IsCaseIgnorable,
-                                           _PyUnicode_IsUppercase,
-                                           _PyUnicode_IsLowercase,
-                                           _PyUnicode_IsLineBreak,
-                                           _Py_ISLINEBREAK,
-                                           _Py_ISLINEFEED,
-                                           _Py_ISCARRIAGERETURN,
-                                           _PyUnicode_IsTitlecase,
-                                           _Py_ISLOWER,
-                                           _Py_ISUPPER,
-                                           _Py_TAB,
-                                           _Py_LINEFEED,
-                                           _Py_CARRIAGE_RETURN,
-                                           _Py_SPACE,
-                                           _PyUnicode_IsAlpha,
-                                           _PyUnicode_IsNumeric,
-                                           _Py_ISALPHA,
-                                           _PyUnicode_IsDigit,
-                                           _PyUnicode_IsDecimalDigit)
+from numba.cpython.unicode_support import (
+    _Py_TOUPPER, _Py_TOLOWER, _Py_UCS4, _Py_ISALNUM, _PyUnicode_ToUpperFull,
+    _PyUnicode_ToLowerFull, _PyUnicode_ToFoldedFull, _PyUnicode_ToTitleFull,
+    _PyUnicode_IsPrintable, _PyUnicode_IsSpace, _Py_ISSPACE,
+    _PyUnicode_IsXidStart, _PyUnicode_IsXidContinue, _PyUnicode_IsCased,
+    _PyUnicode_IsCaseIgnorable, _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
+    _PyUnicode_IsLineBreak, _Py_ISLINEBREAK, _Py_ISLINEFEED,
+    _Py_ISCARRIAGERETURN, _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER,
+    _Py_TAB, _Py_LINEFEED, _Py_CARRIAGE_RETURN, _Py_SPACE, _PyUnicode_IsAlpha,
+    _PyUnicode_IsNumeric, _Py_ISALPHA, _PyUnicode_IsDigit,
+    _PyUnicode_IsDecimalDigit, _Ord_Zero, _PyUnicode_ToDecimalDigit, _Ord_Plus,
+    _Ord_Minus, _Ord_x, _Ord_o, _Ord_b, _Ord_B, _Ord_O, _Ord_X, _Ord_Underscore,
+)
 from numba.cpython import slicing
 
 
@@ -2102,7 +2084,7 @@ overload_method(types.UnicodeType, 'isprintable')(
     gen_isX(_PyUnicode_IsPrintable, False))
 
 # ------------------------------------------------------------------------------
-# String methods that apply a transformation to the characters themselves
+# String methods that apply a transformation from/to the characters themselves
 # ------------------------------------------------------------------------------
 
 
@@ -2464,82 +2446,159 @@ def integer_str(n):
         return impl
 
 
-MSG_INVALID_BASE = "get an unsupported base, expected 2, 8, or 16"
-MSG_INVALID_PREFIX = "str doesn't start with a consistent prefix"
-MSG_INVALID_NUMBER = "str isn't a valid integer with base"
-
-
-@register_jitable
-def _get_integer_with_base(s, base=10):
-    lower_bound = ord("0")
-    upper_bound = 0
-    if base == 2:
-        upper_bound = ord("1")
-    elif base == 8:
-        upper_bound = ord("7")
-    elif base >= 10:
-        upper_bound = ord("9")
-
-    num = 0
-    underline = ord("_")
-    for char in s:
-        ord_char = ord(char)
-        if underline == ord_char:
-            continue
-        else:
-            meet = False
-            if lower_bound <= ord_char <= upper_bound:
-                num = num * base + ord_char - lower_bound
-                meet = True
-            if base == 16:
-                if ord("a") <= ord_char <= ord("f"):
-                    num = num * base + ord_char - ord("a") + 10
-                    meet = True
-                elif ord("A") <= ord_char <= ord("F"):
-                    num = num * base + ord_char - ord("A") + 10
-                    meet = True
-            if not meet:
-                raise ValueError(MSG_INVALID_NUMBER)
-    return num
-
-
-@overload(int)
-def str_to_int(s):
-    if isinstance(s, types.UnicodeType):
-
-        def impl(s):
-            return _get_integer_with_base(s, base=10)
-
-        return impl
-
-
-@overload(int)
-def str_to_int_with_base(s, base):
-    if isinstance(s, types.UnicodeType) and isinstance(base, types.Integer):
-
-        def impl(s, base):
-            if base == 2:
-                if not s.startswith(("0b", "0B")):
-                    raise ValueError(MSG_INVALID_PREFIX)
-                return _get_integer_with_base(s[2:], base=2)
-            if base == 8:
-                if not s.startswith(("0o", "0O")):
-                    raise ValueError(MSG_INVALID_PREFIX)
-                return _get_integer_with_base(s[2:], base=8)
-            if base == 16:
-                if not s.startswith(("0x", "0X")):
-                    raise ValueError(MSG_INVALID_PREFIX)
-                return _get_integer_with_base(s[2:], base=16)
-            else:
-                raise ValueError(MSG_INVALID_BASE)
-
-        return impl
-
-
 @overload(str)
 def boolean_str(b):
     if isinstance(b, types.Boolean):
         return lambda b: "True" if b else "False"
+
+
+# Global error messages for conversion (unicode -> integer)
+
+
+# https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/unicodeobject.c#L8660    # noqa: E501
+def unicode_transform_decimal_and_space_to_ascii(u):
+    if u._is_ascii:
+        return u
+
+    length = u._length
+    ascii_u = _empty_string(PY_UNICODE_1BYTE_KIND, length, is_ascii=True)
+
+    for i in range(length):
+        ch = _get_code_point(u, i)
+        if ch < 127:
+            _set_code_point(ascii_u, i, ch)
+        elif _PyUnicode_IsSpace(ch):
+            _set_code_point(ascii_u, i, _Py_SPACE)
+        else:
+            decimal = _PyUnicode_ToDecimalDigit(ch)
+            if decimal < 0:
+                # why does cpython set code point for index i and i+1?
+                raise ValueError()
+            _set_code_point(ascii_u, i, _Ord_Zero + decimal)
+
+    return ascii_u
+
+
+# https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/longobject.c#L2289    # noqa: E501
+@register_jitable
+def long_from_binary_base(s, base):
+    assert 2 <= base <= 32 and base & (base - 1) == 0
+    ...
+
+
+# https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/longobject.c#L2479    # noqa: E501
+@register_jitable
+def long_from_non_binary_base(s, base):
+    ...
+
+
+@register_jitable
+def long_from_string_base(ascii_u, begin, base):
+    #
+
+
+    # conduct the real conversion
+    is_binary_base = base & (base - 1) == 0
+    if is_binary_base:
+        return long_from_binary_base(ascii_u, base)
+    else:
+        return long_from_non_binary_base(ascii_u, base)
+
+
+# https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/longobject.c#L2632    # noqa: E501
+@register_jitable
+def long_from_string(ascii_u, base):
+
+    # check base
+    assert base == 0 or 2 <= base <= 36
+
+    # skip space
+    i, length = 0, ascii_u._length
+    while i < length and _Py_ISSPACE(_get_code_point(ascii_u, i)):
+        i += 1
+
+    # skip +/-
+    sign = 0
+    ch = _get_code_point(ascii_u, i)
+    if ch == _Ord_Plus:
+        i += 1
+    elif ch == _Ord_Minus:
+        i += 1
+        sign = -1
+
+    # reselect base when it's 0
+    first_ch = _get_code_point(ascii_u, i)
+    second_ch = _get_code_point(ascii_u, i + 1)
+    error_if_nonzero = False
+    if base == 0:
+        if first_ch != _Ord_Zero:
+            base = 10
+        elif second_ch == _Ord_x or second_ch == _Ord_X:
+            base = 16
+        elif second_ch == _Ord_o or second_ch == _Ord_O:
+            base = 8
+        elif second_ch == _Ord_b or second_ch == _Ord_B:
+            base = 2
+        else:
+            error_if_nonzero = True
+            base = 10
+
+    # skip the prefix when base is 2, 8, or 16, or the first underscore
+    if first_ch == _Ord_Zero and (
+        (base == 16 and (second_ch == _Ord_x or second_ch == _Ord_X)) or
+        (base == 8 and (second_ch == _Ord_o or second_ch == _Ord_O)) or
+        (base == 2 and (second_ch == _Ord_b or second_ch == _Ord_B))
+    ):
+        i += 2
+        if _get_code_point(ascii_u, i) == _Ord_Underscore:
+            i += 1
+
+    # main workhorse
+    z = long_from_string_base(ascii_u, i, base)
+
+    # be consistent with cpython
+    if error_if_nonzero:
+        assert z == 0
+
+    # negate if sign is '-'
+    if sign == -1:
+        z = -z
+
+    return z
+
+
+# https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/longobject.c#L2856    # noqa: E501
+@register_jitable
+def py_long_from_unicode(u, base=10):
+    # TODO: _PyUnicode_TransformDecimalAndSpaceToASCII
+    ascii_u = unicode_transform_decimal_and_space_to_ascii(u)
+    # assert ascii_bytes is not None
+
+    result = long_from_string(ascii_u, base)
+
+    # TODO: null and validation checking
+    return result
+
+
+@overload(int)
+def str_to_int(u):
+    if isinstance(u, types.UnicodeType):
+
+        def impl(u):
+            return py_long_from_unicode(u, base=10)
+
+        return impl
+
+
+# TODO: support types.bytes and types.bytearray based on/inspired from this
+@overload(int)
+def str_to_int_with_base(u, base):
+    if isinstance(u, types.UnicodeType) and isinstance(base, types.Integer):
+
+        def impl(u, base):
+            return py_long_from_unicode(u, base=base)
+
+        return impl
 
 
 # ------------------------------------------------------------------------------

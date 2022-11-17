@@ -9,10 +9,7 @@ import unittest
 from numba.tests.support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
 from numba.core.errors import TypingError, UnsupportedError
 from numba.cpython.unicode import (
-    _MAX_UNICODE,
-    MSG_INVALID_BASE,
-    MSG_INVALID_PREFIX,
-    MSG_INVALID_NUMBER,
+    _MAX_UNICODE, _get_code_point,
 )
 from numba.core.types.functions import _header_lead
 from numba.extending import overload
@@ -2654,39 +2651,8 @@ class TestUnicodeAuxillary(BaseTest):
         self.assertIn(_header_lead, str(raises.exception))
 
     def test_int(self):
-        pyfunc = int_usecase
-        cfunc = njit(int_usecase)
-
-        s = ["1", "100_00", "00_100",
-             "0b1_1", "0B0_1_01",
-             "0o0_60", "0O00_00_015",
-             "0xaf_dE_939", "0X000_AF11"]
-        for item in s:
-            base = 10
-            if len(item) > 2:
-                if item[1] in "bB":
-                    base = 2
-                if item[1] in "oO":
-                    base = 8
-                if item[1] in "xX":
-                    base = 16
-            self.assertEqual(pyfunc(item, base), cfunc(item, base))
-
-    def test_int_invalid(self):
-        self.disable_leak_check()
-
-        cfunc = njit(int_usecase)
-
-        with self.assertRaisesRegex(ValueError, MSG_INVALID_BASE):
-            cfunc("0b1", base=3)
-
-        for item, base in zip(["101", "303", "a0a"], [2, 8, 16]):
-            with self.assertRaisesRegex(ValueError, MSG_INVALID_PREFIX):
-                cfunc(item, base=base)
-
-        for item, base in zip(["0b9", "0o9", "A", "0xG"], [2, 8, 10, 16]):
-            with self.assertRaisesRegex(ValueError, MSG_INVALID_NUMBER):
-                cfunc(item, base=base)
+        # TODO: move cpython testcases here
+        ...
 
     def test_unicode_type_mro(self):
         # see issue #5635
