@@ -2,6 +2,7 @@ import types
 
 from numba.core import utils
 
+
 def copy_code_type(code: types.CodeType, **kwargs) -> types.CodeType:
     """Copy CodeType with mutations.
 

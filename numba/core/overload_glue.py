@@ -8,6 +8,7 @@ from threading import RLock
 from collections import defaultdict
 
 from numba.core import errors
+from numba.misc import codetype
 
 
 class _OverloadWrapper(object):
@@ -39,10 +40,8 @@ class _OverloadWrapper(object):
         new_varnames = [*stub_code.co_varnames]
         new_varnames.extend(varnames)
         co_argcount = len(new_varnames)
-        co_args = [co_argcount]
         additional_co_nlocals = len(varnames)
 
-        from numba.misc import codetype
 
         new_code = codetype.copy_code_type(
             stub_code,
