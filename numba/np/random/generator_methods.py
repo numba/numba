@@ -965,14 +965,14 @@ def NumPyRandomGeneratorType_vonmises(inst, mu, kappa, size=None):
     if is_nonelike(size):
         def impl(inst, mu, kappa, size=None):
             check_arg_bounds(kappa)
-            return np.int64(random_vonmises(inst.bit_generator, mu, kappa))
+            return np.float64(random_vonmises(inst.bit_generator, mu, kappa))
         return impl
     else:
         check_size(size)
 
         def impl(inst, mu, kappa, size=None):
             check_arg_bounds(kappa)
-            out = np.empty(size, dtype=np.int64)
+            out = np.empty(size, dtype=np.float64)
             for i in np.ndindex(size):
                 out[i] = random_vonmises(inst.bit_generator, mu, kappa)
             return out
@@ -994,14 +994,14 @@ def NumPyRandomGeneratorType_gumbel(inst, loc=0.0, scale=1.0, size=None):
     if is_nonelike(size):
         def impl(inst, loc=0.0, scale=1.0, size=None):
             check_arg_bounds(scale)
-            return np.int64(random_gumbel(inst.bit_generator, loc, scale))
+            return np.float64(random_gumbel(inst.bit_generator, loc, scale))
         return impl
     else:
         check_size(size)
 
         def impl(inst, loc=0.0, scale=1.0, size=None):
             check_arg_bounds(scale)
-            out = np.empty(size, dtype=np.int64)
+            out = np.empty(size, dtype=np.float64)
             for i in np.ndindex(size):
                 out[i] = random_gumbel(inst.bit_generator, loc, scale)
             return out
