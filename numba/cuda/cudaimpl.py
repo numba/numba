@@ -544,6 +544,14 @@ def fp16_fabs_impl(context, builder, sig, args):
     return context.compile_internal(builder, fp16_fabs, sig, args, )
 
 
+@lower(math.trunc, types.float16)
+def fp16_trunc_impl(context, builder, sig, args):
+    def fp16_trunc(x):
+        return cuda.fp16.htrunc(x)
+
+    return context.compile_internal(builder, fp16_trunc, sig, args, )
+
+
 _fp16_cmp = """{{
           .reg .pred __$$f16_cmp_tmp;
           setp.{op}.f16 __$$f16_cmp_tmp, $1, $2;
