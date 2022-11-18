@@ -199,6 +199,11 @@ def math_radians(A, B):
     B[i] = math.radians(A[i])
 
 
+def math_trunc(A, B):
+    i = cuda.grid(1)
+    B[i] = math.trunc(A[i])
+
+
 def math_pow_binop(A, B, C):
     i = cuda.grid(1)
     C[i] = A[i] ** B[i]
@@ -240,8 +245,10 @@ class TestCudaMath(CUDATestCase):
         # the tightest under which the tests will pass.
         if npdtype == np.float64:
             rtol = 1e-13
-        else:
+        elif npdtype == np.float32:
             rtol = 1e-6
+        else:
+            rtol = 1e-3
         np.testing.assert_allclose(npfunc(A), B, rtol=rtol)
 
     def unary_bool_special_values(self, func, npfunc, npdtype, npmtype):
@@ -390,6 +397,7 @@ class TestCudaMath(CUDATestCase):
         self.unary_template_float16(math_sqrt, np.sqrt)
         self.unary_template_float16(math_ceil, np.ceil)
         self.unary_template_float16(math_floor, np.floor)
+        self.unary_template_float16(math_trunc, np.trunc)
 
     #---------------------------------------------------------------------------
     # test_math_sin
