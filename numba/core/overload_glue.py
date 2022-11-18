@@ -42,7 +42,6 @@ class _OverloadWrapper(object):
         co_argcount = len(new_varnames)
         additional_co_nlocals = len(varnames)
 
-
         new_code = codetype.copy_code_type(
             stub_code,
             argcount=co_argcount,
