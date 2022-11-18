@@ -611,16 +611,18 @@ execution logic.
   values from useful distributions. Numba will ``unbox`` the :py:class:`Generator` objects
   and will maintain a reference to the underlying :py:class:`BitGenerator` objects using NumPy's
   ``ctypes`` interface bindings. Hence :py:class:`Generator` objects can cross the JIT boundary
-  and their functions be used within Numba-Jit code. Note that since only references
-  to :py:class:`BitGenerator` objects are maintained, any change to the state of a particular
-  :py:class:`Generator` object outside Numba code would affect the state of :py:class:`Generator`
-  inside the Numba code.
+  and their functions be used within Numba-Jit code.
 
 .. literalinclude:: ../../../numba/tests/doc_examples/test_numpy_generators.py
    :language: python
    :start-after: magictoken.npgen_usage.begin
    :end-before: magictoken.npgen_usage.end
    :dedent: 8
+
+.. warning::
+   Note that since only references to :py:class:`BitGenerator` objects are maintained,
+   any change to the state of a particular :py:class:`Generator` object outside Numba
+   code would affect the state of :py:class:`Generator` inside the Numba code.
 
 The following :py:class:`Generator` methods are supported:
 
@@ -630,6 +632,7 @@ The following :py:class:`Generator` methods are supported:
 * :func:`numpy.random.Generator().f()` (*)
 * :func:`numpy.random.Generator().gamma()` (*)
 * :func:`numpy.random.Generator().geometric()` (*)
+* :func:`numpy.random.Generator().gumbel()`
 * :func:`numpy.random.Generator().integers()` (Both `low` and `high` are required
   arguments. Array values for low and high are currently not supported.)
 * :func:`numpy.random.Generator().laplace()` (*)
@@ -660,21 +663,11 @@ The following :py:class:`Generator` methods are supported:
 * :func:`numpy.random.Generator().standard_t()` (*)
 * :func:`numpy.random.Generator().triangular()`
 * :func:`numpy.random.Generator().uniform()` (*)
+* :func:`numpy.random.Generator().von_mises()`
 * :func:`numpy.random.Generator().wald()` (*)
 * :func:`numpy.random.Generator().weibull()`
 * :func:`numpy.random.Generator().zipf()`
 
-.. note::
-  Users can expect Numba to replicate NumPy's results to within
-  the last few (at max 5) ULPs for Linux-x86_64, Windows-x86_64 and macOS.
-
-  For distributions marked above with `(*)`: Due to instruction selection
-  differences across compilers, there may be discrepancies in the order of
-  1000s of ULPs on 32-bit architectures as well as linux-aarch64 and
-  linux-ppc64le platforms. The differences are unlikely to impact the "quality"
-  of the random number generation as they occur through changes in
-  rounding that happen when fused-multiply-add is used instead of multiplication
-  followed by addition.
 
 RandomState and legacy Random number generation
 '''''''''''''''''''''''''''''''''''''''''''''''

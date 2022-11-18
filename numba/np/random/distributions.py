@@ -4,8 +4,9 @@ of random distributions.
 """
 
 import numpy as np
+import platform
 
-from numba.core.extending import register_jitable
+from numba.core.config import IS_32BITS
 from numba.np.random._constants import (wi_double, ki_double,
                                         ziggurat_nor_r, fi_double,
                                         wi_float, ki_float,
@@ -15,52 +16,59 @@ from numba.np.random._constants import (wi_double, ki_double,
                                         ziggurat_exp_r, fe_double,
                                         we_float, ke_float,
                                         ziggurat_exp_r_f, fe_float,
-                                        INT64_MAX, ziggurat_nor_inv_r)
+                                        INT64_MAX, ziggurat_nor_inv_r,
+                                        M_PI)
 from numba.np.random.generator_core import (next_double, next_float,
                                             next_uint32, next_uint64)
-from numba import float32, int64
+from numba import float32, int64, njit
 from numba.np.numpy_support import numpy_version
 # All of the following implementations are direct translations from:
 # https://github.com/numpy/numpy/blob/7cfef93c77599bd387ecc6a15d186c5a46024dac/numpy/random/src/distributions/distributions.c
 
 
+if IS_32BITS or platform.machine() in ['ppc64le', 'aarch64']:
+    fastmath_args = {'contract':True}
+else:
+    fastmath_args = {}
+
+
 if numpy_version >= (1, 21):
-    @register_jitable
+    @njit
     def np_log1p(x):
         return np.log1p(x)
 
-    @register_jitable
+    @njit
     def np_log1pf(x):
         return np.log1p(float32(x))
 
-    @register_jitable
+    @njit
     def random_rayleigh(bitgen, mode):
         return mode * np.sqrt(2.0 * random_standard_exponential(bitgen))
 else:
-    @register_jitable
+    @njit
     def np_log1p(x):
         return np.log(1.0 + x)
 
-    @register_jitable
+    @njit
     def np_log1pf(x):
         f32_one = np.float32(1.0)
         return np.log(f32_one + float32(x))
 
-    @register_jitable
+    @njit
     def random_rayleigh(bitgen, mode):
         return mode * np.sqrt(-2.0 * np.log(1.0 - next_double(bitgen)))
 
 if numpy_version >= (1, 22):
-    @register_jitable
+    @njit
     def np_expm1(x):
         return np.expm1(x)
 else:
-    @register_jitable
+    @njit
     def np_expm1(x):
         return np.exp(x) - 1.0
 
 
-@register_jitable
+@njit
 def random_standard_normal(bitgen):
     while 1:
         r = next_uint64(bitgen)
@@ -89,7 +97,7 @@ def random_standard_normal(bitgen):
                 return x
 
 
-@register_jitable
+@njit
 def random_standard_normal_f(bitgen):
     while 1:
         r = next_uint32(bitgen)
@@ -117,7 +125,7 @@ def random_standard_normal_f(bitgen):
                 return x
 
 
-@register_jitable
+@njit
 def random_standard_exponential(bitgen):
     while 1:
         ri = next_uint64(bitgen)
@@ -135,7 +143,7 @@ def random_standard_exponential(bitgen):
                 return x
 
 
-@register_jitable
+@njit
 def random_standard_exponential_f(bitgen):
     while 1:
         ri = next_uint32(bitgen)
@@ -154,17 +162,17 @@ def random_standard_exponential_f(bitgen):
                 return x
 
 
-@register_jitable
+@njit
 def random_standard_exponential_inv(bitgen):
     return -np_log1p(-next_double(bitgen))
 
 
-@register_jitable
+@njit
 def random_standard_exponential_inv_f(bitgen):
     return -np.log(float32(1.0) - next_float(bitgen))
 
 
-@register_jitable
+@njit(fastmath=fastmath_args)
 def random_standard_gamma(bitgen, shape):
     if (shape == 1.0):
         return random_standard_exponential(bitgen)
@@ -202,7 +210,7 @@ def random_standard_gamma(bitgen, shape):
                 return (b * V)
 
 
-@register_jitable
+@njit(fastmath=fastmath_args)
 def random_standard_gamma_f(bitgen, shape):
     f32_one = float32(1.0)
     shape = float32(shape)
@@ -244,40 +252,40 @@ def random_standard_gamma_f(bitgen, shape):
                 return float32(b * V)
 
 
-@register_jitable
+@njit(fastmath=fastmath_args)
 def random_normal(bitgen, loc, scale):
     scaled_normal = scale * random_standard_normal(bitgen)
     return loc + scaled_normal
 
 
-@register_jitable
+@njit(fastmath=fastmath_args)
 def random_normal_f(bitgen, loc, scale):
     scaled_normal = float32(scale * random_standard_normal_f(bitgen))
     return float32(loc + scaled_normal)
 
 
-@register_jitable
+@njit
 def random_exponential(bitgen, scale):
     return scale * random_standard_exponential(bitgen)
 
 
-@register_jitable
+@njit(fastmath=fastmath_args)
 def random_uniform(bitgen, lower, range):
     scaled_uniform = range * next_double(bitgen)
     return lower + scaled_uniform
 
 
-@register_jitable
+@njit
 def random_gamma(bitgen, shape, scale):
     return scale * random_standard_gamma(bitgen, shape)
 
 
-@register_jitable
+@njit
 def random_gamma_f(bitgen, shape, scale):
     return float32(scale * random_standard_gamma_f(bitgen, shape))
 
 
-@register_jitable
+@njit(fastmath=fastmath_args)
 def random_beta(bitgen, a, b):
     if a <= 1.0 and b <= 1.0:
         while 1:
@@ -303,40 +311,40 @@ def random_beta(bitgen, a, b):
         return Ga / (Ga + Gb)
 
 
-@register_jitable
+@njit
 def random_chisquare(bitgen, df):
     return 2.0 * random_standard_gamma(bitgen, df / 2.0)
 
 
-@register_jitable
+@njit
 def random_f(bitgen, dfnum, dfden):
     return ((random_chisquare(bitgen, dfnum) * dfden) /
             (random_chisquare(bitgen, dfden) * dfnum))
 
 
-@register_jitable
+@njit
 def random_standard_cauchy(bitgen):
     return random_standard_normal(bitgen) / random_standard_normal(bitgen)
 
 
-@register_jitable
+@njit
 def random_pareto(bitgen, a):
     return np_expm1(random_standard_exponential(bitgen) / a)
 
 
-@register_jitable
+@njit
 def random_weibull(bitgen, a):
     if (a == 0.0):
         return 0.0
     return pow(random_standard_exponential(bitgen), 1. / a)
 
 
-@register_jitable
+@njit
 def random_power(bitgen, a):
     return pow(-np_expm1(-random_standard_exponential(bitgen)), 1. / a)
 
 
-@register_jitable
+@njit(fastmath=fastmath_args)
 def random_laplace(bitgen, loc, scale):
     U = next_double(bitgen)
     while U <= 0:
@@ -348,7 +356,15 @@ def random_laplace(bitgen, loc, scale):
     return U
 
 
-@register_jitable
+@njit(fastmath=fastmath_args)
+def random_gumbel(bitgen, loc, scale):
+    U = 1.0 - next_double(bitgen)
+    while U >= 1.0:
+        U = 1.0 - next_double(bitgen)
+    return loc - scale * np.log(-np.log(U))
+
+
+@njit(fastmath=fastmath_args)
 def random_logistic(bitgen, loc, scale):
     U = next_double(bitgen)
     while U <= 0.0:
@@ -356,19 +372,19 @@ def random_logistic(bitgen, loc, scale):
     return loc + scale * np.log(U / (1.0 - U))
 
 
-@register_jitable
+@njit
 def random_lognormal(bitgen, mean, sigma):
     return np.exp(random_normal(bitgen, mean, sigma))
 
 
-@register_jitable
+@njit
 def random_standard_t(bitgen, df):
     num = random_standard_normal(bitgen)
     denom = random_standard_gamma(bitgen, df / 2)
     return np.sqrt(df / 2) * num / np.sqrt(denom)
 
 
-@register_jitable
+@njit(fastmath=fastmath_args)
 def random_wald(bitgen, mean, scale):
     mu_2l = mean / (2 * scale)
     Y = random_standard_normal(bitgen)
@@ -381,7 +397,52 @@ def random_wald(bitgen, mean, scale):
         return mean * mean / X
 
 
-@register_jitable
+@njit(fastmath=fastmath_args)
+def random_vonmises(bitgen, mu, kappa):
+    if (kappa < 1e-8):
+        return M_PI * (2 * next_double(bitgen) - 1)
+    else:
+        if (kappa < 1e-5):
+            s = (1. / kappa + kappa)
+        else:
+            if (kappa <= 1e6):
+                r = 1 + np.sqrt(1 + 4 * kappa * kappa)
+                rho = (r - np.sqrt(2 * r)) / (2 * kappa)
+                s = (1 + rho * rho) / (2 * rho)
+            else:
+                result = mu + np.sqrt(1. / kappa) * \
+                    random_standard_normal(bitgen)
+                if (result < -M_PI):
+                    result += 2 * M_PI
+                if (result > M_PI):
+                    result -= 2 * M_PI
+                return result
+
+        while 1:
+            U = next_double(bitgen)
+            Z = np.cos(M_PI * U)
+            W = (1 + s * Z) / (s + Z)
+            Y = kappa * (s - W)
+            V = next_double(bitgen)
+            if ((Y * (2 - Y) - V >= 0) or (np.log(Y / V) + 1 - Y >= 0)):
+                break
+
+        U = next_double(bitgen)
+
+        result = np.arccos(W)
+        if (U < 0.5):
+            result = -result
+        result += mu
+        neg = (result < 0)
+        mod = np.fabs(result)
+        mod = (np.fmod(mod + M_PI, 2 * M_PI) - M_PI)
+        if (neg):
+            mod *= -1
+
+        return mod
+
+
+@njit(fastmath=fastmath_args)
 def random_geometric_search(bitgen, p):
     X = 1
     sum = prod = p
@@ -394,12 +455,12 @@ def random_geometric_search(bitgen, p):
     return X
 
 
-@register_jitable
+@njit
 def random_geometric_inversion(bitgen, p):
     return np.ceil(-random_standard_exponential(bitgen) / np.log1p(-p))
 
 
-@register_jitable
+@njit
 def random_geometric(bitgen, p):
     if (p >= 0.333333333333333333333333):
         return random_geometric_search(bitgen, p)
@@ -407,7 +468,7 @@ def random_geometric(bitgen, p):
         return random_geometric_inversion(bitgen, p)
 
 
-@register_jitable
+@njit(fastmath=fastmath_args)
 def random_zipf(bitgen, a):
     am1 = a - 1.0
     b = pow(2.0, am1)
@@ -423,7 +484,7 @@ def random_zipf(bitgen, a):
             return X
 
 
-@register_jitable
+@njit(fastmath=fastmath_args)
 def random_triangular(bitgen, left, mode,
                       right):
     base = right - left
@@ -439,7 +500,7 @@ def random_triangular(bitgen, left, mode,
         return right - np.sqrt((1.0 - U) * rightprod)
 
 
-@register_jitable
+@njit(fastmath=fastmath_args)
 def random_loggam(x):
     a = [8.333333333333333e-02, -2.777777777777778e-03,
          7.936507936507937e-04, -5.952380952380952e-04,
@@ -473,7 +534,7 @@ def random_loggam(x):
     return gl
 
 
-@register_jitable
+@njit(fastmath=fastmath_args)
 def random_poisson_mult(bitgen, lam):
     enlam = np.exp(-lam)
     X = 0
@@ -487,7 +548,7 @@ def random_poisson_mult(bitgen, lam):
             return X
 
 
-@register_jitable
+@njit(fastmath=fastmath_args)
 def random_poisson_ptrs(bitgen, lam):
 
     slam = np.sqrt(lam)
@@ -515,7 +576,7 @@ def random_poisson_ptrs(bitgen, lam):
             return k
 
 
-@register_jitable
+@njit(fastmath=fastmath_args)
 def random_poisson(bitgen, lam):
     if (lam >= 10):
         return random_poisson_ptrs(bitgen, lam)
@@ -525,13 +586,13 @@ def random_poisson(bitgen, lam):
         return random_poisson_mult(bitgen, lam)
 
 
-@register_jitable
+@njit
 def random_negative_binomial(bitgen, n, p):
     Y = random_gamma(bitgen, n, (1 - p) / p)
     return random_poisson(bitgen, Y)
 
 
-@register_jitable
+@njit
 def random_noncentral_chisquare(bitgen, df, nonc):
     if np.isnan(nonc):
         return np.nan
@@ -548,13 +609,13 @@ def random_noncentral_chisquare(bitgen, df, nonc):
         return random_chisquare(bitgen, df + 2 * i)
 
 
-@register_jitable
+@njit
 def random_noncentral_f(bitgen, dfnum, dfden, nonc):
     t = random_noncentral_chisquare(bitgen, dfnum, nonc) * dfden
     return t / (random_chisquare(bitgen, dfden) * dfnum)
 
 
-@register_jitable
+@njit
 def random_logseries(bitgen, p):
     r = np_log1p(-p)
 

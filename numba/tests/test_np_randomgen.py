@@ -1,25 +1,15 @@
 import numba
 import numpy as np
 import sys
-import platform
 import itertools
 
 from numba import types
-from numba.core.config import IS_32BITS
 from numba.tests.support import TestCase, MemoryLeakMixin
 from numba.np.random.generator_methods import _get_proper_func
 from numba.np.random.generator_core import next_uint32, next_uint64, next_double
 from numpy.random import MT19937, Generator
 from numba.core.errors import TypingError
 from numba.tests.support import run_in_new_process_caching, SerialMixin
-
-
-# The following logic is to mitigate:
-# https://github.com/numba/numba/pull/8038#issuecomment-1165571368
-if IS_32BITS or platform.machine() in ['ppc64le', 'aarch64']:
-    adjusted_ulp_prec = 2048
-else:
-    adjusted_ulp_prec = 5
 
 
 class TestHelperFuncs(TestCase):
@@ -463,8 +453,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                     with self.subTest(_size=_size, _dtype=_dtype,
                                       _bitgen=_bitgen):
                         self.check_numpy_parity(dist_func, _bitgen,
-                                                None, _size, _dtype,
-                                                adjusted_ulp_prec)
+                                                None, _size, _dtype)
         dist_func = lambda x, shape, size, dtype:\
             x.standard_gamma(shape=shape, size=size, dtype=dtype)
         self._check_invalid_types(dist_func, ['shape', 'size', 'dtype'],
@@ -481,16 +470,14 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         dist_func = lambda x, size, dtype:x.normal()
         with self.subTest():
             self.check_numpy_parity(dist_func, test_size=None,
-                                    test_dtype=None,
-                                    ulp_prec=adjusted_ulp_prec)
+                                    test_dtype=None)
 
         dist_func = lambda x, size, dtype:x.normal(loc=1.5, scale=3, size=size)
         for _size in test_sizes:
             for _bitgen in bitgen_types:
                 with self.subTest(_size=_size, _bitgen=_bitgen):
                     self.check_numpy_parity(dist_func, _bitgen,
-                                            None, _size, None,
-                                            adjusted_ulp_prec)
+                                            None, _size, None)
         dist_func = lambda x, loc, scale, size:\
             x.normal(loc=loc, scale=scale, size=size)
         self._check_invalid_types(dist_func, ['loc', 'scale', 'size'],
@@ -507,16 +494,14 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         dist_func = lambda x, size, dtype:x.uniform()
         with self.subTest():
             self.check_numpy_parity(dist_func, test_size=None,
-                                    test_dtype=None,
-                                    ulp_prec=adjusted_ulp_prec)
+                                    test_dtype=None)
 
         dist_func = lambda x, size, dtype:x.uniform(low=1.5, high=3, size=size)
         for _size in test_sizes:
             for _bitgen in bitgen_types:
                 with self.subTest(_size=_size, _bitgen=_bitgen):
                     self.check_numpy_parity(dist_func, _bitgen,
-                                            None, _size, None,
-                                            adjusted_ulp_prec)
+                                            None, _size, None)
         dist_func = lambda x, low, high, size:\
             x.uniform(low=low, high=high, size=size)
         self._check_invalid_types(dist_func, ['low', 'high', 'size'],
@@ -559,8 +544,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             for _bitgen in bitgen_types:
                 with self.subTest(_size=_size, _bitgen=_bitgen):
                     self.check_numpy_parity(dist_func, _bitgen,
-                                            None, _size, None,
-                                            adjusted_ulp_prec)
+                                            None, _size, None)
         dist_func = lambda x, shape, scale, size:\
             x.gamma(shape=shape, scale=scale, size=size)
         self._check_invalid_types(dist_func, ['shape', 'scale', 'size'],
@@ -578,8 +562,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             for _bitgen in bitgen_types:
                 with self.subTest(_size=_size, _bitgen=_bitgen):
                     self.check_numpy_parity(dist_func, _bitgen,
-                                            None, _size, None,
-                                            adjusted_ulp_prec)
+                                            None, _size, None)
 
         dist_func = lambda x, a, b, size:x.beta(a=a, b=b, size=size)
         self._check_invalid_types(dist_func, ['a', 'b', 'size'],
@@ -597,8 +580,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             for _bitgen in bitgen_types:
                 with self.subTest(_size=_size, _bitgen=_bitgen):
                     self.check_numpy_parity(dist_func, _bitgen,
-                                            None, _size, None,
-                                            adjusted_ulp_prec)
+                                            None, _size, None)
 
         dist_func = lambda x, dfnum, dfden, size:\
             x.f(dfnum=dfnum, dfden=dfden, size=size)
@@ -617,8 +599,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             for _bitgen in bitgen_types:
                 with self.subTest(_size=_size, _bitgen=_bitgen):
                     self.check_numpy_parity(dist_func, _bitgen,
-                                            None, _size, None,
-                                            adjusted_ulp_prec)
+                                            None, _size, None)
 
         dist_func = lambda x, df, size:\
             x.chisquare(df=df, size=size)
@@ -714,8 +695,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         dist_func = lambda x, size, dtype:x.laplace()
         with self.subTest():
             self.check_numpy_parity(dist_func, test_size=None,
-                                    test_dtype=None,
-                                    ulp_prec=adjusted_ulp_prec)
+                                    test_dtype=None)
 
         dist_func = lambda x, size, dtype:\
             x.laplace(loc=1.0, scale=1.5, size=size)
@@ -723,11 +703,35 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             for _bitgen in bitgen_types:
                 with self.subTest(_size=_size, _bitgen=_bitgen):
                     self.check_numpy_parity(dist_func, _bitgen,
-                                            None, _size, None,
-                                            adjusted_ulp_prec)
+                                            None, _size, None)
 
         dist_func = lambda x, loc, scale, size:\
             x.laplace(loc=loc, scale=scale, size=size)
+        self._check_invalid_types(dist_func, ['loc', 'scale', 'size'],
+                                  [1.0, 1.5, (1,)], ['x', 'x', ('x',)])
+
+    def test_gumbel(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        # Test with no arguments
+        dist_func = lambda x, size, dtype:x.gumbel()
+        with self.subTest():
+            self.check_numpy_parity(dist_func, test_size=None,
+                                    test_dtype=None)
+
+        dist_func = lambda x, size, dtype:x.gumbel(loc=1.0,scale=1.5, size=size)
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None)
+
+        dist_func = lambda x, loc, scale, size:\
+            x.gumbel(loc=loc, scale=scale, size=size)
         self._check_invalid_types(dist_func, ['loc', 'scale', 'size'],
                                   [1.0, 1.5, (1,)], ['x', 'x', ('x',)])
 
@@ -742,8 +746,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         dist_func = lambda x, size, dtype:x.logistic()
         with self.subTest():
             self.check_numpy_parity(dist_func, test_size=None,
-                                    test_dtype=None,
-                                    ulp_prec=adjusted_ulp_prec)
+                                    test_dtype=None)
 
         dist_func = lambda x, size, dtype:\
             x.logistic(loc=1.0,scale=1.5, size=size)
@@ -751,8 +754,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             for _bitgen in bitgen_types:
                 with self.subTest(_size=_size, _bitgen=_bitgen):
                     self.check_numpy_parity(dist_func, _bitgen,
-                                            None, _size, None,
-                                            adjusted_ulp_prec)
+                                            None, _size, None)
 
         dist_func = lambda x, loc, scale, size:\
             x.logistic(loc=loc, scale=scale, size=size)
@@ -770,8 +772,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         dist_func = lambda x, size, dtype:x.lognormal()
         with self.subTest():
             self.check_numpy_parity(dist_func, test_size=None,
-                                    test_dtype=None,
-                                    ulp_prec=adjusted_ulp_prec)
+                                    test_dtype=None)
 
         dist_func = lambda x, size, dtype:\
             x.lognormal(mean=5.0, sigma=1.5, size=size)
@@ -779,8 +780,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             for _bitgen in bitgen_types:
                 with self.subTest(_size=_size, _bitgen=_bitgen):
                     self.check_numpy_parity(dist_func, _bitgen,
-                                            None, _size, None,
-                                            adjusted_ulp_prec)
+                                            None, _size, None)
 
         dist_func = lambda x, mean, sigma, size:\
             x.lognormal(mean=mean, sigma=sigma, size=size)
@@ -823,8 +823,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             for _bitgen in bitgen_types:
                 with self.subTest(_size=_size, _bitgen=_bitgen):
                     self.check_numpy_parity(dist_func, _bitgen,
-                                            None, _size, None,
-                                            adjusted_ulp_prec)
+                                            None, _size, None)
 
         dist_func = lambda x, df, size:x.standard_t(df=df, size=size)
         self._check_invalid_types(dist_func, ['df', 'size'],
@@ -842,13 +841,32 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             for _bitgen in bitgen_types:
                 with self.subTest(_size=_size, _bitgen=_bitgen):
                     self.check_numpy_parity(dist_func, _bitgen,
-                                            None, _size, None,
-                                            adjusted_ulp_prec)
+                                            None, _size, None)
 
         dist_func = lambda x, mean, scale, size:\
             x.wald(mean=mean, scale=scale, size=size)
         self._check_invalid_types(dist_func, ['mean', 'scale', 'size'],
                                   [1.0, 1.5, (1,)], ['x', 'x', ('x',)])
+
+    def test_vonmises(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:\
+            x.vonmises(mu=5.0, kappa=1.5, size=size)
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None)
+
+        dist_func = lambda x, mu, kappa, size:\
+            x.vonmises(mu=mu, kappa=kappa, size=size)
+        self._check_invalid_types(dist_func, ['mu', 'kappa', 'size'],
+                                  [5, 1, (1,)], ['x', 'x', ('x',)])
 
     def test_geometric(self):
         # For this test dtype argument is never used, so we pass [None] as dtype
@@ -862,8 +880,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             for _bitgen in bitgen_types:
                 with self.subTest(_size=_size, _bitgen=_bitgen):
                     self.check_numpy_parity(dist_func, _bitgen,
-                                            None, _size, None,
-                                            adjusted_ulp_prec)
+                                            None, _size, None)
 
         dist_func = lambda x, p, size:x.geometric(p=p, size=size)
         self._check_invalid_types(dist_func, ['p', 'size'],
@@ -919,8 +936,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             for _bitgen in bitgen_types:
                 with self.subTest(_size=_size, _bitgen=_bitgen):
                     self.check_numpy_parity(dist_func, _bitgen,
-                                            None, _size, None,
-                                            adjusted_ulp_prec)
+                                            None, _size, None)
 
         dist_func = lambda x, lam, size:x.poisson(lam=lam, size=size)
         self._check_invalid_types(dist_func, ['lam', 'size'],
@@ -939,8 +955,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             for _bitgen in bitgen_types:
                 with self.subTest(_size=_size, _bitgen=_bitgen):
                     self.check_numpy_parity(dist_func, _bitgen,
-                                            None, _size, None,
-                                            adjusted_ulp_prec)
+                                            None, _size, None)
 
         dist_func = lambda x, n, p, size:\
             x.negative_binomial(n=n, p=p, size=size)
@@ -1109,8 +1124,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         for _size, _bitgen in itertools.product(test_sizes, bitgen_types):
             with self.subTest(_size=_size, _bitgen=_bitgen):
                 self.check_numpy_parity(dist_func, _bitgen,
-                                        None, _size, None,
-                                        adjusted_ulp_prec)
+                                        None, _size, None)
 
         dist_func = lambda x, dfnum, dfden, nonc, size:\
             x.noncentral_f(dfnum=dfnum, dfden=dfden, nonc=nonc, size=size)
