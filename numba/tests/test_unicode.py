@@ -1,18 +1,15 @@
 # -*- coding: utf-8 -*-
-from itertools import product
+import unittest
 from itertools import permutations
+from itertools import product
 
 from numba import njit
 from numba.core import types
-import unittest
-
-from numba.tests.support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
 from numba.core.errors import TypingError, UnsupportedError
-from numba.cpython.unicode import (
-    _MAX_UNICODE, _get_code_point,
-)
 from numba.core.types.functions import _header_lead
+from numba.cpython.unicode import _MAX_UNICODE
 from numba.extending import overload
+from numba.tests.support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
 
 
 def isascii(s):

@@ -43,6 +43,7 @@ from numba.cpython.unicode_support import (
     _PyUnicode_IsNumeric, _Py_ISALPHA, _PyUnicode_IsDigit,
     _PyUnicode_IsDecimalDigit, _Ord_Zero, _PyUnicode_ToDecimalDigit, _Ord_Plus,
     _Ord_Minus, _Ord_x, _Ord_o, _Ord_b, _Ord_B, _Ord_O, _Ord_X, _Ord_Underscore,
+    _PyLong_DigitValue, _Py_CHARMASK,
 )
 from numba.cpython import slicing
 
@@ -2481,28 +2482,89 @@ def unicode_transform_decimal_and_space_to_ascii(u):
 
 # https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/longobject.c#L2289    # noqa: E501
 @register_jitable
-def long_from_binary_base(s, base):
-    assert 2 <= base <= 32 and base & (base - 1) == 0
-    ...
+def long_from_binary_base(ascii_u, start, end, digits, base):
+    bits_per_char, n = -1, base
+    while n > 0:
+        bits_per_char += 1
+        n >>= 1
+
+    # TODO: check if the string is too large or the calculation overflows
+    bits_in_accum, accum = 0, 0
+    p = end - 1
+    # from the least to the most significant
+    while p >= start:
+        ch = _get_code_point(ascii_u, p)
+        p -= 1
+        if ch == _Ord_Underscore:
+            continue
+        k = _PyLong_DigitValue[_Py_CHARMASK(ch)]
+        assert 0 <= k < base
+        accum |= k << bits_in_accum
+        bits_in_accum += bits_per_char
+
+    return accum
 
 
 # https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/longobject.c#L2479    # noqa: E501
 @register_jitable
-def long_from_non_binary_base(s, base):
-    ...
+def long_from_non_binary_base(ascii_u, start, end, digits, base):
+    accum = 0
+    p = start
+    # from the most significant to the least
+    # TODO: check if the string is too large or the calculation overflows
+    while p < end:
+        ch = _get_code_point(ascii_u, p)
+        p += 1
+        if ch == _Ord_Underscore:
+            continue
+        k = _PyLong_DigitValue[_Py_CHARMASK(ch)]
+        assert 0 <= k < base
+        accum = accum * base + k
+
+    return accum
 
 
+# https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/longobject.c#L2725    # noqa: E501
 @register_jitable
 def long_from_string_base(ascii_u, begin, base):
     #
+    start = begin
+    if _get_code_point(ascii_u, start) == _Ord_Underscore:
+        raise ValueError()
 
+    digits = prev = 0
+    end = begin
+    ch = _get_code_point(ascii_u, end)
+    while ch == _Ord_Underscore or _PyLong_DigitValue[_Py_CHARMASK(ch)] < base:
+        if ch == _Ord_Underscore:
+            if prev == _Ord_Underscore:
+                raise ValueError()
+        else:
+            digits += 1
+        prev = ch
+        end += 1
+        ch = _get_code_point(ascii_u, end)
+
+    if prev == _Ord_Underscore:
+        raise ValueError()
+
+    if start == end:
+        raise ValueError()
+
+    p = end
+    length = ascii_u._length
+    while p < length and _Py_ISSPACE(_get_code_point(ascii_u, p)):
+        p += 1
+    if p != length:
+        raise ValueError()
 
     # conduct the real conversion
     is_binary_base = base & (base - 1) == 0
     if is_binary_base:
-        return long_from_binary_base(ascii_u, base)
+        return long_from_binary_base(ascii_u, start, end, digits, base)
     else:
-        return long_from_non_binary_base(ascii_u, base)
+        # TODO: limit the size to avoid excessive computation attacks
+        return long_from_non_binary_base(ascii_u, start, end, digits, base)
 
 
 # https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/longobject.c#L2632    # noqa: E501
