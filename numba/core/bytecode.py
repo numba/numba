@@ -313,8 +313,11 @@ class ByteCodePy311(ByteCode):
 
         def fixup_eh(ent):
             from dis import _ExceptionTableEntry
+            # Patch up the exception table offset
+            # because we add a NOP in _patched_opargs
             out = _ExceptionTableEntry(
-                start=ent.start + 2, end=ent.end + 2, target=ent.target + 2,
+                start=ent.start + _FIXED_OFFSET, end=ent.end + _FIXED_OFFSET,
+                target=ent.target + _FIXED_OFFSET,
                 depth=ent.depth, lasti=ent.lasti,
             )
             return out
