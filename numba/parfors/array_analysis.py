@@ -1757,6 +1757,13 @@ class ArrayAnalysis(object):
             known,
         )
 
+    def _get_unique_var_name(self, prefix):
+        idx = 0
+        for var_name in self.typemap.keys():
+            if var_name.startswith(prefix):
+                idx += 1
+        return f"{prefix}_{idx}"
+
     def slice_size(self, index, dsize, equiv_set, scope, stmts):
         """Reason about the size of a slice represented by the "index"
         variable, and return a variable that has this size data, or
@@ -1797,7 +1804,8 @@ class ArrayAnalysis(object):
         # Fill in the left side of the slice's ":" with 0 if it wasn't
         # specified.
         if isinstance(lhs_typ, types.NoneType):
-            zero_var = scope.make_temp(loc, "zero")
+            zero_name = self._get_unique_var_name("zero")
+            zero_var = scope.redefine(zero_name, loc)
             zero = ir.Const(0, loc)
             stmts.append(ir.Assign(value=zero, target=zero_var, loc=loc))
             self._define(equiv_set, zero_var, types.IntegerLiteral(0), zero)
@@ -1882,8 +1890,8 @@ class ArrayAnalysis(object):
             replacement_slice_var = None
         else:
             # Create a new var for the replacement slice.
-            replacement_slice_var = scope.make_temp(
-                loc, "replacement_slice")
+            replacement_slice_var = scope.redefine(
+                self._get_unique_var_name("replacement_slice"), loc)
             # Create a deepcopy of slice calltype so that when we change it
             # below the original isn't changed.  Make the types of the parts of
             # the slice intp.
