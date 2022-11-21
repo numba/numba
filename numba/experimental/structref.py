@@ -59,7 +59,7 @@ class _Utils:
         inst_struct = context.make_helper(builder, struct_type)
         inst_struct.meminfo = meminfo
 
-        return inst_struct._getvalue()
+        return inst_struct
 
     def new_struct_ref_with_mi(self, mi):
         """Encapsulate the MemInfo from a `StructRefPayload` in a `StructRef`
@@ -322,7 +322,8 @@ def new(typingctx, struct_type):
 
     def codegen(context, builder, signature, args):
         utils = _Utils(context, builder, inst_type)
-        return utils.new_struct_ref_without_mi()
+        inst_struct = utils.new_struct_ref_without_mi()
+        return inst_struct._getvalue()
 
     sig = inst_type(struct_type)
     return sig, codegen
