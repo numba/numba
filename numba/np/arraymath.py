@@ -3310,7 +3310,7 @@ def ov_np_where(condition, x=None, y=None):
         raise NumbaTypeError(msg)
 
     if is_nonelike(x) ^ is_nonelike(y):
-        msg = 'Arguments "x" and "y" must not be None if either one is provided'
+        msg = 'either both or neigher of "x" or "y" should be given'
         raise NumbaTypeError(msg)
 
     for arg, name in zip((x, y), ('x', 'y')):
@@ -3318,7 +3318,17 @@ def ov_np_where(condition, x=None, y=None):
             msg = 'The argument "{}" must be array-like if provided'
             raise NumbaTypeError(msg.format(name))
 
-    if is_nonelike(x) and is_nonelike(y):
+    # corner case: None is a valid value for np.where:
+    # >>> np.where([0, 1], None, 2)
+    # array([None, 2])
+    #
+    # >>> np.where([0, 1], 2, None)
+    # array([2, None])
+    #
+    # >>> np.where([0, 1], None, None)
+    # array([None, None])
+    if x is None and y is None:
+        # only `cond` was provided
         return _where_cond_none_none
 
     cond_arr = isinstance(condition, types.Array)
@@ -3343,7 +3353,7 @@ def ov_np_where(condition, x=None, y=None):
             if x.layout == y.layout == condition.layout:
                 layout = x.layout
             else:
-                layout = 'C'
+                layout = 'A'
         return _where_generic_impl(dtype, layout)
     else:
         def impl(condition, x=None, y=None):

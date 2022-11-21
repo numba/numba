@@ -1019,11 +1019,11 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         with self.assertRaisesRegex(TypingError, msg):
             cfunc(None, 2, 3)
 
-        msg = 'Arguments "x" and "y" must not be None if either one is provided'
+        msg = 'either both or neigher of "x" or "y" should be given'
         with self.assertRaisesRegex(TypingError, msg):
             cfunc(1, None, 3)
 
-        msg = 'Arguments "x" and "y" must not be None if either one is provided'
+        msg = 'either both or neigher of "x" or "y" should be given'
         with self.assertRaisesRegex(TypingError, msg):
             cfunc(1, 2, None)
 
