@@ -820,10 +820,32 @@ static void traceback_add(const char *funcname, const char *filename, int lineno
     if (!frame)
         goto error;
 
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 11)
-    // empty
-#else
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 11) /* 3.11 */
+
+    /* A copy of the struct _frame from 
+       https://github.com/python/cpython/blob/0c6b3a2d8e1a887bda6baed27664a62392f2cdc3/Include/internal/pycore_frame.h#L15 
+    */
+    typedef struct _frame {
+        PyObject_HEAD
+        PyFrameObject *f_back;      /* previous frame, or NULL */
+        struct _PyInterpreterFrame *f_frame; /* points to the frame data */
+        PyObject *f_trace;          /* Trace function */
+        int f_lineno;               /* Current line number. Only valid if non-zero */
+        char f_trace_lines;         /* Emit per-line trace events? */
+        char f_trace_opcodes;       /* Emit per-opcode trace events? */
+        char f_fast_as_locals;      /* Have the fast locals of this frame been converted to a dict? */
+        /* The frame data, if this frame object owns the frame */
+        PyObject *_f_frame_data[1];
+    } py_frame;
+
+    /* unsafe cast to our copy of _frame to access the f_lineno field */
+    py_frame* hacked_frame = (py_frame*)frame;
+    hacked_frame->f_lineno = lineno;
+
+#elif (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION < 11) /* <3.11 */
     frame->f_lineno = lineno;
+#else
+    #error "Check if struct _frame has been changed in the new version"
 #endif
     PyErr_Restore(exc, val, tb);
     PyTraceBack_Here(frame);
