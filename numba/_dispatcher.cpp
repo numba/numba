@@ -567,7 +567,8 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
     fn = (PyCFunctionWithKeywords) PyCFunction_GET_FUNCTION(cfunc);
     tstate = PyThreadState_GET();
 
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 11)
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 11)
+    #warning "FIXME: THIS IS STUB CODE"
     if (tstate->tracing && tstate->c_profilefunc)
 #elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 10)
     /*
