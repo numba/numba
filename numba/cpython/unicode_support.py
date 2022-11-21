@@ -55,6 +55,7 @@ _Py_LINEFEED = 0xa
 _Py_CARRIAGE_RETURN = 0xd
 _Py_SPACE = 0x20
 
+# for convenient usage when converting from string to int/float/complex
 _Ord_Zero = 48
 _Ord_Plus = 43
 _Ord_Minus = 45
@@ -777,6 +778,7 @@ def _Py_ISCARRIAGERETURN(ch):
 # Start code related to/from CPython's longobject
 
 
+# https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/longobject.c#L2256    # noqa: E501
 _PyLong_DigitValue = np.array([
     37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37,
     37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37,
