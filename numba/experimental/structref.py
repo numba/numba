@@ -18,6 +18,7 @@ from numba.core.extending import (
     overload,
 )
 from numba.core.typing.templates import AttributeTemplate
+from numba.experimental.jitclass.base import imp_dtor
 
 
 class _Utils:
@@ -37,7 +38,30 @@ class _Utils:
         self.builder = builder
         self.struct_type = struct_type
 
-    def new_struct_ref(self, mi):
+    def new_struct_ref_without_mi(self):
+        context, builder, struct_type = \
+            self.context, self.builder, self.struct_type
+        model = context.data_model_manager[struct_type.get_data_type()]
+        alloc_type = model.get_value_type()
+        alloc_size = context.get_abi_sizeof(alloc_type)
+
+        meminfo = context.nrt.meminfo_alloc_dtor(
+            builder,
+            context.get_constant(types.uintp, alloc_size),
+            imp_dtor(context, builder.module, struct_type),
+        )
+        data_pointer = context.nrt.meminfo_data(builder, meminfo)
+        data_pointer = builder.bitcast(data_pointer, alloc_type.as_pointer())
+
+        # Nullify all data
+        builder.store(cgutils.get_null_value(alloc_type), data_pointer)
+
+        inst_struct = context.make_helper(builder, struct_type)
+        inst_struct.meminfo = meminfo
+
+        return inst_struct._getvalue()
+
+    def new_struct_ref_with_mi(self, mi):
         """Encapsulate the MemInfo from a `StructRefPayload` in a `StructRef`
         """
         context = self.context
@@ -184,7 +208,7 @@ def define_boxing(struct_type, obj_class):
         mi = c.unbox(mip_type, mi_obj).value
 
         utils = _Utils(c.context, c.builder, typ)
-        struct_ref = utils.new_struct_ref(mi)
+        struct_ref = utils.new_struct_ref_with_mi(mi)
         out = struct_ref._getvalue()
 
         c.pyapi.decref(mi_obj)
@@ -294,31 +318,11 @@ def new(typingctx, struct_type):
         instance = new(MyStruct)
         instance.field = field_value
     """
-    from numba.experimental.jitclass.base import imp_dtor
-
     inst_type = struct_type.instance_type
 
     def codegen(context, builder, signature, args):
-        # FIXME: mostly the same as jitclass ctor_impl()
-        model = context.data_model_manager[inst_type.get_data_type()]
-        alloc_type = model.get_value_type()
-        alloc_size = context.get_abi_sizeof(alloc_type)
-
-        meminfo = context.nrt.meminfo_alloc_dtor(
-            builder,
-            context.get_constant(types.uintp, alloc_size),
-            imp_dtor(context, builder.module, inst_type),
-        )
-        data_pointer = context.nrt.meminfo_data(builder, meminfo)
-        data_pointer = builder.bitcast(data_pointer, alloc_type.as_pointer())
-
-        # Nullify all data
-        builder.store(cgutils.get_null_value(alloc_type), data_pointer)
-
-        inst_struct = context.make_helper(builder, inst_type)
-        inst_struct.meminfo = meminfo
-
-        return inst_struct._getvalue()
+        utils = _Utils(context, builder, inst_type)
+        return utils.new_struct_ref_without_mi()
 
     sig = inst_type(struct_type)
     return sig, codegen
