@@ -45,7 +45,7 @@ class Math_unary(ConcreteTemplate):
 @infer_global(math.exp)
 @infer_global(math.fabs)
 @infer_global(math.trunc)
-class Math_sin(ConcreteTemplate):
+class Math_unary_with_fp16(ConcreteTemplate):
     cases = [
         signature(types.float64, types.int64),
         signature(types.float64, types.uint64),
