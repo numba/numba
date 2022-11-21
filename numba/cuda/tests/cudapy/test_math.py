@@ -653,6 +653,15 @@ class TestCudaMath(CUDATestCase):
         self.unary_template_uint64(math_floor, np.floor)
 
     #---------------------------------------------------------------------------
+    # test_math_trunc
+
+    def test_math_trunc(self):
+        self.unary_template_float32(math_trunc, np.trunc)
+        self.unary_template_float64(math_trunc, np.trunc)
+        self.unary_template_int64(math_trunc, np.trunc)
+        self.unary_template_uint64(math_trunc, np.trunc)
+
+    #---------------------------------------------------------------------------
     # test_math_copysign
 
     def test_math_copysign(self):

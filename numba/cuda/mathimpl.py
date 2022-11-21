@@ -43,6 +43,7 @@ unarys += [('atan', 'atanf', math.atan)]
 unarys += [('atanh', 'atanhf', math.atanh)]
 unarys += [('tan', 'tanf', math.tan)]
 unarys += [('tanh', 'tanhf', math.tanh)]
+unarys += [('trunc', 'truncf', math.trunc)]
 
 unarys_fastmath = {}
 unarys_fastmath['cosf'] = 'fast_cosf'
