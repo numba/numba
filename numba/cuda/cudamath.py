@@ -24,6 +24,7 @@ infer_global = registry.register_global
 @infer_global(math.radians)
 @infer_global(math.sinh)
 @infer_global(math.tanh)
+@infer_global(math.tan)
 class Math_unary(ConcreteTemplate):
     cases = [
         signature(types.float64, types.int64),
@@ -35,7 +36,6 @@ class Math_unary(ConcreteTemplate):
 
 @infer_global(math.sin)
 @infer_global(math.cos)
-@infer_global(math.tan)
 @infer_global(math.ceil)
 @infer_global(math.floor)
 @infer_global(math.sqrt)

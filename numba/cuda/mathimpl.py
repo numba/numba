@@ -106,14 +106,6 @@ def fp16_cos_impl(context, builder, sig, args):
     return context.compile_internal(builder, fp16_cos, sig, args)
 
 
-@lower(math.tan, types.float16)
-def fp16_tan_impl(context, builder, sig, args):
-    def fp16_tan(x):
-        return cuda.fp16.hdiv(cuda.fp16.hsin(x), cuda.fp16.hcos(x))
-
-    return context.compile_internal(builder, fp16_tan, sig, args)
-
-
 @lower(math.log, types.float16)
 def fp16_log_impl(context, builder, sig, args):
     def fp16_log(x):

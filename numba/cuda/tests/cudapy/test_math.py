@@ -388,7 +388,6 @@ class TestCudaMath(CUDATestCase):
     def test_math_fp16(self):
         self.unary_template_float16(math_sin, np.sin)
         self.unary_template_float16(math_cos, np.cos)
-        self.unary_template_float16(math_tan, np.tan)
         self.unary_template_float16(math_exp, np.exp)
         self.unary_template_float16(math_log, np.log, start=1)
         self.unary_template_float16(math_log2, np.log2, start=1)
