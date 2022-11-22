@@ -531,7 +531,6 @@ if _Py_hashfunc_name in ('siphash13', 'siphash24', 'fnv'):
     # DOUBLE_ROUND in siphash24, and that siphash13 has an extra "ROUND" applied
     # just before the final XORing of components to create the return value.
 
-
     # /* *********************************************************************
     # <MIT License>
     # Copyright (c) 2013  Marek Majkowski <marek@popcount.org>
@@ -651,34 +650,34 @@ if _Py_hashfunc_name in ('siphash13', 'siphash24', 'fnv'):
                 jmp = (6 * 8)
                 mask = ~types.uint64(ohexefef << jmp)
                 t = (t & mask) | (types.uint64(grab_byte(src, boffset + 6))
-                                << jmp)
+                                  << jmp)
             if src_sz >= 6:
                 jmp = (5 * 8)
                 mask = ~types.uint64(ohexefef << jmp)
                 t = (t & mask) | (types.uint64(grab_byte(src, boffset + 5))
-                                << jmp)
+                                  << jmp)
             if src_sz >= 5:
                 jmp = (4 * 8)
                 mask = ~types.uint64(ohexefef << jmp)
                 t = (t & mask) | (types.uint64(grab_byte(src, boffset + 4))
-                                << jmp)
+                                  << jmp)
             if src_sz >= 4:
                 t &= types.uint64(0xffffffff00000000)
                 for i in range(4):
                     jmp = i * 8
                     mask = ~types.uint64(ohexefef << jmp)
                     t = (t & mask) | (types.uint64(grab_byte(src, boffset + i))
-                                    << jmp)
+                                      << jmp)
             if src_sz >= 3:
                 jmp = (2 * 8)
                 mask = ~types.uint64(ohexefef << jmp)
                 t = (t & mask) | (types.uint64(grab_byte(src, boffset + 2))
-                                << jmp)
+                                  << jmp)
             if src_sz >= 2:
                 jmp = (1 * 8)
                 mask = ~types.uint64(ohexefef << jmp)
                 t = (t & mask) | (types.uint64(grab_byte(src, boffset + 1))
-                                << jmp)
+                                  << jmp)
             if src_sz >= 1:
                 mask = ~(ohexefef)
                 t = (t & mask) | (types.uint64(grab_byte(src, boffset + 0)))
@@ -697,11 +696,10 @@ if _Py_hashfunc_name in ('siphash13', 'siphash24', 'fnv'):
 
         return _siphash
 
-
     _siphash13 = _gen_siphash('siphash13')
     _siphash24 = _gen_siphash('siphash24')
 
-    _siphasher = _siphash13 if  _Py_hashfunc_name == 'siphash13' else _siphash24
+    _siphasher = _siphash13 if _Py_hashfunc_name == 'siphash13' else _siphash24
 
 else:
     msg = "Unsupported hashing algorithm in use %s" % _Py_hashfunc_name
