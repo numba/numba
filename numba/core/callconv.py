@@ -35,6 +35,7 @@ Status = namedtuple("Status",
                      ))
 
 int32_t = ir.IntType(32)
+int64_t = ir.IntType(64)
 errcode_t = int32_t
 
 def _const_int(code):
@@ -114,8 +115,8 @@ class BaseCallConv(object):
     def _get_call_helper(self, builder):
         return builder.__call_helper
 
-    def _free_allocated_excinfo_memory(self, builder, status):
-        raise NotImplementedError
+    def unpack_exception(self, builder, api, status):
+        return api.unserialize(status.excinfoptr)
 
     def raise_error(self, builder, api, status):
         """
@@ -127,8 +128,7 @@ class BaseCallConv(object):
             # Unserialize user exception.
             # Make sure another error may not interfere.
             api.err_clear()
-            exc = api.unserialize(status.excinfoptr)
-            self._free_allocated_excinfo_memory(builder, status)
+            exc = self.unpack_exception(builder, api, status)
             with cgutils.if_likely(builder,
                                    cgutils.is_not_null(builder, exc)):
                 api.raise_object(exc)  # steals ref
@@ -362,11 +362,11 @@ class CPUCallConv(BaseCallConv):
     _status_ids = itertools.count(1)
 
     def __init__(self, context):
-        # Question for the reviewer << this should be removed before merging!
+        # Question for the reviewer (remove before merging!)
         # Some tests at numba.tests.test_exceptions have the NRT disabled. But
         # NRT is required to free memory when there's a dynamic exception in use
         # Is there a better way to do this?
-        self.contains_dynamic_exception_ = False
+        self.contains_dynamic_exception = False
         super().__init__(context)
 
     def _make_call_helper(self, builder):
@@ -406,7 +406,7 @@ class CPUCallConv(BaseCallConv):
         # the JIT must reserve memory for the excinfo struct whenever it raises
         # a dynamic exception. The alloc_mem flag is used to indicate if an
         # allocation occurred.
-        if not self.contains_dynamic_exception_:
+        if not self.contains_dynamic_exception:
             return
 
         i8p = ir.IntType(8).as_pointer()
@@ -451,6 +451,55 @@ class CPUCallConv(BaseCallConv):
             # Return from the current function
             self._return_errcode_raw(builder, RETCODE_USEREXC, mark_exc=True)
 
+    def unpack_dynamic_exception(self, builder, api, status):
+        excinfo_ptr = status.excinfoptr
+
+        # load the serialized exception buffer from the module and create
+        # a python bytes object
+        picklebuf = builder.extract_value(builder.load(excinfo_ptr), 0)
+        picklebuf_sz = builder.extract_value(builder.load(excinfo_ptr), 1)
+        static_exc_bytes = api.bytes_from_string_and_size(
+            picklebuf, builder.sext(picklebuf_sz, api.py_ssize_t))
+
+        # with builder.if_then(cgutils.is_null(builder, struct_gv)):
+        #     msg = ('PyBytes_FromStringAndSize return NULL',)
+        #     self.return_user_exc(builder, RuntimeError, msg, None)
+
+        # load dynamic args and create a python tuple
+        dyn_args = builder.extract_value(builder.load(excinfo_ptr), 2)
+        n_args = builder.extract_value(builder.load(excinfo_ptr), 3)
+
+        dyn_args = builder.bitcast(dyn_args, GENERIC_POINTER.as_pointer())
+
+        # dyn_st_type = ir.LiteralStructType((GENERIC_POINTER, GENERIC_POINTER, GENERIC_POINTER))
+        # dyn_st = builder.load(builder.bitcast(dyn_args, dyn_st_type.as_pointer()))
+        # tuple_args = [builder.extract_value(dyn_st, idx) for idx in range(3)]
+        # py_tuple = api.tuple_pack(tuple_args)
+        py_tuple = api.tuple_new(n_args)
+        with cgutils.for_range(builder, n_args) as loop:
+            val = builder.load(builder.gep(dyn_args, [loop.index]))
+            api.tuple_setitem(py_tuple, loop.index, val)
+
+
+        excinfo = api.runtime_build_excinfo_struct(static_exc_bytes, py_tuple)
+        return excinfo
+
+    def unpack_exception(self, builder, api, status):
+        excinfo_ptr = status.excinfoptr
+        flag = builder.extract_value(builder.load(excinfo_ptr), 3)
+        gt = builder.icmp_signed('>', flag, int32_t(0))
+        with builder.if_else(gt) as (then, otherwise):
+            with then:
+                dyn_exc = self.unpack_dynamic_exception(builder, api, status)
+                bb_then = builder.block
+            with otherwise:
+                static_exc = api.unserialize(excinfo_ptr)
+                bb_else = builder.block
+        phi = builder.phi(static_exc.type)
+        phi.add_incoming(dyn_exc, bb_then)
+        phi.add_incoming(static_exc, bb_else)
+        return phi
+
     def set_dynamic_user_exc(self, builder, exc, exc_args, loc=None,
                              func_name=None):
         if not issubclass(exc, BaseException):
@@ -461,66 +510,43 @@ class CPUCallConv(BaseCallConv):
                             % (exc_args,))
 
         # set that a dynamic exception was inserted
-        self.contains_dynamic_exception_ = True
+        self.contains_dynamic_exception = True
 
-        pyapi = self.context.get_python_api(builder)
+        api = self.context.get_python_api(builder)
         exc = self.build_excinfo_struct(exc, exc_args, loc, func_name)
-        excptr = self._get_excinfo_argument(builder.function)
-        # {i8*, i32, i8*, i32}
-        struct_gv = builder.load(pyapi.serialize_object(exc))
+        excinfo_pp = self._get_excinfo_argument(builder.function)
+        struct_gv = builder.load(api.serialize_object(exc))
 
-        # Constant arguments are serialized as `None` and replaced by the
-        # correct arguments at runtime
-        py_none = pyapi.make_none()
-        exc_args = [e if isinstance(e, ir.Instruction) else
-                    py_none for e in exc_args]
+        # Each dynamic arg in the exception is a PyObject*
+        n_dyn_args = len([arg for arg in exc_args if isinstance(arg, ir.Instruction)])
+        struct_type = ir.LiteralStructType([GENERIC_POINTER] * n_dyn_args)
+        struct_size = api.py_ssize_t(self.context.get_abi_sizeof(struct_type))
+        # to-do: free this malloc
+        struct_ptr = builder.bitcast(
+            self.context.nrt.allocate(builder, struct_size),
+            struct_type.as_pointer())
 
-        # load the serialized exception buffer from the module and create
-        # a python bytes object
-        pickle_buf = builder.extract_value(struct_gv, 0)
-        pickle_bufsz = builder.extract_value(struct_gv, 1)
-        struct_gv = pyapi.bytes_from_string_and_size(
-            pickle_buf, builder.sext(pickle_bufsz, pyapi.py_ssize_t))
-
-        with builder.if_then(cgutils.is_null(builder, struct_gv)):
-            msg = ('PyBytes_FromStringAndSize return NULL',)
-            self.return_user_exc(builder, RuntimeError, msg, loc)
-
-        tup_exc_args = pyapi.tuple_pack(exc_args)
-        pair = pyapi.runtime_build_excinfo_struct(
-            struct_gv, tup_exc_args)
-        with builder.if_then(builder.icmp_unsigned('==', py_none, pair)):
-            msg = ('Failed to serialize exception args at runtime',)
-            self.return_user_exc(builder, TypeError, msg, loc)
-
-        pickled = pyapi.tuple_getitem(pair, 0)
-        _hash = pyapi.tuple_getitem(pair, 1)
-        ptr = pyapi.bytes_as_string(pickled)
-        sz = pyapi.bytes_size(pickled)
-
-        # check for overflow
-        if pyapi.py_ssize_t.width > 32:
-            overflow = builder.icmp_signed('>', sz, int32_t(types.int32.maxval))
-            with builder.if_then(overflow):
-                msg = ('Bytes size is greater than max value of int32',)
-                self.return_user_exc(builder, OverflowError, msg, loc)
+        zero = int32_t(0)
+        idx = 0
+        for arg in exc_args:
+            if isinstance(arg, ir.Instruction):
+                builder.store(arg, builder.gep(struct_ptr, [zero, int32_t(idx)]))
+                idx += 1
 
         # allocate the excinfo struct
-        st_size = pyapi.py_ssize_t(self.context.get_abi_sizeof(excinfo_t))
-        excinfo = builder.bitcast(self.context.nrt.allocate(builder, st_size),
-                                  excinfo_ptr_t)
+        st_size = api.py_ssize_t(self.context.get_abi_sizeof(excinfo_t))
+        # to-do: free this malloc
+        excinfo_p = builder.bitcast(
+            self.context.nrt.allocate(builder, st_size),
+            excinfo_ptr_t)
 
-        # hash is computed at runtime, after all arguments are known
-        zero, one, two, three = int32_t(0), int32_t(1), int32_t(2), int32_t(3)
-        builder.store(ptr, builder.gep(excinfo, [zero, zero]))
-        # truncating sz to i32 is safe as long sz < MAXVAL(int32_t)
-        builder.store(builder.trunc(sz, int32_t), builder.gep(excinfo,
-                                                              [zero, one]))
-        builder.store(pyapi.bytes_as_string(_hash), builder.gep(excinfo,
-                                                                [zero, two]))
-        # set the alloc_flag flag to 1
-        builder.store(one, builder.gep(excinfo, [zero, three]))
-        builder.store(excinfo, excptr)
+        exc_fields = (builder.extract_value(struct_gv, 0),
+                      builder.extract_value(struct_gv, 1),
+                      builder.bitcast(struct_ptr, GENERIC_POINTER),
+                      int32_t(n_dyn_args))
+        for idx, arg in enumerate(exc_fields):
+            builder.store(arg, builder.gep(excinfo_p, [zero, int32_t(idx)]))
+        builder.store(excinfo_p, excinfo_pp)
 
     def return_non_const_user_exc(self, builder, exc, exc_args, loc=None,
                                   func_name=None):

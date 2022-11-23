@@ -10,6 +10,7 @@ import hashlib
 
 import pickle
 from numba import cloudpickle
+from llvmlite import ir
 
 
 #
@@ -61,23 +62,21 @@ def dumps(obj):
     return pickled
 
 
-def runtime_build_excinfo_struct(struct_gv, exc_args):
-    exc, static_args, locinfo = cloudpickle.loads(struct_gv)
+def runtime_build_excinfo_struct(static_exc, exc_args):
+    exc, static_args, locinfo = cloudpickle.loads(static_exc)
     real_args = []
+    idx = 0
+    for arg in static_args:
+        if isinstance(arg, ir.Instruction):
+            real_args.append(exc_args[idx])
+            idx += 1
+        else:
+            real_args.append(arg)
     # for each "None" argument in runtime_args, use the one that was
     # statically serialized
-    real_args = [static_args[i] if runtime_arg is None else runtime_arg
-                 for i, runtime_arg in enumerate(exc_args)]
-    obj = (exc, tuple(real_args), locinfo)
-    try:
-        data = dumps(obj)
-    except TypeError:
-        return None
-    # Does it worth computing the hash?
-    # The "address" arg in _numba_unpickle will be a different value at
-    # every call and a cache hit will never happen in _unpickled_memo
-    _hash = hashlib.sha1(data).digest()
-    return (data, _hash)
+    # real_args = [static_args[i] if runtime_arg is None else runtime_arg
+    #              for i, runtime_arg in enumerate(exc_args)]
+    return (exc, tuple(real_args), locinfo)
 
 
 # Alias to pickle.loads to allow `serialize.loads()`

@@ -398,13 +398,13 @@ class TestRaising(TestCase):
             with self.assertRaisesRegex(errors.TypingError, msg):
                 compile_isolated(pyfunc, argtypes)
 
-    def test_dynamic_raise_bad_dict(self):
+    def test_dynamic_raise_dict(self):
         @njit
         def raise_literal_dict2():
             raise ValueError({'a': 1, 'b': 3})
 
-        msg = 'Failed to serialize exception args at runtime'
-        with self.assertRaisesRegex(TypeError, msg):
+        msg = "{a: 1, b: 3}"
+        with self.assertRaisesRegex(ValueError, msg):
             raise_literal_dict2()
 
 

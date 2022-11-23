@@ -773,8 +773,9 @@ class PythonAPI(object):
     def tuple_new(self, count):
         fnty = ir.FunctionType(self.pyobj, [ir.IntType(32)])
         fn = self._get_function(fnty, name='PyTuple_New')
-        return self.builder.call(fn, [self.context.get_constant(types.int32,
-                                                                count)])
+        if isinstance(count, int):
+            count = self.context.get_constant(types.int32, count)
+        return self.builder.call(fn, [count])
 
     def tuple_setitem(self, tuple_val, index, item):
         """
@@ -782,7 +783,8 @@ class PythonAPI(object):
         """
         fnty = ir.FunctionType(ir.IntType(32), [self.pyobj, ir.IntType(32), self.pyobj])
         setitem_fn = self._get_function(fnty, name='PyTuple_SetItem')
-        index = self.context.get_constant(types.int32, index)
+        if isinstance(index, int):
+            index = self.context.get_constant(types.int32, index)
         self.builder.call(setitem_fn, [tuple_val, index, item])
 
     #
