@@ -14,9 +14,8 @@ from numba.core.errors import UnsupportedError
 
 
 _logger = logging.getLogger(__name__)
-# logging.basicConfig(level=logging.DEBUG)
 
-_EXCEPT_STACK_OFFSET = 6 if PYVERSION < (3, 11) else 1
+_EXCEPT_STACK_OFFSET = 6
 _FINALLY_POP = _EXCEPT_STACK_OFFSET if PYVERSION >= (3, 8) else 1
 _NO_RAISE_OPS = frozenset({
     'LOAD_CONST',
@@ -1002,15 +1001,17 @@ class TraceRunner(object):
     def op_CALL(self, state, inst):
         narg = inst.arg
         args = list(reversed([state.pop() for _ in range(narg)]))
-        func = state.pop()
-        extra = state.pop()  # XXX need to see if it's NULL
-        if not _is_null_temp_reg(extra):
-            func = extra
-            args = [extra, *args]
+        callable_or_firstarg = state.pop()
+        null_or_callable = state.pop()
+        if _is_null_temp_reg(null_or_callable):
+            callable = callable_or_firstarg
+        else:
+            callable = null_or_callable
+            args = [callable_or_firstarg, *args]
         res = state.make_temp()
 
         kw_names = state.pop_kw_names()
-        state.append(inst, func=func, args=args, kw_names=kw_names, res=res)
+        state.append(inst, func=callable, args=args, kw_names=kw_names, res=res)
         state.push(res)
 
     def op_KW_NAMES(self, state, inst):
