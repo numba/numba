@@ -5,7 +5,6 @@ import sys
 import abc
 import io
 import copyreg
-import hashlib
 
 
 import pickle
