@@ -1513,6 +1513,27 @@ class TestHasattrBuiltin(MemoryLeakMixin, TestCase):
                   typed.List.empty_list(ty), np.ones(4), 'ABC'):
             self.assertPreciseEqual(foo(x), foo.py_func(x))
 
+    def test_hasattr_non_const_attr(self):
+        # This tests that an error is raised in the case that a hasattr() call
+        # is made on an attribute that cannot be resolved as a compile time
+        # constant (there's a phi in the way!).
+
+        @njit
+        def foo(pred):
+            if pred > 3:
+                attr = "__hash__"
+            else:
+                attr = "__str__"
+
+            hasattr(1, attr)
+
+        with self.assertRaises(errors.NumbaTypeError) as raises:
+            foo(6)
+
+        msg = ('hasattr() cannot determine the type of variable '
+               '"attr" due to a branch.')
+        self.assertIn(msg, str(raises.exception))
+
 
 class TestStrAndReprBuiltin(MemoryLeakMixin, TestCase):
 
