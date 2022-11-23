@@ -89,7 +89,9 @@ class Toolchain(object):
         self._py_include_dirs = self._build_ext.include_dirs
 
         np_compile_args = {'include_dirs': [np.get_include(),],}
-        if sys.platform != 'win32':
+        if sys.platform == 'win32':
+            np_compile_args['libraries'] = []
+        else:
             np_compile_args['libraries'] = ['m',]
         self._math_info = np_compile_args
 
