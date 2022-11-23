@@ -26,7 +26,7 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
                                  RefType)
 from numba.core.typing import signature
 from numba.core.extending import (register_jitable, overload, overload_method,
-                                  intrinsic)
+                                  intrinsic, overload_attribute)
 from numba.misc import quicksort, mergesort
 from numba.cpython import slicing
 from numba.cpython.unsafe.tuple import tuple_setitem, build_full_slice_tuple
@@ -3030,7 +3030,7 @@ def array_is(context, builder, sig, args):
 # Hash
 
 
-@overload_method(types.Array, "__hash__")
+@overload_attribute(types.Array, "__hash__")
 def ol_array_hash(arr):
     return lambda arr: None
 

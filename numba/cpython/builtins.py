@@ -912,8 +912,8 @@ _getattr_default = _getattr_default_type()
 # getattr with no default arg, obj is an open type and name is forced as a
 # literal string. The _getattr_default marker is used to indicate "no default
 # was provided".
-@overload(getattr)
-def ol_getattr(obj, name):
+@overload(getattr, prefer_literal=True)
+def ol_getattr_2(obj, name):
     def impl(obj, name):
         return resolve_getattr(obj, name, _getattr_default)
     return impl
@@ -924,7 +924,7 @@ def ol_getattr(obj, name):
 # definition is: `getattr(object, name[, default]) -> value`, the `default`
 # is not a kwarg.
 @overload(getattr)
-def ol_getattr(obj, name, default):
+def ol_getattr_3(obj, name, default):
     def impl(obj, name, default):
         return resolve_getattr(obj, name, default)
     return impl

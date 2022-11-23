@@ -12,6 +12,7 @@ from numba import _helperlib
 from numba.core.extending import (
     overload,
     overload_method,
+    overload_attribute,
     intrinsic,
     register_model,
     models,
@@ -746,7 +747,7 @@ def impl_get(dct, key, default=None):
     return impl
 
 
-@overload_method(types.DictType, '__hash__')
+@overload_attribute(types.DictType, '__hash__')
 def impl_hash(dct):
     if not isinstance(dct, types.DictType):
         return
