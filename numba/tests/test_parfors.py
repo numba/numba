@@ -517,6 +517,16 @@ def get_optimized_numba_ir(test_func, args, **kws):
             tp.state.return_type, tp.state.typingctx, tp.state.targetctx,
             options, flags, tp.state.metadata, diagnostics=diagnostics)
         parfor_pass.run()
+        parfor_pass = numba.parfors.parfor.ParforFusionPass(
+            tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
+            tp.state.return_type, tp.state.typingctx, tp.state.targetctx,
+            options, flags, tp.state.metadata, diagnostics=diagnostics)
+        parfor_pass.run()
+        parfor_pass = numba.parfors.parfor.ParforPreLoweringPass(
+            tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
+            tp.state.return_type, tp.state.typingctx, tp.state.targetctx,
+            options, flags, tp.state.metadata, diagnostics=diagnostics)
+        parfor_pass.run()
         test_ir._definitions = build_definitions(test_ir.blocks)
 
     return test_ir, tp
