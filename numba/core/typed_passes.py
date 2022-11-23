@@ -9,6 +9,8 @@ from numba.core import (errors, types, typing, ir, funcdesc, rewrites,
 
 from numba.parfors.parfor import PreParforPass as _parfor_PreParforPass
 from numba.parfors.parfor import ParforPass as _parfor_ParforPass
+from numba.parfors.parfor import ParforFusionPass as _parfor_ParforFusionPass
+from numba.parfors.parfor import ParforPreLoweringPass as _parfor_ParforPreLoweringPass
 from numba.parfors.parfor import Parfor
 from numba.parfors.parfor_lowering import ParforLower
 
@@ -333,6 +335,64 @@ class ParforPass(FunctionPass):
 
         # Add reload function to initialize the parallel backend.
         state.reload_init.append(_reload_parfors)
+        return True
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class ParforFusionPass(FunctionPass):
+
+    _name = "parfor_fusion_pass"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        """
+        Do fusion of parfor nodes.
+        """
+        # Ensure we have an IR and type information.
+        assert state.func_ir
+        parfor_pass = _parfor_ParforFusionPass(state.func_ir,
+                                               state.typemap,
+                                               state.calltypes,
+                                               state.return_type,
+                                               state.typingctx,
+                                               state.targetctx,
+                                               state.flags.auto_parallel,
+                                               state.flags,
+                                               state.metadata,
+                                               state.parfor_diagnostics)
+        parfor_pass.run()
+
+        return True
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class ParforPreLoweringPass(FunctionPass):
+
+    _name = "parfor_prelowering_pass"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        """
+        Prepare parfors for lowering.
+        """
+        # Ensure we have an IR and type information.
+        assert state.func_ir
+        parfor_pass = _parfor_ParforPreLoweringPass(state.func_ir,
+                                                    state.typemap,
+                                                    state.calltypes,
+                                                    state.return_type,
+                                                    state.typingctx,
+                                                    state.targetctx,
+                                                    state.flags.auto_parallel,
+                                                    state.flags,
+                                                    state.metadata,
+                                                    state.parfor_diagnostics)
+        parfor_pass.run()
+
         return True
 
 

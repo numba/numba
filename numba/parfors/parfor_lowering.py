@@ -54,6 +54,13 @@ class ParforLower(lowering.Lower):
 
 
 def _lower_parfor_parallel(lowerer, parfor):
+    if parfor.lowerer is None:
+        return _lower_parfor_parallel_std(lowerer, parfor)
+    else:
+        return parfor.lowerer(lowerer, parfor)
+
+
+def _lower_parfor_parallel_std(lowerer, parfor):
     """Lowerer that handles LLVM code generation for parfor.
     This function lowers a parfor IR node to LLVM.
     The general approach is as follows:
