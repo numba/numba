@@ -4065,7 +4065,7 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata, func_ir, typemap):
     report = None
 
     # fusion of parfors with different lowerers is not possible
-    if len(parfor1.lowerer) != len(parfor2.lowerer):
+    if parfor1.lowerer != parfor2.lowerer:
         dprint("try_fuse: parfors different lowerers")
         msg = "- fusion failed: lowerer mismatch"
         report = FusionReport(parfor1.id, parfor2.id, msg)
