@@ -202,7 +202,7 @@ class ByteCodeIter(object):
         return buf
 
 
-class ByteCode(object):
+class _ByteCode(object):
     """
     The decoded bytecode of a function, and related information.
     """
@@ -307,7 +307,7 @@ class ByteCode(object):
                                           self.co_consts, self.co_names)
 
 
-class ByteCodePy311(ByteCode):
+class ByteCodePy311(_ByteCode):
     def __init__(self, func_id):
         super().__init__(func_id)
 
@@ -340,6 +340,8 @@ class ByteCodePy311(ByteCode):
 
 if PYVERSION >= (3, 11):
     ByteCode = ByteCodePy311
+else:
+    ByteCode = _ByteCode
 
 
 class FunctionIdentity(serialize.ReduceMixin):
