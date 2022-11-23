@@ -4,9 +4,7 @@ of random distributions.
 """
 
 import numpy as np
-import platform
 
-from numba.core.config import IS_32BITS
 from numba.np.random._constants import (wi_double, ki_double,
                                         ziggurat_nor_r, fi_double,
                                         wi_float, ki_float,
@@ -24,12 +22,6 @@ from numba import float32, int64, njit
 from numba.np.numpy_support import numpy_version
 # All of the following implementations are direct translations from:
 # https://github.com/numpy/numpy/blob/7cfef93c77599bd387ecc6a15d186c5a46024dac/numpy/random/src/distributions/distributions.c
-
-
-if IS_32BITS or platform.machine() in ['ppc64le', 'aarch64']:
-    fastmath_args = {'contract':True}
-else:
-    fastmath_args = {}
 
 
 if numpy_version >= (1, 21):
@@ -66,6 +58,9 @@ else:
     @njit
     def np_expm1(x):
         return np.exp(x) - 1.0
+
+
+fastmath_args = {'contract': True}
 
 
 @njit
