@@ -1659,7 +1659,8 @@ def np_real_spacing_impl(context, builder, sig, args):
         types.float64: 'numba_nextafter',
     }
 
-    inner_sig = typing.signature(sig.return_type, *sig.args, *sig.args)
+    [ty] = sig.args
+    inner_sig = typing.signature(sig.return_type, ty, ty)
     ll_ty = args[0].type
     ll_inf = ll_ty(np.inf)
     fnty = llvmlite.ir.FunctionType(ll_ty, [ll_ty, ll_ty])
