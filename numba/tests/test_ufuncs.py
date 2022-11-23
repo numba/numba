@@ -604,7 +604,12 @@ class TestUFuncs(BaseUFuncTest, TestCase):
         self.basic_ufunc_test(np.trunc, flags=flags, kinds='f')
 
     def test_spacing_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.spacing, flags=flags, kinds='f')
+        # additional input to check inf behaviour as Numba uses a different alg
+        # to NumPy
+        additional = [(np.array([np.inf, -np.inf], dtype=np.float64),
+                       types.Array(types.float64, 1, 'C')),]
+        self.basic_ufunc_test(np.spacing, flags=flags, kinds='f',
+                              additional_inputs=additional)
 
     ############################################################################
     # Other tests
