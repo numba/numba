@@ -1329,8 +1329,12 @@ class Interpreter(object):
     """A bytecode interpreter that builds up the IR.
     """
 
+    _DEBUG_PRINT = False
+
     def __init__(self, func_id):
         self.func_id = func_id
+        if self._DEBUG_PRINT:
+            print(func_id.func)
         self.arg_count = func_id.arg_count
         self.arg_names = func_id.arg_names
         self.loc = self.first_loc = ir.Loc.from_function_id(func_id)
@@ -1754,6 +1758,8 @@ class Interpreter(object):
         return self.bytecode.co_freevars
 
     def _dispatch(self, inst, kws):
+        if self._DEBUG_PRINT:
+            print(inst)
         assert self.current_block is not None
         if PYVERSION == (3, 11):
             if self.syntax_blocks:
@@ -2226,13 +2232,11 @@ class Interpreter(object):
             self.store(gl, res)
     elif PYVERSION < (3, 11):
         def op_LOAD_DEREF(self, inst, res):
-            n_cellvars = len(self.code_cellvars)
-            if inst.arg < n_cellvars:
-                name = self.code_cellvars[inst.arg]
+            name = self.func_id.func.__code__._varname_from_oparg(inst.arg)
+            if name in self.code_cellvars:
                 gl = self.get(name)
-            else:
-                idx = inst.arg - n_cellvars
-                name = self.code_freevars[idx]
+            elif name in self.code_freevars:
+                idx = self.code_freevars.index(name)
                 value = self.get_closure_value(idx)
                 gl = ir.FreeVar(idx, name, value, loc=self.loc)
             self.store(gl, res)
@@ -2244,14 +2248,9 @@ class Interpreter(object):
             pass  # ignored bytecode
 
         def op_STORE_DEREF(self, inst, value):
-            idx = inst.arg - len(self.code_locals)
-            n_cellvars = len(self.code_cellvars)
-            if idx < n_cellvars:
-                dstname = self.code_cellvars[idx]
-            else:
-                dstname = self.code_freevars[idx - n_cellvars]
+            name = self.func_id.func.__code__._varname_from_oparg(inst.arg)
             value = self.get(value)
-            self.store(value=value, name=dstname)
+            self.store(value=value, name=name)
     elif PYVERSION < (3, 11):
         def op_STORE_DEREF(self, inst, value):
             n_cellvars = len(self.code_cellvars)
@@ -3013,20 +3012,19 @@ class Interpreter(object):
     if PYVERSION == (3, 11):
 
         def op_LOAD_CLOSURE(self, inst, res):
-            n_cellvars = len(self.code_cellvars)
-            arg = inst.arg - len(self.code_locals)
-            if arg < n_cellvars:
-                name = self.code_cellvars[arg]
+            name = self.func_id.func.__code__._varname_from_oparg(inst.arg)
+            if name in self.code_cellvars:
                 try:
                     gl = self.get(name)
                 except NotDefinedError:
                     msg = "Unsupported use of op_LOAD_CLOSURE encountered"
                     raise NotImplementedError(msg)
-            else:
-                idx = arg - n_cellvars
-                name = self.code_freevars[idx]
+            elif name in self.code_freevars:
+                idx = self.code_freevars.index(name)
                 value = self.get_closure_value(idx)
                 gl = ir.FreeVar(idx, name, value, loc=self.loc)
+            else:
+                assert 0, "unreachable"
             self.store(gl, res)
 
     elif PYVERSION < (3, 11):
