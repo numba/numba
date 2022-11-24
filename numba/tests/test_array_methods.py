@@ -1337,7 +1337,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         pyfunc = array_sum_dtype_kws
         cfunc = jit(nopython=True)(pyfunc)
         all_dtypes = [np.float64, np.float32, np.int64, np.int32, np.uint32,
-                      np.uint64, np.complex64, np.complex128, TIMEDELTA_M]
+                      np.uint64, np.complex64, np.complex128]
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype),
@@ -1351,8 +1351,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                       np.dtype('uint32'): [np.float64, np.int64, np.float32],
                       np.dtype('uint64'): [np.float64, np.int64],
                       np.dtype('complex64'): [np.complex64, np.complex128],
-                      np.dtype('complex128'): [np.complex128],
-                      np.dtype(TIMEDELTA_M): [np.dtype(TIMEDELTA_M)]}
+                      np.dtype('complex128'): [np.complex128]}
 
         for arr_list in all_test_arrays:
             for arr in arr_list:
@@ -1360,15 +1359,15 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                     subtest_str = ("Testing np.sum with {} input and {} output"
                                    .format(arr.dtype, out_dtype))
                     with self.subTest(subtest_str):
-                        self.assertPreciseEqual(pyfunc(arr, dtype=out_dtype),
-                                                cfunc(arr, dtype=out_dtype))
+                            self.assertPreciseEqual(pyfunc(arr, dtype=out_dtype),
+                                                    cfunc(arr, dtype=out_dtype))
 
     def test_sum_axis_dtype_kws(self):
         """ test sum with axis and dtype parameters over a whole range of dtypes """
         pyfunc = array_sum_axis_dtype_kws
         cfunc = jit(nopython=True)(pyfunc)
         all_dtypes = [np.float64, np.float32, np.int64, np.int32, np.uint32,
-                      np.uint64, np.complex64, np.complex128, TIMEDELTA_M]
+                      np.uint64, np.complex64, np.complex128]
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype),
@@ -1382,9 +1381,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                       np.dtype('uint32'): [np.float64, np.int64, np.float32],
                       np.dtype('uint64'): [np.float64, np.uint64],
                       np.dtype('complex64'): [np.complex64, np.complex128],
-                      np.dtype('complex128'): [np.complex128],
-                      np.dtype(TIMEDELTA_M): [np.dtype(TIMEDELTA_M)],
-                      np.dtype(TIMEDELTA_Y): [np.dtype(TIMEDELTA_Y)]}
+                      np.dtype('complex128'): [np.complex128]}
 
         for arr_list in all_test_arrays:
             for arr in arr_list:
