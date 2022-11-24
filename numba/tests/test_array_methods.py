@@ -1666,7 +1666,5 @@ class TestArrayComparisons(TestCase):
     # Other comparison operators ('==', etc.) are tested in test_ufuncs
 
 
-# if __name__ == '__main__':
-#     unittest.main()
-x = TestArrayMethods()
-x.test_sum_axis_dtype_kws()
+if __name__ == '__main__':
+    unittest.main()
