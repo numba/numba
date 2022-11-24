@@ -2455,6 +2455,7 @@ def boolean_str(b):
 
 # WARNING: Integer in [-1<<63, 1<<63) is supported, which differs from cpython.
 # Global error messages for conversion (unicode -> integer)
+_INVALID_LITERAL_MSG = "invalid literal for int() with base"
 
 
 # https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/unicodeobject.c#L8660    # noqa: E501
@@ -2476,7 +2477,7 @@ def unicode_transform_decimal_and_space_to_ascii(u):
             decimal = _PyUnicode_ToDecimalDigit(ch)
             if decimal < 0:
                 # why does cpython set code point for index i and i+1?
-                raise ValueError()
+                raise ValueError(_INVALID_LITERAL_MSG)
             _set_code_point(ascii_u, i, _Ord_Zero + decimal)
 
     return ascii_u
@@ -2484,7 +2485,7 @@ def unicode_transform_decimal_and_space_to_ascii(u):
 
 # https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/longobject.c#L2289    # noqa: E501
 @register_jitable
-def long_from_binary_base(ascii_u, start, end, digits, base):
+def long_from_binary_base(ascii_u, start, end, base):
     bits_per_char, n = -1, base
     while n > 0:
         bits_per_char += 1
@@ -2509,7 +2510,7 @@ def long_from_binary_base(ascii_u, start, end, digits, base):
 
 # https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/longobject.c#L2479    # noqa: E501
 @register_jitable
-def long_from_non_binary_base(ascii_u, start, end, digits, base):
+def long_from_non_binary_base(ascii_u, start, end, base):
     accum = 0
     p = start
     # from the most significant to the least
@@ -2528,10 +2529,9 @@ def long_from_non_binary_base(ascii_u, start, end, digits, base):
 # https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/longobject.c#L2725    # noqa: E501
 @register_jitable
 def long_from_string_base(ascii_u, begin, base):
-    #
     start = begin
     if _get_code_point(ascii_u, start) == _Ord_Underscore:
-        raise ValueError()
+        raise ValueError(_INVALID_LITERAL_MSG)
 
     digits = prev = 0
     end = begin
@@ -2539,33 +2539,31 @@ def long_from_string_base(ascii_u, begin, base):
     while ch == _Ord_Underscore or _PyLong_DigitValue[_Py_CHARMASK(ch)] < base:
         if ch == _Ord_Underscore:
             if prev == _Ord_Underscore:
-                raise ValueError()
+                raise ValueError(_INVALID_LITERAL_MSG)
         else:
             digits += 1
         prev = ch
         end += 1
         ch = _get_code_point(ascii_u, end)
 
-    if prev == _Ord_Underscore:
-        raise ValueError()
-
-    if start == end:
-        raise ValueError()
+    # literal cannot be trailed with an underscore.
+    # even if base is 2, digits should be larger than 63.
+    if prev == _Ord_Underscore or start == end or digits > 63:
+        raise ValueError(_INVALID_LITERAL_MSG)
 
     p = end
     length = ascii_u._length
     while p < length and _Py_ISSPACE(_get_code_point(ascii_u, p)):
         p += 1
     if p != length:
-        raise ValueError()
+        raise ValueError(_INVALID_LITERAL_MSG)
 
     # conduct the real conversion
     is_binary_base = base & (base - 1) == 0
     if is_binary_base:
-        return long_from_binary_base(ascii_u, start, end, digits, base)
+        return long_from_binary_base(ascii_u, start, end, base)
     else:
-        # TODO: limit the size to avoid excessive computation attacks
-        return long_from_non_binary_base(ascii_u, start, end, digits, base)
+        return long_from_non_binary_base(ascii_u, start, end, base)
 
 
 # https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/longobject.c#L2632    # noqa: E501
@@ -2573,7 +2571,8 @@ def long_from_string_base(ascii_u, begin, base):
 def long_from_string(ascii_u, base):
 
     # check base
-    assert base == 0 or 2 <= base <= 36
+    if not (base == 0 or 2 <= base <= 36):
+        raise ValueError(_INVALID_LITERAL_MSG)
 
     # skip space
     i, length = 0, ascii_u._length
@@ -2633,35 +2632,38 @@ def long_from_string(ascii_u, base):
 # https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/longobject.c#L2856    # noqa: E501
 @register_jitable
 def py_long_from_unicode(u, base=10):
-    # _PyUnicode_TransformDecimalAndSpaceToASCII
     ascii_u = unicode_transform_decimal_and_space_to_ascii(u)
-    # assert ascii_bytes is not None
-
     result = long_from_string(ascii_u, base)
-
-    # TODO: null and validation checking
     return result
 
 
 @overload(int)
 def str_to_int(u):
-    if isinstance(u, types.UnicodeType):
+    if not isinstance(u, types.UnicodeType):
+        raise TypingError(
+            f"The literal should be an UnicodeType, but we got a {u}")
 
-        def impl(u):
-            return py_long_from_unicode(u, base=10)
+    def impl(u):
+        return py_long_from_unicode(u, base=10)
 
-        return impl
+    return impl
 
 
 # TODO: support types.bytes and types.bytearray based on/inspired from this
 @overload(int)
 def str_to_int_with_base(u, base):
-    if isinstance(u, types.UnicodeType) and isinstance(base, types.Integer):
+    if not isinstance(u, types.UnicodeType):
+        raise TypingError(
+            f"The literal should be an UnicodeType, but we got a {u}")
 
-        def impl(u, base):
-            return py_long_from_unicode(u, base=base)
+    if not isinstance(base, types.Integer):
+        raise TypingError(
+            f"The base argument should be an Integer, but we got a {base}")
 
-        return impl
+    def impl(u, base):
+        return py_long_from_unicode(u, base=base)
+
+    return impl
 
 
 # ------------------------------------------------------------------------------

@@ -8,7 +8,7 @@ from numba import njit
 from numba.core import types
 from numba.core.errors import TypingError, UnsupportedError
 from numba.core.types.functions import _header_lead
-from numba.cpython.unicode import _MAX_UNICODE
+from numba.cpython.unicode import _MAX_UNICODE, _INVALID_LITERAL_MSG
 from numba.extending import overload
 from numba.tests.support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
 
@@ -2712,9 +2712,6 @@ class TestUnicodeAuxillary(BaseTest):
 
 class IntTestCases(BaseTest):
 
-    import os
-    # os.environ['NUMBA_DEBUG_TYPEINFER'] = '1'
-
     L = [
         ('0', 0),
         ('1', 1),
@@ -2739,7 +2736,89 @@ class IntTestCases(BaseTest):
         ("\u0200", ValueError)
     ]
 
-    # https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Lib/test/test_int.py#L41    # noqa: E501
+    # https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Lib/test/test_grammar.py#L26    # noqa: E501
+    VALID_UNDERSCORE_LITERALS = [
+        '0_0_0',
+        '4_2',
+        '1_0000_0000',
+        '0b1001_0100',
+        '0xffff_ffff',
+        '0o5_7_7',
+        '1_00_00.5',
+        '1_00_00.5e5',
+        '1_00_00e5_1',
+        '1e1_0',
+        '.1_4',
+        '.1_4e1',
+        '0b_0',
+        '0x_f',
+        '0o_5',
+        '1_00_00j',
+        '1_00_00.5j',
+        '1_00_00e5_1j',
+        '.1_4j',
+        '(1_2.5+3_3j)',
+        '(.5_6j)',
+    ]
+
+    INVALID_UNDERSCORE_LITERALS = [
+        # Trailing underscores:
+        '0_',
+        '42_',
+        '1.4j_',
+        '0x_',
+        '0b1_',
+        '0xf_',
+        '0o5_',
+        '0 if 1_Else 1',
+        # Underscores in the base selector:
+        '0_b0',
+        '0_xf',
+        '0_o5',
+        # Old-style octal, still disallowed:
+        # Python does allow the two below, don't know why they are put here.
+        # '0_7',
+        # '09_99',
+        # Multiple consecutive underscores:
+        '4_______2',
+        '0.1__4',
+        '0.1__4j',
+        '0b1001__0100',
+        '0xffff__ffff',
+        '0x___',
+        '0o5__77',
+        '1e1__0',
+        '1e1__0j',
+        # Underscore right before a dot:
+        '1_.4',
+        '1_.4j',
+        # Underscore right after a dot:
+        '1._4',
+        '1._4j',
+        '._5',
+        '._5j',
+        # Underscore right after a sign:
+        '1.0e+_1',
+        '1.0e+_1j',
+        # Underscore right before j:
+        '1.4_j',
+        '1.4e5_j',
+        # Underscore right before e:
+        '1_e1',
+        '1.4_e1',
+        '1.4_e1j',
+        # Underscore right after e:
+        '1e_1',
+        '1.4e_1',
+        '1.4e_1j',
+        # Complex cases with parens:
+        '(1+1.5_j_)',
+        '(1+1.5_j)',
+    ]
+
+    # https://github.com/python/cpython/blob
+    # /1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Lib/test/test_int.py#L41    #
+    # noqa: E501
     # The conversion case from non-str to int is deleted.
     def test_basic(self):
         cfunc = njit(int_usecase)
@@ -2761,7 +2840,7 @@ class IntTestCases(BaseTest):
                     self.assertEqual(cfunc(ss), vv)
 
         # cases for border cases, -1<<63 and 1<<63-1
-        self.assertEqual(cfunc(str(-1-sys.maxsize)), -1-sys.maxsize)
+        self.assertEqual(cfunc(str(-1 - sys.maxsize)), -1 - sys.maxsize)
         self.assertEqual(cfunc(str(sys.maxsize)), sys.maxsize)
 
         self.assertEqual(base_cfunc('0o123', 0), 83)
@@ -2771,10 +2850,8 @@ class IntTestCases(BaseTest):
         # Various representations of 2**32 evaluated to 0
         # rather than 2**32 in previous versions
 
-        self.assertEqual(
-            base_cfunc('100000000000000000000000000000000', 2),
-            4294967296
-        )
+        s = '100000000000000000000000000000000'
+        self.assertEqual(base_cfunc(s, 2), 4294967296)
         self.assertEqual(base_cfunc('102002022201221111211', 3), 4294967296)
         self.assertEqual(base_cfunc('10000000000000000', 4), 4294967296)
         self.assertEqual(base_cfunc('32244002423141', 5), 4294967296)
@@ -2877,6 +2954,102 @@ class IntTestCases(BaseTest):
         self.assertRaises(ValueError, base_cfunc, '0x0g', 16)
         self.assertRaises(ValueError, base_cfunc, '0Xg', 16)
         self.assertRaises(ValueError, base_cfunc, '0X0g', 16)
+
+    def test_underscores(self):
+        self.disable_leak_check()
+        cfunc = njit(int_usecase)
+        base_cfunc = njit(int_base_usecase)
+
+        for lit in self.VALID_UNDERSCORE_LITERALS:
+            if any(ch in lit for ch in '.eEjJ'):
+                continue
+            self.assertEqual(base_cfunc(lit, 0), eval(lit))
+            lit_without_us = lit.replace('_', '')
+            self.assertEqual(base_cfunc(lit, 0), base_cfunc(lit_without_us, 0))
+        for lit in self.INVALID_UNDERSCORE_LITERALS:
+            if any(ch in lit for ch in '.eEjJ'):
+                continue
+            self.assertRaises(ValueError, base_cfunc, lit, 0)
+        # Additional test cases with bases != 0, only for the constructor:
+        self.assertEqual(base_cfunc("1_00", 3), 9)
+        self.assertEqual(cfunc("0_100"), 100)  # not valid as a literal!
+        self.assertRaises(ValueError, cfunc, "_100")
+        self.assertRaises(ValueError, cfunc, "+_100")
+        self.assertRaises(ValueError, cfunc, "1__00")
+        self.assertRaises(ValueError, cfunc, "100_")
+
+    def test_int_base_limits(self):
+        # Testing the supported limits of the int() base parameter.
+        self.disable_leak_check()
+        base_cfunc = njit(int_base_usecase)
+        self.assertEqual(base_cfunc('0', 5), 0)
+        with self.assertRaises(ValueError):
+            base_cfunc('0', 1)
+        with self.assertRaises(ValueError):
+            base_cfunc('0', 37)
+        with self.assertRaises(ValueError):
+            base_cfunc('0', -909)  # An old magic value base from Python 2.
+        # Bases 2 through 36 are supported.
+        for base in range(2, 37):
+            self.assertEqual(base_cfunc('0', base=base), 0)
+
+    def test_int_base_bad_types(self):
+        # Not integer types are not valid bases; issue16772
+        self.disable_leak_check()
+        base_cfunc = njit(int_base_usecase)
+        with self.assertRaises(TypingError):
+            base_cfunc('0', 5.5)
+        with self.assertRaises(TypingError):
+            base_cfunc('0', 5.0)
+
+    def test_string_float(self):
+        self.disable_leak_check()
+        cfunc = njit(int_usecase)
+        self.assertRaises(ValueError, cfunc, '1.2')
+
+    def test_error_message(self):
+        self.disable_leak_check()
+        cfunc = njit(int_usecase)
+        base_cfunc = njit(int_base_usecase)
+
+        def check(s, base=None):
+            with self.assertRaises(ValueError, msg=_INVALID_LITERAL_MSG) as cm:
+                if base is None:
+                    cfunc(s)
+                else:
+                    base_cfunc(s, base)
+            self.assertEqual(cm.exception.args[0], _INVALID_LITERAL_MSG)
+
+        check('\xbd')
+        check('123\xbd')
+        check('  123 456  ')
+
+        check('123\x00')
+        # SF bug 1545497: embedded NULs were not detected with explicit base
+        check('123\x00', 10)
+        check('123\x00 245', 20)
+        check('123\x00 245', 16)
+        check('123\x00245', 20)
+        check('123\x00245', 16)
+        # lone surrogate in Unicode string
+        check('123\ud800')
+        check('123\ud800', 10)
+
+        # Add two assertions for unsupported types.
+        unicode_regex = "The literal should be an UnicodeType, but we got a .*"
+        with self.assertRaisesRegex(TypingError, unicode_regex):
+            cfunc(("a", "b"))
+        base_regex = "The base argument should be an Integer, but we got a .*"
+        with self.assertRaisesRegex(TypingError, base_regex):
+            base_cfunc('101', 0.5)
+
+    def test_issue31619(self):
+        base_cfunc = njit(int_base_usecase)
+        s = '1_0_1_0_1_0_1_0_1_0_1_0_1_0_1_0_1_0_1_0_1_0_1_0_1_0_1_0_1_0_1'
+        self.assertEqual(base_cfunc(s, 2), 0b1010101010101010101010101010101)
+        self.assertEqual(base_cfunc('1_2_3_4_5_6_7_0_1_2_3', 8), 0o12345670123)
+        self.assertEqual(base_cfunc('1_2_3_4_5_6_7_8_9', 16), 0x123456789)
+        self.assertEqual(base_cfunc('1_2_3_4_5_6_7', 32), 1144132807)
 
 
 if __name__ == '__main__':
