@@ -572,7 +572,8 @@ def build_with_axis_impl(a, axis, flatten_impl, ret_type=None):
     if ret_type is None:
         ret_type = types.intp
 
-    tuple_buffer = tuple(range(a.ndim))
+    shape_tuple_buffer = tuple([0] * (a.ndim - 1))
+    tuple_buffer = tuple([slice(None)] * a.ndim)
 
     def impl(a, axis=None):
         if axis < 0:
@@ -585,25 +586,28 @@ def build_with_axis_impl(a, axis, flatten_impl, ret_type=None):
         if a.ndim == 1:
             return flatten_impl(a)
 
-        # Make chosen axis the last axis:
-        tmp = tuple_buffer
-        for i in range(axis, a.ndim - 1):
-            tmp = tuple_setitem(tmp, i, i + 1)
-        transpose_index = tuple_setitem(tmp, a.ndim - 1, axis)
-        transposed_arr = a.transpose(transpose_index)
+        out_shape = shape_tuple_buffer
 
-        # Flatten along that axis; since we've transposed, we can just get
-        # batches off the overall flattened array.
-        m = transposed_arr.shape[-1]
-        raveled = transposed_arr.ravel()
-        assert raveled.size == a.size
-        assert transposed_arr.size % m == 0
-        out = np.empty(transposed_arr.size // m, ret_type)
-        for i in range(out.size):
-            out[i] = flatten_impl(raveled[i * m:(i + 1) * m])
+        idx = 0
+        for i in range(a.ndim):
+            if i == axis:
+                continue
+            out_shape = tuple_setitem(out_shape, idx, a.shape[i])
+            idx = idx + 1
 
-        # Reshape based on axis we didn't flatten over:
-        return out.reshape(transposed_arr.shape[:-1])
+        out = np.empty(out_shape, ret_type)
+        for _idx in np.ndindex(out_shape):
+            curr_idx = tuple_buffer
+            idx = 0
+            for i in range(a.ndim):
+                if i == axis:
+                    continue
+                curr_idx = tuple_setitem(curr_idx, i,
+                                         slice(_idx[idx], _idx[idx] + 1))
+                idx = idx + 1
+            out[_idx] = flatten_impl(a[curr_idx])
+
+        return out
 
     return impl
 
