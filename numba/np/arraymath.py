@@ -3964,6 +3964,10 @@ iinfo = namedtuple('iinfo', _iinfo_supported)
 # This module is imported under the compiler lock which should deal with the
 # lack of thread safety in the warning filter.
 def _gen_np_machar():
+    # NumPy 1.24 removed np.MachAr
+    if numpy_version >= (1, 24):
+        return
+
     np122plus = numpy_version >= (1, 22)
     w = None
     with warnings.catch_warnings(record=True) as w:
