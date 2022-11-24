@@ -1386,10 +1386,10 @@ class Interpreter(object):
         peepholes = []
         if PYVERSION == (3, 11):
             peepholes.append(peep_hole_split_at_pop_block)
-        if PYVERSION in [(3, 9), (3, 10)]:
+        if PYVERSION in [(3, 9), (3, 10), (3, 11)]:
             peepholes.append(peep_hole_list_to_tuple)
         peepholes.append(peep_hole_delete_with_exit)
-        if PYVERSION == (3, 10):
+        if PYVERSION in [(3, 10), (3, 11)]:
             # peep_hole_call_function_ex_to_call_function_kw
             # depends on peep_hole_list_to_tuple converting
             # any large number of arguments from a list to a
