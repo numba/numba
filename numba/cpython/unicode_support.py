@@ -775,7 +775,7 @@ def _Py_ISCARRIAGERETURN(ch):
 
 
 # ------------------------------------------------------------------------------
-# Start code related to/from CPython's longobject
+# Start code related to CPython's longobject
 
 
 # https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/longobject.c#L2256    # noqa: E501
@@ -797,3 +797,7 @@ _PyLong_DigitValue = np.array([
     37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37,
     37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37,
 ], dtype=np.uint8)
+
+
+# End code related to CPython's longobject
+# ------------------------------------------------------------------------------

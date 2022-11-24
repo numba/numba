@@ -2453,10 +2453,12 @@ def boolean_str(b):
         return lambda b: "True" if b else "False"
 
 
+# WARNING: Integer in [-1<<63, 1<<63) is supported, which differs from cpython.
 # Global error messages for conversion (unicode -> integer)
 
 
 # https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/unicodeobject.c#L8660    # noqa: E501
+@register_jitable
 def unicode_transform_decimal_and_space_to_ascii(u):
     if u._is_ascii:
         return u
@@ -2520,7 +2522,6 @@ def long_from_non_binary_base(ascii_u, start, end, digits, base):
         k = _PyLong_DigitValue[_Py_CHARMASK(ch)]
         assert 0 <= k < base
         accum = accum * base + k
-
     return accum
 
 
@@ -2632,7 +2633,7 @@ def long_from_string(ascii_u, base):
 # https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/longobject.c#L2856    # noqa: E501
 @register_jitable
 def py_long_from_unicode(u, base=10):
-    # TODO: _PyUnicode_TransformDecimalAndSpaceToASCII
+    # _PyUnicode_TransformDecimalAndSpaceToASCII
     ascii_u = unicode_transform_decimal_and_space_to_ascii(u)
     # assert ascii_bytes is not None
 

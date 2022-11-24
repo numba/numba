@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import sys
 import unittest
 from itertools import permutations
 from itertools import product
@@ -358,11 +359,12 @@ def chr_usecase(x):
     return chr(x)
 
 
-def int_usecase(s, base):
-    if base == 10:
-        return int(s)
-    else:
-        return int(s, base)
+def int_usecase(s):
+    return int(s)
+
+
+def int_base_usecase(s, base):
+    return int(s, base)
 
 
 class BaseTest(MemoryLeakMixin, TestCase):
@@ -2647,10 +2649,6 @@ class TestUnicodeAuxillary(BaseTest):
             cfunc('abc')
         self.assertIn(_header_lead, str(raises.exception))
 
-    def test_int(self):
-        # TODO: move cpython testcases here
-        ...
-
     def test_unicode_type_mro(self):
         # see issue #5635
         def bar(x):
@@ -2710,6 +2708,175 @@ class TestUnicodeAuxillary(BaseTest):
         msg = "format spec in f-strings not supported yet"
         self.assertIn(msg, str(raises.exception))
         self.assertEqual(impl5(), njit(impl5)())
+
+
+class IntTestCases(BaseTest):
+
+    import os
+    # os.environ['NUMBA_DEBUG_TYPEINFER'] = '1'
+
+    L = [
+        ('0', 0),
+        ('1', 1),
+        ('9', 9),
+        ('10', 10),
+        ('99', 99),
+        ('100', 100),
+        ('314', 314),
+        (repr(sys.maxsize), sys.maxsize),
+    ]
+
+    L_might_raise_error = [
+        (' 314', 314),
+        ('314 ', 314),
+        ('  \t\t  314  \t\t  ', 314),
+        ('  1x', ValueError),
+        ('  1  ', 1),
+        ('  1\02  ', ValueError),
+        ('', ValueError),
+        (' ', ValueError),
+        ('  \t\t  ', ValueError),
+        ("\u0200", ValueError)
+    ]
+
+    # https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Lib/test/test_int.py#L41    # noqa: E501
+    # The conversion case from non-str to int is deleted.
+    def test_basic(self):
+        cfunc = njit(int_usecase)
+        base_cfunc = njit(int_base_usecase)
+
+        self.assertEqual(cfunc("-3"), -3)
+        self.assertEqual(cfunc(" -3 "), -3)
+        self.assertEqual(cfunc("\N{EM SPACE}-3\N{EN SPACE}"), -3)
+        # Different base:
+        self.assertEqual(base_cfunc("10", 16), 16)
+        # Test conversion from strings and various anomalies
+        for s, v in self.L:
+            for sign in "", "+", "-":
+                for prefix in "", " ", "\t", "  \t\t  ":
+                    ss = prefix + sign + s
+                    vv = v
+                    if sign == "-" and v is not ValueError:
+                        vv = -v
+                    self.assertEqual(cfunc(ss), vv)
+
+        # cases for border cases, -1<<63 and 1<<63-1
+        self.assertEqual(cfunc(str(-1-sys.maxsize)), -1-sys.maxsize)
+        self.assertEqual(cfunc(str(sys.maxsize)), sys.maxsize)
+
+        self.assertEqual(base_cfunc('0o123', 0), 83)
+        self.assertEqual(base_cfunc('0x123', 16), 291)
+
+        # SF bug 1334662: int(string, base) wrong answers
+        # Various representations of 2**32 evaluated to 0
+        # rather than 2**32 in previous versions
+
+        self.assertEqual(
+            base_cfunc('100000000000000000000000000000000', 2),
+            4294967296
+        )
+        self.assertEqual(base_cfunc('102002022201221111211', 3), 4294967296)
+        self.assertEqual(base_cfunc('10000000000000000', 4), 4294967296)
+        self.assertEqual(base_cfunc('32244002423141', 5), 4294967296)
+        self.assertEqual(base_cfunc('1550104015504', 6), 4294967296)
+        self.assertEqual(base_cfunc('211301422354', 7), 4294967296)
+        self.assertEqual(base_cfunc('40000000000', 8), 4294967296)
+        self.assertEqual(base_cfunc('12068657454', 9), 4294967296)
+        self.assertEqual(base_cfunc('4294967296', 10), 4294967296)
+        self.assertEqual(base_cfunc('1904440554', 11), 4294967296)
+        self.assertEqual(base_cfunc('9ba461594', 12), 4294967296)
+        self.assertEqual(base_cfunc('535a79889', 13), 4294967296)
+        self.assertEqual(base_cfunc('2ca5b7464', 14), 4294967296)
+        self.assertEqual(base_cfunc('1a20dcd81', 15), 4294967296)
+        self.assertEqual(base_cfunc('100000000', 16), 4294967296)
+        self.assertEqual(base_cfunc('a7ffda91', 17), 4294967296)
+        self.assertEqual(base_cfunc('704he7g4', 18), 4294967296)
+        self.assertEqual(base_cfunc('4f5aff66', 19), 4294967296)
+        self.assertEqual(base_cfunc('3723ai4g', 20), 4294967296)
+        self.assertEqual(base_cfunc('281d55i4', 21), 4294967296)
+        self.assertEqual(base_cfunc('1fj8b184', 22), 4294967296)
+        self.assertEqual(base_cfunc('1606k7ic', 23), 4294967296)
+        self.assertEqual(base_cfunc('mb994ag', 24), 4294967296)
+        self.assertEqual(base_cfunc('hek2mgl', 25), 4294967296)
+        self.assertEqual(base_cfunc('dnchbnm', 26), 4294967296)
+        self.assertEqual(base_cfunc('b28jpdm', 27), 4294967296)
+        self.assertEqual(base_cfunc('8pfgih4', 28), 4294967296)
+        self.assertEqual(base_cfunc('76beigg', 29), 4294967296)
+        self.assertEqual(base_cfunc('5qmcpqg', 30), 4294967296)
+        self.assertEqual(base_cfunc('4q0jto4', 31), 4294967296)
+        self.assertEqual(base_cfunc('4000000', 32), 4294967296)
+        self.assertEqual(base_cfunc('3aokq94', 33), 4294967296)
+        self.assertEqual(base_cfunc('2qhxjli', 34), 4294967296)
+        self.assertEqual(base_cfunc('2br45qb', 35), 4294967296)
+        self.assertEqual(base_cfunc('1z141z4', 36), 4294967296)
+
+        # tests with base 0
+        # this fails on 3.0, but in 2.x the old octal syntax is allowed
+        self.assertEqual(base_cfunc(' 0o123  ', 0), 83)
+        self.assertEqual(base_cfunc(' 0o123  ', 0), 83)
+        self.assertEqual(base_cfunc('000', 0), 0)
+        self.assertEqual(base_cfunc('0o123', 0), 83)
+        self.assertEqual(base_cfunc('0x123', 0), 291)
+        self.assertEqual(base_cfunc('0b100', 0), 4)
+        self.assertEqual(base_cfunc(' 0O123   ', 0), 83)
+        self.assertEqual(base_cfunc(' 0X123  ', 0), 291)
+        self.assertEqual(base_cfunc(' 0B100 ', 0), 4)
+
+        # without base still base 10
+        self.assertEqual(cfunc('0123'), 123)
+        self.assertEqual(base_cfunc('0123', 10), 123)
+
+        # tests with prefix and base != 0
+        self.assertEqual(base_cfunc('0x123', 16), 291)
+        self.assertEqual(base_cfunc('0o123', 8), 83)
+        self.assertEqual(base_cfunc('0b100', 2), 4)
+        self.assertEqual(base_cfunc('0X123', 16), 291)
+        self.assertEqual(base_cfunc('0O123', 8), 83)
+        self.assertEqual(base_cfunc('0B100', 2), 4)
+
+    def test_basic_raise_error(self):
+        self.disable_leak_check()
+
+        cfunc = njit(int_usecase)
+        base_cfunc = njit(int_base_usecase)
+
+        # Test conversion from strings and various anomalies
+        for s, v in self.L_might_raise_error:
+            for sign in "", "+", "-":
+                for prefix in "", " ", "\t", "  \t\t  ":
+                    ss = prefix + sign + s
+                    vv = v
+                    if sign == "-" and v is not ValueError:
+                        vv = -v
+                    try:
+                        self.assertEqual(cfunc(ss), vv)
+                    except ValueError:
+                        pass
+
+        # Bug 1679: "0x" is not a valid hex literal
+        self.assertRaises(ValueError, base_cfunc, "0x", 16)
+        self.assertRaises(ValueError, base_cfunc, "0x", 0)
+
+        self.assertRaises(ValueError, base_cfunc, "0o", 8)
+        self.assertRaises(ValueError, base_cfunc, "0o", 0)
+
+        self.assertRaises(ValueError, base_cfunc, "0b", 2)
+        self.assertRaises(ValueError, base_cfunc, "0b", 0)
+
+        # the code has special checks for the first character after the
+        #  type prefix
+        self.assertRaises(ValueError, base_cfunc, '0b2', 2)
+        self.assertRaises(ValueError, base_cfunc, '0b02', 2)
+        self.assertRaises(ValueError, base_cfunc, '0B2', 2)
+        self.assertRaises(ValueError, base_cfunc, '0B02', 2)
+        self.assertRaises(ValueError, base_cfunc, '0o8', 8)
+        self.assertRaises(ValueError, base_cfunc, '0o08', 8)
+        self.assertRaises(ValueError, base_cfunc, '0O8', 8)
+        self.assertRaises(ValueError, base_cfunc, '0O08', 8)
+        self.assertRaises(ValueError, base_cfunc, '0xg', 16)
+        self.assertRaises(ValueError, base_cfunc, '0x0g', 16)
+        self.assertRaises(ValueError, base_cfunc, '0Xg', 16)
+        self.assertRaises(ValueError, base_cfunc, '0X0g', 16)
 
 
 if __name__ == '__main__':
