@@ -961,11 +961,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.inf, None
             yield np.PINF, None
             yield np.asarray([-np.inf, 0., np.inf]), None
-            yield np.NINF, np.zeros(1, dtype=np.bool)
-            yield np.inf, np.zeros(1, dtype=np.bool)
-            yield np.PINF, np.zeros(1, dtype=np.bool)
+            yield np.NINF, np.zeros(1, dtype=np.bool_)
+            yield np.inf, np.zeros(1, dtype=np.bool_)
+            yield np.PINF, np.zeros(1, dtype=np.bool_)
             yield np.NINF, np.empty(12)
-            yield np.asarray([-np.inf, 0., np.inf]), np.zeros(3, dtype=np.bool)
+            yield np.asarray([-np.inf, 0., np.inf]), np.zeros(3, dtype=np.bool_)
 
         pyfuncs = [isneginf, isposinf]
         for pyfunc in pyfuncs:
