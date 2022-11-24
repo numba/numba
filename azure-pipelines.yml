@@ -12,12 +12,12 @@ jobs:
     name: macOS
     vmImage: macos-11
     matrix:
-      py37_np124:
+      py37_np124_macos:
         PYTHON: '3.7'
         NUMPY: '1.24.0rc1'
         CONDA_ENV: 'azure_ci'
         TEST_START_INDEX: 0
-      py310_np124:
+      py310_np124_macos:
         PYTHON: '3.10'
         NUMPY: '1.24.0rc1'
         CONDA_ENV: 'azure_ci'
@@ -95,12 +95,12 @@ jobs:
         CONDA_ENV: azure_ci
         RUN_TYPEGUARD: yes
         TEST_START_INDEX: 12
-      py39_np124:
+      py39_np124_slice13:
         PYTHON: '3.9'
         NUMPY: '1.24.0rc1'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 13
-      py39_np124:
+      py39_np124_slice14:
         PYTHON: '3.9'
         NUMPY: '1.24.0rc1'
         CONDA_ENV: azure_ci
@@ -110,7 +110,7 @@ jobs:
         NUMPY: '1.24.0rc1'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 15
-      py310_np124:
+      py310_np124_slice16:
         PYTHON: '3.10'
         NUMPY: '1.24.0rc1'
         CONDA_ENV: azure_ci
