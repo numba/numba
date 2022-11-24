@@ -307,6 +307,12 @@ class _ByteCode(object):
                                           self.co_consts, self.co_names)
 
 
+def _fix_LOAD_GLOBAL_arg(arg):
+    if utils.PYVERSION >= (3, 11):
+        return arg >> 1
+    return arg
+
+
 class ByteCodePy311(_ByteCode):
     def __init__(self, func_id):
         super().__init__(func_id)
