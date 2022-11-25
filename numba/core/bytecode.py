@@ -94,7 +94,9 @@ class ByteCodeInst(object):
             if self.opcode in (dis.opmap[k]
                                for k in ("JUMP_BACKWARD",
                                          "POP_JUMP_BACKWARD_IF_TRUE",
-                                         "POP_JUMP_BACKWARD_IF_FALSE")):
+                                         "POP_JUMP_BACKWARD_IF_FALSE",
+                                         "POP_JUMP_BACKWARD_IF_NONE",
+                                         "POP_JUMP_BACKWARD_IF_NOT_NONE",)):
                 return self.offset - (self.arg - 1) * 2
         elif PYVERSION > (3, 11):
             raise NotImplementedError(PYVERSION)
