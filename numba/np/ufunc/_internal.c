@@ -326,12 +326,9 @@ init_ufunc_dispatch(int *numpy_uses_fastcall)
             } else if (strncmp(crnt_name, "reduceat", 9) == 0) {
                 ufunc_dispatch.ufunc_reduceat =
                     (PyCFunctionWithKeywords)crnt->ml_meth;
-            } else if (strncmp(crnt_name, "resolve_dtypes", 15) == 0) {
             } else {
                 result = -1;
             }
-            break;
-        case '_':
             break;
         default:
             result = -1; /* Unknown method */
