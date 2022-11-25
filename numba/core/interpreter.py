@@ -2829,14 +2829,16 @@ class Interpreter(object):
         self._op_JUMP_IF(inst, pred=pred, iftrue=True)
 
     def _jump_if_none(self, inst, pred, iftrue):
-        brs = {
-            True: inst.get_jump_target(),
-            False: inst.next,
-        }
-        truebr = brs[iftrue]
-        falsebr = brs[not iftrue]
+        # branch pruning assumes true falls through and false is jump
+        truebr = inst.next
+        falsebr = inst.get_jump_target()
 
-        op = BINOPS_TO_OPERATORS["is"]
+        # this seems strange
+        if not iftrue:
+            op = BINOPS_TO_OPERATORS["is"]
+        else:
+            op = BINOPS_TO_OPERATORS["is not"]
+
         rhs = self.store(value=ir.Const(None, loc=self.loc),
                          name=f"$constNone{inst.offset}")
         lhs = self.get(pred)
