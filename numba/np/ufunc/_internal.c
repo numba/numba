@@ -341,6 +341,8 @@ init_ufunc_dispatch(int *numpy_uses_fastcall)
                 *numpy_uses_fastcall = crnt->ml_flags & METH_FASTCALL;
             }
             else if (*numpy_uses_fastcall != (crnt->ml_flags & METH_FASTCALL)) {
+                PyErr_SetString(PyExc_RuntimeError,
+                    "ufunc.at() flags do not match numpy_uses_fastcall");
                 return -1;
             }
         }
