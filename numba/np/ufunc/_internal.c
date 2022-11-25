@@ -356,13 +356,11 @@ init_ufunc_dispatch(int *numpy_uses_fastcall)
 #endif
                   );
     } else {
-        char* message_format = "Unexpected ufunc method %s()";
-        // This is slightly more than needed (extra 1 for \0 and the %s bytes
-        // are removed), but it is better to have a little too much than a
-        // little less than needed.
-        size_t message_size = strlen(message_format) + strlen(crnt_name) + 1;
-        char exception_message[message_size];
-        sprintf(exception_message, message_format, crnt_name);
+        // Sufficient for any sensible method name
+        const size_t max_msg_size = 256;
+        char exception_message[max_msg_size];
+        char const * const message_format = "Unexpected ufunc method %s()";
+        snprintf(exception_message, max_msg_size, message_format, crnt_name);
         PyErr_SetString(PyExc_RuntimeError, exception_message);
     }
 
