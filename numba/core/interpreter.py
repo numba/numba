@@ -2867,10 +2867,10 @@ class Interpreter(object):
 
         op = BINOPS_TO_OPERATORS["is"]
 
-        constnone = self.store(value=ir.Const(None, loc=self.loc),
-                         name="${inst.offset}constnone")
-        pred = self.get(pred)
-        isnone = ir.Expr.binop(op, lhs=pred, rhs=constnone, loc=self.loc)
+        lhs = self.store(value=ir.Const(None, loc=self.loc),
+                         name=f"${inst.offset}constnone")
+        rhs = self.get(pred)
+        isnone = ir.Expr.binop(op, lhs=lhs, rhs=rhs, loc=self.loc)
 
         pname = "$%spred" % (inst.offset)
         predicate = self.store(value=isnone, name=pname)
