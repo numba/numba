@@ -2839,7 +2839,7 @@ class Interpreter(object):
         op = BINOPS_TO_OPERATORS["is"]
 
         lhs = self.store(value=ir.Const(None, loc=self.loc),
-                         name="${inst.offset}constnone")
+                         name=f"${inst.offset}constnone")
         rhs = self.get(pred)
         isnone = ir.Expr.binop(op, lhs=lhs, rhs=rhs, loc=self.loc)
 
