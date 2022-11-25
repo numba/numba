@@ -2866,15 +2866,26 @@ class Interpreter(object):
         falsebr = brs[not iftrue]
 
         op = BINOPS_TO_OPERATORS["is"]
-
-        lhs = self.store(value=ir.Const(None, loc=self.loc),
-                         name=f"${inst.offset}constnone")
-        rhs = self.get(pred)
+        rhs = self.store(value=ir.Const(None, loc=self.loc),
+                         name=f"$constNone{inst.offset}")
+        lhs = self.get(pred)
         isnone = ir.Expr.binop(op, lhs=lhs, rhs=rhs, loc=self.loc)
 
-        pname = "$%spred" % (inst.offset)
-        predicate = self.store(value=isnone, name=pname)
-        branch = ir.Branch(cond=predicate, truebr=truebr, falsebr=falsebr,
+        maybeNone = f"$maybeNone{inst.offset}"
+        self.store(value=isnone, name=maybeNone)
+
+        name = f"$bool{inst.offset}"
+        gv_fn = ir.Global("bool", bool, loc=self.loc)
+        self.store(value=gv_fn, name=name)
+
+        callres = ir.Expr.call(self.get(name), (self.get(maybeNone),), (),
+                               loc=self.loc)
+
+        pname = f"$pred{inst.offset}"
+        predicate = self.store(value=callres, name=pname)
+        branch = ir.Branch(cond=predicate,
+                           truebr=truebr,
+                           falsebr=falsebr,
                            loc=self.loc)
         self.current_block.append(branch)
 
