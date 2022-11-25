@@ -306,9 +306,7 @@ static struct _ufunc_dispatch {
     PyCFunctionWithKeywords ufunc_accumulate;
     PyCFunctionWithKeywords ufunc_reduceat;
     PyCFunctionWithKeywords ufunc_outer;
-#if NPY_API_VERSION >= 0x00000008
     PyCFunction ufunc_at;
-#endif
 } ufunc_dispatch;
 
 static int
@@ -324,10 +322,8 @@ init_ufunc_dispatch(int *numpy_uses_fastcall)
             if (strncmp(crnt_name, "accumulate", 11) == 0) {
                 ufunc_dispatch.ufunc_accumulate =
                     (PyCFunctionWithKeywords)crnt->ml_meth;
-#if NPY_API_VERSION >= 0x00000008
             } else if (strncmp(crnt_name, "at", 3) == 0) {
                 ufunc_dispatch.ufunc_at = crnt->ml_meth;
-#endif
             } else {
                 result = -1;
             }
@@ -372,9 +368,7 @@ init_ufunc_dispatch(int *numpy_uses_fastcall)
                   && (ufunc_dispatch.ufunc_accumulate != NULL)
                   && (ufunc_dispatch.ufunc_reduceat != NULL)
                   && (ufunc_dispatch.ufunc_outer != NULL)
-#if NPY_API_VERSION >= 0x00000008
                   && (ufunc_dispatch.ufunc_at != NULL)
-#endif
                   );
     }
     return result;
@@ -446,13 +440,11 @@ dufunc_outer_fast(PyDUFuncObject * self,
 }
 
 
-#if NPY_API_VERSION >= 0x00000008
 static PyObject *
 dufunc_at(PyDUFuncObject * self, PyObject * args)
 {
     return ufunc_dispatch.ufunc_at((PyObject*)self->ufunc, args);
 }
-#endif
 
 static PyObject *
 dufunc__compile_for_args(PyDUFuncObject * self, PyObject * args,
@@ -630,11 +622,9 @@ static struct PyMethodDef dufunc_methods[] = {
     {"outer",
         (PyCFunction)dufunc_outer,
         METH_VARARGS | METH_KEYWORDS, NULL},
-#if NPY_API_VERSION >= 0x00000008
     {"at",
         (PyCFunction)dufunc_at,
         METH_VARARGS, NULL},
-#endif
     {"_compile_for_args",
         (PyCFunction)dufunc__compile_for_args,
         METH_VARARGS | METH_KEYWORDS,
@@ -664,11 +654,9 @@ static struct PyMethodDef dufunc_methods_fast[] = {
     {"outer",
         (PyCFunction)dufunc_outer_fast,
         METH_FASTCALL | METH_KEYWORDS, NULL},
-#if NPY_API_VERSION >= 0x00000008
     {"at",
         (PyCFunction)dufunc_at,
         METH_VARARGS, NULL},
-#endif
     {"_compile_for_args",
         (PyCFunction)dufunc__compile_for_args,
         METH_VARARGS | METH_KEYWORDS,
@@ -837,9 +825,7 @@ MOD_INIT(_internal)
     if (PyModule_AddIntMacro(m, PyUFunc_One)
         || PyModule_AddIntMacro(m, PyUFunc_Zero)
         || PyModule_AddIntMacro(m, PyUFunc_None)
-#if NPY_API_VERSION >= 0x00000007
         || PyModule_AddIntMacro(m, PyUFunc_ReorderableNone)
-#endif
         )
         return MOD_ERROR_VAL;
 
