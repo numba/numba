@@ -219,23 +219,27 @@ complicated inputs, depending on their shapes::
 .. _scalar-return-values:
 
 Scalar return values
-------------------------
+--------------------
 
-Now suppose we want to return a scalar value from :func:`~numba.guvectorize`::
+Now suppose we want to return a scalar value from :func:`~numba.guvectorize`. To do this, we need to:
 
-   @guvectorize([(int64[:], int64, int64[:])], '(n),()->()')
-   def g(x, y, res):
-       acc=0
-       for i in range(x.shape[0]):
-           acc += x[i] + y
-       res[0]=acc
+* in the signatures, declare the scalar return with ``[:]`` like a 1-dimensional array (eg. ``int64[:]``),
 
-The modified function takes the sum of the 1-dimensional array (``x``) plus the scalar (``y``).
-There are a few important changes that allow the wrapped function to return a scalar:
+* in the layout, declare it as ``()``,
 
-* in the signatures, declare the scalar return with ``[:]`` like a 1-dimensional array (eg. ``int64[:]``)
-* in the layout, declare it as ``()``
-* in the implementation, write the return value to output. (e.g. ``res[0]=acc``)
+* in the implementation, write to the first element (e.g. ``res[0] = acc``).
+
+The following example function computes the sum of the 1-dimensional array (``x``) plus the scalar (``y``) and returns it as a scalar:
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_guvectorize_scalar_return`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.ex_guvectorize_scalar_return.begin
+   :end-before: magictoken.ex_guvectorize_scalar_return.end
+   :dedent: 12
+   :linenos:
+
+Now apply the wrapped function over the array, we get a scalar value as the output.
 
     >>> a = np.arange(5)
     >>> g(a,2)

@@ -197,6 +197,19 @@ class DocsExamplesTest(unittest.TestCase):
             timefunc(correct, "numba (%d threads)" % nthreads, func_nb_mt, a, b)
             # magictoken.ex_no_gil.end
 
+    def test_guvectorize_scalar_return(self):
+        with captured_stdout():
+            # magictoken.ex_guvectorize_scalar_return.begin
+            from numba import guvectorize, int64
+
+            @guvectorize([(int64[:], int64, int64[:])], '(n),()->()')
+            def g(x, y, res):
+                acc = 0
+                for i in range(x.shape[0]):
+                    acc += x[i] + y
+                res[0] = acc
+            # magictoken.ex_guvectorize_scalar_return.end
+
 
 if __name__ == '__main__':
     unittest.main()
