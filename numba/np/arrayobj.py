@@ -6396,6 +6396,7 @@ def nan_to_num_impl(X, copy=True, nan=0.0):
                     output_flat[i] = nan
             return output
     else:
-        raise TypeError("The first argument must be a scalar or an array-like")
+        raise errors.TypingError("The first argument must be a scalar or an "
+                                 "array-like")
 
     return impl
