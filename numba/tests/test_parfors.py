@@ -3335,6 +3335,9 @@ class TestPrangeBase(TestParforsBase):
             prange_names.append('prange')
             prange_names = tuple(prange_names)
             prange_idx = len(prange_names) - 1
+            if utils.PYVERSION == (3, 11):
+                # this is the inverse of _fix_LOAD_GLOBAL_arg
+                prange_idx = 1 + (prange_idx << 1)
             new_code = bytearray(pyfunc_code.co_code)
             assert len(patch_instance) <= len(range_locations)
             # patch up the new byte code
