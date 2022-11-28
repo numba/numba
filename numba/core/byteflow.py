@@ -1071,6 +1071,11 @@ class TraceRunner(object):
             varkwarg = None
         vararg = state.pop()
         func = state.pop()
+
+        if PYVERSION == (3, 11):
+            if "$null" in state.peek(1):
+                state.pop() # pop NULL, it's not used
+
         res = state.make_temp()
         state.append(inst, func=func, vararg=vararg, varkwarg=varkwarg, res=res)
         state.push(res)
