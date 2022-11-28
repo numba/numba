@@ -6376,3 +6376,26 @@ def arr_take_along_axis(arr, indices, axis):
             return _take_along_axis_impl(arr, indices, axis, Ni, Nk,
                                          indices_broadcast_shape)
     return take_along_axis_impl
+
+
+@overload(np.nan_to_num)
+def nan_to_num_impl(X, copy=True, nan=0.0):
+    if isinstance(X, types.Number):
+        def impl(X, copy=True, nan=0.0):
+            if np.isnan(X):
+                return nan
+            return X
+
+    elif type_can_asarray(X):
+        def impl(X, copy=True, nan=0.0):
+            X_ = np.asarray(X)
+            output = np.copy(X_) if copy else X_
+            output_flat = output.flat
+            for i in range(output.size):
+                if np.isnan(output_flat[i]):
+                    output_flat[i] = nan
+            return output
+    else:
+        raise TypeError("The first argument must be a scalar or an array-like")
+
+    return impl

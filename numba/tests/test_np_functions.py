@@ -4,6 +4,7 @@ import itertools
 import math
 import platform
 from functools import partial
+from itertools import product
 import warnings
 
 import numpy as np
@@ -408,6 +409,10 @@ def array_contains(a, key):
 
 def swapaxes(a, a1, a2):
     return np.swapaxes(a, a1, a2)
+
+
+def nan_to_num(X, copy=True, nan=0.0):
+    return np.nan_to_num(X, copy=copy, nan=nan)
 
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
@@ -4861,6 +4866,35 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as raises:
             gen(0)(arr2d, np.ones((2, 3), dtype=np.uint64))
         self.assertIn("dimensions don't match", str(raises.exception))
+
+    def test_nan_to_num(self):
+        values = [
+            np.nan,
+            1.0,
+            np.asarray([0.1, 1.0, 0.4]),
+            np.asarray([[0.1, 1.0, 0.4], [0.4, 1.2, 4.0]]),
+            np.asarray([0.1, np.nan, 0.4]),
+            np.asarray([[0.1, np.nan, 0.4], [np.nan, 1.2, 4.0]]),
+        ]
+        nans = [0.0, 4.2]
+
+        pyfunc = nan_to_num
+        cfunc = njit(nan_to_num)
+
+        for value, nan in product(values, nans):
+            expected = pyfunc(value, nan=nan)
+            got = cfunc(value, nan=nan)
+            self.assertPreciseEqual(expected, got)
+
+    def test_nan_to_num_copy_false(self):
+        # Check that copy=False operates in-place
+        X = np.asarray([0.1, 0.4, np.nan])
+        cfunc = njit(nan_to_num)
+
+        expected = 1.0
+        cfunc(X, copy=False, nan=expected)
+
+        self.assertPreciseEqual(X[-1], expected)
 
 
 class TestNPMachineParameters(TestCase):
