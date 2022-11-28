@@ -246,7 +246,7 @@ class _ByteCode(object):
                 table[adj_offset].lineno = lineno
         # Assign unfilled lineno
         # Start with first bytecode's lineno
-        known = table[_FIXED_OFFSET].lineno
+        known = code.co_firstlineno
         for inst in table.values():
             if inst.lineno >= 0:
                 known = inst.lineno
