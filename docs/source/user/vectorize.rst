@@ -215,6 +215,33 @@ complicated inputs, depending on their shapes::
    Use it to ensure the generated code does not fallback to
    :term:`object mode`.
 
+
+.. _scalar-return-values:
+
+Scalar return values
+------------------------
+
+Now suppose we want to return a scalar value from :func:`~numba.guvectorize`::
+
+   @guvectorize([(int64[:], int64, int64[:])], '(n),()->()')
+   def g(x, y, res):
+       acc=0
+       for i in range(x.shape[0]):
+           acc += x[i] + y
+       res[0]=acc
+
+The modified function takes the sum of the 1-dimensional array (``x``) plus the scalar (``y``).
+There are a few important changes that allow the wrapped function to return a scalar:
+
+* in the signatures, declare the scalar return with ``[:]`` like a 1-dimensional array (eg. ``int64[:]``)
+* in the layout, declare it as ``()``
+* in the implementation, write the return value to output. (e.g. ``res[0]=acc``)
+
+    >>> a = np.arange(5)
+    >>> g(a,2)
+    20
+
+
 .. _overwriting-input-values:
 
 Overwriting input values
@@ -388,7 +415,7 @@ compilation works for a :class:`~numba.GUFunc`::
    >>> res = np.zeros_like(x)
    >>> g(x, y, res)
    >>> res
-   array([5, 6, 7, 8, 9])
+   array([10, 11, 12, 13, 14])
    >>> g.types
    ['ll->l']
 
