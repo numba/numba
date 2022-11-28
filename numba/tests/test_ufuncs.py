@@ -126,6 +126,7 @@ class BaseUFuncTest(MemoryLeakMixin):
 
         self.cache = CompilationCache()
 
+    @functools.lru_cache(maxsize=None)
     def _compile(self, pyfunc, args, nopython=True, nrt=False):
         # NOTE: to test the implementation of Numpy ufuncs, we disable
         # rewriting of array expressions.
