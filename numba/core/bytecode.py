@@ -155,7 +155,15 @@ def _unpack_opargs(code):
                 arg |= code[i + j] << (8 * j)
             i += ARG_LEN
             if op == EXTENDED_ARG:
+                # This is a deviation from what dis does...
+                # In python 3.11 it seems like EXTENDED_ARGs appear more often
+                # and are also used as jump targets. So as to not have to do
+                # "book keeping" for where EXTENDED_ARGs have been "skipped"
+                # they are replaced with NOPs so as to provide a legal jump
+                # target and also ensure that the bytecode offsets are correct.
+                yield (offset, OPCODE_NOP, arg, i)
                 extended_arg = arg << 8 * ARG_LEN
+                offset = i
                 continue
         else:
             arg = None
