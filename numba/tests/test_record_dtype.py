@@ -1732,6 +1732,68 @@ class TestNestedArrays(TestCase):
 
         np.testing.assert_array_equal(expected, got)
 
+    def test_issue_1469_1(self):
+        # Dimensions of nested arrays as a dtype are concatenated with the
+        # dimensions of the array.
+        nptype = np.dtype((np.float64,(4,)))
+        nbtype = types.Array(numpy_support.from_dtype(nptype),2,'C')
+        expected = types.Array(types.float64, 3, 'C')
+        self.assertEqual(nbtype, expected)
+
+    def test_issue_1469_2(self):
+        # Nesting nested arrays results in concatentated dimensions -
+        # In this example a 3D array of a 2D nested array of 2D nested arrays
+        # results in a 7D type.
+        nptype = np.dtype((np.dtype((np.float64, (5, 2))), (3, 6)))
+        nbtype = types.Array(numpy_support.from_dtype(nptype), 3, 'C')
+        expected = types.Array(types.float64, 7, 'C')
+        self.assertEqual(nbtype, expected)
+
+    def test_issue_1469_3(self):
+        # Nested arrays in record dtypes are accepted, but alignment is not
+        # guaranteed.
+        nptype = np.dtype([('a', np.float64,(4,))])
+        nbtype = types.Array(numpy_support.from_dtype(nptype),2,'C')
+
+        # Manual construction of expected array of record type
+        natype = types.NestedArray(types.float64, (4,))
+        fields = [('a', {'type': natype, 'offset': 0})]
+        rectype = types.Record(fields=fields, size=32, aligned=False)
+        expected = types.Array(rectype, 2, 'C', aligned=False)
+
+        self.assertEqual(nbtype, expected)
+
+    def test_issue_3158_1(self):
+        # A nested array dtype.
+        item = np.dtype([('some_field', np.int32)])
+        items = np.dtype([('items', item, 10)])
+
+        @njit
+        def fn(x):
+            return x[0]
+
+        arr = np.zeros((2,), items)
+        expected = fn.py_func(arr)
+        actual = fn(arr)
+
+        self.assertEqual(expected, actual)
+
+    def test_issue_3158_2(self):
+        # A slightly more complex nested array dtype example.
+        dtype1 = np.dtype([('a', 'i8'), ('b', 'i4')])
+        dtype2 = np.dtype((dtype1, (2, 2)))
+        dtype3 = np.dtype([('x', '?'), ('y', dtype2)])
+
+        @njit
+        def fn(arr):
+            return arr[0]
+
+        arr = np.zeros(2, dtype3)
+        expected = fn.py_func(arr)
+        actual = fn(arr)
+
+        self.assertEqual(expected, actual)
+
 
 if __name__ == '__main__':
     unittest.main()
