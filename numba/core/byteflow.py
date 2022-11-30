@@ -142,7 +142,7 @@ class Flow(object):
                     state.get_inst().opname not in _NO_RAISE_OPS):
                 # Is in a *try* block
                 state.fork(pc=state.get_inst().next)
-                runner.handle_try(state)
+                runner._adjust_except_stack(state)
                 return True
             else:
                 state.advance_pc()
@@ -335,14 +335,20 @@ class TraceRunner(object):
             msg = "Use of unsupported opcode (%s) found" % inst.opname
             raise UnsupportedError(msg, loc=self.get_debug_loc(inst.lineno))
 
-    def handle_try(self, state):
+    def _adjust_except_stack(self, state):
+        """
+        Adjust stack when entering an exception handler to match expectation
+        by the bytecode.
+        """
         tryblk = state.get_top_block('TRY')
         state.pop_block_and_above(tryblk)
         nstack = state.stack_depth
         kwargs = {}
         expected_depth = tryblk['stack_depth']
         if nstack > expected_depth:
+            # Pop extra item in the stack
             kwargs['npop'] = nstack - expected_depth
+        # Set extra stack itemcount due to the exception values.
         extra_stack = 1
         if tryblk['push_lasti']:
             extra_stack += 1
@@ -367,8 +373,8 @@ class TraceRunner(object):
 
     def op_RETURN_GENERATOR(self, state, inst):
         # This impl doesn't follow what CPython does. CPython is hacking
-        # the frame stack in the interpreter. We cannot. From usage, it always
-        # have a POP_TOP after it so we push a dummy value to the stack.
+        # the frame stack in the interpreter. From usage, it always
+        # has a POP_TOP after it so we push a dummy value to the stack.
         #
         # Example bytecode:
         # >          0	NOP(arg=None, lineno=80)
@@ -792,7 +798,7 @@ class TraceRunner(object):
             state.append(inst, exc=exc)
 
             if state.has_active_try():
-                self.handle_try(state)
+                self._adjust_except_stack(state)
             else:
                 state.terminate()
 
@@ -1266,7 +1272,7 @@ class TraceRunner(object):
         op = dis._nb_ops[inst.arg][1]
         rhs = state.pop()
         lhs = state.pop()
-        res = state.make_temp()
+        res = state.make_temp(prefix=f"binop_{op}")
         state.append(inst, op=op, lhs=lhs, rhs=rhs, res=res)
         state.push(res)
 
@@ -1393,7 +1399,7 @@ class TraceRunner(object):
             state.append(inst, exc=exc)
 
             if state.has_active_try():
-                self.handle_try(state)
+                self._adjust_except_stack(state)
             else:
                 state.terminate()
     else:
