@@ -613,7 +613,7 @@ class Lower(BaseLower):
                 # dynamic values
                 typ = self.typeof(exc_arg.name)
                 val = self.loadvar(exc_arg.name)
-                self.incref(typ, val)
+                # self.incref(typ, val)
             else:
                 # to-do: fill typ
                 typ = None

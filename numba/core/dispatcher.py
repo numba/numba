@@ -147,6 +147,10 @@ class _FunctionCompiler(object):
         flags = compiler.Flags()
         self.targetdescr.options.parse_as_flags(flags, self.targetoptions)
         flags = self._customize_flags(flags)
+        # print(flags)
+        flags.enable_looplift = False
+        flags.enable_pyobject = False
+        flags.enable_pyobject_looplift = False
 
         impl = self._get_implementation(args, {})
         cres = compiler.compile_extra(self.targetdescr.typing_context,

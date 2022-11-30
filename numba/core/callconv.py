@@ -457,9 +457,9 @@ class CPUCallConv(BaseCallConv):
         # merge static and dynamic variables
         excinfo = api.runtime_build_excinfo_struct(static_exc_bytes, py_tuple)
 
-        if self.context.enable_nrt:
-            self.context.nrt.free(
-                builder, builder.bitcast(excinfo_ptr, api.voidptr))
+        # if self.context.enable_nrt:
+        #     self.context.nrt.free(
+                # builder, builder.bitcast(excinfo_ptr, api.voidptr))
         return excinfo
 
     def unpack_exception(self, builder, api, status):
@@ -470,6 +470,7 @@ class CPUCallConv(BaseCallConv):
         # else:
         #     (static) unserialize the exception using pythonapi.unserialize
 
+        cgutils.printf(builder, "comecou\n")
         excinfo_ptr = status.excinfoptr
         flag = builder.extract_value(builder.load(excinfo_ptr), ALLOC_FLAG_IDX)
         gt = builder.icmp_signed('>', flag, int32_t(0))
@@ -483,6 +484,7 @@ class CPUCallConv(BaseCallConv):
         phi = builder.phi(static_exc.type)
         phi.add_incoming(dyn_exc, bb_then)
         phi.add_incoming(static_exc, bb_else)
+        cgutils.printf(builder, "passou\n")
         return phi
 
     def emit_unwrap_dyn_exception_func(self, module, st_type, nb_types):
@@ -552,7 +554,7 @@ class CPUCallConv(BaseCallConv):
             objs.append(obj)
 
         # at this point, a pointer to the list of runtime values can be freed
-        self.context.nrt.free(builder, fn.args[0])
+        # self.context.nrt.free(builder, fn.args[0])
 
         # Create a tuple of CPython objects
         tup = api.tuple_pack(objs)
@@ -585,6 +587,7 @@ class CPUCallConv(BaseCallConv):
             raise TypeError("exc_args should be None or tuple, got %r"
                             % (exc_args,))
 
+        cgutils.printf(builder, "set dynamic user exc\n")
         api = self.context.get_python_api(builder)
         exc = self.build_excinfo_struct(exc, exc_args, loc, func_name)
         excinfo_pp = self._get_excinfo_argument(builder.function)
