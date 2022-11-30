@@ -729,19 +729,6 @@ class Raise(Terminator):
         return []
 
 
-class StaticReraise(Terminator):
-    is_exit = True
-
-    def __init__(self, loc):
-        assert isinstance(loc, Loc)
-        self.loc = loc
-
-    def __str__(self):
-        return "<static> reraise"
-
-    def get_targets(self):
-        return []
-
 class StaticRaise(Terminator):
     """
     Raise an exception class and arguments known at compile-time.

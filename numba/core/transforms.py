@@ -481,8 +481,7 @@ def _legalize_with_head(blk):
     counters = defaultdict(int)
     for stmt in blk.body:
         counters[type(stmt)] += 1
-
-    if counters.pop(ir.EnterWith, 0) != 1:
+    if counters.pop(ir.EnterWith) != 1:
         raise errors.CompilerError(
             "with's head-block must have exactly 1 ENTER_WITH",
             loc=blk.loc,
@@ -510,6 +509,7 @@ def _cfg_nodes_in_region(cfg, region_begin, region_end):
     while stack:
         tos = stack.pop()
         succlist = list(cfg.successors(tos))
+        # a single block function will have a empty sucessor list
         if succlist:
             succs, _ = zip(*succlist)
             nodes = set([node for node in succs

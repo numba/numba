@@ -90,12 +90,15 @@ class ByteCodeInst(object):
         # https://bugs.python.org/issue27129
         # https://github.com/python/cpython/pull/25069
         assert self.is_jump
-        if PYVERSION >= (3, 11):
+        if PYVERSION == (3, 11):
             if self.opcode in (dis.opmap[k]
                                for k in ("JUMP_BACKWARD",
                                          "POP_JUMP_BACKWARD_IF_TRUE",
                                          "POP_JUMP_BACKWARD_IF_FALSE")):
                 return self.offset - (self.arg - 1) * 2
+        elif PYVERSION > (3, 11):
+            raise NotImplementedError(PYVERSION)
+
         if PYVERSION >= (3, 10):
             if self.opcode in JREL_OPS:
                 return self.next + self.arg * 2
@@ -202,7 +205,7 @@ class ByteCodeIter(object):
         return buf
 
 
-class ByteCode(object):
+class _ByteCode(object):
     """
     The decoded bytecode of a function, and related information.
     """
@@ -313,14 +316,17 @@ def _fix_LOAD_GLOBAL_arg(arg):
     return arg
 
 
-class ByteCodePy311(ByteCode):
+class ByteCodePy311(_ByteCode):
     def __init__(self, func_id):
         super().__init__(func_id)
 
         def fixup_eh(ent):
             from dis import _ExceptionTableEntry
+            # Patch up the exception table offset
+            # because we add a NOP in _patched_opargs
             out = _ExceptionTableEntry(
-                start=ent.start + 2, end=ent.end + 2, target=ent.target + 2,
+                start=ent.start + _FIXED_OFFSET, end=ent.end + _FIXED_OFFSET,
+                target=ent.target + _FIXED_OFFSET,
                 depth=ent.depth, lasti=ent.lasti,
             )
             return out
@@ -341,8 +347,12 @@ class ByteCodePy311(ByteCode):
             return ent
 
 
-if PYVERSION >= (3, 11):
+if PYVERSION == (3, 11):
     ByteCode = ByteCodePy311
+elif PYVERSION < (3, 11):
+    ByteCode = _ByteCode
+else:
+    raise NotImplementedError(PYVERSION)
 
 
 class FunctionIdentity(serialize.ReduceMixin):

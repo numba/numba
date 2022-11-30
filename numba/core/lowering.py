@@ -562,9 +562,6 @@ class Lower(BaseLower):
         elif isinstance(inst, ir.StaticTryRaise):
             self.lower_static_try_raise(inst)
 
-        elif isinstance(inst, ir.StaticReraise):
-            self.lower_static_reraise(inst)
-
         else:
             if hasattr(self.context, "lower_extensions"):
                 for _class, func in self.context.lower_extensions.items():
@@ -617,11 +614,6 @@ class Lower(BaseLower):
             self.set_exception(None, loc=self.loc)
         else:
             self.set_exception(inst.exc_class, inst.exc_args, loc=self.loc)
-
-    def lower_static_reraise(self, inst):
-        self.call_conv.return_reraise(
-            self.builder
-        )
 
     def lower_assign(self, ty, inst):
         value = inst.value

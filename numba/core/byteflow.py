@@ -14,9 +14,8 @@ from numba.core.errors import UnsupportedError
 
 
 _logger = logging.getLogger(__name__)
-# logging.basicConfig(level=logging.DEBUG)
 
-_EXCEPT_STACK_OFFSET = 6 if PYVERSION < (3, 11) else 1
+_EXCEPT_STACK_OFFSET = 6
 _FINALLY_POP = _EXCEPT_STACK_OFFSET if PYVERSION >= (3, 8) else 1
 _NO_RAISE_OPS = frozenset({
     'LOAD_CONST',
@@ -136,14 +135,14 @@ class Flow(object):
             self.block_infos[state.pc_initial] = si = adapt_state_infos(state)
             _logger.debug("block_infos %s:\n%s", state, si)
 
-    if PYVERSION >= (3, 11):
+    if PYVERSION == (3, 11):
         def _run_handle_exception(self, runner, state):
             if not state.in_with() and (
                     state.has_active_try() and
                     state.get_inst().opname not in _NO_RAISE_OPS):
                 # Is in a *try* block
                 state.fork(pc=state.get_inst().next)
-                runner.handle_try(state)
+                runner._adjust_except_stack(state)
                 return True
             else:
                 state.advance_pc()
@@ -164,7 +163,7 @@ class Flow(object):
                         eh_block['push_lasti'] = eh.lasti
                         state.fork(pc=state._pc, extra_block=eh_block)
                         return True
-    else:
+    elif PYVERSION < (3, 11):
         def _run_handle_exception(self, runner, state):
             if (state.has_active_try() and
                     state.get_inst().opname not in _NO_RAISE_OPS):
@@ -186,6 +185,8 @@ class Flow(object):
                 return True
             else:
                 state.advance_pc()
+    else:
+        raise NotImplementedError(PYVERSION)
 
     def _build_cfg(self, all_states):
         graph = CFGraph()
@@ -316,7 +317,9 @@ class TraceRunner(object):
         return Loc(self.debug_filename, lineno)
 
     def dispatch(self, state):
-        if PYVERSION == (3, 11) and state._blockstack:
+        if PYVERSION > (3, 11):
+            raise NotImplementedError(PYVERSION)
+        elif PYVERSION == (3, 11) and state._blockstack:
             state: State
             while state._blockstack:
                 topblk = state._blockstack[-1]
@@ -336,14 +339,20 @@ class TraceRunner(object):
             msg = "Use of unsupported opcode (%s) found" % inst.opname
             raise UnsupportedError(msg, loc=self.get_debug_loc(inst.lineno))
 
-    def handle_try(self, state):
+    def _adjust_except_stack(self, state):
+        """
+        Adjust stack when entering an exception handler to match expectation
+        by the bytecode.
+        """
         tryblk = state.get_top_block('TRY')
         state.pop_block_and_above(tryblk)
         nstack = state.stack_depth
         kwargs = {}
         expected_depth = tryblk['stack_depth']
         if nstack > expected_depth:
+            # Pop extra item in the stack
             kwargs['npop'] = nstack - expected_depth
+        # Set extra stack itemcount due to the exception values.
         extra_stack = 1
         if tryblk['push_lasti']:
             extra_stack += 1
@@ -368,8 +377,8 @@ class TraceRunner(object):
 
     def op_RETURN_GENERATOR(self, state, inst):
         # This impl doesn't follow what CPython does. CPython is hacking
-        # the frame stack in the interpreter. We cannot. From usage, it always
-        # have a POP_TOP after it so we push a dummy value to the stack.
+        # the frame stack in the interpreter. From usage, it always
+        # has a POP_TOP after it so we push a dummy value to the stack.
         #
         # Example bytecode:
         # >          0	NOP(arg=None, lineno=80)
@@ -425,11 +434,13 @@ class TraceRunner(object):
             if inst.arg & 1:
                 state.push(state.make_null())
             state.push(res)
-    else:
+    elif PYVERSION < (3, 11):
         def op_LOAD_GLOBAL(self, state, inst):
             res = state.make_temp()
             state.append(inst, res=res)
             state.push(res)
+    else:
+        raise NotImplementedError(PYVERSION)
 
     def op_COPY_FREE_VARS(self, state, inst):
         state.append(inst)
@@ -781,7 +792,7 @@ class TraceRunner(object):
         state.append(inst, value=val, res=res)
         state.push(res)
 
-    if PYVERSION >= (3, 11):
+    if PYVERSION == (3, 11):
         def op_RAISE_VARARGS(self, state, inst):
             if inst.arg == 0:
                 exc = None
@@ -796,11 +807,11 @@ class TraceRunner(object):
             state.append(inst, exc=exc)
 
             if state.has_active_try():
-                self.handle_try(state)
+                self._adjust_except_stack(state)
             else:
                 state.terminate()
 
-    else:
+    elif PYVERSION < (3, 11):
         def op_RAISE_VARARGS(self, state, inst):
             in_exc_block = any([
                 state.get_top_block("EXCEPT") is not None,
@@ -819,6 +830,8 @@ class TraceRunner(object):
                 raise ValueError("Multiple argument raise is not supported.")
             state.append(inst, exc=exc)
             state.terminate()
+    else:
+        raise NotImplementedError
 
     def op_BEGIN_FINALLY(self, state, inst):
         temps = []
@@ -958,11 +971,11 @@ class TraceRunner(object):
             'FINALLY', state, next=inst.next, end=inst.get_jump_target(),
         )
 
-    if PYVERSION >= (3, 11):
+    if PYVERSION == (3, 11):
         def op_POP_EXCEPT(self, state, inst):
             state.pop()
 
-    else:
+    elif PYVERSION < (3, 11):
         def op_POP_EXCEPT(self, state, inst):
             blk = state.pop_block()
             if blk['kind'] not in {BlockKind('EXCEPT'), BlockKind('FINALLY')}:
@@ -975,6 +988,8 @@ class TraceRunner(object):
             state.pop()
             # Forces a new block
             state.fork(pc=inst.next)
+    else:
+        raise NotImplementedError(PYVERSION)
 
     def op_POP_BLOCK(self, state, inst):
         blk = state.pop_block()
@@ -1005,15 +1020,17 @@ class TraceRunner(object):
     def op_CALL(self, state, inst):
         narg = inst.arg
         args = list(reversed([state.pop() for _ in range(narg)]))
-        func = state.pop()
-        extra = state.pop()  # XXX need to see if it's NULL
-        if not _is_null_temp_reg(extra):
-            func = extra
-            args = [extra, *args]
+        callable_or_firstarg = state.pop()
+        null_or_callable = state.pop()
+        if _is_null_temp_reg(null_or_callable):
+            callable = callable_or_firstarg
+        else:
+            callable = null_or_callable
+            args = [callable_or_firstarg, *args]
         res = state.make_temp()
 
         kw_names = state.pop_kw_names()
-        state.append(inst, func=func, args=args, kw_names=kw_names, res=res)
+        state.append(inst, func=callable, args=args, kw_names=kw_names, res=res)
         state.push(res)
 
     def op_KW_NAMES(self, state, inst):
@@ -1268,7 +1285,7 @@ class TraceRunner(object):
         op = dis._nb_ops[inst.arg][1]
         rhs = state.pop()
         lhs = state.pop()
-        res = state.make_temp()
+        res = state.make_temp(prefix=f"binop_{op}")
         state.append(inst, op=op, lhs=lhs, rhs=rhs, res=res)
         state.push(res)
 
@@ -1327,12 +1344,14 @@ class TraceRunner(object):
     op_BINARY_XOR = _binaryop
 
     def op_MAKE_FUNCTION(self, state, inst, MAKE_CLOSURE=False):
-        if PYVERSION >= (3, 11):
+        if PYVERSION == (3, 11):
             # https://github.com/python/cpython/commit/2f180ce
             # name set via co_qualname
             name = None
-        else:
+        elif PYVERSION < (3, 11):
             name = state.pop()
+        else:
+            raise NotImplementedError(PYVERSION)
         code = state.pop()
         closure = annotations = kwdefaults = defaults = None
         if inst.arg & 0x8:
@@ -1386,7 +1405,7 @@ class TraceRunner(object):
         state.fork(pc=inst.next)
         state.fork(pc=inst.get_jump_target())
 
-    if PYVERSION >= (3, 11):
+    if PYVERSION == (3, 11):
         def op_RERAISE(self, state, inst):
             # This isn't handled, but the state is set up anyway
             exc = state.pop()
@@ -1395,20 +1414,22 @@ class TraceRunner(object):
             state.append(inst, exc=exc)
 
             if state.has_active_try():
-                self.handle_try(state)
+                self._adjust_except_stack(state)
             else:
                 state.terminate()
-    else:
+    elif PYVERSION < (3, 11):
         def op_RERAISE(self, state, inst):
             # This isn't handled, but the state is set up anyway
             exc = state.pop()
             state.append(inst, exc=exc)
             state.terminate()
+    else:
+        raise NotImplementedError(PYVERSION)
 
     # NOTE: Please see notes in `interpreter.py` surrounding the implementation
     # of LOAD_METHOD and CALL_METHOD.
 
-    if PYVERSION >= (3, 11):
+    if PYVERSION == (3, 11):
         def op_LOAD_METHOD(self, state, inst):
             item = state.pop()
             extra = state.make_null()
@@ -1416,16 +1437,18 @@ class TraceRunner(object):
             res = state.make_temp()
             state.append(inst, item=item, res=res)
             state.push(res)
-    else:
+    elif PYVERSION < (3, 11):
         def op_LOAD_METHOD(self, state, inst):
             self.op_LOAD_ATTR(state, inst)
+    else:
+        raise NotImplementedError(PYVERSION)
 
     def op_CALL_METHOD(self, state, inst):
         self.op_CALL_FUNCTION(state, inst)
 
 
 @total_ordering
-class State(object):
+class _State(object):
     """State of the trace
     """
     def __init__(self, bytecode, pc, nstack, blockstack, nullvals=()):
@@ -1679,7 +1702,7 @@ class State(object):
                 stack.append(self.make_temp())
         # Handle changes on the blockstack
         blockstack = list(self._blockstack)
-        if PYVERSION >= (3, 11):
+        if PYVERSION == (3, 11):
             # pop expired block in destination pc
             while blockstack:
                 top = blockstack[-1]
@@ -1688,6 +1711,10 @@ class State(object):
                     blockstack.pop()
                 else:
                     break
+        elif PYVERSION < (3, 11):
+            pass # intentionally bypass
+        else:
+            raise NotImplementedError(PYVERSION)
 
         if extra_block:
             blockstack.append(extra_block)
@@ -1732,7 +1759,7 @@ class State(object):
                 for edge in self._outedges}
 
 
-class StatePy311(State):
+class StatePy311(_State):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._kw_names = None
@@ -1763,8 +1790,12 @@ class StatePy311(State):
         return self.make_temp(prefix="null$")
 
 
-if PYVERSION >= (3, 11):
+if PYVERSION == (3, 11):
     State = StatePy311
+elif PYVERSION < (3, 11):
+    State = _State
+else:
+    raise NotImplementedError(PYVERSION)
 
 
 Edge = namedtuple("Edge", ["pc", "stack", "blockstack", "npush"])
