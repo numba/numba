@@ -2238,21 +2238,9 @@ class Interpreter(object):
                 gl = ir.FreeVar(idx, name, value, loc=self.loc)
             self.store(gl, res)
     else:
-        def op_LOAD_DEREF(self, inst, res):
-            n_cellvars = len(self.code_cellvars)
-            idx = inst.arg - len(self.code_locals)
-            if idx < n_cellvars:
-                name = self.code_cellvars[idx]
-                gl = self.get(name)
-            else:
-                name = self.code_freevars[idx - n_cellvars]
-                value = self.get_closure_value(idx)
-                gl = ir.FreeVar(idx, name, value, loc=self.loc)
-            self.store(gl, res)
         raise NotImplementedError(PYVERSION)
 
-    if PYVERSION >= (3, 11):
-
+    if PYVERSION == (3, 11):
         def op_MAKE_CELL(self, inst):
             pass  # ignored bytecode
 
@@ -2265,7 +2253,7 @@ class Interpreter(object):
                 dstname = self.code_freevars[idx - n_cellvars]
             value = self.get(value)
             self.store(value=value, name=dstname)
-    else:
+    elif PYVERSION < (3, 11):
         def op_STORE_DEREF(self, inst, value):
             n_cellvars = len(self.code_cellvars)
             if inst.arg < n_cellvars:
@@ -2274,6 +2262,8 @@ class Interpreter(object):
                 dstname = self.code_freevars[inst.arg - n_cellvars]
             value = self.get(value)
             self.store(value=value, name=dstname)
+    else:
+        raise NotImplementedError(PYVERSION)
 
     def op_SETUP_LOOP(self, inst):
         assert self.blocks[inst.offset] is self.current_block
@@ -3021,7 +3011,7 @@ class Interpreter(object):
         self.op_MAKE_FUNCTION(inst, name, code, closure, annotations,
                               kwdefaults, defaults, res)
 
-    if PYVERSION >= (3, 11):
+    if PYVERSION == (3, 11):
 
         def op_LOAD_CLOSURE(self, inst, res):
             n_cellvars = len(self.code_cellvars)
@@ -3040,7 +3030,7 @@ class Interpreter(object):
                 gl = ir.FreeVar(idx, name, value, loc=self.loc)
             self.store(gl, res)
 
-    else:
+    elif PYVERSION < (3, 11):
         def op_LOAD_CLOSURE(self, inst, res):
             n_cellvars = len(self.code_cellvars)
             if inst.arg < n_cellvars:
@@ -3056,6 +3046,8 @@ class Interpreter(object):
                 value = self.get_closure_value(idx)
                 gl = ir.FreeVar(idx, name, value, loc=self.loc)
             self.store(gl, res)
+    else:
+        raise NotImplementedError(PYVERSION)
 
     def op_LIST_APPEND(self, inst, target, value, appendvar, res):
         target = self.get(target)
