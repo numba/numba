@@ -1386,8 +1386,6 @@ class _LoopTypesTester(TestCase):
                             dtype=a_letter_type)
         elif a_letter_type in 'FD':
             # complex
-            # Note `-1j` is different on 2.x and 3.x, hence the explicit
-            # spelling
             if sys.platform != 'win32':
                 # Other platforms have better handling of negative zeros,
                 # test them
