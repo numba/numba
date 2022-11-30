@@ -63,7 +63,7 @@ typedef struct {
     const char *data;
     int len;
     const char *hashbuf;
-    const char *unwrap_dyn_args_func;  // pointer to unwrap dyn args function
+    const char *func_ptr;  // pointer to unwrap dyn args function
     int alloc_flag;
 } env_def_t;
 

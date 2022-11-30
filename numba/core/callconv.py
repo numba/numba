@@ -436,8 +436,10 @@ class CPUCallConv(BaseCallConv):
 
         # load the serialized exception buffer from the module and create
         # a python bytes object
-        picklebuf = builder.extract_value(builder.load(excinfo_ptr), 0)
-        picklebuf_sz = builder.extract_value(builder.load(excinfo_ptr), 1)
+        picklebuf = builder.extract_value(
+            builder.load(excinfo_ptr), PICKLE_BUF_IDX)
+        picklebuf_sz = builder.extract_value(
+            builder.load(excinfo_ptr), PICKLE_BUFSZ_IDX)
         static_exc_bytes = api.bytes_from_string_and_size(
             picklebuf, builder.sext(picklebuf_sz, api.py_ssize_t))
 
@@ -457,7 +459,10 @@ class CPUCallConv(BaseCallConv):
         # merge static and dynamic variables
         excinfo = api.runtime_build_excinfo_struct(static_exc_bytes, py_tuple)
 
+        # At this point, one can free the entire excinfo_ptr struct
         if self.context.enable_nrt:
+            # One can safely emit a free instruction as it is only executed
+            # if its in a dynamic exception branch
             self.context.nrt.free(
                 builder, builder.bitcast(excinfo_ptr, api.voidptr))
         return excinfo
@@ -486,37 +491,24 @@ class CPUCallConv(BaseCallConv):
         return phi
 
     def emit_unwrap_dyn_exception_func(self, module, st_type, nb_types):
-        # The exception struct has the following structure
-        # {i8*, i32, i8*, i8*, i32}
-        #   ^  serialized info about the exception (loc, kind, comptime args)
-        #        ^  size of the serialized exception
-        #             ^  In a dynamic exception, used to store dynamic arguments
-        #                as native values. In a static exception, it stores a
-        #                hash of the serialized exception (see pythonapi.py)
-        #                  ^  ptr to the function created here if in a dynamic
-        #                     exception, otherwise "null"
-        #                       ^  Number of dynamic args if in a dynamic
-        #                          exception. Default is "0"
+        # Create a function that convert a list of runtime arguments to a tuple
+        # of PyObjects. i.e.:
         #
-        # This part emits a function that knows how to unwrap the void* (i8*)
-        # into a struct that contains each of the dynamic arguments as native
-        # values. For instance:
         #   @njit('void(float, int64)')
         #   def func(a, b):
         #       raise ValueError(a, 123, b)
         #
         # The last three arguments of the exception info struction will hold:
-        # * A ptr to a {f32, i64} struct
-        # * A ptr to a function that converts i8* -> {f32, i64} -> python tuple
-        # * Number of dynamic arguments - 2
+        #   {___, ___, i8*, i8*, i32}
+        #               ^ A ptr to a {f32, i64} struct
+        #                    ^ function ptr that converts i8* -> {f32, i64}* ->
+        #                      python tuple
+        #                          ^ Number of dynamic arguments = 2
         #
-        # Why this is needed? The generated jitted function needs to be CPython
-        # API free region, as a user can specify "nogil=True" option to @jit.
-        # This is sort of a workaround around this restriction, where arguments
-        # as stored as native values and later converted to its corresponding
-        # CPython objects in the CPython wrapper
 
-        name = f'__excinfo_unwrap_args_{hash(st_type)}'
+        # hash is not a good function to use here as it is not deterministic
+        # TODO: change suffix by mangling of st_type
+        name = f'__excinfo_unwrap_args{hash(st_type)}'
         if name in module.globals:
             return module.globals.get(name)
 
@@ -546,6 +538,7 @@ class CPUCallConv(BaseCallConv):
 
             # not all objects are supported
             if obj == cgutils.get_null_value(obj.type):
+                # When not supported, abort compilation
                 msg = f'cannot convert native {typ} to python object'
                 raise errors.TypingError(msg)
 
@@ -585,11 +578,55 @@ class CPUCallConv(BaseCallConv):
             raise TypeError("exc_args should be None or tuple, got %r"
                             % (exc_args,))
 
+        # An exception in Numba is defined as the excinfo_t struct defined
+        # above. Some arguments in this struct are not used, depending on
+        # which kind of exception is being raised.
+        #
+        #             static exc - last 2 args are NULL and 0
+        #             vvv  vvv  vvv
+        # excinfo_t: {i8*, i32, i8*, i8*, i32}
+        #                       ^^^  ^^^  ^^^
+        #                       dynamic exc only - first 2 args are used for
+        #                                          static info
+        # Comment below details how the struct is used in the case of a dynamic
+        # exception
+        #
+        # {i8*, ___, ___, ___, ___}
+        #   ^  serialized info about the exception (loc, kind, comptime args)
+        #
+        # {___, i32, ___, ___, ___}
+        #        ^  len(serialized_exception)
+        #
+        # {___, ___, i8*, ___, ___}
+        #             ^  Store a list of native values in a dynamic exception.
+        #                Or a hash(serialized_exception) in a static exc.
+        #
+        # {___, ___, ___, i8*, ___}
+        #                  ^  Pointer to function that convert native values
+        #                     into PyObject*. "Null" in the case of a static
+        #                     exception
+        #
+        # {___, ___, ___, ___, i32}
+        #                       ^  Number of dynamic args in the exception.
+        #                          Default is "0"
+        #
+        # Here we:
+        # 1) Serializes compile time information and store them in the first
+        #    two args {i8*, i32, ___, ___, ___} of excinfo_t
+        # 2) Emit the required code for converting native values to CPython
+        #    objects. Those objects are stored in the last three args
+        #    {___, ___, i8*, i8*, i32} of excinfo_t
+        # 3) Allocate a new excinfo_t struct
+        # 4) Fill excinfo_t struct and copy the pointer to the excinfo** arg
+
+        # serialize comp. time args
         api = self.context.get_python_api(builder)
         exc = self.build_excinfo_struct(exc, exc_args, loc, func_name)
         excinfo_pp = self._get_excinfo_argument(builder.function)
         struct_gv = builder.load(api.serialize_object(exc))
 
+        # Create the struct for runtime args and emit a function to convert it
+        # into a Python tuple
         st_type = ir.LiteralStructType([arg.type for arg in exc_args if
                                         isinstance(arg, ir.Value)])
         st_ptr = self.emit_wrap_args_insts(builder, api, st_type, exc_args)
@@ -602,6 +639,7 @@ class CPUCallConv(BaseCallConv):
             self.context.nrt.allocate(builder, exc_size),
             excinfo_ptr_t)
 
+        # fill the args
         zero = int32_t(0)
         exc_fields = (builder.extract_value(struct_gv, 0),
                       builder.extract_value(struct_gv, 1),

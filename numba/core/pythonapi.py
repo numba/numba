@@ -1156,24 +1156,6 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name=fname)
         return self.builder.call(fn, [string, size])
 
-    def bytes_size(self, bytesobj):
-        """
-        Return the length of the bytes in bytes object.
-        """
-        fnty = ir.FunctionType(self.py_ssize_t, [self.pyobj])
-        fname = "PyBytes_Size"
-        fn = self._get_function(fnty, name=fname)
-        return self.builder.call(fn, [bytesobj])
-
-    def bytes_as_string(self, bytesobj):
-        """
-        Return a pointer to the contents of the bytes object.
-        """
-        fnty = ir.FunctionType(self.voidptr, [self.pyobj])
-        fname = "PyBytes_AsString"
-        fn = self._get_function(fnty, name=fname)
-        return self.builder.call(fn, [bytesobj])
-
     def object_hash(self, obj):
         fnty = ir.FunctionType(self.py_hash_t, [self.pyobj, ])
         fname = "PyObject_Hash"
@@ -1376,7 +1358,8 @@ class PythonAPI(object):
     def serialize_uncached(self, obj):
         """
         Same as serialize_object(), but don't create a global variable,
-        simply return a literal for {i8* data, i32 length, i8* hashbuf, i32 alloc_flag}
+        simply return a literal for structure:
+        {i8* data, i32 length, i8* hashbuf, i8* func_ptr, i32 alloc_flag}
         """
         # First make the array constant
         data = serialize.dumps(obj)
@@ -1404,8 +1387,9 @@ class PythonAPI(object):
     def serialize_object(self, obj):
         """
         Serialize the given object in the bitcode, and return it
-        as a pointer to a {i8* data, i32 length, i8* hashbuf}, structure constant
-        (suitable for passing to unserialize()).
+        as a pointer to a
+        {i8* data, i32 length, i8* hashbuf, i8* fn_ptr, i32 flag},
+        structure constant (suitable for passing to unserialize()).
         """
         try:
             gv = self.module.__serialized[obj]
