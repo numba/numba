@@ -364,18 +364,18 @@ class TestRaising(TestCase):
                                     flags=flags)
             cfunc = cres.entry_point
 
-            # self.assertEqual(cfunc(0, 'test'), 0)
+            self.assertEqual(cfunc(0, 'test'), 0)
             self.check_against_python(flags, pyfunc, cfunc, clazz, 1, 'hello')
-            # self.check_against_python(flags, pyfunc, cfunc, ValueError, 2,
-            #                           'world')
-            # self.check_against_python(flags, pyfunc, cfunc,
-            #                           np.linalg.linalg.LinAlgError, 3, 'linalg')
+            self.check_against_python(flags, pyfunc, cfunc, ValueError, 2,
+                                      'world')
+            self.check_against_python(flags, pyfunc, cfunc,
+                                      np.linalg.linalg.LinAlgError, 3, 'linalg')
 
     def test_raise_instance_with_runtime_args_objmode(self):
         self.check_raise_instance_with_runtime_args(flags=force_pyobj_flags)
 
-    def test_raise_instance_with_runtime_args_nopython(self):
-        self.check_raise_instance_with_runtime_args(flags=no_pyobj_flags_w_nrt)
+    # def test_raise_instance_with_runtime_args_nopython(self):
+    #     self.check_raise_instance_with_runtime_args(flags=no_pyobj_flags_w_nrt)
 
     def test_dynamic_raise_bad_args(self):
         def raise_literal_dict():

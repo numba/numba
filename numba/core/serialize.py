@@ -71,10 +71,6 @@ def runtime_build_excinfo_struct(static_exc, exc_args):
             idx += 1
         else:
             real_args.append(arg)
-    # for each "None" argument in runtime_args, use the one that was
-    # statically serialized
-    # real_args = [static_args[i] if runtime_arg is None else runtime_arg
-    #              for i, runtime_arg in enumerate(exc_args)]
     return (exc, tuple(real_args), locinfo)
 
 
