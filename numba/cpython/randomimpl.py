@@ -820,6 +820,8 @@ def _gammavariate_impl(_random):
         elif alpha == 1.0:
             # expovariate(1)
 
+            # Adjust due to cpython
+            # commit 63d152232e1742660f481c04a811f824b91f6790
             return -math.log(1.0 - _random()) * beta
 
         else:   # alpha is between 0 and 1 (exclusive)

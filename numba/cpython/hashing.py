@@ -328,45 +328,6 @@ def _tuple_hash(tup):
 
     return process_return(acc)
 
-# This is an obfuscated translation of CPython's tuplehash:
-# https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/tupleobject.c#L347-L369    # noqa: E501
-# The obfuscation occurs for a heterogeneous tuple as each tuple member needs
-# a potentially different hash() function calling for it. This cannot be done at
-# runtime as there's no way to iterate a heterogeneous tuple, so this is
-# achieved by essentially unrolling the loop over the members and inserting a
-# per-type hash function call for each member, and then simply computing the
-# hash value in an inlined/rolling fashion.
-
-
-@intrinsic
-def _tuple_hash_resolve(tyctx, val):
-    def impl(cgctx, builder, signature, args):
-        typingctx = cgctx.typing_context
-        fnty = typingctx.resolve_value_type(hash)
-        tupty, = signature.args
-        tup, = args
-        lty = cgctx.get_value_type(signature.return_type)
-        x = ir.Constant(lty, 0x345678)
-        mult = ir.Constant(lty, _PyHASH_MULTIPLIER)
-        shift = ir.Constant(lty, 82520)
-        tl = len(tupty)
-        for i, packed in enumerate(zip(tupty.types, range(tl - 1, -1, -1))):
-            ty, l = packed
-            sig = fnty.get_call_type(tyctx, (ty,), {})
-            impl = cgctx.get_function(fnty, sig)
-            tuple_val = builder.extract_value(tup, i)
-            y = impl(builder, (tuple_val,))
-            xxory = builder.xor(x, y)
-            x = builder.mul(xxory, mult)
-            lconst = ir.Constant(lty, l)
-            mult = builder.add(mult, shift)
-            mult = builder.add(mult, lconst)
-            mult = builder.add(mult, lconst)
-        x = builder.add(x, ir.Constant(lty, 97531))
-        return x
-    sig = _Py_hash_t(val)
-    return sig, impl
-
 
 @overload_method(types.BaseTuple, '__hash__')
 def tuple_hash(val):
