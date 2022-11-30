@@ -1175,6 +1175,18 @@ class Scope(EqualityCheckMixin):
         return vers
 
     def make_temp(self, loc, prefix=''):
+    """
+    Returns a `Var` instance for use as a temporary variable in this scope.
+
+    Parameters:
+    -----------
+
+    - loc: Loc
+        The location of the variable.
+ 
+    - prefix: str [optional]
+        prefix for the temporary variable name.
+    """
         n = len(self.localvars)
         v = Var(scope=self, name=f'${prefix}.{n}', loc=loc)
         self.localvars.define(v.name, v)
