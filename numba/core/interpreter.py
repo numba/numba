@@ -1509,7 +1509,7 @@ class Interpreter(object):
         self.dfainfo = self.dfa.infos[self.current_block_offset]
         self.assigner = Assigner()
         # Check out-of-scope syntactic-block
-        if PYVERSION >= (3, 11):
+        if PYVERSION == (3, 11):
             while self.syntax_blocks:
                 if offset >= self.syntax_blocks[-1].exit:
                     synblk = self.syntax_blocks.pop()
@@ -1522,12 +1522,14 @@ class Interpreter(object):
             if newtryblk is not None:
                 if newtryblk is not tryblk:
                     self._insert_try_block_begin()
-        else:
+        elif PYVERSION < (3, 11):
             while self.syntax_blocks:
                 if offset >= self.syntax_blocks[-1].exit:
                     self.syntax_blocks.pop()
                 else:
                     break
+        else:
+            raise NotImplementedError(PYVERSION)
 
     def _end_current_block(self):
         # Handle try block
@@ -1740,6 +1742,8 @@ class Interpreter(object):
                     if inst.offset >= top.exit:
                         self.current_block.append(ir.PopBlock(loc=self.loc))
                         self.syntax_blocks.pop()
+        elif PYVERSION > (3, 11):
+            raise NotImplementedError(PYVERSION)
 
         fname = "op_%s" % inst.opname.replace('+', '_')
         try:
@@ -2176,17 +2180,31 @@ class Interpreter(object):
             value = self.get_global_value(name)
             gl = ir.Global(name, value, loc=self.loc)
             self.store(gl, res)
-    else:
+    elif PYVERSION < (3, 11):
         def op_LOAD_GLOBAL(self, inst, res):
             name = self.code_names[inst.arg]
             value = self.get_global_value(name)
             gl = ir.Global(name, value, loc=self.loc)
             self.store(gl, res)
+    else:
+        raise NotImplementedError(PYVERSION)
 
     def op_COPY_FREE_VARS(self, inst):
         pass
 
-    if PYVERSION < (3, 11):
+    if PYVERSION == (3, 11):
+        def op_LOAD_DEREF(self, inst, res):
+            n_cellvars = len(self.code_cellvars)
+            if inst.arg < n_cellvars:
+                name = self.code_cellvars[inst.arg]
+                gl = self.get(name)
+            else:
+                idx = inst.arg - len(self.code_locals)
+                name = self.code_freevars[idx]
+                value = self.get_closure_value(idx)
+                gl = ir.FreeVar(idx, name, value, loc=self.loc)
+            self.store(gl, res)
+    elif PYVERSION < (3, 11):
         def op_LOAD_DEREF(self, inst, res):
             n_cellvars = len(self.code_cellvars)
             if inst.arg < n_cellvars:
@@ -2199,17 +2217,7 @@ class Interpreter(object):
                 gl = ir.FreeVar(idx, name, value, loc=self.loc)
             self.store(gl, res)
     else:
-        def op_LOAD_DEREF(self, inst, res):
-            n_cellvars = len(self.code_cellvars)
-            if inst.arg < n_cellvars:
-                name = self.code_cellvars[inst.arg]
-                gl = self.get(name)
-            else:
-                idx = inst.arg - len(self.code_locals)
-                name = self.code_freevars[idx]
-                value = self.get_closure_value(idx)
-                gl = ir.FreeVar(idx, name, value, loc=self.loc)
-            self.store(gl, res)
+        raise NotImplementedError(PYVERSION)
 
     def op_STORE_DEREF(self, inst, value):
         n_cellvars = len(self.code_cellvars)
