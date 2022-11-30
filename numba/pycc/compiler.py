@@ -105,6 +105,7 @@ class _ModuleCompiler(object):
     env_def_ty = ir.LiteralStructType((lt._void_star,
                                        lt._int32,
                                        lt._void_star,
+                                       lt._void_star,
                                        lt._int32))
     env_def_ptr = ir.PointerType(env_def_ty)
 

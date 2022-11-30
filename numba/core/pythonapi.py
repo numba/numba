@@ -1352,7 +1352,8 @@ class PythonAPI(object):
     def unserialize(self, structptr):
         """
         Unserialize some data.  *structptr* should be a pointer to
-        a {i8* data, i32 length, i8* hashbuf, i32 alloc_flag} structure.
+        a {i8* data, i32 length, i8* hashbuf, i8* func_ptr, i32 alloc_flag}
+        structure.
         """
         fnty = ir.FunctionType(self.pyobj,
                              (self.voidptr, ir.IntType(32), self.voidptr))
@@ -1397,6 +1398,7 @@ class PythonAPI(object):
             arr.bitcast(self.voidptr),
             Constant(ir.IntType(32), arr.type.pointee.count),
             hasharr.bitcast(self.voidptr),
+            cgutils.get_null_value(self.voidptr),
             Constant(ir.IntType(32), 0),
             ])
         return struct

@@ -4,12 +4,11 @@ Calling conventions for Numba-compiled functions.
 
 from collections import namedtuple
 from collections.abc import Iterable
-from decimal import Overflow
 import itertools
 
 from llvmlite import ir
 
-from numba.core import types, cgutils
+from numba.core import types, cgutils, errors
 from numba.core.base import PYOBJECT, GENERIC_POINTER
 
 
@@ -30,7 +29,8 @@ Status = namedtuple("Status",
                      "is_python_exc",
                      # If the function errored with a user exception
                      "is_user_exc",
-                     # The pointer to the exception info structure (for user exceptions)
+                     # The pointer to the exception info structure (for user
+                     # exceptions)
                      "excinfoptr",
                      ))
 
@@ -38,8 +38,10 @@ int32_t = ir.IntType(32)
 int64_t = ir.IntType(64)
 errcode_t = int32_t
 
+
 def _const_int(code):
     return ir.Constant(errcode_t, code)
+
 
 RETCODE_OK = _const_int(0)
 RETCODE_EXC = _const_int(-1)
@@ -50,8 +52,6 @@ RETCODE_STOPIT = _const_int(-3)
 FIRST_USEREXC = 1
 
 RETCODE_USEREXC = _const_int(FIRST_USEREXC)
-
-
 
 
 class BaseCallConv(object):
@@ -337,10 +337,16 @@ class _MinimalCallHelper(object):
             locinfo = None
             return exc, exc_args, locinfo
 
+
 # The structure type constructed by PythonAPI.serialize_uncached()
-# i.e a {i8* pickle_buf, i32 pickle_bufsz, i8* hash_buf, i32 alloc_flag}
+# i.e a {i8* pickle_buf, i32 pickle_bufsz, i8* hash_buf, i8* fn, i32 alloc_flag}
+PICKLE_BUF_IDX = 0
+PICKLE_BUFSZ_IDX = 1
+HASH_BUF_IDX = 2
+UNWRAP_FUNC_IDX = 3
+ALLOC_FLAG_IDX = 4
 excinfo_t = ir.LiteralStructType(
-    [GENERIC_POINTER, int32_t, GENERIC_POINTER, int32_t])
+    [GENERIC_POINTER, int32_t, GENERIC_POINTER, GENERIC_POINTER, int32_t])
 excinfo_ptr_t = ir.PointerType(excinfo_t)
 
 
@@ -362,11 +368,6 @@ class CPUCallConv(BaseCallConv):
     _status_ids = itertools.count(1)
 
     def __init__(self, context):
-        # Question for the reviewer (remove before merging!)
-        # Some tests at numba.tests.test_exceptions have the NRT disabled. But
-        # NRT is required to free memory when there's a dynamic exception in use
-        # Is there a better way to do this?
-        self.contains_dynamic_exception = False
         super().__init__(context)
 
     def _make_call_helper(self, builder):
@@ -396,27 +397,6 @@ class CPUCallConv(BaseCallConv):
         exc = (exc, exc_args, locinfo)
         return exc
 
-    def _free_allocated_excinfo_memory(self, builder, status):
-        # There are two approaches for dealing with exceptions in Numba. If all
-        # arguments are known at compile-time, Numba will serialize the
-        # arguments to the LLVM module and create a global variable to
-        # represent the exception info struct. This is referred to as the
-        # static version. Another way is the dynamic version, where some
-        # arguments are only known at runtime. In Order to accomplish this,
-        # the JIT must reserve memory for the excinfo struct whenever it raises
-        # a dynamic exception. The alloc_mem flag is used to indicate if an
-        # allocation occurred.
-        if not self.contains_dynamic_exception:
-            return
-
-        i8p = ir.IntType(8).as_pointer()
-        one = int32_t(1)
-
-        alloc_flag = builder.extract_value(builder.load(status.excinfoptr), 3)
-        ptr = builder.bitcast(status.excinfoptr, i8p)
-        with builder.if_then(builder.icmp_signed('==', alloc_flag, one)):
-            self.context.nrt.free(builder, ptr)
-
     def set_static_user_exc(self, builder, exc, exc_args=None, loc=None,
                             func_name=None):
         if exc is not None and not issubclass(exc, BaseException):
@@ -441,8 +421,8 @@ class CPUCallConv(BaseCallConv):
                         func_name=None):
         try_info = getattr(builder, '_in_try_block', False)
         self.set_static_user_exc(builder, exc, exc_args=exc_args,
-                                   loc=loc, func_name=func_name)
-        trystatus = self.check_try_status(builder)
+                                 loc=loc, func_name=func_name)
+        trystatus = self.check_try_status(builder)  # noqa: F841
         if try_info:
             # This is a hack for old-style impl.
             # We will branch directly to the exception handler.
@@ -461,32 +441,37 @@ class CPUCallConv(BaseCallConv):
         static_exc_bytes = api.bytes_from_string_and_size(
             picklebuf, builder.sext(picklebuf_sz, api.py_ssize_t))
 
-        # with builder.if_then(cgutils.is_null(builder, struct_gv)):
-        #     msg = ('PyBytes_FromStringAndSize return NULL',)
-        #     self.return_user_exc(builder, RuntimeError, msg, None)
+        # Load dynamic args (i8*) and the unwrap function
+        dyn_args = builder.extract_value(
+            builder.load(excinfo_ptr), HASH_BUF_IDX)
+        func_ptr = builder.extract_value(
+            builder.load(excinfo_ptr), UNWRAP_FUNC_IDX)
 
-        # load dynamic args and create a python tuple
-        dyn_args = builder.extract_value(builder.load(excinfo_ptr), 2)
-        n_args = builder.extract_value(builder.load(excinfo_ptr), 3)
+        # convert the unwrap function to a function pointer and call it
+        # it returns a python tuple with dynamic arguments converted to
+        # CPython objects
+        fnty = ir.FunctionType(PYOBJECT, [GENERIC_POINTER])
+        fn = builder.bitcast(func_ptr, fnty.as_pointer())
+        py_tuple = builder.call(fn, [dyn_args])
 
-        dyn_args = builder.bitcast(dyn_args, GENERIC_POINTER.as_pointer())
-
-        # dyn_st_type = ir.LiteralStructType((GENERIC_POINTER, GENERIC_POINTER, GENERIC_POINTER))
-        # dyn_st = builder.load(builder.bitcast(dyn_args, dyn_st_type.as_pointer()))
-        # tuple_args = [builder.extract_value(dyn_st, idx) for idx in range(3)]
-        # py_tuple = api.tuple_pack(tuple_args)
-        py_tuple = api.tuple_new(n_args)
-        with cgutils.for_range(builder, n_args) as loop:
-            val = builder.load(builder.gep(dyn_args, [loop.index]))
-            api.tuple_setitem(py_tuple, loop.index, val)
-
-
+        # merge static and dynamic variables
         excinfo = api.runtime_build_excinfo_struct(static_exc_bytes, py_tuple)
+
+        if self.context.enable_nrt:
+            self.context.nrt.free(
+                builder, builder.bitcast(excinfo_ptr, api.voidptr))
         return excinfo
 
     def unpack_exception(self, builder, api, status):
+        # Emit code that checks the alloc flag (last excinfo member)
+        # if flag > 0:
+        #     (dynamic) unpack the exception to retrieve runtime information
+        #               and merge with static info
+        # else:
+        #     (static) unserialize the exception using pythonapi.unserialize
+
         excinfo_ptr = status.excinfoptr
-        flag = builder.extract_value(builder.load(excinfo_ptr), 3)
+        flag = builder.extract_value(builder.load(excinfo_ptr), ALLOC_FLAG_IDX)
         gt = builder.icmp_signed('>', flag, int32_t(0))
         with builder.if_else(gt) as (then, otherwise):
             with then:
@@ -500,7 +485,98 @@ class CPUCallConv(BaseCallConv):
         phi.add_incoming(static_exc, bb_else)
         return phi
 
-    def set_dynamic_user_exc(self, builder, exc, exc_args, loc=None,
+    def emit_unwrap_dyn_exception_func(self, module, st_type, nb_types):
+        # The exception struct has the following structure
+        # {i8*, i32, i8*, i8*, i32}
+        #   ^  serialized info about the exception (loc, kind, comptime args)
+        #        ^  size of the serialized exception
+        #             ^  In a dynamic exception, used to store dynamic arguments
+        #                as native values. In a static exception, it stores a
+        #                hash of the serialized exception (see pythonapi.py)
+        #                  ^  ptr to the function created here if in a dynamic
+        #                     exception, otherwise "null"
+        #                       ^  Number of dynamic args if in a dynamic
+        #                          exception. Default is "0"
+        #
+        # This part emits a function that knows how to unwrap the void* (i8*)
+        # into a struct that contains each of the dynamic arguments as native
+        # values. For instance:
+        #   @njit('void(float, int64)')
+        #   def func(a, b):
+        #       raise ValueError(a, 123, b)
+        #
+        # The last three arguments of the exception info struction will hold:
+        # * A ptr to a {f32, i64} struct
+        # * A ptr to a function that converts i8* -> {f32, i64} -> python tuple
+        # * Number of dynamic arguments - 2
+        #
+        # Why this is needed? The generated jitted function needs to be CPython
+        # API free region, as a user can specify "nogil=True" option to @jit.
+        # This is sort of a workaround around this restriction, where arguments
+        # as stored as native values and later converted to its corresponding
+        # CPython objects in the CPython wrapper
+
+        name = f'__excinfo_unwrap_args_{hash(st_type)}'
+        if name in module.globals:
+            return module.globals.get(name)
+
+        fnty = ir.FunctionType(GENERIC_POINTER, [GENERIC_POINTER])
+        fn = ir.Function(module, fnty, name)
+
+        # prevent the function from being inlined
+        fn.attributes.add('nounwind')
+        fn.attributes.add('noinline')
+
+        bb_entry = fn.append_basic_block('')
+        builder = ir.IRBuilder(bb_entry)
+        api = self.context.get_python_api(builder)
+
+        # i8* -> {native arg1 type, native arg2 type, ...}
+        st_type_ptr = st_type.as_pointer()
+        st_ptr = builder.bitcast(fn.args[0], st_type_ptr)
+        # compile time values are stored as None
+        nb_types = [typ for typ in nb_types if typ]
+
+        # convert native values into CPython objects
+        objs = []
+        for i, typ in enumerate(nb_types):
+            val = builder.extract_value(builder.load(st_ptr), i)
+            self.context.nrt.decref(builder, typ, val)
+            obj = api.from_native_value(typ, val)
+
+            # not all objects are supported
+            if obj == cgutils.get_null_value(obj.type):
+                msg = f'cannot convert native {typ} to python object'
+                raise errors.TypingError(msg)
+
+            objs.append(obj)
+
+        # at this point, a pointer to the list of runtime values can be freed
+        self.context.nrt.free(builder, fn.args[0])
+
+        # Create a tuple of CPython objects
+        tup = api.tuple_pack(objs)
+        builder.ret(tup)
+
+        return fn
+
+    def emit_wrap_args_insts(self, builder, api, st_type, exc_args):
+        st_size = api.py_ssize_t(self.context.get_abi_sizeof(st_type))
+
+        st_ptr = builder.bitcast(
+            self.context.nrt.allocate(builder, st_size),
+            st_type.as_pointer())
+
+        # skip compile-time values
+        exc_args = [arg for arg in exc_args if isinstance(arg, ir.Value)]
+
+        zero = int32_t(0)
+        for idx, arg in enumerate(exc_args):
+            builder.store(arg, builder.gep(st_ptr, [zero, int32_t(idx)]))
+
+        return st_ptr
+
+    def set_dynamic_user_exc(self, builder, exc, exc_args, nb_types, loc=None,
                              func_name=None):
         if not issubclass(exc, BaseException):
             raise TypeError("exc should be an exception class, got %r"
@@ -509,48 +585,36 @@ class CPUCallConv(BaseCallConv):
             raise TypeError("exc_args should be None or tuple, got %r"
                             % (exc_args,))
 
-        # set that a dynamic exception was inserted
-        self.contains_dynamic_exception = True
-
         api = self.context.get_python_api(builder)
         exc = self.build_excinfo_struct(exc, exc_args, loc, func_name)
         excinfo_pp = self._get_excinfo_argument(builder.function)
         struct_gv = builder.load(api.serialize_object(exc))
 
-        # Each dynamic arg in the exception is a PyObject*
-        n_dyn_args = len([arg for arg in exc_args if isinstance(arg, ir.Instruction)])
-        struct_type = ir.LiteralStructType([GENERIC_POINTER] * n_dyn_args)
-        struct_size = api.py_ssize_t(self.context.get_abi_sizeof(struct_type))
-        # to-do: free this malloc
-        struct_ptr = builder.bitcast(
-            self.context.nrt.allocate(builder, struct_size),
-            struct_type.as_pointer())
-
-        zero = int32_t(0)
-        idx = 0
-        for arg in exc_args:
-            if isinstance(arg, ir.Instruction):
-                builder.store(arg, builder.gep(struct_ptr, [zero, int32_t(idx)]))
-                idx += 1
+        st_type = ir.LiteralStructType([arg.type for arg in exc_args if
+                                        isinstance(arg, ir.Value)])
+        st_ptr = self.emit_wrap_args_insts(builder, api, st_type, exc_args)
+        unwrap_fn = self.emit_unwrap_dyn_exception_func(
+            builder.module, st_type, nb_types)
 
         # allocate the excinfo struct
-        st_size = api.py_ssize_t(self.context.get_abi_sizeof(excinfo_t))
-        # to-do: free this malloc
+        exc_size = api.py_ssize_t(self.context.get_abi_sizeof(excinfo_t))
         excinfo_p = builder.bitcast(
-            self.context.nrt.allocate(builder, st_size),
+            self.context.nrt.allocate(builder, exc_size),
             excinfo_ptr_t)
 
+        zero = int32_t(0)
         exc_fields = (builder.extract_value(struct_gv, 0),
                       builder.extract_value(struct_gv, 1),
-                      builder.bitcast(struct_ptr, GENERIC_POINTER),
-                      int32_t(n_dyn_args))
+                      builder.bitcast(st_ptr, GENERIC_POINTER),
+                      builder.bitcast(unwrap_fn, GENERIC_POINTER),
+                      int32_t(len(st_type)))
         for idx, arg in enumerate(exc_fields):
             builder.store(arg, builder.gep(excinfo_p, [zero, int32_t(idx)]))
         builder.store(excinfo_p, excinfo_pp)
 
-    def return_non_const_user_exc(self, builder, exc, exc_args, loc=None,
-                                  func_name=None):
-        self.set_dynamic_user_exc(builder, exc, exc_args,
+    def return_non_const_user_exc(self, builder, exc, exc_args, nb_types,
+                                  loc=None, func_name=None):
+        self.set_dynamic_user_exc(builder, exc, exc_args, nb_types,
                                   loc=loc, func_name=func_name)
         self._return_errcode_raw(builder, RETCODE_USEREXC, mark_exc=True)
 
@@ -783,7 +847,7 @@ class NumpyErrorModel(ErrorModel):
 error_models = {
     'python': PythonErrorModel,
     'numpy': NumpyErrorModel,
-    }
+}
 
 
 def create_error_model(model_name, context):

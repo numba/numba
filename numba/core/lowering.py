@@ -137,9 +137,10 @@ class BaseLower(object):
         Called after lowering a block.
         """
 
-    def return_non_const_exception(self, exc_class, exc_args, loc=None):
+    def return_non_const_exception(self, exc_class, exc_args, nb_types,
+                                   loc=None):
         self.call_conv.return_non_const_user_exc(
-            self.builder, exc_class, exc_args,
+            self.builder, exc_class, exc_args, nb_types,
             loc=loc, func_name=self.func_ir.func_id.func_name,
         )
 
@@ -605,27 +606,23 @@ class Lower(BaseLower):
 
     def lower_dynamic_raise(self, inst):
         exc_args = inst.exc_args
-        pyapi = self.context.get_python_api(self.builder)
-        env_manager = self.context.get_env_manager(self.builder)
         args = []
+        nb_types = []
         for exc_arg in exc_args:
             if isinstance(exc_arg, ir.Var):
                 # dynamic values
                 typ = self.typeof(exc_arg.name)
                 val = self.loadvar(exc_arg.name)
                 self.incref(typ, val)
-                obj = pyapi.from_native_value(typ, val, env_manager)
-                # raise exception if cannot convert from native value
-                if cgutils.get_null_value(obj.type) == obj:
-                    msg = f'cannot convert native {typ} to python object'
-                    raise TypingError(msg)
             else:
-                # constants
-                obj = exc_arg
-            args.append(obj)
+                # to-do: fill typ
+                typ = None
+                val = exc_arg
+            nb_types.append(typ)
+            args.append(val)
 
         self.return_non_const_exception(inst.exc_class, tuple(args),
-                                        loc=self.loc)
+                                        tuple(nb_types), loc=self.loc)
 
     def lower_static_raise(self, inst):
         if inst.exc_class is None:
