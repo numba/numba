@@ -11,7 +11,7 @@ import unittest
 from numba import guvectorize, njit, typeof, vectorize
 from numba.core import types
 from numba.np.numpy_support import from_dtype
-from numba.core.errors import LoweringError, TypingError, NumbaTypeError
+from numba.core.errors import LoweringError, TypingError
 from numba.tests.support import TestCase, CompilationCache, MemoryLeakMixin
 from numba.core.typing.npydecl import supported_ufuncs
 from numba.np import numpy_support
@@ -750,17 +750,16 @@ class TestUFuncs(BaseUFuncTest, TestCase):
             self.assertPreciseEqual(result, expected)
 
     def test_implicit_output_npm(self):
-        # This is a test for Issue #1078
-        # (https://github.com/numba/numba/issues/1078) It ensures that the
-        # implicit output is an array as opposed to a scalar by attempting to
-        # return the result of a ufunc with nrt disabled, which should cause an
-        # error (because we cannot return an array without nrt)
+        # Test for Issue #1078 (https://github.com/numba/numba/issues/1078) -
+        # ensures that the output of a ufunc is an array.
+        arr_ty = types.Array(types.uint64, 1, 'C')
+        sig = (arr_ty, arr_ty)
+
+        @njit((arr_ty, arr_ty))
         def myadd(a0, a1):
             return np.add(a0, a1)
-        arr_ty = types.Array(types.uint64, 1, 'C')
 
-        with self.assertRaises(NumbaTypeError):
-            njit((arr_ty, arr_ty), _nrt=False)(myadd)
+        self.assertEqual(myadd.overloads[sig].signature.return_type, arr_ty)
 
     def test_broadcast_implicit_output_npm_nrt(self):
         def pyfunc(a0, a1):
