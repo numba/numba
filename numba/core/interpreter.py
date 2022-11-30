@@ -1226,39 +1226,48 @@ def peep_hole_fuse_dict_add_updates(func_ir):
 
 def peep_hole_split_at_pop_block(func_ir):
     """
-    Split blocks that contain ir.PopBlock
+    Split blocks that contain ir.PopBlock.
     """
-    newblocks = {}
-    for label, blk in func_ir.blocks.items():
+    new_block_map = {}
+    sorted_blocks = sorted(func_ir.blocks.items())
+    for blk_idx, (label, blk) in enumerate(sorted_blocks):
+        # Gather locations of PopBlock
+        pop_block_locs = []
         for i, inst in enumerate(blk.body):
             if isinstance(inst, ir.PopBlock):
-                head = blk.body[:i]
-                mid = blk.body[i:i + 1]
-                tail = blk.body[i + 1:]
-                if head:
-                    blk.body.clear()
-                    blk.body.extend(head)
+                pop_block_locs.append(i)
+        # Rewrite block with PopBlock
+        if pop_block_locs:
+            new_blocks = []
+            for i in pop_block_locs:
+                before_blk = ir.Block(blk.scope, loc=blk.loc)
+                before_blk.body.extend(blk.body[:i])
+                new_blocks.append(before_blk)
 
-                    midblk = ir.Block(blk.scope, loc=blk.loc)
-                    midblk.body.extend(mid)
+                popblk_blk = ir.Block(blk.scope, loc=blk.loc)
+                popblk_blk.body.append(blk.body[i])
+                new_blocks.append(popblk_blk)
+            # Add jump instructions
+            prev_label = label
+            for newblk in new_blocks:
+                new_block_map[prev_label] = newblk
+                next_label = prev_label + 1
+                newblk.body.append(ir.Jump(next_label, loc=blk.loc))
+                prev_label = next_label
+            # Check prev_label does not exceed current new block label
+            if blk_idx + 1 < len(sorted_blocks):
+                if prev_label >= sorted_blocks[blk_idx + 1][0]:
+                    # Panic! Due to heuristic in with-lifting, block labels
+                    # must be monotonically increasing. We cannot continue if we
+                    # run out of usable label between the two blocks.
+                    raise errors.InternalError("POP_BLOCK peephole failed")
+            # Add tail block, which will get the original terminator
+            tail_blk = ir.Block(blk.scope, loc=blk.loc)
+            tail_blk.body.extend(blk.body[pop_block_locs[-1] + 1:])
+            new_block_map[prev_label] = tail_blk
 
-                    midlabel = label + i * 2
-                    newblocks[midlabel] = midblk
-
-                    blk.body.append(ir.Jump(midlabel, loc=blk.loc))
-                else:
-                    blk.body.clear()
-                    blk.body.extend(mid)
-                    midblk = blk
-
-                tailblk = ir.Block(blk.scope, loc=blk.loc)
-                tailblk.body.extend(tail)
-                taillabel = label + (i + 1) * 2
-                newblocks[taillabel] = tailblk
-
-                midblk.append(ir.Jump(taillabel, loc=blk.loc))
-
-    func_ir.blocks.update(newblocks)
+    # guard for accidental overwrite due to label collision
+    func_ir.blocks.update(new_block_map)
     return func_ir
 
 
