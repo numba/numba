@@ -135,7 +135,7 @@ class Flow(object):
             self.block_infos[state.pc_initial] = si = adapt_state_infos(state)
             _logger.debug("block_infos %s:\n%s", state, si)
 
-    if PYVERSION >= (3, 11):
+    if PYVERSION == (3, 11):
         def _run_handle_exception(self, runner, state):
             if not state.in_with() and (
                     state.has_active_try() and
@@ -163,7 +163,7 @@ class Flow(object):
                         eh_block['push_lasti'] = eh.lasti
                         state.fork(pc=state._pc, extra_block=eh_block)
                         return True
-    else:
+    elif PYVERSION < (3, 11):
         def _run_handle_exception(self, runner, state):
             if (state.has_active_try() and
                     state.get_inst().opname not in _NO_RAISE_OPS):
@@ -185,6 +185,8 @@ class Flow(object):
                 return True
             else:
                 state.advance_pc()
+    else:
+        raise NotImplementedError(PYVERSION)
 
     def _build_cfg(self, all_states):
         graph = CFGraph()
@@ -315,7 +317,9 @@ class TraceRunner(object):
         return Loc(self.debug_filename, lineno)
 
     def dispatch(self, state):
-        if PYVERSION == (3, 11) and state._blockstack:
+        if PYVERSION > (3, 11):
+            raise NotImplementedError(PYVERSION)
+        elif PYVERSION == (3, 11) and state._blockstack:
             state: State
             while state._blockstack:
                 topblk = state._blockstack[-1]
