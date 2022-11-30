@@ -67,11 +67,10 @@ jobs:
         CONDA_ENV: azure_ci
         BUILD_DOC: yes
         TEST_START_INDEX: 7
-      py38_np120_pickle5:
+      py38_np120:
         PYTHON: '3.8'
         NUMPY: '1.20'
         CONDA_ENV: azure_ci
-        TEST_PICKLE5: yes
         TEST_START_INDEX: 8
       py38_np120_svml:
         PYTHON: '3.8'
