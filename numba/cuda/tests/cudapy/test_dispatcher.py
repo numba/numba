@@ -220,9 +220,7 @@ class TestDispatcher(CUDATestCase):
             t.join()
         self.assertFalse(errors)
 
-    def test_explicit_signatures(self):
-        sigs = ["(int64[::1], int64, int64)",
-                "(float64[::1], float64, float64)"]
+    def _test_explicit_signatures(self, sigs):
         f = cuda.jit(sigs)(add_kernel)
 
         # Exact signature matches
@@ -244,6 +242,41 @@ class TestDispatcher(CUDATestCase):
             f[1, 1](r, 1j, 1j)
         self.assertIn("No matching definition", str(cm.exception))
         self.assertEqual(len(f.overloads), 2, f.overloads)
+
+    def test_explicit_signatures_strings(self):
+        # Check with a list of strings for signatures
+        sigs = ["(int64[::1], int64, int64)",
+                "(float64[::1], float64, float64)"]
+        self._test_explicit_signatures(sigs)
+
+    def test_explicit_signatures_tuples(self):
+        # Check with a list of tuples of argument types for signatures
+        sigs = [(int64[::1], int64, int64), (float64[::1], float64, float64)]
+        self._test_explicit_signatures(sigs)
+
+    def test_explicit_signatures_signatures(self):
+        # Check with a list of Signature objects for signatures
+        sigs = [void(int64[::1], int64, int64),
+                void(float64[::1], float64, float64)]
+        self._test_explicit_signatures(sigs)
+
+    def test_explicit_signatures_mixed(self):
+        # Check when we mix types of signature objects in a list of signatures
+
+        # Tuple and string
+        sigs = [(int64[::1], int64, int64),
+                "(float64[::1], float64, float64)"]
+        self._test_explicit_signatures(sigs)
+
+        # Tuple and Signature object
+        sigs = [(int64[::1], int64, int64),
+                void(float64[::1], float64, float64)]
+        self._test_explicit_signatures(sigs)
+
+        # Signature object and string
+        sigs = [void(int64[::1], int64, int64),
+                "(float64[::1], float64, float64)"]
+        self._test_explicit_signatures(sigs)
 
     def test_explicit_signatures_same_type_class(self):
         # A more interesting one...
