@@ -44,34 +44,46 @@ The :func:`~numba.vectorize` decorator has two modes of operation:
 As described above, if you pass a list of signatures to the
 :func:`~numba.vectorize` decorator, your function will be compiled
 into a NumPy ufunc.  In the basic case, only one signature will be
-passed::
+passed:
 
-   from numba import vectorize, float64
-
-   @vectorize([float64(float64, float64)])
-   def f(x, y):
-       return x + y
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_vectorize_one_signature`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.ex_vectorize_one_signature.begin
+   :end-before: magictoken.ex_vectorize_one_signature.end
+   :dedent: 12
+   :linenos:
 
 If you pass several signatures, beware that you have to pass most specific
 signatures before least specific ones (e.g., single-precision floats
 before double-precision floats), otherwise type-based dispatching will not work
-as expected::
+as expected:
 
-   @vectorize([int32(int32, int32),
-               int64(int64, int64),
-               float32(float32, float32),
-               float64(float64, float64)])
-   def f(x, y):
-       return x + y
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_vectorize_multiple_signatures`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.ex_vectorize_multiple_signatures.begin
+   :end-before: magictoken.ex_vectorize_multiple_signatures.end
+   :dedent: 12
+   :linenos:
 
-The function will work as expected over the specified array types::
+The function will work as expected over the specified array types:
 
-   >>> a = np.arange(6)
-   >>> f(a, a)
-   array([ 0,  2,  4,  6,  8, 10])
-   >>> a = np.linspace(0, 1, 6)
-   >>> f(a, a)
-   array([ 0. ,  0.4,  0.8,  1.2,  1.6,  2. ])
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_vectorize_multiple_signatures`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.ex_vectorize_return_call_one.begin
+   :end-before: magictoken.ex_vectorize_return_call_one.end
+   :dedent: 12
+   :linenos:
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_vectorize_multiple_signatures`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.ex_vectorize_return_call_two.begin
+   :end-before: magictoken.ex_vectorize_return_call_two.end
+   :dedent: 12
+   :linenos:
 
 but it will fail working on other types::
 
@@ -162,12 +174,15 @@ also has two modes of operation: Eager, or decoration-time compilation and
 lazy, or call-time compilation.
 
 
-Here is a very simple example::
+Here is a very simple example:
 
-   @guvectorize([(int64[:], int64, int64[:])], '(n),()->(n)')
-   def g(x, y, res):
-       for i in range(x.shape[0]):
-           res[i] = x[i] + y
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_guvectorize`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.ex_guvectorize.begin
+   :end-before: magictoken.ex_guvectorize.end
+   :dedent: 12
+   :linenos:
 
 The underlying Python function simply adds a given scalar (``y``) to all
 elements of a 1-dimension array.  What's more interesting is the declaration.
@@ -221,12 +236,15 @@ Overwriting input values
 ------------------------
 
 In most cases, writing to inputs may also appear to work - however, this
-behaviour cannot be relied on. Consider the following example function::
+behaviour cannot be relied on. Consider the following example function:
 
-   @guvectorize([(float64[:], float64[:])], '()->()')
-   def init_values(invals, outvals):
-       invals[0] = 6.5
-       outvals[0] = 4.2
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_guvectorize_overwrite`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.ex_guvectorize_overwrite.begin
+   :end-before: magictoken.ex_guvectorize_overwrite.end
+   :dedent: 12
+   :linenos:
 
 Calling the `init_values` function with an array of `float64` type results in
 visible changes to the input::
@@ -266,13 +284,15 @@ Dynamic universal functions
 As described above, if you do not pass any signatures to the
 :func:`~numba.vectorize` decorator, your Python function will be used
 to build a dynamic universal function, or :class:`~numba.DUFunc`.  For
-example::
+example:
 
-   from numba import vectorize
-
-   @vectorize
-   def f(x, y):
-       return x * y
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_vectorize_dynamic`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.ex_vectorize_dynamic.begin
+   :end-before: magictoken.ex_vectorize_dynamic.end
+   :dedent: 12
+   :linenos:
 
 The resulting :func:`f` is a :class:`~numba.DUFunc` instance that
 starts with no supported input types.  As you make calls to :func:`f`,
@@ -359,14 +379,15 @@ Dynamic generalized universal functions
 Similar to a dynamic universal function, if you do not specify any types to
 the :func:`~numba.guvectorize` decorator, your Python function will be used
 to build a dynamic generalized universal function, or :class:`~numba.GUFunc`.
-For example::
+For example:
 
-   from numba import guvectorize
-
-   @guvectorize('(n),()->(n)')
-   def g(x, y, res):
-       for i in range(x.shape[0]):
-           res[i] = x[i] + y
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_guvectorize_dynamic`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.ex_guvectorize_dynamic.begin
+   :end-before: magictoken.ex_guvectorize_dynamic.end
+   :dedent: 12
+   :linenos:
 
 We can verify the resulting function :func:`g` is a :class:`~numba.GUFunc`
 instance that starts with no supported input types. For instance::

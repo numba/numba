@@ -197,6 +197,93 @@ class DocsExamplesTest(unittest.TestCase):
             timefunc(correct, "numba (%d threads)" % nthreads, func_nb_mt, a, b)
             # magictoken.ex_no_gil.end
 
+    def test_vectorize_one_signature(self):
+        with captured_stdout():
+            # magictoken.ex_vectorize_one_signature.begin
+            from numba import vectorize, float64
+
+            @vectorize([float64(float64, float64)])
+            def f(x, y):
+                return x + y
+            # magictoken.ex_vectorize_one_signature.end
+
+    def test_vectorize_multiple_signatures(self):
+        with captured_stdout():
+            # magictoken.ex_vectorize_multiple_signatures.begin
+            from numba import vectorize, int32, int64, float32, float64
+            import numpy as np
+
+            @vectorize([int32(int32, int32),
+                        int64(int64, int64),
+                        float32(float32, float32),
+                        float64(float64, float64)])
+            def f(x, y):
+                return x + y
+            # magictoken.ex_vectorize_multiple_signatures.end
+
+            # magictoken.ex_vectorize_return_call_one.begin
+            a = np.arange(6)
+            result = f(a, a)
+            # result == array([ 0,  2,  4,  6,  8, 10])
+            # magictoken.ex_vectorize_return_call_one.end
+
+            self.assertIsInstance(result, np.ndarray)
+            correct = np.array([0, 2, 4, 6, 8, 10])
+            np.testing.assert_array_equal(result, correct)
+
+            # magictoken.ex_vectorize_return_call_two.begin
+            a = np.linspace(0, 1, 6)
+            result = f(a, a)
+            # Now, result == array([0. , 0.4, 0.8, 1.2, 1.6, 2. ])
+            # magictoken.ex_vectorize_return_call_two.end
+
+            self.assertIsInstance(result, np.ndarray)
+            correct = np.array([0., 0.4, 0.8, 1.2, 1.6, 2. ])
+            np.testing.assert_array_equal(result, correct)
+
+    def test_guvectorize(self):
+        with captured_stdout():
+            # magictoken.ex_guvectorize.begin
+            from numba import guvectorize, int64
+
+            @guvectorize([(int64[:], int64, int64[:])], '(n),()->(n)')
+            def g(x, y, res):
+                for i in range(x.shape[0]):
+                    res[i] = x[i] + y
+            # magictoken.ex_guvectorize.end
+
+    def test_guvectorize_overwrite(self):
+        with captured_stdout():
+            # magictoken.ex_guvectorize_overwrite.begin
+            from numba import guvectorize, float64
+
+            @guvectorize([(float64[:], float64[:])], '()->()')
+            def init_values(invals, outvals):
+                invals[0] = 6.5
+                outvals[0] = 4.2
+            # magictoken.ex_guvectorize_overwrite.end
+
+    def test_vectorize_dynamic(self):
+        with captured_stdout():
+            # magictoken.ex_vectorize_dynamic.begin
+            from numba import vectorize
+
+            @vectorize
+            def f(x, y):
+                return x * y
+            # magictoken.ex_vectorize_dynamic.end
+
+    def test_guvectorize_dynamic(self):
+        with captured_stdout():
+            # magictoken.ex_guvectorize_dynamic.begin
+            from numba import guvectorize
+
+            @guvectorize('(n),()->(n)')
+            def g(x, y, res):
+                for i in range(x.shape[0]):
+                    res[i] = x[i] + y
+            # magictoken.ex_guvectorize_dynamic.end
+
 
 if __name__ == '__main__':
     unittest.main()
