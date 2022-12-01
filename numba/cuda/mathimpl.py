@@ -5,6 +5,7 @@ from numba.core import types, typing, cgutils
 from numba.core.imputils import Registry
 from numba.types import float32, float64, int64, uint64
 from numba.cuda import libdevice
+from numba import cuda
 
 registry = Registry()
 lower = registry.lower
@@ -42,6 +43,7 @@ unarys += [('atan', 'atanf', math.atan)]
 unarys += [('atanh', 'atanhf', math.atanh)]
 unarys += [('tan', 'tanf', math.tan)]
 unarys += [('tanh', 'tanhf', math.tanh)]
+unarys += [('trunc', 'truncf', math.trunc)]
 
 unarys_fastmath = {}
 unarys_fastmath['cosf'] = 'fast_cosf'
@@ -86,6 +88,94 @@ def maybe_fast_truediv(context, builder, sig, args):
 @lower(math.isfinite, types.Integer)
 def math_isfinite_int(context, builder, sig, args):
     return context.get_constant(types.boolean, 1)
+
+
+@lower(math.sin, types.float16)
+def fp16_sin_impl(context, builder, sig, args):
+    def fp16_sin(x):
+        return cuda.fp16.hsin(x)
+
+    return context.compile_internal(builder, fp16_sin, sig, args)
+
+
+@lower(math.cos, types.float16)
+def fp16_cos_impl(context, builder, sig, args):
+    def fp16_cos(x):
+        return cuda.fp16.hcos(x)
+
+    return context.compile_internal(builder, fp16_cos, sig, args)
+
+
+@lower(math.log, types.float16)
+def fp16_log_impl(context, builder, sig, args):
+    def fp16_log(x):
+        return cuda.fp16.hlog(x)
+
+    return context.compile_internal(builder, fp16_log, sig, args)
+
+
+@lower(math.log10, types.float16)
+def fp16_log10_impl(context, builder, sig, args):
+    def fp16_log10(x):
+        return cuda.fp16.hlog10(x)
+
+    return context.compile_internal(builder, fp16_log10, sig, args)
+
+
+@lower(math.log2, types.float16)
+def fp16_log2_impl(context, builder, sig, args):
+    def fp16_log2(x):
+        return cuda.fp16.hlog2(x)
+
+    return context.compile_internal(builder, fp16_log2, sig, args)
+
+
+@lower(math.exp, types.float16)
+def fp16_exp_impl(context, builder, sig, args):
+    def fp16_exp(x):
+        return cuda.fp16.hexp(x)
+
+    return context.compile_internal(builder, fp16_exp, sig, args)
+
+
+@lower(math.floor, types.float16)
+def fp16_floor_impl(context, builder, sig, args):
+    def fp16_floor(x):
+        return cuda.fp16.hfloor(x)
+
+    return context.compile_internal(builder, fp16_floor, sig, args)
+
+
+@lower(math.ceil, types.float16)
+def fp16_ceil_impl(context, builder, sig, args):
+    def fp16_ceil(x):
+        return cuda.fp16.hceil(x)
+
+    return context.compile_internal(builder, fp16_ceil, sig, args)
+
+
+@lower(math.sqrt, types.float16)
+def fp16_sqrt_impl(context, builder, sig, args):
+    def fp16_sqrt(x):
+        return cuda.fp16.hsqrt(x)
+
+    return context.compile_internal(builder, fp16_sqrt, sig, args)
+
+
+@lower(math.fabs, types.float16)
+def fp16_fabs_impl(context, builder, sig, args):
+    def fp16_fabs(x):
+        return cuda.fp16.habs(x)
+
+    return context.compile_internal(builder, fp16_fabs, sig, args)
+
+
+@lower(math.trunc, types.float16)
+def fp16_trunc_impl(context, builder, sig, args):
+    def fp16_trunc(x):
+        return cuda.fp16.htrunc(x)
+
+    return context.compile_internal(builder, fp16_trunc, sig, args)
 
 
 def impl_boolean(key, ty, libfunc):

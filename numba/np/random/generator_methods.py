@@ -237,8 +237,9 @@ def NumPyRandomGeneratorType_random(inst, size=None, dtype=np.float64):
 
         def impl(inst, size=None, dtype=np.float64):
             out = np.empty(size, dtype=dtype)
-            for i in np.ndindex(size):
-                out[i] = dist_func(inst.bit_generator)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = dist_func(inst.bit_generator)
             return out
         return impl
 
@@ -276,12 +277,13 @@ def NumPyRandomGeneratorType_standard_exponential(inst, size=None,
 
         def impl(inst, size=None, dtype=np.float64, method='zig'):
             out = np.empty(size, dtype=dtype)
+            out_f = out.flat
             if method == 'zig':
-                for i in np.ndindex(size):
-                    out[i] = dist_func(inst.bit_generator)
+                for i in range(out.size):
+                    out_f[i] = dist_func(inst.bit_generator)
             elif method == 'inv':
-                for i in np.ndindex(size):
-                    out[i] = dist_func_inv(inst.bit_generator)
+                for i in range(out.size):
+                    out_f[i] = dist_func_inv(inst.bit_generator)
             else:
                 raise ValueError("Method must be either 'zig' or 'inv'")
             return out
@@ -306,8 +308,9 @@ def NumPyRandomGeneratorType_standard_normal(inst, size=None, dtype=np.float64):
 
         def impl(inst, size=None, dtype=np.float64):
             out = np.empty(size, dtype=dtype)
-            for i in np.ndindex(size):
-                out[i] = dist_func(inst.bit_generator)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = dist_func(inst.bit_generator)
             return out
         return impl
 
@@ -332,8 +335,9 @@ def NumPyRandomGeneratorType_standard_gamma(inst, shape, size=None,
 
         def impl(inst, shape, size=None, dtype=np.float64):
             out = np.empty(size, dtype=dtype)
-            for i in np.ndindex(size):
-                out[i] = dist_func(inst.bit_generator, shape)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = dist_func(inst.bit_generator, shape)
             return out
         return impl
 
@@ -356,8 +360,9 @@ def NumPyRandomGeneratorType_normal(inst, loc=0.0, scale=1.0,
 
         def impl(inst, loc=0.0, scale=1.0, size=None):
             out = np.empty(size, dtype=np.float64)
-            for i in np.ndindex(size):
-                out[i] = random_normal(inst.bit_generator, loc, scale)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = random_normal(inst.bit_generator, loc, scale)
             return out
         return impl
 
@@ -380,8 +385,9 @@ def NumPyRandomGeneratorType_uniform(inst, low=0.0, high=1.0,
 
         def impl(inst, low=0.0, high=1.0, size=None):
             out = np.empty(size, dtype=np.float64)
-            for i in np.ndindex(size):
-                out[i] = random_uniform(inst.bit_generator, low, high - low)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = random_uniform(inst.bit_generator, low, high - low)
             return out
         return impl
 
@@ -402,8 +408,9 @@ def NumPyRandomGeneratorType_exponential(inst, scale=1.0, size=None):
 
         def impl(inst, scale=1.0, size=None):
             out = np.empty(size, dtype=np.float64)
-            for i in np.ndindex(size):
-                out[i] = random_exponential(inst.bit_generator, scale)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = random_exponential(inst.bit_generator, scale)
             return out
         return impl
 
@@ -425,8 +432,9 @@ def NumPyRandomGeneratorType_gamma(inst, shape, scale=1.0, size=None):
 
         def impl(inst, shape, scale=1.0, size=None):
             out = np.empty(size, dtype=np.float64)
-            for i in np.ndindex(size):
-                out[i] = random_gamma(inst.bit_generator, shape, scale)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = random_gamma(inst.bit_generator, shape, scale)
             return out
         return impl
 
@@ -448,8 +456,9 @@ def NumPyRandomGeneratorType_beta(inst, a, b, size=None):
 
         def impl(inst, a, b, size=None):
             out = np.empty(size)
-            for i in np.ndindex(size):
-                out[i] = random_beta(inst.bit_generator, a, b)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = random_beta(inst.bit_generator, a, b)
             return out
         return impl
 
@@ -471,8 +480,9 @@ def NumPyRandomGeneratorType_f(inst, dfnum, dfden, size=None):
 
         def impl(inst, dfnum, dfden, size=None):
             out = np.empty(size)
-            for i in np.ndindex(size):
-                out[i] = random_f(inst.bit_generator, dfnum, dfden)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = random_f(inst.bit_generator, dfnum, dfden)
             return out
         return impl
 
@@ -493,8 +503,9 @@ def NumPyRandomGeneratorType_chisquare(inst, df, size=None):
 
         def impl(inst, df, size=None):
             out = np.empty(size)
-            for i in np.ndindex(size):
-                out[i] = random_chisquare(inst.bit_generator, df)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = random_chisquare(inst.bit_generator, df)
             return out
         return impl
 
@@ -514,8 +525,9 @@ def NumPyRandomGeneratorType_standard_cauchy(inst, size=None):
 
         def impl(inst, size=None):
             out = np.empty(size)
-            for i in np.ndindex(size):
-                out[i] = random_standard_cauchy(inst.bit_generator)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = random_standard_cauchy(inst.bit_generator)
             return out
         return impl
 
@@ -535,8 +547,9 @@ def NumPyRandomGeneratorType_pareto(inst, a, size=None):
 
         def impl(inst, a, size=None):
             out = np.empty(size)
-            for i in np.ndindex(size):
-                out[i] = random_pareto(inst.bit_generator, a)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = random_pareto(inst.bit_generator, a)
             return out
         return impl
 
@@ -556,8 +569,9 @@ def NumPyRandomGeneratorType_weibull(inst, a, size=None):
 
         def impl(inst, a, size=None):
             out = np.empty(size)
-            for i in np.ndindex(size):
-                out[i] = random_weibull(inst.bit_generator, a)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = random_weibull(inst.bit_generator, a)
             return out
         return impl
 
@@ -577,8 +591,9 @@ def NumPyRandomGeneratorType_power(inst, a, size=None):
 
         def impl(inst, a, size=None):
             out = np.empty(size)
-            for i in np.ndindex(size):
-                out[i] = random_power(inst.bit_generator, a)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = random_power(inst.bit_generator, a)
             return out
         return impl
 
@@ -599,8 +614,9 @@ def NumPyRandomGeneratorType_laplace(inst, loc=0.0, scale=1.0, size=None):
 
         def impl(inst, loc=0.0, scale=1.0, size=None):
             out = np.empty(size)
-            for i in np.ndindex(size):
-                out[i] = random_laplace(inst.bit_generator, loc, scale)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = random_laplace(inst.bit_generator, loc, scale)
             return out
         return impl
 
@@ -621,8 +637,9 @@ def NumPyRandomGeneratorType_logistic(inst, loc=0.0, scale=1.0, size=None):
 
         def impl(inst, loc=0.0, scale=1.0, size=None):
             out = np.empty(size)
-            for i in np.ndindex(size):
-                out[i] = random_logistic(inst.bit_generator, loc, scale)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = random_logistic(inst.bit_generator, loc, scale)
             return out
         return impl
 
@@ -643,8 +660,9 @@ def NumPyRandomGeneratorType_lognormal(inst, mean=0.0, sigma=1.0, size=None):
 
         def impl(inst, mean=0.0, sigma=1.0, size=None):
             out = np.empty(size)
-            for i in np.ndindex(size):
-                out[i] = random_lognormal(inst.bit_generator, mean, sigma)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = random_lognormal(inst.bit_generator, mean, sigma)
             return out
         return impl
 
@@ -664,8 +682,9 @@ def NumPyRandomGeneratorType_rayleigh(inst, scale=1.0, size=None):
 
         def impl(inst, scale=1.0, size=None):
             out = np.empty(size)
-            for i in np.ndindex(size):
-                out[i] = random_rayleigh(inst.bit_generator, scale)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = random_rayleigh(inst.bit_generator, scale)
             return out
         return impl
 
@@ -685,8 +704,9 @@ def NumPyRandomGeneratorType_standard_t(inst, df, size=None):
 
         def impl(inst, df, size=None):
             out = np.empty(size)
-            for i in np.ndindex(size):
-                out[i] = random_standard_t(inst.bit_generator, df)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = random_standard_t(inst.bit_generator, df)
             return out
         return impl
 
@@ -707,8 +727,9 @@ def NumPyRandomGeneratorType_wald(inst, mean, scale, size=None):
 
         def impl(inst, mean, scale, size=None):
             out = np.empty(size)
-            for i in np.ndindex(size):
-                out[i] = random_wald(inst.bit_generator, mean, scale)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = random_wald(inst.bit_generator, mean, scale)
             return out
         return impl
 
@@ -728,8 +749,9 @@ def NumPyRandomGeneratorType_geometric(inst, p, size=None):
 
         def impl(inst, p, size=None):
             out = np.empty(size, dtype=np.int64)
-            for i in np.ndindex(size):
-                out[i] = random_geometric(inst.bit_generator, p)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = random_geometric(inst.bit_generator, p)
             return out
         return impl
 
@@ -749,8 +771,9 @@ def NumPyRandomGeneratorType_zipf(inst, a, size=None):
 
         def impl(inst, a, size=None):
             out = np.empty(size, dtype=np.int64)
-            for i in np.ndindex(size):
-                out[i] = random_zipf(inst.bit_generator, a)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = random_zipf(inst.bit_generator, a)
             return out
         return impl
 
@@ -772,9 +795,10 @@ def NumPyRandomGeneratorType_triangular(inst, left, mode, right, size=None):
 
         def impl(inst, left, mode, right, size=None):
             out = np.empty(size)
-            for i in np.ndindex(size):
-                out[i] = random_triangular(inst.bit_generator,
-                                           left, mode, right)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = random_triangular(inst.bit_generator,
+                                             left, mode, right)
             return out
         return impl
 
@@ -794,8 +818,9 @@ def NumPyRandomGeneratorType_poisson(inst, lam , size=None):
 
         def impl(inst, lam , size=None):
             out = np.empty(size, dtype=np.int64)
-            for i in np.ndindex(size):
-                out[i] = random_poisson(inst.bit_generator, lam)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = random_poisson(inst.bit_generator, lam)
             return out
         return impl
 
@@ -816,8 +841,9 @@ def NumPyRandomGeneratorType_negative_binomial(inst, n, p, size=None):
 
         def impl(inst, n, p , size=None):
             out = np.empty(size, dtype=np.int64)
-            for i in np.ndindex(size):
-                out[i] = random_negative_binomial(inst.bit_generator, n, p)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = random_negative_binomial(inst.bit_generator, n, p)
             return out
         return impl
 
@@ -848,9 +874,10 @@ def NumPyRandomGeneratorType_noncentral_chisquare(inst, df, nonc, size=None):
         def impl(inst, df, nonc, size=None):
             check_arg_bounds(df, nonc)
             out = np.empty(size, dtype=np.float64)
-            for i in np.ndindex(size):
-                out[i] = random_noncentral_chisquare(inst.bit_generator,
-                                                     df, nonc)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = random_noncentral_chisquare(inst.bit_generator,
+                                                       df, nonc)
             return out
         return impl
 
@@ -884,9 +911,10 @@ def NumPyRandomGeneratorType_noncentral_f(inst, dfnum, dfden, nonc, size=None):
         def impl(inst, dfnum, dfden, nonc, size=None):
             check_arg_bounds(dfnum, dfden, nonc)
             out = np.empty(size, dtype=np.float64)
-            for i in np.ndindex(size):
-                out[i] = random_noncentral_f(inst.bit_generator,
-                                             dfnum, dfden, nonc)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = random_noncentral_f(inst.bit_generator,
+                                               dfnum, dfden, nonc)
             return out
         return impl
 
@@ -913,7 +941,8 @@ def NumPyRandomGeneratorType_logseries(inst, p, size=None):
         def impl(inst, p, size=None):
             check_arg_bounds(p)
             out = np.empty(size, dtype=np.int64)
-            for i in np.ndindex(size):
-                out[i] = random_logseries(inst.bit_generator, p)
+            out_f = out.flat
+            for i in range(out.size):
+                out_f[i] = random_logseries(inst.bit_generator, p)
             return out
         return impl
