@@ -85,6 +85,15 @@ def is_cuda_array(obj):
     return hasattr(obj, '__cuda_array_interface__')
 
 
+def is_fp16_supported(device_id=None):
+    if not config.CUDA_USE_NVIDIA_BINDING:
+        return False
+
+    if select_device(device_id).compute_capability < (5, 3):
+        return False
+
+    return True
+
 @require_context
 def to_device(obj, stream=0, copy=True, to=None):
     """to_device(obj, stream=0, copy=True, to=None)
