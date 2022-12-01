@@ -12,7 +12,7 @@ from numba import guvectorize, njit, typeof, vectorize
 from numba.core import types
 from numba.np.numpy_support import from_dtype
 from numba.core.errors import LoweringError, TypingError
-from numba.tests.support import TestCase, CompilationCache, MemoryLeakMixin
+from numba.tests.support import TestCase, MemoryLeakMixin
 from numba.core.typing.npydecl import supported_ufuncs
 from numba.np import numpy_support
 from numba.core.registry import cpu_target
@@ -124,8 +124,6 @@ class BaseUFuncTest(MemoryLeakMixin):
              types.Array(types.uint16, 1, 'C')),
         ]
 
-        self.cache = CompilationCache()
-
     @functools.lru_cache(maxsize=None)
     def _compile(self, pyfunc, args, nrt=False):
         # NOTE: to test the implementation of Numpy ufuncs, we disable
@@ -156,7 +154,9 @@ class BaseUFuncTest(MemoryLeakMixin):
         return output_type
 
 
-class TestUFuncs(BaseUFuncTest, TestCase):
+class BasicUFuncTest(BaseUFuncTest):
+    def _make_ufunc_usecase(self, ufunc):
+        return _make_ufunc_usecase(ufunc)
 
     def basic_ufunc_test(self, ufunc, skip_inputs=[], additional_inputs=[],
                          int_output_type=None, float_output_type=None,
@@ -166,7 +166,7 @@ class TestUFuncs(BaseUFuncTest, TestCase):
         # the simplefilter() call below.
         self.reset_module_warnings(__name__)
 
-        pyfunc = _make_ufunc_usecase(ufunc)
+        pyfunc = self._make_ufunc_usecase(ufunc)
 
         inputs = list(self.inputs) + additional_inputs
 
@@ -253,6 +253,8 @@ class TestUFuncs(BaseUFuncTest, TestCase):
                     else:
                         raise
 
+
+class TestUFuncs(BasicUFuncTest, TestCase):
     def basic_int_ufunc_test(self, name=None):
         skip_inputs = [
             types.float32,
