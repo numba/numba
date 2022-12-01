@@ -188,7 +188,7 @@ def impl_boolean(key, ty, libfunc):
     lower(key, ty)(lower_boolean_impl)
 
 
-def impl_unary(key, ty, libfunc):
+def get_lower_unary_impl(key, ty, libfunc):
     def lower_unary_impl(context, builder, sig, args):
         actual_libfunc = libfunc
         fast_replacement = None
@@ -201,7 +201,24 @@ def impl_unary(key, ty, libfunc):
         libfunc_impl = context.get_function(actual_libfunc,
                                             typing.signature(ty, ty))
         return libfunc_impl(builder, args)
+    return lower_unary_impl
 
+
+def get_unary_impl_for_fn_and_ty(fn, ty):
+    for fname64, fname32, key in unarys:
+        if fn == key:
+            if ty == float32:
+                impl = getattr(libdevice, fname32)
+            elif ty == float64:
+                impl = getattr(libdevice, fname64)
+
+            return get_lower_unary_impl(key, ty, impl)
+
+    raise RuntimeError(f"Implementation of {fn} for {ty} not found")
+
+
+def impl_unary(key, ty, libfunc):
+    lower_unary_impl = get_lower_unary_impl(key, ty, libfunc)
     lower(key, ty)(lower_unary_impl)
 
 
@@ -223,7 +240,7 @@ def impl_unary_int(key, ty, libfunc):
     lower(key, ty)(lower_unary_int_impl)
 
 
-def impl_binary(key, ty, libfunc):
+def get_lower_binary_impl(key, ty, libfunc):
     def lower_binary_impl(context, builder, sig, args):
         actual_libfunc = libfunc
         fast_replacement = None
@@ -236,7 +253,24 @@ def impl_binary(key, ty, libfunc):
         libfunc_impl = context.get_function(actual_libfunc,
                                             typing.signature(ty, ty, ty))
         return libfunc_impl(builder, args)
+    return lower_binary_impl
 
+
+def get_binary_impl_for_fn_and_ty(fn, ty):
+    for fname64, fname32, key in binarys:
+        if fn == key:
+            if ty == float32:
+                impl = getattr(libdevice, fname32)
+            elif ty == float64:
+                impl = getattr(libdevice, fname64)
+
+            return get_lower_binary_impl(key, ty, impl)
+
+    raise RuntimeError(f"Implementation of {fn} for {ty} not found")
+
+
+def impl_binary(key, ty, libfunc):
+    lower_binary_impl = get_lower_binary_impl(key, ty, libfunc)
     lower(key, ty, ty)(lower_binary_impl)
 
 
