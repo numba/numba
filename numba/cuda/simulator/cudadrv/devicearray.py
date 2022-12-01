@@ -67,6 +67,26 @@ class FakeWithinKernelCUDAArray(object):
     def __len__(self):
         return len(self._item)
 
+    def __array_ufunc__(self, ufunc, method, *args, **kwargs):
+        # ufuncs can only be called directly on instances of numpy.ndarray (not
+        # things that implement its interfaces, like the FakeCUDAArray or
+        # FakeWithinKernelCUDAArray). For other objects, __array_ufunc__ is
+        # called when they are arguments to ufuncs, to provide an opportunity
+        # to somehow implement the ufunc. Since the FakeWithinKernelCUDAArray
+        # is just a thin wrapper over an ndarray, we can implement all ufuncs
+        # by passing the underlying ndarrays to a call to the intended ufunc.
+        call = getattr(ufunc, method)
+
+        def convert_fakes(obj):
+            if isinstance(obj, FakeWithinKernelCUDAArray):
+                obj = obj._item._ary
+
+            return obj
+
+        out = tuple(convert_fakes(o) for o in kwargs['out'])
+        args = tuple(convert_fakes(a) for a in args)
+        return call(*args, out=out)
+
 
 class FakeCUDAArray(object):
     '''
