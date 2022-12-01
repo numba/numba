@@ -201,6 +201,7 @@ class DocsExamplesTest(unittest.TestCase):
         with captured_stdout():
             # magictoken.ex_guvectorize_scalar_return.begin
             from numba import guvectorize, int64
+            import numpy as np
 
             @guvectorize([(int64[:], int64, int64[:])], '(n),()->()')
             def g(x, y, res):
@@ -209,6 +210,15 @@ class DocsExamplesTest(unittest.TestCase):
                     acc += x[i] + y
                 res[0] = acc
             # magictoken.ex_guvectorize_scalar_return.end
+
+            # magictoken.ex_guvectorize_scalar_return_call.begin
+            a = np.arange(5)
+            result = g(a, 2)
+            # At this point, result == 20.
+            # magictoken.ex_guvectorize_scalar_return_call.end
+
+            self.assertIsInstance(result, np.integer)
+            self.assertEqual(result, 20)
 
 
 if __name__ == '__main__':
