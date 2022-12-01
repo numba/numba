@@ -6,7 +6,7 @@ from llvmlite import ir
 import llvmlite.binding as ll
 
 from numba.core.imputils import Registry, lower_cast
-from numba.core.typing.npydecl import parse_dtype, signature
+from numba.core.typing.npydecl import parse_dtype
 from numba.core.datamodel import models
 from numba.core import types, cgutils
 from .cudadrv import nvvm
@@ -185,7 +185,7 @@ def ptx_threadfence_device(context, builder, sig, args):
 @lower(stubs.syncwarp)
 def ptx_syncwarp(context, builder, sig, args):
     mask = context.get_constant(types.int32, 0xFFFFFFFF)
-    mask_sig = signature(types.none, types.int32)
+    mask_sig = types.none(types.int32)
     return ptx_syncwarp_mask(context, builder, mask_sig, [mask])
 
 
