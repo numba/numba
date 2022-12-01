@@ -1268,7 +1268,6 @@ def peep_hole_split_at_pop_block(func_ir):
             tail_blk.body.extend(blk.body[pop_block_locs[-1] + 1:])
             new_block_map[prev_label] = tail_blk
 
-    # guard for accidental overwrite due to label collision
     func_ir.blocks.update(new_block_map)
     return func_ir
 
@@ -1411,11 +1410,11 @@ class Interpreter(object):
         return func_ir
 
     def _end_try_blocks(self):
-        """Closing all try blocks by inserting the required marker at the
+        """Closes all try blocks by inserting the required marker at the
         exception handler
 
         This is only needed for py3.11 because of the changes in exception
-        handling. This merely maps the new py3.11 semantic back to the old way.
+        handling. This merely maps the new py3.11 semantics back to the old way.
 
         What the code does:
 
