@@ -27,6 +27,16 @@ from numba import _dispatcher
 
 from warnings import warn
 
+cuda_fp16_math_funcs = ['hsin', 'hcos',
+                        'hlog', 'hlog10',
+                        'hlog2',
+                        'hexp', 'hexp10',
+                        'hexp2',
+                        'hsqrt', 'hrsqrt',
+                        'hfloor', 'hceil',
+                        'hrcp', 'hrint',
+                        'htrunc', 'hdiv']
+
 
 class _Kernel(serialize.ReduceMixin):
     '''
@@ -95,6 +105,17 @@ class _Kernel(serialize.ReduceMixin):
         # We need to link against cudadevrt if grid sync is being used.
         if self.cooperative:
             link.append(get_cudalib('cudadevrt', static=True))
+
+        res = [fn for fn in cuda_fp16_math_funcs
+               if(f'__numba_wrapper_{fn}' in lib.get_asm_str())]
+
+        if res:
+            # Path to the source containing the foreign function
+
+            basedir = os.path.dirname(os.path.abspath(__file__))
+            functions_cu_path = os.path.join(basedir,
+                                             'cpp_function_wrappers.cu')
+            link.append(functions_cu_path)
 
         for filepath in link:
             lib.add_linking_file(filepath)

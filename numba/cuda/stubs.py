@@ -556,6 +556,16 @@ class fp16(Stub):
 
         """
 
+    class hdiv(Stub):
+        """hdiv(a, b)
+
+        Perform fp16 division, (a / b) in round to nearest mode. Supported
+        on fp16 operands only.
+
+        Returns the fp16 result of the division
+
+        """
+
     class hfma(Stub):
         """hfma(a, b, c)
 
@@ -581,6 +591,156 @@ class fp16(Stub):
         Perform fp16 absolute value, |a|. Supported on fp16 operands only.
 
         Returns the fp16 result of the absolute value.
+
+        """
+
+    class hsin(Stub):
+        """hsin(a)
+
+        Calculate sine in round to nearest even mode. Supported on fp16
+        operands only.
+
+        Returns the sine result.
+
+        """
+
+    class hcos(Stub):
+        """hsin(a)
+
+        Calculate cosine in round to nearest even mode. Supported on fp16
+        operands only.
+
+        Returns the cosine result.
+
+        """
+
+    class hlog(Stub):
+        """hlog(a)
+
+        Calculate natural logarithm in round to nearest even mode. Supported
+        on fp16 operands only.
+
+        Returns the natural logarithm result.
+
+        """
+
+    class hlog10(Stub):
+        """hlog10(a)
+
+        Calculate logarithm base 10 in round to nearest even mode. Supported
+        on fp16 operands only.
+
+        Returns the logarithm base 10 result.
+
+        """
+
+    class hlog2(Stub):
+        """hlog2(a)
+
+        Calculate logarithm base 2 in round to nearest even mode. Supported
+        on fp16 operands only.
+
+        Returns the logarithm base 2 result.
+
+        """
+
+    class hexp(Stub):
+        """hexp(a)
+
+        Calculate natural exponential, exp(a), in round to nearest mode.
+        Supported on fp16 operands only.
+
+        Returns the natural exponential result.
+
+        """
+
+    class hexp10(Stub):
+        """hexp10(a)
+
+        Calculate exponential base 10 (10 ** a) in round to nearest mode.
+        Supported on fp16 operands only.
+
+        Returns the exponential base 10 result.
+
+        """
+
+    class hexp2(Stub):
+        """hexp2(a)
+
+        Calculate exponential base 2 (2 ** a) in round to nearest mode.
+        Supported on fp16 operands only.
+
+        Returns the exponential base 2 result.
+
+        """
+
+    class hfloor(Stub):
+        """hfloor(a)
+
+        Calculate the floor, the largest integer less than or equal to 'a'.
+        Supported on fp16 operands only.
+
+        Returns the floor result.
+
+        """
+
+    class hceil(Stub):
+        """hceil(a)
+
+        Calculate the ceil, the smallest integer greater than or equal to 'a'.
+        Supported on fp16 operands only.
+
+        Returns the ceil result.
+
+        """
+
+    class hsqrt(Stub):
+        """hsqrt(a)
+
+        Calculate the square root of the input argument in round to nearest
+        mode. Supported on fp16 operands only.
+
+        Returns the square root result.
+
+        """
+
+    class hrsqrt(Stub):
+        """hrsqrt(a)
+
+        Calculate the reciprocal square root of the input argument in round
+        to nearest even mode. Supported on fp16 operands only.
+
+        Returns the reciprocal square root result.
+
+        """
+
+    class hrcp(Stub):
+        """hrcp(a)
+
+        Calculate the reciprocal of the input argument in round to nearest
+        even mode. Supported on fp16 operands only.
+
+        Returns the reciprocal result.
+
+        """
+
+    class hrint(Stub):
+        """hrint(a)
+
+        Round the input argument to nearest integer value. Supported on fp16
+        operands only.
+
+        Returns the rounded result.
+
+        """
+
+    class htrunc(Stub):
+        """htrunc(a)
+
+        Truncate the input argument to its integer portion. Supported
+        on fp16 operands only.
+
+        Returns the truncated result.
 
         """
 

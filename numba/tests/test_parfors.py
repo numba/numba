@@ -2255,6 +2255,27 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, arr, 10, True)
         self.check(test_impl, arr, 10, False)
 
+    def test_issue8515(self):
+        # issue8515: an array is filled in the first prange and
+        # then accessed with c[i - 1] in the next prange which
+        # should prevent fusion with the previous prange.
+        def test_impl(n):
+            r = np.zeros(n, dtype=np.intp)
+            c = np.zeros(n, dtype=np.intp)
+            for i in prange(n):
+                for j in range(i):
+                    c[i] += 1
+
+            for i in prange(n):
+                if i == 0:
+                    continue
+                r[i] = c[i] - c[i - 1]
+            return r[1:]
+
+        self.check(test_impl, 15)
+        self.assertEqual(countParfors(test_impl, (types.int64, )), 2)
+
+
 @skip_parfors_unsupported
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):

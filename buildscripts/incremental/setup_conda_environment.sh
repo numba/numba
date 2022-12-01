@@ -33,7 +33,7 @@ conda list
 # Create a base env first and then add to it...
 # NOTE: gitpython is needed for CI testing to do the test slicing
 # NOTE: pyyaml is used to ensure that the Azure CI config is valid
-conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml
+conda create -n $CONDA_ENV -q -y -c conda-forge ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml
 
 # Activate first
 set +v
@@ -43,35 +43,35 @@ set -v
 # Install optional packages into activated env
 echo "PYTHON=$PYTHON"
 echo "VANILLA_INSTALL=$VANILLA_INSTALL"
-if [ "${VANILLA_INSTALL}" != "yes" ]; then
-    # Scipy, CFFI, jinja2, IPython and pygments are optional
-    # dependencies, but exercised in the test suite
-    # pexpect is used to run the gdb tests.
-    # ipykernel is used for testing ipython behaviours.
-    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel scipy pygments pexpect
-fi
+# if [ "${VANILLA_INSTALL}" != "yes" ]; then
+#     # Scipy, CFFI, jinja2, IPython and pygments are optional
+#     # dependencies, but exercised in the test suite
+#     # pexpect is used to run the gdb tests.
+#     # ipykernel is used for testing ipython behaviours.
+#     # $CONDA_INSTALL ${EXTRA_CHANNELS} jinja2 pygments pexpect
+# fi
 
 # Install the compiler toolchain and gdb (if available)
 if [[ $(uname) == Linux ]]; then
-    $CONDA_INSTALL gcc_linux-64 gxx_linux-64 gdb gdb-pretty-printer
+    $CONDA_INSTALL gcc_linux-64 gxx_linux-64 
 elif  [[ $(uname) == Darwin ]]; then
-    $CONDA_INSTALL clang_osx-64 clangxx_osx-64
+    $CONDA_INSTALL -c conda-forge clangxx
     # Install llvm-openmp on OSX for headers during build and runtime during
     # testing
-    $CONDA_INSTALL llvm-openmp
+    # $CONDA_INSTALL llvm-openmp
 fi
 
 # Install latest correct build
-$CONDA_INSTALL -c numba/label/dev llvmlite=0.40
+$CONDA_INSTALL conda-forge::llvmdev=11
 
 # Install importlib-metadata for Python < 3.9
 if [ $PYTHON \< "3.9" ]; then $CONDA_INSTALL importlib_metadata; fi
 
 # Install dependencies for building the documentation
-if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx=2.4.4 docutils=0.17 sphinx_rtd_theme pygments numpydoc; fi
-if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL rstcheck; fi
+# if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx docutils sphinx_rtd_theme pygments numpydoc; fi
+# if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL rstcheck; fi
 # Install dependencies for code coverage (codecov.io)
-if [ "$RUN_COVERAGE" == "yes" ]; then $PIP_INSTALL codecov; fi
+# if [ "$RUN_COVERAGE" == "yes" ]; then $PIP_INSTALL codecov; fi
 # Install SVML
 if [ "$TEST_SVML" == "yes" ]; then $CONDA_INSTALL -c numba icc_rt; fi
 # Install Intel TBB parallel backend
@@ -79,7 +79,7 @@ if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL -c numba tbb=2021 "tbb-de
 # Install pickle5
 if [ "$TEST_PICKLE5" == "yes" ]; then $PIP_INSTALL pickle5; fi
 # Install typeguard
-if [ "$RUN_TYPEGUARD" == "yes" ]; then $CONDA_INSTALL conda-forge::typeguard; fi
+# if [ "$RUN_TYPEGUARD" == "yes" ]; then $CONDA_INSTALL conda-forge::typeguard; fi
 
 # environment dump for debug
 # echo "DEBUG ENV:"

@@ -6,6 +6,14 @@ conda activate $CONDA_ENV
 # Make sure any error below is reported as such
 set -v -e
 
+
+git clone https://github.com/numba/llvmlite 
+pushd llvmlite
+git fetch origin pull/869/head:pr/869
+git checkout pr/869
+python -m pip install . 
+popd
+
 # Build numba extensions without silencing compile errors
 # if [[ "$(uname -s)" == *"Linux"* ]] && [[ "$(uname -p)" == *"86"* ]]; then
 #     EXTRA_BUILD_EXT_FLAGS="--werror --wall"

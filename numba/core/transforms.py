@@ -509,7 +509,7 @@ def _cfg_nodes_in_region(cfg, region_begin, region_end):
     while stack:
         tos = stack.pop()
         succlist = list(cfg.successors(tos))
-        # a single block function will have a empty sucessor list
+        # a single block function will have a empty successor list
         if succlist:
             succs, _ = zip(*succlist)
             nodes = set([node for node in succs
