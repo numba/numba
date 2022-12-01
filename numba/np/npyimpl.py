@@ -26,7 +26,6 @@ from numba.core import errors
 from numba.cpython import builtins
 
 registry = Registry('npyimpl')
-lower = registry.lower
 
 
 ########################################################################
@@ -494,7 +493,7 @@ def _ufunc_db_function(ufunc):
 ################################################################################
 # Helper functions that register the ufuncs
 
-def register_ufunc_kernel(ufunc, kernel):
+def register_ufunc_kernel(ufunc, kernel, lower):
     def do_ufunc(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel)
 
@@ -509,7 +508,8 @@ def register_ufunc_kernel(ufunc, kernel):
     return kernel
 
 
-def register_unary_operator_kernel(operator, ufunc, kernel, inplace=False):
+def register_unary_operator_kernel(operator, ufunc, kernel, lower,
+                                   inplace=False):
     assert not inplace  # are there any inplace unary operators?
     def lower_unary_operator(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel)
@@ -517,7 +517,7 @@ def register_unary_operator_kernel(operator, ufunc, kernel, inplace=False):
     lower(operator, _arr_kind)(lower_unary_operator)
 
 
-def register_binary_operator_kernel(op, ufunc, kernel, inplace=False):
+def register_binary_operator_kernel(op, ufunc, kernel, lower, inplace=False):
     def lower_binary_operator(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel)
 
@@ -542,7 +542,7 @@ def register_binary_operator_kernel(op, ufunc, kernel, inplace=False):
 ################################################################################
 # Use the contents of ufunc_db to initialize the supported ufuncs
 
-@lower(operator.pos, types.Array)
+@registry.lower(operator.pos, types.Array)
 def array_positive_impl(context, builder, sig, args):
     '''Lowering function for +(array) expressions.  Defined here
     (numba.targets.npyimpl) since the remaining array-operator
@@ -557,11 +557,11 @@ def array_positive_impl(context, builder, sig, args):
                               _UnaryPositiveKernel)
 
 
-def _register_ufuncs():
+def register_ufuncs(ufuncs, lower):
     kernels = {}
-    # NOTE: Assuming ufunc implementation for the CPUContext.
-    for ufunc in ufunc_db.get_ufuncs():
-        kernels[ufunc] = register_ufunc_kernel(ufunc, _ufunc_db_function(ufunc))
+    for ufunc in ufuncs:
+        db_func = _ufunc_db_function(ufunc)
+        kernels[ufunc] = register_ufunc_kernel(ufunc, db_func, lower)
 
     for _op_map in (npydecl.NumpyRulesUnaryArrayOperator._op_map,
                     npydecl.NumpyRulesArrayOperator._op_map,
@@ -570,9 +570,9 @@ def _register_ufuncs():
             ufunc = getattr(np, ufunc_name)
             kernel = kernels[ufunc]
             if ufunc.nin == 1:
-                register_unary_operator_kernel(operator, ufunc, kernel)
+                register_unary_operator_kernel(operator, ufunc, kernel, lower)
             elif ufunc.nin == 2:
-                register_binary_operator_kernel(operator, ufunc, kernel)
+                register_binary_operator_kernel(operator, ufunc, kernel, lower)
             else:
                 raise RuntimeError("There shouldn't be any non-unary or binary operators")
 
@@ -582,14 +582,16 @@ def _register_ufuncs():
             ufunc = getattr(np, ufunc_name)
             kernel = kernels[ufunc]
             if ufunc.nin == 1:
-                register_unary_operator_kernel(operator, ufunc, kernel, inplace=True)
+                register_unary_operator_kernel(operator, ufunc, kernel, lower,
+                                               inplace=True)
             elif ufunc.nin == 2:
-                register_binary_operator_kernel(operator, ufunc, kernel, inplace=True)
+                register_binary_operator_kernel(operator, ufunc, kernel, lower,
+                                                inplace=True)
             else:
                 raise RuntimeError("There shouldn't be any non-unary or binary operators")
 
 
-_register_ufuncs()
+register_ufuncs(ufunc_db.get_ufuncs(), registry.lower)
 
 
 @intrinsic
