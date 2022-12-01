@@ -9,6 +9,8 @@ from numba.core.imputils import Registry, lower_cast
 from numba.core.typing.npydecl import parse_dtype
 from numba.core.datamodel import models
 from numba.core import types, cgutils
+from numba.np import ufunc_db
+from numba.np.npyimpl import register_ufuncs
 from .cudadrv import nvvm
 from numba import cuda
 from numba.cuda import nvvmutils, stubs, errors
@@ -1051,3 +1053,8 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
 @lower_constant(CUDADispatcher)
 def cuda_dispatcher_const(context, builder, ty, pyval):
     return context.get_dummy_value()
+
+
+# NumPy
+
+register_ufuncs(ufunc_db.get_ufuncs(), lower)

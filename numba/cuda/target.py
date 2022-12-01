@@ -10,7 +10,7 @@ from numba.core.callconv import MinimalCallConv
 from numba.core.typing import cmathdecl
 
 from .cudadrv import nvvm
-from numba.cuda import codegen, nvvmutils
+from numba.cuda import codegen, nvvmutils, ufuncs
 
 
 # -----------------------------------------------------------------------------
@@ -358,6 +358,9 @@ class CUDATargetContext(BaseContext):
         # fpm.initialize()
         # fpm.run(func)
         # fpm.finalize()
+
+    def get_ufunc_info(self, ufunc_key):
+        return ufuncs.get_ufunc_info(ufunc_key)
 
 
 class CUDACallConv(MinimalCallConv):

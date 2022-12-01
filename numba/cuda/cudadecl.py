@@ -1,7 +1,9 @@
 import operator
 from numba.core import types
 from numba.core.typing.npydecl import (parse_dtype, parse_shape,
-                                       register_number_classes)
+                                       register_number_classes,
+                                       register_numpy_ufunc,
+                                       trigonometric_functions)
 from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          AbstractTemplate, CallableTemplate,
                                          signature, Registry)
@@ -791,3 +793,9 @@ class CudaModuleTemplate(AttributeTemplate):
 
 
 register_global(cuda, types.Module(cuda))
+
+
+# NumPy
+
+for func in trigonometric_functions:
+    register_numpy_ufunc(func, register_global)
