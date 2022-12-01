@@ -26,12 +26,17 @@
  *
  */
 
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 11)
+
+
+
+
 /*
  * NOTE: There is a version split for tracing code. Python 3.10 introduced a
  * trace_info structure to help make tracing more robust. See:
  * https://github.com/python/cpython/pull/24726
  */
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 10)
+#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 10)
 
 /*
  * Code originally from:
@@ -186,7 +191,7 @@ else                                                            \
     }                                                           \
 }
 
-#else
+#else  // Python <3.10
 
 /*
  * Code originally from:
@@ -562,7 +567,10 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
     fn = (PyCFunctionWithKeywords) PyCFunction_GET_FUNCTION(cfunc);
     tstate = PyThreadState_GET();
 
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 10)
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 11)
+    #warning "FIXME: THIS IS STUB CODE"
+    if (tstate->tracing && tstate->c_profilefunc)
+#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 10)
     /*
      * On Python 3.10+ trace_info comes from somewhere up in PyFrameEval et al,
      * Numba doesn't have access to that so creates an equivalent struct and
@@ -621,12 +629,15 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
         }
         /* Populate the 'fast locals' in `frame` */
         PyFrame_LocalsToFast(frame, 0);
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 11)
+        result = fn(PyCFunction_GET_SELF(cfunc), args, kws);
+#else
         tstate->frame = frame;
         C_TRACE(result, fn(PyCFunction_GET_SELF(cfunc), args, kws));
         /* write changes back to locals? */
         PyFrame_FastToLocals(frame);
         tstate->frame = frame->f_back;
-
+#endif
     error:
         Py_XDECREF(frame);
         Py_XDECREF(globals);

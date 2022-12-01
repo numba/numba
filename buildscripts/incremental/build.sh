@@ -15,11 +15,12 @@ python -m pip install .
 popd
 
 # Build numba extensions without silencing compile errors
-if [[ "$(uname -s)" == *"Linux"* ]] && [[ "$(uname -p)" == *"86"* ]]; then
-    EXTRA_BUILD_EXT_FLAGS="--werror --wall"
-else
-    EXTRA_BUILD_EXT_FLAGS=""
-fi
+# if [[ "$(uname -s)" == *"Linux"* ]] && [[ "$(uname -p)" == *"86"* ]]; then
+#     EXTRA_BUILD_EXT_FLAGS="--werror --wall"
+# else
+#     EXTRA_BUILD_EXT_FLAGS=""
+# fi
+EXTRA_BUILD_EXT_FLAGS=""
 
 if [[ $(uname) == "Darwin" ]]; then
     # The following is suggested in https://docs.conda.io/projects/conda-build/en/latest/resources/compiler-tools.html?highlight=SDK#macos-sdk

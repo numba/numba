@@ -90,6 +90,15 @@ class ByteCodeInst(object):
         # https://bugs.python.org/issue27129
         # https://github.com/python/cpython/pull/25069
         assert self.is_jump
+        if PYVERSION == (3, 11):
+            if self.opcode in (dis.opmap[k]
+                               for k in ("JUMP_BACKWARD",
+                                         "POP_JUMP_BACKWARD_IF_TRUE",
+                                         "POP_JUMP_BACKWARD_IF_FALSE")):
+                return self.offset - (self.arg - 1) * 2
+        elif PYVERSION > (3, 11):
+            raise NotImplementedError(PYVERSION)
+
         if PYVERSION >= (3, 10):
             if self.opcode in JREL_OPS:
                 return self.next + self.arg * 2
@@ -196,12 +205,13 @@ class ByteCodeIter(object):
         return buf
 
 
-class ByteCode(object):
+class _ByteCode(object):
     """
     The decoded bytecode of a function, and related information.
     """
     __slots__ = ('func_id', 'co_names', 'co_varnames', 'co_consts',
-                 'co_cellvars', 'co_freevars', 'table', 'labels')
+                 'co_cellvars', 'co_freevars', 'exception_entries',
+                 'table', 'labels')
 
     def __init__(self, func_id):
         code = func_id.code
@@ -219,6 +229,7 @@ class ByteCode(object):
         self.co_consts = code.co_consts
         self.co_cellvars = code.co_cellvars
         self.co_freevars = code.co_freevars
+
         self.table = table
         self.labels = sorted(labels)
 
@@ -258,7 +269,8 @@ class ByteCode(object):
                 return ' '
 
         return '\n'.join('%s %10s\t%s' % ((label_marker(i),) + i)
-                         for i in self.table.items())
+                         for i in self.table.items()
+                         if i[1].opname != "CACHE")
 
     @classmethod
     def _compute_used_globals(cls, func, table, co_consts, co_names):
@@ -296,6 +308,45 @@ class ByteCode(object):
         """
         return self._compute_used_globals(self.func_id.func, self.table,
                                           self.co_consts, self.co_names)
+
+
+class ByteCodePy311(_ByteCode):
+    def __init__(self, func_id):
+        super().__init__(func_id)
+
+        def fixup_eh(ent):
+            from dis import _ExceptionTableEntry
+            # Patch up the exception table offset
+            # because we add a NOP in _patched_opargs
+            out = _ExceptionTableEntry(
+                start=ent.start + _FIXED_OFFSET, end=ent.end + _FIXED_OFFSET,
+                target=ent.target + _FIXED_OFFSET,
+                depth=ent.depth, lasti=ent.lasti,
+            )
+            return out
+
+        entries = dis.Bytecode(func_id.code).exception_entries
+        self.exception_entries = tuple(map(fixup_eh, entries))
+
+    def find_exception_entry(self, offset):
+        """
+        Returns the exception entry for the given instruction offset
+        """
+        candidates = []
+        for ent in self.exception_entries:
+            if ent.start <= offset <= ent.end:
+                candidates.append((ent.depth, ent))
+        if candidates:
+            ent = max(candidates)[1]
+            return ent
+
+
+if PYVERSION == (3, 11):
+    ByteCode = ByteCodePy311
+elif PYVERSION < (3, 11):
+    ByteCode = _ByteCode
+else:
+    raise NotImplementedError(PYVERSION)
 
 
 class FunctionIdentity(serialize.ReduceMixin):

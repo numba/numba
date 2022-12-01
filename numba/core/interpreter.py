@@ -10,10 +10,9 @@ from numba.core.errors import NotDefinedError, UnsupportedError, error_extras
 from numba.core.ir_utils import get_definition, guard
 from numba.core.utils import (PYVERSION, BINOPS_TO_OPERATORS,
                               INPLACE_BINOPS_TO_OPERATORS,)
-from numba.core.byteflow import Flow, AdaptDFA, AdaptCFA
+from numba.core.byteflow import Flow, AdaptDFA, AdaptCFA, BlockKind
 from numba.core.unsafe import eh
 from numba.cpython.unsafe.tuple import unpack_single_tuple
-
 
 class _UNKNOWN_VALUE(object):
     """Represents an unknown value, this is for ease of debugging purposes only.
@@ -1224,6 +1223,55 @@ def peep_hole_fuse_dict_add_updates(func_ir):
     return func_ir
 
 
+def peep_hole_split_at_pop_block(func_ir):
+    """
+    Split blocks that contain ir.PopBlock.
+
+    This rewrite restores the IR structure to pre 3.11 so that withlifting
+    can work correctly.
+    """
+    new_block_map = {}
+    sorted_blocks = sorted(func_ir.blocks.items())
+    for blk_idx, (label, blk) in enumerate(sorted_blocks):
+        # Gather locations of PopBlock
+        pop_block_locs = []
+        for i, inst in enumerate(blk.body):
+            if isinstance(inst, ir.PopBlock):
+                pop_block_locs.append(i)
+        # Rewrite block with PopBlock
+        if pop_block_locs:
+            new_blocks = []
+            for i in pop_block_locs:
+                before_blk = ir.Block(blk.scope, loc=blk.loc)
+                before_blk.body.extend(blk.body[:i])
+                new_blocks.append(before_blk)
+
+                popblk_blk = ir.Block(blk.scope, loc=blk.loc)
+                popblk_blk.body.append(blk.body[i])
+                new_blocks.append(popblk_blk)
+            # Add jump instructions
+            prev_label = label
+            for newblk in new_blocks:
+                new_block_map[prev_label] = newblk
+                next_label = prev_label + 1
+                newblk.body.append(ir.Jump(next_label, loc=blk.loc))
+                prev_label = next_label
+            # Check prev_label does not exceed current new block label
+            if blk_idx + 1 < len(sorted_blocks):
+                if prev_label >= sorted_blocks[blk_idx + 1][0]:
+                    # Panic! Due to heuristic in with-lifting, block labels
+                    # must be monotonically increasing. We cannot continue if we
+                    # run out of usable label between the two blocks.
+                    raise errors.InternalError("POP_BLOCK peephole failed")
+            # Add tail block, which will get the original terminator
+            tail_blk = ir.Block(blk.scope, loc=blk.loc)
+            tail_blk.body.extend(blk.body[pop_block_locs[-1] + 1:])
+            new_block_map[prev_label] = tail_blk
+
+    func_ir.blocks.update(new_block_map)
+    return func_ir
+
+
 def _build_new_build_map(func_ir, name, old_body, old_lineno, new_items):
     """
     Create a new build_map with a new set of key/value items
@@ -1320,9 +1368,15 @@ class Interpreter(object):
         self.dfainfo = None
 
         self.scopes.append(ir.Scope(parent=self.current_scope, loc=self.loc))
+
         # Interpret loop
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
+        if PYVERSION == (3, 11):
+            # Insert end of try markers
+            self._end_try_blocks()
+        elif PYVERSION > (3, 11):
+            raise NotImplementedError(PYVERSION)
         self._legalize_exception_vars()
         # Prepare FunctionIR
         func_ir = ir.FunctionIR(self.blocks, self.is_generator, self.func_id,
@@ -1333,6 +1387,8 @@ class Interpreter(object):
         # post process the IR to rewrite opcodes/byte sequences that are too
         # involved to risk handling as part of direct interpretation
         peepholes = []
+        if PYVERSION == (3, 11):
+            peepholes.append(peep_hole_split_at_pop_block)
         if PYVERSION in [(3, 9), (3, 10)]:
             peepholes.append(peep_hole_list_to_tuple)
         peepholes.append(peep_hole_delete_with_exit)
@@ -1345,12 +1401,60 @@ class Interpreter(object):
             peepholes.append(peep_hole_fuse_dict_add_updates)
 
         post_processed_ir = self.post_process(peepholes, func_ir)
+
         return post_processed_ir
 
     def post_process(self, peepholes, func_ir):
         for peep in peepholes:
             func_ir = peep(func_ir)
         return func_ir
+
+    def _end_try_blocks(self):
+        """Closes all try blocks by inserting the required marker at the
+        exception handler
+
+        This is only needed for py3.11 because of the changes in exception
+        handling. This merely maps the new py3.11 semantics back to the old way.
+
+        What the code does:
+
+        - For each block, compute the difference of blockstack to its incoming
+          blocks' blockstack.
+        - If the incoming blockstack has an extra TRY, the current block must
+          be the EXCEPT block and we need to insert a marker.
+
+        See also: _insert_try_block_end
+        """
+        assert PYVERSION == (3, 11)
+        graph = self.cfa.graph
+        for offset, block in self.blocks.items():
+            # Get current blockstack
+            cur_bs = self.dfa.infos[offset].blockstack
+            # Check blockstack of the incoming blocks
+            for inc, _ in graph.predecessors(offset):
+                inc_bs = self.dfa.infos[inc].blockstack
+
+                # find first diff in the blockstack
+                for i, (x, y) in enumerate(zip(cur_bs, inc_bs)):
+                    if x != y:
+                        break
+                else:
+                    i = min(len(cur_bs), len(inc_bs))
+
+                def do_change(remain):
+                    while remain:
+                        ent = remain.pop()
+                        if ent['kind'] == BlockKind('TRY'):
+                            # Extend block with marker for end of try
+                            self.current_block = block
+                            oldbody = list(block.body)
+                            block.body.clear()
+                            self._insert_try_block_end()
+                            block.body.extend(oldbody)
+                            return True
+
+                if do_change(list(inc_bs[i:])):
+                    break
 
     def _legalize_exception_vars(self):
         """Search for unsupported use of exception variables.
@@ -1397,15 +1501,16 @@ class Interpreter(object):
     def _start_new_block(self, offset):
         oldblock = self.current_block
         self.insert_block(offset)
+
+        tryblk = self.dfainfo.active_try_block if self.dfainfo else None
         # Ensure the last block is terminated
         if oldblock is not None and not oldblock.is_terminated:
             # Handle ending try block.
-            tryblk = self.dfainfo.active_try_block
             # If there's an active try-block and the handler block is live.
             if tryblk is not None and tryblk['end'] in self.cfa.graph.nodes():
                 # We are in a try-block, insert a branch to except-block.
                 # This logic cannot be in self._end_current_block()
-                # because we the non-raising next block-offset.
+                # because we don't know the non-raising next block-offset.
                 branch = ir.Branch(
                     cond=self.get('$exception_check'),
                     truebr=tryblk['end'],
@@ -1417,15 +1522,33 @@ class Interpreter(object):
             else:
                 jmp = ir.Jump(offset, loc=self.loc)
                 oldblock.append(jmp)
+
         # Get DFA block info
         self.dfainfo = self.dfa.infos[self.current_block_offset]
         self.assigner = Assigner()
         # Check out-of-scope syntactic-block
-        while self.syntax_blocks:
-            if offset >= self.syntax_blocks[-1].exit:
-                self.syntax_blocks.pop()
-            else:
-                break
+        if PYVERSION == (3, 11):
+            # This is recreating pre-3.11 code structure
+            while self.syntax_blocks:
+                if offset >= self.syntax_blocks[-1].exit:
+                    synblk = self.syntax_blocks.pop()
+                    if isinstance(synblk, ir.With):
+                        self.current_block.append(ir.PopBlock(self.loc))
+                else:
+                    break
+            # inject try block:
+            newtryblk = self.dfainfo.active_try_block
+            if newtryblk is not None:
+                if newtryblk is not tryblk:
+                    self._insert_try_block_begin()
+        elif PYVERSION < (3, 11):
+            while self.syntax_blocks:
+                if offset >= self.syntax_blocks[-1].exit:
+                    self.syntax_blocks.pop()
+                else:
+                    break
+        else:
+            raise NotImplementedError(PYVERSION)
 
     def _end_current_block(self):
         # Handle try block
@@ -1571,7 +1694,13 @@ class Interpreter(object):
         for phiname, varname in self.dfainfo.outgoing_phis.items():
             target = self.current_scope.get_or_define(phiname,
                                                       loc=self.loc)
-            stmt = ir.Assign(value=self.get(varname), target=target,
+            try:
+                val = self.get(varname)
+            except ir.NotDefinedError:
+                # Hack to make sure exception variables are defined
+                assert PYVERSION == (3, 11), "unexpected missing definition"
+                val = ir.Const(value=None, loc=self.loc)
+            stmt = ir.Assign(value=val, target=target,
                              loc=self.loc)
             self.definitions[target.name].append(stmt.value)
             if not self.current_block.is_terminated:
@@ -1626,6 +1755,16 @@ class Interpreter(object):
 
     def _dispatch(self, inst, kws):
         assert self.current_block is not None
+        if PYVERSION == (3, 11):
+            if self.syntax_blocks:
+                top = self.syntax_blocks[-1]
+                if isinstance(top, ir.With) :
+                    if inst.offset >= top.exit:
+                        self.current_block.append(ir.PopBlock(loc=self.loc))
+                        self.syntax_blocks.pop()
+        elif PYVERSION > (3, 11):
+            raise NotImplementedError(PYVERSION)
+
         fname = "op_%s" % inst.opname.replace('+', '_')
         try:
             fn = getattr(self, fname)
@@ -1696,6 +1835,21 @@ class Interpreter(object):
     # --- Bytecode handlers ---
 
     def op_NOP(self, inst):
+        pass
+
+    def op_RESUME(self, inst):
+        pass
+
+    def op_CACHE(self, inst):
+        pass
+
+    def op_PRECALL(self, inst):
+        pass
+
+    def op_PUSH_NULL(self, inst):
+        pass
+
+    def op_RETURN_GENERATOR(self, inst):
         pass
 
     def op_PRINT_ITEM(self, inst, item, printvar, res):
@@ -2040,23 +2194,50 @@ class Interpreter(object):
             const = ir.Const(value, loc=self.loc)
         self.store(const, res)
 
-    def op_LOAD_GLOBAL(self, inst, res):
-        name = self.code_names[inst.arg]
-        value = self.get_global_value(name)
-        gl = ir.Global(name, value, loc=self.loc)
-        self.store(gl, res)
+    if PYVERSION == (3, 11):
+        def op_LOAD_GLOBAL(self, inst, idx, res):
+            name = self.code_names[idx]
+            value = self.get_global_value(name)
+            gl = ir.Global(name, value, loc=self.loc)
+            self.store(gl, res)
+    elif PYVERSION < (3, 11):
+        def op_LOAD_GLOBAL(self, inst, res):
+            name = self.code_names[inst.arg]
+            value = self.get_global_value(name)
+            gl = ir.Global(name, value, loc=self.loc)
+            self.store(gl, res)
+    else:
+        raise NotImplementedError(PYVERSION)
 
-    def op_LOAD_DEREF(self, inst, res):
-        n_cellvars = len(self.code_cellvars)
-        if inst.arg < n_cellvars:
-            name = self.code_cellvars[inst.arg]
-            gl = self.get(name)
-        else:
-            idx = inst.arg - n_cellvars
-            name = self.code_freevars[idx]
-            value = self.get_closure_value(idx)
-            gl = ir.FreeVar(idx, name, value, loc=self.loc)
-        self.store(gl, res)
+    def op_COPY_FREE_VARS(self, inst):
+        pass
+
+    if PYVERSION == (3, 11):
+        def op_LOAD_DEREF(self, inst, res):
+            n_cellvars = len(self.code_cellvars)
+            if inst.arg < n_cellvars:
+                name = self.code_cellvars[inst.arg]
+                gl = self.get(name)
+            else:
+                idx = inst.arg - len(self.code_locals)
+                name = self.code_freevars[idx]
+                value = self.get_closure_value(idx)
+                gl = ir.FreeVar(idx, name, value, loc=self.loc)
+            self.store(gl, res)
+    elif PYVERSION < (3, 11):
+        def op_LOAD_DEREF(self, inst, res):
+            n_cellvars = len(self.code_cellvars)
+            if inst.arg < n_cellvars:
+                name = self.code_cellvars[inst.arg]
+                gl = self.get(name)
+            else:
+                idx = inst.arg - n_cellvars
+                name = self.code_freevars[idx]
+                value = self.get_closure_value(idx)
+                gl = ir.FreeVar(idx, name, value, loc=self.loc)
+            self.store(gl, res)
+    else:
+        raise NotImplementedError(PYVERSION)
 
     def op_STORE_DEREF(self, inst, value):
         n_cellvars = len(self.code_cellvars)
@@ -2087,6 +2268,20 @@ class Interpreter(object):
         exit_fn_obj = ir.Const(None, loc=self.loc)
         self.store(value=exit_fn_obj, name=exitfn)
 
+    def op_BEFORE_WITH(self, inst, contextmanager, exitfn, end):
+        assert self.blocks[inst.offset] is self.current_block
+        # Handle with
+        wth = ir.With(inst.offset, exit=end)
+        self.syntax_blocks.append(wth)
+        ctxmgr = self.get(contextmanager)
+        self.current_block.append(ir.EnterWith(contextmanager=ctxmgr,
+                                               begin=inst.offset,
+                                               end=end, loc=self.loc,))
+
+        # Store exit function
+        exit_fn_obj = ir.Const(None, loc=self.loc)
+        self.store(value=exit_fn_obj, name=exitfn)
+
     def op_SETUP_EXCEPT(self, inst):
         # Removed since python3.8
         self._insert_try_block_begin()
@@ -2113,6 +2308,18 @@ class Interpreter(object):
             # Set to None for now
             self.store(const_none, name=tmp)
             self._exception_vars.add(tmp)
+
+    def op_CALL(self, inst, func, args, kw_names, res):
+        func = self.get(func)
+        args = [self.get(x) for x in args]
+        if kw_names is not None:
+            names = self.code_consts[kw_names]
+            kwargs = list(zip(names, args[-len(names):]))
+            args = args[:-len(names)]
+        else:
+            kwargs = ()
+        expr = ir.Expr.call(func, args, kwargs, loc=self.loc)
+        self.store(expr, res)
 
     def op_CALL_FUNCTION(self, inst, func, args, res):
         func = self.get(func)
@@ -2445,6 +2652,12 @@ class Interpreter(object):
                                      loc=self.loc)
         self.store(expr, res)
 
+    def op_BINARY_OP(self, inst, op, lhs, rhs, res):
+        if "=" in op:
+            self._inplace_binop(op[:-1], lhs, rhs, res)
+        else:
+            self._binop(op, lhs, rhs, res)
+
     def op_BINARY_ADD(self, inst, lhs, rhs, res):
         self._binop('+', lhs, rhs, res)
 
@@ -2537,6 +2750,10 @@ class Interpreter(object):
         jmp = ir.Jump(inst.get_jump_target(), loc=self.loc)
         self.current_block.append(jmp)
 
+    def op_JUMP_BACKWARD(self, inst):
+        jmp = ir.Jump(inst.get_jump_target(), loc=self.loc)
+        self.current_block.append(jmp)
+
     def op_POP_BLOCK(self, inst, kind=None):
         if kind is None:
             self.syntax_blocks.pop()
@@ -2625,6 +2842,45 @@ class Interpreter(object):
     def op_JUMP_IF_TRUE(self, inst, pred):
         self._op_JUMP_IF(inst, pred=pred, iftrue=True)
 
+    def _jump_if_none(self, inst, pred, iftrue):
+        brs = {
+            True: inst.get_jump_target(),
+            False: inst.next,
+        }
+        truebr = brs[iftrue]
+        falsebr = brs[not iftrue]
+
+        op = BINOPS_TO_OPERATORS["is"]
+
+        constnone = self.store(value=ir.Const(None, loc=self.loc),
+                         name="${inst.offset}constnone")
+        pred = self.get(pred)
+        isnone = ir.Expr.binop(op, lhs=pred, rhs=constnone, loc=self.loc)
+
+        pname = "$%spred" % (inst.offset)
+        predicate = self.store(value=isnone, name=pname)
+        branch = ir.Branch(cond=predicate, truebr=truebr, falsebr=falsebr,
+                           loc=self.loc)
+        self.current_block.append(branch)
+
+    def op_POP_JUMP_FORWARD_IF_NONE(self, inst, pred):
+        self._jump_if_none(inst, pred, True)
+
+    def op_POP_JUMP_FORWARD_IF_NOT_NONE(self, inst, pred):
+        self._jump_if_none(inst, pred, False)
+
+    def op_POP_JUMP_FORWARD_IF_FALSE(self, inst, pred):
+        self._op_JUMP_IF(inst, pred=pred, iftrue=False)
+
+    def op_POP_JUMP_FORWARD_IF_TRUE(self, inst, pred):
+        self._op_JUMP_IF(inst, pred=pred, iftrue=True)
+
+    def op_POP_JUMP_BACKWARD_IF_FALSE(self, inst, pred):
+        self._op_JUMP_IF(inst, pred=pred, iftrue=False)
+
+    def op_POP_JUMP_BACKWARD_IF_TRUE(self, inst, pred):
+        self._op_JUMP_IF(inst, pred=pred, iftrue=True)
+
     def op_POP_JUMP_IF_FALSE(self, inst, pred):
         self._op_JUMP_IF(inst, pred=pred, iftrue=False)
 
@@ -2636,6 +2892,19 @@ class Interpreter(object):
 
     def op_JUMP_IF_TRUE_OR_POP(self, inst, pred):
         self._op_JUMP_IF(inst, pred=pred, iftrue=True)
+
+    def op_CHECK_EXC_MATCH(self, inst, pred, tos, tos1):
+        gv_fn = ir.Global(
+            "exception_match", eh.exception_match, loc=self.loc,
+        )
+        exc_match_name = '$exc_match'
+        self.store(value=gv_fn, name=exc_match_name, redefine=True)
+        lhs = self.get(tos1)
+        rhs = self.get(tos)
+        exc = ir.Expr.call(
+            self.get(exc_match_name), args=(lhs, rhs), kws=(), loc=self.loc,
+        )
+        self.store(exc, pred)
 
     def op_JUMP_IF_NOT_EXC_MATCH(self, inst, pred, tos, tos1):
         truebr = inst.next
@@ -2656,12 +2925,19 @@ class Interpreter(object):
         self.current_block.append(bra)
 
     def op_RERAISE(self, inst, exc):
-        # Numba can't handle this case and it's caught else where, this is a
-        # runtime guard in case this is reached by unknown means.
-        msg = (f"Unreachable condition reached (op code RERAISE executed)"
-               f"{error_extras['reportable']}")
-        stmt = ir.StaticRaise(AssertionError, (msg,), self.loc)
-        self.current_block.append(stmt)
+        tryblk = self.dfainfo.active_try_block
+        if tryblk is not None:
+            stmt = ir.TryRaise(exception=None, loc=self.loc)
+            self.current_block.append(stmt)
+            self._insert_try_block_end()
+            self.current_block.append(ir.Jump(tryblk['end'], loc=self.loc))
+        else:
+            # Numba can't handle this case and it's caught else where, this is a
+            # runtime guard in case this is reached by unknown means.
+            msg = (f"Unreachable condition reached (op code RERAISE executed)"
+                   f"{error_extras['reportable']}")
+            stmt = ir.StaticRaise(AssertionError, (msg,), self.loc)
+            self.current_block.append(stmt)
 
     def op_RAISE_VARARGS(self, inst, exc):
         if exc is not None:

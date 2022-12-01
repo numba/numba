@@ -79,13 +79,11 @@ jobs:
         PYTHON: '3.11'
         NUMPY: '1.23'
         CONDA_ENV: azure_ci
-        BUILD_DOC: yes
         TEST_START_INDEX: 7
       py311_np123_8_pickle5:
         PYTHON: '3.11'
         NUMPY: '1.23'
         CONDA_ENV: azure_ci
-        TEST_PICKLE5: yes
         TEST_START_INDEX: 8
       py311_np123_9_svml:
         PYTHON: '3.11'
