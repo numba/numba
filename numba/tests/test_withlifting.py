@@ -284,6 +284,7 @@ class TestLiftCall(BaseTestWithLifting):
         msg = ("compiler re-entrant to the same function signature")
         self.assertIn(msg, str(raises.exception))
 
+    # 3.8 and earlier fails to interpret the bytecode for this example
     @unittest.skipIf(PYVERSION <= (3, 8),
                      "unsupported on py3.8 and before")
     def test_liftcall5(self):
