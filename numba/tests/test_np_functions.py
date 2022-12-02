@@ -4871,10 +4871,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         values = [
             np.nan,
             1.0,
-            np.asarray([0.1, 1.0, 0.4]),
-            np.asarray([[0.1, 1.0, 0.4], [0.4, 1.2, 4.0]]),
-            np.asarray([0.1, np.nan, 0.4]),
-            np.asarray([[0.1, np.nan, 0.4], [np.nan, 1.2, 4.0]]),
+            np.array([0.1, 1.0, 0.4]),
+            np.array([[0.1, 1.0, 0.4], [0.4, 1.2, 4.0]]),
+            np.array([0.1, np.nan, 0.4]),
+            np.array([[0.1, np.nan, 0.4], [np.nan, 1.2, 4.0]]),
+            np.array([-np.inf, np.nan, np.inf])
         ]
         nans = [0.0, 4.2]
 
@@ -4888,13 +4889,21 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def test_nan_to_num_copy_false(self):
         # Check that copy=False operates in-place
-        X = np.asarray([0.1, 0.4, np.nan])
+        x = np.asarray([0.1, 0.4, np.nan])
         cfunc = njit(nan_to_num)
 
         expected = 1.0
-        cfunc(X, copy=False, nan=expected)
+        cfunc(x, copy=False, nan=expected)
 
-        self.assertPreciseEqual(X[-1], expected)
+        self.assertPreciseEqual(x[-1], expected)
+
+    def test_nan_to_num_invalid_argument(self):
+        cfunc = njit(nan_to_num)
+        with self.assertTypingError() as raises:
+            cfunc("invalid_input")
+
+        msg = "The first argument must be a scalar or an array-like"
+        self.assertIn(msg, str(raises.exception))
 
 
 class TestNPMachineParameters(TestCase):

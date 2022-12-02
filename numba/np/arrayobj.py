@@ -6379,17 +6379,17 @@ def arr_take_along_axis(arr, indices, axis):
 
 
 @overload(np.nan_to_num)
-def nan_to_num_impl(X, copy=True, nan=0.0):
-    if isinstance(X, types.Number):
-        def impl(X, copy=True, nan=0.0):
-            if np.isnan(X):
+def nan_to_num_impl(x, copy=True, nan=0.0):
+    if isinstance(x, types.Number):
+        def impl(x, copy=True, nan=0.0):
+            if math.isnan(x):
                 return nan
-            return X
+            return x
 
-    elif type_can_asarray(X):
-        def impl(X, copy=True, nan=0.0):
-            X_ = np.asarray(X)
-            output = np.copy(X_) if copy else X_
+    elif type_can_asarray(x):
+        def impl(x, copy=True, nan=0.0):
+            x_ = np.asarray(x)
+            output = np.copy(x_) if copy else x_
             output_flat = output.flat
             for i in range(output.size):
                 if np.isnan(output_flat[i]):
