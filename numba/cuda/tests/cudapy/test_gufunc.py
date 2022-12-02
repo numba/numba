@@ -334,6 +334,7 @@ class TestCUDAGufunc(CUDATestCase):
         self.assertIn('specifies int32 return type', msg)
 
 
+@skip_on_cudasim('ufunc API unsupported in the simulator')
 class TestMultipleOutputs(CUDATestCase):
     def test_multiple_outputs_same_type_passed_in(self):
         @guvectorize([void(float32[:], float32[:], float32[:])],
