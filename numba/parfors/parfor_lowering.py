@@ -33,11 +33,25 @@ from numba.core.ir_utils import (
     get_global_func_typ,
 )
 from numba.core.typing import signature
+from numba.core import lowering
 from numba.parfors.parfor import ensure_parallel_support
 from numba.core.errors import (
     NumbaParallelSafetyWarning, NotDefinedError, CompilerError, InternalError,
 )
 from numba.parfors.parfor_lowering_utils import ParforLoweringBuilder
+
+
+class ParforLower(lowering.Lower):
+    """This is a custom lowering class that extends standard lowering so as
+    to accommodate parfor.Parfor nodes."""
+
+    # custom instruction lowering to handle parfor nodes
+    def lower_inst(self, inst):
+        if isinstance(inst, parfor.Parfor):
+            _lower_parfor_parallel(self, inst)
+        else:
+            super().lower_inst(inst)
+
 
 def _lower_parfor_parallel(lowerer, parfor):
     """Lowerer that handles LLVM code generation for parfor.

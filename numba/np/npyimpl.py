@@ -383,7 +383,23 @@ def numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
     # assume outputs are all the same size, which numpy requires
 
     loopshape = outputs[0].shape
-    with cgutils.loop_nest(builder, loopshape, intp=intpty) as loop_indices:
+
+    # count the number of C and F layout arrays, respectively
+    input_layouts = [inp.layout for inp in inputs
+                     if isinstance(inp, _ArrayHelper)]
+    num_c_layout = len([x for x in input_layouts if x == 'C'])
+    num_f_layout = len([x for x in input_layouts if x == 'F'])
+
+    # Only choose F iteration order if more arrays are in F layout.
+    # Default to C order otherwise.
+    # This is a best effort for performance. NumPy has more fancy logic that
+    # uses array iterators in non-trivial cases.
+    if num_f_layout > num_c_layout:
+        order = 'F'
+    else:
+        order = 'C'
+
+    with cgutils.loop_nest(builder, loopshape, intp=intpty, order=order) as loop_indices:
         vals_in = []
         for i, (index, arg) in enumerate(zip(indices, inputs)):
             index.update_indices(loop_indices, i)

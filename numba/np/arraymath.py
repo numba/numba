@@ -350,263 +350,243 @@ def array_sum_axis(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
-@lower_builtin(np.prod, types.Array)
-@lower_builtin("array.prod", types.Array)
-def array_prod(context, builder, sig, args):
-
-    def array_prod_impl(arr):
-        c = 1
-        for v in np.nditer(arr):
-            c *= v.item()
-        return c
-
-    res = context.compile_internal(builder, array_prod_impl, sig, args,
-                                   locals=dict(c=sig.return_type))
-    return impl_ret_borrowed(context, builder, sig.return_type, res)
-
-
-@lower_builtin(np.cumsum, types.Array)
-@lower_builtin("array.cumsum", types.Array)
-def array_cumsum(context, builder, sig, args):
-    scalar_dtype = sig.return_type.dtype
-    dtype = as_dtype(scalar_dtype)
-    zero = scalar_dtype(0)
-
-    def array_cumsum_impl(arr):
-        out = np.empty(arr.size, dtype)
-        c = zero
-        for idx, v in enumerate(arr.flat):
-            c += v
-            out[idx] = c
-        return out
-
-    res = context.compile_internal(builder, array_cumsum_impl, sig, args,
-                                   locals=dict(c=scalar_dtype))
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-
-@lower_builtin(np.cumprod, types.Array)
-@lower_builtin("array.cumprod", types.Array)
-def array_cumprod(context, builder, sig, args):
-    scalar_dtype = sig.return_type.dtype
-    dtype = as_dtype(scalar_dtype)
-
-    def array_cumprod_impl(arr):
-        out = np.empty(arr.size, dtype)
-        c = 1
-        for idx, v in enumerate(arr.flat):
-            c *= v
-            out[idx] = c
-        return out
-
-    res = context.compile_internal(builder, array_cumprod_impl, sig, args,
-                                   locals=dict(c=scalar_dtype))
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-
-@lower_builtin(np.mean, types.Array)
-@lower_builtin("array.mean", types.Array)
-def array_mean(context, builder, sig, args):
-    zero = sig.return_type(0)
-
-    def array_mean_impl(arr):
-        # Can't use the naive `arr.sum() / arr.size`, as it would return
-        # a wrong result on integer sum overflow.
-        c = zero
-        for v in np.nditer(arr):
-            c += v.item()
-        return c / arr.size
-
-    res = context.compile_internal(builder, array_mean_impl, sig, args,
-                                   locals=dict(c=sig.return_type))
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-@lower_builtin(np.var, types.Array)
-@lower_builtin("array.var", types.Array)
-def array_var(context, builder, sig, args):
-    def array_var_impl(arr):
-        # Compute the mean
-        m = arr.mean()
-
-        # Compute the sum of square diffs
-        ssd = 0
-        for v in np.nditer(arr):
-            val = (v.item() - m)
-            ssd += np.real(val * np.conj(val))
-        return ssd / arr.size
-
-    res = context.compile_internal(builder, array_var_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-@lower_builtin(np.std, types.Array)
-@lower_builtin("array.std", types.Array)
-def array_std(context, builder, sig, args):
-    def array_std_impl(arry):
-        return arry.var() ** 0.5
-    res = context.compile_internal(builder, array_std_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-def zero_dim_msg(fn_name):
-    msg = ("zero-size array to reduction operation "
-           "{0} which has no identity".format(fn_name))
-    return msg
-
-
-@lower_builtin(np.min, types.Array)
-@lower_builtin("array.min", types.Array)
-def array_min(context, builder, sig, args):
-    ty = sig.args[0].dtype
-    MSG = zero_dim_msg('minimum')
-
-    if isinstance(ty, (types.NPDatetime, types.NPTimedelta)):
-        def array_min_impl(arry):
-            if arry.size == 0:
-                raise ValueError(MSG)
-
-            it = np.nditer(arry)
-            min_value = next(it).take(0)
-            if np.isnat(min_value):
-                return min_value
-
-            for view in it:
-                v = view.item()
-                if np.isnat(v):
-                    return v
-                if v < min_value:
-                    min_value = v
-            return min_value
-
-    elif isinstance(ty, types.Complex):
-        def array_min_impl(arry):
-            if arry.size == 0:
-                raise ValueError(MSG)
-
-            it = np.nditer(arry)
-            min_value = next(it).take(0)
-
-            for view in it:
-                v = view.item()
-                if v.real < min_value.real:
-                    min_value = v
-                elif v.real == min_value.real:
-                    if v.imag < min_value.imag:
-                        min_value = v
-            return min_value
-
-    elif isinstance(ty, types.Float):
-        def array_min_impl(arry):
-            if arry.size == 0:
-                raise ValueError(MSG)
-
-            it = np.nditer(arry)
-            min_value = next(it).take(0)
-            if np.isnan(min_value):
-                return min_value
-
-            for view in it:
-                v = view.item()
-                if np.isnan(v):
-                    return v
-                if v < min_value:
-                    min_value = v
-            return min_value
-
+def get_accumulator(dtype, value):
+    if dtype.type == np.timedelta64:
+        acc_init = np.int64(value).view(dtype)
     else:
-        def array_min_impl(arry):
-            if arry.size == 0:
-                raise ValueError(MSG)
+        acc_init = dtype.type(value)
+    return acc_init
 
-            it = np.nditer(arry)
-            min_value = next(it).take(0)
 
-            for view in it:
-                v = view.item()
-                if v < min_value:
-                    min_value = v
+@overload(np.prod)
+@overload_method(types.Array, "prod")
+def array_prod(a):
+    if isinstance(a, types.Array):
+        dtype = as_dtype(a.dtype)
+
+        acc_init = get_accumulator(dtype, 1)
+
+        def array_prod_impl(a):
+            c = acc_init
+            for v in np.nditer(a):
+                c *= v.item()
+            return c
+
+        return array_prod_impl
+
+
+@overload(np.cumsum)
+@overload_method(types.Array, "cumsum")
+def array_cumsum(a):
+    if isinstance(a, types.Array):
+        is_integer = a.dtype in types.signed_domain
+        is_bool = a.dtype == types.bool_
+        if (is_integer and a.dtype.bitwidth < types.intp.bitwidth)\
+                or is_bool:
+            dtype = as_dtype(types.intp)
+        else:
+            dtype = as_dtype(a.dtype)
+
+        acc_init = get_accumulator(dtype, 0)
+
+        def array_cumsum_impl(a):
+            out = np.empty(a.size, dtype)
+            c = acc_init
+            for idx, v in enumerate(a.flat):
+                c += v
+                out[idx] = c
+            return out
+
+        return array_cumsum_impl
+
+
+@overload(np.cumprod)
+@overload_method(types.Array, "cumprod")
+def array_cumprod(a):
+    if isinstance(a, types.Array):
+        is_integer = a.dtype in types.signed_domain
+        is_bool = a.dtype == types.bool_
+        if (is_integer and a.dtype.bitwidth < types.intp.bitwidth)\
+                or is_bool:
+            dtype = as_dtype(types.intp)
+        else:
+            dtype = as_dtype(a.dtype)
+
+        acc_init = get_accumulator(dtype, 1)
+
+        def array_cumprod_impl(a):
+            out = np.empty(a.size, dtype)
+            c = acc_init
+            for idx, v in enumerate(a.flat):
+                c *= v
+                out[idx] = c
+            return out
+
+        return array_cumprod_impl
+
+
+@overload(np.mean)
+@overload_method(types.Array, "mean")
+def array_mean(a):
+    if isinstance(a, types.Array):
+        is_number = a.dtype in types.integer_domain | frozenset([types.bool_])
+        if is_number:
+            dtype = as_dtype(types.float64)
+        else:
+            dtype = as_dtype(a.dtype)
+
+        acc_init = get_accumulator(dtype, 0)
+
+        def array_mean_impl(a):
+            # Can't use the naive `arr.sum() / arr.size`, as it would return
+            # a wrong result on integer sum overflow.
+            c = acc_init
+            for v in np.nditer(a):
+                c += v.item()
+            return c / a.size
+
+        return array_mean_impl
+
+
+@overload(np.var)
+@overload_method(types.Array, "var")
+def array_var(a):
+    if isinstance(a, types.Array):
+        def array_var_impl(a):
+            # Compute the mean
+            m = a.mean()
+
+            # Compute the sum of square diffs
+            ssd = 0
+            for v in np.nditer(a):
+                val = (v.item() - m)
+                ssd += np.real(val * np.conj(val))
+            return ssd / a.size
+
+        return array_var_impl
+
+
+@overload(np.std)
+@overload_method(types.Array, "std")
+def array_std(a):
+    if isinstance(a, types.Array):
+        def array_std_impl(a):
+            return a.var() ** 0.5
+
+        return array_std_impl
+
+
+@register_jitable
+def min_comparator(a, min_val):
+    return a < min_val
+
+
+@register_jitable
+def max_comparator(a, min_val):
+    return a > min_val
+
+
+@register_jitable
+def return_false(a):
+    return False
+
+
+@overload(np.min)
+@overload_method(types.Array, "min")
+def npy_min(a):
+    if not isinstance(a, types.Array):
+        return
+
+    if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
+        pre_return_func = np.isnat
+        comparator = min_comparator
+    elif isinstance(a.dtype, types.Complex):
+        pre_return_func = return_false
+
+        def comp_func(a, min_val):
+            if a.real < min_val.real:
+                return True
+            elif a.real == min_val.real:
+                if a.imag < min_val.imag:
+                    return True
+            return False
+
+        comparator = register_jitable(comp_func)
+    elif isinstance(a.dtype, types.Float):
+        pre_return_func = np.isnan
+        comparator = min_comparator
+    else:
+        pre_return_func = return_false
+        comparator = min_comparator
+
+    def impl_min(a):
+        if a.size == 0:
+            raise ValueError("zero-size array to reduction operation "
+                             "minimum which has no identity")
+
+        it = np.nditer(a)
+        min_value = next(it).take(0)
+        if pre_return_func(min_value):
             return min_value
 
-    res = context.compile_internal(builder, array_min_impl, sig, args)
-    return impl_ret_borrowed(context, builder, sig.return_type, res)
+        for view in it:
+            v = view.item()
+            if pre_return_func(v):
+                return v
+            if comparator(v, min_value):
+                min_value = v
+        return min_value
+
+    return impl_min
 
 
-@lower_builtin(np.max, types.Array)
-@lower_builtin("array.max", types.Array)
-def array_max(context, builder, sig, args):
-    ty = sig.args[0].dtype
-    MSG = zero_dim_msg('maximum')
+@overload(np.max)
+@overload_method(types.Array, "max")
+def npy_max(a):
+    if not isinstance(a, types.Array):
+        return
 
-    if isinstance(ty, (types.NPDatetime, types.NPTimedelta)):
-        def array_max_impl(arry):
-            if arry.size == 0:
-                raise ValueError(MSG)
+    if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
+        pre_return_func = np.isnat
+        comparator = max_comparator
+    elif isinstance(a.dtype, types.Complex):
+        pre_return_func = return_false
 
-            it = np.nditer(arry)
-            max_value = next(it).take(0)
-            if np.isnat(max_value):
-                return max_value
+        def comp_func(a, max_val):
+            if a.real > max_val.real:
+                return True
+            elif a.real == max_val.real:
+                if a.imag > max_val.imag:
+                    return True
+            return False
 
-            for view in it:
-                v = view.item()
-                if np.isnat(v):
-                    return v
-                if v > max_value:
-                    max_value = v
-            return max_value
-
-    elif isinstance(ty, types.Complex):
-        def array_max_impl(arry):
-            if arry.size == 0:
-                raise ValueError(MSG)
-
-            it = np.nditer(arry)
-            max_value = next(it).take(0)
-
-            for view in it:
-                v = view.item()
-                if v.real > max_value.real:
-                    max_value = v
-                elif v.real == max_value.real:
-                    if v.imag > max_value.imag:
-                        max_value = v
-            return max_value
-
-    elif isinstance(ty, types.Float):
-        def array_max_impl(arry):
-            if arry.size == 0:
-                raise ValueError(MSG)
-
-            it = np.nditer(arry)
-            max_value = next(it).take(0)
-            if np.isnan(max_value):
-                return max_value
-
-            for view in it:
-                v = view.item()
-                if np.isnan(v):
-                    return v
-                if v > max_value:
-                    max_value = v
-            return max_value
-
+        comparator = register_jitable(comp_func)
+    elif isinstance(a.dtype, types.Float):
+        pre_return_func = np.isnan
+        comparator = max_comparator
     else:
-        def array_max_impl(arry):
-            if arry.size == 0:
-                raise ValueError(MSG)
+        pre_return_func = return_false
+        comparator = max_comparator
 
-            it = np.nditer(arry)
-            max_value = next(it).take(0)
+    def impl_max(a):
+        if a.size == 0:
+            raise ValueError("zero-size array to reduction operation "
+                             "maximum which has no identity")
 
-            for view in it:
-                v = view.item()
-                if v > max_value:
-                    max_value = v
+        it = np.nditer(a)
+        max_value = next(it).take(0)
+        if pre_return_func(max_value):
             return max_value
 
-    res = context.compile_internal(builder, array_max_impl, sig, args)
-    return impl_ret_borrowed(context, builder, sig.return_type, res)
+        for view in it:
+            v = view.item()
+            if pre_return_func(v):
+                return v
+            if comparator(v, max_value):
+                max_value = v
+        return max_value
+
+    return impl_max
 
 
 @register_jitable
