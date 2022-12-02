@@ -15,7 +15,6 @@ from numba.core.untyped_passes import (ReconstructSSA, TranslateByteCode,
                                        IRProcessing, DeadBranchPrune,
                                        PreserveIR)
 from numba.core.compiler import DefaultPassBuilder, CompilerBase, PassManager
-from numba.misc import codetype
 
 
 _GLOBAL = 123
@@ -661,9 +660,8 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
             co_consts[k] = v
         new_consts = tuple([v for _, v in sorted(co_consts.items())])
 
-        # create new code parts
         # create code object with mutation
-        new_code = codetype.copy_code_type(pyfunc_code, constants=new_consts)
+        new_code = pyfunc_code.replace(co_consts=new_consts)
 
         # get function
         return pytypes.FunctionType(new_code, globals())

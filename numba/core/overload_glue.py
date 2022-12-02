@@ -8,7 +8,6 @@ from threading import RLock
 from collections import defaultdict
 
 from numba.core import errors
-from numba.misc import codetype
 
 
 class _OverloadWrapper(object):
@@ -42,11 +41,10 @@ class _OverloadWrapper(object):
         co_argcount = len(new_varnames)
         additional_co_nlocals = len(varnames)
 
-        new_code = codetype.copy_code_type(
-            stub_code,
-            argcount=co_argcount,
-            nlocals=stub_code.co_nlocals + additional_co_nlocals,
-            varnames=tuple(new_varnames),
+        new_code = stub_code.replace(
+            co_argcount=co_argcount,
+            co_nlocals=stub_code.co_nlocals + additional_co_nlocals,
+            co_varnames=tuple(new_varnames),
         )
         # get function
         new_func = pytypes.FunctionType(new_code, {'body': body_func})
