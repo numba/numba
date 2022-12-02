@@ -94,6 +94,7 @@ def is_fp16_supported(device_id=None):
 
     return True
 
+
 @require_context
 def to_device(obj, stream=0, copy=True, to=None):
     """to_device(obj, stream=0, copy=True, to=None)
