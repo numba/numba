@@ -97,25 +97,15 @@ but it will fail working on other types::
 You might ask yourself, "why would I go through this instead of compiling
 a simple iteration loop using the :ref:`@jit <jit>` decorator?".  The
 answer is that NumPy ufuncs automatically get other features such as
-reduction, accumulation or broadcasting.  Using the example above::
+reduction, accumulation or broadcasting.  Using the example above:
 
-   >>> a = np.arange(12).reshape(3, 4)
-   >>> a
-   array([[ 0,  1,  2,  3],
-          [ 4,  5,  6,  7],
-          [ 8,  9, 10, 11]])
-   >>> f.reduce(a, axis=0)
-   array([12, 15, 18, 21])
-   >>> f.reduce(a, axis=1)
-   array([ 6, 22, 38])
-   >>> f.accumulate(a)
-   array([[ 0,  1,  2,  3],
-          [ 4,  6,  8, 10],
-          [12, 15, 18, 21]])
-   >>> f.accumulate(a, axis=1)
-   array([[ 0,  1,  3,  6],
-          [ 4,  9, 15, 22],
-          [ 8, 17, 27, 38]])
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_vectorize_multiple_signatures`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.ex_vectorize_return_call_three.begin
+   :end-before: magictoken.ex_vectorize_return_call_three.end
+   :dedent: 12
+   :linenos:
 
 .. seealso::
    `Standard features of ufuncs <http://docs.scipy.org/doc/numpy/reference/ufuncs.html#ufunc>`_ (NumPy documentation).
@@ -201,27 +191,26 @@ There are two things there:
    In the above example, the second argument also could be declared as
    ``int64[:]``.  In that case, the value must be read by ``y[0]``.
 
-We can now check what the compiled ufunc does, over a simple example::
+We can now check what the compiled ufunc does, over a simple example:
 
-   >>> a = np.arange(5)
-   >>> a
-   array([0, 1, 2, 3, 4])
-   >>> g(a, 2)
-   array([2, 3, 4, 5, 6])
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_guvectorize`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.ex_guvectorize_call_one.begin
+   :end-before: magictoken.ex_guvectorize_call_one.end
+   :dedent: 12
+   :linenos:
 
 The nice thing is that NumPy will automatically dispatch over more
-complicated inputs, depending on their shapes::
+complicated inputs, depending on their shapes:
 
-   >>> a = np.arange(6).reshape(2, 3)
-   >>> a
-   array([[0, 1, 2],
-          [3, 4, 5]])
-   >>> g(a, 10)
-   array([[10, 11, 12],
-          [13, 14, 15]])
-   >>> g(a, np.array([10, 20]))
-   array([[10, 11, 12],
-          [23, 24, 25]])
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_guvectorize`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.ex_guvectorize_call_two.begin
+   :end-before: magictoken.ex_guvectorize_call_two.end
+   :dedent: 12
+   :linenos:
 
 
 .. note::
@@ -229,6 +218,45 @@ complicated inputs, depending on their shapes::
    passing ``nopython=True`` :ref:`as in the @jit decorator <jit-nopython>`.
    Use it to ensure the generated code does not fallback to
    :term:`object mode`.
+
+
+.. _scalar-return-values:
+
+Scalar return values
+--------------------
+
+Now suppose we want to return a scalar value from 
+:func:`~numba.guvectorize`. To do this, we need to:
+
+* in the signatures, declare the scalar return with ``[:]`` like 
+  a 1-dimensional array (eg. ``int64[:]``),
+
+* in the layout, declare it as ``()``,
+
+* in the implementation, write to the first element (e.g. ``res[0] = acc``).
+
+The following example function computes the sum of the 1-dimensional 
+array (``x``) plus the scalar (``y``) and returns it as a scalar:
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_guvectorize_scalar_return`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.ex_guvectorize_scalar_return.begin
+   :end-before: magictoken.ex_guvectorize_scalar_return.end
+   :dedent: 12
+   :linenos:
+
+Now if we apply the wrapped function over the array, we get a scalar 
+value as the output:
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_guvectorize_scalar_return`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.ex_guvectorize_scalar_return_call.begin
+   :end-before: magictoken.ex_guvectorize_scalar_return_call.end
+   :dedent: 12
+   :linenos:
+
 
 .. _overwriting-input-values:
 
@@ -409,7 +437,7 @@ compilation works for a :class:`~numba.GUFunc`::
    >>> res = np.zeros_like(x)
    >>> g(x, y, res)
    >>> res
-   array([5, 6, 7, 8, 9])
+   array([10, 11, 12, 13, 14])
    >>> g.types
    ['ll->l']
 

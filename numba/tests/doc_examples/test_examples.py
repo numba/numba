@@ -239,18 +239,119 @@ class DocsExamplesTest(unittest.TestCase):
 
             self.assertIsInstance(result, np.ndarray)
             correct = np.array([0., 0.4, 0.8, 1.2, 1.6, 2. ])
-            np.testing.assert_array_equal(result, correct)
+            np.testing.assert_array_almost_equal(result, correct, -16)
+
+            # magictoken.ex_vectorize_return_call_three.begin
+            a = np.arange(12).reshape(3, 4)
+            # a == array([[ 0,  1,  2,  3],
+            #             [ 4,  5,  6,  7],
+            #             [ 8,  9, 10, 11]])
+
+            result1 = f.reduce(a, axis=0)
+            # result1 == array([12, 15, 18, 21])
+
+            result2 = f.reduce(a, axis=1)
+            # result2 == array([ 6, 22, 38])
+
+            result3 = f.accumulate(a)
+            # result3 == array([[ 0,  1,  2,  3],
+            #                   [ 4,  6,  8, 10],
+            #                   [12, 15, 18, 21]])
+
+            result4 = f.accumulate(a, axis=1)
+            # result3 == array([[ 0,  1,  3,  6],
+            #                   [ 4,  9, 15, 22],
+            #                   [ 8, 17, 27, 38]])
+            # magictoken.ex_vectorize_return_call_three.end
+
+            self.assertIsInstance(result1, np.ndarray)
+            correct = np.array([12, 15, 18, 21])
+            np.testing.assert_array_equal(result1, correct)
+
+            self.assertIsInstance(result2, np.ndarray)
+            correct = np.array([6, 22, 38])
+            np.testing.assert_array_equal(result2, correct)
+
+            self.assertIsInstance(result3, np.ndarray)
+            correct = np.array([
+                [0, 1, 2, 3],
+                [4, 6, 8, 10],
+                [12, 15, 18, 21]
+            ])
+            np.testing.assert_array_equal(result3, correct)
+
+            self.assertIsInstance(result4, np.ndarray)
+            correct = np.array([
+                [0, 1, 3, 6],
+                [4, 9, 15, 22],
+                [8, 17, 27, 38]
+            ])
+            np.testing.assert_array_equal(result4, correct)
 
     def test_guvectorize(self):
         with captured_stdout():
             # magictoken.ex_guvectorize.begin
             from numba import guvectorize, int64
+            import numpy as np
 
             @guvectorize([(int64[:], int64, int64[:])], '(n),()->(n)')
             def g(x, y, res):
                 for i in range(x.shape[0]):
                     res[i] = x[i] + y
             # magictoken.ex_guvectorize.end
+
+            # magictoken.ex_guvectorize_call_one.begin
+            a = np.arange(5)
+            result = g(a, 2)
+            # result == array([2, 3, 4, 5, 6])
+            # magictoken.ex_guvectorize_call_one.end
+
+            self.assertIsInstance(result, np.ndarray)
+            correct = np.array([2, 3, 4, 5, 6])
+            np.testing.assert_array_equal(result, correct)
+
+            # magictoken.ex_guvectorize_call_two.begin
+            a = np.arange(6).reshape(2, 3)
+            # a == array([[0, 1, 2], [3, 4, 5]])
+
+            result1 = g(a, 10)
+            # result1 == array([[10, 11, 12], [13, 14, 15]])
+
+            result2 = g(a, np.array([10, 20]))
+            g(a, np.array([10, 20]))
+            # result2 == array([[10, 11, 12], [23, 24, 25]])
+            # magictoken.ex_guvectorize_call_two.end
+
+            self.assertIsInstance(result1, np.ndarray)
+            correct = np.array([[10, 11, 12], [13, 14, 15]])
+            np.testing.assert_array_equal(result1, correct)
+
+            self.assertIsInstance(result2, np.ndarray)
+            correct = np.array([[10, 11, 12], [23, 24, 25]])
+            np.testing.assert_array_equal(result2, correct)
+
+    def test_guvectorize_scalar_return(self):
+        with captured_stdout():
+            # magictoken.ex_guvectorize_scalar_return.begin
+            from numba import guvectorize, int64
+            import numpy as np
+
+            @guvectorize([(int64[:], int64, int64[:])], '(n),()->()')
+            def g(x, y, res):
+                acc = 0
+                for i in range(x.shape[0]):
+                    acc += x[i] + y
+                res[0] = acc
+            # magictoken.ex_guvectorize_scalar_return.end
+
+            # magictoken.ex_guvectorize_scalar_return_call.begin
+            a = np.arange(5)
+            result = g(a, 2)
+            # At this point, result == 20.
+            # magictoken.ex_guvectorize_scalar_return_call.end
+
+            self.assertIsInstance(result, np.integer)
+            self.assertEqual(result, 20)
 
     def test_guvectorize_overwrite(self):
         with captured_stdout():
