@@ -39,30 +39,13 @@ class _OverloadWrapper(object):
         new_varnames = [*stub_code.co_varnames]
         new_varnames.extend(varnames)
         co_argcount = len(new_varnames)
-        co_args = [co_argcount]
         additional_co_nlocals = len(varnames)
 
-        from numba.core import utils
-        if utils.PYVERSION >= (3, 8):
-            co_args.append(stub_code.co_posonlyargcount)
-        co_args.append(stub_code.co_kwonlyargcount)
-        co_args.extend([stub_code.co_nlocals + additional_co_nlocals,
-                        stub_code.co_stacksize,
-                        stub_code.co_flags,
-                        stub_code.co_code,
-                        stub_code.co_consts,
-                        stub_code.co_names,
-                        tuple(new_varnames),
-                        stub_code.co_filename,
-                        stub_code.co_name,
-                        stub_code.co_firstlineno,
-                        stub_code.co_lnotab,
-                        stub_code.co_freevars,
-                        stub_code.co_cellvars
-                        ])
-
-        new_code = pytypes.CodeType(*co_args)
-
+        new_code = stub_code.replace(
+            co_argcount=co_argcount,
+            co_nlocals=stub_code.co_nlocals + additional_co_nlocals,
+            co_varnames=tuple(new_varnames),
+        )
         # get function
         new_func = pytypes.FunctionType(new_code, {'body': body_func})
         return new_func

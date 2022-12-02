@@ -927,6 +927,11 @@ class ControlFlowAnalysis(object):
     op_JUMP_IF_FALSE = _op_ABSOLUTE_JUMP_IF
     op_JUMP_IF_TRUE = _op_ABSOLUTE_JUMP_IF
 
+    op_POP_JUMP_FORWARD_IF_FALSE = _op_ABSOLUTE_JUMP_IF
+    op_POP_JUMP_BACKWARD_IF_FALSE = _op_ABSOLUTE_JUMP_IF
+    op_POP_JUMP_FORWARD_IF_TRUE = _op_ABSOLUTE_JUMP_IF
+    op_POP_JUMP_BACKWARD_IF_TRUE = _op_ABSOLUTE_JUMP_IF
+
     def _op_ABSOLUTE_JUMP_OR_POP(self, inst):
         self.jump(inst.get_jump_target())
         self.jump(inst.next, pops=1)
@@ -942,6 +947,8 @@ class ControlFlowAnalysis(object):
     def op_JUMP_FORWARD(self, inst):
         self.jump(inst.get_jump_target())
         self._force_new_block = True
+
+    op_JUMP_BACKWARD = op_JUMP_FORWARD
 
     def op_RETURN_VALUE(self, inst):
         self._curblock.terminating = True
