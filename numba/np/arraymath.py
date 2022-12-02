@@ -3292,9 +3292,12 @@ def _where_generic_impl(dtype, layout):
         cond_ = np.broadcast_to(cond1, shape)
         x_ = np.broadcast_to(x1, shape)
         y_ = np.broadcast_to(y1, shape)
-        res = np.empty(shape, dtype=dtype)
+
         if layout == 'F':
-            res = np.asfortranarray(res)
+            res = np.empty(shape[::-1], dtype=dtype).T
+        else:
+            res = np.empty(shape, dtype=dtype)
+
         if use_faster_impl:
             return _where_fast_inner_impl(cond_, x_, y_, res)
         else:
@@ -3310,7 +3313,7 @@ def ov_np_where(condition, x=None, y=None):
         raise NumbaTypeError(msg)
 
     if is_nonelike(x) ^ is_nonelike(y):
-        msg = 'either both or neigher of "x" or "y" should be given'
+        msg = 'Either both of "x" and "y", or neither, should be given.'
         raise NumbaTypeError(msg)
 
     for arg, name in zip((x, y), ('x', 'y')):

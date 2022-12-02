@@ -921,12 +921,10 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         pyfunc = np_where_3
         cfunc = jit(nopython=True)(pyfunc)
 
-        dts = [bool, np.int16, np.int32, np.int64, np.double, np.complex128,
-               np.longdouble, np.clongdouble]
+        # skipping unsupported dtypes:
+        # np.longdouble, np.clongdouble
+        dts = [bool, np.int16, np.int32, np.int64, np.double, np.complex128]
         for dt in dts:
-            if dt in [np.longdouble, np.clongdouble]:
-                # unsupported dtype
-                continue
             c = np.ones(53, dtype=bool)
             np.testing.assert_equal(cfunc( c, dt(0), dt(1)), dt(0))
             np.testing.assert_equal(cfunc(~c, dt(0), dt(1)), dt(1))
@@ -1019,11 +1017,11 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         with self.assertRaisesRegex(TypingError, msg):
             cfunc(None, 2, 3)
 
-        msg = 'either both or neigher of "x" or "y" should be given'
+        msg = 'Either both of "x" and "y", or neither, should be given.'
         with self.assertRaisesRegex(TypingError, msg):
             cfunc(1, None, 3)
 
-        msg = 'either both or neigher of "x" or "y" should be given'
+        msg = 'Either both of "x" and "y", or neither, should be given.'
         with self.assertRaisesRegex(TypingError, msg):
             cfunc(1, 2, None)
 
