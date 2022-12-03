@@ -4870,14 +4870,18 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_nan_to_num(self):
         values = [
             np.nan,
-            1.0,
+            1,
+            1.1,
+            np.array([1], dtype=int),
             np.array([0.1, 1.0, 0.4]),
+            np.array([1, 2, 3]),
             np.array([[0.1, 1.0, 0.4], [0.4, 1.2, 4.0]]),
             np.array([0.1, np.nan, 0.4]),
             np.array([[0.1, np.nan, 0.4], [np.nan, 1.2, 4.0]]),
-            np.array([-np.inf, np.nan, np.inf])
+            np.array([-np.inf, np.nan, np.inf]),
+            np.array([-np.inf, np.nan, np.inf], dtype=np.float32)
         ]
-        nans = [0.0, 4.2]
+        nans = [0.0, 10]
 
         pyfunc = nan_to_num
         cfunc = njit(nan_to_num)
@@ -4899,11 +4903,26 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def test_nan_to_num_invalid_argument(self):
         cfunc = njit(nan_to_num)
-        with self.assertTypingError() as raises:
-            cfunc("invalid_input")
 
-        msg = "The first argument must be a scalar or an array-like"
-        self.assertIn(msg, str(raises.exception))
+        invalid_inputs = [
+            (
+                "invalid_input",
+                "The first argument must be a scalar or an array-like"
+            ),
+            (
+                np.array([0.1 + 2j, np.nan]),
+                "Only Integers and Floats are accepted"
+            ),
+            (
+                0.1 + 2j,
+                "Only Integers and Floats are accepted"
+            )
+        ]
+
+        for value, msg in invalid_inputs:
+            with self.assertTypingError() as raises:
+                cfunc(value)
+            self.assertIn(msg, str(raises.exception))
 
 
 class TestNPMachineParameters(TestCase):

@@ -6381,22 +6381,48 @@ def arr_take_along_axis(arr, indices, axis):
 @overload(np.nan_to_num)
 def nan_to_num_impl(x, copy=True, nan=0.0):
     if isinstance(x, types.Number):
-        def impl(x, copy=True, nan=0.0):
-            if math.isnan(x):
-                return nan
-            return x
+        if isinstance(x, types.Integer):
+            # Integers do not have nans or infs
+            def impl(x, copy=True, nan=0.0):
+                return x
+
+        elif isinstance(x, types.Float):
+            def impl(x, copy=True, nan=0.0):
+                if np.isnan(x):
+                    return nan
+                elif np.isneginf(x):
+                    return np.finfo(np.float64).min
+                elif np.isposinf(x):
+                    return np.finfo(np.float64).max
+                return x
+        else:
+            raise errors.TypingError("Only Integers and Floats are accepted")
 
     elif type_can_asarray(x):
-        def impl(x, copy=True, nan=0.0):
-            x_ = np.asarray(x)
-            output = np.copy(x_) if copy else x_
-            output_flat = output.flat
-            for i in range(output.size):
-                if np.isnan(output_flat[i]):
-                    output_flat[i] = nan
-            return output
+        if isinstance(x.dtype, types.Integer):
+            # Integers do not have nans or infs
+            def impl(x, copy=True, nan=0.0):
+                return x
+        elif isinstance(x.dtype, types.Float):
+            def impl(x, copy=True, nan=0.0):
+                min_inf = np.finfo(x.dtype).min
+                max_inf = np.finfo(x.dtype).max
+
+                x_ = np.asarray(x)
+                output = np.copy(x_) if copy else x_
+
+                output_flat = output.flat
+                for i in range(output.size):
+                    if np.isnan(output_flat[i]):
+                        output_flat[i] = nan
+                    elif np.isneginf(output_flat[i]):
+                        output_flat[i] = min_inf
+                    elif np.isposinf(output_flat[i]):
+                        output_flat[i] = max_inf
+                return output
+        else:
+            raise errors.TypingError("Only Integers and Floats are accepted")
     else:
         raise errors.TypingError("The first argument must be a scalar or an "
                                  "array-like")
-
     return impl
