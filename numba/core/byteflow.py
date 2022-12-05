@@ -7,7 +7,7 @@ import logging
 from collections import namedtuple, defaultdict, deque
 from functools import total_ordering
 
-from numba.core.utils import UniqueDict, PYVERSION
+from numba.core.utils import UniqueDict, PYVERSION, ALL_BINOPS_TO_OPERATORS
 from numba.core.controlflow import NEW_BLOCKERS, CFGraph
 from numba.core.ir import Loc
 from numba.core.errors import UnsupportedError
@@ -1296,7 +1296,8 @@ class TraceRunner(object):
         op = dis._nb_ops[inst.arg][1]
         rhs = state.pop()
         lhs = state.pop()
-        res = state.make_temp(prefix=f"binop_{op}")
+        op_name = ALL_BINOPS_TO_OPERATORS[op].__name__
+        res = state.make_temp(prefix=f"binop_{op_name}")
         state.append(inst, op=op, lhs=lhs, rhs=rhs, res=res)
         state.push(res)
 
