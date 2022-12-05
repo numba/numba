@@ -755,13 +755,6 @@ class TraceRunner(object):
             )
         )
 
-    def op_SETUP_EXCEPT(self, state, inst):
-        # Opcode removed since py3.8
-        state.append(inst)
-        self._setup_try(
-            'EXCEPT', state, next=inst.next, end=inst.get_jump_target(),
-        )
-
     def op_SETUP_FINALLY(self, state, inst):
         state.append(inst)
         self._setup_try(

@@ -790,7 +790,7 @@ class ControlFlowAnalysis(object):
             elif inst.is_jump:
                 # this catches e.g. try... except
                 l = Loc(self.bytecode.func_id.filename, inst.lineno)
-                if inst.opname in {"SETUP_EXCEPT", "SETUP_FINALLY"}:
+                if inst.opname in {"SETUP_FINALLY"}:
                     msg = "'try' block not supported until python3.7 or later"
                 else:
                     msg = "Use of unsupported opcode (%s) found" % inst.opname
