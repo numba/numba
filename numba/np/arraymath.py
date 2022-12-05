@@ -3253,12 +3253,8 @@ def array_nonzero(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, tup)
 
 
-def _where_cond_none_none(condition, x=None, y=None):
-    return np.asarray(condition).nonzero()
-
-
 def _where_zero_size_array_impl(dtype):
-    def impl(condition, x=None, y=None):
+    def impl(condition, x, y):
         x_ = np.asarray(x).astype(dtype)
         y_ = np.asarray(y).astype(dtype)
         return x_ if condition else y_
@@ -3286,7 +3282,7 @@ def _where_fast_inner_impl(cond, x, y, res):
 def _where_generic_impl(dtype, layout):
     use_faster_impl = layout in [{'C'}, {'F'}]
 
-    def impl(condition, x=None, y=None):
+    def impl(condition, x, y):
         cond1, x1, y1 = np.asarray(condition), np.asarray(x), np.asarray(y)
         shape = __broadcast_shapes(cond1.shape, x1.shape, y1.shape)
         cond_ = np.broadcast_to(cond1, shape)
@@ -3307,19 +3303,21 @@ def _where_generic_impl(dtype, layout):
 
 
 @overload(np.where)
-def ov_np_where(condition, x=None, y=None):
+def ov_np_where(condition):
     if not type_can_asarray(condition):
         msg = 'The argument "condition" must be array-like'
         raise NumbaTypeError(msg)
 
-    if is_nonelike(x) ^ is_nonelike(y):
-        msg = 'Either both of "x" and "y", or neither, should be given.'
-        raise NumbaTypeError(msg)
+    def where_cond_none_none(condition):
+        return np.asarray(condition).nonzero()
+    return where_cond_none_none
 
-    for arg, name in zip((x, y), ('x', 'y')):
-        if not is_nonelike(arg) and not type_can_asarray(arg):
-            msg = 'The argument "{}" must be array-like if provided'
-            raise NumbaTypeError(msg.format(name))
+
+@overload(np.where)
+def ov_np_where_x_y(condition, x, y):
+    if not type_can_asarray(condition):
+        msg = 'The argument "condition" must be array-like'
+        raise NumbaTypeError(msg)
 
     # corner case: None is a valid value for np.where:
     # >>> np.where([0, 1], None, 2)
@@ -3330,9 +3328,14 @@ def ov_np_where(condition, x=None, y=None):
     #
     # >>> np.where([0, 1], None, None)
     # array([None, None])
-    if x is None and y is None:
-        # only `cond` was provided
-        return _where_cond_none_none
+    if is_nonelike(x) or is_nonelike(y):
+        # skip it for now as np.asarray(None) is not supported
+        raise NumbaTypeError('Argument "x" or "y" cannot be None')
+
+    for arg, name in zip((x, y), ('x', 'y')):
+        if not type_can_asarray(arg):
+            msg = 'The argument "{}" must be array-like if provided'
+            raise NumbaTypeError(msg.format(name))
 
     cond_arr = isinstance(condition, types.Array)
     x_arr = isinstance(x, types.Array)
@@ -3359,7 +3362,7 @@ def ov_np_where(condition, x=None, y=None):
                 layout = 'A'
         return _where_generic_impl(dtype, layout)
     else:
-        def impl(condition, x=None, y=None):
+        def impl(condition, x, y):
             return np.where(np.asarray(condition), np.asarray(x), np.asarray(y))
         return impl
 

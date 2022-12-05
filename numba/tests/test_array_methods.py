@@ -1017,14 +1017,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         with self.assertRaisesRegex(TypingError, msg):
             cfunc(None, 2, 3)
 
-        msg = 'Either both of "x" and "y", or neither, should be given.'
-        with self.assertRaisesRegex(TypingError, msg):
-            cfunc(1, None, 3)
-
-        msg = 'Either both of "x" and "y", or neither, should be given.'
-        with self.assertRaisesRegex(TypingError, msg):
-            cfunc(1, 2, None)
-
         msg = 'The argument "x" must be array-like if provided'
         with self.assertRaisesRegex(TypingError, msg):
             cfunc(1, 'hello', 3)
@@ -1033,6 +1025,10 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         with self.assertRaisesRegex(TypingError, msg):
             cfunc(1, 2, 'world')
 
+        # None values are not yet supported in np.where
+        msg = 'Argument "x" or "y" cannot be None'
+        with self.assertRaisesRegex(TypingError, msg):
+            cfunc(1, None, None)
 
     def test_arange_1_arg(self):
 
