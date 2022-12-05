@@ -14,6 +14,7 @@ from numba.core.byteflow import Flow, AdaptDFA, AdaptCFA, BlockKind
 from numba.core.unsafe import eh
 from numba.cpython.unsafe.tuple import unpack_single_tuple
 
+
 class _UNKNOWN_VALUE(object):
     """Represents an unknown value, this is for ease of debugging purposes only.
     """
@@ -2220,23 +2221,23 @@ class Interpreter(object):
 
     if PYVERSION == (3, 11):
         def op_LOAD_DEREF(self, inst, res):
-            n_cellvars = len(self.code_cellvars)
-            idx = inst.arg - len(self.code_locals)
-            if idx < n_cellvars:
-                name = self.code_cellvars[idx]
-                gl = self.get(name)
-            else:
-                name = self.code_freevars[idx - n_cellvars]
-                value = self.get_closure_value(idx)
-                gl = ir.FreeVar(idx, name, value, loc=self.loc)
-            self.store(gl, res)
-    elif PYVERSION < (3, 11):
-        def op_LOAD_DEREF(self, inst, res):
             name = self.func_id.func.__code__._varname_from_oparg(inst.arg)
             if name in self.code_cellvars:
                 gl = self.get(name)
             elif name in self.code_freevars:
                 idx = self.code_freevars.index(name)
+                value = self.get_closure_value(idx)
+                gl = ir.FreeVar(idx, name, value, loc=self.loc)
+            self.store(gl, res)
+    elif PYVERSION < (3, 11):
+        def op_LOAD_DEREF(self, inst, res):
+            n_cellvars = len(self.code_cellvars)
+            if inst.arg < n_cellvars:
+                name = self.code_cellvars[inst.arg]
+                gl = self.get(name)
+            else:
+                idx = inst.arg - n_cellvars
+                name = self.code_freevars[idx]
                 value = self.get_closure_value(idx)
                 gl = ir.FreeVar(idx, name, value, loc=self.loc)
             self.store(gl, res)
