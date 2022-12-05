@@ -99,6 +99,11 @@ INPLACE_BINOPS_TO_OPERATORS = {
     '@=': operator.imatmul,
 }
 
+
+ALL_BINOPS_TO_OPERATORS = {**BINOPS_TO_OPERATORS,
+                           **INPLACE_BINOPS_TO_OPERATORS}
+
+
 UNARY_BUITINS_TO_OPERATORS = {
     '+': operator.pos,
     '-': operator.neg,

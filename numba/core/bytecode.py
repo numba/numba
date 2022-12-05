@@ -94,7 +94,9 @@ class ByteCodeInst(object):
             if self.opcode in (dis.opmap[k]
                                for k in ("JUMP_BACKWARD",
                                          "POP_JUMP_BACKWARD_IF_TRUE",
-                                         "POP_JUMP_BACKWARD_IF_FALSE")):
+                                         "POP_JUMP_BACKWARD_IF_FALSE",
+                                         "POP_JUMP_BACKWARD_IF_NONE",
+                                         "POP_JUMP_BACKWARD_IF_NOT_NONE",)):
                 return self.offset - (self.arg - 1) * 2
         elif PYVERSION > (3, 11):
             raise NotImplementedError(PYVERSION)
@@ -153,7 +155,15 @@ def _unpack_opargs(code):
                 arg |= code[i + j] << (8 * j)
             i += ARG_LEN
             if op == EXTENDED_ARG:
+                # This is a deviation from what dis does...
+                # In python 3.11 it seems like EXTENDED_ARGs appear more often
+                # and are also used as jump targets. So as to not have to do
+                # "book keeping" for where EXTENDED_ARGs have been "skipped"
+                # they are replaced with NOPs so as to provide a legal jump
+                # target and also ensure that the bytecode offsets are correct.
+                yield (offset, OPCODE_NOP, arg, i)
                 extended_arg = arg << 8 * ARG_LEN
+                offset = i
                 continue
         else:
             arg = None
@@ -244,7 +254,7 @@ class _ByteCode(object):
                 table[adj_offset].lineno = lineno
         # Assign unfilled lineno
         # Start with first bytecode's lineno
-        known = table[_FIXED_OFFSET].lineno
+        known = code.co_firstlineno
         for inst in table.values():
             if inst.lineno >= 0:
                 known = inst.lineno
