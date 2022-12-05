@@ -275,31 +275,29 @@ behaviour cannot be relied on. Consider the following example function:
    :linenos:
 
 Calling the `init_values` function with an array of `float64` type results in
-visible changes to the input::
+visible changes to the input:
 
-   >>> invals = np.zeros(shape=(3, 3), dtype=np.float64)
-   >>> outvals = init_values(invals)
-   >>> invals
-   array([[6.5, 6.5, 6.5],
-          [6.5, 6.5, 6.5],
-          [6.5, 6.5, 6.5]])
-   >>> outvals
-   array([[4.2, 4.2, 4.2],
-       [4.2, 4.2, 4.2],
-       [4.2, 4.2, 4.2]])
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_guvectorize_overwrite`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.ex_guvectorize_overwrite_call_one.begin
+   :end-before: magictoken.ex_guvectorize_overwrite_call_one.end
+   :dedent: 12
+   :linenos:
 
 This works because NumPy can pass the input data directly into the `init_values`
 function as the data `dtype` matches that of the declared argument.  However, it
 may also create and pass in a temporary array, in which case changes to the
 input are lost. For example, this can occur when casting is required. To
-demonstrate, we can  use an array of `float32` with the `init_values` function::
+demonstrate, we can  use an array of `float32` with the `init_values` function:
 
-   >>> invals = np.zeros(shape=(3, 3), dtype=np.float32)
-   >>> outvals = init_values(invals)
-   >>> invals
-   array([[0., 0., 0.],
-          [0., 0., 0.],
-          [0., 0., 0.]], dtype=float32)
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_guvectorize_overwrite`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.ex_guvectorize_overwrite_call_two.begin
+   :end-before: magictoken.ex_guvectorize_overwrite_call_two.end
+   :dedent: 12
+   :linenos:
 
 In this case, there is no change to the `invals` array because the temporary
 casted array was mutated instead.
@@ -342,12 +340,15 @@ then delegating ufunc property reads and method calls to this member
 (also known as type aggregation).  When we look at the initial types
 supported by the ufunc, we can verify there are none.
 
-Let's try to make a call to :func:`f`::
+Let's try to make a call to :func:`f`:
 
-   >>> f(3,4)
-   12
-   >>> f.types   # shorthand for f.ufunc.types
-   ['ll->l']
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_vectorize_dynamic`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.ex_vectorize_dynamic_call_one.begin
+   :end-before: magictoken.ex_vectorize_dynamic_call_one.end
+   :dedent: 12
+   :linenos:
 
 If this was a normal NumPy ufunc, we would have seen an exception
 complaining that the ufunc couldn't handle the input types.  When we
@@ -355,23 +356,29 @@ call :func:`f` with integer arguments, not only do we receive an
 answer, but we can verify that Numba created a loop supporting C
 :code:`long` integers.
 
-We can add additional loops by calling :func:`f` with different inputs::
+We can add additional loops by calling :func:`f` with different inputs:
 
-   >>> f(1.,2.)
-   2.0
-   >>> f.types
-   ['ll->l', 'dd->d']
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_vectorize_dynamic`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.ex_vectorize_dynamic_call_two.begin
+   :end-before: magictoken.ex_vectorize_dynamic_call_two.end
+   :dedent: 12
+   :linenos:
 
 We can now verify that Numba added a second loop for dealing with
 floating-point inputs, :code:`"dd->d"`.
 
 If we mix input types to :func:`f`, we can verify that `NumPy ufunc
-casting rules`_ are still in effect::
+casting rules`_ are still in effect:
 
-   >>> f(1,2.)
-   2.0
-   >>> f.types
-   ['ll->l', 'dd->d']
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_vectorize_dynamic`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.ex_vectorize_dynamic_call_three.begin
+   :end-before: magictoken.ex_vectorize_dynamic_call_three.end
+   :dedent: 12
+   :linenos:
 
 .. _`NumPy ufunc casting rules`: http://docs.scipy.org/doc/numpy/reference/ufuncs.html#casting-rules
 
@@ -385,17 +392,15 @@ the warning given above in "`The @vectorize decorator`_" subsection,
 but instead of signature declaration order in the decorator, call
 order matters.  If we had passed in floating-point arguments first,
 any calls with integer arguments would be cast to double-precision
-floating-point values.  For example::
+floating-point values.  For example:
 
-   >>> @vectorize
-   ... def g(a, b): return a / b
-   ...
-   >>> g(2.,3.)
-   0.66666666666666663
-   >>> g(2,3)
-   0.66666666666666663
-   >>> g.types
-   ['dd->d']
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_vectorize_dynamic`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.ex_vectorize_dynamic_call_four.begin
+   :end-before: magictoken.ex_vectorize_dynamic_call_four.end
+   :dedent: 12
+   :linenos:
 
 If you require precise support for various type signatures, you should
 specify them in the :func:`~numba.vectorize` decorator, and not rely
@@ -430,42 +435,51 @@ instance that starts with no supported input types. For instance::
 Similar to a :class:`~numba.DUFunc`, as one make calls to :func:`g()`,
 numba generates new kernels for previously unsupported input types. The
 following set of interpreter interactions will illustrate how dynamic
-compilation works for a :class:`~numba.GUFunc`::
+compilation works for a :class:`~numba.GUFunc`:
 
-   >>> x = np.arange(5, dtype=np.int64)
-   >>> y = 10
-   >>> res = np.zeros_like(x)
-   >>> g(x, y, res)
-   >>> res
-   array([10, 11, 12, 13, 14])
-   >>> g.types
-   ['ll->l']
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_guvectorize_dynamic`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.ex_guvectorize_dynamic_call_one.begin
+   :end-before: magictoken.ex_guvectorize_dynamic_call_one.end
+   :dedent: 12
+   :linenos:
 
 If this was a normal :func:`guvectorize` function, we would have seen an
 exception complaining that the ufunc could not handle the given input types.
 When we call :func:`g()` with the input arguments, numba creates a new loop
 for the input types.
 
-We can add additional loops by calling :func:`g` with new arguments::
+We can add additional loops by calling :func:`g` with new arguments:
 
-   >>> x = np.arange(5, dtype=np.double)
-   >>> y = 2.2
-   >>> res = np.zeros_like(x)
-   >>> g(x, y, res)
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_guvectorize_dynamic`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.ex_guvectorize_dynamic_call_two.begin
+   :end-before: magictoken.ex_guvectorize_dynamic_call_two.end
+   :dedent: 12
+   :linenos:
 
 We can now verify that Numba added a second loop for dealing with
 floating-point inputs, :code:`"dd->d"`.
 
-   >>> g.types  # shorthand for g.ufunc.types
-   ['ll->l', 'dd->d']
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_guvectorize_dynamic`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.ex_guvectorize_dynamic_call_three.begin
+   :end-before: magictoken.ex_guvectorize_dynamic_call_three.end
+   :dedent: 12
+   :linenos:
 
-One can also verify that NumPy ufunc casting rules are working as expected::
+One can also verify that NumPy ufunc casting rules are working as expected:
 
-   >>> x = np.arange(5, dtype=np.int64)
-   >>> y = 2.2
-   >>> res = np.zeros_like(x)
-   >>> g(x, y, res)
-   >>> res
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_guvectorize_dynamic`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.ex_guvectorize_dynamic_call_four.begin
+   :end-before: magictoken.ex_guvectorize_dynamic_call_four.end
+   :dedent: 12
+   :linenos:
 
 If you need precise support for various type signatures, you should not rely on dynamic
 compilation and instead, specify the types them as first

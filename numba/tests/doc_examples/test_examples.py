@@ -357,12 +357,64 @@ class DocsExamplesTest(unittest.TestCase):
         with captured_stdout():
             # magictoken.ex_guvectorize_overwrite.begin
             from numba import guvectorize, float64
+            import numpy as np
 
             @guvectorize([(float64[:], float64[:])], '()->()')
             def init_values(invals, outvals):
                 invals[0] = 6.5
                 outvals[0] = 4.2
             # magictoken.ex_guvectorize_overwrite.end
+
+            # magictoken.ex_guvectorize_overwrite_call_one.begin
+            invals = np.zeros(shape=(3, 3), dtype=np.float64)
+            # invals == array([[6.5, 6.5, 6.5],
+            #                  [6.5, 6.5, 6.5],
+            #                  [6.5, 6.5, 6.5]])
+
+            outvals = init_values(invals)
+            # outvals == array([[4.2, 4.2, 4.2],
+            #                   [4.2, 4.2, 4.2],
+            #                   [4.2, 4.2, 4.2]])
+            # magictoken.ex_guvectorize_overwrite_call_one.end
+
+            self.assertIsInstance(invals, np.ndarray)
+            correct = np.array([
+                [6.5, 6.5, 6.5],
+                [6.5, 6.5, 6.5],
+                [6.5, 6.5, 6.5]])
+            np.testing.assert_array_equal(invals, correct)
+
+            self.assertIsInstance(outvals, np.ndarray)
+            correct = np.array([
+                [4.2, 4.2, 4.2],
+                [4.2, 4.2, 4.2],
+                [4.2, 4.2, 4.2]])
+            np.testing.assert_array_equal(outvals, correct)
+
+            # magictoken.ex_guvectorize_overwrite_call_two.begin
+            invals = np.zeros(shape=(3, 3), dtype=np.float32)
+            # invals == array([[0., 0., 0.],
+            #                  [0., 0., 0.],
+            #                  [0., 0., 0.]], dtype=float32)
+            outvals = init_values(invals)
+            # outvals == array([[4.2, 4.2, 4.2],
+            #                   [4.2, 4.2, 4.2],
+            #                   [4.2, 4.2, 4.2]])
+            # magictoken.ex_guvectorize_overwrite_call_two.end
+
+            self.assertIsInstance(invals, np.ndarray)
+            correct = np.array([
+                [0., 0., 0.],
+                [0., 0., 0.],
+                [0., 0., 0.]], dtype=np.float32)
+            np.testing.assert_array_equal(invals, correct)
+
+            self.assertIsInstance(outvals, np.ndarray)
+            correct = np.array([
+                [4.2, 4.2, 4.2],
+                [4.2, 4.2, 4.2],
+                [4.2, 4.2, 4.2]])
+            np.testing.assert_array_equal(outvals, correct)
 
     def test_vectorize_dynamic(self):
         with captured_stdout():
@@ -374,16 +426,115 @@ class DocsExamplesTest(unittest.TestCase):
                 return x * y
             # magictoken.ex_vectorize_dynamic.end
 
+            # magictoken.ex_vectorize_dynamic_call_one.begin
+            result = f(3,4)
+            # result == 12
+
+            print(f.types)
+            # ['ll->l']
+            # magictoken.ex_vectorize_dynamic_call_one.end
+
+            self.assertEqual(result, 12)
+            correct = ['ll->l']
+            self.assertEqual(f.types, correct)
+
+            # magictoken.ex_vectorize_dynamic_call_two.begin
+            result = f(1.,2.)
+            # result == 2.0
+
+            print(f.types)
+            # ['ll->l', 'dd->d']
+            # magictoken.ex_vectorize_dynamic_call_two.end
+
+            self.assertEqual(result, 2.0)
+            correct = ['ll->l', 'dd->d']
+            self.assertEqual(f.types, correct)
+
+            # magictoken.ex_vectorize_dynamic_call_three.begin
+            result = f(1,2.)
+            # result == 2.0
+
+            print(f.types)
+            # ['ll->l', 'dd->d']
+            # magictoken.ex_vectorize_dynamic_call_three.end
+
+            self.assertEqual(result, 2.0)
+            correct = ['ll->l', 'dd->d']
+            self.assertEqual(f.types, correct)
+
+            # magictoken.ex_vectorize_dynamic_call_four.begin
+            @vectorize
+            def g(a, b):
+                return a / b
+
+            print(g(2.,3.))
+            # 0.66666666666666663
+
+            print(g(2,3))
+            # 0.66666666666666663
+
+            print(g.types)
+            # ['dd->d']
+            # magictoken.ex_vectorize_dynamic_call_four.end
+
+            correct = ['dd->d']
+            self.assertEqual(g.types, correct)
+
     def test_guvectorize_dynamic(self):
         with captured_stdout():
             # magictoken.ex_guvectorize_dynamic.begin
             from numba import guvectorize
+            import numpy as np
 
             @guvectorize('(n),()->(n)')
             def g(x, y, res):
                 for i in range(x.shape[0]):
                     res[i] = x[i] + y
             # magictoken.ex_guvectorize_dynamic.end
+
+            # magictoken.ex_guvectorize_dynamic_call_one.begin
+            x = np.arange(5, dtype=np.int64)
+            y = 10
+            res = np.zeros_like(x)
+            # res == array([10, 11, 12, 13, 14])
+
+            g(x, y, res)
+            print(g.types)
+            # ['ll->l']
+            # magictoken.ex_guvectorize_dynamic_call_one.end
+
+            correct = np.array([10, 11, 12, 13, 14])
+            np.testing.assert_array_equal(res, correct)
+            correct = ['ll->l']
+            self.assertEqual(g.types, correct)
+
+            # magictoken.ex_guvectorize_dynamic_call_two.begin
+            x = np.arange(5, dtype=np.double)
+            y = 2.2
+            res = np.zeros_like(x)
+            # res == array([2.2, 3.2, 4.2, 5.2, 6.2])
+            g(x, y, res)
+            # magictoken.ex_guvectorize_dynamic_call_two.end
+
+            # magictoken.ex_guvectorize_dynamic_call_three.begin
+            print(g.types) # shorthand for g.ufunc.types
+            # ['ll->l', 'dd->d']
+            # magictoken.ex_guvectorize_dynamic_call_three.end
+
+            correct = ['ll->l', 'dd->d']
+            self.assertEqual(g.types, correct)
+
+            # magictoken.ex_guvectorize_dynamic_call_four.begin
+            x = np.arange(5, dtype=np.int64)
+            y = 2.2
+            res = np.zeros_like(x)
+            g(x, y, res)
+            print(res)
+            # res == array([2, 3, 4, 5, 6])
+            # magictoken.ex_guvectorize_dynamic_call_four.end
+
+            correct = np.array([2, 3, 4, 5, 6])
+            np.testing.assert_array_equal(res, correct)
 
 
 if __name__ == '__main__':
