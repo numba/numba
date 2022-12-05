@@ -26,6 +26,7 @@ labels: task
 * [ ] Run the HEAD of the release branch through the build farm and confirm:
   * [ ] Build farm CPU testing has passed.
   * [ ] Build farm CUDA testing has passed.
+  * [ ] Build farm wheel testing has passed.
 * [ ] Annotated tag `X.Y.Zrc1` on release branch (no `v` prefix).
 * [ ] Build and upload conda packages on buildfarm (check "upload").
 * [ ] Build wheels and sdist on the buildfarm (check "upload").
