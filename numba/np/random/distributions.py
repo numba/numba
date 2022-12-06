@@ -60,7 +60,35 @@ else:
         return np.exp(x) - 1.0
 
 
-fastmath_args = {'contract': True}
+def _get_fastmath_args():
+    # Try and work out if the NumPy implementation was compiled with fma
+    # instructions enabled. This impacts the results from computations of the
+    # form `x * y + z` which are prevalent throughout, but the simplest of which
+    # is probably `normal` vs. `standard_normal`, the former is a scaled and
+    # shifted version of the latter. Should there be a difference between a
+    # manual computation of `normal` in the interpreter and a direct call
+    # chances are it's due to `fma`.
+
+    i = 32
+    rng_interp = np.random.default_rng(i)
+    rng_direct = np.random.default_rng(i)
+
+    loc = float(np.uint64(0x3ff30a3d70a3d70a).view(np.float64)) # 1.19
+    scale = float(np.uint64(0x3fd5555555555555).view(np.float64)) # 0.33333.....
+    # rng_interp.standard_normal() = 0.9091452127202385
+    interp = loc + scale * rng_interp.standard_normal()
+    direct = rng_direct.normal(loc, scale)
+
+    if interp != direct:
+        # could end up with interp=1.4930484042400796 and
+        # direct=1.4930484042400793, i.e. 3ULP difference if fma is in use
+        fastmath_args = {'contract': True}
+    else:
+        fastmath_args = {}
+    return fastmath_args
+
+
+fastmath_args = _get_fastmath_args()
 
 
 @njit
