@@ -17,6 +17,8 @@ from numba.cuda import cudadrv
 from numba.cuda.cudadrv.driver import driver as cudriver
 from numba.cuda.cudadrv.runtime import runtime as curuntime
 from numba.core import config
+from numba.np.random.distributions import _get_fastmath_args
+
 
 _psutil_import = False
 try:
@@ -67,6 +69,7 @@ _numpy_supported_simd_features = 'NumPy Supported SIMD features'
 _numpy_supported_simd_dispatch = 'NumPy Supported SIMD dispatch'
 _numpy_supported_simd_baseline = 'NumPy Supported SIMD baseline'
 _numpy_AVX512_SKX_detected = 'NumPy AVX512_SKX detected'
+_numpy_rng_uses_fma = 'NumPy RNG uses FMA'
 # SVML info
 _svml_state, _svml_loaded = 'SVML State', 'SVML Lib Loaded'
 _llvm_svml_patched = 'LLVM SVML Patched'
@@ -400,6 +403,7 @@ def get_sysinfo():
         sys_info[_numpy_supported_simd_baseline] = __cpu_baseline__
         sys_info[_numpy_AVX512_SKX_detected] = \
             __cpu_features__.get("AVX512_SKX", False)
+    sys_info[_numpy_rng_uses_fma] = _get_fastmath_args() != {}
 
     # SVML information
     # Replicate some SVML detection logic from numba.__init__ here.
@@ -602,6 +606,8 @@ def display_sysinfo(info=None, sep_pos=45):
                     or ('None found.',))),
         ("NumPy AVX512_SKX support detected",
          info.get(_numpy_AVX512_SKX_detected, '?')),
+        ("NumPy RNG uses FMA",
+         info.get(_numpy_rng_uses_fma, '?')),
         ("",),
         ("__SVML Information__",),
         ("SVML State, config.USING_SVML", info.get(_svml_state, '?')),
