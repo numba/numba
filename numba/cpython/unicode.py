@@ -2399,6 +2399,26 @@ def ol_ord(c):
         return impl
 
 
+# near the speed of native python (including python overhead) when called from
+# jitted code; however, getting significantly faster would prohibit implementing
+# it in python like this
+@overload(int)
+def str_integer(s):
+    if isinstance(s, numba.types.UnicodeType):
+        def impl(s):
+            if s[0] == "-":
+                sgn = -1
+                s = s[1:]
+            else:
+                sgn = 1
+            final_index, result = len(s) - 1, 0
+            for i, v in enumerate(s):
+                result += (ord(v) - 48) * (10 ** (final_index - i))
+            return result * sgn
+        return impl
+    
+    
+
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L2005-L2028    # noqa: E501
 # This looks a bit different to the cpython implementation but, with the
 # exception of a latin1 fast path is logically the same. It finds the "kind" of
