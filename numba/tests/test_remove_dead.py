@@ -21,7 +21,7 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, Fixup
                              WithLifting, PreserveIR, InlineClosureLikes)
 
 from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
-                           NopythonRewrites, PreParforPass, ParforPass,
+                           NopythonRewrites, PreParforPass,
                            DumpParforDiagnostics, NativeLowering,
                            IRLegalization, NoPythonBackend, NativeLowering)
 import numpy as np

@@ -393,6 +393,26 @@ class ParforPassFinalize(FunctionPass):
         return True
 
 
+@register_pass(mutates_CFG=True, analysis_only=False)
+class DefaultParforPass(FunctionPass):
+
+    _name = "parfor_pass_default"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        from .compiler_machinery import PassManager
+
+        pm = PassManager("parfor pass manager")
+        pm.add_pass(ParforPassConversion)
+        pm.add_pass(ParforPassFusion)
+        pm.add_pass(ParforPassFinalize)
+        pm.finalize()
+        pm.run(state)
+        return True
+
+
 @register_pass(mutates_CFG=False, analysis_only=True)
 class DumpParforDiagnostics(AnalysisPass):
 
