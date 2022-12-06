@@ -802,10 +802,13 @@ class TraceRunner(object):
         def op_RAISE_VARARGS(self, state, inst):
             if inst.arg == 0:
                 exc = None
-                raise UnsupportedError(
-                    "The re-raising of an exception is not yet supported.",
-                    loc=self.get_debug_loc(inst.lineno),
-                )
+                # No re-raising within a try-except block.
+                # But we allow bare reraise.
+                if state.has_active_try():
+                    raise UnsupportedError(
+                        "The re-raising of an exception is not yet supported.",
+                        loc=self.get_debug_loc(inst.lineno),
+                    )
             elif inst.arg == 1:
                 exc = state.pop()
             else:
