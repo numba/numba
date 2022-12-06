@@ -282,9 +282,9 @@ def _reload_parfors():
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)
-class ParforPass(FunctionPass):
+class ParforPassConversion(FunctionPass):
 
-    _name = "parfor_pass"
+    _name = "parfor_pass_conversion"
 
     def __init__(self):
         FunctionPass.__init__(self)
@@ -305,7 +305,64 @@ class ParforPass(FunctionPass):
                                          state.flags,
                                          state.metadata,
                                          state.parfor_diagnostics)
-        parfor_pass.run()
+        parfor_pass.run_conversions()
+        return True
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class ParforPassFusion(FunctionPass):
+
+    _name = "parfor_pass_fusion"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        """
+        Convert data-parallel computations into Parfor nodes
+        """
+        # Ensure we have an IR and type information.
+        assert state.func_ir
+
+        parfor_pass = _parfor_ParforPass(state.func_ir,
+                                         state.typemap,
+                                         state.calltypes,
+                                         state.return_type,
+                                         state.typingctx,
+                                         state.targetctx,
+                                         state.flags.auto_parallel,
+                                         state.flags,
+                                         state.metadata,
+                                         state.parfor_diagnostics)
+        parfor_pass.run_fusion()
+        return True
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class ParforPassFinalize(FunctionPass):
+
+    _name = "parfor_pass_finalize"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        """
+        Convert data-parallel computations into Parfor nodes
+        """
+        # Ensure we have an IR and type information.
+        assert state.func_ir
+        parfor_pass = _parfor_ParforPass(state.func_ir,
+                                         state.typemap,
+                                         state.calltypes,
+                                         state.return_type,
+                                         state.typingctx,
+                                         state.targetctx,
+                                         state.flags.auto_parallel,
+                                         state.flags,
+                                         state.metadata,
+                                         state.parfor_diagnostics)
+        parfor_pass.run_finalize()
 
         # check the parfor pass worked and warn if it didn't
         has_parfor = False

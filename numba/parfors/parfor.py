@@ -2847,7 +2847,6 @@ def _find_mask(typemap, func_ir, arr_def):
 
 
 class ParforPass(ParforPassStates):
-
     """ParforPass class is responsible for converting NumPy
     calls in Numba intermediate representation to Parfors, which
     will lower into either sequential or parallel loops during lowering
@@ -2864,6 +2863,11 @@ class ParforPass(ParforPassStates):
     def run(self):
         """run parfor conversion pass: replace Numpy calls
         with Parfors when possible and optimize the IR."""
+        self.run_conversions()
+        self.run_fusion()
+        self.run_finalize()
+
+    def run_conversions(self):
         self._pre_run()
         # run stencil translation to parfor
         if self.options.stencil:
@@ -2883,6 +2887,7 @@ class ParforPass(ParforPassStates):
         if self.options.inplace_binop:
             ConvertInplaceBinop(self).run(self.func_ir.blocks)
 
+    def run_fusion(self):
         # setup diagnostics now parfors are found
         self.diagnostics.setup(self.func_ir, self.options.fusion)
 
@@ -2938,6 +2943,7 @@ class ParforPass(ParforPassStates):
             # remove dead code after fusion to remove extra arrays and variables
             simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
 
+    def run_finalize(self):
         # push function call variables inside parfors so gufunc function
         # wouldn't need function variables as argument
         push_call_vars(self.func_ir.blocks, {}, {}, self.typemap)

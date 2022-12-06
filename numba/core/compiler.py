@@ -26,7 +26,10 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode,
 
 from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                                      NopythonRewrites, PreParforPass,
-                                     ParforPass, DumpParforDiagnostics,
+                                     ParforPassConversion,
+                                     ParforPassFusion,
+                                     ParforPassFinalize,
+                                     DumpParforDiagnostics,
                                      IRLegalization, NoPythonBackend,
                                      InlineOverloads, PreLowerStripPhis,
                                      NativeLowering, NativeParforLowering,
@@ -610,7 +613,9 @@ class DefaultPassBuilder(object):
         if not state.flags.no_rewrites:
             pm.add_pass(NopythonRewrites, "nopython rewrites")
         if state.flags.auto_parallel.enabled:
-            pm.add_pass(ParforPass, "convert to parfors")
+            pm.add_pass(ParforPassConversion, "convert to parfors")
+            pm.add_pass(ParforPassFusion, "convert to parfors")
+            pm.add_pass(ParforPassFinalize, "convert to parfors")
 
         pm.finalize()
         return pm
