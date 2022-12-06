@@ -85,11 +85,12 @@ def is_cuda_array(obj):
     return hasattr(obj, '__cuda_array_interface__')
 
 
-def is_fp16_supported(device_id=None):
-    if not config.CUDA_USE_NVIDIA_BINDING:
-        return False
+def is_fp16_supported():
+    """ Determine if IEEE floating-point 16-bit is supported.
 
-    return True
+        Returns True if fp16 is supported, False otherwise.
+    """
+    return bool(config.CUDA_USE_NVIDIA_BINDING)
 
 
 @require_context

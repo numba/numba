@@ -1,7 +1,7 @@
 
 from numba import cuda
 from numba.cuda.testing import (CUDATestCase, skip_on_cudasim,
-                                skip_unless_cc_53)
+                                skip_unless_cc_53, skip_unless_cudasim)
 from numba.core import config
 from numba.tests.support import override_config
 
@@ -25,3 +25,7 @@ class TestIsFP16Supported(CUDATestCase):
         self.assertFalse(cuda.is_fp16_supported())
         with override_config('CUDA_USE_NVIDIA_BINDING', 1):
             self.assertTrue(cuda.is_fp16_supported())
+
+    @skip_unless_cudasim
+    def test_is_fp16_supported_on_simulator(self):
+        self.assertTrue(cuda.is_fp16_supported())

@@ -469,9 +469,12 @@ precision parts of the CUDA Toolkit documentation.
 16-bit Floating Point Intrinsics
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+.. function:: numba.cuda.is_fp16_supported ()
+
+   Return ``True`` if 16-bit floatint point is supported, ``False`` otherwise.
+
 The following functions are used to operate on 16-bit floating point operands.
 These functions return a 16-bit floating point result.
-
 
 .. function:: numba.cuda.fp16.hfma (a, b, c)
 
