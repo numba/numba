@@ -5,6 +5,9 @@
 #include <cassert>
 #include <vector>
 
+#include "_pycore_code.h"
+#include "_pycore_frame.h"
+#include "_pycore_pyerrors.h"
 #include "_typeof.h"
 #include "frameobject.h"
 #include "core/typeconv/typeconv.hpp"
@@ -28,14 +31,103 @@
 
 #if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 11)
 
-
-
-
 /*
  * NOTE: There is a version split for tracing code. Python 3.10 introduced a
  * trace_info structure to help make tracing more robust. See:
  * https://github.com/python/cpython/pull/24726
  */
+
+/*
+ * Code originally from:
+ * https://github.com/python/cpython/blob/deaf509e8fc6e0363bd6f26d52ad42f976ec42f2/Python/ceval.c#L6804
+ */
+static int
+call_trace(Py_tracefunc func, PyObject *obj,
+           PyThreadState *tstate, _PyInterpreterFrame *frame,
+           int what, PyObject *arg)
+{
+    int result;
+    if (tstate->tracing) {
+        return 0;
+    }
+    PyFrameObject *f = _PyFrame_GetFrameObject(frame);
+    if (f == NULL) {
+        return -1;
+    }
+    int old_what = tstate->tracing_what;
+    tstate->tracing_what = what;
+    PyThreadState_EnterTracing(tstate);
+    assert(_PyInterpreterFrame_LASTI(frame) >= 0);
+    if (_PyCode_InitLineArray(frame->f_code)) {
+        return -1;
+    }
+    f->f_lineno = _PyCode_LineNumberFromArray(frame->f_code, _PyInterpreterFrame_LASTI(frame));
+    result = func(obj, f, what, arg);
+    f->f_lineno = 0;
+    PyThreadState_LeaveTracing(tstate);
+    tstate->tracing_what = old_what;
+    return result;
+}
+
+/*
+ * Code originally from:
+ * https://github.com/python/cpython/blob/d5650a1738fe34f6e1db4af5f4c4edb7cae90a36/Python/ceval.c#L4220-L4240
+ */
+static int
+call_trace_protected(Py_tracefunc func, PyObject *obj,
+                     PyThreadState *tstate, _PyInterpreterFrame *frame,
+                     int what, PyObject *arg)
+{
+    PyObject *type, *value, *traceback;
+    int err;
+    _PyErr_Fetch(tstate, &type, &value, &traceback);
+    err = call_trace(func, obj, tstate, frame, what, arg);
+    if (err == 0)
+    {
+        _PyErr_Restore(tstate, type, value, traceback);
+        return 0;
+    }
+    else {
+        Py_XDECREF(type);
+        Py_XDECREF(value);
+        Py_XDECREF(traceback);
+        return -1;
+    }
+}
+
+/*
+ * Code originally from:
+ * https://github.com/python/cpython/blob/deaf509e8fc6e0363bd6f26d52ad42f976ec42f2/Python/ceval.c#L7245
+ * NOTE: The state test https://github.com/python/cpython/blob/d5650a1738fe34f6e1db4af5f4c4edb7cae90a36/Python/ceval.c#L4521
+ * has been removed, it's dealt with in call_cfunc.
+ */
+#define C_TRACE(x, call) \
+if (call_trace(tstate->c_profilefunc, tstate->c_profileobj, \
+    tstate, tstate->cframe->current_frame, \
+    PyTrace_C_CALL, cfunc)) { \
+    x = NULL; \
+} \
+else { \
+    x = call; \
+    if (tstate->c_profilefunc != NULL) { \
+        if (x == NULL) { \
+            call_trace_protected(tstate->c_profilefunc, \
+                tstate->c_profileobj, \
+                tstate, tstate->cframe->current_frame, \
+                PyTrace_RETURN, cfunc); \
+            /* XXX should pass (type, value, tb) */ \
+        } else { \
+            if (call_trace(tstate->c_profilefunc, \
+                tstate->c_profileobj, \
+                tstate, tstate->cframe->current_frame, \
+                PyTrace_RETURN, cfunc)) { \
+                Py_DECREF(x); \
+                x = NULL; \
+            } \
+        } \
+    } \
+} \
+
 #elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 10)
 
 /*
@@ -630,7 +722,7 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
         /* Populate the 'fast locals' in `frame` */
         PyFrame_LocalsToFast(frame, 0);
 #if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 11)
-        result = fn(PyCFunction_GET_SELF(cfunc), args, kws);
+        C_TRACE(result, fn(PyCFunction_GET_SELF(cfunc), args, kws));
 #else
         tstate->frame = frame;
         C_TRACE(result, fn(PyCFunction_GET_SELF(cfunc), args, kws));
