@@ -11,7 +11,11 @@ from numba import njit, stencil
 from numba.core import types, registry
 from numba.core.compiler import compile_extra, Flags
 from numba.core.cpu import ParallelOptions
-from numba.tests.support import skip_parfors_unsupported, _32bit
+from numba.tests.support import (
+    skip_parfors_unsupported,
+    _32bit,
+    skip_m1_llvm_rtdyld_failure,
+)
 from numba.core.errors import LoweringError, TypingError, NumbaValueError
 import unittest
 
@@ -76,6 +80,7 @@ if not _32bit: # prevent compilation on unsupported 32bit targets
         return a + 1
 
 
+@skip_m1_llvm_rtdyld_failure   # skip all stencil tests on m1
 class TestStencilBase(unittest.TestCase):
 
     _numba_parallel_test_ = False

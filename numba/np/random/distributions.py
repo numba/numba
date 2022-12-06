@@ -18,7 +18,7 @@ from numba.np.random._constants import (wi_double, ki_double,
                                         INT64_MAX, ziggurat_nor_inv_r)
 from numba.np.random.generator_core import (next_double, next_float,
                                             next_uint32, next_uint64)
-from numba import float32
+from numba import float32, int64
 from numba.np.numpy_support import numpy_version
 # All of the following implementations are direct translations from:
 # https://github.com/numpy/numpy/blob/7cfef93c77599bd387ecc6a15d186c5a46024dac/numpy/random/src/distributions/distributions.c
@@ -529,3 +529,48 @@ def random_poisson(bitgen, lam):
 def random_negative_binomial(bitgen, n, p):
     Y = random_gamma(bitgen, n, (1 - p) / p)
     return random_poisson(bitgen, Y)
+
+
+@register_jitable
+def random_noncentral_chisquare(bitgen, df, nonc):
+    if np.isnan(nonc):
+        return np.nan
+
+    if nonc == 0:
+        return random_chisquare(bitgen, df)
+
+    if 1 < df:
+        Chi2 = random_chisquare(bitgen, df - 1)
+        n = random_standard_normal(bitgen) + np.sqrt(nonc)
+        return Chi2 + n * n
+    else:
+        i = random_poisson(bitgen, nonc / 2.0)
+        return random_chisquare(bitgen, df + 2 * i)
+
+
+@register_jitable
+def random_noncentral_f(bitgen, dfnum, dfden, nonc):
+    t = random_noncentral_chisquare(bitgen, dfnum, nonc) * dfden
+    return t / (random_chisquare(bitgen, dfden) * dfnum)
+
+
+@register_jitable
+def random_logseries(bitgen, p):
+    r = np_log1p(-p)
+
+    while 1:
+        V = next_double(bitgen)
+        if (V >= p):
+            return 1
+        U = next_double(bitgen)
+        q = -np.expm1(r * U)
+        if (V <= q * q):
+            result = int64(np.floor(1 + np.log(V) / np.log(q)))
+            if result < 1 or V == 0.0:
+                continue
+            else:
+                return result
+        if (V >= q):
+            return 1
+        else:
+            return 2

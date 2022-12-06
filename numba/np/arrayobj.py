@@ -2499,7 +2499,7 @@ def _compatible_view(a, dtype):
     pass
 
 
-@overload(_compatible_view)
+@overload(_compatible_view, target='generic')
 def ol_compatible_view(a, dtype):
     """Determines if the array and dtype are compatible for forming a view."""
     # NOTE: NumPy 1.23+ uses this check.
