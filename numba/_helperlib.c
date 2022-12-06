@@ -4,6 +4,10 @@
  * NUMBA_EXPORT_FUNC() and NUMBA_EXPORT_DATA() macros.
  */
 
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 11)
+    #include "_pycore_frame.h"
+#endif
+
 #include "_pymodule.h"
 #include <stddef.h>
 #include <stdio.h>
@@ -822,23 +826,8 @@ static void traceback_add(const char *funcname, const char *filename, int lineno
 
 #if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 11) /* 3.11 */
 
-    /* A copy of the struct _frame from 
-       https://github.com/python/cpython/blob/0c6b3a2d8e1a887bda6baed27664a62392f2cdc3/Include/internal/pycore_frame.h#L15 
-    */
-    typedef struct _frame {
-        PyObject_HEAD
-        PyFrameObject *f_back;      /* previous frame, or NULL */
-        struct _PyInterpreterFrame *f_frame; /* points to the frame data */
-        PyObject *f_trace;          /* Trace function */
-        int f_lineno;               /* Current line number. Only valid if non-zero */
-        char f_trace_lines;         /* Emit per-line trace events? */
-        char f_trace_opcodes;       /* Emit per-opcode trace events? */
-        char f_fast_as_locals;      /* Have the fast locals of this frame been converted to a dict? */
-        /* The frame data, if this frame object owns the frame */
-        PyObject *_f_frame_data[1];
-    } py_frame;
-
     /* unsafe cast to our copy of _frame to access the f_lineno field */
+    typedef struct _frame py_frame;
     py_frame* hacked_frame = (py_frame*)frame;
     hacked_frame->f_lineno = lineno;
 
