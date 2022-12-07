@@ -103,7 +103,8 @@ def parse_slice(useslice):
     except Exception:
         msg = (
                     "Expected arguments shard index and count to follow "
-                    "option `-j`, found '%s'" % useslice)
+                    "option `-j i:t`, where i is the shard number and t "
+                    "is the total number of shards, found '%s'" % useslice)
         raise ValueError(msg)
     if count == 0:
         return lambda x: True

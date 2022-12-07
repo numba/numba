@@ -126,7 +126,7 @@ class TestCase(unittest.TestCase):
         lAll = {x for x in tmpAll if x.startswith('numba.')}
         l1 = {x for x in tmp1 if x.startswith('numba.')}
         l2 = {x for x in tmp2 if x.startswith('numba.')}
-        # The variance between two adjacent shards should be less than 5% of
+        # The difference between two adjacent shards should be less than 5% of
         # the total
         self.assertLess(abs(len(l2) - len(l1)), len(lAll) / 20)
         self.assertLess(len(l1), len(lAll))
