@@ -533,7 +533,6 @@ class CPUCallConv(BaseCallConv):
         objs = []
         for i, typ in enumerate(nb_types):
             val = builder.extract_value(builder.load(st_ptr), i)
-            self.context.nrt.decref(builder, typ, val)
             obj = api.from_native_value(typ, val)
 
             # not all objects are supported
