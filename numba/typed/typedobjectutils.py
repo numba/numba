@@ -7,7 +7,9 @@ from llvmlite import ir
 
 from numba.core import types, cgutils
 from numba.core import typing
+from numba.core.optional import any_to_optional
 from numba.core.registry import cpu_target
+from numba.core.types import Optional
 from numba.core.typeconv import Conversion
 from numba.core.extending import intrinsic
 from numba.core.errors import TypingError, NumbaTypeSafetyWarning
@@ -24,13 +26,16 @@ def _cast(typingctx, val, typ):
     """Cast *val* to *typ*
     """
     def codegen(context, builder, signature, args):
-        [val, typ] = args
-        context.nrt.incref(builder, signature.return_type, val)
-        return val
+        val = args[0]
+        new_val = context.cast(builder, val, val_ty, casted_ty)
+        context.nrt.incref(builder, signature.return_type, new_val)
+        return new_val
+
     # Using implicit casting in argument types
-    casted = typ.instance_type
-    _sentry_safe_cast(val, casted)
-    sig = casted(casted, typ)
+    val_ty = val
+    casted_ty = typ.instance_type
+    _sentry_safe_cast(val, casted_ty)
+    sig = casted_ty(val_ty, typ)
     return sig, codegen
 
 
@@ -91,6 +96,7 @@ def _sentry_safe_cast_default(default, valty):
 def _nonoptional(typingctx, val):
     """Typing trick to cast Optional[T] to T
     """
+    print("**** _non optional ****")
     if not isinstance(val, types.Optional):
         raise TypeError('expected an optional')
 
@@ -107,16 +113,16 @@ def _container_get_data(context, builder, container_ty, c):
     """Helper to get the C list pointer in a numba containers.
     """
     ctor = cgutils.create_struct_proxy(container_ty)
-    conatainer_struct = ctor(context, builder, value=c)
-    return conatainer_struct.data
+    container_struct = ctor(context, builder, value=c)
+    return container_struct.data
 
 
 def _container_get_meminfo(context, builder, container_ty, c):
     """Helper to get the meminfo for a container
     """
     ctor = cgutils.create_struct_proxy(container_ty)
-    conatainer_struct = ctor(context, builder, value=c)
-    return conatainer_struct.meminfo
+    container_struct = ctor(context, builder, value=c)
+    return container_struct.meminfo
 
 
 def _get_incref_decref(context, module, datamodel, container_element_type):

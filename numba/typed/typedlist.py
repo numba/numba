@@ -490,7 +490,6 @@ def box_lsttype(typ, val, c):
         builder.store(res, result_var)
     return builder.load(result_var)
 
-
 @unbox(types.ListType)
 def unbox_listtype(typ, val, c):
     context = c.context

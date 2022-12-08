@@ -19,9 +19,9 @@ from numba.experimental import jitclass
 
 
 # global typed-list for testing purposes
-global_typed_list = List.empty_list(int32)
-for i in (1, 2, 3):
-    global_typed_list.append(int32(i))
+# global_typed_list = List.empty_list(int32)
+# for i in (1, 2, 3):
+#     global_typed_list.append(int32(i))
 
 
 def to_tl(l):
@@ -1658,3 +1658,61 @@ class TestListFromIter(MemoryLeakMixin, TestCase):
             "List() takes no keyword arguments",
             str(raises.exception),
         )
+
+
+def _print(lst):
+    print(f'python: list dtype={lst._numba_type_}, size={len(lst)}')
+
+
+class TestOptionalType(MemoryLeakMixin, TestCase):
+    import os
+    # os.environ['NUMBA_DEBUG_TYPEINFER'] = '1'
+
+    def test_misc(self):
+        @njit
+        def foo(a):
+            if a > 0:
+                b = None
+            else:
+                b = a
+            return b
+
+        print(f"{foo(1)}, {foo(0)}")
+
+    def test_optional_constructor(self):
+        py_list = [None, 1]
+        nb_list = List(py_list)
+        print(nb_list)
+
+    def test_optional_in_python(self):
+        lst = List()
+        lst.append(None)
+        lst.append(None)
+        _print(lst)
+        lst.append(1)
+        # list.append(None)
+        lst.append(2)
+        _print(lst)
+
+    def test_optional_in_python_again(self):
+        lst = List()
+        lst.append(None)
+        lst.append(None)
+
+    def test_optional_in_jit(self):
+        @njit
+        def foo():
+            lst = List()
+            lst.append(None)
+            lst.append(1)
+
+        foo()
+
+    def test_optional_in_jit_again(self):
+        @njit
+        def foo():
+            lst = List()
+            lst.append(1)
+            lst.append(None)
+
+        foo()

@@ -18,12 +18,14 @@ from numba.core.extending import (
 )
 from numba.core.imputils import iternext_impl
 from numba.core import types, cgutils
+from numba.core.optional import any_to_optional
 from numba.core.types import (
     ListType,
     ListTypeIterableType,
     ListTypeIteratorType,
     Type,
     NoneType,
+    Optional,
 )
 from numba.core.imputils import impl_ret_borrowed, RefType
 from numba.core.errors import TypingError
@@ -589,16 +591,51 @@ def _list_append(typingctx, l, item):
     return sig, codegen
 
 
+def _ensure_none_and_concrete(type1, type2):
+    def _inner_check(_type1, _type2):
+        # case 1: both are none, then don't need optional
+        # case 2: one is already optional, then don't need optional again
+        not_allowed = (Optional, NoneType)
+        if isinstance(_type1, NoneType) and not isinstance(_type2, not_allowed):
+            return True
+        return False
+
+    return _inner_check(type1, type2) or _inner_check(type2, type1)
+
+
+def _merged_optional(type1, type2):
+    if isinstance(type1, NoneType):
+        concrete_ty = type2
+    else:
+        concrete_ty = type1
+    return Optional(concrete_ty)
+
+
 @overload_method(types.ListType, 'append')
 def impl_append(l, item):
     if not isinstance(l, types.ListType):
         return
 
-    itemty = l.item_type
+    list_itemty = l.item_type
+    convert_flag = False
+    if item != list_itemty:
+        if _ensure_none_and_concrete(item, list_itemty):
+            list_itemty = _merged_optional(item, list_itemty)
+            l.dtype = l.item_type = list_itemty
+            l.name = "{}[{}]".format(l.__class__.__name__, list_itemty, )
+            convert_flag = True
+        else:
+            ...
+            # raise TypingError(f"Can't unify {item} and "
+            #                   f"{list_itemty} in typed list")
 
     def impl(l, item):
-        casteditem = _cast(item, itemty)
-        status = _list_append(l, casteditem)
+        if convert_flag:
+            for index, item in enumerate(l):
+                opt_item = _cast(item, list_itemty)
+                l[index] = opt_item
+        casted_item = _cast(item, list_itemty)
+        status = _list_append(l, casted_item)
         if status == ListStatus.LIST_OK:
             return
         elif status == ListStatus.LIST_ERR_IMMUTABLE:
@@ -615,9 +652,9 @@ def impl_append(l, item):
         # Handle the imprecise case.
         l = l.refine(item)
         # Re-bind the item type to match the arguments.
-        itemty = l.item_type
+        list_itemty = l.item_type
         # Create the signature that we wanted this impl to have.
-        sig = typing.signature(types.void, l, itemty)
+        sig = typing.signature(types.void, l, list_itemty)
         return sig, impl
 
 
@@ -734,6 +771,7 @@ def _gen_getitem(borrowed):
                 if not borrowed:
                     context.nrt.incref(builder, tl.item_type, item)
 
+                # loaded = item
                 if is_none:
                     loaded = item
                 else:
