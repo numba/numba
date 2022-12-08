@@ -14,7 +14,6 @@ from numba.np.numpy_support import (ufunc_find_matching_loop,
 from numba.core.errors import (TypingError, NumbaPerformanceWarning,
                                NumbaTypeError, NumbaAssertionError)
 from numba import pndindex
-from numba.core.overload_glue import glue_typing
 
 registry = Registry()
 infer = registry.register
