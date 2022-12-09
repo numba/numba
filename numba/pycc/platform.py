@@ -45,7 +45,7 @@ def _gentmpfile(suffix):
             os.rmdir(tmpdir)
 
 
-@functools.lru_cache
+@functools.lru_cache(maxsize=1)
 def external_compiler_works():
     """
     Returns True if the "external compiler" bound in numpy.distutil is present
