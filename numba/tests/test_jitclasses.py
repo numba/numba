@@ -1166,6 +1166,16 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             Foo()
         self.assertIn("Method '__enter__' is not supported.", str(e.exception))
 
+    def test_modulename(self):
+        @jitclass
+        class TestModname(object):
+            def __init__(self):
+                self.x = 12
+
+        thisModule = __name__
+        classModule = TestModname.__module__
+        self.assertEqual(thisModule, classModule)
+
 
 class TestJitClassOverloads(MemoryLeakMixin, TestCase):
 
