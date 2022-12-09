@@ -120,20 +120,33 @@ class TestCase(unittest.TestCase):
             self.assertEqual(total, included + excluded)
 
     def test_check_slice(self):
-        tmp = self.get_testsuite_listing(['-j','0,5,1'])
-        l = [x for x in tmp if x.startswith('numba.')]
-        self.assertEqual(len(l), 5)
+        tmpAll = self.get_testsuite_listing([])
+        tmp1 = self.get_testsuite_listing(['-j', '0:2'])
+        tmp2 = self.get_testsuite_listing(['-j', '1:2'])
+        lAll = {x for x in tmpAll if x.startswith('numba.')}
+        l1 = {x for x in tmp1 if x.startswith('numba.')}
+        l2 = {x for x in tmp2 if x.startswith('numba.')}
+        # The difference between two adjacent shards should be less than 5% of
+        # the total
+        self.assertLess(abs(len(l2) - len(l1)), len(lAll) / 20)
+        self.assertLess(len(l1), len(lAll))
+        self.assertLess(len(l2), len(lAll))
+        # Test should always run
+        self.assertIn("numba.tests.test_api.TestNumbaModule.test_numba_module",
+                      l1)
+        self.assertIn("numba.tests.test_api.TestNumbaModule.test_numba_module",
+                      l2)
 
     def test_check_slicing_equivalent(self):
         def filter_test(xs):
-            return [x for x in xs if x.startswith('numba.')]
+            return {x for x in xs if x.startswith('numba.')}
         full = filter_test(self.get_testsuite_listing([]))
-        sliced = []
+        sliced = set()
         for i in range(3):
-            subset = self.get_testsuite_listing(['-j', '{},None,3'.format(i)])
-            sliced.extend(filter_test(subset))
+            subset = self.get_testsuite_listing(['-j', '{}:3'.format(i)])
+            sliced.update(filter_test(subset))
         # The tests must be equivalent
-        self.assertEqual(sorted(full), sorted(sliced))
+        self.assertEqual(full, sliced)
 
     @unittest.skipUnless(has_gitpython, "Requires gitpython")
     def test_gitdiff(self):

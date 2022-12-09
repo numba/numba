@@ -58,5 +58,5 @@ jobs:
     - script: |
         call activate %CONDA_ENV%
         set NUMBA_CAPTURED_ERRORS=new_style
-        python runtests.py -m 2 -b -j "%TEST_START_INDEX%,None,%TEST_COUNT%"  --exclude-tags='long_running'  -- numba.tests
+        python runtests.py -m 2 -b -j "%TEST_START_INDEX%:%TEST_COUNT%"  --exclude-tags='long_running'  -- numba.tests
       displayName: 'Test slice of test files'
