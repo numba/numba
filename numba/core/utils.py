@@ -22,8 +22,7 @@ from inspect import signature as pysignature # noqa: F401
 from inspect import Signature as pySignature # noqa: F401
 from inspect import Parameter as pyParameter # noqa: F401
 
-from numba.core.config import (PYVERSION, MACHINE_BITS, # noqa: F401
-                               DEVELOPER_MODE) # noqa: F401
+from numba.core.config import MACHINE_BITS, DEVELOPER_MODE # noqa: F401
 from numba.core import config
 from numba.core import types
 
@@ -374,8 +373,6 @@ class UniqueDict(dict):
         if key in self:
             raise AssertionError("key already in dictionary: %r" % (key,))
         super(UniqueDict, self).__setitem__(key, value)
-
-    from functools import cached_property
 
 
 def runonce(fn):
