@@ -71,9 +71,7 @@ _py38_or_later = utils.PYVERSION >= (3, 8)
 _MAX_UNICODE = 0x10ffff
 
 # https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/stringlib/fastsearch.h#L31    # noqa: E501
-# I fix the _bloom_width, not chosen from (32, 64, 128) based on machines.
-#   Not sure if impacting the bloom-filter effectiveness.
-_BLOOM_WIDTH = 64
+_BLOOM_WIDTH = types.intp.bitwidth
 
 # DATA MODEL
 
@@ -612,7 +610,6 @@ def _bloom_check(mask, ch):
 
 
 # https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/stringlib/fastsearch.h#L550    # noqa: E501
-# XXX: Why we don't have the FAST_COUNT flag as cpython?
 @register_jitable
 def _default_find(data, substr, start, end):
     """Left finder."""
@@ -623,8 +620,8 @@ def _default_find(data, substr, start, end):
     gap = mlast = m - 1
     last = _get_code_point(substr, mlast)
 
-    # How to coerce mask to be an uint64 as cpython does?
-    mask = _bloom_add(0, last)
+    zero = types.intp(0)
+    mask = _bloom_add(zero, last)
     for i in range(mlast):
         ch = _get_code_point(substr, i)
         mask = _bloom_add(mask, ch)
