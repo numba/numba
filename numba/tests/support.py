@@ -39,8 +39,8 @@ from numba.core.untyped_passes import PreserveIR
 import unittest
 from numba.core.runtime import rtsys
 from numba.np import numpy_support
-from numba.pycc.platform import _external_compiler_ok
 from numba.core.runtime import _nrt_python as _nrt
+from numba.pycc.platform import external_compiler_works
 
 
 try:
@@ -155,12 +155,6 @@ needs_blas = unittest.skipUnless(has_blas, "BLAS needs SciPy 1.0+")
 # with this environment variable set.
 _exec_cond = os.environ.get('SUBPROC_TEST', None) == '1'
 needs_subprocess = unittest.skipUnless(_exec_cond, "needs subprocess harness")
-
-
-# decorate for test needs external compilers
-needs_external_compilers = unittest.skipIf(not _external_compiler_ok,
-                                           ('Compatible external compilers are '
-                                            'missing'))
 
 
 def ignore_internal_warnings():
@@ -616,6 +610,16 @@ class TestCase(unittest.TestCase):
             return wrapper(maybefunc)
         else:
             return wrapper
+
+    def skip_if_no_external_compiler(self):
+        """
+        Call this to ensure the test is skipped if no suitable external compiler
+        is found. This is a method on the TestCase opposed to a stand-alone
+        decorator so as to make it "lazy" via runtime evaluation opposed to
+        running at test-discovery time.
+        """
+        if not external_compiler_works():
+            self.skipTest("No suitable external compiler was found.")
 
 
 class SerialMixin(object):

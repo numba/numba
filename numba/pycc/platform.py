@@ -44,9 +44,13 @@ def _gentmpfile(suffix):
         else:
             os.rmdir(tmpdir)
 
-def _check_external_compiler():
-    # see if the external compiler bound in numpy.distutil is present
-    # and working
+
+@functools.lru_cache
+def external_compiler_works():
+    """
+    Returns True if the "external compiler" bound in numpy.distutil is present
+    and working, False otherwise.
+    """
     compiler = new_compiler()
     customize_compiler(compiler)
     for suffix in ['.c', '.cxx']:
@@ -63,10 +67,6 @@ def _check_external_compiler():
             return False
     return True
 
-# boolean on whether the externally provided compiler is present and
-# functioning correctly
-_external_compiler_ok = _check_external_compiler()
-
 
 class _DummyExtension(object):
     libraries = []
@@ -75,7 +75,7 @@ class _DummyExtension(object):
 class Toolchain(object):
 
     def __init__(self):
-        if not _external_compiler_ok:
+        if not external_compiler_works():
             self._raise_external_compiler_error()
 
         # Need to import it here since setuptools may monkeypatch it
