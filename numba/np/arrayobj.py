@@ -32,7 +32,7 @@ from numba.core.extending import (register_jitable, overload, overload_method,
                                   intrinsic, overload_attribute)
 from numba.misc import quicksort, mergesort
 from numba.cpython import slicing
-from numba.cpython.charseq import _make_constant_bytes
+from numba.cpython.charseq import _make_constant_bytes, bytes_type
 from numba.cpython.unsafe.tuple import tuple_setitem, build_full_slice_tuple
 from numba.core.extending import overload_classmethod
 from numba.core.typing.npydecl import (parse_dtype as ty_parse_dtype,
@@ -5085,6 +5085,26 @@ def array_astype(context, builder, sig, args):
         store_item(context, builder, rettype, item, dest_ptr)
 
     return impl_ret_new_ref(context, builder, sig.return_type, ret._getvalue())
+
+
+@intrinsic
+def array_tobytes(typingctx, b):
+    assert isinstance(b, types.Array)
+    sig = bytes_type(b)
+
+    def codegen(context, builder, sig, args):
+        [arr] = args
+        return array_to_bytes(context, builder, b, bytes_type, arr)
+    return sig, codegen
+
+
+@overload(bytes)
+@overload_method(types.Array, "tobytes")
+def impl_array_tobytes(arr):
+    if isinstance(arr, types.Array):
+        def impl(arr):
+            return array_tobytes(arr)
+        return impl
 
 
 @intrinsic
