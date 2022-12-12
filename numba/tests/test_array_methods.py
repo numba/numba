@@ -170,9 +170,6 @@ def np_frombuffer_allocated_dtype(shape):
 def identity_usecase(a, b):
     return (a is b), (a is not b)
 
-def bytes_cast(a):
-    return bytes(a)
-
 def array_tobytes(a):
     return a.tobytes()
 
@@ -608,12 +605,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_array_tobytes(self):
         self.check_layout_dependent_func(
             array_tobytes,
-            memoryaddr=lambda x: np.frombuffer(x, dtype=np.uint8).ctypes.data,
-        )
-
-    def test_bytecast_array(self):
-        self.check_layout_dependent_func(
-            bytes_cast,
             memoryaddr=lambda x: np.frombuffer(x, dtype=np.uint8).ctypes.data,
         )
 
