@@ -341,6 +341,7 @@ The following methods of NumPy arrays are supported:
     inputs), while NumPy would use a 32-bit accumulator in those cases.
 
 
+* :meth:`~numpy.ndarray.tobytes` (without arguments)
 * :meth:`~numpy.ndarray.transpose`
 * :meth:`~numpy.ndarray.view` (only the 1-argument form)
 * :meth:`~numpy.ndarray.__contains__`
