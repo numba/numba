@@ -4846,7 +4846,7 @@ def array_astype(context, builder, sig, args):
 
 
 @intrinsic
-def array_tobytes(typingctx, b):
+def _array_tobytes_intrinsic(typingctx, b):
     assert isinstance(b, types.Array)
     sig = bytes_type(b)
 
@@ -4856,12 +4856,11 @@ def array_tobytes(typingctx, b):
     return sig, codegen
 
 
-@overload(bytes)
 @overload_method(types.Array, "tobytes")
 def impl_array_tobytes(arr):
     if isinstance(arr, types.Array):
         def impl(arr):
-            return array_tobytes(arr)
+            return _array_tobytes_intrinsic(arr)
         return impl
 
 
