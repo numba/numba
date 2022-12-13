@@ -74,7 +74,13 @@ def jitclass(cls_or_spec=None, spec=None):
         else:
             from numba.experimental.jitclass.base import (register_class_type,
                                                           ClassBuilder)
-            return register_class_type(cls, spec, types.ClassType, ClassBuilder)
+            cls_jitted = register_class_type(cls, spec, types.ClassType,
+                                             ClassBuilder)
+
+            # Preserve the module name of the original class
+            cls_jitted.__module__ = cls.__module__
+
+            return cls_jitted
 
     if cls_or_spec is None:
         return wrap
