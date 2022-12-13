@@ -5,7 +5,7 @@
  */
 
 #if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 11)
-    #include "_pycore_frame.h"
+    #include "_pycore.h"
 #endif
 
 #include "_pymodule.h"

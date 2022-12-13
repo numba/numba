@@ -5,9 +5,7 @@
 #include <cassert>
 #include <vector>
 
-#include "_pycore_code.h"
-#include "_pycore_frame.h"
-#include "_pycore_pyerrors.h"
+#include "_pycore.h"
 #include "_typeof.h"
 #include "frameobject.h"
 #include "core/typeconv/typeconv.hpp"
@@ -36,6 +34,276 @@
  * trace_info structure to help make tracing more robust. See:
  * https://github.com/python/cpython/pull/24726
  */
+
+/*
+ * Code originally from:
+ * https://github.com/python/cpython/blob/3c137dc613c860f605d3520d7fd722cd8ed79da6/Include/cpython/code.h
+ */
+#define _PyCode_CODE(CO) ((_Py_CODEUNIT *)(CO)->co_code_adaptive)
+#define _PyCode_NBYTES(CO) (Py_SIZE(CO) * (Py_ssize_t)sizeof(_Py_CODEUNIT))
+
+/*
+ * Code originally from:
+ * https://github.com/python/cpython/blob/3c137dc613c860f605d3520d7fd722cd8ed79da6/Objects/codeobject.c
+ */
+static int
+scan_varint(const uint8_t *ptr)
+{
+    unsigned int read = *ptr++;
+    unsigned int val = read & 63;
+    unsigned int shift = 0;
+    while (read & 64) {
+        read = *ptr++;
+        shift += 6;
+        val |= (read & 63) << shift;
+    }
+    return val;
+}
+
+static int
+scan_signed_varint(const uint8_t *ptr)
+{
+    unsigned int uval = scan_varint(ptr);
+    if (uval & 1) {
+        return -(int)(uval >> 1);
+    }
+    else {
+        return uval >> 1;
+    }
+}
+
+static int
+get_line_delta(const uint8_t *ptr)
+{
+    int code = ((*ptr) >> 3) & 15;
+    switch (code) {
+        case PY_CODE_LOCATION_INFO_NONE:
+            return 0;
+        case PY_CODE_LOCATION_INFO_NO_COLUMNS:
+        case PY_CODE_LOCATION_INFO_LONG:
+            return scan_signed_varint(ptr+1);
+        case PY_CODE_LOCATION_INFO_ONE_LINE0:
+            return 0;
+        case PY_CODE_LOCATION_INFO_ONE_LINE1:
+            return 1;
+        case PY_CODE_LOCATION_INFO_ONE_LINE2:
+            return 2;
+        default:
+            /* Same line */
+            return 0;
+    }
+}
+
+static inline int
+at_end(PyCodeAddressRange *bounds) {
+    return bounds->opaque.lo_next >= bounds->opaque.limit;
+}
+
+static int
+is_no_line_marker(uint8_t b)
+{
+    return (b >> 3) == 0x1f;
+}
+
+#define ASSERT_VALID_BOUNDS(bounds) \
+    assert(bounds->opaque.lo_next <=  bounds->opaque.limit && \
+        (bounds->ar_line == -1 || bounds->ar_line == bounds->opaque.computed_line) && \
+        (bounds->opaque.lo_next == bounds->opaque.limit || \
+        (*bounds->opaque.lo_next) & 128))
+
+static int
+next_code_delta(PyCodeAddressRange *bounds)
+{
+    assert((*bounds->opaque.lo_next) & 128);
+    return (((*bounds->opaque.lo_next) & 7) + 1) * sizeof(_Py_CODEUNIT);
+}
+
+static void
+advance(PyCodeAddressRange *bounds)
+{
+    ASSERT_VALID_BOUNDS(bounds);
+    bounds->opaque.computed_line += get_line_delta(bounds->opaque.lo_next);
+    if (is_no_line_marker(*bounds->opaque.lo_next)) {
+        bounds->ar_line = -1;
+    }
+    else {
+        bounds->ar_line = bounds->opaque.computed_line;
+    }
+    bounds->ar_start = bounds->ar_end;
+    bounds->ar_end += next_code_delta(bounds);
+    do {
+        bounds->opaque.lo_next++;
+    } while (bounds->opaque.lo_next < bounds->opaque.limit &&
+        ((*bounds->opaque.lo_next) & 128) == 0);
+    ASSERT_VALID_BOUNDS(bounds);
+}
+
+int
+_PyLineTable_NextAddressRange(PyCodeAddressRange *range)
+{
+    if (at_end(range)) {
+        return 0;
+    }
+    advance(range);
+    assert(range->ar_end > range->ar_start);
+    return 1;
+}
+
+void
+_PyLineTable_InitAddressRange(const char *linetable, Py_ssize_t length, int firstlineno, PyCodeAddressRange *range)
+{
+    range->opaque.lo_next = (const uint8_t *)linetable;
+    range->opaque.limit = range->opaque.lo_next + length;
+    range->ar_start = -1;
+    range->ar_end = 0;
+    range->opaque.computed_line = firstlineno;
+    range->ar_line = -1;
+}
+
+int
+_PyCode_InitAddressRange(PyCodeObject* co, PyCodeAddressRange *bounds)
+{
+    assert(co->co_linetable != NULL);
+    const char *linetable = PyBytes_AS_STRING(co->co_linetable);
+    Py_ssize_t length = PyBytes_GET_SIZE(co->co_linetable);
+    _PyLineTable_InitAddressRange(linetable, length, co->co_firstlineno, bounds);
+    return bounds->ar_line;
+}
+
+int
+PyCode_Addr2Line(PyCodeObject *co, int addrq)
+{
+    if (addrq < 0) {
+        return co->co_firstlineno;
+    }
+    assert(addrq >= 0 && addrq < _PyCode_NBYTES(co));
+    if (co->_co_linearray) {
+        return _PyCode_LineNumberFromArray(co, addrq / sizeof(_Py_CODEUNIT));
+    }
+    PyCodeAddressRange bounds;
+    _PyCode_InitAddressRange(co, &bounds);
+    return _PyCode_CheckLineNumber(addrq, &bounds);
+}
+
+/******************
+ * source location tracking (co_lines/co_positions)
+ ******************/
+
+/* Use co_linetable to compute the line number from a bytecode index, addrq.  See
+   lnotab_notes.txt for the details of the lnotab representation.
+*/
+
+int
+_PyCode_CreateLineArray(PyCodeObject *co)
+{
+    assert(co->_co_linearray == NULL);
+    PyCodeAddressRange bounds;
+    int size;
+    int max_line = 0;
+    _PyCode_InitAddressRange(co, &bounds);
+    while(_PyLineTable_NextAddressRange(&bounds)) {
+        if (bounds.ar_line > max_line) {
+            max_line = bounds.ar_line;
+        }
+    }
+    if (max_line < (1 << 15)) {
+        size = 2;
+    }
+    else {
+        size = 4;
+    }
+    co->_co_linearray = (char *) PyMem_Malloc(Py_SIZE(co)*size);
+    if (co->_co_linearray == NULL) {
+        PyErr_NoMemory();
+        return -1;
+    }
+    co->_co_linearray_entry_size = size;
+    _PyCode_InitAddressRange(co, &bounds);
+    while(_PyLineTable_NextAddressRange(&bounds)) {
+        int start = bounds.ar_start / sizeof(_Py_CODEUNIT);
+        int end = bounds.ar_end / sizeof(_Py_CODEUNIT);
+        for (int index = start; index < end; index++) {
+            assert(index < (int)Py_SIZE(co));
+            if (size == 2) {
+                assert(((int16_t)bounds.ar_line) == bounds.ar_line);
+                ((int16_t *)co->_co_linearray)[index] = bounds.ar_line;
+            }
+            else {
+                assert(size == 4);
+                ((int32_t *)co->_co_linearray)[index] = bounds.ar_line;
+            }
+        }
+    }
+    return 0;
+}
+
+#define CALL_STAT_INC(name) ((void)0)
+
+/*
+ * Code originally from:
+ * https://github.com/python/cpython/blob/3c137dc613c860f605d3520d7fd722cd8ed79da6/Objects/frameobject.c
+ */
+PyFrameObject*
+_PyFrame_New_NoTrack(PyCodeObject *code)
+{
+    CALL_STAT_INC(frame_objects_created);
+    int slots = code->co_nlocalsplus + code->co_stacksize;
+    PyFrameObject *f = PyObject_GC_NewVar(PyFrameObject, &PyFrame_Type, slots);
+    if (f == NULL) {
+        return NULL;
+    }
+    f->f_back = NULL;
+    f->f_trace = NULL;
+    f->f_trace_lines = 1;
+    f->f_trace_opcodes = 0;
+    f->f_fast_as_locals = 0;
+    f->f_lineno = 0;
+    return f;
+}
+
+/*
+ * Code originally from:
+ * https://github.com/python/cpython/blob/3c137dc613c860f605d3520d7fd722cd8ed79da6/Python/frame.c
+ */
+PyFrameObject *
+_PyFrame_MakeAndSetFrameObject(_PyInterpreterFrame *frame)
+{
+    assert(frame->frame_obj == NULL);
+    PyObject *error_type, *error_value, *error_traceback;
+    PyErr_Fetch(&error_type, &error_value, &error_traceback);
+
+    PyFrameObject *f = _PyFrame_New_NoTrack(frame->f_code);
+    if (f == NULL) {
+        Py_XDECREF(error_type);
+        Py_XDECREF(error_value);
+        Py_XDECREF(error_traceback);
+        return NULL;
+    }
+    PyErr_Restore(error_type, error_value, error_traceback);
+    if (frame->frame_obj) {
+        // GH-97002: How did we get into this horrible situation? Most likely,
+        // allocating f triggered a GC collection, which ran some code that
+        // *also* created the same frame... while we were in the middle of
+        // creating it! See test_sneaky_frame_object in test_frame.py for a
+        // concrete example.
+        //
+        // Regardless, just throw f away and use that frame instead, since it's
+        // already been exposed to user code. It's actually a bit tricky to do
+        // this, since we aren't backed by a real _PyInterpreterFrame anymore.
+        // Just pretend that we have an owned, cleared frame so frame_dealloc
+        // doesn't make the situation worse:
+        f->f_frame = (_PyInterpreterFrame *)f->_f_frame_data;
+        f->f_frame->owner = FRAME_CLEARED;
+        f->f_frame->frame_obj = f;
+        Py_DECREF(f);
+        return frame->frame_obj;
+    }
+    assert(frame->owner != FRAME_OWNED_BY_FRAME_OBJECT);
+    assert(frame->owner != FRAME_CLEARED);
+    f->f_frame = frame;
+    frame->frame_obj = f;
+    return f;
+}
 
 /*
  * Code originally from:

@@ -1,21 +1,73 @@
+#include <stdbool.h>
+#include <stddef.h>
+
+#ifndef Py_INTERNAL_H
+#define Py_INTERNAL_H
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/*
+ * Code originally from:
+ * https://github.com/python/cpython/blob/3c137dc613c860f605d3520d7fd722cd8ed79da6/Include/internal/pycore_pyerrors.h
+ */
+
+PyAPI_FUNC(void) _PyErr_Fetch(
+    PyThreadState *tstate,
+    PyObject **type,
+    PyObject **value,
+    PyObject **traceback);
+
+PyAPI_FUNC(void) _PyErr_Restore(
+    PyThreadState *tstate,
+    PyObject *type,
+    PyObject *value,
+    PyObject *traceback);
+
+/*
+ * Code originally from:
+ * https://github.com/python/cpython/blob/3c137dc613c860f605d3520d7fd722cd8ed79da6/Include/internal/pycore_code.h
+ */
+
+/* Line array cache for tracing */
+
+extern int _PyCode_CreateLineArray(PyCodeObject *co);
+
+static inline int
+_PyCode_InitLineArray(PyCodeObject *co)
+{
+    if (co->_co_linearray) {
+        return 0;
+    }
+    return _PyCode_CreateLineArray(co);
+}
+
+static inline int
+_PyCode_LineNumberFromArray(PyCodeObject *co, int index)
+{
+    assert(co->_co_linearray != NULL);
+    assert(index >= 0);
+    assert(index < Py_SIZE(co));
+    if (co->_co_linearray_entry_size == 2) {
+        return ((int16_t *)co->_co_linearray)[index];
+    }
+    else {
+        assert(co->_co_linearray_entry_size == 4);
+        return ((int32_t *)co->_co_linearray)[index];
+    }
+}
+
 /*
  * Code originally from:
  * https://github.com/python/cpython/blob/e72f469e857e2e853dd067742e4c8c5f7bb8fb16/Include/internal/pycore_frame.h
  */
 
-#ifndef Py_INTERNAL_FRAME_H
-#define Py_INTERNAL_FRAME_H
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#include <stdbool.h>
-#include <stddef.h>
-
 /* See Objects/frame_layout.md for an explanation of the frame stack
  * including explanation of the PyFrameObject and _PyInterpreterFrame
  * structs. */
 
+#define _PyInterpreterFrame_LASTI(IF) \
+    ((int)((IF)->prev_instr - _PyCode_CODE((IF)->f_code)))
 
 struct _frame {
     PyObject_HEAD
@@ -29,6 +81,8 @@ struct _frame {
     /* The frame data, if this frame object owns the frame */
     PyObject *_f_frame_data[1];
 };
+
+extern PyFrameObject* _PyFrame_New_NoTrack(PyCodeObject *code);
 
 /* other API */
 
@@ -106,4 +160,4 @@ _PyFrame_GetFrameObject(_PyInterpreterFrame *frame)
 #ifdef __cplusplus
 }
 #endif
-#endif /* !Py_INTERNAL_FRAME_H */
+#endif /* PYCORE_INTERNAL_H */
