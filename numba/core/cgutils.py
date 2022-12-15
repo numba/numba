@@ -793,7 +793,7 @@ def get_item_pointer2(context, builder, data, shape, strides, layout, inds,
 
 def _scalar_pred_against_zero(builder, value, fpred, icond):
     nullval = value.type(0)
-    if isinstance(value.type, (ir.FloatType, ir.DoubleType)):
+    if isinstance(value.type, (ir.FloatType, ir.DoubleType, ir.HalfType)):
         isnull = fpred(value, nullval)
     elif isinstance(value.type, ir.IntType):
         isnull = builder.icmp_signed(icond, value, nullval)
