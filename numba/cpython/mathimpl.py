@@ -136,6 +136,18 @@ def unary_math_intr(fn, intrcode):
     unary_math_int_impl(fn, float_impl)
     return float_impl
 
+def unary_math_fp16_intr(fn, intrcode):
+    """
+    Implement the math function *fn* using the LLVM intrinsic *intrcode*.
+    """
+    @lower(fn, types.float16)
+    def float_impl(context, builder, sig, args):
+        res = call_fp_intrinsic(builder, intrcode, args)
+        return impl_ret_untracked(context, builder, sig.return_type, res)
+
+    unary_math_int_impl(fn, float_impl)
+    return float_impl
+
 def unary_math_extern(fn, f32extern, f64extern, int_restype=False):
     """
     Register implementations of Python function *fn* using the
@@ -199,6 +211,7 @@ tanh_impl = unary_math_extern(math.tanh, "tanhf", "tanh")
 log2_impl = unary_math_extern(math.log2, "log2f", "log2")
 ceil_impl = unary_math_extern(math.ceil, "ceilf", "ceil", True)
 floor_impl = unary_math_extern(math.floor, "floorf", "floor", True)
+floor_fp16_impl = unary_math_fp16_intr(math.floor, "llvm.floor")
 
 gamma_impl = unary_math_extern(math.gamma, "numba_gammaf", "numba_gamma") # work-around
 sqrt_impl = unary_math_extern(math.sqrt, "sqrtf", "sqrt")
