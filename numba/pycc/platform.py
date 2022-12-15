@@ -2,7 +2,7 @@ from distutils.ccompiler import CCompiler, new_compiler
 from distutils.command.build_ext import build_ext
 from distutils.sysconfig import customize_compiler
 from distutils import log
-
+import numpy.distutils.misc_util as np_misc # DEBUG
 import numpy as np
 
 import functools
@@ -58,10 +58,10 @@ def _check_external_compiler():
                 ntf.close()
                 # *output_dir* is set to avoid the compiler putting temp files
                 # in the current directory.
-                #compiler.compile([ntf.name], output_dir=Path(ntf.name).anchor)
+                compiler.compile([ntf.name], output_dir=Path(ntf.name).anchor)
         except Exception: # likely CompileError or file system issue
             return False
-    return False
+    return True
 
 # boolean on whether the externally provided compiler is present and
 # functioning correctly
@@ -87,6 +87,8 @@ class Toolchain(object):
         self._build_ext.finalize_options()
         self._py_lib_dirs = self._build_ext.library_dirs
         self._py_include_dirs = self._build_ext.include_dirs
+
+        np_misc.get_info('npymath') # DEBUG
 
         np_compile_args = {'include_dirs': [np.get_include(),],}
         if sys.platform == 'win32':
