@@ -47,21 +47,20 @@ def _gentmpfile(suffix):
 def _check_external_compiler():
     # see if the external compiler bound in numpy.distutil is present
     # and working
-    #compiler = new_compiler()
-    #customize_compiler(compiler)
-    #for suffix in ['.c', '.cxx']:
-        #try:
-            #with _gentmpfile(suffix) as ntf:
-                #simple_c = "int main(void) { return 0; }"
-                #ntf.write(simple_c)
-                #ntf.flush()
-                #ntf.close()
-                ## *output_dir* is set to avoid the compiler putting temp files
-                ## in the current directory.
+    compiler = new_compiler()
+    customize_compiler(compiler)
+    for suffix in ['.c', '.cxx']:
+        try:
+            with _gentmpfile(suffix) as ntf:
+                simple_c = "int main(void) { return 0; }"
+                ntf.write(simple_c)
+                ntf.flush()
+                ntf.close()
+                # *output_dir* is set to avoid the compiler putting temp files
+                # in the current directory.
                 #compiler.compile([ntf.name], output_dir=Path(ntf.name).anchor)
-        #except Exception: # likely CompileError or file system issue
-            #return False
-    #return True
+        except Exception: # likely CompileError or file system issue
+            return False
     return False
 
 # boolean on whether the externally provided compiler is present and
