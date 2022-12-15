@@ -709,7 +709,8 @@ def real_divmod_func_body(context, builder, vx, wx):
     div_istrue = builder.fcmp_ordered('!=', div, ZERO)
 
     with builder.if_then(div_istrue):
-        realtypemap = {'float': types.float32,
+        realtypemap = {'half': types.float16,
+                       'float': types.float32,
                        'double': types.float64}
         realtype = realtypemap[str(wx.type)]
         floorfn = context.get_function(math.floor,
