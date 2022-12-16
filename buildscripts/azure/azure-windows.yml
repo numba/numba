@@ -61,5 +61,5 @@ jobs:
         call activate %CONDA_ENV%
         set NUMBA_CAPTURED_ERRORS=new_style
         set NUMBA_ENABLE_CUDASIM=1
-        python runtests.py -m 2 -v -b -j "%TEST_START_INDEX%:%TEST_COUNT%"  --exclude-tags='long_running'  -- numba.tests
+        python runtests.py -m 2 -b -j "%TEST_START_INDEX%:%TEST_COUNT%"  --exclude-tags='long_running'  -- numba.tests
       displayName: 'Test slice of test files'
