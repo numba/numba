@@ -45,6 +45,7 @@ jobs:
 
     - script: |
         call activate %CONDA_ENV%
+        set NUMBA_ENABLE_CUDASIM=1
         python -m numba.runtests -l
       displayName: 'List discovered tests'
 
