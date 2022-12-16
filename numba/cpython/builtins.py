@@ -573,6 +573,11 @@ def indval_min(indval1, indval2):
                     return indval2
             return indval1
         return min_impl
+    elif isinstance(indval1, types.scalars.Boolean) and \
+         isinstance(indval2, types.scalars.Boolean):
+        def bool_min_impl(indval1, indval2):
+            return indval1 and indval2
+        return bool_min_impl
 
 
 @overload(max)
@@ -602,6 +607,11 @@ def indval_max(indval1, indval2):
                     return indval2
             return indval1
         return max_impl
+    elif isinstance(indval1, types.scalars.Boolean) and \
+         isinstance(indval2, types.scalars.Boolean):
+        def bool_max_impl(indval1, indval2):
+            return indval1 or indval2
+        return bool_max_impl
 
 
 greater_than = register_jitable(lambda a, b: a > b)

@@ -838,6 +838,27 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.check_min_max_invalid_types(min_usecase1, flags=no_pyobj_flags)
 
+    def check_minmax_bool1(self, pyfunc, flags):
+        cr = compile_isolated(pyfunc, (types.bool_, types.bool_), flags=flags)
+        cfunc = cr.entry_point
+
+        x_operands = [False, True]
+        y_operands = [False, True]
+        for x, y in itertools.product(x_operands, y_operands):
+            self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
+
+    def test_max_bool1(self, flags=enable_pyobj_flags):
+        """
+        max(*args)
+        """
+        self.check_minmax_bool1(max_usecase1, flags)
+
+    def test_min_bool1(self, flags=enable_pyobj_flags):
+        """
+        min(*args)
+        """
+        self.check_minmax_bool1(min_usecase1, flags)
+
     # Test that max(1) and min(1) fail
 
     def check_min_max_unary_non_iterable(self, pyfunc, flags=enable_pyobj_flags):
