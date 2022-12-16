@@ -68,6 +68,9 @@ from numba.cpython import slicing
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L84-L85    # noqa: E501
 _MAX_UNICODE = 0x10ffff
 
+# https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/stringlib/fastsearch.h#L31    # noqa: E501
+_BLOOM_WIDTH = types.intp.bitwidth
+
 # DATA MODEL
 
 
@@ -591,6 +594,116 @@ def unicode_sub_check_type(ty, name):
         raise TypingError(msg)
 
 
+# FAST SEARCH algorithm implementation from cpython
+
+@register_jitable
+def _bloom_add(mask, ch):
+    mask |= (1 << (ch & (_BLOOM_WIDTH - 1)))
+    return mask
+
+
+@register_jitable
+def _bloom_check(mask, ch):
+    return mask & (1 << (ch & (_BLOOM_WIDTH - 1)))
+
+
+# https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/stringlib/fastsearch.h#L550    # noqa: E501
+@register_jitable
+def _default_find(data, substr, start, end):
+    """Left finder."""
+    m = len(substr)
+    if m == 0:
+        return start
+
+    gap = mlast = m - 1
+    last = _get_code_point(substr, mlast)
+
+    zero = types.intp(0)
+    mask = _bloom_add(zero, last)
+    for i in range(mlast):
+        ch = _get_code_point(substr, i)
+        mask = _bloom_add(mask, ch)
+        if ch == last:
+            gap = mlast - i - 1
+
+    i = start
+    while i <= end - m:
+        ch = _get_code_point(data, mlast + i)
+        if ch == last:
+            j = 0
+            while j < mlast:
+                haystack_ch = _get_code_point(data, i + j)
+                needle_ch = _get_code_point(substr, j)
+                if haystack_ch != needle_ch:
+                    break
+                j += 1
+            if j == mlast:
+                # got a match
+                return i
+
+            ch = _get_code_point(data, mlast + i + 1)
+            if _bloom_check(mask, ch) == 0:
+                i += m
+            else:
+                i += gap
+        else:
+            ch = _get_code_point(data, mlast + i + 1)
+            if _bloom_check(mask, ch) == 0:
+                i += m
+        i += 1
+
+    return -1
+
+
+@register_jitable
+def _default_rfind(data, substr, start, end):
+    """Right finder."""
+    m = len(substr)
+    if m == 0:
+        return end
+
+    skip = mlast = m - 1
+    mfirst = _get_code_point(substr, 0)
+    mask = _bloom_add(0, mfirst)
+    i = mlast
+    while i > 0:
+        ch = _get_code_point(substr, i)
+        mask = _bloom_add(mask, ch)
+        if ch == mfirst:
+            skip = i - 1
+        i -= 1
+
+    i = end - m
+    while i >= start:
+        ch = _get_code_point(data, i)
+        if ch == mfirst:
+            j = mlast
+            while j > 0:
+                haystack_ch = _get_code_point(data, i + j)
+                needle_ch = _get_code_point(substr, j)
+                if haystack_ch != needle_ch:
+                    break
+                j -= 1
+
+            if j == 0:
+                # got a match
+                return i
+
+            ch = _get_code_point(data, i - 1)
+            if i > start and _bloom_check(mask, ch) == 0:
+                i -= m
+            else:
+                i -= skip
+
+        else:
+            ch = _get_code_point(data, i - 1)
+            if i > start and _bloom_check(mask, ch) == 0:
+                i -= m
+        i -= 1
+
+    return -1
+
+
 def generate_finder(find_func):
     """Generate finder either left or right."""
     def impl(data, substr, start=None, end=None):
@@ -610,30 +723,8 @@ def generate_finder(find_func):
     return impl
 
 
-@register_jitable
-def _finder(data, substr, start, end):
-    """Left finder."""
-    if len(substr) == 0:
-        return start
-    for i in range(start, min(len(data), end) - len(substr) + 1):
-        if _cmp_region(data, i, substr, 0, len(substr)) == 0:
-            return i
-    return -1
-
-
-@register_jitable
-def _rfinder(data, substr, start, end):
-    """Right finder."""
-    if len(substr) == 0:
-        return end
-    for i in range(min(len(data), end) - len(substr), start - 1, -1):
-        if _cmp_region(data, i, substr, 0, len(substr)) == 0:
-            return i
-    return -1
-
-
-_find = register_jitable(generate_finder(_finder))
-_rfind = register_jitable(generate_finder(_rfinder))
+_find = register_jitable(generate_finder(_default_find))
+_rfind = register_jitable(generate_finder(_default_rfind))
 
 
 @overload_method(types.UnicodeType, 'find')
