@@ -62,7 +62,10 @@ nrt_flags = Flags()
 nrt_flags.nrt = True
 
 
-tag = testing.make_tag_decorator(['important', 'long_running'])
+tag = testing.make_tag_decorator(['important', 'long_running', 'always_test'])
+
+# Use to mark a test as a test that must always run when sharded
+always_test = tag('always_test')
 
 _32bit = sys.maxsize <= 2 ** 32
 is_parfors_unsupported = _32bit
