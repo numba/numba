@@ -9,7 +9,7 @@ from itertools import product
 import numpy as np
 
 from numba import njit, typeof, literally, prange
-from numba.core import types, ir, ir_utils, cgutils, errors
+from numba.core import types, ir, ir_utils, cgutils, errors, utils
 from numba.core.extending import (
     overload,
     overload_method,
@@ -28,7 +28,7 @@ from numba.core.cpu import InlineOptions
 from numba.core.compiler import DefaultPassBuilder, CompilerBase
 from numba.core.typed_passes import InlineOverloads
 from numba.core.typing import signature
-from numba.tests.support import (TestCase, unittest, skip_py38_or_later,
+from numba.tests.support import (TestCase, unittest,
                                  MemoryLeakMixin, IRPreservingTestPipeline,
                                  skip_parfors_unsupported,
                                  ignore_internal_warnings)
@@ -438,7 +438,6 @@ class TestFunctionInlining(MemoryLeakMixin, InliningBase):
 
         self.check(impl, inline_expect={'foo': True}, block_count=1)
 
-    @skip_py38_or_later
     def test_inline_involved(self):
 
         fortran = njit(inline='always')(_gen_involved())
@@ -471,8 +470,16 @@ class TestFunctionInlining(MemoryLeakMixin, InliningBase):
                 return foo(z) + 7 + x
             return bar(z + 2)
 
+        # block count changes with Python version due to bytecode differences.
+        if utils.PYVERSION in ((3, 8), (3, 9)):
+            bc = 33
+        elif utils.PYVERSION == (3, 10):
+            bc = 35
+        else:
+            raise ValueError(f"Unsupported Python version: {utils.PYVERSION}")
+
         self.check(impl, inline_expect={'foo': True, 'boz': True,
-                                        'fortran': True}, block_count=37)
+                                        'fortran': True}, block_count=bc)
 
     def test_inline_renaming_scheme(self):
         # See #7380, this checks that inlined variables have a name derived from

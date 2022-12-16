@@ -137,8 +137,8 @@ def _ensure_critical_deps():
     from numba.np.numpy_support import numpy_version
     from numba.core.utils import PYVERSION
 
-    if PYVERSION < (3, 7):
-        msg = ("Numba needs Python 3.7 or greater. Got Python "
+    if PYVERSION < (3, 8):
+        msg = ("Numba needs Python 3.8 or greater. Got Python "
                f"{PYVERSION[0]}.{PYVERSION[1]}.")
         raise ImportError(msg)
 

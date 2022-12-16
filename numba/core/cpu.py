@@ -1,4 +1,5 @@
 import platform
+from functools import cached_property
 
 import llvmlite.binding as ll
 from llvmlite import ir

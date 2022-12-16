@@ -14,7 +14,6 @@ from numba.core import errors, types
 from numba.core.dispatcher import Dispatcher
 from numba.core.errors import LoweringError, TypingError
 from numba.core.runtime.nrt import MemInfo
-from numba.core.utils import PYVERSION
 from numba.experimental import jitclass
 from numba.experimental.jitclass import _box
 from numba.experimental.jitclass.base import JitClassType
@@ -1154,6 +1153,28 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(pyfunc(Bar(123)), cfunc(Bar(123)))
         self.assertEqual(pyfunc(0), cfunc(0))
 
+    def test_jitclass_unsupported_dunder(self):
+        with self.assertRaises(TypeError) as e:
+            @jitclass
+            class Foo(object):
+                def __init__(self):
+                    return
+
+                def __enter__(self):
+                    return None
+            Foo()
+        self.assertIn("Method '__enter__' is not supported.", str(e.exception))
+
+    def test_modulename(self):
+        @jitclass
+        class TestModname(object):
+            def __init__(self):
+                self.x = 12
+
+        thisModule = __name__
+        classModule = TestModname.__module__
+        self.assertEqual(thisModule, classModule)
+
 
 class TestJitClassOverloads(MemoryLeakMixin, TestCase):
 
@@ -1454,32 +1475,12 @@ class TestJitClassOverloads(MemoryLeakMixin, TestCase):
 
         obj = IndexClass()
 
-        if PYVERSION >= (3, 8):
-            self.assertSame(py_c(obj), complex(1))
-            self.assertSame(jit_c(obj), complex(1))
-            self.assertSame(py_f(obj), 1.)
-            self.assertSame(jit_f(obj), 1.)
-            self.assertSame(py_i(obj), 1)
-            self.assertSame(jit_i(obj), 1)
-        else:
-            with self.assertRaises(TypeError) as e:
-                py_c(obj)
-            self.assertIn("complex", str(e.exception))
-            with self.assertRaises(TypingError) as e:
-                jit_c(obj)
-            self.assertIn("complex", str(e.exception))
-            with self.assertRaises(TypeError) as e:
-                py_f(obj)
-            self.assertIn("float", str(e.exception))
-            with self.assertRaises(TypingError) as e:
-                jit_f(obj)
-            self.assertIn("float", str(e.exception))
-            with self.assertRaises(TypeError) as e:
-                py_i(obj)
-            self.assertIn("int", str(e.exception))
-            with self.assertRaises(TypingError) as e:
-                jit_i(obj)
-            self.assertIn("int", str(e.exception))
+        self.assertSame(py_c(obj), complex(1))
+        self.assertSame(jit_c(obj), complex(1))
+        self.assertSame(py_f(obj), 1.)
+        self.assertSame(jit_f(obj), 1.)
+        self.assertSame(py_i(obj), 1)
+        self.assertSame(jit_i(obj), 1)
 
         @jitclass([])
         class FloatIntIndexClass:

@@ -220,8 +220,6 @@ Misc Support
   patterns in LLVM IR
 - :ghfile:`numba/core/utils.py` - Python 2 backports of Python 3 functionality
   (also imports local copy of ``six``)
-- :ghfile:`numba/core/overload_glue.py` - Functions for wrapping split typing
-  and lowering API use cases into overloads.
 - :ghfile:`numba/misc/appdirs.py` - Vendored package for determining application
   config directories on every platform
 - :ghfile:`numba/core/compiler_lock.py` - Global compiler lock because Numba's

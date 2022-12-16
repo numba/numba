@@ -14,7 +14,6 @@ from numba.np.numpy_support import (ufunc_find_matching_loop,
 from numba.core.errors import (TypingError, NumbaPerformanceWarning,
                                NumbaTypeError, NumbaAssertionError)
 from numba import pndindex
-from numba.core.overload_glue import glue_typing
 
 registry = Registry()
 infer = registry.register
@@ -684,41 +683,3 @@ class NdIndex(AbstractTemplate):
         if all(isinstance(x, types.Integer) for x in shape):
             iterator_type = types.NumpyNdIndexType(len(shape))
             return signature(iterator_type, *args)
-
-
-@glue_typing(np.where)
-class Where(AbstractTemplate):
-
-    def generic(self, args, kws):
-        assert not kws
-
-        if len(args) == 1:
-            # 0-dim arrays return one result array
-            ary = args[0]
-            ndim = max(ary.ndim, 1)
-            retty = types.UniTuple(types.Array(types.intp, 1, 'C'), ndim)
-            return signature(retty, ary)
-
-        elif len(args) == 3:
-            cond, x, y = args
-            retdty = from_dtype(np.promote_types(
-                        as_dtype(getattr(args[1], 'dtype', args[1])),
-                        as_dtype(getattr(args[2], 'dtype', args[2]))))
-            if isinstance(cond, types.Array):
-                # array where()
-                if isinstance(x, types.Array) and isinstance(y, types.Array):
-                    if (cond.ndim == x.ndim == y.ndim):
-                        if x.layout == y.layout == cond.layout:
-                            retty = types.Array(retdty, x.ndim, x.layout)
-                        else:
-                            retty = types.Array(retdty, x.ndim, 'C')
-                        return signature(retty, *args)
-                else:
-                    # x and y both scalar
-                    retty = types.Array(retdty, cond.ndim, cond.layout)
-                    return signature(retty, *args)
-            else:
-                # scalar where()
-                if not isinstance(x, types.Array):
-                    retty = types.Array(retdty, 0, 'C')
-                    return signature(retty, *args)

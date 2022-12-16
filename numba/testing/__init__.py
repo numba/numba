@@ -59,3 +59,9 @@ def run_tests(argv=None, defaultTest=None, topleveldir=None,
                             verbosity=verbosity,
                             nomultiproc=nomultiproc)
     return prog.result
+
+
+def always_test(cls, value=True):
+    """Makes a test class always run when sharded"""
+    setattr(cls, "always_test", value)
+    return cls

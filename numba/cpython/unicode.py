@@ -20,7 +20,7 @@ from numba.core.extending import (
 from numba.core.imputils import (lower_constant, lower_cast, lower_builtin,
                                  iternext_impl, impl_ret_new_ref, RefType)
 from numba.core.datamodel import register_default, StructModel
-from numba.core import utils, types, cgutils
+from numba.core import types, cgutils
 from numba.core.pythonapi import (
     PY_UNICODE_1BYTE_KIND,
     PY_UNICODE_2BYTE_KIND,
@@ -64,8 +64,6 @@ from numba.cpython.unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,
                                            _PyUnicode_IsDecimalDigit)
 from numba.cpython import slicing
 
-
-_py38_or_later = utils.PYVERSION >= (3, 8)
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L84-L85    # noqa: E501
 _MAX_UNICODE = 0x10ffff
@@ -2256,11 +2254,7 @@ def _unicode_capitalize(data, length, res, maxchars):
     mapped = np.zeros(3, dtype=_Py_UCS4)
     code_point = _get_code_point(data, 0)
 
-    # https://github.com/python/cpython/commit/b015fc86f7b1f35283804bfee788cce0a5495df7/Objects/unicodeobject.c#diff-220e5da0d1c8abf508b25c02da6ca16c    # noqa: E501
-    if _py38_or_later:
-        n_res = _PyUnicode_ToTitleFull(code_point, mapped)
-    else:
-        n_res = _PyUnicode_ToUpperFull(code_point, mapped)
+    n_res = _PyUnicode_ToTitleFull(code_point, mapped)
 
     for m in mapped[:n_res]:
         maxchar = max(maxchar, m)
