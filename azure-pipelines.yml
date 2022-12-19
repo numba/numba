@@ -71,7 +71,6 @@ jobs:
         PYTHON: '3.8'
         NUMPY: '1.24.0rc2'
         CONDA_ENV: azure_ci
-        TEST_PICKLE5: yes
         TEST_START_INDEX: 8
       py38_np124_svml:
         PYTHON: '3.8'

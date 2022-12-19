@@ -26,6 +26,7 @@ from contextlib import contextmanager
 import uuid
 import importlib
 import types as pytypes
+from functools import cached_property
 
 import numpy as np
 
@@ -68,10 +69,6 @@ is_parfors_unsupported = _32bit
 skip_parfors_unsupported = unittest.skipIf(
     is_parfors_unsupported,
     'parfors not supported',
-)
-skip_py38_or_later = unittest.skipIf(
-    utils.PYVERSION >= (3, 8),
-    "unsupported on py3.8 or later"
 )
 
 skip_unless_py10_or_later = unittest.skipUnless(
@@ -213,7 +210,7 @@ class TestCase(unittest.TestCase):
 
     # A random state yielding the same random numbers for any test case.
     # Use as `self.random.<method name>`
-    @utils.cached_property
+    @cached_property
     def random(self):
         return np.random.RandomState(42)
 
@@ -673,32 +670,6 @@ def compile_function(name, code, globs):
     ns = {}
     eval(co, globs, ns)
     return ns[name]
-
-def tweak_code(func, codestring=None, consts=None):
-    """
-    Tweak the code object of the given function by replacing its
-    *codestring* (a bytes object) and *consts* tuple, optionally.
-    """
-    co = func.__code__
-    tp = type(co)
-    if codestring is None:
-        codestring = co.co_code
-    if consts is None:
-        consts = co.co_consts
-    if utils.PYVERSION >= (3, 8):
-        new_code = tp(co.co_argcount, co.co_posonlyargcount,
-                      co.co_kwonlyargcount, co.co_nlocals,
-                      co.co_stacksize, co.co_flags, codestring,
-                      consts, co.co_names, co.co_varnames,
-                      co.co_filename, co.co_name, co.co_firstlineno,
-                      co.co_lnotab)
-    else:
-        new_code = tp(co.co_argcount, co.co_kwonlyargcount, co.co_nlocals,
-                      co.co_stacksize, co.co_flags, codestring,
-                      consts, co.co_names, co.co_varnames,
-                      co.co_filename, co.co_name, co.co_firstlineno,
-                      co.co_lnotab)
-    func.__code__ = new_code
 
 
 _trashcan_dir = 'numba-tests'
