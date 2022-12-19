@@ -6,6 +6,7 @@ Lowering implementation for object mode.
 import builtins
 import operator
 import inspect
+from functools import cached_property
 
 import llvmlite.ir
 
@@ -171,7 +172,7 @@ class PyLower(BaseLower):
             msg = f"{type(inst)}, {inst}"
             raise NumbaNotImplementedError(msg)
 
-    @utils.cached_property
+    @cached_property
     def _omitted_typobj(self):
         """Return a `OmittedArg` type instance as a LLVM value suitable for
         testing at runtime.

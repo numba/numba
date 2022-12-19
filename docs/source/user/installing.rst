@@ -5,7 +5,7 @@ Installation
 Compatibility
 -------------
 
-Numba is compatible with Python 3.7--3.10, and NumPy versions 1.18 or later.
+Numba is compatible with Python 3.8--3.10, and NumPy versions 1.18 or later.
 
 Our supported platforms are:
 
@@ -229,8 +229,6 @@ vary with target operating system and hardware. The following lists them all
     inspection. `See here <https://github.com/radareorg/radare2>`_ for
     information on obtaining and installing.
   * ``graphviz`` - for some CFG inspection functionality.
-  * ``pickle5`` - provides Python 3.8 pickling features for faster pickling in
-    Python 3.7.
   * ``typeguard`` - used by ``runtests.py`` for
     :ref:`runtime type-checking <type_anno_check>`.
   * ``cuda-python`` - The NVIDIA CUDA Python bindings. See :ref:`cuda-bindings`.

@@ -7,6 +7,7 @@ import collections
 import contextlib
 import math
 import operator
+from functools import cached_property
 
 from llvmlite import ir
 from numba.core import types, typing, cgutils
@@ -14,7 +15,6 @@ from numba.core.imputils import (lower_builtin, lower_cast,
                                     iternext_impl, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked,
                                     for_iter, call_len, RefType)
-from numba.core.utils import cached_property
 from numba.misc import quicksort
 from numba.cpython import slicing
 from numba.core.errors import NumbaValueError, TypingError
@@ -1138,9 +1138,9 @@ class SetInstance(object):
         )
         # create type-specific name
         fname = f".dtor.set.{self._ty.dtype}"
-    
+
         fn = cgutils.get_or_insert_function(module, fnty, name=fname)
-    
+
         if fn.is_declaration:
             # Set linkage
             fn.linkage = 'linkonce_odr'
@@ -1151,7 +1151,7 @@ class SetInstance(object):
                 entry = loop.entry
                 context.nrt.decref(builder, self._ty.dtype, entry.key)
             builder.ret_void()
-    
+
         return fn
 
     def incref_value(self, val):

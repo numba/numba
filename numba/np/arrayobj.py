@@ -13,7 +13,7 @@ from llvmlite.ir import Constant
 import numpy as np
 
 from numba import pndindex, literal_unroll
-from numba.core import types, utils, typing, errors, cgutils, extending
+from numba.core import types, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, carray, farray, is_contiguous,
                                     is_fortran, check_is_integer,
                                     type_is_scalar)
@@ -1533,6 +1533,16 @@ def ol_numpy_broadcast_shapes(*args):
 
 if numpy_version >= (1, 20):
     overload(np.broadcast_shapes)(ol_numpy_broadcast_shapes)
+
+
+def __broadcast_shapes(*args):
+    pass
+
+
+# np.broadcast_shapes is only available on NumPy >= 1.20
+# this quick hack allow us to use np.broadcast_shapes internally without
+# having to check if it exists in the NumPy module
+overload(__broadcast_shapes)(ol_numpy_broadcast_shapes)
 
 
 @overload(np.broadcast_arrays)
@@ -3188,7 +3198,7 @@ def make_nditer_cls(nditerty):
         def set_member_ptr(self, ptr):
             setattr(self.nditer, self.member_name, ptr)
 
-        @utils.cached_property
+        @functools.cached_property
         def member_ptr(self):
             return getattr(self.nditer, self.member_name)
 
@@ -3280,7 +3290,7 @@ def make_nditer_cls(nditerty):
         so indices and shapes arrays have to be reversed as well.
         """
 
-        @utils.cached_property
+        @functools.cached_property
         def subiters(self):
             l = []
             factories = {'flat': FlatSubIter if nditerty.need_shaped_indexing
