@@ -4868,11 +4868,18 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertIn("dimensions don't match", str(raises.exception))
 
     def test_nan_to_num(self):
+        # Test cases are from
+        # https://github.com/numpy/numpy/blob/8ff45c5bb520db04af8720bf1d34a392a8d2561a/numpy/lib/tests/test_type_check.py#L350-L452
         values = [
             np.nan,
             1,
             1.1,
+            1+1j,
+            complex(-np.inf, np.nan),
+            complex(np.nan, np.nan),
             np.array([1], dtype=int),
+            np.array([complex(-np.inf, np.inf), complex(1, np.nan),
+                      complex(np.nan, 1), complex(np.inf, - np.inf)]),
             np.array([0.1, 1.0, 0.4]),
             np.array([1, 2, 3]),
             np.array([[0.1, 1.0, 0.4], [0.4, 1.2, 4.0]]),
@@ -4892,14 +4899,17 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(expected, got)
 
     def test_nan_to_num_copy_false(self):
-        # Check that copy=False operates in-place
-        x = np.asarray([0.1, 0.4, np.nan])
+        # Check that copy=False operates in-place.
         cfunc = njit(nan_to_num)
 
+        x = np.asarray([0.1, 0.4, np.nan])
         expected = 1.0
         cfunc(x, copy=False, nan=expected)
-
         self.assertPreciseEqual(x[-1], expected)
+
+        x_complex = np.asarray([0.1, 0.4, complex(np.nan, np.nan)])
+        cfunc(x_complex, copy=False, nan=expected)
+        self.assertPreciseEqual(x_complex[-1], 1. + 1.j)
 
     def test_nan_to_num_invalid_argument(self):
         cfunc = njit(nan_to_num)
@@ -4908,14 +4918,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             (
                 "invalid_input",
                 "The first argument must be a scalar or an array-like"
-            ),
-            (
-                np.array([0.1 + 2j, np.nan]),
-                "Only Integers and Floats are accepted"
-            ),
-            (
-                0.1 + 2j,
-                "Only Integers and Floats are accepted"
             )
         ]
 

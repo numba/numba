@@ -6405,8 +6405,15 @@ def nan_to_num_impl(x, copy=True, nan=0.0):
                 elif np.isposinf(x):
                     return np.finfo(np.float64).max
                 return x
+        elif isinstance(x, types.Complex):
+            def impl(x, copy=True, nan=0.0):
+                r = np.nan_to_num(x.real, copy=copy, nan=nan)
+                c = np.nan_to_num(x.imag, copy=copy, nan=nan)
+                return complex(r, c)
         else:
-            raise errors.TypingError("Only Integers and Floats are accepted")
+            raise errors.TypingError(
+                "Only Integer, Float, and Complex values are accepted"
+            )
 
     elif type_can_asarray(x):
         if isinstance(x.dtype, types.Integer):
@@ -6430,8 +6437,18 @@ def nan_to_num_impl(x, copy=True, nan=0.0):
                     elif np.isposinf(output_flat[i]):
                         output_flat[i] = max_inf
                 return output
+        elif isinstance(x.dtype, types.Complex):
+            def impl(x, copy=True, nan=0.0):
+                x_ = np.asarray(x)
+                output = np.copy(x_) if copy else x_
+
+                np.nan_to_num(output.real, copy=False, nan=nan)
+                np.nan_to_num(output.imag, copy=False, nan=nan)
+                return output
         else:
-            raise errors.TypingError("Only Integers and Floats are accepted")
+            raise errors.TypingError(
+                "Only Integer, Float, and Complex values are accepted"
+            )
     else:
         raise errors.TypingError("The first argument must be a scalar or an "
                                  "array-like")
