@@ -4879,7 +4879,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             complex(np.nan, np.nan),
             np.array([1], dtype=int),
             np.array([complex(-np.inf, np.inf), complex(1, np.nan),
-                      complex(np.nan, 1), complex(np.inf, - np.inf)]),
+                      complex(np.nan, 1), complex(np.inf, -np.inf)]),
             np.array([0.1, 1.0, 0.4]),
             np.array([1, 2, 3]),
             np.array([[0.1, 1.0, 0.4], [0.4, 1.2, 4.0]]),
@@ -4914,17 +4914,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_nan_to_num_invalid_argument(self):
         cfunc = njit(nan_to_num)
 
-        invalid_inputs = [
-            (
-                "invalid_input",
-                "The first argument must be a scalar or an array-like"
-            )
-        ]
-
-        for value, msg in invalid_inputs:
-            with self.assertTypingError() as raises:
-                cfunc(value)
-            self.assertIn(msg, str(raises.exception))
+        with self.assertTypingError() as raises:
+            cfunc("invalid_input")
+        self.assertIn("The first argument must be a scalar or an array-like",
+                      str(raises.exception))
 
 
 class TestNPMachineParameters(TestCase):
