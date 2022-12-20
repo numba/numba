@@ -4874,7 +4874,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             np.nan,
             1,
             1.1,
-            1+1j,
+            1 + 1j,
             complex(-np.inf, np.nan),
             complex(np.nan, np.nan),
             np.array([1], dtype=int),
