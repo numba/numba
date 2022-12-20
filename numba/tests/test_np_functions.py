@@ -4907,7 +4907,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc(x, copy=False, nan=expected)
         self.assertPreciseEqual(x[-1], expected)
 
-        # NumPy scalar
         x = np.asarray(np.nan)
         cfunc(x, copy=False, nan=expected)
         self.assertPreciseEqual(x, np.asarray(expected))
