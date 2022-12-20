@@ -4902,12 +4902,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # Check that copy=False operates in-place.
         cfunc = njit(nan_to_num)
 
-        x = np.asarray([0.1, 0.4, np.nan])
+        x = np.array([0.1, 0.4, np.nan])
         expected = 1.0
         cfunc(x, copy=False, nan=expected)
         self.assertPreciseEqual(x[-1], expected)
 
-        x_complex = np.asarray([0.1, 0.4, complex(np.nan, np.nan)])
+        x_complex = np.array([0.1, 0.4, complex(np.nan, np.nan)])
         cfunc(x_complex, copy=False, nan=expected)
         self.assertPreciseEqual(x_complex[-1], 1. + 1.j)
 
