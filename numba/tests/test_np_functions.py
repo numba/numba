@@ -4907,10 +4907,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc(x, copy=False, nan=expected)
         self.assertPreciseEqual(x[-1], expected)
 
-        x = np.asarray(np.nan)
-        cfunc(x, copy=False, nan=expected)
-        self.assertPreciseEqual(x, np.asarray(expected))
-
         x_complex = np.asarray([0.1, 0.4, complex(np.nan, np.nan)])
         cfunc(x_complex, copy=False, nan=expected)
         self.assertPreciseEqual(x_complex[-1], 1. + 1.j)
