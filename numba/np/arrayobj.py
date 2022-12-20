@@ -6401,14 +6401,14 @@ def nan_to_num_impl(x, copy=True, nan=0.0):
                 if np.isnan(x):
                     return nan
                 elif np.isneginf(x):
-                    return np.finfo(np.float64).min
+                    return np.finfo(type(x)).min
                 elif np.isposinf(x):
-                    return np.finfo(np.float64).max
+                    return np.finfo(type(x)).max
                 return x
         elif isinstance(x, types.Complex):
             def impl(x, copy=True, nan=0.0):
-                r = np.nan_to_num(x.real, copy=copy, nan=nan)
-                c = np.nan_to_num(x.imag, copy=copy, nan=nan)
+                r = np.nan_to_num(x.real, nan=nan)
+                c = np.nan_to_num(x.imag, nan=nan)
                 return complex(r, c)
         else:
             raise errors.TypingError(
