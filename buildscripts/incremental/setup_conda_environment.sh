@@ -62,7 +62,7 @@ elif  [[ $(uname) == Darwin ]]; then
 fi
 
 # Install NumPy
-$PIP_INSTALL numpy==$NUMPY
+$PIP_INSTALL --pre numpy==$NUMPY
 
 # Install latest correct build
 $CONDA_INSTALL -c numba/label/dev llvmlite=0.40
