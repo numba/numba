@@ -576,11 +576,11 @@ def indval_min(indval1, indval2):
 
 
 @overload(min)
-def indval_min(indval1, indval2):
-    if isinstance(indval1, types.scalars.Boolean) and \
-         isinstance(indval2, types.scalars.Boolean):
-        def bool_min_impl(indval1, indval2):
-            return indval1 and indval2
+def boolval_min(val1, val2):
+    if isinstance(val1, types.scalars.Boolean) and \
+       isinstance(val2, types.scalars.Boolean):
+        def bool_min_impl(val1, val2):
+            return val1 and val2
         return bool_min_impl
 
 
@@ -614,11 +614,11 @@ def indval_max(indval1, indval2):
 
 
 @overload(max)
-def indval_max(indval1, indval2):
-    if isinstance(indval1, types.scalars.Boolean) and \
-         isinstance(indval2, types.scalars.Boolean):
-        def bool_max_impl(indval1, indval2):
-            return indval1 or indval2
+def boolval_max(val1, val2):
+    if isinstance(val1, types.scalars.Boolean) and \
+       isinstance(val2, types.scalars.Boolean):
+        def bool_max_impl(val1, val2):
+            return val1 or val2
         return bool_max_impl
 
 
