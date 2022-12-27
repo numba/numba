@@ -27,6 +27,16 @@ from numba import _dispatcher
 
 from warnings import warn
 
+cuda_fp16_math_funcs = ['hsin', 'hcos',
+                        'hlog', 'hlog10',
+                        'hlog2',
+                        'hexp', 'hexp10',
+                        'hexp2',
+                        'hsqrt', 'hrsqrt',
+                        'hfloor', 'hceil',
+                        'hrcp', 'hrint',
+                        'htrunc', 'hdiv']
+
 
 class _Kernel(serialize.ReduceMixin):
     '''
@@ -95,6 +105,17 @@ class _Kernel(serialize.ReduceMixin):
         # We need to link against cudadevrt if grid sync is being used.
         if self.cooperative:
             link.append(get_cudalib('cudadevrt', static=True))
+
+        res = [fn for fn in cuda_fp16_math_funcs
+               if(f'__numba_wrapper_{fn}' in lib.get_asm_str())]
+
+        if res:
+            # Path to the source containing the foreign function
+
+            basedir = os.path.dirname(os.path.abspath(__file__))
+            functions_cu_path = os.path.join(basedir,
+                                             'cpp_function_wrappers.cu')
+            link.append(functions_cu_path)
 
         for filepath in link:
             lib.add_linking_file(filepath)
@@ -204,6 +225,13 @@ class _Kernel(serialize.ReduceMixin):
         The amount of shared memory used per block for this kernel.
         '''
         return self._codelibrary.get_cufunc().attrs.shared
+
+    @property
+    def local_mem_per_thread(self):
+        '''
+        The amount of local memory used per thread for this kernel.
+        '''
+        return self._codelibrary.get_cufunc().attrs.local
 
     def inspect_llvm(self):
         '''
@@ -747,6 +775,25 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
             return next(iter(self.overloads.values())).shared_mem_per_block
         else:
             return {sig: overload.shared_mem_per_block
+                    for sig, overload in self.overloads.items()}
+
+    def get_local_mem_per_thread(self, signature=None):
+        '''
+        Returns the size in bytes of local memory per thread
+        for this kernel.
+
+        :param signature: The signature of the compiled kernel to get local
+                          memory usage for. This may be omitted for a
+                          specialized kernel.
+        :return: The amount of local memory allocated by the compiled variant
+                 of the kernel for the given signature and current device.
+        '''
+        if signature is not None:
+            return self.overloads[signature.args].local_mem_per_thread
+        if self.specialized:
+            return next(iter(self.overloads.values())).local_mem_per_thread
+        else:
+            return {sig: overload.local_mem_per_thread
                     for sig, overload in self.overloads.items()}
 
     def get_call_template(self, args, kws):

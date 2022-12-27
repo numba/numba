@@ -7,6 +7,7 @@ import collections
 import contextlib
 import math
 import operator
+from functools import cached_property
 
 from llvmlite import ir
 from numba.core import types, typing, cgutils
@@ -14,11 +15,10 @@ from numba.core.imputils import (lower_builtin, lower_cast,
                                     iternext_impl, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked,
                                     for_iter, call_len, RefType)
-from numba.core.utils import cached_property
 from numba.misc import quicksort
 from numba.cpython import slicing
-from numba.extending import intrinsic
-from numba.core.errors import NumbaValueError
+from numba.core.errors import NumbaValueError, TypingError
+from numba.core.extending import overload, overload_method, intrinsic
 
 
 def get_payload_struct(context, builder, set_type, ptr):
@@ -101,6 +101,14 @@ def is_hash_used(context, builder, h):
     # Everything below DELETED is an used entry
     deleted = ir.Constant(h.type, DELETED)
     return builder.icmp_unsigned('<', h, deleted)
+
+
+def check_all_set(*args):
+    if not all([isinstance(typ, types.Set) for typ in args]):
+        raise TypingError(f"All arguments must be Sets, got {args}")
+
+    if not all([args[0].dtype == s.dtype for s in args]):
+        raise TypingError(f"All Sets must be of the same type, got {args}")
 
 
 SetLoop = collections.namedtuple('SetLoop', ('index', 'entry', 'do_break'))
@@ -1130,9 +1138,9 @@ class SetInstance(object):
         )
         # create type-specific name
         fname = f".dtor.set.{self._ty.dtype}"
-    
+
         fn = cgutils.get_or_insert_function(module, fnty, name=fname)
-    
+
         if fn.is_declaration:
             # Set linkage
             fn.linkage = 'linkonce_odr'
@@ -1143,7 +1151,7 @@ class SetInstance(object):
                 entry = loop.entry
                 context.nrt.decref(builder, self._ty.dtype, entry.key)
             builder.ret_void()
-    
+
         return fn
 
     def incref_value(self, val):
@@ -1298,51 +1306,106 @@ def set_add(context, builder, sig, args):
 
     return context.get_dummy_value()
 
-@lower_builtin("set.discard", types.Set, types.Any)
-def set_discard(context, builder, sig, args):
-    inst = SetInstance(context, builder, sig.args[0], args[0])
-    item = args[1]
-    inst.discard(item)
 
-    return context.get_dummy_value()
+@intrinsic
+def _set_discard(typingctx, s, item):
+    sig = types.none(s, item)
 
-@lower_builtin("set.pop", types.Set)
-def set_pop(context, builder, sig, args):
-    inst = SetInstance(context, builder, sig.args[0], args[0])
-    used = inst.payload.used
-    with builder.if_then(cgutils.is_null(builder, used), likely=False):
-        context.call_conv.return_user_exc(builder, KeyError,
-                                          ("set.pop(): empty set",))
+    def set_discard(context, builder, sig, args):
+        inst = SetInstance(context, builder, sig.args[0], args[0])
+        item = args[1]
+        inst.discard(item)
 
-    return inst.pop()
+        return context.get_dummy_value()
 
-@lower_builtin("set.remove", types.Set, types.Any)
-def set_remove(context, builder, sig, args):
-    inst = SetInstance(context, builder, sig.args[0], args[0])
-    item = args[1]
-    found = inst.discard(item)
-    with builder.if_then(builder.not_(found), likely=False):
-        context.call_conv.return_user_exc(builder, KeyError,
-                                          ("set.remove(): key not in set",))
+    return sig, set_discard
 
-    return context.get_dummy_value()
+
+@overload_method(types.Set, "discard")
+def ol_set_discard(s, item):
+    return lambda s, item: _set_discard(s, item)
+
+
+@intrinsic
+def _set_pop(typingctx, s):
+    sig = s.dtype(s)
+
+    def set_pop(context, builder, sig, args):
+        inst = SetInstance(context, builder, sig.args[0], args[0])
+        used = inst.payload.used
+        with builder.if_then(cgutils.is_null(builder, used), likely=False):
+            context.call_conv.return_user_exc(builder, KeyError,
+                                            ("set.pop(): empty set",))
+
+        return inst.pop()
+
+    return sig, set_pop
+
+
+@overload_method(types.Set, "pop")
+def ol_set_pop(s):
+    return lambda s: _set_pop(s)
+
+
+@intrinsic
+def _set_remove(typingctx, s, item):
+    sig = types.none(s, item)
+
+    def set_remove(context, builder, sig, args):
+        inst = SetInstance(context, builder, sig.args[0], args[0])
+        item = args[1]
+        found = inst.discard(item)
+        with builder.if_then(builder.not_(found), likely=False):
+            context.call_conv.return_user_exc(builder, KeyError,
+                                            ("set.remove(): key not in set",))
+
+        return context.get_dummy_value()
+
+    return sig, set_remove
+
+
+@overload_method(types.Set, "remove")
+def ol_set_remove(s, item):
+    if s.dtype == item:
+        return lambda s, item: _set_remove(s, item)
 
 
 # Mutating set operations
 
-@lower_builtin("set.clear", types.Set)
-def set_clear(context, builder, sig, args):
-    inst = SetInstance(context, builder, sig.args[0], args[0])
-    inst.clear()
-    return context.get_dummy_value()
+@intrinsic
+def _set_clear(typingctx, s):
+    sig = types.none(s)
 
-@lower_builtin("set.copy", types.Set)
-def set_copy(context, builder, sig, args):
-    inst = SetInstance(context, builder, sig.args[0], args[0])
-    other = inst.copy()
-    return impl_ret_new_ref(context, builder, sig.return_type, other.value)
+    def set_clear(context, builder, sig, args):
+        inst = SetInstance(context, builder, sig.args[0], args[0])
+        inst.clear()
+        return context.get_dummy_value()
 
-@lower_builtin("set.difference_update", types.Set, types.IterableType)
+    return sig, set_clear
+
+
+@overload_method(types.Set, "clear")
+def ol_set_clear(s):
+    return lambda s: _set_clear(s)
+
+
+@intrinsic
+def _set_copy(typingctx, s):
+    sig = s(s)
+
+    def set_copy(context, builder, sig, args):
+        inst = SetInstance(context, builder, sig.args[0], args[0])
+        other = inst.copy()
+        return impl_ret_new_ref(context, builder, sig.return_type, other.value)
+
+    return sig, set_copy
+
+
+@overload_method(types.Set, "copy")
+def ol_set_copy(s):
+    return lambda s: _set_copy(s)
+
+
 def set_difference_update(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
     other = SetInstance(context, builder, sig.args[1], args[1])
@@ -1351,23 +1414,56 @@ def set_difference_update(context, builder, sig, args):
 
     return context.get_dummy_value()
 
-@lower_builtin("set.intersection_update", types.Set, types.Set)
+
+@intrinsic
+def _set_difference_update(typingctx, a, b):
+    sig = types.none(a, b)
+    return sig, set_difference_update
+
+
+@overload_method(types.Set, "difference_update")
+def set_difference_update_impl(a, b):
+    check_all_set(a, b)
+    return lambda a, b: _set_difference_update(a, b)
+
+
 def set_intersection_update(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
     other = SetInstance(context, builder, sig.args[1], args[1])
-
     inst.intersect(other)
-
     return context.get_dummy_value()
 
-@lower_builtin("set.symmetric_difference_update", types.Set, types.Set)
+
+@intrinsic
+def _set_intersection_update(typingctx, a, b):
+    sig = types.none(a, b)
+    return sig, set_intersection_update
+
+
+@overload_method(types.Set, "intersection_update")
+def set_intersection_update_impl(a, b):
+    check_all_set(a, b)
+    return lambda a, b: _set_intersection_update(a, b)
+
+
 def set_symmetric_difference_update(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
     other = SetInstance(context, builder, sig.args[1], args[1])
-
     inst.symmetric_difference(other)
-
     return context.get_dummy_value()
+
+
+@intrinsic
+def _set_symmetric_difference_update(typingctx, a, b):
+    sig = types.none(a, b)
+    return sig, set_symmetric_difference_update
+
+
+@overload_method(types.Set, "symmetric_difference_update")
+def set_symmetric_difference_update_impl(a, b):
+    check_all_set(a, b)
+    return lambda a, b: _set_symmetric_difference_update(a, b)
+
 
 @lower_builtin("set.update", types.Set, types.IterableType)
 def set_update(context, builder, sig, args):
@@ -1399,34 +1495,50 @@ def set_update(context, builder, sig, args):
 
     return context.get_dummy_value()
 
+def gen_operator_impl(op, impl):
+    @intrinsic
+    def _set_operator_intr(typingctx, a, b):
+        sig = a(a, b)
+        def codegen(context, builder, sig, args):
+            assert sig.return_type == sig.args[0]
+            impl(context, builder, sig, args)
+            return impl_ret_borrowed(context, builder, sig.args[0], args[0])
+        return sig, codegen
+
+    @overload(op)
+    def _ol_set_operator(a, b):
+        check_all_set(a, b)
+        return lambda a, b: _set_operator_intr(a, b)
+
+
 for op_, op_impl in [
     (operator.iand, set_intersection_update),
     (operator.ior, set_update),
     (operator.isub, set_difference_update),
     (operator.ixor, set_symmetric_difference_update),
     ]:
-    @lower_builtin(op_, types.Set, types.Set)
-    def set_inplace(context, builder, sig, args, op_impl=op_impl):
-        assert sig.return_type == sig.args[0]
-        op_impl(context, builder, sig, args)
-        return impl_ret_borrowed(context, builder, sig.args[0], args[0])
+    gen_operator_impl(op_, op_impl)
 
 
 # Set operations creating a new set
 
-@lower_builtin(operator.sub, types.Set, types.Set)
-@lower_builtin("set.difference", types.Set, types.Set)
-def set_difference(context, builder, sig, args):
+@overload(operator.sub)
+@overload_method(types.Set, "difference")
+def impl_set_difference(a, b):
+    check_all_set(a, b)
+
     def difference_impl(a, b):
         s = a.copy()
         s.difference_update(b)
         return s
 
-    return context.compile_internal(builder, difference_impl, sig, args)
+    return difference_impl
 
-@lower_builtin(operator.and_, types.Set, types.Set)
-@lower_builtin("set.intersection", types.Set, types.Set)
-def set_intersection(context, builder, sig, args):
+@overload(operator.and_)
+@overload_method(types.Set, "intersection")
+def set_intersection(a, b):
+    check_all_set(a, b)
+
     def intersection_impl(a, b):
         if len(a) < len(b):
             s = a.copy()
@@ -1437,11 +1549,13 @@ def set_intersection(context, builder, sig, args):
             s.intersection_update(a)
             return s
 
-    return context.compile_internal(builder, intersection_impl, sig, args)
+    return intersection_impl
 
-@lower_builtin(operator.xor, types.Set, types.Set)
-@lower_builtin("set.symmetric_difference", types.Set, types.Set)
-def set_symmetric_difference(context, builder, sig, args):
+@overload(operator.xor)
+@overload_method(types.Set, "symmetric_difference")
+def set_symmetric_difference(a, b):
+    check_all_set(a, b)
+
     def symmetric_difference_impl(a, b):
         if len(a) > len(b):
             s = a.copy()
@@ -1452,12 +1566,13 @@ def set_symmetric_difference(context, builder, sig, args):
             s.symmetric_difference_update(a)
             return s
 
-    return context.compile_internal(builder, symmetric_difference_impl,
-                                    sig, args)
+    return symmetric_difference_impl
 
-@lower_builtin(operator.or_, types.Set, types.Set)
-@lower_builtin("set.union", types.Set, types.Set)
-def set_union(context, builder, sig, args):
+@overload(operator.or_)
+@overload_method(types.Set, "union")
+def set_union(a, b):
+    check_all_set(a, b)
+
     def union_impl(a, b):
         if len(a) > len(b):
             s = a.copy()
@@ -1468,61 +1583,114 @@ def set_union(context, builder, sig, args):
             s.update(a)
             return s
 
-    return context.compile_internal(builder, union_impl, sig, args)
+    return union_impl
 
 
 # Predicates
 
-@lower_builtin("set.isdisjoint", types.Set, types.Set)
-def set_isdisjoint(context, builder, sig, args):
-    inst = SetInstance(context, builder, sig.args[0], args[0])
-    other = SetInstance(context, builder, sig.args[1], args[1])
+@intrinsic
+def _set_isdisjoint(typingctx, a, b):
+    sig = types.boolean(a, b)
 
-    return inst.isdisjoint(other)
+    def codegen(context, builder, sig, args):
+        inst = SetInstance(context, builder, sig.args[0], args[0])
+        other = SetInstance(context, builder, sig.args[1], args[1])
 
-@lower_builtin(operator.le, types.Set, types.Set)
-@lower_builtin("set.issubset", types.Set, types.Set)
-def set_issubset(context, builder, sig, args):
-    inst = SetInstance(context, builder, sig.args[0], args[0])
-    other = SetInstance(context, builder, sig.args[1], args[1])
+        return inst.isdisjoint(other)
 
-    return inst.issubset(other)
+    return sig, codegen
 
-@lower_builtin(operator.ge, types.Set, types.Set)
-@lower_builtin("set.issuperset", types.Set, types.Set)
-def set_issuperset(context, builder, sig, args):
+
+@overload_method(types.Set, "isdisjoint")
+def set_isdisjoint(a, b):
+    check_all_set(a, b)
+
+    return lambda a, b: _set_isdisjoint(a, b)
+
+
+@intrinsic
+def _set_issubset(typingctx, a, b):
+    sig = types.boolean(a, b)
+
+    def codegen(context, builder, sig, args):
+        inst = SetInstance(context, builder, sig.args[0], args[0])
+        other = SetInstance(context, builder, sig.args[1], args[1])
+
+        return inst.issubset(other)
+
+    return sig, codegen
+
+@overload(operator.le)
+@overload_method(types.Set, "issubset")
+def set_issubset(a, b):
+    check_all_set(a, b)
+
+    return lambda a, b: _set_issubset(a, b)
+
+
+@overload(operator.ge)
+@overload_method(types.Set, "issuperset")
+def set_issuperset(a, b):
+    check_all_set(a, b)
+
     def superset_impl(a, b):
         return b.issubset(a)
 
-    return context.compile_internal(builder, superset_impl, sig, args)
+    return superset_impl
 
-@lower_builtin(operator.eq, types.Set, types.Set)
-def set_isdisjoint(context, builder, sig, args):
-    inst = SetInstance(context, builder, sig.args[0], args[0])
-    other = SetInstance(context, builder, sig.args[1], args[1])
+@intrinsic
+def _set_eq(typingctx, a, b):
+    sig = types.boolean(a, b)
 
-    return inst.equals(other)
+    def codegen(context, builder, sig, args):
+        inst = SetInstance(context, builder, sig.args[0], args[0])
+        other = SetInstance(context, builder, sig.args[1], args[1])
 
-@lower_builtin(operator.ne, types.Set, types.Set)
-def set_ne(context, builder, sig, args):
+        return inst.equals(other)
+
+    return sig, codegen
+
+@overload(operator.eq)
+def set_eq(a, b):
+    check_all_set(a, b)
+
+    return lambda a, b: _set_eq(a, b)
+
+@overload(operator.ne)
+def set_ne(a, b):
+    check_all_set(a, b)
+
     def ne_impl(a, b):
         return not a == b
 
-    return context.compile_internal(builder, ne_impl, sig, args)
+    return ne_impl
 
-@lower_builtin(operator.lt, types.Set, types.Set)
-def set_lt(context, builder, sig, args):
-    inst = SetInstance(context, builder, sig.args[0], args[0])
-    other = SetInstance(context, builder, sig.args[1], args[1])
+@intrinsic
+def _set_lt(typingctx, a, b):
+    sig = types.boolean(a, b)
 
-    return inst.issubset(other, strict=True)
+    def codegen(context, builder, sig, args):
+        inst = SetInstance(context, builder, sig.args[0], args[0])
+        other = SetInstance(context, builder, sig.args[1], args[1])
 
-@lower_builtin(operator.gt, types.Set, types.Set)
-def set_gt(context, builder, sig, args):
+        return inst.issubset(other, strict=True)
+
+    return sig, codegen
+
+@overload(operator.lt)
+def set_lt(a, b):
+    check_all_set(a, b)
+
+    return lambda a, b: _set_lt(a, b)
+
+@overload(operator.gt)
+def set_gt(a, b):
+    check_all_set(a, b)
+
     def gt_impl(a, b):
         return b < a
 
-    return context.compile_internal(builder, gt_impl, sig, args)
+    return gt_impl
 
 @lower_builtin(operator.is_, types.Set, types.Set)
 def set_is(context, builder, sig, args):

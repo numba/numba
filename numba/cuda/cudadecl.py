@@ -8,6 +8,7 @@ from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
 from numba.cuda.types import dim3, grid_group
 from numba.core.typeconv import Conversion
 from numba import cuda
+from numba.cuda.compiler import declare_device_function_template
 
 registry = Registry()
 register = registry.register
@@ -341,7 +342,6 @@ def _genfp16_binary_comparison(l_key):
         ]
     return Cuda_fp16_cmp
 
-
 # If multiple ConcreteTemplates provide typing for a single function, then
 # function resolution will pick the first compatible typing it finds even if it
 # involves inserting a cast that would be considered undesirable (in this
@@ -354,6 +354,8 @@ def _genfp16_binary_comparison(l_key):
 # This is tracked as Issue #7863 (https://github.com/numba/numba/issues/7863) -
 # once this is resolved it should be possible to replace this AbstractTemplate
 # with a ConcreteTemplate to simplify the logic.
+
+
 def _fp16_binary_operator(l_key, retty):
     @register_global(l_key)
     class Cuda_fp16_operator(AbstractTemplate):
@@ -420,6 +422,40 @@ Cuda_hle = _genfp16_binary_comparison(cuda.fp16.hle)
 _genfp16_comparison_operator(operator.le)
 Cuda_hlt = _genfp16_binary_comparison(cuda.fp16.hlt)
 _genfp16_comparison_operator(operator.lt)
+_genfp16_binary_operator(operator.truediv)
+_genfp16_binary_operator(operator.itruediv)
+
+
+def _resolve_wrapped_unary(fname):
+    decl = declare_device_function_template(f'__numba_wrapper_{fname}',
+                                            types.float16,
+                                            (types.float16,))
+    return types.Function(decl)
+
+
+def _resolve_wrapped_binary(fname):
+    decl = declare_device_function_template(f'__numba_wrapper_{fname}',
+                                            types.float16,
+                                            (types.float16, types.float16,))
+    return types.Function(decl)
+
+
+hsin_device = _resolve_wrapped_unary('hsin')
+hcos_device = _resolve_wrapped_unary('hcos')
+hlog_device = _resolve_wrapped_unary('hlog')
+hlog10_device = _resolve_wrapped_unary('hlog10')
+hlog2_device = _resolve_wrapped_unary('hlog2')
+hexp_device = _resolve_wrapped_unary('hexp')
+hexp10_device = _resolve_wrapped_unary('hexp10')
+hexp2_device = _resolve_wrapped_unary('hexp2')
+hsqrt_device = _resolve_wrapped_unary('hsqrt')
+hrsqrt_device = _resolve_wrapped_unary('hrsqrt')
+hfloor_device = _resolve_wrapped_unary('hfloor')
+hceil_device = _resolve_wrapped_unary('hceil')
+hrcp_device = _resolve_wrapped_unary('hrcp')
+hrint_device = _resolve_wrapped_unary('hrint')
+htrunc_device = _resolve_wrapped_unary('htrunc')
+hdiv_device = _resolve_wrapped_binary('hdiv')
 
 
 # generate atomic operations
@@ -580,6 +616,9 @@ class CudaFp16Template(AttributeTemplate):
     def resolve_hmul(self, mod):
         return types.Function(Cuda_hmul)
 
+    def resolve_hdiv(self, mod):
+        return hdiv_device
+
     def resolve_hneg(self, mod):
         return types.Function(Cuda_hneg)
 
@@ -588,6 +627,51 @@ class CudaFp16Template(AttributeTemplate):
 
     def resolve_hfma(self, mod):
         return types.Function(Cuda_hfma)
+
+    def resolve_hsin(self, mod):
+        return hsin_device
+
+    def resolve_hcos(self, mod):
+        return hcos_device
+
+    def resolve_hlog(self, mod):
+        return hlog_device
+
+    def resolve_hlog10(self, mod):
+        return hlog10_device
+
+    def resolve_hlog2(self, mod):
+        return hlog2_device
+
+    def resolve_hexp(self, mod):
+        return hexp_device
+
+    def resolve_hexp10(self, mod):
+        return hexp10_device
+
+    def resolve_hexp2(self, mod):
+        return hexp2_device
+
+    def resolve_hfloor(self, mod):
+        return hfloor_device
+
+    def resolve_hceil(self, mod):
+        return hceil_device
+
+    def resolve_hsqrt(self, mod):
+        return hsqrt_device
+
+    def resolve_hrsqrt(self, mod):
+        return hrsqrt_device
+
+    def resolve_hrcp(self, mod):
+        return hrcp_device
+
+    def resolve_hrint(self, mod):
+        return hrint_device
+
+    def resolve_htrunc(self, mod):
+        return htrunc_device
 
     def resolve_heq(self, mod):
         return types.Function(Cuda_heq)

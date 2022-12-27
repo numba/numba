@@ -244,6 +244,9 @@ def _typeof_dtype(val, c):
 
 @typeof_impl.register(np.ndarray)
 def _typeof_ndarray(val, c):
+    if isinstance(val, np.ma.MaskedArray):
+        msg = "Unsupported array type: numpy.ma.MaskedArray."
+        raise errors.NumbaTypeError(msg)
     try:
         dtype = numpy_support.from_dtype(val.dtype)
     except errors.NumbaNotImplementedError:

@@ -797,7 +797,7 @@ the line in which the access violation occurred is printed.
 
 Continuing the example as a debugging session demonstration, first ``index``
 can be printed, and it is evidently 1e9. Printing ``c`` shows that it is a
-structure, so the type needs looking up and it can be seen that is it an
+structure, so the type needs looking up and it can be seen that it is an
 ``array(float64, 1d, C)`` type. Given the segfault came from an invalid access
 it would be informative to check the number of items in the array and compare
 that to the index requested. Inspecting the ``nitems`` member of the structure
@@ -874,12 +874,13 @@ breakpoint was hit, and after a ``continue`` was issued, it broke again at line
 Debugging in parallel regions
 -----------------------------
 
-The follow example is quite involved, it executes with ``gdb`` instrumentation
-from the outset as per the example above, but it also uses threads and makes use
-of the breakpoint functionality. Further, the last iteration of the parallel
-section calls the function ``work``, which is actually just a binding to
-``glibc``'s ``free(3)`` in this case, but could equally be some involved
-function that is presenting a segfault for unknown reasons.
+The following example is quite involved, it executes with ``gdb``
+instrumentation from the outset as per the example above, but it also uses
+threads and makes use of the breakpoint functionality. Further, the last
+iteration of the parallel section calls the function ``work``, which is
+actually just a binding to ``glibc``'s ``free(3)`` in this case, but could
+equally be some involved function that is presenting a segfault for unknown
+reasons.
 
 .. code-block:: python
   :linenos:
