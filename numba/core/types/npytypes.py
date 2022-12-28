@@ -58,6 +58,9 @@ class UnicodeCharSeq(Type):
             # on.
             return Conversion.safe
 
+    def __repr__(self):
+        return f"UnicodeCharSeq({self.count})"
+
 
 _RecordField = collections.namedtuple(
     '_RecordField',
@@ -233,6 +236,18 @@ class Record(Type):
                           category=NumbaExperimentalFeatureWarning)
             return Conversion.safe
 
+    def __repr__(self):
+        fields = [f"('{f_name}', " +
+                  f"{{'type': {repr(f_info.type)}, " +
+                  f"'offset': {f_info.offset}, " +
+                  f"'alignment': {f_info.alignment}, " +
+                  f"'title': {f_info.title}, " +
+                  f"}}" +
+                  ")"
+                  for f_name, f_info in self.fields.items()
+                  ]
+        fields = "[" + ", ".join(fields) + "]"
+        return f"Record({fields}, {self.size}, {self.aligned})"
 
 class DType(DTypeSpec, Opaque):
     """
@@ -500,6 +515,11 @@ class Array(Buffer):
         """
         return np.ndarray
 
+    def __repr__(self):
+        return (
+            f"Array({self.dtype}, {self.ndim}, '{self.layout}', "
+            f"{not self.mutable}, aligned={self.aligned})"
+                )
 
 class ArrayCTypes(Type):
     """
@@ -591,6 +611,9 @@ class NestedArray(Array):
     @property
     def key(self):
         return self.dtype, self.shape
+
+    def __repr__(self):
+        return f"NestedArray({repr(self.dtype)}, {self.shape})"
 
 
 class NumPyRandomBitGeneratorType(Type):
