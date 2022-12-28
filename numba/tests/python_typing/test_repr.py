@@ -27,7 +27,6 @@ class MyTestCase(TestCase):
         rec_dtype = [("a", "f8"), ("b", "U8"), ("c", "i8", (2, 3))]
         nb_dict = Dict()
         nb_dict['a'] = 1
-        nb_list = List()
         # tests cases
         val_types_cases = [
             1,

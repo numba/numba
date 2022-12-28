@@ -476,6 +476,7 @@ class List(MutableSequence, InitialValue):
     def __repr__(self):
         return f"List({self.dtype}, {self.reflected})"
 
+
 class LiteralList(Literal, ConstSized, Hashable):
     """A heterogeneous immutable list (basically a tuple with list semantics).
     """
@@ -668,6 +669,7 @@ class ListType(IterableType):
 
     def __repr__(self):
         return f"ListType({self.item_type})"
+
 
 class ListTypeIterableType(SimpleIterableType):
     """List iterable type
