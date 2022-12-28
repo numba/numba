@@ -585,6 +585,9 @@ class Set(Container):
             if dtype is not None:
                 return Set(dtype, reflected)
 
+    def __repr__(self):
+        return f"Set({self.dtype}, {self.reflected})"
+
 
 class SetIter(BaseContainerIterator):
     """
@@ -663,6 +666,8 @@ class ListType(IterableType):
             if not other.is_precise():
                 return self
 
+    def __repr__(self):
+        return f"ListType({self.item_type})"
 
 class ListTypeIterableType(SimpleIterableType):
     """List iterable type
@@ -767,6 +772,9 @@ class DictType(IterableType, InitialValue):
 
     def __unliteral__(self):
         return DictType(self.key_type, self.value_type)
+
+    def __repr__(self):
+        return f"DictType({self.key_type}, {self.value_type})"
 
 
 class LiteralStrKeyDict(Literal, ConstSized, Hashable):
