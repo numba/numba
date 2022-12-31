@@ -1963,7 +1963,7 @@ class TestMisc(TestCase):
             is_jitted(guvectorize("void(float64[:])", "(m)")(foo))
         )
 
-    def test_overload_glue_arg_binding(self):
+    def test_overload_arg_binding(self):
         # See issue #7982, checks that calling a function with named args works
         # correctly irrespective of the order in which the names are supplied.
         @njit

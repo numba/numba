@@ -79,6 +79,17 @@ def simple_smem(ary, dty):
     ary[i] = sm[i]
 
 
+LMEM_SIZE = 1000
+
+
+def simple_lmem(A, B, dty):
+    C = cuda.local.array(LMEM_SIZE, dty)
+    for i in range(C.shape[0]):
+        C[i] = A[i]
+    for i in range(C.shape[0]):
+        B[i] = C[i]
+
+
 @skip_on_cudasim('Linking unsupported in the simulator')
 class TestLinker(CUDATestCase):
 
@@ -268,6 +279,23 @@ class TestLinker(CUDATestCase):
             np.zeros(100, dtype=np.int32), np.float64)
         shared_mem_size = compiled_specialized.get_shared_mem_per_block()
         self.assertEqual(shared_mem_size, 800)
+
+    def test_get_local_mem_per_thread(self):
+        sig = void(int32[::1], int32[::1], typeof(np.int32))
+        compiled = cuda.jit(sig)(simple_lmem)
+        shared_mem_size = compiled.get_local_mem_per_thread()
+        calc_size = np.dtype(np.int32).itemsize * LMEM_SIZE
+        self.assertGreaterEqual(shared_mem_size, calc_size)
+
+    def test_get_local_mem_per_specialized(self):
+        compiled = cuda.jit(simple_lmem)
+        compiled_specialized = compiled.specialize(
+            np.zeros(LMEM_SIZE, dtype=np.int32),
+            np.zeros(LMEM_SIZE, dtype=np.int32),
+            np.float64)
+        local_mem_size = compiled_specialized.get_local_mem_per_thread()
+        calc_size = np.dtype(np.float64).itemsize * LMEM_SIZE
+        self.assertGreaterEqual(local_mem_size, calc_size)
 
 
 if __name__ == '__main__':

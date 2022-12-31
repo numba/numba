@@ -12,8 +12,8 @@ jobs:
     name: macOS
     vmImage: macos-11
     matrix:
-      py37_np118:
-        PYTHON: '3.7'
+      py38_np118:
+        PYTHON: '3.8'
         NUMPY: '1.18'
         CONDA_ENV: 'azure_ci'
         TEST_START_INDEX: 0
@@ -29,8 +29,8 @@ jobs:
     name: Linux
     vmImage: ubuntu-20.04
     matrix:
-      py37_np118_vanilla:
-        PYTHON: '3.7'
+      py38_np118_vanilla:
+        PYTHON: '3.8'
         NUMPY: '1.18'
         CONDA_ENV: azure_ci
         VANILLA_INSTALL: yes
@@ -67,11 +67,10 @@ jobs:
         CONDA_ENV: azure_ci
         BUILD_DOC: yes
         TEST_START_INDEX: 7
-      py38_np120_pickle5:
+      py38_np120:
         PYTHON: '3.8'
         NUMPY: '1.20'
         CONDA_ENV: azure_ci
-        TEST_PICKLE5: yes
         TEST_START_INDEX: 8
       py38_np120_svml:
         PYTHON: '3.8'

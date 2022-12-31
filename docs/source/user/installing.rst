@@ -5,7 +5,7 @@ Installation
 Compatibility
 -------------
 
-Numba is compatible with Python 3.7--3.10, and NumPy versions 1.18 or later.
+Numba is compatible with Python 3.8--3.10, and NumPy versions 1.18 or later.
 
 Our supported platforms are:
 
@@ -132,6 +132,9 @@ Then you can build and install Numba from the top level of the source tree::
 
     $ python setup.py install
 
+If you wish to run the test suite, see the instructions in the
+:ref:`developer documentation <running-tests>`.
+
 .. _numba-source-install-env_vars:
 
 Build time environment variables and configuration of optional components
@@ -174,14 +177,14 @@ vary with target operating system and hardware. The following lists them all
 
 * Required build time:
 
-  * ``setuptools<60``
+  * ``setuptools``
   * ``numpy``
   * ``llvmlite``
   * Compiler toolchain mentioned above
 
 * Required run time:
 
-  * ``setuptools<60``
+  * ``setuptools``
   * ``numpy``
   * ``llvmlite``
 
@@ -226,8 +229,6 @@ vary with target operating system and hardware. The following lists them all
     inspection. `See here <https://github.com/radareorg/radare2>`_ for
     information on obtaining and installing.
   * ``graphviz`` - for some CFG inspection functionality.
-  * ``pickle5`` - provides Python 3.8 pickling features for faster pickling in
-    Python 3.7.
   * ``typeguard`` - used by ``runtests.py`` for
     :ref:`runtime type-checking <type_anno_check>`.
   * ``cuda-python`` - The NVIDIA CUDA Python bindings. See :ref:`cuda-bindings`.
@@ -257,6 +258,10 @@ information.
 | Numba     | Release date | Python                    | NumPy                      | llvmlite                     | LLVM              | TBB                         |
 +===========+==============+===========================+============================+==============================+===================+=============================+
 | 0.57.x    | TBC          | 3.8.x <= version < 3.12   | 1.19 <= version < 1.24     | 0.40.x                       | 11.x              | 2021.x                      |
++-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.56.4    | 2022-11-03   | 3.7.x <= version < 3.11   | 1.18 <= version < 1.24     | 0.39.x                       | 11.x              | 2021.x                      |
++-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.56.3    | 2022-10-13   | 3.7.x <= version < 3.11   | 1.18 <= version < 1.24     | 0.39.x                       | 11.x              | 2021.x                      |
 +-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
 | 0.56.2    | 2022-09-01   | 3.7.x <= version < 3.11   | 1.18 <= version < 1.24     | 0.39.x                       | 11.x              | 2021.x                      |
 +-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
