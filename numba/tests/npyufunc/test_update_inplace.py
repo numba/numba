@@ -22,7 +22,8 @@ def py_update_3(x0_t, x1_t, x2_t, y_1):
 
 class TestUpdateInplace(TestCase):
 
-    def _run_test_for_gufunc(self, gufunc, py_func, expect_f4_to_pass=True, z=2):
+    def _run_test_for_gufunc(self, gufunc, py_func, expect_f4_to_pass=True,
+                             z=2):
         for dtype, expect_to_pass in [('f8', True), ('f4', expect_f4_to_pass)]:
             inputs = [np.zeros(10, dtype) for _ in range(gufunc.nin - 1)]
             ex_inputs = [x_t.copy() for x_t in inputs]
@@ -40,7 +41,8 @@ class TestUpdateInplace(TestCase):
         # test without writable_args
         gufunc = guvectorize(['void(f8[:], f8[:])'], '(t),()',
                              nopython=True)(py_replace_2nd)
-        self._run_test_for_gufunc(gufunc, py_replace_2nd, expect_f4_to_pass=False)
+        self._run_test_for_gufunc(gufunc, py_replace_2nd,
+                                  expect_f4_to_pass=False)
 
         # test with writable_args
         gufunc = guvectorize(['void(f8[:], f8[:])'], '(t),()',
@@ -67,20 +69,22 @@ class TestUpdateInplace(TestCase):
 
     def test_update_inplace_3(self):
         # test without writable_args
-        gufunc = guvectorize(['void(f8[:], f8[:], f8[:], f8[:])'], '(t),(t),(t),()',
+        gufunc = guvectorize(['void(f8[:], f8[:], f8[:], f8[:])'],
+                             '(t),(t),(t),()',
                              nopython=True)(py_update_3)
         self._run_test_for_gufunc(gufunc, py_update_3, expect_f4_to_pass=False)
 
         # test with writable_args
-        gufunc = guvectorize(['void(f8[:], f8[:], f8[:], f8[:])'], '(t),(t),(t),()',
-                             nopython=True, writable_args=(0, 1, 2))(py_update_3)
+        gufunc = guvectorize(['void(f8[:], f8[:], f8[:], f8[:])'],
+                             '(t),(t),(t),()', nopython=True,
+                             writable_args=(0, 1, 2))(py_update_3)
         self._run_test_for_gufunc(gufunc, py_update_3)
 
     def test_exceptions(self):
         # check that len(writable_args) <= nin
         with self.assertRaises(ValueError):
-            guvectorize(['void(f8[:], f8[:])'], '(t),()',
-                        nopython=True, writable_args=(0, 1, 2, 5))(py_replace_2nd)
+            guvectorize(['void(f8[:], f8[:])'], '(t),()', nopython=True,
+                        writable_args=(0, 1, 2, 5))(py_replace_2nd)
 
         # check that all values in writable_args are between 0 and nin
         with self.assertRaises(ValueError):
@@ -94,7 +98,8 @@ class TestUpdateInplace(TestCase):
         # writable_args are not supported for target='cuda'
         with self.assertRaises(TypeError):
             guvectorize(['void(f8[:], f8[:])'], '(t),()',
-                        nopython=True, writable_args=(0,), target='cuda')(py_replace_2nd)
+                        nopython=True, writable_args=(0,),
+                        target='cuda')(py_replace_2nd)
 
 
 if __name__ == '__main__':
