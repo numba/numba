@@ -15,18 +15,19 @@ def py_replace_2nd(x_t, y_1):
 
 class TestUpdateInplace(TestCase):
 
-    def _run_test_for_gufunc(self, gufunc, py_func, expect_f4_to_pass=True):
+    def _run_test_for_gufunc(self, gufunc, py_func, expect_f4_to_pass=True, z=2):
         for dtype, expect_to_pass in [('f8', True), ('f4', expect_f4_to_pass)]:
-            x_t = np.zeros(10, dtype)
-            ex_t = x_t.copy()
+            inputs = [np.zeros(10, dtype) for _ in range(gufunc.nin - 1)]
+            ex_inputs = [x_t.copy() for x_t in inputs]
 
-            gufunc(x_t, 2)
-            py_func(ex_t, np.array([2]))
+            gufunc(*inputs, z)
+            py_func(*ex_inputs, np.array([z]))
 
-            if expect_to_pass:
-                np.testing.assert_equal(x_t, ex_t)
-            else:
-                self.assertFalse((x_t == ex_t).all())
+            for x_t, ex_x_t in zip(inputs, ex_inputs):
+                if expect_to_pass:
+                    np.testing.assert_equal(x_t, ex_x_t)
+                else:
+                    self.assertFalse((x_t == ex_x_t).all())
 
     def test_update_inplace(self):
         # test without writable_args
