@@ -91,6 +91,11 @@ class TestUpdateInplace(TestCase):
             guvectorize(['void(f8[:], f8[:])'], '(t),()',
                         nopython=True, writable_args=(-1,))(py_replace_2nd)
 
+        # writable_args are not supported for target='cuda'
+        with self.assertRaises(TypeError):
+            guvectorize(['void(f8[:], f8[:])'], '(t),()',
+                        nopython=True, writable_args=(0,), target='cuda')(py_replace_2nd)
+
 
 if __name__ == '__main__':
     unittest.main()
