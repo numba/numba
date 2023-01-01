@@ -76,6 +76,21 @@ class TestUpdateInplace(TestCase):
                              nopython=True, writable_args=(0, 1, 2))(py_update_3)
         self._run_test_for_gufunc(gufunc, py_update_3)
 
+    def test_exceptions(self):
+        # check that len(writable_args) <= nin
+        with self.assertRaises(ValueError):
+            guvectorize(['void(f8[:], f8[:])'], '(t),()',
+                        nopython=True, writable_args=(0, 1, 2, 5))(py_replace_2nd)
+
+        # check that all values in writable_args are between 0 and nin
+        with self.assertRaises(ValueError):
+            guvectorize(['void(f8[:], f8[:])'], '(t),()',
+                        nopython=True, writable_args=(5,))(py_replace_2nd)
+
+        with self.assertRaises(ValueError):
+            guvectorize(['void(f8[:], f8[:])'], '(t),()',
+                        nopython=True, writable_args=(-1,))(py_replace_2nd)
+
 
 if __name__ == '__main__':
     unittest.main()

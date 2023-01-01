@@ -222,7 +222,12 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args)
 
     /* update op_flags */
     if (writable_args_tuple != NULL) {
-        n_writable_args =PyTuple_Size(writable_args_tuple);
+        n_writable_args = PyTuple_Size(writable_args_tuple);
+        if (n_writable_args > nin) {
+                PyErr_SetString(PyExc_ValueError, "Number of writable_args must be <= nin");
+                Py_DECREF(ufunc);
+                return NULL;
+        }
         for (i = 0; i < n_writable_args; ++i) {
             data_obj = PyTuple_GET_ITEM(writable_args_tuple, i);
             success = 0;
