@@ -13,6 +13,13 @@ def py_replace_2nd(x_t, y_1):
         x_t[t] = y_1[0]
 
 
+def py_update_3(x0_t, x1_t, x2_t, y_1):
+    for t in range(0, x0_t.shape[0]):
+        x0_t[t] = y_1[0]
+        x1_t[t] = 2 * y_1[0]
+        x2_t[t] = 3 * y_1[0]
+
+
 class TestUpdateInplace(TestCase):
 
     def _run_test_for_gufunc(self, gufunc, py_func, expect_f4_to_pass=True, z=2):
@@ -23,11 +30,11 @@ class TestUpdateInplace(TestCase):
             gufunc(*inputs, z)
             py_func(*ex_inputs, np.array([z]))
 
-            for x_t, ex_x_t in zip(inputs, ex_inputs):
+            for i, (x_t, ex_x_t) in enumerate(zip(inputs, ex_inputs)):
                 if expect_to_pass:
-                    np.testing.assert_equal(x_t, ex_x_t)
+                    np.testing.assert_equal(x_t, ex_x_t, err_msg='input %s' % i)
                 else:
-                    self.assertFalse((x_t == ex_x_t).all())
+                    self.assertFalse((x_t == ex_x_t).all(), msg='input %s' % i)
 
     def test_update_inplace(self):
         # test without writable_args
@@ -57,6 +64,17 @@ class TestUpdateInplace(TestCase):
                              nopython=True, writable_args=(0,),
                              target='parallel')(py_replace_2nd)
         self._run_test_for_gufunc(gufunc, py_replace_2nd)
+
+    def test_update_inplace_3(self):
+        # test without writable_args
+        gufunc = guvectorize(['void(f8[:], f8[:], f8[:], f8[:])'], '(t),(t),(t),()',
+                             nopython=True)(py_update_3)
+        self._run_test_for_gufunc(gufunc, py_update_3, expect_f4_to_pass=False)
+
+        # test with writable_args
+        gufunc = guvectorize(['void(f8[:], f8[:], f8[:], f8[:])'], '(t),(t),(t),()',
+                             nopython=True, writable_args=(0, 1, 2))(py_update_3)
+        self._run_test_for_gufunc(gufunc, py_update_3)
 
 
 if __name__ == '__main__':
