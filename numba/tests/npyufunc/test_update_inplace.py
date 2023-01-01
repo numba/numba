@@ -15,32 +15,29 @@ def py_replace_2nd(x_t, y_1):
 
 class TestUpdateInplace(TestCase):
 
-    def _run_test_for_gufunc(self, gufunc, assume_f4_works=True):
-        # f8 (works)
-        x_t = np.zeros(10, 'f8')
-        gufunc(x_t, 2)
-        np.testing.assert_equal(x_t[1::2], 0)
-        np.testing.assert_equal(x_t[::2], 2)
+    def _run_test_for_gufunc(self, gufunc, py_func, expect_f4_to_pass=True):
+        for dtype, expect_to_pass in [('f8', True), ('f4', expect_f4_to_pass)]:
+            x_t = np.zeros(10, dtype)
+            ex_t = x_t.copy()
 
-        # f4 (works)
-        x_t = np.zeros(10, 'f4')
-        gufunc(x_t, 2)
-        if assume_f4_works:
-            np.testing.assert_equal(x_t[1::2], 0)
-            np.testing.assert_equal(x_t[::2], 2)
-        else:
-            np.testing.assert_equal(x_t, 0)
+            gufunc(x_t, 2)
+            py_func(ex_t, np.array([2]))
+
+            if expect_to_pass:
+                np.testing.assert_equal(x_t, ex_t)
+            else:
+                self.assertFalse((x_t == ex_t).all())
 
     def test_update_inplace(self):
         # test without writable_args
         gufunc = guvectorize(['void(f8[:], f8[:])'], '(t),()',
                              nopython=True)(py_replace_2nd)
-        self._run_test_for_gufunc(gufunc, assume_f4_works=False)
+        self._run_test_for_gufunc(gufunc, py_replace_2nd, expect_f4_to_pass=False)
 
         # test with writable_args
         gufunc = guvectorize(['void(f8[:], f8[:])'], '(t),()',
                              nopython=True, writable_args=(0,))(py_replace_2nd)
-        self._run_test_for_gufunc(gufunc)
+        self._run_test_for_gufunc(gufunc, py_replace_2nd)
 
     def test_update_inplace_with_cache(self):
         # test with writable_args
@@ -51,14 +48,14 @@ class TestUpdateInplace(TestCase):
         gufunc = guvectorize(['void(f8[:], f8[:])'], '(t),()',
                              nopython=True, writable_args=(0,),
                              cache=True)(py_replace_2nd)
-        self._run_test_for_gufunc(gufunc)
+        self._run_test_for_gufunc(gufunc, py_replace_2nd)
 
     def test_update_inplace_parallel(self):
         # test with writable_args
         gufunc = guvectorize(['void(f8[:], f8[:])'], '(t),()',
                              nopython=True, writable_args=(0,),
                              target='parallel')(py_replace_2nd)
-        self._run_test_for_gufunc(gufunc)
+        self._run_test_for_gufunc(gufunc, py_replace_2nd)
 
 
 if __name__ == '__main__':
