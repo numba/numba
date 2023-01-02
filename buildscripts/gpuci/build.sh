@@ -55,7 +55,7 @@ gpuci_mamba_retry create -n numba_ci -y \
 
 conda activate numba_ci
 
-pip install -q numpy==1.24.0
+pip install -q numpy==1.24.1
 
 if [ $NUMBA_CUDA_USE_NVIDIA_BINDING == "1" ]
 then
