@@ -1109,6 +1109,20 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(nanargmax(arr2d),
                                 jit(nopython=True)(nanargmax)(arr2d))
 
+    def test_nanargmax_empty_input(self):
+        @jit(nopython=True)
+        def jitnanargmax(arr):
+            return np.nanargmax(arr, None)
+
+        def assert_raises(arr, pattern):
+            with self.assertRaisesRegex(ValueError, pattern):
+                jitnanargmax.py_func(arr)
+            with self.assertRaisesRegex(ValueError, pattern):
+                jitnanargmax(arr)
+
+        assert_raises(np.arange(0), "attempt to get argmax of an empty sequence")
+        assert_raises(np.arange(0, dtype=np.float64), "All-NaN slice encountered")
+
     def test_argmin_axis_1d_2d_4d(self):
         arr1d = np.array([0, 20, 3, 4])
         arr2d = np.arange(6).reshape(2, 3)
@@ -1253,6 +1267,20 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(nanargmin(arr2d),
                                 jit(nopython=True)(nanargmin)(arr2d))
 
+    def test_nanargmin_empty_input(self):
+        @jit(nopython=True)
+        def jitnanargmin(arr):
+            return np.nanargmin(arr, None)
+
+        def assert_raises(arr, pattern):
+            with self.assertRaisesRegex(ValueError, pattern):
+                jitnanargmin.py_func(arr)
+            with self.assertRaisesRegex(ValueError, pattern):
+                jitnanargmin(arr)
+
+        assert_raises(np.arange(0), "attempt to get argmin of an empty sequence")
+        assert_raises(np.arange(0, dtype=np.float64), "All-NaN slice encountered")
+
     @classmethod
     def install_generated_tests(cls):
         # These form a testing product where each of the combinations are tested
@@ -1341,8 +1369,8 @@ class TestArrayReductionsExceptions(MemoryLeakMixin, TestCase):
         empty_seq = "attempt to get {0} of an empty sequence"
         op_no_ident = ("zero-size array to reduction operation "
                        "{0}")
-        for x in [array_argmax, array_argmax_global, array_nanargmax_global, array_argmin,
-                  array_argmin_global, array_nanargmin_global]:
+        for x in [array_argmax, array_argmax_global, array_argmin,
+                  array_argmin_global]:
             fn_to_msg[x] = empty_seq
         for x in [array_max, array_max, array_min, array_min]:
             fn_to_msg[x] = op_no_ident
