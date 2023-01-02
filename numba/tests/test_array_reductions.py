@@ -87,11 +87,17 @@ def array_argmin(arr):
 def array_argmin_global(arr):
     return np.argmin(arr)
 
+def array_nanargmin_global(arr):
+    return np.nanargmin(arr)
+
 def array_argmax(arr):
     return arr.argmax()
 
 def array_argmax_global(arr):
     return np.argmax(arr)
+
+def array_nanargmax_global(arr):
+    return np.nanargmax(arr)
 
 def array_median_global(arr):
     return np.median(arr)
@@ -1031,6 +1037,78 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(argmax(arr2d),
                                 jit(nopython=True)(argmax)(arr2d))
 
+    def test_nanargmax_axis_1d_2d_4d(self):
+        arr1d = np.array([0, 20, 3, 4])
+        arr2d = np.arange(6).reshape(2, 3)
+        arr2d[0,1] += 100
+
+        arr4d = np.arange(120).reshape(2, 3, 4, 5) + 10
+        arr4d[0, 1, 1, 2] += 100
+        arr4d[1, 0, 0, 0] -= 51
+
+        for arr in [arr1d, arr2d, arr4d]:
+            axes = list(range(arr.ndim)) + [
+                -(i+1) for i in range(arr.ndim)
+            ]
+            py_functions = [
+                lambda a, _axis=axis: np.nanargmax(a, axis=_axis)
+                for axis in axes
+            ]
+            c_functions = [
+                jit(nopython=True)(pyfunc) for pyfunc in py_functions
+            ]
+            for cfunc in c_functions:
+                self.assertPreciseEqual(cfunc.py_func(arr), cfunc(arr))
+
+    def test_nanargmax_axis_out_of_range(self):
+        arr1d = np.arange(6)
+        arr2d = np.arange(6).reshape(2, 3)
+
+        @jit(nopython=True)
+        def jitnanargmax(arr, axis):
+            return np.nanargmax(arr, axis)
+
+        def assert_raises(arr, axis):
+            with self.assertRaisesRegex(ValueError, "axis.*out of bounds"):
+                jitnanargmax.py_func(arr, axis)
+            with self.assertRaisesRegex(ValueError, "axis.*out of bounds"):
+                jitnanargmax(arr, axis)
+
+        assert_raises(arr1d, 1)
+        assert_raises(arr1d, -2)
+        assert_raises(arr2d, -3)
+        assert_raises(arr2d, 2)
+
+    def test_nanargmax_axis_must_be_integer(self):
+        arr = np.arange(6)
+
+        @jit(nopython=True)
+        def jitnanargmax(arr, axis):
+            return np.nanargmax(arr, axis)
+
+        with self.assertTypingError() as e:
+            jitnanargmax(arr, "foo")
+        self.assertIn("axis must be an integer", str(e.exception))
+
+    def test_nanargmax_method_axis(self):
+        arr2d = np.arange(6).reshape(2, 3)
+
+        def nanargmax(arr):
+            return np.nanargmax(arr, axis=0)
+
+        self.assertPreciseEqual(nanargmax(arr2d),
+                                jit(nopython=True)(nanargmax)(arr2d))
+
+    def test_nanargmax_return_type(self):
+        # See issue #7853, return type should be intp not based on input type
+        arr2d = np.arange(6, dtype=np.uint8).reshape(2, 3)
+
+        def nanargmax(arr):
+            return np.nanargmax(arr, axis=0)
+
+        self.assertPreciseEqual(nanargmax(arr2d),
+                                jit(nopython=True)(nanargmax)(arr2d))
+
     def test_argmin_axis_1d_2d_4d(self):
         arr1d = np.array([0, 20, 3, 4])
         arr2d = np.arange(6).reshape(2, 3)
@@ -1103,6 +1181,78 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(argmin(arr2d),
                                 jit(nopython=True)(argmin)(arr2d))
 
+    def test_nanargmin_axis_1d_2d_4d(self):
+        arr1d = np.array([0, 20, 3, 4])
+        arr2d = np.arange(6).reshape(2, 3)
+        arr2d[0,1] += 100
+
+        arr4d = np.arange(120).reshape(2, 3, 4, 5) + 10
+        arr4d[0, 1, 1, 2] += 100
+        arr4d[1, 0, 0, 0] -= 51
+
+        for arr in [arr1d, arr2d, arr4d]:
+            axes = list(range(arr.ndim)) + [
+                -(i+1) for i in range(arr.ndim)
+            ]
+            py_functions = [
+                lambda a, _axis=axis: np.nanargmin(a, axis=_axis)
+                for axis in axes
+            ]
+            c_functions = [
+                jit(nopython=True)(pyfunc) for pyfunc in py_functions
+            ]
+            for cfunc in c_functions:
+                self.assertPreciseEqual(cfunc.py_func(arr), cfunc(arr))
+
+    def test_nanargmin_axis_out_of_range(self):
+        arr1d = np.arange(6)
+        arr2d = np.arange(6).reshape(2, 3)
+
+        @jit(nopython=True)
+        def jitnanargmin(arr, axis):
+            return np.nanargmin(arr, axis)
+
+        def assert_raises(arr, axis):
+            with self.assertRaisesRegex(ValueError, "axis.*out of bounds"):
+                jitnanargmin.py_func(arr, axis)
+            with self.assertRaisesRegex(ValueError, "axis.*out of bounds"):
+                jitnanargmin(arr, axis)
+
+        assert_raises(arr1d, 1)
+        assert_raises(arr1d, -2)
+        assert_raises(arr2d, -3)
+        assert_raises(arr2d, 2)
+
+    def test_nanargmin_axis_must_be_integer(self):
+        arr = np.arange(6)
+
+        @jit(nopython=True)
+        def jitnanargmin(arr, axis):
+            return np.nanargmin(arr, axis)
+
+        with self.assertTypingError() as e:
+            jitnanargmin(arr, "foo")
+        self.assertIn("axis must be an integer", str(e.exception))
+
+    def test_nanargmin_method_axis(self):
+        arr2d = np.arange(6).reshape(2, 3)
+
+        def nanargmin(arr):
+            return np.nanargmin(arr, axis=0)
+
+        self.assertPreciseEqual(nanargmin(arr2d),
+                                jit(nopython=True)(nanargmin)(arr2d))
+
+    def test_nanargmin_return_type(self):
+        # See issue #7853, return type should be intp not based on input type
+        arr2d = np.arange(6, dtype=np.uint8).reshape(2, 3)
+
+        def nanargmin(arr):
+            return np.argmin(arr, axis=0)
+
+        self.assertPreciseEqual(nanargmin(arr2d),
+                                jit(nopython=True)(nanargmin)(arr2d))
+
     @classmethod
     def install_generated_tests(cls):
         # These form a testing product where each of the combinations are tested
@@ -1124,7 +1274,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         # these functions only work in real space as no complex comparison
         # operator is implemented
         reduction_funcs_rspace = [array_argmin, array_argmin_global,
-                                  array_argmax, array_argmax_global]
+                                  array_argmax, array_argmax_global,
+                                  array_nanargmax_global, array_nanargmin_global]
 
         reduction_funcs += [array_nanmean, array_nanstd, array_nanvar]
         reduction_funcs += [array_nanprod]
@@ -1190,8 +1341,8 @@ class TestArrayReductionsExceptions(MemoryLeakMixin, TestCase):
         empty_seq = "attempt to get {0} of an empty sequence"
         op_no_ident = ("zero-size array to reduction operation "
                        "{0}")
-        for x in [array_argmax, array_argmax_global, array_argmin,
-                  array_argmin_global]:
+        for x in [array_argmax, array_argmax_global, array_nanargmax_global, array_argmin,
+                  array_argmin_global, array_nanargmin_global]:
             fn_to_msg[x] = empty_seq
         for x in [array_max, array_max, array_min, array_min]:
             fn_to_msg[x] = op_no_ident

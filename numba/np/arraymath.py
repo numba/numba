@@ -656,6 +656,33 @@ def array_argmin_impl_generic(arry):
     return min_idx
 
 
+@register_jitable
+def array_nanargmin_impl_float(arry):
+    if arry.size == 0:
+        raise ValueError("attempt to get nanargmin of an empty sequence")
+    has_non_nan_index = False
+    for v in arry.flat:
+        if np.isnan(v):
+            continue
+        min_value = v
+        min_idx = 0
+        has_non_nan_index = True
+        break
+    if not has_non_nan_index:
+        raise ValueError("All-NaN slice encountered")
+
+    idx = 0
+    for v in arry.flat:
+        if np.isnan(v):
+            continue
+
+        if v < min_value:
+            min_value = v
+            min_idx = idx
+        idx += 1
+    return min_idx
+
+
 @overload(np.argmin)
 @overload_method(types.Array, "argmin")
 def array_argmin(arr, axis=None):
@@ -672,6 +699,21 @@ def array_argmin(arr, axis=None):
     else:
         array_argmin_impl = build_argmax_or_argmin_with_axis_impl(
             arr, axis, flatten_impl
+        )
+    return array_argmin_impl
+
+
+@overload(np.nanargmin)
+def array_nanargmin(arr, axis=None):
+    if not isinstance(arr.dtype, types.Float):
+        return array_argmin(arr=arr, axis=axis)
+
+    if is_nonelike(axis):
+        def array_argmin_impl(arr, axis=None):
+            return array_nanargmin_impl_float(arr)
+    else:
+        array_argmin_impl = build_argmax_or_argmin_with_axis_impl(
+            arr, axis, array_nanargmin_impl_float
         )
     return array_argmin_impl
 
@@ -717,6 +759,31 @@ def array_argmax_impl_float(arry):
     for v in arry.flat:
         if np.isnan(v):
             return idx
+        if v > max_value:
+            max_value = v
+            max_idx = idx
+        idx += 1
+    return max_idx
+
+
+@register_jitable
+def array_nanargmax_impl_float(arry):
+    if arry.size == 0:
+        raise ValueError("attempt to get nanargmax of an empty sequence")
+    has_non_nan_index = False
+    for v in arry.flat:
+        if not np.isnan(v):
+            max_value = v
+            max_idx = 0
+            has_non_nan_index = True
+            break
+    if not has_non_nan_index:
+        raise ValueError("All-NaN slice encountered")
+
+    idx = 0
+    for v in arry.flat:
+        if np.isnan(v):
+            continue
         if v > max_value:
             max_value = v
             max_idx = idx
@@ -802,6 +869,21 @@ def array_argmax(arr, axis=None):
     else:
         array_argmax_impl = build_argmax_or_argmin_with_axis_impl(
             arr, axis, flatten_impl
+        )
+    return array_argmax_impl
+
+
+@overload(np.nanargmax)
+def array_nanargmax(arr, axis=None):
+    if not isinstance(arr.dtype, types.Float):
+        return array_argmax(arr=arr, axis=axis)
+
+    if is_nonelike(axis):
+        def array_argmax_impl(arr, axis=None):
+            return array_nanargmax_impl_float(arr)
+    else:
+        array_argmax_impl = build_argmax_or_argmin_with_axis_impl(
+            arr, axis, array_nanargmax_impl_float
         )
     return array_argmax_impl
 
