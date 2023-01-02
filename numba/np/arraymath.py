@@ -658,6 +658,8 @@ def array_argmin_impl_generic(arry):
 
 @register_jitable
 def array_nanargmin_impl_float(arry):
+    if numpy_version < (1, 22) and arry.size == 0:
+        raise ValueError("attempt to get argmin of an empty sequence")
     has_non_nan_index = False
     for v in arry.flat:
         if np.isnan(v):
@@ -766,6 +768,8 @@ def array_argmax_impl_float(arry):
 
 @register_jitable
 def array_nanargmax_impl_float(arry):
+    if numpy_version < (1, 22) and arry.size == 0:
+        raise ValueError("attempt to get argmax of an empty sequence")
     has_non_nan_index = False
     for v in arry.flat:
         if not np.isnan(v):

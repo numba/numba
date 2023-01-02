@@ -1120,8 +1120,13 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             with self.assertRaisesRegex(ValueError, pattern):
                 jitnanargmax(arr)
 
+        if numpy_version < (1, 22):
+            empty_sequence_message = "attempt to get argmax of an empty sequence"
+        else:
+            empty_sequence_message = "All-NaN slice encountered"
+
         assert_raises(np.arange(0), "attempt to get argmax of an empty sequence")
-        assert_raises(np.arange(0, dtype=np.float64), "All-NaN slice encountered")
+        assert_raises(np.arange(0, dtype=np.float64), empty_sequence_message)
 
     def test_argmin_axis_1d_2d_4d(self):
         arr1d = np.array([0, 20, 3, 4])
@@ -1278,8 +1283,13 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             with self.assertRaisesRegex(ValueError, pattern):
                 jitnanargmin(arr)
 
+        if numpy_version < (1, 22):
+            empty_sequence_message = "attempt to get argmin of an empty sequence"
+        else:
+            empty_sequence_message = "All-NaN slice encountered"
+
         assert_raises(np.arange(0), "attempt to get argmin of an empty sequence")
-        assert_raises(np.arange(0, dtype=np.float64), "All-NaN slice encountered")
+        assert_raises(np.arange(0, dtype=np.float64), empty_sequence_message)
 
     @classmethod
     def install_generated_tests(cls):
