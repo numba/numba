@@ -255,6 +255,7 @@ class TestCase(unittest.TestCase):
         """
         old_refcounts = [sys.getrefcount(x) for x in objects]
         yield
+        gc.collect()
         new_refcounts = [sys.getrefcount(x) for x in objects]
         for old, new, obj in zip(old_refcounts, new_refcounts, objects):
             if old != new:
