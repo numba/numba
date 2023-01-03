@@ -852,9 +852,7 @@ class TestBuiltins(TestCase):
         self.check_minmax_bool1(max_usecase1, flags)
 
     def test_min_bool1(self, flags=enable_pyobj_flags):
-        """
-        min(*args)
-        """
+        # tests min(<booleans>)
         self.check_minmax_bool1(min_usecase1, flags)
 
     # Test that max(1) and min(1) fail
