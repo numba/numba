@@ -848,9 +848,7 @@ class TestBuiltins(TestCase):
             self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
     def test_max_bool1(self, flags=enable_pyobj_flags):
-        """
-        max(*args)
-        """
+        # tests max(<booleans>)
         self.check_minmax_bool1(max_usecase1, flags)
 
     def test_min_bool1(self, flags=enable_pyobj_flags):
