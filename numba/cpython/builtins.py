@@ -577,8 +577,8 @@ def indval_min(indval1, indval2):
 
 @overload(min)
 def boolval_min(val1, val2):
-    if isinstance(val1, types.scalars.Boolean) and \
-       isinstance(val2, types.scalars.Boolean):
+    if isinstance(val1, types.Boolean) and \
+       isinstance(val2, types.Boolean):
         def bool_min_impl(val1, val2):
             return val1 and val2
         return bool_min_impl
