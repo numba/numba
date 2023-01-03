@@ -668,17 +668,29 @@ class CPUCodeLibrary(CodeLibrary):
         """
         Internal: optimize this library's final module.
         """
-        cheap_name = "Module passes (cheap optimization for refprune)"
-        with self._recorded_timings.record(cheap_name):
-            # A cheaper optimisation pass is run first to try and get as many
-            # refops into the same function as possible via inlining
-            self._codegen._mpm_cheap.run(self._final_module)
-        # Refop pruning is then run on the heavily inlined function
-        if not config.LLVM_REFPRUNE_PASS:
-            self._final_module = remove_redundant_nrt_refct(self._final_module)
+        seen = set()
+        link_modules = []
+        def walk_libs(parent):
+            for lib in parent._linking_libraries:
+                if lib in seen:
+                    continue
+                seen.add(lib)
+                link_modules.append(lib._get_module_for_linking())
+                walk_libs(lib)
+
+        walk_libs(self)
+
+        for module in link_modules:
+            self._final_module.link_in(module, preserve=True)
+
+        for fn in self._final_module.functions:
+            if fn.linkage == ll.Linkage.linkonce_odr:
+                fn.linkage = "internal"
+
+        self._optimize_functions(self._final_module)
+
         full_name = "Module passes (full optimization)"
         with self._recorded_timings.record(full_name):
-            # The full optimisation suite is then run on the refop pruned IR
             self._codegen._mpm_full.run(self._final_module)
 
     def _get_module_for_linking(self):
@@ -707,12 +719,11 @@ class CPUCodeLibrary(CodeLibrary):
             raise RuntimeError("library unfit for linking: "
                                "no available functions in %s"
                                % (self,))
-        if to_fix:
-            mod = mod.clone()
-            for name in to_fix:
-                # NOTE: this will mark the symbol WEAK if serialized
-                # to an ELF file
-                mod.get_function(name).linkage = 'linkonce_odr'
+        mod = mod.clone()
+        for name in to_fix:
+            # NOTE: this will mark the symbol WEAK if serialized
+            # to an ELF file
+            mod.get_function(name).linkage = 'linkonce_odr'
         self._shared_module = mod
         return mod
 
@@ -744,18 +755,19 @@ class CPUCodeLibrary(CodeLibrary):
 
         self._raise_if_finalized()
 
+        # TODO Doing this before finalization is finished avoids
+        # a recursion error because of _get_module_for_linking,
+        # but if finialization failes this leads the module in
+        # an invalid state.
+        self._finalized = True
+
         if config.DUMP_FUNC_OPT:
             dump("FUNCTION OPTIMIZED DUMP %s" % self.name,
                  self.get_llvm_str(), 'llvm')
 
-        # Link libraries for shared code
-        seen = set()
-        for library in self._linking_libraries:
-            if library not in seen:
-                seen.add(library)
-                self._final_module.link_in(
-                    library._get_module_for_linking(), preserve=True,
-                )
+        # Create the module that is linked into other modules
+        # before module level optimization.
+        self._get_module_for_linking()
 
         # Optimize the module after all dependences are linked in above,
         # to allow for inlining.
@@ -795,8 +807,6 @@ class CPUCodeLibrary(CodeLibrary):
         if cleanup:
             weakref.finalize(self, cleanup)
         self._finalize_specific()
-
-        self._finalized = True
 
         if config.DUMP_OPTIMIZED:
             dump("OPTIMIZED DUMP %s" % self.name, self.get_llvm_str(), 'llvm')
@@ -1188,30 +1198,6 @@ class CPUCodegen(Codegen):
         self._engine = JitEngine(engine)
         self._target_data = engine.target_data
         self._data_layout = str(self._target_data)
-
-        if config.OPT.is_opt_max:
-            # If the OPT level is set to 'max' then the user is requesting that
-            # compilation time is traded for potential performance gain. This
-            # currently manifests as running the "cheap" pass at -O3
-            # optimisation level with loop-vectorization enabled. There's no
-            # guarantee that this will increase runtime performance, it may
-            # detriment it, this is here to give the user an easily accessible
-            # option to try.
-            loopvect = True
-            opt_level = 3
-        else:
-            # The default behaviour is to do an opt=0 pass to try and inline as
-            # much as possible with the cheapest cost of doing so. This is so
-            # that the ref-op pruner pass that runs after the cheap pass will
-            # have the largest possible scope for working on pruning references.
-            loopvect = False
-            opt_level = 0
-
-        self._mpm_cheap = self._module_pass_manager(loop_vectorize=loopvect,
-                                                    slp_vectorize=False,
-                                                    opt=opt_level,
-                                                    cost="cheap")
-
         self._mpm_full = self._module_pass_manager()
 
         self._engine.set_object_cache(self._library_class._object_compiled_hook,
@@ -1228,19 +1214,8 @@ class CPUCodegen(Codegen):
         pm = ll.create_module_pass_manager()
         pm.add_target_library_info(ll.get_process_triple())
         self._tm.add_analysis_passes(pm)
-        cost = kwargs.pop("cost", None)
         with self._pass_manager_builder(**kwargs) as pmb:
             pmb.populate(pm)
-        # If config.OPT==0 do not include these extra passes to help with
-        # vectorization.
-        if cost is not None and cost == "cheap" and config.OPT != 0:
-            # This knocks loops into rotated form early to reduce the likelihood
-            # of vectorization failing due to unknown PHI nodes.
-            pm.add_loop_rotate_pass()
-            # These passes are required to get SVML to vectorize tests
-            pm.add_instruction_combining_pass()
-            pm.add_jump_threading_pass()
-
         if config.LLVM_REFPRUNE_PASS:
             pm.add_refprune_pass(_parse_refprune_flags())
         return pm
