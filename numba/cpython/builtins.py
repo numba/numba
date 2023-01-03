@@ -615,8 +615,8 @@ def indval_max(indval1, indval2):
 
 @overload(max)
 def boolval_max(val1, val2):
-    if isinstance(val1, types.scalars.Boolean) and \
-       isinstance(val2, types.scalars.Boolean):
+    if isinstance(val1, types.Boolean) and \
+       isinstance(val2, types.Boolean):
         def bool_max_impl(val1, val2):
             return val1 or val2
         return bool_max_impl
