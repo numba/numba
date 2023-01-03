@@ -33,7 +33,7 @@ conda list
 # Create a base env first and then add to it...
 # NOTE: gitpython is needed for CI testing to do the test slicing
 # NOTE: pyyaml is used to ensure that the Azure CI config is valid
-conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON pip gitpython pyyaml cython
+conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml
 
 # Activate first
 set +v
@@ -60,9 +60,6 @@ elif  [[ $(uname) == Darwin ]]; then
     # testing
     $CONDA_INSTALL llvm-openmp
 fi
-
-# Install NumPy
-$PIP_INSTALL numpy==$NUMPY
 
 # Install latest correct build
 $CONDA_INSTALL -c numba/label/dev llvmlite=0.40
