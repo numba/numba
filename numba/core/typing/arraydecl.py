@@ -799,26 +799,9 @@ def install_array_method(name, generic, prefer_literal=True):
 
     setattr(ArrayAttribute, "resolve_" + name, array_attribute_attachment)
 
-# Functions that return the same type as the array
-for fname in ["min", "max"]:
-    install_array_method(fname, generic_homog)
 
 # Functions that return a machine-width type, to avoid overflows
-install_array_method("prod", generic_expand)
 install_array_method("sum", sum_expand, prefer_literal=True)
-
-# Functions that return a machine-width type, to avoid overflows
-for fname in ["cumsum", "cumprod"]:
-    install_array_method(fname, generic_expand_cumulative)
-
-# Functions that require integer arrays get promoted to float64 return
-for fName in ["mean"]:
-    install_array_method(fName, generic_hetero_real)
-
-# var and std by definition return in real space and int arrays
-# get promoted to float64 return
-for fName in ["var", "std"]:
-    install_array_method(fName, generic_hetero_always_real)
 
 
 @infer_global(operator.eq)

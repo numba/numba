@@ -19,7 +19,7 @@ except ImportError:
         pass
 
 
-min_python_version = "3.7"
+min_python_version = "3.8"
 max_python_version = "3.11"  # exclusive
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.18"
@@ -390,7 +390,6 @@ metadata = dict(
         "Operating System :: OS Independent",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
@@ -411,6 +410,7 @@ metadata = dict(
         # numba gdb hook init command language file
         "numba.misc": ["cmdlang.gdb"],
         "numba.typed": ["py.typed"],
+        "numba.cuda" : ["cpp_function_wrappers.cu"]
     },
     scripts=["bin/numba"],
     url="https://numba.pydata.org",

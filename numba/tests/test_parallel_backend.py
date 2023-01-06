@@ -687,8 +687,9 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
             self.assertIn("failed with code", e_msg)
             # raised a SIGABRT, but the value is platform specific so just check
             # the error message
-            self.assertIn("Terminating: Nested parallel kernel launch detected",
-                          e_msg)
+            expected = ("Numba workqueue threading layer is terminating: "
+                        "Concurrent access has been detected.")
+            self.assertIn(expected, e_msg)
 
     @unittest.skipUnless(_HAVE_OS_FORK, "Test needs fork(2)")
     def test_workqueue_handles_fork_from_non_main_thread(self):

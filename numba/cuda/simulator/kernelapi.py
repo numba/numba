@@ -232,6 +232,9 @@ class FakeCUDAFp16(object):
     def hmul(self, a, b):
         return a * b
 
+    def hdiv(self, a, b):
+        return a / b
+
     def hfma(self, a, b, c):
         return a * b + c
 
@@ -240,6 +243,51 @@ class FakeCUDAFp16(object):
 
     def habs(self, a):
         return abs(a)
+
+    def hsin(self, x):
+        return np.sin(x, dtype=np.float16)
+
+    def hcos(self, x):
+        return np.cos(x, dtype=np.float16)
+
+    def hlog(self, x):
+        return np.log(x, dtype=np.float16)
+
+    def hlog2(self, x):
+        return np.log2(x, dtype=np.float16)
+
+    def hlog10(self, x):
+        return np.log10(x, dtype=np.float16)
+
+    def hexp(self, x):
+        return np.exp(x, dtype=np.float16)
+
+    def hexp2(self, x):
+        return np.exp2(x, dtype=np.float16)
+
+    def hexp10(self, x):
+        return np.float16(10 ** x)
+
+    def hsqrt(self, x):
+        return np.sqrt(x, dtype=np.float16)
+
+    def hrsqrt(self, x):
+        return np.float16(x ** -0.5)
+
+    def hceil(self, x):
+        return np.ceil(x, dtype=np.float16)
+
+    def hfloor(self, x):
+        return np.ceil(x, dtype=np.float16)
+
+    def hrcp(self, x):
+        return np.reciprocal(x, dtype=np.float16)
+
+    def htrunc(self, x):
+        return np.trunc(x, dtype=np.float16)
+
+    def hrint(self, x):
+        return np.rint(x, dtype=np.float16)
 
     def heq(self, a, b):
         return a == b

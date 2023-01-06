@@ -66,7 +66,6 @@ exclude =
     numba/core/registry.py
     numba/core/imputils.py
     numba/cpython/builtins.py
-    numba/core/cpu.py
     numba/misc/quicksort.py
     numba/core/callconv.py
     numba/cpython/randomimpl.py
@@ -161,7 +160,6 @@ exclude =
     numba/tests/test_indexing.py
     numba/tests/test_pycc.py
     numba/tests/annotation_usecases.py
-    numba/tests/test_extended_arg.py
     numba/tests/test_alignment.py
     numba/tests/test_multi3.py
     numba/tests/test_overlap.py
@@ -192,7 +190,6 @@ exclude =
     numba/tests/test_complex.py
     numba/tests/test_hashing.py
     numba/tests/test_sys_stdin_assignment.py
-    numba/tests/test_ufuncs.py
     numba/tests/pdlike_usecase.py
     numba/tests/test_range.py
     numba/tests/test_nrt_refct.py

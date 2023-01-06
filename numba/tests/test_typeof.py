@@ -12,7 +12,7 @@ import numpy as np
 import unittest
 import numba.core.typing.cffi_utils as cffi_support
 from numba.core import types
-from numba.core.errors import NumbaValueError
+from numba.core.errors import NumbaValueError, NumbaTypeError
 from numba.misc.special import typeof
 from numba.core.dispatcher import OmittedArg
 from numba._dispatcher import compute_fingerprint
@@ -110,6 +110,13 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         with self.assertRaises(NumbaValueError) as raises:
             typeof(a5)
         self.assertIn("Unsupported array dtype: %s" % (a5.dtype,),
+                      str(raises.exception))
+
+        # Unsupported array type (masked array)
+        with self.assertRaises(NumbaTypeError) as raises:
+            masked_arr = np.ma.MaskedArray([1])
+            typeof(masked_arr)
+        self.assertIn(f"Unsupported array type: numpy.ma.MaskedArray",
                       str(raises.exception))
 
     def test_structured_arrays(self):

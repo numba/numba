@@ -254,6 +254,27 @@ A code review should try to assess the following criteria:
 * docstrings, comments
 * test coverage
 
+
+Policy on large scale changes to code formatting
+''''''''''''''''''''''''''''''''''''''''''''''''
+
+Please note that pull requests making large scale changes to format the code
+base are in general not accepted. Such changes often increase the likelihood of
+merge conflicts for other pull requests, which inevitably take time and
+resources to resolve. They also require a lot of effort to check as Numba aims
+to compile code that is valid even if it is not ideal. For example, in a test of
+``operator.eq``::
+
+    if x == None: # Valid code, even if the recommended form is `if x is None:`
+
+This tests Numba's compilation of comparison with ``None``, and therefore
+should not be changed, even though most style checkers will suggest it should.
+
+This policy has been adopted by the core developers so as to try and make best
+use of limited resources. Whilst it would be great to have an extremely tidy
+code base, priority is given to fixes and features over code formatting changes.
+
+
 Coding conventions
 ''''''''''''''''''
 
