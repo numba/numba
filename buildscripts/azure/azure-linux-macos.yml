@@ -48,4 +48,6 @@ jobs:
       condition: succeededOrFailed()
       displayName: Publish Test Results
       inputs:
-        testResultsFiles: 'junit_reports/TEST-*.xml'
+        searchFolder: '$(System.DefaultWorkingDirectory)/junit_reports' 
+        testResultsFiles: 'TEST-*.xml'
+        mergeTestResults: true
