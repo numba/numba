@@ -1,11 +1,9 @@
 import numba
 import numpy as np
 import sys
-import platform
 import itertools
 
 from numba import types
-from numba.core.config import IS_32BITS
 from numba.tests.support import TestCase, MemoryLeakMixin
 from numba.np.random.generator_methods import _get_proper_func
 from numba.np.random.generator_core import next_uint32, next_uint64, next_double
@@ -14,12 +12,12 @@ from numba.core.errors import TypingError
 from numba.tests.support import run_in_new_process_caching, SerialMixin
 
 
-# The following logic is to mitigate:
+# TODO: Following testing tolerance adjustments should be reduced
+# once NumPy Generator's fmadd issue described below is resolved:
 # https://github.com/numba/numba/pull/8038#issuecomment-1165571368
-if IS_32BITS or platform.machine() in ['ppc64le', 'aarch64']:
-    adjusted_ulp_prec = 2048
-else:
-    adjusted_ulp_prec = 5
+# The progress is being tracked as one of the tasks at:
+# https://github.com/numba/numba/issues/8519
+adjusted_ulp_prec = 2048
 
 
 class TestHelperFuncs(TestCase):
