@@ -235,6 +235,7 @@ The following attributes of NumPy arrays are supported:
 * :attr:`~numpy.ndarray.flags`
 * :attr:`~numpy.ndarray.flat`
 * :attr:`~numpy.ndarray.itemsize`
+* :attr:`~numpy.ndarray.nbytes`
 * :attr:`~numpy.ndarray.ndim`
 * :attr:`~numpy.ndarray.shape`
 * :attr:`~numpy.ndarray.size`

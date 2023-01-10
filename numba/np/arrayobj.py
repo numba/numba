@@ -2644,6 +2644,7 @@ def array_itemsize(context, builder, typ, value):
     return impl_ret_untracked(context, builder, typ, res)
 
 
+@lower_getattr(types.Array, "nbytes")
 @lower_getattr(types.MemoryView, "nbytes")
 def array_nbytes(context, builder, typ, value):
     """
