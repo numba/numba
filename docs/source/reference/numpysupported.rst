@@ -668,7 +668,7 @@ The following :py:class:`Generator` methods are supported:
 
 .. note::
   Due to instruction selection differences across compilers, there
-  may be discrepancies in the order of 1000s of ULPs on 32-bit
+  may be discrepancies, when compared to NumPy, in the order of 1000s of ULPs on 32-bit
   architectures as well as linux-aarch64 and linux-ppc64le platforms.
   For Linux-x86_64, Windows-x86_64 and macOS these discrepancies are
   less pronounced (order of 10s of ULPs) but are not guaranteed to

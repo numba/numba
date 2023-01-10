@@ -15,7 +15,7 @@ from numba.tests.support import run_in_new_process_caching, SerialMixin
 # TODO: Following testing tolerance adjustments should be reduced
 # once NumPy Generator's fmadd issue described below is resolved:
 # https://github.com/numba/numba/pull/8038#issuecomment-1165571368
-# The progress is being tracked as one of the tasks at:
+# The progress is being tracked as one of the tasks in:
 # https://github.com/numba/numba/issues/8519
 adjusted_ulp_prec = 2048
 
