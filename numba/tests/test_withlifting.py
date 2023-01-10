@@ -284,7 +284,7 @@ class TestLiftCall(BaseTestWithLifting):
         msg = ("compiler re-entrant to the same function signature")
         self.assertIn(msg, str(raises.exception))
 
-    # 3.7 fails to interpret the bytecode for this example
+    # 3.8 and earlier fails to interpret the bytecode for this example
     @unittest.skipIf(PYVERSION <= (3, 8),
                      "unsupported on py3.8 and before")
     def test_liftcall5(self):
@@ -665,28 +665,6 @@ class TestLiftObj(MemoryLeak, TestCase):
         x = np.array([1, 2, 3])
         self.assert_equal_return_and_stdout(foo, x)
 
-    def test_case13_branch_to_objmode_ctx(self):
-        # Checks for warning in dataflow.py due to mishandled stack offset
-        # dataflow.py:57: RuntimeWarning: inconsistent stack offset ...
-        def foo(x, wobj):
-            if wobj:
-                with objmode_context(y='int64[:]'):
-                    y = (x + 1).astype('int64')
-            else:
-                y = x + 2
-
-            return x + y
-
-        x = np.array([1, 2, 3], dtype='int64')
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always", RuntimeWarning)
-            self.assert_equal_return_and_stdout(foo, x, True)
-        # Assert no warnings from dataflow.py
-        for each in w:
-            self.assertFalse(each.filename.endswith('dataflow.py'),
-                             msg='there were warnings in dataflow.py')
-
     def test_case14_return_direct_from_objmode_ctx(self):
         def foo(x):
             with objmode_context(x='int64[:]'):
@@ -764,12 +742,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         with self.assertRaises((errors.TypingError, errors.CompilerError)) as raises:
             cfoo = njit(foo)
             cfoo(np.array([1, 2, 3]))
-        if PYVERSION <= (3, 7):
-            # 3.7 and below can't handle the return
-            msg = "unsupported control flow: due to return statements inside with block"
-        else:
-            # above can't handle the recursion
-            msg = "Untyped global name 'foo'"
+        msg = "Untyped global name 'foo'"
         self.assertIn(msg, str(raises.exception))
 
     @unittest.expectedFailure
@@ -1106,8 +1079,6 @@ class TestLiftObj(MemoryLeak, TestCase):
 
         with self.assertRaises(TypeError) as raises:
             test4()
-        # Note: in python3.6, the Generic[T] on typedlist is causing it to
-        #       format differently.
         self.assertRegex(
             str(raises.exception),
             (r"can't unbox a <class 'list'> "

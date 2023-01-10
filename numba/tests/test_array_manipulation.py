@@ -426,6 +426,20 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         arr = np.array(42)
         check_all_axes(arr)
 
+    def test_expand_dims_exceptions(self):
+        pyfunc = expand_dims
+        cfunc = jit(nopython=True)(pyfunc)
+        arr = np.arange(5)
+
+        with self.assertTypingError() as raises:
+            cfunc('hello', 3)
+        self.assertIn('First argument "a" must be an array', str(raises.exception))
+
+        with self.assertTypingError() as raises:
+            cfunc(arr, 'hello')
+        self.assertIn('Argument "axis" must be an integer', str(raises.exception))
+
+
     def check_atleast_nd(self, pyfunc, cfunc):
         def check_result(got, expected):
             # We would like to check the result has the same contiguity,
@@ -806,6 +820,28 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             got = cfunc(input_array, shape)
             self.assertPreciseEqual(got, expected)
 
+    def test_broadcast_to_0d_array(self):
+        pyfunc = numpy_broadcast_to
+        cfunc = jit(nopython=True)(pyfunc)
+
+        inputs = [
+            np.array(123),
+            123,
+            True,
+            # can't do np.asarray() on the types below
+            # 'hello',
+            # np.timedelta64(10, 'Y'),
+            # np.datetime64(10, 'Y'),
+        ]
+
+        shape = ()
+        for arr in inputs:
+            expected = pyfunc(arr, shape)
+            got = cfunc(arr, shape)
+            self.assertPreciseEqual(expected, got)
+            # ensure that np.broadcast_to returned a read-only array
+            self.assertFalse(got.flags['WRITEABLE'])
+
     def test_broadcast_to_raises(self):
         pyfunc = numpy_broadcast_to
         cfunc = jit(nopython=True)(pyfunc)
@@ -814,11 +850,15 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         # https://github.com/numpy/numpy/blob/75f852edf94a7293e7982ad516bee314d7187c2d/numpy/lib/tests/test_stride_tricks.py#L260-L276  # noqa: E501
         data = [
             [np.zeros((0,)), (), TypingError,
-             'The argument "shape" must be a tuple or an integer.'],
+             'Cannot broadcast a non-scalar to a scalar array'],
             [np.zeros((1,)), (), TypingError,
-             'The argument "shape" must be a tuple or an integer.'],
+             'Cannot broadcast a non-scalar to a scalar array'],
             [np.zeros((3,)), (), TypingError,
-             'The argument "shape" must be a tuple or an integer.'],
+             'Cannot broadcast a non-scalar to a scalar array'],
+            [(), (), TypingError,
+             'Cannot broadcast a non-scalar to a scalar array'],
+            [(123,), (), TypingError,
+             'Cannot broadcast a non-scalar to a scalar array'],
             [np.zeros((3,)), (1,), ValueError,
              'operands could not be broadcast together with remapped shapes'],
             [np.zeros((3,)), (2,), ValueError,
@@ -841,12 +881,23 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
              'The second argument "shape" must be a tuple of integers'],
             ['hello', (3,), TypingError,
              'The first argument "array" must be array-like'],
+            [3, (2, 'a'), TypingError,
+             'object cannot be interpreted as an integer'],
         ]
         self.disable_leak_check()
         for arr, target_shape, err, msg in data:
             with self.assertRaises(err) as raises:
                 cfunc(arr, target_shape)
             self.assertIn(msg, str(raises.exception))
+
+    def test_broadcast_to_corner_cases(self):
+        @njit
+        def _broadcast_to_1():
+            return np.broadcast_to('a', (2, 3))
+
+        expected = _broadcast_to_1.py_func()
+        got = _broadcast_to_1()
+        self.assertPreciseEqual(expected, got)
 
     def test_broadcast_to_change_view(self):
         pyfunc = numpy_broadcast_to
@@ -869,6 +920,20 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             expected = pyfunc(input_array, shape, idx)
             got = cfunc(input_array, shape, idx)
             self.assertPreciseEqual(got, expected)
+
+    def test_broadcast_to_array_attrs(self):
+        # See issue #8534. This tests that broadcast array attributes have the
+        # correct value when accessed.
+        @njit
+        def foo(arr):
+            ret = np.broadcast_to(arr, (2, 3))
+            return ret, ret.size, ret.shape, ret.strides
+
+        arr = np.arange(3)
+
+        expected = foo.py_func(arr)
+        got = foo(arr)
+        self.assertPreciseEqual(expected, got)
 
     @unittest.skipIf(numpy_version < (1, 20), "requires NumPy 1.20 or newer")
     def test_broadcast_shapes(self):

@@ -4279,6 +4279,8 @@ def has_cross_iter_dep(
         if array_accessed in non_indexed_arrays:
             return True
 
+        indexed_arrays.add(array_accessed)
+
         npsize = len(new_position)
         # See if we have not seen a npsize dimensioned array accessed before.
         if npsize not in index_positions:

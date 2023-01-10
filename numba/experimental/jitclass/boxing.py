@@ -144,12 +144,14 @@ def _specialize_box(typ):
         "__ixor__",
     }
     for name, func in typ.methods.items():
+        if name == "__init__":
+            continue
         if (
             name.startswith("__")
             and name.endswith("__")
             and name not in supported_dunders
         ):
-            continue
+            raise TypeError(f"Method '{name}' is not supported.")
         dct[name] = _generate_method(name, func)
 
     # Inject static methods as class members

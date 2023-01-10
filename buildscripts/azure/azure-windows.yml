@@ -12,12 +12,12 @@ jobs:
         PYTHON: '3.10'
         NUMPY: '1.23'
         CONDA_ENV: 'testenv'
-        TEST_START_INDEX: 18
-      py37_np118:
-        PYTHON: '3.7'
+        TEST_START_INDEX: 17
+      py38_np118:
+        PYTHON: '3.8'
         NUMPY: '1.18'
         CONDA_ENV: 'testenv'
-        TEST_START_INDEX: 19
+        TEST_START_INDEX: 18
 
   steps:
     - task: CondaEnvironment@1
@@ -28,12 +28,6 @@ jobs:
     - script: |
         buildscripts\\incremental\\setup_conda_environment.cmd
       displayName: 'Before Install'
-
-    - script: |
-        # use TBB
-        call activate %CONDA_ENV%
-        conda install -y -c numba tbb=2021 tbb-devel
-      displayName: 'Add in TBB'
 
     - script: |
         buildscripts\\incremental\\build.cmd
@@ -51,12 +45,14 @@ jobs:
 
     - script: |
         call activate %CONDA_ENV%
+        set NUMBA_ENABLE_CUDASIM=1
         python -m numba.runtests -l
       displayName: 'List discovered tests'
 
     - script: |
         call activate %CONDA_ENV%
         set NUMBA_CAPTURED_ERRORS=new_style
+        set NUMBA_ENABLE_CUDASIM=1
         echo "Running slice of discovered tests: %TEST_START_INDEX%,None,%TEST_COUNT%"
         python -m numba.runtests -b -v -g -m 2 -- numba.tests
       displayName: 'Test modified test files'
@@ -64,5 +60,6 @@ jobs:
     - script: |
         call activate %CONDA_ENV%
         set NUMBA_CAPTURED_ERRORS=new_style
-        python runtests.py -m 2 -b -j "%TEST_START_INDEX%,None,%TEST_COUNT%"  --exclude-tags='long_running'  -- numba.tests
+        set NUMBA_ENABLE_CUDASIM=1
+        python runtests.py -m 2 -b -j "%TEST_START_INDEX%:%TEST_COUNT%"  --exclude-tags='long_running'  -- numba.tests
       displayName: 'Test slice of test files'

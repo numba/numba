@@ -27,7 +27,7 @@ import numba.parfors.parfor
 from numba import (njit, prange, parallel_chunksize,
                    get_parallel_chunksize, set_parallel_chunksize,
                    set_num_threads, get_num_threads, typeof)
-from numba.core import (types, utils, typing, errors, ir, rewrites,
+from numba.core import (types, typing, errors, ir, rewrites,
                         typed_passes, inline_closurecall, config, compiler, cpu)
 from numba.extending import (overload_method, register_model,
                              typeof_impl, unbox, NativeValue, models)
@@ -235,6 +235,8 @@ class TestParforsBase(TestCase):
                 elif isinstance(x, np.number):
                     new_args.append(x.copy())
                 elif isinstance(x, numbers.Number):
+                    new_args.append(x)
+                elif x is None:
                     new_args.append(x)
                 elif isinstance(x, tuple):
                     new_args.append(copy.deepcopy(x))
@@ -2130,6 +2132,18 @@ class TestParfors(TestParforsBase):
         self.assertEqual(countParfors(test_impl, cptypes), 2)
         self.check(test_impl, a, b, size)
 
+    def test_prange_optional(self):
+        def test_impl(arr, pred=None):
+            for i in prange(1):
+                if pred is not None:
+                    arr[i] = 0.0
+
+        arr = np.ones(10)
+        self.check(test_impl, arr, None,
+                   check_arg_equality=[np.testing.assert_almost_equal,
+                                       lambda x, y: x == y])
+        self.assertEqual(arr.sum(), 10.0)
+
     def test_untraced_value_tuple(self):
         # This is a test for issue #6478.
         def test_impl():
@@ -2187,6 +2201,76 @@ class TestParfors(TestParforsBase):
             return x
 
         self.check(test_impl, np.zeros((3, 1)))
+
+    def test_1array_control_flow(self):
+        # issue8146
+        def test_impl(arr, flag1, flag2):
+            inv = np.arange(arr.size)
+            if flag1:
+                return inv.astype(np.float64)
+            if flag2:
+                ret = inv[inv]
+            else:
+                ret = inv[inv - 1]
+            return ret / arr.size
+
+        arr = np.arange(100)
+        self.check(test_impl, arr, True, False)
+        self.check(test_impl, arr, True, True)
+        self.check(test_impl, arr, False, False)
+
+    def test_2array_1_control_flow(self):
+        # issue8146
+        def test_impl(arr, l, flag):
+            inv1 = np.arange(arr.size)
+            inv2 = np.arange(l, arr.size + l)
+            if flag:
+                ret = inv1[inv1]
+            else:
+                ret = inv1[inv1 - 1]
+            return ret / inv2
+
+        arr = np.arange(100)
+        self.check(test_impl, arr, 10, True)
+        self.check(test_impl, arr, 10, False)
+
+    def test_2array_2_control_flow(self):
+        # issue8146
+        def test_impl(arr, l, flag):
+            inv1 = np.arange(arr.size)
+            inv2 = np.arange(l, arr.size + l)
+            if flag:
+                ret1 = inv1[inv1]
+                ret2 = inv2[inv1]
+            else:
+                ret1 = inv1[inv1 - 1]
+                ret2 = inv2[inv1 - 1]
+            return ret1 / ret2
+
+        arr = np.arange(100)
+        self.check(test_impl, arr, 10, True)
+        self.check(test_impl, arr, 10, False)
+
+    def test_issue8515(self):
+        # issue8515: an array is filled in the first prange and
+        # then accessed with c[i - 1] in the next prange which
+        # should prevent fusion with the previous prange.
+        def test_impl(n):
+            r = np.zeros(n, dtype=np.intp)
+            c = np.zeros(n, dtype=np.intp)
+            for i in prange(n):
+                for j in range(i):
+                    c[i] += 1
+
+            for i in prange(n):
+                if i == 0:
+                    continue
+                r[i] = c[i] - c[i - 1]
+            return r[1:]
+
+        self.check(test_impl, 15)
+        self.assertEqual(countParfors(test_impl, (types.int64, )), 2)
+
 
 @skip_parfors_unsupported
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
@@ -3276,29 +3360,9 @@ class TestPrangeBase(TestParforsBase):
                 new_code[idx] = prange_idx
             new_code = bytes(new_code)
 
-        # create new code parts
-        co_args = [pyfunc_code.co_argcount]
-
-        if utils.PYVERSION >= (3, 8):
-            co_args.append(pyfunc_code.co_posonlyargcount)
-        co_args.append(pyfunc_code.co_kwonlyargcount)
-        co_args.extend([pyfunc_code.co_nlocals,
-                        pyfunc_code.co_stacksize,
-                        pyfunc_code.co_flags,
-                        new_code,
-                        pyfunc_code.co_consts,
-                        prange_names,
-                        pyfunc_code.co_varnames,
-                        pyfunc_code.co_filename,
-                        pyfunc_code.co_name,
-                        pyfunc_code.co_firstlineno,
-                        pyfunc_code.co_lnotab,
-                        pyfunc_code.co_freevars,
-                        pyfunc_code.co_cellvars
-                        ])
-
         # create code object with prange mutation
-        prange_code = pytypes.CodeType(*co_args)
+        prange_code = pyfunc_code.replace(co_code=new_code,
+                                          co_names=prange_names)
 
         # get function
         pfunc = pytypes.FunctionType(prange_code, globals())

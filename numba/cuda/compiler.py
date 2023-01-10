@@ -207,14 +207,16 @@ def compile_cuda(pyfunc, return_type, args, debug=False, lineinfo=False,
         flags.nvvm_options = nvvm_options
 
     # Run compilation pipeline
-    cres = compiler.compile_extra(typingctx=typingctx,
-                                  targetctx=targetctx,
-                                  func=pyfunc,
-                                  args=args,
-                                  return_type=return_type,
-                                  flags=flags,
-                                  locals={},
-                                  pipeline_class=CUDACompiler)
+    from numba.core.target_extension import target_override
+    with target_override('cuda'):
+        cres = compiler.compile_extra(typingctx=typingctx,
+                                      targetctx=targetctx,
+                                      func=pyfunc,
+                                      args=args,
+                                      return_type=return_type,
+                                      flags=flags,
+                                      locals={},
+                                      pipeline_class=CUDACompiler)
 
     library = cres.library
     library.finalize()
@@ -295,6 +297,10 @@ def compile_ptx_for_current_device(pyfunc, args, debug=False, lineinfo=False,
 
 
 def declare_device_function(name, restype, argtypes):
+    return declare_device_function_template(name, restype, argtypes).key
+
+
+def declare_device_function_template(name, restype, argtypes):
     from .descriptor import cuda_target
     typingctx = cuda_target.typing_context
     targetctx = cuda_target.target_context
@@ -309,7 +315,8 @@ def declare_device_function(name, restype, argtypes):
         name=name, restype=restype, argtypes=argtypes)
     typingctx.insert_user_function(extfn, device_function_template)
     targetctx.insert_user_function(extfn, fndesc)
-    return extfn
+
+    return device_function_template
 
 
 class ExternFunction(object):

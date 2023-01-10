@@ -5,8 +5,6 @@ body.
 
 import ast
 
-from numba.core.utils import PYVERSION
-
 
 class FindDefFirstLine(ast.NodeVisitor):
     """
@@ -64,10 +62,8 @@ class FindDefFirstLine(ast.NodeVisitor):
 
 def _is_docstring(node):
     if isinstance(node, ast.Expr):
-        if PYVERSION <= (3, 7):
-            return isinstance(node.value, ast.Str)
-        elif (isinstance(node.value, ast.Constant)
-              and isinstance(node.value.value, str)):
+        if (isinstance(node.value, ast.Constant)
+                and isinstance(node.value.value, str)):
             return True
     return False
 

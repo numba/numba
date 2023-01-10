@@ -12,6 +12,7 @@ from collections import namedtuple
 import llvmlite.binding as ll
 from llvmlite import ir
 
+from numba import literal_unroll
 from numba.core.extending import (
     overload, overload_method, intrinsic, register_jitable)
 from numba.core import errors
@@ -20,7 +21,6 @@ from numba.core.unsafe.bytes import grab_byte, grab_uint64_t
 from numba.cpython.randomimpl import (const_int, get_next_int, get_next_int32,
                                       get_state_ptr)
 
-_py38_or_later = utils.PYVERSION >= (3, 8)
 _py310_or_later = utils.PYVERSION >= (3, 10)
 
 # This is Py_hash_t, which is a Py_ssize_t, which has sizeof(size_t):
@@ -280,128 +280,60 @@ def complex_hash(val):
     return impl
 
 
-if _py38_or_later:
-    # Python 3.8 strengthened its hash alg for tuples.
-    # This is a translation of CPython's tuplehash for Python >=3.8
-    # https://github.com/python/cpython/blob/b738237d6792acba85b1f6e6c8993a812c7fd815/Objects/tupleobject.c#L338-L391    # noqa: E501
+# Python 3.8 strengthened its hash alg for tuples.
+# This is a translation of CPython's tuplehash for Python >=3.8
+# https://github.com/python/cpython/blob/b738237d6792acba85b1f6e6c8993a812c7fd815/Objects/tupleobject.c#L338-L391    # noqa: E501
 
-    # These consts are needed for this alg variant, they are from:
-    # https://github.com/python/cpython/blob/b738237d6792acba85b1f6e6c8993a812c7fd815/Objects/tupleobject.c#L353-L363    # noqa: E501
-    if _Py_uhash_t.bitwidth // 8 > 4:
-        _PyHASH_XXPRIME_1 = _Py_uhash_t(11400714785074694791)
-        _PyHASH_XXPRIME_2 = _Py_uhash_t(14029467366897019727)
-        _PyHASH_XXPRIME_5 = _Py_uhash_t(2870177450012600261)
+# These consts are needed for this alg variant, they are from:
+# https://github.com/python/cpython/blob/b738237d6792acba85b1f6e6c8993a812c7fd815/Objects/tupleobject.c#L353-L363    # noqa: E501
+if _Py_uhash_t.bitwidth // 8 > 4:
+    _PyHASH_XXPRIME_1 = _Py_uhash_t(11400714785074694791)
+    _PyHASH_XXPRIME_2 = _Py_uhash_t(14029467366897019727)
+    _PyHASH_XXPRIME_5 = _Py_uhash_t(2870177450012600261)
 
-        @register_jitable(locals={'x': types.uint64})
-        def _PyHASH_XXROTATE(x):
-            # Rotate left 31 bits
-            return ((x << types.uint64(31)) | (x >> types.uint64(33)))
-    else:
-        _PyHASH_XXPRIME_1 = _Py_uhash_t(2654435761)
-        _PyHASH_XXPRIME_2 = _Py_uhash_t(2246822519)
-        _PyHASH_XXPRIME_5 = _Py_uhash_t(374761393)
-
-        @register_jitable(locals={'x': types.uint64})
-        def _PyHASH_XXROTATE(x):
-            # Rotate left 13 bits
-            return ((x << types.uint64(13)) | (x >> types.uint64(19)))
-
-    # Python 3.7+ has literal_unroll, this means any homogeneous and
-    # heterogeneous tuples can use the same alg and just be unrolled.
-    from numba import literal_unroll
-
-    @register_jitable(locals={'acc': _Py_uhash_t, 'lane': _Py_uhash_t,
-                              '_PyHASH_XXPRIME_5': _Py_uhash_t,
-                              '_PyHASH_XXPRIME_1': _Py_uhash_t,
-                              'tl': _Py_uhash_t})
-    def _tuple_hash(tup):
-        tl = len(tup)
-        acc = _PyHASH_XXPRIME_5
-        for x in literal_unroll(tup):
-            lane = hash(x)
-            if lane == _Py_uhash_t(-1):
-                return -1
-            acc += lane * _PyHASH_XXPRIME_2
-            acc = _PyHASH_XXROTATE(acc)
-            acc *= _PyHASH_XXPRIME_1
-
-        acc += tl ^ (_PyHASH_XXPRIME_5 ^ _Py_uhash_t(3527539))
-
-        if acc == _Py_uhash_t(-1):
-            return process_return(1546275796)
-
-        return process_return(acc)
+    @register_jitable(locals={'x': types.uint64})
+    def _PyHASH_XXROTATE(x):
+        # Rotate left 31 bits
+        return ((x << types.uint64(31)) | (x >> types.uint64(33)))
 else:
-    # This is a translation of CPython's tuplehash:
-    # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/tupleobject.c#L347-L369    # noqa: E501
-    @register_jitable(locals={'x': _Py_uhash_t,
-                              'y': _Py_hash_t,
-                              'mult': _Py_uhash_t,
-                              'l': _Py_hash_t, })
-    def _tuple_hash(tup):
-        tl = len(tup)
-        mult = _PyHASH_MULTIPLIER
-        x = _Py_uhash_t(0x345678)
-        # in C this is while(--l >= 0), i is indexing tup instead of *tup++
-        for i, l in enumerate(range(tl - 1, -1, -1)):
-            y = hash(tup[i])
-            xxory = (x ^ y)
-            x = xxory * mult
-            mult += _Py_hash_t((_Py_uhash_t(82520) + l + l))
-        x += _Py_uhash_t(97531)
-        return process_return(x)
+    _PyHASH_XXPRIME_1 = _Py_uhash_t(2654435761)
+    _PyHASH_XXPRIME_2 = _Py_uhash_t(2246822519)
+    _PyHASH_XXPRIME_5 = _Py_uhash_t(374761393)
 
-# This is an obfuscated translation of CPython's tuplehash:
-# https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/tupleobject.c#L347-L369    # noqa: E501
-# The obfuscation occurs for a heterogeneous tuple as each tuple member needs
-# a potentially different hash() function calling for it. This cannot be done at
-# runtime as there's no way to iterate a heterogeneous tuple, so this is
-# achieved by essentially unrolling the loop over the members and inserting a
-# per-type hash function call for each member, and then simply computing the
-# hash value in an inlined/rolling fashion.
+    @register_jitable(locals={'x': types.uint64})
+    def _PyHASH_XXROTATE(x):
+        # Rotate left 13 bits
+        return ((x << types.uint64(13)) | (x >> types.uint64(19)))
 
 
-@intrinsic
-def _tuple_hash_resolve(tyctx, val):
-    def impl(cgctx, builder, signature, args):
-        typingctx = cgctx.typing_context
-        fnty = typingctx.resolve_value_type(hash)
-        tupty, = signature.args
-        tup, = args
-        lty = cgctx.get_value_type(signature.return_type)
-        x = ir.Constant(lty, 0x345678)
-        mult = ir.Constant(lty, _PyHASH_MULTIPLIER)
-        shift = ir.Constant(lty, 82520)
-        tl = len(tupty)
-        for i, packed in enumerate(zip(tupty.types, range(tl - 1, -1, -1))):
-            ty, l = packed
-            sig = fnty.get_call_type(tyctx, (ty,), {})
-            impl = cgctx.get_function(fnty, sig)
-            tuple_val = builder.extract_value(tup, i)
-            y = impl(builder, (tuple_val,))
-            xxory = builder.xor(x, y)
-            x = builder.mul(xxory, mult)
-            lconst = ir.Constant(lty, l)
-            mult = builder.add(mult, shift)
-            mult = builder.add(mult, lconst)
-            mult = builder.add(mult, lconst)
-        x = builder.add(x, ir.Constant(lty, 97531))
-        return x
-    sig = _Py_hash_t(val)
-    return sig, impl
+@register_jitable(locals={'acc': _Py_uhash_t, 'lane': _Py_uhash_t,
+                          '_PyHASH_XXPRIME_5': _Py_uhash_t,
+                          '_PyHASH_XXPRIME_1': _Py_uhash_t,
+                          'tl': _Py_uhash_t})
+def _tuple_hash(tup):
+    tl = len(tup)
+    acc = _PyHASH_XXPRIME_5
+    for x in literal_unroll(tup):
+        lane = hash(x)
+        if lane == _Py_uhash_t(-1):
+            return -1
+        acc += lane * _PyHASH_XXPRIME_2
+        acc = _PyHASH_XXROTATE(acc)
+        acc *= _PyHASH_XXPRIME_1
+
+    acc += tl ^ (_PyHASH_XXPRIME_5 ^ _Py_uhash_t(3527539))
+
+    if acc == _Py_uhash_t(-1):
+        return process_return(1546275796)
+
+    return process_return(acc)
 
 
 @overload_method(types.BaseTuple, '__hash__')
 def tuple_hash(val):
-    if _py38_or_later or isinstance(val, types.Sequence):
-        def impl(val):
-            return _tuple_hash(val)
-        return impl
-    else:
-        def impl(val):
-            hashed = _Py_hash_t(_tuple_hash_resolve(val))
-            return process_return(hashed)
-        return impl
+    def impl(val):
+        return _tuple_hash(val)
+    return impl
 
 
 # ------------------------------------------------------------------------------
