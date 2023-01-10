@@ -517,7 +517,7 @@ class Array(Buffer):
 
     def __repr__(self):
         return (
-            f"Array({self.dtype}, {self.ndim}, '{self.layout}', "
+            f"Array({repr(self.dtype)}, {self.ndim}, '{self.layout}', "
             f"{not self.mutable}, aligned={self.aligned})"
                 )
 

@@ -14,7 +14,7 @@ NB_TYPES = [
 ]
 
 
-class MyTestCase(TestCase):
+class TestRepr(TestCase):
     def check_repr(self, val):
         ty = typeof(val)
         tys_ns = {ty.__name__: ty for ty in NB_TYPES if hasattr(ty, "__name__")}
@@ -37,6 +37,8 @@ class MyTestCase(TestCase):
             (1, "a"),
             [1, "a"],
             ([1, "a"], [2, "b"]),
+            ((1, 2), (3, "b")),
+            ((1, 2), (3, [1, 2])),
             np.ones(3),
             np.array([(1, "a", np.ones((2, 3)))], dtype=rec_dtype),
             nb_dict,
@@ -46,6 +48,8 @@ class MyTestCase(TestCase):
         for val in val_types_cases:
             self.check_repr(val)
 
+    def test_fail(self):
+        self.assertTrue(False)
 
 if __name__ == '__main__':
     unittest.main()

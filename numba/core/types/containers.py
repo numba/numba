@@ -257,7 +257,7 @@ class UniTuple(BaseAnonymousTuple, _HomogeneousTuple, Sequence):
         return type(self)(dtype=unliteral(self.dtype), count=self.count)
 
     def __repr__(self):
-        return f"UniTuple({self.dtype}, {self.count})"
+        return f"UniTuple({repr(self.dtype)}, {self.count})"
 
 
 class UniTupleIter(BaseContainerIterator):
