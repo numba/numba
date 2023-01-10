@@ -261,7 +261,6 @@ class TestCC(BasePYCCTest):
 
 class TestDistutilsSupport(TestCase):
 
-
     def setUp(self):
         super().setUp()
         self.skip_if_no_external_compiler() # external compiler needed
