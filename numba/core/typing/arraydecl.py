@@ -486,7 +486,7 @@ class ArrayAttribute(AttributeTemplate):
         # Only support no argument version (default order='C')
         assert not kws
         assert not args
-        # To ensure that Numba behaves exactly like Numpy,
+        # To ensure that Numba behaves exactly like NumPy,
         # we also clear the read-only flag when doing a "flatten"
         # Why? Two reasons:
         # Because flatten always returns a copy. (see NumPy docs for "flatten")
