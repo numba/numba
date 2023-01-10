@@ -1329,10 +1329,12 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         pyfunc = unfold_flatten
         cfunc = jit(nopython=True)(pyfunc)
 
-        # If issue #8370 is not fixed: This will fail with "NumbaTypeError:
-        # Cannot modify readonly array of type: readonly array(int32, 2d, C)"
-        cfunc(np.array([[1, 1, 1], [2, 2, 2], [3, 3, 3]]), 2)
+        # If issue #8370 is not fixed: This will fail.
+        res_nb = cfunc(np.array([[1, 1, 1], [2, 2, 2], [3, 3, 3]]), 2)
+        res_py = pyfunc(np.array([[1, 1, 1], [2, 2, 2], [3, 3, 3]]), 2)
 
+        self.assertTrue(np.array_equal(res_py, res_nb),
+                        'Numba and Numpy returned different results')
 
     def test_readonly_after_ravel(self):
         # Reproduces another suggested problem in Issue #8370
@@ -1348,9 +1350,12 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         pyfunc = unfold_ravel
         cfunc = jit(nopython=True)(pyfunc)
 
-        # If issue #8370 is not fixed: This will fail with "NumbaTypeError:
-        # Cannot modify readonly array of type: readonly array(int32, 2d, C)"
-        cfunc(np.array([[1, 1, 1], [2, 2, 2], [3, 3, 3]]), 2)
+        # If issue #8370 is not fixed: This will fail.
+        res_nb = cfunc(np.array([[1, 1, 1], [2, 2, 2], [3, 3, 3]]), 2)
+        res_py = pyfunc(np.array([[1, 1, 1], [2, 2, 2], [3, 3, 3]]), 2)
+
+        self.assertTrue(np.array_equal(res_py, res_nb),
+                        'Numba and Numpy returned different results')
 
     def test_mutability_after_ravel(self):
         # Reproduces another suggested problem in Issue #8370
