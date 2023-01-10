@@ -486,9 +486,12 @@ class ArrayAttribute(AttributeTemplate):
         # Only support no argument version (default order='C')
         assert not kws
         assert not args
-        # Just like in Numpy: "np.copy clears previously
-        # set WRITEABLE=False flag"
-        # Numba also sets readonly=False (b/c flatten returns a copy())
+        # To ensure that Numba behaves exactly like Numpy,
+        # we also clear the read-only flag when doing a "flatten"
+        # Why? Two reasons:
+        # Because flatten always returns a copy. (see NumPy docs for "flatten")
+        # And because a copy always returns a writeable array.
+        # ref: https://numpy.org/doc/stable/reference/generated/numpy.copy.html
         return signature(ary.copy(ndim=1, layout='C', readonly=False))
 
     def generic_resolve(self, ary, attr):
