@@ -12,6 +12,15 @@ from numba.cuda import require_context
 from numba.tests.support import ignore_internal_warnings
 from numba import cuda, void, float64, int64, int32, typeof, float32
 
+CONST1D = np.arange(10, dtype=np.float64)
+
+
+def simple_const_mem(A):
+    C = cuda.const.array_like(CONST1D)
+    i = cuda.grid(1)
+
+    A[i] = C[i] + 1.0
+
 
 def func_with_lots_of_registers(x, a, b, c, d, e, f):
     a1 = 1.0
@@ -81,8 +90,17 @@ def coop_smem2d(ary):
 
 def simple_maxthreads(ary):
     i = cuda.grid(1)
-    cuda.syncthreads()
     ary[i] = i
+
+LMEM_SIZE = 1000
+
+
+def simple_lmem(A, B, dty):
+    C = cuda.local.array(LMEM_SIZE, dty)
+    for i in range(C.shape[0]):
+        C[i] = A[i]
+    for i in range(C.shape[0]):
+        B[i] = C[i]
 
 
 @skip_on_cudasim('Linking unsupported in the simulator')
@@ -250,6 +268,12 @@ class TestLinker(CUDATestCase):
         compiled = cuda.jit(sig, max_registers=38)(func_with_lots_of_registers)
         self.assertLessEqual(compiled.get_regs_per_thread(), 38)
 
+    def test_get_const_mem_size(self):
+        sig = void(float64[::1])
+        compiled = cuda.jit(sig)(simple_const_mem)
+        const_mem_size = compiled.get_const_mem_size()
+        self.assertGreaterEqual(const_mem_size, CONST1D.nbytes)
+
     def test_get_no_shared_memory(self):
         compiled = cuda.jit(func_with_lots_of_registers)
         compiled = compiled.specialize(np.empty(32), *range(6))
@@ -283,6 +307,23 @@ class TestLinker(CUDATestCase):
             compiled[1, nelem](ary)
         except CudaAPIError as e:
             self.assertIn("cuLaunchKernel", e.msg)
+
+    def test_get_local_mem_per_thread(self):
+        sig = void(int32[::1], int32[::1], typeof(np.int32))
+        compiled = cuda.jit(sig)(simple_lmem)
+        shared_mem_size = compiled.get_local_mem_per_thread()
+        calc_size = np.dtype(np.int32).itemsize * LMEM_SIZE
+        self.assertGreaterEqual(shared_mem_size, calc_size)
+
+    def test_get_local_mem_per_specialized(self):
+        compiled = cuda.jit(simple_lmem)
+        compiled_specialized = compiled.specialize(
+            np.zeros(LMEM_SIZE, dtype=np.int32),
+            np.zeros(LMEM_SIZE, dtype=np.int32),
+            np.float64)
+        local_mem_size = compiled_specialized.get_local_mem_per_thread()
+        calc_size = np.dtype(np.float64).itemsize * LMEM_SIZE
+        self.assertGreaterEqual(local_mem_size, calc_size)
 
 
 if __name__ == '__main__':

@@ -137,11 +137,15 @@ def _ensure_critical_deps():
     from numba.np.numpy_support import numpy_version
     from numba.core.utils import PYVERSION
 
-    if PYVERSION < (3, 7):
-        raise ImportError("Numba needs Python 3.7 or greater")
+    if PYVERSION < (3, 8):
+        msg = ("Numba needs Python 3.8 or greater. Got Python "
+               f"{PYVERSION[0]}.{PYVERSION[1]}.")
+        raise ImportError(msg)
 
     if numpy_version < (1, 18):
-        raise ImportError("Numba needs NumPy 1.18 or greater")
+        msg = (f"Numba needs NumPy 1.18 or greater. Got NumPy "
+               f"{numpy_version[0]}.{numpy_version[1]}.")
+        raise ImportError(msg)
 
     try:
         import scipy
@@ -150,7 +154,9 @@ def _ensure_critical_deps():
     else:
         sp_version = tuple(map(int, scipy.__version__.split('.')[:2]))
         if sp_version < (1, 0):
-            raise ImportError("Numba requires SciPy version 1.0 or greater")
+            msg = ("Numba requires SciPy version 1.0 or greater. Got SciPy "
+                   f"{scipy.__version__}.")
+            raise ImportError(msg)
 
 
 def _try_enable_svml():

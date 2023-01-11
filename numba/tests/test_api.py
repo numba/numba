@@ -4,9 +4,11 @@ import numba
 from numba import jit, njit
 
 from numba.tests.support import TestCase
+from numba.testing import always_test
 import unittest
 
 
+@always_test
 class TestNumbaModule(TestCase):
     """
     Test the APIs exposed by the top-level `numba` module.
