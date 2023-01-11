@@ -20,7 +20,7 @@ _meminfo_struct_type = ir.LiteralStructType([
     ])
 
 
-incref_decref_ty = ir.FunctionType(ir.VoidType(), [_pointer_type])
+incref_decref_ty = ir.FunctionType(ir.VoidType(), [_pointer_type, cgutils.voidptr_t])
 meminfo_data_ty = ir.FunctionType(_pointer_type, [_pointer_type])
 
 
@@ -47,7 +47,7 @@ def _define_nrt_incref(module, atomic_incr):
     # Cannot inline this for refcount pruning to work
     fn_incref.attributes.add('noinline')
     builder = ir.IRBuilder(fn_incref.append_basic_block())
-    [ptr] = fn_incref.args
+    [ptr, trace_str] = fn_incref.args
     is_null = builder.icmp_unsigned("==", ptr, cgutils.get_null_value(ptr.type))
     with cgutils.if_unlikely(builder, is_null):
         builder.ret_void()
@@ -56,6 +56,8 @@ def _define_nrt_incref(module, atomic_incr):
     if config.DEBUG_NRT:
         cgutils.printf(builder, "*** NRT_Incref %zu [%p]\n", builder.load(word_ptr),
                        ptr)
+        cgutils.printf(builder, "Traceback %s\n", builder.load(trace_str),
+                ptr)
     builder.call(atomic_incr, [word_ptr])
     builder.ret_void()
 
@@ -73,7 +75,7 @@ def _define_nrt_decref(module, atomic_decr):
                            name="NRT_MemInfo_call_dtor")
 
     builder = ir.IRBuilder(fn_decref.append_basic_block())
-    [ptr] = fn_decref.args
+    [ptr, trace_str] = fn_decref.args
     is_null = builder.icmp_unsigned("==", ptr, cgutils.get_null_value(ptr.type))
     with cgutils.if_unlikely(builder, is_null):
         builder.ret_void()
@@ -90,6 +92,7 @@ def _define_nrt_decref(module, atomic_decr):
     if config.DEBUG_NRT:
         cgutils.printf(builder, "*** NRT_Decref %zu [%p]\n", builder.load(word_ptr),
                        ptr)
+        cgutils.printf(builder, "%s", trace_str)
     newrefct = builder.call(atomic_decr,
                             [word_ptr])
 
