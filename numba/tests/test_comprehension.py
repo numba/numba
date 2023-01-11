@@ -361,7 +361,9 @@ class TestArrayComprehension(unittest.TestCase):
         self.check(comp_nest_with_array_conditional, 5,
                    assert_allocate_list=True)
 
-    @unittest.skipUnless(numpy_version < (1, 24), 'Removed in NumPy 1.24')
+    @unittest.skipUnless(numpy_version < (1, 24),
+                         'Setting an array element with a sequence is removed '
+                         'in NumPy 1.24')
     def test_comp_nest_with_dependency(self):
         def comp_nest_with_dependency(n):
             l = np.array([[i * j for j in range(i+1)] for i in range(n)])
