@@ -112,7 +112,8 @@ def parse_slice(useslice):
         raise ValueError("Sharding out of range")
     else:
         def decide(test):
-            if getattr(test, "always_test", False):
+            func = getattr(test, test._testMethodName)
+            if "always_test" in getattr(func, 'tags', {}):
                 return True
             return abs(zlib.crc32(test.id().encode('utf-8'))) % count == index
         return decide
