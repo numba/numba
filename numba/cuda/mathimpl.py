@@ -42,7 +42,6 @@ unarys += [('sinh', 'sinhf', math.sinh)]
 unarys += [('atan', 'atanf', math.atan)]
 unarys += [('atanh', 'atanhf', math.atanh)]
 unarys += [('tan', 'tanf', math.tan)]
-unarys += [('tanh', 'tanhf', math.tanh)]
 unarys += [('trunc', 'truncf', math.trunc)]
 
 unarys_fastmath = {}
@@ -357,9 +356,7 @@ def impl_tanh(ty, libfunc):
 
         if ty == float32 and context.fastmath:
             cc = get_compute_capability()
-            tanhf_fastmath = ((cc[0] == 7) and (cc[1] >= 5)) or \
-                (cc[0] >= 8)
-            if tanhf_fastmath:
+            if cc >= (7,5):
                 return tanhf_impl_fastmath()
 
         return tanh_impl_libdevice()
@@ -370,9 +367,8 @@ def impl_tanh(ty, libfunc):
 impl_tanh(types.float32, libdevice.tanhf)
 impl_tanh(types.float64, libdevice.tanh)
 
-tanh_impl64 = getattr(libdevice, 'tanh')
-impl_unary_int(math.tanh, int64, tanh_impl64)
-impl_unary_int(math.tanh, uint64, tanh_impl64)
+impl_unary_int(math.tanh, int64, libdevice.tanh)
+impl_unary_int(math.tanh, uint64, libdevice.tanh)
 
 # Complex power implementations - translations of _Py_c_pow from CPython
 # https://github.com/python/cpython/blob/a755410e054e1e2390de5830befc08fe80706c66/Objects/complexobject.c#L123-L151
