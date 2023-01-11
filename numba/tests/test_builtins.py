@@ -1615,38 +1615,26 @@ class TestStrAndReprBuiltin(MemoryLeakMixin, TestCase):
             self.assertEqual(foo(x), foo.py_func(x))
 
     def test_repr_fallback(self):
-        # checks objmode str/repr call fallback, there's no overloaded
-        # __str__ or __repr__ for the dummy type so it has to use the objmode
-        # `repr` call.
+        # checks str/repr fallback, there's no overloaded __str__ or __repr__
+        # for the dummy type so it has to use generic '<object type:(type)>'
+        # string for the `repr` call.
 
         Dummy, DummyType = self.make_dummy_type()
-        string_repr = "this is the dummy object Python side repr"
-        Dummy.__repr__= lambda inst: string_repr
         dummy = Dummy()
+        string_repr = f"<object type:{typeof(dummy)}>"
+        Dummy.__repr__= lambda inst: string_repr
 
         @box(DummyType)
         def box_dummy(typ, obj, c):
             clazobj = c.pyapi.unserialize(c.pyapi.serialize_object(Dummy))
             return c.pyapi.call_function_objargs(clazobj, ())
 
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always', errors.NumbaPerformanceWarning)
-            ignore_internal_warnings()
+        @njit
+        def foo(x):
+            return str(x)
 
-            @njit
-            def foo(x):
-                return str(x)
+        self.assertEqual(foo(dummy), foo.py_func(dummy))
 
-            self.assertEqual(foo(dummy), foo.py_func(dummy))
-
-            self.assertEqual(len(w), 1)
-
-            self.assertEqual(w[0].category,
-                             errors.NumbaPerformanceWarning)
-
-            msg = ("There is no '__repr__' specialisation defined for the "
-                   f"type '{typeof(dummy)}'")
-            self.assertIn(msg, str(w[0].message))
 
 
 if __name__ == '__main__':

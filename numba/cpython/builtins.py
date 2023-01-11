@@ -981,33 +981,17 @@ def ol_hasattr(obj, name):
     return impl
 
 
-def _get_py_repr_and_warn(obj):
-    # Gets the repr of an object at runtime whilst issuing a performance
-    # warning
-    from numba import typeof
-    msg = ("There is no '__repr__' specialisation defined for the type "
-           f"'{typeof(obj)}', as a result the Python interpreter has been "
-           "called to fetch a repr(), this has a performance penalty. To avoid "
-           "this penalty either define a '__repr__' for the type or remove the "
-           "call to str()/repr()!")
-    warnings.warn(NumbaPerformanceWarning(msg))
-    return repr(obj)
-
-
 @overload(repr)
 def ol_repr_generic(obj):
-    from numba import objmode
+    missing_repr_format = f"<object type:{obj}>"
     def impl(obj):
         attr = '__repr__'
         if hasattr(obj, attr) == True:
             return getattr(obj, attr)()
         else:
-            # There's no __str__ or __repr__ defined for this object, go via
-            # the interpreter.
-            pyrepr = ""
-            with objmode(pyrepr='unicode_type'):
-                pyrepr = _get_py_repr_and_warn(obj)
-            return pyrepr
+            # There's no __str__ or __repr__ defined for this object, return
+            # something generic
+            return missing_repr_format
     return impl
 
 
