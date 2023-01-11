@@ -5,6 +5,7 @@ Support for native homogeneous lists.
 
 import math
 import operator
+from functools import cached_property
 
 from llvmlite import ir
 from numba.core import types, typing, errors, cgutils
@@ -13,7 +14,6 @@ from numba.core.imputils import (lower_builtin, lower_cast,
                                     impl_ret_new_ref, impl_ret_untracked,
                                     RefType)
 from numba.core.extending import overload_method, overload
-from numba.core.utils import cached_property
 from numba.misc import quicksort
 from numba.cpython import slicing
 from numba import literal_unroll
@@ -794,16 +794,24 @@ def list_eq(context, builder, sig, args):
 
     return builder.load(res)
 
-@lower_builtin(operator.ne, types.List, types.List)
-def list_ne(context, builder, sig, args):
+
+def all_list(*args):
+    return all([isinstance(typ, types.List) for typ in args])
+
+@overload(operator.ne)
+def impl_list_ne(a, b):
+    if not all_list(a, b):
+        return
 
     def list_ne_impl(a, b):
         return not (a == b)
 
-    return context.compile_internal(builder, list_ne_impl, sig, args)
+    return list_ne_impl
 
-@lower_builtin(operator.le, types.List, types.List)
-def list_le(context, builder, sig, args):
+@overload(operator.le)
+def impl_list_le(a, b):
+    if not all_list(a, b):
+        return
 
     def list_le_impl(a, b):
         m = len(a)
@@ -815,10 +823,12 @@ def list_le(context, builder, sig, args):
                 return False
         return m <= n
 
-    return context.compile_internal(builder, list_le_impl, sig, args)
+    return list_le_impl
 
-@lower_builtin(operator.lt, types.List, types.List)
-def list_lt(context, builder, sig, args):
+@overload(operator.lt)
+def impl_list_lt(a, b):
+    if not all_list(a, b):
+        return
 
     def list_lt_impl(a, b):
         m = len(a)
@@ -830,23 +840,27 @@ def list_lt(context, builder, sig, args):
                 return False
         return m < n
 
-    return context.compile_internal(builder, list_lt_impl, sig, args)
+    return list_lt_impl
 
-@lower_builtin(operator.ge, types.List, types.List)
-def list_ge(context, builder, sig, args):
+@overload(operator.ge)
+def impl_list_ge(a, b):
+    if not all_list(a, b):
+        return
 
     def list_ge_impl(a, b):
         return b <= a
 
-    return context.compile_internal(builder, list_ge_impl, sig, args)
+    return list_ge_impl
 
-@lower_builtin(operator.gt, types.List, types.List)
-def list_gt(context, builder, sig, args):
+@overload(operator.gt)
+def impl_list_gt(a, b):
+    if not all_list(a, b):
+        return
 
     def list_gt_impl(a, b):
         return b < a
 
-    return context.compile_internal(builder, list_gt_impl, sig, args)
+    return list_gt_impl
 
 #-------------------------------------------------------------------------------
 # Methods
@@ -870,15 +884,17 @@ def list_clear(context, builder, sig, args):
 
     return context.get_dummy_value()
 
-@lower_builtin("list.copy", types.List)
-def list_copy(context, builder, sig, args):
+
+@overload_method(types.List, "copy")
+def list_copy(lst):
     def list_copy_impl(lst):
         return list(lst)
 
-    return context.compile_internal(builder, list_copy_impl, sig, args)
+    return list_copy_impl
 
-@lower_builtin("list.count", types.List, types.Any)
-def list_count(context, builder, sig, args):
+
+@overload_method(types.List, "count")
+def list_count(lst, value):
 
     def list_count_impl(lst, value):
         res = 0
@@ -887,7 +903,8 @@ def list_count(context, builder, sig, args):
                 res += 1
         return res
 
-    return context.compile_internal(builder, list_count_impl, sig, args)
+    return list_count_impl
+
 
 def _list_extend_list(context, builder, sig, args):
     src = ListInstance(context, builder, sig.args[1], args[1])
@@ -921,41 +938,19 @@ def list_extend(context, builder, sig, args):
 
     return context.compile_internal(builder, list_extend, sig, args)
 
-@lower_builtin("list.index", types.List, types.Any)
-def list_index(context, builder, sig, args):
 
-    def list_index_impl(lst, value):
-        for i in range(len(lst)):
-            if lst[i] == value:
-                return i
-        # XXX references are leaked when raising
-        raise ValueError("value not in list")
+intp_max = types.intp.maxval
 
-    return context.compile_internal(builder, list_index_impl, sig, args)
 
-@lower_builtin("list.index", types.List, types.Any,
-           types.Integer)
-def list_index(context, builder, sig, args):
+@overload_method(types.List, "index")
+def list_index(lst, value, start=0, stop=intp_max):
 
-    def list_index_impl(lst, value, start):
-        n = len(lst)
-        if start < 0:
-            start += n
-            if start < 0:
-                start = 0
-        for i in range(start, len(lst)):
-            if lst[i] == value:
-                return i
-        # XXX references are leaked when raising
-        raise ValueError("value not in list")
+    if not isinstance(start, (int, types.Integer, types.Omitted)):
+        raise errors.TypingError(f'arg "start" must be an Integer. Got {start}')
+    if not isinstance(stop, (int, types.Integer, types.Omitted)):
+        raise errors.TypingError(f'arg "stop" must be an Integer. Got {stop}')
 
-    return context.compile_internal(builder, list_index_impl, sig, args)
-
-@lower_builtin("list.index", types.List, types.Any,
-           types.Integer, types.Integer)
-def list_index(context, builder, sig, args):
-
-    def list_index_impl(lst, value, start, stop):
+    def list_index_impl(lst, value, start=0, stop=intp_max):
         n = len(lst)
         if start < 0:
             start += n
@@ -970,8 +965,8 @@ def list_index(context, builder, sig, args):
                 return i
         # XXX references are leaked when raising
         raise ValueError("value not in list")
+    return list_index_impl
 
-    return context.compile_internal(builder, list_index_impl, sig, args)
 
 @lower_builtin("list.insert", types.List, types.Integer,
            types.Any)
@@ -1022,8 +1017,8 @@ def list_pop(context, builder, sig, args):
     inst.resize(n)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-@lower_builtin("list.remove", types.List, types.Any)
-def list_remove(context, builder, sig, args):
+@overload_method(types.List, "remove")
+def list_remove(lst, value):
 
     def list_remove_impl(lst, value):
         for i in range(len(lst)):
@@ -1033,18 +1028,17 @@ def list_remove(context, builder, sig, args):
         # XXX references are leaked when raising
         raise ValueError("list.remove(x): x not in list")
 
-    return context.compile_internal(builder, list_remove_impl, sig, args)
+    return list_remove_impl
 
-@lower_builtin("list.reverse", types.List)
-def list_reverse(context, builder, sig, args):
+@overload_method(types.List, "reverse")
+def list_reverse(lst):
 
     def list_reverse_impl(lst):
         for a in range(0, len(lst) // 2):
             b = -a - 1
             lst[a], lst[b] = lst[b], lst[a]
 
-    return context.compile_internal(builder, list_reverse_impl, sig, args)
-
+    return list_reverse_impl
 
 # -----------------------------------------------------------------------------
 # Sorting

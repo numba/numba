@@ -117,8 +117,6 @@ Compiler Pipeline
   Numba IR
 - :ghfile:`numba/core/analysis.py` - Utility functions to analyze Numba IR
   (variable lifetime, prune branches, etc)
-- :ghfile:`numba/core/dataflow.py` - Dataflow analysis for Python bytecode (used
-  in analysis.py)
 - :ghfile:`numba/core/controlflow.py` - Control flow analysis of Numba IR and
   Python bytecode
 - :ghfile:`numba/core/typeinfer.py` - Type inference algorithm
@@ -222,8 +220,6 @@ Misc Support
   patterns in LLVM IR
 - :ghfile:`numba/core/utils.py` - Python 2 backports of Python 3 functionality
   (also imports local copy of ``six``)
-- :ghfile:`numba/core/overload_glue.py` - Functions for wrapping split typing
-  and lowering API use cases into overloads.
 - :ghfile:`numba/misc/appdirs.py` - Vendored package for determining application
   config directories on every platform
 - :ghfile:`numba/core/compiler_lock.py` - Global compiler lock because Numba's

@@ -1,9 +1,16 @@
+import functools
+
 from llvmlite import ir
 
-from numba.core.datamodel.registry import register_default
-from numba.core.extending import register_model, models
+from numba.core.datamodel.registry import DataModelManager, register
+from numba.core.extending import models
 from numba.core import types
 from numba.cuda.types import Dim3, GridGroup, CUDADispatcher
+
+
+cuda_data_manager = DataModelManager()
+
+register_model = functools.partial(register, cuda_data_manager)
 
 
 @register_model(Dim3)
@@ -24,7 +31,7 @@ class GridGroupModel(models.PrimitiveModel):
         super().__init__(dmm, fe_type, be_type)
 
 
-@register_default(types.Float)
+@register_model(types.Float)
 class FloatModel(models.PrimitiveModel):
     def __init__(self, dmm, fe_type):
         if fe_type == types.float16:

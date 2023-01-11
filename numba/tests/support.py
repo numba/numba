@@ -26,6 +26,7 @@ from contextlib import contextmanager
 import uuid
 import importlib
 import types as pytypes
+from functools import cached_property
 
 import numpy as np
 
@@ -39,7 +40,6 @@ from numba.core.untyped_passes import PreserveIR
 import unittest
 from numba.core.runtime import rtsys
 from numba.np import numpy_support
-from numba.pycc.platform import _external_compiler_ok
 from numba.core.runtime import _nrt_python as _nrt
 from numba.core.extending import (
     overload_method,
@@ -50,6 +50,7 @@ from numba.core.extending import (
     models,
 )
 from numba.core.datamodel.models import OpaqueModel
+from numba.pycc.platform import external_compiler_works
 
 
 try:
@@ -77,10 +78,6 @@ is_parfors_unsupported = _32bit
 skip_parfors_unsupported = unittest.skipIf(
     is_parfors_unsupported,
     'parfors not supported',
-)
-skip_py38_or_later = unittest.skipIf(
-    utils.PYVERSION >= (3, 8),
-    "unsupported on py3.8 or later"
 )
 
 skip_unless_py10_or_later = unittest.skipUnless(
@@ -134,6 +131,10 @@ skip_ppc64le_issue6465 = unittest.skipIf(platform.machine() == 'ppc64le',
 # https://github.com/numba/numba/issues/7822#issuecomment-1065356758
 _uname = platform.uname()
 IS_OSX_ARM64 = _uname.system == 'Darwin' and _uname.machine == 'arm64'
+skip_m1_llvm_rtdyld_failure  = unittest.skipIf(IS_OSX_ARM64,
+    "skip tests that contribute to triggering an AssertionError in LLVM's "
+    "RuntimeDyLd on OSX arm64. (see: numba#8567)")
+
 skip_m1_fenv_errors = unittest.skipIf(IS_OSX_ARM64,
     "fenv.h-like functionality unreliable on OSX arm64")
 
@@ -160,12 +161,6 @@ needs_blas = unittest.skipUnless(has_blas, "BLAS needs SciPy 1.0+")
 # with this environment variable set.
 _exec_cond = os.environ.get('SUBPROC_TEST', None) == '1'
 needs_subprocess = unittest.skipUnless(_exec_cond, "needs subprocess harness")
-
-
-# decorate for test needs external compilers
-needs_external_compilers = unittest.skipIf(not _external_compiler_ok,
-                                           ('Compatible external compilers are '
-                                            'missing'))
 
 
 def ignore_internal_warnings():
@@ -218,7 +213,7 @@ class TestCase(unittest.TestCase):
 
     # A random state yielding the same random numbers for any test case.
     # Use as `self.random.<method name>`
-    @utils.cached_property
+    @cached_property
     def random(self):
         return np.random.RandomState(42)
 
@@ -647,6 +642,16 @@ class TestCase(unittest.TestCase):
 
         return Dummy, DummyType
 
+    def skip_if_no_external_compiler(self):
+        """
+        Call this to ensure the test is skipped if no suitable external compiler
+        is found. This is a method on the TestCase opposed to a stand-alone
+        decorator so as to make it "lazy" via runtime evaluation opposed to
+        running at test-discovery time.
+        """
+        if not external_compiler_works():
+            self.skipTest("No suitable external compiler was found.")
+
 
 class SerialMixin(object):
     """Mixin to mark test for serial execution.
@@ -703,32 +708,6 @@ def compile_function(name, code, globs):
     ns = {}
     eval(co, globs, ns)
     return ns[name]
-
-def tweak_code(func, codestring=None, consts=None):
-    """
-    Tweak the code object of the given function by replacing its
-    *codestring* (a bytes object) and *consts* tuple, optionally.
-    """
-    co = func.__code__
-    tp = type(co)
-    if codestring is None:
-        codestring = co.co_code
-    if consts is None:
-        consts = co.co_consts
-    if utils.PYVERSION >= (3, 8):
-        new_code = tp(co.co_argcount, co.co_posonlyargcount,
-                      co.co_kwonlyargcount, co.co_nlocals,
-                      co.co_stacksize, co.co_flags, codestring,
-                      consts, co.co_names, co.co_varnames,
-                      co.co_filename, co.co_name, co.co_firstlineno,
-                      co.co_lnotab)
-    else:
-        new_code = tp(co.co_argcount, co.co_kwonlyargcount, co.co_nlocals,
-                      co.co_stacksize, co.co_flags, codestring,
-                      consts, co.co_names, co.co_varnames,
-                      co.co_filename, co.co_name, co.co_firstlineno,
-                      co.co_lnotab)
-    func.__code__ = new_code
 
 
 _trashcan_dir = 'numba-tests'

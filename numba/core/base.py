@@ -3,6 +3,7 @@ import copy
 import sys
 from itertools import permutations, takewhile
 from contextlib import contextmanager
+from functools import cached_property
 
 from llvmlite import ir as llvmir
 from llvmlite.ir import Constant
@@ -329,14 +330,14 @@ class BaseContext(object):
     def target_data(self):
         raise NotImplementedError
 
-    @utils.cached_property
+    @cached_property
     def nonconst_module_attrs(self):
         """
         All module attrs are constant for targets using BaseContext.
         """
         return tuple()
 
-    @utils.cached_property
+    @cached_property
     def nrt(self):
         from numba.core.runtime.context import NRTContext
         return NRTContext(self, self.enable_nrt)

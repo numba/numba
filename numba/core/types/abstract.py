@@ -2,10 +2,11 @@ from abc import ABCMeta, abstractmethod, abstractproperty
 from typing import Dict as ptDict, Type as ptType
 import itertools
 import weakref
+from functools import cached_property
 
 import numpy as np
 
-from numba.core.utils import cached_property, get_hashable_key
+from numba.core.utils import get_hashable_key
 
 # Types are added to a global registry (_typecache) in order to assign
 # them unique integer codes for fast matching in _dispatcher.c.
