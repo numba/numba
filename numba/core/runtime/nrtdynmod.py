@@ -56,9 +56,9 @@ def _define_nrt_incref(module, atomic_incr):
     if config.DEBUG_NRT:
         cgutils.printf(builder, "*** NRT_Incref %zu [%p]\n", builder.load(word_ptr),
                        ptr)
-    if config.DEBUG_NRT_STACK_LIMIT:
-        cgutils.printf(builder, "Traceback %s\n", builder.load(trace_str),
-                ptr)
+        if config.DEBUG_NRT_STACK_LIMIT:
+            cgutils.printf(builder, "Traceback %s\n", builder.load(trace_str),
+                    ptr)
     builder.call(atomic_incr, [word_ptr])
     builder.ret_void()
 
@@ -93,8 +93,8 @@ def _define_nrt_decref(module, atomic_decr):
     if config.DEBUG_NRT:
         cgutils.printf(builder, "*** NRT_Decref %zu [%p]\n", builder.load(word_ptr),
                        ptr)
-    if config.DEBUG_NRT_STACK_LIMIT:
-        cgutils.printf(builder, "%s", trace_str)
+        if config.DEBUG_NRT_STACK_LIMIT:
+            cgutils.printf(builder, "%s", trace_str)
     newrefct = builder.call(atomic_decr,
                             [word_ptr])
 
