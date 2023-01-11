@@ -1333,8 +1333,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         res_nb = cfunc(np.array([[1, 1, 1], [2, 2, 2], [3, 3, 3]]), 2)
         res_py = pyfunc(np.array([[1, 1, 1], [2, 2, 2], [3, 3, 3]]), 2)
 
-        self.assertTrue(np.array_equal(res_py, res_nb),
-                        'Numba and Numpy returned different results')
+        np.testing.assert_array_equal(res_py, res_nb)
 
     def test_readonly_after_ravel(self):
         # Reproduces another suggested problem in Issue #8370
@@ -1354,8 +1353,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         res_nb = cfunc(np.array([[1, 1, 1], [2, 2, 2], [3, 3, 3]]), 2)
         res_py = pyfunc(np.array([[1, 1, 1], [2, 2, 2], [3, 3, 3]]), 2)
 
-        self.assertTrue(np.array_equal(res_py, res_nb),
-                        'Numba and Numpy returned different results')
+        np.testing.assert_array_equal(res_py, res_nb)
 
     def test_mutability_after_ravel(self):
         # Reproduces another suggested problem in Issue #8370
