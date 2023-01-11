@@ -18,8 +18,7 @@ import numpy as np
 
 from numba import jit, vectorize, guvectorize, set_num_threads
 from numba.tests.support import (temp_directory, override_config, TestCase, tag,
-                                 skip_parfors_unsupported, linux_only,
-                                 needs_external_compilers)
+                                 skip_parfors_unsupported, linux_only)
 
 import queue as t_queue
 from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
@@ -1064,9 +1063,11 @@ class TestTBBSpecificIssues(ThreadLayerTestHelper):
             print("OUT:", out)
             print("ERR:", err)
 
-    @needs_external_compilers
     @linux_only # fork required.
     def test_lifetime_of_task_scheduler_handle(self):
+
+        self.skip_if_no_external_compiler() # external compiler needed
+
         # See PR #7280 for context.
         BROKEN_COMPILERS = 'SKIP: COMPILATION FAILED'
         runme = """if 1:
@@ -1074,11 +1075,11 @@ class TestTBBSpecificIssues(ThreadLayerTestHelper):
             import sys
             import multiprocessing as mp
             from tempfile import TemporaryDirectory, NamedTemporaryFile
-            from numba.pycc.platform import Toolchain, _external_compiler_ok
+            from numba.pycc.platform import Toolchain, external_compiler_works
             from numba import njit, prange, threading_layer
             import faulthandler
             faulthandler.enable()
-            if not _external_compiler_ok:
+            if not external_compiler_works():
                 raise AssertionError('External compilers are not found.')
             with TemporaryDirectory() as tmpdir:
                 with NamedTemporaryFile(dir=tmpdir) as tmpfile:
