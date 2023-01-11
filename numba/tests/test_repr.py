@@ -48,9 +48,6 @@ class TestRepr(TestCase):
         for val in val_types_cases:
             self.check_repr(val)
 
-    def test_fail(self):
-        self.assertTrue(False)
-
 
 if __name__ == '__main__':
     unittest.main()
