@@ -233,6 +233,7 @@ class _Kernel(serialize.ReduceMixin):
         '''
         return self._codelibrary.get_cufunc().attrs.maxthreads
 
+    @property
     def local_mem_per_thread(self):
         '''
         The amount of local memory used per thread for this kernel.
