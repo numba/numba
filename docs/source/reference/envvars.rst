@@ -150,9 +150,10 @@ These variables influence what is printed out during compilation of
 
 .. envvar:: NUMBA_DEBUG_NRT_STACK_LIMIT
 
-   Enables user to set traceback stack limit when NUMBA_DEBUG_NRT set to non-zero.
+   Enables user to set traceback stack limit when ``NUMBA_DEBUG_NRT`` set to non-zero.
    By default set to 0 to disable traceback print. Increasing it to a positive non-zero
-   value enables traceback stack printing upto the respective value.
+   value enables traceback stack printing upto the respective value. Does not have any
+   active effects when ``NUMBA_DEBUG_NRT`` flag is set to disabled/zero.
 
 .. envvar:: NUMBA_NRT_STATS
 

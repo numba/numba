@@ -379,7 +379,7 @@ class NRTContext(object):
 
             trace_str = ""
 
-            if config.DEBUG_NRT:
+            if config.DEBUG_NRT and config.DEBUG_NRT_STACK_LIMIT:
                 trace = io.StringIO()
                 traceback.print_stack(limit=config.DEBUG_NRT_STACK_LIMIT+2, file=trace)
                 # The last two stack frames are `_call_incref_decref`
