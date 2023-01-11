@@ -3,7 +3,7 @@ from distutils.command.build_ext import build_ext
 from distutils.sysconfig import customize_compiler
 from distutils import log
 
-import numpy.distutils.misc_util as np_misc
+import numpy as np
 
 import functools
 import os
@@ -87,7 +87,13 @@ class Toolchain(object):
         self._build_ext.finalize_options()
         self._py_lib_dirs = self._build_ext.library_dirs
         self._py_include_dirs = self._build_ext.include_dirs
-        self._math_info = np_misc.get_info('npymath')
+
+        np_compile_args = {'include_dirs': [np.get_include(),],}
+        if sys.platform == 'win32':
+            np_compile_args['libraries'] = []
+        else:
+            np_compile_args['libraries'] = ['m',]
+        self._math_info = np_compile_args
 
     @property
     def verbose(self):
@@ -173,7 +179,7 @@ class Toolchain(object):
         """
         Get the library directories necessary to link with Python.
         """
-        return list(self._py_lib_dirs) + self._math_info['library_dirs']
+        return list(self._py_lib_dirs)
 
     def get_python_include_dirs(self):
         """
