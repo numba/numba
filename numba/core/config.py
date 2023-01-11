@@ -224,7 +224,7 @@ class _EnvReloader(object):
         DEBUG_NRT = _readenv("NUMBA_DEBUG_NRT", int, 0)
 
         # Stack Traceback limit when DEBUG_NRT is enabled
-        DEBUG_NRT_STACK_LIMIT = _readenv("NUMBA_DEBUG_NRT_STACK_LIMIT", int, 3)
+        DEBUG_NRT_STACK_LIMIT = _readenv("NUMBA_DEBUG_NRT_STACK_LIMIT", int, 0)
 
         # Enable NRT statistics counters
         NRT_STATS = _readenv("NUMBA_NRT_STATS", int, 0)
