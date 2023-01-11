@@ -168,7 +168,7 @@ class TestCC(BasePYCCTest):
         self.check_compile_for_cpu("host")
 
     @unittest.skipIf(sys.platform == 'darwin' and
-                     utils.PYVERSION in ((3, 8), (3, 7)),
+                     utils.PYVERSION == (3, 8),
                      'distutils incorrectly using gcc on python 3.8 builds')
     def test_compile_helperlib(self):
         with self.check_cc_compiled(self._test_module.cc_helperlib) as lib:
@@ -240,7 +240,7 @@ class TestCC(BasePYCCTest):
             self.assertPreciseEqual(res, hash("A"))
             res = lib.hash_str("A")
             self.assertPreciseEqual(res, hash("A"))
-            
+
             code = """if 1:
                 from numpy.testing import assert_equal
                 res = lib.hash_literal_str_A()
