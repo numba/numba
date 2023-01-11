@@ -159,8 +159,8 @@ class TestCase(unittest.TestCase):
 
         # check that each shard contains no repeats
         sharded_sets = [set(x) for x in sharded]
-        [self.assertEqual(len(sharded_sets[i]), len(sharded[i]))
-         for i in range(len(sharded))]
+        for i in range(len(sharded)):
+            self.assertEqual(len(sharded_sets[i]), len(sharded[i]))
 
         # check that the always running tests are in every shard, and then
         # remove them from the shards
@@ -178,7 +178,8 @@ class TestCase(unittest.TestCase):
         # same as the full listing
 
         sum_of_parts = set()
-        [sum_of_parts.update(x) for x in sharded_sets]
+        for x in sharded_sets:
+            sum_of_parts.update(x)
         sum_of_parts.update(always_running)
 
         full_listing = set(self._get_numba_tests_from_listing(
