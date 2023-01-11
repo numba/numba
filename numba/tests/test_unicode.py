@@ -2,7 +2,7 @@
 from itertools import product
 from itertools import permutations
 
-from numba import njit
+from numba import njit, typeof
 from numba.core import types
 import unittest
 from numba.tests.support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
@@ -2688,11 +2688,13 @@ class TestUnicodeAuxillary(BaseTest):
         self.assertEqual(impl2(2), njit(impl2)(2))
         # string input
         self.assertEqual(impl3("DE"), njit(impl3)("DE"))
-        # check error when input type doesn't have str() implementation
-        with self.assertRaises(TypingError) as raises:
-            njit(impl3)(["A", "B"])
-        msg = "No implementation of function Function(<class 'str'>)"
-        self.assertIn(msg, str(raises.exception))
+
+        # check output when there's no __str__ or __repr__ defined
+        list_arg = ["A", "B"]
+        got = njit(impl3)(list_arg)
+        expected = f"ABC_<object type:{typeof(list_arg)}>"
+        self.assertEqual(got, expected)
+
         # check error when format spec provided
         with self.assertRaises(UnsupportedError) as raises:
             njit(impl4)(["A", "B"])
