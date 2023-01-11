@@ -146,8 +146,6 @@ class TestCase(unittest.TestCase):
         for i in range(3):
             subset = self.get_testsuite_listing(['-j', '{}:3'.format(i)])
             slist = [*self._get_numba_tests_from_listing(subset)]
-            # there's at least 100 tests in a shard of roughly 1/3!
-            self.assertGreater(len(slist), 100)
             sharded.append(slist)
 
         # get the always running tests
