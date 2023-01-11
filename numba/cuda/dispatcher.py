@@ -232,6 +232,7 @@ class _Kernel(serialize.ReduceMixin):
         The maximum allowable threads per block.
         '''
         return self._codelibrary.get_cufunc().attrs.maxthreads
+
     def local_mem_per_thread(self):
         '''
         The amount of local memory used per thread for this kernel.
@@ -802,7 +803,7 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         else:
             return {sig: overload.max_threads_per_block
                     for sig, overload in self.overloads.items()}
-    
+
     def get_local_mem_per_thread(self, signature=None):
         '''
         Returns the size in bytes of local memory per thread

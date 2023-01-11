@@ -92,6 +92,7 @@ def simple_maxthreads(ary):
     i = cuda.grid(1)
     ary[i] = i
 
+
 LMEM_SIZE = 1000
 
 
