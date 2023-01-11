@@ -103,7 +103,6 @@ class TestFastMathOption(CUDATestCase):
             ], prec_unexpected=['sin.approx.ftz.f32 '])
         )
 
-    @skip_unless_cc_75
     def test_tanhf(self):
         self._test_fast_math_unary(
             tanh,
