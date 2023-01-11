@@ -1315,6 +1315,72 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
                 self.assertIn("shape mismatch: objects cannot be broadcast to a single shape",
                               str(raises.exception))
 
+    def test_readonly_after_flatten(self):
+        # Reproduces Issue #8370
+        def unfold_flatten(x, y):
+            r, c = x.shape
+            a = np.broadcast_to(x, (y, r, c))
+            b = np.swapaxes(a, 0, 1)
+            cc = b.flatten()
+            d = np.reshape(cc, (-1, c))
+            d[y - 1:, :] = d[: 1 - y]
+            return d
+
+        pyfunc = unfold_flatten
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # If issue #8370 is not fixed: This will fail.
+        res_nb = cfunc(np.array([[1, 1, 1], [2, 2, 2], [3, 3, 3]]), 2)
+        res_py = pyfunc(np.array([[1, 1, 1], [2, 2, 2], [3, 3, 3]]), 2)
+
+        np.testing.assert_array_equal(res_py, res_nb)
+
+    def test_readonly_after_ravel(self):
+        # Reproduces another suggested problem in Issue #8370
+        def unfold_ravel(x, y):
+            r, c = x.shape
+            a = np.broadcast_to(x, (y, r, c))
+            b = np.swapaxes(a, 0, 1)
+            cc = b.ravel()
+            d = np.reshape(cc, (-1, c))
+            d[y - 1:, :] = d[: 1 - y]
+            return d
+
+        pyfunc = unfold_ravel
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # If issue #8370 is not fixed: This will fail.
+        res_nb = cfunc(np.array([[1, 1, 1], [2, 2, 2], [3, 3, 3]]), 2)
+        res_py = pyfunc(np.array([[1, 1, 1], [2, 2, 2], [3, 3, 3]]), 2)
+
+        np.testing.assert_array_equal(res_py, res_nb)
+
+    def test_mutability_after_ravel(self):
+        # Reproduces another suggested problem in Issue #8370
+        # Namely that ravel should only return a writable array
+        # if a copy took place... otherwise leave it as it is.
+        self.disable_leak_check()
+        a_c = np.arange(9).reshape((3, 3)).copy()
+        a_f = a_c.copy(order='F')
+        a_c.flags.writeable = False
+        a_f.flags.writeable = False
+
+        def try_ravel_w_copy(a):
+            result = a.ravel()
+            return result
+
+        pyfunc = try_ravel_w_copy
+        cfunc = jit(nopython=True)(pyfunc)
+
+        ret_c = cfunc(a_c)
+        ret_f = cfunc(a_f)
+
+        msg = 'No copy was performed, so the ' \
+              'resulting array must not be writeable'
+        self.assertTrue(not ret_c.flags.writeable, msg)
+
+        msg = 'A copy was performed, yet the resulting array is not modifiable'
+        self.assertTrue(ret_f.flags.writeable, msg)
 
 
 if __name__ == '__main__':
