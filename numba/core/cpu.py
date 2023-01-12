@@ -1,4 +1,5 @@
 import platform
+from functools import cached_property
 
 import llvmlite.binding as ll
 from llvmlite import ir
@@ -8,7 +9,6 @@ from numba.core.callwrapper import PyCallWrapper
 from numba.core.base import BaseContext
 from numba.core import (utils, types, config, cgutils, callconv, codegen,
                         externals, fastmathpass, intrinsics)
-from numba.core.utils import cached_property
 from numba.core.options import TargetOptions, include_default_options
 from numba.core.runtime import rtsys
 from numba.core.compiler_lock import global_compiler_lock
@@ -60,13 +60,6 @@ class CPUContext(BaseContext):
 
         # Initialize NRT runtime
         rtsys.initialize(self)
-
-        # Add lower_extension attribute
-        self.lower_extensions = {}
-        from numba.parfors.parfor_lowering import _lower_parfor_parallel
-        from numba.parfors.parfor import Parfor
-        # Specify how to lower Parfor nodes using the lower_extensions
-        self.lower_extensions[Parfor] = _lower_parfor_parallel
 
     def load_additional_registries(self):
         # Add implementations that work via import

@@ -248,6 +248,9 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_dtype(self, ary):
         return types.DType(ary.dtype)
 
+    def resolve_nbytes(self, ary):
+        return types.intp
+
     def resolve_itemsize(self, ary):
         return types.intp
 
@@ -474,14 +477,22 @@ class ArrayAttribute(AttributeTemplate):
         # Only support no argument version (default order='C')
         assert not kws
         assert not args
-        return signature(ary.copy(ndim=1, layout='C'))
+        copy_will_be_made = ary.layout != 'C'
+        readonly = not (copy_will_be_made or ary.mutable)
+        return signature(ary.copy(ndim=1, layout='C', readonly=readonly))
 
     @bound_function("array.flatten")
     def resolve_flatten(self, ary, args, kws):
         # Only support no argument version (default order='C')
         assert not kws
         assert not args
-        return signature(ary.copy(ndim=1, layout='C'))
+        # To ensure that Numba behaves exactly like NumPy,
+        # we also clear the read-only flag when doing a "flatten"
+        # Why? Two reasons:
+        # Because flatten always returns a copy. (see NumPy docs for "flatten")
+        # And because a copy always returns a writeable array.
+        # ref: https://numpy.org/doc/stable/reference/generated/numpy.copy.html
+        return signature(ary.copy(ndim=1, layout='C', readonly=False))
 
     def generic_resolve(self, ary, attr):
         # Resolution of other attributes, for record arrays

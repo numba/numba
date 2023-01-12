@@ -15,10 +15,10 @@ import llvmlite.binding as ll
 from numba.core import utils
 from numba.pycc.decorators import clear_export_registry
 from numba.pycc.platform import find_shared_ending, find_pyext_ending
-from numba.pycc.platform import _external_compiler_ok
+from numba.pycc.platform import external_compiler_works
 
 from numba.tests.support import (TestCase, tag, import_dynamic, temp_directory,
-                                 has_blas, needs_external_compilers)
+                                 has_blas)
 import unittest
 
 
@@ -48,12 +48,12 @@ class TestCompilerChecks(TestCase):
     @_windows_only
     def test_windows_compiler_validity(self):
         # When inside conda-build VSINSTALLDIR should be set and windows should
-        # have a valid compiler available, `_external_compiler_ok` should  agree
-        # with this. If this is not the case then error out to alert devs.
+        # have a valid compiler available, `external_compiler_works()` should
+        # agree with this. If this is not the case then error out to alert devs.
         is_running_conda_build = os.environ.get('CONDA_BUILD', None) is not None
         if is_running_conda_build:
             if os.environ.get('VSINSTALLDIR', None) is not None:
-                self.assertTrue(_external_compiler_ok)
+                self.assertTrue(external_compiler_works())
 
 
 class BasePYCCTest(TestCase):
@@ -84,11 +84,11 @@ class BasePYCCTest(TestCase):
             sys.modules.pop(name, None)
 
 
-@needs_external_compilers
 class TestCC(BasePYCCTest):
 
     def setUp(self):
         super(TestCC, self).setUp()
+        self.skip_if_no_external_compiler() # external compiler needed
         from numba.tests import compile_with_pycc
         self._test_module = compile_with_pycc
         imp.reload(self._test_module)
@@ -168,7 +168,7 @@ class TestCC(BasePYCCTest):
         self.check_compile_for_cpu("host")
 
     @unittest.skipIf(sys.platform == 'darwin' and
-                     utils.PYVERSION in ((3, 8), (3, 7)),
+                     utils.PYVERSION == (3, 8),
                      'distutils incorrectly using gcc on python 3.8 builds')
     def test_compile_helperlib(self):
         with self.check_cc_compiled(self._test_module.cc_helperlib) as lib:
@@ -240,7 +240,7 @@ class TestCC(BasePYCCTest):
             self.assertPreciseEqual(res, hash("A"))
             res = lib.hash_str("A")
             self.assertPreciseEqual(res, hash("A"))
-            
+
             code = """if 1:
                 from numpy.testing import assert_equal
                 res = lib.hash_literal_str_A()
@@ -259,10 +259,12 @@ class TestCC(BasePYCCTest):
             self.assertPreciseEqual(got, expect)
 
 
-@needs_external_compilers
 class TestDistutilsSupport(TestCase):
 
     def setUp(self):
+        super().setUp()
+        self.skip_if_no_external_compiler() # external compiler needed
+
         unset_macosx_deployment_target()
 
         # Copy the test project into a temp directory to avoid

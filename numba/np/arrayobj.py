@@ -13,7 +13,7 @@ from llvmlite.ir import Constant
 import numpy as np
 
 from numba import pndindex, literal_unroll
-from numba.core import types, utils, typing, errors, cgutils, extending
+from numba.core import types, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, carray, farray, is_contiguous,
                                     is_fortran, check_is_integer,
                                     type_is_scalar)
@@ -1535,6 +1535,16 @@ if numpy_version >= (1, 20):
     overload(np.broadcast_shapes)(ol_numpy_broadcast_shapes)
 
 
+def __broadcast_shapes(*args):
+    pass
+
+
+# np.broadcast_shapes is only available on NumPy >= 1.20
+# this quick hack allow us to use np.broadcast_shapes internally without
+# having to check if it exists in the NumPy module
+overload(__broadcast_shapes)(ol_numpy_broadcast_shapes)
+
+
 @overload(np.broadcast_arrays)
 def numpy_broadcast_arrays(*args):
 
@@ -2634,6 +2644,7 @@ def array_itemsize(context, builder, typ, value):
     return impl_ret_untracked(context, builder, typ, res)
 
 
+@lower_getattr(types.Array, "nbytes")
 @lower_getattr(types.MemoryView, "nbytes")
 def array_nbytes(context, builder, typ, value):
     """
@@ -3188,7 +3199,7 @@ def make_nditer_cls(nditerty):
         def set_member_ptr(self, ptr):
             setattr(self.nditer, self.member_name, ptr)
 
-        @utils.cached_property
+        @functools.cached_property
         def member_ptr(self):
             return getattr(self.nditer, self.member_name)
 
@@ -3280,7 +3291,7 @@ def make_nditer_cls(nditerty):
         so indices and shapes arrays have to be reversed as well.
         """
 
-        @utils.cached_property
+        @functools.cached_property
         def subiters(self):
             l = []
             factories = {'flat': FlatSubIter if nditerty.need_shaped_indexing
@@ -6376,3 +6387,70 @@ def arr_take_along_axis(arr, indices, axis):
             return _take_along_axis_impl(arr, indices, axis, Ni, Nk,
                                          indices_broadcast_shape)
     return take_along_axis_impl
+
+
+@overload(np.nan_to_num)
+def nan_to_num_impl(x, copy=True, nan=0.0):
+    if isinstance(x, types.Number):
+        if isinstance(x, types.Integer):
+            # Integers do not have nans or infs
+            def impl(x, copy=True, nan=0.0):
+                return x
+
+        elif isinstance(x, types.Float):
+            def impl(x, copy=True, nan=0.0):
+                if np.isnan(x):
+                    return nan
+                elif np.isneginf(x):
+                    return np.finfo(type(x)).min
+                elif np.isposinf(x):
+                    return np.finfo(type(x)).max
+                return x
+        elif isinstance(x, types.Complex):
+            def impl(x, copy=True, nan=0.0):
+                r = np.nan_to_num(x.real, nan=nan)
+                c = np.nan_to_num(x.imag, nan=nan)
+                return complex(r, c)
+        else:
+            raise errors.TypingError(
+                "Only Integer, Float, and Complex values are accepted"
+            )
+
+    elif type_can_asarray(x):
+        if isinstance(x.dtype, types.Integer):
+            # Integers do not have nans or infs
+            def impl(x, copy=True, nan=0.0):
+                return x
+        elif isinstance(x.dtype, types.Float):
+            def impl(x, copy=True, nan=0.0):
+                min_inf = np.finfo(x.dtype).min
+                max_inf = np.finfo(x.dtype).max
+
+                x_ = np.asarray(x)
+                output = np.copy(x_) if copy else x_
+
+                output_flat = output.flat
+                for i in range(output.size):
+                    if np.isnan(output_flat[i]):
+                        output_flat[i] = nan
+                    elif np.isneginf(output_flat[i]):
+                        output_flat[i] = min_inf
+                    elif np.isposinf(output_flat[i]):
+                        output_flat[i] = max_inf
+                return output
+        elif isinstance(x.dtype, types.Complex):
+            def impl(x, copy=True, nan=0.0):
+                x_ = np.asarray(x)
+                output = np.copy(x_) if copy else x_
+
+                np.nan_to_num(output.real, copy=False, nan=nan)
+                np.nan_to_num(output.imag, copy=False, nan=nan)
+                return output
+        else:
+            raise errors.TypingError(
+                "Only Integer, Float, and Complex values are accepted"
+            )
+    else:
+        raise errors.TypingError("The first argument must be a scalar or an "
+                                 "array-like")
+    return impl

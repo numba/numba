@@ -1,17 +1,19 @@
 import re
+from functools import cached_property
 import llvmlite.binding as ll
 from llvmlite import ir
 
 from numba.core import typing, types, debuginfo, itanium_mangler, cgutils
 from numba.core.dispatcher import Dispatcher
 from numba.core.errors import NumbaInvalidConfigWarning
-from numba.core.utils import cached_property
 from numba.core.base import BaseContext
 from numba.core.callconv import MinimalCallConv
 from numba.core.typing import cmathdecl
+from numba.core import datamodel
 
 from .cudadrv import nvvm
 from numba.cuda import codegen, nvvmutils
+from numba.cuda.models import cuda_data_manager
 
 from warnings import warn
 
@@ -69,6 +71,9 @@ class CUDATargetContext(BaseContext):
 
     def __init__(self, typingctx, target='cuda'):
         super().__init__(typingctx, target)
+        self.data_model_manager = cuda_data_manager.chain(
+            datamodel.default_manager
+        )
 
     @property
     def DIBuilder(self):
