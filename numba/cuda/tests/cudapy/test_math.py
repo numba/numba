@@ -653,10 +653,19 @@ class TestCudaMath(CUDATestCase):
 
     #---------------------------------------------------------------------------
     # test_math_trunc
+    #
+    # Note that math.trunc() is only supported on NumPy float64s, and not
+    # other float types or int types. See NumPy Issue #13375:
+    #
+    # - https://github.com/numpy/numpy/issues/13375 - "Add methods from the
+    #   builtin float types to the numpy floating point types"
 
     def test_math_trunc(self):
-        self.unary_template_float32(math_trunc, np.trunc)
         self.unary_template_float64(math_trunc, np.trunc)
+
+    @skip_on_cudasim('trunc only supported on NumPy float64')
+    def test_math_trunc_non_float64(self):
+        self.unary_template_float32(math_trunc, np.trunc)
         self.unary_template_int64(math_trunc, np.trunc)
         self.unary_template_uint64(math_trunc, np.trunc)
 

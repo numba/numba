@@ -867,11 +867,7 @@ int reraise_exc_is_none(void) {
     /* Reraise */
     PyThreadState *tstate = PyThreadState_GET();
     PyObject *tb, *type, *value;
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 7)
     _PyErr_StackItem *tstate_exc = tstate->exc_info;
-#else
-    PyThreadState *tstate_exc = tstate;
-#endif
     type = tstate_exc->exc_type;
     value = tstate_exc->exc_value;
     tb = tstate_exc->exc_traceback;

@@ -278,7 +278,7 @@ class TestErrorMessages(unittest.TestCase):
 
         self.assertIn("Overload of function 'add'", excstr)
         # there'll be numerous matched templates that don't work but as they
-        # are mostly "overload_glue"s they'll just appear as "No match".
+        # are mostly "overload"s they'll just appear as "No match".
         self.assertIn("No match.", excstr)
 
     def test_abstract_template_source(self):
