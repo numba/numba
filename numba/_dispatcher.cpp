@@ -311,27 +311,20 @@ _PyFrame_MakeAndSetFrameObject(_PyInterpreterFrame *frame)
  */
 static int
 call_trace(Py_tracefunc func, PyObject *obj,
-           PyThreadState *tstate, _PyInterpreterFrame *frame,
+           PyThreadState *tstate, PyFrameObject *frame,
            int what, PyObject *arg)
 {
     int result;
     if (tstate->tracing) {
         return 0;
     }
-    PyFrameObject *f = _PyFrame_GetFrameObject(frame);
-    if (f == NULL) {
+    if (frame == NULL) {
         return -1;
     }
     int old_what = tstate->tracing_what;
     tstate->tracing_what = what;
     PyThreadState_EnterTracing(tstate);
-    assert(_PyInterpreterFrame_LASTI(frame) >= 0);
-    if (_PyCode_InitLineArray(frame->f_code)) {
-        return -1;
-    }
-    f->f_lineno = _PyCode_LineNumberFromArray(frame->f_code, _PyInterpreterFrame_LASTI(frame));
-    result = func(obj, f, what, arg);
-    f->f_lineno = 0;
+    result = func(obj, frame, PyTrace_CALL, NULL);
     PyThreadState_LeaveTracing(tstate);
     tstate->tracing_what = old_what;
     return result;
@@ -343,7 +336,7 @@ call_trace(Py_tracefunc func, PyObject *obj,
  */
 static int
 call_trace_protected(Py_tracefunc func, PyObject *obj,
-                     PyThreadState *tstate, _PyInterpreterFrame *frame,
+                     PyThreadState *tstate, PyFrameObject *frame,
                      int what, PyObject *arg)
 {
     PyObject *type, *value, *traceback;
@@ -369,9 +362,9 @@ call_trace_protected(Py_tracefunc func, PyObject *obj,
  * NOTE: The state test https://github.com/python/cpython/blob/d5650a1738fe34f6e1db4af5f4c4edb7cae90a36/Python/ceval.c#L4521
  * has been removed, it's dealt with in call_cfunc.
  */
-#define C_TRACE(x, call) \
+#define C_TRACE(x, call, frame) \
 if (call_trace(tstate->c_profilefunc, tstate->c_profileobj, \
-    tstate, tstate->cframe->current_frame, \
+    tstate, frame, \
     PyTrace_C_CALL, cfunc)) { \
     x = NULL; \
 } \
@@ -381,13 +374,13 @@ else { \
         if (x == NULL) { \
             call_trace_protected(tstate->c_profilefunc, \
                 tstate->c_profileobj, \
-                tstate, tstate->cframe->current_frame, \
+                tstate, frame, \
                 PyTrace_RETURN, cfunc); \
             /* XXX should pass (type, value, tb) */ \
         } else { \
             if (call_trace(tstate->c_profilefunc, \
                 tstate->c_profileobj, \
-                tstate, tstate->cframe->current_frame, \
+                tstate, frame, \
                 PyTrace_RETURN, cfunc)) { \
                 Py_DECREF(x); \
                 x = NULL; \
@@ -928,8 +921,7 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
     tstate = PyThreadState_GET();
 
 #if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 11)
-    #warning "FIXME: THIS IS STUB CODE"
-    if (tstate->tracing && tstate->c_profilefunc)
+    if (tstate->cframe->use_tracing && tstate->c_profilefunc)
 #elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 10)
     /*
      * On Python 3.10+ trace_info comes from somewhere up in PyFrameEval et al,
@@ -990,7 +982,7 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
         /* Populate the 'fast locals' in `frame` */
         PyFrame_LocalsToFast(frame, 0);
 #if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 11)
-        C_TRACE(result, fn(PyCFunction_GET_SELF(cfunc), args, kws));
+        C_TRACE(result, fn(PyCFunction_GET_SELF(cfunc), args, kws), frame);
 #else
         tstate->frame = frame;
         C_TRACE(result, fn(PyCFunction_GET_SELF(cfunc), args, kws));
