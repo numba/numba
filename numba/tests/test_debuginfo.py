@@ -380,7 +380,7 @@ class TestDebugInfoEmission(TestCase):
         for line in full_ir.splitlines():
             line_stripped = line.strip()
             if line_stripped.startswith('call void @NRT_decref'):
-                self.assertRegex(line, r'.*meminfo\.[0-9]+\)$')
+                self.assertRegex(line, r'.*meminfo\.[0-9]+.*\)$')
                 count += 1
         self.assertGreater(count, 0) # make sure there were some decrefs!
 
