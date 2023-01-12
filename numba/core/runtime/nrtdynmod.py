@@ -57,8 +57,7 @@ def _define_nrt_incref(module, atomic_incr):
         cgutils.printf(builder, "*** NRT_Incref %zu [%p]\n", builder.load(word_ptr),
                        ptr)
         if config.DEBUG_NRT_STACK_LIMIT:
-            cgutils.printf(builder, "Traceback %s\n", builder.load(trace_str),
-                    ptr)
+            cgutils.printf(builder, "%s", trace_str)
     builder.call(atomic_incr, [word_ptr])
     builder.ret_void()
 
