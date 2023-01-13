@@ -114,7 +114,6 @@ class TestFastMathOption(CUDATestCase):
             )
         )
 
-    @skip_unless_cc_75
     def test_tanhf_compile_ptx(self):
         def tanh_kernel(r, x):
             r[0] = tanh(x)
