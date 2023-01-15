@@ -332,7 +332,9 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         self.cache = cache
         self._sigs = []
         self._cres = {}
-        self.writable_args = writable_args
+
+        transform_arg = _get_transform_arg(py_func)
+        self.writable_args = tuple([transform_arg(a) for a in writable_args])
 
     def _finalize_signature(self, cres, args, return_type):
         if not cres.objectmode and cres.signature.return_type != types.void:
@@ -394,3 +396,22 @@ class GUFuncBuilder(_BaseUFuncBuilder):
                 ty = a
             dtypenums.append(as_dtype(ty).num)
         return dtypenums, ptr, env
+
+
+def _get_transform_arg(py_func):
+    """Return function that transform arg into index"""
+    args = inspect.getfullargspec(py_func).args
+    pos_by_arg = {arg: i for i, arg in enumerate(args)}
+
+    def transform_arg(arg):
+        if isinstance(arg, int):
+            return arg
+
+        try:
+            return pos_by_arg[arg]
+        except KeyError:
+            msg = (f"Specified writable arg {arg} not found in arg list "
+                   f"{args} for function {py_func.__qualname__}")
+            raise RuntimeError(msg)
+
+    return transform_arg

@@ -302,7 +302,8 @@ casted array was mutated instead.
    ``writable_args=(n, m)``.
 
 To solve this problem, one needs to tell the GUFunc engine that 0-th
-argument is writable. This can be achieved by passing ``writable_args=(0,)``
+argument is writable. This can be achieved by passing argument position
+``writable_args=(0,)`` or argument name ``writable_args=('invals',)``
 to ``@guvectorize``.  Now, the code above works as expected::
 
    @guvectorize([(float64[:], float64[:])], '()->()', writable_args=(0,))

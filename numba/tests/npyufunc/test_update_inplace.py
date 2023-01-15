@@ -49,6 +49,11 @@ class TestUpdateInplace(TestCase):
                              nopython=True, writable_args=(0,))(py_replace_2nd)
         self._run_test_for_gufunc(gufunc, py_replace_2nd)
 
+        # test with writable_args as strings
+        gufunc = guvectorize(['void(f8[:], f8[:])'], '(t),()', nopython=True,
+                             writable_args=('x_t',))(py_replace_2nd)
+        self._run_test_for_gufunc(gufunc, py_replace_2nd)
+
     def test_update_inplace_with_cache(self):
         # test with writable_args
         gufunc = guvectorize(['void(f8[:], f8[:])'], '(t),()',
@@ -78,6 +83,12 @@ class TestUpdateInplace(TestCase):
         gufunc = guvectorize(['void(f8[:], f8[:], f8[:], f8[:])'],
                              '(t),(t),(t),()', nopython=True,
                              writable_args=(0, 1, 2))(py_update_3)
+        self._run_test_for_gufunc(gufunc, py_update_3)
+
+        # test with writable_args as mix of strings and ints
+        gufunc = guvectorize(['void(f8[:], f8[:], f8[:], f8[:])'],
+                             '(t),(t),(t),()', nopython=True,
+                             writable_args=('x0_t', 'x1_t', 2))(py_update_3)
         self._run_test_for_gufunc(gufunc, py_update_3)
 
     def test_exceptions(self):
