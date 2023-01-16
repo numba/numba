@@ -13,6 +13,7 @@ jobs:
 
   steps:
     - script: |
+        set -e
         echo "Installing Miniconda"
         buildscripts/incremental/install_miniconda.sh
         export PATH=$HOME/miniconda3/bin:$PATH
