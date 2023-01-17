@@ -69,6 +69,8 @@ def string_slicing(s, start, stop):
 
 
 def string_conversion(x):
+    # the test that calls this has always relied on objmode fallback so force it
+    object()
     return str(x)
 
 
