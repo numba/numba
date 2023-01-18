@@ -14,9 +14,9 @@ class TestCudaLineInfo(CUDATestCase):
 
         pat = (
             r'\.loc'      # .loc directive beginning
-            r'\s*[0-9]*'  # whitespace then file index
-            r'\s*[0-9]*'  # whitespace then line number
-            r'\s*[0-9]*'  # whitespace then column position
+            r'\s+[0-9]+'  # whitespace then file index
+            r'\s+[0-9]+'  # whitespace then line number
+            r'\s+[0-9]+'  # whitespace then column position
         )
         return re.compile(pat)
 
@@ -32,8 +32,8 @@ class TestCudaLineInfo(CUDATestCase):
             r'!DICompileUnit\(.*'    # Opening of DICompileUnit metadata. Since
                                      # the order of attributes is not
                                      # guaranteed, we need to match arbitrarily
-                                     # aftwerwards.
-            r'emissionKind:\s*'      # The emissionKind attribute followed by
+                                     # afterwards.
+            r'emissionKind:\s+'      # The emissionKind attribute followed by
                                      # whitespace.
             r'DebugDirectivesOnly'   # The correct emissionKind.
         )
@@ -42,7 +42,7 @@ class TestCudaLineInfo(CUDATestCase):
 
         pat = (
             r'!DICompileUnit\(.*'  # Same as the pattern above, but for the
-            r'emissionKind:\s*'    # incorrect FullDebug emissionKind.
+            r'emissionKind:\s+'    # incorrect FullDebug emissionKind.
             r'FullDebug'           #
         )
         match = re.compile(pat).search(llvm)
@@ -52,7 +52,7 @@ class TestCudaLineInfo(CUDATestCase):
         # if lineinfo was propagated through correctly.
         pat = (
             r'\.file'                # .file directive beginning
-            r'\s*[0-9]*\s*'          # file number surrounded by whitespace
+            r'\s+[0-9]+\s+'          # file number surrounded by whitespace
             r'".*test_lineinfo.py"'  # filename in quotes, ignoring full path
         )
         match = re.compile(pat).search(ptx)
@@ -65,7 +65,7 @@ class TestCudaLineInfo(CUDATestCase):
         # Debug info sections should not be present when only lineinfo is
         # generated
         pat = (
-            r'\.section\s*'  # .section directive beginning
+            r'\.section\s+'  # .section directive beginning
             r'\.debug_'      # Any section name beginning ".debug_"
         )
         match = re.compile(pat).search(ptx)
