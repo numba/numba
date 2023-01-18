@@ -4,10 +4,6 @@
  * NUMBA_EXPORT_FUNC() and NUMBA_EXPORT_DATA() macros.
  */
 
-#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 11)
-    #include "_pycore.h"
-#endif
-
 #include "_pymodule.h"
 #include <stddef.h>
 #include <stdio.h>
@@ -25,6 +21,11 @@
 #include <numpy/npy_math.h>
 
 #include "_arraystruct.h"
+
+
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 11)
+#include "internal/pycore_frame.h"
+#endif
 
 /*
  * Other helpers.
