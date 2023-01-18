@@ -154,6 +154,7 @@ class TestCudaLineInfo(CUDATestCase):
                 # We will begin our search on the line following the
                 # declaration
                 start = lineno + 1
+                break
 
         if start is None:
             self.fail(f'Could not identify device function in:\n\n{ptx}')
@@ -165,6 +166,7 @@ class TestCudaLineInfo(CUDATestCase):
             # Assume the end of the function is a line with an unindented '}'
             if line[:1] == '}':
                 end = start + offset
+                break
 
         if end is None:
             self.fail(f'Could not identify end of device function in:\n\n{ptx}')
@@ -176,6 +178,7 @@ class TestCudaLineInfo(CUDATestCase):
         for line in ptxlines[start:end]:
             if loc_directive.search(line) is not None:
                 found = True
+                break
 
         if not found:
             # Join one line either side so the function as a whole is shown,
