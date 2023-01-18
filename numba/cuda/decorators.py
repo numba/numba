@@ -12,7 +12,7 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
 
 
 def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
-        opt=True, cache=False, **kws):
+        opt=True, lineinfo=False, cache=False, **kws):
     """
     JIT compile a python function conforming to the CUDA Python specification.
     If a signature is supplied, then a function is returned that takes a
@@ -79,6 +79,12 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                " - set debug=False or opt=False.")
         warn(NumbaInvalidConfigWarning(msg))
 
+    if debug and lineinfo:
+        msg = ("debug and lineinfo are mutually exclusive. Use debug to get "
+               "full debug info (this disables some optimizations), or "
+               "lineinfo for line info only with code generation unaffected.")
+        warn(NumbaInvalidConfigWarning(msg))
+
     if device and kws.get('link'):
         raise ValueError("link keyword invalid for device function")
 
@@ -96,6 +102,7 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
         def _jit(func):
             targetoptions = kws.copy()
             targetoptions['debug'] = debug
+            targetoptions['lineinfo'] = lineinfo
             targetoptions['link'] = link
             targetoptions['opt'] = opt
             targetoptions['fastmath'] = fastmath
@@ -129,7 +136,7 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
             else:
                 def autojitwrapper(func):
                     return jit(func, device=device, debug=debug, opt=opt,
-                               link=link, cache=cache, **kws)
+                               lineinfo=lineinfo, link=link, cache=cache, **kws)
 
             return autojitwrapper
         # func_or_sig is a function
@@ -140,6 +147,7 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
             else:
                 targetoptions = kws.copy()
                 targetoptions['debug'] = debug
+                targetoptions['lineinfo'] = lineinfo
                 targetoptions['opt'] = opt
                 targetoptions['link'] = link
                 targetoptions['fastmath'] = fastmath
