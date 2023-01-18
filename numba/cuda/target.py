@@ -158,6 +158,7 @@ class CUDATargetContext(BaseContext):
                        in a kernel call.
         fndesc:        The FunctionDescriptor of the source function.
         debug:         Whether to compile with debug.
+        lineinfo:      Whether to emit line info.
         nvvm_options:  Dict of NVVM options used when compiling the new library.
         filename:      The source filename that the function is contained in.
         linenum:       The source line that the function is on.
