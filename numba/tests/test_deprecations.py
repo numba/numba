@@ -1,7 +1,7 @@
 import warnings
 from numba import jit, generated_jit
 from numba.core.errors import (NumbaDeprecationWarning,
-                          NumbaPendingDeprecationWarning, NumbaWarning)
+                               NumbaPendingDeprecationWarning, NumbaWarning)
 from numba.tests.support import TestCase
 import unittest
 
@@ -21,6 +21,11 @@ class TestDeprecation(TestCase):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("ignore", category=NumbaWarning)
             warnings.simplefilter("always", category=NumbaDeprecationWarning)
+            # ignore the warning about the nopython kwarg not being supplied
+            warnings.filterwarnings("ignore",
+                                    message=(r".*The 'nopython' keyword "
+                                             r"argument was not supplied.*"),
+                                    category=NumbaDeprecationWarning,)
 
             def foo():
                 return []  # empty list cannot be typed
@@ -28,7 +33,61 @@ class TestDeprecation(TestCase):
 
             msg = ("Fall-back from the nopython compilation path to the object "
                    "mode compilation path")
+
             self.check_warning(w, msg, NumbaDeprecationWarning)
+
+    @TestCase.run_test_in_subprocess
+    def test_default_missing_nopython_kwarg(self):
+        # test that not supplying `nopython` kwarg to @jit raises a warning
+        # about the default changing.
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("ignore", category=NumbaWarning)
+            warnings.simplefilter("always", category=NumbaDeprecationWarning)
+
+            @jit
+            def foo():
+                pass
+
+            foo()
+
+            msg = "The 'nopython' keyword argument was not supplied"
+            self.check_warning(w, msg, NumbaDeprecationWarning)
+
+    @TestCase.run_test_in_subprocess
+    def test_explicit_false_nopython_kwarg(self):
+        # tests that explicitly setting `nopython=False` in @jit raises a
+        # warning about the default changing and it being an error in the
+        # future.
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("ignore", category=NumbaWarning)
+            warnings.simplefilter("always", category=NumbaDeprecationWarning)
+
+            @jit(nopython=False)
+            def foo():
+                pass
+
+            foo()
+
+            msg = "The keyword argument 'nopython=False' was supplied"
+            self.check_warning(w, msg, NumbaDeprecationWarning)
+
+    @TestCase.run_test_in_subprocess
+    def test_default_missing_nopython_kwarg_silent_if_forceobj(self):
+        # Checks that if forceobj is set and the nopython kwarg is also not
+        # present then no warning is raised. The user intentially wants objmode.
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("ignore", category=NumbaWarning)
+            warnings.simplefilter("always", category=NumbaDeprecationWarning)
+
+            @jit(forceobj=True)
+            def foo():
+                object()
+
+            foo()
+
+        # no warnings should be raised.
+        self.assertFalse(w)
 
     @TestCase.run_test_in_subprocess
     def test_reflection_of_mutable_container(self):
