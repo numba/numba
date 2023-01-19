@@ -24,7 +24,10 @@
 
 
 #if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 11)
-#include "internal/pycore_frame.h"
+    /*
+     * For struct _frame
+     */
+    #include "internal/pycore_frame.h"
 #endif
 
 /*

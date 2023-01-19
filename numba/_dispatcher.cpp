@@ -650,6 +650,11 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
     tstate = PyThreadState_GET();
 
 #if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 11)
+    /*
+     * On Python 3.11, _PyEval_EvalFrameDefault stop using PyTraceInfo since 
+     * it's now baked into ThreadState.
+     * https://github.com/python/cpython/pull/26623
+     */
     if (tstate->cframe->use_tracing && tstate->c_profilefunc)
 #elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 10)
     /*
