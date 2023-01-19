@@ -45,11 +45,8 @@ class _Kernel(serialize.ReduceMixin):
     '''
 
     @global_compiler_lock
-    def __init__(self, py_func, argtypes, link=None, debug=False,
-                 lineinfo=False, inline=False, fastmath=False, extensions=None,
-                 max_registers=None, opt=True, device=False):
-
-        if device:
+    def __init__(self, py_func, argtypes, targetoptions):
+        if targetoptions.get('device'):
             raise RuntimeError('Cannot compile a device function as a kernel')
 
         super().__init__()
@@ -71,21 +68,25 @@ class _Kernel(serialize.ReduceMixin):
 
         self.py_func = py_func
         self.argtypes = argtypes
-        self.debug = debug
-        self.lineinfo = lineinfo
-        self.extensions = extensions or []
+        self.targetoptions = targetoptions
+        debug = targetoptions.get('debug')
+        lineinfo = targetoptions.get('lineinfo')
+        fastmath = targetoptions.get('fastmath')
+        opt = targetoptions.get('opt')
+        inline = targetoptions.get('inline')
+        max_registers = targetoptions.get('max_registers')
 
         nvvm_options = {
-            'debug': self.debug,
-            'lineinfo': self.lineinfo,
+            'debug': debug,
+            'lineinfo': lineinfo,
             'fastmath': fastmath,
             'opt': 3 if opt else 0
         }
 
         cc = get_current_device().compute_capability
-        cres = compile_cuda(self.py_func, types.void, self.argtypes,
-                            debug=self.debug,
-                            lineinfo=self.lineinfo,
+        cres = compile_cuda(py_func, types.void, argtypes,
+                            debug=debug,
+                            lineinfo=lineinfo,
                             inline=inline,
                             fastmath=fastmath,
                             nvvm_options=nvvm_options,
@@ -99,8 +100,7 @@ class _Kernel(serialize.ReduceMixin):
                                                   filename, linenum,
                                                   max_registers)
 
-        if not link:
-            link = []
+        link = self.targetoptions.get('link', [])
 
         # A kernel needs cooperative launch if grid_sync is being used.
         self.cooperative = 'cudaCGGetIntrinsicHandle' in lib.get_asm_str()
@@ -161,7 +161,7 @@ class _Kernel(serialize.ReduceMixin):
 
     @classmethod
     def _rebuild(cls, cooperative, name, signature, codelibrary,
-                 debug, lineinfo, call_helper, extensions):
+                 call_helper, targetoptions):
         """
         Rebuild an instance.
         """
@@ -175,10 +175,8 @@ class _Kernel(serialize.ReduceMixin):
         instance.signature = signature
         instance._type_annotation = None
         instance._codelibrary = codelibrary
-        instance.debug = debug
-        instance.lineinfo = lineinfo
         instance.call_helper = call_helper
-        instance.extensions = extensions
+        instance.targetoptions = targetoptions
         return instance
 
     def _reduce_states(self):
@@ -191,8 +189,8 @@ class _Kernel(serialize.ReduceMixin):
         """
         return dict(cooperative=self.cooperative, name=self.entry_name,
                     signature=self.signature, codelibrary=self._codelibrary,
-                    debug=self.debug, lineinfo=self.lineinfo,
-                    call_helper=self.call_helper, extensions=self.extensions)
+                    call_helper=self.call_helper,
+                    targetoptions=self.targetoptions)
 
     def bind(self):
         """
@@ -291,7 +289,7 @@ class _Kernel(serialize.ReduceMixin):
         # Prepare kernel
         cufunc = self._codelibrary.get_cufunc()
 
-        if self.debug:
+        if self.targetoptions.get('debug'):
             excname = cufunc.name + "__errcode__"
             excmem, excsz = cufunc.module.get_global_symbol(excname)
             assert excsz == ctypes.sizeof(ctypes.c_int)
@@ -321,7 +319,7 @@ class _Kernel(serialize.ReduceMixin):
                              kernelargs,
                              cooperative=self.cooperative)
 
-        if self.debug:
+        if self.targetoptions.get('debug'):
             driver.device_to_host(ctypes.addressof(excval), excmem, excsz)
             if excval.value != 0:
                 # An error occurred
@@ -365,7 +363,8 @@ class _Kernel(serialize.ReduceMixin):
         """
 
         # map the arguments using any extension you've registered
-        for extension in reversed(self.extensions):
+        extensions = self.targetoptions.get('extensions', (),)
+        for extension in reversed(extensions):
             ty, val = extension.prepare_args(
                 ty,
                 val,
@@ -888,7 +887,7 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
             if not self._can_compile:
                 raise RuntimeError("Compilation disabled")
 
-            kernel = _Kernel(self.py_func, argtypes, **self.targetoptions)
+            kernel = _Kernel(self.py_func, argtypes, self.targetoptions)
             # We call bind to force codegen, so that there is a cubin to cache
             kernel.bind()
             self._cache.save_overload(sig, kernel)
