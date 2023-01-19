@@ -105,10 +105,10 @@ def jit(func_or_sig=None, device=False, inline=False, link=None, debug=None,
             targetoptions['link'] = link
             targetoptions['opt'] = opt
             targetoptions['fastmath'] = fastmath
-            targetoptions['device'] = device
             targetoptions['extensions'] = extensions
 
-            disp = CUDADispatcher(func, targetoptions=targetoptions)
+            disp = CUDADispatcher(func, targetoptions=targetoptions,
+                                  device=device)
 
             if cache:
                 disp.enable_caching()
@@ -155,9 +155,9 @@ def jit(func_or_sig=None, device=False, inline=False, link=None, debug=None,
                 targetoptions['opt'] = opt
                 targetoptions['link'] = link
                 targetoptions['fastmath'] = fastmath
-                targetoptions['device'] = device
                 targetoptions['extensions'] = extensions
-                disp = CUDADispatcher(func_or_sig, targetoptions=targetoptions)
+                disp = CUDADispatcher(func_or_sig, targetoptions=targetoptions,
+                                      device=device)
 
                 if cache:
                     disp.enable_caching()

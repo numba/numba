@@ -46,11 +46,6 @@ class _Kernel(serialize.ReduceMixin):
 
     @global_compiler_lock
     def __init__(self, py_func, argtypes, targetoptions):
-        if targetoptions.get('device'):
-            raise RuntimeError('Cannot compile a device function as a kernel')
-
-        super().__init__()
-
         # _DispatcherBase.nopython_signatures() expects this attribute to be
         # present, because it assumes an overload is a CompileResult. In the
         # CUDA target, _Kernel instances are stored instead, so we provide this
@@ -571,7 +566,8 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
 
     targetdescr = cuda_target
 
-    def __init__(self, py_func, targetoptions, pipeline_class=CUDACompiler):
+    def __init__(self, py_func, targetoptions, device=False,
+                 pipeline_class=CUDACompiler):
         super().__init__(py_func, targetoptions=targetoptions,
                          pipeline_class=pipeline_class)
 
@@ -586,6 +582,9 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         # If we produced specialized dispatchers, we cache them for each set of
         # argument types
         self.specializations = {}
+
+        # Is this intended to be used as a device function?
+        self._device = device
 
     @property
     def _numba_type_(self):
@@ -865,6 +864,9 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         Compile and bind to the current context a version of this kernel
         specialized for the given signature.
         '''
+        if self._device:
+            raise RuntimeError('Cannot compile a device function as a kernel')
+
         argtypes, return_type = sigutils.normalize_signature(sig)
         assert return_type is None or return_type == types.none
 
@@ -905,14 +907,13 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
                  for all previously-encountered signatures.
 
         '''
-        device = self.targetoptions.get('device')
         if signature is not None:
-            if device:
+            if self._device:
                 return self.overloads[signature].library.get_llvm_str()
             else:
                 return self.overloads[signature].inspect_llvm()
         else:
-            if device:
+            if self._device:
                 return {sig: overload.library.get_llvm_str()
                         for sig, overload in self.overloads.items()}
             else:
@@ -929,14 +930,13 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
                  for all previously-encountered signatures.
         '''
         cc = get_current_device().compute_capability
-        device = self.targetoptions.get('device')
         if signature is not None:
-            if device:
+            if self._device:
                 return self.overloads[signature].library.get_asm_str(cc)
             else:
                 return self.overloads[signature].inspect_asm(cc)
         else:
-            if device:
+            if self._device:
                 return {sig: overload.library.get_asm_str(cc)
                         for sig, overload in self.overloads.items()}
             else:
@@ -956,7 +956,7 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
 
         Requires nvdisasm to be available on the PATH.
         '''
-        if self.targetoptions.get('device'):
+        if self._device:
             raise RuntimeError('Cannot inspect SASS of a device function')
 
         if signature is not None:
