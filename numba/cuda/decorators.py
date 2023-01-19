@@ -11,7 +11,7 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "positional argument.")
 
 
-def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
+def jit(func_or_sig=None, device=False, inline=False, link=None, debug=None,
         opt=True, cache=False, **kws):
     """
     JIT compile a Python function for CUDA GPUs.
@@ -54,6 +54,7 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
     :type cache: bool
     """
 
+    link = link or []
     if link and config.ENABLE_CUDASIM:
         raise NotImplementedError('Cannot link PTX in the simulator')
 
