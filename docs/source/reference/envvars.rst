@@ -150,10 +150,12 @@ These variables influence what is printed out during compilation of
 
 .. envvar:: NUMBA_DEBUG_NRT_STACK_LIMIT
 
-   Enables user to set traceback stack limit when ``NUMBA_DEBUG_NRT`` set to non-zero.
-   By default set to 0 to disable traceback print. Increasing it to a positive non-zero
-   value enables traceback stack printing upto the respective value. Does not have any
-   active effects when ``NUMBA_DEBUG_NRT`` flag is set to disabled/zero.
+   :ref:`Numba run time (NRT) <arch-numba-runtime>` calls to reference counting
+   operations will print `n` frames of backtrace from the stack present at the time
+   the call was generated during compilation. The purpose of this is to make it
+   easier to locate the code responsible for generating reference counting
+   operations. This environment variable has no effect unless the environment
+   variable ``NUMBA_DEBUG_NRT`` is enabled. Default value is zero.
 
 .. envvar:: NUMBA_NRT_STATS
 

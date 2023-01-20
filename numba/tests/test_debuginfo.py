@@ -125,6 +125,8 @@ class TestDebugInfoEmission(TestCase):
     """
 
     _NUMBA_OPT_0_ENV = {'NUMBA_OPT': '0'}
+    _NUMBA_NRT_STACK_TRACE = {'NUMBA_DEBUG_NRT': 1,
+                              'NUMBA_DEBUG_NRT_STACK_LIMIT': 3}
 
     def _get_llvmir(self, fn, sig):
         with override_config('OPT', 0):

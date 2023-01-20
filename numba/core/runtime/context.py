@@ -381,20 +381,26 @@ class NRTContext(object):
 
             if config.DEBUG_NRT and config.DEBUG_NRT_STACK_LIMIT:
                 trace = io.StringIO()
-                traceback.print_stack(limit=config.DEBUG_NRT_STACK_LIMIT+2, file=trace)
+                traceback.print_stack(limit=config.DEBUG_NRT_STACK_LIMIT + 2,
+                                      file=trace)
                 # The last two stack frames are `_call_incref_decref`
                 # and `traceback.print_stack` which we ignore.
-                clean_trace = trace.getvalue().split('\n')[:-5]
+                clean_trace = trace.getvalue().split('\n')
+                for i, _substr in enumerate(reversed(clean_trace)):
+                    if "_call_incref_decref" in _substr:
+                        break
+                clean_trace = clean_trace[:-(i + 1)]
 
                 if clean_trace:
-                    trace_str += 'Traceback:' + '\n'.join(clean_trace)+'\n\n'
+                    trace_str += 'Traceback:' + '\n'.join(clean_trace) + '\n\n'
 
-            mod = builder.module
-            # Make global constant for format string
-            cstring = cgutils.voidptr_t
-            fmt_bytes = cgutils.make_bytearray((trace_str + '\00').encode('ascii'))
-            global_fmt = cgutils.global_constant(mod, "printf_format", fmt_bytes)
-            ptr_fmt = builder.bitcast(global_fmt, cstring)
+                mod = builder.module
+                # Make global constant for format string
+                fmt_bytes = cgutils.make_bytearray((trace_str + '\00').encode('ascii'))
+                global_fmt = cgutils.global_constant(mod, "nrt_debug_printf_format", fmt_bytes)
+                ptr_fmt = builder.bitcast(global_fmt, cgutils.voidptr_t)
+            else:
+                ptr_fmt = cgutils.get_null_value(cgutils.voidptr_t)
 
             builder.call(fn, [mi, ptr_fmt])
 
