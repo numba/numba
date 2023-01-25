@@ -116,6 +116,13 @@ class TestCompileToPTX(unittest.TestCase):
         ptx, resty = compile_ptx(f, [], lineinfo=True)
         self.check_line_info(ptx)
 
+    def test_non_void_return_type(self):
+        def f(x, y):
+            return x[0] + y[0]
+
+        with self.assertRaisesRegex(TypeError, 'must have void return type'):
+            compile_ptx(f, (uint32[::1], uint32[::1]))
+
 
 @skip_on_cudasim('Compilation unsupported in the simulator')
 class TestCompileToPTXForCurrentDevice(CUDATestCase):
