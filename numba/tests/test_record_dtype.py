@@ -1766,13 +1766,16 @@ class TestNestedArrays(TestCase):
     def test_issue_3158_1(self):
         # A nested array dtype.
         item = np.dtype([('some_field', np.int32)])
-        items = np.dtype([('items', item, 10)])
+        items = np.dtype([('items', item, 3)])
 
         @njit
         def fn(x):
             return x[0]
 
-        arr = np.zeros((2,), items)
+        arr = np.asarray([([(0,), (1,), (2,)],),
+                          ([(4,), (5,), (6,)],)],
+                         dtype=items)
+
         expected = fn.py_func(arr)
         actual = fn(arr)
 
@@ -1788,7 +1791,9 @@ class TestNestedArrays(TestCase):
         def fn(arr):
             return arr[0]
 
-        arr = np.zeros(2, dtype3)
+        arr = np.asarray([(False, [[(0, 1), (2, 3)], [(4, 5), (6, 7)]]),
+                          (True, [[(8, 9), (10, 11)], [(12, 13), (14, 15)]])],
+                         dtype=dtype3)
         expected = fn.py_func(arr)
         actual = fn(arr)
 
