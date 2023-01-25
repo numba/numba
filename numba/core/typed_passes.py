@@ -10,7 +10,8 @@ from numba.core import (errors, types, typing, ir, funcdesc, rewrites,
 from numba.parfors.parfor import PreParforPass as _parfor_PreParforPass
 from numba.parfors.parfor import ParforPass as _parfor_ParforPass
 from numba.parfors.parfor import ParforFusionPass as _parfor_ParforFusionPass
-from numba.parfors.parfor import ParforPreLoweringPass as _parfor_ParforPreLoweringPass
+from numba.parfors.parfor import ParforPreLoweringPass as \
+    _parfor_ParforPreLoweringPass
 from numba.parfors.parfor import Parfor
 from numba.parfors.parfor_lowering import ParforLower
 
