@@ -196,7 +196,7 @@ vary with target operating system and hardware. The following lists them all
   * ``llvm-openmp`` (OSX) - provides headers for compiling OpenMP support into
     Numba's threading backend
   * ``tbb-devel`` - provides TBB headers/libraries for compiling TBB support
-    into Numba's threading backend (2021 <= version < 2021.6 required).
+    into Numba's threading backend (version >= 2021.6 required).
   * ``importlib_metadata`` (for Python versions < 3.9)
 
 * Optional runtime are:
@@ -260,7 +260,7 @@ information.
 +----------++--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
 | Numba     | Release date | Python                    | NumPy                      | llvmlite                     | LLVM              | TBB                         |
 +===========+==============+===========================+============================+==============================+===================+=============================+
-| 0.57.0    | TBC          | 3.8.x <= version < 3.12   | 1.21 <= version < 1.25     | 0.40.x                       | 11.x              | 2021.x                      |
+| 0.57.0    | TBC          | 3.8.x <= version < 3.12   | 1.21 <= version < 1.25     | 0.40.x                       | 11.x              | 2021.6 <= version           |
 +-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
 | 0.56.4    | 2022-11-03   | 3.7.x <= version < 3.11   | 1.18 <= version < 1.24     | 0.39.x                       | 11.x              | 2021.x                      |
 +-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+

@@ -40,7 +40,7 @@ requirements:
     # NOTE: 2021.1..2021.5 are API compatible for Numba's purposes.
     # NOTE: ppc64le exclusion is temporary until packages are more generally
     #       available.
-    - tbb-devel >=2021,<2021.6       # [not (aarch64 or ppc64le)]
+    - tbb-devel >=2021.6       # [not (aarch64 or ppc64le)]
   run:
     - python >=3.8
     # NumPy 1.22.0, 1.22.1, 1.22.2 are all broken for ufuncs, see #7756
@@ -50,8 +50,8 @@ requirements:
     # On channel https://anaconda.org/numba/
     - llvmlite >=0.40.0dev0,<0.40
   run_constrained:
-    # If TBB is present it must be at least version 2021
-    - tbb >=2021    # [not (aarch64 or ppc64le)]
+    # If TBB is present it must be at least version 2021.6
+    - tbb >=2021.6    # [not (aarch64 or ppc64le)]
     # avoid confusion from openblas bugs
     - libopenblas !=0.3.6      # [x86_64]
     # 0.3.17 buggy on M1 silicon
@@ -75,7 +75,7 @@ test:
     - scipy
     - ipython                  # [not aarch64]
     - setuptools
-    - tbb  >=2021              # [not (aarch64 or ppc64le)]
+    - tbb >=2021.6             # [not (aarch64 or ppc64le)]
     - llvm-openmp              # [osx]
     # This is for driving gdb tests
     - pexpect                  # [linux64]

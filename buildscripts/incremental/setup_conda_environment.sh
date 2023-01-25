@@ -85,7 +85,7 @@ if [ "$RUN_COVERAGE" == "yes" ]; then $PIP_INSTALL codecov; fi
 # Install SVML
 if [ "$TEST_SVML" == "yes" ]; then $CONDA_INSTALL -c numba icc_rt; fi
 # Install Intel TBB parallel backend
-if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL -c numba tbb=2021 "tbb-devel>=2021,<2021.6"; fi
+if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL -c numba tbb>=2021.6 tbb-devel>=2021.6; fi
 # Install typeguard
 if [ "$RUN_TYPEGUARD" == "yes" ]; then $CONDA_INSTALL conda-forge::typeguard; fi
 
