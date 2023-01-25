@@ -1735,8 +1735,8 @@ class TestNestedArrays(TestCase):
     def test_issue_1469_1(self):
         # Dimensions of nested arrays as a dtype are concatenated with the
         # dimensions of the array.
-        nptype = np.dtype((np.float64,(4,)))
-        nbtype = types.Array(numpy_support.from_dtype(nptype),2,'C')
+        nptype = np.dtype((np.float64, (4,)))
+        nbtype = types.Array(numpy_support.from_dtype(nptype), 2, 'C')
         expected = types.Array(types.float64, 3, 'C')
         self.assertEqual(nbtype, expected)
 
@@ -1753,7 +1753,7 @@ class TestNestedArrays(TestCase):
         # Nested arrays in record dtypes are accepted, but alignment is not
         # guaranteed.
         nptype = np.dtype([('a', np.float64,(4,))])
-        nbtype = types.Array(numpy_support.from_dtype(nptype),2,'C')
+        nbtype = types.Array(numpy_support.from_dtype(nptype), 2, 'C')
 
         # Manual construction of expected array of record type
         natype = types.NestedArray(types.float64, (4,))
