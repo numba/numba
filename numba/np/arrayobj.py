@@ -545,12 +545,16 @@ def setitem_array(context, builder, sig, args):
     if use_fancy_indexing:
         # Index describes a non-trivial view => use generic slice assignment
         # (NOTE: this also handles scalar broadcasting)
-        return fancy_setslice(context, builder, sig, args,
-                              index_types, indices)
+        fancy_setslice(context, builder, sig, args,
+                       index_types, indices)
+        builder.module.add_named_metadata('numba_args_may_always_need_nrt',
+                                          ['fancy_setslice'])
+    else:
+        # Store source value the given location
+        val = context.cast(builder, val, valty, aryty.dtype)
+        store_item(context, builder, aryty, val, dataptr)
 
-    # Store source value the given location
-    val = context.cast(builder, val, valty, aryty.dtype)
-    store_item(context, builder, aryty, val, dataptr)
+    return context.get_dummy_value()
 
 
 @lower_builtin(len, types.Buffer)
@@ -1719,8 +1723,6 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
            and hasattr(_indexer, "idxary_instr"):
             context.nrt.decref(builder, _indexer.idxty, _indexer.idxary_instr)
     context.nrt.decref(builder, retty, src_flat_instr)
-
-    return context.get_dummy_value()
 
 
 # ------------------------------------------------------------------------------
