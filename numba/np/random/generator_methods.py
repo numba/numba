@@ -21,7 +21,8 @@ from numba.np.random.distributions import \
      random_lognormal, random_rayleigh, random_standard_t, random_wald,
      random_geometric, random_zipf, random_triangular,
      random_poisson, random_negative_binomial, random_logseries,
-     random_noncentral_chisquare, random_noncentral_f)
+     random_noncentral_chisquare, random_noncentral_f,
+     random_vonmises, random_gumbel)
 from numba.np.random import random_methods
 
 
@@ -944,5 +945,64 @@ def NumPyRandomGeneratorType_logseries(inst, p, size=None):
             out_f = out.flat
             for i in range(out.size):
                 out_f[i] = random_logseries(inst.bit_generator, p)
+            return out
+        return impl
+
+
+@overload_method(types.NumPyRandomGeneratorType, 'vonmises')
+def NumPyRandomGeneratorType_vonmises(inst, mu, kappa, size=None):
+    check_types(mu, [types.Float, types.Integer, int, float], 'mu')
+    check_types(kappa, [types.Float, types.Integer, int, float], 'kappa')
+
+    if isinstance(size, types.Omitted):
+        size = size.value
+
+    @register_jitable
+    def check_arg_bounds(kappa):
+        if kappa < 0:
+            raise ValueError("kappa should be >= 0")
+
+    if is_nonelike(size):
+        def impl(inst, mu, kappa, size=None):
+            check_arg_bounds(kappa)
+            return np.float64(random_vonmises(inst.bit_generator, mu, kappa))
+        return impl
+    else:
+        check_size(size)
+
+        def impl(inst, mu, kappa, size=None):
+            check_arg_bounds(kappa)
+            out = np.empty(size, dtype=np.float64)
+            for i in np.ndindex(size):
+                out[i] = random_vonmises(inst.bit_generator, mu, kappa)
+            return out
+        return impl
+
+
+@overload_method(types.NumPyRandomGeneratorType, 'gumbel')
+def NumPyRandomGeneratorType_gumbel(inst, loc=0.0, scale=1.0, size=None):
+    check_types(loc, [types.Float, types.Integer, int, float], 'loc')
+    check_types(scale, [types.Float, types.Integer, int, float], 'scale')
+    if isinstance(size, types.Omitted):
+        size = size.value
+
+    @register_jitable
+    def check_arg_bounds(scale):
+        if scale < 0:
+            raise ValueError("scale must be non-negative")
+
+    if is_nonelike(size):
+        def impl(inst, loc=0.0, scale=1.0, size=None):
+            check_arg_bounds(scale)
+            return np.float64(random_gumbel(inst.bit_generator, loc, scale))
+        return impl
+    else:
+        check_size(size)
+
+        def impl(inst, loc=0.0, scale=1.0, size=None):
+            check_arg_bounds(scale)
+            out = np.empty(size, dtype=np.float64)
+            for i in np.ndindex(size):
+                out[i] = random_gumbel(inst.bit_generator, loc, scale)
             return out
         return impl

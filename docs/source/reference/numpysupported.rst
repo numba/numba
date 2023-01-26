@@ -632,6 +632,7 @@ The following :py:class:`Generator` methods are supported:
 * :func:`numpy.random.Generator().f()`
 * :func:`numpy.random.Generator().gamma()`
 * :func:`numpy.random.Generator().geometric()`
+* :func:`numpy.random.Generator().gumbel()`
 * :func:`numpy.random.Generator().integers()` (Both `low` and `high` are required
   arguments. Array values for low and high are currently not supported.)
 * :func:`numpy.random.Generator().laplace()`
@@ -662,6 +663,7 @@ The following :py:class:`Generator` methods are supported:
 * :func:`numpy.random.Generator().standard_t()`
 * :func:`numpy.random.Generator().triangular()`
 * :func:`numpy.random.Generator().uniform()`
+* :func:`numpy.random.Generator().von_mises()`
 * :func:`numpy.random.Generator().wald()`
 * :func:`numpy.random.Generator().weibull()`
 * :func:`numpy.random.Generator().zipf()`
