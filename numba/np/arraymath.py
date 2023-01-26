@@ -1132,7 +1132,7 @@ def _isclose_item(x, y, rtol, atol, equal_nan):
 
 @overload(np.isclose)
 def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-    if not(type_can_asarray(a) and type_can_asarray(b)):
+    if not (type_can_asarray(a) and type_can_asarray(b)):
         raise TypingError("Inputs for `np.isclose` must be array-like.")
 
     if isinstance(a, types.Array) and isinstance(b, types.Number):
@@ -2077,10 +2077,10 @@ def np_ediff1d(ary, to_end=None, to_begin=None):
     # Check that to_end and to_begin are compatible with ary
     ary_dt = _dtype_of_compound(ary)
     to_begin_dt = None
-    if not(is_nonelike(to_begin)):
+    if not (is_nonelike(to_begin)):
         to_begin_dt = _dtype_of_compound(to_begin)
     to_end_dt = None
-    if not(is_nonelike(to_end)):
+    if not (is_nonelike(to_end)):
         to_end_dt = _dtype_of_compound(to_end)
 
     if to_begin_dt is not None and not np.can_cast(to_begin_dt, ary_dt):
