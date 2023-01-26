@@ -603,7 +603,7 @@ class TestStencil(TestStencilBase):
         for compiler in [self.compile_njit, self.compile_parallel]:
             try:
                 compiler(wrapped,())
-            except(NumbaValueError, LoweringError) as e:
+            except (NumbaValueError, LoweringError) as e:
                 self.assertIn(msg, str(e))
             else:
                 raise AssertionError("Expected error was not raised")
@@ -3056,7 +3056,7 @@ class TestManyStencils(TestStencilBase):
         """ Issue #3454, const(int) == const(int) evaluating incorrectly. """
         def kernel(a):
             b = 0
-            if(2 == 0):
+            if (2 == 0):
                 b = 2
             return a[0, 0] + b
         # ----------------------------------------------------------------------
