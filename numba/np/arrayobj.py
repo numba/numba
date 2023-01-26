@@ -1634,8 +1634,10 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
     indexer = FancyIndexer(context, builder, aryty, ary,
                            index_types, indices)
     indexer.prepare()
-    src_is_scalar = False
+    src_type = None
+
     if isinstance(srcty, types.Buffer):
+        src_type = 'buffer'
         # Source is an array
         src_dtype = srcty.dtype
         index_shape = indexer.get_shape()
@@ -1659,6 +1661,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
             context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
     elif isinstance(srcty, types.Sequence):
+        src_type = 'sequence'
         src_dtype = srcty.dtype
 
         # Check shape is equal to sequence length
@@ -1672,13 +1675,16 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         with builder.if_then(shape_error, likely=False):
             msg = "cannot assign slice from input of different size"
             context.call_conv.return_user_exc(builder, ValueError, (msg,))
+        getitem_impl = context.get_function(
+            operator.getitem,
+            signature(src_dtype, srcty, types.intp))
     else:
         # Source is a scalar (broadcast or not, depending on destination
         # shape).
         src_dtype = srcty
-        src_is_scalar = True
+        src_type = 'scalar'
 
-    if not src_is_scalar:
+    if src_type == 'buffer':
         def flat_imp_nocopy(ary):
             return ary.reshape(ary.size)
 
@@ -1699,8 +1705,9 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
                                                   (src._getvalue(),))
         src_flat = make_array(retty)(context, builder, src_flat_instr)
         src_data = src_flat.data
-        src_idx = cgutils.alloca_once_value(builder,
-                                            context.get_constant(types.intp, 0))
+
+    src_idx = cgutils.alloca_once_value(builder,
+                                        context.get_constant(types.intp, 0))
     # Loop on destination and copy from source to destination
     dest_indices = indexer.begin_loops()
 
@@ -1709,11 +1716,12 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
     dest_ptr = cgutils.get_item_pointer2(context, builder, dest_data,
                                          dest_shapes, dest_strides,
                                          aryty.layout, dest_indices,
-                                         wraparound=False)
+                                         wraparound=False,
+                                         boundscheck=context.enable_boundscheck)
 
-    if src_is_scalar:
+    if src_type == 'scalar':
         store_item(context, builder, aryty, src, dest_ptr)
-    else:
+    elif src_type == 'buffer':
         cur = builder.load(src_idx)
         ptr = builder.gep(src_data, [cur])
         val = builder.load(ptr)
@@ -1721,10 +1729,17 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         store_item(context, builder, aryty, val, dest_ptr)
         next_idx = cgutils.increment_index(builder, cur)
         builder.store(next_idx, src_idx)
+    elif src_type == 'sequence':
+        cur = builder.load(src_idx)
+        val = getitem_impl(builder, (src, cur))
+        val = context.cast(builder, val, src_dtype, aryty.dtype)
+        store_item(context, builder, aryty, val, dest_ptr)
+        next_idx = cgutils.increment_index(builder, cur)
+        builder.store(next_idx, src_idx)
 
     indexer.end_loops()
 
-    if not src_is_scalar:
+    if src_type == 'buffer':
         for _indexer in indexer.indexers:
             if isinstance(_indexer, IntegerArrayIndexer) \
                and hasattr(_indexer, "idxary_instr"):
