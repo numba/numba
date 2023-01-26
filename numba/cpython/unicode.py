@@ -848,7 +848,7 @@ def unicode_count(src, sub, start=None, end=None):
             if sub_len == 0:
                 return src_len + 1
 
-            while(start + sub_len <= src_len):
+            while (start + sub_len <= src_len):
                 if src[start : start + sub_len] == sub:
                     count += 1
                     start += sub_len
@@ -2020,7 +2020,7 @@ def _is_upper(is_lower, is_upper, is_title):
             code_point = _get_code_point(a, idx)
             if is_lower(code_point) or is_title(code_point):
                 return False
-            elif(not cased and is_upper(code_point)):
+            elif (not cased and is_upper(code_point)):
                 cased = True
         return cased
     return impl
