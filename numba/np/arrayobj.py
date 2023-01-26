@@ -1634,7 +1634,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
     indexer = FancyIndexer(context, builder, aryty, ary,
                            index_types, indices)
     indexer.prepare()
-
+    src_is_scalar = False
     if isinstance(srcty, types.Buffer):
         # Source is an array
         src_dtype = srcty.dtype
@@ -1676,29 +1676,31 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         # Source is a scalar (broadcast or not, depending on destination
         # shape).
         src_dtype = srcty
+        src_is_scalar = True
 
-    def flat_imp_nocopy(ary):
-        return ary.reshape(ary.size)
+    if not src_is_scalar:
+        def flat_imp_nocopy(ary):
+            return ary.reshape(ary.size)
 
-    def flat_imp_copy(ary):
-        return ary.copy().reshape(ary.size)
+        def flat_imp_copy(ary):
+            return ary.copy().reshape(ary.size)
 
-    # If the source array is contigous, use the nocopy version
-    if srcty.is_contig:
-        flat_imp = flat_imp_nocopy
-    # otherwise, use copy version since we don't support
-    # reshaping non-contigous arrays
-    else:
-        flat_imp = flat_imp_copy
+        # If the source array is contigous, use the nocopy version
+        if srcty.is_contig:
+            flat_imp = flat_imp_nocopy
+        # otherwise, use copy version since we don't support
+        # reshaping non-contigous arrays
+        else:
+            flat_imp = flat_imp_copy
 
-    retty = types.Array(srcty.dtype, 1, srcty.layout, readonly=True)
-    sig = signature(retty, srcty)
-    src_flat_instr = context.compile_internal(builder, flat_imp, sig,
-                                              (src._getvalue(),))
-    src_flat = make_array(retty)(context, builder, src_flat_instr)
-    src_data = src_flat.data
-    src_idx = cgutils.alloca_once_value(builder,
-                                        context.get_constant(types.intp, 0))
+        retty = types.Array(srcty.dtype, 1, srcty.layout, readonly=True)
+        sig = signature(retty, srcty)
+        src_flat_instr = context.compile_internal(builder, flat_imp, sig,
+                                                  (src._getvalue(),))
+        src_flat = make_array(retty)(context, builder, src_flat_instr)
+        src_data = src_flat.data
+        src_idx = cgutils.alloca_once_value(builder,
+                                            context.get_constant(types.intp, 0))
     # Loop on destination and copy from source to destination
     dest_indices = indexer.begin_loops()
 
@@ -1709,20 +1711,26 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
                                          aryty.layout, dest_indices,
                                          wraparound=False)
 
-    cur = builder.load(src_idx)
-    ptr = builder.gep(src_data, [cur])
-    val = builder.load(ptr)
-    val = context.cast(builder, val, src_dtype, aryty.dtype)
-    store_item(context, builder, aryty, val, dest_ptr)
-    next_idx = cgutils.increment_index(builder, cur)
-    builder.store(next_idx, src_idx)
+    if src_is_scalar:
+        store_item(context, builder, aryty, src, dest_ptr)
+    else:
+        cur = builder.load(src_idx)
+        ptr = builder.gep(src_data, [cur])
+        val = builder.load(ptr)
+        val = context.cast(builder, val, src_dtype, aryty.dtype)
+        store_item(context, builder, aryty, val, dest_ptr)
+        next_idx = cgutils.increment_index(builder, cur)
+        builder.store(next_idx, src_idx)
 
     indexer.end_loops()
-    for _indexer in indexer.indexers:
-        if isinstance(_indexer, IntegerArrayIndexer) \
-           and hasattr(_indexer, "idxary_instr"):
-            context.nrt.decref(builder, _indexer.idxty, _indexer.idxary_instr)
-    context.nrt.decref(builder, retty, src_flat_instr)
+
+    if not src_is_scalar:
+        for _indexer in indexer.indexers:
+            if isinstance(_indexer, IntegerArrayIndexer) \
+               and hasattr(_indexer, "idxary_instr"):
+                context.nrt.decref(builder, _indexer.idxty,
+                                   _indexer.idxary_instr)
+        context.nrt.decref(builder, retty, src_flat_instr)
 
 
 # ------------------------------------------------------------------------------
