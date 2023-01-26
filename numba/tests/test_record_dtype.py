@@ -1773,7 +1773,7 @@ class TestNestedArrays(TestCase):
             return x[0]
 
         arr = np.asarray([([(0,), (1,), (2,)],),
-                          ([(4,), (5,), (6,)],)],
+                          ([(3,), (4,), (5,)],)],
                          dtype=items)
 
         expected = fn.py_func(arr)
