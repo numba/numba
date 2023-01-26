@@ -19,8 +19,13 @@ _meminfo_struct_type = ir.LiteralStructType([
     _word_type,     # size_t size
     ])
 
+print_nrt_stack = config.DEBUG_NRT and config.DEBUG_NRT_STACK_LIMIT
 
-incref_decref_ty = ir.FunctionType(ir.VoidType(), [_pointer_type, cgutils.voidptr_t])
+if print_nrt_stack:
+    incref_decref_ty = ir.FunctionType(ir.VoidType(), [_pointer_type, cgutils.voidptr_t])
+else:
+    incref_decref_ty = ir.FunctionType(ir.VoidType(), [_pointer_type])
+
 meminfo_data_ty = ir.FunctionType(_pointer_type, [_pointer_type])
 
 
@@ -47,7 +52,11 @@ def _define_nrt_incref(module, atomic_incr):
     # Cannot inline this for refcount pruning to work
     fn_incref.attributes.add('noinline')
     builder = ir.IRBuilder(fn_incref.append_basic_block())
-    [ptr, trace_str] = fn_incref.args
+    if print_nrt_stack:
+        [ptr, trace_str] = fn_incref.args
+    else:
+        [ptr] = fn_incref.args
+
     is_null = builder.icmp_unsigned("==", ptr, cgutils.get_null_value(ptr.type))
     with cgutils.if_unlikely(builder, is_null):
         builder.ret_void()
@@ -56,7 +65,7 @@ def _define_nrt_incref(module, atomic_incr):
     if config.DEBUG_NRT:
         cgutils.printf(builder, "*** NRT_Incref %zu [%p]\n", builder.load(word_ptr),
                        ptr)
-        if config.DEBUG_NRT_STACK_LIMIT:
+        if print_nrt_stack:
             cgutils.printf(builder, "%s", trace_str)
     builder.call(atomic_incr, [word_ptr])
     builder.ret_void()
@@ -75,7 +84,10 @@ def _define_nrt_decref(module, atomic_decr):
                            name="NRT_MemInfo_call_dtor")
 
     builder = ir.IRBuilder(fn_decref.append_basic_block())
-    [ptr, trace_str] = fn_decref.args
+    if print_nrt_stack:
+        [ptr, trace_str] = fn_decref.args
+    else:
+        [ptr] = fn_decref.args
     is_null = builder.icmp_unsigned("==", ptr, cgutils.get_null_value(ptr.type))
     with cgutils.if_unlikely(builder, is_null):
         builder.ret_void()
@@ -92,7 +104,7 @@ def _define_nrt_decref(module, atomic_decr):
     if config.DEBUG_NRT:
         cgutils.printf(builder, "*** NRT_Decref %zu [%p]\n", builder.load(word_ptr),
                        ptr)
-        if config.DEBUG_NRT_STACK_LIMIT:
+        if print_nrt_stack:
             cgutils.printf(builder, "%s", trace_str)
     newrefct = builder.call(atomic_decr,
                             [word_ptr])

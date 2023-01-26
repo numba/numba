@@ -399,10 +399,10 @@ class NRTContext(object):
                 fmt_bytes = cgutils.make_bytearray((trace_str + '\00').encode('ascii'))
                 global_fmt = cgutils.global_constant(mod, "nrt_debug_printf_format", fmt_bytes)
                 ptr_fmt = builder.bitcast(global_fmt, cgutils.voidptr_t)
+                builder.call(fn, [mi, ptr_fmt])
             else:
-                ptr_fmt = cgutils.get_null_value(cgutils.voidptr_t)
+                builder.call(fn, [mi])
 
-            builder.call(fn, [mi, ptr_fmt])
 
     def incref(self, builder, typ, value):
         """

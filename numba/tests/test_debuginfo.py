@@ -125,8 +125,8 @@ class TestDebugInfoEmission(TestCase):
     """
 
     _NUMBA_OPT_0_ENV = {'NUMBA_OPT': '0'}
-    _NUMBA_NRT_STACK_TRACE = {'NUMBA_DEBUG_NRT': 1,
-                              'NUMBA_DEBUG_NRT_STACK_LIMIT': 3}
+    _NUMBA_NRT_STACK_TRACE = {'NUMBA_DEBUG_NRT': '1',
+                              'NUMBA_DEBUG_NRT_STACK_LIMIT': '3'}
 
     def _get_llvmir(self, fn, sig):
         with override_config('OPT', 0):
@@ -382,7 +382,7 @@ class TestDebugInfoEmission(TestCase):
         for line in full_ir.splitlines():
             line_stripped = line.strip()
             if line_stripped.startswith('call void @NRT_decref'):
-                self.assertRegex(line, r'.*meminfo\.[0-9]+.*\)$')
+                self.assertRegex(line, r'.*meminfo\.[0-9]+\)$')
                 count += 1
         self.assertGreater(count, 0) # make sure there were some decrefs!
 
@@ -747,6 +747,23 @@ class TestDebugInfoEmission(TestCase):
         lines = self._get_lines_from_debuginfo(metadata)
         # Only one line
         self.assertEqual(len(lines), 1)
+
+    @TestCase.run_test_in_subprocess(envvars=_NUMBA_NRT_STACK_TRACE)
+    def test_nrt_stack_trace(self):
+        @njit
+        def foo(x):
+            return x + 5
+
+        sig = (types.float64[::1],)
+        full_ir = self._get_llvmir(foo, sig=sig)
+
+        for line in full_ir.splitlines():
+            line_stripped = line.strip()
+            if line_stripped.startswith('call void @NRT_decref'):
+                # Function has two arguments instead of one
+                self.assertRegex(line, r'@NRT_decref\(.*, .*\)$')
+        # This should be present as a constant within the IR
+        self.assertIn('Traceback:', full_ir)
 
 
 if __name__ == '__main__':
