@@ -138,6 +138,8 @@ class Record(Type):
         name = 'Record({};{};{})'.format(desc, self.size, self.aligned)
         super(Record, self).__init__(name)
 
+        self.bitwidth = self.dtype.itemsize * 8
+
     @classmethod
     def _normalize_fields(cls, fields):
         """
@@ -446,6 +448,9 @@ class Array(Buffer):
         if (not aligned or
             (isinstance(dtype, Record) and not dtype.aligned)):
             self.aligned = False
+        if isinstance(dtype, NestedArray):
+            ndim += dtype.ndim
+            dtype = dtype.dtype
         if name is None:
             type_name = "array"
             if not self.mutable:
@@ -577,6 +582,10 @@ class NestedArray(Array):
     """
 
     def __init__(self, dtype, shape):
+        if isinstance(dtype, NestedArray):
+            tmp = Array(dtype.dtype, dtype.ndim, 'C')
+            shape += dtype.shape
+            dtype = tmp.dtype
         assert dtype.bitwidth % 8 == 0, \
             "Dtype bitwidth must be a multiple of bytes"
         self._shape = shape
