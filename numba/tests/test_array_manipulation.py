@@ -147,10 +147,6 @@ def as_strided2(a):
     return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
 
 
-def add_axis2(a):
-    return a[np.newaxis, :]
-
-
 def bad_index(arr, arr2d):
     x = arr.x,
     y = arr.y
@@ -633,23 +629,49 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
         self.assertIn("squeeze", str(raises.exception))
 
-    def test_add_axis2(self, flags=enable_pyobj_flags):
-        a = np.arange(9).reshape(3, 3)
+    def test_add_axis(self):
+        @njit
+        def np_new_axis_getitem(a, idx):
+            return a[idx]
 
-        pyfunc = add_axis2
-        arraytype1 = typeof(a)
-        cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
-        cfunc = cr.entry_point
+        @njit
+        def np_new_axis_setitem(a, idx, item):
+            a[idx] = item
+            return a
 
-        expected = pyfunc(a)
-        got = cfunc(a)
-        np.testing.assert_equal(expected, got)
+        a = np.arange(4 * 5 * 6 * 7).reshape((4, 5, 6, 7))
+        idx_cases = [
+            (slice(None), np.newaxis),
+            (np.newaxis, slice(None)),
+            (slice(1), np.newaxis, 1),
+            (np.newaxis, 2, slice(None)),
+            (slice(1), Ellipsis, np.newaxis, 1),
+            (1, np.newaxis, Ellipsis),
+            (np.newaxis, slice(1), np.newaxis, 1),
+            (1, Ellipsis, None, np.newaxis),
+            (np.newaxis, slice(1), Ellipsis, np.newaxis, 1),
+            (1, np.newaxis, np.newaxis, Ellipsis),
+            (np.newaxis, 1, np.newaxis, Ellipsis),
+            (slice(3), 1, np.newaxis, None),
+            (np.newaxis, 1, Ellipsis, None),
+        ]
+        pyfunc_getitem = np_new_axis_getitem.py_func
+        cfunc_getitem = np_new_axis_getitem
 
-    def test_add_axis2_npm(self):
-        with self.assertTypingError() as raises:
-            self.test_add_axis2(flags=no_pyobj_flags)
-        self.assertIn("unsupported array index type none in",
-                      str(raises.exception))
+        pyfunc_setitem = np_new_axis_setitem.py_func
+        cfunc_setitem = np_new_axis_setitem
+
+        for idx in idx_cases:
+            expected = pyfunc_getitem(a, idx)
+            got = cfunc_getitem(a, idx)
+            np.testing.assert_equal(expected, got)
+
+            a_empty = np.zeros_like(a)
+            item = a[idx]
+
+            expected = pyfunc_setitem(a_empty.copy(), idx, item)
+            got = cfunc_setitem(a_empty.copy(), idx, item)
+            np.testing.assert_equal(expected, got)
 
     def test_bad_index_npm(self):
         with self.assertTypingError() as raises:
