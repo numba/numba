@@ -36,6 +36,7 @@ from .cloudpickle import (
     parametrized_type_hint_getinitargs, _create_parametrized_type_hint,
     builtin_code_type,
     _make_dict_keys, _make_dict_values, _make_dict_items,
+    _DYNAMIC_CLASS_TRACKER_REUSING,
 )
 
 
@@ -460,6 +461,10 @@ def _function_setstate(obj, state):
 
 
 def _class_setstate(obj, state):
+    # Check if class is being reused and needs bypass setstate logic.
+    if obj in _DYNAMIC_CLASS_TRACKER_REUSING:
+        return obj
+
     state, slotstate = state
     registry = None
     for attrname, attr in state.items():

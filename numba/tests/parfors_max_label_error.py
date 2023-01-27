@@ -10,7 +10,7 @@ code path.
 import numpy as np
 
 from numba import njit
-from numba.core.dispatcher import TargetConfig
+from numba.core.dispatcher import TargetConfigurationStack
 from numba.core.target_extension import (
     dispatcher_registry,
     CPUDispatcher,
@@ -58,7 +58,7 @@ def f(a):
 
 def main():
     a = np.ones(20)
-    with TargetConfig.switch_target(retarget):
+    with TargetConfigurationStack.switch_target(retarget):
         r = f(a)
     np.testing.assert_equal(r, f.py_func(a))
     print("TEST PASSED")

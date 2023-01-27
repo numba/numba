@@ -1,9 +1,9 @@
 
-Example: an interval type
+Example: An Interval Type
 =========================
 
-We will extend the Numba frontend to support a class that it does not
-currently support so as to allow:
+In this example, we will extend the Numba frontend to add support for a user-defined
+class that it does not internally support. This will allow:
 
 * Passing an instance of the class to a Numba function
 * Accessing attributes of the class in a Numba function
@@ -15,23 +15,13 @@ We will mix APIs from the :ref:`high-level extension API <high-level-extending>`
 and the :ref:`low-level extension API <low-level-extending>`, depending on what is
 available for a given task.
 
-The starting point for our example is the following pure Python class::
+The starting point for our example is the following pure Python class:
 
-   class Interval(object):
-       """
-       A half-open interval on the real number line.
-       """
-       def __init__(self, lo, hi):
-           self.lo = lo
-           self.hi = hi
-
-       def __repr__(self):
-           return 'Interval(%f, %f)' % (self.lo, self.hi)
-
-       @property
-       def width(self):
-           return self.hi - self.lo
-
+.. literalinclude:: ../../../numba/tests/doc_examples/test_interval_example.py
+   :language: python
+   :start-after: magictoken.interval_py_class.begin
+   :end-before: magictoken.interval_py_class.end
+   :dedent: 8
 
 Extending the typing layer
 """"""""""""""""""""""""""
@@ -46,15 +36,13 @@ granularity as well as various meta-information not available with regular
 Python types.
 
 We first create a type class ``IntervalType`` and, since we don't need the
-type to be parametric, we instantiate a single type instance ``interval_type``::
+type to be parametric, we instantiate a single type instance ``interval_type``:
 
-   from numba import types
-
-   class IntervalType(types.Type):
-       def __init__(self):
-           super(IntervalType, self).__init__(name='Interval')
-
-   interval_type = IntervalType()
+.. literalinclude:: ../../../numba/tests/doc_examples/test_interval_example.py
+   :language: python
+   :start-after: magictoken.interval_type_class.begin
+   :end-before: magictoken.interval_type_class.end
+   :dedent: 8
 
 
 Type inference for Python values
@@ -63,13 +51,13 @@ Type inference for Python values
 In itself, creating a Numba type doesn't do anything.  We must teach Numba
 how to infer some Python values as instances of that type.  In this example,
 it is trivial: any instance of the ``Interval`` class should be treated as
-belonging to the type ``interval_type``::
+belonging to the type ``interval_type``:
 
-   from numba.extending import typeof_impl
-
-   @typeof_impl.register(Interval)
-   def typeof_index(val, c):
-       return interval_type
+.. literalinclude:: ../../../numba/tests/doc_examples/test_interval_example.py
+   :language: python
+   :start-after: magictoken.interval_typeof_register.begin
+   :end-before: magictoken.interval_typeof_register.end
+   :dedent: 8
 
 Function arguments and global values will thusly be recognized as belonging
 to ``interval_type`` whenever they are instances of ``Interval``.
@@ -81,11 +69,13 @@ Type inference for Python annotations
 While ``typeof`` is used to infer the Numba type of Python objects,
 ``as_numba_type`` is used to infer the Numba type of Python types.  For simple
 cases, we can simply register that the Python type ``Interval`` corresponds with
-the Numba type ``interval_type``::
+the Numba type ``interval_type``:
 
-   from numba.extending import as_numba_type
-
-   as_numba_type.register(Interval, interval_type)
+.. literalinclude:: ../../../numba/tests/doc_examples/test_interval_example.py
+   :language: python
+   :start-after: magictoken.numba_type_register.begin
+   :end-before: magictoken.numba_type_register.end
+   :dedent: 8
 
 Note that ``as_numba_type`` is only used to infer types from type annotations at
 compile time.  The ``typeof`` registry above is used to infer the type of
@@ -97,16 +87,13 @@ Type inference for operations
 
 We want to be able to construct interval objects from Numba functions, so
 we must teach Numba to recognize the two-argument ``Interval(lo, hi)``
-constructor.  The arguments should be floating-point numbers::
+constructor.  The arguments should be floating-point numbers:
 
-   from numba.extending import type_callable
-
-   @type_callable(Interval)
-   def type_interval(context):
-       def typer(lo, hi):
-           if isinstance(lo, types.Float) and isinstance(hi, types.Float):
-               return interval_type
-       return typer
+.. literalinclude:: ../../../numba/tests/doc_examples/test_interval_example.py
+   :language: python
+   :start-after: magictoken.numba_type_callable.begin
+   :end-before: magictoken.numba_type_callable.end
+   :dedent: 8
 
 
 The :func:`type_callable` decorator specifies that the decorated function
@@ -141,19 +128,13 @@ a tailored native representation, also called a *data model*.
 
 A common case of data model is an immutable struct-like data model, that
 is akin to a C ``struct``.  Our interval datatype conveniently falls in
-that category, and here is a possible data model for it::
+that category, and here is a possible data model for it:
 
-   from numba.extending import models, register_model
-
-   @register_model(IntervalType)
-   class IntervalModel(models.StructModel):
-       def __init__(self, dmm, fe_type):
-           members = [
-               ('lo', types.float64),
-               ('hi', types.float64),
-               ]
-           models.StructModel.__init__(self, dmm, fe_type, members)
-
+.. literalinclude:: ../../../numba/tests/doc_examples/test_interval_example.py
+   :language: python
+   :start-after: magictoken.interval_model.begin
+   :end-before: magictoken.interval_model.end
+   :dedent: 8
 
 This instructs Numba that values of type ``IntervalType`` (or any instance
 thereof) are represented as a structure of two fields ``lo`` and ``hi``,
@@ -170,12 +151,13 @@ Exposing data model attributes
 
 We want the data model attributes ``lo`` and ``hi`` to be exposed under
 the same names for use in Numba functions.  Numba provides a convenience
-function to do exactly that::
+function to do exactly that:
 
-   from numba.extending import make_attribute_wrapper
-
-   make_attribute_wrapper(IntervalType, 'lo', 'lo')
-   make_attribute_wrapper(IntervalType, 'hi', 'hi')
+.. literalinclude:: ../../../numba/tests/doc_examples/test_interval_example.py
+   :language: python
+   :start-after: magictoken.interval_attribute_wrapper.begin
+   :end-before: magictoken.interval_attribute_wrapper.end
+   :dedent: 8
 
 This will expose the attributes in read-only mode.  As mentioned above,
 writable attributes don't fit in this model.
@@ -186,15 +168,13 @@ Exposing a property
 
 As the ``width`` property is computed rather than stored in the structure,
 we cannot simply expose it like we did for ``lo`` and ``hi``.  We have to
-re-implement it explicitly::
+re-implement it explicitly:
 
-   from numba.extending import overload_attribute
-
-   @overload_attribute(IntervalType, "width")
-   def get_width(interval):
-       def getter(interval):
-           return interval.hi - interval.lo
-       return getter
+.. literalinclude:: ../../../numba/tests/doc_examples/test_interval_example.py
+   :language: python
+   :start-after: magictoken.interval_overload_attribute.begin
+   :end-before: magictoken.interval_overload_attribute.end
+   :dedent: 8
 
 You might ask why we didn't need to expose a type inference hook for this
 attribute? The answer is that ``@overload_attribute`` is part of the
@@ -205,19 +185,13 @@ single API.
 Implementing the constructor
 ----------------------------
 
-Now we want to implement the two-argument ``Interval`` constructor::
+Now we want to implement the two-argument ``Interval`` constructor:
 
-   from numba.extending import lower_builtin
-   from numba.core import cgutils
-
-   @lower_builtin(Interval, types.Float, types.Float)
-   def impl_interval(context, builder, sig, args):
-       typ = sig.return_type
-       lo, hi = args
-       interval = cgutils.create_struct_proxy(typ)(context, builder)
-       interval.lo = lo
-       interval.hi = hi
-       return interval._getvalue()
+.. literalinclude:: ../../../numba/tests/doc_examples/test_interval_example.py
+   :language: python
+   :start-after: magictoken.interval_lower_builtin.begin
+   :end-before: magictoken.interval_lower_builtin.end
+   :dedent: 8
 
 
 There is a bit more going on here.  ``@lower_builtin`` decorates the
@@ -247,24 +221,13 @@ Boxing and unboxing
 If you try to use an ``Interval`` instance at this point, you'll certainly
 get the error *"cannot convert Interval to native value"*.  This is because
 Numba doesn't yet know how to make a native interval value from a Python
-``Interval`` instance.  Let's teach it how to do it::
+``Interval`` instance.  Let's teach it how to do it:
 
-   from numba.extending import unbox, NativeValue
-
-   @unbox(IntervalType)
-   def unbox_interval(typ, obj, c):
-       """
-       Convert a Interval object to a native interval structure.
-       """
-       lo_obj = c.pyapi.object_getattr_string(obj, "lo")
-       hi_obj = c.pyapi.object_getattr_string(obj, "hi")
-       interval = cgutils.create_struct_proxy(typ)(c.context, c.builder)
-       interval.lo = c.pyapi.float_as_double(lo_obj)
-       interval.hi = c.pyapi.float_as_double(hi_obj)
-       c.pyapi.decref(lo_obj)
-       c.pyapi.decref(hi_obj)
-       is_error = cgutils.is_not_null(c.builder, c.pyapi.err_occurred())
-       return NativeValue(interval._getvalue(), is_error=is_error)
+.. literalinclude:: ../../../numba/tests/doc_examples/test_interval_example.py
+   :language: python
+   :start-after: magictoken.interval_unbox.begin
+   :end-before: magictoken.interval_unbox.end
+   :dedent: 8
 
 *Unbox* is the other name for "convert a Python object to a native value"
 (it fits the idea of a Python object as a sophisticated box containing
@@ -275,29 +238,18 @@ and possibly other information.
 The snippet above makes abundant use of the ``c.pyapi`` object, which
 gives access to a subset of the
 `Python interpreter's C API <https://docs.python.org/3/c-api/index.html>`_.
-Note the use of ``c.pyapi.err_occurred()`` to detect any errors that
+Note the use of ``early_exit_if_null`` to detect and handle any errors that
 may have happened when unboxing the object (try passing ``Interval('a', 'b')``
 for example).
 
 We also want to do the reverse operation, called *boxing*, so as to return
-interval values from Numba functions::
+interval values from Numba functions:
 
-   from numba.extending import box
-
-   @box(IntervalType)
-   def box_interval(typ, val, c):
-       """
-       Convert a native interval structure to an Interval object.
-       """
-       interval = cgutils.create_struct_proxy(typ)(c.context, c.builder, value=val)
-       lo_obj = c.pyapi.float_from_double(interval.lo)
-       hi_obj = c.pyapi.float_from_double(interval.hi)
-       class_obj = c.pyapi.unserialize(c.pyapi.serialize_object(Interval))
-       res = c.pyapi.call_function_objargs(class_obj, (lo_obj, hi_obj))
-       c.pyapi.decref(lo_obj)
-       c.pyapi.decref(hi_obj)
-       c.pyapi.decref(class_obj)
-       return res
+.. literalinclude:: ../../../numba/tests/doc_examples/test_interval_example.py
+   :language: python
+   :start-after: magictoken.interval_box.begin
+   :end-before: magictoken.interval_box.end
+   :dedent: 8
 
 
 Using it
@@ -305,21 +257,13 @@ Using it
 
 :term:`nopython mode` functions are now able to make use of Interval objects
 and the various operations you have defined on them.  You can try for
-example the following functions::
+example the following functions:
 
-   from numba import jit
-
-   @jit(nopython=True)
-   def inside_interval(interval, x):
-       return interval.lo <= x < interval.hi
-
-   @jit(nopython=True)
-   def interval_width(interval):
-       return interval.width
-
-   @jit(nopython=True)
-   def sum_intervals(i, j):
-       return Interval(i.lo + j.lo, i.hi + j.hi)
+.. literalinclude:: ../../../numba/tests/doc_examples/test_interval_example.py
+   :language: python
+   :start-after: magictoken.interval_usage.begin
+   :end-before: magictoken.interval_usage.end
+   :dedent: 8
 
 
 Conclusion

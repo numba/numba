@@ -3,7 +3,7 @@ def initialize_all():
     import numba.cuda.models  # noqa: F401
 
     from numba import cuda
-    from numba.cuda.compiler import Dispatcher
+    from numba.cuda.dispatcher import CUDADispatcher
     from numba.core.target_extension import (target_registry,
                                              dispatcher_registry,
                                              jit_registry)
@@ -14,4 +14,4 @@ def initialize_all():
 
     cuda_target = target_registry["cuda"]
     jit_registry[cuda_target] = cuda_jit_device
-    dispatcher_registry[cuda_target] = Dispatcher
+    dispatcher_registry[cuda_target] = CUDADispatcher

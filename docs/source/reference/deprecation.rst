@@ -200,181 +200,191 @@ uses the `fall-back` compilation path. In future code such as::
 
 will simply not compile, a ``TypingError`` would be raised.
 
+A further consequence of this change is that the ``nopython`` keyword argument
+will become redundant as :term:`nopython mode` will be the default. As a result,
+following this change, supplying the keyword argument as ``nopython=False`` will
+trigger a warning stating that the implicit default has changed to ``True``.
+Essentially this keyword will have no effect following removal of this feature.
+
 Schedule
 --------
 This feature will be removed with respect to this schedule:
 
-* Deprecation warnings will be issued in version 0.44.0
-* Prominent notice will be given for a minimum of two releases prior to full
-  removal.
+* Deprecation warnings will be issued in version 0.44.0.
+* Prominent notice is given in 0.57.0.
+* Removal will take place in version 0.59.0.
 
 Recommendations
 ---------------
 Projects that need/rely on the deprecated behaviour should pin their dependency
-on Numba to a version prior to removal of this behaviour. Alternatively, to
-accommodate the scheduled deprecations, users with code compiled at present with
-``@jit`` can supply the ``nopython=True`` keyword argument, if the code
-continues to compile then the code is already ready for this change. If the code
-does not compile, continue using the ``@jit`` decorator without
-``nopython=True`` and profile the performance of the function. Then remove the
-decorator and again check the performance of the function. If there is no
-benefit to having the ``@jit`` decorator present consider removing it! If there
-is benefit to having the ``@jit`` decorator present, then to be future proof
-supply the keyword argument ``forceobj=True`` to ensure the function is always
-compiled in :term:`object mode`.
+on Numba to a version prior to removal of this behaviour.
+
+General advice to accommodate the scheduled deprecation:
+
+Users with code compiled at present with ``@jit`` can supply the
+``nopython=True`` keyword argument, if the code continues to compile then the
+code is already ready for this change. If the code does not compile, continue
+using the ``@jit`` decorator without ``nopython=True`` and profile the
+performance of the function. Then remove the decorator and again check the
+performance of the function. If there is no benefit to having the ``@jit``
+decorator present consider removing it! If there is benefit to having the
+``@jit`` decorator present, then to be future proof supply the keyword argument
+``forceobj=True`` to ensure the function is always compiled in
+:term:`object mode`.
+
+Advice for users of the "loop-lifting" feature:
+
+If object mode compilation with loop-lifting is needed it should be
+explicitly declared through supplying the keyword arguments ``forceobj=True``
+and ``looplift=True`` to the ``@jit`` decorator.
+
+Advice for users setting ``nopython=False``:
+
+This is essentially specifying the implicit default prior to removal of this
+feature, either remove the keyword argument or change the value to ``True``.
 
 
-Deprecation of the target kwarg
-===============================
-There have been a number of users attempting to use the ``target`` keyword
-argument that's meant for internal use only. We are deprecating this argument,
-as alternative solutions are available to achieve the same behaviour.
 
-Recommendations
----------------
-Update the ``jit`` decorator as follows:
+.. _deprecation-of-generated-jit:
 
-* Change ``@numba.jit(..., target='cuda')`` to ``numba.cuda.jit(...)``.
+Deprecation of ``generated_jit``
+================================
+The top level API function ``numba.generated_jit`` provides functionality that
+allows users to write JIT compilable functions that have different
+implementations based on the types of the arguments to the function. This is a
+hugely useful concept and is also key to Numba's internal implementation.
 
-Schedule
---------
-This feature will be moved with respect to this schedule:
+Reason for deprecation
+----------------------
 
-* Deprecation warnings will be issued in 0.51.0.
-* The target kwarg will be removed in version 0.54.0.
+There are a number of reasons for this deprecation.
 
+First, ``generated_jit`` breaks the concept of "JIT transparency" in that if the
+JIT compiler is disabled, the source code does not execute the same way as it
+would were the JIT compiler present.
 
-Removal of the role of compute capability for CUDA inspection methods
-=====================================================================
+Second, internally Numba uses the ``numba.extending.overload`` family of
+decorators to access an equivalent functionality to ``generated_jit``. The
+``overload`` family of decorators are more powerful than ``generated_jit`` as
+they support far more options and both the CPU and CUDA targets. Essentially a
+replacement for ``generated_jit`` already exists and has been recommended and
+preferred for a long while.
 
-The following methods of the :class:`Dispatcher
-<numba.cuda.compiler.Dispatcher>` class:
+Third, the public extension API decorators are far better maintained than
+``generated_jit``. This is an important consideration due to Numba's limited
+resources, fewer duplicated pieces of functionality to maintain will reduce
+pressure on these resources.
 
-- :meth:`inspect_asm <numba.cuda.compiler.Dispatcher.inspect_asm>`
-- :meth:`inspect_llvm <numba.cuda.compiler.Dispatcher.inspect_llvm>`
-- :meth:`inspect_sass <numba.cuda.compiler.Dispatcher.inspect_sass>`
+For more information on the ``overload`` family of decorators see the
+:ref:`high level extension API documentation <high-level-extending>`.
 
-accepted a kwarg called ``compute_capability``. This kwarg is now removed as it
-was problematic - in most cases the returned values erroneously pertained to
-the device in the current context, instead of the requested compute capability.
+Example(s) of the impact
+------------------------
 
-These methods return a dict of variants, which was previously keyed by a
-``(compute_capability, argtypes)`` tuple. The dict is now only keyed by
-argument types, and items in the dict are for the device in the current
-context.
-
-For specialized Dispatchers (those whose kernels were eagerly compiled by
-providing a signature), the methods previously returned only one variant,
-instead of a dict of variants. For consistency with the CPU target and for
-support for multiple signatures to be added to the CUDA target, these methods
-now always return a dict.
-
-The :meth:`ptx <numba.cuda.compiler.Dispatcher.ptx>` property also returned one
-variant directly for specialized Dispatchers, and a dict for un-specialized
-Dispatchers. It now always returns a dict
-
-Recommendations
----------------
-
-Update calls to these methods such that:
-
-- They are always called when the device for which their output is required is
-  in the current CUDA context.
-- The ``compute_capability`` kwarg is not passed to them.
-- Any use of their results indexes into them using only a tuple of argument
-  types.
-- With specialized Dispatchers, ensure that the returned dict is indexed into
-  using the appropriate signature.
+Any source code using ``generated_jit`` would fail to work once the
+functionality has been removed.
 
 Schedule
 --------
 
-In 0.53.0:
+This feature will be removed with respect to this schedule:
 
-- The ``compute_capability`` kwarg was deprecated.
-- Returned values from the inspection methods supported indexing by
-  ``(compute_capability, argtypes)`` and ``argtypes``.
-- The inspection methods and ``ptx`` property of specialized dispatchers returned
-  their result for a single variant, rather than a dict, and produced a
-  warning.
-
-In 0.54.0:
-
-- The ``compute_capability`` kwarg has been removed.
-- ``ptx`` and the inspection methods always return a dict.
-- Support for indexing into the results of these methods using ``(cc,
-  argtypes)`` has been removed.
-
-
-.. _deprecation-strict-strides:
-
-Deprecation of strict strides checking when computing contiguity
-================================================================
-
-The contiguity of device arrays (the ``'C_CONTIGUOUS'`` and ``'F_CONTIGUOUS'``
-elements of the flags of a device array) are computed using relaxed strides
-checking, which matches the default in NumPy since Version 1.12. A config
-variable, :envvar:`NUMBA_NPY_RELAXED_STRIDES_CHECKING`, is provided to force
-computation of these flags using strict strides checking.
-
-This flag is provided to work around any bugs that may be exposed by strict
-strides checking, and will be removed in future.
-
-Schedule
---------
-
-In 0.54.0:
-
-- Relaxed strides checking will become the default.
-- Strict strides checking will be deprecated.
-
-In 0.55.0:
-
-- Strict strides checking will be removed, if there are no reports of bugs
-  related to relaxed strides checking in 0.54.0 onwards. This plan will be
-  re-examined if bugs related to relaxed strides checking are reported, but may
-  not necessarily change as a result.
-
-
-Deprecation of the ``inspect_ptx()`` method
-===========================================
-
-The undocumented ``inspect_ptx()`` method of functions decorated with
-``@cuda.jit(device=True)`` is sometimes used to compile a Python function to
-PTX for use outside of Numba. An interface for this specific purpose is
-provided in the :func:`compile_ptx() <numba.cuda.compile_ptx>` function.
-``inspect_ptx()`` has one or two longstanding issues and presents a maintenance
-burden for upcoming changes in the CUDA target, so it is deprecated and will be
-removed in favor of the use of :func:`compile_ptx() <numba.cuda.compile_ptx>`.
+* Deprecation warnings will be issued in version 0.57.0.
+* Removal will take place in version 0.59.0.
 
 Recommendations
 ---------------
 
-Replace any code that compiles device functions to PTX using the following
-pattern:
+Projects that need/rely on the deprecated behaviour should pin their dependency
+on Numba to a version prior to removal of this behaviour, or consider following
+replacement instructions below that outline how to adjust to the change.
 
-.. code-block:: python
+Replacement
+-----------
 
-    @cuda.jit(signature, device=True)
-    def func(args):
-        ...
+The ``overload`` decorator offers a replacement for the functionality available
+through ``generated_jit``. An example follows of translating from one to the
+other. First define a type specialised function dispatch with the
+``generated_jit`` decorator::
 
-    ptx_code = func.inspect_ptx(nvvm_options=nvvm_options).decode()
+  from numba import njit, generated_jit, types
 
-with:
+  @generated_jit
+  def select(x):
+      if isinstance(x, types.Float):
+          def impl(x):
+              return x + 1
+          return impl
+      elif isinstance(x, types.UnicodeType):
+          def impl(x):
+              return x + " the number one"
+          return impl
+      else:
+          raise TypeError("Unsupported Type")
 
-.. code-block:: python
+  @njit
+  def foo(x):
+      return select(x)
 
-    def func(args):
-        ...
+  print(foo(1.))
+  print(foo("a string"))
 
-    ptx_code, return_type = compile_ptx(func, signature, device=True, nvvm_options=nvvm_options)
+Conceptually, ``generated_jit`` is like ``overload``, but with ``generated_jit``
+the overloaded function is the decorated function. Taking the example above and
+adjusting it to use the ``overload`` API::
 
-Schedule
---------
+  from numba import njit, types
+  from numba.extending import overload
 
-- In Numba 0.54: ``inspect_ptx()`` will be deprecated.
-- In Numba 0.55: ``inspect_ptx()`` will be removed.
+  # A pure python implementation that will run if the JIT compiler is disabled.
+  def select(x):
+      if isinstance(x, float):
+          return x + 1
+      elif isinstance(x, str):
+          return x + " the number one"
+      else:
+          raise TypeError("Unsupported Type")
+
+  # An overload for the `select` function cf. generated_jit
+  @overload(select)
+  def ol_select(x):
+      if isinstance(x, types.Float):
+          def impl(x):
+              return x + 1
+          return impl
+      elif isinstance(x, types.UnicodeType):
+          def impl(x):
+              return x + " the number one"
+          return impl
+      else:
+          raise TypeError("Unsupported Type")
+
+  @njit
+  def foo(x):
+      return select(x)
+
+  print(foo(1.))
+  print(foo("a string"))
+
+Further, users that are using ``generated_jit`` to dispatch on some of the more
+primitive types may find that Numba's support for ``isinstance`` is sufficient,
+for example::
+
+  @njit # NOTE: standard @njit decorator.
+  def select(x):
+      if isinstance(x, float):
+          return x + 1
+      elif isinstance(x, str):
+          return x + " the number one"
+      else:
+          raise TypeError("Unsupported Type")
+
+  @njit
+  def foo(x):
+      return select(x)
+
+  print(foo(1.))
+  print(foo("a string"))
 
 
 Deprecation of eager compilation of CUDA device functions
@@ -383,7 +393,7 @@ Deprecation of eager compilation of CUDA device functions
 In future versions of Numba, the ``device`` kwarg to the ``@cuda.jit`` decorator
 will be obviated, and whether a device function or global kernel is compiled will
 be inferred from the context. With respect to kernel / device functions and lazy
-/ eager compilation, four cases are presently handled:
+/ eager compilation, four cases were handled:
 
 1. ``device=True``, eager compilation with a signature provided
 2. ``device=False``, eager compilation with a signature provided
@@ -397,58 +407,67 @@ device function, then a device function should be compiled.
 
 The first two cases cannot be differentiated in the absence of the ``device``
 kwarg - without it, it will not be clear from a signature alone whether a device
-function or global kernel should be compiled. In order to resolve this, support
-for eager compilation of device functions will be removed. Eager compilation
-with the ``@cuda.jit`` decorator will in future always imply the immediate
-compilation of a global kernel.
+function or global kernel should be compiled. In order to resolve this, device
+functions will no longer be eagerly compiled. When a signature is provided to a
+device function, it will only be used to enforce the types of arguments that
+the function accepts.
 
-Recommendations
----------------
+.. note::
 
-Any eagerly-compiled device functions should have their signature removed, e.g.:
+   In previous releases this notice stated that support for providing
+   signatures to device functions would be removed completely - however, this
+   precludes the common use case of enforcing the types that can be passed to a
+   device function (and the automatic insertion of casts that it implies) so
+   this notice has been updated to retain support for passing signatures.
 
-.. code-block:: python
-
-   @cuda.jit('int32(int32, int32)', device=True)
-   def f(x, y):
-       return x + y
-
-becomes:
-
-
-.. code-block:: python
-
-   @cuda.jit(device=True)
-   def f(x, y):
-       return x + y
 
 Schedule
 --------
 
 - In Numba 0.54: Eager compilation of device functions will be deprecated.
 - In Numba 0.55: Eager compilation of device functions will be unsupported and
-  attempts to eagerly compile device functions will raise an error.
+  the provision of signatures for device functions will only enforce casting.
 
 
-.. _rocm_unmaintained:
+Deprecation and removal of ``numba.core.base.BaseContext.add_user_function()``
+==============================================================================
 
-Dropping support for the ROCm target
-====================================
+``add_user_function()``  offered the same functionality as
+``insert_user_function()``, only with a check that the function has already
+been inserted at least once.  It is now removed as it was no longer used
+internally and it was expected that it was not used externally.
 
-The `ROCm <https://rocmdocs.amd.com/en/latest/index.html>`_ target has not been
-maintained for a number of years. It's known to be not far from working but has
-essentially bit-rotted in a number of areas. Numba 0.54 includes a new API for
-describing targets and both the CPU and CUDA targets have been ported to use
-this. Due to lack of maintenance, support and user base, the ROCm target is
-not being ported to this API, is being moved to an "unmaintained" status and
-will reside outside of the Numba package. Should there be sufficient interest
-and support for this target in future its status will be reconsidered.
+Recommendations
+---------------
+
+Replace any uses of ``add_user_function()`` with ``insert_user_function()``.
 
 Schedule
 --------
 
-In 0.54.0:
+- In Numba 0.55: ``add_user_function()`` was deprecated.
+- In Numba 0.56: ``add_user_function()`` was removed.
 
-- The ``ROCm`` target is officially unmaintained and the target source code has
-  been moved out of the Numba main repository and into a `separate repository
-  <https://github.com/numba/numba-rocm>`_.
+
+Deprecation and removal of CUDA Toolkits < 11.0 and devices with CC < 5.3
+=========================================================================
+
+- Support for CUDA toolkits less than 11.0 has been removed.
+- Support for devices with Compute Capability < 5.3 is deprecated and will be
+  removed in the future.
+
+
+Recommendations
+---------------
+
+- For devices of Compute Capability 3.0 and 3.2, Numba 0.55.1 or earlier will
+  be required.
+- CUDA toolkit 11.0 or later (ideally 11.2 or later) should be installed.
+
+Schedule
+--------
+
+- In Numba 0.55.1: support for CC < 5.3 and CUDA toolkits < 10.2 was deprecated.
+- In Numba 0.56: support for CC < 3.5 and CUDA toolkits < 10.2 was removed.
+- In Numba 0.57: Support for CUDA toolkit 10.2 was removed. Support for CC < 5.3
+  will be removed.

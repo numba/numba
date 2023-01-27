@@ -83,14 +83,14 @@ class TestGUFunc(TestCase):
         out_kw = np.zeros_like(y)
         my_cumsum(x, out=out_kw, axis=0)
         np.testing.assert_equal(out_kw, expected)
-    
+
     def test_docstring(self):
         @guvectorize([(int64[:], int64, int64[:])], '(n),()->(n)')
         def gufunc(x, y, res):
             "docstring for gufunc"
             for i in range(x.shape[0]):
                 res[i] = x[i] + y
-        
+
         self.assertEqual("numba.tests.npyufunc.test_gufunc", gufunc.__module__)
         self.assertEqual("gufunc", gufunc.__name__)
         self.assertEqual("TestGUFunc.test_docstring.<locals>.gufunc", gufunc.__qualname__)
@@ -163,7 +163,7 @@ class TestDynamicGUFunc(TestCase):
 
         # inp is (10000, 3)
         # out is (10000)
-        # The outter (leftmost) dimension must match or numpy broadcasting is performed.
+        # The outer (leftmost) dimension must match or numpy broadcasting is performed.
 
         self.assertTrue(sum_row.is_dynamic)
         inp = np.arange(30000, dtype=np.int32).reshape(10000, 3)
@@ -198,6 +198,73 @@ class TestDynamicGUFunc(TestCase):
         my_cumsum(x, out=out_kw, axis=0)
         np.testing.assert_equal(out_kw, expected)
 
+    def test_gufunc_attributes(self):
+        @guvectorize("(n)->(n)")
+        def gufunc(x, res):
+            acc = 0
+            for i in range(x.shape[0]):
+                acc += x[i]
+                res[i] = acc
+
+        # ensure gufunc exports attributes
+        attrs = ['signature', 'accumulate', 'at', 'outer', 'reduce', 'reduceat']
+        for attr in attrs:
+            contains = hasattr(gufunc, attr)
+            self.assertTrue(contains, 'dynamic gufunc not exporting "%s"' % (attr,))
+
+        a = np.array([1, 2, 3, 4])
+        res = np.array([0, 0, 0, 0])
+        gufunc(a, res)  # trigger compilation
+        self.assertPreciseEqual(res, np.array([1, 3, 6, 10]))
+
+        # other attributes are not callable from a gufunc with signature
+        # see: https://github.com/numba/numba/issues/2794
+        # note: this is a limitation in NumPy source code!
+        self.assertEqual(gufunc.signature, "(n)->(n)")
+
+        with self.assertRaises(RuntimeError) as raises:
+            gufunc.accumulate(a)
+        self.assertEqual(str(raises.exception), "Reduction not defined on ufunc with signature")
+
+        with self.assertRaises(RuntimeError) as raises:
+            gufunc.reduce(a)
+        self.assertEqual(str(raises.exception), "Reduction not defined on ufunc with signature")
+
+        with self.assertRaises(RuntimeError) as raises:
+            gufunc.reduceat(a, [0, 2])
+        self.assertEqual(str(raises.exception), "Reduction not defined on ufunc with signature")
+
+        with self.assertRaises(TypeError) as raises:
+            gufunc.outer(a, a)
+        self.assertEqual(str(raises.exception), "method outer is not allowed in ufunc with non-trivial signature")
+
+    def test_gufunc_attributes2(self):
+        @guvectorize('(),()->()')
+        def add(x, y, res):
+            res[0] = x + y
+
+        # add signature "(),() -> ()" is evaluated to None
+        self.assertIsNone(add.signature)
+
+        a = np.array([1, 2, 3, 4])
+        b = np.array([4, 3, 2, 1])
+        res = np.array([0, 0, 0, 0])
+        add(a, b, res)  # trigger compilation
+        self.assertPreciseEqual(res, np.array([5, 5, 5, 5]))
+
+        # now test other attributes
+        self.assertIsNone(add.signature)
+        self.assertEqual(add.reduce(a), 10)
+        self.assertPreciseEqual(add.accumulate(a), np.array([1, 3, 6, 10]))
+        self.assertPreciseEqual(add.outer([0, 1], [1, 2]), np.array([[1, 2], [2, 3]]))
+        self.assertPreciseEqual(add.reduceat(a, [0, 2]), np.array([3, 7]))
+
+        x = np.array([1, 2, 3, 4])
+        y = np.array([1, 2])
+        add.at(x, [0, 1], y)
+        self.assertPreciseEqual(x, np.array([2, 4, 3, 4]))
+
+
 class TestGUVectorizeScalar(TestCase):
     """
     Nothing keeps user from out-of-bound memory access
@@ -220,7 +287,7 @@ class TestGUVectorizeScalar(TestCase):
 
         # inp is (10000, 3)
         # out is (10000)
-        # The outter (leftmost) dimension must match or numpy broadcasting is performed.
+        # The outer (leftmost) dimension must match or numpy broadcasting is performed.
 
         inp = np.arange(30000, dtype=np.int32).reshape(10000, 3)
         out = sum_row(inp)

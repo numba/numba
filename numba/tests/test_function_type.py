@@ -1068,7 +1068,9 @@ class TestMiscIssues(TestCase):
 
         self.assertEqual(bar_good((foo, )), 2)
 
-        with self.assertRaises(errors.TypingError) as cm:
+        # new/old style error handling
+        with self.assertRaises((errors.UnsupportedError,
+                                errors.TypingError)) as cm:
             bar_bad((foo, ))
 
         self.assertRegex(

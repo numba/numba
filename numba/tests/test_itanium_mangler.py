@@ -1,7 +1,4 @@
 # -*- coding: utf-8 -*-
-
-import re
-
 from numba import int32, int64, uint32, uint64, float32, float64
 from numba.core.types import range_iter32_type
 from numba.core import itanium_mangler
@@ -71,12 +68,12 @@ class TestItaniumManager(unittest.TestCase):
         self.assertEqual(expect, got)
         # check float (not handled using standard)
         got = itanium_mangler.mangle_value(12.3)
-        self.assertRegexpMatches(got, r'^\d+_12\$[0-9a-z][0-9a-z]3$')
+        self.assertRegexpMatches(got, r'^\d+_12_[0-9a-z][0-9a-z]3$')
 
     def test_mangle_unicode(self):
         name = u'f∂ƒ©z'
         got = itanium_mangler.mangle_identifier(name)
-        self.assertRegexpMatches(got, r'^\d+f(\$[a-z0-9][a-z0-9])+z$')
+        self.assertRegexpMatches(got, r'^\d+f(_[a-z0-9][a-z0-9])+z$')
 
 
 if __name__ == '__main__':

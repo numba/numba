@@ -2,7 +2,7 @@ from collections import namedtuple
 
 import numpy as np
 
-from llvmlite.llvmpy.core import Type, Builder, ICMP_EQ, Constant
+from llvmlite.ir import Constant, IRBuilder
 from llvmlite import ir
 
 from numba.core import types, cgutils
@@ -144,14 +144,14 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, cres):
     (library, env, name)
     """
     assert isinstance(fname, str)
-    byte_t = Type.int(8)
-    byte_ptr_t = Type.pointer(byte_t)
-    byte_ptr_ptr_t = Type.pointer(byte_ptr_t)
+    byte_t = ir.IntType(8)
+    byte_ptr_t = ir.PointerType(byte_t)
+    byte_ptr_ptr_t = ir.PointerType(byte_ptr_t)
     intp_t = context.get_value_type(types.intp)
-    intp_ptr_t = Type.pointer(intp_t)
+    intp_ptr_t = ir.PointerType(intp_t)
 
-    fnty = Type.function(Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
-                                       intp_ptr_t, byte_ptr_t])
+    fnty = ir.FunctionType(ir.VoidType(), [byte_ptr_ptr_t, intp_ptr_t,
+                                           intp_ptr_t, byte_ptr_t])
 
     wrapperlib = context.codegen().create_library('ufunc_wrapper')
     wrapper_module = wrapperlib.create_ir_module('')
@@ -172,7 +172,7 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, cres):
     arg_steps.name = "steps"
     arg_data.name = "data"
 
-    builder = Builder(wrapper.append_basic_block("entry"))
+    builder = IRBuilder(wrapper.append_basic_block("entry"))
 
     # Prepare Environment
     envname = context.get_env_name(cres.fndesc)
@@ -260,7 +260,8 @@ class UArrayArg(object):
         self.abisize = self.context.get_constant(types.intp, sizeof)
         offseted_step = self.builder.gep(steps, [offset])
         self.step = self.builder.load(offseted_step)
-        self.is_unit_strided = builder.icmp(ICMP_EQ, self.abisize, self.step)
+        self.is_unit_strided = builder.icmp_unsigned('==',
+                                                     self.abisize, self.step)
         self.builder = builder
 
     def load_direct(self, byteoffset):
@@ -331,14 +332,14 @@ class _GufuncWrapper(object):
         return self.cres.environment
 
     def _wrapper_function_type(self):
-        byte_t = Type.int(8)
-        byte_ptr_t = Type.pointer(byte_t)
-        byte_ptr_ptr_t = Type.pointer(byte_ptr_t)
+        byte_t = ir.IntType(8)
+        byte_ptr_t = ir.PointerType(byte_t)
+        byte_ptr_ptr_t = ir.PointerType(byte_ptr_t)
         intp_t = self.context.get_value_type(types.intp)
-        intp_ptr_t = Type.pointer(intp_t)
+        intp_ptr_t = ir.PointerType(intp_t)
 
-        fnty = Type.function(Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
-                                           intp_ptr_t, byte_ptr_t])
+        fnty = ir.FunctionType(ir.VoidType(), [byte_ptr_ptr_t, intp_ptr_t,
+                                               intp_ptr_t, byte_ptr_t])
         return fnty
 
     def _build_wrapper(self, library, name):
@@ -368,7 +369,7 @@ class _GufuncWrapper(object):
         arg_steps.name = "steps"
         arg_data.name = "data"
 
-        builder = Builder(wrapper.append_basic_block("entry"))
+        builder = IRBuilder(wrapper.append_basic_block("entry"))
         loopcount = builder.load(arg_dims, name="loopcount")
         pyapi = self.context.get_python_api(builder)
 
@@ -519,18 +520,18 @@ def _prepare_call_to_object_mode(context, builder, pyapi, func,
 
     ll_int = context.get_value_type(types.int32)
     ll_intp = context.get_value_type(types.intp)
-    ll_intp_ptr = Type.pointer(ll_intp)
+    ll_intp_ptr = ir.PointerType(ll_intp)
     ll_voidptr = context.get_value_type(types.voidptr)
     ll_pyobj = context.get_value_type(types.pyobject)
-    fnty = Type.function(ll_pyobj, [ll_int, ll_intp_ptr,
-                                    ll_intp_ptr, ll_voidptr,
-                                    ll_int, ll_int])
+    fnty = ir.FunctionType(ll_pyobj, [ll_int, ll_intp_ptr,
+                                      ll_intp_ptr, ll_voidptr,
+                                      ll_int, ll_int])
 
     fn_array_new = cgutils.get_or_insert_function(mod, fnty,
                                                   "numba_ndarray_new")
 
     # Convert each llarray into pyobject
-    error_pointer = cgutils.alloca_once(builder, Type.int(1), name='error')
+    error_pointer = cgutils.alloca_once(builder, ir.IntType(1), name='error')
     builder.store(cgutils.true_bit, error_pointer)
 
     # The PyObject* arguments to the kernel function
@@ -548,10 +549,10 @@ def _prepare_call_to_object_mode(context, builder, pyapi, func,
             arycls = context.make_array(argty)
             array = arycls(context, builder, value=arg)
 
-            zero = Constant.int(ll_int, 0)
+            zero = Constant(ll_int, 0)
 
             # Extract members of the llarray
-            nd = Constant.int(ll_int, argty.ndim)
+            nd = Constant(ll_int, argty.ndim)
             dims = builder.gep(array._get_ptr_by_name('shape'), [zero, zero])
             strides = builder.gep(array._get_ptr_by_name('strides'),
                                   [zero, zero])
@@ -559,8 +560,8 @@ def _prepare_call_to_object_mode(context, builder, pyapi, func,
             dtype = np.dtype(str(argty.dtype))
 
             # Prepare other info for reconstruction of the PyArray
-            type_num = Constant.int(ll_int, dtype.num)
-            itemsize = Constant.int(ll_int, dtype.itemsize)
+            type_num = Constant(ll_int, dtype.num)
+            itemsize = Constant(ll_int, dtype.itemsize)
 
             # Call helper to reconstruct PyArray objects
             obj = builder.call(fn_array_new, [nd, dims, strides, data,

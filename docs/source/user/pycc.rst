@@ -25,7 +25,7 @@ Benefits
 
 .. seealso::
    Compiled extension modules are discussed in the
-   `Python packaging user guide <https://packaging.python.org/en/latest/extensions/>`_.
+   `Python packaging user guide <https://packaging.python.org/en/latest/guides/packaging-binary-extensions/>`_.
 
 
 Limitations
@@ -37,6 +37,9 @@ Limitations
 
 #. Each exported function can have only one signature (but you can export
    several different signatures under different names).
+
+#. Exported functions do not check the types of the arguments that are passed
+   to them; the caller is expected to provide arguments of the correct type.
 
 #. AOT compilation produces generic code for your CPU's architectural family
    (for example "x86-64"), while JIT compilation produces code optimized

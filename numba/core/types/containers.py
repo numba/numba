@@ -1,5 +1,5 @@
-from collections import namedtuple
 from collections.abc import Iterable
+from collections.abc import Sequence as pySequence
 from types import MappingProxyType
 
 from .abstract import (
@@ -256,6 +256,9 @@ class UniTuple(BaseAnonymousTuple, _HomogeneousTuple, Sequence):
     def __unliteral__(self):
         return type(self)(dtype=unliteral(self.dtype), count=self.count)
 
+    def __repr__(self):
+        return f"UniTuple({repr(self.dtype)}, {self.count})"
+
 
 class UniTupleIter(BaseContainerIterator):
     """
@@ -340,6 +343,9 @@ class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
 
             if all(t is not None for t in unified):
                 return Tuple(unified)
+
+    def __repr__(self):
+        return f"Tuple({tuple(ty for ty in self.types)})"
 
 
 class _StarArgTupleMixin:
@@ -467,6 +473,9 @@ class List(MutableSequence, InitialValue):
         return List(self.dtype, reflected=self.reflected,
                     initial_value=None)
 
+    def __repr__(self):
+        return f"List({self.dtype}, {self.reflected})"
+
 
 class LiteralList(Literal, ConstSized, Hashable):
     """A heterogeneous immutable list (basically a tuple with list semantics).
@@ -577,6 +586,9 @@ class Set(Container):
             if dtype is not None:
                 return Set(dtype, reflected)
 
+    def __repr__(self):
+        return f"Set({self.dtype}, {self.reflected})"
+
 
 class SetIter(BaseContainerIterator):
     """
@@ -654,6 +666,9 @@ class ListType(IterableType):
         if isinstance(other, ListType):
             if not other.is_precise():
                 return self
+
+    def __repr__(self):
+        return f"ListType({self.item_type})"
 
 
 class ListTypeIterableType(SimpleIterableType):
@@ -760,11 +775,30 @@ class DictType(IterableType, InitialValue):
     def __unliteral__(self):
         return DictType(self.key_type, self.value_type)
 
+    def __repr__(self):
+        return f"DictType({self.key_type}, {self.value_type})"
+
 
 class LiteralStrKeyDict(Literal, ConstSized, Hashable):
     """A Dictionary of string keys to heterogeneous values (basically a
     namedtuple with dict semantics).
     """
+
+    class FakeNamedTuple(pySequence):
+        # This is namedtuple-like and is a workaround for #6518 and #7416.
+        # This has the couple of namedtuple properties that are used by Numba's
+        # internals but avoids use of an actual namedtuple as it cannot have
+        # numeric field names, i.e. `namedtuple('foo', '0 1')` is invalid.
+        def __init__(self, name, keys):
+            self.__name__ = name
+            self._fields = tuple(keys)
+            super(LiteralStrKeyDict.FakeNamedTuple, self).__init__()
+
+        def __len__(self):
+            return len(self._fields)
+
+        def __getitem__(self, key):
+            return self._fields[key]
 
     mutable = False
 
@@ -772,7 +806,7 @@ class LiteralStrKeyDict(Literal, ConstSized, Hashable):
         self._literal_init(literal_value)
         self.value_index = value_index
         strkeys = [x.literal_value for x in literal_value.keys()]
-        self.tuple_ty = namedtuple("_ntclazz", " ".join(strkeys))
+        self.tuple_ty = self.FakeNamedTuple("_ntclazz", strkeys)
         tys = [x for x in literal_value.values()]
         self.types = tuple(tys)
         self.count = len(self.types)

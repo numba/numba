@@ -686,8 +686,11 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         np.random.shuffle(arr)
         self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
         # Test with a NaT
-        arr[arr.size // 2] = 'NaT'
-        self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
+        if numpy_version != (1, 21) and 'median' not in pyfunc.__name__:
+            # There's problems with NaT handling in "median" on at least NumPy
+            # 1.21.{3, 4}. See https://github.com/numpy/numpy/issues/20376
+            arr[arr.size // 2] = 'NaT'
+            self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
         if 'median' not in pyfunc.__name__:
             # Test with (val, NaT)^N (and with the random NaT from above)
             # use a loop, there's some weird thing/bug with arr[1::2] = 'NaT'
@@ -1018,6 +1021,16 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(argmax(arr2d),
                                 jit(nopython=True)(argmax)(arr2d))
 
+    def test_argmax_return_type(self):
+        # See issue #7853, return type should be intp not based on input type
+        arr2d = np.arange(6, dtype=np.uint8).reshape(2, 3)
+
+        def argmax(arr):
+            return arr2d.argmax(axis=0)
+
+        self.assertPreciseEqual(argmax(arr2d),
+                                jit(nopython=True)(argmax)(arr2d))
+
     def test_argmin_axis_1d_2d_4d(self):
         arr1d = np.array([0, 20, 3, 4])
         arr2d = np.arange(6).reshape(2, 3)
@@ -1073,6 +1086,16 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     def test_argmin_method_axis(self):
         arr2d = np.arange(6).reshape(2, 3)
+
+        def argmin(arr):
+            return arr2d.argmin(axis=0)
+
+        self.assertPreciseEqual(argmin(arr2d),
+                                jit(nopython=True)(argmin)(arr2d))
+
+    def test_argmin_return_type(self):
+        # See issue #7853, return type should be intp not based on input type
+        arr2d = np.arange(6, dtype=np.uint8).reshape(2, 3)
 
         def argmin(arr):
             return arr2d.argmin(axis=0)

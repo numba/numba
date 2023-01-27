@@ -206,8 +206,7 @@ class TestCUDAGufunc(CUDATestCase):
                 numba_dist_cuda(a, b, dist)
                 self.assertEqual(w[0].category, NumbaPerformanceWarning)
                 self.assertIn('Grid size', str(w[0].message))
-                self.assertIn('2 * SM count',
-                              str(w[0].message))
+                self.assertIn('low occupancy', str(w[0].message))
 
     def test_efficient_launch_configuration(self):
         @guvectorize(['void(float32[:], float32[:], float32[:])'],
@@ -304,6 +303,10 @@ class TestCUDAGufunc(CUDATestCase):
         b = (np.asarray((1.5, 2.5, 3.5)),
              np.asarray((4.5, 5.5, 6.5)))
         self.check_tuple_arg(a, b)
+
+    def test_gufunc_name(self):
+        gufunc = _get_matmulcore_gufunc(max_blocksize=512)
+        self.assertEqual(gufunc.__name__, 'matmulcore')
 
 
 if __name__ == '__main__':

@@ -11,10 +11,7 @@ synchronization, along with cooperative kernel launches.
 Cooperative groups are supported on Linux, and Windows for devices in `TCC
 mode
 <https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#tesla-compute-cluster-mode-for-windows>`_.
-Cooperative Groups also require the CUDA Device Runtime library, ``cudadevrt``,
-to be available - for conda default channel-installed CUDA toolkit packages, it
-is only available in versions 10.2 onwards. System-installed toolkits (e.g. from
-NVIDIA distribution packages or runfiles) all include ``cudadevrt``.
+
 
 Using Grid Groups
 -----------------
@@ -48,7 +45,7 @@ cooperative launch of a kernel with a given block size and dynamic shared
 memory requirement, use the ``max_cooperative_grid_blocks()`` method of kernel
 overloads:
 
-.. automethod:: numba.cuda.compiler._Kernel.max_cooperative_grid_blocks
+.. automethod:: numba.cuda.dispatcher._Kernel.max_cooperative_grid_blocks
 
 This can be used to ensure that the kernel is launched with no more than the
 maximum number of blocks. Exceeding the maximum number of blocks for the

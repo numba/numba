@@ -30,9 +30,12 @@ def _init_casting_rules(tm):
     tcr.safe_unsafe(types.uint16, types.int32)
     tcr.safe_unsafe(types.uint32, types.int64)
 
+    tcr.safe_unsafe(types.int8, types.float16)
     tcr.safe_unsafe(types.int16, types.float32)
     tcr.safe_unsafe(types.int32, types.float64)
 
+
+    tcr.unsafe_unsafe(types.int16, types.float16)
     tcr.unsafe_unsafe(types.int32, types.float32)
     # XXX this is inconsistent with the above; but we want to prefer
     # float64 over int64 when typing a heterogeneous operation,
@@ -41,6 +44,7 @@ def _init_casting_rules(tm):
     tcr.safe_unsafe(types.int64, types.float64)
     tcr.safe_unsafe(types.uint64, types.float64)
 
+    tcr.promote_unsafe(types.float16, types.float32)
     tcr.promote_unsafe(types.float32, types.float64)
 
     tcr.safe(types.float32, types.complex64)

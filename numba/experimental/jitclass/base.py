@@ -269,7 +269,7 @@ class ConstructorTemplate(templates.AbstractTemplate):
         sig = disp_type.get_call_type(self.context, boundargs, kws)
 
         if not isinstance(sig.return_type, types.NoneType):
-            raise TypeError(
+            raise errors.NumbaTypeError(
                 f"__init__() should return None, not '{sig.return_type}'")
 
         # Actual constructor returns an instance value (not None)
@@ -292,6 +292,12 @@ def _drop_ignored_attrs(dct):
             drop.add(k)
         elif getattr(v, '__objclass__', None) is object:
             drop.add(k)
+
+    # If a class defines __eq__ but not __hash__, __hash__ is implicitly set to
+    # None. This is a class member, and class members are not presently
+    # supported.
+    if '__hash__' in dct and dct['__hash__'] is None:
+        drop.add('__hash__')
 
     for k in drop:
         del dct[k]
@@ -326,7 +332,7 @@ class ClassBuilder(object):
         Register method implementations.
         This simply registers that the method names are valid methods.  Inside
         of imp() below we retrieve the actual method to run from the type of
-        the reciever argument (i.e. self).
+        the receiver argument (i.e. self).
         """
         to_register = list(instance_type.jit_methods) + \
             list(instance_type.jit_static_methods)
