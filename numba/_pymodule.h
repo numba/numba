@@ -3,9 +3,9 @@
 
 #define PY_SSIZE_T_CLEAN
 
-#include <Python.h>
-#include <structmember.h>
-#include <frameobject.h>
+#include "Python.h"
+#include "structmember.h"
+#include "frameobject.h"
 
 #define MOD_ERROR_VAL NULL
 #define MOD_SUCCESS_VAL(val) val

@@ -25,7 +25,7 @@ Benefits
 
 .. seealso::
    Compiled extension modules are discussed in the
-   `Python packaging user guide <https://packaging.python.org/en/latest/extensions/>`_.
+   `Python packaging user guide <https://packaging.python.org/en/latest/guides/packaging-binary-extensions/>`_.
 
 
 Limitations

@@ -15,10 +15,9 @@ Threading layer on top of OpenMP.
 #include "workqueue.h"
 #include "gufunc_scheduler.h"
 
-#ifdef _MSC_VER
+#ifdef _WIN32
 #include <malloc.h>
 #else
-#include <pthread.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <signal.h>
@@ -33,7 +32,9 @@ Threading layer on top of OpenMP.
 #elif defined(__clang__)
 #define _OMP_VENDOR "Intel"
 #elif defined(__GNUC__) // NOTE: clang also defines this, but it's checked above
+#ifndef _WIN32
 #define _NOT_FORKSAFE 1 // GNU OpenMP Not forksafe
+#endif
 #define _OMP_VENDOR "GNU"
 #endif
 

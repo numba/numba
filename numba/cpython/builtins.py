@@ -1,3 +1,4 @@
+from collections import namedtuple
 import math
 from functools import reduce
 
@@ -16,10 +17,11 @@ from numba.core import typing, types, utils, cgutils
 from numba.core.extending import overload, intrinsic
 from numba.core.typeconv import Conversion
 from numba.core.errors import (TypingError, LoweringError,
-                               NumbaExperimentalFeatureWarning)
+                               NumbaExperimentalFeatureWarning,
+                               NumbaTypeError, RequireLiteralValue,
+                               NumbaPerformanceWarning)
 from numba.misc.special import literal_unroll
 from numba.core.typing.asnumbatype import as_numba_type
-from numba.core.errors import NumbaTypeError
 
 
 @overload(operator.truth)
@@ -574,6 +576,15 @@ def indval_min(indval1, indval2):
         return min_impl
 
 
+@overload(min)
+def boolval_min(val1, val2):
+    if isinstance(val1, types.Boolean) and \
+       isinstance(val2, types.Boolean):
+        def bool_min_impl(val1, val2):
+            return val1 and val2
+        return bool_min_impl
+
+
 @overload(max)
 def indval_max(indval1, indval2):
     if isinstance(indval1, IndexValueType) and \
@@ -601,6 +612,15 @@ def indval_max(indval1, indval2):
                     return indval2
             return indval1
         return max_impl
+
+
+@overload(max)
+def boolval_max(val1, val2):
+    if isinstance(val1, types.Boolean) and \
+       isinstance(val2, types.Boolean):
+        def bool_max_impl(val1, val2):
+            return val1 or val2
+        return bool_max_impl
 
 
 greater_than = register_jitable(lambda a, b: a > b)
@@ -823,3 +843,165 @@ def ol_isinstance(var, typs):
                     return true_impl
 
     return false_impl
+
+
+# -- getattr implementation
+
+def _getattr_raise_attr_exc(obj, name):
+    # Dummy function for the purpose of creating an overloadable stub from
+    # which to raise an AttributeError as needed
+    pass
+
+
+@overload(_getattr_raise_attr_exc)
+def ol__getattr_raise_attr_exc(obj, name):
+    if not isinstance(name, types.StringLiteral):
+        raise RequireLiteralValue("argument 'name' must be a literal string")
+    lname = name.literal_value
+    message = f"'{obj}' has no attribute '{lname}'"
+
+    def impl(obj, name):
+        raise AttributeError(message)
+    return impl
+
+
+@intrinsic
+def resolve_getattr(tyctx, obj, name, default):
+    if not isinstance(name, types.StringLiteral):
+        raise RequireLiteralValue("argument 'name' must be a literal string")
+    lname = name.literal_value
+    fn = tyctx.resolve_getattr(obj, lname)
+    # Cannot handle things like `getattr(np, 'cos')` as the return type is
+    # types.Function.
+    if isinstance(fn, types.Function):
+        msg = ("Returning function objects is not implemented. "
+               f"getattr() was requested to return {fn} from attribute "
+               f"'{lname}' of {obj}.")
+        raise TypingError(msg)
+
+    if fn is None:  # No attribute
+
+        # if default is not _getattr_default then return the default
+        if not (isinstance(default, types.NamedTuple) and
+                default.instance_class == _getattr_default_type):
+            # it's not the marker default value, so return it
+            sig = default(obj, name, default)
+            def impl(cgctx, builder, sig, llargs):
+                tmp = llargs[-1]
+                cgctx.nrt.incref(builder, default, tmp)
+                return tmp
+        else:
+            # else wire in raising an AttributeError
+            fnty = tyctx.resolve_value_type(_getattr_raise_attr_exc)
+            raise_sig = fnty.get_call_type(tyctx, (obj, name), {})
+            sig = types.none(obj, name, default)
+            def impl(cgctx, builder, sig, llargs):
+                native_impl = cgctx.get_function(fnty, raise_sig)
+                return native_impl(builder, llargs[:-1])
+
+    else:  # Attribute present, wire in handing it back to the overload(getattr)
+        sig = fn(obj, name, default)
+        if isinstance(fn, types.BoundFunction):
+            # It's a method on an object
+            def impl(cgctx, builder, sig, ll_args):
+                cast_type = fn.this
+                casted = cgctx.cast(builder, ll_args[0], obj, cast_type)
+                res = cgctx.get_bound_function(builder, casted, cast_type)
+                cgctx.nrt.incref(builder, fn, res)
+                return res
+        else:
+            # Else it's some other type of attribute.
+            # Ensure typing calls occur at typing time, not at lowering
+            attrty = tyctx.resolve_getattr(obj, lname)
+            def impl(cgctx, builder, sig, ll_args):
+                attr_impl = cgctx.get_getattr(obj, lname)
+                res = attr_impl(cgctx, builder, obj, ll_args[0], lname)
+                casted = cgctx.cast(builder, res, attrty, fn)
+                cgctx.nrt.incref(builder, fn, casted)
+                return casted
+    return sig, impl
+
+
+# These are marker objects to indicate "no default has been provided" in a call
+_getattr_default_type = namedtuple('_getattr_default_type', '')
+_getattr_default = _getattr_default_type()
+
+
+# getattr with no default arg, obj is an open type and name is forced as a
+# literal string. The _getattr_default marker is used to indicate "no default
+# was provided".
+@overload(getattr, prefer_literal=True)
+def ol_getattr_2(obj, name):
+    def impl(obj, name):
+        return resolve_getattr(obj, name, _getattr_default)
+    return impl
+
+
+# getattr with default arg present, obj is an open type, name is forced as a
+# literal string, the "default" is again an open type. Note that the CPython
+# definition is: `getattr(object, name[, default]) -> value`, the `default`
+# is not a kwarg.
+@overload(getattr)
+def ol_getattr_3(obj, name, default):
+    def impl(obj, name, default):
+        return resolve_getattr(obj, name, default)
+    return impl
+
+
+@intrinsic
+def resolve_hasattr(tyctx, obj, name):
+    if not isinstance(name, types.StringLiteral):
+        raise RequireLiteralValue("argument 'name' must be a literal string")
+    lname = name.literal_value
+    fn = tyctx.resolve_getattr(obj, lname)
+    # Whilst technically the return type could be a types.bool_, the literal
+    # value is resolvable at typing time. Propagating this literal information
+    # into the type system allows the compiler to prune branches based on a
+    # hasattr predicate. As a result the signature is based on literals. This is
+    # "safe" because the overload requires a literal string so each will be a
+    # different variant of (obj, literal(name)) -> literal(bool).
+    if fn is None:
+        retty = types.literal(False)
+    else:
+        retty = types.literal(True)
+    sig = retty(obj, name)
+    def impl(cgctx, builder, sig, ll_args):
+       return cgutils.false_bit if fn is None else cgutils.true_bit
+    return sig, impl
+
+# hasattr cannot be implemented as a getattr call and then catching
+# AttributeError because Numba doesn't support catching anything other than
+# "Exception", so lacks the specificity required. Instead this implementation
+# tries to resolve the attribute via typing information and returns True/False
+# based on that.
+@overload(hasattr)
+def ol_hasattr(obj, name):
+    def impl(obj, name):
+        return resolve_hasattr(obj, name)
+    return impl
+
+
+@overload(repr)
+def ol_repr_generic(obj):
+    missing_repr_format = f"<object type:{obj}>"
+    def impl(obj):
+        attr = '__repr__'
+        if hasattr(obj, attr) == True:
+            return getattr(obj, attr)()
+        else:
+            # There's no __str__ or __repr__ defined for this object, return
+            # something generic
+            return missing_repr_format
+    return impl
+
+
+@overload(str)
+def ol_str_generic(object=''):
+    def impl(object=""):
+        attr = '__str__'
+        if hasattr(object, attr) == True:
+            return getattr(object, attr)()
+        else:
+            return repr(object)
+    return impl
+

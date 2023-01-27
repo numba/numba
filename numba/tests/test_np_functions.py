@@ -4,6 +4,7 @@ import itertools
 import math
 import platform
 from functools import partial
+from itertools import product
 import warnings
 
 import numpy as np
@@ -18,7 +19,7 @@ from numba.core.config import IS_WIN32, IS_32BITS
 from numba.core.utils import pysignature
 from numba.np.extensions import cross2d
 from numba.tests.support import (TestCase, CompilationCache, MemoryLeakMixin,
-                                 needs_blas, needs_subprocess)
+                                 needs_blas)
 import unittest
 
 
@@ -128,6 +129,10 @@ def isneginf(x, out=None):
 
 def isposinf(x, out=None):
     return np.isposinf(x, out)
+
+
+def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+    return np.isclose(a, b, rtol, atol, equal_nan)
 
 
 def isnat(x):
@@ -382,6 +387,10 @@ def np_cross(a, b):
     return np.cross(a, b)
 
 
+def nb_cross2d(a, b):
+    return cross2d(a, b)
+
+
 def flip_lr(a):
     return np.fliplr(a)
 
@@ -400,6 +409,10 @@ def array_contains(a, key):
 
 def swapaxes(a, a1, a2):
     return np.swapaxes(a, a1, a2)
+
+
+def nan_to_num(X, copy=True, nan=0.0):
+    return np.nan_to_num(X, copy=copy, nan=nan)
 
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
@@ -517,6 +530,15 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x_types = [typeof(v) for v in x_values]
         check(x_types, x_values, ulps=2)
 
+    def test_sinc_exceptions(self):
+        pyfunc = sinc
+        cfunc = jit(nopython=True)(pyfunc)
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc('str')
+        self.assertIn('Argument "x" must be a Number or array-like',
+                      str(raises.exception))
+
     def test_contains(self):
         def arrs():
             a_0 = np.arange(10, 50)
@@ -611,6 +633,15 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x_values = np.array(x_values)
         x_types = [types.complex64, types.complex128]
         check(x_types, x_values)
+
+    def test_angle_exceptions(self):
+        pyfunc = angle1
+        cfunc = jit(nopython=True)(pyfunc)
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc('hello')
+        self.assertIn('Argument "z" must be a complex or Array[complex]',
+                      str(raises.exception))
 
     def test_array_equal(self):
         def arrays():
@@ -867,6 +898,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield 4.234
             yield True
             yield None
+            yield np.timedelta64(10, 'Y')
+            yield np.datetime64('nat')
+            yield np.datetime64(1, 'Y')
 
         pyfunc = isscalar
         cfunc = jit(nopython=True)(pyfunc)
@@ -945,6 +979,86 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 expected = pyfunc(x, out)
                 got = cfunc(x, out)
                 self.assertPreciseEqual(expected, got)
+
+    def test_isclose(self):
+        rtol = 1e-5
+        atol = 1e-8
+        arr = np.array([100, 1000])
+        aran = np.arange(8).reshape((2, 2, 2))
+        kw = {'rtol': rtol, 'atol': atol}
+
+        def values():
+            yield 1e10, 1.00001e10, {}
+            yield 1e10, np.nan, {}
+            yield np.array([1e-8, 1e-7]), np.array([0.0, 0.0]), {}
+            yield np.array([1e10, 1e-7]), np.array([1.00001e10, 1e-8]), {}
+            yield np.array([1e10, 1e-8]), np.array([1.00001e10, 1e-9]), {}
+            yield np.array([1e10, 1e-8]), np.array([1.0001e10, 1e-9]), {}
+            yield np.array([1.0, np.nan]), np.array([1.0, np.nan]), {}
+            yield np.array([1.0, np.nan]), np.array([1.0, np.nan]), {'equal_nan': True}  # noqa
+            yield np.array([np.nan, np.nan]), np.array([1.0, np.nan]), {'equal_nan': True}  # noqa
+            yield np.array([1e-100, 1e-7]), np.array([0.0, 0.0]), {'atol': 0.0}
+            yield np.array([1e-10, 1e-10]), np.array([1e-20, 0.0]), {}
+            yield np.array([1e-10, 1e-10]), np.array([1e-20, 0.999999e-10]), {'atol': 0.0}  # noqa
+            yield np.array([1, np.inf, 2]), np.array([3, np.inf, 4]), kw
+            yield np.array([atol, np.inf, -np.inf, np.nan]), np.array([0]), kw
+            yield np.array([atol, np.inf, -np.inf, np.nan]), 0, kw
+            yield 0, np.array([atol, np.inf, -np.inf, np.nan]), kw
+
+            # tests taken from
+            # https://github.com/numpy/numpy/blob/aac965af6032b69d5cb515ad785cc9a331e816f4/numpy/core/tests/test_numeric.py#L2298-L2335  # noqa: E501
+
+            # all close tests
+            yield np.array([0, 1]), np.array([1, 0]), kw
+            yield arr, arr, kw
+            yield np.array([1]), np.array([1 + rtol + atol]), kw
+            yield arr, arr + arr * rtol, kw
+            yield arr, arr + arr * rtol + atol, kw
+            yield aran, aran + aran * rtol, kw
+            yield np.inf, np.inf, kw
+            yield -np.inf, np.inf, kw
+            yield np.inf, np.array([np.inf]), kw
+            yield np.array([np.inf, -np.inf]), np.array([np.inf, -np.inf]), kw
+
+            # none close tests
+            yield np.array([np.inf, 0]), np.array([1, np.inf]), kw
+            yield np.array([np.inf, -np.inf]), np.array([1, 0]), kw
+            yield np.array([np.inf, np.inf]), np.array([1, -np.inf]), kw
+            yield np.array([np.inf, np.inf]), np.array([1, 0]), kw
+            yield np.array([np.nan, 0]), np.array([np.nan, -np.inf]), kw
+            yield np.array([atol * 2]), np.array([0]), kw
+            yield np.array([1]), np.array([1 + rtol + atol * 2]), kw
+            yield aran, aran + rtol * 1.1 * aran + atol * 1.1, kw
+            yield np.array(np.array([np.inf, 1])), np.array(np.array([0, np.inf])), kw  # noqa
+
+            # some close tests
+            yield np.array([np.inf, 0]), np.array([atol * 2, atol * 2]), kw
+            yield np.array([np.inf, 0]), np.array([np.inf, atol * 2]), kw
+            yield np.array([atol, 1, 1e6 * (1 + 2 * rtol) + atol]), np.array([0, np.nan, 1e6]), kw  # noqa
+            yield np.arange(3), np.array([0, 1, 2.1]), kw
+            yield np.nan, np.array([np.nan, np.nan, np.nan]), kw
+            yield np.array([0]), np.array([atol, np.inf, -np.inf, np.nan]), kw
+            yield 0, np.array([atol, np.inf, -np.inf, np.nan]), kw
+
+        pyfunc = isclose
+        cfunc = jit(nopython=True)(pyfunc)
+        for a, b, kwargs in values():
+            expected = pyfunc(a, b, **kwargs)
+            got = cfunc(a, b, **kwargs)
+            if isinstance(expected, np.bool_):
+                self.assertEqual(expected, got)
+            else:
+                self.assertTrue(np.array_equal(expected, got))
+
+    def isclose_exception(self):
+        pyfunc = isclose
+        cfunc = jit(nopython=True)(pyfunc)
+        inputs = [('hello', 'world'), (2.0, None), ('a', 3.0)]
+        for (a, b) in inputs:
+            with self.assertRaises(TypingError) as raises:
+                cfunc(a, b)
+            self.assertIn("Inputs for `np.isclose` must be array-like.",
+                          str(raises.exception))
 
     def bincount_sequences(self):
         """
@@ -2683,6 +2797,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield a, [1, 3]
             yield a, [1, 3], 1
             yield a, [1, 3], 2
+            yield a, [1], -1
+            yield a, [1], -2
+            yield a, [1], -3
+            yield a, np.array([], dtype=np.int64), 0
 
             a = np.arange(100).reshape(2, -1)
             yield a, 1
@@ -2742,6 +2860,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             "array split does not result in an equal division",
             str(raises.exception)
         )
+
+        with self.assertRaises(ValueError) as raises:
+            njit(split)(np.ones(5), [3], axis=-3)
+        self.assertIn("np.split: Argument axis out of bounds",
+                      str(raises.exception))
 
     def test_roll_basic(self):
         pyfunc = roll
@@ -4432,7 +4555,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def test_cross2d(self):
         pyfunc = np_cross
-        cfunc = cross2d
+        cfunc = njit(nb_cross2d)
         pairs = [
             # 2x2 (n-dims)
             (
@@ -4477,7 +4600,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(expected, got)
 
     def test_cross2d_exceptions(self):
-        cfunc = cross2d
+        cfunc = njit(nb_cross2d)
         self.disable_leak_check()
 
         # test incompatible dimensions for ndim == 1
@@ -4626,14 +4749,14 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as raises:
             cfunc(np.arange(4), 1, 0)
 
-        self.assertIn('The second argument "axis1" is out of bounds for array'
-                      ' of given dimension', str(raises.exception))
+        self.assertIn('np.swapaxes: Argument axis1 out of bounds',
+                      str(raises.exception))
 
         with self.assertRaises(ValueError) as raises:
             cfunc(np.arange(8).reshape(2, 4), 0, -3)
 
-        self.assertIn('The third argument "axis2" is out of bounds for array'
-                      ' of given dimension', str(raises.exception))
+        self.assertIn('np.swapaxes: Argument axis2 out of bounds',
+                      str(raises.exception))
 
     def test_take_along_axis(self):
         a = np.arange(24).reshape((3, 1, 4, 2))
@@ -4744,6 +4867,58 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             gen(0)(arr2d, np.ones((2, 3), dtype=np.uint64))
         self.assertIn("dimensions don't match", str(raises.exception))
 
+    def test_nan_to_num(self):
+        # Test cases are from
+        # https://github.com/numpy/numpy/blob/8ff45c5bb520db04af8720bf1d34a392a8d2561a/numpy/lib/tests/test_type_check.py#L350-L452
+        values = [
+            np.nan,
+            1,
+            1.1,
+            1 + 1j,
+            complex(-np.inf, np.nan),
+            complex(np.nan, np.nan),
+            np.array([1], dtype=int),
+            np.array([complex(-np.inf, np.inf), complex(1, np.nan),
+                      complex(np.nan, 1), complex(np.inf, -np.inf)]),
+            np.array([0.1, 1.0, 0.4]),
+            np.array([1, 2, 3]),
+            np.array([[0.1, 1.0, 0.4], [0.4, 1.2, 4.0]]),
+            np.array([0.1, np.nan, 0.4]),
+            np.array([[0.1, np.nan, 0.4], [np.nan, 1.2, 4.0]]),
+            np.array([-np.inf, np.nan, np.inf]),
+            np.array([-np.inf, np.nan, np.inf], dtype=np.float32)
+        ]
+        nans = [0.0, 10]
+
+        pyfunc = nan_to_num
+        cfunc = njit(nan_to_num)
+
+        for value, nan in product(values, nans):
+            expected = pyfunc(value, nan=nan)
+            got = cfunc(value, nan=nan)
+            self.assertPreciseEqual(expected, got)
+
+    def test_nan_to_num_copy_false(self):
+        # Check that copy=False operates in-place.
+        cfunc = njit(nan_to_num)
+
+        x = np.array([0.1, 0.4, np.nan])
+        expected = 1.0
+        cfunc(x, copy=False, nan=expected)
+        self.assertPreciseEqual(x[-1], expected)
+
+        x_complex = np.array([0.1, 0.4, complex(np.nan, np.nan)])
+        cfunc(x_complex, copy=False, nan=expected)
+        self.assertPreciseEqual(x_complex[-1], 1. + 1.j)
+
+    def test_nan_to_num_invalid_argument(self):
+        cfunc = njit(nan_to_num)
+
+        with self.assertTypingError() as raises:
+            cfunc("invalid_input")
+        self.assertIn("The first argument must be a scalar or an array-like",
+                      str(raises.exception))
+
 
 class TestNPMachineParameters(TestCase):
     # tests np.finfo, np.iinfo, np.MachAr
@@ -4818,8 +4993,8 @@ def foo():
             cfunc(np.float64(7))
 
     @unittest.skipUnless(numpy_version >= (1, 22), "Needs NumPy >= 1.22")
-    @needs_subprocess
-    def test_np_MachAr_deprecation_np122_impl(self):
+    @TestCase.run_test_in_subprocess
+    def test_np_MachAr_deprecation_np122(self):
         # Tests that Numba is replaying the NumPy 1.22 deprecation warning
         # raised on the getattr of 'MachAr' on the NumPy module.
         # Needs to be run in a subprocess as the warning is generated from the
@@ -4835,13 +5010,6 @@ def foo():
 
         self.assertEqual(len(w), 1)
         self.assertIn('`np.MachAr` is deprecated', str(w[0]))
-
-    @unittest.skipUnless(numpy_version >= (1, 22), "Needs NumPy >= 1.22")
-    def test_np_MachAr_deprecation_np122(self):
-        test_name = 'test_np_MachAr_deprecation_np122_impl'
-        self.subprocess_test_runner(test_module=self.__module__,
-                                    test_class=type(self).__name__,
-                                    test_name=test_name,)
 
 
 if __name__ == '__main__':

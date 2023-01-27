@@ -5,11 +5,11 @@ Installation
 Compatibility
 -------------
 
-Numba is compatible with Python 3.7--3.10, and Numpy versions 1.18 or later.
+Numba is compatible with Python 3.8--3.10, and NumPy versions 1.18 or later.
 
 Our supported platforms are:
 
-* Linux x86 (32-bit and 64-bit)
+* Linux x86_64
 * Linux ppcle64 (POWER8, POWER9)
 * Windows 7 and later (32-bit and 64-bit)
 * OS X 10.9 and later (64-bit and unofficial support on M1/Arm64)
@@ -17,7 +17,6 @@ Our supported platforms are:
 * NVIDIA GPUs of compute capability 5.3 and later
 
   * Compute capabilities 3.5 - 5.2 are supported, but deprecated.
-* ARMv7 (32-bit little-endian, such as Raspberry Pi 2 and 3)
 * ARMv8 (64-bit little-endian, such as the NVIDIA Jetson)
 
 :ref:`numba-parallel` is only available on 64-bit platforms.
@@ -71,32 +70,14 @@ To use CUDA with Numba installed by `pip`, you need to install the `CUDA SDK
 installed system-wide on Linux.
 
 
-.. _numba-install-armv7:
-
-Installing on Linux ARMv7 Platforms
------------------------------------
-
-`Berryconda <https://github.com/jjhelmus/berryconda>`_ is a
-conda-based Python distribution for the Raspberry Pi.  We are now uploading
-packages to the ``numba`` channel on Anaconda Cloud for 32-bit little-endian,
-ARMv7-based boards, which currently includes the Raspberry Pi 2 and 3,
-but not the Pi 1 or Zero.  These can be installed using conda from the
-``numba`` channel::
-
-    $ conda install -c numba numba
-
-Berryconda and Numba may work on other Linux-based ARMv7 systems, but this has
-not been tested.
-
-
 Installing on Linux ARMv8 (AArch64) Platforms
 ---------------------------------------------
 
 We build and test conda packages on the `NVIDIA Jetson TX2
 <https://www.nvidia.com/en-us/autonomous-machines/embedded-systems-dev-kits-modules/>`_,
 but they are likely to work for other AArch64 platforms.  (Note that while the
-Raspberry Pi CPU is 64-bit, Raspbian runs it in 32-bit mode, so look at
-:ref:`numba-install-armv7` instead.)
+CPUs in the Raspberry Pi 3, 4, and Zero 2 W are 64-bit, Raspberry Pi OS may be
+running in 32-bit mode depending on the OS image in use).
 
 Conda-forge support for AArch64 is still quite experimental and packages are limited,
 but it does work enough for Numba to build and pass tests.  To set up the environment:
@@ -136,7 +117,6 @@ Source archives of the latest release can also be found on
 * A C compiler compatible with your Python installation.  If you are using
   Anaconda, you can use the following conda packages:
 
-  * Linux ``x86``: ``gcc_linux-32`` and ``gxx_linux-32``
   * Linux ``x86_64``: ``gcc_linux-64`` and ``gxx_linux-64``
   * Linux ``POWER``: ``gcc_linux-ppc64le`` and ``gxx_linux-ppc64le``
   * Linux ``ARM``: no conda packages, use the system compiler
@@ -151,6 +131,9 @@ Source archives of the latest release can also be found on
 Then you can build and install Numba from the top level of the source tree::
 
     $ python setup.py install
+
+If you wish to run the test suite, see the instructions in the
+:ref:`developer documentation <running-tests>`.
 
 .. _numba-source-install-env_vars:
 
@@ -234,7 +217,7 @@ vary with target operating system and hardware. The following lists them all
   * ``pyyaml`` - permits the use of a ``.numba_config.yaml``
     file for storing per project configuration options
   * ``colorama`` - makes error message highlighting work
-  * ``icc_rt`` - (numba channel) allows Numba to use Intel SVML for extra
+  * ``intel-cmplr-lib-rt`` - allows Numba to use Intel SVML for extra
     performance
   * ``pygments`` - for "pretty" type annotation
   * ``gdb`` as an executable on the ``$PATH`` - if you would like to use the gdb
@@ -246,8 +229,6 @@ vary with target operating system and hardware. The following lists them all
     inspection. `See here <https://github.com/radareorg/radare2>`_ for
     information on obtaining and installing.
   * ``graphviz`` - for some CFG inspection functionality.
-  * ``pickle5`` - provides Python 3.8 pickling features for faster pickling in
-    Python 3.7.
   * ``typeguard`` - used by ``runtests.py`` for
     :ref:`runtime type-checking <type_anno_check>`.
   * ``cuda-python`` - The NVIDIA CUDA Python bindings. See :ref:`cuda-bindings`.
@@ -278,7 +259,15 @@ information.
 +===========+==============+===========================+============================+==============================+===================+=============================+
 | 0.57.x    | TBC          | 3.8.x <= version < 3.12   | 1.19 <= version < 1.24     | 0.40.x                       | 11.x              | 2021.x                      |
 +-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
-| 0.56.x    | TBC          | 3.7.x <= version < 3.11   | 1.18 <= version < 1.23     | 0.39.x                       | 11.x              | 2021.x                      |
+| 0.56.4    | 2022-11-03   | 3.7.x <= version < 3.11   | 1.18 <= version < 1.24     | 0.39.x                       | 11.x              | 2021.x                      |
++-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.56.3    | 2022-10-13   | 3.7.x <= version < 3.11   | 1.18 <= version < 1.24     | 0.39.x                       | 11.x              | 2021.x                      |
++-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.56.2    | 2022-09-01   | 3.7.x <= version < 3.11   | 1.18 <= version < 1.24     | 0.39.x                       | 11.x              | 2021.x                      |
++-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.56.1    | NO RELEASE   |                           |                            |                              |                   |                             |
++-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.56.0    | 2022-07-25   | 3.7.x <= version < 3.11   | 1.18 <= version < 1.23     | 0.39.x                       | 11.x              | 2021.x                      |
 +-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
 | 0.55.2    | 2022-05-25   | 3.7.x <= version < 3.11   | 1.18 <= version < 1.23     | 0.38.x                       | 11.x              | 2021.x                      |
 +-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+

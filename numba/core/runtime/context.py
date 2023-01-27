@@ -1,8 +1,24 @@
 import functools
+from collections import namedtuple
 
 from llvmlite import ir
+from numba.core import types, cgutils, errors, config
 
-from numba.core import types, cgutils, errors
+
+_NRT_Meminfo_Functions = namedtuple("_NRT_Meminfo_Functions",
+                                    ("alloc",
+                                     "alloc_dtor",
+                                     "alloc_aligned"))
+
+
+_NRT_MEMINFO_SAFE_API = _NRT_Meminfo_Functions("NRT_MemInfo_alloc_safe",
+                                               "NRT_MemInfo_alloc_dtor_safe",
+                                               "NRT_MemInfo_alloc_safe_aligned")
+
+
+_NRT_MEMINFO_DEFAULT_API = _NRT_Meminfo_Functions("NRT_MemInfo_alloc",
+                                                  "NRT_MemInfo_alloc_dtor",
+                                                  "NRT_MemInfo_alloc_aligned")
 
 
 class NRTContext(object):
@@ -13,6 +29,12 @@ class NRTContext(object):
     def __init__(self, context, enabled):
         self._context = context
         self._enabled = enabled
+        # If DEBUG_NRT is set, use the safe function variants which use memset
+        # to inject a few known bytes into the start of allocated regions.
+        if config.DEBUG_NRT:
+            self._meminfo_api = _NRT_MEMINFO_SAFE_API
+        else:
+            self._meminfo_api = _NRT_MEMINFO_DEFAULT_API
 
     def _require_nrt(self):
         if not self._enabled:
@@ -84,7 +106,8 @@ class NRTContext(object):
 
         mod = builder.module
         fnty = ir.FunctionType(cgutils.voidptr_t, [cgutils.intp_t])
-        fn = cgutils.get_or_insert_function(mod, fnty, "NRT_MemInfo_alloc_safe")
+        fn = cgutils.get_or_insert_function(mod, fnty,
+                                            self._meminfo_api.alloc)
         fn.return_value.add_attribute("noalias")
         return builder.call(fn, [size])
 
@@ -116,7 +139,7 @@ class NRTContext(object):
         fnty = ir.FunctionType(cgutils.voidptr_t,
                                [cgutils.intp_t, cgutils.voidptr_t])
         fn = cgutils.get_or_insert_function(mod, fnty,
-                                            "NRT_MemInfo_alloc_dtor_safe")
+                                            self._meminfo_api.alloc_dtor)
         fn.return_value.add_attribute("noalias")
         return builder.call(fn, [size,
                                  builder.bitcast(dtor, cgutils.voidptr_t)])
@@ -151,7 +174,7 @@ class NRTContext(object):
         u32 = ir.IntType(32)
         fnty = ir.FunctionType(cgutils.voidptr_t, [cgutils.intp_t, u32])
         fn = cgutils.get_or_insert_function(mod, fnty,
-                                            "NRT_MemInfo_alloc_safe_aligned")
+                                            self._meminfo_api.alloc_aligned)
         fn.return_value.add_attribute("noalias")
         if isinstance(align, int):
             align = self._context.get_constant(types.uint32, align)
