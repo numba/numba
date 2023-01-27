@@ -447,7 +447,7 @@ def dead_branch_prune(func_ir, called_args):
             if len(const_conds) == 2:
                 # prune the branch, switch the branch for an unconditional jump
                 prune_stat, taken = prune(branch, condition, blk, *const_conds)
-                if(prune_stat):
+                if (prune_stat):
                     # add the condition to the list of nullified conditions
                     nullified_conditions.append(nullified(condition, taken,
                                                           True))
@@ -464,7 +464,7 @@ def dead_branch_prune(func_ir, called_args):
 
             if not isinstance(resolved_const, Unknown):
                 prune_stat, taken = prune_by_predicate(branch, condition, blk)
-                if(prune_stat):
+                if (prune_stat):
                     # add the condition to the list of nullified conditions
                     nullified_conditions.append(nullified(condition, taken,
                                                           False))

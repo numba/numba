@@ -58,10 +58,14 @@ class CPUContext(BaseContext):
         # Map external C functions.
         externals.c_math_functions.install(self)
 
-        # Initialize NRT runtime
+    def load_additional_registries(self):
+        # Only initialize the NRT once something is about to be compiled. The
+        # "initialized" state doesn't need to be threadsafe, there's a lock
+        # around the internal compilation and the rtsys.initialize call can be
+        # made multiple times, worse case init just gets called a bit more often
+        # than optimal.
         rtsys.initialize(self)
 
-    def load_additional_registries(self):
         # Add implementations that work via import
         from numba.cpython import (builtins, charseq, enumimpl, # noqa F401
                                    hashing, heapq, iterators, # noqa F401

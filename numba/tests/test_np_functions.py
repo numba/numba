@@ -4,6 +4,7 @@ import itertools
 import math
 import platform
 from functools import partial
+from itertools import product
 import warnings
 
 import numpy as np
@@ -408,6 +409,10 @@ def array_contains(a, key):
 
 def swapaxes(a, a1, a2):
     return np.swapaxes(a, a1, a2)
+
+
+def nan_to_num(X, copy=True, nan=0.0):
+    return np.nan_to_num(X, copy=copy, nan=nan)
 
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
@@ -4861,6 +4866,58 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as raises:
             gen(0)(arr2d, np.ones((2, 3), dtype=np.uint64))
         self.assertIn("dimensions don't match", str(raises.exception))
+
+    def test_nan_to_num(self):
+        # Test cases are from
+        # https://github.com/numpy/numpy/blob/8ff45c5bb520db04af8720bf1d34a392a8d2561a/numpy/lib/tests/test_type_check.py#L350-L452
+        values = [
+            np.nan,
+            1,
+            1.1,
+            1 + 1j,
+            complex(-np.inf, np.nan),
+            complex(np.nan, np.nan),
+            np.array([1], dtype=int),
+            np.array([complex(-np.inf, np.inf), complex(1, np.nan),
+                      complex(np.nan, 1), complex(np.inf, -np.inf)]),
+            np.array([0.1, 1.0, 0.4]),
+            np.array([1, 2, 3]),
+            np.array([[0.1, 1.0, 0.4], [0.4, 1.2, 4.0]]),
+            np.array([0.1, np.nan, 0.4]),
+            np.array([[0.1, np.nan, 0.4], [np.nan, 1.2, 4.0]]),
+            np.array([-np.inf, np.nan, np.inf]),
+            np.array([-np.inf, np.nan, np.inf], dtype=np.float32)
+        ]
+        nans = [0.0, 10]
+
+        pyfunc = nan_to_num
+        cfunc = njit(nan_to_num)
+
+        for value, nan in product(values, nans):
+            expected = pyfunc(value, nan=nan)
+            got = cfunc(value, nan=nan)
+            self.assertPreciseEqual(expected, got)
+
+    def test_nan_to_num_copy_false(self):
+        # Check that copy=False operates in-place.
+        cfunc = njit(nan_to_num)
+
+        x = np.array([0.1, 0.4, np.nan])
+        expected = 1.0
+        cfunc(x, copy=False, nan=expected)
+        self.assertPreciseEqual(x[-1], expected)
+
+        x_complex = np.array([0.1, 0.4, complex(np.nan, np.nan)])
+        cfunc(x_complex, copy=False, nan=expected)
+        self.assertPreciseEqual(x_complex[-1], 1. + 1.j)
+
+    def test_nan_to_num_invalid_argument(self):
+        cfunc = njit(nan_to_num)
+
+        with self.assertTypingError() as raises:
+            cfunc("invalid_input")
+        self.assertIn("The first argument must be a scalar or an array-like",
+                      str(raises.exception))
 
 
 class TestNPMachineParameters(TestCase):

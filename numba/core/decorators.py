@@ -138,17 +138,39 @@ def jit(signature_or_function=None, locals={}, cache=False,
                 return x + y
 
     """
+    forceobj = options.get('forceobj', False)
     if 'argtypes' in options:
         raise DeprecationError(_msg_deprecated_signature_arg.format('argtypes'))
     if 'restype' in options:
         raise DeprecationError(_msg_deprecated_signature_arg.format('restype'))
-    if options.get('nopython', False) and options.get('forceobj', False):
+    if options.get('nopython', False) and forceobj:
         raise ValueError("Only one of 'nopython' or 'forceobj' can be True.")
 
     if "_target" in options:
         # Set the "target_backend" option if "_target" is defined.
         options['target_backend'] = options['_target']
     target = options.pop('_target', 'cpu')
+
+    nopython = options.get('nopython', None)
+    if (nopython is None or nopython is False) and not forceobj:
+        # if nopython was not supplied/is False AND forceobj is not in use, then
+        # warn the user about a change in the default for the nopython WRT
+        # deprecation of objmode fallback.
+        url = ("https://numba.readthedocs.io/en/stable/reference/"
+                "deprecation.html#deprecation-of-object-mode-fall-"
+                "back-behaviour-when-using-jit")
+        if nopython is None:
+            msg = ("The 'nopython' keyword argument was not supplied to the "
+                   "'numba.jit' decorator. The implicit default value for this "
+                   "argument is currently False, but it will be changed to "
+                   f"True in Numba 0.59.0. See {url} for details.")
+        else:
+            msg = ("The keyword argument 'nopython=False' was supplied. From "
+                   "Numba 0.59.0 the default is being changed to True and use "
+                   "of 'nopython=False' will raise a warning as the "
+                   f"argument will have no effect. See {url} for "
+                   "details.")
+        warnings.warn(NumbaDeprecationWarning(msg), stacklevel=2)
 
     options['boundscheck'] = boundscheck
 
