@@ -1024,12 +1024,6 @@ numba_dict_insert_ez(
     return numba_dict_insert(d, key_bytes, hash, val_bytes, old);
 }
 
-int
-numba_dict_new_minsize(NB_Dict **out, Py_ssize_t key_size, Py_ssize_t val_size)
-{
-    return numba_dict_new(out, D_MINSIZE, key_size, val_size);
-}
-
 
 /* Allocate a new dictionary with enough space to hold n_keys without resizes */
 int
@@ -1037,7 +1031,7 @@ numba_dict_new_sized(NB_Dict **out, Py_ssize_t n_keys, Py_ssize_t key_size, Py_s
 
     /* Respect D_MINSIZE */
     if (n_keys <= USABLE_FRACTION(D_MINSIZE)) {
-        return numba_dict_new_minsize(out, key_size, val_size);
+        return numba_dict_new(out, D_MINSIZE, key_size, val_size);
     }
 
     /*  Adjust for load factor */

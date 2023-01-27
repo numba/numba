@@ -111,12 +111,6 @@ numba_dict_free(NB_Dict *d);
 NUMBA_EXPORT_FUNC(Py_ssize_t)
 numba_dict_length(NB_Dict *d);
 
-/* Allocates a new dict at the minimal size
-See numba_dict_new().
-*/
-NUMBA_EXPORT_FUNC(int)
-numba_dict_new_minsize(NB_Dict **out, Py_ssize_t key_size, Py_ssize_t val_size);
-
 /* Set the method table for type specific operations
 */
 NUMBA_EXPORT_FUNC(void)
