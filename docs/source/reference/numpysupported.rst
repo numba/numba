@@ -306,6 +306,7 @@ The following methods of NumPy arrays are supported:
 
 * :meth:`~numpy.ndarray.argmax` (``axis`` keyword argument supported).
 * :meth:`~numpy.ndarray.argmin` (``axis`` keyword argument supported).
+* :func:`numpy.argpartition` (only the 2 first arguments)
 * :meth:`~numpy.ndarray.argsort` (``kind`` key word argument supported for
   values ``'quicksort'`` and ``'mergesort'``)
 * :meth:`~numpy.ndarray.astype` (only the 1-argument form)
