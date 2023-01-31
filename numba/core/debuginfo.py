@@ -322,11 +322,6 @@ class DIBuilder(AbstractDIBuilder):
                                        argmap=argmap)
         function.set_metadata("dbg", di_subp)
 
-        # Don't marked alwaysinline functions as noinline.
-        if 'alwaysinline' not in function.attributes:
-            # disable inlining for this function for easier debugging
-            function.attributes.add('noinline')
-
     def finalize(self):
         dbgcu = cgutils.get_or_insert_named_metadata(self.module, self.DBG_CU_NAME)
         dbgcu.add(self.dicompileunit)

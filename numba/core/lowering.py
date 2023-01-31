@@ -123,6 +123,14 @@ class BaseLower(object):
                                        argtypes=self.fndesc.argtypes,
                                        line=self.defn_loc.line)
 
+        # When full debug info is enabled, disable inlining where possible, to
+        # improve the quality of the debug experience. 'alwaysinline' functions
+        # cannot have inlining disabled.
+        attributes = self.builder.function.attributes
+        full_debug = self.flags.debuginfo and not self.flags.dbg_directives_only
+        if full_debug and 'alwaysinline' not in attributes:
+            attributes.add('noinline')
+
     def post_lower(self):
         """
         Called after all blocks are lowered
