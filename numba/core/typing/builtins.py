@@ -954,6 +954,7 @@ class Int(AbstractTemplate):
         if kws:
             raise errors.NumbaAssertionError('kws not supported')
 
+        # support for int(str, base=10) is done via @overload
         arg = args[0]
 
         if isinstance(arg, types.Integer):

@@ -2927,8 +2927,8 @@ class IntTestCases(BaseTest):
                         vv = -v
                     try:
                         self.assertEqual(cfunc(ss), vv)
-                    except ValueError:
-                        pass
+                    except ValueError as e:
+                        self.assertEqual(str(e), _INVALID_LITERAL_MSG)
 
         # Bug 1679: "0x" is not a valid hex literal
         self.assertRaises(ValueError, base_cfunc, "0x", 16)

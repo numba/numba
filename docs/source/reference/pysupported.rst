@@ -934,7 +934,8 @@ The following built-in functions are supported:
   cannot be a function type (e.g. ``getattr(numpy, 'cos')`` is not supported as
   it returns a function type).
 * :func:`hash` (see :ref:`pysupported-hashing` below)
-* :class:`int`
+* :class:`int`: support `int`, `float`, or `str` as the first argument,
+  and support an optional `base` argument with `str`
 * :func:`iter`: only the one-argument form
 * :func:`isinstance` (experimental support only)
 * :func:`len`
