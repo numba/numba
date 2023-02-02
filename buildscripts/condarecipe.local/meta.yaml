@@ -34,7 +34,7 @@ requirements:
     - setuptools
     - importlib_metadata       # [py<39]
     # On channel https://anaconda.org/numba/
-    - llvmlite >=0.40.0dev0,<0.40
+    - llvmlite >=0.40.0dev0llvm14,<0.40
     # TBB devel version is to match TBB libs.
     # 2020.3 is the last version with the "old" ABI
     # NOTE: 2021.1..2021.5 are API compatible for Numba's purposes.
@@ -48,7 +48,7 @@ requirements:
     - setuptools
     - importlib_metadata       # [py<39]
     # On channel https://anaconda.org/numba/
-    - llvmlite >=0.40.0dev0,<0.40
+    - llvmlite ==0.40.0dev0llvm14
   run_constrained:
     # If TBB is present it must be at least version 2021
     - tbb >=2021    # [not (aarch64 or ppc64le)]
