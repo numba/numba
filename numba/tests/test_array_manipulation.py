@@ -147,6 +147,10 @@ def as_strided2(a):
     return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
 
 
+def sliding_window_view(x, window_shape, axis=None):
+    return np.lib.stride_tricks.sliding_window_view(x, window_shape, axis=axis)
+
+
 def bad_index(arr, arr2d):
     x = arr.x,
     y = arr.y
@@ -515,6 +519,98 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
     def test_as_strided(self):
         self.check_as_strided(as_strided1)
         self.check_as_strided(as_strided2)
+
+    @unittest.skipIf(numpy_version < (1, 20), "requires NumPy 1.20 or newer")
+    def test_sliding_window_view(self):
+        cfunc = jit(nopython=True)(sliding_window_view)
+
+        def check(arr, window_shape, axis):
+            # Our version is always writeable (NumPy default is False).
+            expected = np.lib.stride_tricks.sliding_window_view(
+                arr, window_shape, axis, writeable=True
+            )
+            got = cfunc(arr, window_shape, axis)
+            self.assertPreciseEqual(got, expected)
+
+        # 1d array, different ways of specifying the axis.
+        arr1 = np.arange(24)
+        check(arr1, 5, None)
+        check(arr1, 4, 0)
+        check(arr1, 8, -1)
+        check(arr1, 11, (0,))
+
+        # 2d array, 1d window.
+        arr2 = np.arange(200).reshape(10, 20)
+        check(arr2, 5, 0)
+        check(arr2, 8, (-1,))
+
+        # 2d array, 2d window.
+        check(arr2, (4, 5), None)
+        check(arr2, (5, 8), (0, 1))
+        check(arr2, (5, 8), (1, 0))
+        check(arr2, (5, 8), (1, -2))
+
+        # 4d array, 2d window.
+        arr4 = np.arange(200).reshape(4, 5, 5, 2)
+        check(arr4, (3, 2), (1, 2))
+        check(arr4, (3, 2), (-2, -3))
+
+        # Repeated axis.
+        check(arr2, (5, 3, 3), (0, 1, 0))
+
+    def test_sliding_window_view_errors(self):
+        cfunc = jit(nopython=True)(sliding_window_view)
+
+        def _raises(msg, *args):
+            with self.assertRaises(ValueError) as raises:
+                cfunc(*args)
+            self.assertIn(msg, str(raises.exception))
+
+        def _typing_error(msg, *args):
+            with self.assertRaises(errors.TypingError) as raises:
+                cfunc(*args)
+            self.assertIn(msg, str(raises.exception))
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        arr1 = np.arange(24)
+        arr2 = np.arange(200).reshape(10, 20)
+
+        # Window shape validity.
+        _raises("window_shape cannot be larger", arr1, 25, None)
+        _raises("window_shape cannot be larger", arr2, (4, 21), None)
+        _raises("`window_shape` cannot contain negative", arr1, -1, None)
+        _raises("`window_shape` cannot contain negative", arr2, (4, -3), None)
+
+        # window_shape and axis are compatible.
+        _raises("matching length window_shape and axis", arr1, (10, 2), None)
+        _raises("matching length window_shape and axis", arr2, (10, 2), 1)
+        _raises("matching length window_shape and axis", arr1, 5, (0, 0))
+
+        # Axis values out of bounds.
+        _raises("Argument axis out of bounds", arr1, 4, 1)
+        _raises("Argument axis out of bounds", arr1, 4, -2)
+        _raises("Argument axis out of bounds", arr2, (4, 4), (0, 3))
+        _raises("Argument axis out of bounds", arr2, (4, 4), (0, -3))
+
+        # Useful messages for unsupported types.
+        _typing_error(
+            "window_shape must be an integer or tuple of integer", arr1, None
+        )
+        _typing_error(
+            "window_shape must be an integer or tuple of integer", arr1, 3.1
+        )
+        _typing_error(
+            "window_shape must be an integer or tuple of integer", arr1, (3.1,)
+        )
+        _typing_error(
+            "axis must be None, an integer or tuple of integer", arr1, 4, 3.1
+        )
+        _typing_error(
+            "axis must be None, an integer or tuple of integer", arr1, 4, (3.1,)
+        )
+
 
     def test_flatten_array(self, flags=enable_pyobj_flags, layout='C'):
         a = np.arange(9).reshape(3, 3)
