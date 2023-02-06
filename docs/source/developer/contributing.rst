@@ -462,13 +462,13 @@ Main documentation
 ''''''''''''''''''
 
 This documentation is under the ``docs`` directory of the `Numba repository`_.
-It is built with `Sphinx <http://sphinx-doc.org/>`_ and
-`numpydoc <https://numpydoc.readthedocs.io/>`_, which are available using
-conda or pip; i.e. ``conda install sphinx numpydoc``.
+It is built with `Sphinx <http://sphinx-doc.org/>`_, `numpydoc
+<https://numpydoc.readthedocs.io/>`_ and the `sphinx-rtd-theme
+<https://sphinx-rtd-theme.readthedocs.io/en/stable/>`.
 
-To build the documentation, you need the rtd theme::
+To install all dependencies for building the documentation, use::
 
-   $ conda install sphinx_rtd_theme
+   $ conda install sphinx numpydoc sphinx_rtd_theme
 
 You can edit the source files under ``docs/source/``, after which you can
 build and check the documentation under ``docs/``::
