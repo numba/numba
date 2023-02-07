@@ -1474,9 +1474,9 @@ def nan_aware_less_than(a, b):
 
 
 def _partition_factory(pivotimpl):
-    def _partition(A, low, high, I=np.arange(0)):
+    def _partition(A, low, high, I=None):
         mid = (low + high) >> 1
-        argpartition = True if len(I) else False
+        argpartition = True if I is None else False
         # NOTE: the pattern of swaps below for the pivot choice and the
         # partitioning gives good results (i.e. regular O(n log n))
         # on sorted, reverse-sorted, and uniform arrays.  Subtle changes
@@ -1528,7 +1528,7 @@ _partition_w_nan = register_jitable(_partition_factory(nan_aware_less_than))
 
 
 def _select_factory(partitionimpl):
-    def _select(arry, k, low, high, idx=np.arange(0)):
+    def _select(arry, k, low, high, idx=None):
         """
         Select the k'th smallest element in array[low:high + 1].
         """
