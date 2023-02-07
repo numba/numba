@@ -6290,9 +6290,9 @@ if numpy_version >= (1, 20):
     @extending.overload(np.lib.stride_tricks.sliding_window_view)
     def sliding_window_view(x, window_shape, axis=None):
 
-        # Window shape must be given as either an integer or tuple of integers. We
-        # also need to generate buffer tuples we can modify to contain the final
-        # shape and strides (reshape_unchecked does not accept lists).
+        # Window shape must be given as either an integer or tuple of integers.
+        # We also need to generate buffer tuples we can modify to contain the
+        # final shape and strides (reshape_unchecked does not accept lists).
         if isinstance(window_shape, types.Integer):
             shape_buffer = tuple(range(x.ndim + 1))
             stride_buffer = tuple(range(x.ndim + 1))
@@ -6324,7 +6324,9 @@ if numpy_version >= (1, 20):
         elif isinstance(axis, types.Integer):
             @register_jitable
             def get_axis(window_shape, axis, ndim):
-                return [normalize_axis("sliding_window_view", "axis", ndim, axis)]
+                return [
+                    normalize_axis("sliding_window_view", "axis", ndim, axis)
+                ]
 
         elif (isinstance(axis, types.UniTuple) and
               isinstance(axis.dtype, types.Integer)):
@@ -6366,7 +6368,8 @@ if numpy_version >= (1, 20):
                         "window_shape cannot be larger than input array shape"
                     )
 
-                out_shape = tuple_setitem(out_shape, ax, out_shape[ax] - dim + 1)
+                trimmed = out_shape[ax] - dim + 1
+                out_shape = tuple_setitem(out_shape, ax, trimmed)
                 out_shape = tuple_setitem(out_shape, i, dim)
                 out_strides = tuple_setitem(out_strides, i, x.strides[ax])
                 i += 1
