@@ -1476,7 +1476,7 @@ def nan_aware_less_than(a, b):
 def _partition_factory(pivotimpl):
     def _partition(A, low, high, I=None):
         mid = (low + high) >> 1
-        argpartition = True if I is None else False
+        argpartition = False if I is None else True
         # NOTE: the pattern of swaps below for the pivot choice and the
         # partitioning gives good results (i.e. regular O(n log n))
         # on sorted, reverse-sorted, and uniform arrays.  Subtle changes
