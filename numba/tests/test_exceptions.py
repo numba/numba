@@ -156,7 +156,7 @@ class TestRaising(TestCase):
             pyfunc(*args)
         with self.assertRaises(expected_error_class) as jiterr:
             cfunc(*args)
-        # self.assertEqual(pyerr.exception.args, jiterr.exception.args)
+        self.assertEqual(pyerr.exception.args, jiterr.exception.args)
 
         # special equality check for UDEs
         if isinstance(pyerr.exception, (UDEArgsToSuper, UDENoArgSuper)):

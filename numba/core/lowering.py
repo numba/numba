@@ -137,9 +137,8 @@ class BaseLower(object):
         Called after lowering a block.
         """
 
-    def return_non_const_exception(self, exc_class, exc_args, nb_types,
-                                   loc=None):
-        self.call_conv.return_non_const_user_exc(
+    def return_dynamic_exception(self, exc_class, exc_args, nb_types, loc=None):
+        self.call_conv.return_dynamic_user_exc(
             self.builder, exc_class, exc_args, nb_types,
             loc=loc, func_name=self.func_ir.func_id.func_name,
         )
@@ -615,14 +614,13 @@ class Lower(BaseLower):
                 val = self.loadvar(exc_arg.name)
                 self.incref(typ, val)
             else:
-                # to-do: fill typ
                 typ = None
                 val = exc_arg
             nb_types.append(typ)
             args.append(val)
 
-        self.return_non_const_exception(inst.exc_class, tuple(args),
-                                        tuple(nb_types), loc=self.loc)
+        self.return_dynamic_exception(inst.exc_class, tuple(args),
+                                      tuple(nb_types), loc=self.loc)
 
     def lower_static_raise(self, inst):
         if inst.exc_class is None:

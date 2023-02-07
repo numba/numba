@@ -1343,14 +1343,12 @@ class PythonAPI(object):
         hashed = self.builder.extract_value(self.builder.load(structptr), 2)
         return self.builder.call(fn, (ptr, n, hashed))
 
-    def runtime_build_excinfo_struct(self, struct_gv, exc_args):
+    def build_dynamic_excinfo_struct(self, struct_gv, exc_args):
         """
         Serialize some data at runtime. Returns a pointer to a python tuple
         (bytes_data, hash) where the first element is the serialized data as
         bytes and the second its hash.
         """
-        # Should one move this function to outside this file? Since this is not
-        # actually part of the Python API
         fnty = ir.FunctionType(self.pyobj, (self.pyobj, self.pyobj))
         fn = self._get_function(fnty, name="numba_runtime_build_excinfo_struct")
         return self.builder.call(fn, (struct_gv, exc_args))
@@ -1388,7 +1386,7 @@ class PythonAPI(object):
         """
         Serialize the given object in the bitcode, and return it
         as a pointer to a
-        {i8* data, i32 length, i8* hashbuf, i8* fn_ptr, i32 flag},
+        {i8* data, i32 length, i8* hashbuf, i8* fn_ptr, i32 alloc_flag},
         structure constant (suitable for passing to unserialize()).
         """
         try:
