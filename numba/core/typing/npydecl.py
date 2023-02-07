@@ -481,7 +481,7 @@ def _parse_nested_sequence(context, typ):
     heterogeneous, as long as it converts to the given dtype.
     """
     if isinstance(typ, (types.Buffer,)):
-        raise TypingError("%r not allowed in a homogeneous sequence" % typ)
+        raise TypingError("%s not allowed in a homogeneous sequence" % typ)
     elif isinstance(typ, (types.Sequence,)):
         n, dtype = _parse_nested_sequence(context, typ.dtype)
         return n + 1, dtype
@@ -494,12 +494,12 @@ def _parse_nested_sequence(context, typ):
         for i in range(1, typ.count):
             _n, dtype = _parse_nested_sequence(context, typ[i])
             if _n != n:
-                raise TypingError("type %r does not have a regular shape"
+                raise TypingError("type %s does not have a regular shape"
                                   % (typ,))
             dtypes.append(dtype)
         dtype = context.unify_types(*dtypes)
         if dtype is None:
-            raise TypingError("cannot convert %r to a homogeneous type" % typ)
+            raise TypingError("cannot convert %s to a homogeneous type" % typ)
         return n + 1, dtype
     else:
         # Scalar type => check it's valid as a Numpy array dtype

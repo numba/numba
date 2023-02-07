@@ -270,6 +270,10 @@ def compile_ptx(pyfunc, args, debug=False, lineinfo=False, device=False,
                         fastmath=fastmath,
                         nvvm_options=nvvm_options)
     resty = cres.signature.return_type
+
+    if resty and not device and resty != types.void:
+        raise TypeError("CUDA kernel must have void return type.")
+
     if device:
         lib = cres.library
     else:

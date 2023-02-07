@@ -112,7 +112,7 @@ NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -g -m $TEST_NPR
 echo "INFO: All discovered tests:"
 python -m numba.runtests -l
 
-# Now run the Numba test suite with slicing
+# Now run the Numba test suite with sharding
 # Note that coverage is run from the checkout dir to match the "source"
 # directive in .coveragerc
 echo "INFO: Running shard of discovered tests: ($TEST_START_INDEX:$TEST_COUNT)"

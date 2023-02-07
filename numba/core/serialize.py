@@ -206,8 +206,8 @@ NumbaPickler.dispatch_table[_CustomPickled] = _custom_reduce__custompickled
 
 
 class ReduceMixin(abc.ABC):
-    """A mixin class for objects that should be reduced by the NumbaPickler instead
-    of the standard pickler.
+    """A mixin class for objects that should be reduced by the NumbaPickler
+    instead of the standard pickler.
     """
     # Subclass MUST override the below methods
 
