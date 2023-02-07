@@ -6286,96 +6286,97 @@ def as_strided(x, shape=None, strides=None):
     return as_strided_impl
 
 
-@extending.overload(np.lib.stride_tricks.sliding_window_view)
-def sliding_window_view(x, window_shape, axis=None):
+if numpy_version >= (1, 20):
+    @extending.overload(np.lib.stride_tricks.sliding_window_view)
+    def sliding_window_view(x, window_shape, axis=None):
 
-    # Window shape must be given as either an integer or tuple of integers. We
-    # also need to generate buffer tuples we can modify to contain the final
-    # shape and strides (reshape_unchecked does not accept lists).
-    if isinstance(window_shape, types.Integer):
-        shape_buffer = tuple(range(x.ndim + 1))
-        stride_buffer = tuple(range(x.ndim + 1))
+        # Window shape must be given as either an integer or tuple of integers. We
+        # also need to generate buffer tuples we can modify to contain the final
+        # shape and strides (reshape_unchecked does not accept lists).
+        if isinstance(window_shape, types.Integer):
+            shape_buffer = tuple(range(x.ndim + 1))
+            stride_buffer = tuple(range(x.ndim + 1))
 
-        @register_jitable
-        def get_window_shape(window_shape):
-            return (window_shape,)
+            @register_jitable
+            def get_window_shape(window_shape):
+                return (window_shape,)
 
-    elif (isinstance(window_shape, types.UniTuple) and
-          isinstance(window_shape.dtype, types.Integer)):
-        shape_buffer = tuple(range(x.ndim + len(window_shape)))
-        stride_buffer = tuple(range(x.ndim + len(window_shape)))
+        elif (isinstance(window_shape, types.UniTuple) and
+              isinstance(window_shape.dtype, types.Integer)):
+            shape_buffer = tuple(range(x.ndim + len(window_shape)))
+            stride_buffer = tuple(range(x.ndim + len(window_shape)))
 
-        @register_jitable
-        def get_window_shape(window_shape):
-            return window_shape
+            @register_jitable
+            def get_window_shape(window_shape):
+                return window_shape
 
-    else:
-        raise errors.TypingError(
-            "window_shape must be an integer or tuple of integers"
-        )
-
-    # Axis must be integer, tuple of integers, or None for all axes.
-    if is_nonelike(axis):
-        @register_jitable
-        def get_axis(window_shape, axis, ndim):
-            return list(range(ndim))
-
-    elif isinstance(axis, types.Integer):
-        @register_jitable
-        def get_axis(window_shape, axis, ndim):
-            return [normalize_axis("sliding_window_view", "axis", ndim, axis)]
-
-    elif (isinstance(axis, types.UniTuple) and
-          isinstance(axis.dtype, types.Integer)):
-        @register_jitable
-        def get_axis(window_shape, axis, ndim):
-            return [normalize_axis("sliding_window_view", "axis", ndim, a)
-                    for a in axis]
-
-    else:
-        raise errors.TypingError(
-            "axis must be None, an integer or tuple of integers"
-        )
-
-    def sliding_window_view_impl(x, window_shape, axis=None):
-        window_shape = get_window_shape(window_shape)
-        axis = get_axis(window_shape, axis, x.ndim)
-        if len(window_shape) != len(axis):
-            raise ValueError(
-                "Must provide matching length window_shape and axis"
+        else:
+            raise errors.TypingError(
+                "window_shape must be an integer or tuple of integers"
             )
 
-        # Initialise view details with shape and strides of x.
-        out_shape = shape_buffer
-        out_strides = stride_buffer
-        for i in range(x.ndim):
-            out_shape = tuple_setitem(out_shape, i, x.shape[i])
-            out_strides = tuple_setitem(out_strides, i, x.strides[i])
+        # Axis must be integer, tuple of integers, or None for all axes.
+        if is_nonelike(axis):
+            @register_jitable
+            def get_axis(window_shape, axis, ndim):
+                return list(range(ndim))
 
-        # Trim the dimensions being windowed and set the window shape and
-        # strides. Note: the same axis can be windowed repeatedly.
-        i = x.ndim
-        for ax, dim in zip(axis, window_shape):
-            if dim < 0:
+        elif isinstance(axis, types.Integer):
+            @register_jitable
+            def get_axis(window_shape, axis, ndim):
+                return [normalize_axis("sliding_window_view", "axis", ndim, axis)]
+
+        elif (isinstance(axis, types.UniTuple) and
+              isinstance(axis.dtype, types.Integer)):
+            @register_jitable
+            def get_axis(window_shape, axis, ndim):
+                return [normalize_axis("sliding_window_view", "axis", ndim, a)
+                        for a in axis]
+
+        else:
+            raise errors.TypingError(
+                "axis must be None, an integer or tuple of integers"
+            )
+
+        def sliding_window_view_impl(x, window_shape, axis=None):
+            window_shape = get_window_shape(window_shape)
+            axis = get_axis(window_shape, axis, x.ndim)
+            if len(window_shape) != len(axis):
                 raise ValueError(
-                    "`window_shape` cannot contain negative values"
-                )
-            if out_shape[ax] < dim:
-                raise ValueError(
-                    "window_shape cannot be larger than input array shape"
+                    "Must provide matching length window_shape and axis"
                 )
 
-            out_shape = tuple_setitem(out_shape, ax, out_shape[ax] - dim + 1)
-            out_shape = tuple_setitem(out_shape, i, dim)
-            out_strides = tuple_setitem(out_strides, i, x.strides[ax])
-            i += 1
+            # Initialise view details with shape and strides of x.
+            out_shape = shape_buffer
+            out_strides = stride_buffer
+            for i in range(x.ndim):
+                out_shape = tuple_setitem(out_shape, i, x.shape[i])
+                out_strides = tuple_setitem(out_strides, i, x.strides[i])
 
-        # The NumPy version calls as_strided, but our implementation of
-        # as_strided is effectively a wrapper for reshape_unchecked.
-        view = reshape_unchecked(x, out_shape, out_strides)
-        return view
+            # Trim the dimensions being windowed and set the window shape and
+            # strides. Note: the same axis can be windowed repeatedly.
+            i = x.ndim
+            for ax, dim in zip(axis, window_shape):
+                if dim < 0:
+                    raise ValueError(
+                        "`window_shape` cannot contain negative values"
+                    )
+                if out_shape[ax] < dim:
+                    raise ValueError(
+                        "window_shape cannot be larger than input array shape"
+                    )
 
-    return sliding_window_view_impl
+                out_shape = tuple_setitem(out_shape, ax, out_shape[ax] - dim + 1)
+                out_shape = tuple_setitem(out_shape, i, dim)
+                out_strides = tuple_setitem(out_strides, i, x.strides[ax])
+                i += 1
+
+            # The NumPy version calls as_strided, but our implementation of
+            # as_strided is effectively a wrapper for reshape_unchecked.
+            view = reshape_unchecked(x, out_shape, out_strides)
+            return view
+
+        return sliding_window_view_impl
 
 
 @overload(bool)

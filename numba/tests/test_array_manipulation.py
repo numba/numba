@@ -558,6 +558,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         # Repeated axis.
         check(arr2, (5, 3, 3), (0, 1, 0))
 
+    @unittest.skipIf(numpy_version < (1, 20), "requires NumPy 1.20 or newer")
     def test_sliding_window_view_errors(self):
         cfunc = jit(nopython=True)(sliding_window_view)
 
