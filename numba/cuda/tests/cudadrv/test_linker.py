@@ -191,8 +191,8 @@ class TestLinker(CUDATestCase):
 
     @skip_with_cuda_python
     def test_linking_cu_ctypes_unsupported(self):
-        msg = ('Linking CUDA source files is not supported with the ctypes '
-               'binding')
+        msg = ('Support for fp16 or linking CUDA source files '
+               'requires the use of the Nvidia CUDA bindings')
         with self.assertRaisesRegex(NotImplementedError, msg):
             @cuda.jit('void()', link=['jitlink.cu'])
             def f():
