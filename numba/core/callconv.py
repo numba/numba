@@ -5,6 +5,7 @@ Calling conventions for Numba-compiled functions.
 from collections import namedtuple
 from collections.abc import Iterable
 import itertools
+import hashlib
 
 from llvmlite import ir
 
@@ -480,12 +481,22 @@ class CPUCallConv(BaseCallConv):
         func_ptr = builder.extract_value(
             builder.load(excinfo_ptr), UNWRAP_FUNC_IDX)
 
-        # convert the unwrap function to a function pointer and call it
-        # it returns a python tuple with dynamic arguments converted to
+        # Convert the unwrap function to a function pointer and call it.
+        # Function returns a python tuple with dynamic arguments converted to
         # CPython objects
         fnty = ir.FunctionType(PYOBJECT, [GENERIC_POINTER])
         fn = builder.bitcast(func_ptr, fnty.as_pointer())
         py_tuple = builder.call(fn, [dyn_args])
+
+        # We check at this stage if creating the Python tuple was successful
+        # or not. Note the exception is raised by calling PyErr_SetString
+        # directly as the function being processed is the CPython wrapper
+        # to-do: fix!
+        # failed = cgutils.is_null(builder, py_tuple)
+        # with cgutils.if_unlikely(builder, failed):
+        #     msg = 'Error creating Python tuple from runtime exception arguments'
+        #     pyapi.err_set_string("PyExc_RuntimeError", msg)
+        #     builder.ret(pyapi.get_null_object())
 
         # merge static and dynamic variables
         excinfo = pyapi.build_dynamic_excinfo_struct(static_exc_bytes, py_tuple)
@@ -503,7 +514,7 @@ class CPUCallConv(BaseCallConv):
         # if alloc_flag > 0:
         #     (dynamic) unpack the exception to retrieve runtime information
         #               and merge with static info
-        #:
+        # else:
         #     (static) unserialize the exception using pythonapi.unserialize
 
         excinfo_ptr = status.excinfoptr
@@ -538,9 +549,8 @@ class CPUCallConv(BaseCallConv):
         #                          ^ Number of dynamic arguments = 2
         #
 
-        # hash is not a good function to use here as it is not deterministic
-        # TODO: change suffix by mangling of st_type
-        name = f'__excinfo_unwrap_args{hash(st_type)}'
+        _hash = hashlib.sha1(str(st_type).encode()).hexdigest()
+        name = f'__excinfo_unwrap_args{_hash}'
         if name in module.globals:
             return module.globals.get(name)
 
@@ -576,7 +586,8 @@ class CPUCallConv(BaseCallConv):
             objs.append(obj)
 
         # at this point, a pointer to the list of runtime values can be freed
-        self.context.nrt.free(builder, fn.args[0])
+        self.context.nrt.free(builder,
+                              self._get_return_argument(builder.function))
 
         # Create a tuple of CPython objects
         tup = pyapi.tuple_pack(objs)

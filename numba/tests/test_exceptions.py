@@ -418,6 +418,15 @@ class TestRaising(TestCase):
         with self.assertRaisesRegex(ValueError, msg):
             raise_literal_dict2()
 
+    def test_disable_nrt(self):
+        @njit(_nrt=False)
+        def raise_with_no_nrt(i):
+            raise ValueError(i)
+
+        msg = 'NRT required but not enabled'
+        with self.assertRaisesRegex(errors.NumbaRuntimeError, msg):
+            raise_with_no_nrt(123)
+
 
 if __name__ == '__main__':
     unittest.main()

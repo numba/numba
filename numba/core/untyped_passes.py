@@ -6,7 +6,7 @@ import warnings
 from numba.core.compiler_machinery import (FunctionPass, AnalysisPass,
                                            SSACompliantMixin, register_pass)
 from numba.core import (errors, types, ir, bytecode, postproc, rewrites, config,
-                        transforms)
+                        transforms, consts)
 from numba.misc.special import literal_unroll
 from numba.core.analysis import (dead_branch_prune, rewrite_semantic_constants,
                                  find_literally_calls, compute_cfg_from_blocks,
@@ -1724,3 +1724,34 @@ class ReconstructSSA(FunctionPass):
                 typ = locals_dict[parent]
                 for derived in redefs:
                     locals_dict[derived] = typ
+
+
+@register_pass(mutates_CFG=False, analysis_only=False)
+class RewriteDynamicRaises(FunctionPass):
+    """Replace existing raise statements by dynamic raises in Numba IR.
+    """
+    _name = "Rewrite dynamic raises"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        func_ir = state.func_ir
+        for block in func_ir.blocks.values():
+            for raise_ in block.find_insts((ir.Raise, ir.TryRaise)):
+                call_inst = guard(get_definition, func_ir, raise_.exception)
+                if call_inst is None:
+                    continue
+                exc_type = func_ir.infer_constant(call_inst.func.name)
+                exc_args = []
+                for exc_arg in call_inst.args:
+                    try:
+                        const = func_ir.infer_constant(exc_arg)
+                        exc_args.append(const)
+                    except consts.ConstantInferenceError:
+                        exc_args.append(exc_arg)
+                loc = raise_.loc
+                dyn_raise = ir.DynamicRaise(exc_type, tuple(exc_args), loc)
+                block.insert_after(dyn_raise, raise_)
+                block.remove(raise_)
+        return False

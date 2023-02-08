@@ -1,14 +1,15 @@
-from numba.core import errors, ir
+from numba.core import errors, ir, consts
 from numba.core.rewrites import register_rewrite, Rewrite
 
 
 @register_rewrite('before-inference')
-class RewriteConstRaises(Rewrite):
+class RewriteRaises(Rewrite):
     """
     Rewrite IR statements of the kind `raise(value)`
-    where `value` is the result of instantiating an exception with
-    constant arguments
-    into `static_raise(exception_type, constant args)`.
+    where `value` is the result of instantiating an exception with constant
+    arguments into `static_raise(exception_type, constant args)`. If the
+    (some) arguments are not none, then, exception is IR node is translated
+    to `dynamic_raise(exception_type, args)`
 
     This allows lowering in nopython mode, where one can't instantiate
     exception instances from runtime data.
@@ -36,6 +37,13 @@ class RewriteConstRaises(Rewrite):
                 msg = "Encountered unsupported constant type used for exception"
             raise errors.UnsupportedError(msg, loc)
 
+    def _try_infer_constant(self, func_ir, inst):
+        try:
+            return func_ir.infer_constant(inst.exception)
+        except consts.ConstantInferenceError:
+            # not a static exception
+            return None
+
     def match(self, func_ir, block, typemap, calltypes):
         self.raises = raises = {}
         self.tryraises = tryraises = {}
@@ -48,9 +56,17 @@ class RewriteConstRaises(Rewrite):
                 exc_type, exc_args = None, None
             else:
                 # raise <something> => find the definition site for <something>
-                const = func_ir.infer_constant(inst.exception)
+                # const = func_ir.infer_constant(inst.exception)
+                const = self._try_infer_constant(func_ir, inst)
+
+                # failure to infer constant indicates this isn't a static
+                # exception
+                if const is None:
+                    continue
+
                 loc = inst.exception.loc
                 exc_type, exc_args = self._break_constant(const, loc)
+
             if isinstance(inst, ir.Raise):
                 raises[inst] = exc_type, exc_args
             elif isinstance(inst, ir.TryRaise):
@@ -68,11 +84,7 @@ class RewriteConstRaises(Rewrite):
         for inst in self.block.body:
             if inst in self.raises:
                 exc_type, exc_args = self.raises[inst]
-                is_dyn = False
-                if exc_args:
-                    is_dyn = any([isinstance(arg, ir.Var) for arg in exc_args])
-                cls = ir.DynamicRaise if is_dyn else ir.StaticRaise
-                new_inst = cls(exc_type, exc_args, inst.loc)
+                new_inst = ir.StaticRaise(exc_type, exc_args, inst.loc)
                 new_block.append(new_inst)
             elif inst in self.tryraises:
                 exc_type, exc_args = self.tryraises[inst]

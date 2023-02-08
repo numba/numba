@@ -20,7 +20,7 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode,
                                        MakeFunctionToJitFunction,
                                        CanonicalizeLoopExit,
                                        CanonicalizeLoopEntry, LiteralUnroll,
-                                       ReconstructSSA,
+                                       ReconstructSSA, RewriteDynamicRaises,
                                        LiteralPropagationSubPipelinePass,
                                        )
 
@@ -635,6 +635,8 @@ class DefaultPassBuilder(object):
             pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
             pm.add_pass(DeadBranchPrune, "dead branch pruning")
             pm.add_pass(GenericRewrites, "nopython rewrites")
+
+        pm.add_pass(RewriteDynamicRaises, "rewrite dynamic raises")
 
         # convert any remaining closures into functions
         pm.add_pass(MakeFunctionToJitFunction,
