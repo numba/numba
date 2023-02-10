@@ -279,6 +279,80 @@ class TestMakeFunctionToJITFunction(unittest.TestCase):
 
         np.testing.assert_allclose(impl(), cfunc())
 
+    def test_generator_closure(self):
+
+        def gen_factory():
+            def gen_closure():
+                for i in range(4):
+                    yield i
+                yield 4
+            return gen_closure()
+
+        cfunc = njit(gen_factory)
+        pyfunc = cfunc.py_func
+
+        for nb_res, py_res in zip(cfunc(), pyfunc()):
+            np.testing.assert_allclose(nb_res, py_res)
+
+    def test_generator_escapes(self):
+
+        def gen_factory(consumer_func):
+            def impl():
+                def gen_closure():
+                    for i in range(4):
+                        yield i
+                    yield 4
+                return consumer_func(gen_closure)
+            return impl
+
+        cfunc = njit(gen_factory(consumer))
+        pyfunc = gen_factory(consumer.py_func)
+
+        for nb_res, py_res in zip(cfunc(), pyfunc()):
+            np.testing.assert_allclose(nb_res, py_res)
+
+    def test_generator_escapes_outer(self):
+
+        @njit
+        def outer_gen():
+            def gen_closure():
+                for i in range(4):
+                    yield i
+                yield 4
+            return gen_closure()
+
+        @njit
+        def gen_factory():
+            x = outer_gen()
+            for i in range(4):
+                yield next(x)
+
+        cfunc = gen_factory()
+        pyfunc = gen_factory.py_func()
+
+        for nb_res, py_res in zip(cfunc, pyfunc):
+            np.testing.assert_allclose(nb_res, py_res)
+
+    def test_nested_generator_escapes(self):
+
+        def gen_factory(consumer_func):
+            def impl():
+                def inner():
+                    for i in range(4):
+                        yield i
+                    yield 4
+
+                def innerinner(x):
+                    return x()
+                return consumer_func(inner, innerinner)
+            return impl
+
+        cfunc = njit(gen_factory(consumer2arg))
+        pyfunc = gen_factory(consumer2arg.py_func)
+
+        for nb_res, py_res in zip(cfunc(), pyfunc()):
+            np.testing.assert_allclose(nb_res, py_res)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -47,8 +47,8 @@ def callee_ir_validator(func_ir):
     for blk in func_ir.blocks.values():
         for stmt in blk.find_insts(ir.Assign):
             if isinstance(stmt.value, ir.Yield):
-                msg = "The use of yield in a closure is unsupported."
-                raise errors.UnsupportedError(msg, loc=stmt.loc)
+                return False
+    return True
 
 
 def _created_inlined_var_name(function_name, var_name):
@@ -610,7 +610,7 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     # check that the contents of the callee IR is something that can be inlined
     # if a validator is supplied
     if callee_validator is not None:
-        callee_validator(callee_ir)
+        require(callee_validator(callee_ir))
 
     callee_blocks = callee_ir.blocks
 
