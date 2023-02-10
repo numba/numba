@@ -1473,10 +1473,9 @@ def nan_aware_less_than(a, b):
             return a < b
 
 
-def _partition_factory(pivotimpl):
+def _partition_factory(pivotimpl, argpartition=False):
     def _partition(A, low, high, I=None):
         mid = (low + high) >> 1
-        argpartition = False if I is None else True
         # NOTE: the pattern of swaps below for the pivot choice and the
         # partitioning gives good results (i.e. regular O(n log n))
         # on sorted, reverse-sorted, and uniform arrays.  Subtle changes
@@ -1525,6 +1524,7 @@ def _partition_factory(pivotimpl):
 
 _partition = register_jitable(_partition_factory(less_than))
 _partition_w_nan = register_jitable(_partition_factory(nan_aware_less_than))
+_argpartition_w_nan = register_jitable(_partition_factory(nan_aware_less_than, argpartition=True))
 
 
 def _select_factory(partitionimpl):
@@ -1546,6 +1546,7 @@ def _select_factory(partitionimpl):
 
 _select = register_jitable(_select_factory(_partition))
 _select_w_nan = register_jitable(_select_factory(_partition_w_nan))
+_arg_select_w_nan = register_jitable(_select_factory(_argpartition_w_nan))
 
 
 @register_jitable
@@ -1836,7 +1837,7 @@ def np_argpartition_impl_inner(a, kth_array):
         high = len(arry) - 1
 
         for kth in kth_array:
-            _select_w_nan(arry, kth, low, high, idx_arry)
+            _arg_select_w_nan(arry, kth, low, high, idx_arry)
             low = kth  # narrow span of subsequent partition
 
         out[s] = idx_arry
