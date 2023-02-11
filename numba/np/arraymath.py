@@ -1524,7 +1524,10 @@ def _partition_factory(pivotimpl, argpartition=False):
 
 _partition = register_jitable(_partition_factory(less_than))
 _partition_w_nan = register_jitable(_partition_factory(nan_aware_less_than))
-_argpartition_w_nan = register_jitable(_partition_factory(nan_aware_less_than, argpartition=True))
+_argpartition_w_nan = register_jitable(_partition_factory(
+    nan_aware_less_than,
+    argpartition=True)
+)
 
 
 def _select_factory(partitionimpl):
