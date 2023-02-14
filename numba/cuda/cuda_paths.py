@@ -69,7 +69,7 @@ def _cudalib_path():
         return 'lib64'
 
 
-def _static_cudalib_path():
+def _cuda_home_static_cudalib_path():
     if IS_WIN32:
         return ('lib', 'x64')
     else:
@@ -91,7 +91,7 @@ def _get_static_cudalib_dir_path_decision():
     options = [
         ('Conda environment', get_conda_ctk()),
         ('Conda environment (NVIDIA package)', get_nvidia_static_cudalib_ctk()),
-        ('CUDA_HOME', get_cuda_home(*_static_cudalib_path())),
+        ('CUDA_HOME', get_cuda_home(*_cuda_home_static_cudalib_path())),
         ('System', get_system_ctk(_cudalib_path())),
     ]
     by, libdir = _find_valid_path(options)
@@ -140,7 +140,7 @@ def get_nvidia_nvvm_ctk():
     is_conda_env = os.path.exists(os.path.join(sys.prefix, 'conda-meta'))
     if not is_conda_env:
         return
-    # Asssume the existence of NVVM to imply cudatoolkit installed
+    # Assume the existence of NVVM to imply cudatoolkit installed
     libdir = os.path.join(sys.prefix, 'nvvm', _cudalib_path())
     if not os.path.exists(libdir) or not os.path.isdir(libdir):
         return
