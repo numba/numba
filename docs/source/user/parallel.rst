@@ -79,11 +79,19 @@ support for explicit parallel loops. One can use Numba's ``prange`` instead of
 make sure that the loop does not have cross iteration dependencies except for
 supported reductions.
 
-A reduction is inferred automatically if a variable is updated by a binary
-function/operator using its previous value in the loop body. The initial value
-of the reduction is inferred automatically for the ``+=``, ``-=``,  ``*=``,
-and ``/=`` operators.
-For other functions/operators, the reduction variable should hold the identity
+A reduction is inferred automatically if a variable is updated by a supported binary
+function/operator using its previous value in the loop body.  The following
+functions/operators are supported: ``+=``, ``+``, ``-=``, ``-``, ``*=``,
+``*``, ``/=``, ``/``, ``max()``, ``min()``.
+The initial value of the reduction is inferred automatically for the
+supported operators (i.e., not the ``max`` and ``min`` functions).
+Note that the ``//=`` operator is not supported because
+in the general case the result depends on the order in which the divisors are
+applied.  However, if all divisors are integers then the programmer may be
+able to rewrite the ``//=`` reduction as a ``*=`` reduction followed by
+a single floor division after the parallel region where the divisor is the
+accumulated product.
+For the ``max`` and ``min`` functions, the reduction variable should hold the identity
 value right before entering the ``prange`` loop.  Reductions in this manner
 are supported for scalars and for arrays of arbitrary dimensions.
 
@@ -117,12 +125,23 @@ The following example demonstrates a product reduction on a two-dimensional arra
 
         return result1
 
-Care should be taken, however, when reducing into slices or elements of an array 
-if the elements specified by the slice or index are written to simultaneously by 
+.. note:: When using Python's ``range`` to induce a loop, Numba types the
+          induction variable as a signed integer. This is also the case for
+          Numba's ``prange`` when ``parallel=False``. However, for
+          ``parallel=True``, if the range is identifiable as strictly positive,
+          the type of the induction variable  will be ``uint64``. The impact of
+          a ``uint64`` induction variable is often most noticable when
+          undertaking operations involving it and a signed integer. Under
+          Numba's type coercion rules, such a case will commonly result in the
+          operation producing a floating point result type.
+
+
+Care should be taken, however, when reducing into slices or elements of an array
+if the elements specified by the slice or index are written to simultaneously by
 multiple parallel threads. The compiler may not detect such cases and then a race condition
 would occur.
 
-The following example demonstrates such a case where a race condition in the execution of the 
+The following example demonstrates such a case where a race condition in the execution of the
 parallel for-loop results in an incorrect return value::
 
     from numba import njit, prange
@@ -589,5 +608,112 @@ The report is split into the following sections:
     loop invariant! Whereas in ``loop #3``, the expression
     ``$const58.3 = const(int, 1)`` comes from the source ``b[j + 1]``, the
     number ``1`` is clearly a constant and so can be hoisted out of the loop.
+
+.. _numba-parallel-scheduling:
+
+Scheduling
+==========
+
+By default, Numba divides the iterations of a parallel region into approximately equal
+sized chunks and gives one such chunk to each configured thread.
+(See :ref:`setting_the_number_of_threads`).
+This scheduling approach is equivalent to OpenMP's static schedule with no specified
+chunk size and is appropriate when the work required for each iteration is nearly constant.
+Conversely, if the work required per iteration, as shown in the ``prange`` loop below,
+varies significantly then this static
+scheduling approach can lead to load imbalances and longer execution times.
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_parallel_chunksize.py
+   :language: python
+   :caption: from ``test_unbalanced_example`` of ``numba/tests/doc_examples/test_parallel_chunksize.py``
+   :start-after: magictoken.ex_unbalanced.begin
+   :end-before: magictoken.ex_unbalanced.end
+   :dedent: 12
+   :linenos:
+
+In such cases,
+Numba provides a mechanism to control how many iterations of a parallel region
+(i.e., the chunk size) go into each chunk.
+Numba then computes the number of required chunks which is
+equal to the number of iterations divided by the chunk size, truncated to the nearest
+integer.  All of these chunks are then approximately, equally sized.
+Numba then gives one such chunk to each configured
+thread as above and when a thread finishes a chunk, Numba gives that thread the next
+available chunk.
+This scheduling approach is similar to OpenMP's dynamic scheduling
+option with the specified chunk size.
+(Note that Numba is only capable of supporting this dynamic scheduling
+of parallel regions if the underlying Numba threading backend,
+:ref:`numba-threading-layer`, is also capable of dynamic scheduling.
+At the moment, only the ``tbb`` backend is capable of dynamic
+scheduling and so is required if any performance
+benefit is to be achieved from this chunk size selection mechanism.)
+To minimize execution time, the programmer must
+pick a chunk size that strikes a balance between greater load balancing with smaller
+chunk sizes and less scheduling overhead with larger chunk sizes.
+See :ref:`chunk-details-label` for additional details on the internal implementation
+of chunk sizes.
+
+The number of iterations of a parallel region in a chunk is stored as a thread-local
+variable and can be set using
+:func:`numba.set_parallel_chunksize`.  This function takes one integer parameter
+whose value must be greater than
+or equal to 0.  A value of 0 is the default value and instructs Numba to use the
+static scheduling approach above.  Values greater than 0 instruct Numba to use that value
+as the chunk size in the dynamic scheduling approach described above.
+:func:`numba.set_parallel_chunksize` returns the previous value of the chunk size.
+The current value of this thread local variable is used as the chunk size for all
+subsequent parallel regions invoked by this thread.
+However, upon entering a parallel region, Numba sets the chunk size thread local variable
+for each of the threads executing that parallel region back to the default of 0,
+since it is unlikely
+that any nested parallel regions would require the same chunk size.  If the same thread is
+used to execute a sequential and parallel region then that thread's chunk size
+variable is set to 0 at the beginning of the parallel region and restored to
+its original value upon exiting the parallel region.
+This behavior is demonstrated in ``func1`` in the example below in that the
+reported chunk size inside the ``prange`` parallel region is 0 but is 4 outside
+the parallel region.  Note that if the ``prange`` is not executed in parallel for
+any reason (e.g., setting ``parallel=False``) then the chunk size reported inside
+the non-parallel prange would be reported as 4.
+This behavior may initially be counterintuitive to programmers as it differs from
+how thread local variables typically behave in other languages.
+A programmer may use
+the chunk size API described in this section within the threads executing a parallel
+region if the programmer wishes to specify a chunk size for any nested parallel regions
+that may be launched.
+The current value of the parallel chunk size can be obtained by calling
+:func:`numba.get_parallel_chunksize`.
+Both of these functions can be used from standard Python and from within Numba JIT compiled functions
+as shown below.  Both invocations of ``func1`` would be executed with a chunk size of 4 whereas
+``func2`` would use a chunk size of 8.
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_parallel_chunksize.py
+   :language: python
+   :caption: from ``test_chunksize_manual`` of ``numba/tests/doc_examples/test_parallel_chunksize.py``
+   :start-after: magictoken.ex_chunksize_manual.begin
+   :end-before: magictoken.ex_chunksize_manual.end
+   :dedent: 12
+   :linenos:
+
+Since this idiom of saving and restoring is so common, Numba provides the
+:func:`parallel_chunksize` with clause context-manager to simplify the idiom.
+As shown below, this with clause can be invoked from both standard Python and
+within Numba JIT compiled functions.  As with other Numba context-managers, be
+aware that the raising of exceptions is not supported from within a context managed
+block that is part of a Numba JIT compiled function.
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_parallel_chunksize.py
+   :language: python
+   :caption: from ``test_chunksize_with`` of ``numba/tests/doc_examples/test_parallel_chunksize.py``
+   :start-after: magictoken.ex_chunksize_with.begin
+   :end-before: magictoken.ex_chunksize_with.end
+   :dedent: 12
+   :linenos:
+
+Note that these functions to set the chunk size only have an effect on
+Numba automatic parallelization with the :ref:`parallel_jit_option` option.
+Chunk size specification has no effect on the :func:`~numba.vectorize` decorator
+or the :func:`~numba.guvectorize` decorator.
 
 .. seealso:: :ref:`parallel_jit_option`, :ref:`Parallel FAQs <parallel_FAQs>`

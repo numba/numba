@@ -195,10 +195,10 @@ The general pattern for using ``get_num_threads`` in code generation is
 
 .. code:: python
 
-   import llvmlite.llvmpy.core as lc
+   from llvmlite import ir as llvmir
 
    get_num_threads = cgutils.get_or_insert_function(builder.module
-       lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
+       llvmir.FunctionType(llvmir.IntType(types.intp.bitwidth), []),
        name="get_num_threads")
 
    num_threads = builder.call(get_num_threads, [])
@@ -225,3 +225,25 @@ considerations should be taken into account to ensure the use of the
 ``num_threads`` variable is safe. It would probably be better to keep such
 logic in the threading backends, rather than trying to do it in code
 generation.
+
+.. _chunk-details-label:
+
+Parallel Chunksize Details
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+There are some cases in which the actual parallel work chunk sizes may differ
+from the requested
+chunk size that is requested through :func:`numba.set_parallel_chunksize`.
+First, if the number of required chunks based on the specified chunk size
+is less than the number of configured threads then Numba will use all of the configured
+threads to execute the parallel region.  In this case, the actual chunk size will be
+less than the requested chunk size.  Second, due to truncation, in cases where the
+iteration count is slightly less than a multiple of the chunk size
+(e.g., 14 iterations and a specified chunk size of 5), the actual chunk size will be
+larger than the specified chunk size.  As in the given example, the number of chunks
+would be 2 and the actual chunk size would be 7 (i.e. 14 / 2).  Lastly, since Numba
+divides an N-dimensional iteration space into N-dimensional (hyper)rectangular chunks,
+it may be the case there are not N integer factors whose product is equal to the chunk
+size.  In this case, some chunks will have an area/volume larger than the chunk size
+whereas others will be less than the specified chunk size.
+

@@ -23,12 +23,12 @@ To address the problem, the following are needed:
 2. Allow compiler flags to be inherited from the caller. (Done)
 3. Consider compiler flags in function resolution. (TODO)
 
-:class:`numba.core.utils.ConfigStack` is used to propagate the compiler flags
+:class:`numba.core.targetconfig.ConfigStack` is used to propagate the compiler flags
 throughout the compiler. At the start of the compilation, the flags are pushed
 into the ``ConfigStack``, which maintains a thread-local stack for the
 compilation. Thus, callees can check the flags in the caller.
 
-.. autoclass:: numba.core.utils.ConfigStack
+.. autoclass:: numba.core.targetconfig.ConfigStack
     :members:
 
 Compiler flags

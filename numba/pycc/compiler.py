@@ -6,9 +6,9 @@ import sys
 
 from llvmlite import ir
 from llvmlite.binding import Linkage
-import llvmlite.llvmpy.core as lc
 
 from numba.pycc import llvm_types as lt
+from numba.core.cgutils import create_constant_array
 from numba.core.compiler import compile_extra, Flags
 from numba.core.compiler_lock import global_compiler_lock
 
@@ -21,10 +21,10 @@ logger = logging.getLogger(__name__)
 
 __all__ = ['Compiler']
 
-NULL = lc.Constant.null(lt._void_star)
-ZERO = lc.Constant.int(lt._int32, 0)
-ONE = lc.Constant.int(lt._int32, 1)
-METH_VARARGS_AND_KEYWORDS = lc.Constant.int(lt._int32, 1|2)
+NULL = ir.Constant(lt._void_star, None)
+ZERO = ir.Constant(lt._int32, 0)
+ONE = ir.Constant(lt._int32, 1)
+METH_VARARGS_AND_KEYWORDS = ir.Constant(lt._int32, 1|2)
 
 
 def get_header():
@@ -93,15 +93,15 @@ class _ModuleCompiler(object):
     #:                                    describe the args expected by the C func */
     #:     const char  *ml_doc;        /* The __doc__ attribute, or NULL */
     #: };
-    method_def_ty = lc.Type.struct((lt._int8_star,
-                                    lt._void_star,
-                                    lt._int32,
-                                    lt._int8_star))
+    method_def_ty = ir.LiteralStructType((lt._int8_star,
+                                          lt._void_star,
+                                          lt._int32,
+                                          lt._int8_star))
 
-    method_def_ptr = lc.Type.pointer(method_def_ty)
+    method_def_ptr = ir.PointerType(method_def_ty)
     # The structure type constructed by PythonAPI.serialize_uncached()
-    env_def_ty = lc.Type.struct((lt._void_star, lt._int32, lt._void_star))
-    env_def_ptr = lc.Type.pointer(env_def_ty)
+    env_def_ty = ir.LiteralStructType((lt._void_star, lt._int32, lt._void_star))
+    env_def_ptr = ir.PointerType(env_def_ty)
 
     def __init__(self, export_entries, module_name, use_nrt=False,
                  **aot_options):
@@ -160,11 +160,11 @@ class _ModuleCompiler(object):
             llvm_func = cres.library.get_function(func_name)
 
             if self.export_python_wrap:
-                llvm_func.linkage = lc.LINKAGE_INTERNAL
+                llvm_func.linkage = 'internal'
                 wrappername = cres.fndesc.llvm_cpython_wrapper_name
                 wrapper = cres.library.get_function(wrappername)
                 wrapper.name = self._mangle_method_symbol(entry.symbol)
-                wrapper.linkage = lc.LINKAGE_EXTERNAL
+                wrapper.linkage = 'external'
                 fnty = cres.target_context.call_conv.get_function_type(
                     cres.fndesc.restype, cres.fndesc.argtypes)
                 self.exported_function_types[entry] = fnty
@@ -235,21 +235,22 @@ class _ModuleCompiler(object):
             lfunc = ir.Function(llvm_module, fnty, llvm_func_name)
 
             method_name = self.context.insert_const_string(llvm_module, name)
-            method_def_const = lc.Constant.struct((method_name,
-                                                   lc.Constant.bitcast(lfunc, lt._void_star),
-                                                   METH_VARARGS_AND_KEYWORDS,
-                                                   NULL))
+            method_def_const = ir.Constant.literal_struct(
+                (method_name,
+                 ir.Constant.bitcast(lfunc, lt._void_star),
+                 METH_VARARGS_AND_KEYWORDS,
+                 NULL))
             method_defs.append(method_def_const)
 
-        sentinel = lc.Constant.struct([NULL, NULL, ZERO, NULL])
+        sentinel = ir.Constant.literal_struct([NULL, NULL, ZERO, NULL])
         method_defs.append(sentinel)
-        method_array_init = lc.Constant.array(self.method_def_ty, method_defs)
+        method_array_init = create_constant_array(self.method_def_ty, method_defs)
         method_array = cgutils.add_global_variable(llvm_module,
                                                    method_array_init.type,
                                                    '.module_methods')
         method_array.initializer = method_array_init
-        method_array.linkage = lc.LINKAGE_INTERNAL
-        method_array_ptr = lc.Constant.gep(method_array, [ZERO, ZERO])
+        method_array.linkage = 'internal'
+        method_array_ptr = ir.Constant.gep(method_array, [ZERO, ZERO])
         return method_array_ptr
 
     def _emit_environment_array(self, llvm_module, builder, pyapi):
@@ -264,7 +265,7 @@ class _ModuleCompiler(object):
             # Constants may be unhashable so avoid trying to cache them
             env_def = pyapi.serialize_uncached(env.consts)
             env_defs.append(env_def)
-        env_defs_init = lc.Constant.array(self.env_def_ty, env_defs)
+        env_defs_init = create_constant_array(self.env_def_ty, env_defs)
         gv = self.context.insert_unique_const(llvm_module,
                                               '.module_environments',
                                               env_defs_init)
@@ -282,7 +283,7 @@ class _ModuleCompiler(object):
             envgv = gv.bitcast(lt._void_star)
             env_setters.append(envgv)
 
-        env_setters_init = lc.Constant.array(lt._void_star, env_setters)
+        env_setters_init = create_constant_array(lt._void_star, env_setters)
         gv = self.context.insert_unique_const(llvm_module,
                                               '.module_envgvs',
                                               env_setters_init)
@@ -306,7 +307,7 @@ class _ModuleCompiler(object):
 
 class ModuleCompiler(_ModuleCompiler):
 
-    _ptr_fun = lambda ret, *args: lc.Type.pointer(lc.Type.function(ret, args))
+    _ptr_fun = lambda ret, *args: ir.PointerType(ir.FunctionType(ret, args))
 
     #: typedef int (*visitproc)(PyObject *, void *);
     visitproc_ty = _ptr_fun(lt._int8,
@@ -337,10 +338,13 @@ class ModuleCompiler(_ModuleCompiler):
     #:   Py_ssize_t m_index;
     #:   PyObject* m_copy;
     #: } PyModuleDef_Base;
-    module_def_base_ty = lc.Type.struct((lt._pyobject_head,
-                                         m_init_ty,
-                                         lt._llvm_py_ssize_t,
-                                         lt._pyobject_head_p))
+    module_def_base_ty = ir.LiteralStructType(
+        (
+            lt._pyobject_head,
+            m_init_ty,
+            lt._llvm_py_ssize_t,
+            lt._pyobject_head_p
+        ))
 
     #: This struct holds all information that is needed to create a module object.
     #: typedef struct PyModuleDef{
@@ -354,15 +358,18 @@ class ModuleCompiler(_ModuleCompiler):
     #:   inquiry m_clear;
     #:   freefunc m_free;
     #: }PyModuleDef;
-    module_def_ty = lc.Type.struct((module_def_base_ty,
-                                    _char_star,
-                                    _char_star,
-                                    lt._llvm_py_ssize_t,
-                                    _ModuleCompiler.method_def_ptr,
-                                    inquiry_ty,
-                                    traverseproc_ty,
-                                    inquiry_ty,
-                                    freefunc_ty))
+    module_def_ty = ir.LiteralStructType(
+        (
+            module_def_base_ty,
+            _char_star,
+            _char_star,
+            lt._llvm_py_ssize_t,
+            _ModuleCompiler.method_def_ptr,
+            inquiry_ty,
+            traverseproc_ty,
+            inquiry_ty,
+            freefunc_ty
+        ))
 
     @property
     def module_create_definition(self):
@@ -370,9 +377,9 @@ class ModuleCompiler(_ModuleCompiler):
         Return the signature and name of the Python C API function to
         initialize the module.
         """
-        signature = lc.Type.function(lt._pyobject_head_p,
-                                     (lc.Type.pointer(self.module_def_ty),
-                                      lt._int32))
+        signature = ir.FunctionType(lt._pyobject_head_p,
+                                    (ir.PointerType(self.module_def_ty),
+                                     lt._int32))
 
         name = "PyModule_Create2"
         if lt._trace_refs_:
@@ -385,7 +392,7 @@ class ModuleCompiler(_ModuleCompiler):
         """
         Return the name and signature of the module's initialization function.
         """
-        signature = lc.Type.function(lt._pyobject_head_p, ())
+        signature = ir.FunctionType(lt._pyobject_head_p, ())
 
         return signature, "PyInit_" + self.module_name
 
@@ -393,37 +400,37 @@ class ModuleCompiler(_ModuleCompiler):
         # Figure out the Python C API module creation function, and
         # get a LLVM function for it.
         create_module_fn = ir.Function(llvm_module, *self.module_create_definition)
-        create_module_fn.linkage = lc.LINKAGE_EXTERNAL
+        create_module_fn.linkage = 'external'
 
         # Define a constant string for the module name.
         mod_name_const = self.context.insert_const_string(llvm_module,
                                                           self.module_name)
 
-        mod_def_base_init = lc.Constant.struct(
+        mod_def_base_init = ir.Constant.literal_struct(
             (lt._pyobject_head_init,                        # PyObject_HEAD
-             lc.Constant.null(self.m_init_ty),              # m_init
-             lc.Constant.null(lt._llvm_py_ssize_t),         # m_index
-             lc.Constant.null(lt._pyobject_head_p),         # m_copy
+             ir.Constant(self.m_init_ty, None),             # m_init
+             ir.Constant(lt._llvm_py_ssize_t, None),        # m_index
+             ir.Constant(lt._pyobject_head_p, None),        # m_copy
             )
         )
         mod_def_base = cgutils.add_global_variable(llvm_module,
                                                    mod_def_base_init.type,
                                                    '.module_def_base')
         mod_def_base.initializer = mod_def_base_init
-        mod_def_base.linkage = lc.LINKAGE_INTERNAL
+        mod_def_base.linkage = 'internal'
 
         method_array = self._emit_method_array(llvm_module)
 
-        mod_def_init = lc.Constant.struct(
+        mod_def_init = ir.Constant.literal_struct(
             (mod_def_base_init,                              # m_base
              mod_name_const,                                 # m_name
-             lc.Constant.null(self._char_star),              # m_doc
-             lc.Constant.int(lt._llvm_py_ssize_t, -1),       # m_size
+             ir.Constant(self._char_star, None),             # m_doc
+             ir.Constant(lt._llvm_py_ssize_t, -1),           # m_size
              method_array,                                   # m_methods
-             lc.Constant.null(self.inquiry_ty),              # m_reload
-             lc.Constant.null(self.traverseproc_ty),         # m_traverse
-             lc.Constant.null(self.inquiry_ty),              # m_clear
-             lc.Constant.null(self.freefunc_ty)              # m_free
+             ir.Constant(self.inquiry_ty, None),             # m_reload
+             ir.Constant(self.traverseproc_ty, None),        # m_traverse
+             ir.Constant(self.inquiry_ty, None),             # m_clear
+             ir.Constant(self.freefunc_ty, None)             # m_free
             )
         )
 
@@ -431,17 +438,17 @@ class ModuleCompiler(_ModuleCompiler):
         mod_def = cgutils.add_global_variable(llvm_module, mod_def_init.type,
                                               '.module_def')
         mod_def.initializer = mod_def_init
-        mod_def.linkage = lc.LINKAGE_INTERNAL
+        mod_def.linkage = 'internal'
 
         # Define the module initialization function.
         mod_init_fn = ir.Function(llvm_module, *self.module_init_definition)
         entry = mod_init_fn.append_basic_block('Entry')
-        builder = lc.Builder(entry)
+        builder = ir.IRBuilder(entry)
         pyapi = self.context.get_python_api(builder)
 
         mod = builder.call(create_module_fn,
                            (mod_def,
-                            lc.Constant.int(lt._int32, sys.api_version)))
+                            ir.Constant(lt._int32, sys.api_version)))
 
         # Test if module has been created correctly.
         # (XXX for some reason comparing with the NULL constant fails llvm
@@ -456,7 +463,7 @@ class ModuleCompiler(_ModuleCompiler):
         if ret is not None:
             with builder.if_then(cgutils.is_not_null(builder, ret)):
                 # Init function errored out
-                builder.ret(lc.Constant.null(mod.type))
+                builder.ret(ir.Constant(mod.type, None))
 
         builder.ret(mod)
 

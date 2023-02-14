@@ -39,7 +39,7 @@ The most basic types can be expressed through simple expressions.  The
 symbols below refer to attributes of the main ``numba`` module (so if
 you read "boolean", it means that symbol can be accessed as ``numba.boolean``).
 Many types are available both as a canonical name and a shorthand alias,
-following Numpy's conventions.
+following NumPy's conventions.
 
 Numbers
 -------
@@ -65,6 +65,8 @@ intc                    --               C int-sized integer
 uintc                   --               C int-sized unsigned integer
 intp                    --               pointer-sized integer
 uintp                   --               pointer-sized unsigned integer
+ssize_t                 --               C ssize_t
+size_t                  --               C size_t
 
 float32                 f4               single-precision floating-point number
 float64, double         f8               double-precision floating-point number
@@ -268,7 +270,7 @@ Inference
       reflected list(int64)
 
 
-Numpy scalars
+NumPy scalars
 -------------
 
 Instead of using :func:`~numba.typeof`, non-trivial scalars such as
@@ -276,7 +278,7 @@ structured types can also be constructed programmatically.
 
 .. function:: numba.from_dtype(dtype)
 
-   Create a Numba type corresponding to the given Numpy *dtype*::
+   Create a Numba type corresponding to the given NumPy *dtype*::
 
       >>> struct_dtype = np.dtype([('row', np.float64), ('col', np.float64)])
       >>> ty = numba.from_dtype(struct_dtype)
@@ -287,18 +289,18 @@ structured types can also be constructed programmatically.
 
 .. class:: numba.types.NPDatetime(unit)
 
-   Create a Numba type for Numpy datetimes of the given *unit*.  *unit*
-   should be a string amongst the codes recognized by Numpy (e.g.
+   Create a Numba type for NumPy datetimes of the given *unit*.  *unit*
+   should be a string amongst the codes recognized by NumPy (e.g.
    ``Y``, ``M``, ``D``, etc.).
 
 .. class:: numba.types.NPTimedelta(unit)
 
-   Create a Numba type for Numpy timedeltas of the given *unit*.  *unit*
-   should be a string amongst the codes recognized by Numpy (e.g.
+   Create a Numba type for NumPy timedeltas of the given *unit*.  *unit*
+   should be a string amongst the codes recognized by NumPy (e.g.
    ``Y``, ``M``, ``D``, etc.).
 
    .. seealso::
-      Numpy `datetime units <http://docs.scipy.org/doc/numpy/reference/arrays.datetime.html#datetime-units>`_.
+      NumPy `datetime units <http://docs.scipy.org/doc/numpy/reference/arrays.datetime.html#datetime-units>`_.
 
 
 Arrays

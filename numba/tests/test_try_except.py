@@ -700,8 +700,10 @@ class TestTryExceptOtherControlFlow(TestCase):
 
         with self.assertRaises(CompilerError) as raises:
             udt()
+        msg = ("unsupported control flow: with-context contains branches "
+               "(i.e. break/return/raise) that can leave the block ")
         self.assertIn(
-            "Does not support with-context that contain branches",
+            msg,
             str(raises.exception),
         )
 
@@ -723,8 +725,10 @@ class TestTryExceptOtherControlFlow(TestCase):
 
         with self.assertRaises(CompilerError) as raises:
             test_objmode()
+        msg = ("unsupported control flow: with-context contains branches "
+               "(i.e. break/return/raise) that can leave the block ")
         self.assertIn(
-            "Does not support with-context that contain branches",
+            msg,
             str(raises.exception),
         )
 

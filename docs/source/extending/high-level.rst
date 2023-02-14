@@ -6,6 +6,14 @@ High-level extension API
 
 This extension API is exposed through the :mod:`numba.extending` module.
 
+To aid debugging extensions to Numba, it's recommended to set the following
+environment variable::
+
+    NUMBA_CAPTURED_ERRORS="new_style"
+
+this makes it easy to differentiate between errors in implementation and
+acceptable errors that can take part in e.g. type inference. For more
+information see :envvar:`NUMBA_CAPTURED_ERRORS`.
 
 Implementing functions
 ----------------------

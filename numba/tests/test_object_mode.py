@@ -16,8 +16,10 @@ def complex_constant(n):
     tmp = n + 4
     return tmp + 3j
 
+
 def long_constant(n):
     return n + 100000000000000000000000000000000000000000000000
+
 
 def delitem_usecase(x):
     del x[:]
@@ -31,7 +33,7 @@ def loop_nest_3(x, y):
     n = 0
     for i in range(x):
         for j in range(y):
-            for k in range(x+y):
+            for k in range(x + y):
                 n += i * j
 
     return n
@@ -106,6 +108,20 @@ class TestObjectMode(TestCase):
         self.assertPreciseEqual(l, [])
         with self.assertRaises(TypeError):
             cfunc(42)
+
+    def test_starargs_non_tuple(self):
+        def consumer(*x):
+            return x
+
+        @jit(forceobj=True)
+        def foo(x):
+            return consumer(*x)
+
+        arg = "ijo"
+        got = foo(arg)
+        expect = foo.py_func(arg)
+        self.assertEqual(got, tuple(arg))
+        self.assertEqual(got, expect)
 
 
 class TestObjectModeInvalidRewrite(TestCase):

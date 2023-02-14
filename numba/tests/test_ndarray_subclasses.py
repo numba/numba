@@ -89,6 +89,11 @@ class MyArrayType(types.Array):
         super().__init__(dtype, ndim, layout, readonly=readonly,
                          aligned=aligned, name=name)
 
+    def copy(self, *args, **kwargs):
+        # This is here to future-proof.
+        # The test here never uses this.
+        raise NotImplementedError
+
     # Tell Numba typing how to combine MyArrayType with other ndarray types.
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         if method == "__call__":
@@ -118,7 +123,21 @@ def typeof_ta_ndarray(val, c):
     return MyArrayType(dtype, val.ndim, layout, readonly=readonly)
 
 
-register_model(MyArrayType)(numba.core.datamodel.models.ArrayModel)
+@register_model(MyArrayType)
+class MyArrayTypeModel(numba.core.datamodel.models.StructModel):
+    def __init__(self, dmm, fe_type):
+        ndim = fe_type.ndim
+        members = [
+            ('meminfo', types.MemInfoPointer(fe_type.dtype)),
+            ('parent', types.pyobject),
+            ('nitems', types.intp),
+            ('itemsize', types.intp),
+            ('data', types.CPointer(fe_type.dtype)),
+            ('shape', types.UniTuple(types.intp, ndim)),
+            ('strides', types.UniTuple(types.intp, ndim)),
+            ('extra_field', types.intp),
+        ]
+        super(MyArrayTypeModel, self).__init__(dmm, fe_type, members)
 
 
 @type_callable(MyArray)
@@ -287,10 +306,11 @@ class TestNdarraySubclasses(MemoryLeakMixin, TestCase):
         buf = np.arange(4, dtype=np.float32)
         with self.assertRaises(TypingError) as raises:
             foo(buf)
-        self.assertIn(
-            "unsupported use of ufunc <ufunc 'add'> on MyArray(1, float32, C)",
-            str(raises.exception),
-        )
+
+        msg = ("No implementation of function",
+               "add(MyArray(1, float32, C), MyArray(1, float32, C))")
+        for m in msg:
+            self.assertIn(m, str(raises.exception))
 
     @use_logger
     def test_myarray_allocator_override(self):

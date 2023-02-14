@@ -267,7 +267,10 @@ class _FreshVarHandler(_BaseHandler):
             if len(defmap) == 0:
                 newtarget = assign.target
                 _logger.debug("first assign: %s", newtarget)
-                assert newtarget.name in scope.localvars
+                if newtarget.name not in scope.localvars:
+                    wmsg = f"variable {newtarget.name!r} is not in scope."
+                    warnings.warn(errors.NumbaIRAssumptionWarning(wmsg,
+                                  loc=assign.loc))
             else:
                 newtarget = scope.redefine(assign.target.name, loc=assign.loc)
             assign = ir.Assign(

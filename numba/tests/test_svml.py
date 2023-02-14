@@ -19,7 +19,7 @@ import unittest
 needs_svml = unittest.skipUnless(config.USING_SVML,
                                  "SVML tests need SVML to be present")
 
-# a map of float64 vector lenghs with corresponding CPU architecture
+# a map of float64 vector lengths with corresponding CPU architecture
 vlen2cpu = {2: 'nehalem', 4: 'haswell', 8: 'skylake-avx512'}
 # force LLVM to use AVX512 registers for vectorization
 # https://reviews.llvm.org/D67259
@@ -207,7 +207,7 @@ class TestSVMLGeneration(TestCase):
             fn, contains, avoids = combo_svml_usecase(dtype, mode, vlen,
                                                       flags['fastmath'],
                                                       flags['name'])
-            # look for specific patters in the asm for a given target
+            # look for specific patterns in the asm for a given target
             with override_env_config('NUMBA_CPU_NAME', vlen2cpu[vlen]), \
                  override_env_config('NUMBA_CPU_FEATURES', vlen2cpu_features[vlen]):
                 # recompile for overridden CPU
@@ -240,9 +240,17 @@ class TestSVMLGeneration(TestCase):
             q = ctx.Queue()
             p = ctx.Process(target=type(self).mp_runner, args=[testname, q])
             p.start()
-            # timeout to avoid hanging and long enough to avoid bailing too early
-            p.join(timeout=10)
-            self.assertEqual(p.exitcode, 0, msg="process ended unexpectedly")
+            # timeout to avoid hanging and long enough to avoid bailing too
+            # early. Note: this was timeout=10 but that seemed to caused
+            # intermittent failures on heavily loaded machines.
+            term_or_timeout = p.join(timeout=30)
+            exitcode = p.exitcode
+            if term_or_timeout is None:
+                if exitcode is None:
+                    self.fail("Process timed out.")
+                elif exitcode < 0:
+                    self.fail(f"Process terminated with signal {-exitcode}.")
+            self.assertEqual(exitcode, 0, msg="process ended unexpectedly")
             out = q.get()
             status = out['status']
             msg = out['msg']
@@ -347,7 +355,7 @@ class TestSVML(TestCase):
         np.testing.assert_almost_equal(jitstd_result, py_expected, **kwargs)
         np.testing.assert_almost_equal(jitfast_result, py_expected, **kwargs)
 
-        # look for specific patters in the asm for a given target
+        # look for specific patterns in the asm for a given target
         with override_env_config('NUMBA_CPU_NAME', cpu_name), \
              override_env_config('NUMBA_CPU_FEATURES', cpu_features):
             # recompile for overridden CPU
