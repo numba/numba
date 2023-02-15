@@ -17,7 +17,7 @@ def select_device(dev=0):
     assert dev == 0, 'Only a single device supported by the simulator'
 
 
-def is_fp16_supported():
+def is_float16_supported():
     return True
 
 

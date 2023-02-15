@@ -21,11 +21,10 @@ class TestIsFP16Supported(CUDATestCase):
     @skip_on_cudasim
     @skip_unless_cc_53
     def test_is_fp16_supported(self):
-        self.assertEqual(config.CUDA_USE_NVIDIA_BINDING, 0)
-        self.assertFalse(cuda.is_fp16_supported())
+        self.assertFalse(cuda.is_float16_supported())
         with override_config('CUDA_USE_NVIDIA_BINDING', 1):
-            self.assertTrue(cuda.is_fp16_supported())
+            self.assertTrue(cuda.is_float16_supported())
 
     @skip_unless_cudasim
     def test_is_fp16_supported_on_simulator(self):
-        self.assertTrue(cuda.is_fp16_supported())
+        self.assertTrue(cuda.is_float16_supported())
