@@ -4,8 +4,9 @@ Implementation of compiled C callbacks (@cfunc).
 
 
 import ctypes
+from functools import cached_property
 
-from numba.core import utils, compiler, registry
+from numba.core import compiler, registry
 from numba.core.caching import NullCache, FunctionCache
 from numba.core.dispatcher import _FunctionCompiler
 from numba.core.typing import signature
@@ -96,7 +97,7 @@ class CFunc(object):
         """
         return self._wrapper_address
 
-    @utils.cached_property
+    @cached_property
     def cffi(self):
         """
         A cffi function pointer representing the C callback.
@@ -107,7 +108,7 @@ class CFunc(object):
         # spurious mismatches (such as "int32_t" vs. "int").
         return ffi.cast("void *", self.address)
 
-    @utils.cached_property
+    @cached_property
     def ctypes(self):
         """
         A ctypes function object representing the C callback.
