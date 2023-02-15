@@ -57,7 +57,7 @@ try:
 except ImportError:
     scipy = None
 
-# Make sure that coverage is setup.
+# Make sure that coverage is set up.
 try:
     import coverage
 except ImportError:
