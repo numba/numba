@@ -1311,8 +1311,9 @@ class TestMixedInts(TestCase):
         self.run_arith_binop(self.op.mod_usecase, 'mod', samples)
 
     def test_pow(self):
+        extra_cast = {}
         if utils.PYVERSION == (3, 11):
-            extra_cast = dict(force_type=float)
+            extra_cast["force_type"] = float
         pyfunc = self.op.pow_usecase
         # Only test with positive values, as otherwise trying to write the
         # control function in terms of Python or Numpy power turns out insane.
