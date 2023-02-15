@@ -6,6 +6,7 @@ from numba.core.base import OverloadSelector
 from numba.core.registry import cpu_target
 from numba.core.imputils import builtin_registry, RegistryLoader
 from numba.core import types
+from numba.core.errors import NumbaNotImplementedError, NumbaTypeError
 
 
 class TestOverloadSelector(unittest.TestCase):
@@ -64,7 +65,7 @@ class TestOverloadSelector(unittest.TestCase):
         os.append(2, (types.Integer, types.Boolean))
         self.assertEqual(os.find((types.boolean, types.boolean)), 1)
         # not implemented
-        with self.assertRaises(NotImplementedError) as raises:
+        with self.assertRaises(NumbaNotImplementedError) as raises:
             os.find((types.boolean, types.int32))
         # generic
         os.append(3, (types.Any, types.Any))
@@ -72,7 +73,7 @@ class TestOverloadSelector(unittest.TestCase):
         self.assertEqual(os.find((types.boolean, types.boolean)), 1)
         # add ambiguous signature; can match (bool, any) and (any, bool)
         os.append(4, (types.Boolean, types.Any))
-        with self.assertRaises(TypeError) as raises:
+        with self.assertRaises(NumbaTypeError) as raises:
             os.find((types.boolean, types.boolean))
         self.assertIn('2 ambiguous signatures', str(raises.exception))
         # disambiguous
@@ -122,7 +123,7 @@ class TestAmbiguousOverloads(unittest.TestCase):
         for sig in permutations(all_types, r=2):
             try:
                 os.find(sig)
-            except NotImplementedError:
+            except NumbaNotImplementedError:
                 pass   # ignore not implemented cast
 
     def test_ambiguous_functions(self):
@@ -138,7 +139,7 @@ class TestAmbiguousOverloads(unittest.TestCase):
             for sig in product(all_types, all_types):
                 try:
                     os.find(sig)
-                except NotImplementedError:
+                except NumbaNotImplementedError:
                     pass   # ignore not implemented cast
 
 

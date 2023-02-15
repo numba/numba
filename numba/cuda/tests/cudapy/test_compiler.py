@@ -60,8 +60,7 @@ class TestCompileToPTX(unittest.TestCase):
 
         # With fastmath, ftz and approximate div / sqrt are enabled
         self.assertIn('fma.rn.ftz.f32', ptx)
-        # "full" refers to a full-range approximate divide
-        self.assertIn('div.full.ftz.f32', ptx)
+        self.assertIn('div.approx.ftz.f32', ptx)
         self.assertIn('sqrt.approx.ftz.f32', ptx)
 
     def check_debug_info(self, ptx):
@@ -116,6 +115,13 @@ class TestCompileToPTX(unittest.TestCase):
 
         ptx, resty = compile_ptx(f, [], lineinfo=True)
         self.check_line_info(ptx)
+
+    def test_non_void_return_type(self):
+        def f(x, y):
+            return x[0] + y[0]
+
+        with self.assertRaisesRegex(TypeError, 'must have void return type'):
+            compile_ptx(f, (uint32[::1], uint32[::1]))
 
 
 @skip_on_cudasim('Compilation unsupported in the simulator')

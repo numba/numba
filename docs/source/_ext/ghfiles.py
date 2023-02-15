@@ -16,9 +16,9 @@ def make_ref(text):
     """ Make hyperlink to Github """
     full_path = path.join(top, text)
     if path.isfile(full_path):
-        ref = "https://www.github.com/numba/numba/blob/master/" + text
+        ref = "https://www.github.com/numba/numba/blob/main/" + text
     elif path.isdir(full_path):
-        ref = "https://www.github.com/numba/numba/tree/master/" + text
+        ref = "https://www.github.com/numba/numba/tree/main/" + text
     else:
         logger.warn("Failed to find file in repomap: " + text)
         ref = "https://www.github.com/numba/numba"
@@ -61,7 +61,7 @@ def ghfile_role(name, rawtext, text, lineno, inliner, options={}, content=[]):
         node = nodes.reference(rawtext, text, refuri=make_ref(text), **options)
         my_nodes.append(node)
 
-    # insert seperators if needed
+    # insert separators if needed
     if len(my_nodes) > 1:
         my_nodes = intersperse(my_nodes, nodes.Text(" | "))
     return my_nodes, []

@@ -38,8 +38,8 @@ With these operations, a class object (not the instance) does not need to be
 materialize. Using the class object as a constructor is fully resolved (a
 runtime implementation is picked) during the typing phase in the compiler.
 This means **a class object will not be first class**.  On the other hand,
-implementating a first-class class object will require an
-"interface" type, or the type of class.
+implementing a first-class class object will require an "interface" type,
+or the type of class.
 
 The instantiation of a class will allocate resources for storing the data
 attributes.  This is described in the "Storage model" section.  Methods are
@@ -69,7 +69,7 @@ C structure::
         complex64 field2;
     };
 
-This will also be comptabile with an aligned numpy structure dtype.
+This will also be compatible with an aligned NumPy structured dtype.
 
 
 Methods

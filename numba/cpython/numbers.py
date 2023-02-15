@@ -5,8 +5,7 @@ import numpy as np
 import operator
 
 from llvmlite import ir
-from llvmlite.llvmpy.core import Type, Constant
-import llvmlite.llvmpy.core as lc
+from llvmlite.ir import Constant
 
 from numba.core.imputils import (lower_builtin, lower_getattr,
                                     lower_getattr_generic, lower_cast,
@@ -313,59 +312,59 @@ def static_power_impl(context, builder, sig, args):
 
 
 def int_slt_impl(context, builder, sig, args):
-    res = builder.icmp(lc.ICMP_SLT, *args)
+    res = builder.icmp_signed('<', *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def int_sle_impl(context, builder, sig, args):
-    res = builder.icmp(lc.ICMP_SLE, *args)
+    res = builder.icmp_signed('<=', *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def int_sgt_impl(context, builder, sig, args):
-    res = builder.icmp(lc.ICMP_SGT, *args)
+    res = builder.icmp_signed('>', *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def int_sge_impl(context, builder, sig, args):
-    res = builder.icmp(lc.ICMP_SGE, *args)
+    res = builder.icmp_signed('>=', *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def int_ult_impl(context, builder, sig, args):
-    res = builder.icmp(lc.ICMP_ULT, *args)
+    res = builder.icmp_unsigned('<', *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def int_ule_impl(context, builder, sig, args):
-    res = builder.icmp(lc.ICMP_ULE, *args)
+    res = builder.icmp_unsigned('<=', *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def int_ugt_impl(context, builder, sig, args):
-    res = builder.icmp(lc.ICMP_UGT, *args)
+    res = builder.icmp_unsigned('>', *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def int_uge_impl(context, builder, sig, args):
-    res = builder.icmp(lc.ICMP_UGE, *args)
+    res = builder.icmp_unsigned('>=', *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def int_eq_impl(context, builder, sig, args):
-    res = builder.icmp(lc.ICMP_EQ, *args)
+    res = builder.icmp_unsigned('==', *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def int_ne_impl(context, builder, sig, args):
-    res = builder.icmp(lc.ICMP_NE, *args)
+    res = builder.icmp_unsigned('!=', *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def int_abs_impl(context, builder, sig, args):
     [x] = args
-    ZERO = Constant.null(x.type)
-    ltz = builder.icmp(lc.ICMP_SLT, x, ZERO)
+    ZERO = Constant(x.type, None)
+    ltz = builder.icmp_signed('<', x, ZERO)
     negated = builder.neg(x)
     res = builder.select(ltz, negated, x)
     return impl_ret_untracked(context, builder, sig.return_type, res)
@@ -444,7 +443,7 @@ def int_invert_impl(context, builder, sig, args):
     [typ] = sig.args
     [val] = args
     # Invert before upcasting, for unsigned numbers
-    res = builder.xor(val, Constant.all_ones(val.type))
+    res = builder.xor(val, Constant(val.type, int('1' * val.type.width, 2)))
     res = context.cast(builder, res, typ, sig.return_type)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
@@ -454,12 +453,12 @@ def int_sign_impl(context, builder, sig, args):
     np.sign(int)
     """
     [x] = args
-    POS = Constant.int(x.type, 1)
-    NEG = Constant.int(x.type, -1)
-    ZERO = Constant.int(x.type, 0)
+    POS = Constant(x.type, 1)
+    NEG = Constant(x.type, -1)
+    ZERO = Constant(x.type, 0)
 
-    cmp_zero = builder.icmp(lc.ICMP_EQ, x, ZERO)
-    cmp_pos = builder.icmp(lc.ICMP_SGT, x, ZERO)
+    cmp_zero = builder.icmp_unsigned('==', x, ZERO)
+    cmp_pos = builder.icmp_signed('>', x, ZERO)
 
     presult = cgutils.alloca_once(builder, x.type)
 
@@ -608,12 +607,12 @@ def real_divmod(context, builder, x, y):
 
     module = builder.module
     fname = context.mangler(".numba.python.rem", [x.type])
-    fnty = Type.function(floatty, (floatty, floatty, Type.pointer(floatty)))
+    fnty = ir.FunctionType(floatty, (floatty, floatty, ir.PointerType(floatty)))
     fn = cgutils.get_or_insert_function(module, fnty, fname)
 
     if fn.is_declaration:
-        fn.linkage = lc.LINKAGE_LINKONCE_ODR
-        fnbuilder = lc.Builder(fn.append_basic_block('entry'))
+        fn.linkage = 'linkonce_odr'
+        fnbuilder = ir.IRBuilder(fn.append_basic_block('entry'))
         fx, fy, pmod = fn.args
         div, mod = real_divmod_func_body(context, fnbuilder, fx, fy)
         fnbuilder.store(mod, pmod)
@@ -692,7 +691,7 @@ def real_divmod_func_body(context, builder, vx, wx):
         with if_nonzero_mod:
             # `mod` is non-zero or NaN
             # Ensure the remainder has the same sign as the denominator
-            wx_ltz_ne_mod_ltz = builder.icmp(lc.ICMP_NE, wx_ltz, mod_ltz)
+            wx_ltz_ne_mod_ltz = builder.icmp_unsigned('!=', wx_ltz, mod_ltz)
 
             with builder.if_then(wx_ltz_ne_mod_ltz):
                 builder.store(builder.fsub(div, ONE), pdiv)
@@ -707,7 +706,7 @@ def real_divmod_func_body(context, builder, vx, wx):
     del mod, div
 
     div = builder.load(pdiv)
-    div_istrue = builder.fcmp(lc.FCMP_ONE, div, ZERO)
+    div_istrue = builder.fcmp_ordered('!=', div, ZERO)
 
     with builder.if_then(div_istrue):
         realtypemap = {'float': types.float32,
@@ -718,8 +717,8 @@ def real_divmod_func_body(context, builder, vx, wx):
         floordiv = floorfn(builder, [div])
         floordivdiff = builder.fsub(div, floordiv)
         floordivincr = builder.fadd(floordiv, ONE)
-        HALF = Constant.real(wx.type, 0.5)
-        pred = builder.fcmp(lc.FCMP_OGT, floordivdiff, HALF)
+        HALF = Constant(wx.type, 0.5)
+        pred = builder.fcmp_ordered('>', floordivdiff, HALF)
         floordiv = builder.select(pred, floordivincr, floordiv)
         builder.store(floordiv, pfloordiv)
 
@@ -803,38 +802,38 @@ def real_power_impl(context, builder, sig, args):
         imp = context.get_function(math.pow, sig)
         res = imp(builder, args)
     else:
-        fn = lc.Function.intrinsic(module, lc.INTR_POW, [y.type])
+        fn = module.declare_intrinsic('llvm.pow', [y.type])
         res = builder.call(fn, (x, y))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def real_lt_impl(context, builder, sig, args):
-    res = builder.fcmp(lc.FCMP_OLT, *args)
+    res = builder.fcmp_ordered('<', *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def real_le_impl(context, builder, sig, args):
-    res = builder.fcmp(lc.FCMP_OLE, *args)
+    res = builder.fcmp_ordered('<=', *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def real_gt_impl(context, builder, sig, args):
-    res = builder.fcmp(lc.FCMP_OGT, *args)
+    res = builder.fcmp_ordered('>', *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def real_ge_impl(context, builder, sig, args):
-    res = builder.fcmp(lc.FCMP_OGE, *args)
+    res = builder.fcmp_ordered('>=', *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def real_eq_impl(context, builder, sig, args):
-    res = builder.fcmp(lc.FCMP_OEQ, *args)
+    res = builder.fcmp_ordered('==', *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def real_ne_impl(context, builder, sig, args):
-    res = builder.fcmp(lc.FCMP_UNE, *args)
+    res = builder.fcmp_unordered('!=', *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
@@ -863,14 +862,14 @@ def real_sign_impl(context, builder, sig, args):
     np.sign(float)
     """
     [x] = args
-    POS = Constant.real(x.type, 1)
-    NEG = Constant.real(x.type, -1)
-    ZERO = Constant.real(x.type, 0)
+    POS = Constant(x.type, 1)
+    NEG = Constant(x.type, -1)
+    ZERO = Constant(x.type, 0)
 
     presult = cgutils.alloca_once(builder, x.type)
 
-    is_pos = builder.fcmp(lc.FCMP_OGT, x, ZERO)
-    is_neg = builder.fcmp(lc.FCMP_OLT, x, ZERO)
+    is_pos = builder.fcmp_ordered('>', x, ZERO)
+    is_neg = builder.fcmp_ordered('<', x, ZERO)
 
     with builder.if_else(is_pos) as (gt_zero, not_gt_zero):
         with gt_zero:
@@ -994,7 +993,7 @@ def complex_power_impl(context, builder, sig, args):
                 types.complex64: "numba_cpowf",
                 types.complex128: "numba_cpow",
                 }[ty]
-            fnty = Type.function(Type.void(), [pa.type] * 3)
+            fnty = ir.FunctionType(ir.VoidType(), [pa.type] * 3)
             cpow = cgutils.get_or_insert_function(module, fnty, func_name)
             builder.call(cpow, (pa, pb, pc))
 
@@ -1113,8 +1112,8 @@ def complex_eq_impl(context, builder, sig, args):
     x = context.make_complex(builder, typ, value=cx)
     y = context.make_complex(builder, typ, value=cy)
 
-    reals_are_eq = builder.fcmp(lc.FCMP_OEQ, x.real, y.real)
-    imags_are_eq = builder.fcmp(lc.FCMP_OEQ, x.imag, y.imag)
+    reals_are_eq = builder.fcmp_ordered('==', x.real, y.real)
+    imags_are_eq = builder.fcmp_ordered('==', x.imag, y.imag)
     res = builder.and_(reals_are_eq, imags_are_eq)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
@@ -1125,8 +1124,8 @@ def complex_ne_impl(context, builder, sig, args):
     x = context.make_complex(builder, typ, value=cx)
     y = context.make_complex(builder, typ, value=cy)
 
-    reals_are_ne = builder.fcmp(lc.FCMP_UNE, x.real, y.real)
-    imags_are_ne = builder.fcmp(lc.FCMP_UNE, x.imag, y.imag)
+    reals_are_ne = builder.fcmp_unordered('!=', x.real, y.real)
+    imags_are_ne = builder.fcmp_unordered('!=', x.imag, y.imag)
     res = builder.or_(reals_are_ne, imags_are_ne)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
@@ -1191,12 +1190,12 @@ def bool_as_bool(context, builder, sig, args):
 @lower_builtin(bool, types.Integer)
 def int_as_bool(context, builder, sig, args):
     [val] = args
-    return builder.icmp_unsigned('!=', val, ir.Constant(val.type, 0))
+    return builder.icmp_unsigned('!=', val, Constant(val.type, 0))
 
 @lower_builtin(bool, types.Float)
 def float_as_bool(context, builder, sig, args):
     [val] = args
-    return builder.fcmp(lc.FCMP_UNE, val, ir.Constant(val.type, 0.0))
+    return builder.fcmp_unordered('!=', val, Constant(val.type, 0.0))
 
 @lower_builtin(bool, types.Complex)
 def complex_as_bool(context, builder, sig, args):
@@ -1204,9 +1203,9 @@ def complex_as_bool(context, builder, sig, args):
     [val] = args
     cmplx = context.make_complex(builder, typ, val)
     real, imag = cmplx.real, cmplx.imag
-    zero = ir.Constant(real.type, 0.0)
-    real_istrue = builder.fcmp(lc.FCMP_UNE, real, zero)
-    imag_istrue = builder.fcmp(lc.FCMP_UNE, imag, zero)
+    zero = Constant(real.type, 0.0)
+    real_istrue = builder.fcmp_unordered('!=', real, zero)
+    imag_istrue = builder.fcmp_unordered('!=', imag, zero)
     return builder.or_(real_istrue, imag_istrue)
 
 
@@ -1306,7 +1305,7 @@ def any_to_boolean(context, builder, fromty, toty, val):
 @lower_cast(types.Boolean, types.Number)
 def boolean_to_any(context, builder, fromty, toty, val):
     # Casting from boolean to anything first casts to int32
-    asint = builder.zext(val, Type.int())
+    asint = builder.zext(val, ir.IntType(32))
     return context.cast(builder, asint, types.int32, toty)
 
 @lower_cast(types.IntegerLiteral, types.Boolean)
@@ -1327,7 +1326,7 @@ def constant_complex(context, builder, ty, pyval):
     fty = ty.underlying_float
     real = context.get_constant_generic(builder, fty, pyval.real)
     imag = context.get_constant_generic(builder, fty, pyval.imag)
-    return ir.Constant.literal_struct((real, imag))
+    return Constant.literal_struct((real, imag))
 
 @lower_constant(types.Integer)
 @lower_constant(types.Float)

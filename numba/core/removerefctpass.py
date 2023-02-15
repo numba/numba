@@ -107,8 +107,7 @@ def remove_unnecessary_nrt_usage(function, context, fndesc):
     - call function(s) that return refcounted object.
 
     In effect, the function will not capture or create references that extend
-    the lifetime of any refcounted objects beyound the lifetime of the
-    function.
+    the lifetime of any refcounted objects beyond the lifetime of the function.
 
     The rewrite is performed in place.
     If rewrite has happened, this function returns True, otherwise, it returns False.

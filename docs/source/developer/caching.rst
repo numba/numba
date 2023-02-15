@@ -20,10 +20,6 @@ overloaded signatures compiled for the function. The *object code* is stored in
 files with an ``.nbc`` extension, one file per overload. The data in both files
 is serialized with :mod:`pickle`.
 
-.. note:: On Python <=3.7, Numba extends ``pickle`` using the pure-Python
-          pickler. To use the faster C Pickler, install ``pickle5``
-          from ``pip``. ``pickle5`` backports Python 3.8 pickler features.
-
 
 Requirements for Cacheability
 -----------------------------
@@ -69,7 +65,7 @@ This is a list of known limitation of the cache:
 - Cache invalidation fails to recognize changes in symbols defined in a
   different file.
 - Global variables are treated as constants. The cache will remember the value
-  in the global variable used at compilation. On cache load, the cached
+  of the global variable at compilation time. On cache load, the cached
   function will not rebind to the new value of the global variable.
 
 

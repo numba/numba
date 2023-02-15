@@ -58,7 +58,7 @@ class GUVectorize(_BaseVectorize):
 def vectorize(ftylist_or_function=(), **kws):
     """vectorize(ftylist_or_function=(), target='cpu', identity=None, **kws)
 
-    A decorator that creates a Numpy ufunc object using Numba compiled
+    A decorator that creates a NumPy ufunc object using Numba compiled
     code.  When no arguments or only keyword arguments are given,
     vectorize will return a Numba dynamic ufunc (DUFunc) object, where
     compilation/specialization may occur at call-time.
@@ -98,7 +98,7 @@ def vectorize(ftylist_or_function=(), **kws):
     Examples
     -------
         @vectorize(['float32(float32, float32)',
-                    'float64(float64, float64)'], identity=1)
+                    'float64(float64, float64)'], identity=0)
         def sum(a, b):
             return a + b
 
@@ -133,7 +133,7 @@ def vectorize(ftylist_or_function=(), **kws):
 def guvectorize(*args, **kwargs):
     """guvectorize(ftylist, signature, target='cpu', identity=None, **kws)
 
-    A decorator to create numpy generialized-ufunc object from Numba compiled
+    A decorator to create NumPy generalized-ufunc object from Numba compiled
     code.
 
     Args
@@ -144,7 +144,7 @@ def guvectorize(*args, **kwargs):
         function type.
 
     signature: str
-        A NumPy generialized-ufunc signature.
+        A NumPy generalized-ufunc signature.
         e.g. "(m, n), (n, p)->(m, p)"
 
     identity: int, str, or None
@@ -161,7 +161,7 @@ def guvectorize(*args, **kwargs):
     Returns
     --------
 
-    A NumPy generialized universal-function
+    A NumPy generalized universal-function
 
     Example
     -------

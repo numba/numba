@@ -12,10 +12,11 @@ from textwrap import dedent
 
 import numpy as np
 
-from numba import jit
+from numba import jit, typed, typeof
 from numba.core import types, utils
 import unittest
-from numba.tests.support import TestCase, tag, CompilationCache
+from numba.tests.support import (TestCase, tag, CompilationCache,
+                                 skip_unless_py10_or_later)
 
 from numba.cpython.unicode import compile_time_get_string_data
 from numba.cpython import hashing
@@ -116,9 +117,14 @@ class BaseTest(TestCase):
                 yield a + a.mean()
 
         # Infs, nans, zeros, magic -1
-        a = typ([0.0, 0.5, -0.0, -1.0, float('inf'), -float('inf'),
-                 float('nan')])
-        yield a
+        a = [0.0, 0.5, -0.0, -1.0, float('inf'), -float('inf'),]
+
+        # Python 3.10 has a hash for nan based on the pointer to the PyObject
+        # containing the nan, skip this input and use explicit test instead.
+        if utils.PYVERSION < (3, 10):
+            a.append(float('nan'))
+
+        yield typ(a)
 
     def complex_samples(self, typ, float_ty):
         for real in self.float_samples(float_ty):
@@ -127,7 +133,13 @@ class BaseTest(TestCase):
                 real = real[:len(imag)]
                 imag = imag[:len(real)]
                 a = real + typ(1j) * imag
-                yield a
+                # Python 3.10 has a hash for nan based on the pointer to the
+                # PyObject containing the nan, skip input that ends up as nan
+                if utils.PYVERSION >= (3, 10):
+                    if not np.any(np.isnan(a)):
+                        yield a
+                else:
+                    yield a
 
 
 class TestNumberHashing(BaseTest):
@@ -209,6 +221,20 @@ class TestNumberHashing(BaseTest):
         self.check_hash_values([np.int32(-0x7fffffff)])
         self.check_hash_values([np.int32(-0x7ffffff6)])
         self.check_hash_values([np.int32(-0x7fffff9c)])
+
+
+    @skip_unless_py10_or_later
+    def test_py310_nan_hash(self):
+        # On Python 3.10+ nan's hash to a value which is based on the pointer to
+        # the PyObject containing the nan. Numba cannot replicate as there's no
+        # object, it instead produces equivalent behaviour, i.e. hashes to
+        # something "unique".
+
+        # Run 10 hashes, make sure that the "uniqueness" is sufficient that
+        # there's more than one hash value. Not much more can be done!
+        x = [float('nan') for i in range(10)]
+        out = set([self.cfunc(z) for z in x])
+        self.assertGreater(len(out), 1)
 
 
 class TestTupleHashing(BaseTest):
@@ -351,6 +377,38 @@ class TestUnicodeHashing(BaseTest):
         a = (compile_time_get_string_data(expected))
         b = (compile_time_get_string_data(got))
         self.assertEqual(a, b)
+
+
+class TestUnhashable(TestCase):
+    # Tests that unhashable types behave correctly and raise a TypeError at
+    # runtime.
+
+    def test_hash_unhashable(self):
+        unhashables = (typed.Dict().empty(types.int64, types.int64),
+                       typed.List().empty_list(types.int64),
+                       np.ones(4))
+        cfunc = jit(nopython=True)(hash_usecase)
+        for ty in unhashables:
+            with self.assertRaises(TypeError) as raises:
+                cfunc(ty)
+            expected = f"unhashable type: '{str(typeof(ty))}'"
+            self.assertIn(expected, str(raises.exception))
+
+    def test_no_generic_hash(self):
+        # In CPython, if there's no attr `__hash__` on an object, a hash of the
+        # object's pointer is returned (see: _Py_HashPointer in the CPython
+        # source). Numba has no access to such objects and can't create them
+        # either, so it catches this case and raises an exception.
+
+        @jit(nopython=True)
+        def foo():
+            hash(np.cos)
+
+        with self.assertRaises(TypeError) as raises:
+            foo()
+
+        expected = ("No __hash__ is defined for object ")
+        self.assertIn(expected, str(raises.exception))
 
 
 if __name__ == "__main__":

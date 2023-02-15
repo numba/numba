@@ -13,32 +13,26 @@ TCCMap::TCCMap()
 {
 }
 
-unsigned int TCCMap::hash(const TypePair &key) const {
-    const int mult = 1000003;
-    int x = 0x345678;
-    x = (x ^ key.first) * mult;
-    x = (x ^ key.second);
-    return x;
+size_t TCCMap::hash(const TypePair &key) const {
+    return std::hash<size_t>()(std::hash<Type>()(key.first)) ^
+           std::hash<Type>()(key.second);
 }
 
 void TCCMap::insert(const TypePair &key, TypeCompatibleCode val) {
-    unsigned int i = hash(key) & (TCCMAP_SIZE - 1);
+    size_t i = hash(key) & (TCCMAP_SIZE - 1);
     TCCMapBin &bin = records[i];
-    TCCRecord data;
-    data.key = key;
-    data.val = val;
     for (unsigned int j = 0; j < bin.size(); ++j) {
         if (bin[j].key == key) {
             bin[j].val = val;
             return;
         }
     }
-    bin.push_back(data);
+    bin.push_back({key, val});
     nb_records++;
 }
 
 TypeCompatibleCode TCCMap::find(const TypePair &key) const {
-    unsigned int i = hash(key) & (TCCMAP_SIZE - 1);
+    size_t i = hash(key) & (TCCMAP_SIZE - 1);
     const TCCMapBin &bin = records[i];
     for (unsigned int j = 0; j < bin.size(); ++j) {
         if (bin[j].key == key) {

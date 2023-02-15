@@ -41,10 +41,6 @@ def jit(signature_or_function=None, locals={}, cache=False,
         Mapping of local variable names to Numba types. Used to override the
         types deduced by Numba's type inference engine.
 
-    target (deprecated): str
-        Specifies the target platform to compile for. Valid targets are cpu,
-        gpu, npyufunc, and cuda. Defaults to cpu.
-
     pipeline_class: type numba.compiler.CompilerBase
             The compiler pipeline type for customizing the compilation stages.
 
@@ -106,7 +102,7 @@ def jit(signature_or_function=None, locals={}, cache=False,
     --------
     The function can be used in the following ways:
 
-    1) jit(signatures, target='cpu', **targetoptions) -> jit(function)
+    1) jit(signatures, **targetoptions) -> jit(function)
 
         Equivalent to:
 
@@ -127,7 +123,7 @@ def jit(signature_or_function=None, locals={}, cache=False,
             def bar(x, y):
                 return x + y
 
-    2) jit(function, target='cpu', **targetoptions) -> dispatcher
+    2) jit(function, **targetoptions) -> dispatcher
 
         Create a dispatcher function object that specializes at call site.
 
@@ -137,25 +133,44 @@ def jit(signature_or_function=None, locals={}, cache=False,
             def foo(x, y):
                 return x + y
 
-            @jit(target='cpu', nopython=True)
+            @jit(nopython=True)
             def bar(x, y):
                 return x + y
 
     """
+    forceobj = options.get('forceobj', False)
     if 'argtypes' in options:
         raise DeprecationError(_msg_deprecated_signature_arg.format('argtypes'))
     if 'restype' in options:
         raise DeprecationError(_msg_deprecated_signature_arg.format('restype'))
-    if options.get('nopython', False) and options.get('forceobj', False):
+    if options.get('nopython', False) and forceobj:
         raise ValueError("Only one of 'nopython' or 'forceobj' can be True.")
-    if 'target' in options:
-        target = options.pop('target')
-        warnings.warn("The 'target' keyword argument is deprecated.", NumbaDeprecationWarning)
-    else:
-        if "_target" in options:
-            # Set the "target_backend" option if "_target" is defined.
-            options['target_backend'] = options['_target']
-        target = options.pop('_target', 'cpu')
+
+    if "_target" in options:
+        # Set the "target_backend" option if "_target" is defined.
+        options['target_backend'] = options['_target']
+    target = options.pop('_target', 'cpu')
+
+    nopython = options.get('nopython', None)
+    if (nopython is None or nopython is False) and not forceobj:
+        # if nopython was not supplied/is False AND forceobj is not in use, then
+        # warn the user about a change in the default for the nopython WRT
+        # deprecation of objmode fallback.
+        url = ("https://numba.readthedocs.io/en/stable/reference/"
+                "deprecation.html#deprecation-of-object-mode-fall-"
+                "back-behaviour-when-using-jit")
+        if nopython is None:
+            msg = ("The 'nopython' keyword argument was not supplied to the "
+                   "'numba.jit' decorator. The implicit default value for this "
+                   "argument is currently False, but it will be changed to "
+                   f"True in Numba 0.59.0. See {url} for details.")
+        else:
+            msg = ("The keyword argument 'nopython=False' was supplied. From "
+                   "Numba 0.59.0 the default is being changed to True and use "
+                   "of 'nopython=False' will raise a warning as the "
+                   f"argument will have no effect. See {url} for "
+                   "details.")
+        warnings.warn(NumbaDeprecationWarning(msg), stacklevel=2)
 
     options['boundscheck'] = boundscheck
 
@@ -230,7 +245,7 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
     return wrapper
 
 
-def generated_jit(function=None, target='cpu', cache=False,
+def generated_jit(function=None, cache=False,
                   pipeline_class=None, **options):
     """
     This decorator allows flexible type-based compilation
@@ -238,10 +253,17 @@ def generated_jit(function=None, target='cpu', cache=False,
     function is called at compile-time with the *types* of the arguments
     and should return an implementation function for those types.
     """
+    url_s = "https://numba.readthedocs.io/en/stable/reference/deprecation.html"
+    url_anchor = "#deprecation-of-generated-jit"
+    url = f"{url_s}{url_anchor}"
+    msg = ("numba.generated_jit is deprecated. Please see the documentation "
+           f"at: {url} for more information and advice on a suitable "
+           "replacement.")
+    warnings.warn(msg, NumbaDeprecationWarning)
     dispatcher_args = {}
     if pipeline_class is not None:
         dispatcher_args['pipeline_class'] = pipeline_class
-    wrapper = _jit(sigs=None, locals={}, target=target, cache=cache,
+    wrapper = _jit(sigs=None, locals={}, target='cpu', cache=cache,
                    targetoptions=options, impl_kind='generated',
                    **dispatcher_args)
     if function is not None:

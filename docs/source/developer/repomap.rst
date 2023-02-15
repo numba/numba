@@ -22,8 +22,6 @@ Build and Packaging
 - :ghfile:`.pre-commit-config.yaml` - Configuration file for pre-commit hooks.
 - :ghfile:`.readthedocs.yml` - Configuration file for Read the Docs.
 - :ghfile:`buildscripts/condarecipe.local` - Conda build recipe
-- :ghfile:`buildscripts/condarecipe_clone_icc_rt` - Recipe to build a
-  standalone icc_rt package.
 
 
 Continuous Integration
@@ -32,7 +30,6 @@ Continuous Integration
   Win/Mac/Linux)
 - :ghfile:`buildscripts/azure/` - Azure Pipeline configuration for specific
   platforms
-- :ghfile:`buildscripts/appveyor/` - Appveyor build scripts
 - :ghfile:`buildscripts/incremental/` - Generic scripts for building Numba
   on various CI systems
 - :ghfile:`codecov.yml` - Codecov.io coverage reporting
@@ -120,8 +117,6 @@ Compiler Pipeline
   Numba IR
 - :ghfile:`numba/core/analysis.py` - Utility functions to analyze Numba IR
   (variable lifetime, prune branches, etc)
-- :ghfile:`numba/core/dataflow.py` - Dataflow analysis for Python bytecode (used
-  in analysis.py)
 - :ghfile:`numba/core/controlflow.py` - Control flow analysis of Numba IR and
   Python bytecode
 - :ghfile:`numba/core/typeinfer.py` - Type inference algorithm
@@ -193,9 +188,7 @@ with CPython APIs.
 - :ghfile:`numba/_helperlib.c` - C functions required by Numba compiled code
   at runtime.  Linked into ahead-of-time compiled modules
 - :ghfile:`numba/_helpermod.c` - Python extension module with pointers to
-  functions from ``_helperlib.c`` and ``_npymath_exports.c``
-- :ghfile:`numba/_npymath_exports.c` - Export function pointer table to
-  NumPy C math functions
+  functions from ``_helperlib.c``
 - :ghfile:`numba/_dynfuncmod.c` - Python extension module exporting
   _dynfunc.c functionality
 - :ghfile:`numba/_dynfunc.c` - C level Environment and Closure objects (keep
@@ -204,7 +197,7 @@ with CPython APIs.
 - :ghfile:`numba/_pymodule.h` - C macros for Python 2/3 portable naming of C
   API functions
 - :ghfile:`numba/mviewbuf.c` - Handles Python memoryviews
-- :ghfile:`numba/_typeof.{h,c}` - C implementation of type fingerprinting,
+- :ghfile:`numba/_typeof.{h,cpp}` - C++ implementation of type fingerprinting,
   used by dispatcher
 - :ghfile:`numba/_numba_common.h` - Portable C macro for marking symbols
   that can be shared between object files, but not outside the
@@ -225,8 +218,6 @@ Misc Support
   patterns in LLVM IR
 - :ghfile:`numba/core/utils.py` - Python 2 backports of Python 3 functionality
   (also imports local copy of ``six``)
-- :ghfile:`numba/core/overload_glue.py` - Functions for wrapping split typing
-  and lowering API use cases into overloads.
 - :ghfile:`numba/misc/appdirs.py` - Vendored package for determining application
   config directories on every platform
 - :ghfile:`numba/core/compiler_lock.py` - Global compiler lock because Numba's
@@ -270,7 +261,7 @@ Misc Support
 Core Python Data Types
 ''''''''''''''''''''''
 
-- :ghfile:`numba/_hashtable.{h,c}` - Adaptation of the Python 3.7 hash table
+- :ghfile:`numba/_hashtable.{h,cpp}` - Adaptation of the Python 3.7 hash table
   implementation
 - :ghfile:`numba/cext/dictobject.{h,c}` - C level implementation of typed
   dictionary
@@ -350,8 +341,6 @@ that must be matched during type inference.
 - :ghfile:`numba/core/typing/listdecl.py` - Python lists
 - :ghfile:`numba/core/typing/builtins.py` - Python builtin global functions and
   operators
-- :ghfile:`numba/core/typing/randomdecl.py` - Python and NumPy ``random``
-  modules
 - :ghfile:`numba/core/typing/setdecl.py` - Python sets
 - :ghfile:`numba/core/typing/npydecl.py` - NumPy ndarray (and operators), NumPy
   functions
@@ -479,7 +468,6 @@ CPU unit tests (GPU target unit tests listed in later sections
 
 - :ghfile:`runtests.py` - Convenience script that launches test runner and
   turns on full compiler tracebacks
-- :ghfile:`run_coverage.py` - Runs test suite with coverage tracking enabled
 - :ghfile:`.coveragerc` - Coverage.py configuration
 - :ghfile:`numba/runtests.py` - Entry point to unittest runner
 - :ghfile:`numba/testing/_runtests.py` - Implementation of custom test runner
@@ -514,8 +502,6 @@ Command Line Utilities
   standalone Python extension modules
 - :ghfile:`numba/pycc/llvm_types.py` - Aliases to LLVM data types used by
   ``compiler.py``
-- :ghfile:`numba/pycc/pycc` - Stub to call main function.  Is this still
-  used?
 - :ghfile:`numba/pycc/modulemixin.c` - C file compiled into every compiled
   extension.  Pulls in C source from Numba core that is needed to make
   extension standalone
@@ -543,9 +529,9 @@ Note that the CUDA target does reuse some parts of the CPU target.
 - :ghfile:`numba/cuda/compiler.py` - Compiler pipeline for CUDA target
 - :ghfile:`numba/cuda/intrinsic_wrapper.py` - CUDA device intrinsics
   (shuffle, ballot, etc)
-- :ghfile:`numba/cuda/initialize.py` - Defered initialization of the CUDA
+- :ghfile:`numba/cuda/initialize.py` - Deferred initialization of the CUDA
   device and subsystem.  Called only when user imports ``numba.cuda``
-- :ghfile:`numba/cuda/simulator_init.py` - Initalizes the CUDA simulator
+- :ghfile:`numba/cuda/simulator_init.py` - Initializes the CUDA simulator
   subsystem (only when user requests it with env var)
 - :ghfile:`numba/cuda/random.py` - Implementation of random number generator
 - :ghfile:`numba/cuda/api.py` - User facing APIs imported into ``numba.cuda.*``

@@ -17,7 +17,7 @@ NumPy support in Numba comes in many forms:
 * Numba understands calls to NumPy `ufuncs`_ and is able to generate
   equivalent native code for many of them.
 
-* NumPy arrays are directly supported in Numba.  Access to Numpy arrays
+* NumPy arrays are directly supported in Numba.  Access to NumPy arrays
   is very efficient, as indexing is lowered to direct memory accesses
   when possible.
 
@@ -30,14 +30,14 @@ NumPy support in Numba comes in many forms:
 .. _ufuncs: http://docs.scipy.org/doc/numpy/reference/ufuncs.html
 .. _gufuncs: http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
 
-The following sections focus on the Numpy features supported in
+The following sections focus on the NumPy features supported in
 :term:`nopython mode`, unless otherwise stated.
 
 
 Scalar types
 ============
 
-Numba supports the following Numpy scalar types:
+Numba supports the following NumPy scalar types:
 
 * **Integers**: all integers of either signedness, and any width up to 64 bits
 * **Booleans**
@@ -146,27 +146,34 @@ Without subtyping the last line would fail. With subtyping, no new compilation w
 compiled function for ``record1`` will be used for ``record2``.
 
 .. seealso::
-   `Numpy scalars <http://docs.scipy.org/doc/numpy/reference/arrays.scalars.html>`_
+   `NumPy scalars <http://docs.scipy.org/doc/numpy/reference/arrays.scalars.html>`_
    reference.
 
 
 Array types
 ===========
 
-`Numpy arrays <http://docs.scipy.org/doc/numpy/reference/arrays.ndarray.html>`_
+`NumPy arrays <http://docs.scipy.org/doc/numpy/reference/arrays.ndarray.html>`_
 of any of the scalar types above are supported, regardless of the shape
 or layout.
+
+.. note::
+   `NumPy MaskedArrays <https://numpy.org/doc/stable/reference/maskedarray.html>`_
+   are not supported.
+
 
 Array access
 ------------
 
 Arrays support normal iteration.  Full basic indexing and slicing is
-supported.  A subset of advanced indexing is also supported: only one
-advanced index is allowed, and it has to be a one-dimensional array
-(it can be combined with an arbitrary number of basic indices as well).
+supported along with passing ``None`` / ``np.newaxis`` as indices for
+additional resulting dimensions. A subset of advanced indexing is also
+supported: only one advanced index is allowed, and it has to be a
+one-dimensional array (it can be combined with an arbitrary number
+of basic indices as well).
 
 .. seealso::
-   `Numpy indexing <http://docs.scipy.org/doc/numpy/reference/arrays.indexing.html>`_
+   `NumPy indexing <http://docs.scipy.org/doc/numpy/reference/arrays.indexing.html>`_
    reference.
 
 
@@ -224,12 +231,13 @@ version raises an error because of the unsupported use of attribute access.
 Attributes
 ----------
 
-The following attributes of Numpy arrays are supported:
+The following attributes of NumPy arrays are supported:
 
 * :attr:`~numpy.ndarray.dtype`
 * :attr:`~numpy.ndarray.flags`
 * :attr:`~numpy.ndarray.flat`
 * :attr:`~numpy.ndarray.itemsize`
+* :attr:`~numpy.ndarray.nbytes`
 * :attr:`~numpy.ndarray.ndim`
 * :attr:`~numpy.ndarray.shape`
 * :attr:`~numpy.ndarray.size`
@@ -254,22 +262,22 @@ non-C-contiguous arrays.
 The ``real`` and ``imag`` attributes
 ''''''''''''''''''''''''''''''''''''
 
-Numpy supports these attributes regardless of the dtype but Numba chooses to
+NumPy supports these attributes regardless of the dtype but Numba chooses to
 limit their support to avoid potential user error.  For numeric dtypes,
-Numba follows Numpy's behavior.  The :attr:`~numpy.ndarray.real` attribute
+Numba follows NumPy's behavior.  The :attr:`~numpy.ndarray.real` attribute
 returns a view of the real part of the complex array and it behaves as an identity
 function for other numeric dtypes.  The :attr:`~numpy.ndarray.imag` attribute
 returns a view of the imaginary part of the complex array and it returns a zero
 array with the same shape and dtype for other numeric dtypes.  For non-numeric
 dtypes, including all structured/record dtypes, using these attributes will
 result in a compile-time (`TypingError`) error.  This behavior differs from
-Numpy's but it is chosen to avoid the potential confusion with field names that
+NumPy's but it is chosen to avoid the potential confusion with field names that
 overlap these attributes.
 
 Calculation
 -----------
 
-The following methods of Numpy arrays are supported in their basic form
+The following methods of NumPy arrays are supported in their basic form
 (without any optional arguments):
 
 * :meth:`~numpy.ndarray.all`
@@ -288,13 +296,13 @@ The following methods of Numpy arrays are supported in their basic form
 * :meth:`~numpy.ndarray.take`
 * :meth:`~numpy.ndarray.var`
 
-The corresponding top-level Numpy functions (such as :func:`numpy.prod`)
+The corresponding top-level NumPy functions (such as :func:`numpy.prod`)
 are similarly supported.
 
 Other methods
 -------------
 
-The following methods of Numpy arrays are supported:
+The following methods of NumPy arrays are supported:
 
 * :meth:`~numpy.ndarray.argmax` (``axis`` keyword argument supported).
 * :meth:`~numpy.ndarray.argmin` (``axis`` keyword argument supported).
@@ -334,13 +342,13 @@ The following methods of Numpy arrays are supported:
 
 * :meth:`~numpy.ndarray.transpose`
 * :meth:`~numpy.ndarray.view` (only the 1-argument form)
-* :meth:`~numpy.ndarray.__contains__` 
+* :meth:`~numpy.ndarray.__contains__`
 
 Where applicable, the corresponding top-level NumPy functions (such as
 :func:`numpy.argmax`) are similarly supported.
 
 .. warning::
-   Sorting may be slightly slower than Numpy's implementation.
+   Sorting may be slightly slower than NumPy's implementation.
 
 
 Functions
@@ -391,6 +399,8 @@ Reductions
 The following reduction functions are supported:
 
 * :func:`numpy.diff` (only the 2 first arguments)
+* :func:`numpy.amin` (only the first argument, also aliased as np.min)
+* :func:`numpy.amax` (only the first argument, also aliased as np.max)
 * :func:`numpy.median` (only the first argument)
 * :func:`numpy.nancumprod` (only the first argument)
 * :func:`numpy.nancumsum` (only the first argument)
@@ -416,17 +426,20 @@ Other functions
 
 The following top-level functions are supported:
 
+* :func:`numpy.allclose`
 * :func:`numpy.append`
 * :func:`numpy.arange`
 * :func:`numpy.argsort` (``kind`` key word argument supported for values
   ``'quicksort'`` and ``'mergesort'``)
 * :func:`numpy.argwhere`
+* :func:`numpy.around`
 * :func:`numpy.array` (only the 2 first arguments)
 * :func:`numpy.array_equal`
 * :func:`numpy.array_split`
 * :func:`numpy.asarray` (only the 2 first arguments)
 * :func:`numpy.asarray_chkfinite` (only the 2 first arguments)
-* :func:`numpy.asfarray` 
+* :func:`numpy.ascontiguousarray` (only the first argument)
+* :func:`numpy.asfarray`
 * :func:`numpy.asfortranarray` (only the first argument)
 * :func:`numpy.atleast_1d`
 * :func:`numpy.atleast_2d`
@@ -434,8 +447,11 @@ The following top-level functions are supported:
 * :func:`numpy.bartlett`
 * :func:`numpy.bincount`
 * :func:`numpy.blackman`
+* :func:`numpy.broadcast_to` (only the 2 first arguments)
+* :func:`numpy.broadcast_arrays` (only the first argument)
+* :func:`numpy.broadcast_shapes`
 * :func:`numpy.column_stack`
-* :func:`numpy.concatenate`
+* :func:`numpy.concatenate` (only supports tuple arguments)
 * :func:`numpy.convolve` (only the 2 first arguments)
 * :func:`numpy.copy` (only the first argument)
 * :func:`numpy.corrcoef` (only the 3 first arguments, requires SciPy)
@@ -473,6 +489,7 @@ The following top-level functions are supported:
 * :func:`numpy.histogram` (only the 3 first arguments)
 * :func:`numpy.hstack`
 * :func:`numpy.identity`
+* :func:`numpy.isclose`
 * :func:`numpy.kaiser`
 * :func:`numpy.iscomplex`
 * :func:`numpy.iscomplexobj`
@@ -484,6 +501,8 @@ The following top-level functions are supported:
 * :func:`numpy.interp` (only the 3 first arguments)
 * :func:`numpy.intersect1d` (only first 2 arguments, ar1 and ar2)
 * :func:`numpy.linspace` (only the 3-argument form)
+* :func:`numpy.logspace` (only the 3 first arguments)
+* :func:`numpy.nan_to_num` (only the 3 first arguments)
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
 * :class:`numpy.nditer` (only the first argument)
@@ -502,14 +521,16 @@ The following top-level functions are supported:
 * :func:`numpy.searchsorted` (only the 3 first arguments)
 * :func:`numpy.select` (only using homogeneous lists or tuples for the first
   two arguments, condlist and choicelist). Additionally, these two arguments
-  can only contain arrays (unlike Numpy that also accepts tuples).
+  can only contain arrays (unlike NumPy that also accepts tuples).
 * :func:`numpy.shape`
 * :func:`numpy.sinc`
-* :func:`numpy.sort` (no optional arguments)
+* :func:`numpy.sort` (no optional arguments, quicksort accepts
+  multi-dimensional array and sorts its last axis).
 * :func:`numpy.split`
-* :func:`numpy.stack`
+* :func:`numpy.stack` (only the first two arguments are supported)
 * :func:`numpy.swapaxes`
 * :func:`numpy.take` (only the 2 first arguments)
+* :func:`numpy.take_along_axis` (the axis argument must be a literal value)
 * :func:`numpy.transpose`
 * :func:`numpy.trapz` (only the 3 first arguments)
 * :func:`numpy.tri` (only the 3 first arguments; third argument ``k`` must be an integer)
@@ -575,6 +596,94 @@ Modules
 
 ``random``
 ----------
+
+Generator Objects
+'''''''''''''''''
+Numba supports :py:class:`numpy.random.Generator()` objects. As of version 0.56, users can pass
+individual NumPy :py:class:`Generator` objects into Numba functions and use their
+methods inside the functions. The same algorithms are used as NumPy for
+random number generation hence maintaining parity between the random
+number generated using NumPy and Numba under identical arguments 
+(also the same documentation notes as NumPy :py:class:`Generator` methods apply).
+The current Numba support for :py:class:`Generator` is not thread-safe, hence we
+do not recommend using :py:class:`Generator` methods in methods with parallel
+execution logic.
+
+.. note::
+  NumPy's :py:class:`Generator` objects rely on :py:class:`BitGenerator` to manage state
+  and generate the random bits, which are then transformed into random
+  values from useful distributions. Numba will ``unbox`` the :py:class:`Generator` objects
+  and will maintain a reference to the underlying :py:class:`BitGenerator` objects using NumPy's
+  ``ctypes`` interface bindings. Hence :py:class:`Generator` objects can cross the JIT boundary
+  and their functions be used within Numba-Jit code. Note that since only references
+  to :py:class:`BitGenerator` objects are maintained, any change to the state of a particular
+  :py:class:`Generator` object outside Numba code would affect the state of :py:class:`Generator`
+  inside the Numba code.
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_numpy_generators.py
+   :language: python
+   :start-after: magictoken.npgen_usage.begin
+   :end-before: magictoken.npgen_usage.end
+   :dedent: 8
+
+The following :py:class:`Generator` methods are supported:
+
+* :func:`numpy.random.Generator().beta()`
+* :func:`numpy.random.Generator().chisquare()`
+* :func:`numpy.random.Generator().exponential()`
+* :func:`numpy.random.Generator().f()`
+* :func:`numpy.random.Generator().gamma()`
+* :func:`numpy.random.Generator().geometric()`
+* :func:`numpy.random.Generator().integers()` (Both `low` and `high` are required
+  arguments. Array values for low and high are currently not supported.)
+* :func:`numpy.random.Generator().laplace()`
+* :func:`numpy.random.Generator().logistic()`
+* :func:`numpy.random.Generator().lognormal()`
+* :func:`numpy.random.Generator().logseries()` (Accepts float values as well as
+  data types that cast to floats. Array values for ``p`` are currently not
+  supported.)
+* :func:`numpy.random.Generator().negative_binomial()`
+* :func:`numpy.random.Generator().noncentral_chisquare()` (Accepts float values
+  as well as data types that cast to floats. Array values for ``dfnum`` and
+  ``nonc`` are currently not supported.)
+* :func:`numpy.random.Generator().noncentral_f()` (Accepts float values as well
+  as data types that cast to floats. Array values for ``dfnum``, ``dfden`` and
+  ``nonc`` are currently not supported.)
+* :func:`numpy.random.Generator().normal()`
+* :func:`numpy.random.Generator().pareto()`
+* :func:`numpy.random.Generator().permutation()` (Only accepts NumPy ndarrays and integers.)
+* :func:`numpy.random.Generator().poisson()`
+* :func:`numpy.random.Generator().power()`
+* :func:`numpy.random.Generator().random()`
+* :func:`numpy.random.Generator().rayleigh()`
+* :func:`numpy.random.Generator().shuffle()` (Only accepts NumPy ndarrays.)
+* :func:`numpy.random.Generator().standard_cauchy()`
+* :func:`numpy.random.Generator().standard_exponential()`
+* :func:`numpy.random.Generator().standard_gamma()`
+* :func:`numpy.random.Generator().standard_normal()`
+* :func:`numpy.random.Generator().standard_t()`
+* :func:`numpy.random.Generator().triangular()`
+* :func:`numpy.random.Generator().uniform()`
+* :func:`numpy.random.Generator().wald()`
+* :func:`numpy.random.Generator().weibull()`
+* :func:`numpy.random.Generator().zipf()`
+
+.. note::
+  Due to instruction selection differences across compilers, there
+  may be discrepancies, when compared to NumPy, in the order of 1000s
+  of ULPs on 32-bit architectures as well as linux-aarch64 and linux-
+  ppc64le platforms. For Linux-x86_64, Windows-x86_64 and macOS these
+  discrepancies are less pronounced (order of 10s of ULPs) but are not
+  guaranteed to follow the exception pattern and may increase in some
+  cases.
+
+  The differences are unlikely to impact the "quality" of the random
+  number generation as they occur through changes in rounding that
+  happen when fused-multiply-add is used instead of multiplication
+  followed by addition.
+
+RandomState and legacy Random number generation
+'''''''''''''''''''''''''''''''''''''''''''''''
 
 Numba supports top-level functions from the
 `numpy.random <http://docs.scipy.org/doc/numpy/reference/routines.random.html>`_
@@ -645,13 +754,13 @@ Permutations
   array) is not supported
 * :func:`numpy.random.permutation`
 * :func:`numpy.random.shuffle`: the sequence argument must be a one-dimension
-  Numpy array or buffer-providing object (such as a :class:`bytearray`
+  NumPy array or buffer-providing object (such as a :class:`bytearray`
   or :class:`array.array`)
 
 Distributions
 '''''''''''''
 
-.. warning:: The `size` argument is not supported in the following functions.
+The following functions support all arguments.
 
 * :func:`numpy.random.beta`
 * :func:`numpy.random.binomial`
@@ -669,6 +778,7 @@ Distributions
 * :func:`numpy.random.logseries`
 * :func:`numpy.random.multinomial`
 * :func:`numpy.random.negative_binomial`
+* :func:`numpy.random.noncentral_chisquare`
 * :func:`numpy.random.normal`
 * :func:`numpy.random.pareto`
 * :func:`numpy.random.poisson`
@@ -688,7 +798,7 @@ Distributions
 
 .. note::
    Calling :func:`numpy.random.seed` from non-Numba code (or from
-   :term:`object mode` code) will seed the Numpy random generator, not the
+   :term:`object mode` code) will seed the NumPy random generator, not the
    Numba random generator.
 
 .. note::

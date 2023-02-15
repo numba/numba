@@ -206,14 +206,14 @@ class TestZeroCounts(TestCase):
             with self.assertRaises(TypingError) as e:
                 cfunc(typ(2))
             self.assertIn(
-                "{} is only defined for integers, but passed value was '{}'."
+                "{} is only defined for integers, but value passed was '{}'."
                 .format(func_name, typ),
                 str(e.exception),
             )
 
         # Testing w/ too many/few arguments
         def check(args, string):
-            with self.assertRaises(TypingError) as e:
+            with self.assertRaises((TypingError, TypeError)) as e:
                 cfunc(*args)
             self.assertIn(
                 "{}() ".format(func_name),

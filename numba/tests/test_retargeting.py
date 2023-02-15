@@ -1,10 +1,11 @@
 import unittest
 from contextlib import contextmanager
+from functools import cached_property
 
 from numba import njit
-from numba.core import errors, cpu, utils, typing
+from numba.core import errors, cpu, typing
 from numba.core.descriptors import TargetDescriptor
-from numba.core.dispatcher import TargetConfig
+from numba.core.dispatcher import TargetConfigurationStack
 from numba.core.retarget import BasicRetarget
 from numba.core.extending import overload
 from numba.core.target_extension import (
@@ -48,12 +49,12 @@ class CustomTargetDescr(TargetDescriptor):
     options = cpu.CPUTargetOptions
     _nested = _NestedContext()
 
-    @utils.cached_property
+    @cached_property
     def _toplevel_target_context(self):
         # Lazily-initialized top-level target context, for all threads
         return cpu.CPUContext(self.typing_context, self._target_name)
 
-    @utils.cached_property
+    @cached_property
     def _toplevel_typing_context(self):
         # Lazily-initialized top-level typing context, for all threads
         return typing.Context()
@@ -154,7 +155,7 @@ class TestRetargeting(unittest.TestCase):
         self.retarget = CustomCPURetarget()
 
     def switch_target(self):
-        return TargetConfig.switch_target(self.retarget)
+        return TargetConfigurationStack.switch_target(self.retarget)
 
     @contextmanager
     def check_retarget_error(self):

@@ -26,12 +26,11 @@ MOD_INIT(_num_threads)
 {
     PyObject *m;
     MOD_DEF(m, "_num_threads", "No docs", NULL)
-        if (m == NULL)
-            return MOD_ERROR_VAL;
-    PyObject_SetAttrString(m, "set_num_threads",
-                           PyLong_FromVoidPtr((void*)&set_num_threads));
-    PyObject_SetAttrString(m, "get_num_threads",
-                           PyLong_FromVoidPtr((void*)&get_num_threads));
+    if (m == NULL)
+        return MOD_ERROR_VAL;
+
+    SetAttrStringFromVoidPointer(m, set_num_threads);
+    SetAttrStringFromVoidPointer(m, get_num_threads);
 
     return MOD_SUCCESS_VAL(m);
 }
