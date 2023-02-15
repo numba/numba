@@ -2721,11 +2721,13 @@ class CtypesLinker(Linker):
             raise LinkerError(msg)
 
     def add_cu(self, path, name):
-        raise NotImplementedError("Support for fp16 or linking CUDA source "
-                                  "files requires the use of the Nvidia CUDA "
-                                  "bindings and enabling the "
-                                  "NUMBA_CUDA_USE_NVIDIA_BINDING environment "
-                                  "variable. See documentation for me details.")
+        msg = ("Support for float16 or linking CUDA source "
+               "files requires the use of the NVIDIA CUDA "
+               "bindings and seting the "
+               "NUMBA_CUDA_USE_NVIDIA_BINDING environment variable to 1. "
+               "Relevant documentation is available here:\n"
+               "https://numba.readthedocs.io/en/stable/cuda/bindings.html")
+        raise NotImplementedError(msg)
 
     def complete(self):
         cubin = c_void_p(0)
