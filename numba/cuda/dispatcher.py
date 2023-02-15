@@ -108,7 +108,7 @@ class _Kernel(serialize.ReduceMixin):
             link.append(get_cudalib('cudadevrt', static=True))
 
         helper_found = [fn for fn in helper_functions
-                        if(f'{fn}' in lib.get_asm_str())]
+                        if (f'{fn}' in lib.get_asm_str())]
 
         if helper_found:
             # Path to the source containing the foreign function
