@@ -1010,7 +1010,7 @@ def list_pop(context, builder, sig, args):
     inst.guard_index(idx, "pop index out of range")
 
     res = inst.getitem(idx)
-
+    inst.incref_value(res)
     one = ir.Constant(n.type, 1)
     n = builder.sub(n, ir.Constant(n.type, 1))
     inst.move(idx, builder.add(idx, one), builder.sub(n, idx))

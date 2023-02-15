@@ -463,6 +463,19 @@ class TestLists(MemoryLeakMixin, TestCase):
             cfunc(1, 5)
         self.assertEqual(str(cm.exception), "pop index out of range")
 
+    def test_pop_refcounted(self):
+        # See issue #8753.
+
+        @njit
+        def foo():
+            lst = [[1,]]
+            x = [10,]
+            lst.pop(0)
+            lst.append(x)
+            return lst[0]
+
+        self.assertPreciseEqual(foo(), foo.py_func())
+
     def test_insert(self):
         pyfunc = list_insert
         cfunc = jit(nopython=True)(pyfunc)
