@@ -494,7 +494,8 @@ class CPUCallConv(BaseCallConv):
         # to-do: fix!
         # failed = cgutils.is_null(builder, py_tuple)
         # with cgutils.if_unlikely(builder, failed):
-        #     msg = 'Error creating Python tuple from runtime exception arguments'
+        #     msg = ('Error creating Python tuple from runtime exception '
+        #            'arguments')
         #     pyapi.err_set_string("PyExc_RuntimeError", msg)
         #     builder.ret(pyapi.get_null_object())
 
