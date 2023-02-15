@@ -29,7 +29,7 @@ jobs:
           stale-pr-message: >
             This pull request is marked as stale as it has had no activity in
             the past 3 months. Please respond to this comment if you're still
-            interested in working on this.
+            interested in working on this. Many thanks!
           days-before-pr-stale: 90  # 3 months
           days-before-pr-close: 7
           any-of-pr-labels: '2 - In progress,4 - Waiting on author'
