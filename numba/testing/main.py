@@ -770,28 +770,24 @@ class ParallelTestRunner(runner.TextTestRunner):
 
         # Split the tests and recycle the worker process to tame memory usage.
         chunk_size = 100
-        splitted_tests = [self._ptests[i:i + chunk_size]
-                          for i in range(0, len(self._ptests), chunk_size)]
 
-        for tests in splitted_tests:
-            pool = multiprocessing.Pool(self.nprocs)
-            try:
-                self._run_parallel_tests(result, pool, child_runner, tests)
-            except:
-                # On exception, kill still active workers immediately
+        pool = multiprocessing.Pool(self.nprocs, maxtasksperchild=chunk_size)
+        try:
+            self._run_parallel_tests(result, pool, child_runner, self._ptests)
+        except:
+            # On exception, kill still active workers immediately
+            pool.terminate()
+            # Make sure exception is reported and not ignored
+            raise
+        else:
+            # Close the pool cleanly unless asked to early out
+            if result.shouldStop:
                 pool.terminate()
-                # Make sure exception is reported and not ignored
-                raise
             else:
-                # Close the pool cleanly unless asked to early out
-                if result.shouldStop:
-                    pool.terminate()
-                    break
-                else:
-                    pool.close()
-            finally:
-                # Always join the pool (this is necessary for coverage.py)
-                pool.join()
+                pool.close()
+        finally:
+            # Always join the pool (this is necessary for coverage.py)
+            pool.join()
         if not result.shouldStop:
             stests = SerialSuite(self._stests)
             stests.run(result)
