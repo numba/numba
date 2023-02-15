@@ -231,7 +231,7 @@ class TestDebugInfoEmission(TestCase):
                 if not started:
                     started = True
             elif op_expect and started:
-                self.assertTrue(False, "Math opcodes are not contiguous")
+                self.fail("Math opcodes are not contiguous")
         self.assertFalse(op_expect, "Math opcodes were not found")
 
         # Parse out metadata from end of each line, check it monotonically
