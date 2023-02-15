@@ -7,7 +7,7 @@ from numba.cuda import compile_ptx
 from numba.core.errors import TypingError
 from numba.core.types import f2
 from numba.cuda.testing import (unittest, CUDATestCase, skip_on_cudasim,
-                                skip_unless_cc_53)
+                                skip_unless_cc_53, skip_unless_cuda_python)
 
 
 def simple_threadidx(ary):
@@ -104,6 +104,18 @@ def simple_hmul_scalar(ary, a, b):
     ary[0] = cuda.fp16.hmul(a, b)
 
 
+def simple_hdiv_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hdiv(a, b)
+
+
+def simple_hdiv_kernel(ary, array_a, array_b):
+    i = cuda.grid(1)
+    if i < ary.size:
+        a = array_a[i]
+        b = array_b[i]
+        ary[i] = cuda.fp16.hdiv(a, b)
+
+
 def simple_hneg(ary, a):
     ary[0] = cuda.fp16.hneg(a[0])
 
@@ -187,6 +199,109 @@ def simple_hmin_scalar(ary, a, b):
     ary[0] = cuda.fp16.hmin(a, b)
 
 
+def simple_hsin(r, x):
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.hsin(x[i])
+
+
+def simple_hcos(r, x):
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.hcos(x[i])
+
+
+def simple_hlog(r, x):
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.hlog(x[i])
+
+
+def simple_hlog2(r, x):
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.hlog2(x[i])
+
+
+def simple_hlog10(r, x):
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.hlog10(x[i])
+
+
+def simple_hexp(r, x):
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.hexp(x[i])
+
+
+def simple_hexp2(r, x):
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.hexp2(x[i])
+
+
+def simple_hsqrt(r, x):
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.hsqrt(x[i])
+
+
+def simple_hrsqrt(r, x):
+
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.hrsqrt(x[i])
+
+
+def numpy_hrsqrt(x, dtype):
+    return x ** -0.5
+
+
+def simple_hceil(r, x):
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.hceil(x[i])
+
+
+def simple_hfloor(r, x):
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.hfloor(x[i])
+
+
+def simple_hrcp(r, x):
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.hrcp(x[i])
+
+
+def simple_htrunc(r, x):
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.htrunc(x[i])
+
+
+def simple_hrint(r, x):
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.hrint(x[i])
+
+
 def simple_cbrt(ary, a):
     ary[0] = cuda.cbrt(a)
 
@@ -248,6 +363,10 @@ def nonliteral_gridsize(x):
 
 
 class TestCudaIntrinsic(CUDATestCase):
+    def setUp(self):
+        super().setUp()
+        np.random.seed(0)
+
     def test_simple_threadidx(self):
         compiled = cuda.jit("void(int32[:])")(simple_threadidx)
         ary = np.ones(1, dtype=np.int32)
@@ -533,6 +652,29 @@ class TestCudaIntrinsic(CUDATestCase):
         self.assertIn('mul.f16', ptx)
 
     @skip_unless_cc_53
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
+    def test_hdiv_scalar(self):
+        compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hdiv_scalar)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.float16(3.1415926)
+        arg2 = np.float16(1.57)
+        compiled[1, 1](ary, arg1, arg2)
+        ref = arg1 / arg2
+        np.testing.assert_allclose(ary[0], ref)
+
+    @skip_unless_cc_53
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
+    def test_hdiv(self):
+        compiled = cuda.jit("void(f2[:], f2[:], f2[:])")(simple_hdiv_kernel)
+        arry1 = np.random.randint(-65504, 65505, size=500).astype(np.float16)
+        arry2 = np.random.randint(-65504, 65505, size=500).astype(np.float16)
+        ary = np.zeros_like(arry1, dtype=np.float16)
+
+        compiled.forall(ary.size)(ary, arry1, arry2)
+        ref = arry1 / arry2
+        np.testing.assert_allclose(ary, ref)
+
+    @skip_unless_cc_53
     def test_hneg(self):
         compiled = cuda.jit("void(f2[:], f2[:])")(simple_hneg)
         ary = np.zeros(1, dtype=np.float16)
@@ -577,6 +719,62 @@ class TestCudaIntrinsic(CUDATestCase):
         args = (f2[:], f2)
         ptx, _ = compile_ptx(simple_habs_scalar, args, cc=(5, 3))
         self.assertIn('abs.f16', ptx)
+
+    @skip_unless_cc_53
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
+    def test_fp16_intrinsics_common(self):
+        kernels = (simple_hsin, simple_hcos,
+                   simple_hlog, simple_hlog2, simple_hlog10,
+                   simple_hsqrt, simple_hceil, simple_hfloor,
+                   simple_hrcp, simple_htrunc, simple_hrint,
+                   simple_hrsqrt)
+        exp_kernels = (simple_hexp, simple_hexp2)
+        expected_functions = (np.sin, np.cos,
+                              np.log, np.log2, np.log10,
+                              np.sqrt, np.ceil, np.floor,
+                              np.reciprocal, np.trunc, np.rint,
+                              numpy_hrsqrt)
+        expected_exp_functions = (np.exp, np.exp2)
+
+        # Generate random data
+        N = 32
+        np.random.seed(1)
+        x = np.random.randint(1, 65505, size=N).astype(np.float16)
+        r = np.zeros_like(x)
+        for kernel, fn in zip(kernels, expected_functions):
+            with self.subTest(fn=fn):
+                kernel = cuda.jit("void(f2[:], f2[:])")(kernel)
+                kernel[1,N](r, x)
+                expected = fn(x, dtype=np.float16)
+                np.testing.assert_allclose(r, expected)
+
+        x2 = np.random.randint(1, 10, size=N).astype(np.float16)
+        for kernel, fn in zip(exp_kernels, expected_exp_functions):
+            with self.subTest(fn=fn):
+                kernel = cuda.jit("void(f2[:], f2[:])")(kernel)
+                kernel[1,N](r, x2)
+                expected = fn(x2, dtype=np.float16)
+                np.testing.assert_allclose(r, expected)
+
+    @skip_unless_cc_53
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
+    def test_hexp10(self):
+        @cuda.jit()
+        def hexp10_vectors(r, x):
+            i = cuda.grid(1)
+
+            if i < len(r):
+                r[i] = cuda.fp16.hexp10(x[i])
+
+        # Generate random data
+        N = 32
+        np.random.seed(1)
+        x = np.random.rand(N).astype(np.float16)
+        r = np.zeros_like(x)
+
+        # Run the kernel
+        hexp10_vectors[1, N](r, x)
+        np.testing.assert_allclose(r, 10 ** x)
 
     @skip_unless_cc_53
     def test_fp16_comparison(self):

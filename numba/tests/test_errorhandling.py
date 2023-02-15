@@ -278,7 +278,7 @@ class TestErrorMessages(unittest.TestCase):
 
         self.assertIn("Overload of function 'add'", excstr)
         # there'll be numerous matched templates that don't work but as they
-        # are mostly "overload_glue"s they'll just appear as "No match".
+        # are mostly "overload"s they'll just appear as "No match".
         self.assertIn("No match.", excstr)
 
     def test_abstract_template_source(self):
@@ -297,7 +297,7 @@ class TestErrorMessages(unittest.TestCase):
         # hits CallableTemplate
         @njit
         def foo():
-            return np.angle(1)
+            return np.angle(None)
 
         with self.assertRaises(errors.TypingError) as raises:
             foo()
@@ -453,14 +453,14 @@ class TestDeveloperSpecificErrorMessages(SerialMixin, unittest.TestCase):
     def test_bound_function_error_string(self):
         # See PR #5952
         def foo(x):
-            x.max(-1) # axis not supported
+            x.max(-1)
 
         with override_config('DEVELOPER_MODE', 1):
             with self.assertRaises(errors.TypingError) as raises:
                 njit("void(int64[:,:])")(foo)
 
         excstr = str(raises.exception)
-        self.assertIn("args not supported", excstr)
+        self.assertIn("too many positional arguments", excstr)
 
 
 class TestCapturedErrorHandling(SerialMixin, unittest.TestCase):

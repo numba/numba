@@ -33,11 +33,25 @@ from numba.core.ir_utils import (
     get_global_func_typ,
 )
 from numba.core.typing import signature
+from numba.core import lowering
 from numba.parfors.parfor import ensure_parallel_support
 from numba.core.errors import (
     NumbaParallelSafetyWarning, NotDefinedError, CompilerError, InternalError,
 )
 from numba.parfors.parfor_lowering_utils import ParforLoweringBuilder
+
+
+class ParforLower(lowering.Lower):
+    """This is a custom lowering class that extends standard lowering so as
+    to accommodate parfor.Parfor nodes."""
+
+    # custom instruction lowering to handle parfor nodes
+    def lower_inst(self, inst):
+        if isinstance(inst, parfor.Parfor):
+            _lower_parfor_parallel(self, inst)
+        else:
+            super().lower_inst(inst)
+
 
 def _lower_parfor_parallel(lowerer, parfor):
     """Lowerer that handles LLVM code generation for parfor.
@@ -1807,8 +1821,14 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         else:
             if i < num_inps:
                 # Scalar input, need to store the value in an array of size 1
-                typ = (context.get_data_type(aty)
-                       if not isinstance(aty, types.Boolean)
+                if isinstance(aty, types.Optional):
+                    # Unpack optional type
+                    unpacked_aty = aty.type
+                    arg = context.cast(builder, arg, aty, unpacked_aty)
+                else:
+                    unpacked_aty = aty
+                typ = (context.get_data_type(unpacked_aty)
+                       if not isinstance(unpacked_aty, types.Boolean)
                        else llvmlite.ir.IntType(1))
                 ptr = cgutils.alloca_once(builder, typ)
                 builder.store(arg, ptr)
