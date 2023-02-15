@@ -1554,7 +1554,7 @@ class TestNestedArrays(TestCase):
         nbarr2 = np.recarray(1, dtype=recordwith2darray)
         args = (nbarr1, nbarr2)
         pyfunc = record_setitem_array
-        errmsg = "unsupported array index type"
+        errmsg = "Unsupported array index type"
         with self.assertRaisesRegex(TypingError, errmsg):
             self.get_cfunc(pyfunc, tuple((typeof(arg) for arg in args)))
 

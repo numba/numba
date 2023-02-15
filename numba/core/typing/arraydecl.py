@@ -34,49 +34,86 @@ def get_array_index_type(ary, idx):
     right_indices = []
     ellipsis_met = False
     advanced = False
-    has_integer = False
     num_newaxis = 0
 
     if not isinstance(idx, types.BaseTuple):
         idx = [idx]
 
+    # A subspace is a contigous group of advanced indices.
+    # num_subspaces keeps track of the number of such
+    # contigous groups.
+    in_subspace = False
+    num_subspaces = 0
+    array_indices = 0
+
     # Walk indices
     for ty in idx:
         if ty is types.ellipsis:
             if ellipsis_met:
-                raise NumbaTypeError("only one ellipsis allowed in array index "
-                                     "(got %s)" % (idx,))
+                raise NumbaTypeError(
+                    "Only one ellipsis allowed in array indices "
+                    "(got %s)" % (idx,))
             ellipsis_met = True
+            in_subspace = False
         elif isinstance(ty, types.SliceType):
-            pass
+            # If we encounter a non-advanced index while in a
+            # subspace then that subspace ends.
+            in_subspace = False
+        # In advanced indexing, any index broadcastable to an
+        # array is considered an advanced index. All the
+        # branches below are hence considered as advanced indices.
         elif isinstance(ty, types.Integer):
             # Normalize integer index
             ty = types.intp if ty.signed else types.uintp
             # Integer indexing removes the given dimension
             ndim -= 1
-            has_integer = True
+            # If we're within a subspace/contigous group of
+            # advanced indices then no action is necessary
+            # since we've already counted that subspace once.
+            if not in_subspace:
+                # If we're not within a subspace and we encounter
+                # this branch then we have a new subspace/group. 
+                num_subspaces += 1
+                in_subspace = True
         elif (isinstance(ty, types.Array) and ty.ndim == 0
               and isinstance(ty.dtype, types.Integer)):
             # 0-d array used as integer index
             ndim -= 1
-            has_integer = True
+            if not in_subspace:
+                num_subspaces += 1
+                in_subspace = True
         elif (isinstance(ty, types.Array)
-              and ty.ndim == 1
               and isinstance(ty.dtype, (types.Integer, types.Boolean))):
-            if advanced or has_integer:
-                # We don't support the complicated combination of
-                # advanced indices (and integers are considered part
-                # of them by Numpy).
-                msg = "only one advanced index supported"
-                raise NumbaNotImplementedError(msg)
+            if ty.ndim > 1:
+                # Advanced indexing limitation # 1
+                raise NumbaTypeError(
+                    "Multi-dimensional indices are not supported.")
+            array_indices += 1
+            # The condition for activating advanced indexing is simply
+            # having atleast one array with size > 1.
             advanced = True
+            if not in_subspace:
+                num_subspaces += 1
+                in_subspace = True
         elif (is_nonelike(ty)):
             ndim += 1
             num_newaxis += 1
         else:
-            raise NumbaTypeError("unsupported array index type %s in %s"
+            raise NumbaTypeError("Unsupported array index type %s in %s"
                                  % (ty, idx))
         (right_indices if ellipsis_met else left_indices).append(ty)
+
+    if advanced:
+        if array_indices > 1:
+            # Advanced indexing limitation # 2
+            msg = "Using more than one non-scalar array index is unsupported."
+            raise NumbaTypeError(msg)
+
+        if num_subspaces > 1:
+            # Advanced indexing limitation # 3
+            msg = ("Using more than one indexing subspace (consecutive group "
+                   "of integer or array indices) is unsupported.")
+            raise NumbaTypeError(msg)
 
     # Only Numpy arrays support advanced indexing
     if advanced and not isinstance(ary, types.Array):
