@@ -199,13 +199,6 @@ class _Kernel(serialize.ReduceMixin):
         self._codelibrary.get_cufunc()
 
     @property
-    def device(self):
-        """
-        Get current active context
-        """
-        return get_current_device()
-
-    @property
     def regs_per_thread(self):
         '''
         The number of registers used by each thread for this kernel.
@@ -980,10 +973,6 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
 
         for _, defn in self.overloads.items():
             defn.inspect_types(file=file)
-
-    def bind(self):
-        for defn in self.overloads.values():
-            defn.bind()
 
     @classmethod
     def _rebuild(cls, py_func, targetoptions):
