@@ -1,6 +1,8 @@
 
 call activate %CONDA_ENV%
 
+@rem Ensure that the documentation builds without warnings
+if "%BUILD_DOC%" == "yes" python setup.py build_doc
 @rem Run system info tool
 pushd bin
 numba -s

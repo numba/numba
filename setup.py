@@ -76,8 +76,7 @@ if platform.machine() == 'ppc64le':
 
 class NumbaBuildExt(build_ext):
     def run(self):
-        optimization_level = "/Od" if sys.platform == 'win32' else "-O0"
-        extra_compile_args = [optimization_level]
+        extra_compile_args = []
         if sys.platform.startswith("linux") and platform.machine() == "x86_64":
             extra_compile_args.extend(["-Werror", "-Wall"])
         
