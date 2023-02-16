@@ -1530,9 +1530,16 @@ def _create_gufunc_for_parfor_body(
 
     class ParforGufuncCompiler(compiler.CompilerBase):
         def define_pipelines(self):
-            pms = [compiler.DefaultPassBuilder.define_parfor_gufunc_pipeline(self.state),
-                   compiler.DefaultPassBuilder.define_nopython_lowering_pipeline(self.state)]
-            return pms
+            from numba.core.compiler_machinery import PassManager
+            dpb = compiler.DefaultPassBuilder
+            pm = PassManager("full_parfor_gufunc")
+            parfor_gufunc_passes = dpb.define_parfor_gufunc_pipeline(self.state)
+            pm.passes.extend(parfor_gufunc_passes.passes)
+            lowering_passes = dpb.define_nopython_lowering_pipeline(self.state)
+            pm.passes.extend(lowering_passes.passes)
+
+            pm.finalize()
+            return [pm]
 
     kernel_func = compiler.compile_ir(
         typingctx,
