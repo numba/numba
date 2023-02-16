@@ -3,19 +3,19 @@
 Incubator Projects
 ==================
 
-In addition to the primary `Numba repository <https://github.com/numba/numba>`_, there are other incubator projects that explore new compilation technologies. Since these projects are in explorative phase of their developement, their long-term support and stability are not guaranteed. 
+In addition to the primary `Numba repository <https://github.com/numba/numba>`_, there are other incubator projects that explore new compilation technologies. Since these projects are in the explorative phase of their development, their long-term support and stability are not guaranteed. 
 
 Some of these projects can be owned and maintained by folks from the community and therefore these projects may operate in a different workflow to that of other projects in the Numba organization. However these projects are expected to conform to the `Numba Code of Conduct <https://github.com/numba/numba-governance/blob/accepted/code-of-conduct.md>`_.
 
 
-Contrib package criteria
-------------------------
+Incubator project acceptance criteria
+-------------------------------------
 
 If you are working on a project which you think could be a great addition to the Numba incubator projects then please feel free to raise an issue at TBD requesting a transfer.
 
 For a project to be accepted as an Incubator Project it must meet the following criteria:
 
-- The project must aim to complement or enhance Numba compilation pipeline in some way, maybe it explores alternative compiler backend, different type-inference strategy, different intermediate representations, etc.
+- The project must aim to complement or enhance the Numba compilation pipeline in some way, maybe it explores an alternative compiler back-end, a different type-inference strategy, different intermediate representations, etc.
 - The project must have at least one active maintainer.
 
 
