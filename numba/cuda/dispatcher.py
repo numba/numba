@@ -788,7 +788,7 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         '''
         Returns the maximum allowable number of threads per block
         for this kernel. Exceeding this threshold will result in
-        the kernel failing to launch
+        the kernel failing to launch.
 
         :param signature: The signature of the compiled kernel to get the max
                           threads per block for. This may be omitted for a
