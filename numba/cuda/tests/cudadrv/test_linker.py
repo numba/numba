@@ -3,12 +3,11 @@ import numpy as np
 import warnings
 from numba.cuda.testing import unittest
 from numba.cuda.testing import (skip_on_cudasim, skip_unless_cuda_python,
-                                skip_if_cuda_includes_missing,
-                                skip_with_cuda_python)
+                                skip_if_cuda_includes_missing)
 from numba.cuda.testing import CUDATestCase
 from numba.cuda.cudadrv.driver import Linker, LinkerError, NvrtcError
 from numba.cuda import require_context
-from numba.tests.support import ignore_internal_warnings
+from numba.tests.support import TestCase, ignore_internal_warnings
 from numba import cuda, void, float64, int64, int32, typeof
 
 CONST1D = np.arange(10, dtype=np.float64)
@@ -92,6 +91,7 @@ def simple_lmem(A, B, dty):
 
 @skip_on_cudasim('Linking unsupported in the simulator')
 class TestLinker(CUDATestCase):
+    _NUMBA_NVIDIA_BINDING_0_ENV = {'NUMBA_CUDA_USE_NVIDIA_BINDING': '0'}
 
     @require_context
     def test_linker_basic(self):
@@ -189,12 +189,20 @@ class TestLinker(CUDATestCase):
         # Check the filename is reported correctly
         self.assertIn('in the compilation of "error.cu"', msg)
 
-    @skip_with_cuda_python
+    # We need to run the test ina subprocess because the Linker class
+    # that instantiates either the CudaPythonLinker or CtypesLinker
+    # sets USE_NV_BINDING = config.CUDA_USE_NVIDIA_BINDING at
+    # module import time, so overriding the config variable does
+    # not help.
+
+    @TestCase.run_test_in_subprocess(envvars=_NUMBA_NVIDIA_BINDING_0_ENV)
     def test_linking_cu_ctypes_unsupported(self):
-        msg = ('Support for fp16 or linking CUDA source files '
-               'requires the use of the Nvidia CUDA bindings')
+        link = os.path.join(os.path.dirname(__file__), 'data', 'jitlink.cu')
+        msg = ('Linking CUDA source files is not supported with the ctypes '
+               'binding')
+
         with self.assertRaisesRegex(NotImplementedError, msg):
-            @cuda.jit('void()', link=['jitlink.cu'])
+            @cuda.jit('void()', link=[link])
             def f():
                 pass
 
