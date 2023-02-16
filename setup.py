@@ -1,9 +1,10 @@
 import os
 import platform
+import subprocess
 import sys
 import sysconfig
 
-from setuptools import Extension, find_packages, setup
+from setuptools import Command, Extension, find_packages, setup
 from setuptools.command.build_ext import build_ext
 
 import versioneer
@@ -48,6 +49,14 @@ def _guard_py_ver():
 
 _guard_py_ver()
 
+
+class build_doc(Command):
+    description = "build documentation"
+
+    def run(self):
+        subprocess.run(['make', '-C', 'docs', 'html'])
+
+
 versioneer.VCS = 'git'
 versioneer.versionfile_source = 'numba/_version.py'
 versioneer.versionfile_build = 'numba/_version.py'
@@ -55,6 +64,7 @@ versioneer.tag_prefix = ''
 versioneer.parentdir_prefix = 'numba-'
 
 cmdclass = versioneer.get_cmdclass()
+cmdclass['build_doc'] = build_doc
 
 extra_link_args = []
 install_name_tool_fixer = []
@@ -67,7 +77,10 @@ if platform.machine() == 'ppc64le':
 class NumbaBuildExt(build_ext):
     def run(self):
         optimization_level = "/Od" if sys.platform == 'win32' else "-O0"
-        extra_compile_args = ["-Werror", "-Wall", optimization_level]
+        extra_compile_args = [optimization_level]
+        if sys.platform.startswith("linux") and platform.machine() == "x86_64":
+            extra_compile_args.extend(["-Werror", "-Wall"])
+        
         for ext in self.extensions:
             ext.extra_compile_args.extend(extra_compile_args)
         super().run()
@@ -91,7 +104,7 @@ def is_building():
                       'build_scripts', 'install', 'install_lib',
                       'install_headers', 'install_scripts', 'install_data',
                       'sdist', 'bdist', 'bdist_dumb', 'bdist_rpm',
-                      'bdist_wininst', 'check', 'bdist_wheel',
+                      'bdist_wininst', 'check', 'build_doc', 'bdist_wheel',
                       'bdist_egg', 'develop', 'easy_install', 'test']
     return any(bc in sys.argv[1:] for bc in build_commands)
 
