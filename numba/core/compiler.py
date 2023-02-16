@@ -619,6 +619,18 @@ class DefaultPassBuilder(object):
         return pm
 
     @staticmethod
+    def define_parfor_gufunc_pipeline(state, name="parfor_gufunc_typed"):
+        """Returns the typed part of the nopython pipeline"""
+        pm = PassManager(name)
+        assert state.func_ir
+        pm.add_pass(IRProcessing, "processing IR")
+        pm.add_pass(NopythonTypeInference, "nopython frontend")
+        pm.add_pass(ParforPreLoweringPass, "parfor prelowering")
+
+        pm.finalize()
+        return pm
+
+    @staticmethod
     def define_untyped_pipeline(state, name='untyped'):
         """Returns an untyped part of the nopython pipeline"""
         pm = PassManager(name)

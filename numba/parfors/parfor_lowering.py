@@ -1527,6 +1527,13 @@ def _create_gufunc_for_parfor_body(
         flags.noalias = True
 
     fixup_var_define_in_scope(gufunc_ir.blocks)
+
+    class ParforGufuncCompiler(compiler.CompilerBase):
+        def define_pipelines(self):
+            pms = [compiler.DefaultPassBuilder.define_parfor_gufunc_pipeline(self.state),
+                   compiler.DefaultPassBuilder.define_nopython_lowering_pipeline(self.state)]
+            return pms
+
     kernel_func = compiler.compile_ir(
         typingctx,
         targetctx,
@@ -1534,7 +1541,8 @@ def _create_gufunc_for_parfor_body(
         gufunc_param_types,
         types.none,
         flags,
-        locals)
+        locals,
+        pipeline_class=ParforGufuncCompiler)
 
     flags.noalias = old_alias
 
