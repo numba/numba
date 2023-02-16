@@ -47,7 +47,6 @@ class TestProfiler(unittest.TestCase):
                         )
         self.assertIn(expected_key, stats.stats)
 
-    @expected_failure_py311
     def test_profiler(self):
         self.check_profiler_dot(dot)
 
