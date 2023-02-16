@@ -34,4 +34,4 @@ jobs:
           days-before-pr-close: 7
           any-of-pr-labels: '2 - In progress,4 - Waiting on author'
           stale-pr-label: 'stale'
-          close-pr-label: 'abandoned'
+          close-pr-label: 'abandoned - stale'
