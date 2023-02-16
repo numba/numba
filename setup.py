@@ -1,7 +1,7 @@
 import os
 import platform
 import sys
-from sysconfig import get_config_vars
+import sysconfig
 
 from setuptools import Extension, find_packages, setup
 from setuptools.command import build_ext
@@ -27,7 +27,7 @@ max_llvmlite_version = "0.41"
 
 if sys.platform.startswith('linux'):
     # Patch for #2555 to make wheels without libpython
-    get_config_vars()['Py_ENABLE_SHARED'] = 0
+    sysconfig.get_config_vars()['Py_ENABLE_SHARED'] = 0
 
 
 def _guard_py_ver():
@@ -63,40 +63,13 @@ if sys.platform == 'darwin':
 if platform.machine() == 'ppc64le':
     extra_link_args += ['-pthread']
 
-build_ext = cmdclass.get('build_ext', build_ext)
-
-numba_be_user_options = [
-    ('werror', None, 'Build extensions with -Werror'),
-    ('wall', None, 'Build extensions with -Wall'),
-    ('noopt', None, 'Build extensions without optimization'),
-]
-
 
 class NumbaBuildExt(build_ext):
-
-    user_options = build_ext.user_options + numba_be_user_options
-    boolean_options = build_ext.boolean_options + ['werror', 'wall', 'noopt']
-
-    def initialize_options(self):
-        super().initialize_options()
-        self.werror = 0
-        self.wall = 0
-        self.noopt = 0
-
     def run(self):
-        extra_compile_args = []
-        if self.noopt:
-            if sys.platform == 'win32':
-                extra_compile_args.append('/Od')
-            else:
-                extra_compile_args.append('-O0')
-        if self.werror:
-            extra_compile_args.append('-Werror')
-        if self.wall:
-            extra_compile_args.append('-Wall')
+        optimization_level = "/Od" if sys.platform == 'win32' else "-O0"
+        extra_compile_args = ["-Werror", "-Wall", optimization_level]
         for ext in self.extensions:
             ext.extra_compile_args.extend(extra_compile_args)
-
         super().run()
 
 
