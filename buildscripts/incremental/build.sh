@@ -9,8 +9,8 @@ set -v -e
 
 git clone https://github.com/numba/llvmlite 
 pushd llvmlite
-git fetch origin pull/869/head:pr/869
-git checkout pr/869
+git fetch origin pull/907/head:pr/907
+git checkout pr/907
 python -m pip install . 
 popd
 
