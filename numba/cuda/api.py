@@ -86,7 +86,7 @@ def is_cuda_array(obj):
 
 
 def is_float16_supported():
-    """Whether 16-bit floats are  supported.
+    """Whether 16-bit floats are supported.
 
     Returns True if float16 is supported, False otherwise.
     """
