@@ -278,7 +278,7 @@ class TestMemoryView(MemoryLeakMixin, TestCase):
         self.assertIs(f_contiguous_usecase(m), True)
         for arr in self._arrays():
             m = memoryview(arr)
-            # Note `arr.flags.contiguous` is wrong (it mimicks c_contiguous)
+            # Note `arr.flags.contiguous` is wrong (it mimics c_contiguous)
             self.assertIs(contiguous_usecase(m),
                           arr.flags.f_contiguous or arr.flags.c_contiguous)
             self.assertIs(c_contiguous_usecase(m), arr.flags.c_contiguous)

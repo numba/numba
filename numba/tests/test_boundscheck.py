@@ -9,7 +9,7 @@ from numba.core import config
 import unittest
 
 BOUNDSCHECK_FLAGS = DEFAULT_FLAGS.copy()
-BOUNDSCHECK_FLAGS.set('boundscheck', True)
+BOUNDSCHECK_FLAGS.boundscheck = True
 
 
 def basic_array_access(a):
@@ -24,6 +24,12 @@ def slice_array_access(a):
 def fancy_array_access(x):
     a = np.array([1, 2, 3])
     return x[a]
+
+
+def fancy_array_modify(x):
+    a = np.array([1, 2, 3])
+    x[a] = 0
+    return x
 
 
 class TestBoundsCheckNoError(MemoryLeakMixin, unittest.TestCase):
@@ -198,6 +204,26 @@ class TestBoundsCheckError(unittest.TestCase):
         at = typeof(a)
         rt = at.dtype[:]
         c_boundscheck = compile_isolated(fancy_array_access, [at],
+                                         return_type=rt,
+                                         flags=BOUNDSCHECK_FLAGS)
+        boundscheck = c_boundscheck.entry_point
+        with self.assertRaises(IndexError):
+            boundscheck(a)
+
+    def test_fancy_indexing_with_modification_boundscheck(self):
+        a = np.arange(3)
+        b = np.arange(4)
+
+        # Check the numpy behavior to ensure the test is correct.
+        with self.assertRaises(IndexError):
+            # TODO: When we raise the same error message as numpy, test that
+            # they are the same
+            fancy_array_modify(a)
+        fancy_array_modify(b)
+
+        at = typeof(a)
+        rt = at.dtype[:]
+        c_boundscheck = compile_isolated(fancy_array_modify, [at],
                                          return_type=rt,
                                          flags=BOUNDSCHECK_FLAGS)
         boundscheck = c_boundscheck.entry_point

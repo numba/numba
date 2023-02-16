@@ -26,6 +26,7 @@ Talks on Applications of Numba
 * SciPy 2019 - How to Accelerate an Existing Codebase with Numba - Siu Kwan Lam & Stanley Seibert (`Video <https://www.youtube.com/watch?v=-4tD8kNHdXs>`__)
 * SciPy 2019 - Real World Numba: Creating a Skeleton Analysis Library - Juan Nunez-Iglesias (`Video <https://www.youtube.com/watch?v=0pUPNMglnaE>`__)
 * SciPy 2019 - Fast Gradient Boosting Decision Trees with PyGBM and Numba - Nicholas Hug (`Video <https://www.youtube.com/watch?v=cLpIh8Aiy2w>`__)
+* PyCon Sweden 2020 - Accelerating Scientific Computing using Numba - Ankit Mahato (`Video <https://www.youtube.com/watch?v=d_21Q0UoWrQ>`__)
 
 Tutorials
 ---------

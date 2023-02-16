@@ -1,16 +1,25 @@
-import cmath
 import math
 import itertools
-import string
-import sys
-import textwrap
 
 import numpy as np
 
 from numba.cuda.testing import unittest, CUDATestCase
-from numba.core import types, utils
+from numba.core import types
 from numba import cuda
-from numba.tests.complex_usecases import *
+from numba.tests.complex_usecases import (real_usecase, imag_usecase,
+                                          conjugate_usecase, phase_usecase,
+                                          polar_as_complex_usecase,
+                                          rect_usecase, isnan_usecase,
+                                          isinf_usecase, isfinite_usecase,
+                                          exp_usecase, log_usecase,
+                                          log_base_usecase, log10_usecase,
+                                          sqrt_usecase, asin_usecase,
+                                          acos_usecase, atan_usecase,
+                                          cos_usecase, sin_usecase,
+                                          tan_usecase, acosh_usecase,
+                                          asinh_usecase, atanh_usecase,
+                                          cosh_usecase, sinh_usecase,
+                                          tanh_usecase)
 from numba.np import numpy_support
 
 
@@ -133,7 +142,8 @@ class TestCMath(BaseComplexTest):
 
     def check_predicate_func(self, pyfunc):
         self.run_unary(pyfunc,
-                       [types.boolean(tp) for tp in (types.complex128, types.complex64)],
+                       [types.boolean(tp)
+                        for tp in (types.complex128, types.complex64)],
                        self.basic_values())
 
     def check_unary_func(self, pyfunc, ulps=1, values=None,
@@ -247,6 +257,39 @@ class TestCMath(BaseComplexTest):
     def test_tanh(self):
         self.check_unary_func(tanh_usecase, ulps=2,
                               ignore_sign_on_zero=True)
+
+
+class TestAtomicOnComplexComponents(CUDATestCase):
+    # Based on the reproducer from Issue #8309. array.real and array.imag could
+    # not be used because they required returning an array from a generated
+    # function, and even if this was permitted, they could not be resolved from
+    # the atomic lowering when they were overloads.
+    #
+    # See https://github.com/numba/numba/issues/8309
+
+    def test_atomic_on_real(self):
+        @cuda.jit
+        def atomic_add_one(values):
+            i = cuda.grid(1)
+            cuda.atomic.add(values.real, i, 1)
+
+        N = 32
+        arr1 = np.arange(N) + np.arange(N) * 1j
+        arr2 = arr1.copy()
+        atomic_add_one[1, N](arr2)
+        np.testing.assert_equal(arr1 + 1, arr2)
+
+    def test_atomic_on_imag(self):
+        @cuda.jit
+        def atomic_add_one_j(values):
+            i = cuda.grid(1)
+            cuda.atomic.add(values.imag, i, 1)
+
+        N = 32
+        arr1 = np.arange(N) + np.arange(N) * 1j
+        arr2 = arr1.copy()
+        atomic_add_one_j[1, N](arr2)
+        np.testing.assert_equal(arr1 + 1j, arr2)
 
 
 if __name__ == '__main__':

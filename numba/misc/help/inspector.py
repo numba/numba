@@ -23,7 +23,7 @@ def _get_commit():
             "Cannot find git commit hash. Source links could be inaccurate.",
             category=errors.NumbaWarning,
         )
-        return 'master'
+        return 'main'
     return full
 
 
@@ -295,6 +295,7 @@ class ReSTFormatter(Formatter):
     def write_supported_item(self, modname, itemname, typename, explained,
                              sources, alias):
         self.print('.. function:: {}.{}'.format(modname, itemname))
+        self.print('   :noindex:')
         self.print()
 
         if alias:

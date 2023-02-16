@@ -26,10 +26,7 @@ static int get_readonly_buffer(PyObject* obj, Py_buffer *buf)
 {
     int flags = PyBUF_ND|PyBUF_STRIDES|PyBUF_FORMAT;
 
-    if (!PyObject_GetBuffer(obj, buf, flags))
-        return 0;
-
-    return -1;
+    return PyObject_GetBuffer(obj, buf, flags);
 }
 
 
@@ -51,41 +48,21 @@ memoryview_get_buffer(PyObject *self, PyObject *args){
     int force = 0;
     int readonly = 0;
     PyObject *ret = NULL;
-    void * ptr = NULL;
-    const void* roptr = NULL;
-    Py_ssize_t buflen;
     Py_buffer buf;
 
     if (!PyArg_ParseTuple(args, "O|ii", &obj, &force, &readonly))
         return NULL;
 
     if (readonly) {
-        if (!get_readonly_buffer(obj, &buf)) { /* new buffer api */
-            ret = PyLong_FromVoidPtr(buf.buf);
-            free_buffer(&buf);
-        } else {  /* old buffer api */
-            PyErr_Clear();
-            if(-1 == PyObject_AsReadBuffer(obj, &roptr, &buflen))
-                return NULL;
-        }
+        if (get_readonly_buffer(obj, &buf))
+            return NULL;
     } else {
-        if (!get_writable_buffer(obj, &buf, force)) { /* new buffer api */
-            ret = PyLong_FromVoidPtr(buf.buf);
-            free_buffer(&buf);
-        } else { /* old buffer api */
-            PyErr_Clear();
-            if (-1 == PyObject_AsWriteBuffer(obj, &ptr, &buflen)) {
-                if (!force)
-                    return NULL;
-                /* Force writeable by getting a read-only buffer */
-                PyErr_Clear();
-                if(-1 == PyObject_AsReadBuffer(obj, &roptr, &buflen))
-                    return NULL;
-                ptr = (void*) roptr;
-            }
-            ret = PyLong_FromVoidPtr(ptr);
-        }
+        if (get_writable_buffer(obj, &buf, force))
+            return NULL;
     }
+
+    ret = PyLong_FromVoidPtr(buf.buf);
+    free_buffer(&buf);
     return ret;
 }
 
@@ -160,21 +137,15 @@ memoryview_get_extents(PyObject *self, PyObject *args)
     PyObject *obj = NULL;
     PyObject *ret = NULL;
     Py_buffer b;
-    const void * ptr = NULL;
-    Py_ssize_t bufptr, buflen;
     if (!PyArg_ParseTuple(args, "O", &obj))
         return NULL;
 
-    if (!get_readonly_buffer(obj, &b)) { /* new buffer api */
-        ret = get_extents(b.shape, b.strides, b.ndim, b.itemsize,
-                          (Py_ssize_t)b.buf);
-        free_buffer(&b);
-    } else { /* old buffer api */
-        PyErr_Clear();
-        if (-1 == PyObject_AsReadBuffer(obj, &ptr, &buflen)) return NULL;
-        bufptr = (Py_ssize_t)ptr;
-        ret = Py_BuildValue("nn", bufptr, bufptr + buflen);
-    }
+    if (get_readonly_buffer(obj, &b))
+        return NULL;
+
+    ret = get_extents(b.shape, b.strides, b.ndim, b.itemsize,
+                      (Py_ssize_t)b.buf);
+    free_buffer(&b);
     return ret;
 }
 
@@ -315,32 +286,26 @@ static PyBufferProcs MemAlloc_as_buffer = {
 
 static PyTypeObject MemAllocType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    "mviewbuf.MemAlloc",                            /* tp_name */
-    sizeof(MemAllocObject),                   /* tp_basicsize */
+    "mviewbuf.MemAlloc",                        /* tp_name */
+    sizeof(MemAllocObject),                     /* tp_basicsize */
     0,                                          /* tp_itemsize */
-    /* methods */
-    0,                  /* tp_dealloc */
-    0,                            /* tp_print */
+    0,                                          /* tp_dealloc */
+    0,                                          /* tp_vectorcall_offset */
     0,                                          /* tp_getattr */
     0,                                          /* tp_setattr */
-#if PY_MAJOR_VERSION >= 3
-    0,                                          /* tp_reserved */
-#else
-    0,                                          /* tp_compare */
-#endif
-    0,                         /*tp_repr*/
-    0,                         /*tp_as_number*/
-    0,                         /*tp_as_sequence*/
-    0,                         /*tp_as_mapping*/
-    0,                         /*tp_hash */
-    0,                         /*tp_call*/
-    0,                         /*tp_str*/
-    0,                         /*tp_getattro*/
-    0,                         /*tp_setattro*/
-    &MemAlloc_as_buffer,        /*tp_as_buffer*/
-    (Py_TPFLAGS_DEFAULT| Py_TPFLAGS_BASETYPE),                    /* tp_flags */
+    0,                                          /* tp_as_async */
+    0,                                          /* tp_repr */
+    0,                                          /* tp_as_number */
+    0,                                          /* tp_as_sequence */
+    0,                                          /* tp_as_mapping */
+    0,                                          /* tp_hash */
+    0,                                          /* tp_call */
+    0,                                          /* tp_str */
+    0,                                          /* tp_getattro */
+    0,                                          /* tp_setattro */
+    &MemAlloc_as_buffer,                        /* tp_as_buffer */
+    (Py_TPFLAGS_DEFAULT| Py_TPFLAGS_BASETYPE),  /* tp_flags */
     0,                                          /* tp_doc */
-
     0,                                          /* tp_traverse */
     0,                                          /* tp_clear */
     0,                                          /* tp_richcompare */
@@ -367,6 +332,32 @@ static PyTypeObject MemAllocType = {
     0,                                          /* tp_weaklist */
     0,                                          /* tp_del */
     0,                                          /* tp_version_tag */
+    0,                                          /* tp_finalize */
+/* The docs suggest Python 3.8 has no tp_vectorcall
+ * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Doc/c-api/typeobj.rst?plain=1#L146
+ * but the header has it:
+ * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Include/cpython/object.h#L257
+ */
+    0,                                          /* tp_vectorcall */
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 8)
+/* This is Python 3.8 only.
+ * See: https://github.com/python/cpython/blob/3.8/Include/cpython/object.h
+ * there's a tp_print preserved for backwards compatibility. xref:
+ * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Include/cpython/object.h#L260
+ */
+    0,                                          /* tp_print */
+#endif
+
+/* WARNING: Do not remove this, only modify it! It is a version guard to
+ * act as a reminder to update this struct on Python version update! */
+#if (PY_MAJOR_VERSION == 3)
+#if ! ((PY_MINOR_VERSION == 8) || (PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10))
+#error "Python minor version is not supported."
+#endif
+#else
+#error "Python major version is not supported."
+#endif
+/* END WARNING*/
 };
 
 

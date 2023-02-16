@@ -9,7 +9,18 @@
 #include <cmath>
 #include <iostream>
 #include <stdio.h>
+#include <stdint.h>
 #include "gufunc_scheduler.h"
+
+#ifdef _MSC_VER
+#define THREAD_LOCAL(ty) __declspec(thread) ty
+#else
+/* Non-standard C99 extension that's understood by gcc and clang */
+#define THREAD_LOCAL(ty) __thread ty
+#endif
+
+// Default 0 value means one evenly-sized chunk of work per worker thread.
+static THREAD_LOCAL(uintp) parallel_chunksize = 0;
 
 // round not available on VS2010.
 double guround (double number) {
@@ -68,7 +79,46 @@ public:
         }
         return ret;
     }
+
+    uintp total_size() const {
+        std::vector<intp> per_dim = iters_per_dim();
+        uintp res = 1;
+        for (size_t i = 0; i < per_dim.size(); ++i) {
+            res *= per_dim[i];
+        }
+        return res;
+    }
+
+    void print() const {
+        size_t i;
+        for(i = 0; i < start.size(); ++i) {
+            printf("%td ", start[i]);
+        }
+        for(i = 0; i < end.size(); ++i) {
+            printf("%td ", end[i]);
+        }
+    }
 };
+
+extern "C" uintp set_parallel_chunksize(uintp n) {
+    uintp orig = parallel_chunksize;
+    parallel_chunksize = n;
+    return orig;
+}
+
+extern "C" uintp get_parallel_chunksize() {
+    return parallel_chunksize;
+}
+
+extern "C" uintp get_sched_size(uintp num_threads, uintp num_dim, intp *starts, intp *ends) {
+    if (parallel_chunksize == 0) {
+        return num_threads;
+    }
+    RangeActual ra(num_dim, starts, ends);
+    uintp total_work_size = ra.total_size();
+    uintp num_divisions = total_work_size / parallel_chunksize;
+    return num_divisions < num_threads ? num_threads : num_divisions;
+}
 
 class dimlength {
 public:
@@ -202,6 +252,9 @@ void divide_work(const RangeActual &full_iteration_space,
         } else {
             // We allocate the remaining threads proportionally to the ratio of the current dimension length to the total.
             divisions_for_this_dim = intp(guround(num_threads * ((float)dims[index].length / total_len)));
+            if (divisions_for_this_dim < 1) {
+                        divisions_for_this_dim = 1;
+            }
         }
 
         // These are used to divide the iteration space.
@@ -279,26 +332,32 @@ std::vector<RangeActual> create_schedule(const RangeActual &full_space, uintp nu
             return ret;
         } else {
             // There are more iterations than threads.
-            // Compute the modal number of iterations to assign to each thread.
-            intp ilen = ra_len / num_sched;
-
             std::vector<RangeActual> ret;
+            // cur holds the next unallocated iteration.
+            intp cur = 0;
             // For each thread...
             for(uintp i = 0; i < num_sched; ++i) {
+                // Compute the number of items to do in this thread as
+                // the floor of the amount of work left (ra_len-cur) divided
+                // by the number of threads left to which to allocate work.
+                intp ilen = ((ra_len-cur-1) / (num_sched-i)) + 1;
+
                 // Compute the start iteration number for that thread as the start iteration
                 // plus the modal number of iterations times the thread number.
-                intp start = full_space.start[0] + (ilen * i);
+                intp start = full_space.start[0] + cur;
                 intp end;
                 // If this isn't the last thread then the end iteration number is one less
                 // than the start iteration number of the next thread.  If it is the last
                 // thread then assign all remaining iterations to it.
                 if(i < num_sched-1) {
-                    end = full_space.start[0] + (ilen * (i+1)) - 1;
+                    end = full_space.start[0] + (cur + ilen) - 1;
                 } else {
                     end = full_space.end[0];
                 }
                 // Record the iteration start and end in the schedule.
                 ret.push_back(RangeActual(start, end));
+                // Update the next unallocated iteration.
+                cur += ilen;
             }
             return ret;
         }
@@ -318,6 +377,18 @@ std::vector<RangeActual> create_schedule(const RangeActual &full_space, uintp nu
 }
 
 /*
+ *   Print the calculated schedule when in debug mode.
+ */
+void print_schedule(const std::vector<RangeActual> &vra) {
+    size_t i;
+    for (i = 0; i < vra.size(); ++i) {
+        printf("sched[%td] = ", i);
+        vra[i].print();
+        printf("\n");
+    }
+}
+
+/*
     num_dim (D) is the number of dimensions of the iteration space.
     starts is the range-start of each of those dimensions, inclusive.
     ends is the range-end of each of those dimensions, inclusive.
@@ -327,6 +398,7 @@ std::vector<RangeActual> create_schedule(const RangeActual &full_space, uintp nu
 */
 extern "C" void do_scheduling_signed(uintp num_dim, intp *starts, intp *ends, uintp num_threads, intp *sched, intp debug) {
     if (debug) {
+        printf("do_scheduling_signed\n");
         printf("num_dim = %d\n", (int)num_dim);
         printf("ranges = (");
         for (unsigned i = 0; i < num_dim; i++) {
@@ -340,11 +412,15 @@ extern "C" void do_scheduling_signed(uintp num_dim, intp *starts, intp *ends, ui
 
     RangeActual full_space(num_dim, starts, ends);
     std::vector<RangeActual> ret = create_schedule(full_space, num_threads);
+    if (debug) {
+        print_schedule(ret);
+    }
     flatten_schedule(ret, sched);
 }
 
 extern "C" void do_scheduling_unsigned(uintp num_dim, intp *starts, intp *ends, uintp num_threads, uintp *sched, intp debug) {
     if (debug) {
+        printf("do_scheduling_unsigned\n");
         printf("num_dim = %d\n", (int)num_dim);
         printf("ranges = (");
         for (unsigned i = 0; i < num_dim; i++) {
@@ -358,5 +434,8 @@ extern "C" void do_scheduling_unsigned(uintp num_dim, intp *starts, intp *ends, 
 
     RangeActual full_space(num_dim, starts, ends);
     std::vector<RangeActual> ret = create_schedule(full_space, num_threads);
+    if (debug) {
+        print_schedule(ret);
+    }
     flatten_schedule(ret, sched);
 }

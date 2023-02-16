@@ -5,10 +5,11 @@ Tests for enum support.
 
 import numpy as np
 import unittest
-from numba import jit, vectorize
+from numba import jit, vectorize, int8, int16, int32
 
 from numba.tests.support import TestCase
-from .enum_usecases import Color, Shape, Shake, Planet, RequestError
+from .enum_usecases import Color, Shape, Shake, Planet, RequestError, \
+                           IntEnumWithNegatives
 
 
 def compare_usecase(a, b):
@@ -48,6 +49,13 @@ def int_coerce_usecase(x):
         return x - RequestError.not_found
     else:
         return x + Shape.circle
+
+def int_cast_usecase(x):
+    # Explicit coercion of intenums to ints
+    if x > int16(RequestError.internal_error):
+        return x - int32(RequestError.not_found)
+    else:
+        return x + int8(Shape.circle)
 
 
 def vectorize_usecase(x):
@@ -134,11 +142,38 @@ class TestIntEnum(BaseEnumTest, TestCase):
         for arg in [300, 450, 550]:
             self.assertPreciseEqual(pyfunc(arg), cfunc(arg))
 
+    def test_int_cast(self):
+        pyfunc = int_cast_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for arg in [300, 450, 550]:
+            self.assertPreciseEqual(pyfunc(arg), cfunc(arg))
+
     def test_vectorize(self):
         cfunc = vectorize(nopython=True)(vectorize_usecase)
         arg = np.array([2, 404, 500, 404])
         sol = np.array([vectorize_usecase(i) for i in arg], dtype=arg.dtype)
         self.assertPreciseEqual(sol, cfunc(arg))
+
+    def test_hash(self):
+        def pyfun(x):
+            return hash(x)
+        cfunc = jit(nopython=True)(pyfun)
+        for member in IntEnumWithNegatives:
+            self.assertPreciseEqual(pyfun(member), cfunc(member))
+
+    def test_int_shape_cast(self):
+        def pyfun_empty(x):
+            return np.empty((x, x), dtype='int64').fill(-1)
+        def pyfun_zeros(x):
+            return np.zeros((x, x), dtype='int64')
+        def pyfun_ones(x):
+            return np.ones((x, x), dtype='int64')
+        for pyfun in [pyfun_empty, pyfun_zeros, pyfun_ones]:
+            cfunc = jit(nopython=True)(pyfun)
+            for member in IntEnumWithNegatives:
+                if member >= 0:
+                    self.assertPreciseEqual(pyfun(member), cfunc(member))
 
 
 if __name__ == '__main__':

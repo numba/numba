@@ -1,8 +1,0 @@
-# configuration file used by run_coverage.py
-[run]
-branch = True
-source = .
-concurrency = multiprocessing
-parallel = True
-
-[html]

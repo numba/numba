@@ -10,7 +10,6 @@ class TestCudaComplex(CUDATestCase):
             i = cuda.grid(1)
             a[i] += b
 
-
         a = np.arange(5, dtype=np.complex128)
         a0 = a.copy()
         foo[1, a.shape](a, 2j)
@@ -19,5 +18,3 @@ class TestCudaComplex(CUDATestCase):
 
 if __name__ == '__main__':
     unittest.main()
-
-

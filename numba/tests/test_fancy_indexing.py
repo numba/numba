@@ -3,7 +3,7 @@ import itertools
 import numpy as np
 
 import unittest
-from numba import jit, typeof
+from numba import jit, typeof, njit
 from numba.core import types
 from numba.core.errors import TypingError
 from numba.tests.support import MemoryLeakMixin, TestCase, tag
@@ -176,6 +176,28 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         indices = self.generate_advanced_indices(N)
         self.check_setitem_indices(arr, indices)
 
+    def test_setitem_0d(self):
+        # Test setitem with a 0d-array
+        pyfunc = setitem_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+
+        inps = [
+            (np.zeros(3), np.array(3.14)),
+            (np.zeros(2), np.array(2)),
+            (np.zeros(3, dtype=np.int64), np.array(3, dtype=np.int64)),
+            (np.zeros(3, dtype=np.float64), np.array(1, dtype=np.int64)),
+            (np.zeros(5, dtype='<U3'), np.array('abc')),
+            (np.zeros((3,), dtype='<U3'), np.array('a')),
+            (np.array(['abc','def','ghi'], dtype='<U3'),
+             np.array('WXYZ', dtype='<U4')),
+            (np.zeros(3, dtype=complex), np.array(2+3j, dtype=complex)),
+        ]
+
+        for x1, v in inps:
+            x2 = x1.copy()
+            pyfunc(x1, 0, v)
+            cfunc(x2, 0, v)
+            self.assertPreciseEqual(x1, x2)
 
     def test_np_take(self):
         # shorter version of array.take test in test_array_methods
@@ -233,6 +255,50 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
 
         #exceptions leak refs
         self.disable_leak_check()
+
+    def test_newaxis(self):
+        @njit
+        def np_new_axis_getitem(a, idx):
+            return a[idx]
+
+        @njit
+        def np_new_axis_setitem(a, idx, item):
+            a[idx] = item
+            return a
+
+        a = np.arange(4 * 5 * 6 * 7).reshape((4, 5, 6, 7))
+        idx_cases = [
+            (slice(None), np.newaxis),
+            (np.newaxis, slice(None)),
+            (slice(1), np.newaxis, np.array([1, 2, 1])),
+            (np.newaxis, np.array([1, 2, 1]), slice(None)),
+            (slice(1), Ellipsis, np.newaxis, np.array([1, 2, 1])),
+            (np.array([1, 2, 1]), np.newaxis, Ellipsis),
+            (np.newaxis, slice(1), np.newaxis, np.array([1, 2, 1])),
+            (np.array([1, 2, 1]), Ellipsis, None, np.newaxis),
+            (np.newaxis, slice(1), Ellipsis, np.newaxis, np.array([1, 2, 1])),
+            (np.array([1, 2, 1]), np.newaxis, np.newaxis, Ellipsis),
+            (np.newaxis, np.array([1, 2, 1]), np.newaxis, Ellipsis),
+            (slice(3), np.array([1, 2, 1]), np.newaxis, None),
+            (np.newaxis, np.array([1, 2, 1]), Ellipsis, None),
+        ]
+        pyfunc_getitem = np_new_axis_getitem.py_func
+        cfunc_getitem = np_new_axis_getitem
+
+        pyfunc_setitem = np_new_axis_setitem.py_func
+        cfunc_setitem = np_new_axis_setitem
+
+        for idx in idx_cases:
+            expected = pyfunc_getitem(a, idx)
+            got = cfunc_getitem(a, idx)
+            np.testing.assert_equal(expected, got)
+
+            a_empty = np.zeros_like(a)
+            item = a[idx]
+
+            expected = pyfunc_setitem(a_empty.copy(), idx, item)
+            got = cfunc_setitem(a_empty.copy(), idx, item)
+            np.testing.assert_equal(expected, got)
 
 
 if __name__ == '__main__':

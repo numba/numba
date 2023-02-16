@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: General Question
+    url: https://numba.discourse.group/c/numba/community-support/
+    about: "If you have a general question (not a bug report or feature request) then please ask on Numba's discourse instance."
+  - name: Quick Question/Just want to say Hi!
+    url: https://gitter.im/numba/numba
+    about: "If you have a quick question or want chat to users/developers in real time then please use gitter.im/numba/numba"
+  - name: Discuss an involved feature
+    url: https://numba.discourse.group/c/numba/development/
+    about: "If you would like to suggest a more involved feature like *Can a new compiler pass be added to do X* then please start a discussion on Numba's discourse instance."

@@ -20,7 +20,7 @@ from numba.core import types
 from numba.core.errors import TypingError
 from numba.tests.support import (TestCase, MemoryLeakMixin, override_config,
                                  forbid_codegen)
-from numba.typed import listobject
+from numba.typed import listobject, List
 
 
 class TestCreateAppendLength(MemoryLeakMixin, TestCase):
@@ -42,6 +42,14 @@ class TestCreateAppendLength(MemoryLeakMixin, TestCase):
             with forbid_codegen():
                 l = listobject.new_list(int32)
                 self.assertEqual(type(l), list)
+
+    def test_nonempty_list_create_no_jit(self):
+        # See Issue #6001: https://github.com/numba/numba/issues/6001
+        with override_config('DISABLE_JIT', True):
+            with forbid_codegen():
+                l = List([1, 2, 3])
+                self.assertEqual(type(l), list)
+                self.assertEqual(l, [1, 2, 3])
 
 
 class TestBool(MemoryLeakMixin, TestCase):
@@ -214,6 +222,20 @@ class TestGetitem(MemoryLeakMixin, TestCase):
         for t in (types.signed_domain
                   ):
             self.assertEqual(foo((t(0))), 0)
+
+    def test_list_getitem_different_sized_int_index(self):
+        # Checks that the index type cast and ext/trunc to the
+        # type of the length is correct, both wraparound and
+        # direct index is tested via -1/0.
+
+        for ty in types.integer_domain:
+            @njit
+            def foo():
+                l = listobject.new_list(int32)
+                l.append(7)
+                return l[ty(0)], l[ty(-1)]
+
+            self.assertEqual(foo(), (7, 7))
 
 
 class TestGetitemSlice(MemoryLeakMixin, TestCase):
@@ -443,6 +465,7 @@ class TestGetitemSlice(MemoryLeakMixin, TestCase):
 
     def test_list_getitem_multiple_slice_zero_step_index_error(self):
         self.disable_leak_check()
+
         @njit
         def foo():
             l = listobject.new_list(int32)
@@ -654,6 +677,7 @@ class TestPop(MemoryLeakMixin, TestCase):
 
     def test_list_pop_empty_index_error_with_index(self):
         self.disable_leak_check()
+
         @njit
         def foo(i):
             l = listobject.new_list(int32)
@@ -682,6 +706,7 @@ class TestPop(MemoryLeakMixin, TestCase):
 
     def test_list_pop_mutiple_index_error_with_index(self):
         self.disable_leak_check()
+
         @njit
         def foo(i):
             l = listobject.new_list(int32)
@@ -923,6 +948,7 @@ class TestExtend(MemoryLeakMixin, TestCase):
 
     def test_list_extend_typing_error_non_iterable(self):
         self.disable_leak_check()
+
         @njit
         def foo():
             l = listobject.new_list(int32)
@@ -1003,6 +1029,7 @@ class TestInsert(MemoryLeakMixin, TestCase):
 
     def test_list_insert_typing_error(self):
         self.disable_leak_check()
+
         @njit
         def foo():
             l = listobject.new_list(int32)
@@ -1021,6 +1048,7 @@ class TestRemove(MemoryLeakMixin, TestCase):
 
     def test_list_remove_empty(self):
         self.disable_leak_check()
+
         @njit
         def foo():
             l = listobject.new_list(int32)
@@ -1041,6 +1069,7 @@ class TestRemove(MemoryLeakMixin, TestCase):
 
     def test_list_remove_singleton_value_error(self):
         self.disable_leak_check()
+
         @njit
         def foo():
             l = listobject.new_list(int32)
@@ -1064,6 +1093,7 @@ class TestRemove(MemoryLeakMixin, TestCase):
 
     def test_list_remove_multiple_value_error(self):
         self.disable_leak_check()
+
         @njit
         def foo():
             l = listobject.new_list(int32)
@@ -1220,6 +1250,7 @@ class TestIndex(MemoryLeakMixin, TestCase):
 
     def test_index_singleton_value_error(self):
         self.disable_leak_check()
+
         @njit
         def foo():
             l = listobject.new_list(int32)
@@ -1235,6 +1266,7 @@ class TestIndex(MemoryLeakMixin, TestCase):
 
     def test_index_multiple_value_error(self):
         self.disable_leak_check()
+
         @njit
         def foo():
             l = listobject.new_list(int32)
@@ -1251,6 +1283,7 @@ class TestIndex(MemoryLeakMixin, TestCase):
 
     def test_index_multiple_value_error_start(self):
         self.disable_leak_check()
+
         @njit
         def foo(start):
             l = listobject.new_list(int32)
@@ -1269,6 +1302,7 @@ class TestIndex(MemoryLeakMixin, TestCase):
 
     def test_index_multiple_value_error_end(self):
         self.disable_leak_check()
+
         @njit
         def foo(end):
             l = listobject.new_list(int32)
@@ -1287,6 +1321,7 @@ class TestIndex(MemoryLeakMixin, TestCase):
 
     def test_index_typing_error_start(self):
         self.disable_leak_check()
+
         @njit
         def foo():
             l = listobject.new_list(int32)
@@ -1302,6 +1337,7 @@ class TestIndex(MemoryLeakMixin, TestCase):
 
     def test_index_typing_error_end(self):
         self.disable_leak_check()
+
         @njit
         def foo():
             l = listobject.new_list(int32)
@@ -1553,6 +1589,7 @@ class TestImmutable(MemoryLeakMixin, TestCase):
 
     def test_append_fails(self):
         self.disable_leak_check()
+
         @njit
         def foo():
             l = make_test_list()

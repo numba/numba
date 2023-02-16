@@ -12,6 +12,7 @@ def bar():
 
 def baz_factory(a):
     b = 17 + a
+
     @njit(inline='always')
     def baz():
         return _GLOBAL1 + a - b

@@ -244,43 +244,9 @@ otherwise, the instruction is an no-op.
 In :term:`object mode` each variable contains an owned reference to a PyObject.
 
 
-Stage 3: Macro expansion
-------------------------
-
-Now that the function has been translated into the Numba IR, macro expansion can
-be performed. Macro expansion converts specific attributes that are known to
-Numba into IR nodes representing function calls. This is initiated in the
-``numba.compiler.translate_stage`` function, and is implemented in
-``numba.macro``.
-
-Examples of attributes that are macro-expanded include the CUDA intrinsics for
-grid, block and thread dimensions and indices. For example, the assignment to
-``tx`` in the following function::
-
-  @cuda.jit(argtypes=[f4[:]])
-  def f(a):
-      tx = cuda.threadIdx.x
-
-has the following representation after translation to Numba IR::
-
-  $0.1 = global(cuda: <module 'numba.cuda' from '...'>) ['$0.1']
-  $0.2 = getattr(value=$0.1, attr=threadIdx) ['$0.1', '$0.2']
-  del $0.1                                 []
-  $0.3 = getattr(value=$0.2, attr=x)       ['$0.2', '$0.3']
-  del $0.2                                 []
-  tx = $0.3                                ['$0.3', 'tx']
-
-After macro expansion, the ``$0.3 = getattr(value=$0.2, attr=x)`` IR node is
-translated into::
-
-  $0.3 = call tid.x(, )                    ['$0.3']
-
-which represents an instance of the ``Intrinsic`` IR node for calling the
-``tid.x`` intrinsic function.
-
 .. _`rewrite-untyped-ir`:
 
-Stage 4: Rewrite untyped IR
+Stage 3: Rewrite untyped IR
 ---------------------------
 
 Before running type inference, it may be desired to run certain
@@ -316,15 +282,14 @@ you'll see the IR being rewritten before the type inference phase::
 
 .. _arch_type_inference:
 
-Stage 5: Infer types
+Stage 4: Infer types
 --------------------
 
-Now that the Numba IR has been generated and macro-expanded, type analysis
-can be performed.  The types of the function arguments can be taken either
-from the explicit function signature given in the ``@jit`` decorator
-(such as ``@jit('float64(float64, float64)')``), or they can be taken from
-the types of the actual function arguments if compilation is happening
-when the function is first called.
+Now that the Numba IR has been generated, type analysis can be performed.  The
+types of the function arguments can be taken either from the explicit function
+signature given in the ``@jit`` decorator (such as ``@jit('float64(float64,
+float64)')``), or they can be taken from the types of the actual function
+arguments if compilation is happening when the function is first called.
 
 The type inference engine is found in ``numba.typeinfer``.  Its job is to
 assign a type to every intermediate variable in the Numba IR.  The result of
@@ -365,7 +330,7 @@ types, language features, or functions are used in the function body.
 
 .. _`rewrite-typed-ir`:
 
-Stage 6a: Rewrite typed IR
+Stage 5a: Rewrite typed IR
 --------------------------
 
 This pass's purpose is to perform any high-level optimizations that still
@@ -433,7 +398,7 @@ allocates a single result array.
 
 .. _`parallel-accelerator`:
 
-Stage 6b: Perform Automatic Parallelization
+Stage 5b: Perform Automatic Parallelization
 -------------------------------------------
 
 This pass is only performed if the ``parallel`` option in the :func:`~numba.jit`
@@ -673,7 +638,7 @@ described in more detail in the following paragraphs.
 
   .. _`lowering`:
 
-Stage 7a: Generate nopython LLVM IR
+Stage 6a: Generate nopython LLVM IR
 -----------------------------------
 
 If type inference succeeds in finding a Numba type for every intermediate
@@ -827,7 +792,7 @@ can be seen below::
   ______________________________________________________________________
 
 
-Stage 7b: Generate object mode LLVM IR
+Stage 6b: Generate object mode LLVM IR
 --------------------------------------
 
 If type inference fails to find Numba types for all values inside a function,
@@ -915,7 +880,7 @@ function.  Loop-lifting helps improve the performance of functions that
 need to access uncompilable code (such as I/O or plotting code) but still
 contain a time-intensive section of compilable code.
 
-Stage 8: Compile LLVM IR to machine code
+Stage 7: Compile LLVM IR to machine code
 ----------------------------------------
 
 In both :term:`object mode` and :term:`nopython mode`, the generated LLVM IR

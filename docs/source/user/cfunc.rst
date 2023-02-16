@@ -126,14 +126,17 @@ With CFFI
 For applications that have a lot of state, it is useful to pass data in C
 structures.  To simplify the interoperability with C code, numba can convert
 a ``cffi`` type into a numba ``Record`` type using
-``numba.cffi_support.map_type``::
+``numba.core.typing.cffi_utils.map_type``::
 
-   from numba import cffi_support
+   from numba.core.typing import cffi_utils
 
-   nbtype = cffi_support.map_type(cffi_type, use_record_dtype=True)
+   nbtype = cffi_utils.map_type(cffi_type, use_record_dtype=True)
 
 .. note:: **use_record_dtype=True** is needed otherwise pointers to C
     structures are returned as void pointers.
+
+.. note:: From v0.49 the ``numba.cffi_support`` module has been phased out
+    in favour of ``numba.core.typing.cffi_utils``
 
 
 For example::
@@ -158,7 +161,7 @@ For example::
    ffi.cdef(src)
 
    # Get the function signature from *my_func*
-   sig = cffi_support.map_type(ffi.typeof('my_func'), use_record_dtype=True)
+   sig = cffi_utils.map_type(ffi.typeof('my_func'), use_record_dtype=True)
 
    # Make the cfunc
    from numba import cfunc, carray
@@ -169,7 +172,7 @@ For example::
       tmp = 0
       for i in range(n):
          tmp += base[i].i1 * base[i].f2 / base[i].d3
-         tmp += base[i].af4.sum()  # nested arrays are like normal numpy array
+         tmp += base[i].af4.sum()  # nested arrays are like normal NumPy arrays
       return tmp
 
 
@@ -213,3 +216,73 @@ Compilation options
 A number of keyword-only arguments can be passed to the ``@cfunc``
 decorator: ``nopython`` and ``cache``.  Their meaning is similar to those
 in the ``@jit`` decorator.
+
+
+Calling C code from Numba
+=========================
+
+It is also possible to call C code from Numba ``@jit`` functions. In this
+example, we are going to be compiling a simple function ``sum`` that adds two
+integers and calling it within Numba ``@jit`` code.
+
+.. note::
+   The example below was tested on Linux and will likely work on Unix-like
+   operating systems.
+
+.. code-block:: C
+
+   #include <stdint.h>
+
+   int64_t sum(int64_t a, int64_t b){
+      return a + b;
+   }
+
+
+Compile the code with ``gcc lib.c -fPIC -shared -o shared_library.so`` to
+generate a shared library.
+
+.. code-block:: python
+
+   from numba import njit
+   from numba.core import types, typing
+   from llvmlite import binding
+   import os
+
+   # load the library into LLVM
+   path = os.path.abspath('./shared_library.so')
+   binding.load_library_permanently(path)
+
+   # Adds typing information
+   c_func_name = 'sum'
+   return_type = types.int64
+   argty = types.int64
+   c_sig = typing.signature(return_type, argty, argty)
+   c_func = types.ExternalFunction(c_func_name, c_sig)
+
+   @njit
+   def example(x, y):
+      return c_func(x, y)
+
+   print(example(3, 4)) # 7
+
+
+It is also possible to use ``ctypes`` as well to call C functions. The advantage
+of using ``ctypes`` is that it is invariant to the usage of JIT decorators.
+
+.. code-block:: python
+
+   from numba import njit
+   import ctypes
+   DSO = ctypes.CDLL('./shared_library.so')
+
+   # Add typing information
+   c_func = DSO.sum
+   c_func.restype = ctypes.c_int
+   c_func.argtypes = [ctypes.c_int, ctypes.c_int]
+
+   @njit
+   def example(x, y):
+      return c_func(x, y)
+
+   print(example(3, 4)) # 7
+   print(example.py_func(3, 4)) # 7

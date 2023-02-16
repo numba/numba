@@ -3,22 +3,21 @@ Implementation of operations on Array objects and objects supporting
 the buffer protocol.
 """
 
-
 import functools
 import math
 import operator
 
 from llvmlite import ir
-import llvmlite.llvmpy.core as lc
-from llvmlite.llvmpy.core import Constant
+from llvmlite.ir import Constant
 
 import numpy as np
 
-from numba import pndindex
-from numba.core import types, utils, typing, errors, cgutils, extending
+from numba import pndindex, literal_unroll
+from numba.core import types, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, carray, farray, is_contiguous,
-                                    is_fortran)
-from numba.np.numpy_support import type_can_asarray, is_nonelike
+                                    is_fortran, check_is_integer,
+                                    type_is_scalar)
+from numba.np.numpy_support import type_can_asarray, is_nonelike, numpy_version
 from numba.core.imputils import (lower_builtin, lower_getattr,
                                  lower_getattr_generic,
                                  lower_setattr_generic,
@@ -27,11 +26,18 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
                                  impl_ret_new_ref, impl_ret_untracked,
                                  RefType)
 from numba.core.typing import signature
+from numba.core.types import StringLiteral
 from numba.core.extending import (register_jitable, overload, overload_method,
-                                  intrinsic)
+                                  intrinsic, overload_attribute)
 from numba.misc import quicksort, mergesort
 from numba.cpython import slicing
-from numba.cpython.unsafe.tuple import tuple_setitem
+from numba.cpython.unsafe.tuple import tuple_setitem, build_full_slice_tuple
+from numba.core.extending import overload_classmethod
+from numba.core.typing.npydecl import (parse_dtype as ty_parse_dtype,
+                                       parse_shape as ty_parse_shape,
+                                       _parse_nested_sequence,
+                                       _sequence_of_arrays,
+                                       _choose_concatenation_layout)
 
 
 def set_range_metadata(builder, load, lower_bound, upper_bound):
@@ -39,8 +45,8 @@ def set_range_metadata(builder, load, lower_bound, upper_bound):
     Set the "range" metadata on a load instruction.
     Note the interval is in the form [lower_bound, upper_bound).
     """
-    range_operands = [Constant.int(load.type, lower_bound),
-                      Constant.int(load.type, upper_bound)]
+    range_operands = [Constant(load.type, lower_bound),
+                      Constant(load.type, upper_bound)]
     md = builder.module.add_metadata(range_operands)
     load.set_metadata("range", md)
 
@@ -187,18 +193,30 @@ def populate_array(array, data, shape, strides, itemsize, meminfo,
     context = array._context
     builder = array._builder
     datamodel = array._datamodel
-    required_fields = set(datamodel._fields)
+    # doesn't matter what this array type instance is, it's just to get the
+    # fields for the datamodel of the standard array type in this context
+    standard_array = types.Array(types.float64, 1, 'C')
+    standard_array_type_datamodel = context.data_model_manager[standard_array]
+    required_fields = set(standard_array_type_datamodel._fields)
+    datamodel_fields = set(datamodel._fields)
+    # Make sure that the presented array object has a data model that is close
+    # enough to an array for this function to proceed.
+    if (required_fields & datamodel_fields) != required_fields:
+        missing = required_fields - datamodel_fields
+        msg = (f"The datamodel for type {array._fe_type} is missing "
+               f"field{'s' if len(missing) > 1 else ''} {missing}.")
+        raise ValueError(msg)
 
     if meminfo is None:
-        meminfo = Constant.null(context.get_value_type(
-            datamodel.get_type('meminfo')))
+        meminfo = Constant(context.get_value_type(
+            datamodel.get_type('meminfo')), None)
 
     intp_t = context.get_value_type(types.intp)
     if isinstance(shape, (tuple, list)):
         shape = cgutils.pack_array(builder, shape, intp_t)
     if isinstance(strides, (tuple, list)):
         strides = cgutils.pack_array(builder, strides, intp_t)
-    if isinstance(itemsize, utils.INT_TYPES):
+    if isinstance(itemsize, int):
         itemsize = intp_t(itemsize)
 
     attrs = dict(shape=shape,
@@ -209,8 +227,8 @@ def populate_array(array, data, shape, strides, itemsize, meminfo,
 
     # Set `parent` attribute
     if parent is None:
-        attrs['parent'] = Constant.null(context.get_value_type(
-            datamodel.get_type('parent')))
+        attrs['parent'] = Constant(context.get_value_type(
+            datamodel.get_type('parent')), None)
     else:
         attrs['parent'] = parent
     # Calc num of items from shape
@@ -250,6 +268,34 @@ def update_array_info(aryty, array):
 
     array.itemsize = context.get_constant(types.intp,
                                           get_itemsize(context, aryty))
+
+
+def normalize_axis(func_name, arg_name, ndim, axis):
+    """Constrain axis values to valid positive values."""
+    raise NotImplementedError()
+
+
+@overload(normalize_axis)
+def normalize_axis_overloads(func_name, arg_name, ndim, axis):
+    if not isinstance(func_name, StringLiteral):
+        raise errors.TypingError("func_name must be a str literal.")
+    if not isinstance(arg_name, StringLiteral):
+        raise errors.TypingError("arg_name must be a str literal.")
+
+    msg = (
+        f"{func_name.literal_value}: Argument {arg_name.literal_value} "
+        "out of bounds for dimensions of the array"
+    )
+
+    def impl(func_name, arg_name, ndim, axis):
+        if axis < 0:
+            axis += ndim
+        if axis < 0 or axis >= ndim:
+            raise ValueError(msg)
+
+        return axis
+
+    return impl
 
 
 @lower_builtin('getiter', types.Buffer)
@@ -310,7 +356,7 @@ def iternext_array(context, builder, sig, args, result):
     nitems, = cgutils.unpack_tuple(builder, ary.shape, count=1)
 
     index = builder.load(iterobj.index)
-    is_valid = builder.icmp(lc.ICMP_SLT, index, nitems)
+    is_valid = builder.icmp_signed('<', index, nitems)
     result.set_valid(is_valid)
 
     with builder.if_then(is_valid):
@@ -333,6 +379,7 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices,
     the corresponding view.
     """
     zero = context.get_constant(types.intp, 0)
+    one = context.get_constant(types.intp, 1)
 
     shapes = cgutils.unpack_tuple(builder, ary.shape, aryty.ndim)
     strides = cgutils.unpack_tuple(builder, ary.strides, aryty.ndim)
@@ -341,11 +388,12 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices,
     output_shapes = []
     output_strides = []
 
+    num_newaxes = len([idx for idx in index_types if is_nonelike(idx)])
     ax = 0
     for indexval, idxty in zip(indices, index_types):
         if idxty is types.ellipsis:
             # Fill up missing dimensions at the middle
-            n_missing = aryty.ndim - len(indices) + 1
+            n_missing = aryty.ndim - len(indices) + 1 + num_newaxes
             for i in range(n_missing):
                 output_indices.append(zero)
                 output_shapes.append(shapes[ax])
@@ -368,6 +416,10 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices,
             if boundscheck:
                 cgutils.do_boundscheck(context, builder, ind, shapes[ax], ax)
             output_indices.append(ind)
+        elif is_nonelike(idxty):
+            output_shapes.append(one)
+            output_strides.append(zero)
+            ax -= 1
         else:
             raise NotImplementedError("unexpected index type: %s" % (idxty,))
         ax += 1
@@ -637,7 +689,7 @@ class EntireIndexer(Indexer):
     def loop_head(self):
         builder = self.builder
         # Initialize loop variable
-        self.builder.store(Constant.int(self.ll_intp, 0), self.index)
+        self.builder.store(Constant(self.ll_intp, 0), self.index)
         builder.branch(self.bb_start)
         builder.position_at_end(self.bb_start)
         cur_index = builder.load(self.index)
@@ -669,7 +721,7 @@ class IntegerIndexer(Indexer):
         pass
 
     def get_size(self):
-        return Constant.int(self.ll_intp, 1)
+        return Constant(self.ll_intp, 1)
 
     def get_shape(self):
         return ()
@@ -719,7 +771,7 @@ class IntegerArrayIndexer(Indexer):
     def loop_head(self):
         builder = self.builder
         # Initialize loop variable
-        self.builder.store(Constant.int(self.ll_intp, 0), self.idx_index)
+        self.builder.store(Constant(self.ll_intp, 0), self.idx_index)
         builder.branch(self.bb_start)
         builder.position_at_end(self.bb_start)
         cur_index = builder.load(self.idx_index)
@@ -758,7 +810,7 @@ class BooleanArrayIndexer(Indexer):
         self.idxary = idxary
         assert idxty.ndim == 1
         self.ll_intp = self.context.get_value_type(types.intp)
-        self.zero = Constant.int(self.ll_intp, 0)
+        self.zero = Constant(self.ll_intp, 0)
 
     def prepare(self):
         builder = self.builder
@@ -841,7 +893,7 @@ class SliceIndexer(Indexer):
         self.idxty = idxty
         self.slice = slice
         self.ll_intp = self.context.get_value_type(types.intp)
-        self.zero = Constant.int(self.ll_intp, 0)
+        self.zero = Constant(self.ll_intp, 0)
 
     def prepare(self):
         builder = self.builder
@@ -908,18 +960,22 @@ class FancyIndexer(object):
         self.shapes = cgutils.unpack_tuple(builder, ary.shape, aryty.ndim)
         self.strides = cgutils.unpack_tuple(builder, ary.strides, aryty.ndim)
         self.ll_intp = self.context.get_value_type(types.intp)
+        self.newaxes = []
 
         indexers = []
+        num_newaxes = len([idx for idx in index_types if is_nonelike(idx)])
 
-        ax = 0
+        ax = 0 # keeps track of position of original axes
+        new_ax = 0 # keeps track of position for inserting new axes
         for indexval, idxty in zip(indices, index_types):
             if idxty is types.ellipsis:
                 # Fill up missing dimensions at the middle
-                n_missing = aryty.ndim - len(indices) + 1
+                n_missing = aryty.ndim - len(indices) + 1 + num_newaxes
                 for i in range(n_missing):
                     indexer = EntireIndexer(context, builder, aryty, ary, ax)
                     indexers.append(indexer)
                     ax += 1
+                    new_ax += 1
                 continue
 
             # Regular index value
@@ -945,9 +1001,13 @@ class FancyIndexer(object):
                 else:
                     assert 0
                 indexers.append(indexer)
+            elif is_nonelike(idxty):
+                self.newaxes.append(new_ax)
+                ax -= 1
             else:
                 raise AssertionError("unexpected index type: %s" % (idxty,))
             ax += 1
+            new_ax += 1
 
         # Fill up missing dimensions at the end
         assert ax <= aryty.ndim, (ax, aryty.ndim)
@@ -962,8 +1022,21 @@ class FancyIndexer(object):
     def prepare(self):
         for i in self.indexers:
             i.prepare()
-        # Compute the resulting shape
-        self.indexers_shape = sum([i.get_shape() for i in self.indexers], ())
+
+        one = self.context.get_constant(types.intp, 1)
+
+        # Compute the resulting shape given by the indices
+        res_shape = [i.get_shape() for i in self.indexers]
+
+        # At every position where newaxis/None is present insert
+        # one as a constant shape in the resulting list of shapes.
+        for i in self.newaxes:
+            res_shape.insert(i, (one,))
+
+        # Store the shape as a tuple, we can't do a simple
+        # tuple(res_shape) here since res_shape is a list
+        # of tuples which may be differently sized.
+        self.indexers_shape = sum(res_shape, ())
 
     def get_shape(self):
         """
@@ -1086,7 +1159,7 @@ def offset_bounds_from_strides(context, builder, arrty, arr, shapes, strides):
     Compute a half-open range [lower, upper) of byte offsets from the
     array's data pointer, that bound the in-memory extent of the array.
 
-    This mimicks offset_bounds_from_strides() from
+    This mimics offset_bounds_from_strides() from
     numpy/core/src/private/mem_overlap.c
     """
     itemsize = arr.itemsize
@@ -1190,7 +1263,6 @@ def maybe_copy_source(context, builder, use_copy,
             builder.store(builder.load(src_ptr), dest_ptr)
 
     def src_getitem(source_indices):
-        assert len(source_indices) == srcty.ndim
         src_ptr = cgutils.alloca_once(builder, ptrty)
         with builder.if_else(use_copy, likely=False) as (if_copy, otherwise):
             with if_copy:
@@ -1296,10 +1368,265 @@ def _broadcast_to_shape(context, builder, arrtype, arr, target_shape):
     new_arrtype = arrtype.copy(ndim=len(target_shape), layout='A')
     # Create new view
     new_arr = make_array(new_arrtype)(context, builder)
-    repl = dict(shape=cgutils.pack_array(builder, shapes),
-                strides=cgutils.pack_array(builder, strides))
-    cgutils.copy_struct(new_arr, arr, repl)
+    populate_array(new_arr,
+                   data=arr.data,
+                   shape=cgutils.pack_array(builder, shapes),
+                   strides=cgutils.pack_array(builder, strides),
+                   itemsize=arr.itemsize,
+                   meminfo=arr.meminfo,
+                   parent=arr.parent)
     return new_arrtype, new_arr
+
+
+@intrinsic
+def _numpy_broadcast_to(typingctx, array, shape):
+    ret = array.copy(ndim=shape.count, layout='A', readonly=True)
+    sig = ret(array, shape)
+
+    def codegen(context, builder, sig, args):
+        src, shape_ = args
+        srcty = sig.args[0]
+
+        src = make_array(srcty)(context, builder, src)
+        shape_ = cgutils.unpack_tuple(builder, shape_)
+        _, dest = _broadcast_to_shape(context, builder, srcty, src, shape_,)
+
+        # Hack to get np.broadcast_to to return a read-only array
+        setattr(dest, 'parent', Constant(
+                context.get_value_type(dest._datamodel.get_type('parent')),
+                None))
+
+        res = dest._getvalue()
+        return impl_ret_borrowed(context, builder, sig.return_type, res)
+    return sig, codegen
+
+
+@intrinsic
+def get_readonly_array(typingctx, arr):
+    # returns a copy of arr which is readonly
+    ret = arr.copy(readonly=True)
+    sig = ret(arr)
+
+    def codegen(context, builder, sig, args):
+        [src] = args
+        srcty = sig.args[0]
+
+        dest = make_array(srcty)(context, builder, src)
+        # Hack to return a read-only array
+        dest.parent = cgutils.get_null_value(dest.parent.type)
+        res = dest._getvalue()
+        return impl_ret_borrowed(context, builder, sig.return_type, res)
+    return sig, codegen
+
+
+@register_jitable
+def _can_broadcast(array, dest_shape):
+    src_shape = array.shape
+    src_ndim = len(src_shape)
+    dest_ndim = len(dest_shape)
+    if src_ndim > dest_ndim:
+        raise ValueError('input operand has more dimensions than allowed '
+                         'by the axis remapping')
+    for size in dest_shape:
+        if size < 0:
+            raise ValueError('all elements of broadcast shape must be '
+                             'non-negative')
+
+    # based on _broadcast_onto function in numba/np/npyimpl.py
+    src_index = 0
+    dest_index = dest_ndim - src_ndim
+    while src_index < src_ndim:
+        src_dim = src_shape[src_index]
+        dest_dim = dest_shape[dest_index]
+        # possible cases for (src_dim, dest_dim):
+        #  * (1, 1)   -> Ok
+        #  * (>1, 1)  -> Error!
+        #  * (>1, >1) -> src_dim == dest_dim else error!
+        #  * (1, >1)  -> Ok
+        if src_dim == dest_dim or src_dim == 1:
+            src_index += 1
+            dest_index += 1
+        else:
+            raise ValueError('operands could not be broadcast together '
+                             'with remapped shapes')
+
+
+def _default_broadcast_to_impl(array, shape):
+    array = np.asarray(array)
+    _can_broadcast(array, shape)
+    return _numpy_broadcast_to(array, shape)
+
+
+@overload(np.broadcast_to)
+def numpy_broadcast_to(array, shape):
+    if not type_can_asarray(array):
+        raise errors.TypingError('The first argument "array" must '
+                                 'be array-like')
+
+    if isinstance(shape, types.Integer):
+        def impl(array, shape):
+            return np.broadcast_to(array, (shape,))
+        return impl
+
+    elif isinstance(shape, types.UniTuple):
+        if not isinstance(shape.dtype, types.Integer):
+            msg = 'The second argument "shape" must be a tuple of integers'
+            raise errors.TypingError(msg)
+        return _default_broadcast_to_impl
+
+    elif isinstance(shape, types.Tuple) and shape.count > 0:
+        # check if all types are integers
+        if not all([isinstance(typ, types.IntegerLiteral) for typ in shape]):
+            msg = f'"{shape}" object cannot be interpreted as an integer'
+            raise errors.TypingError(msg)
+        return _default_broadcast_to_impl
+    elif isinstance(shape, types.Tuple) and shape.count == 0:
+        is_scalar_array = isinstance(array, types.Array) and array.ndim == 0
+        if type_is_scalar(array) or is_scalar_array:
+
+            def impl(array, shape):  # broadcast_to(array, ())
+                # Array type must be supported by "type_can_asarray"
+                # Quick note that unicode types are not supported!
+                array = np.asarray(array)
+                return get_readonly_array(array)
+            return impl
+
+        else:
+            msg = 'Cannot broadcast a non-scalar to a scalar array'
+            raise errors.TypingError(msg)
+    else:
+        msg = ('The argument "shape" must be a tuple or an integer. '
+               'Got %s' % shape)
+        raise errors.TypingError(msg)
+
+
+@register_jitable
+def numpy_broadcast_shapes_list(r, m, shape):
+    for i in range(len(shape)):
+        k = m - len(shape) + i
+        tmp = shape[i]
+        if tmp < 0:
+            raise ValueError("negative dimensions are not allowed")
+        if tmp == 1:
+            continue
+        if r[k] == 1:
+            r[k] = tmp
+        elif r[k] != tmp:
+            raise ValueError("shape mismatch: objects"
+                             " cannot be broadcast"
+                             " to a single shape")
+
+
+def ol_numpy_broadcast_shapes(*args):
+    # Based on https://github.com/numpy/numpy/blob/f702b26fff3271ba6a6ba29a021fc19051d1f007/numpy/core/src/multiarray/iterators.c#L1129-L1212  # noqa
+    for idx, arg in enumerate(args):
+        is_int = isinstance(arg, types.Integer)
+        is_int_tuple = isinstance(arg, types.UniTuple) and \
+            isinstance(arg.dtype, types.Integer)
+        is_empty_tuple = isinstance(arg, types.Tuple) and len(arg.types) == 0
+        if not (is_int or is_int_tuple or is_empty_tuple):
+            msg = (f'Argument {idx} must be either an int or tuple[int]. '
+                   f'Got {arg}')
+            raise errors.TypingError(msg)
+
+    # discover the number of dimensions
+    m = 0
+    for arg in args:
+        if isinstance(arg, types.Integer):
+            m = max(m, 1)
+        elif isinstance(arg, types.BaseTuple):
+            m = max(m, len(arg))
+
+    if m == 0:
+        return lambda *args: ()
+    else:
+        tup_init = (1,) * m
+
+        def impl(*args):
+            # propagate args
+            r = [1] * m
+            tup = tup_init
+            for arg in literal_unroll(args):
+                if isinstance(arg, tuple) and len(arg) > 0:
+                    numpy_broadcast_shapes_list(r, m, arg)
+                elif isinstance(arg, int):
+                    numpy_broadcast_shapes_list(r, m, (arg,))
+            for idx, elem in enumerate(r):
+                tup = tuple_setitem(tup, idx, elem)
+            return tup
+        return impl
+
+
+if numpy_version >= (1, 20):
+    overload(np.broadcast_shapes)(ol_numpy_broadcast_shapes)
+
+
+def __broadcast_shapes(*args):
+    pass
+
+
+# np.broadcast_shapes is only available on NumPy >= 1.20
+# this quick hack allow us to use np.broadcast_shapes internally without
+# having to check if it exists in the NumPy module
+overload(__broadcast_shapes)(ol_numpy_broadcast_shapes)
+
+
+@overload(np.broadcast_arrays)
+def numpy_broadcast_arrays(*args):
+
+    for idx, arg in enumerate(args):
+        if not type_can_asarray(arg):
+            raise errors.TypingError(f'Argument "{idx}" must '
+                                     'be array-like')
+
+    unified_dtype = None
+    dt = None
+    for arg in args:
+        if isinstance(arg, (types.Array, types.BaseTuple)):
+            dt = arg.dtype
+        else:
+            dt = arg
+
+        if unified_dtype is None:
+            unified_dtype = dt
+        elif unified_dtype != dt:
+            raise errors.TypingError('Mismatch of argument types. Numba cannot '
+                                     'broadcast arrays with different types. '
+                                     f'Got {args}')
+
+    # number of dimensions
+    m = 0
+    for idx, arg in enumerate(args):
+        if isinstance(arg, types.ArrayCompatible):
+            m = max(m, arg.ndim)
+        elif isinstance(arg, (types.Number, types.Boolean, types.BaseTuple)):
+            m = max(m, 1)
+        else:
+            raise errors.TypingError(f'Unhandled type {arg}')
+
+    tup_init = (0,) * m
+
+    def impl(*args):
+        # find out the output shape
+        # we can't call np.broadcast_shapes here since args may have arrays
+        # with different shapes and it is not possible to create a list
+        # with those shapes dynamically
+        shape = [1] * m
+        for array in literal_unroll(args):
+            numpy_broadcast_shapes_list(shape, m, np.asarray(array).shape)
+
+        tup = tup_init
+
+        for i in range(m):
+            tup = tuple_setitem(tup, i, shape[i])
+
+        # numpy checks if the input arrays have the same shape as `shape`
+        outs = []
+        for array in literal_unroll(args):
+            outs.append(np.broadcast_to(np.asarray(array), tup))
+        return outs
+
+    return impl
 
 
 def fancy_setslice(context, builder, sig, args, index_types, indices):
@@ -1399,14 +1726,28 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         def src_cleanup():
             pass
 
+    zero = context.get_constant(types.uintp, 0)
     # Loop on destination and copy from source to destination
     dest_indices, counts = indexer.begin_loops()
 
     # Source is iterated in natural order
-    source_indices = tuple(c for c in counts if c is not None)
+
+    # Counts represent a counter for the number of times a specified axis
+    # is being accessed, during setitem they are used as source
+    # indices
+    counts = list(counts)
+
+    # We need to artifically introduce the index zero wherever a
+    # newaxis is present within the indexer. These always remain
+    # zero.
+    for i in indexer.newaxes:
+        counts.insert(i, zero)
+
+    source_indices = [c for c in counts if c is not None]
+
     val = src_getitem(source_indices)
 
-    # Cast to the destination dtype (cross-dtype slice assignement is allowed)
+    # Cast to the destination dtype (cross-dtype slice assignment is allowed)
     val = context.cast(builder, val, src_dtype, aryty.dtype)
 
     # No need to check for wraparound, as the indexers all ensure
@@ -1414,7 +1755,8 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
     dest_ptr = cgutils.get_item_pointer2(context, builder, dest_data,
                                          dest_shapes, dest_strides,
                                          aryty.layout, dest_indices,
-                                         wraparound=False)
+                                         wraparound=False,
+                                         boundscheck=context.enable_boundscheck)
     store_item(context, builder, aryty, val, dest_ptr)
 
     indexer.end_loops()
@@ -1475,7 +1817,7 @@ def array_transpose_tuple(context, builder, sig, args):
     num_axis, dtype = axisty.count, axisty.dtype
 
     ll_intp = context.get_value_type(types.intp)
-    ll_ary_size = lc.Type.array(ll_intp, num_axis)
+    ll_ary_size = ir.ArrayType(ll_intp, num_axis)
 
     # Allocate memory for axes, shapes, and strides arrays.
     arys = [axis, ary.shape, ary.strides]
@@ -1562,6 +1904,49 @@ def array_T(context, builder, typ, value):
     return impl_ret_borrowed(context, builder, typ, res)
 
 
+@overload(np.logspace)
+def numpy_logspace(start, stop, num=50):
+    if not isinstance(start, types.Number):
+        raise errors.TypingError('The first argument "start" must be a number')
+    if not isinstance(stop, types.Number):
+        raise errors.TypingError('The second argument "stop" must be a number')
+    if not isinstance(num, (int, types.Integer)):
+        raise errors.TypingError('The third argument "num" must be an integer')
+
+    def impl(start, stop, num=50):
+        y = np.linspace(start, stop, num)
+        return np.power(10.0, y)
+
+    return impl
+
+
+@overload(np.rot90)
+def numpy_rot90(arr, k=1):
+    # supporting axes argument it needs to be included in np.flip
+    if not isinstance(k, (int, types.Integer)):
+        raise errors.TypingError('The second argument "k" must be an integer')
+    if not isinstance(arr, types.Array):
+        raise errors.TypingError('The first argument "arr" must be an array')
+
+    if arr.ndim < 2:
+        raise errors.NumbaValueError('Input must be >= 2-d.')
+
+    def impl(arr, k=1):
+        k = k % 4
+        if k == 0:
+            return arr[:]
+        elif k == 1:
+            return np.swapaxes(np.fliplr(arr), 0, 1)
+        elif k == 2:
+            return np.flipud(np.fliplr(arr))
+        elif k == 3:
+            return np.fliplr(np.swapaxes(arr, 0, 1))
+        else:
+            raise AssertionError  # unreachable
+
+    return impl
+
+
 def _attempt_nocopy_reshape(context, builder, aryty, ary,
                             newnd, newshape, newstrides):
     """
@@ -1574,15 +1959,15 @@ def _attempt_nocopy_reshape(context, builder, aryty, ary,
     ll_intp = context.get_value_type(types.intp)
     ll_intp_star = ll_intp.as_pointer()
     ll_intc = context.get_value_type(types.intc)
-    fnty = lc.Type.function(ll_intc, [
+    fnty = ir.FunctionType(ll_intc, [
         # nd, *dims, *strides
         ll_intp, ll_intp_star, ll_intp_star,
         # newnd, *newdims, *newstrides
         ll_intp, ll_intp_star, ll_intp_star,
         # itemsize, is_f_order
         ll_intp, ll_intc])
-    fn = builder.module.get_or_insert_function(
-        fnty, name="numba_attempt_nocopy_reshape")
+    fn = cgutils.get_or_insert_function(builder.module, fnty,
+                                        "numba_attempt_nocopy_reshape")
 
     nd = ll_intp(aryty.ndim)
     shape = cgutils.gep_inbounds(builder, ary._get_ptr_by_name('shape'), 0, 0)
@@ -1637,7 +2022,7 @@ def array_reshape(context, builder, sig, args):
     shape = args[1]
 
     ll_intp = context.get_value_type(types.intp)
-    ll_shape = lc.Type.array(ll_intp, shapety.count)
+    ll_shape = ir.ArrayType(ll_intp, shapety.count)
 
     ary = make_array(aryty)(context, builder, args[0])
 
@@ -1772,6 +2157,161 @@ def array_flatten(context, builder, sig, args):
     res = context.compile_internal(builder, imp, sig, args)
     res = impl_ret_new_ref(context, builder, sig.return_type, res)
     return res
+
+
+@register_jitable
+def _np_clip_impl(a, a_min, a_max, out):
+    # Both a_min and a_max are numpy arrays
+    ret = np.empty_like(a) if out is None else out
+    a_b, a_min_b, a_max_b = np.broadcast_arrays(a, a_min, a_max)
+    for index in np.ndindex(a_b.shape):
+        val_a = a_b[index]
+        val_a_min = a_min_b[index]
+        val_a_max = a_max_b[index]
+        ret[index] = min(max(val_a, val_a_min), val_a_max)
+
+    return ret
+
+
+@register_jitable
+def _np_clip_impl_none(a, b, use_min, out):
+    for index in np.ndindex(a.shape):
+        val_a = a[index]
+        val_b = b[index]
+        if use_min:
+            out[index] = min(val_a, val_b)
+        else:
+            out[index] = max(val_a, val_b)
+    return out
+
+
+@overload(np.clip)
+def np_clip(a, a_min, a_max, out=None):
+    if not type_can_asarray(a):
+        raise errors.TypingError('The argument "a" must be array-like')
+
+    if (not isinstance(a_min, types.NoneType) and
+            not type_can_asarray(a_min)):
+        raise errors.TypingError(('The argument "a_min" must be a number '
+                                 'or an array-like'))
+
+    if (not isinstance(a_max, types.NoneType) and
+            not type_can_asarray(a_max)):
+        raise errors.TypingError('The argument "a_max" must be a number '
+                                 'or an array-like')
+
+    if not (isinstance(out, types.Array) or is_nonelike(out)):
+        msg = 'The argument "out" must be an array if it is provided'
+        raise errors.TypingError(msg)
+
+    # TODO: support scalar a (issue #3469)
+    a_min_is_none = a_min is None or isinstance(a_min, types.NoneType)
+    a_max_is_none = a_max is None or isinstance(a_max, types.NoneType)
+
+    if a_min_is_none and a_max_is_none:
+        # Raises value error when both a_min and a_max are None
+        def np_clip_nn(a, a_min, a_max, out=None):
+            raise ValueError("array_clip: must set either max or min")
+
+        return np_clip_nn
+
+    a_min_is_scalar = isinstance(a_min, types.Number)
+    a_max_is_scalar = isinstance(a_max, types.Number)
+
+    if a_min_is_scalar and a_max_is_scalar:
+        def np_clip_ss(a, a_min, a_max, out=None):
+            # a_min and a_max are scalars
+            # since their shape will be empty
+            # so broadcasting is not needed at all
+            ret = np.empty_like(a) if out is None else out
+            for index in np.ndindex(a.shape):
+                val_a = a[index]
+                ret[index] = min(max(val_a, a_min), a_max)
+
+            return ret
+
+        return np_clip_ss
+    elif a_min_is_scalar and not a_max_is_scalar:
+        if a_max_is_none:
+            def np_clip_sn(a, a_min, a_max, out=None):
+                # a_min is a scalar
+                # since its shape will be empty
+                # so broadcasting is not needed at all
+                ret = np.empty_like(a) if out is None else out
+                for index in np.ndindex(a.shape):
+                    val_a = a[index]
+                    ret[index] = max(val_a, a_min)
+
+                return ret
+
+            return np_clip_sn
+        else:
+            def np_clip_sa(a, a_min, a_max, out=None):
+                # a_min is a scalar
+                # since its shape will be empty
+                # broadcast it to shape of a
+                # by using np.full_like
+                a_min_full = np.full_like(a, a_min)
+                return _np_clip_impl(a, a_min_full, a_max, out)
+
+            return np_clip_sa
+    elif not a_min_is_scalar and a_max_is_scalar:
+        if a_min_is_none:
+            def np_clip_ns(a, a_min, a_max, out=None):
+                # a_max is a scalar
+                # since its shape will be empty
+                # so broadcasting is not needed at all
+                ret = np.empty_like(a) if out is None else out
+                for index in np.ndindex(a.shape):
+                    val_a = a[index]
+                    ret[index] = min(val_a, a_max)
+
+                return ret
+
+            return np_clip_ns
+        else:
+            def np_clip_as(a, a_min, a_max, out=None):
+                # a_max is a scalar
+                # since its shape will be empty
+                # broadcast it to shape of a
+                # by using np.full_like
+                a_max_full = np.full_like(a, a_max)
+                return _np_clip_impl(a, a_min, a_max_full, out)
+
+            return np_clip_as
+    else:
+        # Case where exactly one of a_min or a_max is None
+        if a_min_is_none:
+            def np_clip_na(a, a_min, a_max, out=None):
+                # a_max is a numpy array but a_min is None
+                ret = np.empty_like(a) if out is None else out
+                a_b, a_max_b = np.broadcast_arrays(a, a_max)
+                return _np_clip_impl_none(a_b, a_max_b, True, ret)
+
+            return np_clip_na
+        elif a_max_is_none:
+            def np_clip_an(a, a_min, a_max, out=None):
+                # a_min is a numpy array but a_max is None
+                ret = np.empty_like(a) if out is None else out
+                a_b, a_min_b = np.broadcast_arrays(a, a_min)
+                return _np_clip_impl_none(a_b, a_min_b, False, ret)
+
+            return np_clip_an
+        else:
+            def np_clip_aa(a, a_min, a_max, out=None):
+                # Both a_min and a_max are clearly arrays
+                # because none of the above branches
+                # returned
+                return _np_clip_impl(a, a_min, a_max, out)
+
+            return np_clip_aa
+
+
+@overload_method(types.Array, 'clip')
+def array_clip(a, a_min=None, a_max=None, out=None):
+    def impl(a, a_min=None, a_max=None, out=None):
+        return np.clip(a, a_min, a_max, out)
+    return impl
 
 
 def _change_dtype(context, builder, oldty, newty, ary):
@@ -1993,6 +2533,66 @@ def array_repeat(a, repeats):
     return array_repeat_impl
 
 
+@intrinsic
+def _intrin_get_itemsize(tyctx, dtype):
+    """Computes the itemsize of the dtype"""
+    sig = types.intp(dtype)
+
+    def codegen(cgctx, builder, sig, llargs):
+        llty = cgctx.get_data_type(sig.args[0].dtype)
+        llintp = cgctx.get_data_type(sig.return_type)
+        return llintp(cgctx.get_abi_sizeof(llty))
+    return sig, codegen
+
+
+def _compatible_view(a, dtype):
+    pass
+
+
+@overload(_compatible_view, target='generic')
+def ol_compatible_view(a, dtype):
+    """Determines if the array and dtype are compatible for forming a view."""
+    # NOTE: NumPy 1.23+ uses this check.
+    # Code based on:
+    # https://github.com/numpy/numpy/blob/750ad21258cfc00663586d5a466e24f91b48edc7/numpy/core/src/multiarray/getset.c#L500-L555  # noqa: E501
+    def impl(a, dtype):
+        dtype_size = _intrin_get_itemsize(dtype)
+        if dtype_size != a.itemsize:
+            # catch forbidden cases
+            if a.ndim == 0:
+                msg1 = ("Changing the dtype of a 0d array is only supported "
+                        "if the itemsize is unchanged")
+                raise ValueError(msg1)
+            else:
+                # NumPy has a check here for subarray type conversion which
+                # Numba doesn't support
+                pass
+
+            # Resize on last axis only
+            axis = a.ndim - 1
+            p1 = a.shape[axis] != 1
+            p2 = a.size != 0
+            p3 = a.strides[axis] != a.itemsize
+            if (p1 and p2 and p3):
+                msg2 = ("To change to a dtype of a different size, the last "
+                        "axis must be contiguous")
+                raise ValueError(msg2)
+
+            if dtype_size < a.itemsize:
+                if dtype_size == 0 or a.itemsize % dtype_size != 0:
+                    msg3 = ("When changing to a smaller dtype, its size must "
+                            "be a divisor of the size of original dtype")
+                    raise ValueError(msg3)
+            else:
+                newdim = a.shape[axis] * a.itemsize
+                if newdim % dtype_size != 0:
+                    msg4 = ("When changing to a larger dtype, its size must be "
+                            "a divisor of the total size in bytes of the last "
+                            "axis of the array.")
+                    raise ValueError(msg4)
+    return impl
+
+
 @lower_builtin('array.view', types.Array, types.DTypeSpec)
 def array_view(context, builder, sig, args):
     aryty = sig.args[0]
@@ -2010,8 +2610,20 @@ def array_view(context, builder, sig, args):
         else:
             setattr(ret, k, val)
 
+    if numpy_version >= (1, 23):
+        # NumPy 1.23+ bans views using a dtype that is a different size to that
+        # of the array when the last axis is not contiguous. For example, this
+        # manifests at runtime when a dtype size altering view is requested
+        # on a Fortran ordered array.
+
+        tyctx = context.typing_context
+        fnty = tyctx.resolve_value_type(_compatible_view)
+        _compatible_view_sig = fnty.get_call_type(tyctx, (*sig.args,), {})
+        impl = context.get_function(fnty, _compatible_view_sig)
+        impl(builder, args)
+
     ok = _change_dtype(context, builder, aryty, retty, ret)
-    fail = builder.icmp_unsigned('==', ok, lc.Constant.int(ok.type, 0))
+    fail = builder.icmp_unsigned('==', ok, Constant(ok.type, 0))
 
     with builder.if_then(fail):
         msg = "new type not compatible with array"
@@ -2072,6 +2684,7 @@ def array_itemsize(context, builder, typ, value):
     return impl_ret_untracked(context, builder, typ, res)
 
 
+@lower_getattr(types.Array, "nbytes")
 @lower_getattr(types.MemoryView, "nbytes")
 def array_nbytes(context, builder, typ, value):
     """
@@ -2179,7 +2792,7 @@ def array_flags(context, builder, typ, value):
 @lower_getattr(types.ArrayFlags, "c_contiguous")
 def array_flags_c_contiguous(context, builder, typ, value):
     if typ.array_type.layout != 'C':
-        # any layout can stil be contiguous
+        # any layout can still be contiguous
         flagsobj = context.make_helper(builder, typ, value=value)
         res = _call_contiguous_check(is_contiguous, context, builder,
                                      typ.array_type, flagsobj.parent)
@@ -2192,7 +2805,7 @@ def array_flags_c_contiguous(context, builder, typ, value):
 @lower_getattr(types.ArrayFlags, "f_contiguous")
 def array_flags_f_contiguous(context, builder, typ, value):
     if typ.array_type.layout != 'F':
-        # any layout can stil be contiguous
+        # any layout can still be contiguous
         flagsobj = context.make_helper(builder, typ, value=value)
         res = _call_contiguous_check(is_fortran, context, builder,
                                      typ.array_type, flagsobj.parent)
@@ -2224,17 +2837,14 @@ def array_imag_part(context, builder, typ, value):
     elif typ.dtype in types.number_domain:
         # return a readonly zero array
         sig = signature(typ.copy(readonly=True), typ)
-        return numpy_zeros_like_nd(context, builder, sig, [value])
+        arrtype, shapes = _parse_empty_like_args(context, builder, sig, [value])
+        ary = _empty_nd_impl(context, builder, arrtype, shapes)
+        cgutils.memset(builder, ary.data, builder.mul(ary.itemsize,
+                                                      ary.nitems), 0)
+        return impl_ret_new_ref(context, builder, sig.return_type,
+                                ary._getvalue())
     else:
         raise NotImplementedError('unsupported .imag for {}'.format(type.dtype))
-
-
-@overload_method(types.Array, 'conj')
-@overload_method(types.Array, 'conjugate')
-def array_conj(arr):
-    def impl(arr):
-        return np.conj(arr)
-    return impl
 
 
 def array_complex_attr(context, builder, typ, value, attr):
@@ -2292,8 +2902,16 @@ def array_complex_attr(context, builder, typ, value, attr):
     return impl_ret_borrowed(context, builder, resultty, result._getvalue())
 
 
+@overload_method(types.Array, 'conj')
+@overload_method(types.Array, 'conjugate')
+def array_conj(arr):
+    def impl(arr):
+        return np.conj(arr)
+    return impl
+
 # ------------------------------------------------------------------------------
 # DType attribute
+
 
 def dtype_type(context, builder, dtypety, dtypeval):
     # Just return a dummy opaque value
@@ -2323,7 +2941,11 @@ def array_record_getattr(context, builder, typ, value, attr):
     dtype = rectype.typeof(attr)
     offset = rectype.offset(attr)
 
-    resty = typ.copy(dtype=dtype, layout='A')
+    if isinstance(dtype, types.NestedArray):
+        resty = typ.copy(
+            dtype=dtype.dtype, ndim=typ.ndim + dtype.ndim, layout='A')
+    else:
+        resty = typ.copy(dtype=dtype, layout='A')
 
     raryty = make_array(resty)
 
@@ -2334,11 +2956,24 @@ def array_record_getattr(context, builder, typ, value, attr):
     newdataptr = cgutils.pointer_add(
         builder, array.data, constoffset,  return_type=rary.data.type,
     )
-    datasize = context.get_abi_sizeof(context.get_data_type(dtype))
+    if isinstance(dtype, types.NestedArray):
+        # new shape = recarray shape + inner dimension from nestedarray
+        shape = cgutils.unpack_tuple(builder, array.shape, typ.ndim)
+        shape += [context.get_constant(types.intp, i) for i in dtype.shape]
+        # new strides = recarray strides + strides of the inner nestedarray
+        strides = cgutils.unpack_tuple(builder, array.strides, typ.ndim)
+        strides += [context.get_constant(types.intp, i) for i in dtype.strides]
+        # New datasize = size of elements of the nestedarray
+        datasize = context.get_abi_sizeof(context.get_data_type(dtype.dtype))
+    else:
+        # New shape, strides, and datasize match the underlying array
+        shape = array.shape
+        strides = array.strides
+        datasize = context.get_abi_sizeof(context.get_data_type(dtype))
     populate_array(rary,
                    data=newdataptr,
-                   shape=array.shape,
-                   strides=array.strides,
+                   shape=shape,
+                   strides=strides,
                    itemsize=context.get_constant(types.intp, datasize),
                    meminfo=array.meminfo,
                    parent=array.parent)
@@ -2358,8 +2993,7 @@ def array_record_getitem(context, builder, sig, args):
 @lower_getattr_generic(types.Record)
 def record_getattr(context, builder, typ, value, attr):
     """
-    Generic getattr() implementation for records: fetch the given
-    record member, i.e. a scalar.
+    Generic getattr() implementation for records: get the given record member.
     """
     context.sentry_record_alignment(typ, attr)
     offset = typ.offset(attr)
@@ -2399,8 +3033,7 @@ def record_getattr(context, builder, typ, value, attr):
 @lower_setattr_generic(types.Record)
 def record_setattr(context, builder, sig, args, attr):
     """
-    Generic setattr() implementation for records: set the given
-    record member, i.e. a scalar.
+    Generic setattr() implementation for records: set the given record member.
     """
     typ, valty = sig.args
     target, val = args
@@ -2409,15 +3042,26 @@ def record_setattr(context, builder, sig, args, attr):
     offset = typ.offset(attr)
     elemty = typ.typeof(attr)
 
-    dptr = cgutils.get_record_member(builder, target, offset,
-                                     context.get_data_type(elemty))
-    val = context.cast(builder, val, valty, elemty)
-    align = None if typ.aligned else 1
-    context.pack_value(builder, elemty, val, dptr, align=align)
+    if isinstance(elemty, types.NestedArray):
+        # Copy the data from the RHS into the nested array
+        val_struct = cgutils.create_struct_proxy(valty)(context, builder,
+                                                        value=args[1])
+        src = val_struct.data
+        dest = cgutils.get_record_member(builder, target, offset,
+                                         src.type.pointee)
+        cgutils.memcpy(builder, dest, src,
+                       context.get_constant(types.intp, elemty.nitems))
+    else:
+        # Set the given scalar record member
+        dptr = cgutils.get_record_member(builder, target, offset,
+                                         context.get_data_type(elemty))
+        val = context.cast(builder, val, valty, elemty)
+        align = None if typ.aligned else 1
+        context.pack_value(builder, elemty, val, dptr, align=align)
 
 
 @lower_builtin('static_getitem', types.Record, types.StringLiteral)
-def record_getitem(context, builder, sig, args):
+def record_static_getitem_str(context, builder, sig, args):
     """
     Record.__getitem__ redirects to getattr()
     """
@@ -2425,8 +3069,20 @@ def record_getitem(context, builder, sig, args):
     return impl(context, builder, sig.args[0], args[0], args[1])
 
 
+@lower_builtin('static_getitem', types.Record, types.IntegerLiteral)
+def record_static_getitem_int(context, builder, sig, args):
+    """
+    Record.__getitem__ redirects to getattr()
+    """
+    idx = sig.args[1].literal_value
+    fields = list(sig.args[0].fields)
+    ll_field = context.insert_const_string(builder.module, fields[idx])
+    impl = context.get_getattr(sig.args[0], ll_field)
+    return impl(context, builder, sig.args[0], args[0], fields[idx])
+
+
 @lower_builtin('static_setitem', types.Record, types.StringLiteral, types.Any)
-def record_setitem(context, builder, sig, args):
+def record_static_setitem_str(context, builder, sig, args):
     """
     Record.__setitem__ redirects to setattr()
     """
@@ -2434,6 +3090,20 @@ def record_setitem(context, builder, sig, args):
     rec, idx, val = args
     getattr_sig = signature(sig.return_type, recty, valty)
     impl = context.get_setattr(idx, getattr_sig)
+    assert impl is not None
+    return impl(builder, (rec, val))
+
+
+@lower_builtin('static_setitem', types.Record, types.IntegerLiteral, types.Any)
+def record_static_setitem_int(context, builder, sig, args):
+    """
+    Record.__setitem__ redirects to setattr()
+    """
+    recty, _, valty = sig.args
+    rec, idx, val = args
+    getattr_sig = signature(sig.return_type, recty, valty)
+    fields = list(sig.args[0].fields)
+    impl = context.get_setattr(fields[idx], getattr_sig)
     assert impl is not None
     return impl(builder, (rec, val))
 
@@ -2484,6 +3154,14 @@ def array_is(context, builder, sig, args):
                 a.ctypes.data == b.ctypes.data)
 
     return context.compile_internal(builder, array_is_impl, sig, args)
+
+# ------------------------------------------------------------------------------
+# Hash
+
+
+@overload_attribute(types.Array, "__hash__")
+def ol_array_hash(arr):
+    return lambda arr: None
 
 
 # ------------------------------------------------------------------------------
@@ -2569,7 +3247,7 @@ def make_nditer_cls(nditerty):
         def set_member_ptr(self, ptr):
             setattr(self.nditer, self.member_name, ptr)
 
-        @utils.cached_property
+        @functools.cached_property
         def member_ptr(self):
             return getattr(self.nditer, self.member_name)
 
@@ -2661,7 +3339,7 @@ def make_nditer_cls(nditerty):
         so indices and shapes arrays have to be reversed as well.
         """
 
-        @utils.cached_property
+        @functools.cached_property
         def subiters(self):
             l = []
             factories = {'flat': FlatSubIter if nditerty.need_shaped_indexing
@@ -2898,7 +3576,7 @@ def make_ndindex_cls(nditerty):
                 # but we have to catch that condition early to avoid
                 # a bug inside the iteration logic.
                 dim_size = shapes[dim]
-                dim_is_empty = builder.icmp(lc.ICMP_EQ, dim_size, zero)
+                dim_is_empty = builder.icmp_unsigned('==', dim_size, zero)
                 with cgutils.if_unlikely(builder, dim_is_empty):
                     builder.store(cgutils.true_byte, exhausted)
 
@@ -2978,7 +3656,7 @@ def _make_flattening_iter_cls(flatiterty, kind):
                 nitems = arr.nitems
 
                 index = builder.load(self.index)
-                is_valid = builder.icmp(lc.ICMP_SLT, index, nitems)
+                is_valid = builder.icmp_signed('<', index, nitems)
                 result.set_valid(is_valid)
 
                 with cgutils.if_likely(builder, is_valid):
@@ -3047,7 +3725,7 @@ def _make_flattening_iter_cls(flatiterty, kind):
                     # but we have to catch that condition early to avoid
                     # a bug inside the iteration logic (see issue #846).
                     dim_size = shapes[dim]
-                    dim_is_empty = builder.icmp(lc.ICMP_EQ, dim_size, zero)
+                    dim_is_empty = builder.icmp_unsigned('==', dim_size, zero)
                     with cgutils.if_unlikely(builder, dim_is_empty):
                         builder.store(cgutils.true_byte, exhausted)
 
@@ -3100,7 +3778,7 @@ def _make_flattening_iter_cls(flatiterty, kind):
 
                     count = shapes[dim]
                     stride = strides[dim]
-                    in_bounds = builder.icmp(lc.ICMP_SLT, idx, count)
+                    in_bounds = builder.icmp_signed('<', idx, count)
                     with cgutils.if_likely(builder, in_bounds):
                         # Index is valid => pointer can simply be incremented.
                         builder.store(idx, idxptr)
@@ -3359,7 +4037,7 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
 
     # compute array length
     arrlen = context.get_constant(types.intp, 1)
-    overflow = ir.Constant(ir.IntType(1), 0)
+    overflow = Constant(ir.IntType(1), 0)
     for s in shapes:
         arrlen_mult = builder.smul_with_overflow(arrlen, s)
         arrlen = builder.extract_value(arrlen_mult, 0)
@@ -3398,10 +4076,16 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
              " the maximum possible size.",)
         )
 
-    align = context.get_preferred_array_alignment(arrtype.dtype)
-    meminfo = context.nrt.meminfo_alloc_aligned(builder, size=allocsize,
-                                                align=align)
+    dtype = arrtype.dtype
+    align_val = context.get_preferred_array_alignment(dtype)
+    align = context.get_constant(types.uint32, align_val)
+    args = (context.get_dummy_value(), allocsize, align)
 
+    mip = types.MemInfoPointer(types.voidptr)
+    arytypeclass = types.TypeRef(type(arrtype))
+    argtypes = signature(mip, arytypeclass, types.intp, types.uint32)
+
+    meminfo = context.compile_internal(builder, _call_allocator, argtypes, args)
     data = context.nrt.meminfo_data(builder, meminfo)
 
     intp_t = context.get_value_type(types.intp)
@@ -3418,11 +4102,34 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
     return ary
 
 
-def _zero_fill_array(context, builder, ary):
+@overload_classmethod(types.Array, "_allocate")
+def _ol_array_allocate(cls, allocsize, align):
+    """Implements a Numba-only default target (cpu) classmethod on the array
+    type.
     """
-    Zero-fill an array.  The array must be contiguous.
+    def impl(cls, allocsize, align):
+        return intrin_alloc(allocsize, align)
+    return impl
+
+
+def _call_allocator(arrtype, size, align):
+    """Trampoline to call the intrinsic used for allocation
     """
-    cgutils.memset(builder, ary.data, builder.mul(ary.itemsize, ary.nitems), 0)
+    return arrtype._allocate(size, align)
+
+
+@intrinsic
+def intrin_alloc(typingctx, allocsize, align):
+    """Intrinsic to call into the allocator for Array
+    """
+    def codegen(context, builder, signature, args):
+        [allocsize, align] = args
+        meminfo = context.nrt.meminfo_alloc_aligned(builder, allocsize, align)
+        return meminfo
+
+    mip = types.MemInfoPointer(types.voidptr)    # return untyped pointer
+    sig = signature(mip, allocsize, align)
+    return sig, codegen
 
 
 def _parse_shape(context, builder, ty, val):
@@ -3434,7 +4141,7 @@ def _parse_shape(context, builder, ty, val):
         intp_t = context.get_value_type(types.intp)
         intp_width = intp_t.width
         intp_ir = ir.IntType(intp_width)
-        maxval = ir.Constant(intp_ir, ((1 << intp_width - 1) - 1))
+        maxval = Constant(intp_ir, ((1 << intp_width - 1) - 1))
         if src_t.width < intp_width:
             res = builder.sext(src, intp_ir)
         elif src_t.width >= intp_width:
@@ -3497,170 +4204,199 @@ def _parse_empty_like_args(context, builder, sig, args):
         return sig.return_type, ()
 
 
-@lower_builtin(np.empty, types.Any)
-@lower_builtin(np.empty, types.Any, types.Any)
-def numpy_empty_nd(context, builder, sig, args):
-    arrtype, shapes = _parse_empty_args(context, builder, sig, args)
-    ary = _empty_nd_impl(context, builder, arrtype, shapes)
-    return impl_ret_new_ref(context, builder, sig.return_type, ary._getvalue())
+def _check_const_str_dtype(fname, dtype):
+    if isinstance(dtype, types.UnicodeType):
+        msg = f"If np.{fname} dtype is a string it must be a string constant."
+        raise errors.TypingError(msg)
 
 
-@lower_builtin(np.empty_like, types.Any)
-@lower_builtin(np.empty_like, types.Any, types.DTypeSpec)
-def numpy_empty_like_nd(context, builder, sig, args):
-    arrtype, shapes = _parse_empty_like_args(context, builder, sig, args)
-    ary = _empty_nd_impl(context, builder, arrtype, shapes)
-    return impl_ret_new_ref(context, builder, sig.return_type, ary._getvalue())
+@intrinsic
+def numpy_empty_nd(tyctx, ty_shape, ty_dtype, ty_retty_ref):
+    ty_retty = ty_retty_ref.instance_type
+    sig = ty_retty(ty_shape, ty_dtype, ty_retty_ref)
+
+    def codegen(cgctx, builder, sig, llargs):
+        arrtype, shapes = _parse_empty_args(cgctx, builder, sig, llargs)
+        ary = _empty_nd_impl(cgctx, builder, arrtype, shapes)
+        return ary._getvalue()
+    return sig, codegen
 
 
-@lower_builtin(np.zeros, types.Any)
-@lower_builtin(np.zeros, types.Any, types.Any)
-def numpy_zeros_nd(context, builder, sig, args):
-    arrtype, shapes = _parse_empty_args(context, builder, sig, args)
-    ary = _empty_nd_impl(context, builder, arrtype, shapes)
-    _zero_fill_array(context, builder, ary)
-    return impl_ret_new_ref(context, builder, sig.return_type, ary._getvalue())
+@overload(np.empty)
+def ol_np_empty(shape, dtype=float):
+    _check_const_str_dtype("empty", dtype)
+    if (dtype is float or
+        (isinstance(dtype, types.Function) and dtype.typing_key is float) or
+            is_nonelike(dtype)): #default
+        nb_dtype = types.double
+    else:
+        nb_dtype = ty_parse_dtype(dtype)
+
+    ndim = ty_parse_shape(shape)
+    if nb_dtype is not None and ndim is not None:
+        retty = types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
+
+        def impl(shape, dtype=float):
+            return numpy_empty_nd(shape, dtype, retty)
+        return impl
+    else:
+        msg = f"Cannot parse input types to function np.empty({shape}, {dtype})"
+        raise errors.TypingError(msg)
 
 
-@lower_builtin(np.zeros_like, types.Any)
-@lower_builtin(np.zeros_like, types.Any, types.DTypeSpec)
-def numpy_zeros_like_nd(context, builder, sig, args):
-    arrtype, shapes = _parse_empty_like_args(context, builder, sig, args)
-    ary = _empty_nd_impl(context, builder, arrtype, shapes)
-    _zero_fill_array(context, builder, ary)
-    return impl_ret_new_ref(context, builder, sig.return_type, ary._getvalue())
+@intrinsic
+def numpy_empty_like_nd(tyctx, ty_prototype, ty_dtype, ty_retty_ref):
+    ty_retty = ty_retty_ref.instance_type
+    sig = ty_retty(ty_prototype, ty_dtype, ty_retty_ref)
+
+    def codegen(cgctx, builder, sig, llargs):
+        arrtype, shapes = _parse_empty_like_args(cgctx, builder, sig, llargs)
+        ary = _empty_nd_impl(cgctx, builder, arrtype, shapes)
+        return ary._getvalue()
+    return sig, codegen
 
 
-@lower_builtin(np.full, types.Any, types.Any)
-def numpy_full_nd(context, builder, sig, args):
+@overload(np.empty_like)
+def ol_np_empty_like(arr, dtype=None):
+    _check_const_str_dtype("empty_like", dtype)
+    if not is_nonelike(dtype):
+        nb_dtype = ty_parse_dtype(dtype)
+    elif isinstance(arr, types.Array):
+        nb_dtype = arr.dtype
+    else:
+        nb_dtype = arr
+    if nb_dtype is not None:
+        if isinstance(arr, types.Array):
+            layout = arr.layout if arr.layout != 'A' else 'C'
+            retty = arr.copy(dtype=nb_dtype, layout=layout, readonly=False)
+        else:
+            retty = types.Array(nb_dtype, 0, 'C')
+    else:
+        msg = ("Cannot parse input types to function "
+               f"np.empty_like({arr}, {dtype})")
+        raise errors.TypingError(msg)
 
-    def full(shape, value):
-        arr = np.empty(shape, type(value))
-        for idx in np.ndindex(arr.shape):
-            arr[idx] = value
+    def impl(arr, dtype=None):
+        return numpy_empty_like_nd(arr, dtype, retty)
+    return impl
+
+
+@intrinsic
+def _zero_fill_array_method(tyctx, self):
+    sig = types.none(self)
+
+    def codegen(cgctx, builder, sig, llargs):
+        ary = make_array(sig.args[0])(cgctx, builder, llargs[0])
+        cgutils.memset(builder, ary.data, builder.mul(ary.itemsize, ary.nitems),
+                       0)
+    return sig, codegen
+
+
+@overload_method(types.Array, '_zero_fill')
+def ol_array_zero_fill(self):
+    """Adds a `._zero_fill` method to zero fill an array using memset."""
+    def impl(self):
+        _zero_fill_array_method(self)
+    return impl
+
+
+@overload(np.zeros)
+def ol_np_zeros(shape, dtype=float):
+    _check_const_str_dtype("zeros", dtype)
+
+    def impl(shape, dtype=float):
+        arr = np.empty(shape, dtype=dtype)
+        arr._zero_fill()
+        return arr
+    return impl
+
+
+@overload(np.zeros_like)
+def ol_np_zeros_like(a, dtype=None):
+    _check_const_str_dtype("zeros_like", dtype)
+
+    # NumPy uses 'a' as the arg name for the array-like
+    def impl(a, dtype=None):
+        arr = np.empty_like(a, dtype=dtype)
+        arr._zero_fill()
+        return arr
+    return impl
+
+
+@overload(np.ones_like)
+def ol_np_ones_like(a, dtype=None):
+    _check_const_str_dtype("ones_like", dtype)
+
+    # NumPy uses 'a' as the arg name for the array-like
+    def impl(a, dtype=None):
+        arr = np.empty_like(a, dtype=dtype)
+        arr_flat = arr.flat
+        for idx in range(len(arr_flat)):
+            arr_flat[idx] = 1
+        return arr
+    return impl
+
+
+@overload(np.full)
+def impl_np_full(shape, fill_value, dtype=None):
+    _check_const_str_dtype("full", dtype)
+    if not is_nonelike(dtype):
+        nb_dtype = ty_parse_dtype(dtype)
+    else:
+        nb_dtype = fill_value
+
+    def full(shape, fill_value, dtype=None):
+        arr = np.empty(shape, nb_dtype)
+        arr_flat = arr.flat
+        for idx in range(len(arr_flat)):
+            arr_flat[idx] = fill_value
+        return arr
+    return full
+
+
+@overload(np.full_like)
+def impl_np_full_like(a, fill_value, dtype=None):
+    _check_const_str_dtype("full_like", dtype)
+
+    def full_like(a, fill_value, dtype=None):
+        arr = np.empty_like(a, dtype)
+        arr_flat = arr.flat
+        for idx in range(len(arr_flat)):
+            arr_flat[idx] = fill_value
         return arr
 
-    res = context.compile_internal(builder, full, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
+    return full_like
 
 
-@lower_builtin(np.full, types.Any, types.Any, types.DTypeSpec)
-def numpy_full_dtype_nd(context, builder, sig, args):
+@overload(np.ones)
+def ol_np_ones(shape, dtype=None):
+    # for some reason the NumPy default for dtype is None in the source but
+    # ends up as np.float64 by definition.
+    _check_const_str_dtype("ones", dtype)
 
-    def full(shape, value, dtype):
-        arr = np.empty(shape, dtype)
-        for idx in np.ndindex(arr.shape):
-            arr[idx] = value
+    def impl(shape, dtype=None):
+        arr = np.empty(shape, dtype=dtype)
+        arr_flat = arr.flat
+        for idx in range(len(arr_flat)):
+            arr_flat[idx] = 1
         return arr
-
-    res = context.compile_internal(builder, full, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
+    return impl
 
 
-@lower_builtin(np.full_like, types.Any, types.Any)
-def numpy_full_like_nd(context, builder, sig, args):
+@overload(np.identity)
+def impl_np_identity(n, dtype=None):
+    _check_const_str_dtype("identity", dtype)
+    if not is_nonelike(dtype):
+        nb_dtype = ty_parse_dtype(dtype)
+    else:
+        nb_dtype = types.double
 
-    def full_like(arr, value):
-        arr = np.empty_like(arr)
-        for idx in np.ndindex(arr.shape):
-            arr[idx] = value
-        return arr
-
-    res = context.compile_internal(builder, full_like, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-
-@lower_builtin(np.full_like, types.Any, types.Any, types.DTypeSpec)
-def numpy_full_like_nd_type_spec(context, builder, sig, args):
-
-    def full_like(arr, value, dtype):
-        arr = np.empty_like(arr, dtype)
-        for idx in np.ndindex(arr.shape):
-            arr[idx] = value
-        return arr
-
-    res = context.compile_internal(builder, full_like, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-
-@lower_builtin(np.ones, types.Any)
-def numpy_ones_nd(context, builder, sig, args):
-
-    def ones(shape):
-        arr = np.empty(shape)
-        for idx in np.ndindex(arr.shape):
-            arr[idx] = 1
-        return arr
-
-    valty = sig.return_type.dtype
-    res = context.compile_internal(builder, ones, sig, args,
-                                   locals={'c': valty})
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-
-@lower_builtin(np.ones, types.Any, types.DTypeSpec)
-def numpy_ones_dtype_nd(context, builder, sig, args):
-
-    def ones(shape, dtype):
-        arr = np.empty(shape, dtype)
-        for idx in np.ndindex(arr.shape):
-            arr[idx] = 1
-        return arr
-
-    res = context.compile_internal(builder, ones, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-
-@lower_builtin(np.ones_like, types.Any)
-def numpy_ones_like_nd(context, builder, sig, args):
-
-    def ones_like(arr):
-        arr = np.empty_like(arr)
-        for idx in np.ndindex(arr.shape):
-            arr[idx] = 1
-        return arr
-
-    res = context.compile_internal(builder, ones_like, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-
-@lower_builtin(np.ones_like, types.Any, types.DTypeSpec)
-def numpy_ones_like_dtype_nd(context, builder, sig, args):
-
-    def ones_like(arr, dtype):
-        arr = np.empty_like(arr, dtype)
-        for idx in np.ndindex(arr.shape):
-            arr[idx] = 1
-        return arr
-
-    res = context.compile_internal(builder, ones_like, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-
-@lower_builtin(np.identity, types.Integer)
-def numpy_identity(context, builder, sig, args):
-
-    def identity(n):
-        arr = np.zeros((n, n))
+    def identity(n, dtype=None):
+        arr = np.zeros((n, n), nb_dtype)
         for i in range(n):
             arr[i, i] = 1
         return arr
-
-    res = context.compile_internal(builder, identity, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-
-@lower_builtin(np.identity, types.Integer, types.DTypeSpec)
-def numpy_identity_type_spec(context, builder, sig, args):
-
-    def identity(n, dtype):
-        arr = np.zeros((n, n), dtype)
-        for i in range(n):
-            arr[i, i] = 1
-        return arr
-
-    res = context.compile_internal(builder, identity, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
+    return identity
 
 
 def _eye_none_handler(N, M):
@@ -3704,115 +4440,91 @@ def numpy_eye(N, M=None, k=0, dtype=float):
     return impl
 
 
-@lower_builtin(np.diag, types.Array)
-def numpy_diag(context, builder, sig, args):
-    def diag_impl(val):
-        return np.diag(val, k=0)
-    return context.compile_internal(builder, diag_impl, sig, args)
+@overload(np.diag)
+def impl_np_diag(v, k=0):
+    if not type_can_asarray(v):
+        raise errors.TypingError('The argument "v" must be array-like')
+
+    if isinstance(v, types.Array):
+        if v.ndim not in (1, 2):
+            raise errors.NumbaTypeError("Input must be 1- or 2-d.")
+
+        def diag_impl(v, k=0):
+            if v.ndim == 1:
+                s = v.shape
+                n = s[0] + abs(k)
+                ret = np.zeros((n, n), v.dtype)
+                if k >= 0:
+                    for i in range(n - k):
+                        ret[i, k + i] = v[i]
+                else:
+                    for i in range(n + k):
+                        ret[i - k, i] = v[i]
+                return ret
+            else:  # 2-d
+                rows, cols = v.shape
+                if k < 0:
+                    rows = rows + k
+                if k > 0:
+                    cols = cols - k
+                n = max(min(rows, cols), 0)
+                ret = np.empty(n, v.dtype)
+                if k >= 0:
+                    for i in range(n):
+                        ret[i] = v[i, k + i]
+                else:
+                    for i in range(n):
+                        ret[i] = v[i - k, i]
+                return ret
+        return diag_impl
 
 
-@lower_builtin(np.diag, types.Array, types.Integer)
-def numpy_diag_kwarg(context, builder, sig, args):
-    arg = sig.args[0]
-    if arg.ndim == 1:
-        # vector context
-        def diag_impl(arr, k=0):
-            s = arr.shape
-            n = s[0] + abs(k)
-            ret = np.zeros((n, n), arr.dtype)
-            if k >= 0:
-                for i in range(n - k):
-                    ret[i, k + i] = arr[i]
-            else:
-                for i in range(n + k):
-                    ret[i - k, i] = arr[i]
-            return ret
-    elif arg.ndim == 2:
-        # matrix context
-        def diag_impl(arr, k=0):
-            # Will return arr.diagonal(v, k) when axis args are supported
-            rows, cols = arr.shape
-            if k < 0:
-                rows = rows + k
-            if k > 0:
-                cols = cols - k
-            n = max(min(rows, cols), 0)
-            ret = np.empty(n, arr.dtype)
-            if k >= 0:
-                for i in range(n):
-                    ret[i] = arr[i, k + i]
-            else:
-                for i in range(n):
-                    ret[i] = arr[i - k, i]
-            return ret
-    else:
-        # invalid input
-        raise ValueError("Input must be 1- or 2-d.")
+@overload(np.take)
+@overload_method(types.Array, 'take')
+def numpy_take(a, indices):
 
-    res = context.compile_internal(builder, diag_impl, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-
-@lower_builtin(np.take, types.Array, types.Integer)
-@lower_builtin('array.take', types.Array, types.Integer)
-def numpy_take_1(context, builder, sig, args):
-
-    def take_impl(a, indices):
-        if indices > (a.size - 1) or indices < -a.size:
-            raise IndexError("Index out of bounds")
-        return a.ravel()[np.int(indices)]
-
-    res = context.compile_internal(builder, take_impl, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
-
-
-@lower_builtin('array.take', types.Array, types.Array)
-@lower_builtin(np.take, types.Array, types.Array)
-def numpy_take_2(context, builder, sig, args):
-
-    F_order = sig.args[1].layout == 'F'
-
-    def take_impl(a, indices):
-        ret = np.empty(indices.size, dtype=a.dtype)
-        if F_order:
-            walker = indices.copy()  # get C order
-        else:
-            walker = indices
-        it = np.nditer(walker)
-        i = 0
-        flat = a.ravel()
-        for x in it:
-            if x > (a.size - 1) or x < -a.size:
+    if isinstance(a, types.Array) and isinstance(indices, types.Integer):
+        def take_impl(a, indices):
+            if indices > (a.size - 1) or indices < -a.size:
                 raise IndexError("Index out of bounds")
-            ret[i] = flat[x]
-            i = i + 1
-        return ret.reshape(indices.shape)
+            return a.ravel()[indices]
+        return take_impl
 
-    res = context.compile_internal(builder, take_impl, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
+    if all(isinstance(arg, types.Array) for arg in [a, indices]):
+        F_order = indices.layout == 'F'
 
+        def take_impl(a, indices):
+            ret = np.empty(indices.size, dtype=a.dtype)
+            if F_order:
+                walker = indices.copy()  # get C order
+            else:
+                walker = indices
+            it = np.nditer(walker)
+            i = 0
+            flat = a.ravel()
+            for x in it:
+                if x > (a.size - 1) or x < -a.size:
+                    raise IndexError("Index out of bounds")
+                ret[i] = flat[x]
+                i = i + 1
+            return ret.reshape(indices.shape)
+        return take_impl
 
-@lower_builtin('array.take', types.Array, types.List)
-@lower_builtin(np.take, types.Array, types.List)
-@lower_builtin('array.take', types.Array, types.BaseTuple)
-@lower_builtin(np.take, types.Array, types.BaseTuple)
-def numpy_take_3(context, builder, sig, args):
-
-    def take_impl(a, indices):
-        convert = np.array(indices)
-        ret = np.empty(convert.size, dtype=a.dtype)
-        it = np.nditer(convert)
-        i = 0
-        flat = a.ravel()
-        for x in it:
-            if x > (a.size - 1) or x < -a.size:
-                raise IndexError("Index out of bounds")
-            ret[i] = flat[x]
-            i = i + 1
-        return ret.reshape(convert.shape)
-
-    res = context.compile_internal(builder, take_impl, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
+    if isinstance(a, types.Array) and \
+            isinstance(indices, (types.List, types.BaseTuple)):
+        def take_impl(a, indices):
+            convert = np.array(indices)
+            ret = np.empty(convert.size, dtype=a.dtype)
+            it = np.nditer(convert)
+            i = 0
+            flat = a.ravel()
+            for x in it:
+                if x > (a.size - 1) or x < -a.size:
+                    raise IndexError("Index out of bounds")
+                ret[i] = flat[x]
+                i = i + 1
+            return ret.reshape(convert.shape)
+        return take_impl
 
 
 def _arange_dtype(*args):
@@ -3823,9 +4535,8 @@ def _arange_dtype(*args):
     elif any(isinstance(a, types.Float) for a in bounds):
         dtype = types.float64
     else:
-        # numerous attempts were made at guessing this type from the NumPy
-        # source but it turns out on running `np.arange(10).dtype` on pretty
-        # much all platform and python combinations that it matched np.int?!
+        # `np.arange(10).dtype` is always `np.dtype(int)`, aka `np.int_`, which
+        # in all released versions of numpy corresponds to the C `long` type.
         # Windows 64 is broken by default here because Numba (as of 0.47) does
         # not differentiate between Python and NumPy integers, so a `typeof(1)`
         # on w64 is `int64`, i.e. `intp`. This means an arange(<some int>) will
@@ -3833,8 +4544,11 @@ def _arange_dtype(*args):
         # to int32. Example: without a load of analysis to work out of the args
         # were wrapped in NumPy int*() calls it's not possible to detect the
         # difference between `np.arange(10)` and `np.arange(np.int64(10)`.
-        NPY_TY = getattr(types, "int%s" % (8 * np.dtype(np.int).itemsize))
-        dtype = max(bounds + [NPY_TY,])
+        NPY_TY = getattr(types, "int%s" % (8 * np.dtype(int).itemsize))
+
+        # unliteral these types such that `max` works.
+        unliteral_bounds = [types.unliteral(x) for x in bounds]
+        dtype = max(unliteral_bounds + [NPY_TY,])
 
     return dtype
 
@@ -3901,41 +4615,50 @@ def np_arange(start, stop=None, step=None, dtype=None):
         arr = np.empty(nitems, true_dtype)
         val = _start
         for i in range(nitems):
-            arr[i] = val
-            val += _step
+            arr[i] = val + (i * _step)
         return arr
 
     return impl
 
 
-@lower_builtin(np.linspace, types.Number, types.Number)
-def numpy_linspace_2(context, builder, sig, args):
+@overload(np.linspace)
+def numpy_linspace(start, stop, num=50):
+    if not all(isinstance(arg, types.Number) for arg in [start, stop]):
+        return
 
-    def linspace(start, stop):
-        return np.linspace(start, stop, 50)
+    if not isinstance(num, (int, types.Integer)):
+        msg = 'The argument "num" must be an integer'
+        raise errors.TypingError(msg)
 
-    res = context.compile_internal(builder, linspace, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
+    if any(isinstance(arg, types.Complex) for arg in [start, stop]):
+        dtype = types.complex128
+    else:
+        dtype = types.float64
 
-
-@lower_builtin(np.linspace, types.Number, types.Number,
-               types.Integer)
-def numpy_linspace_3(context, builder, sig, args):
-    dtype = as_dtype(sig.return_type.dtype)
-
-    def linspace(start, stop, num):
+    # Implementation based on https://github.com/numpy/numpy/blob/v1.20.0/numpy/core/function_base.py#L24 # noqa: E501
+    def linspace(start, stop, num=50):
         arr = np.empty(num, dtype)
+        # The multiply by 1.0 mirrors
+        # https://github.com/numpy/numpy/blob/v1.20.0/numpy/core/function_base.py#L125-L128  # noqa: E501
+        # the side effect of this is important... start and stop become the same
+        # type as `dtype` i.e. 64/128 bits wide (float/complex). This is
+        # important later when used in the `np.divide`.
+        start = start * 1.0
+        stop = stop * 1.0
         if num == 0:
             return arr
         div = num - 1
-        delta = stop - start
-        arr[0] = start
-        for i in range(1, num):
-            arr[i] = start + delta * (i / div)
+        if div > 0:
+            delta = stop - start
+            step = np.divide(delta, div)
+            for i in range(0, num):
+                arr[i] = start + (i * step)
+        else:
+            arr[0] = start
+        if num > 1:
+            arr[-1] = stop
         return arr
-
-    res = context.compile_internal(builder, linspace, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
+    return linspace
 
 
 def _array_copy(context, builder, sig, args):
@@ -3975,14 +4698,26 @@ def _array_copy(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, ret._getvalue())
 
 
+@intrinsic
+def _array_copy_intrinsic(typingctx, a):
+    assert isinstance(a, types.Array)
+    layout = 'F' if a.layout == 'F' else 'C'
+    ret = a.copy(layout=layout, readonly=False)
+    sig = ret(a)
+    return sig, _array_copy
+
+
 @lower_builtin("array.copy", types.Array)
 def array_copy(context, builder, sig, args):
     return _array_copy(context, builder, sig, args)
 
 
-@lower_builtin(np.copy, types.Array)
-def numpy_copy(context, builder, sig, args):
-    return _array_copy(context, builder, sig, args)
+@overload(np.copy)
+def impl_numpy_copy(a):
+    if isinstance(a, types.Array):
+        def numpy_copy(a):
+            return _array_copy_intrinsic(a)
+    return numpy_copy
 
 
 def _as_layout_array(context, builder, sig, args, output_layout):
@@ -4050,17 +4785,49 @@ def _as_layout_array(context, builder, sig, args, output_layout):
             return _array_copy(context, builder, sig, args)
 
 
-@lower_builtin(np.asfortranarray, types.Array)
-def array_asfortranarray(context, builder, sig, args):
-    return _as_layout_array(context, builder, sig, args, output_layout='F')
+@intrinsic
+def _as_layout_array_intrinsic(typingctx, a, output_layout):
+    if not isinstance(output_layout, types.StringLiteral):
+        raise errors.RequireLiteralValue(output_layout)
+
+    ret = a.copy(layout=output_layout.literal_value, ndim=max(a.ndim, 1))
+    sig = ret(a, output_layout)
+
+    return sig, lambda c, b, s, a: _as_layout_array(
+        c, b, s, a, output_layout=output_layout.literal_value)
 
 
-@lower_builtin(np.ascontiguousarray, types.Array)
-def array_ascontiguousarray(context, builder, sig, args):
-    return _as_layout_array(context, builder, sig, args, output_layout='C')
+@overload(np.ascontiguousarray)
+def array_ascontiguousarray(a):
+    if not type_can_asarray(a):
+        raise errors.TypingError('The argument "a" must be array-like')
+
+    if isinstance(a, (types.Number, types.Boolean,)):
+        def impl(a):
+            return np.ascontiguousarray(np.array(a))
+    elif isinstance(a, types.Array):
+        def impl(a):
+            return _as_layout_array_intrinsic(a, 'C')
+    return impl
+
+
+@overload(np.asfortranarray)
+def array_asfortranarray(a):
+    if not type_can_asarray(a):
+        raise errors.TypingError('The argument "a" must be array-like')
+
+    if isinstance(a, (types.Number, types.Boolean,)):
+        def impl(a):
+            return np.asfortranarray(np.array(a))
+        return impl
+    elif isinstance(a, types.Array):
+        def impl(a):
+            return _as_layout_array_intrinsic(a, 'F')
+        return impl
 
 
 @lower_builtin("array.astype", types.Array, types.DTypeSpec)
+@lower_builtin("array.astype", types.Array, types.StringLiteral)
 def array_astype(context, builder, sig, args):
     arytype = sig.args[0]
     ary = make_array(arytype)(context, builder, value=args[0])
@@ -4090,50 +4857,146 @@ def array_astype(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, ret._getvalue())
 
 
-@lower_builtin(np.frombuffer, types.Buffer)
-@lower_builtin(np.frombuffer, types.Buffer, types.DTypeSpec)
-def np_frombuffer(context, builder, sig, args):
-    bufty = sig.args[0]
-    aryty = sig.return_type
+@intrinsic
+def np_frombuffer(typingctx, buffer, dtype, retty):
+    ty = retty.instance_type
+    sig = ty(buffer, dtype, retty)
 
-    buf = make_array(bufty)(context, builder, value=args[0])
-    out_ary_ty = make_array(aryty)
-    out_ary = out_ary_ty(context, builder)
-    out_datamodel = out_ary._datamodel
+    def codegen(context, builder, sig, args):
+        bufty = sig.args[0]
+        aryty = sig.return_type
 
-    itemsize = get_itemsize(context, aryty)
-    ll_itemsize = lc.Constant.int(buf.itemsize.type, itemsize)
-    nbytes = builder.mul(buf.nitems, buf.itemsize)
+        buf = make_array(bufty)(context, builder, value=args[0])
+        out_ary_ty = make_array(aryty)
+        out_ary = out_ary_ty(context, builder)
+        out_datamodel = out_ary._datamodel
 
-    # Check that the buffer size is compatible
-    rem = builder.srem(nbytes, ll_itemsize)
-    is_incompatible = cgutils.is_not_null(builder, rem)
-    with builder.if_then(is_incompatible, likely=False):
-        msg = "buffer size must be a multiple of element size"
-        context.call_conv.return_user_exc(builder, ValueError, (msg,))
+        itemsize = get_itemsize(context, aryty)
+        ll_itemsize = Constant(buf.itemsize.type, itemsize)
+        nbytes = builder.mul(buf.nitems, buf.itemsize)
 
-    shape = cgutils.pack_array(builder, [builder.sdiv(nbytes, ll_itemsize)])
-    strides = cgutils.pack_array(builder, [ll_itemsize])
-    data = builder.bitcast(
-        buf.data, context.get_value_type(out_datamodel.get_type('data'))
-    )
+        # Check that the buffer size is compatible
+        rem = builder.srem(nbytes, ll_itemsize)
+        is_incompatible = cgutils.is_not_null(builder, rem)
+        with builder.if_then(is_incompatible, likely=False):
+            msg = "buffer size must be a multiple of element size"
+            context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
-    populate_array(out_ary,
-                   data=data,
-                   shape=shape,
-                   strides=strides,
-                   itemsize=ll_itemsize,
-                   meminfo=buf.meminfo,
-                   parent=buf.parent,)
+        shape = cgutils.pack_array(builder, [builder.sdiv(nbytes, ll_itemsize)])
+        strides = cgutils.pack_array(builder, [ll_itemsize])
+        data = builder.bitcast(
+            buf.data, context.get_value_type(out_datamodel.get_type('data'))
+        )
 
-    res = out_ary._getvalue()
-    return impl_ret_borrowed(context, builder, sig.return_type, res)
+        populate_array(out_ary,
+                       data=data,
+                       shape=shape,
+                       strides=strides,
+                       itemsize=ll_itemsize,
+                       meminfo=buf.meminfo,
+                       parent=buf.parent,)
+
+        res = out_ary._getvalue()
+        return impl_ret_borrowed(context, builder, sig.return_type, res)
+    return sig, codegen
 
 
-@lower_builtin(carray, types.Any, types.Any)
-@lower_builtin(carray, types.Any, types.Any, types.DTypeSpec)
-@lower_builtin(farray, types.Any, types.Any)
-@lower_builtin(farray, types.Any, types.Any, types.DTypeSpec)
+@overload(np.frombuffer)
+def impl_np_frombuffer(buffer, dtype=float):
+    _check_const_str_dtype("frombuffer", dtype)
+
+    if not isinstance(buffer, types.Buffer) or buffer.layout != 'C':
+        msg = f'Argument "buffer" must be buffer-like. Got {buffer}'
+        raise errors.TypingError(msg)
+
+    if (dtype is float or
+        (isinstance(dtype, types.Function) and dtype.typing_key is float) or
+            is_nonelike(dtype)): #default
+        nb_dtype = types.double
+    else:
+        nb_dtype = ty_parse_dtype(dtype)
+
+    if nb_dtype is not None:
+        retty = types.Array(dtype=nb_dtype, ndim=1, layout='C',
+                            readonly=not buffer.mutable)
+    else:
+        msg = ("Cannot parse input types to function "
+               f"np.frombuffer({buffer}, {dtype})")
+        raise errors.TypingError(msg)
+
+    def impl(buffer, dtype=float):
+        return np_frombuffer(buffer, dtype, retty)
+    return impl
+
+
+@overload(carray)
+def impl_carray(ptr, shape, dtype=None):
+    if is_nonelike(dtype):
+        intrinsic_cfarray = get_cfarray_intrinsic('C', None)
+
+        def impl(ptr, shape, dtype=None):
+            return intrinsic_cfarray(ptr, shape)
+        return impl
+    elif isinstance(dtype, types.DTypeSpec):
+        intrinsic_cfarray = get_cfarray_intrinsic('C', dtype)
+
+        def impl(ptr, shape, dtype=None):
+            return intrinsic_cfarray(ptr, shape)
+        return impl
+
+
+@overload(farray)
+def impl_farray(ptr, shape, dtype=None):
+    if is_nonelike(dtype):
+        intrinsic_cfarray = get_cfarray_intrinsic('F', None)
+
+        def impl(ptr, shape, dtype=None):
+            return intrinsic_cfarray(ptr, shape)
+        return impl
+    elif isinstance(dtype, types.DTypeSpec):
+        intrinsic_cfarray = get_cfarray_intrinsic('F', dtype)
+
+        def impl(ptr, shape, dtype=None):
+            return intrinsic_cfarray(ptr, shape)
+        return impl
+
+
+def get_cfarray_intrinsic(layout, dtype_):
+    @intrinsic
+    def intrinsic_cfarray(typingctx, ptr, shape):
+        if ptr is types.voidptr:
+            ptr_dtype = None
+        elif isinstance(ptr, types.CPointer):
+            ptr_dtype = ptr.dtype
+        else:
+            msg = f"pointer argument expected, got '{ptr}'"
+            raise errors.NumbaTypeError(msg)
+
+        if dtype_ is None:
+            if ptr_dtype is None:
+                msg = "explicit dtype required for void* argument"
+                raise errors.NumbaTypeError(msg)
+            dtype = ptr_dtype
+        elif isinstance(dtype_, types.DTypeSpec):
+            dtype = dtype_.dtype
+            if ptr_dtype is not None and dtype != ptr_dtype:
+                msg = f"mismatching dtype '{dtype}' for pointer type '{ptr}'"
+                raise errors.NumbaTypeError(msg)
+        else:
+            msg = f"invalid dtype spec '{dtype_}'"
+            raise errors.NumbaTypeError(msg)
+
+        ndim = ty_parse_shape(shape)
+        if ndim is None:
+            msg = f"invalid shape '{shape}'"
+            raise errors.NumbaTypeError(msg)
+
+        retty = types.Array(dtype, ndim, layout)
+        sig = signature(retty, ptr, shape)
+        return sig, np_cfarray
+    return intrinsic_cfarray
+
+
 def np_cfarray(context, builder, sig, args):
     """
     numba.numpy_support.carray(...) and
@@ -4218,7 +5081,7 @@ def compute_sequence_shape(context, builder, ndim, seqty, seq):
     Compute the likely shape of a nested sequence (possibly 0d).
     """
     intp_t = context.get_value_type(types.intp)
-    zero = Constant.int(intp_t, 0)
+    zero = Constant(intp_t, 0)
 
     def get_first_item(seqty, seq):
         if isinstance(seqty, types.BaseTuple):
@@ -4325,23 +5188,56 @@ def assign_sequence_to_array(context, builder, data, shapes, strides,
     assign(seqty, seq, shapes, ())
 
 
-@lower_builtin(np.array, types.Any)
-@lower_builtin(np.array, types.Any, types.DTypeSpec)
-def np_array(context, builder, sig, args):
-    arrty = sig.return_type
-    ndim = arrty.ndim
-    seqty = sig.args[0]
-    seq = args[0]
+def np_array_typer(typingctx, object, dtype):
+    ndim, seq_dtype = _parse_nested_sequence(typingctx, object)
+    if is_nonelike(dtype):
+        dtype = seq_dtype
+    else:
+        dtype = ty_parse_dtype(dtype)
+        if dtype is None:
+            return
+    return types.Array(dtype, ndim, 'C')
 
-    shapes = compute_sequence_shape(context, builder, ndim, seqty, seq)
-    assert len(shapes) == ndim
 
-    check_sequence_shape(context, builder, seqty, seq, shapes)
-    arr = _empty_nd_impl(context, builder, arrty, shapes)
-    assign_sequence_to_array(context, builder, arr.data, shapes, arr.strides,
-                             arrty, seqty, seq)
+@intrinsic
+def np_array(typingctx, obj, dtype):
+    _check_const_str_dtype("array", dtype)
+    ret = np_array_typer(typingctx, obj, dtype)
+    sig = ret(obj, dtype)
 
-    return impl_ret_new_ref(context, builder, sig.return_type, arr._getvalue())
+    def codegen(context, builder, sig, args):
+        arrty = sig.return_type
+        ndim = arrty.ndim
+        seqty = sig.args[0]
+        seq = args[0]
+
+        shapes = compute_sequence_shape(context, builder, ndim, seqty, seq)
+        assert len(shapes) == ndim
+
+        check_sequence_shape(context, builder, seqty, seq, shapes)
+        arr = _empty_nd_impl(context, builder, arrty, shapes)
+        assign_sequence_to_array(context, builder, arr.data, shapes,
+                                 arr.strides, arrty, seqty, seq)
+
+        return impl_ret_new_ref(context, builder, sig.return_type,
+                                arr._getvalue())
+
+    return sig, codegen
+
+
+@overload(np.array)
+def impl_np_array(object, dtype=None):
+    _check_const_str_dtype("array", dtype)
+    if not type_can_asarray(object):
+        raise errors.TypingError('The argument "object" must '
+                                 'be array-like')
+    if not is_nonelike(dtype) and ty_parse_dtype(dtype) is None:
+        msg = 'The argument "dtype" must be a data-type if it is provided'
+        raise errors.TypingError(msg)
+
+    def impl(object, dtype=None):
+        return np_array(object, dtype)
+    return impl
 
 
 def _normalize_axis(context, builder, func_name, ndim, axis):
@@ -4449,34 +5345,61 @@ def expand_dims(context, builder, sig, args, axis):
     return ret._getvalue()
 
 
-@lower_builtin(np.expand_dims, types.Array, types.Integer)
-def np_expand_dims(context, builder, sig, args):
-    axis = context.cast(builder, args[1], sig.args[1], types.intp)
-    axis = _normalize_axis(context, builder, "np.expand_dims",
-                           sig.return_type.ndim, axis)
+@intrinsic
+def np_expand_dims(typingctx, a, axis):
+    layout = a.layout if a.ndim <= 1 else 'A'
+    ret = a.copy(ndim=a.ndim + 1, layout=layout)
+    sig = ret(a, axis)
 
-    ret = expand_dims(context, builder, sig, args, axis)
-    return impl_ret_borrowed(context, builder, sig.return_type, ret)
+    def codegen(context, builder, sig, args):
+        axis = context.cast(builder, args[1], sig.args[1], types.intp)
+        axis = _normalize_axis(context, builder, "np.expand_dims",
+                               sig.return_type.ndim, axis)
+
+        ret = expand_dims(context, builder, sig, args, axis)
+        return impl_ret_borrowed(context, builder, sig.return_type, ret)
+
+    return sig, codegen
 
 
-def _atleast_nd(context, builder, sig, args, transform):
-    arrtys = sig.args
-    arrs = args
+@overload(np.expand_dims)
+def impl_np_expand_dims(a, axis):
+    if not isinstance(a, types.Array):
+        msg = f'First argument "a" must be an array. Got {a}'
+        raise errors.TypingError(msg)
 
-    if isinstance(sig.return_type, types.BaseTuple):
-        rettys = list(sig.return_type)
-    else:
-        rettys = [sig.return_type]
-    assert len(rettys) == len(arrtys)
+    if not isinstance(axis, types.Integer):
+        msg = f'Argument "axis" must be an integer. Got {axis}'
+        raise errors.TypingError(msg)
 
-    rets = [transform(context, builder, arr, arrty, retty)
-            for arr, arrty, retty in zip(arrs, arrtys, rettys)]
+    def impl(a, axis):
+        return np_expand_dims(a, axis)
+    return impl
 
-    if isinstance(sig.return_type, types.BaseTuple):
-        ret = context.make_tuple(builder, sig.return_type, rets)
-    else:
-        ret = rets[0]
-    return impl_ret_borrowed(context, builder, sig.return_type, ret)
+
+def _atleast_nd(minimum, axes):
+    @intrinsic
+    def impl(typingcontext, *args):
+        arrtys = args
+        rettys = [arg.copy(ndim=max(arg.ndim, minimum)) for arg in args]
+
+        def codegen(context, builder, sig, args):
+            transform = _atleast_nd_transform(minimum, axes)
+            arrs = cgutils.unpack_tuple(builder, args[0])
+
+            rets = [transform(context, builder, arr, arrty, retty)
+                    for arr, arrty, retty in zip(arrs, arrtys, rettys)]
+
+            if len(rets) > 1:
+                ret = context.make_tuple(builder, sig.return_type, rets)
+            else:
+                ret = rets[0]
+            return impl_ret_borrowed(context, builder, sig.return_type, ret)
+
+        return signature(types.Tuple(rettys) if len(rettys) > 1 else rettys[0],
+                         types.StarArgTuple.from_types(args)), codegen
+
+    return lambda *args: impl(*args)
 
 
 def _atleast_nd_transform(min_ndim, axes):
@@ -4502,25 +5425,22 @@ def _atleast_nd_transform(min_ndim, axes):
     return transform
 
 
-@lower_builtin(np.atleast_1d, types.VarArg(types.Array))
-def np_atleast_1d(context, builder, sig, args):
-    transform = _atleast_nd_transform(1, [0])
-
-    return _atleast_nd(context, builder, sig, args, transform)
-
-
-@lower_builtin(np.atleast_2d, types.VarArg(types.Array))
-def np_atleast_2d(context, builder, sig, args):
-    transform = _atleast_nd_transform(2, [0, 0])
-
-    return _atleast_nd(context, builder, sig, args, transform)
+@overload(np.atleast_1d)
+def np_atleast_1d(*args):
+    if all(isinstance(arg, types.Array) for arg in args):
+        return _atleast_nd(1, [0])
 
 
-@lower_builtin(np.atleast_3d, types.VarArg(types.Array))
-def np_atleast_3d(context, builder, sig, args):
-    transform = _atleast_nd_transform(3, [0, 0, 2])
+@overload(np.atleast_2d)
+def np_atleast_2d(*args):
+    if all(isinstance(arg, types.Array) for arg in args):
+        return _atleast_nd(2, [0, 0])
 
-    return _atleast_nd(context, builder, sig, args, transform)
+
+@overload(np.atleast_3d)
+def np_atleast_3d(*args):
+    if all(isinstance(arg, types.Array) for arg in args):
+        return _atleast_nd(3, [0, 0, 2])
 
 
 def _do_concatenate(context, builder, axis,
@@ -4723,52 +5643,101 @@ def _np_stack(context, builder, arrtys, arrs, retty, axis):
     return impl_ret_new_ref(context, builder, retty, ret._getvalue())
 
 
-@lower_builtin(np.concatenate, types.BaseTuple)
-def np_concatenate(context, builder, sig, args):
-    axis = context.get_constant(types.intp, 0)
-    return _np_concatenate(context, builder,
-                           list(sig.args[0]),
-                           cgutils.unpack_tuple(builder, args[0]),
-                           sig.return_type,
-                           axis)
+def np_concatenate_typer(typingctx, arrays, axis):
+    if axis is not None and not isinstance(axis, types.Integer):
+        # Note Numpy allows axis=None, but it isn't documented:
+        # https://github.com/numpy/numpy/issues/7968
+        return
+
+    # does type checking
+    dtype, ndim = _sequence_of_arrays(typingctx,
+                                      "np.concatenate", arrays)
+    if ndim == 0:
+        raise TypeError("zero-dimensional arrays cannot be concatenated")
+
+    layout = _choose_concatenation_layout(arrays)
+
+    return types.Array(dtype, ndim, layout)
 
 
-@lower_builtin(np.concatenate, types.BaseTuple, types.Integer)
-def np_concatenate_axis(context, builder, sig, args):
-    axis = context.cast(builder, args[1], sig.args[1], types.intp)
-    return _np_concatenate(context, builder,
-                           list(sig.args[0]),
-                           cgutils.unpack_tuple(builder, args[0]),
-                           sig.return_type,
-                           axis)
+@intrinsic
+def np_concatenate(typingctx, arrays, axis):
+    ret = np_concatenate_typer(typingctx, arrays, axis)
+    assert isinstance(ret, types.Array)
+    sig = ret(arrays, axis)
+
+    def codegen(context, builder, sig, args):
+        axis = context.cast(builder, args[1], sig.args[1], types.intp)
+        return _np_concatenate(context, builder,
+                               list(sig.args[0]),
+                               cgutils.unpack_tuple(builder, args[0]),
+                               sig.return_type,
+                               axis)
+
+    return sig, codegen
 
 
-@lower_builtin(np.column_stack, types.BaseTuple)
-def np_column_stack(context, builder, sig, args):
-    orig_arrtys = list(sig.args[0])
-    orig_arrs = cgutils.unpack_tuple(builder, args[0])
+@overload(np.concatenate)
+def impl_np_concatenate(arrays, axis=0):
+    if isinstance(arrays, types.BaseTuple):
+        def impl(arrays, axis=0):
+            return np_concatenate(arrays, axis)
+        return impl
 
-    arrtys = []
-    arrs = []
 
-    axis = context.get_constant(types.intp, 1)
+def _column_stack_dims(context, func_name, arrays):
+    # column_stack() allows stacking 1-d and 2-d arrays together
+    for a in arrays:
+        if a.ndim < 1 or a.ndim > 2:
+            raise TypeError("np.column_stack() is only defined on "
+                            "1-d and 2-d arrays")
+    return 2
 
-    for arrty, arr in zip(orig_arrtys, orig_arrs):
-        if arrty.ndim == 2:
-            arrtys.append(arrty)
-            arrs.append(arr)
-        else:
-            # Convert 1d array to 2d column array: np.expand_dims(a, 1)
-            assert arrty.ndim == 1
-            newty = arrty.copy(ndim=2)
-            expand_sig = typing.signature(newty, arrty)
-            newarr = expand_dims(context, builder, expand_sig, (arr,), axis)
 
-            arrtys.append(newty)
-            arrs.append(newarr)
+@intrinsic
+def np_column_stack(typingctx, tup):
+    dtype, ndim = _sequence_of_arrays(typingctx,
+                                      "np.column_stack", tup,
+                                      dim_chooser=_column_stack_dims)
+    layout = _choose_concatenation_layout(tup)
+    ret = types.Array(dtype, ndim, layout)
+    sig = ret(tup)
 
-    return _np_concatenate(context, builder, arrtys, arrs,
-                           sig.return_type, axis)
+    def codegen(context, builder, sig, args):
+        orig_arrtys = list(sig.args[0])
+        orig_arrs = cgutils.unpack_tuple(builder, args[0])
+
+        arrtys = []
+        arrs = []
+
+        axis = context.get_constant(types.intp, 1)
+
+        for arrty, arr in zip(orig_arrtys, orig_arrs):
+            if arrty.ndim == 2:
+                arrtys.append(arrty)
+                arrs.append(arr)
+            else:
+                # Convert 1d array to 2d column array: np.expand_dims(a, 1)
+                assert arrty.ndim == 1
+                newty = arrty.copy(ndim=2)
+                expand_sig = typing.signature(newty, arrty)
+                newarr = expand_dims(context, builder, expand_sig, (arr,), axis)
+
+                arrtys.append(newty)
+                arrs.append(newarr)
+
+        return _np_concatenate(context, builder, arrtys, arrs,
+                               sig.return_type, axis)
+
+    return sig, codegen
+
+
+@overload(np.column_stack)
+def impl_column_stack(tup):
+    if isinstance(tup, types.BaseTuple):
+        def impl(tup):
+            return np_column_stack(tup)
+        return impl
 
 
 def _np_stack_common(context, builder, sig, args, axis):
@@ -4782,92 +5751,157 @@ def _np_stack_common(context, builder, sig, args, axis):
                      axis)
 
 
-@lower_builtin(np.stack, types.BaseTuple)
-def np_stack(context, builder, sig, args):
-    axis = context.get_constant(types.intp, 0)
-    return _np_stack_common(context, builder, sig, args, axis)
+@intrinsic
+def np_stack_common(typingctx, arrays, axis):
+    # does type checking
+    dtype, ndim = _sequence_of_arrays(typingctx,
+                                      "np.stack", arrays)
+    layout = 'F' if all(a.layout == 'F' for a in arrays) else 'C'
+    ret = types.Array(dtype, ndim + 1, layout)
+    sig = ret(arrays, axis)
 
-
-@lower_builtin(np.stack, types.BaseTuple, types.Integer)
-def np_stack_axis(context, builder, sig, args):
-    axis = context.cast(builder, args[1], sig.args[1], types.intp)
-    return _np_stack_common(context, builder, sig, args, axis)
-
-
-@lower_builtin(np.hstack, types.BaseTuple)
-def np_hstack(context, builder, sig, args):
-    tupty = sig.args[0]
-    ndim = tupty[0].ndim
-
-    if ndim == 0:
-        # hstack() on 0-d arrays returns a 1-d array
-        axis = context.get_constant(types.intp, 0)
+    def codegen(context, builder, sig, args):
+        axis = context.cast(builder, args[1], sig.args[1], types.intp)
         return _np_stack_common(context, builder, sig, args, axis)
 
-    else:
-        # As a special case, dimension 0 of 1-dimensional arrays is "horizontal"
-        axis = 0 if ndim == 1 else 1
-
-        def np_hstack_impl(arrays):
-            return np.concatenate(arrays, axis=axis)
-
-        return context.compile_internal(builder, np_hstack_impl, sig, args)
+    return sig, codegen
 
 
-@lower_builtin(np.vstack, types.BaseTuple)
-def np_vstack(context, builder, sig, args):
-    tupty = sig.args[0]
-    ndim = tupty[0].ndim
-
-    if ndim == 0:
-        def np_vstack_impl(arrays):
-            return np.expand_dims(np.hstack(arrays), 1)
-
-    elif ndim == 1:
-        # np.stack(arrays, axis=0)
-        axis = context.get_constant(types.intp, 0)
-        return _np_stack_common(context, builder, sig, args, axis)
-
-    else:
-        def np_vstack_impl(arrays):
-            return np.concatenate(arrays, axis=0)
-
-    return context.compile_internal(builder, np_vstack_impl, sig, args)
+@overload(np.stack)
+def impl_np_stack(arrays, axis=0):
+    if isinstance(arrays, types.BaseTuple):
+        def impl(arrays, axis=0):
+            return np_stack_common(arrays, axis)
+        return impl
 
 
-@lower_builtin(np.dstack, types.BaseTuple)
-def np_dstack(context, builder, sig, args):
-    tupty = sig.args[0]
-    retty = sig.return_type
-    ndim = tupty[0].ndim
+def NdStack_typer(typingctx, func_name, arrays, ndim_min):
+    # does type checking
+    dtype, ndim = _sequence_of_arrays(typingctx, func_name, arrays)
+    ndim = max(ndim, ndim_min)
+    layout = _choose_concatenation_layout(arrays)
+    ret = types.Array(dtype, ndim, layout)
+    return ret
 
-    if ndim == 0:
-        def np_vstack_impl(arrays):
-            return np.hstack(arrays).reshape(1, 1, -1)
+
+@intrinsic
+def _np_hstack(typingctx, tup):
+    ret = NdStack_typer(typingctx, "np.hstack", tup, 1)
+    sig = ret(tup)
+
+    def codegen(context, builder, sig, args):
+        tupty = sig.args[0]
+        ndim = tupty[0].ndim
+
+        if ndim == 0:
+            # hstack() on 0-d arrays returns a 1-d array
+            axis = context.get_constant(types.intp, 0)
+            return _np_stack_common(context, builder, sig, args, axis)
+
+        else:
+            # As a special case, dimension 0 of 1-dimensional arrays
+            # is "horizontal"
+            axis = 0 if ndim == 1 else 1
+
+            def np_hstack_impl(arrays):
+                return np.concatenate(arrays, axis=axis)
+
+            return context.compile_internal(builder, np_hstack_impl, sig, args)
+
+    return sig, codegen
+
+
+@overload(np.hstack)
+def impl_np_hstack(tup):
+    if isinstance(tup, types.BaseTuple):
+        def impl(tup):
+            return _np_hstack(tup)
+        return impl
+
+
+@intrinsic
+def _np_vstack(typingctx, tup):
+    ret = NdStack_typer(typingctx, "np.vstack", tup, 2)
+    sig = ret(tup)
+
+    def codegen(context, builder, sig, args):
+        tupty = sig.args[0]
+        ndim = tupty[0].ndim
+
+        if ndim == 0:
+            def np_vstack_impl(arrays):
+                return np.expand_dims(np.hstack(arrays), 1)
+
+        elif ndim == 1:
+            # np.stack(arrays, axis=0)
+            axis = context.get_constant(types.intp, 0)
+            return _np_stack_common(context, builder, sig, args, axis)
+
+        else:
+            def np_vstack_impl(arrays):
+                return np.concatenate(arrays, axis=0)
 
         return context.compile_internal(builder, np_vstack_impl, sig, args)
 
-    elif ndim == 1:
-        # np.expand_dims(np.stack(arrays, axis=1), axis=0)
-        axis = context.get_constant(types.intp, 1)
-        stack_retty = retty.copy(ndim=retty.ndim - 1)
-        stack_sig = typing.signature(stack_retty, *sig.args)
-        stack_ret = _np_stack_common(context, builder, stack_sig, args, axis)
+    return sig, codegen
 
-        axis = context.get_constant(types.intp, 0)
-        expand_sig = typing.signature(retty, stack_retty)
-        return expand_dims(context, builder, expand_sig, (stack_ret,), axis)
 
-    elif ndim == 2:
-        # np.stack(arrays, axis=2)
-        axis = context.get_constant(types.intp, 2)
-        return _np_stack_common(context, builder, sig, args, axis)
+@overload(np.vstack)
+def impl_np_vstack(tup):
+    if isinstance(tup, types.BaseTuple):
+        def impl(tup):
+            return _np_vstack(tup)
+        return impl
 
-    else:
-        def np_vstack_impl(arrays):
-            return np.concatenate(arrays, axis=2)
 
-        return context.compile_internal(builder, np_vstack_impl, sig, args)
+@intrinsic
+def _np_dstack(typingctx, tup):
+    ret = NdStack_typer(typingctx, "np.dstack", tup, 3)
+    sig = ret(tup)
+
+    def codegen(context, builder, sig, args):
+        tupty = sig.args[0]
+        retty = sig.return_type
+        ndim = tupty[0].ndim
+
+        if ndim == 0:
+            def np_vstack_impl(arrays):
+                return np.hstack(arrays).reshape(1, 1, -1)
+
+            return context.compile_internal(builder, np_vstack_impl, sig, args)
+
+        elif ndim == 1:
+            # np.expand_dims(np.stack(arrays, axis=1), axis=0)
+            axis = context.get_constant(types.intp, 1)
+            stack_retty = retty.copy(ndim=retty.ndim - 1)
+            stack_sig = typing.signature(stack_retty, *sig.args)
+            stack_ret = _np_stack_common(context, builder, stack_sig, args,
+                                         axis)
+
+            axis = context.get_constant(types.intp, 0)
+            expand_sig = typing.signature(retty, stack_retty)
+            return expand_dims(context, builder, expand_sig, (stack_ret,), axis)
+
+        elif ndim == 2:
+            # np.stack(arrays, axis=2)
+            axis = context.get_constant(types.intp, 2)
+            return _np_stack_common(context, builder, sig, args, axis)
+
+        else:
+            def np_vstack_impl(arrays):
+                return np.concatenate(arrays, axis=2)
+
+            return context.compile_internal(builder, np_vstack_impl, sig, args)
+
+    return sig, codegen
+
+
+@overload(np.dstack)
+def impl_np_dstack(tup):
+    if isinstance(tup, types.BaseTuple):
+        def impl(tup):
+            return _np_dstack(tup)
+        return impl
 
 
 @extending.overload_method(types.Array, 'fill')
@@ -4923,9 +5957,11 @@ def np_flip_ud(a):
 
 
 @intrinsic
-def _build_slice_tuple(tyctx, sz):
+def _build_flip_slice_tuple(tyctx, sz):
     """ Creates a tuple of slices for np.flip indexing like
     `(slice(None, None, -1),) * sz` """
+    if not isinstance(sz, types.IntegerLiteral):
+        raise errors.RequireLiteralValue(sz)
     size = int(sz.literal_value)
     tuple_type = types.UniTuple(dtype=types.slice3_type, count=size)
     sig = tuple_type(sz)
@@ -4958,10 +5994,100 @@ def np_flip(a):
         raise errors.TypingError("Cannot np.flip on %s type" % a)
 
     def impl(a):
-        sl = _build_slice_tuple(a.ndim)
+        sl = _build_flip_slice_tuple(a.ndim)
         return a[sl]
 
     return impl
+
+
+@overload(np.array_split)
+def np_array_split(ary, indices_or_sections, axis=0):
+    if isinstance(ary, (types.UniTuple, types.ListType, types.List)):
+        def impl(ary, indices_or_sections, axis=0):
+            return np.array_split(
+                np.asarray(ary),
+                indices_or_sections,
+                axis=axis
+            )
+
+        return impl
+
+    if isinstance(indices_or_sections, types.Integer):
+        def impl(ary, indices_or_sections, axis=0):
+            l, rem = divmod(ary.shape[axis], indices_or_sections)
+            indices = np.cumsum(np.array(
+                [l + 1] * rem +
+                [l] * (indices_or_sections - rem - 1)
+            ))
+            return np.array_split(ary, indices, axis=axis)
+
+        return impl
+
+    elif (
+        isinstance(indices_or_sections, types.IterableType)
+        and isinstance(
+            indices_or_sections.iterator_type.yield_type,
+            types.Integer
+        )
+    ):
+        def impl(ary, indices_or_sections, axis=0):
+            slice_tup = build_full_slice_tuple(ary.ndim)
+            axis = normalize_axis("np.split", "axis", ary.ndim, axis)
+            out = []
+            prev = 0
+            for cur in indices_or_sections:
+                idx = tuple_setitem(slice_tup, axis, slice(prev, cur))
+                out.append(ary[idx])
+                prev = cur
+            out.append(ary[tuple_setitem(slice_tup, axis, slice(cur, None))])
+            return out
+
+        return impl
+
+    elif (
+        isinstance(indices_or_sections, types.Tuple)
+        and all(isinstance(t, types.Integer) for t in indices_or_sections.types)
+    ):
+        def impl(ary, indices_or_sections, axis=0):
+            slice_tup = build_full_slice_tuple(ary.ndim)
+            axis = normalize_axis("np.split", "axis", ary.ndim, axis)
+            out = []
+            prev = 0
+            for cur in literal_unroll(indices_or_sections):
+                idx = tuple_setitem(slice_tup, axis, slice(prev, cur))
+                out.append(ary[idx])
+                prev = cur
+            out.append(ary[tuple_setitem(slice_tup, axis, slice(cur, None))])
+            return out
+
+        return impl
+
+
+@overload(np.split)
+def np_split(ary, indices_or_sections, axis=0):
+    # This is just a wrapper of array_split, but with an extra error if
+    # indices is an int.
+    if isinstance(ary, (types.UniTuple, types.ListType, types.List)):
+        def impl(ary, indices_or_sections, axis=0):
+            return np.split(np.asarray(ary), indices_or_sections, axis=axis)
+
+        return impl
+
+    if isinstance(indices_or_sections, types.Integer):
+        def impl(ary, indices_or_sections, axis=0):
+            _, rem = divmod(ary.shape[axis], indices_or_sections)
+            if rem != 0:
+                raise ValueError(
+                    "array split does not result in an equal division"
+                )
+            return np.array_split(
+                ary, indices_or_sections, axis=axis
+            )
+
+        return impl
+
+    else:
+        return np_array_split(ary, indices_or_sections, axis=axis)
 
 
 # -----------------------------------------------------------------------------
@@ -4971,7 +6097,11 @@ _sorts = {}
 
 
 def lt_floats(a, b):
-    return math.isnan(b) or a < b
+    # Adapted from NumPy commit 717c7acf which introduced the behavior of
+    # putting NaNs at the end.
+    # The code is later moved to numpy/core/src/npysort/npysort_common.h
+    # This info is gathered as of NumPy commit d8c09c50
+    return a < b or (np.isnan(b) and not np.isnan(a))
 
 
 def get_sort_func(kind, is_float, is_argsort=False):
@@ -4985,7 +6115,8 @@ def get_sort_func(kind, is_float, is_argsort=False):
         if kind == 'quicksort':
             sort = quicksort.make_jit_quicksort(
                 lt=lt_floats if is_float else None,
-                is_argsort=is_argsort)
+                is_argsort=is_argsort,
+                is_np_array=True)
             func = sort.run_quicksort
         elif kind == 'mergesort':
             sort = mergesort.make_jit_mergesort(
@@ -5009,15 +6140,17 @@ def array_sort(context, builder, sig, args):
     return context.compile_internal(builder, array_sort_impl, sig, args)
 
 
-@lower_builtin(np.sort, types.Array)
-def np_sort(context, builder, sig, args):
+@overload(np.sort)
+def impl_np_sort(a):
+    if not type_can_asarray(a):
+        raise errors.TypingError('Argument "a" must '
+                                 'be array-like')
 
     def np_sort_impl(a):
         res = a.copy()
         res.sort()
         return res
-
-    return context.compile_internal(builder, np_sort_impl, sig, args)
+    return np_sort_impl
 
 
 @lower_builtin("array.argsort", types.Array, types.StringLiteral)
@@ -5045,6 +6178,33 @@ def array_to_array(context, builder, fromty, toty, val):
     # Type inference should have prevented illegal array casting.
     assert fromty.mutable != toty.mutable or toty.layout == 'A'
     return val
+
+
+@lower_cast(types.Array, types.UnicodeCharSeq)
+@lower_cast(types.Array, types.Float)
+@lower_cast(types.Array, types.Integer)
+@lower_cast(types.Array, types.Complex)
+@lower_cast(types.Array, types.Boolean)
+@lower_cast(types.Array, types.NPTimedelta)
+@lower_cast(types.Array, types.NPDatetime)
+def array0d_to_scalar(context, builder, fromty, toty, val):
+    def impl(a):
+        # a is an array(T, 0d, O), T is type, O is order
+        return a.take(0)
+
+    sig = signature(toty, fromty)
+    res = context.compile_internal(builder, impl, sig, [val])
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+@lower_cast(types.Array, types.UnicodeCharSeq)
+def array_to_unichrseq(context, builder, fromty, toty, val):
+    def impl(a):
+        return str(a[()])
+
+    sig = signature(toty, fromty)
+    res = context.compile_internal(builder, impl, sig, [val])
+    return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
 # ------------------------------------------------------------------------------
@@ -5124,3 +6284,221 @@ def as_strided(x, shape=None, strides=None):
         return x
 
     return as_strided_impl
+
+
+@overload(bool)
+def ol_bool(arr):
+    if isinstance(arr, types.Array):
+        def impl(arr):
+            if arr.size == 0:
+                return False # this is deprecated
+            elif arr.size == 1:
+                return bool(arr.take(0))
+            else:
+                msg = ("The truth value of an array with more than one element "
+                       "is ambiguous. Use a.any() or a.all()")
+                raise ValueError(msg)
+        return impl
+
+
+@overload(np.swapaxes)
+def numpy_swapaxes(arr, axis1, axis2):
+    if not isinstance(axis1, (int, types.Integer)):
+        raise errors.TypingError('The second argument "axis1" must be an '
+                                 'integer')
+    if not isinstance(axis2, (int, types.Integer)):
+        raise errors.TypingError('The third argument "axis2" must be an '
+                                 'integer')
+    if not isinstance(arr, types.Array):
+        raise errors.TypingError('The first argument "arr" must be an array')
+
+    # create tuple list for transpose
+    ndim = arr.ndim
+    axes_list = tuple(range(ndim))
+
+    def impl(arr, axis1, axis2):
+        axis1 = normalize_axis("np.swapaxes", "axis1", ndim, axis1)
+        axis2 = normalize_axis("np.swapaxes", "axis2", ndim, axis2)
+
+        # to ensure tuple_setitem support of negative values
+        if axis1 < 0:
+            axis1 += ndim
+        if axis2 < 0:
+            axis2 += ndim
+
+        axes_tuple = tuple_setitem(axes_list, axis1, axis2)
+        axes_tuple = tuple_setitem(axes_tuple, axis2, axis1)
+        return np.transpose(arr, axes_tuple)
+
+    return impl
+
+
+@register_jitable
+def _take_along_axis_impl(
+        arr, indices, axis, Ni_orig, Nk_orig, indices_broadcast_shape
+):
+    # Based on example code in
+    # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/lib/shape_base.py#L90-L103
+    # With addition of pre-broadcasting:
+    # https://github.com/numpy/numpy/issues/19704
+
+    # Wrap axis, it's used in tuple_setitem so must be (axis >= 0) to ensure
+    # the GEP is in bounds.
+    axis = normalize_axis("np.take_along_axis", "axis", arr.ndim, axis)
+
+    # Broadcast the two arrays to matching shapes:
+    arr_shape = list(arr.shape)
+    arr_shape[axis] = 1
+    for i, (d1, d2) in enumerate(zip(arr_shape, indices.shape)):
+        if d1 == 1:
+            new_val = d2
+        elif d2 == 1:
+            new_val = d1
+        else:
+            if d1 != d2:
+                raise ValueError(
+                    "`arr` and `indices` dimensions don't match"
+                )
+            new_val = d1
+        indices_broadcast_shape = tuple_setitem(
+            indices_broadcast_shape, i, new_val
+        )
+    arr_broadcast_shape = tuple_setitem(
+        indices_broadcast_shape, axis, arr.shape[axis]
+    )
+    arr = np.broadcast_to(arr, arr_broadcast_shape)
+    indices = np.broadcast_to(indices, indices_broadcast_shape)
+
+    Ni = Ni_orig
+    if len(Ni_orig) > 0:
+        for i in range(len(Ni)):
+            Ni = tuple_setitem(Ni, i, arr.shape[i])
+    Nk = Nk_orig
+    if len(Nk_orig) > 0:
+        for i in range(len(Nk)):
+            Nk = tuple_setitem(Nk, i, arr.shape[axis + 1 + i])
+
+    J = indices.shape[axis]  # Need not equal M
+    out = np.empty(Ni + (J,) + Nk, arr.dtype)
+
+    np_s_ = (slice(None, None, None),)
+
+    for ii in np.ndindex(Ni):
+        for kk in np.ndindex(Nk):
+            a_1d = arr[ii + np_s_ + kk]
+            indices_1d = indices[ii + np_s_ + kk]
+            out_1d = out[ii + np_s_ + kk]
+            for j in range(J):
+                out_1d[j] = a_1d[indices_1d[j]]
+    return out
+
+
+@overload(np.take_along_axis)
+def arr_take_along_axis(arr, indices, axis):
+    if not isinstance(arr, types.Array):
+        raise errors.TypingError('The first argument "arr" must be an array')
+    if not isinstance(indices, types.Array):
+        raise errors.TypingError(
+            'The second argument "indices" must be an array')
+    if not isinstance(indices.dtype, types.Integer):
+        raise errors.TypingError('The indices array must contain integers')
+    if is_nonelike(axis):
+        arr_ndim = 1
+    else:
+        arr_ndim = arr.ndim
+    if arr_ndim != indices.ndim:
+        # Matches NumPy error:
+        raise errors.TypingError(
+            "`indices` and `arr` must have the same number of dimensions"
+        )
+
+    indices_broadcast_shape = tuple(range(indices.ndim))
+    if is_nonelike(axis):
+        def take_along_axis_impl(arr, indices, axis):
+            return _take_along_axis_impl(arr.flatten(), indices, 0, (), (),
+                                         indices_broadcast_shape)
+    else:
+        check_is_integer(axis, "axis")
+        if not isinstance(axis, types.IntegerLiteral):
+            raise errors.NumbaValueError("axis must be a literal value")
+        axis = axis.literal_value
+        if axis < 0:
+            axis = arr.ndim + axis
+
+        if axis < 0 or axis >= arr.ndim:
+            raise errors.NumbaValueError("axis is out of bounds")
+
+        Ni = tuple(range(axis))
+        Nk = tuple(range(axis + 1, arr.ndim))
+
+        def take_along_axis_impl(arr, indices, axis):
+            return _take_along_axis_impl(arr, indices, axis, Ni, Nk,
+                                         indices_broadcast_shape)
+    return take_along_axis_impl
+
+
+@overload(np.nan_to_num)
+def nan_to_num_impl(x, copy=True, nan=0.0):
+    if isinstance(x, types.Number):
+        if isinstance(x, types.Integer):
+            # Integers do not have nans or infs
+            def impl(x, copy=True, nan=0.0):
+                return x
+
+        elif isinstance(x, types.Float):
+            def impl(x, copy=True, nan=0.0):
+                if np.isnan(x):
+                    return nan
+                elif np.isneginf(x):
+                    return np.finfo(type(x)).min
+                elif np.isposinf(x):
+                    return np.finfo(type(x)).max
+                return x
+        elif isinstance(x, types.Complex):
+            def impl(x, copy=True, nan=0.0):
+                r = np.nan_to_num(x.real, nan=nan)
+                c = np.nan_to_num(x.imag, nan=nan)
+                return complex(r, c)
+        else:
+            raise errors.TypingError(
+                "Only Integer, Float, and Complex values are accepted"
+            )
+
+    elif type_can_asarray(x):
+        if isinstance(x.dtype, types.Integer):
+            # Integers do not have nans or infs
+            def impl(x, copy=True, nan=0.0):
+                return x
+        elif isinstance(x.dtype, types.Float):
+            def impl(x, copy=True, nan=0.0):
+                min_inf = np.finfo(x.dtype).min
+                max_inf = np.finfo(x.dtype).max
+
+                x_ = np.asarray(x)
+                output = np.copy(x_) if copy else x_
+
+                output_flat = output.flat
+                for i in range(output.size):
+                    if np.isnan(output_flat[i]):
+                        output_flat[i] = nan
+                    elif np.isneginf(output_flat[i]):
+                        output_flat[i] = min_inf
+                    elif np.isposinf(output_flat[i]):
+                        output_flat[i] = max_inf
+                return output
+        elif isinstance(x.dtype, types.Complex):
+            def impl(x, copy=True, nan=0.0):
+                x_ = np.asarray(x)
+                output = np.copy(x_) if copy else x_
+
+                np.nan_to_num(output.real, copy=False, nan=nan)
+                np.nan_to_num(output.imag, copy=False, nan=nan)
+                return output
+        else:
+            raise errors.TypingError(
+                "Only Integer, Float, and Complex values are accepted"
+            )
+    else:
+        raise errors.TypingError("The first argument must be a scalar or an "
+                                 "array-like")
+    return impl

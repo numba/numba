@@ -17,7 +17,7 @@ All Numba deprecations are issued via ``NumbaDeprecationWarning`` or
 ``NumbaPendingDeprecationWarning`` s, to suppress the reporting of
 these the following code snippet can be used::
 
-    from numba.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
+    from numba.core.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
     import warnings
 
     warnings.simplefilter('ignore', category=NumbaDeprecationWarning)
@@ -53,7 +53,7 @@ efficiently and consistently. After a number of years of experience with this
 problem, it is clear that providing this behaviour is both fraught with
 difficulty and often leads to code which does not have good performance (all
 reflected data has to go through special APIs to convert the data to native
-formats at call time and and then back to CPython formats at return time). As a
+formats at call time and then back to CPython formats at return time). As a
 result of this, the sheer number of reported problems in the issue tracker, and
 how well a new approach that was taken with ``typed.Dict`` (typed dictionaries)
 has gone, the core developers have decided to deprecate the noted ``reflection``
@@ -100,8 +100,8 @@ Schedule
 This feature will be removed with respect to this schedule:
 
 * Pending-deprecation warnings will be issued in version 0.44.0
-* Deprecation warnings and replacements will be issued in version 0.50.0
-* Support will be removed in version 0.51.0
+* Prominent notice will be given for a minimum of two releases prior to full
+  removal.
 
 Recommendations
 ---------------
@@ -200,57 +200,274 @@ uses the `fall-back` compilation path. In future code such as::
 
 will simply not compile, a ``TypingError`` would be raised.
 
+A further consequence of this change is that the ``nopython`` keyword argument
+will become redundant as :term:`nopython mode` will be the default. As a result,
+following this change, supplying the keyword argument as ``nopython=False`` will
+trigger a warning stating that the implicit default has changed to ``True``.
+Essentially this keyword will have no effect following removal of this feature.
+
 Schedule
 --------
 This feature will be removed with respect to this schedule:
 
-* Deprecation warnings will be issued in version 0.44.0
-* Support will be removed in version 0.50.0
+* Deprecation warnings will be issued in version 0.44.0.
+* Prominent notice is given in 0.57.0.
+* Removal will take place in version 0.59.0.
 
 Recommendations
 ---------------
 Projects that need/rely on the deprecated behaviour should pin their dependency
-on Numba to a version prior to removal of this behaviour. Alternatively, to
-accommodate the scheduled deprecations, users with code compiled at present with
-``@jit`` can supply the ``nopython=True`` keyword argument, if the code
-continues to compile then the code is already ready for this change. If the code
-does not compile, continue using the ``@jit`` decorator without
-``nopython=True`` and profile the performance of the function. Then remove the
-decorator and again check the performance of the function. If there is no
-benefit to having the ``@jit`` decorator present consider removing it! If there
-is benefit to having the ``@jit`` decorator present, then to be future proof
-supply the keyword argument ``forceobj=True`` to ensure the function is always
-compiled in :term:`object mode`.
+on Numba to a version prior to removal of this behaviour.
+
+General advice to accommodate the scheduled deprecation:
+
+Users with code compiled at present with ``@jit`` can supply the
+``nopython=True`` keyword argument, if the code continues to compile then the
+code is already ready for this change. If the code does not compile, continue
+using the ``@jit`` decorator without ``nopython=True`` and profile the
+performance of the function. Then remove the decorator and again check the
+performance of the function. If there is no benefit to having the ``@jit``
+decorator present consider removing it! If there is benefit to having the
+``@jit`` decorator present, then to be future proof supply the keyword argument
+``forceobj=True`` to ensure the function is always compiled in
+:term:`object mode`.
+
+Advice for users of the "loop-lifting" feature:
+
+If object mode compilation with loop-lifting is needed it should be
+explicitly declared through supplying the keyword arguments ``forceobj=True``
+and ``looplift=True`` to the ``@jit`` decorator.
+
+Advice for users setting ``nopython=False``:
+
+This is essentially specifying the implicit default prior to removal of this
+feature, either remove the keyword argument or change the value to ``True``.
 
 
-Change of jitclass location
-===========================
-Between versions 0.48 and 0.49 Numba underwent a large amount of refactoring.
-One of the decisions made by the core developers as part of this refactoring was
-to move ``numba.jitclass`` to a new location ``numba.experimental.jitclass``.
-This is to help reinforce expectations over the behaviour and support for
-certain features by deliberately placing them in an ``experimental`` submodule.
 
+.. _deprecation-of-generated-jit:
+
+Deprecation of ``generated_jit``
+================================
+The top level API function ``numba.generated_jit`` provides functionality that
+allows users to write JIT compilable functions that have different
+implementations based on the types of the arguments to the function. This is a
+hugely useful concept and is also key to Numba's internal implementation.
+
+Reason for deprecation
+----------------------
+
+There are a number of reasons for this deprecation.
+
+First, ``generated_jit`` breaks the concept of "JIT transparency" in that if the
+JIT compiler is disabled, the source code does not execute the same way as it
+would were the JIT compiler present.
+
+Second, internally Numba uses the ``numba.extending.overload`` family of
+decorators to access an equivalent functionality to ``generated_jit``. The
+``overload`` family of decorators are more powerful than ``generated_jit`` as
+they support far more options and both the CPU and CUDA targets. Essentially a
+replacement for ``generated_jit`` already exists and has been recommended and
+preferred for a long while.
+
+Third, the public extension API decorators are far better maintained than
+``generated_jit``. This is an important consideration due to Numba's limited
+resources, fewer duplicated pieces of functionality to maintain will reduce
+pressure on these resources.
+
+For more information on the ``overload`` family of decorators see the
+:ref:`high level extension API documentation <high-level-extending>`.
 
 Example(s) of the impact
 ------------------------
-The ``jitclass`` decorator has historically been available via
-``from numba import jitclass``, any code using this import location will in
-future need to be updated to ``from numba.experimental import jitclass``.
 
+Any source code using ``generated_jit`` would fail to work once the
+functionality has been removed.
+
+Schedule
+--------
+
+This feature will be removed with respect to this schedule:
+
+* Deprecation warnings will be issued in version 0.57.0.
+* Removal will take place in version 0.59.0.
 
 Recommendations
 ---------------
-Simply update imports as follows:
 
-* Change ``from numba import jitclass`` to
-  ``from numba.experimental import jitclass``
+Projects that need/rely on the deprecated behaviour should pin their dependency
+on Numba to a version prior to removal of this behaviour, or consider following
+replacement instructions below that outline how to adjust to the change.
+
+Replacement
+-----------
+
+The ``overload`` decorator offers a replacement for the functionality available
+through ``generated_jit``. An example follows of translating from one to the
+other. First define a type specialised function dispatch with the
+``generated_jit`` decorator::
+
+  from numba import njit, generated_jit, types
+
+  @generated_jit
+  def select(x):
+      if isinstance(x, types.Float):
+          def impl(x):
+              return x + 1
+          return impl
+      elif isinstance(x, types.UnicodeType):
+          def impl(x):
+              return x + " the number one"
+          return impl
+      else:
+          raise TypeError("Unsupported Type")
+
+  @njit
+  def foo(x):
+      return select(x)
+
+  print(foo(1.))
+  print(foo("a string"))
+
+Conceptually, ``generated_jit`` is like ``overload``, but with ``generated_jit``
+the overloaded function is the decorated function. Taking the example above and
+adjusting it to use the ``overload`` API::
+
+  from numba import njit, types
+  from numba.extending import overload
+
+  # A pure python implementation that will run if the JIT compiler is disabled.
+  def select(x):
+      if isinstance(x, float):
+          return x + 1
+      elif isinstance(x, str):
+          return x + " the number one"
+      else:
+          raise TypeError("Unsupported Type")
+
+  # An overload for the `select` function cf. generated_jit
+  @overload(select)
+  def ol_select(x):
+      if isinstance(x, types.Float):
+          def impl(x):
+              return x + 1
+          return impl
+      elif isinstance(x, types.UnicodeType):
+          def impl(x):
+              return x + " the number one"
+          return impl
+      else:
+          raise TypeError("Unsupported Type")
+
+  @njit
+  def foo(x):
+      return select(x)
+
+  print(foo(1.))
+  print(foo("a string"))
+
+Further, users that are using ``generated_jit`` to dispatch on some of the more
+primitive types may find that Numba's support for ``isinstance`` is sufficient,
+for example::
+
+  @njit # NOTE: standard @njit decorator.
+  def select(x):
+      if isinstance(x, float):
+          return x + 1
+      elif isinstance(x, str):
+          return x + " the number one"
+      else:
+          raise TypeError("Unsupported Type")
+
+  @njit
+  def foo(x):
+      return select(x)
+
+  print(foo(1.))
+  print(foo("a string"))
+
+
+Deprecation of eager compilation of CUDA device functions
+=========================================================
+
+In future versions of Numba, the ``device`` kwarg to the ``@cuda.jit`` decorator
+will be obviated, and whether a device function or global kernel is compiled will
+be inferred from the context. With respect to kernel / device functions and lazy
+/ eager compilation, four cases were handled:
+
+1. ``device=True``, eager compilation with a signature provided
+2. ``device=False``, eager compilation with a signature provided
+3. ``device=True``, lazy compilation with no signature
+4. ``device=False``, lazy compilation with no signature
+
+The latter two cases can be differentiated without the ``device`` kwarg, because
+it can be inferred from the calling context - if the call is from the host, then
+a global kernel should be compiled, and if the call is from a kernel or another
+device function, then a device function should be compiled.
+
+The first two cases cannot be differentiated in the absence of the ``device``
+kwarg - without it, it will not be clear from a signature alone whether a device
+function or global kernel should be compiled. In order to resolve this, device
+functions will no longer be eagerly compiled. When a signature is provided to a
+device function, it will only be used to enforce the types of arguments that
+the function accepts.
+
+.. note::
+
+   In previous releases this notice stated that support for providing
+   signatures to device functions would be removed completely - however, this
+   precludes the common use case of enforcing the types that can be passed to a
+   device function (and the automatic insertion of casts that it implies) so
+   this notice has been updated to retain support for passing signatures.
 
 
 Schedule
 --------
-This feature will be moved with respect to this schedule:
 
-* Deprecation warnings will be issued in version 0.49.0
-* Support for importing from ``numba.jitclass`` will be removed in version
-  0.51.0.
+- In Numba 0.54: Eager compilation of device functions will be deprecated.
+- In Numba 0.55: Eager compilation of device functions will be unsupported and
+  the provision of signatures for device functions will only enforce casting.
+
+
+Deprecation and removal of ``numba.core.base.BaseContext.add_user_function()``
+==============================================================================
+
+``add_user_function()``  offered the same functionality as
+``insert_user_function()``, only with a check that the function has already
+been inserted at least once.  It is now removed as it was no longer used
+internally and it was expected that it was not used externally.
+
+Recommendations
+---------------
+
+Replace any uses of ``add_user_function()`` with ``insert_user_function()``.
+
+Schedule
+--------
+
+- In Numba 0.55: ``add_user_function()`` was deprecated.
+- In Numba 0.56: ``add_user_function()`` was removed.
+
+
+Deprecation and removal of CUDA Toolkits < 11.0 and devices with CC < 5.3
+=========================================================================
+
+- Support for CUDA toolkits less than 11.0 has been removed.
+- Support for devices with Compute Capability < 5.3 is deprecated and will be
+  removed in the future.
+
+
+Recommendations
+---------------
+
+- For devices of Compute Capability 3.0 and 3.2, Numba 0.55.1 or earlier will
+  be required.
+- CUDA toolkit 11.0 or later (ideally 11.2 or later) should be installed.
+
+Schedule
+--------
+
+- In Numba 0.55.1: support for CC < 5.3 and CUDA toolkits < 10.2 was deprecated.
+- In Numba 0.56: support for CC < 3.5 and CUDA toolkits < 10.2 was removed.
+- In Numba 0.57: Support for CUDA toolkit 10.2 was removed. Support for CC < 5.3
+  will be removed.

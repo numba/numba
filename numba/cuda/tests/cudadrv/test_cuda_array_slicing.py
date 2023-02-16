@@ -3,7 +3,8 @@ from itertools import product
 import numpy as np
 
 from numba import cuda
-from numba.cuda.testing import unittest, CUDATestCase
+from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
+from unittest.mock import patch
 
 
 class CudaArrayIndexing(CUDATestCase):
@@ -290,7 +291,9 @@ class CudaArraySetting(CUDATestCase):
             container=[
                 "Can't assign 3-D array to 1-D self",  # device
                 "could not broadcast input array from shape (2,3) "
-                "into shape (35)",  # simulator
+                "into shape (35)",  # simulator, NP < 1.20
+                "could not broadcast input array from shape (2,3) "
+                "into shape (35,)",  # simulator, NP >= 1.20
             ])
 
     def test_incompatible_shape(self):
@@ -305,8 +308,71 @@ class CudaArraySetting(CUDATestCase):
                 "Can't copy sequence with size 2 to array axis 0 with "
                 "dimension 5",  # device
                 "cannot copy sequence with size 2 to array axis with "
-                "dimension 5",  # simulator
+                "dimension 5",  # simulator, NP < 1.20
+                "could not broadcast input array from shape (2,) into "
+                "shape (5,)",   # simulator, NP >= 1.20
             ])
+
+    @skip_on_cudasim('cudasim does not use streams and operates synchronously')
+    def test_sync(self):
+        # There should be a synchronization when no stream is supplied
+        darr = cuda.to_device(np.arange(5))
+
+        with patch.object(cuda.cudadrv.driver.Stream, 'synchronize',
+                          return_value=None) as mock_sync:
+            darr[0] = 10
+
+        mock_sync.assert_called_once()
+
+    @skip_on_cudasim('cudasim does not use streams and operates synchronously')
+    def test_no_sync_default_stream(self):
+        # There should not be a synchronization when the array has a default
+        # stream, whether it is the default stream, the legacy default stream,
+        # the per-thread default stream, or another stream.
+        streams = (cuda.stream(), cuda.default_stream(),
+                   cuda.legacy_default_stream(),
+                   cuda.per_thread_default_stream())
+
+        for stream in streams:
+            darr = cuda.to_device(np.arange(5), stream=stream)
+
+            with patch.object(cuda.cudadrv.driver.Stream, 'synchronize',
+                              return_value=None) as mock_sync:
+                darr[0] = 10
+
+            mock_sync.assert_not_called()
+
+    @skip_on_cudasim('cudasim does not use streams and operates synchronously')
+    def test_no_sync_supplied_stream(self):
+        # There should not be a synchronization when a stream is supplied for
+        # the setitem call, whether it is the default stream, the legacy default
+        # stream, the per-thread default stream, or another stream.
+        streams = (cuda.stream(), cuda.default_stream(),
+                   cuda.legacy_default_stream(),
+                   cuda.per_thread_default_stream())
+
+        for stream in streams:
+            darr = cuda.to_device(np.arange(5))
+
+            with patch.object(cuda.cudadrv.driver.Stream, 'synchronize',
+                              return_value=None) as mock_sync:
+                darr.setitem(0, 10, stream=stream)
+
+            mock_sync.assert_not_called()
+
+    @unittest.skip('Requires PR #6367')
+    def test_issue_6505(self):
+        # On Windows, the writes to ary_v would not be visible prior to the
+        # assertion, due to the assignment being done with a kernel launch that
+        # returns asynchronously - there should now be a sync after the kernel
+        # launch to ensure that the writes are always visible.
+        ary = cuda.mapped_array(2, dtype=np.int32)
+        ary[:] = 0
+
+        ary_v = ary.view('u1')
+        ary_v[1] = 1
+        ary_v[5] = 1
+        self.assertEqual(sum(ary), 512)
 
 
 if __name__ == '__main__':

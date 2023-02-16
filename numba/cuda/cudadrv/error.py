@@ -2,6 +2,10 @@ class CudaDriverError(Exception):
     pass
 
 
+class CudaRuntimeError(Exception):
+    pass
+
+
 class CudaSupportError(ImportError):
     pass
 
@@ -12,4 +16,8 @@ class NvvmError(Exception):
 
 
 class NvvmSupportError(ImportError):
+    pass
+
+
+class NvvmWarning(Warning):
     pass

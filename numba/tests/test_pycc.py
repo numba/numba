@@ -13,12 +13,12 @@ import numpy as np
 import llvmlite.binding as ll
 
 from numba.core import utils
-from numba.pycc import main
 from numba.pycc.decorators import clear_export_registry
 from numba.pycc.platform import find_shared_ending, find_pyext_ending
-from numba.pycc.platform import _external_compiler_ok
+from numba.pycc.platform import external_compiler_works
 
-from numba.tests.support import TestCase, tag, import_dynamic, temp_directory, has_blas
+from numba.tests.support import (TestCase, tag, import_dynamic, temp_directory,
+                                 has_blas)
 import unittest
 
 
@@ -27,10 +27,6 @@ try:
 except ImportError:
     setuptools = None
 
-# if suitable compilers are not present then skip.
-_skip_reason = 'AOT compatible compilers missing'
-_skip_missing_compilers = unittest.skipIf(not _external_compiler_ok,
-                                          _skip_reason)
 _skip_reason = 'windows only'
 _windows_only = unittest.skipIf(not sys.platform.startswith('win'),
                                 _skip_reason)
@@ -52,12 +48,12 @@ class TestCompilerChecks(TestCase):
     @_windows_only
     def test_windows_compiler_validity(self):
         # When inside conda-build VSINSTALLDIR should be set and windows should
-        # have a valid compiler available, `_external_compiler_ok` should  agree
-        # with this. If this is not the case then error out to alert devs.
+        # have a valid compiler available, `external_compiler_works()` should
+        # agree with this. If this is not the case then error out to alert devs.
         is_running_conda_build = os.environ.get('CONDA_BUILD', None) is not None
         if is_running_conda_build:
             if os.environ.get('VSINSTALLDIR', None) is not None:
-                self.assertTrue(_external_compiler_ok)
+                self.assertTrue(external_compiler_works())
 
 
 class BasePYCCTest(TestCase):
@@ -88,84 +84,11 @@ class BasePYCCTest(TestCase):
             sys.modules.pop(name, None)
 
 
-@_skip_missing_compilers
-class TestLegacyAPI(BasePYCCTest):
-
-    def test_pycc_ctypes_lib(self):
-        """
-        Test creating a C shared library object using pycc.
-        """
-        source = os.path.join(base_path, 'compile_with_pycc.py')
-        cdll_modulename = 'test_dll_legacy' + find_shared_ending()
-        cdll_path = os.path.join(self.tmpdir, cdll_modulename)
-        if os.path.exists(cdll_path):
-            os.unlink(cdll_path)
-
-        main(args=['--debug', '-o', cdll_path, source])
-        lib = CDLL(cdll_path)
-        lib.mult.argtypes = [POINTER(c_double), c_void_p,
-                             c_double, c_double]
-        lib.mult.restype = c_int
-
-        lib.multf.argtypes = [POINTER(c_float), c_void_p,
-                              c_float, c_float]
-        lib.multf.restype = c_int
-
-        res = c_double()
-        lib.mult(byref(res), None, 123, 321)
-        self.assertEqual(res.value, 123 * 321)
-
-        res = c_float()
-        lib.multf(byref(res), None, 987, 321)
-        self.assertEqual(res.value, 987 * 321)
-
-    def test_pycc_pymodule(self):
-        """
-        Test creating a CPython extension module using pycc.
-        """
-        self.skipTest("lack of environment can make the extension crash")
-
-        source = os.path.join(base_path, 'compile_with_pycc.py')
-        modulename = 'test_pyext_legacy'
-        out_modulename = os.path.join(self.tmpdir,
-                                      modulename + find_pyext_ending())
-        if os.path.exists(out_modulename):
-            os.unlink(out_modulename)
-
-        main(args=['--debug', '--python', '-o', out_modulename, source])
-
-        with self.check_c_ext(self.tmpdir, modulename) as lib:
-            res = lib.multi(123, 321)
-            self.assertPreciseEqual(res, 123 * 321)
-            res = lib.multf(987, 321)
-            self.assertPreciseEqual(res, 987.0 * 321.0)
-
-    def test_pycc_bitcode(self):
-        """
-        Test creating a LLVM bitcode file using pycc.
-        """
-        modulename = os.path.join(base_path, 'compile_with_pycc')
-        bitcode_modulename = os.path.join(self.tmpdir, 'test_bitcode_legacy.bc')
-        if os.path.exists(bitcode_modulename):
-            os.unlink(bitcode_modulename)
-
-        main(args=['--debug', '--llvm', '-o', bitcode_modulename,
-                   modulename + '.py'])
-
-        # Sanity check bitcode file contents
-        with open(bitcode_modulename, "rb") as f:
-            bc = f.read()
-
-        bitcode_wrapper_magic = b'\xde\xc0\x17\x0b'
-        bitcode_magic = b'BC\xc0\xde'
-        self.assertTrue(bc.startswith((bitcode_magic, bitcode_wrapper_magic)), bc)
-
-
-@_skip_missing_compilers
 class TestCC(BasePYCCTest):
 
     def setUp(self):
         super(TestCC, self).setUp()
+        self.skip_if_no_external_compiler() # external compiler needed
         from numba.tests import compile_with_pycc
         self._test_module = compile_with_pycc
         imp.reload(self._test_module)
@@ -182,6 +105,16 @@ class TestCC(BasePYCCTest):
     def check_cc_compiled_in_subprocess(self, lib, code):
         prolog = """if 1:
             import sys
+            import types
+            # to disable numba package
+            sys.modules['numba'] = types.ModuleType('numba')
+            try:
+                from numba import njit
+            except ImportError:
+                pass
+            else:
+                raise RuntimeError('cannot disable numba package')
+
             sys.path.insert(0, %(path)r)
             import %(name)s as lib
             """ % {'name': lib.__name__,
@@ -203,7 +136,7 @@ class TestCC(BasePYCCTest):
         self.assertTrue(os.path.basename(f).startswith('pycc_test_simple.'), f)
         if sys.platform.startswith('linux'):
             self.assertTrue(f.endswith('.so'), f)
-            self.assertIn('.cpython', f)
+            self.assertIn(find_pyext_ending(), f)
 
     def test_compile(self):
         with self.check_cc_compiled(self._test_module.cc) as lib:
@@ -301,6 +234,22 @@ class TestCC(BasePYCCTest):
                 """ % dict(has_blas=has_blas)
             self.check_cc_compiled_in_subprocess(lib, code)
 
+    def test_hashing(self):
+        with self.check_cc_compiled(self._test_module.cc_nrt) as lib:
+            res = lib.hash_literal_str_A()
+            self.assertPreciseEqual(res, hash("A"))
+            res = lib.hash_str("A")
+            self.assertPreciseEqual(res, hash("A"))
+
+            code = """if 1:
+                from numpy.testing import assert_equal
+                res = lib.hash_literal_str_A()
+                assert_equal(res, hash("A"))
+                res = lib.hash_str("A")
+                assert_equal(res, hash("A"))
+                """
+            self.check_cc_compiled_in_subprocess(lib, code)
+
     def test_c_extension_usecase(self):
         # Test C-extensions
         with self.check_cc_compiled(self._test_module.cc_nrt) as lib:
@@ -310,10 +259,12 @@ class TestCC(BasePYCCTest):
             self.assertPreciseEqual(got, expect)
 
 
-@_skip_missing_compilers
 class TestDistutilsSupport(TestCase):
 
     def setUp(self):
+        super().setUp()
+        self.skip_if_no_external_compiler() # external compiler needed
+
         unset_macosx_deployment_target()
 
         # Copy the test project into a temp directory to avoid

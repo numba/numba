@@ -2,11 +2,9 @@ import numpy as np
 
 import unittest
 from numba import jit, from_dtype
-from numba.core import types, utils
+from numba.core import types
 from numba.typed import Dict
-from numba.tests.support import (TestCase, skip_ppc64le_issue4026)
-
-require_py37 = unittest.skipIf(utils.PYVERSION < (3, 7), "requires Python 3.7+")
+from numba.tests.support import (TestCase, skip_ppc64le_issue4563)
 
 
 def getitem(x, i):
@@ -216,7 +214,11 @@ def return_not(x, i):
     return not x[i]
 
 
-@skip_ppc64le_issue4026
+def join_string_array(str_arr):
+    return ",".join(str_arr)
+
+
+@skip_ppc64le_issue4563
 class TestUnicodeArray(TestCase):
 
     def _test(self, pyfunc, cfunc, *args, **kwargs):
@@ -551,7 +553,6 @@ class TestUnicodeArray(TestCase):
         self._test(pyfunc, cfunc, x, 0, y, ())
         self._test(pyfunc, cfunc, y, (), x, 0)
 
-    @require_py37
     def test_return_isascii(self):
         pyfunc = return_isascii
         cfunc = jit(nopython=True)(pyfunc)
@@ -876,6 +877,12 @@ class TestUnicodeArray(TestCase):
         self._test(pyfunc, cfunc, np.array(''), ())
         self._test(pyfunc, cfunc, np.array(b''), ())
         self._test(pyfunc, cfunc, (b'',), 0)
+
+    def test_join(self):
+        pyfunc = join_string_array
+        cfunc = jit(nopython=True)(pyfunc)
+
+        self._test(pyfunc, cfunc, np.array(["hi", "there"]))
 
 
 if __name__ == '__main__':

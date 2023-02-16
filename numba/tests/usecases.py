@@ -2,6 +2,8 @@ import math
 import numpy as np
 from numba import jit
 
+_GLOBAL_STR = "abc"
+
 def sum1d(s, e):
     c = 0
     for i in range(s, e):
@@ -67,6 +69,8 @@ def string_slicing(s, start, stop):
 
 
 def string_conversion(x):
+    # the test that calls this has always relied on objmode fallback so force it
+    object()
     return str(x)
 
 

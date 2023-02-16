@@ -3,6 +3,7 @@ from numba import from_dtype, cuda
 from numba.cuda.testing import skip_on_cudasim, CUDATestCase
 import unittest
 
+
 class TestAlignment(CUDATestCase):
     def test_record_alignment(self):
         rec_dtype = np.dtype([('a', 'int32'), ('b', 'float64')], align=True)

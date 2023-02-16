@@ -3,7 +3,7 @@ import enum
 import numpy as np
 
 from .abstract import Dummy, Hashable, Literal, Number, Type
-from functools import total_ordering
+from functools import total_ordering, cached_property
 from numba.core import utils
 from numba.core.typeconv import Conversion
 from numba.np import npdatetime_helpers
@@ -93,6 +93,25 @@ class IntegerLiteral(Literal, Integer):
 
 
 Literal.ctor_map[int] = IntegerLiteral
+
+
+class BooleanLiteral(Literal, Boolean):
+
+    def __init__(self, value):
+        self._literal_init(value)
+        name = 'Literal[bool]({})'.format(value)
+        Boolean.__init__(
+            self,
+            name=name
+            )
+
+    def can_convert_to(self, typingctx, other):
+        conv = typingctx.can_convert(self.literal_type, other)
+        if conv is not None:
+            return max(conv, Conversion.promote)
+
+
+Literal.ctor_map[bool] = BooleanLiteral
 
 
 @total_ordering
@@ -186,7 +205,7 @@ class EnumClass(Dummy):
     def key(self):
         return self.instance_class, self.dtype
 
-    @utils.cached_property
+    @cached_property
     def member_type(self):
         """
         The type of this class' members.
@@ -200,7 +219,7 @@ class IntEnumClass(EnumClass):
     """
     basename = "IntEnum class"
 
-    @utils.cached_property
+    @cached_property
     def member_type(self):
         """
         The type of this class' members.

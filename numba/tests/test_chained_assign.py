@@ -5,15 +5,9 @@ import copy
 from numba.tests.support import MemoryLeakMixin
 
 
-try:
-    xrange
-except NameError:
-    xrange = range
-
-
 @jit
 def inc(a):
-    for i in xrange(len(a)):
+    for i in range(len(a)):
         a[i] += 1
     return a
 

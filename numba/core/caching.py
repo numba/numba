@@ -13,10 +13,10 @@ import os
 import pickle
 import sys
 import tempfile
+import uuid
 import warnings
 
 from numba.misc.appdirs import AppDirs
-from numba.core.utils import add_metaclass, file_replace
 
 import numba
 from numba.core.errors import NumbaWarning
@@ -24,20 +24,7 @@ from numba.core.base import BaseContext
 from numba.core.codegen import CodeLibrary
 from numba.core.compiler import CompileResult
 from numba.core import config, compiler
-
-
-def _get_codegen(obj):
-    """
-    Returns the Codegen associated with the given object.
-    """
-    if isinstance(obj, BaseContext):
-        return obj.codegen()
-    elif isinstance(obj, CodeLibrary):
-        return obj.codegen
-    elif isinstance(obj, CompileResult):
-        return obj.target_context.codegen()
-    else:
-        raise TypeError(type(obj))
+from numba.core.serialize import dumps
 
 
 def _cache_log(msg, *args):
@@ -46,8 +33,7 @@ def _cache_log(msg, *args):
         print(msg)
 
 
-@add_metaclass(ABCMeta)
-class _Cache(object):
+class _Cache(metaclass=ABCMeta):
 
     @abstractproperty
     def cache_path(self):
@@ -109,19 +95,14 @@ class NullCache(_Cache):
         pass
 
 
-@add_metaclass(ABCMeta)
-class _CacheLocator(object):
+class _CacheLocator(metaclass=ABCMeta):
     """
     A filesystem locator for caching a given function.
     """
 
     def ensure_cache_path(self):
         path = self.get_cache_path()
-        try:
-            os.makedirs(path)
-        except OSError as e:
-            if e.errno != errno.EEXIST:
-                raise
+        os.makedirs(path, exist_ok=True)
         # Ensure the directory is writable by trying to write a temporary file
         tempfile.TemporaryFile(dir=path).close()
 
@@ -152,6 +133,23 @@ class _CacheLocator(object):
         given file.
         """
         raise NotImplementedError
+
+    @classmethod
+    def get_suitable_cache_subpath(cls, py_file):
+        """Given the Python file path, compute a suitable path inside the
+        cache directory.
+
+        This will reduce a file path that is too long, which can be a problem
+        on some operating system (i.e. Windows 7).
+        """
+        path = os.path.abspath(py_file)
+        subpath = os.path.dirname(path)
+        parentdir = os.path.split(subpath)[-1]
+        # Use SHA1 to reduce path length.
+        # Note: windows doesn't like long path.
+        hashed = hashlib.sha1(subpath.encode()).hexdigest()
+        # Retain parent directory name for easier debugging
+        return '_'.join([parentdir, hashed])
 
 
 class _SourceFileBackedLocatorMixin(object):
@@ -194,9 +192,8 @@ class _UserProvidedCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
     def __init__(self, py_func, py_file):
         self._py_file = py_file
         self._lineno = py_func.__code__.co_firstlineno
-        drive, path = os.path.splitdrive(os.path.abspath(self._py_file))
-        subpath = os.path.dirname(path).lstrip(os.path.sep)
-        self._cache_path = os.path.join(config.CACHE_DIR, subpath)
+        cache_subpath = self.get_suitable_cache_subpath(py_file)
+        self._cache_path = os.path.join(config.CACHE_DIR, cache_subpath)
 
     def get_cache_path(self):
         return self._cache_path
@@ -235,15 +232,7 @@ class _UserWideCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
         self._lineno = py_func.__code__.co_firstlineno
         appdirs = AppDirs(appname="numba", appauthor=False)
         cache_dir = appdirs.user_cache_dir
-        cache_subpath = os.path.dirname(py_file)
-        if not (os.name == "nt" or getattr(sys, 'frozen', False)):
-            # On non-Windows, further disambiguate by appending the entire
-            # absolute source path to the cache dir, e.g.
-            # "$HOME/.cache/numba/usr/lib/.../mypkg/mysubpkg"
-            # On Windows, this is undesirable because of path length limitations
-            # For frozen applications, there is no existing "full path"
-            # directory, and depends on a relocatable executable.
-            cache_subpath = os.path.abspath(cache_subpath).lstrip(os.path.sep)
+        cache_subpath = self.get_suitable_cache_subpath(py_file)
         self._cache_path = os.path.join(cache_dir, cache_subpath)
 
     def get_cache_path(self):
@@ -305,7 +294,10 @@ class _IPythonCacheLocator(_CacheLocator):
 
     @classmethod
     def from_function(cls, py_func, py_file):
-        if not py_file.startswith("<ipython-"):
+        if not (
+            py_file.startswith("<ipython-")
+            or os.path.basename(os.path.dirname(py_file)).startswith("ipykernel_")
+        ):
             return
         self = cls(py_func, py_file)
         try:
@@ -316,8 +308,7 @@ class _IPythonCacheLocator(_CacheLocator):
         return self
 
 
-@add_metaclass(ABCMeta)
-class _CacheImpl(object):
+class CacheImpl(metaclass=ABCMeta):
     """
     Provides the core machinery for caching.
     - implement how to serialize and deserialize the data in the cache.
@@ -330,7 +321,6 @@ class _CacheImpl(object):
                         _IPythonCacheLocator]
 
     def __init__(self, py_func):
-        self._is_closure = bool(py_func.__closure__)
         self._lineno = py_func.__code__.co_firstlineno
         # Get qualname
         try:
@@ -387,7 +377,7 @@ class _CacheImpl(object):
         pass
 
 
-class CompileResultCacheImpl(_CacheImpl):
+class CompileResultCacheImpl(CacheImpl):
     """
     Implements the logic to cache CompileResult objects.
     """
@@ -409,10 +399,8 @@ class CompileResultCacheImpl(_CacheImpl):
         Check cachability of the given compile result.
         """
         cannot_cache = None
-        if self._is_closure:
-            cannot_cache = "as it uses outer variables in a closure"
-        elif cres.lifted:
-            cannot_cache = "as it uses lifted loops"
+        if any(not x.can_cache for x in cres.lifted):
+            cannot_cache = "as it uses lifted code"
         elif cres.library.has_dynamic_globals:
             cannot_cache = ("as it uses dynamic globals "
                             "(such as ctypes pointers and large global arrays)")
@@ -425,7 +413,7 @@ class CompileResultCacheImpl(_CacheImpl):
         return True
 
 
-class CodeLibraryCacheImpl(_CacheImpl):
+class CodeLibraryCacheImpl(CacheImpl):
     """
     Implements the logic to cache CodeLibrary objects.
     """
@@ -448,7 +436,7 @@ class CodeLibraryCacheImpl(_CacheImpl):
         """
         Check cachability of the given CodeLibrary.
         """
-        return not self._is_closure
+        return not codelib.has_dynamic_globals
 
     def get_filename_base(self, fullname, abiflags):
         parent = super(CodeLibraryCacheImpl, self)
@@ -500,7 +488,7 @@ class IndexDataCacheFile(object):
             return
         try:
             return self._load_data(data_name)
-        except EnvironmentError:
+        except OSError:
             # File could have been removed while the index still refers it.
             return
 
@@ -513,11 +501,9 @@ class IndexDataCacheFile(object):
             with open(self._index_path, "rb") as f:
                 version = pickle.load(f)
                 data = f.read()
-        except EnvironmentError as e:
+        except FileNotFoundError:
             # Index doesn't exist yet?
-            if e.errno in (errno.ENOENT,):
-                return {}
-            raise
+            return {}
         if version != self._version:
             # This is another version.  Avoid trying to unpickling the
             # rest of the stream, as that may fail.
@@ -561,19 +547,20 @@ class IndexDataCacheFile(object):
         return os.path.join(self._cache_path, name)
 
     def _dump(self, obj):
-        return pickle.dumps(obj, protocol=-1)
+        return dumps(obj)
 
     @contextlib.contextmanager
     def _open_for_write(self, filepath):
         """
-        Open *filepath* for writing in a race condition-free way
-        (hopefully).
+        Open *filepath* for writing in a race condition-free way (hopefully).
+        uuid4 is used to try and avoid name collisions on a shared filesystem.
         """
-        tmpname = '%s.tmp.%d' % (filepath, os.getpid())
+        uid = uuid.uuid4().hex[:16]  # avoid long paths
+        tmpname = '%s.tmp.%s' % (filepath, uid)
         try:
             with open(tmpname, "wb") as f:
                 yield f
-            file_replace(tmpname, filepath)
+            os.replace(tmpname, filepath)
         except Exception:
             # In case of error, remove dangling tmp file
             try:
@@ -602,7 +589,7 @@ class Cache(_Cache):
 
     Note:
     This contains the driver logic only.  The core logic is provided
-    by a subclass of ``_CacheImpl`` specified as *_impl_class* in the subclass.
+    by a subclass of ``CacheImpl`` specified as *_impl_class* in the subclass.
     """
 
     # The following class variables must be overridden by subclass.
@@ -610,6 +597,7 @@ class Cache(_Cache):
 
     def __init__(self, py_func):
         self._name = repr(py_func)
+        self._py_func = py_func
         self._impl = self._impl_class(py_func)
         self._cache_path = self._impl.locator.get_cache_path()
         # This may be a bit strict but avoids us maintaining a magic number
@@ -650,7 +638,7 @@ class Cache(_Cache):
     def _load_overload(self, sig, target_context):
         if not self._enabled:
             return
-        key = self._index_key(sig, _get_codegen(target_context))
+        key = self._index_key(sig, target_context.codegen())
         data = self._cache_file.load(key)
         if data is not None:
             data = self._impl.rebuild(target_context, data)
@@ -669,7 +657,7 @@ class Cache(_Cache):
         if not self._impl.check_cachable(data):
             return
         self._impl.locator.ensure_cache_path()
-        key = self._index_key(sig, _get_codegen(data))
+        key = self._index_key(sig, data.codegen)
         data = self._impl.reduce(data)
         self._cache_file.save(key, data)
 
@@ -680,7 +668,7 @@ class Cache(_Cache):
             # from several processes (see #2028)
             try:
                 yield
-            except EnvironmentError as e:
+            except OSError as e:
                 if e.errno != errno.EACCES:
                     raise
         else:
@@ -690,9 +678,22 @@ class Cache(_Cache):
     def _index_key(self, sig, codegen):
         """
         Compute index key for the given signature and codegen.
-        It includes a description of the OS and target architecture.
+        It includes a description of the OS, target architecture and hashes of
+        the bytecode for the function and, if the function has a __closure__,
+        a hash of the cell_contents.
         """
-        return (sig, codegen.magic_tuple())
+        codebytes = self._py_func.__code__.co_code
+        if self._py_func.__closure__ is not None:
+            cvars = tuple([x.cell_contents for x in self._py_func.__closure__])
+            # Note: cloudpickle serializes a function differently depending
+            #       on how the process is launched; e.g. multiprocessing.Process
+            cvarbytes = dumps(cvars)
+        else:
+            cvarbytes = b''
+
+        hasher = lambda x: hashlib.sha256(x).hexdigest()
+        return (sig, codegen.magic_tuple(), (hasher(codebytes),
+                                             hasher(cvarbytes),))
 
 
 class FunctionCache(Cache):
@@ -727,5 +728,4 @@ def make_library_cache(prefix):
         _impl_class = CustomCodeLibraryCacheImpl
 
     return LibraryCache
-
 

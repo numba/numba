@@ -39,9 +39,10 @@ class TestDeallocation(CUDATestCase):
         try:
             # change to a smaller ratio
             config.CUDA_DEALLOCS_RATIO = max_pending / mi.total
-            # due to round off error (floor is used in calculating _max_pending_bytes)
-            # it can be off by 1.
-            self.assertAlmostEqual(deallocs._max_pending_bytes, max_pending, delta=1)
+            # due to round off error (floor is used in calculating
+            # _max_pending_bytes) it can be off by 1.
+            self.assertAlmostEqual(deallocs._max_pending_bytes, max_pending,
+                                   delta=1)
 
             # allocate half the max size
             # this will not trigger deallocation
@@ -50,7 +51,8 @@ class TestDeallocation(CUDATestCase):
 
             # allocate another remaining
             # this will not trigger deallocation
-            cuda.to_device(np.ones(deallocs._max_pending_bytes - deallocs._size, dtype=np.int8))
+            cuda.to_device(np.ones(deallocs._max_pending_bytes -
+                                   deallocs._size, dtype=np.int8))
             self.assertEqual(len(deallocs), 2)
 
             # another byte to trigger .clear()
@@ -178,6 +180,12 @@ class TestDel(CUDATestCase):
         with self.check_ignored_exception(ctx):
             del mem
 
+    def test_managed_memory(self):
+        ctx = cuda.current_context()
+        mem = ctx.memallocmanaged(32)
+        with self.check_ignored_exception(ctx):
+            del mem
+
     def test_pinned_contextmanager(self):
         # Check that temporarily pinned memory is unregistered immediately,
         # such that it can be re-pinned at any time
@@ -198,7 +206,8 @@ class TestDel(CUDATestCase):
                     pass
                 with cuda.pinned(arr):
                     pass
-            # Should also work when breaking out of the block due to an exception
+            # Should also work when breaking out of the block due to an
+            # exception
             try:
                 with cuda.pinned(arr):
                     raise PinnedException
@@ -216,23 +225,25 @@ class TestDel(CUDATestCase):
         ctx = cuda.current_context()
         ctx.deallocations.clear()
         with self.check_ignored_exception(ctx):
-            with cuda.mapped(arr) as marr:
+            with cuda.mapped(arr):
                 pass
-            with cuda.mapped(arr) as marr:
+            with cuda.mapped(arr):
                 pass
             # Should also work inside a `defer_cleanup` block
             with cuda.defer_cleanup():
-                with cuda.mapped(arr) as marr:
+                with cuda.mapped(arr):
                     pass
-                with cuda.mapped(arr) as marr:
+                with cuda.mapped(arr):
                     pass
-            # Should also work when breaking out of the block due to an exception
+            # Should also work when breaking out of the block due to an
+            # exception
             try:
-                with cuda.mapped(arr) as marr:
+                with cuda.mapped(arr):
                     raise MappedException
             except MappedException:
-                with cuda.mapped(arr) as marr:
+                with cuda.mapped(arr):
                     pass
+
 
 if __name__ == '__main__':
     unittest.main()
