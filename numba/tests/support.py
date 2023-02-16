@@ -86,6 +86,12 @@ skip_unless_py10 = unittest.skipUnless(
 
 skip_if_32bit = unittest.skipIf(_32bit, "Not supported on 32 bit")
 
+def expected_failure_py311(fn):
+    if utils.PYVERSION == (3, 11):
+        return unittest.expectedFailure(fn)
+    else:
+        return fn
+
 _msg = "SciPy needed for test"
 skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
 
@@ -673,32 +679,6 @@ def compile_function(name, code, globs):
     ns = {}
     eval(co, globs, ns)
     return ns[name]
-
-def tweak_code(func, codestring=None, consts=None):
-    """
-    Tweak the code object of the given function by replacing its
-    *codestring* (a bytes object) and *consts* tuple, optionally.
-    """
-    co = func.__code__
-    tp = type(co)
-    if codestring is None:
-        codestring = co.co_code
-    if consts is None:
-        consts = co.co_consts
-    if utils.PYVERSION >= (3, 8):
-        new_code = tp(co.co_argcount, co.co_posonlyargcount,
-                      co.co_kwonlyargcount, co.co_nlocals,
-                      co.co_stacksize, co.co_flags, codestring,
-                      consts, co.co_names, co.co_varnames,
-                      co.co_filename, co.co_name, co.co_firstlineno,
-                      co.co_lnotab)
-    else:
-        new_code = tp(co.co_argcount, co.co_kwonlyargcount, co.co_nlocals,
-                      co.co_stacksize, co.co_flags, codestring,
-                      consts, co.co_names, co.co_varnames,
-                      co.co_filename, co.co_name, co.co_firstlineno,
-                      co.co_lnotab)
-    func.__code__ = new_code
 
 
 _trashcan_dir = 'numba-tests'

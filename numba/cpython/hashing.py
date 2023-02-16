@@ -39,9 +39,7 @@ _PyHASH_MULTIPLIER = 0xf4243  # 1000003UL
 _PyHASH_IMAG = _PyHASH_MULTIPLIER
 _PyLong_SHIFT = sys.int_info.bits_per_digit
 _Py_HASH_CUTOFF = sys.hash_info.cutoff
-_Py_hashfunc_name = ("siphash24"
-                     if utils.PYVERSION >= (3, 11)
-                     else sys.hash_info.algorithm)
+_Py_hashfunc_name = sys.hash_info.algorithm
 
 
 # hash(obj) is implemented by calling obj.__hash__()
@@ -509,7 +507,7 @@ _hashsecret = _build_hashsecret()
 # ------------------------------------------------------------------------------
 
 
-if _Py_hashfunc_name in ('siphash24', 'fnv'):
+if _Py_hashfunc_name in ('siphash13', 'siphash24', 'fnv'):
 
     # Check for use of the FNV hashing alg, warn users that it's not implemented
     # and functionality relying of properties derived from hashing will be fine
@@ -527,6 +525,11 @@ if _Py_hashfunc_name in ('siphash24', 'fnv'):
 
     # This is a translation of CPython's siphash24 function:
     # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L287-L413    # noqa: E501
+    # and also, since Py 3.11, a translation of CPython's siphash13 function:
+    # https://github.com/python/cpython/blob/9dda9020abcf0d51d59b283a89c58c8e1fb0f574/Python/pyhash.c#L376-L424
+    # the only differences are in the use of SINGLE_ROUND in siphash13 vs.
+    # DOUBLE_ROUND in siphash24, and that siphash13 has an extra "ROUND" applied
+    # just before the final XORing of components to create the return value.
 
     # /* *********************************************************************
     # <MIT License>
@@ -588,9 +591,7 @@ if _Py_hashfunc_name in ('siphash24', 'fnv'):
                               'v1': types.uint64,
                               'v2': types.uint64,
                               'v3': types.uint64, })
-    def _DOUBLE_ROUND(v0, v1, v2, v3):
-        v0, v1, v2, v3 = _HALF_ROUND(v0, v1, v2, v3, 13, 16)
-        v2, v1, v0, v3 = _HALF_ROUND(v2, v1, v0, v3, 17, 21)
+    def _SINGLE_ROUND(v0, v1, v2, v3):
         v0, v1, v2, v3 = _HALF_ROUND(v0, v1, v2, v3, 13, 16)
         v2, v1, v0, v3 = _HALF_ROUND(v2, v1, v0, v3, 17, 21)
         return v0, v1, v2, v3
@@ -598,80 +599,108 @@ if _Py_hashfunc_name in ('siphash24', 'fnv'):
     @register_jitable(locals={'v0': types.uint64,
                               'v1': types.uint64,
                               'v2': types.uint64,
-                              'v3': types.uint64,
-                              'b': types.uint64,
-                              'mi': types.uint64,
-                              'tmp': types.Array(types.uint64, 1, 'C'),
-                              't': types.uint64,
-                              'mask': types.uint64,
-                              'jmp': types.uint64,
-                              'ohexefef': types.uint64})
-    def _siphash24(k0, k1, src, src_sz):
-        b = types.uint64(src_sz) << 56
-        v0 = k0 ^ types.uint64(0x736f6d6570736575)
-        v1 = k1 ^ types.uint64(0x646f72616e646f6d)
-        v2 = k0 ^ types.uint64(0x6c7967656e657261)
-        v3 = k1 ^ types.uint64(0x7465646279746573)
+                              'v3': types.uint64, })
+    def _DOUBLE_ROUND(v0, v1, v2, v3):
+        v0, v1, v2, v3 = _SINGLE_ROUND(v0, v1, v2, v3)
+        v0, v1, v2, v3 = _SINGLE_ROUND(v0, v1, v2, v3)
+        return v0, v1, v2, v3
 
-        idx = 0
-        while (src_sz >= 8):
-            mi = grab_uint64_t(src, idx)
-            idx += 1
-            src_sz -= 8
-            v3 ^= mi
-            v0, v1, v2, v3 = _DOUBLE_ROUND(v0, v1, v2, v3)
-            v0 ^= mi
+    def _gen_siphash(alg):
+        if alg == 'siphash13':
+            _ROUNDER = _SINGLE_ROUND
+            _EXTRA_ROUND = True
+        elif alg == 'siphash24':
+            _ROUNDER = _DOUBLE_ROUND
+            _EXTRA_ROUND = False
+        else:
+            assert 0, 'unreachable'
 
-        # this is the switch fallthrough:
-        # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L390-L400    # noqa: E501
-        t = types.uint64(0x0)
-        boffset = idx * 8
-        ohexefef = types.uint64(0xff)
-        if src_sz >= 7:
-            jmp = (6 * 8)
-            mask = ~types.uint64(ohexefef << jmp)
-            t = (t & mask) | (types.uint64(grab_byte(src, boffset + 6))
-                              << jmp)
-        if src_sz >= 6:
-            jmp = (5 * 8)
-            mask = ~types.uint64(ohexefef << jmp)
-            t = (t & mask) | (types.uint64(grab_byte(src, boffset + 5))
-                              << jmp)
-        if src_sz >= 5:
-            jmp = (4 * 8)
-            mask = ~types.uint64(ohexefef << jmp)
-            t = (t & mask) | (types.uint64(grab_byte(src, boffset + 4))
-                              << jmp)
-        if src_sz >= 4:
-            t &= types.uint64(0xffffffff00000000)
-            for i in range(4):
-                jmp = i * 8
+        @register_jitable(locals={'v0': types.uint64,
+                                  'v1': types.uint64,
+                                  'v2': types.uint64,
+                                  'v3': types.uint64,
+                                  'b': types.uint64,
+                                  'mi': types.uint64,
+                                  't': types.uint64,
+                                  'mask': types.uint64,
+                                  'jmp': types.uint64,
+                                  'ohexefef': types.uint64})
+        def _siphash(k0, k1, src, src_sz):
+            b = types.uint64(src_sz) << 56
+            v0 = k0 ^ types.uint64(0x736f6d6570736575)
+            v1 = k1 ^ types.uint64(0x646f72616e646f6d)
+            v2 = k0 ^ types.uint64(0x6c7967656e657261)
+            v3 = k1 ^ types.uint64(0x7465646279746573)
+
+            idx = 0
+            while (src_sz >= 8):
+                mi = grab_uint64_t(src, idx)
+                idx += 1
+                src_sz -= 8
+                v3 ^= mi
+                v0, v1, v2, v3 = _ROUNDER(v0, v1, v2, v3)
+                v0 ^= mi
+
+            # this is the switch fallthrough:
+            # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L390-L400    # noqa: E501
+            t = types.uint64(0x0)
+            boffset = idx * 8
+            ohexefef = types.uint64(0xff)
+            if src_sz >= 7:
+                jmp = (6 * 8)
                 mask = ~types.uint64(ohexefef << jmp)
-                t = (t & mask) | (types.uint64(grab_byte(src, boffset + i))
+                t = (t & mask) | (types.uint64(grab_byte(src, boffset + 6))
                                   << jmp)
-        if src_sz >= 3:
-            jmp = (2 * 8)
-            mask = ~types.uint64(ohexefef << jmp)
-            t = (t & mask) | (types.uint64(grab_byte(src, boffset + 2))
-                              << jmp)
-        if src_sz >= 2:
-            jmp = (1 * 8)
-            mask = ~types.uint64(ohexefef << jmp)
-            t = (t & mask) | (types.uint64(grab_byte(src, boffset + 1))
-                              << jmp)
-        if src_sz >= 1:
-            mask = ~(ohexefef)
-            t = (t & mask) | (types.uint64(grab_byte(src, boffset + 0)))
+            if src_sz >= 6:
+                jmp = (5 * 8)
+                mask = ~types.uint64(ohexefef << jmp)
+                t = (t & mask) | (types.uint64(grab_byte(src, boffset + 5))
+                                  << jmp)
+            if src_sz >= 5:
+                jmp = (4 * 8)
+                mask = ~types.uint64(ohexefef << jmp)
+                t = (t & mask) | (types.uint64(grab_byte(src, boffset + 4))
+                                  << jmp)
+            if src_sz >= 4:
+                t &= types.uint64(0xffffffff00000000)
+                for i in range(4):
+                    jmp = i * 8
+                    mask = ~types.uint64(ohexefef << jmp)
+                    t = (t & mask) | (types.uint64(grab_byte(src, boffset + i))
+                                      << jmp)
+            if src_sz >= 3:
+                jmp = (2 * 8)
+                mask = ~types.uint64(ohexefef << jmp)
+                t = (t & mask) | (types.uint64(grab_byte(src, boffset + 2))
+                                  << jmp)
+            if src_sz >= 2:
+                jmp = (1 * 8)
+                mask = ~types.uint64(ohexefef << jmp)
+                t = (t & mask) | (types.uint64(grab_byte(src, boffset + 1))
+                                  << jmp)
+            if src_sz >= 1:
+                mask = ~(ohexefef)
+                t = (t & mask) | (types.uint64(grab_byte(src, boffset + 0)))
 
-        b |= t
-        v3 ^= b
-        v0, v1, v2, v3 = _DOUBLE_ROUND(v0, v1, v2, v3)
-        v0 ^= b
-        v2 ^= ohexefef
-        v0, v1, v2, v3 = _DOUBLE_ROUND(v0, v1, v2, v3)
-        v0, v1, v2, v3 = _DOUBLE_ROUND(v0, v1, v2, v3)
-        t = (v0 ^ v1) ^ (v2 ^ v3)
-        return t
+            b |= t
+            v3 ^= b
+            v0, v1, v2, v3 = _ROUNDER(v0, v1, v2, v3)
+            v0 ^= b
+            v2 ^= ohexefef
+            v0, v1, v2, v3 = _ROUNDER(v0, v1, v2, v3)
+            v0, v1, v2, v3 = _ROUNDER(v0, v1, v2, v3)
+            if _EXTRA_ROUND:
+                v0, v1, v2, v3 = _ROUNDER(v0, v1, v2, v3)
+            t = (v0 ^ v1) ^ (v2 ^ v3)
+            return t
+
+        return _siphash
+
+    _siphash13 = _gen_siphash('siphash13')
+    _siphash24 = _gen_siphash('siphash24')
+
+    _siphasher = _siphash13 if _Py_hashfunc_name == 'siphash13' else _siphash24
+
 else:
     msg = "Unsupported hashing algorithm in use %s" % _Py_hashfunc_name
     raise ValueError(msg)
@@ -732,7 +761,7 @@ def _Py_HashBytes(val, _len):
         _hash ^= _len
         _hash ^= _load_hashsecret('djbx33a_suffix')
     else:
-        tmp = _siphash24(types.uint64(_load_hashsecret('siphash_k0')),
+        tmp = _siphasher(types.uint64(_load_hashsecret('siphash_k0')),
                          types.uint64(_load_hashsecret('siphash_k1')),
                          val, _len)
         _hash = process_return(tmp)

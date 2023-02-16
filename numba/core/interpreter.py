@@ -14,6 +14,7 @@ from numba.core.byteflow import Flow, AdaptDFA, AdaptCFA, BlockKind
 from numba.core.unsafe import eh
 from numba.cpython.unsafe.tuple import unpack_single_tuple
 
+
 class _UNKNOWN_VALUE(object):
     """Represents an unknown value, this is for ease of debugging purposes only.
     """
@@ -1329,8 +1330,12 @@ class Interpreter(object):
     """A bytecode interpreter that builds up the IR.
     """
 
+    _DEBUG_PRINT = False
+
     def __init__(self, func_id):
         self.func_id = func_id
+        if self._DEBUG_PRINT:
+            print(func_id.func)
         self.arg_count = func_id.arg_count
         self.arg_names = func_id.arg_names
         self.loc = self.first_loc = ir.Loc.from_function_id(func_id)
@@ -1392,7 +1397,7 @@ class Interpreter(object):
         if PYVERSION in [(3, 9), (3, 10), (3, 11)]:
             peepholes.append(peep_hole_list_to_tuple)
         peepholes.append(peep_hole_delete_with_exit)
-        if PYVERSION == (3, 10):
+        if PYVERSION in [(3, 10), (3, 11)]:
             # peep_hole_call_function_ex_to_call_function_kw
             # depends on peep_hole_list_to_tuple converting
             # any large number of arguments from a list to a
@@ -1754,6 +1759,8 @@ class Interpreter(object):
         return self.bytecode.co_freevars
 
     def _dispatch(self, inst, kws):
+        if self._DEBUG_PRINT:
+            print(inst)
         assert self.current_block is not None
         if PYVERSION == (3, 11):
             if self.syntax_blocks:
@@ -2214,13 +2221,11 @@ class Interpreter(object):
 
     if PYVERSION == (3, 11):
         def op_LOAD_DEREF(self, inst, res):
-            n_cellvars = len(self.code_cellvars)
-            idx = inst.arg - len(self.code_locals)
-            if idx < n_cellvars:
-                name = self.code_cellvars[idx]
+            name = self.func_id.func.__code__._varname_from_oparg(inst.arg)
+            if name in self.code_cellvars:
                 gl = self.get(name)
-            else:
-                name = self.code_freevars[idx - n_cellvars]
+            elif name in self.code_freevars:
+                idx = self.code_freevars.index(name)
                 value = self.get_closure_value(idx)
                 gl = ir.FreeVar(idx, name, value, loc=self.loc)
             self.store(gl, res)
@@ -2244,14 +2249,9 @@ class Interpreter(object):
             pass  # ignored bytecode
 
         def op_STORE_DEREF(self, inst, value):
-            idx = inst.arg - len(self.code_locals)
-            n_cellvars = len(self.code_cellvars)
-            if idx < n_cellvars:
-                dstname = self.code_cellvars[idx]
-            else:
-                dstname = self.code_freevars[idx - n_cellvars]
+            name = self.func_id.func.__code__._varname_from_oparg(inst.arg)
             value = self.get(value)
-            self.store(value=value, name=dstname)
+            self.store(value=value, name=name)
     elif PYVERSION < (3, 11):
         def op_STORE_DEREF(self, inst, value):
             n_cellvars = len(self.code_cellvars)
@@ -2859,23 +2859,36 @@ class Interpreter(object):
         self._op_JUMP_IF(inst, pred=pred, iftrue=True)
 
     def _jump_if_none(self, inst, pred, iftrue):
-        brs = {
-            True: inst.get_jump_target(),
-            False: inst.next,
-        }
-        truebr = brs[iftrue]
-        falsebr = brs[not iftrue]
+        # branch pruning assumes true falls through and false is jump
+        truebr = inst.next
+        falsebr = inst.get_jump_target()
 
-        op = BINOPS_TO_OPERATORS["is"]
+        # this seems strange
+        if not iftrue:
+            op = BINOPS_TO_OPERATORS["is"]
+        else:
+            op = BINOPS_TO_OPERATORS["is not"]
 
-        constnone = self.store(value=ir.Const(None, loc=self.loc),
-                         name="${inst.offset}constnone")
-        pred = self.get(pred)
-        isnone = ir.Expr.binop(op, lhs=pred, rhs=constnone, loc=self.loc)
+        rhs = self.store(value=ir.Const(None, loc=self.loc),
+                         name=f"$constNone{inst.offset}")
+        lhs = self.get(pred)
+        isnone = ir.Expr.binop(op, lhs=lhs, rhs=rhs, loc=self.loc)
 
-        pname = "$%spred" % (inst.offset)
-        predicate = self.store(value=isnone, name=pname)
-        branch = ir.Branch(cond=predicate, truebr=truebr, falsebr=falsebr,
+        maybeNone = f"$maybeNone{inst.offset}"
+        self.store(value=isnone, name=maybeNone)
+
+        name = f"$bool{inst.offset}"
+        gv_fn = ir.Global("bool", bool, loc=self.loc)
+        self.store(value=gv_fn, name=name)
+
+        callres = ir.Expr.call(self.get(name), (self.get(maybeNone),), (),
+                               loc=self.loc)
+
+        pname = f"$pred{inst.offset}"
+        predicate = self.store(value=callres, name=pname)
+        branch = ir.Branch(cond=predicate,
+                           truebr=truebr,
+                           falsebr=falsebr,
                            loc=self.loc)
         self.current_block.append(branch)
 
@@ -2883,6 +2896,12 @@ class Interpreter(object):
         self._jump_if_none(inst, pred, True)
 
     def op_POP_JUMP_FORWARD_IF_NOT_NONE(self, inst, pred):
+        self._jump_if_none(inst, pred, False)
+
+    def op_POP_JUMP_BACKWARD_IF_NONE(self, inst, pred):
+        self._jump_if_none(inst, pred, True)
+
+    def op_POP_JUMP_BACKWARD_IF_NOT_NONE(self, inst, pred):
         self._jump_if_none(inst, pred, False)
 
     def op_POP_JUMP_FORWARD_IF_FALSE(self, inst, pred):
@@ -3013,20 +3032,19 @@ class Interpreter(object):
     if PYVERSION == (3, 11):
 
         def op_LOAD_CLOSURE(self, inst, res):
-            n_cellvars = len(self.code_cellvars)
-            arg = inst.arg - len(self.code_locals)
-            if arg < n_cellvars:
-                name = self.code_cellvars[arg]
+            name = self.func_id.func.__code__._varname_from_oparg(inst.arg)
+            if name in self.code_cellvars:
                 try:
                     gl = self.get(name)
                 except NotDefinedError:
                     msg = "Unsupported use of op_LOAD_CLOSURE encountered"
                     raise NotImplementedError(msg)
-            else:
-                idx = arg - n_cellvars
-                name = self.code_freevars[idx]
+            elif name in self.code_freevars:
+                idx = self.code_freevars.index(name)
                 value = self.get_closure_value(idx)
                 gl = ir.FreeVar(idx, name, value, loc=self.loc)
+            else:
+                assert 0, "unreachable"
             self.store(gl, res)
 
     elif PYVERSION < (3, 11):

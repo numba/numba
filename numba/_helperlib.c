@@ -884,18 +884,19 @@ void traceback_add_loc(PyObject *loc) {
 static
 int reraise_exc_is_none(void) {
     /* Reraise */
-    PyThreadState *tstate = PyThreadState_GET();
     PyObject *tb, *type, *value;
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 7)
+
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 11)
+    /* intentionally empty */
+#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 7)
+    PyThreadState *tstate = PyThreadState_GET();
     _PyErr_StackItem *tstate_exc = tstate->exc_info;
 #else
     PyThreadState *tstate_exc = tstate;
 #endif
 
 #if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 11)
-    type = tstate->curexc_type;
-    value = tstate->curexc_value;
-    tb = tstate->curexc_traceback;
+    PyErr_GetExcInfo(&type, &value, &tb);
 #else
     type = tstate_exc->exc_type;
     value = tstate_exc->exc_value;

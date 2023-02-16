@@ -7,7 +7,7 @@ import logging
 from collections import namedtuple, defaultdict, deque
 from functools import total_ordering
 
-from numba.core.utils import UniqueDict, PYVERSION
+from numba.core.utils import UniqueDict, PYVERSION, ALL_BINOPS_TO_OPERATORS
 from numba.core.controlflow import NEW_BLOCKERS, CFGraph
 from numba.core.ir import Loc
 from numba.core.errors import UnsupportedError
@@ -751,6 +751,12 @@ class TraceRunner(object):
     def op_POP_JUMP_FORWARD_IF_NOT_NONE(self, state, inst):
         self._op_POP_JUMP_IF(state, inst)
 
+    def op_POP_JUMP_BACKWARD_IF_NONE(self, state, inst):
+        self._op_POP_JUMP_IF(state, inst)
+
+    def op_POP_JUMP_BACKWARD_IF_NOT_NONE(self, state, inst):
+        self._op_POP_JUMP_IF(state, inst)
+
     def op_POP_JUMP_FORWARD_IF_FALSE(self, state, inst):
         self._op_POP_JUMP_IF(state, inst)
 
@@ -796,10 +802,13 @@ class TraceRunner(object):
         def op_RAISE_VARARGS(self, state, inst):
             if inst.arg == 0:
                 exc = None
-                raise UnsupportedError(
-                    "The re-raising of an exception is not yet supported.",
-                    loc=self.get_debug_loc(inst.lineno),
-                )
+                # No re-raising within a try-except block.
+                # But we allow bare reraise.
+                if state.has_active_try():
+                    raise UnsupportedError(
+                        "The re-raising of an exception is not yet supported.",
+                        loc=self.get_debug_loc(inst.lineno),
+                    )
             elif inst.arg == 1:
                 exc = state.pop()
             else:
@@ -1065,6 +1074,11 @@ class TraceRunner(object):
             varkwarg = None
         vararg = state.pop()
         func = state.pop()
+
+        if PYVERSION == (3, 11):
+            if _is_null_temp_reg(state.peek(1)):
+                state.pop() # pop NULL, it's not used
+
         res = state.make_temp()
         state.append(inst, func=func, vararg=vararg, varkwarg=varkwarg, res=res)
         state.push(res)
@@ -1285,7 +1299,8 @@ class TraceRunner(object):
         op = dis._nb_ops[inst.arg][1]
         rhs = state.pop()
         lhs = state.pop()
-        res = state.make_temp(prefix=f"binop_{op}")
+        op_name = ALL_BINOPS_TO_OPERATORS[op].__name__
+        res = state.make_temp(prefix=f"binop_{op_name}")
         state.append(inst, op=op, lhs=lhs, rhs=rhs, res=res)
         state.push(res)
 
