@@ -200,28 +200,49 @@ uses the `fall-back` compilation path. In future code such as::
 
 will simply not compile, a ``TypingError`` would be raised.
 
+A further consequence of this change is that the ``nopython`` keyword argument
+will become redundant as :term:`nopython mode` will be the default. As a result,
+following this change, supplying the keyword argument as ``nopython=False`` will
+trigger a warning stating that the implicit default has changed to ``True``.
+Essentially this keyword will have no effect following removal of this feature.
+
 Schedule
 --------
 This feature will be removed with respect to this schedule:
 
-* Deprecation warnings will be issued in version 0.44.0
-* Prominent notice will be given for a minimum of two releases prior to full
-  removal.
+* Deprecation warnings will be issued in version 0.44.0.
+* Prominent notice is given in 0.57.0.
+* Removal will take place in version 0.59.0.
 
 Recommendations
 ---------------
 Projects that need/rely on the deprecated behaviour should pin their dependency
-on Numba to a version prior to removal of this behaviour. Alternatively, to
-accommodate the scheduled deprecations, users with code compiled at present with
-``@jit`` can supply the ``nopython=True`` keyword argument, if the code
-continues to compile then the code is already ready for this change. If the code
-does not compile, continue using the ``@jit`` decorator without
-``nopython=True`` and profile the performance of the function. Then remove the
-decorator and again check the performance of the function. If there is no
-benefit to having the ``@jit`` decorator present consider removing it! If there
-is benefit to having the ``@jit`` decorator present, then to be future proof
-supply the keyword argument ``forceobj=True`` to ensure the function is always
-compiled in :term:`object mode`.
+on Numba to a version prior to removal of this behaviour.
+
+General advice to accommodate the scheduled deprecation:
+
+Users with code compiled at present with ``@jit`` can supply the
+``nopython=True`` keyword argument, if the code continues to compile then the
+code is already ready for this change. If the code does not compile, continue
+using the ``@jit`` decorator without ``nopython=True`` and profile the
+performance of the function. Then remove the decorator and again check the
+performance of the function. If there is no benefit to having the ``@jit``
+decorator present consider removing it! If there is benefit to having the
+``@jit`` decorator present, then to be future proof supply the keyword argument
+``forceobj=True`` to ensure the function is always compiled in
+:term:`object mode`.
+
+Advice for users of the "loop-lifting" feature:
+
+If object mode compilation with loop-lifting is needed it should be
+explicitly declared through supplying the keyword arguments ``forceobj=True``
+and ``looplift=True`` to the ``@jit`` decorator.
+
+Advice for users setting ``nopython=False``:
+
+This is essentially specifying the implicit default prior to removal of this
+feature, either remove the keyword argument or change the value to ``True``.
+
 
 
 .. _deprecation-of-generated-jit:

@@ -188,9 +188,7 @@ with CPython APIs.
 - :ghfile:`numba/_helperlib.c` - C functions required by Numba compiled code
   at runtime.  Linked into ahead-of-time compiled modules
 - :ghfile:`numba/_helpermod.c` - Python extension module with pointers to
-  functions from ``_helperlib.c`` and ``_npymath_exports.c``
-- :ghfile:`numba/_npymath_exports.c` - Export function pointer table to
-  NumPy C math functions
+  functions from ``_helperlib.c``
 - :ghfile:`numba/_dynfuncmod.c` - Python extension module exporting
   _dynfunc.c functionality
 - :ghfile:`numba/_dynfunc.c` - C level Environment and Closure objects (keep

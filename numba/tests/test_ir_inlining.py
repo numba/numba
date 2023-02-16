@@ -15,15 +15,11 @@ from numba.core.extending import (
     overload_method,
     overload_attribute,
     register_model,
-    typeof_impl,
-    unbox,
-    NativeValue,
     models,
     make_attribute_wrapper,
     intrinsic,
     register_jitable,
 )
-from numba.core.datamodel.models import OpaqueModel
 from numba.core.cpu import InlineOptions
 from numba.core.compiler import DefaultPassBuilder, CompilerBase
 from numba.core.typed_passes import InlineOverloads
@@ -115,29 +111,6 @@ class InliningBase(TestCase):
             self.assertFalse(found == v)
 
         return fir  # for use in further analysis
-
-    def make_dummy_type(self):
-        """ Use to generate a dummy type """
-
-        # Use test_id to make sure no collision is possible.
-        test_id = self.id()
-        DummyType = type('DummyTypeFor{}'.format(test_id), (types.Opaque,), {})
-
-        dummy_type = DummyType("my_dummy")
-        register_model(DummyType)(OpaqueModel)
-
-        class Dummy(object):
-            pass
-
-        @typeof_impl.register(Dummy)
-        def typeof_dummy(val, c):
-            return dummy_type
-
-        @unbox(DummyType)
-        def unbox_dummy(typ, obj, c):
-            return NativeValue(c.context.get_dummy_value())
-
-        return Dummy, DummyType
 
 
 # used in _gen_involved
