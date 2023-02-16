@@ -1,12 +1,11 @@
 import os
 import platform
 import sys
-from distutils import sysconfig
-from distutils.command import build
-from distutils.command.build_ext import build_ext
-from distutils.spawn import spawn
+from sysconfig import get_config_vars
 
 from setuptools import Extension, find_packages, setup
+from setuptools.command import build_ext
+
 import versioneer
 
 _version_module = None
@@ -28,7 +27,7 @@ max_llvmlite_version = "0.41"
 
 if sys.platform.startswith('linux'):
     # Patch for #2555 to make wheels without libpython
-    sysconfig.get_config_vars()['Py_ENABLE_SHARED'] = 0
+    get_config_vars()['Py_ENABLE_SHARED'] = 0
 
 
 def _guard_py_ver():
@@ -49,14 +48,6 @@ def _guard_py_ver():
 
 _guard_py_ver()
 
-
-class build_doc(build.build):
-    description = "build documentation"
-
-    def run(self):
-        spawn(['make', '-C', 'docs', 'html'])
-
-
 versioneer.VCS = 'git'
 versioneer.versionfile_source = 'numba/_version.py'
 versioneer.versionfile_build = 'numba/_version.py'
@@ -64,7 +55,6 @@ versioneer.tag_prefix = ''
 versioneer.parentdir_prefix = 'numba-'
 
 cmdclass = versioneer.get_cmdclass()
-cmdclass['build_doc'] = build_doc
 
 extra_link_args = []
 install_name_tool_fixer = []
@@ -128,7 +118,7 @@ def is_building():
                       'build_scripts', 'install', 'install_lib',
                       'install_headers', 'install_scripts', 'install_data',
                       'sdist', 'bdist', 'bdist_dumb', 'bdist_rpm',
-                      'bdist_wininst', 'check', 'build_doc', 'bdist_wheel',
+                      'bdist_wininst', 'check', 'bdist_wheel',
                       'bdist_egg', 'develop', 'easy_install', 'test']
     return any(bc in sys.argv[1:] for bc in build_commands)
 
