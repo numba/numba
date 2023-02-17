@@ -73,6 +73,8 @@ if sys.platform == 'darwin':
 if platform.machine() == 'ppc64le':
     extra_link_args += ['-pthread']
 
+build_ext = cmdclass.get('build_ext', build_ext)
+
 numba_be_user_options = [
     ('werror', None, 'Build extensions with -Werror'),
     ('wall', None, 'Build extensions with -Wall'),
