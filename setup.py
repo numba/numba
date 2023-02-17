@@ -79,6 +79,7 @@ numba_be_user_options = [
     ('noopt', None, 'Build extensions without optimization'),
 ]
 
+
 class NumbaBuildExt(build_ext):
 
     user_options = build_ext.user_options + numba_be_user_options
@@ -103,6 +104,7 @@ class NumbaBuildExt(build_ext):
             extra_compile_args.append('-Wall')
         for ext in self.extensions:
             ext.extra_compile_args.extend(extra_compile_args)
+
         super().run()
 
 
