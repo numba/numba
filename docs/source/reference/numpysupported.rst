@@ -540,6 +540,7 @@ The following top-level functions are supported:
 * :func:`numpy.triu` (second argument ``k`` must be an integer)
 * :func:`numpy.triu_indices` (all arguments must be integer)
 * :func:`numpy.triu_indices_from` (second argument ``k`` must be an integer)
+* :func:`numpy.union1d` (For unicode arrays, only supports arrays of the same dtype)
 * :func:`numpy.unique` (only the first argument)
 * :func:`numpy.vander`
 * :func:`numpy.vstack`

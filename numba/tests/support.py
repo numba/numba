@@ -52,12 +52,18 @@ from numba.core.extending import (
 from numba.core.datamodel.models import OpaqueModel
 from numba.pycc.platform import external_compiler_works
 
-
 try:
     import scipy
 except ImportError:
     scipy = None
 
+# Make sure that coverage is set up.
+try:
+    import coverage
+except ImportError:
+    pass
+else:
+    coverage.process_startup()
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.enable_pyobject = True
@@ -583,6 +589,10 @@ class TestCase(unittest.TestCase):
         cmd = [sys.executable, '-m', 'numba.runtests', fully_qualified_test]
         env_copy = os.environ.copy()
         env_copy['SUBPROC_TEST'] = '1'
+        try:
+            env_copy['COVERAGE_PROCESS_START'] = os.environ['COVERAGE_RCFILE']
+        except KeyError:
+            pass   # ignored
         envvars = pytypes.MappingProxyType({} if envvars is None else envvars)
         env_copy.update(envvars)
         status = subprocess.run(cmd, stdout=subprocess.PIPE,
