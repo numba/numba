@@ -73,13 +73,34 @@ if sys.platform == 'darwin':
 if platform.machine() == 'ppc64le':
     extra_link_args += ['-pthread']
 
+numba_be_user_options = [
+    ('werror', None, 'Build extensions with -Werror'),
+    ('wall', None, 'Build extensions with -Wall'),
+    ('noopt', None, 'Build extensions without optimization'),
+]
 
 class NumbaBuildExt(build_ext):
+
+    user_options = build_ext.user_options + numba_be_user_options
+    boolean_options = build_ext.boolean_options + ['werror', 'wall', 'noopt']
+
+    def initialize_options(self):
+        super().initialize_options()
+        self.werror = 0
+        self.wall = 0
+        self.noopt = 0
+
     def run(self):
         extra_compile_args = []
-        if sys.platform.startswith("linux") and platform.machine() == "x86_64":
-            extra_compile_args.extend(["-Werror", "-Wall"])
-        
+        if self.noopt:
+            if sys.platform == 'win32':
+                extra_compile_args.append('/Od')
+            else:
+                extra_compile_args.append('-O0')
+        if self.werror:
+            extra_compile_args.append('-Werror')
+        if self.wall:
+            extra_compile_args.append('-Wall')
         for ext in self.extensions:
             ext.extra_compile_args.extend(extra_compile_args)
         super().run()
