@@ -165,6 +165,19 @@ build_c_helpers_dict(void)
     declmethod(list_iter);
     declmethod(list_iter_next);
 
+    /* for set support */
+    declmethod(test_set);
+    declmethod(set_new);
+    declmethod(set_set_method_table);
+    declmethod(set_free);
+    declmethod(set_length);
+    declmethod(set_add);
+    declmethod(set_contains);
+    declmethod(set_discard);
+    declmethod(set_iter_sizeof);
+    declmethod(set_iter);
+    declmethod(set_iter_next);
+
 #define MATH_UNARY(F, R, A) declmethod(F);
 #define MATH_BINARY(F, R, A, B) declmethod(F);
     #include "mathnames.h"

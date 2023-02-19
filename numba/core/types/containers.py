@@ -882,6 +882,92 @@ class DictIteratorType(SimpleIteratorType):
         super(DictIteratorType, self).__init__(name, yield_type)
 
 
+class SetType(IterableType, InitialValue):
+    """Set type
+    """
+
+    def __init__(self, keyty, initial_value=None):
+        assert not isinstance(keyty, TypeRef)
+        keyty = unliteral(keyty)
+        if isinstance(keyty, (Optional, NoneType)):
+            fmt = "Set.key_type cannot be of type {}"
+            raise TypingError(fmt.format(keyty))
+        self.key_type = keyty
+        name = "{}[{}]<iv={}>".format(
+            self.__class__.__name__, keyty, initial_value
+        )
+        super(SetType, self).__init__(name)
+        InitialValue.__init__(self, initial_value)
+
+    @property
+    def iterator_type(self):
+        return SetIterableType(self).iterator_type
+
+    def is_precise(self):
+        return not any(
+            (
+                isinstance(self.key_type, Undefined),
+            )
+        )
+
+    @classmethod
+    def refine(cls, keyty):
+        """Refine to a precise Set type
+        """
+        res = cls(keyty)
+        assert res.is_precise()
+        return res
+
+    def unify(self, typingctx, other):
+        """
+        Unify this with the *other* Set.
+        """
+        # If other is set
+        if isinstance(other, SetType):
+            if not other.is_precise():
+                return self
+            else:
+                ukey_type = self.key_type == other.key_type
+                if ukey_type:
+                    siv = self.initial_value
+                    oiv = other.initial_value
+                    siv_none = siv is None
+                    oiv_none = oiv is None
+                    if not siv_none and not oiv_none:
+                        if siv == oiv:
+                            return SetType(other.key_type, siv)
+                    return SetType(other.key_type)
+
+    @property
+    def key(self):
+        return self.key_type, str(self.initial_value)
+
+    def __unliteral__(self):
+        return SetType(self.key_type)
+
+
+class SetIterableType(SimpleIterableType):
+    def __init__(self, parent):
+        assert isinstance(parent, SetType)
+        self.parent = parent
+        self.yield_type = self.parent.key_type
+        name = "values[{}]".format(self.parent.name)
+        self.name = name
+        iterator_type = SetIteratorType(self)
+        super(SetIterableType, self).__init__(name, iterator_type)
+
+
+class SetIteratorType(SimpleIteratorType):
+    def __init__(self, iterable):
+        self.parent = iterable.parent
+        self.iterable = iterable
+        yield_type = iterable.parent.key_type
+        name = "iter[{}->{}],{}".format(
+            iterable.parent, yield_type, iterable.name
+        )
+        super(SetIteratorType, self).__init__(name, yield_type)
+
+
 class StructRef(Type):
     """A mutable struct.
     """
