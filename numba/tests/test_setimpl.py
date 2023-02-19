@@ -72,6 +72,9 @@ class Set(object):
     def __iter__(self):
         return SetIter(self)
 
+    def __del__(self):
+        self.tc.numba_set_free(self.setp)
+
     def add(self, key):
         key_bytes = to_bytes(key)
         self.set_add(key_bytes)
@@ -199,6 +202,12 @@ class TestSetImpl(TestCase):
                 setiter_ty,                             # it
                 ctypes.POINTER(ctypes.c_void_p),    # item_ptr
             ],
+        )
+        # numba_set_free(NB_Set *setp)
+        self.numba_set_free = wrap(
+            'set_free',
+            None,
+            [set_ty],
         )
 
     def test_simple_c_test(self):
