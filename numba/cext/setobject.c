@@ -290,7 +290,7 @@ numba_set_table_resize(NB_Set *setp, Py_ssize_t minused)
 void
 numba_set_set_method_table(NB_Set *setp, set_type_based_methods_table *methods)
 {
-
+    memcpy(&setp->methods, methods, sizeof(set_type_based_methods_table));
 }
 
 static int

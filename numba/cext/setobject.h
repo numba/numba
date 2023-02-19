@@ -23,8 +23,8 @@
 typedef void (*set_refcount_op_t)(const void*);
 
 typedef struct {
-    set_refcount_op_t       item_incref;
-    set_refcount_op_t       item_decref;
+    set_refcount_op_t       key_incref;
+    set_refcount_op_t       key_decref;
 } set_type_based_methods_table;
 
 typedef struct {
@@ -46,7 +46,9 @@ typedef struct {
      * frequently needed.
      */
     Py_ssize_t mask;
-    
+
+    /* method table for type-dependent operations */
+    set_type_based_methods_table methods;
     /* The table points to a fixed-size smalltable for small tables
      * or to additional malloc'ed memory for bigger tables.
      * The table pointer is never NULL which saves us from repeated
