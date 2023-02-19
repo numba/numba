@@ -53,11 +53,9 @@ static char *_dummy_struct;
 
 void
 numba_set_free(NB_Set *setp) {
-    // FIXME: Segfaults when trying to free up memory
-    // Segfault only happens through Python API
-    // if(setp->smalltable == setp->table)
-    //     free(setp->table);
-    // free(setp);
+    if(setp->smalltable != setp->table)
+        free(setp->table);
+    free(setp);
 }
 
 /* Allocate new set */
