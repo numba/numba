@@ -42,8 +42,8 @@ if config.CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY:
         from ptxcompiler import compile_ptx
         from cubinlinker import CubinLinker, CubinLinkerError
     except ImportError as ie:
-        msg = ("Minor version compatiblity requires ptxcompiler and "
-               "cubinlinker to be available")
+        msg = ("Minor version compatibility requires ptxcompiler and "
+               "cubinlinker packages to be available")
         raise ImportError(msg) from ie
 
 USE_NV_BINDING = config.CUDA_USE_NVIDIA_BINDING
@@ -2662,10 +2662,11 @@ class MVCLinker(Linker):
     """
     def __init__(self, max_registers=None, lineinfo=False, cc=None):
         if cc is None:
-            raise RuntimeError("MVCLinker requires CC to be specified")
+            raise RuntimeError("MVCLinker requires Compute Capability to be "
+                               "specified, but cc is None")
 
-        sm_ver = f"{cc[0] * 10 + cc[1]}"
-        ptx_compile_opts = ['--gpu-name', f'sm_{sm_ver}', '-c']
+        arch = f"sm_{cc[0] * 10 + cc[1]}"
+        ptx_compile_opts = ['--gpu-name', arch, '-c']
         if max_registers:
             arg = f"--maxrregcount={max_registers}"
             ptx_compile_opts.append(arg)
@@ -2673,8 +2674,7 @@ class MVCLinker(Linker):
             ptx_compile_opts.append('--generate-line-info')
         self.ptx_compile_options = tuple(ptx_compile_opts)
 
-        arch = f"--arch=sm_{sm_ver}"
-        self._linker = CubinLinker(arch)
+        self._linker = CubinLinker(f"--arch={arch}")
 
     @property
     def info_log(self):
