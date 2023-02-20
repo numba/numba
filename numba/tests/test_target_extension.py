@@ -10,6 +10,7 @@ from numba.tests.support import TestCase
 import contextlib
 import ctypes
 import operator
+from functools import cached_property
 import numpy as np
 from numba import njit, types
 from numba.extending import overload, intrinsic, overload_classmethod
@@ -28,7 +29,6 @@ from numba.core.descriptors import TargetDescriptor
 from numba.core import cpu, typing, cgutils
 from numba.core.base import BaseContext
 from numba.core.compiler_lock import global_compiler_lock
-from numba.core.utils import cached_property
 from numba.core import callconv
 from numba.core.codegen import CPUCodegen, JITCodeLibrary
 from numba.core.callwrapper import PyCallWrapper
@@ -266,12 +266,12 @@ class DPUTarget(TargetDescriptor):
     options = cpu.CPUTargetOptions
     _nested = _NestedContext()
 
-    @utils.cached_property
+    @cached_property
     def _toplevel_target_context(self):
         # Lazily-initialized top-level target context, for all threads
         return DPUContext(self.typing_context, self._target_name)
 
-    @utils.cached_property
+    @cached_property
     def _toplevel_typing_context(self):
         # Lazily-initialized top-level typing context, for all threads
         return typing.Context()

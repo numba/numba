@@ -17,7 +17,7 @@ _logger = logging.getLogger(__name__)
 
 
 _EXCEPT_STACK_OFFSET = 6
-_FINALLY_POP = _EXCEPT_STACK_OFFSET if PYVERSION >= (3, 8) else 1
+_FINALLY_POP = _EXCEPT_STACK_OFFSET
 _NO_RAISE_OPS = frozenset({
     'LOAD_CONST',
 })
@@ -755,13 +755,6 @@ class TraceRunner(object):
             )
         )
 
-    def op_SETUP_EXCEPT(self, state, inst):
-        # Opcode removed since py3.8
-        state.append(inst)
-        self._setup_try(
-            'EXCEPT', state, next=inst.next, end=inst.get_jump_target(),
-        )
-
     def op_SETUP_FINALLY(self, state, inst):
         state.append(inst)
         self._setup_try(
@@ -978,12 +971,9 @@ class TraceRunner(object):
         state.push(dct)
 
     def op_MAP_ADD(self, state, inst):
-        # NOTE: https://docs.python.org/3/library/dis.html#opcode-MAP_ADD
-        # Python >= 3.8: TOS and TOS1 are value and key respectively
-        # Python < 3.8: TOS and TOS1 are key and value respectively
         TOS = state.pop()
         TOS1 = state.pop()
-        key, value = (TOS, TOS1) if PYVERSION < (3, 8) else (TOS1, TOS)
+        key, value = (TOS1, TOS)
         index = inst.arg
         target = state.peek(index)
         setitemvar = state.make_temp()

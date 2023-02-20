@@ -166,9 +166,11 @@ Array access
 ------------
 
 Arrays support normal iteration.  Full basic indexing and slicing is
-supported.  A subset of advanced indexing is also supported: only one
-advanced index is allowed, and it has to be a one-dimensional array
-(it can be combined with an arbitrary number of basic indices as well).
+supported along with passing ``None`` / ``np.newaxis`` as indices for
+additional resulting dimensions. A subset of advanced indexing is also
+supported: only one advanced index is allowed, and it has to be a
+one-dimensional array (it can be combined with an arbitrary number
+of basic indices as well).
 
 .. seealso::
    `NumPy indexing <http://docs.scipy.org/doc/numpy/reference/arrays.indexing.html>`_
@@ -235,6 +237,7 @@ The following attributes of NumPy arrays are supported:
 * :attr:`~numpy.ndarray.flags`
 * :attr:`~numpy.ndarray.flat`
 * :attr:`~numpy.ndarray.itemsize`
+* :attr:`~numpy.ndarray.nbytes`
 * :attr:`~numpy.ndarray.ndim`
 * :attr:`~numpy.ndarray.shape`
 * :attr:`~numpy.ndarray.size`
@@ -499,6 +502,7 @@ The following top-level functions are supported:
 * :func:`numpy.intersect1d` (only first 2 arguments, ar1 and ar2)
 * :func:`numpy.linspace` (only the 3-argument form)
 * :func:`numpy.logspace` (only the 3 first arguments)
+* :func:`numpy.nan_to_num` (only the 3 first arguments)
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
 * :class:`numpy.nditer` (only the first argument)
@@ -536,6 +540,7 @@ The following top-level functions are supported:
 * :func:`numpy.triu` (second argument ``k`` must be an integer)
 * :func:`numpy.triu_indices` (all arguments must be integer)
 * :func:`numpy.triu_indices_from` (second argument ``k`` must be an integer)
+* :func:`numpy.union1d` (For unicode arrays, only supports arrays of the same dtype)
 * :func:`numpy.unique` (only the first argument)
 * :func:`numpy.vander`
 * :func:`numpy.vstack`
@@ -624,56 +629,58 @@ execution logic.
 
 The following :py:class:`Generator` methods are supported:
 
-* :func:`numpy.random.Generator().beta()` (*)
-* :func:`numpy.random.Generator().chisquare()` (*)
+* :func:`numpy.random.Generator().beta()`
+* :func:`numpy.random.Generator().chisquare()`
 * :func:`numpy.random.Generator().exponential()`
-* :func:`numpy.random.Generator().f()` (*)
-* :func:`numpy.random.Generator().gamma()` (*)
-* :func:`numpy.random.Generator().geometric()` (*)
+* :func:`numpy.random.Generator().f()`
+* :func:`numpy.random.Generator().gamma()`
+* :func:`numpy.random.Generator().geometric()`
 * :func:`numpy.random.Generator().integers()` (Both `low` and `high` are required
   arguments. Array values for low and high are currently not supported.)
-* :func:`numpy.random.Generator().laplace()` (*)
-* :func:`numpy.random.Generator().logistic()` (*)
-* :func:`numpy.random.Generator().lognormal()` (*)
+* :func:`numpy.random.Generator().laplace()`
+* :func:`numpy.random.Generator().logistic()`
+* :func:`numpy.random.Generator().lognormal()`
 * :func:`numpy.random.Generator().logseries()` (Accepts float values as well as
   data types that cast to floats. Array values for ``p`` are currently not
   supported.)
-* :func:`numpy.random.Generator().negative_binomial()` (*)
+* :func:`numpy.random.Generator().negative_binomial()`
 * :func:`numpy.random.Generator().noncentral_chisquare()` (Accepts float values
   as well as data types that cast to floats. Array values for ``dfnum`` and
   ``nonc`` are currently not supported.)
 * :func:`numpy.random.Generator().noncentral_f()` (Accepts float values as well
   as data types that cast to floats. Array values for ``dfnum``, ``dfden`` and
   ``nonc`` are currently not supported.)
-* :func:`numpy.random.Generator().normal()` (*)
+* :func:`numpy.random.Generator().normal()`
 * :func:`numpy.random.Generator().pareto()`
 * :func:`numpy.random.Generator().permutation()` (Only accepts NumPy ndarrays and integers.)
-* :func:`numpy.random.Generator().poisson()` (*)
+* :func:`numpy.random.Generator().poisson()`
 * :func:`numpy.random.Generator().power()`
 * :func:`numpy.random.Generator().random()`
 * :func:`numpy.random.Generator().rayleigh()`
 * :func:`numpy.random.Generator().shuffle()` (Only accepts NumPy ndarrays.)
 * :func:`numpy.random.Generator().standard_cauchy()`
 * :func:`numpy.random.Generator().standard_exponential()`
-* :func:`numpy.random.Generator().standard_gamma()` (*)
+* :func:`numpy.random.Generator().standard_gamma()`
 * :func:`numpy.random.Generator().standard_normal()`
-* :func:`numpy.random.Generator().standard_t()` (*)
+* :func:`numpy.random.Generator().standard_t()`
 * :func:`numpy.random.Generator().triangular()`
-* :func:`numpy.random.Generator().uniform()` (*)
-* :func:`numpy.random.Generator().wald()` (*)
+* :func:`numpy.random.Generator().uniform()`
+* :func:`numpy.random.Generator().wald()`
 * :func:`numpy.random.Generator().weibull()`
 * :func:`numpy.random.Generator().zipf()`
 
 .. note::
-  Users can expect Numba to replicate NumPy's results to within
-  the last few (at max 5) ULPs for Linux-x86_64, Windows-x86_64 and macOS.
+  Due to instruction selection differences across compilers, there
+  may be discrepancies, when compared to NumPy, in the order of 1000s
+  of ULPs on 32-bit architectures as well as linux-aarch64 and linux-
+  ppc64le platforms. For Linux-x86_64, Windows-x86_64 and macOS these
+  discrepancies are less pronounced (order of 10s of ULPs) but are not
+  guaranteed to follow the exception pattern and may increase in some
+  cases.
 
-  For distributions marked above with `(*)`: Due to instruction selection
-  differences across compilers, there may be discrepancies in the order of
-  1000s of ULPs on 32-bit architectures as well as linux-aarch64 and
-  linux-ppc64le platforms. The differences are unlikely to impact the "quality"
-  of the random number generation as they occur through changes in
-  rounding that happen when fused-multiply-add is used instead of multiplication
+  The differences are unlikely to impact the "quality" of the random
+  number generation as they occur through changes in rounding that
+  happen when fused-multiply-add is used instead of multiplication
   followed by addition.
 
 RandomState and legacy Random number generation

@@ -15,12 +15,9 @@ from numba.core.extending import intrinsic, overload, register_jitable
 from numba.core.imputils import (Registry, impl_ret_untracked,
                                     impl_ret_new_ref)
 from numba.core.typing import signature
-from numba.core import types, utils, cgutils
+from numba.core import types, cgutils
 from numba.np import arrayobj
 from numba.core.errors import NumbaTypeError
-
-
-POST_PY38 = utils.PYVERSION >= (3, 8)
 
 
 registry = Registry('randomimpl')
@@ -823,15 +820,9 @@ def _gammavariate_impl(_random):
         elif alpha == 1.0:
             # expovariate(1)
 
-            if POST_PY38:
-                # Adjust due to cpython
-                # commit 63d152232e1742660f481c04a811f824b91f6790
-                return -math.log(1.0 - _random()) * beta
-            else:
-                u = _random()
-                while u <= 1e-7:
-                    u = _random()
-                return -math.log(u) * beta
+            # Adjust due to cpython
+            # commit 63d152232e1742660f481c04a811f824b91f6790
+            return -math.log(1.0 - _random()) * beta
 
         else:   # alpha is between 0 and 1 (exclusive)
             # Uses ALGORITHM GS of Statistical Computing - Kennedy & Gentle
