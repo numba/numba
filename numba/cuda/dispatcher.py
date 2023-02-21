@@ -45,7 +45,7 @@ class _Kernel(serialize.ReduceMixin):
     '''
 
     @global_compiler_lock
-    def __init__(self, py_func, argtypes, targetoptions):
+    def __init__(self, py_func, argtypes, extensions, targetoptions):
         # _DispatcherBase.nopython_signatures() expects this attribute to be
         # present, because it assumes an overload is a CompileResult. In the
         # CUDA target, _Kernel instances are stored instead, so we provide this
@@ -64,6 +64,7 @@ class _Kernel(serialize.ReduceMixin):
         self.py_func = py_func
         self.argtypes = argtypes
         self.targetoptions = targetoptions
+        self.extensions = extensions
         debug = targetoptions.get('debug')
         lineinfo = targetoptions.get('lineinfo')
         fastmath = targetoptions.get('fastmath')
@@ -156,7 +157,7 @@ class _Kernel(serialize.ReduceMixin):
 
     @classmethod
     def _rebuild(cls, cooperative, name, signature, codelibrary,
-                 call_helper, targetoptions):
+                 call_helper, targetoptions, extensions):
         """
         Rebuild an instance.
         """
@@ -172,6 +173,7 @@ class _Kernel(serialize.ReduceMixin):
         instance._codelibrary = codelibrary
         instance.call_helper = call_helper
         instance.targetoptions = targetoptions
+        instance.extensions = extensions
         return instance
 
     def _reduce_states(self):
@@ -185,7 +187,8 @@ class _Kernel(serialize.ReduceMixin):
         return dict(cooperative=self.cooperative, name=self.entry_name,
                     signature=self.signature, codelibrary=self._codelibrary,
                     call_helper=self.call_helper,
-                    targetoptions=self.targetoptions)
+                    targetoptions=self.targetoptions,
+                    extensions=self.extensions)
 
     def bind(self):
         """
@@ -358,8 +361,7 @@ class _Kernel(serialize.ReduceMixin):
         """
 
         # map the arguments using any extension you've registered
-        extensions = self.targetoptions.get('extensions', (),)
-        for extension in reversed(extensions):
+        for extension in reversed(self.extensions):
             ty, val = extension.prepare_args(
                 ty,
                 val,
@@ -567,7 +569,7 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
     targetdescr = cuda_target
 
     def __init__(self, py_func, targetoptions, device=False,
-                 pipeline_class=CUDACompiler):
+                 extensions=None, pipeline_class=CUDACompiler):
         super().__init__(py_func, targetoptions=targetoptions,
                          pipeline_class=pipeline_class)
 
@@ -585,6 +587,9 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
 
         # Is this intended to be used as a device function?
         self._device = device
+
+        # Launch parameter handling extensions
+        self.extensions = extensions or []
 
     @property
     def _numba_type_(self):
@@ -624,27 +629,6 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
                  arguments."""
 
         return ForAll(self, ntasks, tpb=tpb, stream=stream, sharedmem=sharedmem)
-
-    @property
-    def extensions(self):
-        '''
-        A list of objects that must have a `prepare_args` function. When a
-        specialized kernel is called, each argument will be passed through
-        to the `prepare_args` (from the last object in this list to the
-        first). The arguments to `prepare_args` are:
-
-        - `ty` the numba type of the argument
-        - `val` the argument value itself
-        - `stream` the CUDA stream used for the current call to the kernel
-        - `retr` a list of zero-arg functions that you may want to append
-          post-call cleanup work to.
-
-        The `prepare_args` function must return a tuple `(ty, val)`, which
-        will be passed in turn to the next right-most `extension`. After all
-        the extensions have been called, the resulting `(ty, val)` will be
-        passed into Numba's default argument marshalling logic.
-        '''
-        return self.targetoptions.get('extensions')
 
     def __call__(self, *args, **kwargs):
         # An attempt to launch an unconfigured kernel
@@ -889,7 +873,8 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
             if not self._can_compile:
                 raise RuntimeError("Compilation disabled")
 
-            kernel = _Kernel(self.py_func, argtypes, self.targetoptions)
+            kernel = _Kernel(self.py_func, argtypes, self.extensions,
+                             self.targetoptions)
             # We call bind to force codegen, so that there is a cubin to cache
             kernel.bind()
             self._cache.save_overload(sig, kernel)

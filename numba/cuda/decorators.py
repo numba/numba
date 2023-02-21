@@ -12,7 +12,7 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
 
 
 def jit(func_or_sig=None, device=False, inline=False, link=None, debug=None,
-        opt=True, cache=False, **kws):
+        opt=True, cache=False, extensions=None, **kws):
     """
     JIT compile a Python function for CUDA GPUs.
 
@@ -52,6 +52,9 @@ def jit(func_or_sig=None, device=False, inline=False, link=None, debug=None,
     :type lineinfo: bool
     :param cache: If True, enables the file-based cache for this function.
     :type cache: bool
+    :param extensions: An optional list of kernel launch parameter handling
+                       extensions
+    :type extensions: list
     """
 
     link = link or []
@@ -73,7 +76,6 @@ def jit(func_or_sig=None, device=False, inline=False, link=None, debug=None,
 
     debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
     fastmath = kws.get('fastmath', False)
-    extensions = kws.get('extensions', [])
 
     if debug and opt:
         msg = ("debug=True with opt=True (the default) "
@@ -105,10 +107,9 @@ def jit(func_or_sig=None, device=False, inline=False, link=None, debug=None,
             targetoptions['link'] = link
             targetoptions['opt'] = opt
             targetoptions['fastmath'] = fastmath
-            targetoptions['extensions'] = extensions
 
             disp = CUDADispatcher(func, targetoptions=targetoptions,
-                                  device=device)
+                                  device=device, extensions=extensions)
 
             if cache:
                 disp.enable_caching()
@@ -155,9 +156,8 @@ def jit(func_or_sig=None, device=False, inline=False, link=None, debug=None,
                 targetoptions['opt'] = opt
                 targetoptions['link'] = link
                 targetoptions['fastmath'] = fastmath
-                targetoptions['extensions'] = extensions
                 disp = CUDADispatcher(func_or_sig, targetoptions=targetoptions,
-                                      device=device)
+                                      device=device, extensions=extensions)
 
                 if cache:
                     disp.enable_caching()

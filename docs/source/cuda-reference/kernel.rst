@@ -9,6 +9,34 @@ be configured and launched:
 
 .. autofunction:: numba.cuda.jit
 
+Kernel launch parameter handling extensions
+-------------------------------------------
+
+Numba supports passing a limited set of types of objects (scalars, arrays, and
+tuples) to CUDA kernels. The set of supported types can be augmented by passing
+*kernel launch parameter handling extensions* to the :py:func:`@cuda.jit
+<numba.cuda.jit>` decorator in the ``extensions`` keyword argument. Each
+extension defines a method, ``prepare_args()``, which processes an argument
+passed to the kernel.
+
+When a kernel is called, each argument is passed through the ``prepare_args()``
+method of each registered extension. The ``prepare_args()`` method must return a
+tuple ``(ty, val)``, which will be passed in turn to the next registered
+extension. After all the extensions have been called, the resulting
+``(ty, val)`` pair will be passed into Numba's default argument marshalling
+logic.
+
+Each extension should define its ``prepare_args()`` method as:
+
+.. function:: prepare_args(self, ty, val, stream=None, retr=None)
+   :noindex:
+
+   :param ty: The numba type of the argument
+   :param val: The argument value itself
+   :param stream: The CUDA stream used for the current call to the kernel
+   :param retr: an optional list of zero-arg functions that you may want to
+                append post-call cleanup work to.
+   :return: The ``(ty, val)`` pair representing the transformed argument.
 
 Dispatcher objects
 ------------------
@@ -58,7 +86,7 @@ creating a specialized instance:
 
 .. autoclass:: numba.cuda.dispatcher.CUDADispatcher
    :members: inspect_asm, inspect_llvm, inspect_sass, inspect_types,
-             get_regs_per_thread, specialize, specialized, extensions, forall,
+             get_regs_per_thread, specialize, specialized, forall,
              get_shared_mem_per_block, get_const_mem_size,
              get_local_mem_per_thread
 
