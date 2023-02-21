@@ -68,7 +68,7 @@ class _Kernel(serialize.ReduceMixin):
         debug = targetoptions.get('debug')
         lineinfo = targetoptions.get('lineinfo')
         fastmath = targetoptions.get('fastmath')
-        opt = targetoptions.get('opt')
+        opt = targetoptions.get('opt', True)
         inline = targetoptions.get('inline')
         max_registers = targetoptions.get('max_registers')
 
@@ -813,11 +813,12 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
 
                 debug = self.targetoptions.get('debug')
                 inline = self.targetoptions.get('inline')
+                opt = self.targetoptions.get('opt', True)
                 fastmath = self.targetoptions.get('fastmath')
 
                 nvvm_options = {
                     'debug': debug,
-                    'opt': 3 if self.targetoptions.get('opt') else 0,
+                    'opt': 3 if opt else 0,
                     'fastmath': fastmath
                 }
 
