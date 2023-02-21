@@ -8,6 +8,10 @@ from numba.cuda.testing import skip_on_cudasim
 from numba.cuda.testing import CUDATestCase
 import unittest
 
+
+# Signatures to test with - these are all homogeneous in dtype, so the output
+# dtype should match the input dtype - the output should not have been cast
+# upwards, as reported in #8400: https://github.com/numba/numba/issues/8400
 signatures = [int32(int32, int32),
               float32(float32, float32),
               float64(float64, float64)]
@@ -58,6 +62,7 @@ class TestCUDAVectorize(CUDATestCase):
             expected = np.add(data, data)
             actual = vector_add(data, data)
             np.testing.assert_allclose(expected, actual)
+            self.assertEqual(actual.dtype, ty)
 
     def test_1d_async(self):
 
@@ -77,6 +82,7 @@ class TestCUDAVectorize(CUDATestCase):
             expected = np.add(data, data)
 
             np.testing.assert_allclose(expected, actual)
+            self.assertEqual(actual.dtype, ty)
 
     def test_nd(self):
 
@@ -92,6 +98,7 @@ class TestCUDAVectorize(CUDATestCase):
             expected = data + data2
             actual = vector_add(data, data2)
             np.testing.assert_allclose(expected, actual)
+            self.assertEqual(actual.dtype, dtype)
 
     def test_output_arg(self):
         @vectorize(signatures, target='cuda')
@@ -106,17 +113,25 @@ class TestCUDAVectorize(CUDATestCase):
         vector_add(A, B, out=actual)
 
         np.testing.assert_allclose(expected, actual)
+        self.assertEqual(expected.dtype, actual.dtype)
 
     def test_reduce(self):
         @vectorize(signatures, target='cuda')
         def vector_add(a, b):
             return a + b
 
+        dtype = np.int32
+
         for n in input_sizes:
-            x = np.arange(n, dtype=np.int32)
+            x = np.arange(n, dtype=dtype)
             expected = np.add.reduce(x)
             actual = vector_add.reduce(x)
-            self.assertEqual(expected, actual)
+            np.testing.assert_allclose(expected, actual)
+            # np.add.reduce is special-cased to return an int64 for any int
+            # arguments, so we can't compare against its returned dtype when
+            # we're checking the general reduce machinery (which just happens
+            # to be using addition). Instead, compare against the input dtype.
+            self.assertEqual(dtype, actual.dtype)
 
     def test_reduce_async(self):
 
@@ -125,13 +140,16 @@ class TestCUDAVectorize(CUDATestCase):
             return a + b
 
         stream = cuda.stream()
+        dtype = np.int32
 
         for n in input_sizes:
-            x = np.arange(n, dtype=np.int32)
+            x = np.arange(n, dtype=dtype)
             expected = np.add.reduce(x)
             dx = cuda.to_device(x, stream)
             actual = vector_add.reduce(dx, stream=stream)
-            self.assertEqual(expected, actual)
+            np.testing.assert_allclose(expected, actual)
+            # Compare against the input dtype as in test_reduce().
+            self.assertEqual(dtype, actual.dtype)
 
     def test_manual_transfer(self):
         @vectorize(signatures, target='cuda')
@@ -144,6 +162,7 @@ class TestCUDAVectorize(CUDATestCase):
         expected = x + x
         actual = vector_add(x, dx).copy_to_host()
         np.testing.assert_equal(expected, actual)
+        self.assertEqual(expected.dtype, actual.dtype)
 
     def test_ufunc_output_2d(self):
         @vectorize(signatures, target='cuda')
@@ -158,6 +177,7 @@ class TestCUDAVectorize(CUDATestCase):
         expected = x + x
         actual = dx.copy_to_host()
         np.testing.assert_equal(expected, actual)
+        self.assertEqual(expected.dtype, actual.dtype)
 
     def check_tuple_arg(self, a, b):
         @vectorize(signatures, target='cuda')
