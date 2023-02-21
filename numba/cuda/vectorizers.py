@@ -207,7 +207,7 @@ def __vectorized_{name}({args}, __out__):
 
 class CUDAVectorize(deviceufunc.DeviceVectorize):
     def _compile_core(self, sig):
-        cudevfn = cuda.jit(sig, device=True, inline=True)(self.pyfunc)
+        cudevfn = cuda.jit(sig, device=True)(self.pyfunc)
         return cudevfn, cudevfn.overloads[sig.args].signature.return_type
 
     def _get_globals(self, corefn):

@@ -11,8 +11,8 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "positional argument.")
 
 
-def jit(func_or_sig=None, device=False, inline=False, link=None, debug=None,
-        opt=True, cache=False, extensions=None, **kws):
+def jit(func_or_sig=None, device=False, link=None, debug=None, opt=True,
+        cache=False, extensions=None, **kws):
     """
     JIT compile a Python function for CUDA GPUs.
 
