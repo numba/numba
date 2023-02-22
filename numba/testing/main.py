@@ -771,7 +771,8 @@ class ParallelTestRunner(runner.TextTestRunner):
         # Split the tests and recycle the worker process to tame memory usage.
         chunk_size = 100
 
-        pool = multiprocessing.Pool(self.nprocs, maxtasksperchild=chunk_size)
+        mpc = multiprocessing.get_context("spawn")
+        pool = mpc.Pool(self.nprocs, maxtasksperchild=chunk_size)
         try:
             self._run_parallel_tests(result, pool, child_runner, self._ptests)
         except:
