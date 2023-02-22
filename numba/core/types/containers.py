@@ -256,6 +256,9 @@ class UniTuple(BaseAnonymousTuple, _HomogeneousTuple, Sequence):
     def __unliteral__(self):
         return type(self)(dtype=unliteral(self.dtype), count=self.count)
 
+    def __repr__(self):
+        return f"UniTuple({repr(self.dtype)}, {self.count})"
+
 
 class UniTupleIter(BaseContainerIterator):
     """
@@ -340,6 +343,9 @@ class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
 
             if all(t is not None for t in unified):
                 return Tuple(unified)
+
+    def __repr__(self):
+        return f"Tuple({tuple(ty for ty in self.types)})"
 
 
 class _StarArgTupleMixin:
@@ -467,6 +473,9 @@ class List(MutableSequence, InitialValue):
         return List(self.dtype, reflected=self.reflected,
                     initial_value=None)
 
+    def __repr__(self):
+        return f"List({self.dtype}, {self.reflected})"
+
 
 class LiteralList(Literal, ConstSized, Hashable):
     """A heterogeneous immutable list (basically a tuple with list semantics).
@@ -577,6 +586,9 @@ class Set(Container):
             if dtype is not None:
                 return Set(dtype, reflected)
 
+    def __repr__(self):
+        return f"Set({self.dtype}, {self.reflected})"
+
 
 class SetIter(BaseContainerIterator):
     """
@@ -654,6 +666,9 @@ class ListType(IterableType):
         if isinstance(other, ListType):
             if not other.is_precise():
                 return self
+
+    def __repr__(self):
+        return f"ListType({self.item_type})"
 
 
 class ListTypeIterableType(SimpleIterableType):
@@ -759,6 +774,9 @@ class DictType(IterableType, InitialValue):
 
     def __unliteral__(self):
         return DictType(self.key_type, self.value_type)
+
+    def __repr__(self):
+        return f"DictType({self.key_type}, {self.value_type})"
 
 
 class LiteralStrKeyDict(Literal, ConstSized, Hashable):

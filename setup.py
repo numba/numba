@@ -19,7 +19,7 @@ except ImportError:
         pass
 
 
-min_python_version = "3.7"
+min_python_version = "3.8"
 max_python_version = "3.11"  # exclusive
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.18"
@@ -137,14 +137,13 @@ def get_ext_modules():
     """
     Return a list of Extension instances for the setup() call.
     """
-    # Note we don't import Numpy at the toplevel, since setup.py
-    # should be able to run without Numpy for pip to discover the
-    # build dependencies
-    import numpy.distutils.misc_util as np_misc
-
-    # Inject required options for extensions compiled against the Numpy
-    # C API (include dirs, library dirs etc.)
-    np_compile_args = np_misc.get_info('npymath')
+    # Note we don't import NumPy at the toplevel, since setup.py
+    # should be able to run without NumPy for pip to discover the
+    # build dependencies. Need NumPy headers and libm linkage.
+    import numpy as np
+    np_compile_args = {'include_dirs': [np.get_include(),],}
+    if sys.platform != 'win32':
+        np_compile_args['libraries'] = ['m',]
 
     ext_devicearray = Extension(name='numba._devicearray',
                                 sources=['numba/_devicearray.cpp'],
@@ -182,7 +181,6 @@ def get_ext_modules():
                               depends=["numba/_pymodule.h",
                                        "numba/_helperlib.c",
                                        "numba/_lapack.c",
-                                       "numba/_npymath_exports.c",
                                        "numba/_random.c",
                                        "numba/mathnames.inc",
                                        ],
@@ -390,7 +388,6 @@ metadata = dict(
         "Operating System :: OS Independent",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",

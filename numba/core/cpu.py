@@ -1,4 +1,5 @@
 import platform
+from functools import cached_property
 
 import llvmlite.binding as ll
 from llvmlite import ir
@@ -8,7 +9,6 @@ from numba.core.callwrapper import PyCallWrapper
 from numba.core.base import BaseContext
 from numba.core import (utils, types, config, cgutils, callconv, codegen,
                         externals, fastmathpass, intrinsics)
-from numba.core.utils import cached_property
 from numba.core.options import TargetOptions, include_default_options
 from numba.core.runtime import rtsys
 from numba.core.compiler_lock import global_compiler_lock
@@ -58,10 +58,14 @@ class CPUContext(BaseContext):
         # Map external C functions.
         externals.c_math_functions.install(self)
 
-        # Initialize NRT runtime
+    def load_additional_registries(self):
+        # Only initialize the NRT once something is about to be compiled. The
+        # "initialized" state doesn't need to be threadsafe, there's a lock
+        # around the internal compilation and the rtsys.initialize call can be
+        # made multiple times, worse case init just gets called a bit more often
+        # than optimal.
         rtsys.initialize(self)
 
-    def load_additional_registries(self):
         # Add implementations that work via import
         from numba.cpython import (builtins, charseq, enumimpl, # noqa F401
                                    hashing, heapq, iterators, # noqa F401

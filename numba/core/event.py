@@ -474,8 +474,8 @@ def _prepare_chrome_trace_data(listener: RecordingListener):
 
 
 def _setup_chrome_trace_exit_handler():
-    """Setup a RecordingListener and an exit handler to write the captured events
-    to file.
+    """Setup a RecordingListener and an exit handler to write the captured
+    events to file.
     """
     listener = RecordingListener()
     register("numba:run_pass", listener)

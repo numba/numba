@@ -82,12 +82,14 @@ class _Kernel(serialize.ReduceMixin):
             'opt': 3 if opt else 0
         }
 
+        cc = get_current_device().compute_capability
         cres = compile_cuda(self.py_func, types.void, self.argtypes,
                             debug=self.debug,
                             lineinfo=self.lineinfo,
                             inline=inline,
                             fastmath=fastmath,
-                            nvvm_options=nvvm_options)
+                            nvvm_options=nvvm_options,
+                            cc=cc)
         tgt_ctx = cres.target_context
         code = self.py_func.__code__
         filename = code.co_filename
@@ -107,7 +109,7 @@ class _Kernel(serialize.ReduceMixin):
             link.append(get_cudalib('cudadevrt', static=True))
 
         res = [fn for fn in cuda_fp16_math_funcs
-               if(f'__numba_wrapper_{fn}' in lib.get_asm_str())]
+               if (f'__numba_wrapper_{fn}' in lib.get_asm_str())]
 
         if res:
             # Path to the source containing the foreign function
@@ -197,13 +199,6 @@ class _Kernel(serialize.ReduceMixin):
         Force binding to current CUDA context
         """
         self._codelibrary.get_cufunc()
-
-    @property
-    def device(self):
-        """
-        Get current active context
-        """
-        return get_current_device()
 
     @property
     def regs_per_thread(self):
@@ -844,11 +839,13 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
                     'fastmath': fastmath
                 }
 
+                cc = get_current_device().compute_capability
                 cres = compile_cuda(self.py_func, None, args,
                                     debug=debug,
                                     inline=inline,
                                     fastmath=fastmath,
-                                    nvvm_options=nvvm_options)
+                                    nvvm_options=nvvm_options,
+                                    cc=cc)
                 self.overloads[args] = cres
 
                 cres.target_context.insert_user_function(cres.entry_point,
@@ -980,10 +977,6 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
 
         for _, defn in self.overloads.items():
             defn.inspect_types(file=file)
-
-    def bind(self):
-        for defn in self.overloads.values():
-            defn.bind()
 
     @classmethod
     def _rebuild(cls, py_func, targetoptions):

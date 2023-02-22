@@ -28,6 +28,11 @@ class CUDAFlags(Flags):
         default=None,
         doc="NVVM options",
     )
+    compute_capability = Option(
+        type=tuple,
+        default=None,
+        doc="Compute Capability",
+    )
 
 
 # The CUDACompileResult (CCR) has a specially-defined entry point equal to its
@@ -180,7 +185,11 @@ class CUDACompiler(CompilerBase):
 
 @global_compiler_lock
 def compile_cuda(pyfunc, return_type, args, debug=False, lineinfo=False,
-                 inline=False, fastmath=False, nvvm_options=None):
+                 inline=False, fastmath=False, nvvm_options=None,
+                 cc=None):
+    if cc is None:
+        raise ValueError('Compute Capability must be supplied')
+
     from .descriptor import cuda_target
     typingctx = cuda_target.typing_context
     targetctx = cuda_target.target_context
@@ -205,6 +214,7 @@ def compile_cuda(pyfunc, return_type, args, debug=False, lineinfo=False,
         flags.fastmath = True
     if nvvm_options:
         flags.nvvm_options = nvvm_options
+    flags.compute_capability = cc
 
     # Run compilation pipeline
     from numba.core.target_extension import target_override
@@ -266,10 +276,15 @@ def compile_ptx(pyfunc, args, debug=False, lineinfo=False, device=False,
         'opt': 3 if opt else 0
     }
 
+    cc = cc or config.CUDA_DEFAULT_PTX_CC
     cres = compile_cuda(pyfunc, None, args, debug=debug, lineinfo=lineinfo,
                         fastmath=fastmath,
-                        nvvm_options=nvvm_options)
+                        nvvm_options=nvvm_options, cc=cc)
     resty = cres.signature.return_type
+
+    if resty and not device and resty != types.void:
+        raise TypeError("CUDA kernel must have void return type.")
+
     if device:
         lib = cres.library
     else:
@@ -281,7 +296,6 @@ def compile_ptx(pyfunc, args, debug=False, lineinfo=False, device=False,
         lib, kernel = tgt.prepare_cuda_kernel(cres.library, cres.fndesc, debug,
                                               nvvm_options, filename, linenum)
 
-    cc = cc or config.CUDA_DEFAULT_PTX_CC
     ptx = lib.get_asm_str(cc=cc)
     return ptx, resty
 
