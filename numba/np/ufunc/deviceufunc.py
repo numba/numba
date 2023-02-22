@@ -636,11 +636,11 @@ class GeneralizedUFunc(object):
         indtypes, schedule, outdtypes, kernel = self._schedule(
             callsteps.inputs, callsteps.outputs)
         callsteps.adjust_input_types(indtypes)
-        returnvalues = callsteps.allocate_outputs(schedule, outdtypes)
-        parameters = callsteps.prepare_kernel_parameters()
-        newparameters = self._broadcast(schedule, parameters, returnvalues)
-        callsteps.launch_kernel(kernel, schedule.loopn, newparameters)
-        return callsteps.post_process_result(returnvalues)
+        outputs = callsteps.prepare_outputs(schedule, outdtypes)
+        inputs = callsteps.prepare_inputs()
+        parameters = self._broadcast(schedule, inputs, outputs)
+        callsteps.launch_kernel(kernel, schedule.loopn, parameters)
+        return callsteps.post_process_result(outputs)
 
     def _schedule(self, inputs, outs):
         input_shapes = [a.shape for a in inputs]
@@ -825,19 +825,26 @@ class GUFuncCallSteps(metaclass=ABCMeta):
                 # Cast types
                 self.inputs[i] = val.astype(ity)
 
-    def allocate_outputs(self, schedule, outdtypes):
-        retvals = []
+    def prepare_outputs(self, schedule, outdtypes):
+        """
+        Returns an array of output parameters that all reside on the target device.
+
+        Outputs that were passed-in to the GUFunc are used if they reside on the
+        device; space is allocated for other outputs as necessary.
+        """
+        outputs = []
         for shape, dtype, output in zip(schedule.output_shapes, outdtypes,
                                         self.outputs):
             if output is None or self._copy_result_to_host:
-                retval = self.device_array(shape, dtype)
-            else:
-                retval = output
-            retvals.append(retval)
+                output = self.device_array(shape, dtype)
+            outputs.append(output)
 
-        return retvals
+        return outputs
 
-    def prepare_kernel_parameters(self):
+    def prepare_inputs(self):
+        """
+        Returns an array of input parameters that all reside on the target device.
+        """
         def ensure_device(parameter):
             if self.is_device_array(parameter):
                 convert = self.as_device_array
@@ -862,5 +869,3 @@ class GUFuncCallSteps(metaclass=ABCMeta):
             return outs[0]
         else:
             return outs
-
-
