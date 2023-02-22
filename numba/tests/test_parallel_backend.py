@@ -19,7 +19,8 @@ import numpy as np
 
 from numba import jit, vectorize, guvectorize, set_num_threads
 from numba.tests.support import (temp_directory, override_config, TestCase, tag,
-                                 skip_parfors_unsupported, linux_only)
+                                 skip_parfors_unsupported, linux_only,
+                                 SerialMixin)
 
 import queue as t_queue
 from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
@@ -239,12 +240,10 @@ if not _windows:
 default_proc_impl = compile_factory(*_get_mp_classes('default'))
 
 
-class TestParallelBackendBase(TestCase):
+class TestParallelBackendBase(SerialMixin, TestCase):
     """
     Base class for testing the parallel backends
     """
-    _numba_parallel_test_ = False
-
     all_impls = [
         jit_runner(nopython=True),
         jit_runner(nopython=True, cache=True),
@@ -455,7 +454,7 @@ class TestSpecificBackend(TestInSubprocess, TestParallelBackendBase):
 TestSpecificBackend.generate()
 
 
-class ThreadLayerTestHelper(TestCase):
+class ThreadLayerTestHelper(SerialMixin, TestCase):
     """
     Helper class for running an isolated piece of code based on a template
     """
