@@ -13,6 +13,7 @@ import sys
 import textwrap
 import threading
 import unittest
+from contextlib import contextmanager
 
 import numpy as np
 
@@ -162,22 +163,45 @@ def chooser(fnlist, **kwargs):
         q.put(e)
 
 
+@contextmanager
+def _workaround_mp_fileno_issue():
+    """
+    https://github.com/python/cpython/issues/49563
+
+    Unittest may replace the stdio with non file object.
+    This swap the stdio with /dev/null temporarily to avoid multiprocessing fork
+    context asking for fileno from non file object.
+    """
+    old_stdin, old_stdout, old_stderr = sys.stdin, sys.stdout, sys.stderr
+    sys.stdin = open(os.devnull)
+    sys.stdout = open(os.devnull)
+    sys.stderr = open(os.devnull)
+    try:
+        yield
+    finally:
+        sys.stdin.close()
+        sys.stdout.close()
+        sys.stderr.close()
+        sys.stdin, sys.stdout, sys.stderr = old_stdin, old_stdout, old_stderr
+
+
 def compile_factory(parallel_class, queue_impl):
     def run_compile(fnlist):
-        q = queue_impl()
-        kws = {'queue': q}
-        ths = [parallel_class(target=chooser, args=(fnlist,), kwargs=kws)
-               for i in range(4)]
-        for th in ths:
-            th.start()
-        for th in ths:
-            th.join()
-        if not q.empty():
-            errors = []
-            while not q.empty():
-                errors.append(q.get(False))
-            _msg = "Error(s) occurred in delegated runner:\n%s"
-            raise RuntimeError(_msg % '\n'.join([repr(x) for x in errors]))
+        with _workaround_mp_fileno_issue():
+            q = queue_impl()
+            kws = {'queue': q}
+            ths = [parallel_class(target=chooser, args=(fnlist,), kwargs=kws)
+                   for i in range(4)]
+            for th in ths:
+                th.start()
+            for th in ths:
+                th.join()
+            if not q.empty():
+                errors = []
+                while not q.empty():
+                    errors.append(q.get(False))
+                _msg = "Error(s) occurred in delegated runner:\n%s"
+                raise RuntimeError(_msg % '\n'.join([repr(x) for x in errors]))
     return run_compile
 
 
@@ -334,7 +358,9 @@ class TestParallelBackend(TestParallelBackendBase):
                             _msg = 'daemonized processes cannot have children'
                             self.skipTest(_msg)
                         else:
-                            self.run_compile(impl, parallelism=p)
+                            with _workaround_mp_fileno_issue():
+                                self.run_compile(impl, parallelism=p)
+
                     return test_method
                 fn = methgen(impl, p)
                 fn.__name__ = methname
