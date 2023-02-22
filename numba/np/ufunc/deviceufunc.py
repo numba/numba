@@ -636,12 +636,11 @@ class GeneralizedUFunc(object):
         indtypes, schedule, outdtypes, kernel = self._schedule(
             callsteps.inputs, callsteps.outputs)
         callsteps.adjust_input_types(indtypes)
-        callsteps.allocate_outputs(schedule, outdtypes)
+        returnvalues = callsteps.allocate_outputs(schedule, outdtypes)
         parameters = callsteps.prepare_kernel_parameters()
-        newparams = self._broadcast(schedule, parameters,
-                                    callsteps.kernel_returnvalues)
-        callsteps.launch_kernel(kernel, schedule.loopn, newparams)
-        return callsteps.post_process_result()
+        newparameters = self._broadcast(schedule, parameters, returnvalues)
+        callsteps.launch_kernel(kernel, schedule.loopn, newparameters)
+        return callsteps.post_process_result(returnvalues)
 
     def _schedule(self, inputs, outs):
         input_shapes = [a.shape for a in inputs]
@@ -726,7 +725,6 @@ class GUFuncCallSteps(object):
     __slots__ = [
         'outputs',
         'inputs',
-        'kernel_returnvalues',
         '_copy_result_to_host',
     ]
 
@@ -798,7 +796,7 @@ class GUFuncCallSteps(object):
                 retval = output
             retvals.append(retval)
 
-        self.kernel_returnvalues = retvals
+        return retvals
 
     def prepare_kernel_parameters(self):
         def ensure_device(parameter):
@@ -811,13 +809,13 @@ class GUFuncCallSteps(object):
 
         return [ensure_device(p) for p in self.inputs]
 
-    def post_process_result(self):
+    def post_process_result(self, returnvalues):
         if self._copy_result_to_host:
             outs = []
-            for retval, output in zip(self.kernel_returnvalues, self.outputs):
+            for retval, output in zip(returnvalues, self.outputs):
                 outs.append(self.to_host(retval, output))
         elif self.outputs[0] is None:
-            outs = self.kernel_returnvalues
+            outs = returnvalues
         else:
             outs = self.outputs
 
