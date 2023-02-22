@@ -636,11 +636,14 @@ class GeneralizedUFunc(object):
         indtypes, schedule, outdtypes, kernel = self._schedule(
             callsteps.inputs, callsteps.outputs)
         callsteps.adjust_input_types(indtypes)
+
         outputs = callsteps.prepare_outputs(schedule, outdtypes)
         inputs = callsteps.prepare_inputs()
         parameters = self._broadcast(schedule, inputs, outputs)
+
         callsteps.launch_kernel(kernel, schedule.loopn, parameters)
-        return callsteps.post_process_result(outputs)
+
+        return callsteps.post_process_outputs(outputs)
 
     def _schedule(self, inputs, outs):
         input_shapes = [a.shape for a in inputs]
@@ -725,6 +728,9 @@ class GUFuncCallSteps(metaclass=ABCMeta):
     """
     Implements memory management and kernel launch operations for GUFunc calls.
 
+    One instance of this class is instantiated for each call, and the instance
+    is specific to the arguments given to the GUFunc call.
+
     The base class implements the overall logic; subclasses provide
     target-specific implementations of individual functions.
     """
@@ -768,6 +774,8 @@ class GUFuncCallSteps(metaclass=ABCMeta):
         """
 
     def __init__(self, nin, nout, args, kwargs):
+        # Get outputs either from the out kwarg, or generate an initial list of
+        # "placeholder" outputs using None as a sentry value
         outputs = kwargs.get('out')
         if outputs is not None and len(args) > nin:
             raise ValueError("cannot specify 'out' as both positional "
@@ -775,23 +783,27 @@ class GUFuncCallSteps(metaclass=ABCMeta):
         else:
             outputs = [outputs] * nout
 
-        user_outputs_are_device = []
+        # Ensure all output device arrays are Numba device arrays - any output
+        # passed in that supports the CUDA Array Interface is converted; others
+        # are left untouched.
+        all_user_outputs_are_host = True
         self.outputs = []
         for output in outputs:
-            user_output_is_device = self.is_device_array(output)
-            if user_output_is_device:
+            if self.is_device_array(output):
                 self.outputs.append(self.as_device_array(output))
+                all_user_outputs_are_host = False
             else:
                 self.outputs.append(output)
-            user_outputs_are_device.append(user_output_is_device)
 
-        _is_device_array = [self.is_device_array(a) for a in args]
+        all_host_arrays = not any([self.is_device_array(a) for a in args])
+
         # - If any of the arguments are device arrays, we leave the output on
         #   the device.
-        self._copy_result_to_host = (not any(_is_device_array) and
-                                     not any(user_outputs_are_device))
+        self._copy_result_to_host = (all_host_arrays and
+                                     all_user_outputs_are_host)
 
-        # Normalize inputs
+        # Normalize inputs - ensure they are either device- or host-side arrays
+        # (as opposed to lists, tuples, etc).
         def normalize_input(a):
             if self.is_device_array(a):
                 convert = self.as_device_array
@@ -811,7 +823,7 @@ class GUFuncCallSteps(metaclass=ABCMeta):
     def adjust_input_types(self, indtypes):
         """
         Attempt to cast the inputs to the required types if necessary
-        and if they are not device array.
+        and if they are not device arrays.
 
         Side effect: Only affects the elements of `inputs` that require
         a type cast.
@@ -855,17 +867,21 @@ class GUFuncCallSteps(metaclass=ABCMeta):
 
         return [ensure_device(p) for p in self.inputs]
 
-    def post_process_result(self, returnvalues):
-        if self._copy_result_to_host:
-            outs = []
-            for retval, output in zip(returnvalues, self.outputs):
-                outs.append(self.to_host(retval, output))
-        elif self.outputs[0] is None:
-            outs = returnvalues
-        else:
-            outs = self.outputs
+    def post_process_outputs(self, outputs):
+        """
+        Moves the given output(s) to the host if necessary.
 
-        if len(outs) == 1:
-            return outs[0]
+        Returns a single value (e.g. an array) if there was one output, or a
+        tuple of arrays if there were multiple. Although this feels a little
+        jarring, it is consistent with the behavior of GUFuncs in general.
+        """
+        if self._copy_result_to_host:
+            outputs = [self.to_host(output, self_output)
+                       for output, self_output in zip(outputs, self.outputs)]
+        elif self.outputs[0] is not None:
+            outputs = self.outputs
+
+        if len(outputs) == 1:
+            return outputs[0]
         else:
-            return outs
+            return outputs
