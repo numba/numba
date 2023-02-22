@@ -219,6 +219,7 @@ class TestParallelBackendBase(TestCase):
     """
     Base class for testing the parallel backends
     """
+    _numba_parallel_test_ = False
 
     all_impls = [
         jit_runner(nopython=True),
