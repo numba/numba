@@ -2,6 +2,7 @@
 Implements custom ufunc dispatch mechanism for non-CPU devices.
 """
 
+from abc import ABCMeta, abstractmethod
 from collections import OrderedDict
 import operator
 import warnings
@@ -632,7 +633,6 @@ class GeneralizedUFunc(object):
     def __call__(self, *args, **kws):
         callsteps = self._call_steps(self.engine.nin, self.engine.nout,
                                      args, kws)
-        callsteps.prepare_inputs()
         indtypes, schedule, outdtypes, kernel = self._schedule(
             callsteps.inputs, callsteps.outputs)
         callsteps.adjust_input_types(indtypes)
@@ -721,12 +721,51 @@ class GeneralizedUFunc(object):
         raise NotImplementedError
 
 
-class GUFuncCallSteps(object):
+class GUFuncCallSteps(metaclass=ABCMeta):
+    """
+    Implements memory management and kernel launch operations for GUFunc calls.
+
+    The base class implements the overall logic; subclasses provide
+    target-specific implementations of individual functions.
+    """
+
+    # The base class uses these slots; subclasses may provide additional slots.
     __slots__ = [
         'outputs',
         'inputs',
         '_copy_result_to_host',
     ]
+
+    @abstractmethod
+    def launch_kernel(self, kernel, nelem, args):
+        """Implement the kernel launch"""
+
+    @abstractmethod
+    def is_device_array(self, obj):
+        """
+        Return True if `obj` is a device array for this target
+        """
+
+    @abstractmethod
+    def as_device_array(self, obj):
+        """
+        Return `obj` as a device array on this target.
+
+        May return `obj` directly if it is already on the target.
+        """
+
+    @abstractmethod
+    def to_device(self, hostary):
+        """
+        Copy `hostary` to the device and return the device array.
+        """
+
+    @abstractmethod
+    def device_array(self, shape, dtype):
+        """
+        Allocate a new uninitialized device array with the given shape and
+        dtype.
+        """
 
     def __init__(self, nin, nout, args, kwargs):
         outputs = kwargs.get('out')
@@ -824,20 +863,4 @@ class GUFuncCallSteps(object):
         else:
             return outs
 
-    def prepare_inputs(self):
-        pass
 
-    def launch_kernel(self, kernel, nelem, args):
-        raise NotImplementedError
-
-    def is_device_array(self, obj):
-        raise NotImplementedError
-
-    def as_device_array(self, obj):
-        return obj
-
-    def to_device(self, hostary):
-        raise NotImplementedError
-
-    def device_array(self, shape, dtype):
-        raise NotImplementedError
