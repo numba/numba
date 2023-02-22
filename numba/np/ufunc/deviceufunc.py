@@ -637,9 +637,8 @@ class GeneralizedUFunc(object):
             callsteps.inputs, callsteps.outputs)
         callsteps.adjust_input_types(indtypes)
         callsteps.allocate_outputs(schedule, outdtypes)
-        callsteps.prepare_kernel_parameters()
-        newparams = self._broadcast(schedule,
-                                    callsteps.kernel_parameters,
+        parameters = callsteps.prepare_kernel_parameters()
+        newparams = self._broadcast(schedule, parameters,
                                     callsteps.kernel_returnvalues)
         callsteps.launch_kernel(kernel, schedule.loopn, newparams)
         return callsteps.post_process_result()
@@ -725,12 +724,9 @@ class GeneralizedUFunc(object):
 
 class GUFuncCallSteps(object):
     __slots__ = [
-        'args',
-        'kwargs',
         'outputs',
         'inputs',
         'kernel_returnvalues',
-        'kernel_parameters',
         '_copy_result_to_host',
     ]
 
@@ -742,9 +738,6 @@ class GUFuncCallSteps(object):
         else:
             outputs = [outputs] * nout
 
-        self.args = args
-        self.kwargs = kwargs
-
         user_outputs_are_device = []
         self.outputs = []
         for output in outputs:
@@ -755,7 +748,7 @@ class GUFuncCallSteps(object):
                 self.outputs.append(output)
             user_outputs_are_device.append(user_output_is_device)
 
-        _is_device_array = [self.is_device_array(a) for a in self.args]
+        _is_device_array = [self.is_device_array(a) for a in args]
         # - If any of the arguments are device arrays, we leave the output on
         #   the device.
         self._copy_result_to_host = (not any(_is_device_array) and
@@ -770,7 +763,7 @@ class GUFuncCallSteps(object):
 
             return convert(a)
 
-        normalized_inputs = [normalize_input(a) for a in self.args]
+        normalized_inputs = [normalize_input(a) for a in args]
         self.inputs = normalized_inputs[:nin]
 
         # Check if there are extra arguments for outputs.
@@ -816,9 +809,7 @@ class GUFuncCallSteps(object):
 
             return convert(parameter)
 
-        parameters = [ensure_device(p) for p in self.inputs]
-        assert all(self.is_device_array(a) for a in parameters)
-        self.kernel_parameters = parameters
+        return [ensure_device(p) for p in self.inputs]
 
     def post_process_result(self):
         if self._copy_result_to_host:

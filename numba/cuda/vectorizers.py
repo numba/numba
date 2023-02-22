@@ -94,6 +94,10 @@ class _CUDAGUFuncCallSteps(GUFuncCallSteps):
         '_stream',
     ]
 
+    def __init__(self, nin, nout, args, kwargs):
+        super().__init__(nin, nout, args, kwargs)
+        self._stream = kwargs.get('stream', 0)
+
     def is_device_array(self, obj):
         return cuda.is_cuda_array(obj)
 
@@ -116,9 +120,6 @@ class _CUDAGUFuncCallSteps(GUFuncCallSteps):
 
     def device_array(self, shape, dtype):
         return cuda.device_array(shape=shape, dtype=dtype, stream=self._stream)
-
-    def prepare_inputs(self):
-        self._stream = self.kwargs.get('stream', 0)
 
     def launch_kernel(self, kernel, nelem, args):
         kernel.forall(nelem, stream=self._stream)(*args)
