@@ -698,8 +698,9 @@ class _MinimalRunner(object):
         result.buffer = runner.buffer
         with self.cleanup_object(test):
             test(result)
+        pid = os.getpid()
         # HACK as cStringIO.StringIO isn't picklable in 2.x
-        result.stream = _FakeStringIO(result.stream.getvalue())
+        result.stream = _FakeStringIO(f"[pid={pid}] " + result.stream.getvalue())
         return _MinimalResult(result, test.id())
 
     @contextlib.contextmanager
