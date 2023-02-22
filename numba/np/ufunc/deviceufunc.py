@@ -434,7 +434,7 @@ class DeviceGUFuncVectorize(_BaseUFuncBuilder):
         self.signature = sig
         self.inputsig, self.outputsig = parse_signature(self.signature)
 
-        # Maps from a tuple of arg_dtypes to (return_dtypes, cudakernel)
+        # Maps from a tuple of input_dtypes to (output_dtypes, cudakernel)
         self.kernelmap = OrderedDict()
 
     @property
