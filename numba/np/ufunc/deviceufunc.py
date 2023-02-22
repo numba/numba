@@ -433,7 +433,8 @@ class DeviceGUFuncVectorize(_BaseUFuncBuilder):
         self.identity = parse_identity(identity)
         self.signature = sig
         self.inputsig, self.outputsig = parse_signature(self.signature)
-        # { arg_dtypes: (return_dtypes), cudakernel }
+
+        # Maps from a tuple of arg_dtypes to (return_dtypes, cudakernel)
         self.kernelmap = OrderedDict()
 
     @property
@@ -661,9 +662,8 @@ class GeneralizedUFunc(object):
 
         # check output
         for sched_shape, out in zip(schedule.output_shapes, outs):
-            if out is not None:
-                if sched_shape != out.shape:
-                    raise ValueError('output shape mismatch')
+            if out is not None and sched_shape != out.shape:
+                raise ValueError('output shape mismatch')
 
         return indtypes, schedule, outdtypes, kernel
 
@@ -731,8 +731,7 @@ class GUFuncCallSteps(object):
         'norm_inputs',
         'kernel_returnvalues',
         'kernel_parameters',
-        '_is_device_array',
-        '_need_device_conversion',
+        '_copy_result_to_host',
     ]
 
     def __init__(self, nin, nout, args, kwargs):
@@ -756,21 +755,26 @@ class GUFuncCallSteps(object):
                 self.outputs.append(output)
             user_outputs_are_device.append(user_output_is_device)
 
-        self._is_device_array = [self.is_device_array(a) for a in self.args]
-        self._need_device_conversion = (not any(self._is_device_array) and
-                                        not any(user_outputs_are_device))
+        _is_device_array = [self.is_device_array(a) for a in self.args]
+        # - If any of the arguments are device arrays, we leave the output on
+        #   the device.
+        self._copy_result_to_host = (not any(_is_device_array) and
+                                     not any(user_outputs_are_device))
 
         # Normalize inputs
-        inputs = []
-        for a, isdev in zip(self.args, self._is_device_array):
-            if isdev:
-                inputs.append(self.as_device_array(a))
+        def normalize_input(a):
+            if self.is_device_array(a):
+                convert = self.as_device_array
             else:
-                inputs.append(np.asarray(a))
-        self.norm_inputs = inputs[:nin]
+                convert = np.asarray
+
+            return convert(a)
+
+        normalized_inputs = [normalize_input(a) for a in self.args]
+        self.inputs = normalized_inputs[:nin]
 
         # Check if there are extra arguments for outputs.
-        unused_inputs = inputs[nin:]
+        unused_inputs = normalized_inputs[nin:]
         if unused_inputs:
             self.outputs = unused_inputs
 
@@ -795,7 +799,7 @@ class GUFuncCallSteps(object):
         retvals = []
         for shape, dtype, output in zip(schedule.output_shapes, outdtypes,
                                         self.outputs):
-            if output is None or self._need_device_conversion:
+            if output is None or self._copy_result_to_host:
                 retval = self.device_array(shape, dtype)
             else:
                 retval = output
@@ -804,17 +808,20 @@ class GUFuncCallSteps(object):
         self.kernel_returnvalues = retvals
 
     def prepare_kernel_parameters(self):
-        params = []
-        for inp, isdev in zip(self.norm_inputs, self._is_device_array):
-            if isdev:
-                params.append(inp)
+        def ensure_device(parameter):
+            if self.is_device_array(parameter):
+                convert = self.as_device_array
             else:
-                params.append(self.to_device(inp))
-        assert all(self.is_device_array(a) for a in params)
-        self.kernel_parameters = params
+                convert = self.to_device
+
+            return convert(parameter)
+
+        parameters = [ensure_device(p) for p in self.norm_inputs]
+        assert all(self.is_device_array(a) for a in parameters)
+        self.kernel_parameters = parameters
 
     def post_process_result(self):
-        if self._need_device_conversion:
+        if self._copy_result_to_host:
             outs = []
             for retval, output in zip(self.kernel_returnvalues, self.outputs):
                 outs.append(self.to_host(retval, output))
