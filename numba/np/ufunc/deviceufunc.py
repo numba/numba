@@ -634,7 +634,7 @@ class GeneralizedUFunc(object):
                                      args, kws)
         callsteps.prepare_inputs()
         indtypes, schedule, outdtypes, kernel = self._schedule(
-            callsteps.norm_inputs, callsteps.outputs)
+            callsteps.inputs, callsteps.outputs)
         callsteps.adjust_input_types(indtypes)
         callsteps.allocate_outputs(schedule, outdtypes)
         callsteps.prepare_kernel_parameters()
@@ -728,7 +728,7 @@ class GUFuncCallSteps(object):
         'args',
         'kwargs',
         'outputs',
-        'norm_inputs',
+        'inputs',
         'kernel_returnvalues',
         'kernel_parameters',
         '_copy_result_to_host',
@@ -783,17 +783,17 @@ class GUFuncCallSteps(object):
         Attempt to cast the inputs to the required types if necessary
         and if they are not device array.
 
-        Side effect: Only affects the element of `norm_inputs` that requires
+        Side effect: Only affects the elements of `inputs` that require
         a type cast.
         """
-        for i, (ity, val) in enumerate(zip(indtypes, self.norm_inputs)):
+        for i, (ity, val) in enumerate(zip(indtypes, self.inputs)):
             if ity != val.dtype:
                 if not hasattr(val, 'astype'):
                     msg = ("compatible signature is possible by casting but "
                            "{0} does not support .astype()").format(type(val))
                     raise TypeError(msg)
                 # Cast types
-                self.norm_inputs[i] = val.astype(ity)
+                self.inputs[i] = val.astype(ity)
 
     def allocate_outputs(self, schedule, outdtypes):
         retvals = []
@@ -816,7 +816,7 @@ class GUFuncCallSteps(object):
 
             return convert(parameter)
 
-        parameters = [ensure_device(p) for p in self.norm_inputs]
+        parameters = [ensure_device(p) for p in self.inputs]
         assert all(self.is_device_array(a) for a in parameters)
         self.kernel_parameters = parameters
 
