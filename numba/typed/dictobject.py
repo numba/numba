@@ -234,25 +234,26 @@ def _dict_new_sized(typingctx, keyty, valty, n_keys):
     sig = resty(keyty, valty, n_keys)
 
     def codegen(context, builder, sig, args):
-        fnty = ir.FunctionType(
-            ll_status,
-            [ll_dict_type.as_pointer(), ll_ssize_t, ll_ssize_t, ll_ssize_t],
-        )
-        fn = ir.Function(builder.module, fnty, 'numba_dict_new_sized')
+        n_keys = builder.bitcast(args[2], ll_ssize_t)
+
         # Determine sizeof key and value types
         ll_key = context.get_data_type(keyty.instance_type)
         ll_val = context.get_data_type(valty.instance_type)
         sz_key = context.get_abi_sizeof(ll_key)
         sz_val = context.get_abi_sizeof(ll_val)
+
         refdp = cgutils.alloca_once(builder, ll_dict_type, zfill=True)
-        status = builder.call(
-            fn,
-            [refdp, args[2], ll_ssize_t(sz_key), ll_ssize_t(sz_val)],
-        )
-        _raise_if_error(
-            context, builder, status,
-            msg="Failed to allocate dictionary",
-        )
+
+        argtys = [ll_dict_type.as_pointer(), ll_ssize_t, ll_ssize_t, ll_ssize_t]
+        fnty = ir.FunctionType(ll_status, argtys)
+        fn = ir.Function(builder.module, fnty, 'numba_dict_new_sized')
+
+        args = [refdp, n_keys, ll_ssize_t(sz_key), ll_ssize_t(sz_val)]
+        status = builder.call(fn, args)
+
+        allocated_failed_msg = "Failed to allocate dictionary"
+        _raise_if_error(context, builder, status, msg=allocated_failed_msg)
+
         dp = builder.load(refdp)
         return dp
 
