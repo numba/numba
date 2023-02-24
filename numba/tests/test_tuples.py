@@ -505,6 +505,14 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
             self.assertIs(type(got), type(expected))
             self.assertPreciseEqual(got, expected)
 
+    def test_construct_with_defaults_and_access_field(self):
+        pyfunc = lambda x: PointWithDefaults(x).y
+        cfunc = jit(nopython=True)(pyfunc)
+        expected = pyfunc(1)
+        got = cfunc(1)
+        self.assertIs(type(got), type(expected))
+        self.assertPreciseEqual(got, expected)
+
     def test_type(self):
         # Test the type() built-in on named tuples
         pyfunc = type_usecase
