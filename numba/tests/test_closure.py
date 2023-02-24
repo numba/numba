@@ -387,10 +387,25 @@ class TestInlinedClosure(TestCase):
             x = 1, 2
             bar(*x)
 
+        def outer23(x):
+            """Keyword and default arguments passed in different orders"""
+            def inner(y, z=100):
+                # y may be passed positionally or as a keyword
+                # z may be passed positionally, as keyword, or omitted
+                return (x, y, z)
+
+            return (
+                inner(1),
+                inner(2, 200),
+                inner(3, z=300),
+                inner(z=400, y=4),
+                inner(y=5),
+            )
+
         # functions to test that are expected to pass
         f = [outer1, outer2, outer5, outer6, outer7, outer8,
              outer9, outer10, outer12, outer13, outer14,
-             outer15, outer19, outer20, outer21]
+             outer15, outer19, outer20, outer21, outer23]
         for ref in f:
             cfunc = njit(ref)
             var = 10

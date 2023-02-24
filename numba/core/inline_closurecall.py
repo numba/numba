@@ -2,7 +2,9 @@ import types as pytypes  # avoid confusion with numba.types
 import copy
 import ctypes
 import numba.core.analysis
-from numba.core import types, typing, errors, ir, rewrites, config, ir_utils
+from numba.core import (
+    types, typing, errors, ir, rewrites, config, ir_utils, utils
+)
 from numba.parfors.parfor import internal_prange
 from numba.core.ir_utils import (
     next_label,
@@ -750,26 +752,13 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
 
     # handle defaults and kw arguments using pysignature if callee is function
     if isinstance(callee, pytypes.FunctionType):
+        # Python function.
         pysig = numba.core.utils.pysignature(callee)
-        normal_handler = lambda index, param, default: default
+        normal_handler = lambda index, param, value: value
         default_handler = lambda index, param, default: ir.Const(default, loc)
-
-        # Throw error for stararg
-        # TODO: handle stararg
-        def stararg_handler(index, param, default):
-            raise NotImplementedError(
-                "Stararg not supported in inliner for arg {} {}".format(
-                    index, param))
-        if call_expr.op == 'call':
-            kws = dict(call_expr.kws)
-        else:
-            kws = {}
-        return numba.core.typing.fold_arguments(
-            pysig, args, kws, normal_handler, default_handler,
-            stararg_handler)
     else:
-        # TODO: handle arguments for make_function case similar to function
-        # case above
+        # make_function expression.
+        assert isinstance(callee, ir.Expr) and callee.op == "make_function"
         callee_defaults = (callee.defaults if hasattr(callee, 'defaults')
                            else callee.__defaults__)
         if callee_defaults:
@@ -783,7 +772,7 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
                         # this branch is predominantly for kwargs from
                         # inlinable functions
                         defaults_list.append(ir.Const(value=x, loc=loc))
-                args = args + defaults_list
+                defaults_converted = tuple(defaults_list)
             elif (isinstance(callee_defaults, ir.Var)
                     or isinstance(callee_defaults, str)):
                 default_tuple = func_ir.get_definition(callee_defaults)
@@ -791,12 +780,98 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
                 assert (default_tuple.op == "build_tuple")
                 const_vals = [func_ir.get_definition(x) for
                               x in default_tuple.items]
-                args = args + const_vals
+                defaults_converted = tuple(const_vals)
             else:
                 raise NotImplementedError(
                     "Unsupported defaults to make_function: {}".format(
                         callee_defaults))
-        return args
+        else:
+            defaults_converted = None
+
+        # Closures with type annotations or keyword-only default arguments
+        # cannot be interpreted into `ir.Expr`s (see
+        # `numba.core.interpreter.Interpreter.op_MAKE_FUNCTION`), so they are
+        # guaranteed to be empty once this function is called.
+        pysig = _signature_from_make_function_code(
+            code=callee.code,
+            defaults=defaults_converted,
+            kwdefaults=None,
+            annotations={},
+        )
+        # The defaults in `pysig` are already wrapped in `ir.Const` or
+        # `ir.Var` so we don't need to wrap them again; just take their values.
+        normal_handler = lambda index, param, value: value
+        default_handler = lambda index, param, default: default
+
+    # Throw error for stararg
+    # TODO: handle stararg
+    def stararg_handler(index, param, values):
+        raise NotImplementedError(
+            "Stararg not supported in inliner for arg {} {}".format(
+                index, param))
+
+    if call_expr.op == 'call':
+        kws = dict(call_expr.kws)
+    else:
+        kws = {}
+    return numba.core.typing.fold_arguments(
+        pysig, args, kws, normal_handler, default_handler, stararg_handler)
+
+
+def _signature_from_make_function_code(
+    code,
+    defaults,
+    kwdefaults,
+    annotations,
+) -> utils.pySignature:
+    """Computes a signature for a function based on its components.
+
+    When called on a function (an object of type `pytypes.FunctionType`),
+    `inspect.Signature` inspects the fields of that function to determine its
+    signature. Unfortunately, we may not always have an actual function object
+    to compute a signature of (in particular, when trying to compute the
+    signature for a closure in Numba code, which doesn't actually exist until
+    the containing function is called). This function allows constructing a
+    signature based on the individual components of the function that
+    `inspect.signature` inspects.
+    """
+    # It's not possible to directly construct a `pytypes.FunctionType` with
+    # these arguments alone, since `types.FunctionType` also expects values for
+    # the globals and closed-over variables for the code object, and we don't
+    # have them (since we are just compiling the code, not interpreting it with
+    # concrete values). Luckily, `inspect.signature` from the Python standard
+    # library also supports computing signatures from objects that duck-type as
+    # functions. In particular, it will compute a signature for any callable
+    # object that has the same set of fields as `FunctionType`.
+    # Our approach is thus to construct a helper object whose only purpose is to
+    # be a duck-type of `FunctionType` (and pretend to be callable), then ask
+    # `utils.pysignature` (an alias for `inspect.signature`) for its signature.
+    # See inspect._signature_is_functionlike and
+    # inspect._signature_from_function for details on which attributes need to
+    # exist for this to work.
+    fake_function_for_signature = _FakeFunction(
+        code=code,
+        defaults=defaults,
+        kwdefaults=kwdefaults,
+        annotations=annotations,
+    )
+    # utils.pysignature is an alias for inspect.signature
+    return utils.pysignature(fake_function_for_signature)
+
+
+class _FakeFunction:
+    """Object that duck-types like an instance of `pytypes.FunctionType`"""
+
+    def __init__(self, code, defaults, kwdefaults, annotations):
+        # doesn't affect signature but must exist
+        self.__name__ = "fake_function"
+        self.__code__ = code
+        self.__defaults__ = defaults
+        self.__kwdefaults__ = kwdefaults
+        self.__annotations__ = annotations
+
+    def __call__(self, *args, **kwargs):
+        raise NotImplementedError("_FakeFunction should not be called!")
 
 
 def _make_debug_print(prefix):
