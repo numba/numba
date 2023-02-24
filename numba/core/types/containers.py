@@ -377,7 +377,24 @@ class StarArgUniTuple(_StarArgTupleMixin, UniTuple):
 
 
 class BaseNamedTuple(BaseTuple):
-    pass
+    def can_convert_to(self, typingctx, other):
+        if not isinstance(other, BaseNamedTuple):
+            return
+        if (
+            self.instance_class != other.instance_class
+            or self.count != other.count
+        ):
+            return
+        if self.count == 0:
+            return Conversion.safe
+
+        kinds = [
+            typingctx.can_convert(ta, tb)
+            for ta, tb in zip(self.types, other.types)
+        ]
+        if any(kind is None for kind in kinds):
+            return
+        return max(kinds)
 
 
 class NamedUniTuple(_HomogeneousTuple, BaseNamedTuple):
@@ -397,6 +414,20 @@ class NamedUniTuple(_HomogeneousTuple, BaseNamedTuple):
     def key(self):
         return self.instance_class, self.dtype, self.count
 
+    @property
+    def types(self):
+        return (self.dtype,) * self.count
+
+    def unify(self, typingctx, other):
+        if (
+            isinstance(other, NamedUniTuple)
+            and self.instance_class == other.instance_class
+            and self.count == other.count
+        ):
+            dtype = typingctx.unify_pairs(self.dtype, other.dtype)
+            if dtype is not None:
+                return NamedUniTuple(dtype, self.count, self.instance_class)
+
 
 class NamedTuple(_HeterogeneousTuple, BaseNamedTuple):
     def __init__(self, types, cls):
@@ -412,6 +443,19 @@ class NamedTuple(_HeterogeneousTuple, BaseNamedTuple):
     @property
     def key(self):
         return self.instance_class, self.types
+
+    def unify(self, typingctx, other):
+        if (
+            isinstance(other, BaseNamedTuple)
+            and self.instance_class == other.instance_class
+            and self.count == other.count
+        ):
+            unified = [
+                typingctx.unify_pairs(ta, tb)
+                for ta, tb in zip(self.types, other.types)
+            ]
+            if all(t is not None for t in unified):
+                return NamedTuple(unified, self.instance_class)
 
 
 class List(MutableSequence, InitialValue):

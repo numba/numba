@@ -618,6 +618,36 @@ class TestConversions(TestCase):
         msg = "No conversion from UniTuple(int32 x 2) to UniTuple(float32 x 1)"
         self.assertIn(msg, str(raises.exception))
 
+    def test_namedtuple_conversions(self):
+        check = self.check_conversion
+        fromty = types.NamedUniTuple(types.int32, 3, Point)
+        check(fromty, types.NamedUniTuple(types.float32, 3, Point), Point(4, 5, 6))
+        check(fromty,
+            types.NamedTuple((types.float32, types.int16, types.int32), Point),
+            Point(4, 5, 6))
+        aty = types.NamedUniTuple(types.int32, 0, Empty)
+        bty = types.NamedTuple((), Empty)
+        check(aty, bty, Empty())
+        check(bty, aty, Empty())
+
+        with self.assertRaises(errors.TypingError) as raises:
+            check(fromty, types.UniTuple(types.float32, 3), Point(4, 5, 6))
+        msg = "No conversion from Point(int32 x 3) to UniTuple(float32 x 3)"
+        self.assertIn(msg, str(raises.exception))
+
+        with self.assertRaises(errors.TypingError) as raises:
+            check(fromty, types.NamedUniTuple(types.int32, 3, Point2),
+                Point(4, 5, 6))
+        msg = "No conversion from Point(int32 x 3) to Point2(int32 x 3)"
+        self.assertIn(msg, str(raises.exception))
+
+        with self.assertRaises(errors.TypingError) as raises:
+            check(types.UniTuple(types.int32, 3),
+                types.NamedUniTuple(types.int32, 3, Point),
+                Point(4, 5, 6))
+        msg = "No conversion from UniTuple(int32 x 3) to Point(int32 x 3)"
+        self.assertIn(msg, str(raises.exception))
+
 
 class TestMethods(TestCase):
 
