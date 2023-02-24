@@ -216,7 +216,7 @@ def _imp_dtor(context, module):
 
 
 @intrinsic
-def _dict_new_sized(typingctx, keyty, valty, n_keys):
+def _dict_new_sized(typingctx, n_keys, keyty, valty):
     """Wrap numba_dict_new_sized.
 
     Allocate a new dictionary object with enough space to hold
@@ -231,10 +231,10 @@ def _dict_new_sized(typingctx, keyty, valty, n_keys):
         A value of 0 creates a dict with minimum size.
     """
     resty = types.voidptr
-    sig = resty(keyty, valty, n_keys)
+    sig = resty(n_keys, keyty, valty)
 
     def codegen(context, builder, sig, args):
-        n_keys = builder.bitcast(args[2], ll_ssize_t)
+        n_keys = builder.bitcast(args[0], ll_ssize_t)
 
         # Determine sizeof key and value types
         ll_key = context.get_data_type(keyty.instance_type)
@@ -668,7 +668,7 @@ def impl_new_dict(key, value, n_keys=0):
     def imp(key, value, n_keys=0):
         if n_keys < 0:
             raise RuntimeError("expecting *n_keys* to be >= 0")
-        dp = _dict_new_sized(keyty, valty, n_keys)
+        dp = _dict_new_sized(n_keys, keyty, valty)
         _dict_set_method_table(dp, keyty, valty)
         d = _make_dict(keyty, valty, dp)
         return d
