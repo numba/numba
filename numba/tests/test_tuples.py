@@ -1,5 +1,6 @@
 import collections
 import itertools
+import typing
 
 import numpy as np
 
@@ -17,6 +18,11 @@ Point = collections.namedtuple('Point', ('x', 'y', 'z'))
 Point2 = collections.namedtuple('Point2', ('x', 'y', 'z'))
 
 Empty = collections.namedtuple('Empty', ())
+
+class PointWithDefaults(typing.NamedTuple):
+    x: int
+    y: int = 2
+    z: int = 3
 
 def tuple_return_usecase(a, b):
     return a, b
@@ -489,6 +495,15 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
 
         check(make_point)
         check(make_point_kws)
+
+    def test_construct_with_defaults(self):
+        pyfunc = lambda x, z: PointWithDefaults(x, z=z)
+        cfunc = jit(nopython=True)(pyfunc)
+        for args in (5, 6), (5.5, 6j):
+            expected = pyfunc(*args)
+            got = cfunc(*args)
+            self.assertIs(type(got), type(expected))
+            self.assertPreciseEqual(got, expected)
 
     def test_type(self):
         # Test the type() built-in on named tuples
