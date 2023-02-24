@@ -269,8 +269,8 @@ class TestCase(unittest.TestCase):
     def assertRefCountEqual(self, *objects):
         gc.collect()
         rc = [sys.getrefcount(x) for x in objects]
-        for i, x in enumerate(objects[1:], start=1):
-            rc_0 = rc[0]
+        rc_0 = rc[0]
+        for i in range(len(objects))[1:]:
             rc_i = rc[i]
             if rc_0 != rc_i:
                 self.fail(f"Refcount for objects does not match. "
