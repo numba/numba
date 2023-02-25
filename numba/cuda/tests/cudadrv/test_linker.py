@@ -6,10 +6,11 @@ from numba.cuda.testing import (skip_on_cudasim, skip_unless_cuda_python,
                                 skip_if_cuda_includes_missing,
                                 skip_with_cuda_python)
 from numba.cuda.testing import CUDATestCase
-from numba.cuda.cudadrv.driver import Linker, LinkerError, NvrtcError
+from numba.cuda.cudadrv.driver import (CudaAPIError, Linker,
+                                       LinkerError, NvrtcError)
 from numba.cuda import require_context
 from numba.tests.support import ignore_internal_warnings
-from numba import cuda, void, float64, int64, int32, typeof
+from numba import cuda, void, float64, int64, int32, typeof, float32
 
 CONST1D = np.arange(10, dtype=np.float64)
 
@@ -77,6 +78,19 @@ def simple_smem(ary, dty):
             sm[j] = j
     cuda.syncthreads()
     ary[i] = sm[i]
+
+
+def coop_smem2d(ary):
+    i, j = cuda.grid(2)
+    sm = cuda.shared.array((10, 20), float32)
+    sm[i, j] = (i + 1) / (j + 1)
+    cuda.syncthreads()
+    ary[i, j] = sm[i, j]
+
+
+def simple_maxthreads(ary):
+    i = cuda.grid(1)
+    ary[i] = i
 
 
 LMEM_SIZE = 1000
@@ -280,12 +294,27 @@ class TestLinker(CUDATestCase):
         shared_mem_size = compiled_specialized.get_shared_mem_per_block()
         self.assertEqual(shared_mem_size, 800)
 
+    def test_get_max_threads_per_block(self):
+        compiled = cuda.jit("void(float32[:,::1])")(coop_smem2d)
+        max_threads = compiled.get_max_threads_per_block()
+        self.assertGreater(max_threads, 0)
+
+    def test_max_threads_exceeded(self):
+        compiled = cuda.jit("void(int32[::1])")(simple_maxthreads)
+        max_threads = compiled.get_max_threads_per_block()
+        nelem = max_threads + 1
+        ary = np.empty(nelem, dtype=np.int32)
+        try:
+            compiled[1, nelem](ary)
+        except CudaAPIError as e:
+            self.assertIn("cuLaunchKernel", e.msg)
+
     def test_get_local_mem_per_thread(self):
         sig = void(int32[::1], int32[::1], typeof(np.int32))
         compiled = cuda.jit(sig)(simple_lmem)
-        shared_mem_size = compiled.get_local_mem_per_thread()
+        local_mem_size = compiled.get_local_mem_per_thread()
         calc_size = np.dtype(np.int32).itemsize * LMEM_SIZE
-        self.assertGreaterEqual(shared_mem_size, calc_size)
+        self.assertGreaterEqual(local_mem_size, calc_size)
 
     def test_get_local_mem_per_specialized(self):
         compiled = cuda.jit(simple_lmem)
