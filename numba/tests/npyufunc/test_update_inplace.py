@@ -106,6 +106,11 @@ class TestUpdateInplace(TestCase):
             guvectorize(['void(f8[:], f8[:])'], '(t),()',
                         nopython=True, writable_args=(-1,))(py_replace_2nd)
 
+        # check that exception is raised when passing non-existing argument name
+        with self.assertRaises(RuntimeError):
+            guvectorize(['void(f8[:], f8[:])'], '(t),()',
+                        nopython=True, writable_args=('z_t',))(py_replace_2nd)
+
         # writable_args are not supported for target='cuda'
         with self.assertRaises(TypeError):
             guvectorize(['void(f8[:], f8[:])'], '(t),()',
