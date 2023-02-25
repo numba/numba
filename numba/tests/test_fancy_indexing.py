@@ -303,11 +303,11 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
 
 class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
     # Every case has exactly one, one-dimensional array,
-    # Otherwise it's not fancy indexing
+    # otherwise it's not fancy indexing.
     shape = (5, 6, 7, 8, 9, 10)
     indexing_cases = [
         # Slices + Integers
-        (slice(4, 5), 3, np.array([0,1,3,4,2]), 1),
+        (slice(4, 5), 3, np.array([0, 1, 3, 4, 2]), 1),
         (3, np.array([0,1,3,4,2]), slice(None), slice(4)),
 
         # Ellipsis + Integers
@@ -343,8 +343,10 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
 
         indices = []
 
-        # Generate 20 random slice cases
-        for i in range(20):
+        # Generate K random slice cases. The value of K is arbitrary, the intent is
+        # to create plenty of variation.
+        K = 20 
+        for _ in range(K):
             array_idx = self.rng.integers(0, 5, size=15)
             # Randomly select 4 slices from our list
             curr_idx = self.rng.choice(slice_choices, size=4).tolist()
@@ -352,7 +354,6 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
             _array_idx = self.rng.choice(4)
             curr_idx[_array_idx] = array_idx
             indices.append(tuple(curr_idx))
-        
         # Generate 20 random integer cases 
         for i in range(20):
             array_idx = self.rng.integers(0, 5, size=15)
@@ -387,7 +388,6 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
                 self.rng.choice(2, size=bool_arr_shape),
                 dtype=bool
             )
-
             indices.append(tuple(curr_idx))
 
         return indices
@@ -407,7 +407,7 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
         assert expected.base is not orig_base
 
         # Note: Numba may not return the same array strides and
-        # contiguity as Numpy
+        # contiguity as NumPy
         self.assertEqual(got.shape, expected.shape)
         self.assertEqual(got.dtype, expected.dtype)
         np.testing.assert_equal(got, expected)
@@ -416,7 +416,7 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
         assert not np.may_share_memory(got, expected)
 
     def check_setitem_indices(self, arr_shape, index):
-        @njit     
+        @njit
         def set_item(array, idx, item):
             array[idx] = item
 
