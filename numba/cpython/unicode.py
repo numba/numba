@@ -2655,7 +2655,7 @@ def str_to_int(u):
 def str_to_int_with_base(u, base):
     if not isinstance(u, types.UnicodeType):
         raise TypingError(
-            f"The literal should be an UnicodeType, but we got a {u}")
+            f"int() argument must be a string (UnicodeType), got {u}.")
 
     if not isinstance(base, types.Integer):
         raise TypingError(
