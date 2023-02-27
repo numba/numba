@@ -437,7 +437,7 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
 
     def test_getitem(self):
         # Cases with a combination of integers + other objects
-        indices = self.indexing_cases
+        indices = self.indexing_cases.copy()
 
         # Cases with permutations of either integers or objects
         indices += self.generate_random_indices()
@@ -448,7 +448,7 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
 
     def test_setitem(self):
         # Cases with a combination of integers + other objects
-        indices = self.indexing_cases
+        indices = self.indexing_cases.copy()
 
         # Cases with permutations of either integers or objects
         indices += self.generate_random_indices()
@@ -482,5 +482,7 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
             )
 
 
-if __name__ == '__main__':
-    unittest.main()
+# if __name__ == '__main__':
+#     unittest.main()
+x = TestFancyIndexingMultiDim()
+x.test_getitem()
