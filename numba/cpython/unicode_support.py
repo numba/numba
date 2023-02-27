@@ -55,7 +55,7 @@ _Py_LINEFEED = 0xa
 _Py_CARRIAGE_RETURN = 0xd
 _Py_SPACE = 0x20
 
-# for convenient usage when converting from string to int/float/complex
+# for convenience, when converting from string to int/float/complex
 _Ord_Zero = 48
 _Ord_Plus = 43
 _Ord_Minus = 45
