@@ -2494,6 +2494,7 @@ def long_from_binary_base(ascii_u, start, end, base):
     # TODO: check if the string is too large or the calculation overflows
     bits_in_accum, accum = 0, 0
     p = end - 1
+    # Read string from right, and fill in int from left; i.e.,
     # from the least to the most significant
     while p >= start:
         ch = _get_code_point(ascii_u, p)
