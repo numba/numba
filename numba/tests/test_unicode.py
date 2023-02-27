@@ -2819,7 +2819,7 @@ class IntTestCases(BaseTest):
     # https://github.com/python/cpython/blob
     # /1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Lib/test/test_int.py#L41    #
     # noqa: E501
-    # The conversion case from non-str to int is deleted.
+    #NOTE: The test cases where conversion from non-str to int occur are removed.
     def test_basic(self):
         cfunc = njit(int_usecase)
         base_cfunc = njit(int_base_usecase)
