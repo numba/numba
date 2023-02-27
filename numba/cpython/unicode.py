@@ -2659,7 +2659,7 @@ def str_to_int_with_base(u, base):
 
     if not isinstance(base, types.Integer):
         raise TypingError(
-            f"The base argument should be an Integer, but we got a {base}")
+            f"int() the base argument must be an integer, got {base}")
 
     def impl(u, base):
         return py_long_from_unicode(u, base=base)
