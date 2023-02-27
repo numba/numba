@@ -2642,7 +2642,7 @@ def py_long_from_unicode(u, base=10):
 def str_to_int(u):
     if not isinstance(u, types.UnicodeType):
         raise TypingError(
-            f"The literal should be an UnicodeType, but we got a {u}")
+            f"int() argument must be a string (UnicodeType), got {u}.")
 
     def impl(u):
         return py_long_from_unicode(u, base=10)
