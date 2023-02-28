@@ -206,6 +206,30 @@ class TestLinker(CUDATestCase):
             def f():
                 pass
 
+    # Float16 math functions require linking in a .cu file, verify that
+    # we generate the appropriate exception and message if the NVIDIA
+    # bindings are not enabled or installed.
+
+    @TestCase.run_test_in_subprocess(envvars=_NUMBA_NVIDIA_BINDING_0_ENV)
+    def test_linking_float16(self):
+        @cuda.jit()
+        def hexp10_vectors(r, x):
+            i = cuda.grid(1)
+
+            if i < len(r):
+                r[i] = cuda.fp16.hexp10(x[i])
+
+        # Generate random data
+        N = 32
+        np.random.seed(1)
+        x = np.random.rand(N).astype(np.float16)
+        r = np.zeros_like(x)
+
+        msg = ("Use of float16 requires the use of the NVIDIA CUDA "
+               "bindings and settng the ")
+        with self.assertRaisesRegex(NotImplementedError, msg):
+            hexp10_vectors[1, N](r, x)
+
     def test_linking_unknown_filetype_error(self):
         expected_err = "Don't know how to link file with extension .cuh"
         with self.assertRaisesRegex(RuntimeError, expected_err):
