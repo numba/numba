@@ -1211,7 +1211,8 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             for _bitgen in bitgen_types:
                 with self.subTest(_size=_size, _bitgen=_bitgen):
                     self.check_numpy_parity(dist_func, _bitgen,
-                                            None, _size, adjusted_ulp_prec)
+                                            None, _size, None,
+                                            adjusted_ulp_prec)
 
         dist_func = lambda x, mu, kappa, size:\
             x.vonmises(mu=mu, kappa=kappa, size=size)
@@ -1233,7 +1234,8 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                 dist_func = lambda x, size, dtype:\
                     x.vonmises(mu, kappa, size=size)
                 self.check_numpy_parity(dist_func, None,
-                                        None, size, None, adjusted_ulp_prec)
+                                        None, size, None,
+                                        adjusted_ulp_prec)
 
 
 class TestGeneratorCaching(TestCase, SerialMixin):
