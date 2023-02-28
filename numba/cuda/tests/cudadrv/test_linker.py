@@ -204,7 +204,7 @@ class TestLinker(CUDATestCase):
         # Check the filename is reported correctly
         self.assertIn('in the compilation of "error.cu"', msg)
 
-    # We need to run the test ina subprocess because the Linker class
+    # We need to run the test in a subprocess because the Linker class
     # that instantiates either the CudaPythonLinker or CtypesLinker
     # sets USE_NV_BINDING = config.CUDA_USE_NVIDIA_BINDING at
     # module import time, so overriding the config variable does
