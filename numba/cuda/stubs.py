@@ -501,6 +501,8 @@ class atomic(Stub):
         Conditionally assign ``val`` to the first element of an 1D array ``ary``
         if the current value matches ``old``.
 
+        Supported on int32, int64, uint32, uint64 operands only.
+
         Returns the current value as if it is loaded atomically.
         """
 
