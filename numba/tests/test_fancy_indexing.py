@@ -482,7 +482,5 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
             )
 
 
-# if __name__ == '__main__':
-#     unittest.main()
-x = TestFancyIndexingMultiDim()
-x.test_getitem()
+if __name__ == '__main__':
+    unittest.main()
