@@ -1,7 +1,7 @@
 import os.path
 import numpy as np
 import warnings
-from numba.cuda.testing import skip_unless_cc_53, unittest
+from numba.cuda.testing import skip_if_mvc_enabled, skip_unless_cc_53, unittest
 from numba.cuda.testing import (skip_on_cudasim, skip_unless_cuda_python,
                                 skip_if_cuda_includes_missing)
 from numba.cuda.testing import CUDATestCase
@@ -210,6 +210,7 @@ class TestLinker(CUDATestCase):
     # module import time, so overriding the config variable does
     # not help.
 
+    @skip_if_mvc_enabled('NVRTC not available when ctypes binding is used.')
     @TestCase.run_test_in_subprocess(envvars=_NUMBA_NVIDIA_BINDING_0_ENV)
     def test_linking_cu_ctypes_unsupported(self):
         link = os.path.join(os.path.dirname(__file__), 'data', 'jitlink.cu')
