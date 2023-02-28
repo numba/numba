@@ -1172,8 +1172,9 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             self.assertIn('p < 0, p >= 1 or p is NaN', str(raises.exception))
 
     def test_gumbel(self):
-        # For this test the dtype argument is never used, so we pass [None] as the dtype
-        # to make sure it runs only once with default system type.
+        # For this test the dtype argument is never used, so we pass
+        # [None] as the dtype to make sure it runs only once with
+        # default system type.
 
         test_sizes = [None, (), (100,), (10, 20, 30)]
         bitgen_types = [None, MT19937]
@@ -1184,7 +1185,8 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             self.check_numpy_parity(dist_func, test_size=None,
                                     test_dtype=None)
 
-        dist_func = lambda x, size, dtype:x.gumbel(loc=1.0, scale=1.5, size=size)
+        dist_func = lambda x, size, dtype:x.gumbel(loc=1.0,
+                                                   scale=1.5, size=size)
         for _size in test_sizes:
             for _bitgen in bitgen_types:
                 with self.subTest(_size=_size, _bitgen=_bitgen):
@@ -1215,6 +1217,23 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             x.vonmises(mu=mu, kappa=kappa, size=size)
         self._check_invalid_types(dist_func, ['mu', 'kappa', 'size'],
                                   [5, 1, (1,)], ['x', 'x', ('x',)])
+
+    def test_vonmises_cases(self):
+        cases = [
+            # mu, kappa
+            (1, 0), # (kappa < 1e-8)
+            (10, 1e-7), # (kappa < 1e-5)
+            (3, 1e3), # (kappa <= 1e6)
+            (4, 1e10) # (kappa > 1e6)
+        ]
+        size = (2, 3)
+
+        for mu, kappa in cases:
+            with self.subTest(mu=mu, kappa=kappa):
+                dist_func = lambda x, size, dtype:\
+                    x.vonmises(mu, kappa, size=size)
+                self.check_numpy_parity(dist_func, None,
+                                        None, size, None, 0)
 
 
 class TestGeneratorCaching(TestCase, SerialMixin):
