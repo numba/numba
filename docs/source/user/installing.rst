@@ -233,6 +233,9 @@ vary with target operating system and hardware. The following lists them all
     :ref:`runtime type-checking <type_anno_check>`.
   * ``cuda-python`` - The NVIDIA CUDA Python bindings. See :ref:`cuda-bindings`.
     Numba requires Version 11.6 or greater.
+  * ``cubinlinker`` and ``ptxcompiler`` to support
+    :ref:`minor-version-compatibility`.
+
 
 * To build the documentation:
 
