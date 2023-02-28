@@ -1,7 +1,7 @@
 import os.path
 import numpy as np
 import warnings
-from numba.cuda.testing import unittest
+from numba.cuda.testing import skip_unless_cc_53, unittest
 from numba.cuda.testing import (skip_on_cudasim, skip_unless_cuda_python,
                                 skip_if_cuda_includes_missing)
 from numba.cuda.testing import CUDATestCase
@@ -225,25 +225,15 @@ class TestLinker(CUDATestCase):
     # we generate the appropriate exception and message if the NVIDIA
     # bindings are not enabled or installed.
 
+    @skip_unless_cc_53
     @TestCase.run_test_in_subprocess(envvars=_NUMBA_NVIDIA_BINDING_0_ENV)
-    def test_linking_float16(self):
-        @cuda.jit()
-        def hexp10_vectors(r, x):
-            i = cuda.grid(1)
-
-            if i < len(r):
-                r[i] = cuda.fp16.hexp10(x[i])
-
-        # Generate random data
-        N = 32
-        np.random.seed(1)
-        x = np.random.rand(N).astype(np.float16)
-        r = np.zeros_like(x)
-
+    def test_linking_float16_unsupported(self):
         msg = ("Use of float16 requires the use of the NVIDIA CUDA "
-               "bindings and settng the ")
+               "bindings and setting the ")
         with self.assertRaisesRegex(NotImplementedError, msg):
-            hexp10_vectors[1, N](r, x)
+            @cuda.jit('void(float16[::1])')
+            def hexp10_vectors(x):
+                cuda.fp16.hexp10(x[0])
 
     def test_linking_unknown_filetype_error(self):
         expected_err = "Don't know how to link file with extension .cuh"
