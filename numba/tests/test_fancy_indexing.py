@@ -354,8 +354,8 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
             _array_idx = self.rng.choice(4)
             curr_idx[_array_idx] = array_idx
             indices.append(tuple(curr_idx))
-        # Generate 20 random integer cases 
-        for i in range(20):
+        # Generate K random integer cases 
+        for _ in range(K):
             array_idx = self.rng.integers(0, 5, size=15)
             # Randomly select 4 integers from our list
             curr_idx = self.rng.choice(integer_choices, size=4).tolist()
@@ -364,8 +364,8 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
             curr_idx[_array_idx] = array_idx
             indices.append(tuple(curr_idx))
 
-        # Generate 20 random ellipsis cases
-        for i in range(20):
+        # Generate K random ellipsis cases
+        for _ in range(K):
             array_idx = self.rng.integers(0, 5, size=15)
             # Randomly select 4 slices from our list
             curr_idx = self.rng.choice(slice_choices, size=4).tolist()
@@ -376,8 +376,8 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
             curr_idx[_array_idx[1]] = Ellipsis
             indices.append(tuple(curr_idx))
 
-        # Generate 20 random boolean cases
-        for i in range(20):
+        # Generate K random boolean cases
+        for _ in range(K):
             array_idx = self.rng.integers(0, 5, size=15)
             # Randomly select 4 slices from our list
             curr_idx = self.rng.choice(slice_choices, size=4).tolist()
