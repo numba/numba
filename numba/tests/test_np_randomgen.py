@@ -1172,7 +1172,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             self.assertIn('p < 0, p >= 1 or p is NaN', str(raises.exception))
 
     def test_gumbel(self):
-        # For this test dtype argument is never used, so we pass [None] as dtype
+        # For this test the dtype argument is never used, so we pass [None] as the dtype
         # to make sure it runs only once with default system type.
 
         test_sizes = [None, (), (100,), (10, 20, 30)]
@@ -1184,7 +1184,7 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             self.check_numpy_parity(dist_func, test_size=None,
                                     test_dtype=None)
 
-        dist_func = lambda x, size, dtype:x.gumbel(loc=1.0,scale=1.5, size=size)
+        dist_func = lambda x, size, dtype:x.gumbel(loc=1.0, scale=1.5, size=size)
         for _size in test_sizes:
             for _bitgen in bitgen_types:
                 with self.subTest(_size=_size, _bitgen=_bitgen):
