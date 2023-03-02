@@ -708,7 +708,7 @@ lower(math.degrees, types.f4)(gen_deg_rad(_rad2deg))
 lower(math.degrees, types.f8)(gen_deg_rad(_rad2deg))
 
 
-def _normalize_indices(context, builder, indty, inds):
+def _normalize_indices(context, builder, indty, inds, aryty, valty):
     """
     Convert integer indices into tuple of intp
     """
@@ -719,6 +719,15 @@ def _normalize_indices(context, builder, indty, inds):
         indices = cgutils.unpack_tuple(builder, inds, count=len(indty))
     indices = [context.cast(builder, i, t, types.intp)
                for t, i in zip(indty, indices)]
+
+    dtype = aryty.dtype
+    if dtype != valty:
+        raise TypeError("expect %s but got %s" % (dtype, valty))
+
+    if aryty.ndim != len(indty):
+        raise TypeError("indexing %d-D array with %d-D index" %
+                        (aryty.ndim, len(indty)))
+
     return indty, indices
 
 
@@ -729,14 +738,8 @@ def _atomic_dispatcher(dispatch_fn):
         ary, inds, val = args
         dtype = aryty.dtype
 
-        indty, indices = _normalize_indices(context, builder, indty, inds)
-
-        if dtype != valty:
-            raise TypeError("expect %s but got %s" % (dtype, valty))
-
-        if aryty.ndim != len(indty):
-            raise TypeError("indexing %d-D array with %d-D index" %
-                            (aryty.ndim, len(indty)))
+        indty, indices = _normalize_indices(context, builder, indty, inds,
+                                            aryty, valty)
 
         lary = context.make_array(aryty)(context, builder, ary)
         ptr = cgutils.get_item_pointer(context, builder, aryty, lary, indices,
@@ -933,6 +936,28 @@ def ptx_atomic_cas_tuple(context, builder, sig, args):
     else:
         raise TypeError('Unimplemented atomic compare_and_swap '
                         'with %s array' % dtype)
+
+
+@lower(stubs.atomic.cas, types.Array, types.intp, types.Any, types.Any)
+@lower(stubs.atomic.cas, types.Array, types.Tuple, types.Any, types.Any)
+@lower(stubs.atomic.cas, types.Array, types.UniTuple, types.Any, types.Any)
+def ptx_atomic_cas(context, builder, sig, args):
+    aryty, indty, oldty, valty = sig.args
+    ary, inds, old, val = args
+
+    indty, indices = _normalize_indices(context, builder, indty, inds, aryty,
+                                        valty)
+
+    lary = context.make_array(aryty)(context, builder, ary)
+    ptr = cgutils.get_item_pointer(context, builder, aryty, lary, indices,
+                                   wraparound=True)
+
+    if aryty.dtype in (cuda.cudadecl.integer_numba_types):
+        lmod = builder.module
+        bitwidth = aryty.dtype.bitwidth
+        return nvvmutils.atomic_cmpxchg(builder, lmod, bitwidth, ptr, old, val)
+    else:
+        raise TypeError('Unimplemented atomic cas with %s array' % aryty.dtype)
 
 
 # -----------------------------------------------------------------------------
