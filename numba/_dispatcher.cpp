@@ -53,7 +53,7 @@ call_trace(Py_tracefunc func, PyObject *obj,
     int old_what = tstate->tracing_what;
     tstate->tracing_what = what;
     PyThreadState_EnterTracing(tstate);
-    result = func(obj, frame, PyTrace_CALL, NULL);
+    result = func(obj, frame, what, NULL);
     PyThreadState_LeaveTracing(tstate);
     tstate->tracing_what = old_what;
     return result;
@@ -94,7 +94,7 @@ call_trace_protected(Py_tracefunc func, PyObject *obj,
 #define C_TRACE(x, call, frame) \
 if (call_trace(tstate->c_profilefunc, tstate->c_profileobj, \
     tstate, frame, \
-    PyTrace_C_CALL, cfunc)) { \
+    PyTrace_CALL, cfunc)) { \
     x = NULL; \
 } \
 else { \
