@@ -1,0 +1,30 @@
+name: 'Check Release Notes'
+
+on:
+  pull_request: { }
+  push:
+    branches: [ main ]
+
+jobs:
+  check:
+    name: 'Check release notes'
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && contains(github.event.issue.labels.*.name, 'release_notes_not_needed')
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.10
+      - name: Install towncrier
+        run: |
+          python3 -m pip install towncrier
+      - name: Run towncrier
+        # Fetch the pull request' base branch so towncrier will be able to
+        # compare the current branch with the base branch.
+        # Source: https://github.com/actions/checkout/#fetch-all-branches.
+        run: |
+          git fetch --no-tags origin +refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}
+          towncrier check --compare-with origin/${BASE_BRANCH}
+      env:
+        BASE_BRANCH: ${{ github.base_ref }}
