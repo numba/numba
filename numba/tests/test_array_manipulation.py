@@ -147,6 +147,7 @@ def as_strided2(a):
     return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
 
 
+@njit
 def sliding_window_view(x, window_shape, axis=None):
     return np.lib.stride_tricks.sliding_window_view(x, window_shape, axis=axis)
 
@@ -522,54 +523,51 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
     @unittest.skipIf(numpy_version < (1, 20), "requires NumPy 1.20 or newer")
     def test_sliding_window_view(self):
-        cfunc = jit(nopython=True)(sliding_window_view)
-
         def check(arr, window_shape, axis):
             # Our version is always writeable (NumPy default is False).
             expected = np.lib.stride_tricks.sliding_window_view(
                 arr, window_shape, axis, writeable=True
             )
-            got = cfunc(arr, window_shape, axis)
+            got = sliding_window_view(arr, window_shape, axis)
             self.assertPreciseEqual(got, expected)
 
         # 1d array, different ways of specifying the axis.
         arr1 = np.arange(24)
-        check(arr1, 5, None)
-        check(arr1, 4, 0)
-        check(arr1, 8, -1)
-        check(arr1, 11, (0,))
+        for axis in [None, 0, -1, (0,)]:
+            with self.subTest(f"1d array, axis={axis}"):
+                check(arr1, 5, axis)
 
         # 2d array, 1d window.
         arr2 = np.arange(200).reshape(10, 20)
-        check(arr2, 5, 0)
-        check(arr2, 8, (-1,))
+        for axis in [0, -1]:
+            with self.subTest(f"2d array, axis={axis}"):
+                check(arr2, 5, axis)
 
         # 2d array, 2d window.
-        check(arr2, (4, 5), None)
-        check(arr2, (5, 8), (0, 1))
-        check(arr2, (5, 8), (1, 0))
-        check(arr2, (5, 8), (1, -2))
+        for axis in [None, (0, 1), (1, 0), (1, -2)]:
+            with self.subTest(f"2d array, axis={axis}"):
+                check(arr2, (5, 8), axis)
 
         # 4d array, 2d window.
         arr4 = np.arange(200).reshape(4, 5, 5, 2)
-        check(arr4, (3, 2), (1, 2))
-        check(arr4, (3, 2), (-2, -3))
+        for axis in [(1, 2), (-2, -3)]:
+            with self.subTest(f"4d array, axis={axis}"):
+                check(arr4, (3, 2), axis)
 
         # Repeated axis.
-        check(arr2, (5, 3, 3), (0, 1, 0))
+        with self.subTest("2d array, repeated axes"):
+            check(arr2, (5, 3, 3), (0, 1, 0))
 
     @unittest.skipIf(numpy_version < (1, 20), "requires NumPy 1.20 or newer")
     def test_sliding_window_view_errors(self):
-        cfunc = jit(nopython=True)(sliding_window_view)
-
         def _raises(msg, *args):
             with self.assertRaises(ValueError) as raises:
-                cfunc(*args)
+                sliding_window_view(*args)
             self.assertIn(msg, str(raises.exception))
 
         def _typing_error(msg, *args):
             with self.assertRaises(errors.TypingError) as raises:
-                cfunc(*args)
+                sliding_window_view(*args)
             self.assertIn(msg, str(raises.exception))
 
         # Exceptions leak references
@@ -578,39 +576,55 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         arr1 = np.arange(24)
         arr2 = np.arange(200).reshape(10, 20)
 
-        # Window shape validity.
-        _raises("window_shape cannot be larger", arr1, 25, None)
-        _raises("window_shape cannot be larger", arr2, (4, 21), None)
-        _raises("`window_shape` cannot contain negative", arr1, -1, None)
-        _raises("`window_shape` cannot contain negative", arr2, (4, -3), None)
+        # Window shape cannot be larger than dimension or negative.
+        with self.subTest("1d window shape too large"):
+            _raises("window_shape cannot be larger", arr1, 25, None)
+        with self.subTest("2d window shape too large"):
+            _raises("window_shape cannot be larger", arr2, (4, 21), None)
+        with self.subTest("1d window negative size"):
+            _raises("`window_shape` cannot contain negative", arr1, -1, None)
+        with self.subTest("2d window with a negative size"):
+            _raises("`window_shape` cannot contain negative", arr2, (4, -3), None)
 
-        # window_shape and axis are compatible.
-        _raises("matching length window_shape and axis", arr1, (10, 2), None)
-        _raises("matching length window_shape and axis", arr2, (10, 2), 1)
-        _raises("matching length window_shape and axis", arr1, 5, (0, 0))
+        # window_shape and axis parameters must be compatible.
+        with self.subTest("1d array, 2d window shape"):
+            _raises("matching length window_shape and axis", arr1, (10, 2), None)
+        with self.subTest("2d window shape, only one axis given"):
+            _raises("matching length window_shape and axis", arr2, (10, 2), 1)
+        with self.subTest("1d window shape, 2 axes given"):
+            _raises("matching length window_shape and axis", arr1, 5, (0, 0))
 
         # Axis values out of bounds.
-        _raises("Argument axis out of bounds", arr1, 4, 1)
-        _raises("Argument axis out of bounds", arr1, 4, -2)
-        _raises("Argument axis out of bounds", arr2, (4, 4), (0, 3))
-        _raises("Argument axis out of bounds", arr2, (4, 4), (0, -3))
+        with self.subTest("1d array, second axis"):
+            _raises("Argument axis out of bounds", arr1, 4, 1)
+        with self.subTest("1d array, axis -2"):
+            _raises("Argument axis out of bounds", arr1, 4, -2)
+        with self.subTest("2d array, fourth axis"):
+            _raises("Argument axis out of bounds", arr2, (4, 4), (0, 3))
+        with self.subTest("2d array, axis -3"):
+            _raises("Argument axis out of bounds", arr2, (4, 4), (0, -3))
 
         # Useful messages for unsupported types.
-        _typing_error(
-            "window_shape must be an integer or tuple of integer", arr1, None
-        )
-        _typing_error(
-            "window_shape must be an integer or tuple of integer", arr1, 3.1
-        )
-        _typing_error(
-            "window_shape must be an integer or tuple of integer", arr1, (3.1,)
-        )
-        _typing_error(
-            "axis must be None, an integer or tuple of integer", arr1, 4, 3.1
-        )
-        _typing_error(
-            "axis must be None, an integer or tuple of integer", arr1, 4, (3.1,)
-        )
+        with self.subTest("window_shape=None"):
+            _typing_error(
+                "window_shape must be an integer or tuple of integer", arr1, None
+            )
+        with self.subTest("window_shape=float"):
+            _typing_error(
+                "window_shape must be an integer or tuple of integer", arr1, 3.1
+            )
+        with self.subTest("window_shape=tuple(float)"):
+            _typing_error(
+                "window_shape must be an integer or tuple of integer", arr1, (3.1,)
+            )
+        with self.subTest("axis=float"):
+            _typing_error(
+                "axis must be None, an integer or tuple of integer", arr1, 4, 3.1
+            )
+        with self.subTest("axis=tuple(float)"):
+            _typing_error(
+                "axis must be None, an integer or tuple of integer", arr1, 4, (3.1,)
+            )
 
 
     def test_flatten_array(self, flags=enable_pyobj_flags, layout='C'):
