@@ -251,7 +251,7 @@ A code review should try to assess the following criteria:
 * general design and correctness
 * code structure and maintainability
 * coding conventions
-* docstrings, comments
+* docstrings, comments and release notes (if necessary)
 * test coverage
 
 
@@ -319,6 +319,14 @@ There is potential for confusion between the Numba module ``typing`` and Python 
 hints, as well as between Numba types---such as ``Dict`` or ``Literal``---and ``typing`` types of the same name.
 To mitigate the risk of confusion we use a naming convention by which objects of the built-in ``typing`` module are
 imported with an ``pt`` prefix. For example, ``typing.Dict`` is imported as ``from typing import Dict as ptDict``.
+
+Release Notes
+'''''''''''''
+
+Pull Requests that add significant user-facing modifications, they may need to be mentioned in the release notes.
+To add a the release notes, you need to create a short ``.rst`` file with a summary and place it in 
+``docs/source/upcoming_changes``. The file ``docs/source/upcoming_changes/README.rst`` details the format
+and filename conventions.
 
 Stability
 '''''''''

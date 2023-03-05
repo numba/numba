@@ -1,0 +1,5 @@
+[tool.towncrier]
+package = "numba"
+
+directory = "docs/source/upcoming_changes"
+filename = "docs/source/release/{version}-notes.rst"
