@@ -136,6 +136,30 @@ class TestDeprecation(TestCase):
             self.check_warning(w, "numba.generated_jit is deprecated",
                                NumbaDeprecationWarning)
 
+    @TestCase.run_test_in_subprocess
+    def test_pycc_module(self):
+        # checks import of module warns
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always",
+                                  category=NumbaPendingDeprecationWarning)
+            import numba.pycc
+
+            expected_str = ("The 'pycc' module is pending deprecation.")
+            self.check_warning(w, expected_str, NumbaPendingDeprecationWarning)
+
+    @TestCase.run_test_in_subprocess
+    def test_pycc_CC(self):
+        # check the most commonly used functionality (CC) warns
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always",
+                                  category=NumbaPendingDeprecationWarning)
+            from numba.pycc import CC
+
+            expected_str = ("The 'pycc' module is pending deprecation.")
+            self.check_warning(w, expected_str, NumbaPendingDeprecationWarning)
+
 
 if __name__ == '__main__':
     unittest.main()

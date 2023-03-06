@@ -8,6 +8,9 @@ Compiling code ahead of time
 While Numba's main use case is :term:`Just-in-Time compilation`, it also
 provides a facility for :term:`Ahead-of-Time compilation` (AOT).
 
+.. note:: This module is pending deprecation. Please see
+          :ref:`deprecation-numba-pycc`for more information.
+
 
 Overview
 ========
