@@ -143,7 +143,7 @@ class TestDeprecation(TestCase):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always",
                                   category=NumbaPendingDeprecationWarning)
-            import numba.pycc
+            import numba.pycc # noqa: F401
 
             expected_str = ("The 'pycc' module is pending deprecation.")
             self.check_warning(w, expected_str, NumbaPendingDeprecationWarning)
@@ -155,7 +155,7 @@ class TestDeprecation(TestCase):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always",
                                   category=NumbaPendingDeprecationWarning)
-            from numba.pycc import CC
+            from numba.pycc import CC # noqa: F401
 
             expected_str = ("The 'pycc' module is pending deprecation.")
             self.check_warning(w, expected_str, NumbaPendingDeprecationWarning)
