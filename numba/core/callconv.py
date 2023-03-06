@@ -657,7 +657,7 @@ class CPUCallConv(BaseCallConv):
         #
         # {___, ___, ___, i8*, ___}
         #                  ^  Pointer to function that convert native values
-        #                     into PyObject*. "Null" in the case of a static
+        #                     into PyObject*. NULL in the case of a static
         #                     exception
         #
         # {___, ___, ___, ___, i32}
@@ -696,8 +696,8 @@ class CPUCallConv(BaseCallConv):
 
         # fill the args
         zero = int32_t(0)
-        exc_fields = (builder.extract_value(struct_gv, 0),
-                      builder.extract_value(struct_gv, 1),
+        exc_fields = (builder.extract_value(struct_gv, PICKLE_BUF_IDX),
+                      builder.extract_value(struct_gv, PICKLE_BUFSZ_IDX),
                       builder.bitcast(st_ptr, GENERIC_POINTER),
                       builder.bitcast(unwrap_fn, GENERIC_POINTER),
                       int32_t(len(struct_type)))
