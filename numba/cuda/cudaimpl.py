@@ -920,22 +920,10 @@ def ptx_atomic_nanmin(context, builder, dtype, ptr, val):
 
 
 @lower(stubs.atomic.compare_and_swap, types.Array, types.Any, types.Any)
-def ptx_atomic_cas_tuple(context, builder, sig, args):
-    aryty, oldty, valty = sig.args
-    ary, old, val = args
-    dtype = aryty.dtype
-
-    lary = context.make_array(aryty)(context, builder, ary)
-    zero = context.get_constant(types.intp, 0)
-    ptr = cgutils.get_item_pointer(context, builder, aryty, lary, (zero,))
-
-    if aryty.dtype in (cuda.cudadecl.integer_numba_types):
-        lmod = builder.module
-        bitwidth = aryty.dtype.bitwidth
-        return nvvmutils.atomic_cmpxchg(builder, lmod, bitwidth, ptr, old, val)
-    else:
-        raise TypeError('Unimplemented atomic compare_and_swap '
-                        'with %s array' % dtype)
+def ptx_atomic_compare_and_swap(context, builder, sig, args):
+    sig = sig.return_type(sig.args[0], types.intp, sig.args[1], sig.args[2])
+    args = (args[0], context.get_constant(types.intp, 0), args[1], args[2])
+    return ptx_atomic_cas(context, builder, sig, args)
 
 
 @lower(stubs.atomic.cas, types.Array, types.intp, types.Any, types.Any)

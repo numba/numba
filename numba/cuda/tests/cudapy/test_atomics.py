@@ -452,22 +452,19 @@ def gen_atomic_extreme_funcs(func):
 def atomic_compare_and_swap(res, old, ary, fill_val):
     gid = cuda.grid(1)
     if gid < res.size:
-        out = cuda.atomic.compare_and_swap(res[gid:], fill_val, ary[gid])
-        old[gid] = out
+        old[gid] = cuda.atomic.compare_and_swap(res[gid:], fill_val, ary[gid])
 
 
 def atomic_cas_1dim(res, old, ary, fill_val):
     gid = cuda.grid(1)
     if gid < res.size:
-        out = cuda.atomic.cas(res, gid, fill_val, ary[gid])
-        old[gid] = out
+        old[gid] = cuda.atomic.cas(res, gid, fill_val, ary[gid])
 
 
 def atomic_cas_2dim(res, old, ary, fill_val):
     gid = cuda.grid(2)
     if gid[0] < res.shape[0] and gid[1] < res.shape[1]:
-        out = cuda.atomic.cas(res, gid, fill_val, ary[gid])
-        old[gid] = out
+        old[gid] = cuda.atomic.cas(res, gid, fill_val, ary[gid])
 
 
 class TestCudaAtomics(CUDATestCase):

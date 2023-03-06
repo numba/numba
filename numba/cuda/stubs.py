@@ -509,8 +509,8 @@ class atomic(Stub):
     class cas(Stub):
         """cas(ary, idx, old, val)
 
-        Conditionally assign ``val`` to the element ary[idx] of an array
-        ``ary`` if the current value of ary[idx] matches ``old``.
+        Conditionally assign ``val`` to the element ``idx`` of an array
+        ``ary`` if the current value of ``ary[idx]`` matches ``old``.
 
         Supported on int32, int64, uint32, uint64 operands only.
 
