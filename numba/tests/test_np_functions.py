@@ -974,11 +974,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.inf, None
             yield np.PINF, None
             yield np.asarray([-np.inf, 0., np.inf]), None
-            yield np.NINF, np.zeros(1, dtype=np.bool)
-            yield np.inf, np.zeros(1, dtype=np.bool)
-            yield np.PINF, np.zeros(1, dtype=np.bool)
+            yield np.NINF, np.zeros(1, dtype=np.bool_)
+            yield np.inf, np.zeros(1, dtype=np.bool_)
+            yield np.PINF, np.zeros(1, dtype=np.bool_)
             yield np.NINF, np.empty(12)
-            yield np.asarray([-np.inf, 0., np.inf]), np.zeros(3, dtype=np.bool)
+            yield np.asarray([-np.inf, 0., np.inf]), np.zeros(3, dtype=np.bool_)
 
         pyfuncs = [isneginf, isposinf]
         for pyfunc in pyfuncs:
@@ -5383,6 +5383,7 @@ def foo():
         eval(compile(funcstr, '<string>', 'exec'))
         return locals()['foo']
 
+    @unittest.skipIf(numpy_version >= (1, 24), "NumPy < 1.24 required")
     def test_MachAr(self):
         attrs = ('ibeta', 'it', 'machep', 'eps', 'negep', 'epsneg', 'iexp',
                  'minexp', 'xmin', 'maxexp', 'xmax', 'irnd', 'ngrd',
@@ -5425,7 +5426,8 @@ def foo():
             cfunc = jit(nopython=True)(iinfo)
             cfunc(np.float64(7))
 
-    @unittest.skipUnless(numpy_version >= (1, 22), "Needs NumPy >= 1.22")
+    @unittest.skipUnless((1, 22) <= numpy_version < (1, 24),
+                         "Needs NumPy >= 1.22, < 1.24")
     @TestCase.run_test_in_subprocess
     def test_np_MachAr_deprecation_np122(self):
         # Tests that Numba is replaying the NumPy 1.22 deprecation warning
