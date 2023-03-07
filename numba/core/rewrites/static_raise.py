@@ -3,13 +3,12 @@ from numba.core.rewrites import register_rewrite, Rewrite
 
 
 @register_rewrite('before-inference')
-class RewriteRaises(Rewrite):
+class RewriteConstRaises(Rewrite):
     """
     Rewrite IR statements of the kind `raise(value)`
-    where `value` is the result of instantiating an exception with constant
-    arguments into `static_raise(exception_type, constant args)`. If the
-    (some) arguments are not none, then, exception is IR node is translated
-    to `dynamic_raise(exception_type, args)`
+    where `value` is the result of instantiating an exception with
+    constant arguments
+    into `static_raise(exception_type, constant args)`.
 
     This allows lowering in nopython mode, where one can't instantiate
     exception instances from runtime data.
@@ -56,7 +55,6 @@ class RewriteRaises(Rewrite):
                 exc_type, exc_args = None, None
             else:
                 # raise <something> => find the definition site for <something>
-                # const = func_ir.infer_constant(inst.exception)
                 const = self._try_infer_constant(func_ir, inst)
 
                 # failure to infer constant indicates this isn't a static
