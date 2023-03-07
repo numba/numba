@@ -882,7 +882,7 @@ class TestListReflection(MemoryLeakMixin, TestCase):
         got = cfunc(clist, clist)
         self.assertPreciseEqual(expected, got)
         self.assertPreciseEqual(pylist, clist)
-        self.assertPreciseEqual(sys.getrefcount(pylist), sys.getrefcount(clist))
+        self.assertRefCountEqual(pylist, clist)
 
     def test_reflect_clean(self):
         """
