@@ -312,7 +312,6 @@ class TestCudaMath(CUDATestCase):
         arytype = numpy_support.from_dtype(npdtype)[::1]
         restype = numpy_support.from_dtype(nprestype)[::1]
         cfunc = cuda.jit((arytype, arytype, restype))(func)
-        cfunc.bind()
         cfunc[1, nelem](A, A, B)
         np.testing.assert_allclose(npfunc(A, A), B)
 
@@ -609,7 +608,6 @@ class TestCudaMath(CUDATestCase):
         C = np.empty_like(A)
         arytype = numpy_support.from_dtype(npdtype)[::1]
         cfunc = cuda.jit((arytype, int32[::1], arytype))(math_pow)
-        cfunc.bind()
         cfunc[1, nelem](A, B, C)
 
         # NumPy casting rules result in a float64 output always, which doesn't
