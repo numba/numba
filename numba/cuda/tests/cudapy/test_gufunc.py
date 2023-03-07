@@ -12,7 +12,7 @@ from numba.core.errors import NumbaPerformanceWarning
 from numba.tests.support import override_config
 
 
-def _get_matmulcore_gufunc(dtype=float32, max_blocksize=None):
+def _get_matmulcore_gufunc(dtype=float32):
     @guvectorize([void(dtype[:, :], dtype[:, :], dtype[:, :])],
                  '(m,n),(n,p)->(m,p)',
                  target='cuda')
@@ -25,10 +25,7 @@ def _get_matmulcore_gufunc(dtype=float32, max_blocksize=None):
                 for k in range(n):
                     C[i, j] += A[i, k] * B[k, j]
 
-    gufunc = matmulcore
-    if max_blocksize:
-        gufunc.max_blocksize = max_blocksize
-    return gufunc
+    return matmulcore
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
@@ -36,7 +33,7 @@ class TestCUDAGufunc(CUDATestCase):
 
     def test_gufunc_small(self):
 
-        gufunc = _get_matmulcore_gufunc(max_blocksize=512)
+        gufunc = _get_matmulcore_gufunc()
 
         matrix_ct = 2
         A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2,
@@ -50,7 +47,7 @@ class TestCUDAGufunc(CUDATestCase):
 
     def test_gufunc_auto_transfer(self):
 
-        gufunc = _get_matmulcore_gufunc(max_blocksize=512)
+        gufunc = _get_matmulcore_gufunc()
 
         matrix_ct = 2
         A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2,
@@ -66,7 +63,7 @@ class TestCUDAGufunc(CUDATestCase):
 
     def test_gufunc(self):
 
-        gufunc = _get_matmulcore_gufunc(max_blocksize=512)
+        gufunc = _get_matmulcore_gufunc()
 
         matrix_ct = 1001 # an odd number to test thread/block division in CUDA
         A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2,
@@ -80,7 +77,7 @@ class TestCUDAGufunc(CUDATestCase):
 
     def test_gufunc_hidim(self):
 
-        gufunc = _get_matmulcore_gufunc(max_blocksize=512)
+        gufunc = _get_matmulcore_gufunc()
 
         matrix_ct = 100 # an odd number to test thread/block division in CUDA
         A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(4, 25, 2, 4)
@@ -105,24 +102,9 @@ class TestCUDAGufunc(CUDATestCase):
         res2 = gufunc(X, np.tile(Y, (10, 1, 1)))
         np.testing.assert_allclose(gold, res2)
 
-    def test_gufunc_adjust_blocksize(self):
-
-        gufunc = _get_matmulcore_gufunc(max_blocksize=512)
-
-        matrix_ct = 1001 # an odd number to test thread/block division in CUDA
-        A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2,
-                                                                   4)
-        B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(matrix_ct, 4,
-                                                                   5)
-
-        gufunc.max_blocksize = 32
-        C = gufunc(A, B)
-        Gold = ut.matrix_multiply(A, B)
-        self.assertTrue(np.allclose(C, Gold))
-
     def test_gufunc_stream(self):
 
-        gufunc = _get_matmulcore_gufunc(max_blocksize=512)
+        gufunc = _get_matmulcore_gufunc()
 
         #cuda.driver.flush_pending_free()
         matrix_ct = 1001 # an odd number to test thread/block division in CUDA
@@ -320,7 +302,7 @@ class TestCUDAGufunc(CUDATestCase):
         self.check_tuple_arg(a, b)
 
     def test_gufunc_name(self):
-        gufunc = _get_matmulcore_gufunc(max_blocksize=512)
+        gufunc = _get_matmulcore_gufunc()
         self.assertEqual(gufunc.__name__, 'matmulcore')
 
     def test_bad_return_type(self):

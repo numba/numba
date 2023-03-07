@@ -12,16 +12,7 @@ class CUDAUFuncDispatcher(object):
 
     def __init__(self, types_to_retty_kernels, pyfunc):
         self.functions = types_to_retty_kernels
-        self._maxblocksize = 0  # ignored
         self.__name__ = pyfunc.__name__
-
-    @property
-    def max_blocksize(self):
-        return self._maxblocksize
-
-    @max_blocksize.setter
-    def max_blocksize(self, blksz):
-        self._max_blocksize = blksz
 
     def __call__(self, *args, **kws):
         """
