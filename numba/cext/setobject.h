@@ -20,9 +20,12 @@
 
 #define SET_MINSIZE 8
 
+
+typedef int (*set_key_comparator_t)(const char *lhs, const char *rhs);
 typedef void (*set_refcount_op_t)(const void*);
 
 typedef struct {
+    set_key_comparator_t    key_equal;
     set_refcount_op_t       key_incref;
     set_refcount_op_t       key_decref;
 } set_type_based_methods_table;
