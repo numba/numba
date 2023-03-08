@@ -51,8 +51,41 @@ static char *_dummy_struct;
 
 #define dummy (&_dummy_struct)
 
+/* Returns -1 for error; 0 for not equal; 1 for equal */
+static int
+key_equal(NB_Set *setp, const char *lhs, const char *rhs) {
+    if ( setp->methods.key_equal ) {
+        return setp->methods.key_equal(lhs, rhs);
+    } else {
+        return memcmp(lhs, rhs, setp->key_size) == 0;
+    }
+}
+
+static void
+set_incref_key(NB_Set *setp, const char *key) {
+    if ( setp->methods.key_incref ) {
+        setp->methods.key_incref(key);
+    }
+}
+
+static void
+set_decref_key(NB_Set *setp, const char *key) {
+    if ( setp->methods.key_decref ) {
+        setp->methods.key_decref(key);
+    }
+}
+
+
 void
 numba_set_free(NB_Set *setp) {
+
+    for (int i = 0; i < setp->size; i++) {
+        NB_SetEntry entry = setp->table[i];
+        if (entry.key != NULL && entry.key != (char *)dummy) {
+            set_decref_key(setp, entry.key);
+        }
+    }
+
     if(setp->smalltable != setp->table)
         free(setp->table);
     free(setp);
@@ -65,6 +98,8 @@ numba_set_new(NB_Set **out, Py_ssize_t key_size, Py_ssize_t size) {
 
     setp = malloc(sizeof(NB_Set));
     memset(setp->smalltable, 0, sizeof(setp->smalltable));
+    /* Ensure that the method table is all nulls */
+    memset(&setp->methods, 0x00, sizeof(type_based_methods_table));
 
     setp->key_size = key_size;
     setp->filled = 0;
@@ -126,7 +161,6 @@ numba_set_lookkey(NB_Set *setp, char *key, Py_ssize_t hash)
     size_t mask = setp->mask;
     size_t i = (size_t)hash & mask; /* Unsigned for defined overflow behavior */
     size_t j;
-    int cmp;
 
     entry = &setp->table[i];
     if (entry->key == NULL)
@@ -139,8 +173,7 @@ numba_set_lookkey(NB_Set *setp, char *key, Py_ssize_t hash)
             char *startkey = NULL;
             startkey = entry->key;
             table = setp->table;
-            cmp = memcmp(startkey, key, setp->key_size);
-            if (cmp == 0)
+            if (key_equal(setp, startkey, key))
                 return entry;
             if (table != setp->table || entry->key != startkey)
                 return numba_set_lookkey(setp, key, hash);
@@ -157,8 +190,7 @@ numba_set_lookkey(NB_Set *setp, char *key, Py_ssize_t hash)
                     startkey = entry->key;
                     assert(startkey != dummy);
                     table = setp->table;
-                    cmp = memcmp(startkey, key, setp->key_size);
-                    if (cmp == 0)
+                    if (key_equal(setp, startkey, key))
                         return entry;
                     if (table != setp->table || entry->key != startkey)
                         return numba_set_lookkey(setp, key, hash);
@@ -301,6 +333,7 @@ numba_set_found_unused(NB_Set *setp, char *key, NB_SetEntry *entry, Py_ssize_t h
     entry->key = malloc(setp->key_size);
     memset(entry->key, 0, setp->key_size);
     memcpy(entry->key, key, setp->key_size);
+    set_incref_key(setp, key);
     entry->hash = hash;
     if ((size_t)setp->filled*5 < mask*3)
         return OK;
@@ -315,6 +348,7 @@ numba_set_found_unused_or_dummy(NB_Set *setp, char *key, NB_SetEntry *entry, NB_
     entry->key = malloc(setp->key_size);
     memset(entry->key, 0, setp->key_size);
     memcpy(freeslot->key, key, setp->key_size);
+    set_incref_key(setp, key);
     freeslot->hash = hash;
     return OK;
 }
@@ -329,7 +363,6 @@ numba_set_add(NB_Set *setp, char *key, Py_ssize_t hash)
     size_t mask;
     size_t i;                       /* Unsigned for defined overflow behavior */
     size_t j;
-    int cmp;
   restart:
     mask = setp->mask;
     i = (size_t)hash & mask;
@@ -347,8 +380,7 @@ numba_set_add(NB_Set *setp, char *key, Py_ssize_t hash)
             /* startkey cannot be a dummy because the dummy hash field is -1 */
             assert(startkey != dummy);
             table = setp->table;
-            cmp = memcmp(startkey, key, setp->key_size);
-            if (cmp == 0)                                          /* likely */
+            if (key_equal(setp, startkey, key))                                        /* likely */
                 return OK;
             /* Continuing the search from the current entry only makes
                sense if the table and entry are unchanged; otherwise,
@@ -369,8 +401,7 @@ numba_set_add(NB_Set *setp, char *key, Py_ssize_t hash)
                     char *startkey = entry->key;
                     assert(startkey != dummy);
                     table = setp->table;
-                    cmp = memcmp(startkey, key, setp->key_size);;
-                    if (cmp == 0)
+                    if (key_equal(setp, startkey, key))
                         return OK;
                     if (table != setp->table || entry->key != startkey)
                         goto restart;
@@ -414,6 +445,7 @@ numba_set_discard(NB_Set *setp, char *key, Py_hash_t hash)
     entry->key = (char *)dummy;
     entry->hash = -1;
     setp->used--;
+    set_decref_key(setp, key);
     return OK;
 }
 
