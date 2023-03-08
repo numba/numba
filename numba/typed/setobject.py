@@ -29,7 +29,8 @@ from numba.core.types import (
 from numba.core.errors import TypingError
 from numba.typed.typedobjectutils import (_get_incref_decref,
                                           _container_get_data,
-                                          _as_bytes, _cast)
+                                          _as_bytes, _cast,
+                                          _get_equal)
 from numba.core.imputils import impl_ret_borrowed
 
 
@@ -253,6 +254,7 @@ def _set_set_method_table(typingctx, setp, keyty):
 
     def codegen(context, builder, sig, args):
         tablety = ir.LiteralStructType([
+            ll_voidptr_type,  # equal
             ll_voidptr_type,  # key incref
             ll_voidptr_type,  # key decref
         ])
@@ -268,20 +270,26 @@ def _set_set_method_table(typingctx, setp, keyty):
         setp = args[0]
         table = cgutils.alloca_once(builder, tablety, zfill=True)
 
-        key_incref_ptr = cgutils.gep_inbounds(builder, table, 0, 0)
-        key_decref_ptr = cgutils.gep_inbounds(builder, table, 0, 1)
+        key_equal_ptr = cgutils.gep_inbounds(builder, table, 0, 0)
+        key_incref_ptr = cgutils.gep_inbounds(builder, table, 0, 1)
+        key_decref_ptr = cgutils.gep_inbounds(builder, table, 0, 2)
 
-        key_datamodel = context.data_model_manager[keyty.instance_type]
-        if key_datamodel.contains_nrt_meminfo():
-            val_incref, val_decref = _get_incref_decref(
-                context, builder.module, key_datamodel, 'set_value'
+        dm_key = context.data_model_manager[keyty.instance_type]
+        if dm_key.contains_nrt_meminfo():
+            equal = _get_equal(context, builder.module, dm_key, 'set_key')
+            key_incref, key_decref = _get_incref_decref(
+                context, builder.module, dm_key, 'set_key'
             )
             builder.store(
-                builder.bitcast(val_incref, key_incref_ptr.type.pointee),
+                builder.bitcast(equal, key_equal_ptr.type.pointee),
+                key_equal_ptr,
+            )
+            builder.store(
+                builder.bitcast(key_incref, key_incref_ptr.type.pointee),
                 key_incref_ptr,
             )
             builder.store(
-                builder.bitcast(val_decref, key_decref_ptr.type.pointee),
+                builder.bitcast(key_decref, key_decref_ptr.type.pointee),
                 key_decref_ptr,
             )
 
