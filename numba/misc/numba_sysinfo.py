@@ -61,6 +61,9 @@ _cu_rt_ver = 'CUDA Runtime Version'
 _cu_nvidia_bindings = 'NVIDIA CUDA Bindings'
 _cu_nvidia_bindings_used = 'NVIDIA CUDA Bindings In Use'
 _cu_detect_out, _cu_lib_test = 'CUDA Detect Output', 'CUDA Lib Test'
+_cu_mvc_available = 'NVIDIA CUDA Minor Version Compatibility Available'
+_cu_mvc_needed = 'NVIDIA CUDA Minor Version Compatibility Needed'
+_cu_mvc_in_use = 'NVIDIA CUDA Minor Version Compatibility In Use'
 # NumPy info
 _numpy_version = 'NumPy Version'
 _numpy_supported_simd_features = 'NumPy Supported SIMD features'
@@ -360,8 +363,10 @@ def get_sysinfo():
             sys_info[_cu_detect_out] = output.getvalue()
             output.close()
 
-            sys_info[_cu_drv_ver] = '%s.%s' % cudriver.get_version()
-            sys_info[_cu_rt_ver] = '%s.%s' % curuntime.get_version()
+            cu_drv_ver = cudriver.get_version()
+            cu_rt_ver = curuntime.get_version()
+            sys_info[_cu_drv_ver] = '%s.%s' % cu_drv_ver
+            sys_info[_cu_rt_ver] = '%s.%s' % cu_rt_ver
 
             output = StringIO()
             with redirect_stdout(output):
@@ -378,6 +383,17 @@ def get_sysinfo():
 
             nv_binding_used = bool(cudadrv.driver.USE_NV_BINDING)
             sys_info[_cu_nvidia_bindings_used] = nv_binding_used
+
+            try:
+                from ptxcompiler import compile_ptx  # noqa: F401
+                from cubinlinker import CubinLinker  # noqa: F401
+                sys_info[_cu_mvc_available] = True
+            except ImportError:
+                sys_info[_cu_mvc_available] = False
+
+            sys_info[_cu_mvc_needed] = cu_rt_ver > cu_drv_ver
+            mvc_used = hasattr(cudadrv.driver, 'CubinLinker')
+            sys_info[_cu_mvc_in_use] = mvc_used
         except Exception as e:
             _warning_log.append(
                 "Warning (cuda): Probing CUDA failed "
@@ -584,6 +600,12 @@ def display_sysinfo(info=None, sep_pos=45):
         ("CUDA NVIDIA Bindings Available", info.get(_cu_nvidia_bindings, '?')),
         ("CUDA NVIDIA Bindings In Use",
          info.get(_cu_nvidia_bindings_used, '?')),
+        ("CUDA Minor Version Compatibility Available",
+         info.get(_cu_mvc_available, '?')),
+        ("CUDA Minor Version Compatibility Needed",
+         info.get(_cu_mvc_needed, '?')),
+        ("CUDA Minor Version Compatibility In Use",
+         info.get(_cu_mvc_in_use, '?')),
         ("CUDA Detect Output:",),
         (info.get(_cu_detect_out, "None"),),
         ("CUDA Libraries Test Output:",),

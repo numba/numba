@@ -5,7 +5,7 @@ Installation
 Compatibility
 -------------
 
-Numba is compatible with Python 3.8--3.10, and NumPy versions 1.18 or later.
+Numba is compatible with Python 3.8--3.10, and NumPy versions 1.21--1.24.
 
 Our supported platforms are:
 
@@ -233,6 +233,9 @@ vary with target operating system and hardware. The following lists them all
     :ref:`runtime type-checking <type_anno_check>`.
   * ``cuda-python`` - The NVIDIA CUDA Python bindings. See :ref:`cuda-bindings`.
     Numba requires Version 11.6 or greater.
+  * ``cubinlinker`` and ``ptxcompiler`` to support
+    :ref:`minor-version-compatibility`.
+
 
 * To build the documentation:
 
@@ -257,7 +260,7 @@ information.
 +----------++--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
 | Numba     | Release date | Python                    | NumPy                      | llvmlite                     | LLVM              | TBB                         |
 +===========+==============+===========================+============================+==============================+===================+=============================+
-| 0.57.x    | TBC          | 3.8.x <= version < 3.12   | 1.19 <= version < 1.24     | 0.40.x                       | 11.x              | 2021.x                      |
+| 0.57.0    | TBC          | 3.8.x <= version < 3.12   | 1.21 <= version < 1.25     | 0.40.x                       | 11.x              | 2021.x                      |
 +-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
 | 0.56.4    | 2022-11-03   | 3.7.x <= version < 3.11   | 1.18 <= version < 1.24     | 0.39.x                       | 11.x              | 2021.x                      |
 +-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
