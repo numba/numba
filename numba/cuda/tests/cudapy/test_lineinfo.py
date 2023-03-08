@@ -2,6 +2,7 @@ from numba import cuda, float32, int32
 from numba.core.errors import NumbaInvalidConfigWarning
 from numba.cuda.testing import CUDATestCase, skip_on_cudasim
 from numba.cuda.cudadrv.nvvm import NVVM
+from numba.tests.support import ignore_internal_warnings
 import re
 import unittest
 import warnings
@@ -144,13 +145,13 @@ class TestCudaLineInfo(CUDATestCase):
         # Check that there is no device function in the PTX
 
         # A line beginning with ".weak .func" that identifies a device function
-        devfn_start = re.compile(r'^\.weak\s*\.func')
+        devfn_start = re.compile(r'^\.weak\s+\.func')
 
         for line in ptxlines:
             if devfn_start.match(line) is not None:
                 self.fail(f"Found device function in PTX:\n\n{ptx}")
 
-        # Scan for .loc directives taht refer to an inlined device function
+        # Scan for .loc directives that refer to an inlined device function
 
         loc_directive = self._loc_directive_regex()
         found = False
@@ -162,9 +163,6 @@ class TestCudaLineInfo(CUDATestCase):
                     break
 
         if not found:
-            # Join one line either side so the function as a whole is shown,
-            # i.e. including the declaration and parameter list, and the
-            # closing brace.
             self.fail(f'No .loc directive with inlined_at info found'
                       f'in:\n\n{ptx}')
 
@@ -190,6 +188,8 @@ class TestCudaLineInfo(CUDATestCase):
 
     def test_debug_and_lineinfo_warning(self):
         with warnings.catch_warnings(record=True) as w:
+            ignore_internal_warnings()
+
             # We pass opt=False to prevent the warning about opt and debug
             # occurring as well
             @cuda.jit(debug=True, lineinfo=True, opt=False)
