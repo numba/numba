@@ -3,3 +3,58 @@ package = "numba"
 
 directory = "docs/source/upcoming_changes"
 filename = "docs/source/release/{version}-notes.rst"
+
+[[tool.towncrier.type]]
+    directory = "highlight"
+    name = "Highlights"
+    showcontent = true
+
+[[tool.towncrier.type]]
+    directory = "np_support"
+    name = "NumPy support"
+    showcontent = true
+
+[[tool.towncrier.type]]
+    directory = "deprecation"
+    name = "Deprecations"
+    showcontent = true
+
+[[tool.towncrier.type]]
+    directory = "future"
+    name = "Future Changes"
+    showcontent = true
+
+[[tool.towncrier.type]]
+    directory = "expired"
+    name = "Expired deprecations"
+    showcontent = true
+
+[[tool.towncrier.type]]
+    directory = "compatibility"
+    name = "Compatibility notes"
+    showcontent = true
+
+[[tool.towncrier.type]]
+    directory = "cuda"
+    name = "CUDA API changes"
+    showcontent = true
+
+[[tool.towncrier.type]]
+    directory = "new_feature"
+    name = "New Features"
+    showcontent = true
+
+[[tool.towncrier.type]]
+    directory = "improvement"
+    name = "Improvements"
+    showcontent = true
+
+[[tool.towncrier.type]]
+    directory = "performance"
+    name = "Performance improvements and changes"
+    showcontent = true
+
+[[tool.towncrier.type]]
+    directory = "change"
+    name = "Changes"
+    showcontent = true
