@@ -684,6 +684,10 @@ class Device(object):
             # reset at the driver level
             driver.cuDevicePrimaryCtxReset(self.id)
 
+    @property
+    def supports_float16(self):
+        return self.compute_capability >= (5, 3)
+
 
 def met_requirement_for_device(device):
     if device.compute_capability < MIN_REQUIRED_CC:
