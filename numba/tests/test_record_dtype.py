@@ -6,7 +6,6 @@ from numba.core.compiler import compile_isolated
 from numba.core.itanium_mangler import mangle_type
 from numba.core.config import IS_WIN32
 from numba.core.errors import TypingError
-from numba.np.numpy_support import numpy_version
 import unittest
 from numba.np import numpy_support
 from numba.tests.support import TestCase, skip_ppc64le_issue6465
@@ -520,7 +519,7 @@ class TestRecordDtypeMakeCStruct(TestCase):
         # Is aligned?
         # NumPy version < 1.16 misalign complex-128 types to 16bytes.
         # (it seems to align on windows?!)
-        if numpy_version >= (1, 16) or IS_WIN32:
+        if IS_WIN32:
             dtype = ty.dtype
             self.assertTrue(dtype.isalignedstruct)
         else:

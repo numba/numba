@@ -44,7 +44,7 @@ requirements:
   run:
     - python >=3.8
     # NumPy 1.22.0, 1.22.1, 1.22.2 are all broken for ufuncs, see #7756
-    - numpy >=1.18, !=1.22.0, !=1.22.1, !=1.22.2
+    - numpy >=1.21, !=1.22.0, !=1.22.1, !=1.22.2
     - setuptools
     - importlib_metadata       # [py<39]
     # On channel https://anaconda.org/numba/

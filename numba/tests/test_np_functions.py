@@ -1351,15 +1351,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def test_correlate(self):
         self._test_correlate_convolve(correlate)
-        if numpy_version < (1, 18):
-            # correlate supported 0 dimension arrays until 1.18
-            _a = np.ones(shape=(0,))
-            _b = np.arange(5)
-            cfunc = jit(nopython=True)(correlate)
-            for x, y in [(_a, _b), (_b, _a), (_a, _a)]:
-                expected = correlate(x, y)
-                got = cfunc(x, y)
-                self.assertPreciseEqual(expected, got)
 
     def _test_correlate_convolve_exceptions(self, fn):
         # Exceptions leak references
@@ -1377,7 +1368,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             else:
                 self.assertIn("'v' cannot be empty", str(raises.exception))
 
-    @unittest.skipIf(numpy_version < (1, 18), "NumPy > 1.17 required")
     def test_correlate_exceptions(self):
         # correlate supported 0 dimension arrays until 1.18
         self._test_correlate_convolve_exceptions(correlate)
@@ -2793,11 +2783,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield [4, 5, 6]
             yield np.array([])
             yield ()
-            if numpy_version < (1, 16):
-                yield np.array([np.nan, np.inf, 4, -np.inf, 3.142])
-                parts = np.array([np.nan, 2, np.nan, 4, 5, 6, 7, 8, 9])
-                a = parts + 1j * parts[::-1]
-                yield a.reshape(3, 3)
 
         for i in input_variations():
             params = {'ary': i, 'to_end': i, 'to_begin': i}
@@ -2811,27 +2796,21 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         ## fixed here: https://github.com/numpy/numpy/pull/12713 for np 1.16
         to_begin = np.array([1, 2, 3.142, np.nan, 5, 6, 7, -8, np.nan])
         params = {'ary': np.arange(-4, 6), 'to_begin': to_begin}
-        if numpy_version < (1, 16):
-            _check(params)
-        else:
-            # np 1.16 raises, cannot cast float64 array to intp array
-            _check_raises_type_error(params, 'to_begin')
+        # np >1.16 raises, cannot cast float64 array to intp array
+        _check_raises_type_error(params, 'to_begin')
 
         # scalar inputs
         params = {'ary': 3.142}
         _check(params)
 
         params = {'ary': 3, 'to_begin': 3.142}
-        if numpy_version < (1, 16):
-            _check(params)
-        else:
-            _check_raises_type_error(params, 'to_begin')
-            # now use 2 floats
-            params = {'ary': 3., 'to_begin': 3.142}
-            _check(params)
+        _check_raises_type_error(params, 'to_begin')
+        # now use 2 floats
+        params = {'ary': 3., 'to_begin': 3.142}
+        _check(params)
 
         params = {'ary': np.arange(-4, 6), 'to_begin': -5, 'to_end': False}
-        if IS_WIN32 and not IS_32BITS and numpy_version >= (1, 16):
+        if IS_WIN32 and not IS_32BITS:
             # XFAIL on 64-bits windows + numpy 1.16. See #3898
             with self.assertRaises(TypingError) as raises:
                 _check(params)

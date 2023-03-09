@@ -521,7 +521,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         self.check_as_strided(as_strided1)
         self.check_as_strided(as_strided2)
 
-    @unittest.skipIf(numpy_version < (1, 20), "requires NumPy 1.20 or newer")
     def test_sliding_window_view(self):
         def check(arr, window_shape, axis):
             # Our version is always writeable (NumPy default is False).
@@ -558,7 +557,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         with self.subTest("2d array, repeated axes"):
             check(arr2, (5, 3, 3), (0, 1, 0))
 
-    @unittest.skipIf(numpy_version < (1, 20), "requires NumPy 1.20 or newer")
     def test_sliding_window_view_errors(self):
         def _raises(msg, *args):
             with self.assertRaises(ValueError) as raises:
@@ -1068,7 +1066,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         got = foo(arr)
         self.assertPreciseEqual(expected, got)
 
-    @unittest.skipIf(numpy_version < (1, 20), "requires NumPy 1.20 or newer")
     def test_broadcast_shapes(self):
         pyfunc = numpy_broadcast_shapes
         cfunc = jit(nopython=True)(pyfunc)
@@ -1111,7 +1108,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             self.assertIsInstance(got, tuple)
             self.assertPreciseEqual(expected, got)
 
-    @unittest.skipIf(numpy_version < (1, 20), "requires NumPy 1.20 or newer")
     def test_broadcast_shapes_raises(self):
         pyfunc = numpy_broadcast_shapes
         cfunc = jit(nopython=True)(pyfunc)
@@ -1135,7 +1131,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             self.assertIn("shape mismatch: objects cannot be broadcast to a single shape",
                           str(raises.exception))
 
-    @unittest.skipIf(numpy_version < (1, 20), "requires NumPy 1.20 or newer")
     def test_broadcast_shapes_negative_dimension(self):
         pyfunc = numpy_broadcast_shapes
         cfunc = jit(nopython=True)(pyfunc)
@@ -1146,7 +1141,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
         self.assertIn("negative dimensions are not allowed", str(raises.exception))
 
-    @unittest.skipIf(numpy_version < (1, 20), "requires NumPy 1.20 or newer")
     def test_broadcast_shapes_invalid_type(self):
         pyfunc = numpy_broadcast_shapes
         cfunc = jit(nopython=True)(pyfunc)
