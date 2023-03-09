@@ -1,5 +1,5 @@
 from math import sqrt
-from numba import cuda, float32, uint32, void
+from numba import cuda, float32, int32, uint32, void
 from numba.cuda import compile_ptx, compile_ptx_for_current_device
 from numba.cuda.cudadrv.nvvm import NVVM
 
@@ -42,6 +42,11 @@ class TestCompileToPTX(unittest.TestCase):
         self.assertNotIn('.visible .entry', ptx)
         # Inferred return type as expected?
         self.assertEqual(resty, float32)
+        
+        # Check that function's output matches signature
+        sig_int = int32(int32, int32)
+        ptx, resty = compile_ptx(add, sig_int, device=True)
+        self.assertEqual(resty, int32)
 
     def test_fastmath(self):
         def f(x, y, z, d):
