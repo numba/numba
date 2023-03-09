@@ -1,5 +1,5 @@
 from math import sqrt
-from numba import cuda, float32, int32, uint32, void
+from numba import cuda, float32, int16, int32, uint32, void
 from numba.cuda import compile_ptx, compile_ptx_for_current_device
 from numba.cuda.cudadrv.nvvm import NVVM
 
@@ -30,8 +30,8 @@ class TestCompileToPTX(unittest.TestCase):
         def add(x, y):
             return x + y
 
-        args = (float32, float32)
-        ptx, resty = compile_ptx(add, args, device=True)
+        sig = (float32, float32)
+        ptx, resty = compile_ptx(add, sig, device=True)
 
         # Device functions take a func_retval parameter for storing the
         # returned value in by reference
@@ -44,9 +44,17 @@ class TestCompileToPTX(unittest.TestCase):
         self.assertEqual(resty, float32)
 
         # Check that function's output matches signature
-        sig_int = int32(int32, int32)
-        ptx, resty = compile_ptx(add, sig_int, device=True)
+        sig_int32 = int32(int32, int32)
+        ptx, resty = compile_ptx(add, sig_int32, device=True)
         self.assertEqual(resty, int32)
+
+        sig_int16 = int16(int16, int16)
+        ptx, resty = compile_ptx(add, sig_int16, device=True)
+        self.assertEqual(resty, int16)
+
+        sig_string = "uint32(uint32, uint32)"
+        ptx, resty = compile_ptx(add, sig_string, device=True)
+        self.assertEqual(resty, uint32)
 
     def test_fastmath(self):
         def f(x, y, z, d):
@@ -135,8 +143,8 @@ class TestCompileToPTXForCurrentDevice(CUDATestCase):
         def add(x, y):
             return x + y
 
-        args = (float32, float32)
-        ptx, resty = compile_ptx_for_current_device(add, args, device=True)
+        sig = (float32, float32)
+        ptx, resty = compile_ptx_for_current_device(add, sig, device=True)
 
         # Check we target the current device's compute capability, or the
         # closest compute capability supported by the current toolkit.
