@@ -2,6 +2,7 @@ import numba
 import numpy as np
 import sys
 import itertools
+import gc
 
 from numba import types
 from numba.tests.support import TestCase, MemoryLeakMixin
@@ -231,9 +232,11 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         do_box = numba.njit(lambda x:x)
 
         y = do_box(rng_instance)
+        gc.collect()
         ref_1 = sys.getrefcount(rng_instance)
         del y
         no_box(rng_instance)
+        gc.collect()
         ref_2 = sys.getrefcount(rng_instance)
 
         self.assertEqual(ref_1, ref_2 + 1)

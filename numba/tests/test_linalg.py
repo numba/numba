@@ -1124,6 +1124,32 @@ class TestLinalgSvd(TestLinalgBase):
     Tests for np.linalg.svd.
     """
 
+    # This checks that A ~= U*S*V**H, i.e. SV decomposition ties out.  This is
+    # required as NumPy uses only double precision LAPACK routines and
+    # computation of SVD is numerically sensitive. Numba uses type-specific
+    # routines and therefore sometimes comes out with a different answer to
+    # NumPy (orthonormal bases are not unique, etc.).
+
+    def check_reconstruction(self, a, got, expected):
+        u, sv, vt = got
+
+        # Check they are dimensionally correct
+        for k in range(len(expected)):
+            self.assertEqual(got[k].shape, expected[k].shape)
+
+        # Columns in u and rows in vt dictates the working size of s
+        s = np.zeros((u.shape[1], vt.shape[0]))
+        np.fill_diagonal(s, sv)
+
+        rec = np.dot(np.dot(u, s), vt)
+        resolution = np.finfo(a.dtype).resolution
+        np.testing.assert_allclose(
+            a,
+            rec,
+            rtol=10 * resolution,
+            atol=100 * resolution  # zeros tend to be fuzzy
+        )
+
     @needs_lapack
     def test_linalg_svd(self):
         """
@@ -1152,34 +1178,8 @@ class TestLinalgSvd(TestLinalgBase):
                     # plain match failed, test by reconstruction
                     use_reconstruction = True
 
-            # if plain match fails then reconstruction is used.
-            # this checks that A ~= U*S*V**H
-            # i.e. SV decomposition ties out
-            # this is required as numpy uses only double precision lapack
-            # routines and computation of svd is numerically
-            # sensitive, numba using the type specific routines therefore
-            # sometimes comes out with a different answer (orthonormal bases
-            # are not unique etc.).
             if use_reconstruction:
-                u, sv, vt = got
-
-                # check they are dimensionally correct
-                for k in range(len(expected)):
-                    self.assertEqual(got[k].shape, expected[k].shape)
-
-                # regardless of full_matrices cols in u and rows in vt
-                # dictates the working size of s
-                s = np.zeros((u.shape[1], vt.shape[0]))
-                np.fill_diagonal(s, sv)
-
-                rec = np.dot(np.dot(u, s), vt)
-                resolution = np.finfo(a.dtype).resolution
-                np.testing.assert_allclose(
-                    a,
-                    rec,
-                    rtol=10 * resolution,
-                    atol=100 * resolution  # zeros tend to be fuzzy
-                )
+                self.check_reconstruction(a, got, expected)
 
             # Ensure proper resource management
             with self.assertNoNRTLeak():
@@ -1240,8 +1240,11 @@ class TestLinalgSvd(TestLinalgBase):
         got = func(X, False)
         np.testing.assert_allclose(X, X_orig)
 
-        for e_a, g_a in zip(expected, got):
-            np.testing.assert_allclose(e_a, g_a)
+        try:
+            for e_a, g_a in zip(expected, got):
+                np.testing.assert_allclose(e_a, g_a)
+        except AssertionError:
+            self.check_reconstruction(X, got, expected)
 
 
 class TestLinalgQr(TestLinalgBase):

@@ -125,6 +125,7 @@ def _lower_parfor_parallel(lowerer, parfor):
     # init reduction array allocation here.
     nredvars = len(parfor_redvars)
     redarrs = {}
+    to_cleanup = []
     if nredvars > 0:
         # reduction arrays outer dimension equal to thread count
         scope = parfor.init_block.scope
@@ -223,6 +224,7 @@ def _lower_parfor_parallel(lowerer, parfor):
 
             # Remember mapping of original reduction array to the newly created per-worker reduction array.
             redarrs[redvar.name] = redarr_var
+            to_cleanup.append(redarr_var)
 
             init_val = parfor_reddict[red_name].init_val
 
@@ -257,6 +259,8 @@ def _lower_parfor_parallel(lowerer, parfor):
                         typ=redvar_typ,
                         name="redtoset",
                     )
+                    # rettoset is an array from np.full() and must be released
+                    to_cleanup.append(redtoset)
                 else:
                     redtoset = pfbdr.make_const_variable(
                         cval=init_val,
@@ -380,7 +384,7 @@ def _lower_parfor_parallel(lowerer, parfor):
         )
 
     # Cleanup reduction variable
-    for v in redarrs.values():
+    for v in to_cleanup:
         lowerer.lower_inst(ir.Del(v.name, loc=loc))
     # Restore the original typemap of the function that was replaced temporarily at the
     # Beginning of this function.
