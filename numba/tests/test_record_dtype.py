@@ -4,7 +4,6 @@ from numba import jit, literal_unroll, njit, typeof
 from numba.core import types
 from numba.core.compiler import compile_isolated
 from numba.core.itanium_mangler import mangle_type
-from numba.core.config import IS_WIN32
 from numba.core.errors import TypingError
 import unittest
 from numba.np import numpy_support
