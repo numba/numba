@@ -82,12 +82,14 @@ class _Kernel(serialize.ReduceMixin):
             'opt': 3 if opt else 0
         }
 
+        cc = get_current_device().compute_capability
         cres = compile_cuda(self.py_func, types.void, self.argtypes,
                             debug=self.debug,
                             lineinfo=self.lineinfo,
                             inline=inline,
                             fastmath=fastmath,
-                            nvvm_options=nvvm_options)
+                            nvvm_options=nvvm_options,
+                            cc=cc)
         tgt_ctx = cres.target_context
         code = self.py_func.__code__
         filename = code.co_filename
@@ -199,13 +201,6 @@ class _Kernel(serialize.ReduceMixin):
         self._codelibrary.get_cufunc()
 
     @property
-    def device(self):
-        """
-        Get current active context
-        """
-        return get_current_device()
-
-    @property
     def regs_per_thread(self):
         '''
         The number of registers used by each thread for this kernel.
@@ -225,6 +220,13 @@ class _Kernel(serialize.ReduceMixin):
         The amount of shared memory used per block for this kernel.
         '''
         return self._codelibrary.get_cufunc().attrs.shared
+
+    @property
+    def max_threads_per_block(self):
+        '''
+        The maximum allowable threads per block.
+        '''
+        return self._codelibrary.get_cufunc().attrs.maxthreads
 
     @property
     def local_mem_per_thread(self):
@@ -777,6 +779,27 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
             return {sig: overload.shared_mem_per_block
                     for sig, overload in self.overloads.items()}
 
+    def get_max_threads_per_block(self, signature=None):
+        '''
+        Returns the maximum allowable number of threads per block
+        for this kernel. Exceeding this threshold will result in
+        the kernel failing to launch.
+
+        :param signature: The signature of the compiled kernel to get the max
+                          threads per block for. This may be omitted for a
+                          specialized kernel.
+        :return: The maximum allowable threads per block for the compiled
+                 variant of the kernel for the given signature and current
+                 device.
+        '''
+        if signature is not None:
+            return self.overloads[signature.args].max_threads_per_block
+        if self.specialized:
+            return next(iter(self.overloads.values())).max_threads_per_block
+        else:
+            return {sig: overload.max_threads_per_block
+                    for sig, overload in self.overloads.items()}
+
     def get_local_mem_per_thread(self, signature=None):
         '''
         Returns the size in bytes of local memory per thread
@@ -844,11 +867,13 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
                     'fastmath': fastmath
                 }
 
+                cc = get_current_device().compute_capability
                 cres = compile_cuda(self.py_func, None, args,
                                     debug=debug,
                                     inline=inline,
                                     fastmath=fastmath,
-                                    nvvm_options=nvvm_options)
+                                    nvvm_options=nvvm_options,
+                                    cc=cc)
                 self.overloads[args] = cres
 
                 cres.target_context.insert_user_function(cres.entry_point,
@@ -980,10 +1005,6 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
 
         for _, defn in self.overloads.items():
             defn.inspect_types(file=file)
-
-    def bind(self):
-        for defn in self.overloads.values():
-            defn.bind()
 
     @classmethod
     def _rebuild(cls, py_func, targetoptions):
