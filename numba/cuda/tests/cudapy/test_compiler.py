@@ -42,7 +42,7 @@ class TestCompileToPTX(unittest.TestCase):
         self.assertNotIn('.visible .entry', ptx)
         # Inferred return type as expected?
         self.assertEqual(resty, float32)
-        
+
         # Check that function's output matches signature
         sig_int = int32(int32, int32)
         ptx, resty = compile_ptx(add, sig_int, device=True)
