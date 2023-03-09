@@ -1,5 +1,5 @@
 from numba.core.typing.templates import ConcreteTemplate
-from numba.core import types, typing, funcdesc, config, compiler
+from numba.core import types, typing, funcdesc, config, compiler, sigutils
 from numba.core.compiler import (sanitize_compile_result_entries, CompilerBase,
                                  DefaultPassBuilder, Flags, Option,
                                  CompileResult)
@@ -235,12 +235,13 @@ def compile_cuda(pyfunc, return_type, args, debug=False, lineinfo=False,
 
 
 @global_compiler_lock
-def compile_ptx(pyfunc, args, debug=False, lineinfo=False, device=False,
+def compile_ptx(pyfunc, sig, debug=False, lineinfo=False, device=False,
                 fastmath=False, cc=None, opt=True):
     """Compile a Python function to PTX for a given set of argument types.
 
     :param pyfunc: The Python function to compile.
-    :param args: A tuple of argument types to compile for.
+    :param sig: The signature representing the function's input and output
+                     types.
     :param debug: Whether to include debug info in the generated PTX.
     :type debug: bool
     :param lineinfo: Whether to include a line mapping from the generated PTX
@@ -255,8 +256,8 @@ def compile_ptx(pyfunc, args, debug=False, lineinfo=False, device=False,
     :param fastmath: Whether to enable fast math flags (ftz=1, prec_sqrt=0,
                      prec_div=, and fma=1)
     :type fastmath: bool
-    :param cc: Compute capability to compile for, as a tuple ``(MAJOR, MINOR)``.
-               Defaults to ``(5, 3)``.
+    :param cc: Compute capability to compile for, as a tuple
+               ``(MAJOR, MINOR)``. Defaults to ``(5, 3)``.
     :type cc: tuple
     :param opt: Enable optimizations. Defaults to ``True``.
     :type opt: bool
@@ -276,9 +277,11 @@ def compile_ptx(pyfunc, args, debug=False, lineinfo=False, device=False,
         'opt': 3 if opt else 0
     }
 
+    args, return_type = sigutils.normalize_signature(sig)
+
     cc = cc or config.CUDA_DEFAULT_PTX_CC
-    cres = compile_cuda(pyfunc, None, args, debug=debug, lineinfo=lineinfo,
-                        fastmath=fastmath,
+    cres = compile_cuda(pyfunc, return_type, args, debug=debug,
+                        lineinfo=lineinfo, fastmath=fastmath,
                         nvvm_options=nvvm_options, cc=cc)
     resty = cres.signature.return_type
 
@@ -300,13 +303,13 @@ def compile_ptx(pyfunc, args, debug=False, lineinfo=False, device=False,
     return ptx, resty
 
 
-def compile_ptx_for_current_device(pyfunc, args, debug=False, lineinfo=False,
+def compile_ptx_for_current_device(pyfunc, sig, debug=False, lineinfo=False,
                                    device=False, fastmath=False, opt=True):
     """Compile a Python function to PTX for a given set of argument types for
     the current device's compute capabilility. This calls :func:`compile_ptx`
     with an appropriate ``cc`` value for the current device."""
     cc = get_current_device().compute_capability
-    return compile_ptx(pyfunc, args, debug=debug, lineinfo=lineinfo,
+    return compile_ptx(pyfunc, sig, debug=debug, lineinfo=lineinfo,
                        device=device, fastmath=fastmath, cc=cc, opt=True)
 
 
