@@ -711,6 +711,49 @@ The use of reference counted types, e.g. strings, in sets is unsupported.
    made to the set will not be visible to the Python interpreter until
    the function returns.
 
+.. _feature-typed-set:
+
+Typed Set
+----------
+
+.. note::
+  ``numba.typed.Set`` is an experimental feature, if you encounter any bugs in
+  functionality or suffer from unexpectedly bad performance, please report
+  this, ideally by opening an issue on the Numba issue tracker.
+
+As of version 0.58.0, a new implementation of the set data type is available,
+the *typed-set*. This is compiled library backed, type-homogeneous
+set data type that functions exactly like other typed data structures.
+You will need to import it explicitly from the `numba.typed` module::
+
+    In [1]: from numba.typed import Set
+
+    In [2]: from numba import njit, types
+
+    In [3]: @njit
+    ...: def foo(s):
+    ...:     s.add(23)
+    ...:     return s
+    ...:
+
+    In [4]: my_set = Set(types.intp)
+
+    In [5]: my_set.add(1)
+
+    In [6]: foo(my_set)
+    Out[6]: SetType[int64]([1, 23])
+
+Here's an example using ``Set()`` to create ``numba.typed.Set`` inside a
+jit-compiled function and letting the compiler infer the item type:
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_set_usage.py
+   :language: python
+   :caption: from ``ex_inferred_set_jit`` of ``numba/tests/doc_examples/test_typed_set_usage.py``
+   :start-after: magictoken.ex_inferred_set_jit.begin
+   :end-before: magictoken.ex_inferred_set_jit.end
+   :dedent: 12
+   :linenos:
+
 .. _feature-typed-dict:
 
 Typed Dict
