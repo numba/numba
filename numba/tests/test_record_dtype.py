@@ -517,24 +517,7 @@ class TestRecordDtypeMakeCStruct(TestCase):
         # Correct size
         self.assertEqual(ty.size, ctypes.sizeof(Ref))
         # Is aligned?
-        # NumPy version < 1.16 misalign complex-128 types to 16bytes.
-        # (it seems to align on windows?!)
-        if IS_WIN32:
-            dtype = ty.dtype
-            self.assertTrue(dtype.isalignedstruct)
-        else:
-            with self.assertRaises(ValueError) as raises:
-                dtype = ty.dtype
-            # get numpy alignment
-            npalign = np.dtype(np.complex128).alignment
-            # llvm should align to alignment of double.
-            llalign = np.dtype(np.double).alignment
-            self.assertIn(
-                ("NumPy is using a different alignment ({}) "
-                 "than Numba/LLVM ({}) for complex128. "
-                 "This is likely a NumPy bug.").format(npalign, llalign),
-                str(raises.exception),
-            )
+        self.assertTrue(ty.dtype.isalignedstruct)
 
     def test_nestedarray_issue_8132(self):
         # issue#8132 is caused by misrepresenting the NestedArray. Instead of
