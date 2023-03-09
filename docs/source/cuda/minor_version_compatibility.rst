@@ -17,6 +17,9 @@ Numba supports MVC for CUDA 11 on Linux using the external ``cubinlinker`` and
 - Cooperative Groups are unsupported, because they require an archive to be
   linked.
 
+MVC is not yet supported on CUDA 12 - this will be added in a future release of
+Numba.
+
 MVC is not supported on Windows.
 
 
