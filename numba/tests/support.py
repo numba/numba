@@ -50,14 +50,19 @@ from numba.core.extending import (
     models,
 )
 from numba.core.datamodel.models import OpaqueModel
-from numba.pycc.platform import external_compiler_works
-
 
 try:
     import scipy
 except ImportError:
     scipy = None
 
+# Make sure that coverage is set up.
+try:
+    import coverage
+except ImportError:
+    pass
+else:
+    coverage.process_startup()
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.enable_pyobject = True
@@ -259,6 +264,16 @@ class TestCase(unittest.TestCase):
             if old != new:
                 self.fail("Refcount changed from %d to %d for object: %r"
                           % (old, new, obj))
+
+    def assertRefCountEqual(self, *objects):
+        gc.collect()
+        rc = [sys.getrefcount(x) for x in objects]
+        rc_0 = rc[0]
+        for i in range(len(objects))[1:]:
+            rc_i = rc[i]
+            if rc_0 != rc_i:
+                self.fail(f"Refcount for objects does not match. "
+                          f"#0({rc_0}) != #{i}({rc_i}) does not match.")
 
     @contextlib.contextmanager
     def assertNoNRTLeak(self):
@@ -583,6 +598,10 @@ class TestCase(unittest.TestCase):
         cmd = [sys.executable, '-m', 'numba.runtests', fully_qualified_test]
         env_copy = os.environ.copy()
         env_copy['SUBPROC_TEST'] = '1'
+        try:
+            env_copy['COVERAGE_PROCESS_START'] = os.environ['COVERAGE_RCFILE']
+        except KeyError:
+            pass   # ignored
         envvars = pytypes.MappingProxyType({} if envvars is None else envvars)
         env_copy.update(envvars)
         status = subprocess.run(cmd, stdout=subprocess.PIPE,
@@ -652,6 +671,9 @@ class TestCase(unittest.TestCase):
         decorator so as to make it "lazy" via runtime evaluation opposed to
         running at test-discovery time.
         """
+        # This is a local import to avoid deprecation warnings being generated
+        # through the use of the numba.pycc module.
+        from numba.pycc.platform import external_compiler_works
         if not external_compiler_works():
             self.skipTest("No suitable external compiler was found.")
 

@@ -28,6 +28,11 @@ class CUDAFlags(Flags):
         default=None,
         doc="NVVM options",
     )
+    compute_capability = Option(
+        type=tuple,
+        default=None,
+        doc="Compute Capability",
+    )
 
 
 # The CUDACompileResult (CCR) has a specially-defined entry point equal to its
@@ -180,7 +185,11 @@ class CUDACompiler(CompilerBase):
 
 @global_compiler_lock
 def compile_cuda(pyfunc, return_type, args, debug=False, lineinfo=False,
-                 inline=False, fastmath=False, nvvm_options=None):
+                 inline=False, fastmath=False, nvvm_options=None,
+                 cc=None):
+    if cc is None:
+        raise ValueError('Compute Capability must be supplied')
+
     from .descriptor import cuda_target
     typingctx = cuda_target.typing_context
     targetctx = cuda_target.target_context
@@ -190,21 +199,30 @@ def compile_cuda(pyfunc, return_type, args, debug=False, lineinfo=False,
     flags.no_compile = True
     flags.no_cpython_wrapper = True
     flags.no_cfunc_wrapper = True
+
+    # Both debug and lineinfo turn on debug information in the compiled code,
+    # but we keep them separate arguments in case we later want to overload
+    # some other behavior on the debug flag. In particular, -opt=3 is not
+    # supported with debug enabled, and enabling only lineinfo should not
+    # affect the error model.
     if debug or lineinfo:
-        # Note both debug and lineinfo turn on debug information in the
-        # compiled code, but we keep them separate arguments in case we
-        # later want to overload some other behavior on the debug flag.
-        # In particular, -opt=3 is not supported with -g.
         flags.debuginfo = True
+
+    if lineinfo:
+        flags.dbg_directives_only = True
+
+    if debug:
         flags.error_model = 'python'
     else:
         flags.error_model = 'numpy'
+
     if inline:
         flags.forceinline = True
     if fastmath:
         flags.fastmath = True
     if nvvm_options:
         flags.nvvm_options = nvvm_options
+    flags.compute_capability = cc
 
     # Run compilation pipeline
     from numba.core.target_extension import target_override
@@ -260,15 +278,14 @@ def compile_ptx(pyfunc, args, debug=False, lineinfo=False, device=False,
         warn(NumbaInvalidConfigWarning(msg))
 
     nvvm_options = {
-        'debug': debug,
-        'lineinfo': lineinfo,
         'fastmath': fastmath,
         'opt': 3 if opt else 0
     }
 
+    cc = cc or config.CUDA_DEFAULT_PTX_CC
     cres = compile_cuda(pyfunc, None, args, debug=debug, lineinfo=lineinfo,
                         fastmath=fastmath,
-                        nvvm_options=nvvm_options)
+                        nvvm_options=nvvm_options, cc=cc)
     resty = cres.signature.return_type
 
     if resty and not device and resty != types.void:
@@ -283,9 +300,9 @@ def compile_ptx(pyfunc, args, debug=False, lineinfo=False, device=False,
         linenum = code.co_firstlineno
 
         lib, kernel = tgt.prepare_cuda_kernel(cres.library, cres.fndesc, debug,
-                                              nvvm_options, filename, linenum)
+                                              lineinfo, nvvm_options, filename,
+                                              linenum)
 
-    cc = cc or config.CUDA_DEFAULT_PTX_CC
     ptx = lib.get_asm_str(cc=cc)
     return ptx, resty
 

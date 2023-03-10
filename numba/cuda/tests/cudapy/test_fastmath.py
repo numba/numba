@@ -1,11 +1,12 @@
 from typing import List
 from dataclasses import dataclass, field
 from numba import cuda, float32
-from numba.cuda.compiler import compile_ptx_for_current_device
-from math import cos, sin, tan, exp, log, log10, log2, pow
+from numba.cuda.compiler import compile_ptx_for_current_device, compile_ptx
+from math import cos, sin, tan, exp, log, log10, log2, pow, tanh
 from operator import truediv
 import numpy as np
-from numba.cuda.testing import CUDATestCase, skip_on_cudasim
+from numba.cuda.testing import (CUDATestCase, skip_on_cudasim,
+                                skip_unless_cc_75)
 import unittest
 
 
@@ -30,6 +31,7 @@ class TestFastMathOption(CUDATestCase):
         # Test jit code path
         fastver = cuda.jit(sig, device=device, fastmath=True)(pyfunc)
         precver = cuda.jit(sig, device=device)(pyfunc)
+
         criterion.check(
             self, fastver.inspect_asm(sig), precver.inspect_asm(sig)
         )
@@ -41,6 +43,7 @@ class TestFastMathOption(CUDATestCase):
         precptx, _ = compile_ptx_for_current_device(
             pyfunc, sig, device=device
         )
+
         criterion.check(self, fastptx, precptx)
 
     def _test_fast_math_unary(self, op, criterion: FastMathCriterion):
@@ -99,6 +102,39 @@ class TestFastMathOption(CUDATestCase):
                 'div.approx.ftz.f32 '
             ], prec_unexpected=['sin.approx.ftz.f32 '])
         )
+
+    @skip_unless_cc_75
+    def test_tanhf(self):
+
+        self._test_fast_math_unary(
+            tanh,
+            FastMathCriterion(
+                fast_expected=['tanh.approx.f32 '],
+                prec_unexpected=['tanh.approx.f32 ']
+            )
+        )
+
+    def test_tanhf_compile_ptx(self):
+        def tanh_kernel(r, x):
+            r[0] = tanh(x)
+
+        def tanh_common_test(cc, criterion):
+            fastptx, _ = compile_ptx(tanh_kernel, (float32[::1], float32),
+                                     fastmath=True, cc=cc)
+            precptx, _ = compile_ptx(tanh_kernel, (float32[::1], float32),
+                                     cc=cc)
+            criterion.check(self, fastptx, precptx)
+
+        tanh_common_test(cc=(7, 5), criterion=FastMathCriterion(
+            fast_expected=['tanh.approx.f32 '],
+            prec_unexpected=['tanh.approx.f32 ']
+        ))
+
+        tanh_common_test(cc=(7, 0),
+                         criterion=FastMathCriterion(
+            fast_expected=['ex2.approx.ftz.f32 ',
+                           'rcp.approx.ftz.f32 '],
+            prec_unexpected=['tanh.approx.f32 ']))
 
     def test_expf(self):
         self._test_fast_math_unary(
