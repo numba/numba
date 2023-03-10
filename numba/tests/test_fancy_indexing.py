@@ -326,7 +326,9 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
          slice(None), slice(4)),
     ]
 
-    rng = np.random.default_rng(1)
+    def setUp(self):
+        super().setUp()
+        self.rng = np.random.default_rng(1)
 
     def generate_random_indices(self):
         N = min(self.shape)
