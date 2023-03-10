@@ -749,8 +749,8 @@ jit-compiled function and letting the compiler infer the item type:
 .. literalinclude:: ../../../numba/tests/doc_examples/test_typed_set_usage.py
    :language: python
    :caption: from ``ex_inferred_set_jit`` of ``numba/tests/doc_examples/test_typed_set_usage.py``
-   :start-after: magictoken.ex_inferred_set_jit.begin
-   :end-before: magictoken.ex_inferred_set_jit.end
+   :start-after: magictoken.ex_typed_set_from_cpython.begin
+   :end-before: magictoken.ex_typed_set_from_cpython.end
    :dedent: 12
    :linenos:
 
