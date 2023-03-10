@@ -1,12 +1,12 @@
 import os
 import platform
+import subprocess
 import sys
-from distutils import sysconfig
-from distutils.command import build
-from distutils.command.build_ext import build_ext
-from distutils.spawn import spawn
+import sysconfig
 
-from setuptools import Extension, find_packages, setup
+from setuptools import Command, Extension, find_packages, setup
+from setuptools.command.build_ext import build_ext
+
 import versioneer
 
 _version_module = None
@@ -50,18 +50,12 @@ def _guard_py_ver():
 _guard_py_ver()
 
 
-class build_doc(build.build):
+class build_doc(Command):
     description = "build documentation"
 
     def run(self):
-        spawn(['make', '-C', 'docs', 'html'])
+        subprocess.run(['make', '-C', 'docs', 'html'])
 
-
-versioneer.VCS = 'git'
-versioneer.versionfile_source = 'numba/_version.py'
-versioneer.versionfile_build = 'numba/_version.py'
-versioneer.tag_prefix = ''
-versioneer.parentdir_prefix = 'numba-'
 
 cmdclass = versioneer.get_cmdclass()
 cmdclass['build_doc'] = build_doc
