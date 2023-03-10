@@ -325,7 +325,7 @@ Release Notes
 
 Pull Requests that add significant user-facing modifications, they may need to be mentioned in the release notes.
 To add a the release notes, you need to create a short ``.rst`` file with a summary and place it in 
-``docs/source/upcoming_changes``. The file ``docs/source/upcoming_changes/README.rst`` details the format
+``docs/upcoming_changes``. The file ``docs/upcoming_changes/README.rst`` details the format
 and filename conventions.
 
 Stability
