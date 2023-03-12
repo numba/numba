@@ -204,7 +204,12 @@ def get_lower_unary_impl(key, ty, libfunc):
 
 
 def get_unary_impl_for_fn_and_ty(fn, ty):
-    for fname64, fname32, key in unarys:
+    # tanh is a special case - because it is not registered like the other
+    # unary implementations, it does not appear in the unarys list. However,
+    # its implementation can be looked up by key like the other
+    # implementations, so we add it to the list we search here.
+    tanh_impls = ('tanh', 'tanhf', math.tanh)
+    for fname64, fname32, key in unarys + [tanh_impls]:
         if fn == key:
             if ty == float32:
                 impl = getattr(libdevice, fname32)
