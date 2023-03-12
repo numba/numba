@@ -206,7 +206,7 @@ class CUDACachingTest(SerialMixin, DispatcherCacheUsecasesTest):
 
     def test_cannot_cache_linking_libraries(self):
         link = os.path.join(Path(__file__).parent.parent,
-                            'cudadrv', 'data', 'jitlink.ptx')
+                            'data', 'jitlink.ptx')
         msg = 'Cannot pickle CUDACodeLibrary with linking files'
         with self.assertRaisesRegex(RuntimeError, msg):
             @cuda.jit('void()', cache=True, link=[link])
