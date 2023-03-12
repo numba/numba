@@ -29,6 +29,17 @@ class TestCudaStream(CUDATestCase):
         stream.add_callback(callback, callback_event)
         self.assertTrue(callback_event.wait(1.0))
 
+    def test_add_callback_with_default_arg(self):
+        callback_event = threading.Event()
+
+        def callback(stream, status, arg):
+            self.assertIsNone(arg)
+            callback_event.set()
+
+        stream = cuda.stream()
+        stream.add_callback(callback)
+        self.assertTrue(callback_event.wait(1.0))
+
     @with_asyncio_loop
     async def test_async_done(self):
         stream = cuda.stream()

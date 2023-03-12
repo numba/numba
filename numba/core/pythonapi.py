@@ -662,7 +662,6 @@ class PythonAPI(object):
     #
     # Concrete slice API
     #
-
     def slice_as_ints(self, obj):
         """
         Read the members of a slice of integers.

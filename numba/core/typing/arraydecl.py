@@ -12,6 +12,7 @@ from numba.core.typing import collections
 from numba.core.errors import (TypingError, RequireLiteralValue, NumbaTypeError,
                                NumbaNotImplementedError, NumbaAssertionError,
                                NumbaKeyError, NumbaIndexError)
+from numba.core.cgutils import is_nonelike
 
 
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
@@ -34,6 +35,7 @@ def get_array_index_type(ary, idx):
     ellipsis_met = False
     advanced = False
     has_integer = False
+    num_newaxis = 0
 
     if not isinstance(idx, types.BaseTuple):
         idx = [idx]
@@ -68,6 +70,9 @@ def get_array_index_type(ary, idx):
                 msg = "only one advanced index supported"
                 raise NumbaNotImplementedError(msg)
             advanced = True
+        elif (is_nonelike(ty)):
+            ndim += 1
+            num_newaxis += 1
         else:
             raise NumbaTypeError("unsupported array index type %s in %s"
                                  % (ty, idx))
@@ -83,7 +88,7 @@ def get_array_index_type(ary, idx):
         assert right_indices[0] is types.ellipsis
         del right_indices[0]
 
-    n_indices = len(all_indices) - ellipsis_met
+    n_indices = len(all_indices) - ellipsis_met - num_newaxis
     if n_indices > ary.ndim:
         raise NumbaTypeError("cannot index %s with %d indices: %s"
                              % (ary, n_indices, idx))
@@ -247,6 +252,9 @@ class ArrayAttribute(AttributeTemplate):
 
     def resolve_dtype(self, ary):
         return types.DType(ary.dtype)
+
+    def resolve_nbytes(self, ary):
+        return types.intp
 
     def resolve_itemsize(self, ary):
         return types.intp
@@ -474,31 +482,22 @@ class ArrayAttribute(AttributeTemplate):
         # Only support no argument version (default order='C')
         assert not kws
         assert not args
-        return signature(ary.copy(ndim=1, layout='C'))
+        copy_will_be_made = ary.layout != 'C'
+        readonly = not (copy_will_be_made or ary.mutable)
+        return signature(ary.copy(ndim=1, layout='C', readonly=readonly))
 
     @bound_function("array.flatten")
     def resolve_flatten(self, ary, args, kws):
         # Only support no argument version (default order='C')
         assert not kws
         assert not args
-        return signature(ary.copy(ndim=1, layout='C'))
-
-    @bound_function("array.take")
-    def resolve_take(self, ary, args, kws):
-        if kws:
-            raise NumbaAssertionError("kws not supported")
-        argty, = args
-        if isinstance(argty, types.Integer):
-            sig = signature(ary.dtype, *args)
-        elif isinstance(argty, types.Array):
-            sig = signature(argty.copy(layout='C', dtype=ary.dtype), *args)
-        elif isinstance(argty, types.List):  # 1d lists only
-            sig = signature(types.Array(ary.dtype, 1, 'C'), *args)
-        elif isinstance(argty, types.BaseTuple):
-            sig = signature(types.Array(ary.dtype, np.ndim(argty), 'C'), *args)
-        else:
-            raise TypeError("take(%s) not supported for %s" % argty)
-        return sig
+        # To ensure that Numba behaves exactly like NumPy,
+        # we also clear the read-only flag when doing a "flatten"
+        # Why? Two reasons:
+        # Because flatten always returns a copy. (see NumPy docs for "flatten")
+        # And because a copy always returns a writeable array.
+        # ref: https://numpy.org/doc/stable/reference/generated/numpy.copy.html
+        return signature(ary.copy(ndim=1, layout='C', readonly=False))
 
     def generic_resolve(self, ary, attr):
         # Resolution of other attributes, for record arrays
@@ -816,26 +815,9 @@ def install_array_method(name, generic, prefer_literal=True):
 
     setattr(ArrayAttribute, "resolve_" + name, array_attribute_attachment)
 
-# Functions that return the same type as the array
-for fname in ["min", "max"]:
-    install_array_method(fname, generic_homog)
 
 # Functions that return a machine-width type, to avoid overflows
-install_array_method("prod", generic_expand)
 install_array_method("sum", sum_expand, prefer_literal=True)
-
-# Functions that return a machine-width type, to avoid overflows
-for fname in ["cumsum", "cumprod"]:
-    install_array_method(fname, generic_expand_cumulative)
-
-# Functions that require integer arrays get promoted to float64 return
-for fName in ["mean"]:
-    install_array_method(fName, generic_hetero_real)
-
-# var and std by definition return in real space and int arrays
-# get promoted to float64 return
-for fName in ["var", "std"]:
-    install_array_method(fName, generic_hetero_always_real)
 
 
 @infer_global(operator.eq)

@@ -64,7 +64,7 @@ class ArgPacker(object):
     It maintains a position map for unflattening the arguments.
 
     Since struct (esp. nested struct) have specific ABI requirements (e.g.
-    alignemnt, pointer address-space, ...) in different architecture (e.g.
+    alignment, pointer address-space, ...) in different architecture (e.g.
     OpenCL, CUDA), flattening composite argument types simplifes the call
     setup from the Python side.  Functions are receiving simple primitive
     types and there are only a handful of these.

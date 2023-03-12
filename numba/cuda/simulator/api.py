@@ -7,7 +7,7 @@ Contains CUDA API functions
 from contextlib import contextmanager
 from .cudadrv.devices import require_context, reset, gpus  # noqa: F401
 from .kernel import FakeCUDAKernel
-from numba.core.typing import Signature
+from numba.core.sigutils import is_signature
 from warnings import warn
 from ..args import In, Out, InOut  # noqa: F401
 
@@ -77,7 +77,7 @@ event = Event
 
 def jit(func_or_sig=None, device=False, debug=False, argtypes=None,
         inline=False, restype=None, fastmath=False, link=None,
-        boundscheck=None, opt=True
+        boundscheck=None, opt=True, cache=None
         ):
     # Here for API compatibility
     if boundscheck:
@@ -85,15 +85,18 @@ def jit(func_or_sig=None, device=False, debug=False, argtypes=None,
 
     if link is not None:
         raise NotImplementedError('Cannot link PTX in the simulator')
+
     # Check for first argument specifying types - in that case the
     # decorator is not being passed a function
-    if func_or_sig is None or isinstance(func_or_sig, (str, tuple, Signature)):
+    if (func_or_sig is None or is_signature(func_or_sig)
+            or isinstance(func_or_sig, list)):
         def jitwrapper(fn):
             return FakeCUDAKernel(fn,
                                   device=device,
-                                  fastmath=fastmath)
+                                  fastmath=fastmath,
+                                  debug=debug)
         return jitwrapper
-    return FakeCUDAKernel(func_or_sig, device=device)
+    return FakeCUDAKernel(func_or_sig, device=device, debug=debug)
 
 
 @contextmanager

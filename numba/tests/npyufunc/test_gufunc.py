@@ -163,7 +163,7 @@ class TestDynamicGUFunc(TestCase):
 
         # inp is (10000, 3)
         # out is (10000)
-        # The outter (leftmost) dimension must match or numpy broadcasting is performed.
+        # The outer (leftmost) dimension must match or numpy broadcasting is performed.
 
         self.assertTrue(sum_row.is_dynamic)
         inp = np.arange(30000, dtype=np.int32).reshape(10000, 3)
@@ -287,7 +287,7 @@ class TestGUVectorizeScalar(TestCase):
 
         # inp is (10000, 3)
         # out is (10000)
-        # The outter (leftmost) dimension must match or numpy broadcasting is performed.
+        # The outer (leftmost) dimension must match or numpy broadcasting is performed.
 
         inp = np.arange(30000, dtype=np.int32).reshape(10000, 3)
         out = sum_row(inp)

@@ -12,6 +12,7 @@ from numba import _helperlib
 from numba.core.extending import (
     overload,
     overload_method,
+    overload_attribute,
     intrinsic,
     register_model,
     models,
@@ -746,6 +747,13 @@ def impl_get(dct, key, default=None):
     return impl
 
 
+@overload_attribute(types.DictType, '__hash__')
+def impl_hash(dct):
+    if not isinstance(dct, types.DictType):
+        return
+    return lambda dct: None
+
+
 @overload(operator.getitem)
 def impl_getitem(d, key):
     if not isinstance(d, types.DictType):
@@ -909,6 +917,19 @@ def impl_values(d):
     def impl(d):
         return _dict_values(d)
 
+    return impl
+
+
+@overload_method(types.DictType, 'update')
+def ol_dict_update(d, other):
+    if not isinstance(d, types.DictType):
+        return
+    if not isinstance(other, types.DictType):
+        return
+
+    def impl(d, other):
+        for k, v in other.items():
+            d[k] = v
     return impl
 
 
@@ -1299,6 +1320,7 @@ def literalstrkeydict_banned_impl_delitem(d, k):
 @overload_method(types.LiteralStrKeyDict, 'pop')
 @overload_method(types.LiteralStrKeyDict, 'clear')
 @overload_method(types.LiteralStrKeyDict, 'setdefault')
+@overload_method(types.LiteralStrKeyDict, 'update')
 def literalstrkeydict_banned_impl_mutators(d, *args):
     if not isinstance(d, types.LiteralStrKeyDict):
         return

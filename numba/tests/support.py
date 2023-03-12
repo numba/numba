@@ -26,10 +26,11 @@ from contextlib import contextmanager
 import uuid
 import importlib
 import types as pytypes
+from functools import cached_property
 
 import numpy as np
 
-from numba import testing
+from numba import testing, types
 from numba.core import errors, typing, utils, config, cpu
 from numba.core.compiler import (compile_extra, compile_isolated, Flags,
                                  DEFAULT_FLAGS, CompilerBase,
@@ -39,14 +40,29 @@ from numba.core.untyped_passes import PreserveIR
 import unittest
 from numba.core.runtime import rtsys
 from numba.np import numpy_support
-from numba.pycc.platform import _external_compiler_ok
-
+from numba.core.runtime import _nrt_python as _nrt
+from numba.core.extending import (
+    overload_method,
+    typeof_impl,
+    register_model,
+    unbox,
+    NativeValue,
+    models,
+)
+from numba.core.datamodel.models import OpaqueModel
 
 try:
     import scipy
 except ImportError:
     scipy = None
 
+# Make sure that coverage is set up.
+try:
+    import coverage
+except ImportError:
+    pass
+else:
+    coverage.process_startup()
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.enable_pyobject = True
@@ -60,17 +76,16 @@ nrt_flags = Flags()
 nrt_flags.nrt = True
 
 
-tag = testing.make_tag_decorator(['important', 'long_running'])
+tag = testing.make_tag_decorator(['important', 'long_running', 'always_test'])
+
+# Use to mark a test as a test that must always run when sharded
+always_test = tag('always_test')
 
 _32bit = sys.maxsize <= 2 ** 32
 is_parfors_unsupported = _32bit
 skip_parfors_unsupported = unittest.skipIf(
     is_parfors_unsupported,
     'parfors not supported',
-)
-skip_py38_or_later = unittest.skipIf(
-    utils.PYVERSION >= (3, 8),
-    "unsupported on py3.8 or later"
 )
 
 skip_unless_py10_or_later = unittest.skipUnless(
@@ -124,6 +139,10 @@ skip_ppc64le_issue6465 = unittest.skipIf(platform.machine() == 'ppc64le',
 # https://github.com/numba/numba/issues/7822#issuecomment-1065356758
 _uname = platform.uname()
 IS_OSX_ARM64 = _uname.system == 'Darwin' and _uname.machine == 'arm64'
+skip_m1_llvm_rtdyld_failure  = unittest.skipIf(IS_OSX_ARM64,
+    "skip tests that contribute to triggering an AssertionError in LLVM's "
+    "RuntimeDyLd on OSX arm64. (see: numba#8567)")
+
 skip_m1_fenv_errors = unittest.skipIf(IS_OSX_ARM64,
     "fenv.h-like functionality unreliable on OSX arm64")
 
@@ -150,12 +169,6 @@ needs_blas = unittest.skipUnless(has_blas, "BLAS needs SciPy 1.0+")
 # with this environment variable set.
 _exec_cond = os.environ.get('SUBPROC_TEST', None) == '1'
 needs_subprocess = unittest.skipUnless(_exec_cond, "needs subprocess harness")
-
-
-# decorate for test needs external compilers
-needs_external_compilers = unittest.skipIf(not _external_compiler_ok,
-                                           ('Compatible external compilers are '
-                                            'missing'))
 
 
 def ignore_internal_warnings():
@@ -208,7 +221,7 @@ class TestCase(unittest.TestCase):
 
     # A random state yielding the same random numbers for any test case.
     # Use as `self.random.<method name>`
-    @utils.cached_property
+    @cached_property
     def random(self):
         return np.random.RandomState(42)
 
@@ -245,11 +258,22 @@ class TestCase(unittest.TestCase):
         """
         old_refcounts = [sys.getrefcount(x) for x in objects]
         yield
+        gc.collect()
         new_refcounts = [sys.getrefcount(x) for x in objects]
         for old, new, obj in zip(old_refcounts, new_refcounts, objects):
             if old != new:
                 self.fail("Refcount changed from %d to %d for object: %r"
                           % (old, new, obj))
+
+    def assertRefCountEqual(self, *objects):
+        gc.collect()
+        rc = [sys.getrefcount(x) for x in objects]
+        rc_0 = rc[0]
+        for i in range(len(objects))[1:]:
+            rc_i = rc[i]
+            if rc_0 != rc_i:
+                self.fail(f"Refcount for objects does not match. "
+                          f"#0({rc_0}) != #{i}({rc_i}) does not match.")
 
     @contextlib.contextmanager
     def assertNoNRTLeak(self):
@@ -558,7 +582,7 @@ class TestCase(unittest.TestCase):
             environment variable name (str) -> value (str)
         It is most convenient to use this method in conjunction with
         @needs_subprocess as the decorator will cause the decorated test to be
-        skipped unless the `SUBPROC_TEST` environment variable is set
+        skipped unless the `SUBPROC_TEST` environment variable is set to 1
         (this special environment variable is set by this method such that the
         specified test(s) will not be skipped in the subprocess).
 
@@ -574,6 +598,10 @@ class TestCase(unittest.TestCase):
         cmd = [sys.executable, '-m', 'numba.runtests', fully_qualified_test]
         env_copy = os.environ.copy()
         env_copy['SUBPROC_TEST'] = '1'
+        try:
+            env_copy['COVERAGE_PROCESS_START'] = os.environ['COVERAGE_RCFILE']
+        except KeyError:
+            pass   # ignored
         envvars = pytypes.MappingProxyType({} if envvars is None else envvars)
         env_copy.update(envvars)
         status = subprocess.run(cmd, stdout=subprocess.PIPE,
@@ -585,6 +613,69 @@ class TestCase(unittest.TestCase):
         self.assertIn('OK', status.stderr)
         self.assertNotIn('FAIL', status.stderr)
         self.assertNotIn('ERROR', status.stderr)
+
+    def run_test_in_subprocess(maybefunc=None, timeout=60, envvars=None):
+        """Runs the decorated test in a subprocess via invoking numba's test
+        runner. kwargs timeout and envvars are passed through to
+        subprocess_test_runner."""
+        def wrapper(func):
+            def inner(self, *args, **kwargs):
+                if os.environ.get("SUBPROC_TEST", None) != "1":
+                    # Not in a subprocess test env, so stage the call to run the
+                    # test in a subprocess which will set the env var.
+                    class_name = self.__class__.__name__
+                    self.subprocess_test_runner(test_module=self.__module__,
+                                                test_class=class_name,
+                                                test_name=func.__name__,
+                                                timeout=timeout,
+                                                envvars=envvars,)
+                else:
+                    # env var is set, so we're in the subprocess, run the
+                    # actual test.
+                    func(self)
+            return inner
+
+        if isinstance(maybefunc, pytypes.FunctionType):
+            return wrapper(maybefunc)
+        else:
+            return wrapper
+
+    def make_dummy_type(self):
+        """Use to generate a dummy type unique to this test. Returns a python
+        Dummy class and a corresponding Numba type DummyType."""
+
+        # Use test_id to make sure no collision is possible.
+        test_id = self.id()
+        DummyType = type('DummyTypeFor{}'.format(test_id), (types.Opaque,), {})
+
+        dummy_type = DummyType("my_dummy")
+        register_model(DummyType)(OpaqueModel)
+
+        class Dummy(object):
+            pass
+
+        @typeof_impl.register(Dummy)
+        def typeof_dummy(val, c):
+            return dummy_type
+
+        @unbox(DummyType)
+        def unbox_dummy(typ, obj, c):
+            return NativeValue(c.context.get_dummy_value())
+
+        return Dummy, DummyType
+
+    def skip_if_no_external_compiler(self):
+        """
+        Call this to ensure the test is skipped if no suitable external compiler
+        is found. This is a method on the TestCase opposed to a stand-alone
+        decorator so as to make it "lazy" via runtime evaluation opposed to
+        running at test-discovery time.
+        """
+        # This is a local import to avoid deprecation warnings being generated
+        # through the use of the numba.pycc module.
+        from numba.pycc.platform import external_compiler_works
+        if not external_compiler_works():
+            self.skipTest("No suitable external compiler was found.")
 
 
 class SerialMixin(object):
@@ -642,32 +733,6 @@ def compile_function(name, code, globs):
     ns = {}
     eval(co, globs, ns)
     return ns[name]
-
-def tweak_code(func, codestring=None, consts=None):
-    """
-    Tweak the code object of the given function by replacing its
-    *codestring* (a bytes object) and *consts* tuple, optionally.
-    """
-    co = func.__code__
-    tp = type(co)
-    if codestring is None:
-        codestring = co.co_code
-    if consts is None:
-        consts = co.co_consts
-    if utils.PYVERSION >= (3, 8):
-        new_code = tp(co.co_argcount, co.co_posonlyargcount,
-                      co.co_kwonlyargcount, co.co_nlocals,
-                      co.co_stacksize, co.co_flags, codestring,
-                      consts, co.co_names, co.co_varnames,
-                      co.co_filename, co.co_name, co.co_firstlineno,
-                      co.co_lnotab)
-    else:
-        new_code = tp(co.co_argcount, co.co_kwonlyargcount, co.co_nlocals,
-                      co.co_stacksize, co.co_flags, codestring,
-                      consts, co.co_names, co.co_varnames,
-                      co.co_filename, co.co_name, co.co_firstlineno,
-                      co.co_lnotab)
-    func.__code__ = new_code
 
 
 _trashcan_dir = 'numba-tests'
@@ -775,6 +840,16 @@ def capture_cache_log():
             yield out
 
 
+class EnableNRTStatsMixin(object):
+    """Mixin to enable the NRT statistics counters."""
+
+    def setUp(self):
+        _nrt.memsys_enable_stats()
+
+    def tearDown(self):
+        _nrt.memsys_disable_stats()
+
+
 class MemoryLeak(object):
 
     __enable_leak_check = True
@@ -803,16 +878,16 @@ class MemoryLeak(object):
         self.__enable_leak_check = False
 
 
-class MemoryLeakMixin(MemoryLeak):
+class MemoryLeakMixin(EnableNRTStatsMixin, MemoryLeak):
 
     def setUp(self):
         super(MemoryLeakMixin, self).setUp()
         self.memory_leak_setup()
 
     def tearDown(self):
-        super(MemoryLeakMixin, self).tearDown()
         gc.collect()
         self.memory_leak_teardown()
+        super(MemoryLeakMixin, self).tearDown()
 
 
 @contextlib.contextmanager
@@ -1041,11 +1116,11 @@ def strace(work, syscalls, timeout=10):
         strace_binary = shutil.which('strace')
         if strace_binary is None:
             raise ValueError("No valid 'strace' binary could be found")
-        cmd = ['strace', # strace
-            '-q', # quietly (no attach/detach print out)
-            '-p', str(parent_pid), # this PID
-            '-e', ','.join(syscalls), # these syscalls
-            '-o', ntf.name] # put output into this file
+        cmd = [strace_binary, # strace
+               '-q', # quietly (no attach/detach print out)
+               '-p', str(parent_pid), # this PID
+               '-e', ','.join(syscalls), # these syscalls
+               '-o', ntf.name] # put output into this file
 
         # redirect stdout, stderr is handled by the `-o` flag to strace.
         popen = subprocess.Popen(cmd, stdout=subprocess.PIPE,)
@@ -1092,8 +1167,14 @@ def strace(work, syscalls, timeout=10):
     return strace_data
 
 
-def _strace_supported():
+def strace_supported():
     """Checks if strace is supported and working"""
+
+    # Only support this on linux where the `strace` binary is likely to be the
+    # strace needed.
+    if not sys.platform.startswith('linux'):
+        return False
+
     def force_clone(): # subprocess triggers a clone
         subprocess.run([sys.executable, '-c', 'exit()'])
 
@@ -1103,12 +1184,6 @@ def _strace_supported():
     except Exception:
         return False
     return syscall in ''.join(trace)
-
-
-_HAVE_STRACE = _strace_supported()
-
-
-needs_strace = unittest.skipUnless(_HAVE_STRACE, "needs working strace")
 
 
 class IRPreservingTestPipeline(CompilerBase):

@@ -28,6 +28,11 @@ class CUDAFlags(Flags):
         default=None,
         doc="NVVM options",
     )
+    compute_capability = Option(
+        type=tuple,
+        default=None,
+        doc="Compute Capability",
+    )
 
 
 # The CUDACompileResult (CCR) has a specially-defined entry point equal to its
@@ -180,7 +185,11 @@ class CUDACompiler(CompilerBase):
 
 @global_compiler_lock
 def compile_cuda(pyfunc, return_type, args, debug=False, lineinfo=False,
-                 inline=False, fastmath=False, nvvm_options=None):
+                 inline=False, fastmath=False, nvvm_options=None,
+                 cc=None):
+    if cc is None:
+        raise ValueError('Compute Capability must be supplied')
+
     from .descriptor import cuda_target
     typingctx = cuda_target.typing_context
     targetctx = cuda_target.target_context
@@ -190,28 +199,42 @@ def compile_cuda(pyfunc, return_type, args, debug=False, lineinfo=False,
     flags.no_compile = True
     flags.no_cpython_wrapper = True
     flags.no_cfunc_wrapper = True
+
+    # Both debug and lineinfo turn on debug information in the compiled code,
+    # but we keep them separate arguments in case we later want to overload
+    # some other behavior on the debug flag. In particular, -opt=3 is not
+    # supported with debug enabled, and enabling only lineinfo should not
+    # affect the error model.
     if debug or lineinfo:
-        # Note both debug and lineinfo turn on debug information in the
-        # compiled code, but we keep them separate arguments in case we
-        # later want to overload some other behavior on the debug flag.
-        # In particular, -opt=3 is not supported with -g.
         flags.debuginfo = True
+
+    if lineinfo:
+        flags.dbg_directives_only = True
+
+    if debug:
+        flags.error_model = 'python'
+    else:
+        flags.error_model = 'numpy'
+
     if inline:
         flags.forceinline = True
     if fastmath:
         flags.fastmath = True
     if nvvm_options:
         flags.nvvm_options = nvvm_options
+    flags.compute_capability = cc
 
     # Run compilation pipeline
-    cres = compiler.compile_extra(typingctx=typingctx,
-                                  targetctx=targetctx,
-                                  func=pyfunc,
-                                  args=args,
-                                  return_type=return_type,
-                                  flags=flags,
-                                  locals={},
-                                  pipeline_class=CUDACompiler)
+    from numba.core.target_extension import target_override
+    with target_override('cuda'):
+        cres = compiler.compile_extra(typingctx=typingctx,
+                                      targetctx=targetctx,
+                                      func=pyfunc,
+                                      args=args,
+                                      return_type=return_type,
+                                      flags=flags,
+                                      locals={},
+                                      pipeline_class=CUDACompiler)
 
     library = cres.library
     library.finalize()
@@ -255,26 +278,31 @@ def compile_ptx(pyfunc, args, debug=False, lineinfo=False, device=False,
         warn(NumbaInvalidConfigWarning(msg))
 
     nvvm_options = {
-        'debug': debug,
-        'lineinfo': lineinfo,
         'fastmath': fastmath,
         'opt': 3 if opt else 0
     }
 
+    cc = cc or config.CUDA_DEFAULT_PTX_CC
     cres = compile_cuda(pyfunc, None, args, debug=debug, lineinfo=lineinfo,
                         fastmath=fastmath,
-                        nvvm_options=nvvm_options)
+                        nvvm_options=nvvm_options, cc=cc)
     resty = cres.signature.return_type
+
+    if resty and not device and resty != types.void:
+        raise TypeError("CUDA kernel must have void return type.")
+
     if device:
         lib = cres.library
     else:
         tgt = cres.target_context
-        filename = cres.type_annotation.filename
-        linenum = int(cres.type_annotation.linenum)
-        lib, kernel = tgt.prepare_cuda_kernel(cres.library, cres.fndesc, debug,
-                                              nvvm_options, filename, linenum)
+        code = pyfunc.__code__
+        filename = code.co_filename
+        linenum = code.co_firstlineno
 
-    cc = cc or config.CUDA_DEFAULT_PTX_CC
+        lib, kernel = tgt.prepare_cuda_kernel(cres.library, cres.fndesc, debug,
+                                              lineinfo, nvvm_options, filename,
+                                              linenum)
+
     ptx = lib.get_asm_str(cc=cc)
     return ptx, resty
 
@@ -290,6 +318,10 @@ def compile_ptx_for_current_device(pyfunc, args, debug=False, lineinfo=False,
 
 
 def declare_device_function(name, restype, argtypes):
+    return declare_device_function_template(name, restype, argtypes).key
+
+
+def declare_device_function_template(name, restype, argtypes):
     from .descriptor import cuda_target
     typingctx = cuda_target.typing_context
     targetctx = cuda_target.target_context
@@ -304,7 +336,8 @@ def declare_device_function(name, restype, argtypes):
         name=name, restype=restype, argtypes=argtypes)
     typingctx.insert_user_function(extfn, device_function_template)
     targetctx.insert_user_function(extfn, fndesc)
-    return extfn
+
+    return device_function_template
 
 
 class ExternFunction(object):

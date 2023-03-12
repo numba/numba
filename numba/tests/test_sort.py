@@ -402,7 +402,7 @@ class BaseTimsortTest(BaseSortingTest):
         # First check with i == len(stack) - 2
         keys = self.array_factory(orig_keys)
         ms = self.merge_init(keys)
-        # Push sentinel on stack, to check it was't touched
+        # Push sentinel on stack, to check it wasn't touched
         ms = self.timsort.merge_append(ms, stack_sentinel)
         i = ms.n
         ms = self.timsort.merge_append(ms, MergeRun(ssa, na))
@@ -413,7 +413,7 @@ class BaseTimsortTest(BaseSortingTest):
         # Now check with i == len(stack) - 3
         keys = self.array_factory(orig_keys)
         ms = self.merge_init(keys)
-        # Push sentinel on stack, to check it was't touched
+        # Push sentinel on stack, to check it wasn't touched
         ms = self.timsort.merge_append(ms, stack_sentinel)
         i = ms.n
         ms = self.timsort.merge_append(ms, MergeRun(ssa, na))
@@ -831,6 +831,11 @@ class TestNumpySort(TestCase):
             orig = np.random.random(size=size) * 100
             orig[np.random.random(size=size) < 0.1] = float('nan')
             yield orig
+        # 90% of values are NaNs.
+        for size in (50, 500):
+            orig = np.random.random(size=size) * 100
+            orig[np.random.random(size=size) < 0.9] = float('nan')
+            yield orig
 
     def has_duplicates(self, arr):
         """
@@ -941,6 +946,12 @@ class TestNumpySort(TestCase):
         check(np_argsort_kind_usecase, is_stable=True)
         check(argsort_kind_usecase, is_stable=False)
         check(np_argsort_kind_usecase, is_stable=False)
+
+    def test_bad_array(self):
+        cfunc = jit(nopython=True)(np_sort_usecase)
+        msg = '.*Argument "a" must be array-like.*'
+        with self.assertRaisesRegex(errors.TypingError, msg) as raises:
+            cfunc(None)
 
 
 class TestPythonSort(TestCase):

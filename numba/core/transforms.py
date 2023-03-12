@@ -442,7 +442,7 @@ def _get_with_contextmanager(func_ir, blocks, blk_start):
         else:
             extra = None
 
-        ctxobj = ir_utils.guard(ir_utils.find_global_value, func_ir, var_ref)
+        ctxobj = ir_utils.guard(ir_utils.find_outer_value, func_ir, var_ref)
 
         # check the contextmanager object
         if ctxobj is ir.UNDEFINED:
@@ -554,12 +554,6 @@ def find_setupwiths(func_ir):
                     if ir_utils.is_raise(stmt):
                             raise errors.CompilerError(
                                 'unsupported control flow due to raise '
-                                'statements inside with block'
-                                )
-                    # special case 3.7, return before POP_BLOCK
-                    if PYVERSION < (3, 8) and ir_utils.is_return(stmt):
-                            raise errors.CompilerError(
-                                'unsupported control flow: due to return '
                                 'statements inside with block'
                                 )
                     # if a pop_block, process it

@@ -220,8 +220,11 @@ class _EnvReloader(object):
         # (up to and including IR generation)
         DEBUG_FRONTEND = _readenv("NUMBA_DEBUG_FRONTEND", int, 0)
 
-        # Enable debug prints in nrtdynmod
+        # Enable debug prints in nrtdynmod and use of "safe" API functions
         DEBUG_NRT = _readenv("NUMBA_DEBUG_NRT", int, 0)
+
+        # Enable NRT statistics counters
+        NRT_STATS = _readenv("NUMBA_NRT_STATS", int, 0)
 
         # How many recently deserialized functions to retain regardless
         # of external references
@@ -415,6 +418,9 @@ class _EnvReloader(object):
         # Whether the default stream is the per-thread default stream
         CUDA_PER_THREAD_DEFAULT_STREAM = _readenv(
             "NUMBA_CUDA_PER_THREAD_DEFAULT_STREAM", int, 0)
+
+        CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY = _readenv(
+            "NUMBA_CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY", int, 0)
 
         # Location of the CUDA include files
         if IS_WIN32:

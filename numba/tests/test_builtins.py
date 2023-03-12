@@ -11,10 +11,11 @@ import warnings
 
 from numba.core.compiler import compile_isolated, Flags
 from numba import jit, typeof, njit, typed
-from numba.core import errors, types, utils, config
-from numba.tests.support import TestCase, tag, ignore_internal_warnings
+from numba.core import errors, types, config
+from numba.tests.support import (TestCase, tag, ignore_internal_warnings,
+                                 MemoryLeakMixin)
+from numba.core.extending import overload_method, box
 
-py38orlater = utils.PYVERSION >= (3, 8)
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.enable_pyobject = True
@@ -216,10 +217,7 @@ def sum_usecase(x):
 
 def sum_kwarg_usecase(x, start=0):
     ret = sum(x, start)
-    if py38orlater:
-        return sum(x, start=start), ret
-    else:
-        return ret
+    return sum(x, start=start), ret
 
 
 def isinstance_usecase(a):
@@ -841,6 +839,22 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.check_min_max_invalid_types(min_usecase1, flags=no_pyobj_flags)
 
+    def check_minmax_bool1(self, pyfunc, flags):
+        cr = compile_isolated(pyfunc, (types.bool_, types.bool_), flags=flags)
+        cfunc = cr.entry_point
+
+        operands = (False, True)
+        for x, y in itertools.product(operands, operands):
+            self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
+
+    def test_max_bool1(self, flags=enable_pyobj_flags):
+        # tests max(<booleans>)
+        self.check_minmax_bool1(max_usecase1, flags)
+
+    def test_min_bool1(self, flags=enable_pyobj_flags):
+        # tests min(<booleans>)
+        self.check_minmax_bool1(min_usecase1, flags)
+
     # Test that max(1) and min(1) fail
 
     def check_min_max_unary_non_iterable(self, pyfunc, flags=enable_pyobj_flags):
@@ -970,10 +984,7 @@ class TestBuiltins(TestCase):
         def sum_range(sz, start=0):
             tmp = range(sz)
             ret = sum(tmp, start)
-            if py38orlater:
-                return sum(tmp, start=start), ret
-            else:
-                return ret
+            return sum(tmp, start=start), ret
 
         ntpl = namedtuple('ntpl', ['a', 'b'])
 
@@ -1375,9 +1386,11 @@ class TestIsinstanceBuiltin(TestCase):
             got = foo(x)
             self.assertEqual(got, expected)
 
+    @TestCase.run_test_in_subprocess
     def test_experimental_warning(self):
-        # Check that if the isinstance feature is in use then an experiemental
-        # warning is raised.
+        # Check that if the isinstance feature is in use then an experimental
+        # warning is raised. Needs subproc as something else in the test suite
+        # might triggered the warning already.
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter('always', errors.NumbaWarning)
@@ -1396,6 +1409,232 @@ class TestIsinstanceBuiltin(TestCase):
             msg = ("Use of isinstance() detected. This is an experimental "
                    "feature.")
             self.assertIn(msg, str(w[0].message))
+
+
+class TestGetattrBuiltin(MemoryLeakMixin, TestCase):
+    # Tests the getattr() builtin
+
+    def test_getattr_func_retty(self):
+
+        @njit
+        def foo(x):
+            attr = getattr(x, '__hash__')
+            return attr()
+
+        for x in (1, 2.34, (5, 6, 7)):
+            self.assertPreciseEqual(foo(x), foo.py_func(x))
+
+    def test_getattr_value_retty(self):
+
+        @njit
+        def foo(x):
+            return getattr(x, 'ndim')
+
+        for x in range(3):
+            tmp = np.empty((1, ) * x)
+            self.assertPreciseEqual(foo(tmp), foo.py_func(tmp))
+
+    def test_getattr_module_obj(self):
+        # Consts on modules work ok
+
+        @njit
+        def foo():
+            return getattr(np, 'pi')
+
+        self.assertPreciseEqual(foo(), foo.py_func())
+
+    def test_getattr_module_obj_not_implemented(self):
+        # Functions on modules do not work at present
+
+        @njit
+        def foo():
+            return getattr(np, 'cos')(1)
+
+        with self.assertRaises(errors.TypingError) as raises:
+            foo()
+
+        msg = "Returning function objects is not implemented"
+        self.assertIn(msg, str(raises.exception))
+
+    def test_getattr_raises_attribute_error(self):
+
+        invalid_attr = '__not_a_valid_attr__'
+
+        @njit
+        def foo(x):
+            return getattr(x, invalid_attr)
+
+        with self.assertRaises(AttributeError) as raises:
+            foo(1.23)
+
+        self.assertIn(f"'float64' has no attribute '{invalid_attr}'",
+                      str(raises.exception))
+
+    def test_getattr_with_default(self):
+        # Checks returning a default works
+
+        @njit
+        def foo(x, default):
+            return getattr(x, '__not_a_valid_attr__', default)
+
+        for x, y in zip((1, 2.34, (5, 6, 7),), (None, 20, 'some_string')):
+            self.assertPreciseEqual(foo(x, y), foo.py_func(x, y))
+
+    def test_getattr_non_literal_str(self):
+
+        @njit
+        def foo(x, nonliteral_str):
+            return getattr(x, nonliteral_str)
+
+        with self.assertRaises(errors.TypingError) as raises:
+            foo(1, '__hash__')
+
+        msg = "argument 'name' must be a literal string"
+        self.assertIn(msg, str(raises.exception))
+
+    def test_getattr_no_optional_type_generated(self):
+
+        @njit
+        def default_hash():
+            return 12345
+
+        @njit
+        def foo():
+            hash_func = getattr(np.ones(1), "__not_a_valid_attr__",
+                                default_hash)
+            return hash_func() # Optionals have no call support
+
+        self.assertPreciseEqual(foo(), foo.py_func())
+
+
+class TestHasattrBuiltin(MemoryLeakMixin, TestCase):
+    # Tests the hasattr() builtin
+
+    def test_hasattr(self):
+
+        @njit
+        def foo(x):
+            return hasattr(x, '__hash__'), hasattr(x, '__not_a_valid_attr__')
+
+        ty = types.int64
+        for x in (1, 2.34, (5, 6, 7), typed.Dict.empty(ty, ty),
+                  typed.List.empty_list(ty), np.ones(4), 'ABC'):
+            self.assertPreciseEqual(foo(x), foo.py_func(x))
+
+    def test_hasattr_non_const_attr(self):
+        # This tests that an error is raised in the case that a hasattr() call
+        # is made on an attribute that cannot be resolved as a compile time
+        # constant (there's a phi in the way!).
+
+        @njit
+        def foo(pred):
+            if pred > 3:
+                attr = "__hash__"
+            else:
+                attr = "__str__"
+
+            hasattr(1, attr)
+
+        with self.assertRaises(errors.NumbaTypeError) as raises:
+            foo(6)
+
+        msg = ('hasattr() cannot determine the type of variable '
+               '"attr" due to a branch.')
+        self.assertIn(msg, str(raises.exception))
+
+
+class TestStrAndReprBuiltin(MemoryLeakMixin, TestCase):
+
+    def test_str_default(self):
+
+        @njit
+        def foo():
+            return str()
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_str_object_kwarg(self):
+
+        @njit
+        def foo(x):
+            return str(object=x)
+
+        value = "a string"
+        self.assertEqual(foo(value), foo.py_func(value))
+
+    def test_str_calls_dunder_str(self):
+
+        @njit
+        def foo(x):
+            return str(x)
+
+        Dummy, DummyType = self.make_dummy_type()
+        dummy = Dummy()
+        string_repr = "this is the dummy object str"
+        Dummy.__str__= lambda inst: string_repr
+
+        @overload_method(DummyType, "__str__")
+        def ol_dummy_string(dummy):
+            def impl(dummy):
+                return string_repr
+            return impl
+
+        @overload_method(DummyType, "__repr__")
+        def ol_dummy_repr(dummy):
+            def impl(dummy):
+                return "SHOULD NOT BE CALLED"
+            return impl
+
+        self.assertEqual(foo(dummy), foo.py_func(dummy))
+
+    def test_str_falls_back_to_repr(self):
+
+        @njit
+        def foo(x):
+            return str(x)
+
+        Dummy, DummyType = self.make_dummy_type()
+        dummy = Dummy()
+        string_repr = "this is the dummy object repr"
+        Dummy.__repr__= lambda inst: string_repr
+
+        @overload_method(DummyType, "__repr__")
+        def ol_dummy_repr(dummy):
+            def impl(dummy):
+                return string_repr
+            return impl
+
+        self.assertEqual(foo(dummy), foo.py_func(dummy))
+
+    def test_repr(self):
+        @njit
+        def foo(x):
+            return repr(x), x
+
+        for x in ("abc", False, 123):
+            self.assertEqual(foo(x), foo.py_func(x))
+
+    def test_repr_fallback(self):
+        # checks str/repr fallback, there's no overloaded __str__ or __repr__
+        # for the dummy type so it has to use generic '<object type:(type)>'
+        # string for the `repr` call.
+
+        Dummy, DummyType = self.make_dummy_type()
+        dummy = Dummy()
+        string_repr = f"<object type:{typeof(dummy)}>"
+        Dummy.__repr__= lambda inst: string_repr
+
+        @box(DummyType)
+        def box_dummy(typ, obj, c):
+            clazobj = c.pyapi.unserialize(c.pyapi.serialize_object(Dummy))
+            return c.pyapi.call_function_objargs(clazobj, ())
+
+        @njit
+        def foo(x):
+            return str(x)
+
+        self.assertEqual(foo(dummy), foo.py_func(dummy))
+
 
 
 if __name__ == '__main__':

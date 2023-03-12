@@ -23,6 +23,18 @@ For details please consult the
 `CUDA Programming Guide
 <http://docs.nvidia.com/cuda/cuda-c-programming-guide/#programming-model>`_.
 
+Floating Point Error Model
+--------------------------
+
+By default, CUDA Python kernels execute with the NumPy error model. In this
+model, division by zero raises no exception and instead produces a result of
+``inf``, ``-inf`` or ``nan``. This differs from the normal Python error model,
+in which division by zero raises a ``ZeroDivisionError``.
+
+When debug is enabled (by passing ``debug=True`` to the
+:func:`@cuda.jit <numba.cuda.jit>` decorator), the Python error model is used.
+This allows division-by-zero errors during kernel execution to be identified.
+
 Constructs
 ----------
 
@@ -210,7 +222,7 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.log10`
 * :func:`math.log1p`
 * :func:`math.sqrt`
-* :func:`math.remainder`: Python 3.7+
+* :func:`math.remainder`
 * :func:`math.pow`
 * :func:`math.ceil`
 * :func:`math.floor`
@@ -263,7 +275,7 @@ The following functions from the :mod:`operator` module are supported:
 * :func:`operator.xor`
 
 
-Numpy support
+NumPy support
 =============
 
 Due to the CUDA programming model, dynamic memory allocation inside a kernel is
@@ -271,13 +283,13 @@ inefficient and is often not needed.  Numba disallows any memory allocating feat
 This disables a large number of NumPy APIs.  For best performance, users should write
 code such that each thread is dealing with a single element at a time.
 
-Supported numpy features:
+Supported NumPy features:
 
 * accessing `ndarray` attributes `.shape`, `.strides`, `.ndim`, `.size`, etc..
 * scalar ufuncs that have equivalents in the `math` module; i.e. ``np.sin(x[0])``, where x is a 1D array.
 * indexing and slicing works.
 
-Unsupported numpy features:
+Unsupported NumPy features:
 
 * array creation APIs.
 * array methods.

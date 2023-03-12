@@ -202,7 +202,7 @@ class _CFG(object):
             # when trying to render to pdf
             cmax = 200
             if len(fname) > cmax:
-                wstr = (f'CFG output filname "{fname}" exceeds maximum '
+                wstr = (f'CFG output filename "{fname}" exceeds maximum '
                         f'supported length, it will be truncated.')
                 warnings.warn(wstr, NumbaInvalidConfigWarning)
                 fname = fname[:cmax]
