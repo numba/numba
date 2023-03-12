@@ -29,7 +29,14 @@ class TestInspect(CUDATestCase):
         self.assertIn("(float32, int32)", typeanno)
         file.close()
         # Function name in LLVM
-        self.assertIn("foo", foo.inspect_llvm(sig))
+        llvm = foo.inspect_llvm(sig)
+        self.assertIn("foo", llvm)
+
+        # Kernel in LLVM
+        self.assertIn('cuda.kernel.wrapper', llvm)
+
+        # Wrapped device function body in LLVM
+        self.assertIn("define linkonce_odr i32", llvm)
 
         asm = foo.inspect_asm(sig)
 
@@ -63,6 +70,14 @@ class TestInspect(CUDATestCase):
         # Function name in LLVM
         self.assertIn("foo", llvmirs[intp, intp])
         self.assertIn("foo", llvmirs[float64, float64])
+
+        # Kernels in LLVM
+        self.assertIn('cuda.kernel.wrapper', llvmirs[intp, intp])
+        self.assertIn('cuda.kernel.wrapper', llvmirs[float64, float64])
+
+        # Wrapped device function bodies in LLVM
+        self.assertIn("define linkonce_odr i32", llvmirs[intp, intp])
+        self.assertIn("define linkonce_odr i32", llvmirs[float64, float64])
 
         asmdict = foo.inspect_asm()
 
