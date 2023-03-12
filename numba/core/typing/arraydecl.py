@@ -12,6 +12,7 @@ from numba.core.typing import collections
 from numba.core.errors import (TypingError, RequireLiteralValue, NumbaTypeError,
                                NumbaNotImplementedError, NumbaAssertionError,
                                NumbaKeyError, NumbaIndexError)
+from numba.core.cgutils import is_nonelike
 
 
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
@@ -34,6 +35,7 @@ def get_array_index_type(ary, idx):
     ellipsis_met = False
     advanced = False
     has_integer = False
+    num_newaxis = 0
 
     if not isinstance(idx, types.BaseTuple):
         idx = [idx]
@@ -68,6 +70,9 @@ def get_array_index_type(ary, idx):
                 msg = "only one advanced index supported"
                 raise NumbaNotImplementedError(msg)
             advanced = True
+        elif (is_nonelike(ty)):
+            ndim += 1
+            num_newaxis += 1
         else:
             raise NumbaTypeError("unsupported array index type %s in %s"
                                  % (ty, idx))
@@ -83,7 +88,7 @@ def get_array_index_type(ary, idx):
         assert right_indices[0] is types.ellipsis
         del right_indices[0]
 
-    n_indices = len(all_indices) - ellipsis_met
+    n_indices = len(all_indices) - ellipsis_met - num_newaxis
     if n_indices > ary.ndim:
         raise NumbaTypeError("cannot index %s with %d indices: %s"
                              % (ary, n_indices, idx))
@@ -477,14 +482,22 @@ class ArrayAttribute(AttributeTemplate):
         # Only support no argument version (default order='C')
         assert not kws
         assert not args
-        return signature(ary.copy(ndim=1, layout='C'))
+        copy_will_be_made = ary.layout != 'C'
+        readonly = not (copy_will_be_made or ary.mutable)
+        return signature(ary.copy(ndim=1, layout='C', readonly=readonly))
 
     @bound_function("array.flatten")
     def resolve_flatten(self, ary, args, kws):
         # Only support no argument version (default order='C')
         assert not kws
         assert not args
-        return signature(ary.copy(ndim=1, layout='C'))
+        # To ensure that Numba behaves exactly like NumPy,
+        # we also clear the read-only flag when doing a "flatten"
+        # Why? Two reasons:
+        # Because flatten always returns a copy. (see NumPy docs for "flatten")
+        # And because a copy always returns a writeable array.
+        # ref: https://numpy.org/doc/stable/reference/generated/numpy.copy.html
+        return signature(ary.copy(ndim=1, layout='C', readonly=False))
 
     def generic_resolve(self, ary, attr):
         # Resolution of other attributes, for record arrays

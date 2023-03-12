@@ -597,21 +597,21 @@ def charseq_to_str_mth(s):
     return tostr_impl
 
 
-@overload(str)
+@overload_method(types.UnicodeCharSeq, "__str__")
 def charseq_str(s):
-    if isinstance(s, types.UnicodeCharSeq):
-        get_code = _get_code_impl(s)
+    get_code = _get_code_impl(s)
 
-        def str_impl(s):
-            n = len(s)
-            kind = s._get_kind()
-            is_ascii = kind == 1 and s.isascii()
-            result = unicode._empty_string(kind, n, is_ascii)
-            for i in range(n):
-                code = get_code(s, i)
-                unicode._set_code_point(result, i, code)
-            return result
-        return str_impl
+    def str_impl(s):
+        n = len(s)
+        kind = s._get_kind()
+        is_ascii = kind == 1 and s.isascii()
+        result = unicode._empty_string(kind, n, is_ascii)
+        for i in range(n):
+            code = get_code(s, i)
+            unicode._set_code_point(result, i, code)
+        return result
+
+    return str_impl
 
 
 @overload(bytes)

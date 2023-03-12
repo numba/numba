@@ -1,4 +1,3 @@
-import sys
 import numpy as np
 
 import unittest
@@ -393,8 +392,7 @@ class TestNrtArrayGen(MemoryLeakMixin, TestCase):
         np.testing.assert_equal(py_ary, c_ary)
         self.assertEqual(py_res, c_res)
         # Check reference count
-        self.assertEqual(sys.getrefcount(py_ary),
-                         sys.getrefcount(c_ary))
+        self.assertRefCountEqual(py_ary, c_ary)
 
     def test_nrt_gen1(self):
         pygen = nrt_gen1
@@ -413,10 +411,8 @@ class TestNrtArrayGen(MemoryLeakMixin, TestCase):
         np.testing.assert_equal(py_ary2, c_ary2)
         self.assertEqual(py_res, c_res)
         # Check reference count
-        self.assertEqual(sys.getrefcount(py_ary1),
-                         sys.getrefcount(c_ary1))
-        self.assertEqual(sys.getrefcount(py_ary2),
-                         sys.getrefcount(c_ary2))
+        self.assertRefCountEqual(py_ary1, c_ary1)
+        self.assertRefCountEqual(py_ary2, c_ary2)
 
     def test_combine_gen0_gen1(self):
         """
@@ -456,8 +452,7 @@ class TestNrtArrayGen(MemoryLeakMixin, TestCase):
         np.testing.assert_equal(py_ary, c_ary)
         self.assertEqual(py_res, c_res)
         # Check reference count
-        self.assertEqual(sys.getrefcount(py_ary),
-                         sys.getrefcount(c_ary))
+        self.assertRefCountEqual(py_ary, c_ary)
 
     def test_nrt_gen0_no_iter(self):
         """
@@ -479,8 +474,7 @@ class TestNrtArrayGen(MemoryLeakMixin, TestCase):
         np.testing.assert_equal(py_ary, c_ary)
 
         # Check reference count
-        self.assertEqual(sys.getrefcount(py_ary),
-                         sys.getrefcount(c_ary))
+        self.assertRefCountEqual(py_ary, c_ary)
 
 
 # TODO: fix nested generator and MemoryLeakMixin
@@ -512,8 +506,7 @@ class TestNrtNestedGen(TestCase):
 
         np.testing.assert_equal(py_res, c_res)
 
-        self.assertEqual(sys.getrefcount(py_res),
-                         sys.getrefcount(c_res))
+        self.assertRefCountEqual(py_res, c_res)
 
         # The below test will fail due to generator finalizer not invoked.
         # This kept a reference of the c_old.
@@ -543,8 +536,7 @@ class TestNrtNestedGen(TestCase):
         self.assertIs(py_old, py_arr)
         self.assertIs(c_old, c_arr)
 
-        self.assertEqual(sys.getrefcount(py_old),
-                         sys.getrefcount(c_old))
+        self.assertRefCountEqual(py_old, c_old)
 
     def test_nrt_nested_nopython_gen(self):
         """

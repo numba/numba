@@ -42,13 +42,39 @@ _Py_HASH_CUTOFF = sys.hash_info.cutoff
 _Py_hashfunc_name = sys.hash_info.algorithm
 
 
+# This stub/overload pair are used to force branch pruning to remove the dead
+# branch based on the potential `None` type of the hash_func which works better
+# if the predicate for the prune in an ir.Arg. The obj is an arg to allow for
+# a custom error message.
+def _defer_hash(hash_func):
+    pass
+
+
+@overload(_defer_hash)
+def ol_defer_hash(obj, hash_func):
+    err_msg = f"unhashable type: '{obj}'"
+
+    def impl(obj, hash_func):
+        if hash_func is None:
+            raise TypeError(err_msg)
+        else:
+            return hash_func()
+    return impl
+
+
 # hash(obj) is implemented by calling obj.__hash__()
-
-
 @overload(hash)
 def hash_overload(obj):
+    attempt_generic_msg = ("No __hash__ is defined for object of type "
+                           f"'{obj}' and a generic hash() cannot be "
+                           "performed as there is no suitable object "
+                           "represention in Numba compiled code!")
+
     def impl(obj):
-        return obj.__hash__()
+        if hasattr(obj, '__hash__'):
+            return _defer_hash(obj, getattr(obj, '__hash__'))
+        else:
+            raise TypeError(attempt_generic_msg)
     return impl
 
 

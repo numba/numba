@@ -283,6 +283,10 @@ def partition(a, kth):
     return np.partition(a, kth)
 
 
+def argpartition(a, kth):
+    return np.argpartition(a, kth)
+
+
 def cov(m, y=None, rowvar=True, bias=False, ddof=None):
     return np.cov(m, y, rowvar, bias, ddof)
 
@@ -397,6 +401,10 @@ def flip_lr(a):
 
 def flip_ud(a):
     return np.flipud(a)
+
+
+def np_union1d(a, b):
+    return np.union1d(a,b)
 
 
 def np_asarray_chkfinite(a, dtype=None):
@@ -966,11 +974,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.inf, None
             yield np.PINF, None
             yield np.asarray([-np.inf, 0., np.inf]), None
-            yield np.NINF, np.zeros(1, dtype=np.bool)
-            yield np.inf, np.zeros(1, dtype=np.bool)
-            yield np.PINF, np.zeros(1, dtype=np.bool)
+            yield np.NINF, np.zeros(1, dtype=np.bool_)
+            yield np.inf, np.zeros(1, dtype=np.bool_)
+            yield np.PINF, np.zeros(1, dtype=np.bool_)
             yield np.NINF, np.empty(12)
-            yield np.asarray([-np.inf, 0., np.inf]), np.zeros(3, dtype=np.bool)
+            yield np.asarray([-np.inf, 0., np.inf]), np.zeros(3, dtype=np.bool_)
 
         pyfuncs = [isneginf, isposinf]
         for pyfunc in pyfuncs:
@@ -1817,6 +1825,21 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # likewise the unordered collection of elements from the kth onwards
         self.assertPreciseEqual(np.unique(expected[kth:]), np.unique(got[kth:]))
 
+    def argpartition_sanity_check(self, pyfunc, cfunc, a, kth):
+        # as NumPy uses a different algorithm, we do not expect to
+        # match outputs exactly...
+        expected = pyfunc(a, kth)
+        got = cfunc(a, kth)
+
+        # but we do expect the unordered collection of elements up to the
+        # kth to tie out
+        self.assertPreciseEqual(np.unique(a[expected[:kth]]),
+                                np.unique(a[got[:kth]]))
+
+        # likewise the unordered collection of elements from the kth onwards
+        self.assertPreciseEqual(np.unique(a[expected[kth:]]),
+                                np.unique(a[got[kth:]]))
+
     def test_partition_fuzz(self):
         # inspired by the test of the same name in:
         # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py    # noqa: E501
@@ -1841,10 +1864,55 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 for k in kth:
                     self.partition_sanity_check(pyfunc, cfunc, d, k)
 
+    def test_argpartition_fuzz(self):
+        # inspired by the test of the same name in:
+        # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py    # noqa: E501
+        pyfunc = argpartition
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for j in range(10, 30):
+            for i in range(1, j - 2):
+                d = np.arange(j)
+                self.rnd.shuffle(d)
+                d = d % self.rnd.randint(2, 30)
+                idx = self.rnd.randint(d.size)
+                kth = [0, idx, i, i + 1, -idx, -i]  # include negative kth's
+                tgt = np.argsort(d)[kth]
+                self.assertPreciseEqual(d[cfunc(d, kth)[kth]],
+                                        d[tgt])  # a -> array
+                self.assertPreciseEqual(d[cfunc(d.tolist(), kth)[kth]],
+                                        d[tgt])  # a -> list
+                self.assertPreciseEqual(d[cfunc(tuple(d.tolist()), kth)[kth]],
+                                        d[tgt])  # a -> tuple
+
+                for k in kth:
+                    self.argpartition_sanity_check(pyfunc, cfunc, d, k)
+
     def test_partition_exception_out_of_range(self):
         # inspired by the test of the same name in:
         # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py    # noqa: E501
         pyfunc = partition
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        # Test out of range values in kth raise an error
+        a = np.arange(10)
+
+        def _check(a, kth):
+            with self.assertRaises(ValueError) as e:
+                cfunc(a, kth)
+            assert str(e.exception) == "kth out of bounds"
+
+        _check(a, 10)
+        _check(a, -11)
+        _check(a, (3, 30))
+
+    def test_argpartition_exception_out_of_range(self):
+        # inspired by the test of the same name in:
+        # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py    # noqa: E501
+        pyfunc = argpartition
         cfunc = jit(nopython=True)(pyfunc)
 
         # Exceptions leak references
@@ -1882,8 +1950,44 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check(a, (3.3, 4.4))
         _check(a, np.array((1, 2, np.nan)))
 
+    def test_argpartition_exception_non_integer_kth(self):
+        # inspired by the test of the same name in:
+        # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py    # noqa: E501
+        pyfunc = argpartition
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        def _check(a, kth):
+            with self.assertTypingError() as raises:
+                cfunc(a, kth)
+            self.assertIn("Partition index must be integer",
+                          str(raises.exception))
+
+        a = np.arange(10)
+        _check(a, 9.0)
+        _check(a, (3.3, 4.4))
+        _check(a, np.array((1, 2, np.nan)))
+
     def test_partition_exception_a_not_array_like(self):
         pyfunc = partition
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        def _check(a, kth):
+            with self.assertTypingError() as raises:
+                cfunc(a, kth)
+            self.assertIn('The first argument must be an array-like',
+                          str(raises.exception))
+
+        _check(4, 0)
+        _check('Sausages', 0)
+
+    def test_argpartition_exception_a_not_array_like(self):
+        pyfunc = argpartition
         cfunc = jit(nopython=True)(pyfunc)
 
         # Exceptions leak references
@@ -1913,8 +2017,37 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         _check(np.array(1), 0)
 
+    def test_argpartition_exception_a_zero_dim(self):
+        pyfunc = argpartition
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        def _check(a, kth):
+            with self.assertTypingError() as raises:
+                cfunc(a, kth)
+            self.assertIn('The first argument must be at least 1-D (found 0-D)',
+                          str(raises.exception))
+
+        _check(np.array(1), 0)
+
     def test_partition_exception_kth_multi_dimensional(self):
         pyfunc = partition
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        def _check(a, kth):
+            with self.assertRaises(ValueError) as raises:
+                cfunc(a, kth)
+            self.assertIn('kth must be scalar or 1-D', str(raises.exception))
+
+        _check(np.arange(10), kth=np.arange(6).reshape(3, 2))
+
+    def test_argpartition_exception_kth_multi_dimensional(self):
+        pyfunc = argpartition
         cfunc = jit(nopython=True)(pyfunc)
 
         # Exceptions leak references
@@ -1931,6 +2064,25 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # inspired by the test of the same name in:
         # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py    # noqa: E501
         pyfunc = partition
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(a, kth=0):
+            expected = pyfunc(a, kth)
+            got = cfunc(a, kth)
+            self.assertPreciseEqual(expected, got)
+
+        # check axis handling for multidimensional empty arrays
+        a = np.array([])
+        a.shape = (3, 2, 1, 0)
+
+        # include this with some other empty data structures
+        for arr in a, (), np.array([]):
+            check(arr)
+
+    def test_argpartition_empty_array(self):
+        # inspired by the test of the same name in:
+        # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py    # noqa: E501
+        pyfunc = argpartition
         cfunc = jit(nopython=True)(pyfunc)
 
         def check(a, kth=0):
@@ -2047,6 +2199,108 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 # sanity check
                 self.partition_sanity_check(pyfunc, cfunc, d, i)
 
+    def test_argpartition_basic(self):
+        # inspired by the test of the same name in:
+        # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py    # noqa: E501
+        pyfunc = argpartition
+        cfunc = jit(nopython=True)(pyfunc)
+
+        d = np.array([], dtype=np.int64)
+        got = cfunc(d, 0)
+        self.assertPreciseEqual(d, got)
+
+        d = np.ones(1, dtype=np.int64)
+        expected = np.zeros(1, dtype=np.int64)
+        got = cfunc(d, 0)
+        self.assertPreciseEqual(expected, got)
+
+        # kth not modified
+        kth = np.array([30, 15, 5])
+        okth = kth.copy()
+        cfunc(np.arange(40), kth)
+        self.assertPreciseEqual(kth, okth)
+
+        for r in ([2, 1], [1, 2], [1, 1]):
+            d = np.array(r)
+            tgt = np.argsort(d)
+            for k in 0, 1:
+                self.assertPreciseEqual(d[cfunc(d, k)[k]], d[tgt[k]])
+                self.argpartition_sanity_check(pyfunc, cfunc, d, k)
+
+        for r in ([3, 2, 1], [1, 2, 3], [2, 1, 3], [2, 3, 1],
+                  [1, 1, 1], [1, 2, 2], [2, 2, 1], [1, 2, 1]):
+            d = np.array(r)
+            tgt = np.argsort(d)
+            for k in 0, 1, 2:
+                self.assertPreciseEqual(d[cfunc(d, k)[k]], d[tgt[k]])
+                self.argpartition_sanity_check(pyfunc, cfunc, d, k)
+
+        d = np.ones(50)
+        self.assertPreciseEqual(d[cfunc(d, 0)], d)
+
+        # sorted
+        d = np.arange(49)
+        for k in 5, 15:
+            self.assertEqual(cfunc(d, k)[k], k)
+            self.partition_sanity_check(pyfunc, cfunc, d, k)
+
+        # rsorted, with input flavours: array, list and tuple
+        d = np.arange(47)[::-1]
+        for a in d, d.tolist(), tuple(d.tolist()):
+            self.assertEqual(cfunc(a, 6)[6], 40)
+            self.assertEqual(cfunc(a, 16)[16], 30)
+            self.assertPreciseEqual(cfunc(a, -6), cfunc(a, 41))
+            self.assertPreciseEqual(cfunc(a, -16), cfunc(a, 31))
+            self.argpartition_sanity_check(pyfunc, cfunc, d, -16)
+
+        # median of 3 killer, O(n^2) on pure median 3 pivot quickselect
+        # exercises the median of median of 5 code used to keep O(n)
+        d = np.arange(1000000)
+        x = np.roll(d, d.size // 2)
+        mid = x.size // 2 + 1
+        self.assertEqual(x[cfunc(x, mid)[mid]], mid)
+        d = np.arange(1000001)
+        x = np.roll(d, d.size // 2 + 1)
+        mid = x.size // 2 + 1
+        self.assertEqual(x[cfunc(x, mid)[mid]], mid)
+
+        # max
+        d = np.ones(10)
+        d[1] = 4
+        self.assertEqual(d[cfunc(d, (2, -1))[-1]], 4)
+        self.assertEqual(d[cfunc(d, (2, -1))[2]], 1)
+        d[1] = np.nan
+        assert np.isnan(d[cfunc(d, (2, -1))[-1]])
+
+        # equal elements
+        d = np.arange(47) % 7
+        tgt = np.sort(np.arange(47) % 7)
+        self.rnd.shuffle(d)
+        for i in range(d.size):
+            self.assertEqual(d[cfunc(d, i)[i]], tgt[i])
+            self.argpartition_sanity_check(pyfunc, cfunc, d, i)
+
+        d = np.array([0, 1, 2, 3, 4, 5, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+                      7, 7, 7, 7, 7, 9])
+        kth = [0, 3, 19, 20]
+        self.assertEqual(tuple(d[cfunc(d, kth)[kth]]), (0, 3, 7, 7))
+
+        td = [(dt, s) for dt in [np.int32, np.float32] for s in (9, 16)]
+        for dt, s in td:
+            d = np.arange(s, dtype=dt)
+            self.rnd.shuffle(d)
+            d1 = np.tile(np.arange(s, dtype=dt), (4, 1))
+            map(self.rnd.shuffle, d1)
+            for i in range(d.size):
+                p = d[cfunc(d, i)]
+                self.assertEqual(p[i], i)
+                # all before are smaller
+                np.testing.assert_array_less(p[:i], p[i])
+                # all after are larger
+                np.testing.assert_array_less(p[i], p[i + 1:])
+                # sanity check
+                self.argpartition_sanity_check(pyfunc, cfunc, d, i)
+
     def assert_partitioned(self, pyfunc, cfunc, d, kth):
         prev = 0
         for k in np.sort(kth):
@@ -2057,6 +2311,17 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                                  "%d" % (k, d[k:], d[k])))
             prev = k + 1
             self.partition_sanity_check(pyfunc, cfunc, d, k)
+
+    def assert_argpartitioned(self, pyfunc, cfunc, d, kth):
+        prev = 0
+        for k in np.sort(kth):
+            np.testing.assert_array_less(d[prev:k], d[k],
+                                         err_msg='kth %d' % k)
+            self.assertTrue((d[k:] >= d[k]).all(),
+                            msg=("kth %d, %r not greater equal "
+                                 "%d" % (k, d[k:], d[k])))
+            prev = k + 1
+            self.argpartition_sanity_check(pyfunc, cfunc, d, k)
 
     def test_partition_iterative(self):
         # inspired by the test of the same name in:
@@ -2092,6 +2357,42 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         assert_partitioned(cfunc(d, [5] * 4), [5])
         assert_partitioned(cfunc(d, [5] * 4 + [6, 13]), [5] * 4 + [6, 13])
 
+    def test_argpartition_iterative(self):
+        # inspired by the test of the same name in:
+        # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py
+        pyfunc = argpartition
+        cfunc = jit(nopython=True)(pyfunc)
+
+        assert_argpartitioned = partial(self.assert_argpartitioned,
+                                        pyfunc,
+                                        cfunc)
+
+        d = np.array([3, 4, 2, 1])
+        p = d[cfunc(d, (0, 3))]
+        assert_argpartitioned(p, (0, 3))
+        assert_argpartitioned(d[np.argpartition(d, (0, 3))], (0, 3))
+
+        self.assertPreciseEqual(p, d[cfunc(d, (-3, -1))])
+
+        d = np.arange(17)
+        self.rnd.shuffle(d)
+        self.assertPreciseEqual(np.arange(17), d[cfunc(d, list(range(d.size)))])
+
+        # test unsorted kth
+        d = np.arange(17)
+        self.rnd.shuffle(d)
+        keys = np.array([1, 3, 8, -2])
+        self.rnd.shuffle(d)
+        p = d[cfunc(d, keys)]
+        assert_argpartitioned(p, keys)
+        self.rnd.shuffle(keys)
+        self.assertPreciseEqual(d[cfunc(d, keys)], p)
+
+        # equal kth
+        d = np.arange(20)[::-1]
+        assert_argpartitioned(d[cfunc(d, [5] * 4)], [5])
+        assert_argpartitioned(d[cfunc(d, [5] * 4 + [6, 13])], [5] * 4 + [6, 13])
+
     def test_partition_multi_dim(self):
         pyfunc = partition
         cfunc = jit(nopython=True)(pyfunc)
@@ -2126,6 +2427,44 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             for k in range(-3, 3):
                 check(arr, k)
 
+    def test_argpartition_multi_dim(self):
+        pyfunc = argpartition
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(a, kth):
+            expected = pyfunc(a, kth)
+            got = cfunc(a, kth)
+            a = np.asarray(a)
+            idx = np.ndindex(a.shape[:-1])
+            for s in idx:
+                self.assertPreciseEqual(a[s][expected[s][kth]],
+                                        a[s][got[s][kth]])
+
+            for s in np.ndindex(expected.shape[:-1]):
+                self.assertPreciseEqual(np.unique(a[s][expected[s][:kth]]),
+                                        np.unique(a[s][got[s][:kth]]))
+                self.assertPreciseEqual(np.unique(a[s][expected[s][kth:]]),
+                                        np.unique(a[s][got[s][kth:]]))
+
+        def a_variations(a):
+            yield a
+            yield a.T
+            yield np.asfortranarray(a)
+            yield np.full_like(a, fill_value=np.nan)
+            yield np.full_like(a, fill_value=np.inf)
+            # multi-dimensional tuple input
+            yield (((1.0, 3.142, -np.inf, 3),),)
+
+        a = np.linspace(1, 10, 48)
+        a[4:7] = np.nan
+        a[8] = -np.inf
+        a[9] = np.inf
+        a = a.reshape((4, 3, 4))
+
+        for arr in a_variations(a):
+            for k in range(-3, 3):
+                check(arr, k)
+
     def test_partition_boolean_inputs(self):
         pyfunc = partition
         cfunc = jit(nopython=True)(pyfunc)
@@ -2133,6 +2472,14 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for d in np.linspace(1, 10, 17), np.array((True, False, True)):
             for kth in True, False, -1, 0, 1:
                 self.partition_sanity_check(pyfunc, cfunc, d, kth)
+
+    def test_argpartition_boolean_inputs(self):
+        pyfunc = argpartition
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for d in np.linspace(1, 10, 17), np.array((True, False, True)):
+            for kth in True, False, -1, 0, 1:
+                self.argpartition_sanity_check(pyfunc, cfunc, d, kth)
 
     @needs_blas
     def test_cov_invalid_ddof(self):
@@ -4636,6 +4983,92 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             str(raises.exception)
         )
 
+    def test_union1d(self):
+        pyfunc = np_union1d
+        cfunc = jit(nopython=True)(pyfunc)
+        arrays = [
+            # Test 1d arrays
+            (
+                np.array([1, 2, 3]),
+                np.array([2, 3, 4])
+            ),
+            # Test 2d with 1d array
+            (
+                np.array([[1, 2, 3], [2, 3, 4]]),
+                np.array([2, 5, 6])
+            ),
+            # Test 3d with 1d array
+            (
+                np.arange(0, 20).reshape(2,2,5),
+                np.array([1, 20, 21])
+            ),
+            # Test 2d with 3d array
+            (
+                np.arange(0, 10).reshape(2,5),
+                np.arange(0, 20).reshape(2,5,2)
+            ),
+            # Test other array-like
+            (
+                np.array([False, True, 7]),
+                np.array([1, 2, 3])
+            )
+        ]
+
+        for a, b in arrays:
+            expected = pyfunc(a,b)
+            got = cfunc(a,b)
+            self.assertPreciseEqual(expected, got)
+
+    def test_union1d_exceptions(self):
+        cfunc = jit(nopython=True)(np_union1d)
+        self.disable_leak_check()
+
+        # Test inputs not array-like
+        with self.assertRaises(TypingError) as raises:
+            cfunc("Hello", np.array([1,2]))
+        self.assertIn(
+            "The arguments to np.union1d must be array-like",
+            str(raises.exception)
+        )
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.array([1,2]), "Hello")
+        self.assertIn(
+            "The arguments to np.union1d must be array-like",
+            str(raises.exception)
+        )
+        with self.assertRaises(TypingError) as raises:
+            cfunc("Hello", "World")
+        self.assertIn(
+            "The arguments to np.union1d must be array-like",
+            str(raises.exception)
+        )
+
+        # Test Unicode array exceptions
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.array(['hello', 'world']), np.array(['a', 'b']))
+        self.assertIn(
+            "For Unicode arrays, arrays must have same dtype",
+            str(raises.exception)
+        )
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.array(['c', 'd']), np.array(['foo', 'bar']))
+        self.assertIn(
+            "For Unicode arrays, arrays must have same dtype",
+            str(raises.exception)
+        )
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.array(['c', 'd']), np.array([1, 2]))
+        self.assertIn(
+            "For Unicode arrays, arrays must have same dtype",
+            str(raises.exception)
+        )
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.array(['c', 'd']), np.array([1.1, 2.5]))
+        self.assertIn(
+            "For Unicode arrays, arrays must have same dtype",
+            str(raises.exception)
+        )
+
     def test_asarray_chkfinite(self):
         pyfunc = np_asarray_chkfinite
         cfunc = jit(nopython=True)(pyfunc)
@@ -4950,6 +5383,7 @@ def foo():
         eval(compile(funcstr, '<string>', 'exec'))
         return locals()['foo']
 
+    @unittest.skipIf(numpy_version >= (1, 24), "NumPy < 1.24 required")
     def test_MachAr(self):
         attrs = ('ibeta', 'it', 'machep', 'eps', 'negep', 'epsneg', 'iexp',
                  'minexp', 'xmin', 'maxexp', 'xmax', 'irnd', 'ngrd',
@@ -4992,7 +5426,8 @@ def foo():
             cfunc = jit(nopython=True)(iinfo)
             cfunc(np.float64(7))
 
-    @unittest.skipUnless(numpy_version >= (1, 22), "Needs NumPy >= 1.22")
+    @unittest.skipUnless((1, 22) <= numpy_version < (1, 24),
+                         "Needs NumPy >= 1.22, < 1.24")
     @TestCase.run_test_in_subprocess
     def test_np_MachAr_deprecation_np122(self):
         # Tests that Numba is replaying the NumPy 1.22 deprecation warning

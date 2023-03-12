@@ -517,6 +517,24 @@ class Cuda_atomic_compare_and_swap(AbstractTemplate):
 
 
 @register
+class Cuda_atomic_cas(AbstractTemplate):
+    key = cuda.atomic.cas
+
+    def generic(self, args, kws):
+        assert not kws
+        ary, idx, old, val = args
+        dty = ary.dtype
+
+        if dty not in integer_numba_types:
+            return
+
+        if ary.ndim == 1:
+            return signature(dty, ary, types.intp, dty, dty)
+        elif ary.ndim > 1:
+            return signature(dty, ary, idx, dty, dty)
+
+
+@register
 class Cuda_nanosleep(ConcreteTemplate):
     key = cuda.nanosleep
 
@@ -603,6 +621,9 @@ class CudaAtomicTemplate(AttributeTemplate):
 
     def resolve_compare_and_swap(self, mod):
         return types.Function(Cuda_atomic_compare_and_swap)
+
+    def resolve_cas(self, mod):
+        return types.Function(Cuda_atomic_cas)
 
 
 @register_attr

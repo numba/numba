@@ -435,12 +435,6 @@ def _codepoint_is_ascii(ch):
 # PUBLIC API
 
 
-@overload(str)
-def unicode_str(s):
-    if isinstance(s, types.UnicodeType):
-        return lambda s: s
-
-
 @overload(len)
 def unicode_len(s):
     if isinstance(s, types.UnicodeType):
@@ -854,7 +848,7 @@ def unicode_count(src, sub, start=None, end=None):
             if sub_len == 0:
                 return src_len + 1
 
-            while(start + sub_len <= src_len):
+            while (start + sub_len <= src_len):
                 if src[start : start + sub_len] == sub:
                     count += 1
                     start += sub_len
@@ -2026,7 +2020,7 @@ def _is_upper(is_lower, is_upper, is_title):
             code_point = _get_code_point(a, idx)
             if is_lower(code_point) or is_title(code_point):
                 return False
-            elif(not cased and is_upper(code_point)):
+            elif (not cased and is_upper(code_point)):
                 cased = True
         return cased
     return impl
@@ -2520,39 +2514,55 @@ def ol_chr(i):
         return impl
 
 
-@overload(str)
+@overload_method(types.UnicodeType, "__str__")
+def unicode_str(s):
+    return lambda s: s
+
+
+@overload_method(types.UnicodeType, "__repr__")
+def unicode_repr(s):
+    # Can't use f-string as the impl ends up calling str and then repr, which
+    # then recurses somewhere in imports.
+    return lambda s: "'" + s + "'"
+
+
+@overload_method(types.Integer, "__str__")
 def integer_str(n):
-    if isinstance(n, types.Integer):
 
-        ten = n(10)
+    ten = n(10)
 
-        def impl(n):
-            flag = False
-            if n < 0:
-                n = -n
-                flag = True
-            if n == 0:
-                return '0'
-            length = flag + 1 + int(np.floor(np.log10(n)))
-            kind = PY_UNICODE_1BYTE_KIND
-            char_width = _kind_to_byte_width(kind)
-            s = _malloc_string(kind, char_width, length, True)
-            if flag:
-                _set_code_point(s, 0, ord('-'))
-            idx = length - 1
-            while n > 0:
-                n, digit = divmod(n, ten)
-                c = ord('0') + digit
-                _set_code_point(s, idx, c)
-                idx -= 1
-            return s
-        return impl
+    def impl(n):
+        flag = False
+        if n < 0:
+            n = -n
+            flag = True
+        if n == 0:
+            return '0'
+        length = flag + 1 + int(np.floor(np.log10(n)))
+        kind = PY_UNICODE_1BYTE_KIND
+        char_width = _kind_to_byte_width(kind)
+        s = _malloc_string(kind, char_width, length, True)
+        if flag:
+            _set_code_point(s, 0, ord('-'))
+        idx = length - 1
+        while n > 0:
+            n, digit = divmod(n, ten)
+            c = ord('0') + digit
+            _set_code_point(s, idx, c)
+            idx -= 1
+        return s
+    return impl
 
 
-@overload(str)
+@overload_method(types.Integer, "__repr__")
+def integer_repr(n):
+    return lambda n: n.__str__()
+
+
+@overload_method(types.Boolean, "__repr__")
+@overload_method(types.Boolean, "__str__")
 def boolean_str(b):
-    if isinstance(b, types.Boolean):
-        return lambda b: "True" if b else "False"
+    return lambda b: 'True' if b else 'False'
 
 
 # ------------------------------------------------------------------------------

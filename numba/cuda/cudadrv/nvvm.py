@@ -242,14 +242,13 @@ class CompilationUnit(object):
 
         The valid compiler options are
 
-         *   - -g (enable generation of debugging information)
          *   - -opt=
          *     - 0 (disable optimizations)
          *     - 3 (default, enable optimizations)
          *   - -arch=
-         *     - compute_20 (default)
-         *     - compute_30
-         *     - compute_35
+         *     - compute_XX where XX is in (35, 37, 50, 52, 53, 60, 61, 62, 70,
+         *                                  72, 75, 80, 86, 89, 90).
+         *       The default is compute_52.
          *   - -ftz=
          *     - 0 (default, preserve denormal values, when performing
          *          single-precision floating-point operations)
@@ -273,12 +272,6 @@ class CompilationUnit(object):
 
         # stringify options
         opts = []
-        if 'debug' in options:
-            if options.pop('debug'):
-                opts.append('-g')
-
-        if options.pop('lineinfo', False):
-            opts.append('-generate-line-info')
 
         if 'opt' in options:
             opts.append('-opt=%d' % options.pop('opt'))
@@ -368,6 +361,8 @@ CTK_SUPPORTED = {
     (11, 6): ((3, 5), (8, 7)),
     (11, 7): ((3, 5), (8, 7)),
     (11, 8): ((3, 5), (9, 0)),
+    (12, 0): ((5, 0), (9, 0)),
+    (12, 1): ((5, 0), (9, 0)),
 }
 
 

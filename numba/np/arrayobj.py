@@ -28,7 +28,7 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
 from numba.core.typing import signature
 from numba.core.types import StringLiteral
 from numba.core.extending import (register_jitable, overload, overload_method,
-                                  intrinsic)
+                                  intrinsic, overload_attribute)
 from numba.misc import quicksort, mergesort
 from numba.cpython import slicing
 from numba.cpython.unsafe.tuple import tuple_setitem, build_full_slice_tuple
@@ -379,6 +379,7 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices,
     the corresponding view.
     """
     zero = context.get_constant(types.intp, 0)
+    one = context.get_constant(types.intp, 1)
 
     shapes = cgutils.unpack_tuple(builder, ary.shape, aryty.ndim)
     strides = cgutils.unpack_tuple(builder, ary.strides, aryty.ndim)
@@ -387,11 +388,12 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices,
     output_shapes = []
     output_strides = []
 
+    num_newaxes = len([idx for idx in index_types if is_nonelike(idx)])
     ax = 0
     for indexval, idxty in zip(indices, index_types):
         if idxty is types.ellipsis:
             # Fill up missing dimensions at the middle
-            n_missing = aryty.ndim - len(indices) + 1
+            n_missing = aryty.ndim - len(indices) + 1 + num_newaxes
             for i in range(n_missing):
                 output_indices.append(zero)
                 output_shapes.append(shapes[ax])
@@ -414,6 +416,10 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices,
             if boundscheck:
                 cgutils.do_boundscheck(context, builder, ind, shapes[ax], ax)
             output_indices.append(ind)
+        elif is_nonelike(idxty):
+            output_shapes.append(one)
+            output_strides.append(zero)
+            ax -= 1
         else:
             raise NotImplementedError("unexpected index type: %s" % (idxty,))
         ax += 1
@@ -954,18 +960,22 @@ class FancyIndexer(object):
         self.shapes = cgutils.unpack_tuple(builder, ary.shape, aryty.ndim)
         self.strides = cgutils.unpack_tuple(builder, ary.strides, aryty.ndim)
         self.ll_intp = self.context.get_value_type(types.intp)
+        self.newaxes = []
 
         indexers = []
+        num_newaxes = len([idx for idx in index_types if is_nonelike(idx)])
 
-        ax = 0
+        ax = 0 # keeps track of position of original axes
+        new_ax = 0 # keeps track of position for inserting new axes
         for indexval, idxty in zip(indices, index_types):
             if idxty is types.ellipsis:
                 # Fill up missing dimensions at the middle
-                n_missing = aryty.ndim - len(indices) + 1
+                n_missing = aryty.ndim - len(indices) + 1 + num_newaxes
                 for i in range(n_missing):
                     indexer = EntireIndexer(context, builder, aryty, ary, ax)
                     indexers.append(indexer)
                     ax += 1
+                    new_ax += 1
                 continue
 
             # Regular index value
@@ -991,9 +1001,13 @@ class FancyIndexer(object):
                 else:
                     assert 0
                 indexers.append(indexer)
+            elif is_nonelike(idxty):
+                self.newaxes.append(new_ax)
+                ax -= 1
             else:
                 raise AssertionError("unexpected index type: %s" % (idxty,))
             ax += 1
+            new_ax += 1
 
         # Fill up missing dimensions at the end
         assert ax <= aryty.ndim, (ax, aryty.ndim)
@@ -1008,8 +1022,21 @@ class FancyIndexer(object):
     def prepare(self):
         for i in self.indexers:
             i.prepare()
-        # Compute the resulting shape
-        self.indexers_shape = sum([i.get_shape() for i in self.indexers], ())
+
+        one = self.context.get_constant(types.intp, 1)
+
+        # Compute the resulting shape given by the indices
+        res_shape = [i.get_shape() for i in self.indexers]
+
+        # At every position where newaxis/None is present insert
+        # one as a constant shape in the resulting list of shapes.
+        for i in self.newaxes:
+            res_shape.insert(i, (one,))
+
+        # Store the shape as a tuple, we can't do a simple
+        # tuple(res_shape) here since res_shape is a list
+        # of tuples which may be differently sized.
+        self.indexers_shape = sum(res_shape, ())
 
     def get_shape(self):
         """
@@ -1236,7 +1263,6 @@ def maybe_copy_source(context, builder, use_copy,
             builder.store(builder.load(src_ptr), dest_ptr)
 
     def src_getitem(source_indices):
-        assert len(source_indices) == srcty.ndim
         src_ptr = cgutils.alloca_once(builder, ptrty)
         with builder.if_else(use_copy, likely=False) as (if_copy, otherwise):
             with if_copy:
@@ -1700,11 +1726,25 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         def src_cleanup():
             pass
 
+    zero = context.get_constant(types.uintp, 0)
     # Loop on destination and copy from source to destination
     dest_indices, counts = indexer.begin_loops()
 
     # Source is iterated in natural order
-    source_indices = tuple(c for c in counts if c is not None)
+
+    # Counts represent a counter for the number of times a specified axis
+    # is being accessed, during setitem they are used as source
+    # indices
+    counts = list(counts)
+
+    # We need to artifically introduce the index zero wherever a
+    # newaxis is present within the indexer. These always remain
+    # zero.
+    for i in indexer.newaxes:
+        counts.insert(i, zero)
+
+    source_indices = [c for c in counts if c is not None]
+
     val = src_getitem(source_indices)
 
     # Cast to the destination dtype (cross-dtype slice assignment is allowed)
@@ -3114,6 +3154,14 @@ def array_is(context, builder, sig, args):
                 a.ctypes.data == b.ctypes.data)
 
     return context.compile_internal(builder, array_is_impl, sig, args)
+
+# ------------------------------------------------------------------------------
+# Hash
+
+
+@overload_attribute(types.Array, "__hash__")
+def ol_array_hash(arr):
+    return lambda arr: None
 
 
 # ------------------------------------------------------------------------------
@@ -6236,6 +6284,102 @@ def as_strided(x, shape=None, strides=None):
         return x
 
     return as_strided_impl
+
+
+if numpy_version >= (1, 20):
+    @extending.overload(np.lib.stride_tricks.sliding_window_view)
+    def sliding_window_view(x, window_shape, axis=None):
+
+        # Window shape must be given as either an integer or tuple of integers.
+        # We also need to generate buffer tuples we can modify to contain the
+        # final shape and strides (reshape_unchecked does not accept lists).
+        if isinstance(window_shape, types.Integer):
+            shape_buffer = tuple(range(x.ndim + 1))
+            stride_buffer = tuple(range(x.ndim + 1))
+
+            @register_jitable
+            def get_window_shape(window_shape):
+                return (window_shape,)
+
+        elif (isinstance(window_shape, types.UniTuple) and
+              isinstance(window_shape.dtype, types.Integer)):
+            shape_buffer = tuple(range(x.ndim + len(window_shape)))
+            stride_buffer = tuple(range(x.ndim + len(window_shape)))
+
+            @register_jitable
+            def get_window_shape(window_shape):
+                return window_shape
+
+        else:
+            raise errors.TypingError(
+                "window_shape must be an integer or tuple of integers"
+            )
+
+        # Axis must be integer, tuple of integers, or None for all axes.
+        if is_nonelike(axis):
+            @register_jitable
+            def get_axis(window_shape, axis, ndim):
+                return list(range(ndim))
+
+        elif isinstance(axis, types.Integer):
+            @register_jitable
+            def get_axis(window_shape, axis, ndim):
+                return [
+                    normalize_axis("sliding_window_view", "axis", ndim, axis)
+                ]
+
+        elif (isinstance(axis, types.UniTuple) and
+              isinstance(axis.dtype, types.Integer)):
+            @register_jitable
+            def get_axis(window_shape, axis, ndim):
+                return [normalize_axis("sliding_window_view", "axis", ndim, a)
+                        for a in axis]
+
+        else:
+            raise errors.TypingError(
+                "axis must be None, an integer or tuple of integers"
+            )
+
+        def sliding_window_view_impl(x, window_shape, axis=None):
+            window_shape = get_window_shape(window_shape)
+            axis = get_axis(window_shape, axis, x.ndim)
+            if len(window_shape) != len(axis):
+                raise ValueError(
+                    "Must provide matching length window_shape and axis"
+                )
+
+            # Initialise view details with shape and strides of x.
+            out_shape = shape_buffer
+            out_strides = stride_buffer
+            for i in range(x.ndim):
+                out_shape = tuple_setitem(out_shape, i, x.shape[i])
+                out_strides = tuple_setitem(out_strides, i, x.strides[i])
+
+            # Trim the dimensions being windowed and set the window shape and
+            # strides. Note: the same axis can be windowed repeatedly.
+            i = x.ndim
+            for ax, dim in zip(axis, window_shape):
+                if dim < 0:
+                    raise ValueError(
+                        "`window_shape` cannot contain negative values"
+                    )
+                if out_shape[ax] < dim:
+                    raise ValueError(
+                        "window_shape cannot be larger than input array shape"
+                    )
+
+                trimmed = out_shape[ax] - dim + 1
+                out_shape = tuple_setitem(out_shape, ax, trimmed)
+                out_shape = tuple_setitem(out_shape, i, dim)
+                out_strides = tuple_setitem(out_strides, i, x.strides[ax])
+                i += 1
+
+            # The NumPy version calls as_strided, but our implementation of
+            # as_strided is effectively a wrapper for reshape_unchecked.
+            view = reshape_unchecked(x, out_shape, out_strides)
+            return view
+
+        return sliding_window_view_impl
 
 
 @overload(bool)

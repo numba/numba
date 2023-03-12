@@ -8,17 +8,21 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <math.h>
+#include <complex.h>
 #ifdef _MSC_VER
     #define int64_t signed __int64
     #define uint64_t unsigned __int64
     #define uint32_t unsigned __int32
+    #define _complex_float_t _Fcomplex
+    #define _complex_float_ctor(r, i) _FCbuild(r, i)
 #else
     #include <stdint.h>
+    #define _complex_float_t complex float
+    #define _complex_float_ctor(r, i) (r + I * i)
 #endif
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/ndarrayobject.h>
 #include <numpy/arrayscalars.h>
-#include <numpy/npy_math.h>
 
 #include "_arraystruct.h"
 
@@ -123,14 +127,14 @@ numba_cpow(Py_complex *a, Py_complex *b, Py_complex *out) {
 }
 
 NUMBA_EXPORT_FUNC(void)
-numba_cpowf(npy_cfloat *a, npy_cfloat *b, npy_cfloat *out) {
+numba_cpowf(_complex_float_t *a, _complex_float_t *b, _complex_float_t *out) {
     Py_complex _a, _b, _out;
-    _a.real = npy_crealf(*a);
-    _a.imag = npy_cimagf(*a);
-    _b.real = npy_crealf(*b);
-    _b.imag = npy_cimagf(*b);
+    _a.real = crealf(*a);
+    _a.imag = cimagf(*a);
+    _b.real = crealf(*b);
+    _b.imag = cimagf(*b);
     numba_cpow(&_a, &_b, &_out);
-    *out = npy_cpackf((float) _out.real, (float) _out.imag);
+    *out = _complex_float_ctor((float) _out.real, (float) _out.imag);
 }
 
 /* C99 math functions: redirect to system implementations */
@@ -183,17 +187,16 @@ numba_erfcf(float x)
     return erfcf(x);
 }
 
-/* Note npy_signbit() is actually a polymorphic macro */
-NUMBA_EXPORT_FUNC(int)
-numba_signbitf(float a)
+NUMBA_EXPORT_FUNC(float)
+numba_nextafterf(float a, float b)
 {
-    return npy_signbit(a);
+    return nextafterf(a, b);
 }
 
-NUMBA_EXPORT_FUNC(int)
-numba_signbit(npy_double a)
+NUMBA_EXPORT_FUNC(double)
+numba_nextafter(double a, double b)
 {
-    return npy_signbit(a);
+    return nextafter(a, b);
 }
 
 /* Unpack any Python complex-like object into a Py_complex structure */
