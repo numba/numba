@@ -12,6 +12,9 @@ int bar(int *out, int a)
 }
 
 
+// The out argument is necessary due to Numba's CUDA calling convention, which
+// always reserves the first parameter for a pointer to a returned value, even
+// if there is no return value.
 extern "C" __device__
 int array_mutator(void *out, int *a)
 {
