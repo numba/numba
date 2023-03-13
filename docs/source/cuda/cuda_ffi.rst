@@ -117,7 +117,7 @@ would be declared as follows:
    signature = 'float32(CPointer(float32), int32)'
    sum_reduce = cuda.declare_device('sum_reduce', signature)
 
-To obtain a pointer to array data for passing to C functions, use the
+To obtain a pointer to array data for passing to foreign functions, use the
 ``from_buffer()`` method of a ``cffi.FFI`` instance. For example, a kernel using
 the ``sum_reduce`` function could be defined as:
 
