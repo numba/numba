@@ -7,7 +7,7 @@
 //
 
 .version 6.5
-.target sm_53
+.target sm_50
 .address_size 64
 
 	// .globl	bar
