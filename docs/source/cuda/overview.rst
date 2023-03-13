@@ -55,8 +55,8 @@ Software
 --------
 
 Numba aims to support CUDA Toolkit versions released within the last 3 years.
-An NVIDIA driver sufficient for the toolkit version is also required.
-Presently:
+An NVIDIA driver sufficient for the toolkit version is also required (see also
+:ref:`minor-version-compatibility`). Presently:
 
 * 11.0 is the minimum required toolkit version.
 * 11.2 or later is recommended, as it uses an NVVM version based on LLVM 7 (as

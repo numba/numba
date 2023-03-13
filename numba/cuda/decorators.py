@@ -63,6 +63,7 @@ def jit(func_or_sig=None, device=False, cache=False, extensions=None,
     link = options.get('link')
     debug = options.get('debug')
     opt = options.get('opt', True)
+    lineinfo = options.get('lineinfo')
     fastmath = options.get('fastmath', False)
 
     # Checks for erroneous options and combinations of options
@@ -92,6 +93,12 @@ def jit(func_or_sig=None, device=False, cache=False, extensions=None,
         msg = ("debug=True with opt=True (the default) "
                "is not supported by CUDA. This may result in a crash"
                " - set debug=False or opt=False.")
+        warn(NumbaInvalidConfigWarning(msg))
+
+    if debug and lineinfo:
+        msg = ("debug and lineinfo are mutually exclusive. Use debug to get "
+               "full debug info (this disables some optimizations), or "
+               "lineinfo for line info only with code generation unaffected.")
         warn(NumbaInvalidConfigWarning(msg))
 
     if sigutils.is_signature(func_or_sig):

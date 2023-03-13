@@ -306,6 +306,7 @@ The following methods of NumPy arrays are supported:
 
 * :meth:`~numpy.ndarray.argmax` (``axis`` keyword argument supported).
 * :meth:`~numpy.ndarray.argmin` (``axis`` keyword argument supported).
+* :func:`numpy.argpartition` (only the 2 first arguments)
 * :meth:`~numpy.ndarray.argsort` (``kind`` key word argument supported for
   values ``'quicksort'`` and ``'mergesort'``)
 * :meth:`~numpy.ndarray.astype` (only the 1-argument form)
@@ -810,11 +811,15 @@ The following functions support all arguments.
 ``stride_tricks``
 -----------------
 
-The following function from the :mod:`numpy.lib.stride_tricks` module
-is supported:
+The following functions from the :mod:`numpy.lib.stride_tricks` module
+are supported:
 
 * :func:`~numpy.lib.stride_tricks.as_strided` (the *strides* argument
   is mandatory, the *subok* argument is not supported)
+
+* :func:`~numpy.lib.stride_tricks.sliding_window_view` (requires NumPy
+  1.20 or later; the *subok* argument is not supported, the *writeable*
+  argument is not supported with the returned view always being writeable)
 
 .. _supported_ufuncs:
 
