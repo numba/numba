@@ -48,7 +48,7 @@ requirements:
     - setuptools
     - importlib_metadata       # [py<39]
     # On channel https://anaconda.org/numba/
-    - llvmlite ==0.40.0dev0llvm14
+    - llvmlite >=0.40.0dev0,<0.40
   run_constrained:
     # If TBB is present it must be at least version 2021
     - tbb >=2021    # [not (aarch64 or ppc64le)]
