@@ -99,37 +99,34 @@ array arguments using C pointer types.
 
 For example, a function with the following prototype:
 
-.. code:: C
-
-   extern "C"
-   __device__ int
-   sum_reduce(
-     float* return_value,
-     float* array,
-     int n
-   );
-
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/ffi/functions.cu
+   :language: C
+   :caption: ``numba/cuda/tests/doc_examples/ffi/functions.cu``
+   :start-after: magictoken.ex_sum_reduce_proto.begin
+   :end-before: magictoken.ex_sum_reduce_proto.end
+   :linenos:
 
 would be declared as follows:
 
-.. code::
-
-   signature = 'float32(CPointer(float32), int32)'
-   sum_reduce = cuda.declare_device('sum_reduce', signature)
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_ffi.py
+   :language: python
+   :caption: from ``test_ex_from_buffer`` in ``numba/cuda/tests/doc_examples/test_ffi.py``
+   :start-after: magictoken.ex_from_buffer_decl.begin
+   :end-before: magictoken.ex_from_buffer_decl.end
+   :dedent: 8
+   :linenos:
 
 To obtain a pointer to array data for passing to foreign functions, use the
 ``from_buffer()`` method of a ``cffi.FFI`` instance. For example, a kernel using
 the ``sum_reduce`` function could be defined as:
 
-.. code::
-
-   import cffi
-   ffi = cffi.FFI()
-
-   @cuda.jit
-   def reduction_caller(result, array):
-       array_ptr = ffi.from_buffer(array)
-       result[0] = sum_reduce(array, len(array))
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_ffi.py
+   :language: python
+   :caption: from ``test_ex_from_buffer`` in ``numba/cuda/tests/doc_examples/test_ffi.py``
+   :start-after: magictoken.ex_from_buffer_kernel.begin
+   :end-before: magictoken.ex_from_buffer_kernel.end
+   :dedent: 8
+   :linenos:
 
 where ``result`` and ``array`` are both arrays of ``float32`` data.
 
@@ -184,6 +181,8 @@ The foreign function is written as follows:
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/ffi/functions.cu
    :language: C
    :caption: ``numba/cuda/tests/doc_examples/ffi/functions.cu``
+   :start-after: magictoken.ex_mul_f32_f32.begin
+   :end-before: magictoken.ex_mul_f32_f32.end
    :linenos:
 
 The Python code and kernel are:
