@@ -1225,6 +1225,8 @@ class CPUCodegen(Codegen):
                 pm.add_licm_pass()
                 pm.add_cfg_simplification_pass()
             else:
+                # These passes are required to get SVML to vectorize tests
+                # properly on LLVM 14
                 pm.add_instruction_combining_pass()
                 pm.add_jump_threading_pass()
 
