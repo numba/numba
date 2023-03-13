@@ -1,0 +1,115 @@
+name: Release
+
+permissions:
+  contents: write
+
+on:
+  push:
+    tags:
+      - v[0-9]+.*
+
+jobs:
+  # First we are going to create a task that generates a new release in GitHub
+  # as a draft. All the wheels will end up being uploaded here at the end.
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.create-gh-release.outputs.computed-prefix }}${{ steps.create-gh-release.outputs.version }}
+    steps:
+      - uses: actions/checkout@v3
+      - id: create-gh-release
+        uses: taiki-e/create-gh-release-action@v1
+        with:
+          draft: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  build-wheels:
+    # Build binary wheels for the platforms we care about using cibuildwheel.
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-22.04, macOS-11, windows-2019  ]
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-python@v3
+        with:
+          python-version: '3.9'
+
+      - name: Install cibuildwheel
+        run: python -m pip install cibuildwheel==2.12.0
+
+      - name: Build wheels
+        run: "python -m cibuildwheel --output-dir wheelhouse"
+        env:
+          # On a 64-bit machine, cibuildwheel will try to build 32-bit
+          # packages. Since LLVM is only build for 64-bit, linking will go
+          # badly.
+          CIBW_ARCHS: auto64
+          # I cannot tell you how much this isn't going to work on musllinux,
+          # so don't try to compile against it.
+          CIBW_BUILD: cp39-*
+          CIBW_SKIP: cp39-musllinux*
+          # Run our little script to inject LLVM into the build environment. See script for details.
+          CIBW_BEFORE_BUILD: "{project}/buildscripts/github/install_numpy.sh"
+          CIBW_BEFORE_BUILD_WINDOWS: "pwsh {project}/buildscripts/github/install_numpy.ps1"
+          # cibuildwheel is going to assume we are going for maximum
+          # compatibility and that's can't happen with LLVM because it needs a
+          # relatively new C++ compiler. So, instead, we tell it to require a
+          # GLIBC of 2.31. If you get inscrutable compatibility errors, try
+          # `auditwheel -v repair` to get _too much_ output.
+          CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair --plat manylinux_2_31_$(uname -m) -w {dest_dir} {wheel}"
+          # This is different from the default to avoid FAT binary weirdness
+          # and it came from the cibuildwheel manual.
+          CIBW_REPAIR_WHEEL_COMMAND_MACOS: "delocate-wheel --ignore-missing-dependencies --require-archs {delocate_archs} -w {dest_dir} -v {wheel}"
+          # This seems like it should match the number you have for `--plat`,
+          # but it doesn't (older is fine) and there's an explanation for why
+          # this can't be determined automatically in the manual.
+          CIBW_MANYLINUX_X86_64_IMAGE: quay.io/pypa/manylinux_2_24_x86_64
+          CIBW_MANYLINUX_PYPY_X86_64_IMAGE: quay.io/pypa/manylinux_2_24_x86_64
+
+      - uses: actions/upload-artifact@v3
+        with:
+          path: ./wheelhouse/*.whl
+
+  build-sdist:
+    # Build a source package. This is actually easy.
+    name: Make SDist
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Build SDist
+      run: pipx run build --sdist
+
+    - uses: actions/upload-artifact@v3
+      with:
+        path: dist/*.tar.gz
+
+  upload-all:
+    needs: [build-wheels, build-sdist, create-release]
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/download-artifact@v3
+      with:
+        name: artifact
+        path: dist
+    - name: run cargo-dist manifest
+      run: |
+        gh release upload ${{ needs.create-release.outputs.tag }} dist/*
+
+  # Mark the Github Release™️ as a non-draft now that everything has succeeded!
+  publish-release:
+    needs: [create-release, upload-all]
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: mark release as non-draft
+        run: |
+          gh release edit ${{ needs.create-release.outputs.tag }} --draft=false
