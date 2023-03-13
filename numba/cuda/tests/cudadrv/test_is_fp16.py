@@ -28,3 +28,8 @@ class TestIsFP16Supported(CUDATestCase):
     @skip_unless_cudasim
     def test_is_fp16_supported_on_simulator(self):
         self.assertTrue(cuda.is_float16_supported())
+
+    @skip_on_cudasim
+    @skip_unless_cc_53
+    def test_device_supports_float16(self):
+        self.assertTrue(cuda.get_current_device().supports_float16)
