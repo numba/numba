@@ -1,12 +1,9 @@
 import numpy as np
-import os
 import cffi
 
 from numba import cuda, types
-from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
-
-parent_dir = os.path.dirname(os.path.dirname(__file__))
-data_dir = os.path.join(parent_dir, 'data')
+from numba.cuda.testing import (skip_on_cudasim, test_data_dir, unittest,
+                                CUDATestCase)
 
 
 @skip_on_cudasim('Simulator does not support linking')
@@ -14,7 +11,7 @@ class TestCFFI(CUDATestCase):
     def test_from_buffer(self):
         ffi = cffi.FFI()
 
-        link = os.path.join(data_dir, 'jitlink.ptx')
+        link = str(test_data_dir / 'jitlink.ptx')
         sig = types.void(types.CPointer(types.int32))
         array_mutator = cuda.declare_device('array_mutator', sig)
 
