@@ -112,7 +112,7 @@ python -m numba.tests.test_runtests
 echo "INFO: All discovered tests:"
 python -m numba.runtests -l
 
-# Now run the Numba test suite with slicing
+# Now run the Numba test suite with sharding
 # Note that coverage is run from the checkout dir to match the "source"
 # directive in .coveragerc
 echo "INFO: Running slice of discovered tests: ($TEST_START_INDEX,None,$TEST_COUNT)"

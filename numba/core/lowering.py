@@ -64,9 +64,11 @@ class BaseLower(object):
         # debuginfo def location
         self.defn_loc = self._compute_def_location()
 
+        directives_only = self.flags.dbg_directives_only
         self.debuginfo = dibuildercls(module=self.module,
                                       filepath=func_ir.loc.filename,
-                                      cgctx=context)
+                                      cgctx=context,
+                                      directives_only=directives_only)
 
         # Subclass initialization
         self.init()
@@ -120,6 +122,14 @@ class BaseLower(object):
                                        argnames=self.fndesc.args,
                                        argtypes=self.fndesc.argtypes,
                                        line=self.defn_loc.line)
+
+        # When full debug info is enabled, disable inlining where possible, to
+        # improve the quality of the debug experience. 'alwaysinline' functions
+        # cannot have inlining disabled.
+        attributes = self.builder.function.attributes
+        full_debug = self.flags.debuginfo and not self.flags.dbg_directives_only
+        if full_debug and 'alwaysinline' not in attributes:
+            attributes.add('noinline')
 
     def post_lower(self):
         """
@@ -346,7 +356,10 @@ class Lower(BaseLower):
         prevent alloca and subsequent load/store for locals) should be disabled.
         Currently, this is conditional solely on the presence of a request for
         the emission of debug information."""
-        return False if self.flags is None else self.flags.debuginfo
+        if self.flags is None:
+            return False
+
+        return self.flags.debuginfo and not self.flags.dbg_directives_only
 
     def _find_singly_assigned_variable(self):
         func_ir = self.func_ir
@@ -563,11 +576,6 @@ class Lower(BaseLower):
             self.lower_static_try_raise(inst)
 
         else:
-            if hasattr(self.context, "lower_extensions"):
-                for _class, func in self.context.lower_extensions.items():
-                    if isinstance(inst, _class):
-                        func(self, inst)
-                        return
             raise NotImplementedError(type(inst))
 
     def lower_setitem(self, target_var, index_var, value_var, signature):

@@ -188,9 +188,7 @@ with CPython APIs.
 - :ghfile:`numba/_helperlib.c` - C functions required by Numba compiled code
   at runtime.  Linked into ahead-of-time compiled modules
 - :ghfile:`numba/_helpermod.c` - Python extension module with pointers to
-  functions from ``_helperlib.c`` and ``_npymath_exports.c``
-- :ghfile:`numba/_npymath_exports.c` - Export function pointer table to
-  NumPy C math functions
+  functions from ``_helperlib.c``
 - :ghfile:`numba/_dynfuncmod.c` - Python extension module exporting
   _dynfunc.c functionality
 - :ghfile:`numba/_dynfunc.c` - C level Environment and Closure objects (keep
@@ -220,8 +218,6 @@ Misc Support
   patterns in LLVM IR
 - :ghfile:`numba/core/utils.py` - Python 2 backports of Python 3 functionality
   (also imports local copy of ``six``)
-- :ghfile:`numba/core/overload_glue.py` - Functions for wrapping split typing
-  and lowering API use cases into overloads.
 - :ghfile:`numba/misc/appdirs.py` - Vendored package for determining application
   config directories on every platform
 - :ghfile:`numba/core/compiler_lock.py` - Global compiler lock because Numba's

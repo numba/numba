@@ -14,6 +14,10 @@ cmd /C conda info
 set CONDA_INSTALL=cmd /C conda install -q -y
 set PIP_INSTALL=pip install -q
 
+@rem Use conda-forge for NumPy 1.24 - at the time of writing it is not available
+@rem on the defaults channel.
+if %NUMPY%==1.24 (set NUMPY_CHANNEL_PKG="conda-forge::numpy") else (set NUMPY_CHANNEL_PKG="numpy")
+
 @echo on
 
 @rem Deactivate any environment
@@ -21,7 +25,7 @@ call deactivate
 @rem Display root environment (for debugging)
 conda list
 @rem Scipy, CFFI, jinja2 and IPython are optional dependencies, but exercised in the test suite
-conda create -n %CONDA_ENV% -q -y -c conda-forge python=%PYTHON% numpy=%NUMPY% cffi pip scipy jinja2 ipython gitpython pyyaml
+conda create -n %CONDA_ENV% -q -y -c conda-forge python=%PYTHON% %NUMPY_CHANNEL_PKG%=%NUMPY% cffi pip scipy jinja2 ipython gitpython pyyaml
 
 call activate %CONDA_ENV%
 @rem Install latest llvmlite build

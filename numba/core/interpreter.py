@@ -2303,6 +2303,7 @@ class Interpreter(object):
         self._insert_try_block_begin()
 
     def op_SETUP_FINALLY(self, inst):
+        # Removed since python3.11
         self._insert_try_block_begin()
 
     def op_WITH_CLEANUP(self, inst):

@@ -13,7 +13,7 @@ from textwrap import dedent
 
 import numpy as np
 
-from numba import jit, config
+from numba import jit, config, typed, typeof
 from numba.core import types, utils
 import unittest
 from numba.tests.support import (TestCase, tag, CompilationCache,
@@ -461,6 +461,38 @@ class TestUnicodeHashing(BaseTest):
         a = (compile_time_get_string_data(expected))
         b = (compile_time_get_string_data(got))
         self.assertEqual(a, b)
+
+
+class TestUnhashable(TestCase):
+    # Tests that unhashable types behave correctly and raise a TypeError at
+    # runtime.
+
+    def test_hash_unhashable(self):
+        unhashables = (typed.Dict().empty(types.int64, types.int64),
+                       typed.List().empty_list(types.int64),
+                       np.ones(4))
+        cfunc = jit(nopython=True)(hash_usecase)
+        for ty in unhashables:
+            with self.assertRaises(TypeError) as raises:
+                cfunc(ty)
+            expected = f"unhashable type: '{str(typeof(ty))}'"
+            self.assertIn(expected, str(raises.exception))
+
+    def test_no_generic_hash(self):
+        # In CPython, if there's no attr `__hash__` on an object, a hash of the
+        # object's pointer is returned (see: _Py_HashPointer in the CPython
+        # source). Numba has no access to such objects and can't create them
+        # either, so it catches this case and raises an exception.
+
+        @jit(nopython=True)
+        def foo():
+            hash(np.cos)
+
+        with self.assertRaises(TypeError) as raises:
+            foo()
+
+        expected = ("No __hash__ is defined for object ")
+        self.assertIn(expected, str(raises.exception))
 
 
 if __name__ == "__main__":

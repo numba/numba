@@ -4,6 +4,7 @@ import traceback
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.cuda.testing import (skip_on_cudasim, skip_with_cuda_python,
                                 skip_under_cuda_memcheck)
+from numba.tests.support import linux_only
 
 
 def child_test():
@@ -101,6 +102,9 @@ def child_test_wrapper(result_queue):
     result_queue.put((success, output))
 
 
+# Run on Linux only until the reason for test hangs on Windows (Issue #8635,
+# https://github.com/numba/numba/issues/8635) is diagnosed
+@linux_only
 @skip_under_cuda_memcheck('Hangs cuda-memcheck')
 @skip_on_cudasim('Streams not supported on the simulator')
 class TestPTDS(CUDATestCase):

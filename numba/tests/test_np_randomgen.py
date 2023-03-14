@@ -1,11 +1,10 @@
 import numba
 import numpy as np
 import sys
-import platform
 import itertools
+import gc
 
 from numba import types
-from numba.core.config import IS_32BITS
 from numba.tests.support import TestCase, MemoryLeakMixin
 from numba.np.random.generator_methods import _get_proper_func
 from numba.np.random.generator_core import next_uint32, next_uint64, next_double
@@ -14,12 +13,12 @@ from numba.core.errors import TypingError
 from numba.tests.support import run_in_new_process_caching, SerialMixin
 
 
-# The following logic is to mitigate:
+# TODO: Following testing tolerance adjustments should be reduced
+# once NumPy Generator's fmadd issue described below is resolved:
 # https://github.com/numba/numba/pull/8038#issuecomment-1165571368
-if IS_32BITS or platform.machine() in ['ppc64le', 'aarch64']:
-    adjusted_ulp_prec = 2048
-else:
-    adjusted_ulp_prec = 5
+# The progress is being tracked as one of the tasks in:
+# https://github.com/numba/numba/issues/8519
+adjusted_ulp_prec = 2048
 
 
 class TestHelperFuncs(TestCase):
@@ -233,9 +232,11 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         do_box = numba.njit(lambda x:x)
 
         y = do_box(rng_instance)
+        gc.collect()
         ref_1 = sys.getrefcount(rng_instance)
         del y
         no_box(rng_instance)
+        gc.collect()
         ref_2 = sys.getrefcount(rng_instance)
 
         self.assertEqual(ref_1, ref_2 + 1)
@@ -1096,6 +1097,8 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             curr_args[2] = -1
             nb_dist_func(*curr_args)
         self.assertIn('nonc < 0', str(raises.exception))
+        # Exceptions leak references
+        self.disable_leak_check()
 
     def test_noncentral_f(self):
         # For this test dtype argument is never used, so we pass [None] as dtype
@@ -1109,7 +1112,8 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         for _size, _bitgen in itertools.product(test_sizes, bitgen_types):
             with self.subTest(_size=_size, _bitgen=_bitgen):
                 self.check_numpy_parity(dist_func, _bitgen,
-                                        None, _size, None)
+                                        None, _size, None,
+                                        adjusted_ulp_prec)
 
         dist_func = lambda x, dfnum, dfden, nonc, size:\
             x.noncentral_f(dfnum=dfnum, dfden=dfden, nonc=nonc, size=size)
@@ -1139,6 +1143,8 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             curr_args[3] = -1
             nb_dist_func(*curr_args)
         self.assertIn('nonc < 0', str(raises.exception))
+        # Exceptions leak references
+        self.disable_leak_check()
 
     def test_logseries(self):
         # For this test dtype argument is never used, so we pass [None] as dtype
@@ -1171,6 +1177,8 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                 curr_args[1] = _p
                 nb_dist_func(*curr_args)
             self.assertIn('p < 0, p >= 1 or p is NaN', str(raises.exception))
+        # Exceptions leak references
+        self.disable_leak_check()
 
 
 class TestGeneratorCaching(TestCase, SerialMixin):

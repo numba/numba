@@ -9,7 +9,7 @@ import itertools
 from llvmlite import ir
 
 from numba.core import types, cgutils
-from numba.core.base import PYOBJECT, GENERIC_POINTER
+from numba.core.base import GENERIC_POINTER
 
 
 TryStatus = namedtuple('TryStatus', ['in_try', 'excinfo'])
@@ -90,7 +90,7 @@ class BaseCallConv(object):
         self._return_errcode_raw(builder, RETCODE_NONE)
 
     def return_exc(self, builder):
-        self._return_errcode_raw(builder, RETCODE_EXC, mark_exc=True)
+        self._return_errcode_raw(builder, RETCODE_EXC)
 
     def return_stop_iteration(self, builder):
         self._return_errcode_raw(builder, RETCODE_STOPIT)
@@ -207,12 +207,12 @@ class MinimalCallConv(BaseCallConv):
 
         call_helper = self._get_call_helper(builder)
         exc_id = call_helper._add_exception(exc, exc_args, locinfo)
-        self._return_errcode_raw(builder, _const_int(exc_id), mark_exc=True)
+        self._return_errcode_raw(builder, _const_int(exc_id))
 
     def return_status_propagate(self, builder, status):
         self._return_errcode_raw(builder, status.code)
 
-    def _return_errcode_raw(self, builder, code, mark_exc=False):
+    def _return_errcode_raw(self, builder, code):
         if isinstance(code, int):
             code = _const_int(code)
         builder.ret(code)
@@ -395,7 +395,9 @@ class CPUCallConv(BaseCallConv):
         exc = (exc, exc_args, locinfo)
         struct_gv = pyapi.serialize_object(exc)
         excptr = self._get_excinfo_argument(builder.function)
-        builder.store(struct_gv, excptr)
+        store = builder.store(struct_gv, excptr)
+        md = builder.module.add_metadata([ir.IntType(1)(1)])
+        store.set_metadata("numba_exception_output", md)
 
     def return_user_exc(self, builder, exc, exc_args=None, loc=None,
                         func_name=None):
@@ -409,7 +411,7 @@ class CPUCallConv(BaseCallConv):
             builder.branch(try_info['target'])
         else:
             # Return from the current function
-            self._return_errcode_raw(builder, RETCODE_USEREXC, mark_exc=True)
+            self._return_errcode_raw(builder, RETCODE_USEREXC)
 
     def _get_try_state(self, builder):
         try:
@@ -457,14 +459,10 @@ class CPUCallConv(BaseCallConv):
         excptr = self._get_excinfo_argument(builder.function)
         builder.store(status.excinfoptr, excptr)
         with builder.if_then(builder.not_(trystatus.in_try)):
-            self._return_errcode_raw(builder, status.code, mark_exc=True)
+            self._return_errcode_raw(builder, status.code)
 
-    def _return_errcode_raw(self, builder, code, mark_exc=False):
-        ret = builder.ret(code)
-
-        if mark_exc:
-            md = builder.module.add_metadata([ir.IntType(1)(1)])
-            ret.set_metadata("ret_is_raise", md)
+    def _return_errcode_raw(self, builder, code):
+        builder.ret(code)
 
     def _get_return_status(self, builder, code, excinfoptr):
         """
