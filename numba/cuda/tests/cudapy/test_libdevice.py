@@ -152,7 +152,8 @@ def make_test_call(libname):
             pyargs = pyreturns + pyargs
         else:
             pyargs.insert(0, sig.return_type[::1])
-
+        
+        pyargs = tuple(pyargs)
         ptx, resty = compile_ptx(pyfunc, pyargs)
 
         # If the function body was discarded by optimization (therefore making

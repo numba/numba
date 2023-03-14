@@ -98,7 +98,7 @@ class TestCompileToPTX(unittest.TestCase):
         def f():
             pass
 
-        ptx, resty = compile_ptx(f, [], device=True, debug=True)
+        ptx, resty = compile_ptx(f, (), device=True, debug=True)
         self.check_debug_info(ptx)
 
     def test_kernel_with_debug(self):
@@ -106,7 +106,7 @@ class TestCompileToPTX(unittest.TestCase):
         def f():
             pass
 
-        ptx, resty = compile_ptx(f, [], debug=True)
+        ptx, resty = compile_ptx(f, (), debug=True)
         self.check_debug_info(ptx)
 
     def check_line_info(self, ptx):
@@ -119,14 +119,14 @@ class TestCompileToPTX(unittest.TestCase):
         def f():
             pass
 
-        ptx, resty = compile_ptx(f, [], device=True, lineinfo=True)
+        ptx, resty = compile_ptx(f, (), device=True, lineinfo=True)
         self.check_line_info(ptx)
 
     def test_kernel_with_line_info(self):
         def f():
             pass
 
-        ptx, resty = compile_ptx(f, [], lineinfo=True)
+        ptx, resty = compile_ptx(f, (), lineinfo=True)
         self.check_line_info(ptx)
 
     def test_non_void_return_type(self):
