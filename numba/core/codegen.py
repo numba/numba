@@ -234,7 +234,7 @@ class _CFG(object):
         nrt_meminfo = re.compile("@NRT_MemInfo")
         ll_intrin_calls = re.compile(r".*call.*@llvm\..*")
         ll_function_call = re.compile(r".*call.*@.*")
-        ll_raise = re.compile(r"ret i32.*\!ret_is_raise.*")
+        ll_raise = re.compile(r"store .*\!numba_exception_output.*")
         ll_return = re.compile("ret i32 [^1],?.*")
 
         # wrapper function for line wrapping LLVM lines
@@ -1215,14 +1215,21 @@ class CPUCodegen(Codegen):
             # This knocks loops into rotated form early to reduce the likelihood
             # of vectorization failing due to unknown PHI nodes.
             pm.add_loop_rotate_pass()
-            # LLVM 11 added LFTR to the IV Simplification pass, this interacted
-            # badly with the existing use of the InstructionCombiner here and
-            # ended up with PHI nodes that prevented vectorization from
-            # working. The desired vectorization effects can be achieved
-            # with this in LLVM 11 (and also < 11) but at a potentially
-            # slightly higher cost:
-            pm.add_licm_pass()
-            pm.add_cfg_simplification_pass()
+            if ll.llvm_version_info[0] < 12:
+                # LLVM 11 added LFTR to the IV Simplification pass,
+                # this interacted badly with the existing use of the
+                # InstructionCombiner here and ended up with PHI nodes that
+                # prevented vectorization from working. The desired
+                # vectorization effects can be achieved with this in LLVM 11
+                # (and also < 11) but at a potentially slightly higher cost:
+                pm.add_licm_pass()
+                pm.add_cfg_simplification_pass()
+            else:
+                # These passes are required to get SVML to vectorize tests
+                # properly on LLVM 14
+                pm.add_instruction_combining_pass()
+                pm.add_jump_threading_pass()
+
         if config.LLVM_REFPRUNE_PASS:
             pm.add_refprune_pass(_parse_refprune_flags())
         return pm

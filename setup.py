@@ -57,12 +57,6 @@ class build_doc(Command):
         subprocess.run(['make', '-C', 'docs', 'html'])
 
 
-versioneer.VCS = 'git'
-versioneer.versionfile_source = 'numba/_version.py'
-versioneer.versionfile_build = 'numba/_version.py'
-versioneer.tag_prefix = ''
-versioneer.parentdir_prefix = 'numba-'
-
 cmdclass = versioneer.get_cmdclass()
 cmdclass['build_doc'] = build_doc
 

@@ -1000,6 +1000,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         assert_raises(arr1d, -2)
         assert_raises(arr2d, -3)
         assert_raises(arr2d, 2)
+        # Exceptions leak references
+        self.disable_leak_check()
 
     def test_argmax_axis_must_be_integer(self):
         arr = np.arange(6)
@@ -1072,6 +1074,9 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         assert_raises(arr1d, -2)
         assert_raises(arr2d, -3)
         assert_raises(arr2d, 2)
+
+        # Exceptions leak references
+        self.disable_leak_check()
 
     def test_argmin_axis_must_be_integer(self):
         arr = np.arange(6)

@@ -60,7 +60,7 @@ class AbstractDIBuilder(metaclass=abc.ABCMeta):
 
 class DummyDIBuilder(AbstractDIBuilder):
 
-    def __init__(self, module, filepath, cgctx):
+    def __init__(self, module, filepath, cgctx, directives_only):
         pass
 
     def mark_variable(self, builder, allocavalue, name, lltype, size, line,
@@ -89,12 +89,18 @@ class DIBuilder(AbstractDIBuilder):
     DBG_CU_NAME = 'llvm.dbg.cu'
     _DEBUG = False
 
-    def __init__(self, module, filepath, cgctx):
+    def __init__(self, module, filepath, cgctx, directives_only):
         self.module = module
         self.filepath = os.path.abspath(filepath)
         self.difile = self._di_file()
         self.subprograms = []
         self.cgctx = cgctx
+
+        if directives_only:
+            self.emission_kind = 'DebugDirectivesOnly'
+        else:
+            self.emission_kind = 'FullDebug'
+
         self.initialize()
 
     def initialize(self):
@@ -316,11 +322,6 @@ class DIBuilder(AbstractDIBuilder):
                                        argmap=argmap)
         function.set_metadata("dbg", di_subp)
 
-        # Don't marked alwaysinline functions as noinline.
-        if 'alwaysinline' not in function.attributes:
-            # disable inlining for this function for easier debugging
-            function.attributes.add('noinline')
-
     def finalize(self):
         dbgcu = cgutils.get_or_insert_named_metadata(self.module, self.DBG_CU_NAME)
         dbgcu.add(self.dicompileunit)
@@ -404,7 +405,7 @@ class DIBuilder(AbstractDIBuilder):
             'producer': 'clang (Numba)',
             'runtimeVersion': 0,
             'isOptimized': config.OPT != 0,
-            'emissionKind': 1,  # 0-NoDebug, 1-FullDebug
+            'emissionKind': ir.DIToken(self.emission_kind),
         }, is_distinct=True)
 
     def _di_subroutine_type(self, line, function, argmap):
@@ -453,157 +454,3 @@ class DIBuilder(AbstractDIBuilder):
             'column': 1,
             'scope': self.subprograms[-1],
         })
-
-
-class NvvmDIBuilder(DIBuilder):
-    """
-    Only implemented the minimal metadata to get line number information.
-    See http://llvm.org/releases/3.4/docs/LangRef.html
-    """
-    # These constants are copied from llvm3.4
-    DW_LANG_Python = 0x0014
-    DI_Compile_unit = 786449
-    DI_Subroutine_type = 786453
-    DI_Subprogram = 786478
-    DI_File = 786473
-
-    DWARF_VERSION = None  # don't emit DWARF version
-    DEBUG_INFO_VERSION = 1  # as required by NVVM IR Spec
-    # Rename DIComputeUnit MD to hide it from llvm.parse_assembly()
-    # which strips invalid/outdated debug metadata
-    DBG_CU_NAME = 'numba.llvm.dbg.cu'
-
-    # Default member
-    # Used in mark_location to remember last lineno to avoid duplication
-    _last_lineno = None
-
-    def mark_variable(self, builder, allocavalue, name, lltype, size, line,
-                      datamodel=None, argidx=None):
-        # unsupported
-        pass
-
-    def mark_location(self, builder, line):
-        # Avoid duplication
-        if self._last_lineno == line:
-            return
-        self._last_lineno = line
-        # Add call to an inline asm to mark line location
-        asmty = ir.FunctionType(ir.VoidType(), [])
-        asm = ir.InlineAsm(asmty, "// dbg {}".format(line), "",
-                           side_effect=True)
-        call = builder.call(asm, [])
-        md = self._di_location(line)
-        call.set_metadata('numba.dbg', md)
-
-    def mark_subprogram(self, function, qualname, argnames, argtypes, line):
-        argmap = dict(zip(argnames, argtypes))
-        self._add_subprogram(name=qualname, linkagename=function.name,
-                             line=line)
-
-    def _add_subprogram(self, name, linkagename, line):
-        """Emit subprogram metadata
-        """
-        subp = self._di_subprogram(name, linkagename, line)
-        self.subprograms.append(subp)
-        return subp
-
-    #
-    # Helper methods to create the metadata nodes.
-    #
-
-    def _filepair(self):
-        return self.module.add_metadata([
-            os.path.basename(self.filepath),
-            os.path.dirname(self.filepath),
-        ])
-
-    def _di_file(self):
-        return self.module.add_metadata([
-            self._const_int(self.DI_File),
-            self._filepair(),
-        ])
-
-    def _di_compile_unit(self):
-        filepair = self._filepair()
-        empty = self.module.add_metadata([self._const_int(0)])
-        sp_metadata = self.module.add_metadata(self.subprograms)
-        return self.module.add_metadata([
-            self._const_int(self.DI_Compile_unit),         # tag
-            filepair,                   # source directory and file pair
-            self._const_int(self.DW_LANG_Python),  # language
-            'Numba',                     # producer
-            self._const_bool(True),      # optimized
-            "",                          # flags??
-            self._const_int(0),          # runtime version
-            empty,                       # enums types
-            empty,                       # retained types
-            self.module.add_metadata(self.subprograms),  # subprograms
-            empty,                       # global variables
-            empty,                       # imported entities
-            "",                          # split debug filename
-        ])
-
-    def _di_subroutine_type(self):
-        types = self.module.add_metadata([None])
-        return self.module.add_metadata([
-            self._const_int(self.DI_Subroutine_type),                # tag
-            self._const_int(0),
-            None,
-            "",
-            self._const_int(0),                 # line of definition
-            self._const_int(0, 64),             # size in bits
-            self._const_int(0, 64),             # offset in bits
-            self._const_int(0, 64),             # align in bits
-            self._const_int(0),                 # flags
-            None,
-            types,
-            self._const_int(0),
-            None,
-            None,
-            None,
-        ])
-
-    def _di_subprogram(self, name, linkagename, line):
-        function_ptr = self.module.get_global(linkagename)
-        subroutine_type = self._di_subroutine_type()
-        funcvars = self.module.add_metadata([self._const_int(0)])
-        context = self._di_file()
-        return self.module.add_metadata([
-            self._const_int(self.DI_Subprogram),   # tag
-            self._filepair(),          # source dir & file
-            context,                   # context descriptor
-            name,                      # name
-            name,                      # display name
-            linkagename,               # linkage name
-            self._const_int(line),     # line
-            subroutine_type,           # type descriptor
-            self._const_bool(False),   # is local
-            self._const_bool(True),    # is definition
-            self._const_int(0),        # virtuality
-            self._const_int(0),        # virtual function index
-            None,                     # vtable base type
-            self._const_int(0),        # flags
-            self._const_bool(True),    # is optimized
-            function_ptr,              # pointer to function
-            None,                      # function template parameters
-            None,                      # function declaration descriptor
-            funcvars,                     # function variables
-            self._const_int(line)      # scope line
-        ])
-
-    def _di_location(self, line):
-        return self.module.add_metadata([
-            self._const_int(line),   # line
-            self._const_int(0),      # column
-            self.subprograms[-1],    # scope
-            None,                    # original scope
-        ])
-
-    def initialize(self):
-        pass
-
-    def finalize(self):
-        # We create the compile unit at this point because subprograms is
-        # populated and can be referred to by the compile unit.
-        self.dicompileunit = self._di_compile_unit()
-        super().finalize()

@@ -158,6 +158,13 @@ detail""",
              "Equivalent to adding optnone attribute in the LLVM Function.")
     )
 
+    dbg_directives_only = Option(
+        type=bool,
+        default=False,
+        doc=("Make debug emissions directives-only. "
+             "Used when generating lineinfo.")
+    )
+
 
 DEFAULT_FLAGS = Flags()
 DEFAULT_FLAGS.nrt = True
