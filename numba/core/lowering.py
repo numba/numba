@@ -140,6 +140,12 @@ class BaseLower(object):
         Called after lowering a block.
         """
 
+    def return_dynamic_exception(self, exc_class, exc_args, nb_types, loc=None):
+        self.call_conv.return_dynamic_user_exc(
+            self.builder, exc_class, exc_args, nb_types,
+            loc=loc, func_name=self.func_ir.func_id.func_name,
+        )
+
     def return_exception(self, exc_class, exc_args=None, loc=None):
         """Propagate exception to the caller.
         """
@@ -557,6 +563,9 @@ class Lower(BaseLower):
 
             return impl(self.builder, (target, value))
 
+        elif isinstance(inst, ir.DynamicRaise):
+            self.lower_dynamic_raise(inst)
+
         elif isinstance(inst, ir.StaticRaise):
             self.lower_static_raise(inst)
 
@@ -596,6 +605,25 @@ class Lower(BaseLower):
                                   signature.args[2])
 
         return impl(self.builder, (target, index, value))
+
+    def lower_dynamic_raise(self, inst):
+        exc_args = inst.exc_args
+        args = []
+        nb_types = []
+        for exc_arg in exc_args:
+            if isinstance(exc_arg, ir.Var):
+                # dynamic values
+                typ = self.typeof(exc_arg.name)
+                val = self.loadvar(exc_arg.name)
+                self.incref(typ, val)
+            else:
+                typ = None
+                val = exc_arg
+            nb_types.append(typ)
+            args.append(val)
+
+        self.return_dynamic_exception(inst.exc_class, tuple(args),
+                                      tuple(nb_types), loc=self.loc)
 
     def lower_static_raise(self, inst):
         if inst.exc_class is None:
