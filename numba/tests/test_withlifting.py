@@ -284,7 +284,7 @@ class TestLiftCall(BaseTestWithLifting):
         msg = ("compiler re-entrant to the same function signature")
         self.assertIn(msg, str(raises.exception))
 
-    # 3.7 fails to interpret the bytecode for this example
+    # 3.8 and earlier fails to interpret the bytecode for this example
     @unittest.skipIf(PYVERSION <= (3, 8),
                      "unsupported on py3.8 and before")
     def test_liftcall5(self):
@@ -742,12 +742,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         with self.assertRaises((errors.TypingError, errors.CompilerError)) as raises:
             cfoo = njit(foo)
             cfoo(np.array([1, 2, 3]))
-        if PYVERSION <= (3, 7):
-            # 3.7 and below can't handle the return
-            msg = "unsupported control flow: due to return statements inside with block"
-        else:
-            # above can't handle the recursion
-            msg = "Untyped global name 'foo'"
+        msg = "Untyped global name 'foo'"
         self.assertIn(msg, str(raises.exception))
 
     @unittest.expectedFailure

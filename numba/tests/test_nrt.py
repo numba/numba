@@ -83,7 +83,8 @@ class TestNrtMemInfo(unittest.TestCase):
         # Reset the Dummy class
         Dummy.alive = 0
         # initialize the NRT (in case the tests are run in isolation)
-        cpu_target.target_context
+        rtsys.initialize(cpu_target.target_context)
+        super(TestNrtMemInfo, self).setUp()
 
     def test_meminfo_refct_1(self):
         d = Dummy()
@@ -400,6 +401,30 @@ class TestNRTIssue(TestCase):
 
         self.assertEqual(expect, got)
 
+    @TestCase.run_test_in_subprocess
+    def test_no_nrt_on_njit_decoration(self):
+        # Checks that the NRT is not initialized/compiled as a result of
+        # decorating a function with `@njit`.
+        from numba import njit
+
+        # check the NRT is not initialized.
+        self.assertFalse(rtsys._init)
+
+        # decorate
+        @njit
+        def foo():
+            return 123
+
+        # check the NRT is still not initialized
+        self.assertFalse(rtsys._init)
+
+        # execute
+        self.assertEqual(foo(), foo.py_func())
+
+        # check the NRT is still now initialized as execution has definitely
+        # occurred.
+        self.assertTrue(rtsys._init)
+
 
 class TestRefCtPruning(unittest.TestCase):
 
@@ -712,11 +737,14 @@ class TestNrtStatistics(TestCase):
         from numba import njit
         import numpy as np
         from numba.core.runtime import rtsys, _nrt_python
+        from numba.core.registry import cpu_target
 
         @njit
         def foo():
             return np.arange(10)[0]
 
+        # initialize the NRT before use
+        rtsys.initialize(cpu_target.target_context)
         assert _nrt_python.memsys_stats_enabled()
         orig_stats = rtsys.get_allocation_stats()
         foo()

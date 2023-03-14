@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from functools import reduce
+import functools
 import sys
 import threading
 
@@ -25,7 +25,7 @@ def _push_kernel_context(mod):
     Push the current kernel context.
     """
     global _kernel_context
-    assert _kernel_context is None, "conrrent simulated kernel not supported"
+    assert _kernel_context is None, "concurrent simulated kernel not supported"
     _kernel_context = mod
     try:
         yield
@@ -74,6 +74,7 @@ class FakeCUDAKernel(object):
         self.block_dim = None
         self.stream = 0
         self.dynshared_size = 0
+        functools.update_wrapper(self, fn)
 
     def __call__(self, *args):
         if self._device:
@@ -93,7 +94,7 @@ class FakeCUDAKernel(object):
 
             def fake_arg(arg):
                 # map the arguments using any extension you've registered
-                _, arg = reduce(
+                _, arg = functools.reduce(
                     lambda ty_val, extension: extension.prepare_args(
                         *ty_val,
                         stream=0,
