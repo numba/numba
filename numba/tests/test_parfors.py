@@ -49,6 +49,7 @@ from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                       needs_subprocess)
 from numba.core.extending import register_jitable
 from numba.core.bytecode import _fix_LOAD_GLOBAL_arg
+from numba.core import utils
 
 import cmath
 import unittest
