@@ -2218,11 +2218,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
 
         d = np.array([], dtype=np.int64)
+        expected = pyfunc(d, 0)
         got = cfunc(d, 0)
-        self.assertPreciseEqual(d, got)
+        self.assertPreciseEqual(expected, got)
 
         d = np.ones(1, dtype=np.int64)
-        expected = np.zeros(1, dtype=np.int64)
+        expected = pyfunc(d, 0)
         got = cfunc(d, 0)
         self.assertPreciseEqual(expected, got)
 
