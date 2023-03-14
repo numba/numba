@@ -126,5 +126,5 @@ echo "INFO: Running slice of discovered tests: ($TEST_START_INDEX,None,$TEST_COU
 # else
 #     NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
 # fi
-NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
+NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -j "$TEST_START_INDEX:$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
 
