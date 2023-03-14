@@ -350,7 +350,4 @@ class LowerYield(object):
             ty = self.gentype.state_types[state_index]
             val = self.context.unpack_value(self.builder, ty, state_slot)
             self.lower.storevar(val, name)
-            # Previous storevar is making an extra incref
-            if self.context.enable_nrt:
-                self.context.nrt.decref(self.builder, ty, val)
         self.lower.debug_print("# generator resume end")
