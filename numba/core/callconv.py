@@ -714,7 +714,7 @@ class CPUCallConv(BaseCallConv):
         """
         self.set_dynamic_user_exc(builder, exc, exc_args, nb_types,
                                   loc=loc, func_name=func_name)
-        self._return_errcode_raw(builder, RETCODE_USEREXC, mark_exc=True)
+        self._return_errcode_raw(builder, RETCODE_USEREXC)
 
     def _get_try_state(self, builder):
         try:
