@@ -217,11 +217,11 @@ call_trace_protected(Py_tracefunc func, PyObject *obj,
 {
     PyObject *type, *value, *traceback;
     int err;
-    _PyErr_Fetch(&type, &value, &traceback);
+    PyErr_Fetch(&type, &value, &traceback);
     err = call_trace(func, obj, tstate, frame, trace_info, what, arg);
     if (err == 0)
     {
-        _PyErr_Restore(type, value, traceback);
+        PyErr_Restore(type, value, traceback);
         return 0;
     }
     else
