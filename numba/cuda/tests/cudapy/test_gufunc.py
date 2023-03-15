@@ -311,7 +311,7 @@ class TestCUDAGufunc(CUDATestCase):
             def f(x, y):
                 pass
 
-        msg = te.exception.args[0]
+        msg = str(te.exception)
         self.assertIn('guvectorized functions cannot return values', msg)
         self.assertIn('specifies int32 return type', msg)
 

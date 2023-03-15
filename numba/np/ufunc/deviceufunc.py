@@ -435,7 +435,7 @@ class DeviceGUFuncVectorize(_BaseUFuncBuilder):
         self.signature = sig
         self.inputsig, self.outputsig = parse_signature(self.signature)
 
-        # Maps from a tuple of input_dtypes to (output_dtypes, cudakernel)
+        # Maps from a tuple of input_dtypes to (output_dtypes, kernel)
         self.kernelmap = OrderedDict()
 
     @property
@@ -749,7 +749,8 @@ class GUFuncCallSteps(metaclass=ABCMeta):
     @abstractmethod
     def is_device_array(self, obj):
         """
-        Return True if `obj` is a device array for this target
+        Return True if `obj` is a device array for this target, False
+        otherwise.
         """
 
     @abstractmethod
