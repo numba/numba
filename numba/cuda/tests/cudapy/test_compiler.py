@@ -30,8 +30,8 @@ class TestCompileToPTX(unittest.TestCase):
         def add(x, y):
             return x + y
 
-        sig = (float32, float32)
-        ptx, resty = compile_ptx(add, sig, device=True)
+        args = (float32, float32)
+        ptx, resty = compile_ptx(add, args, device=True)
 
         # Device functions take a func_retval parameter for storing the
         # returned value in by reference
@@ -51,7 +51,7 @@ class TestCompileToPTX(unittest.TestCase):
         sig_int16 = int16(int16, int16)
         ptx, resty = compile_ptx(add, sig_int16, device=True)
         self.assertEqual(resty, int16)
-
+        # Using string as signature
         sig_string = "uint32(uint32, uint32)"
         ptx, resty = compile_ptx(add, sig_string, device=True)
         self.assertEqual(resty, uint32)
@@ -143,8 +143,8 @@ class TestCompileToPTXForCurrentDevice(CUDATestCase):
         def add(x, y):
             return x + y
 
-        sig = (float32, float32)
-        ptx, resty = compile_ptx_for_current_device(add, sig, device=True)
+        args = (float32, float32)
+        ptx, resty = compile_ptx_for_current_device(add, args, device=True)
 
         # Check we target the current device's compute capability, or the
         # closest compute capability supported by the current toolkit.

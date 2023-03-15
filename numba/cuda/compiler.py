@@ -241,7 +241,7 @@ def compile_ptx(pyfunc, sig, debug=False, lineinfo=False, device=False,
 
     :param pyfunc: The Python function to compile.
     :param sig: The signature representing the function's input and output
-                     types.
+                types.
     :param debug: Whether to include debug info in the generated PTX.
     :type debug: bool
     :param lineinfo: Whether to include a line mapping from the generated PTX
