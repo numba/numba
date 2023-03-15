@@ -292,7 +292,7 @@ class UFuncMechanism(object):
         shape = args[0].shape
         if out is None:
             # No output is provided
-            devout = cr.device_array(shape, resty, stream=stream)
+            devout = cr.allocate_device_array(shape, resty, stream=stream)
 
             devarys.extend([devout])
             cr.launch(func, shape[0], stream, devarys)
@@ -320,7 +320,7 @@ class UFuncMechanism(object):
             # Return host array
             assert out.shape == shape
             assert out.dtype == resty
-            devout = cr.device_array(shape, resty, stream=stream)
+            devout = cr.allocate_device_array(shape, resty, stream=stream)
             devarys.extend([devout])
             cr.launch(func, shape[0], stream, devarys)
             return devout.copy_to_host(out, stream=stream).reshape(outshape)
@@ -337,7 +337,7 @@ class UFuncMechanism(object):
         """
         raise NotImplementedError
 
-    def device_array(self, shape, dtype, stream):
+    def allocate_device_array(self, shape, dtype, stream):
         """Implements device allocation
         Override in subclass
         """
@@ -768,7 +768,7 @@ class GUFuncCallSteps(metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def device_array(self, shape, dtype):
+    def allocate_device_array(self, shape, dtype):
         """
         Allocate a new uninitialized device array with the given shape and
         dtype.
@@ -849,7 +849,7 @@ class GUFuncCallSteps(metaclass=ABCMeta):
         for shape, dtype, output in zip(schedule.output_shapes, outdtypes,
                                         self.outputs):
             if output is None or self._copy_result_to_host:
-                output = self.device_array(shape, dtype)
+                output = self.allocate_device_array(shape, dtype)
             outputs.append(output)
 
         return outputs

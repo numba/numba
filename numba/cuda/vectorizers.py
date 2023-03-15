@@ -109,7 +109,7 @@ class _CUDAGUFuncCallSteps(GUFuncCallSteps):
         out = devary.copy_to_host(hostary, stream=self._stream)
         return out
 
-    def device_array(self, shape, dtype):
+    def allocate_device_array(self, shape, dtype):
         return cuda.device_array(shape=shape, dtype=dtype, stream=self._stream)
 
     def launch_kernel(self, kernel, nelem, args):
@@ -169,7 +169,7 @@ class CUDAUFuncMechanism(UFuncMechanism):
     def to_host(self, devary, stream):
         return devary.copy_to_host(stream=stream)
 
-    def device_array(self, shape, dtype, stream):
+    def allocate_device_array(self, shape, dtype, stream):
         return cuda.device_array(shape=shape, dtype=dtype, stream=stream)
 
     def broadcast_device(self, ary, shape):
