@@ -196,7 +196,7 @@ class TestCasting(CUDATestCase):
         sizes = (8, 16, 32, 64)
 
         for ty, size in zip(fromtys, sizes):
-            ptx, _ = compile_ptx(to_float16, (ty), device=True)
+            ptx, _ = compile_ptx(to_float16, (ty,), device=True)
             self.assertIn(f"cvt.rn.f16.u{size}", ptx)
 
     @skip_unless_cc_53
