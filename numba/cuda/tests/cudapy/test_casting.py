@@ -134,7 +134,7 @@ class TestCasting(CUDATestCase):
         sizes = (8, 16, 32, 64)
 
         for pyfunc, size in zip(pyfuncs, sizes):
-            ptx, _ = compile_ptx(pyfunc, (f2), device=True)
+            ptx, _ = compile_ptx(pyfunc, (f2,), device=True)
             self.assertIn(f"cvt.rni.s{size}.f16", ptx)
 
     @skip_unless_cc_53
@@ -156,7 +156,7 @@ class TestCasting(CUDATestCase):
         sizes = (8, 16, 32, 64)
 
         for pyfunc, size in zip(pyfuncs, sizes):
-            ptx, _ = compile_ptx(pyfunc, (f2), device=True)
+            ptx, _ = compile_ptx(pyfunc, (f2,), device=True)
             self.assertIn(f"cvt.rni.u{size}.f16", ptx)
 
     @skip_unless_cc_53
@@ -187,7 +187,7 @@ class TestCasting(CUDATestCase):
         sizes = (8, 16, 32, 64)
 
         for ty, size in zip(fromtys, sizes):
-            ptx, _ = compile_ptx(to_float16, (ty), device=True)
+            ptx, _ = compile_ptx(to_float16, (ty,), device=True)
             self.assertIn(f"cvt.rn.f16.s{size}", ptx)
 
     @skip_on_cudasim('Compilation unsupported in the simulator')
@@ -222,7 +222,7 @@ class TestCasting(CUDATestCase):
         postfixes = ("f32", "f64")
 
         for pyfunc, postfix in zip(pyfuncs, postfixes):
-            ptx, _ = compile_ptx(pyfunc, (f2), device=True)
+            ptx, _ = compile_ptx(pyfunc, (f2,), device=True)
             self.assertIn(f"cvt.{postfix}.f16", ptx)
 
     @skip_unless_cc_53
