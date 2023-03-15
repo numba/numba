@@ -803,9 +803,9 @@ class GUFuncCallSteps(metaclass=ABCMeta):
         self._copy_result_to_host = (all_host_arrays and
                                      all_user_outputs_are_host)
 
-        # Normalize inputs - ensure they are either device- or host-side arrays
-        # (as opposed to lists, tuples, etc).
-        def normalize_input(a):
+        # Normalize arguments - ensure they are either device- or host-side
+        # arrays (as opposed to lists, tuples, etc).
+        def normalize_arg(a):
             if self.is_device_array(a):
                 convert = self.as_device_array
             else:
@@ -813,11 +813,11 @@ class GUFuncCallSteps(metaclass=ABCMeta):
 
             return convert(a)
 
-        normalized_inputs = [normalize_input(a) for a in args]
-        self.inputs = normalized_inputs[:nin]
+        normalized_args = [normalize_arg(a) for a in args]
+        self.inputs = normalized_args[:nin]
 
         # Check if there are extra arguments for outputs.
-        unused_inputs = normalized_inputs[nin:]
+        unused_inputs = normalized_args[nin:]
         if unused_inputs:
             self.outputs = unused_inputs
 
