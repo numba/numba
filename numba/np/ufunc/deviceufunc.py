@@ -840,10 +840,10 @@ class GUFuncCallSteps(metaclass=ABCMeta):
 
     def prepare_outputs(self, schedule, outdtypes):
         """
-        Returns an array of output parameters that all reside on the target device.
+        Returns a list of output parameters that all reside on the target device.
 
         Outputs that were passed-in to the GUFunc are used if they reside on the
-        device; space is allocated for other outputs as necessary.
+        device; other outputs are allocated as necessary.
         """
         outputs = []
         for shape, dtype, output in zip(schedule.output_shapes, outdtypes,
@@ -856,7 +856,7 @@ class GUFuncCallSteps(metaclass=ABCMeta):
 
     def prepare_inputs(self):
         """
-        Returns an array of input parameters that all reside on the target device.
+        Returns a list of input parameters that all reside on the target device.
         """
         def ensure_device(parameter):
             if self.is_device_array(parameter):
@@ -885,4 +885,4 @@ class GUFuncCallSteps(metaclass=ABCMeta):
         if len(outputs) == 1:
             return outputs[0]
         else:
-            return outputs
+            return tuple(outputs)
