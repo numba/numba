@@ -784,9 +784,9 @@ class GUFuncCallSteps(metaclass=ABCMeta):
         else:
             outputs = [outputs] * nout
 
-        # Ensure all output device arrays are Numba device arrays - any output
-        # passed in that supports the CUDA Array Interface is converted; others
-        # are left untouched.
+        # Ensure all output device arrays are Numba device arrays - for
+        # example, any output passed in that supports the CUDA Array Interface
+        # is converted to a Numba CUDA device array; others are left untouched.
         all_user_outputs_are_host = True
         self.outputs = []
         for output in outputs:
