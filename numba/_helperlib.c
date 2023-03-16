@@ -890,17 +890,10 @@ int reraise_exc_is_none(void) {
     PyObject *tb, *type, *value;
 
 #if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 11)
-    /* intentionally empty */
-#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 7)
+    PyErr_GetExcInfo(&type, &value, &tb);
+#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 8)
     PyThreadState *tstate = PyThreadState_GET();
     _PyErr_StackItem *tstate_exc = tstate->exc_info;
-#else
-    PyThreadState *tstate_exc = tstate;
-#endif
-
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 11)
-    PyErr_GetExcInfo(&type, &value, &tb);
-#else
     type = tstate_exc->exc_type;
     value = tstate_exc->exc_value;
     tb = tstate_exc->exc_traceback;
