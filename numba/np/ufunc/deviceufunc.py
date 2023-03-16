@@ -791,8 +791,8 @@ class GUFuncCallSteps(metaclass=ABCMeta):
             raise TypeError(msg)
 
         if outputs is not None and len(args) > nin:
-            raise ValueError("cannot specify 'out' as both positional "
-                             "and keyword arguments")
+            raise ValueError("cannot specify argument 'out' as both positional "
+                             "and keyword")
         else:
             # If the user did not pass outputs either in the out kwarg or as
             # positional arguments, then we need to generate an initial list of
