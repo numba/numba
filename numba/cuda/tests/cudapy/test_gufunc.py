@@ -315,6 +315,32 @@ class TestCUDAGufunc(CUDATestCase):
         self.assertIn('guvectorized functions cannot return values', msg)
         self.assertIn('specifies int32 return type', msg)
 
+    def test_incorrect_number_of_pos_args(self):
+        @guvectorize([(int32[:], int32[:], int32[:])],
+                     '(m),(m)->(m)', target='cuda')
+        def f(x, y, z):
+            pass
+
+        arr = np.arange(5)
+
+        # Inputs only, too few
+        with self.assertRaises(TypeError) as te:
+            f(arr)
+
+        msg = str(te.exception)
+        self.assertIn('gufunc accepts 2 positional arguments', msg)
+        self.assertIn('or 3 positional arguments', msg)
+        self.assertIn('Got 1 positional argument.', msg)
+
+        # Inputs and outputs, too many
+        with self.assertRaises(TypeError) as te:
+            f(arr, arr, arr, arr)
+
+        msg = str(te.exception)
+        self.assertIn('gufunc accepts 2 positional arguments', msg)
+        self.assertIn('or 3 positional arguments', msg)
+        self.assertIn('Got 4 positional arguments.', msg)
+
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
 class TestMultipleOutputs(CUDATestCase):
@@ -381,6 +407,32 @@ class TestMultipleOutputs(CUDATestCase):
         copy_and_multiply(A, B, C)
         np.testing.assert_allclose(A, B)
         np.testing.assert_allclose(A * np.float64(1.5), C)
+
+    def test_incorrect_number_of_pos_args(self):
+        @guvectorize([(int32[:], int32[:], int32[:], int32[:])],
+                     '(m),(m)->(m),(m)', target='cuda')
+        def f(x, y, z, w):
+            pass
+
+        arr = np.arange(5)
+
+        # Inputs only, too few
+        with self.assertRaises(TypeError) as te:
+            f(arr)
+
+        msg = str(te.exception)
+        self.assertIn('gufunc accepts 2 positional arguments', msg)
+        self.assertIn('or 4 positional arguments', msg)
+        self.assertIn('Got 1 positional argument.', msg)
+
+        # Inputs and outputs, too many
+        with self.assertRaises(TypeError) as te:
+            f(arr, arr, arr, arr, arr)
+
+        msg = str(te.exception)
+        self.assertIn('gufunc accepts 2 positional arguments', msg)
+        self.assertIn('or 4 positional arguments', msg)
+        self.assertIn('Got 5 positional arguments.', msg)
 
 
 if __name__ == '__main__':

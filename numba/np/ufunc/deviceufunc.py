@@ -775,13 +775,28 @@ class GUFuncCallSteps(metaclass=ABCMeta):
         """
 
     def __init__(self, nin, nout, args, kwargs):
-        # Get outputs either from the out kwarg, or generate an initial list of
-        # "placeholder" outputs using None as a sentry value
         outputs = kwargs.get('out')
+
+        # Ensure the user has passed a correct number of arguments
+        if outputs is None and len(args) not in (nin, (nin + nout)):
+            def pos_argn(n):
+                s = f'{n} positional argument'
+                if n != 1:
+                    s += 's'
+                return s
+
+            msg = (f'This gufunc accepts {pos_argn(nin)} (when providing '
+                   f'input only) or {pos_argn(nin + nout)} (when providing '
+                   f'input and output). Got {pos_argn(len(args))}.')
+            raise TypeError(msg)
+
         if outputs is not None and len(args) > nin:
             raise ValueError("cannot specify 'out' as both positional "
                              "and keyword arguments")
         else:
+            # If the user did not pass outputs either in the out kwarg or as
+            # positional arguments, then we need to generate an initial list of
+            # "placeholder" outputs using None as a sentry value
             outputs = [outputs] * nout
 
         # Ensure all output device arrays are Numba device arrays - for
