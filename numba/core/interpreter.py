@@ -2284,6 +2284,7 @@ class Interpreter(object):
         exit_fn_obj = ir.Const(None, loc=self.loc)
         self.store(value=exit_fn_obj, name=exitfn)
 
+<<<<<<< HEAD
     def op_BEFORE_WITH(self, inst, contextmanager, exitfn, end):
         assert self.blocks[inst.offset] is self.current_block
         # Handle with
@@ -2302,7 +2303,10 @@ class Interpreter(object):
         # Removed since python3.8
         self._insert_try_block_begin()
 
+=======
+>>>>>>> ec5210242e400d281d6c52d633ce041f95f47e98
     def op_SETUP_FINALLY(self, inst):
+        # Removed since python3.11
         self._insert_try_block_begin()
 
     def op_WITH_CLEANUP(self, inst):

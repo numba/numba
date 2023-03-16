@@ -27,13 +27,27 @@ source deactivate
 # Display root environment (for debugging)
 conda list
 
+# Use conda-forge for NumPy 1.24 - at the time of writing it is not available
+# on the defaults channel.
+
+if [ "${NUMPY}" == "1.24" ]; then
+  NUMPY_CHANNEL_PKG=conda-forge::numpy
+else
+  NUMPY_CHANNEL_PKG=numpy
+fi
+
 # If VANILLA_INSTALL is yes, then only Python, NumPy and pip are installed, this
 # is to catch tests/code paths that require an optional package and are not
 # guarding against the possibility that it does not exist in the environment.
 # Create a base env first and then add to it...
 # NOTE: gitpython is needed for CI testing to do the test slicing
 # NOTE: pyyaml is used to ensure that the Azure CI config is valid
+<<<<<<< HEAD
 conda create -n $CONDA_ENV -q -y -c conda-forge ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml
+=======
+
+conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON $NUMPY_CHANNEL_PKG=$NUMPY pip gitpython pyyaml
+>>>>>>> ec5210242e400d281d6c52d633ce041f95f47e98
 
 # Activate first
 set +v
@@ -76,8 +90,6 @@ if [ $PYTHON \< "3.9" ]; then $CONDA_INSTALL importlib_metadata; fi
 if [ "$TEST_SVML" == "yes" ]; then $CONDA_INSTALL -c numba icc_rt; fi
 # Install Intel TBB parallel backend
 if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL -c numba tbb=2021 "tbb-devel>=2021,<2021.6"; fi
-# Install pickle5
-if [ "$TEST_PICKLE5" == "yes" ]; then $PIP_INSTALL pickle5; fi
 # Install typeguard
 # if [ "$RUN_TYPEGUARD" == "yes" ]; then $CONDA_INSTALL conda-forge::typeguard; fi
 

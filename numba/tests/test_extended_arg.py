@@ -4,7 +4,10 @@ import dis
 import struct
 
 from numba import jit
+<<<<<<< HEAD
 from numba.core import utils
+=======
+>>>>>>> ec5210242e400d281d6c52d633ce041f95f47e98
 from numba.tests.support import TestCase
 
 
@@ -25,6 +28,7 @@ class TestExtendedArg(TestCase):
         b = bytearray(f.__code__.co_code)
         consts = f.__code__.co_consts
         bytecode_format = "<BB"
+<<<<<<< HEAD
         consts = consts + (None,) * self.bytecode_len + (42,)
         if utils.PYVERSION >= (3, 11):
             # Python 3.11 has a RESUME op code at the start of a function, need
@@ -35,6 +39,10 @@ class TestExtendedArg(TestCase):
 
         packed_extend_arg = struct.pack(bytecode_format, dis.EXTENDED_ARG, 1)
         b[:] = b[:offset] + packed_extend_arg + b[offset:]
+=======
+        consts = consts + (None,) * bytecode_len + (42,)
+        b[:0] = struct.pack(bytecode_format, dis.EXTENDED_ARG, 1)
+>>>>>>> ec5210242e400d281d6c52d633ce041f95f47e98
         f.__code__ = f.__code__.replace(co_code=bytes(b), co_consts=consts)
         return f
 

@@ -27,7 +27,7 @@ import numba.parfors.parfor
 from numba import (njit, prange, parallel_chunksize,
                    get_parallel_chunksize, set_parallel_chunksize,
                    set_num_threads, get_num_threads, typeof)
-from numba.core import (types, utils, typing, errors, ir, rewrites,
+from numba.core import (types, typing, errors, ir, rewrites,
                         typed_passes, inline_closurecall, config, compiler, cpu)
 from numba.extending import (overload_method, register_model,
                              typeof_impl, unbox, NativeValue, models)
@@ -418,7 +418,7 @@ class TestParforsBase(TestCase):
             return fast_inst
 
         def _assert_fast(instrs):
-            ops = ('fadd', 'fsub', 'fmul', 'fdiv', 'frem', 'fcmp')
+            ops = ('fadd', 'fsub', 'fmul', 'fdiv', 'frem', 'fcmp', 'call')
             for inst in instrs:
                 count = 0
                 for op in ops:
@@ -3366,7 +3366,10 @@ class TestPrangeBase(TestParforsBase):
                 new_code[idx] = prange_idx
             new_code = bytes(new_code)
 
+<<<<<<< HEAD
         # create new code parts
+=======
+>>>>>>> ec5210242e400d281d6c52d633ce041f95f47e98
         # create code object with prange mutation
         prange_code = pyfunc_code.replace(co_code=new_code,
                                           co_names=prange_names)
@@ -4469,11 +4472,6 @@ class TestParforsVectorizer(TestPrangeBase):
 
             return asm
 
-    # this is a common match pattern for something like:
-    # \n\tvsqrtpd\t-192(%rbx,%rsi,8), %zmm0\n
-    # to check vsqrtpd operates on zmm
-    match_vsqrtpd_on_zmm = re.compile('\n\s+vsqrtpd\s+.*zmm.*\n')
-
     @linux_only
     def test_vectorizer_fastmath_asm(self):
         """ This checks that if fastmath is set and the underlying hardware
@@ -4497,22 +4495,19 @@ class TestParforsVectorizer(TestPrangeBase):
                                        fastmath=True)
         slow_asm = self.get_gufunc_asm(will_vectorize, 'unsigned', arg,
                                        fastmath=False)
-
         for v in fast_asm.values():
             # should unwind and call vector sqrt then vector add
             # all on packed doubles using zmm's
             self.assertTrue('vaddpd' in v)
-            self.assertTrue('vsqrtpd' in v)
+            self.assertTrue('vsqrtpd' in v or '__svml_sqrt' in v)
             self.assertTrue('zmm' in v)
-            # make sure vsqrtpd operates on zmm
-            self.assertTrue(len(self.match_vsqrtpd_on_zmm.findall(v)) > 1)
 
         for v in slow_asm.values():
             # vector variants should not be present
             self.assertTrue('vaddpd' not in v)
             self.assertTrue('vsqrtpd' not in v)
             # check scalar variant is present
-            self.assertTrue('vsqrtsd' in v)
+            self.assertTrue('vsqrtsd' in v and '__svml_sqrt' not in v)
             self.assertTrue('vaddsd' in v)
             # check no zmm addressing is present
             self.assertTrue('zmm' not in v)
@@ -4557,11 +4552,9 @@ class TestParforsVectorizer(TestPrangeBase):
         for v in vec_asm.values():
             # should unwind and call vector sqrt then vector mov
             # all on packed doubles using zmm's
-            self.assertTrue('vsqrtpd' in v)
+            self.assertTrue('vsqrtpd' in v or '__svml_sqrt' in v)
             self.assertTrue('vmovupd' in v)
             self.assertTrue('zmm' in v)
-            # make sure vsqrtpd operates on zmm
-            self.assertTrue(len(self.match_vsqrtpd_on_zmm.findall(v)) > 1)
 
     @linux_only
     # needed as 32bit doesn't have equivalent signed/unsigned instruction

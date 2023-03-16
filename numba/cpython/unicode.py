@@ -20,7 +20,7 @@ from numba.core.extending import (
 from numba.core.imputils import (lower_constant, lower_cast, lower_builtin,
                                  iternext_impl, impl_ret_new_ref, RefType)
 from numba.core.datamodel import register_default, StructModel
-from numba.core import utils, types, cgutils
+from numba.core import types, cgutils
 from numba.core.pythonapi import (
     PY_UNICODE_1BYTE_KIND,
     PY_UNICODE_2BYTE_KIND,
@@ -65,10 +65,11 @@ from numba.cpython.unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,
 from numba.cpython import slicing
 
 
-_py38_or_later = utils.PYVERSION >= (3, 8)
-
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L84-L85    # noqa: E501
 _MAX_UNICODE = 0x10ffff
+
+# https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/stringlib/fastsearch.h#L31    # noqa: E501
+_BLOOM_WIDTH = types.intp.bitwidth
 
 # DATA MODEL
 
@@ -434,12 +435,6 @@ def _codepoint_is_ascii(ch):
 # PUBLIC API
 
 
-@overload(str)
-def unicode_str(s):
-    if isinstance(s, types.UnicodeType):
-        return lambda s: s
-
-
 @overload(len)
 def unicode_len(s):
     if isinstance(s, types.UnicodeType):
@@ -593,6 +588,116 @@ def unicode_sub_check_type(ty, name):
         raise TypingError(msg)
 
 
+# FAST SEARCH algorithm implementation from cpython
+
+@register_jitable
+def _bloom_add(mask, ch):
+    mask |= (1 << (ch & (_BLOOM_WIDTH - 1)))
+    return mask
+
+
+@register_jitable
+def _bloom_check(mask, ch):
+    return mask & (1 << (ch & (_BLOOM_WIDTH - 1)))
+
+
+# https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/stringlib/fastsearch.h#L550    # noqa: E501
+@register_jitable
+def _default_find(data, substr, start, end):
+    """Left finder."""
+    m = len(substr)
+    if m == 0:
+        return start
+
+    gap = mlast = m - 1
+    last = _get_code_point(substr, mlast)
+
+    zero = types.intp(0)
+    mask = _bloom_add(zero, last)
+    for i in range(mlast):
+        ch = _get_code_point(substr, i)
+        mask = _bloom_add(mask, ch)
+        if ch == last:
+            gap = mlast - i - 1
+
+    i = start
+    while i <= end - m:
+        ch = _get_code_point(data, mlast + i)
+        if ch == last:
+            j = 0
+            while j < mlast:
+                haystack_ch = _get_code_point(data, i + j)
+                needle_ch = _get_code_point(substr, j)
+                if haystack_ch != needle_ch:
+                    break
+                j += 1
+            if j == mlast:
+                # got a match
+                return i
+
+            ch = _get_code_point(data, mlast + i + 1)
+            if _bloom_check(mask, ch) == 0:
+                i += m
+            else:
+                i += gap
+        else:
+            ch = _get_code_point(data, mlast + i + 1)
+            if _bloom_check(mask, ch) == 0:
+                i += m
+        i += 1
+
+    return -1
+
+
+@register_jitable
+def _default_rfind(data, substr, start, end):
+    """Right finder."""
+    m = len(substr)
+    if m == 0:
+        return end
+
+    skip = mlast = m - 1
+    mfirst = _get_code_point(substr, 0)
+    mask = _bloom_add(0, mfirst)
+    i = mlast
+    while i > 0:
+        ch = _get_code_point(substr, i)
+        mask = _bloom_add(mask, ch)
+        if ch == mfirst:
+            skip = i - 1
+        i -= 1
+
+    i = end - m
+    while i >= start:
+        ch = _get_code_point(data, i)
+        if ch == mfirst:
+            j = mlast
+            while j > 0:
+                haystack_ch = _get_code_point(data, i + j)
+                needle_ch = _get_code_point(substr, j)
+                if haystack_ch != needle_ch:
+                    break
+                j -= 1
+
+            if j == 0:
+                # got a match
+                return i
+
+            ch = _get_code_point(data, i - 1)
+            if i > start and _bloom_check(mask, ch) == 0:
+                i -= m
+            else:
+                i -= skip
+
+        else:
+            ch = _get_code_point(data, i - 1)
+            if i > start and _bloom_check(mask, ch) == 0:
+                i -= m
+        i -= 1
+
+    return -1
+
+
 def generate_finder(find_func):
     """Generate finder either left or right."""
     def impl(data, substr, start=None, end=None):
@@ -612,30 +717,8 @@ def generate_finder(find_func):
     return impl
 
 
-@register_jitable
-def _finder(data, substr, start, end):
-    """Left finder."""
-    if len(substr) == 0:
-        return start
-    for i in range(start, min(len(data), end) - len(substr) + 1):
-        if _cmp_region(data, i, substr, 0, len(substr)) == 0:
-            return i
-    return -1
-
-
-@register_jitable
-def _rfinder(data, substr, start, end):
-    """Right finder."""
-    if len(substr) == 0:
-        return end
-    for i in range(min(len(data), end) - len(substr), start - 1, -1):
-        if _cmp_region(data, i, substr, 0, len(substr)) == 0:
-            return i
-    return -1
-
-
-_find = register_jitable(generate_finder(_finder))
-_rfind = register_jitable(generate_finder(_rfinder))
+_find = register_jitable(generate_finder(_default_find))
+_rfind = register_jitable(generate_finder(_default_rfind))
 
 
 @overload_method(types.UnicodeType, 'find')
@@ -2256,11 +2339,7 @@ def _unicode_capitalize(data, length, res, maxchars):
     mapped = np.zeros(3, dtype=_Py_UCS4)
     code_point = _get_code_point(data, 0)
 
-    # https://github.com/python/cpython/commit/b015fc86f7b1f35283804bfee788cce0a5495df7/Objects/unicodeobject.c#diff-220e5da0d1c8abf508b25c02da6ca16c    # noqa: E501
-    if _py38_or_later:
-        n_res = _PyUnicode_ToTitleFull(code_point, mapped)
-    else:
-        n_res = _PyUnicode_ToUpperFull(code_point, mapped)
+    n_res = _PyUnicode_ToTitleFull(code_point, mapped)
 
     for m in mapped[:n_res]:
         maxchar = max(maxchar, m)
@@ -2435,39 +2514,55 @@ def ol_chr(i):
         return impl
 
 
-@overload(str)
+@overload_method(types.UnicodeType, "__str__")
+def unicode_str(s):
+    return lambda s: s
+
+
+@overload_method(types.UnicodeType, "__repr__")
+def unicode_repr(s):
+    # Can't use f-string as the impl ends up calling str and then repr, which
+    # then recurses somewhere in imports.
+    return lambda s: "'" + s + "'"
+
+
+@overload_method(types.Integer, "__str__")
 def integer_str(n):
-    if isinstance(n, types.Integer):
 
-        ten = n(10)
+    ten = n(10)
 
-        def impl(n):
-            flag = False
-            if n < 0:
-                n = -n
-                flag = True
-            if n == 0:
-                return '0'
-            length = flag + 1 + int(np.floor(np.log10(n)))
-            kind = PY_UNICODE_1BYTE_KIND
-            char_width = _kind_to_byte_width(kind)
-            s = _malloc_string(kind, char_width, length, True)
-            if flag:
-                _set_code_point(s, 0, ord('-'))
-            idx = length - 1
-            while n > 0:
-                n, digit = divmod(n, ten)
-                c = ord('0') + digit
-                _set_code_point(s, idx, c)
-                idx -= 1
-            return s
-        return impl
+    def impl(n):
+        flag = False
+        if n < 0:
+            n = -n
+            flag = True
+        if n == 0:
+            return '0'
+        length = flag + 1 + int(np.floor(np.log10(n)))
+        kind = PY_UNICODE_1BYTE_KIND
+        char_width = _kind_to_byte_width(kind)
+        s = _malloc_string(kind, char_width, length, True)
+        if flag:
+            _set_code_point(s, 0, ord('-'))
+        idx = length - 1
+        while n > 0:
+            n, digit = divmod(n, ten)
+            c = ord('0') + digit
+            _set_code_point(s, idx, c)
+            idx -= 1
+        return s
+    return impl
 
 
-@overload(str)
+@overload_method(types.Integer, "__repr__")
+def integer_repr(n):
+    return lambda n: n.__str__()
+
+
+@overload_method(types.Boolean, "__repr__")
+@overload_method(types.Boolean, "__str__")
 def boolean_str(b):
-    if isinstance(b, types.Boolean):
-        return lambda b: "True" if b else "False"
+    return lambda b: 'True' if b else 'False'
 
 
 # ------------------------------------------------------------------------------

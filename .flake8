@@ -29,6 +29,7 @@ exclude =
     __init__.py
     # Ignore vendored files
     numba/cloudpickle/*
+    versioneer.py
     # Grandfather in existing failing files.  This list should shrink over time
     numba/stencils/stencil.py
     numba/core/transforms.py
@@ -73,7 +74,6 @@ exclude =
     numba/core/registry.py
     numba/core/imputils.py
     numba/cpython/builtins.py
-    numba/core/cpu.py
     numba/misc/quicksort.py
     numba/core/callconv.py
     numba/cpython/randomimpl.py
@@ -141,7 +141,6 @@ exclude =
     numba/tests/test_slices.py
     numba/tests/test_mandelbrot.py
     numba/tests/compile_with_pycc.py
-    numba/tests/test_deprecations.py
     numba/tests/test_looplifting.py
     numba/tests/test_storeslice.py
     numba/tests/recursion_usecases.py
@@ -198,7 +197,6 @@ exclude =
     numba/tests/test_complex.py
     numba/tests/test_hashing.py
     numba/tests/test_sys_stdin_assignment.py
-    numba/tests/test_ufuncs.py
     numba/tests/pdlike_usecase.py
     numba/tests/test_range.py
     numba/tests/test_nrt_refct.py
