@@ -37,7 +37,6 @@ from numba.stencils.stencilparfor import StencilPass
 from numba.core.extending import register_jitable, lower_builtin
 
 from numba.core.ir_utils import (
-    mk_unique_var,
     next_label,
     mk_alloc,
     get_np_ufunc_typ,
@@ -1526,7 +1525,7 @@ class PreParforPass(object):
                             dtype = typ.dtype
                             scope = block.scope
                             loc = instr.loc
-                            g_np_var = ir.Var(scope, mk_unique_var("$np_g_var"), loc)
+                            g_np_var = scope.redefine("$np_g_var", loc)
                             self.typemap[g_np_var.name] = types.misc.Module(numpy)
                             g_np = ir.Global('np', numpy, loc)
                             g_np_assign = ir.Assign(g_np, g_np_var, loc)
@@ -1536,15 +1535,14 @@ class PreParforPass(object):
                             dtype_str = str(dtype)
                             if dtype_str == 'bool':
                                 dtype_str = 'bool_'
-                            typ_var = ir.Var(
-                                scope, mk_unique_var("$np_typ_var"), loc)
+                            typ_var = scope.redefine("$np_typ_var", loc)
                             self.typemap[typ_var.name] = types.StringLiteral(
                                 dtype_str)
                             typ_var_assign = ir.Assign(
                                 ir.Const(dtype_str, loc), typ_var, loc)
 
                             # Get the dtype function from the numpy module.
-                            dtype_attr_var = ir.Var(scope, mk_unique_var("$dtype_attr_var"), loc)
+                            dtype_attr_var = scope.redefine("$dtype_attr_var", loc)
                             temp = find_template(numpy.dtype)
                             tfunc = numba.core.types.Function(temp)
                             tfunc.get_call_type(self.typingctx, (self.typemap[typ_var.name],), {})
@@ -1553,7 +1551,7 @@ class PreParforPass(object):
                             dtype_attr_assign = ir.Assign(dtype_attr_getattr, dtype_attr_var, loc)
 
                             # Call numpy.dtype on the statically coded type two steps above.
-                            dtype_var = ir.Var(scope, mk_unique_var("$dtype_var"), loc)
+                            dtype_var = scope.redefine("$dtype_var", loc)
                             self.typemap[dtype_var.name] = types.npytypes.DType(dtype)
                             dtype_getattr = ir.Expr.call(dtype_attr_var, [typ_var], (), loc)
                             dtype_assign = ir.Assign(dtype_getattr, dtype_var, loc)
@@ -1679,7 +1677,7 @@ class ConvertInplaceBinop:
                 pass_states.typemap, scope, index_vars, body_block)
 
         # Read value.
-        value_var = ir.Var(scope, mk_unique_var("$value_var"), loc)
+        value_var = scope.redefine("$value_var", loc)
         pass_states.typemap[value_var.name] = value_typ.dtype
         getitem_call = ir.Expr.getitem(value, index_var, loc)
         pass_states.calltypes[getitem_call] = signature(
@@ -1687,7 +1685,7 @@ class ConvertInplaceBinop:
         body_block.body.append(ir.Assign(getitem_call, value_var, loc))
 
         # Read target
-        target_var = ir.Var(scope, mk_unique_var("$target_var"), loc)
+        target_var = scope.redefine("$target_var", loc)
         pass_states.typemap[target_var.name] = el_typ
         getitem_call = ir.Expr.getitem(target, index_var, loc)
         pass_states.calltypes[getitem_call] = signature(
@@ -1695,7 +1693,7 @@ class ConvertInplaceBinop:
         body_block.body.append(ir.Assign(getitem_call, target_var, loc))
 
         # Create temp to hold result.
-        expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
+        expr_out_var = scope.redefine("$expr_out_var", loc)
         pass_states.typemap[expr_out_var.name] = el_typ
 
         # Create binop and assign result to temporary.
@@ -1842,7 +1840,7 @@ class ConvertSetItemPass:
             # setitem has a custom target shape
             size_vars = shape
             # create a new target array via getitem
-            subarr_var = ir.Var(scope, mk_unique_var("$subarr"), loc)
+            subarr_var = scope.redefine("$subarr", loc)
             getitem_call = ir.Expr.getitem(target, index, loc)
             subarr_typ = typing.arraydecl.get_array_index_type( arr_typ, index_typ).result
             pass_states.typemap[subarr_var.name] = subarr_typ
@@ -1859,7 +1857,7 @@ class ConvertSetItemPass:
         loopnests = []
         index_vars = []
         for size_var in size_vars:
-            index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
+            index_var = scope.redefine("parfor_index", loc)
             index_vars.append(index_var)
             pass_states.typemap[index_var.name] = types.uintp
             loopnests.append(LoopNest(index_var, 0, size_var, 1))
@@ -1886,7 +1884,7 @@ class ConvertSetItemPass:
                                 true_label: true_block,
                                 end_label:  end_block,
                                 }
-            mask_var = ir.Var(scope, mk_unique_var("$mask_var"), loc)
+            mask_var = scope.redefine("$mask_var", loc)
             pass_states.typemap[mask_var.name] = bool_typ
             mask_val = ir.Expr.getitem(index, index_var, loc)
             body_block.body.extend([
@@ -1896,7 +1894,7 @@ class ConvertSetItemPass:
 
         value_typ = pass_states.typemap[value.name]
         if isinstance(value_typ, types.npytypes.Array):
-            value_var = ir.Var(scope, mk_unique_var("$value_var"), loc)
+            value_var = scope.redefine("$value_var", loc)
             pass_states.typemap[value_var.name] = value_typ.dtype
             getitem_call = ir.Expr.getitem(value, index_var, loc)
             pass_states.calltypes[getitem_call] = signature(
@@ -1933,8 +1931,7 @@ def _make_index_var(typemap, scope, index_vars, body_block, force_tuple=False):
     ndims = len(index_vars)
     loc = body_block.loc
     if ndims > 1 or force_tuple:
-        tuple_var = ir.Var(scope, mk_unique_var(
-            "$parfor_index_tuple_var"), loc)
+        tuple_var = scope.redefine("$parfor_index_tuple_var", loc)
         typemap[tuple_var.name] = types.containers.UniTuple(
             types.uintp, ndims)
         tuple_call = ir.Expr.build_tuple(list(index_vars), loc)
@@ -1957,7 +1954,7 @@ def _mk_parfor_loops(typemap, size_vars, scope, loc):
     loopnests = []
     index_vars = []
     for size_var in size_vars:
-        index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
+        index_var = scope.redefine("parfor_index", loc)
         index_vars.append(index_var)
         typemap[index_var.name] = types.uintp
         loopnests.append(LoopNest(index_var, 0, size_var, 1))
@@ -2056,7 +2053,7 @@ class ConvertNumpyPass:
             pass_states.typemap[lhs.name])
         body_label = next_label()
         body_block = ir.Block(scope, loc)
-        expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
+        expr_out_var = scope.redefine("$expr_out_var", loc)
         pass_states.typemap[expr_out_var.name] = el_typ
 
         index_var, index_var_typ = _make_index_var(
@@ -2142,7 +2139,7 @@ class ConvertNumpyPass:
             pass_states.typemap[lhs.name])
         body_label = next_label()
         body_block = ir.Block(scope, loc)
-        expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
+        expr_out_var = scope.redefine("$expr_out_var", loc)
         pass_states.typemap[expr_out_var.name] = el_typ
 
         index_var, index_var_typ = _make_index_var(
@@ -2274,7 +2271,7 @@ class ConvertReducePass:
             false_label = max(loop_body.keys())
             body_block = ir.Block(scope, loc)
             loop_body[body_label] = body_block
-            mask = ir.Var(scope, mk_unique_var("$mask_val"), loc)
+            mask = scope.redefine("$mask_val", loc)
             pass_states.typemap[mask.name] = mask_typ
             mask_val = ir.Expr.getitem(mask_var, index_var, loc)
             body_block.body.extend([
@@ -2307,7 +2304,7 @@ class ConvertReducePass:
         index_var, index_var_type = _make_index_var(
             pass_states.typemap, scope, index_vars, body_block)
 
-        tmp_var = ir.Var(scope, mk_unique_var("$val"), loc)
+        tmp_var = scope.redefine("$val", loc)
         pass_states.typemap[tmp_var.name] = in_typ
         getitem_call = ir.Expr.getitem(in_arr, index_var, loc)
         pass_states.calltypes[getitem_call] = signature(
@@ -2505,7 +2502,7 @@ class ConvertLoopPass:
                         assert(isinstance(in_arr, ir.Var))
                         in_arr_typ = pass_states.typemap[in_arr.name]
                         if isinstance(in_arr_typ, types.Integer):
-                            index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
+                            index_var = scope.redefine("parfor_index", loc)
                             pass_states.typemap[index_var.name] = types.uintp
                             loops = [LoopNest(index_var, 0, in_arr, 1)]
                             index_vars = [index_var]
@@ -2550,7 +2547,7 @@ class ConvertLoopPass:
                             false_label = max(labels)
                             body_block = ir.Block(scope, loc)
                             loop_body[body_label] = body_block
-                            mask = ir.Var(scope, mk_unique_var("$mask_val"), loc)
+                            mask = scope.redefine("$mask_val", loc)
                             pass_states.typemap[mask.name] = mask_typ
                             mask_val = ir.Expr.getitem(mask_var, orig_index_var, loc)
                             body_block.body.extend([
@@ -2585,7 +2582,7 @@ class ConvertLoopPass:
                                     "Only constant step size of 1 is supported for prange",
                                     loc=inst.loc,
                                 )
-                        index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
+                        index_var = scope.redefine("parfor_index", loc)
                         # assume user-provided start to prange can be negative
                         # this is the only case parfor can have negative index
                         if isinstance(start, int) and start >= 0:
@@ -2962,7 +2959,7 @@ class ParforPass(ParforPassStates):
                         lhs_typ = self.typemap[lhs.name]
                         print("Adding print for assignment to ", lhs.name, lhs_typ, type(lhs_typ))
                         if lhs_typ in types.number_domain or isinstance(lhs_typ, types.Literal):
-                            str_var = ir.Var(scope, mk_unique_var("str_var"), loc)
+                            str_var = scope.redefine("str_var", loc)
                             self.typemap[str_var.name] = types.StringLiteral(lhs.name)
                             lhs_const = ir.Const(lhs.name, loc)
                             str_assign = ir.Assign(lhs_const, str_var, loc)
@@ -3151,7 +3148,7 @@ def _arrayexpr_tree_to_ir(
         op, arr_expr_args = expr
         arg_vars = []
         for arg in arr_expr_args:
-            arg_out_var = ir.Var(scope, mk_unique_var("$arg_out_var"), loc)
+            arg_out_var = scope.redefine("$arg_out_var", loc)
             typemap[arg_out_var.name] = el_typ
             out_ir += _arrayexpr_tree_to_ir(func_ir,
                                             typingctx,
@@ -3187,11 +3184,11 @@ def _arrayexpr_tree_to_ir(
                 # function calls are stored in variables which are not removed
                 # op is typing_key to the variables type
                 func_var_name = _find_func_var(typemap, op, avail_vars, loc=loc)
-                func_var = ir.Var(scope, mk_unique_var(func_var_name), loc)
+                func_var = scope.redefine(func_var_name, loc)
                 typemap[func_var.name] = typemap[func_var_name]
                 func_var_def = copy.deepcopy(func_ir.get_definition(func_var_name))
                 if isinstance(func_var_def, ir.Expr) and func_var_def.op == 'getattr' and func_var_def.attr == 'sqrt':
-                     g_math_var = ir.Var(scope, mk_unique_var("$math_g_var"), loc)
+                     g_math_var = scope.redefine("$math_g_var", loc)
                      typemap[g_math_var.name] = types.misc.Module(math)
                      g_math = ir.Global('math', math, loc)
                      g_math_assign = ir.Assign(g_math, g_math_var, loc)
@@ -3247,13 +3244,13 @@ def _gen_np_divide(arg1, arg2, out_ir, typemap):
     scope = arg1.scope
     loc = arg1.loc
     # g_np_var = Global(numpy)
-    g_np_var = ir.Var(scope, mk_unique_var("$np_g_var"), loc)
+    g_np_var = scope.redefine("$np_g_var", loc)
     typemap[g_np_var.name] = types.misc.Module(numpy)
     g_np = ir.Global('np', numpy, loc)
     g_np_assign = ir.Assign(g_np, g_np_var, loc)
     # attr call: div_attr = getattr(g_np_var, divide)
     div_attr_call = ir.Expr.getattr(g_np_var, "divide", loc)
-    attr_var = ir.Var(scope, mk_unique_var("$div_attr"), loc)
+    attr_var = scope.redefine("$div_attr", loc)
     func_var_typ = get_np_ufunc_typ(numpy.divide)
     typemap[attr_var.name] = func_var_typ
     attr_assign = ir.Assign(div_attr_call, attr_var, loc)
@@ -3291,7 +3288,7 @@ def _gen_arrayexpr_getitem(
     # Handle array-scalar
     if ndims == 0:
         # call np.ravel
-        ravel_var = ir.Var(var.scope, mk_unique_var("$ravel"), loc)
+        ravel_var = var.scope.redefine("$ravel", loc)
         ravel_typ = types.npytypes.Array(dtype=var_typ.dtype, ndim=1, layout='C')
         typemap[ravel_var.name] = ravel_typ
         stmts = ir_utils.gen_np_call('ravel', numpy.ravel, ravel_var, [var], typingctx, typemap, calltypes)
@@ -3299,7 +3296,7 @@ def _gen_arrayexpr_getitem(
         var = ravel_var
         # Const(0)
         const_node = ir.Const(0, var.loc)
-        const_var = ir.Var(var.scope, mk_unique_var("$const_ind_0"), loc)
+        const_var = var.scope.redefine("$const_ind_0", loc)
         typemap[const_var.name] = types.uintp
         const_assign = ir.Assign(const_node, const_var, loc)
         out_ir.append(const_assign)
@@ -3312,13 +3309,12 @@ def _gen_arrayexpr_getitem(
     elif any([x is not None for x in size_consts]):
         # Need a tuple as index
         ind_offset = num_indices - ndims
-        tuple_var = ir.Var(var.scope, mk_unique_var(
-            "$parfor_index_tuple_var_bcast"), loc)
+        tuple_var = var.scope.redefine("$parfor_index_tuple_var_bcast", loc)
         typemap[tuple_var.name] = types.containers.UniTuple(types.uintp, ndims)
         # Just in case, const var for size 1 dim access index: $const0 =
         # Const(0)
         const_node = ir.Const(0, var.loc)
-        const_var = ir.Var(var.scope, mk_unique_var("$const_ind_0"), loc)
+        const_var = var.scope.redefine("$const_ind_0", loc)
         typemap[const_var.name] = types.uintp
         const_assign = ir.Assign(const_node, const_var, loc)
         out_ir.append(const_assign)
@@ -4606,7 +4602,7 @@ def remove_dead_parfor_recursive(parfor, lives, arg_aliases, alias_map,
     # branch back to first body label to simulate loop
     scope = blocks[last_label].scope
 
-    branchcond = ir.Var(scope, mk_unique_var("$branchcond"), ir.Loc("parfors_dummy", -1))
+    branchcond = scope.redefine("$branchcond", ir.Loc("parfors_dummy", -1))
     typemap[branchcond.name] = types.boolean
 
     branch = ir.Branch(branchcond, first_body_block, return_label, ir.Loc("parfors_dummy", -1))
@@ -4632,7 +4628,7 @@ def _add_liveness_return_block(blocks, lives, typemap):
     blocks[return_label] = ir.Block(scope, loc)
 
     # add lives in a dummpy return to last block to avoid their removal
-    tuple_var = ir.Var(scope, mk_unique_var("$tuple_var"), loc)
+    tuple_var = scope.redefine("$tuple_var", loc)
     # dummy type for tuple_var
     typemap[tuple_var.name] = types.containers.UniTuple(
         types.uintp, 2)
@@ -4665,7 +4661,7 @@ def simplify_parfor_body_CFG(blocks):
                 last_block = parfor.loop_body[max(parfor.loop_body.keys())]
                 scope = last_block.scope
                 loc = ir.Loc("parfors_dummy", -1)
-                const = ir.Var(scope, mk_unique_var("$const"), loc)
+                const = scope.redefine("$const", loc)
                 last_block.body.append(ir.Assign(ir.Const(0, loc), const, loc))
                 last_block.body.append(ir.Return(const, loc))
                 parfor.loop_body = simplify_CFG(parfor.loop_body)
@@ -4850,9 +4846,9 @@ def _get_saved_call_nodes(fname, saved_globals, saved_getattrs, block_defs, rena
                                         or fname in saved_getattrs)):
         def rename_global_or_getattr(obj, var_base, nodes, block_defs, rename_dict):
             assert(isinstance(obj, ir.Assign))
-            renamed_var = ir.Var(obj.target.scope,
-                                 mk_unique_var(var_base),
-                                 obj.target.loc)
+            scope = obj.target.scope
+            loc = obj.target.loc
+            renamed_var = scope.redefine(var_base, loc)
             renamed_assign = ir.Assign(copy.deepcopy(obj.value),
                                        renamed_var,
                                        obj.loc)
@@ -5012,7 +5008,7 @@ def dummy_return_in_loop_body(loop_body):
     # max is last block since we add it manually for prange
     last_label = max(loop_body.keys())
     scope = loop_body[last_label].scope
-    const = ir.Var(scope, mk_unique_var("$const"), ir.Loc("parfors_dummy", -1))
+    const = scope.redefine("$const", ir.Loc("parfors_dummy", -1))
     loop_body[last_label].body.append(
         ir.Return(const, ir.Loc("parfors_dummy", -1)))
     yield
