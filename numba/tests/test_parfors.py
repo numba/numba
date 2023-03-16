@@ -3367,7 +3367,6 @@ class TestPrangeBase(TestParforsBase):
                 new_code[idx] = prange_idx
             new_code = bytes(new_code)
 
-        # create new code parts
         # create code object with prange mutation
         prange_code = pyfunc_code.replace(co_code=new_code,
                                           co_names=prange_names)
