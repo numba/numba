@@ -42,12 +42,7 @@ fi
 # Create a base env first and then add to it...
 # NOTE: gitpython is needed for CI testing to do the test slicing
 # NOTE: pyyaml is used to ensure that the Azure CI config is valid
-<<<<<<< HEAD
-conda create -n $CONDA_ENV -q -y -c conda-forge ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml
-=======
-
-conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON $NUMPY_CHANNEL_PKG=$NUMPY pip gitpython pyyaml
->>>>>>> ec5210242e400d281d6c52d633ce041f95f47e98
+conda create -n $CONDA_ENV -q -y -c conda-forge ${EXTRA_CHANNELS} python=$PYTHON $NUMPY_CHANNEL_PKG=$NUMPY pip gitpython pyyaml
 
 # Activate first
 set +v

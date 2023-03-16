@@ -49,6 +49,7 @@ from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                       needs_subprocess)
 from numba.core.extending import register_jitable
 from numba.core.bytecode import _fix_LOAD_GLOBAL_arg
+from numba.core import utils
 
 import cmath
 import unittest
@@ -3366,10 +3367,6 @@ class TestPrangeBase(TestParforsBase):
                 new_code[idx] = prange_idx
             new_code = bytes(new_code)
 
-<<<<<<< HEAD
-        # create new code parts
-=======
->>>>>>> ec5210242e400d281d6c52d633ce041f95f47e98
         # create code object with prange mutation
         prange_code = pyfunc_code.replace(co_code=new_code,
                                           co_names=prange_names)

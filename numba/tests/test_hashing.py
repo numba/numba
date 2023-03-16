@@ -13,11 +13,7 @@ from textwrap import dedent
 
 import numpy as np
 
-<<<<<<< HEAD
-from numba import jit, config
-=======
-from numba import jit, typed, typeof
->>>>>>> ec5210242e400d281d6c52d633ce041f95f47e98
+from numba import jit, config, typed, typeof
 from numba.core import types, utils
 import unittest
 from numba.tests.support import (TestCase, tag, CompilationCache,

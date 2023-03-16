@@ -8,7 +8,6 @@ jobs:
     vmImage: ${{ parameters.vmImage }}
   strategy:
     matrix:
-<<<<<<< HEAD
       py311_np123_17:
         PYTHON: '3.11'
         NUMPY: '1.23'
@@ -17,16 +16,6 @@ jobs:
       py311_np123_18:
         PYTHON: '3.11'
         NUMPY: '1.23'
-=======
-      py310_np124:
-        PYTHON: '3.10'
-        NUMPY: '1.24'
-        CONDA_ENV: 'testenv'
-        TEST_START_INDEX: 17
-      py38_np121:
-        PYTHON: '3.8'
-        NUMPY: '1.21'
->>>>>>> ec5210242e400d281d6c52d633ce041f95f47e98
         CONDA_ENV: 'testenv'
         TEST_START_INDEX: 18
 

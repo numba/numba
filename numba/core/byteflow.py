@@ -962,21 +962,11 @@ class TraceRunner(object):
             )
         )
 
-<<<<<<< HEAD
     def op_PUSH_EXC_INFO(self, state, inst):
         tos = state.pop()
         state.push(state.make_temp("exception"))
         state.push(tos)
 
-    def op_SETUP_EXCEPT(self, state, inst):
-        # Opcode removed since py3.8
-        state.append(inst)
-        self._setup_try(
-            'EXCEPT', state, next=inst.next, end=inst.get_jump_target(),
-        )
-
-=======
->>>>>>> ec5210242e400d281d6c52d633ce041f95f47e98
     def op_SETUP_FINALLY(self, state, inst):
         state.append(inst)
         self._setup_try(

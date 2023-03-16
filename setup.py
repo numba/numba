@@ -19,13 +19,8 @@ except ImportError:
         pass
 
 
-<<<<<<< HEAD
-min_python_version = "3.7"
-max_python_version = "3.12"  # exclusive
-=======
 min_python_version = "3.8"
-max_python_version = "3.11"  # exclusive
->>>>>>> ec5210242e400d281d6c52d633ce041f95f47e98
+max_python_version = "3.12"  # exclusive
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.18"
 min_llvmlite_version = "0.40.0dev0"
