@@ -384,8 +384,8 @@ def _create_timedelta_comparison_impl(ll_op, default_value):
                 else:
                     builder.store(builder.icmp_unsigned(ll_op, norm_a, norm_b), ret)
             with otherwise:
-                # NumPy >= 1.16 switched to NaT ==/>=/>/</<= NaT being
-                # False and NaT != <anything, including NaT> being True
+                # NaT ==/>=/>/</<= NaT is False
+                # NaT != <anything, including NaT> is True
                 if ll_op == '!=':
                     builder.store(cgutils.true_bit, ret)
                 else:
@@ -407,7 +407,7 @@ def _create_timedelta_ordering_impl(ll_op):
                     context, builder, va, vb, ta, tb)
                 builder.store(builder.icmp_signed(ll_op, norm_a, norm_b), ret)
             with otherwise:
-                # NumPy >= 1.16 switched to NaT >=/>/</<= NaT being False
+                # NaT >=/>/</<= NaT is False
                 builder.store(cgutils.false_bit, ret)
         res = builder.load(ret)
         return impl_ret_untracked(context, builder, sig.return_type, res)

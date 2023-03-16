@@ -3770,8 +3770,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.rnd.shuffle(fp)
         _check(params={'x': x, 'xp': xp, 'fp': fp})
 
-        # alg changed in 1.16 and other things were found not-quite-right
-        # in inf/nan handling, skip for now
         x[:5] = np.nan
         x[-5:] = np.inf
         self.rnd.shuffle(x)
@@ -3878,8 +3876,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         fp = [np.inf]
         _check(params={'x': 1, 'xp': xp, 'fp': fp})
 
-        # alg changed in 1.16 and other things were found not-quite-right
-        # in inf/nan handling, skip for now
         x = np.array([1, 2, 2.5, 3, 4])
         xp = np.array([1, 2, 3, 4])
         fp = np.array([1, 2, np.nan, 4])

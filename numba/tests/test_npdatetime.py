@@ -385,8 +385,8 @@ class TestTimedeltaArithmetic(TestCase):
             expected_val = expected
             not_expected_val = not expected
 
-            # since np 1.16 all NaT == comparisons are False, including
-            # NaT==NaT, conversely != is True
+            # all NaT comparisons are False, including NaT==NaT,
+            # conversely != is True
             if np.isnat(a) or np.isnat(a):
                 expected_val = False
                 not_expected_val = True
