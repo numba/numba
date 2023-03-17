@@ -546,6 +546,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc('str')
         self.assertIn('Argument "x" must be a Number or array-like',
                       str(raises.exception))
+        # Exceptions leak references
+        self.disable_leak_check()
 
     def test_contains(self):
         def arrs():
@@ -650,6 +652,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc('hello')
         self.assertIn('Argument "z" must be a complex or Array[complex]',
                       str(raises.exception))
+        # Exceptions leak references
+        self.disable_leak_check()
 
     def test_array_equal(self):
         def arrays():
@@ -777,6 +781,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             'The third argument "axis" must be an integer',
             str(raises.exception)
         )
+        # Exceptions leak references
+        self.disable_leak_check()
 
     def test_delete(self):
 
@@ -840,6 +846,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             'obj must be less than the len(arr)',
             str(raises.exception),
         )
+        # Exceptions leak references
+        self.disable_leak_check()
 
     def diff_arrays(self):
         """
@@ -893,6 +901,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             with self.assertRaises(ValueError) as raises:
                 cfunc(arr, n)
             self.assertIn("order must be non-negative", str(raises.exception))
+        # Exceptions leak references
+        self.disable_leak_check()
 
     def test_isscalar(self):
         def values():
@@ -974,11 +984,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.inf, None
             yield np.PINF, None
             yield np.asarray([-np.inf, 0., np.inf]), None
-            yield np.NINF, np.zeros(1, dtype=np.bool)
-            yield np.inf, np.zeros(1, dtype=np.bool)
-            yield np.PINF, np.zeros(1, dtype=np.bool)
+            yield np.NINF, np.zeros(1, dtype=np.bool_)
+            yield np.inf, np.zeros(1, dtype=np.bool_)
+            yield np.PINF, np.zeros(1, dtype=np.bool_)
             yield np.NINF, np.empty(12)
-            yield np.asarray([-np.inf, 0., np.inf]), np.zeros(3, dtype=np.bool)
+            yield np.asarray([-np.inf, 0., np.inf]), np.zeros(3, dtype=np.bool_)
 
         pyfuncs = [isneginf, isposinf]
         for pyfunc in pyfuncs:
@@ -1097,6 +1107,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc([2, -1])
         self.assertIn("first argument must be non-negative",
                       str(raises.exception))
+        # Exceptions leak references
+        self.disable_leak_check()
 
     def test_bincount2(self):
         pyfunc = bincount2
@@ -2206,11 +2218,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
 
         d = np.array([], dtype=np.int64)
+        expected = pyfunc(d, 0)
         got = cfunc(d, 0)
-        self.assertPreciseEqual(d, got)
+        self.assertPreciseEqual(expected, got)
 
         d = np.ones(1, dtype=np.int64)
-        expected = np.zeros(1, dtype=np.int64)
+        expected = pyfunc(d, 0)
         got = cfunc(d, 0)
         self.assertPreciseEqual(expected, got)
 
@@ -5299,6 +5312,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as raises:
             gen(0)(arr2d, np.ones((2, 3), dtype=np.uint64))
         self.assertIn("dimensions don't match", str(raises.exception))
+        # Exceptions leak references
+        self.disable_leak_check()
 
     def test_nan_to_num(self):
         # Test cases are from
@@ -5383,6 +5398,7 @@ def foo():
         eval(compile(funcstr, '<string>', 'exec'))
         return locals()['foo']
 
+    @unittest.skipIf(numpy_version >= (1, 24), "NumPy < 1.24 required")
     def test_MachAr(self):
         attrs = ('ibeta', 'it', 'machep', 'eps', 'negep', 'epsneg', 'iexp',
                  'minexp', 'xmin', 'maxexp', 'xmax', 'irnd', 'ngrd',
@@ -5425,7 +5441,8 @@ def foo():
             cfunc = jit(nopython=True)(iinfo)
             cfunc(np.float64(7))
 
-    @unittest.skipUnless(numpy_version >= (1, 22), "Needs NumPy >= 1.22")
+    @unittest.skipUnless((1, 22) <= numpy_version < (1, 24),
+                         "Needs NumPy >= 1.22, < 1.24")
     @TestCase.run_test_in_subprocess
     def test_np_MachAr_deprecation_np122(self):
         # Tests that Numba is replaying the NumPy 1.22 deprecation warning

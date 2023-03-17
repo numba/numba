@@ -1830,7 +1830,7 @@ def np_argpartition_impl_inner(a, kth_array):
 
     # allocate and fill empty array rather than copy a and mutate in place
     # as the latter approach fails to preserve strides
-    out = np.empty_like(a, dtype=np.int64)
+    out = np.empty_like(a, dtype=np.intp)
 
     idx = np.ndindex(a.shape[:-1])  # Numpy default partition axis is -1
     for s in idx:
@@ -1924,7 +1924,7 @@ def np_argpartition(a, kth):
     def np_argpartition_impl(a, kth):
         a_tmp = _asarray(a)
         if a_tmp.size == 0:
-            return a_tmp.copy().astype('int64')
+            return a_tmp.copy().astype('intp')
         else:
             kth_array = valid_kths(a_tmp, kth)
             return np_argpartition_impl_inner(a_tmp, kth_array)
@@ -4028,6 +4028,10 @@ iinfo = namedtuple('iinfo', _iinfo_supported)
 # This module is imported under the compiler lock which should deal with the
 # lack of thread safety in the warning filter.
 def _gen_np_machar():
+    # NumPy 1.24 removed np.MachAr
+    if numpy_version >= (1, 24):
+        return
+
     np122plus = numpy_version >= (1, 22)
     w = None
     with warnings.catch_warnings(record=True) as w:

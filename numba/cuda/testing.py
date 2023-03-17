@@ -7,7 +7,11 @@ from numba.cuda.cuda_paths import get_conda_ctk
 from numba.cuda.cudadrv import driver, devices, libs
 from numba.core import config
 from numba.tests.support import TestCase
+from pathlib import Path
 import unittest
+
+numba_cuda_dir = Path(__file__).parent
+test_data_dir = numba_cuda_dir / 'tests' / 'data'
 
 
 class CUDATestCase(SerialMixin, TestCase):

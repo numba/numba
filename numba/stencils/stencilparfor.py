@@ -21,6 +21,7 @@ from numba.core.ir_utils import (get_call_table, mk_unique_var,
                             find_callname, require, find_const, GuardException)
 from numba.core.errors import NumbaValueError
 from numba.core.utils import OPERATORS_TO_BUILTINS
+from numba.np import numpy_support
 
 
 def _compute_last_ind(dim_size, index_const):
@@ -264,7 +265,11 @@ class StencilPass(object):
             dtype_g_np_assign = ir.Assign(dtype_g_np, dtype_g_np_var, loc)
             init_block.body.append(dtype_g_np_assign)
 
-            dtype_np_attr_call = ir.Expr.getattr(dtype_g_np_var, return_type.dtype.name, loc)
+            return_type_name = numpy_support.as_dtype(
+                               return_type.dtype).type.__name__
+            if return_type_name == 'bool':
+                return_type_name = 'bool_'
+            dtype_np_attr_call = ir.Expr.getattr(dtype_g_np_var, return_type_name, loc)
             dtype_attr_var = ir.Var(scope, mk_unique_var("$np_attr_attr"), loc)
             self.typemap[dtype_attr_var.name] = types.functions.NumberClass(return_type.dtype)
             dtype_attr_assign = ir.Assign(dtype_np_attr_call, dtype_attr_var, loc)
