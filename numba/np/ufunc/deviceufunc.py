@@ -780,10 +780,7 @@ class GUFuncCallSteps(metaclass=ABCMeta):
         # Ensure the user has passed a correct number of arguments
         if outputs is None and len(args) not in (nin, (nin + nout)):
             def pos_argn(n):
-                s = f'{n} positional argument'
-                if n != 1:
-                    s += 's'
-                return s
+                return f'{n} positional argument{"s" * (n != 1)}'
 
             msg = (f'This gufunc accepts {pos_argn(nin)} (when providing '
                    f'input only) or {pos_argn(nin + nout)} (when providing '
