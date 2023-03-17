@@ -1,7 +1,7 @@
 import numpy as np
 
 from numba import vectorize, guvectorize
-from numba import cuda
+from numba import cuda, typeof, void
 from numba.cuda.cudadrv import driver
 from numba.cuda.testing import (skip_unless_cuda_python, unittest,
                                 ContextResettingTestCase, ForeignArray)
@@ -9,6 +9,8 @@ from numba.cuda.testing import skip_on_cudasim, skip_if_external_memmgr
 from numba.tests.support import linux_only, override_config
 from unittest.mock import call, patch
 
+def array_reshape(arr, newshape, got):
+    got = arr.reshape(newshape)
 
 @skip_on_cudasim('CUDA Array Interface is not supported in the simulator')
 class TestCudaArrayInterface(ContextResettingTestCase):
@@ -431,6 +433,14 @@ class TestCudaArrayInterface(ContextResettingTestCase):
 
             # Ensure that synchronize was not called
             mock_sync.assert_not_called()
+
+    def check_only_shape(self, kernelfunc, arr, shape, expected_shape):
+        sig = void(typeof(arr), typeof(shape), typeof(shape))
+        kernel = cuda.jit(sig)(kernelfunc)
+        got = numpy.zeros(expected_shape, dtype=arr.dtype)
+        kernel[1, arr.shape](arr, shape, got)
+        self.assertEqual(got.shape, expected_shape)
+        self.assertEqual(got.size, arr.size)
 
     @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_cuda_reshape(self):
