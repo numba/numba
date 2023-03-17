@@ -4600,17 +4600,19 @@ def remove_dead_parfor_recursive(parfor, lives, arg_aliases, alias_map,
     return_label, tuple_var = _add_liveness_return_block(blocks, lives, typemap)
 
     # branch back to first body label to simulate loop
+    dummyLoc = ir.Loc("parfors_dummy", -1)
     scope = blocks[last_label].scope
-
-    branchcond = scope.redefine("$branchcond", ir.Loc("parfors_dummy", -1))
+    branchcond = scope.redefine("$branchcond", dummyLoc)
+    while branchcond.name in typemap.keys():
+        branchcond = scope.redefine("$branchcond", dummyLoc)
     typemap[branchcond.name] = types.boolean
 
-    branch = ir.Branch(branchcond, first_body_block, return_label, ir.Loc("parfors_dummy", -1))
+    branch = ir.Branch(branchcond, first_body_block, return_label, dummyLoc)
     blocks[last_label].body.append(branch)
 
     # add dummy jump in init_block for CFG to work
     blocks[0] = parfor.init_block
-    blocks[0].body.append(ir.Jump(first_body_block, ir.Loc("parfors_dummy", -1)))
+    blocks[0].body.append(ir.Jump(first_body_block, dummyLoc))
 
     # args var including aliases is ok
     remove_dead(blocks, arg_aliases, func_ir, typemap, alias_map, arg_aliases)
@@ -4629,6 +4631,8 @@ def _add_liveness_return_block(blocks, lives, typemap):
 
     # add lives in a dummpy return to last block to avoid their removal
     tuple_var = scope.redefine("$tuple_var", loc)
+    while tuple_var.name in typemap.keys():
+        tuple_var = scope.redefine("$tuple_var", loc)
     # dummy type for tuple_var
     typemap[tuple_var.name] = types.containers.UniTuple(
         types.uintp, 2)
