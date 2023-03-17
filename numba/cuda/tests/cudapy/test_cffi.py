@@ -1,11 +1,17 @@
 import numpy as np
-import cffi
+
+try:
+    import cffi
+    _have_cffi = True
+except ImportError:
+    _have_cffi = False
 
 from numba import cuda, types
 from numba.cuda.testing import (skip_on_cudasim, test_data_dir, unittest,
                                 CUDATestCase)
 
 
+@unittest.skipUnless(_have_cffi, 'Needs CFFI')
 @skip_on_cudasim('Simulator does not support linking')
 class TestCFFI(CUDATestCase):
     def test_from_buffer(self):
