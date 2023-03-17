@@ -1,5 +1,131 @@
-Version 0.57.0 (XX YYY ZZZ)
----------------------------
+Version 0.57.0 RC1 (TBC, 2023)
+------------------------------
+
+This release continues to add new features, bug fixes and stability improvements
+to Numba. Please note that this release contains a significant number of both
+deprecation and pending-deprecation notices with view of making it easier to
+develop new technology for Numba in the future. Also note that this will be the
+last release to support Windows 32-bit packages produced by the Numba team.
+
+Highlights of core dependency upgrades:
+
+* Support for Python 3.11 (minimum is moved to 3.8)
+* Support for NumPy 1.24 (minimum is moved to 1.21)
+
+Python language support enhancements:
+
+* Exception classes now support arguments that are not compile time constant.
+* The built-in functions ``hasattr`` and ``getattr`` are supported for compile
+  time constant attributes.
+* The built-in functions ``str`` and ``repr`` are now implemented similarly to
+  their Python implementations. Custom ``__str__`` and ``__repr__``
+  functions can be associated with types and work as expected.
+* Numba's unicode functionality in ``str.startswith`` now supports kwargs
+  ``start`` and ``end``.
+* ``min`` and ``max`` now support boolean types.
+
+NumPy features/enhancements:
+
+* The largest set of new features is within the ``numpy.random.Generator``
+  support, the vast majority of commonly used distributions are now supported.
+  Namely:
+
+  * ``Generator.beta``
+  * ``Generator.chisquare``
+  * ``Generator.exponential``
+  * ``Generator.f``
+  * ``Generator.gamma``
+  * ``Generator.geometric``
+  * ``Generator.integers``
+  * ``Generator.laplace``
+  * ``Generator.logistic``
+  * ``Generator.lognormal``
+  * ``Generator.logseries``
+  * ``Generator.negative_binomial``
+  * ``Generator.noncentral_chisquare``
+  * ``Generator.noncentral_f``
+  * ``Generator.normal``
+  * ``Generator.pareto``
+  * ``Generator.permutation``
+  * ``Generator.poisson``
+  * ``Generator.power``
+  * ``Generator.random``
+  * ``Generator.rayleigh``
+  * ``Generator.shuffle``
+  * ``Generator.standard_cauchy``
+  * ``Generator.standard_exponential``
+  * ``Generator.standard_gamma``
+  * ``Generator.standard_normal``
+  * ``Generator.standard_t``
+  * ``Generator.triangular``
+  * ``Generator.uniform``
+  * ``Generator.wald``
+  * ``Generator.weibull``
+  * ``Generator.zipf``
+
+* The ``nbytes`` property on NumPy ``ndarray`` types is implemented.
+* Nesting of nested-array types is now supported.
+* ``datetime`` and ``timedelta`` types can be cast to ``int``.
+* ``F``-order iteration is supported in ``ufunc`` generation for increased
+  performance when using combinations of predominantly ``F``-order arrays.
+* The following functions are also now supported:
+
+  * ``np.argpartition``
+  * ``np.isclose``
+  * ``np.new_axis``
+  * ``np.union1d``
+
+Highlights of core changes:
+
+* A large amount of refactoring has taken place to convert many of Numba's
+  internal implementations, of both Python and NumPy functions, from the
+  low-level extension API to the high-level extension API (``numba.extending``).
+* The ``__repr__`` method is supported for Numba types.
+* The default ``target`` for applicable functions in the extension API
+  (``numba.extending``) is now ``"generic"``. This means that ``@overload*`` and
+  ``@intrinsic`` functions will by default be accepted by both the CPU and CUDA
+  targets.
+* The use of ``__getitem__`` on Numba types is now supported in compiled code.
+  i.e. ``types.float64[:, ::1]`` is now compilable.
+
+Performance:
+
+* The performance of ``str.find()`` and ``str.rfind()`` has been improved.
+* Unicode support for ``__getitem__`` now avoids allocation and returns a view.
+* The ``numba.typed.Dict`` dictionary now accepts an ``n_keys`` option to enable
+  allocating the dictionary instance to a predetermined initial size (useful to
+  avoid resizes!).
+* The Numba Run-time (NRT) has been improved in terms of performance and safety:
+
+  * The NRT internal statistics counters are now off by default (removes atomic
+    lock contentions).
+  * Debug cache line filling is off by default.
+  * The NRT is only compiled once a compilation starts opposed to at function
+    decoration time, this improves import speed.
+  * The NRT allocation calls are all made through a "checked" layer by default.
+
+CUDA:
+
+* TBC
+
+Deprecations:
+
+* The ``numba.pycc`` module and everything in it is now pending deprecation.
+* The long awaited full deprecation of ``object mode`` `fall-back` is
+  underway. This change means ``@jit`` with no keyword arguments will eventually
+  alias ``@njit``.
+* The ``@generated_jit`` decorator is deprecated as the Numba extension API
+  provides a better supported superset of the same functionality, particularly
+  through ``@numba.extending.overload``.
+
+Version support/dependency changes:
+
+* The ``setuptools`` package is now an optional run-time dependency opposed to a
+  required run-time dependency.
+* The TBB threading-layer now requires version 2021.6 or later.
+* LLVM 14 is now supported on all platforms via ``llvmlite``.
+
+TODO: Attribution note on PR#8423.
 
 Pull-Requests:
 
