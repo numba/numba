@@ -10,6 +10,7 @@ from numba.cuda.testing import skip_on_cudasim
 @skip_on_cudasim('CUDA Memory API unsupported in the simulator')
 class TestCudaMemory(ContextResettingTestCase):
     def setUp(self):
+        super().setUp()
         self.context = devices.get_context()
 
     def tearDown(self):
@@ -19,8 +20,12 @@ class TestCudaMemory(ContextResettingTestCase):
     def _template(self, obj):
         self.assertTrue(driver.is_device_memory(obj))
         driver.require_device_memory(obj)
+        if driver.USE_NV_BINDING:
+            expected_class = driver.binding.CUdeviceptr
+        else:
+            expected_class = drvapi.cu_device_ptr
         self.assertTrue(isinstance(obj.device_ctypes_pointer,
-                                   drvapi.cu_device_ptr))
+                                   expected_class))
 
     def test_device_memory(self):
         devmem = self.context.memalloc(1024)
@@ -47,18 +52,25 @@ class TestCudaMemory(ContextResettingTestCase):
 
     def test_derived_pointer(self):
         # Use MemoryPointer.view to create derived pointer
+
+        def handle_val(mem):
+            if driver.USE_NV_BINDING:
+                return int(mem.handle)
+            else:
+                return mem.handle.value
+
         def check(m, offset):
             # create view
             v1 = m.view(offset)
-            self.assertEqual(v1.owner.handle.value, m.handle.value)
+            self.assertEqual(handle_val(v1.owner), handle_val(m))
             self.assertEqual(m.refct, 2)
-            self.assertEqual(v1.handle.value - offset, v1.owner.handle.value)
+            self.assertEqual(handle_val(v1) - offset, handle_val(v1.owner))
             # create a view
             v2 = v1.view(offset)
-            self.assertEqual(v2.owner.handle.value, m.handle.value)
-            self.assertEqual(v2.owner.handle.value, m.handle.value)
-            self.assertEqual(v2.handle.value - offset * 2,
-                             v2.owner.handle.value)
+            self.assertEqual(handle_val(v2.owner), handle_val(m))
+            self.assertEqual(handle_val(v2.owner), handle_val(m))
+            self.assertEqual(handle_val(v2) - offset * 2,
+                             handle_val(v2.owner))
             self.assertEqual(m.refct, 3)
             del v2
             self.assertEqual(m.refct, 2)
@@ -97,6 +109,7 @@ class TestCudaMemory(ContextResettingTestCase):
 
 class TestCudaMemoryFunctions(ContextResettingTestCase):
     def setUp(self):
+        super().setUp()
         self.context = devices.get_context()
 
     def tearDown(self):

@@ -20,11 +20,11 @@ class ObjectModeFrontEnd(FunctionPass):
         loop_flags = state.flags.copy()
         outer_flags = state.flags.copy()
         # Do not recursively loop lift
-        outer_flags.unset('enable_looplift')
-        loop_flags.unset('enable_looplift')
+        outer_flags.enable_looplift = False
+        loop_flags.enable_looplift = False
         if not state.flags.enable_pyobject_looplift:
-            loop_flags.unset('enable_pyobject')
-        loop_flags.unset('enable_ssa')
+            loop_flags.enable_pyobject = False
+        loop_flags.enable_ssa = False
 
         main, loops = transforms.loop_lifting(state.func_ir,
                                               typingctx=state.typingctx,
@@ -151,13 +151,13 @@ class ObjectModeBackEnd(LoweringPass):
             warnings.warn(errors.NumbaWarning(warn_msg,
                                               state.func_ir.loc))
 
-            url = ("https://numba.pydata.org/numba-doc/latest/reference/"
+            url = ("https://numba.readthedocs.io/en/stable/reference/"
                    "deprecation.html#deprecation-of-object-mode-fall-"
                    "back-behaviour-when-using-jit")
             msg = ("\nFall-back from the nopython compilation path to the "
-                   "object mode compilation path has been detected, this is "
-                   "deprecated behaviour.\n\nFor more information visit %s" %
-                   url)
+                   "object mode compilation path has been detected. This is "
+                   "deprecated behaviour that will be removed in Numba 0.59.0."
+                   "\n\nFor more information visit %s" % url)
             warnings.warn(errors.NumbaDeprecationWarning(msg,
                                                          state.func_ir.loc))
             if state.flags.release_gil:

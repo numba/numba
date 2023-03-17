@@ -282,7 +282,6 @@ class TestOperations(TestCase):
                "list(undefined)<iv=None>.")
         self.assertIn(msg, str(raises.exception))
 
-
     def test_in(self):
         pyfunc = in_usecase
         cr = compile_isolated(pyfunc,
@@ -290,6 +289,10 @@ class TestOperations(TestCase):
         tup = (4, 1, 5)
         for i in range(5):
             self.assertPreciseEqual(cr.entry_point(i, tup), pyfunc(i, tup))
+
+        # Test the empty case
+        cr = compile_isolated(pyfunc, [types.int64, types.Tuple([])])
+        self.assertPreciseEqual(cr.entry_point(1, ()), pyfunc(1, ()))
 
     def check_slice(self, pyfunc):
         tup = (4, 5, 6, 7)
@@ -672,8 +675,8 @@ class TestTupleBuild(TestCase):
             # hard. Should it be reported numerous times, revisit then.
             msg1 = "No implementation of function"
             self.assertIn(msg1, str(raises.exception))
-            msg2 = "add(Tuple()," # ignore the reflected list part, it's repr
-                                  # is quite volatile.
+            msg2 = "tuple(reflected list(" # ignore the rest of reflected list
+                                           # part, it's repr is quite volatile.
             self.assertIn(msg2, str(raises.exception))
         else:
             msg = "Only tuples are supported when unpacking a single item"
@@ -742,7 +745,6 @@ class TestTupleBuild(TestCase):
 
         with self.assertRaises(errors.UnsupportedError) as raises:
             foo()
-
         msg = "op_LIST_EXTEND at the start of a block"
         self.assertIn(msg, str(raises.exception))
 

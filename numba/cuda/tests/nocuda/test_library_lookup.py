@@ -18,8 +18,6 @@ from numba.cuda.cuda_paths import (
     _get_cudalib_dir_path_decision,
     get_system_ctk,
 )
-from numba.cuda import envvars
-from numba.tests.support import override_env_config
 
 
 has_cuda = nvvm.is_available()
@@ -56,11 +54,6 @@ class LibraryLookupBase(SerialMixin, unittest.TestCase):
     @staticmethod
     def do_terminate():
         return False, None
-
-    def check_NUMBAPRO_warning(self, warns):
-        msg = "Environment variables with the 'NUMBAPRO' prefix are deprecated"
-        self.assertEqual(len(warns), 1)
-        self.assertIn(msg, str(warns[0].message))
 
 
 def remove_env(name):
@@ -110,12 +103,6 @@ class TestLibDeviceLookUp(LibraryLookupBase):
         self.assertEqual(info, os.path.join('mycudahome', 'nvvm', 'libdevice'))
         self.assertFalse(warns)
 
-        # Check that NUMBAPRO_LIBDEVICE override *warns*
-        by, info, warns = self.remote_do(self.do_set_libdevice)
-        self.check_NUMBAPRO_warning(warns)
-        # clear
-        self.remote_do(self.do_clear_envs)
-
         if get_system_ctk() is None:
             # Fake remove conda environment so no cudatoolkit is available
             by, info, warns = self.remote_do(self.do_clear_envs)
@@ -132,19 +119,12 @@ class TestLibDeviceLookUp(LibraryLookupBase):
     def do_clear_envs():
         remove_env('CUDA_HOME')
         remove_env('CUDA_PATH')
-        remove_env('NUMBAPRO_CUDALIB')
-        remove_env('NUMBAPRO_LIBDEVICE')
         return True, _get_libdevice_path_decision()
 
     @staticmethod
     def do_set_cuda_home():
         os.environ['CUDA_HOME'] = os.path.join('mycudahome')
         _fake_non_conda_env()
-        return True, _get_libdevice_path_decision()
-
-    @staticmethod
-    def do_set_libdevice():
-        os.environ['NUMBAPRO_LIBDEVICE'] = 'nbp_libdevice'
         return True, _get_libdevice_path_decision()
 
 
@@ -172,16 +152,6 @@ class TestNvvmLookUp(LibraryLookupBase):
         else:
             self.assertEqual(info, os.path.join('mycudahome', 'nvvm', 'lib64'))
 
-        # Check that NUMBAPRO_CUDALIB override warns
-        self.remote_do(self.do_clear_envs)
-        by, info, warns = self.remote_do(self.do_set_cuda_lib)
-        self.check_NUMBAPRO_warning(warns)
-
-        # Check that NUMBAPRO_NVVM override warns
-        self.remote_do(self.do_clear_envs)
-        by, info, warns = self.remote_do(self.do_set_nvvm)
-        self.check_NUMBAPRO_warning(warns)
-
         if get_system_ctk() is None:
             # Fake remove conda environment so no cudatoolkit is available
             by, info, warns = self.remote_do(self.do_clear_envs)
@@ -198,24 +168,12 @@ class TestNvvmLookUp(LibraryLookupBase):
     def do_clear_envs():
         remove_env('CUDA_HOME')
         remove_env('CUDA_PATH')
-        remove_env('NUMBAPRO_CUDALIB')
-        remove_env('NUMBAPRO_NVVM')
         return True, _get_nvvm_path_decision()
 
     @staticmethod
     def do_set_cuda_home():
         os.environ['CUDA_HOME'] = os.path.join('mycudahome')
         _fake_non_conda_env()
-        return True, _get_nvvm_path_decision()
-
-    @staticmethod
-    def do_set_cuda_lib():
-        os.environ['NUMBAPRO_CUDALIB'] = 'nbp_cudalib'
-        return True, _get_nvvm_path_decision()
-
-    @staticmethod
-    def do_set_nvvm():
-        os.environ['NUMBAPRO_NVVM'] = 'nbp_nvvm'
         return True, _get_nvvm_path_decision()
 
 
@@ -232,10 +190,6 @@ class TestCudaLibLookUp(LibraryLookupBase):
             self.assertEqual(by, "<unknown>")
             self.assertIsNone(info)
         self.assertFalse(warns)
-
-        # Check that NUMBAPRO_CUDALIB override warns
-        by, info, warns = self.remote_do(self.do_set_cuda_lib)
-        self.check_NUMBAPRO_warning(warns)
 
         # Check that CUDA_HOME works by removing conda-env
         self.remote_do(self.do_clear_envs)
@@ -264,7 +218,6 @@ class TestCudaLibLookUp(LibraryLookupBase):
     def do_clear_envs():
         remove_env('CUDA_HOME')
         remove_env('CUDA_PATH')
-        remove_env('NUMBAPRO_CUDALIB')
         return True, _get_cudalib_dir_path_decision()
 
     @staticmethod
@@ -273,38 +226,12 @@ class TestCudaLibLookUp(LibraryLookupBase):
         _fake_non_conda_env()
         return True, _get_cudalib_dir_path_decision()
 
-    @staticmethod
-    def do_set_cuda_lib():
-        os.environ['NUMBAPRO_CUDALIB'] = 'nbp_cudalib'
-        return True, _get_cudalib_dir_path_decision()
-
 
 def _fake_non_conda_env():
     """
     Monkeypatch sys.prefix to hide the fact we are in a conda-env
     """
     sys.prefix = ''
-
-
-class TestMisc(SerialMixin, unittest.TestCase):
-    """Test basic envvars lookup related functions
-    """
-    def test_get_numba_envvar(self):
-        # Make up an env-var that is not already defined.
-        # This makes a string with the following regex pattern "NUMBA_0+"
-        env = "0"
-        while f"NUMBA_{env}" in os.environ:
-            env += "0"
-        default = "the default"
-
-        # Check that we are getting the default
-        got = envvars.get_numba_envvar(env, default=default)
-        self.assertIs(got, default)
-
-        # Check that we are reading the env-var correctly
-        with override_env_config(f"NUMBA_{env}", "my value"):
-            got = envvars.get_numba_envvar(env, default=default)
-            self.assertEqual(got, "my value")
 
 
 if __name__ == '__main__':

@@ -25,8 +25,9 @@ from numba.core import types, utils, typing, ir, config
 from numba.core.typing.templates import Signature
 from numba.core.errors import (TypingError, UntypedAttributeError,
                                new_error_context, termcolor, UnsupportedError,
-                               ForceLiteralArg, CompilerError)
+                               ForceLiteralArg, CompilerError, NumbaValueError)
 from numba.core.funcdesc import qualifying_prefix
+from numba.core.typeconv import Conversion
 
 _logger = logging.getLogger(__name__)
 
@@ -162,15 +163,23 @@ class ConstraintNetwork(object):
                     )
                     errors.append(utils.chain_exception(new_exc, e))
                 except Exception as e:
-                    _logger.debug("captured error", exc_info=e)
-                    msg = ("Internal error at {con}.\n"
-                           "{err}\nEnable logging at debug level for details.")
-                    new_exc = TypingError(
-                        msg.format(con=constraint, err=str(e)),
-                        loc=constraint.loc,
-                        highlighting=False,
-                    )
-                    errors.append(utils.chain_exception(new_exc, e))
+                    if utils.use_old_style_errors():
+                        _logger.debug("captured error", exc_info=e)
+                        msg = ("Internal error at {con}.\n{err}\n"
+                               "Enable logging at debug level for details.")
+                        new_exc = TypingError(
+                            msg.format(con=constraint, err=str(e)),
+                            loc=constraint.loc,
+                            highlighting=False,
+                        )
+                        errors.append(utils.chain_exception(new_exc, e))
+                    elif utils.use_new_style_errors():
+                        raise e
+                    else:
+                        msg = ("Unknown CAPTURED_ERRORS style: "
+                               f"'{config.CAPTURED_ERRORS}'.")
+                        assert 0, msg
+
         return errors
 
 
@@ -337,12 +346,16 @@ class BuildMapConstraint(object):
                 strkey = all([isinstance(x, types.StringLiteral) for x in ktys])
                 literalvty = all([isinstance(x, types.Literal) for x in vtys])
                 vt0 = types.unliteral(vtys[0])
-                # homogeneous values comes in the form of being able to cast
-                # all the other values in the ctor to the type of the first
 
+                # homogeneous values comes in the form of being able to cast
+                # all the other values in the ctor to the type of the first.
+                # The order is important as `typed.Dict` takes it's type from
+                # the first element.
                 def check(other):
-                    return typeinfer.context.can_convert(other, vt0) is not None
+                    conv = typeinfer.context.can_convert(other, vt0)
+                    return conv is not None and conv < Conversion.unsafe
                 homogeneous = all([check(types.unliteral(x)) for x in vtys])
+
                 # Special cases:
                 # Single key:value in ctor, key is str, value is an otherwise
                 # illegal container type, e.g. LiteralStrKeyDict or
@@ -389,10 +402,9 @@ class ExhaustIterConstraint(object):
                         typeinfer.add_type(self.target, tp, loc=self.loc)
                         break
                     else:
-                        raise ValueError("wrong tuple length for %r: "
-                                         "expected %d, got %d"
-                                         % (self.iterator.name, self.count,
-                                            len(tp)))
+                        msg = (f"wrong tuple length for {self.iterator.name}: ",
+                               f"expected {self.count}, got {len(tp)}")
+                        raise NumbaValueError(msg)
                 elif isinstance(tp, types.IterableType):
                     tup = types.UniTuple(dtype=tp.iterator_type.yield_type,
                                          count=self.count)
@@ -582,6 +594,9 @@ class CallConstraint(object):
                 return
 
         # Resolve call type
+        if isinstance(fnty, types.TypeRef):
+            # Unwrap TypeRef
+            fnty = fnty.instance_type
         try:
             sig = typeinfer.resolve_call(fnty, pos_args, kw_args)
         except ForceLiteralArg as e:
@@ -591,14 +606,14 @@ class CallConstraint(object):
                             else self.args)
             folded = e.fold_arguments(folding_args, self.kws)
             requested = set()
-            unsatisified = set()
+            unsatisfied = set()
             for idx in e.requested_args:
                 maybe_arg = typeinfer.func_ir.get_definition(folded[idx])
                 if isinstance(maybe_arg, ir.Arg):
                     requested.add(maybe_arg.index)
                 else:
-                    unsatisified.add(idx)
-            if unsatisified:
+                    unsatisfied.add(idx)
+            if unsatisfied:
                 raise TypingError("Cannot request literal type.", loc=self.loc)
             elif requested:
                 raise ForceLiteralArg(requested, loc=self.loc)
@@ -1140,7 +1155,7 @@ precise type that can be inferred from the other variables. Whilst sometimes
 the type of empty lists can be inferred, this is not always the case, see this
 documentation for help:
 
-https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-untyped-list-problem
+https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-untyped-list-problem
 """
             if offender is not None:
                 # This block deals with imprecise lists
@@ -1385,6 +1400,8 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
             pass
         elif isinstance(inst, (ir.StaticRaise, ir.StaticTryRaise)):
             pass
+        elif isinstance(inst, ir.PopBlock):
+            pass # It's a marker statement
         elif type(inst) in typeinfer_extensions:
             # let external calls handle stmt if type matches
             f = typeinfer_extensions[type(inst)]
@@ -1515,13 +1532,13 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
                 sig = self.context.resolve_function_type(fnty.dispatcher_type,
                                                          pos_args, kw_args)
                 fndesc = disp.overloads[args].fndesc
-                fnty.overloads[args] = qualifying_prefix(fndesc.modname,
-                                                         fndesc.unique_name)
+                qual = qualifying_prefix(fndesc.modname, fndesc.qualname)
+                fnty.add_overloads(args, qual, fndesc.uid)
                 return sig
 
             fnid = frame.func_id
-            fnty.overloads[args] = qualifying_prefix(fnid.modname,
-                                                     fnid.unique_name)
+            qual = qualifying_prefix(fnid.modname, fnid.func_qualname)
+            fnty.add_overloads(args, qual, fnid.unique_id)
             # Resume propagation in parent frame
             return_type = frame.typeinfer.return_types_from_partial()
             # No known return type
@@ -1596,6 +1613,20 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
             literaled = [types.maybe_literal(x) for x in gvar.value]
             if all(literaled):
                 typ = types.Tuple(literaled)
+
+            # if any of the items in the tuple are arrays, they need to be
+            # typed as readonly, mutating an array in a global container
+            # is not supported (should be compile time constant etc).
+            def mark_array_ro(tup):
+                newtup = []
+                for item in tup.types:
+                    if isinstance(item, types.Array):
+                        item = item.copy(readonly=True)
+                    elif isinstance(item, types.BaseAnonymousTuple):
+                        item = mark_array_ro(item)
+                    newtup.append(item)
+                return types.BaseTuple.from_types(newtup)
+            typ = mark_array_ro(typ)
 
         self.sentry_modified_builtin(inst, gvar)
         # Setting literal_value for globals because they are handled
@@ -1695,6 +1726,7 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
         elif expr.op == 'make_function':
             self.lock_type(target.name, types.MakeFunctionLiteral(expr),
                            loc=inst.loc, literal_value=expr)
+
         else:
             msg = "Unsupported op-code encountered: %s" % expr
             raise UnsupportedError(msg, loc=inst.loc)

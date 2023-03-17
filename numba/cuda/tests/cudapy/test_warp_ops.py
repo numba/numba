@@ -233,6 +233,44 @@ class TestCudaWarpOperations(CUDATestCase):
         compiled[1, 32](arr)
         self.assertTrue(np.all(arr == exp))
 
+    def test_activemask(self):
+        @cuda.jit
+        def use_activemask(x):
+            i = cuda.grid(1)
+            if (i % 2) == 0:
+                # Even numbered threads fill in even numbered array entries
+                # with binary "...01010101"
+                x[i] = cuda.activemask()
+            else:
+                # Odd numbered threads fill in odd numbered array entries
+                # with binary "...10101010"
+                x[i] = cuda.activemask()
+
+        out = np.zeros(32, dtype=np.uint32)
+        use_activemask[1, 32](out)
+
+        # 0x5 = 0101: The pattern from even-numbered threads
+        # 0xA = 1010: The pattern from odd-numbered threads
+        expected = np.tile((0x55555555, 0xAAAAAAAA), 16)
+        np.testing.assert_equal(expected, out)
+
+    def test_lanemask_lt(self):
+        @cuda.jit
+        def use_lanemask_lt(x):
+            i = cuda.grid(1)
+            x[i] = cuda.lanemask_lt()
+
+        out = np.zeros(32, dtype=np.uint32)
+        use_lanemask_lt[1, 32](out)
+
+        # A string of 1s that grows from the LSB for each entry:
+        # 0, 1, 3, 7, F, 1F, 3F, 7F, FF, 1FF, etc.
+        # or in binary:
+        # ...0001, ....0011, ...0111, etc.
+        expected = np.asarray([(2 ** i) - 1 for i in range(32)],
+                              dtype=np.uint32)
+        np.testing.assert_equal(expected, out)
+
 
 if __name__ == '__main__':
     unittest.main()

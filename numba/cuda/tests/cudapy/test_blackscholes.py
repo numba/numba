@@ -56,8 +56,8 @@ class TestBlackScholes(CUDATestCase):
         callResultNumpy = np.zeros(OPT_N)
         putResultNumpy = -np.ones(OPT_N)
 
-        callResultNumbapro = np.zeros(OPT_N)
-        putResultNumbapro = -np.ones(OPT_N)
+        callResultNumba = np.zeros(OPT_N)
+        putResultNumba = -np.ones(OPT_N)
 
         # numpy
         for i in range(iterations):
@@ -90,12 +90,12 @@ class TestBlackScholes(CUDATestCase):
             callResult[i] = (S[i] * cndd1 - X[i] * expRT * cndd2)
             putResult[i] = (X[i] * expRT * (1.0 - cndd2) - S[i] * (1.0 - cndd1))
 
-        # numbapro
+        # numba
         blockdim = 512, 1
         griddim = int(math.ceil(float(OPT_N) / blockdim[0])), 1
         stream = cuda.stream()
-        d_callResult = cuda.to_device(callResultNumbapro, stream)
-        d_putResult = cuda.to_device(putResultNumbapro, stream)
+        d_callResult = cuda.to_device(callResultNumba, stream)
+        d_putResult = cuda.to_device(putResultNumba, stream)
         d_stockPrice = cuda.to_device(stockPrice, stream)
         d_optionStrike = cuda.to_device(optionStrike, stream)
         d_optionYears = cuda.to_device(optionYears, stream)
@@ -104,11 +104,11 @@ class TestBlackScholes(CUDATestCase):
             black_scholes_cuda[griddim, blockdim, stream](
                 d_callResult, d_putResult, d_stockPrice, d_optionStrike,
                 d_optionYears, RISKFREE, VOLATILITY)
-        d_callResult.copy_to_host(callResultNumbapro, stream)
-        d_putResult.copy_to_host(putResultNumbapro, stream)
+        d_callResult.copy_to_host(callResultNumba, stream)
+        d_putResult.copy_to_host(putResultNumba, stream)
         stream.synchronize()
 
-        delta = np.abs(callResultNumpy - callResultNumbapro)
+        delta = np.abs(callResultNumpy - callResultNumba)
         L1norm = delta.sum() / np.abs(callResultNumpy).sum()
 
         max_abs_err = delta.max()

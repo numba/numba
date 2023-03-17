@@ -1,11 +1,32 @@
 # Contents in this file are referenced from the sphinx-generated docs.
 # "magictoken" is used for markers as beginning and ending of example text.
 
+import sys
 import unittest
 from numba.tests.support import captured_stdout
 
 
+class MatplotlibBlocker:
+    '''Blocks the import of matplotlib, so that doc examples that attempt to
+    plot the output don't result in plots popping up and blocking testing.'''
+
+    def find_spec(self, fullname, path, target=None):
+        if fullname == 'matplotlib':
+            msg = 'Blocked import of matplotlib for test suite run'
+            raise ImportError(msg)
+
+
 class DocsExamplesTest(unittest.TestCase):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._mpl_blocker = MatplotlibBlocker()
+
+    def setUp(self):
+        sys.meta_path.insert(0, self._mpl_blocker)
+
+    def tearDown(self):
+        sys.meta_path.remove(self._mpl_blocker)
 
     def test_mandelbrot(self):
         with captured_stdout():
@@ -175,6 +196,29 @@ class DocsExamplesTest(unittest.TestCase):
             timefunc(correct, "numba (1 thread)", func_nb, a, b)
             timefunc(correct, "numba (%d threads)" % nthreads, func_nb_mt, a, b)
             # magictoken.ex_no_gil.end
+
+    def test_guvectorize_scalar_return(self):
+        with captured_stdout():
+            # magictoken.ex_guvectorize_scalar_return.begin
+            from numba import guvectorize, int64
+            import numpy as np
+
+            @guvectorize([(int64[:], int64, int64[:])], '(n),()->()')
+            def g(x, y, res):
+                acc = 0
+                for i in range(x.shape[0]):
+                    acc += x[i] + y
+                res[0] = acc
+            # magictoken.ex_guvectorize_scalar_return.end
+
+            # magictoken.ex_guvectorize_scalar_return_call.begin
+            a = np.arange(5)
+            result = g(a, 2)
+            # At this point, result == 20.
+            # magictoken.ex_guvectorize_scalar_return_call.end
+
+            self.assertIsInstance(result, np.integer)
+            self.assertEqual(result, 20)
 
 
 if __name__ == '__main__':

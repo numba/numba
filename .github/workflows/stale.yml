@@ -1,0 +1,37 @@
+name: 'Mark stale issues'
+on:
+  schedule:
+    - cron: '30 1 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  stale:
+    permissions:
+      issues: write  # for actions/stale to close stale issues
+      pull-requests: write  # for actions/stale to close stale PRs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v7
+        with:
+          # issues
+          stale-issue-message: >
+            This issue is marked as stale as it has had no activity in the past
+            30 days. Please close this issue if no further response or action is
+            needed. Otherwise, please respond with any updates and confirm that
+            this issue still needs to be addressed.
+          stale-issue-label: 'stale'
+          any-of-issue-labels: 'question,needtriage,more info needed'
+          days-before-issue-stale: 30
+          days-before-issue-close: 7
+          # pull requests
+          stale-pr-message: >
+            This pull request is marked as stale as it has had no activity in
+            the past 3 months. Please respond to this comment if you're still
+            interested in working on this. Many thanks!
+          days-before-pr-stale: 90  # 3 months
+          days-before-pr-close: 7
+          any-of-pr-labels: '2 - In progress,4 - Waiting on author'
+          stale-pr-label: 'stale'
+          close-pr-label: 'abandoned - stale'

@@ -1,7 +1,7 @@
 import weakref
+import importlib
 
 from numba import _dynfunc
-from numba.core import serialize
 
 
 class Environment(_dynfunc.Environment):
@@ -48,7 +48,7 @@ def _rebuild_env(modname, consts, env_name):
     if env is not None:
         return env
 
-    mod = serialize._rebuild_module(modname)
+    mod = importlib.import_module(modname)
     env = Environment(mod.__dict__)
     env.consts[:] = consts
     env.env_name = env_name

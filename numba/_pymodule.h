@@ -3,9 +3,9 @@
 
 #define PY_SSIZE_T_CLEAN
 
-#include <Python.h>
-#include <structmember.h>
-#include <frameobject.h>
+#include "Python.h"
+#include "structmember.h"
+#include "frameobject.h"
 
 #define MOD_ERROR_VAL NULL
 #define MOD_SUCCESS_VAL(val) val
@@ -24,5 +24,9 @@
 #define PyInt_Type PyLong_Type
 #define PyInt_Check PyLong_Check
 #define PyInt_CheckExact PyLong_CheckExact
+#define SetAttrStringFromVoidPointer(m, name) do { \
+        PyObject *tmp = PyLong_FromVoidPtr((void *) &name); \
+        PyObject_SetAttrString(m, #name, tmp); \
+        Py_DECREF(tmp); } while (0)
 
 #endif /* NUMBA_PY_MODULE_H_ */

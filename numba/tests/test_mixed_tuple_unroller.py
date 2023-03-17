@@ -15,7 +15,8 @@ from numba.core.untyped_passes import (FixupArgs, TranslateByteCode,
                                        SimplifyCFG, IterLoopCanonicalization,
                                        LiteralUnroll, PreserveIR)
 from numba.core.typed_passes import (NopythonTypeInference, IRLegalization,
-                                     NoPythonBackend, PartialTypeInference)
+                                     NoPythonBackend, PartialTypeInference,
+                                     NativeLowering)
 from numba.core.ir_utils import (compute_cfg_from_blocks, flatten_labels)
 from numba.core.types.functions import _header_lead
 
@@ -108,6 +109,7 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
                 pm.add_pass(PreserveIR, "save IR for later inspection")
 
                 # lower
+                pm.add_pass(NativeLowering, "native lowering")
                 pm.add_pass(NoPythonBackend, "nopython mode backend")
 
                 # finalise the contents
@@ -1816,6 +1818,18 @@ class TestMore(TestCase):
 
         self.assertEqual(foo(), foo.py_func())
 
+    def test_unroll_with_non_conformant_loops_present(self):
+        # See issue #8311
+
+        @njit('(Tuple((int64, float64)),)')
+        def foo(tup):
+            for t in literal_unroll(tup):
+                pass
+
+            x = 1
+            while x == 1:
+                x = 0
+
 
 def capture(real_pass):
     """ Returns a compiler pass that captures the mutation state reported
@@ -1859,6 +1873,7 @@ class CapturingCompiler(CompilerBase):
                  "ensure IR is legal prior to lowering")
 
         # lower
+        add_pass(NativeLowering, "native lowering")
         add_pass(NoPythonBackend, "nopython mode backend")
         pm.finalize()
         return [pm]

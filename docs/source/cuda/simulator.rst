@@ -75,8 +75,8 @@ GPU as possible - in particular, the following are supported:
 * The :func:`.detect` function is supported, and reports one device called
   `SIMULATOR`.
 * Cooperative grids: A cooperative kernel can be launched, but with only one
-  block - the simulator always returns ``1`` from a kernel definition's
-  :meth:`~numba.cuda.compiler._Kernel.max_cooperative_grid_blocks` method.
+  block - the simulator always returns ``1`` from a kernel overload's
+  :meth:`~numba.cuda.dispatcher._Kernel.max_cooperative_grid_blocks` method.
 
 Some limitations of the simulator include:
 
@@ -96,6 +96,8 @@ Some limitations of the simulator include:
   is, testing equality, less than, greater than, and basic mathematical 
   operations are supported, but many other operations, such as the in-place 
   operators and bit operators are not.
+* The :func:`ffs() <numba.cuda.ffs>` function only works correctly for values
+  that can be represented using 32-bit integers.
 
 Obviously, the speed of the simulator is also much lower than that of a real
 device. It may be necessary to reduce the size of input data and the size of the

@@ -33,6 +33,17 @@ def reconstruct_ssa(func_ir):
     return func_ir
 
 
+class _CacheListVars:
+    def __init__(self):
+        self._saved = {}
+
+    def get(self, inst):
+        got = self._saved.get(inst)
+        if got is None:
+            self._saved[inst] = got = inst.list_vars()
+        return got
+
+
 def _run_ssa(blocks):
     """Run SSA reconstruction on IR blocks of a function.
     """
@@ -44,6 +55,9 @@ def _run_ssa(blocks):
     df_plus = _iterated_domfronts(cfg)
     # Find SSA violators
     violators = _find_defs_violators(blocks)
+    # Make cache for .list_vars()
+    cache_list_vars = _CacheListVars()
+
     # Process one SSA-violating variable at a time
     for varname in violators:
         _logger.debug(
@@ -55,7 +69,8 @@ def _run_ssa(blocks):
         _logger.debug("Replaced assignments: %s", pformat(defmap))
         # Fix up the RHS
         # Re-associate the variable uses with the reaching definition
-        blocks = _fix_ssa_vars(blocks, varname, defmap, cfg, df_plus)
+        blocks = _fix_ssa_vars(blocks, varname, defmap, cfg, df_plus,
+                               cache_list_vars)
 
     # Post-condition checks.
     # CFG invariant
@@ -65,16 +80,16 @@ def _run_ssa(blocks):
     return blocks
 
 
-def _fix_ssa_vars(blocks, varname, defmap, cfg, df_plus):
+def _fix_ssa_vars(blocks, varname, defmap, cfg, df_plus, cache_list_vars):
     """Rewrite all uses to ``varname`` given the definition map
     """
     states = _make_states(blocks)
     states['varname'] = varname
     states['defmap'] = defmap
     states['phimap'] = phimap = defaultdict(list)
-    states['cfg'] = cfg = compute_cfg_from_blocks(blocks)
-    states['phi_locations'] = _compute_phi_locations(cfg, defmap)
-    newblocks = _run_block_rewrite(blocks, states, _FixSSAVars())
+    states['cfg'] = cfg
+    states['phi_locations'] = _compute_phi_locations(df_plus, defmap)
+    newblocks = _run_block_rewrite(blocks, states, _FixSSAVars(cache_list_vars))
     # insert phi nodes
     for label, philist in phimap.items():
         curblk = newblocks[label]
@@ -101,10 +116,8 @@ def _iterated_domfronts(cfg):
     return domfronts
 
 
-def _compute_phi_locations(cfg, defmap):
+def _compute_phi_locations(iterated_df, defmap):
     # See basic algorithm in Ch 4.1 in Inria SSA Book
-    # Compute DF+
-    iterated_df = _iterated_domfronts(cfg)
     # Compute DF+(defs)
     # DF of all DFs is the union of all DFs
     phi_locations = set()
@@ -254,6 +267,10 @@ class _FreshVarHandler(_BaseHandler):
             if len(defmap) == 0:
                 newtarget = assign.target
                 _logger.debug("first assign: %s", newtarget)
+                if newtarget.name not in scope.localvars:
+                    wmsg = f"variable {newtarget.name!r} is not in scope."
+                    warnings.warn(errors.NumbaIRAssumptionWarning(wmsg,
+                                  loc=assign.loc))
             else:
                 newtarget = scope.redefine(assign.target.name, loc=assign.loc)
             assign = ir.Assign(
@@ -276,11 +293,15 @@ class _FixSSAVars(_BaseHandler):
     See Ch 5 of the Inria SSA book for reference. The method names used here
     are similar to the names used in the pseudocode in the book.
     """
+
+    def __init__(self, cache_list_vars):
+        self._cache_list_vars = cache_list_vars
+
     def on_assign(self, states, assign):
         rhs = assign.value
         if isinstance(rhs, ir.Inst):
             newdef = self._fix_var(
-                states, assign, assign.value.list_vars(),
+                states, assign, self._cache_list_vars.get(assign.value),
             )
             # Has a replacement that is not the current variable
             if newdef is not None and newdef.target is not ir.UNDEFINED:
@@ -309,7 +330,7 @@ class _FixSSAVars(_BaseHandler):
 
     def on_other(self, states, stmt):
         newdef = self._fix_var(
-            states, stmt, stmt.list_vars(),
+            states, stmt, self._cache_list_vars.get(stmt),
         )
         if newdef is not None and newdef.target is not ir.UNDEFINED:
             if states['varname'] != newdef.target.name:

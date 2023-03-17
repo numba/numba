@@ -1,6 +1,7 @@
 from numba import cuda
 import numpy as np
 from numba.cuda.testing import CUDATestCase
+from numba.tests.support import override_config
 import unittest
 
 
@@ -75,6 +76,14 @@ class TestCudaJitNoTypes(CUDATestCase):
         d_b.copy_to_host(b, stream)
 
         self.assertEqual(b[0], (a[0] + 1) + (2 + 1))
+
+    def test_jit_debug_simulator(self):
+        # Ensure that the jit decorator accepts the debug kwarg when the
+        # simulator is in use - see Issue #6615.
+        with override_config('ENABLE_CUDASIM', 1):
+            @cuda.jit(debug=True)
+            def f(x):
+                pass
 
 
 if __name__ == '__main__':

@@ -17,7 +17,7 @@ _logger = logging.getLogger(__name__)
 
 
 _EXCEPT_STACK_OFFSET = 6
-_FINALLY_POP = _EXCEPT_STACK_OFFSET if PYVERSION >= (3, 8) else 1
+_FINALLY_POP = _EXCEPT_STACK_OFFSET
 _NO_RAISE_OPS = frozenset({
     'LOAD_CONST',
 })
@@ -130,6 +130,9 @@ class Flow(object):
                         state.advance_pc()
                         # Must the new PC be a new block?
                         if self._is_implicit_new_block(state):
+                            # check if this is a with...as, abort if so
+                            self._guard_with_as(state)
+                            # else split
                             state.split_new_block()
                             break
                 _logger.debug("end state. edges=%s", state.outgoing_edges)
@@ -245,6 +248,19 @@ class Flow(object):
         else:
             return False
 
+    def _guard_with_as(self, state):
+        """Checks if the next instruction after a SETUP_WITH is something other
+        than a POP_TOP, if it is something else it'll be some sort of store
+        which is not supported (this corresponds to `with CTXMGR as VAR(S)`)."""
+        current_inst = state.get_inst()
+        if current_inst.opname == "SETUP_WITH":
+            next_op = self._bytecode[current_inst.next].opname
+            if next_op != "POP_TOP":
+                msg = ("The 'with (context manager) as "
+                       "(variable):' construct is not "
+                       "supported.")
+                raise UnsupportedError(msg)
+
 
 class TraceRunner(object):
     """Trace runner contains the states for the trace and the opcode dispatch.
@@ -270,6 +286,40 @@ class TraceRunner(object):
 
     def op_NOP(self, state, inst):
         state.append(inst)
+
+    def op_FORMAT_VALUE(self, state, inst):
+        """
+        FORMAT_VALUE(flags): flags argument specifies format spec which is
+        not supported yet. Currently, we just call str() on the value.
+        Pops a value from stack and pushes results back.
+        Required for supporting f-strings.
+        https://docs.python.org/3/library/dis.html#opcode-FORMAT_VALUE
+        """
+        if inst.arg != 0:
+            msg = "format spec in f-strings not supported yet"
+            raise UnsupportedError(msg, loc=self.get_debug_loc(inst.lineno))
+        value = state.pop()
+        strvar = state.make_temp()
+        res = state.make_temp()
+        state.append(inst, value=value, res=res, strvar=strvar)
+        state.push(res)
+
+    def op_BUILD_STRING(self, state, inst):
+        """
+        BUILD_STRING(count): Concatenates count strings from the stack and
+        pushes the resulting string onto the stack.
+        Required for supporting f-strings.
+        https://docs.python.org/3/library/dis.html#opcode-BUILD_STRING
+        """
+        count = inst.arg
+        strings = list(reversed([state.pop() for _ in range(count)]))
+        # corner case: f""
+        if count == 0:
+            tmps = [state.make_temp()]
+        else:
+            tmps = [state.make_temp() for _ in range(count - 1)]
+        state.append(inst, strings=strings, tmps=tmps)
+        state.push(tmps[-1])
 
     def op_POP_TOP(self, state, inst):
         state.pop()
@@ -555,8 +605,14 @@ class TraceRunner(object):
     def _op_POP_JUMP_IF(self, state, inst):
         pred = state.pop()
         state.append(inst, pred=pred)
-        state.fork(pc=inst.next)
-        state.fork(pc=inst.get_jump_target())
+
+        target_inst = inst.get_jump_target()
+        next_inst = inst.next
+        # if the next inst and the jump target are the same location, issue one
+        # fork else issue a fork for the next and the target.
+        state.fork(pc=next_inst)
+        if target_inst != next_inst:
+            state.fork(pc=target_inst)
 
     op_POP_JUMP_IF_TRUE = _op_POP_JUMP_IF
     op_POP_JUMP_IF_FALSE = _op_POP_JUMP_IF
@@ -699,13 +755,6 @@ class TraceRunner(object):
             )
         )
 
-    def op_SETUP_EXCEPT(self, state, inst):
-        # Opcode removed since py3.8
-        state.append(inst)
-        self._setup_try(
-            'EXCEPT', state, next=inst.next, end=inst.get_jump_target(),
-        )
-
     def op_SETUP_FINALLY(self, state, inst):
         state.append(inst)
         self._setup_try(
@@ -729,7 +778,8 @@ class TraceRunner(object):
         blk = state.pop_block()
         if blk['kind'] == BlockKind('TRY'):
             state.append(inst, kind='try')
-        # Forces a new block
+        elif blk['kind'] == BlockKind('WITH'):
+            state.append(inst, kind='with')
         state.fork(pc=inst.next)
 
     def op_BINARY_SUBSCR(self, state, inst):
@@ -770,13 +820,17 @@ class TraceRunner(object):
         state.push(res)
 
     def op_CALL_FUNCTION_EX(self, state, inst):
-        if inst.arg & 1:
+        if inst.arg & 1 and PYVERSION != (3, 10):
             errmsg = "CALL_FUNCTION_EX with **kwargs not supported"
             raise UnsupportedError(errmsg)
+        if inst.arg & 1:
+            varkwarg = state.pop()
+        else:
+            varkwarg = None
         vararg = state.pop()
         func = state.pop()
         res = state.make_temp()
-        state.append(inst, func=func, vararg=vararg, res=res)
+        state.append(inst, func=func, vararg=vararg, varkwarg=varkwarg, res=res)
         state.push(res)
 
     def _dup_topx(self, state, inst, count):
@@ -916,6 +970,17 @@ class TraceRunner(object):
         state.append(inst, items=items[::-1], size=count, res=dct)
         state.push(dct)
 
+    def op_MAP_ADD(self, state, inst):
+        TOS = state.pop()
+        TOS1 = state.pop()
+        key, value = (TOS1, TOS)
+        index = inst.arg
+        target = state.peek(index)
+        setitemvar = state.make_temp()
+        res = state.make_temp()
+        state.append(inst, target=target, key=key, value=value,
+                     setitemvar=setitemvar, res=res)
+
     def op_BUILD_SET(self, state, inst):
         count = inst.arg
         # Note: related python bug http://bugs.python.org/issue26020
@@ -925,6 +990,15 @@ class TraceRunner(object):
         state.push(res)
 
     def op_SET_UPDATE(self, state, inst):
+        value = state.pop()
+        index = inst.arg
+        target = state.peek(index)
+        updatevar = state.make_temp()
+        res = state.make_temp()
+        state.append(inst, target=target, value=value, updatevar=updatevar,
+                     res=res)
+
+    def op_DICT_UPDATE(self, state, inst):
         value = state.pop()
         index = inst.arg
         target = state.peek(index)
@@ -950,6 +1024,17 @@ class TraceRunner(object):
         end = inst.get_jump_target()
         state.fork(pc=end, npop=2)
         state.fork(pc=inst.next)
+
+    def op_GEN_START(self, state, inst):
+        """Pops TOS. If TOS was not None, raises an exception. The kind
+        operand corresponds to the type of generator or coroutine and
+        determines the error message. The legal kinds are 0 for generator,
+        1 for coroutine, and 2 for async generator.
+
+        New in version 3.10.
+        """
+        # no-op in Numba
+        pass
 
     def _unaryop(self, state, inst):
         val = state.pop()
@@ -1009,35 +1094,14 @@ class TraceRunner(object):
         name = state.pop()
         code = state.pop()
         closure = annotations = kwdefaults = defaults = None
-        if PYVERSION < (3, 6):
-            num_posdefaults = inst.arg & 0xFF
-            num_kwdefaults = (inst.arg >> 8) & 0xFF
-            num_annotations = (inst.arg >> 16) & 0x7FFF
-            if MAKE_CLOSURE:
-                closure = state.pop()
-            if num_annotations > 0:
-                annotations = state.pop()
-            if num_kwdefaults > 0:
-                kwdefaults = []
-                for i in range(num_kwdefaults):
-                    v = state.pop()
-                    k = state.pop()
-                    kwdefaults.append((k, v))
-                kwdefaults = tuple(kwdefaults)
-            if num_posdefaults:
-                defaults = []
-                for i in range(num_posdefaults):
-                    defaults.append(state.pop())
-                defaults = tuple(defaults)
-        else:
-            if inst.arg & 0x8:
-                closure = state.pop()
-            if inst.arg & 0x4:
-                annotations = state.pop()
-            if inst.arg & 0x2:
-                kwdefaults = state.pop()
-            if inst.arg & 0x1:
-                defaults = state.pop()
+        if inst.arg & 0x8:
+            closure = state.pop()
+        if inst.arg & 0x4:
+            annotations = state.pop()
+        if inst.arg & 0x2:
+            kwdefaults = state.pop()
+        if inst.arg & 0x1:
+            defaults = state.pop()
         res = state.make_temp()
         state.append(
             inst,

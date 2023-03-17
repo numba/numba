@@ -44,3 +44,12 @@ class RequestError(IntEnum):
     not_found = 404
     internal_error = 500
 
+class IntEnumWithNegatives(IntEnum):
+    # Used for testing of hash, need to make sure -1 -> -2 to comply with CPy
+    one = 1
+    two = 2
+    too = 2
+    three = 3
+    negone = -1
+    negtwo = -2
+    negthree = -3

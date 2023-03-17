@@ -20,8 +20,8 @@ class TestCTypesTypes(TestCase):
         check(c_double, types.float64)
         check(c_int, types.intc)
         check(c_uint16, types.uint16)
-        check(c_size_t, types.uintp)
-        check(c_ssize_t, types.intp)
+        check(c_size_t, types.size_t)
+        check(c_ssize_t, types.ssize_t)
 
         check(c_void_p, types.voidptr)
         check(POINTER(c_float), types.CPointer(types.float32))

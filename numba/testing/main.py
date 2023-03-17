@@ -10,7 +10,9 @@ import sys
 import time
 import unittest
 import warnings
+import zlib
 
+from functools import lru_cache
 from io import StringIO
 from unittest import result, runner, signals, suite, loader, case
 
@@ -53,6 +55,19 @@ def make_tag_decorator(known_tags):
     return tag
 
 
+# Chances are the next queried class is the same as the previous, locally 128
+# entries seems to be fastest.
+# Current number of test classes can be found with:
+# $ ./runtests.py -l|sed -e 's/\(.*\)\..*/\1/'|grep ^numba|sort|uniq|wc -l
+# as of writing it's 658.
+@lru_cache(maxsize=128)
+def _get_mtime(cls):
+    """
+    Gets the mtime of the file in which a test class is defined.
+    """
+    return str(os.path.getmtime(inspect.getfile(cls)))
+
+
 def cuda_sensitive_mtime(x):
     """
     Return a key for sorting tests bases on mtime and test name. For CUDA
@@ -62,7 +77,7 @@ def cuda_sensitive_mtime(x):
     mtime.
     """
     cls = x.__class__
-    key = str(os.path.getmtime(inspect.getfile(cls))) + str(x)
+    key = _get_mtime(cls) + str(x)
 
     from numba.cuda.testing import CUDATestCase
     if CUDATestCase in cls.mro():
@@ -70,19 +85,38 @@ def cuda_sensitive_mtime(x):
 
     return key
 
+
 def parse_slice(useslice):
-    """Parses the argument string "useslice" as the arguments to the `slice()`
-    constructor and returns a slice object that's been instantiated with those
-    arguments. i.e. input useslice="1,20,2" leads to output `slice(1, 20, 2)`.
+    """Parses the argument string "useslice" as a shard index and number and
+    returns a function that filters on those arguments. i.e. input
+    useslice="1:3" leads to output something like `lambda x: zlib.crc32(x) % 3
+    == 1`.
     """
+    if callable(useslice):
+        return useslice
+    if not useslice:
+        return lambda x: True
     try:
-        l = {}
-        exec("sl = slice(%s)" % useslice, l)
-        return l['sl']
+        (index, count) = useslice.split(":")
+        index = int(index)
+        count = int(count)
     except Exception:
-        msg = ("Expected arguments consumable by 'slice' to follow "
-                "option `-j`, found '%s'" % useslice)
+        msg = (
+                    "Expected arguments shard index and count to follow "
+                    "option `-j i:t`, where i is the shard number and t "
+                    "is the total number of shards, found '%s'" % useslice)
         raise ValueError(msg)
+    if count == 0:
+        return lambda x: True
+    elif count < 0 or index < 0 or index >= count:
+        raise ValueError("Sharding out of range")
+    else:
+        def decide(test):
+            func = getattr(test, test._testMethodName)
+            if "always_test" in getattr(func, 'tags', {}):
+                return True
+            return abs(zlib.crc32(test.id().encode('utf-8'))) % count == index
+        return decide
 
 
 class TestLister(object):
@@ -91,13 +125,15 @@ class TestLister(object):
         self.useslice = parse_slice(useslice)
 
     def run(self, test):
-        result = runner.TextTestResult(sys.stderr, descriptions=True, verbosity=1)
+        result = runner.TextTestResult(sys.stderr, descriptions=True,
+                                       verbosity=1)
         self._test_list = _flatten_suite(test)
-        masked_list = self._test_list[self.useslice]
+        masked_list = list(filter(self.useslice, self._test_list))
         self._test_list.sort(key=cuda_sensitive_mtime)
         for t in masked_list:
             print(t.id())
-        print('%d tests found. %s selected' % (len(self._test_list), len(masked_list)))
+        print('%d tests found. %s selected' % (len(self._test_list),
+                                               len(masked_list)))
         return result
 
 
@@ -127,7 +163,7 @@ class BasicTestRunner(runner.TextTestRunner):
         self.useslice = parse_slice(useslice)
 
     def run(self, test):
-        run = _flatten_suite(test)[self.useslice]
+        run = list(filter(self.useslice, _flatten_suite(test)))
         run.sort(key=cuda_sensitive_mtime)
         wrapped = unittest.TestSuite(run)
         return super(BasicTestRunner, self).run(wrapped)
@@ -197,11 +233,19 @@ class NumbaTestProgram(unittest.main):
                             help='Profile the test run')
         parser.add_argument('-j', '--slice', dest='useslice', nargs='?',
                             type=str, const="None",
-                            help='Slice the test sequence')
-        parser.add_argument('-g', '--gitdiff', dest='gitdiff',
-                            action='store_true',
+                            help='Shard the test sequence')
+
+        def git_diff_str(x):
+            if x != 'ancestor':
+                raise ValueError("invalid option for --gitdiff")
+            return x
+
+        parser.add_argument('-g', '--gitdiff', dest='gitdiff', type=git_diff_str,
+                            default=False, nargs='?',
                             help=('Run tests from changes made against '
-                                  'origin/master as identified by `git diff`'))
+                                  'origin/main as identified by `git diff`. '
+                                  'If set to "ancestor", the diff compares '
+                                  'against the common ancestor.'))
         return parser
 
     def _handle_tags(self, argv, tagstr):
@@ -266,8 +310,11 @@ class NumbaTestProgram(unittest.main):
             self.test = _choose_random_tests(self.test, self.random_select,
                                              self.random_seed)
 
-        if self.gitdiff:
-            self.test = _choose_gitdiff_tests(self.test)
+        if self.gitdiff is not False:
+            self.test = _choose_gitdiff_tests(
+                self.test,
+                use_common_ancestor=(self.gitdiff == 'ancestor'),
+            )
 
         if self.verbosity <= 0:
             # We aren't interested in informational messages / warnings when
@@ -379,14 +426,18 @@ def _flatten_suite(test):
     return tests
 
 
-def _choose_gitdiff_tests(tests):
+def _choose_gitdiff_tests(tests, *, use_common_ancestor=False):
     try:
         from git import Repo
     except ImportError:
         raise ValueError("gitpython needed for git functionality")
     repo = Repo('.')
     path = os.path.join('numba', 'tests')
-    target = 'origin/master..HEAD'
+    if use_common_ancestor:
+        print(f"Git diff by common ancestor")
+        target = 'origin/main...HEAD'
+    else:
+        target = 'origin/main..HEAD'
     gdiff_paths = repo.git.diff(target, path, name_only=True).split()
     # normalise the paths as they are unix style from repo.git.diff
     gdiff_paths = [os.path.normpath(x) for x in gdiff_paths]
@@ -666,14 +717,14 @@ class _MinimalRunner(object):
                 del test.__dict__[name]
 
 
-def _split_nonparallel_tests(test, sliced=slice(None)):
+def _split_nonparallel_tests(test, sliced):
     """
     Split test suite into parallel and serial tests.
     """
     ptests = []
     stests = []
 
-    flat = _flatten_suite(test)[sliced]
+    flat = [*filter(sliced, _flatten_suite(test))]
 
     def is_parallelizable_test_case(test):
         # Guard for the fake test case created by unittest when test
@@ -771,7 +822,6 @@ class ParallelTestRunner(runner.TextTestRunner):
 
     def run(self, test):
         self._ptests, self._stests = _split_nonparallel_tests(test,
-                                                              sliced=
                                                               self.useslice)
         print("Parallel: %s. Serial: %s" % (len(self._ptests),
                                             len(self._stests)))

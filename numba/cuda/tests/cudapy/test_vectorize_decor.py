@@ -17,11 +17,7 @@ class TestVectorizeDecor(CUDATestCase, BaseVectorizeDecor):
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
 class TestGPUVectorizeBroadcast(CUDATestCase):
-    def test_broadcast_bug_90(self):
-        """
-        https://github.com/ContinuumIO/numbapro/issues/90
-        """
-
+    def test_broadcast(self):
         a = np.random.randn(100, 3, 1)
         b = a.transpose(2, 1, 0)
 
@@ -38,7 +34,7 @@ class TestGPUVectorizeBroadcast(CUDATestCase):
 
     def test_device_broadcast(self):
         """
-        Same test as .test_broadcast_bug_90() but with device array as inputs
+        Same test as .test_broadcast() but with device array as inputs
         """
 
         a = np.random.randn(100, 3, 1)

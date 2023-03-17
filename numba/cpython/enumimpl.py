@@ -7,6 +7,7 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
                                  lower_getattr_generic, lower_cast,
                                  lower_constant, impl_ret_untracked)
 from numba.core import types
+from numba.core.extending import overload_method
 
 
 @lower_builtin(operator.eq, types.EnumMember, types.EnumMember)
@@ -78,3 +79,11 @@ def enum_class_getitem(context, builder, sig, args):
     member = enum_cls_typ.instance_class[idx.literal_value]
     return context.get_constant_generic(builder, enum_cls_typ.dtype,
                                         member.value)
+
+
+@overload_method(types.IntEnumMember, '__hash__')
+def intenum_hash(val):
+    # uses the hash of the value, for IntEnums this will be int.__hash__
+    def hash_impl(val):
+        return hash(val.value)
+    return hash_impl
