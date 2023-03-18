@@ -37,6 +37,7 @@ from numba.stencils.stencilparfor import StencilPass
 from numba.core.extending import register_jitable, lower_builtin
 
 from numba.core.ir_utils import (
+    mk_unique_var,
     next_label,
     mk_alloc,
     get_np_ufunc_typ,
@@ -4850,9 +4851,10 @@ def _get_saved_call_nodes(fname, saved_globals, saved_getattrs, block_defs, rena
                                         or fname in saved_getattrs)):
         def rename_global_or_getattr(obj, var_base, nodes, block_defs, rename_dict):
             assert(isinstance(obj, ir.Assign))
-            scope = obj.target.scope
-            loc = obj.target.loc
-            renamed_var = scope.redefine(var_base, loc)
+
+            renamed_var = obj.target.scope.redefine(var_base, obj.target.loc)
+            while renamed_var.name in rename_dict.values():
+                renamed_var = obj.target.scope.redefine(var_base, obj.target.loc)
             renamed_assign = ir.Assign(copy.deepcopy(obj.value),
                                        renamed_var,
                                        obj.loc)
