@@ -156,6 +156,81 @@ traditional dynamic memory management.
 .. seealso::
    :ref:`Matrix multiplication example <cuda-matmul>`.
 
+Dynamic Shared Memory
+---------------------
+
+In order to use dynamic shared memory in kernel code declare shared array of size 0:
+
+.. code-block:: python
+
+   @cuda.jit
+   def kernel_func(x):
+      dyn_arr = cuda.shared.array(0, dtype=np.float32)
+      ...
+
+and specify the size of dynamic shared array in bytes during kernel invokation (dispatcher object instantiation):
+
+.. code-block:: python
+
+   kernel_func[32, 32, 0, 128](x)
+
+In above code dispatcher object is instantiated with 4 parameters:
+
+.. code-block:: python
+
+   kernel_func[grid_dim, block_dim, stream_id, dyn_shared_mem_size]
+
+**Note:** that all dynamic shared memory arrays *alias*, so if you want to have multiple dynamic shared arrays, you need to take *disjoint* views of the arrays. For example, consider:
+
+.. code-block:: python
+
+   from numba import cuda
+   import numpy as np
+
+   @cuda.jit
+   def f():
+      f32_arr = cuda.shared.array(0, dtype=np.float32)
+      i32_arr = cuda.shared.array(0, dtype=np.int32)
+      f32_arr[0] = 3.14
+      print(f32_arr[0])
+      print(i32_arr[0])
+
+   f[1, 1, 0, 4]()
+   cuda.synchronize()
+
+This allocates 4 bytes of shared memory (large enough for one int32 or one float32) and declares dynamic shared memory arrays of type int32 and of type float32. When `f32_arr[0]` is set, this also sets the value of `i32_arr[0]`, because they're pointing at the same memory. So we see as output:
+
+.. code-block:: pycon
+
+   3.140000
+   1078523331
+
+because `1078523331` is the `int32` represented by the bits of the `float32` IEEE754 `3.14`.
+
+If we take disjoint views of the dynamic shared memory:
+
+.. code-block:: python
+
+   @cuda.jit
+   def f_with_view():
+      f32_arr = cuda.shared.array(0, dtype=np.float32)
+      i32_arr = cuda.shared.array(0, dtype=np.int32)[1:] # 1 int32 = 4 bytes
+      f32_arr[0] = 3.14
+      i32_arr[0] = 1
+      print(f32_arr[0])
+      print(i32_arr[0])
+
+   f_with_view[1, 1, 0, 8]()
+   cuda.synchronize()
+
+This time we declare 8 dynamic shared memory bytes, using the first 4 for a `float32` value and the next 4 for an `int32` value. Now we can set both the `int32` and `float32` value without them aliasing:
+
+.. code-block:: pycon
+
+   3.140000
+   1
+
+
 .. _cuda-local-memory:
 
 Local memory
