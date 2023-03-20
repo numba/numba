@@ -791,13 +791,13 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             arraytype2 = types.Array(types.int32, 2, 'C')
             compile_isolated(bad_index, (arraytype1, arraytype2),
                              flags=no_pyobj_flags)
-        self.assertIn('unsupported array index type', str(raises.exception))
+        self.assertIn('Unsupported array index type', str(raises.exception))
 
     def test_bad_float_index_npm(self):
         with self.assertTypingError() as raises:
             compile_isolated(bad_float_index,
                              (types.Array(types.float64, 2, 'C'),))
-        self.assertIn('unsupported array index type float64',
+        self.assertIn('Unsupported array index type float64',
                       str(raises.exception))
 
     def test_fill_diagonal_basic(self):
