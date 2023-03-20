@@ -97,7 +97,8 @@ the functionality of the selected device:
 
    .. attribute:: supports_float16
 
-      Return ``True`` if the device supports float16 operations, ``False`` otherwise.
+      Return ``True`` if the device supports float16 operations, ``False``
+      otherwise.
 
 
 Compilation
