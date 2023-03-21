@@ -579,6 +579,9 @@ class Lower(BaseLower):
         elif isinstance(inst, ir.DynamicRaise):
             self.lower_dynamic_raise(inst)
 
+        elif isinstance(inst, ir.DynamicTryRaise):
+            self.lower_try_dynamic_raise(inst)
+
         elif isinstance(inst, ir.StaticRaise):
             self.lower_static_raise(inst)
 
@@ -618,6 +621,11 @@ class Lower(BaseLower):
                                   signature.args[2])
 
         return impl(self.builder, (target, index, value))
+
+    def lower_try_dynamic_raise(self, inst):
+        # Numba is a bit limited in what it can do with exceptions in a try
+        # block. Thus, it is safe to use the same code as the static try raise.
+        self.lower_static_try_raise(inst)
 
     def lower_dynamic_raise(self, inst):
         exc_args = inst.exc_args

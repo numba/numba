@@ -412,7 +412,7 @@ class CPUCallConv(BaseCallConv):
         # An exception in Numba is defined as the excinfo_t struct defined
         # above. Some arguments in this struct are not used, depending on
         # which kind of exception is being raised. A static exception uses
-        # only the first three members whilist a dynamic exception uses all
+        # only the first three members whilst a dynamic exception uses all
         # members:
         #
         #             static exc - last 2 args are NULL and 0
@@ -423,7 +423,8 @@ class CPUCallConv(BaseCallConv):
         #                                          static info
         #
         # Comment below details how the struct is used in the case of a dynamic
-        # exception. For static exception, see CPUCallConv::set_dynamic_user_exc
+        # exception. For dynamic exceptions, see
+        # CPUCallConv::set_dynamic_user_exc
         #
         # {i8*, ___, ___, ___, ___}
         #   ^  serialized info about the exception (loc, kind, compile time
@@ -492,14 +493,12 @@ class CPUCallConv(BaseCallConv):
 
         # We check at this stage if creating the Python tuple was successful
         # or not. Note the exception is raised by calling PyErr_SetString
-        # directly as the function being processed is the CPython wrapper
-        # to-do: fix!
-        # failed = cgutils.is_null(builder, py_tuple)
-        # with cgutils.if_unlikely(builder, failed):
-        #     msg = ('Error creating Python tuple from runtime exception '
-        #            'arguments')
-        #     pyapi.err_set_string("PyExc_RuntimeError", msg)
-        #     builder.ret(pyapi.get_null_object())
+        # directly as the current function is the CPython wrapper.
+        failed = cgutils.is_null(builder, py_tuple)
+        with cgutils.if_unlikely(builder, failed):
+            msg = ('Error creating Python tuple from runtime exception '
+                   'arguments')
+            pyapi.err_set_string("PyExc_RuntimeError", msg)
 
         # merge static and dynamic variables
         excinfo = pyapi.build_dynamic_excinfo_struct(static_exc_bytes, py_tuple)
@@ -572,6 +571,8 @@ class CPUCallConv(BaseCallConv):
         st_type_ptr = st_type.as_pointer()
         st_ptr = builder.bitcast(fn.args[0], st_type_ptr)
         # compile time values are stored as None
+        # TODO: It should be possible to remove "nb_types" as argument to this
+        # function and get the Numba type from the LLVM type
         nb_types = [typ for typ in nb_types if typ is not None]
 
         # convert native values into CPython objects
@@ -580,10 +581,10 @@ class CPUCallConv(BaseCallConv):
             val = builder.extract_value(builder.load(st_ptr), i)
             obj = pyapi.from_native_value(typ, val)
 
-            # not all objects are supported
+            # If object cannot be boxed, raise an exception
             if obj == cgutils.get_null_value(obj.type):
                 # When not supported, abort compilation
-                msg = f'cannot convert native {typ} to python object'
+                msg = f'Cannot convert native {typ} to a Python object.'
                 raise errors.TypingError(msg)
 
             objs.append(obj)
@@ -633,7 +634,7 @@ class CPUCallConv(BaseCallConv):
         # An exception in Numba is defined as the excinfo_t struct defined
         # above. Some arguments in this struct are not used, depending on
         # which kind of exception is being raised. A static exception uses
-        # only the first three members whilist a dynamic exception uses all
+        # only the first three members whilst a dynamic exception uses all
         # members:
         #
         #             static exc - last 2 args are NULL and 0

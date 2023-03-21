@@ -1737,6 +1737,8 @@ class RewriteDynamicRaises(FunctionPass):
 
     def run_pass(self, state):
         func_ir = state.func_ir
+        changed = False
+
         for block in func_ir.blocks.values():
             for raise_ in block.find_insts((ir.Raise, ir.TryRaise)):
                 call_inst = guard(get_definition, func_ir, raise_.exception)
@@ -1751,7 +1753,14 @@ class RewriteDynamicRaises(FunctionPass):
                     except consts.ConstantInferenceError:
                         exc_args.append(exc_arg)
                 loc = raise_.loc
-                dyn_raise = ir.DynamicRaise(exc_type, tuple(exc_args), loc)
+
+                cls = {
+                    ir.TryRaise: ir.DynamicTryRaise,
+                    ir.Raise: ir.DynamicRaise,
+                }[type(raise_)]
+
+                dyn_raise = cls(exc_type, tuple(exc_args), loc)
                 block.insert_after(dyn_raise, raise_)
                 block.remove(raise_)
-        return False
+                changed = True
+        return changed

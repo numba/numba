@@ -405,7 +405,7 @@ class TestRaising(TestCase):
         ]
 
         for pyfunc, argtypes in funcs:
-            msg = '.*cannot convert native .* to python object.*'
+            msg = '.*Cannot convert native .* to a Python object.*'
             with self.assertRaisesRegex(errors.TypingError, msg):
                 compile_isolated(pyfunc, argtypes)
 
@@ -426,6 +426,22 @@ class TestRaising(TestCase):
         msg = 'NRT required but not enabled'
         with self.assertRaisesRegex(errors.NumbaRuntimeError, msg):
             raise_with_no_nrt(123)
+
+    def test_try_raise(self):
+
+        @njit
+        def raise_(a):
+            raise ValueError(a)
+
+        @njit
+        def try_raise(a):
+            try:
+                raise_(a)
+            except Exception:
+                pass
+            return a + 1
+
+        self.assertEqual(try_raise.py_func(3), try_raise(3))
 
 
 if __name__ == '__main__':

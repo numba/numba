@@ -801,6 +801,7 @@ class StaticTryRaise(Stmt):
     """A raise statement inside a try-block.
     Similar to ``StaticRaise`` but does not terminate.
     """
+    Kind = 'static'
 
     def __init__(self, exc_class, exc_args, loc):
         assert exc_class is None or isinstance(exc_class, type)
@@ -812,12 +813,19 @@ class StaticTryRaise(Stmt):
 
     def __str__(self):
         if self.exc_class is None:
-            return "static_try_raise"
+            return f"{self.Kind}_try_raise"
         elif self.exc_args is None:
-            return "static_try_raise %s" % (self.exc_class,)
+            return f"{self.Kind}_try_raise {self.exc_class}"
         else:
-            return "static_try_raise %s(%s)" % (self.exc_class,
-                                     ", ".join(map(repr, self.exc_args)))
+            args = ", ".join(map(repr, self.exc_args))
+            return f"{self.Kind}_try_raise {self.exc_class}({args})"
+
+
+class DynamicTryRaise(StaticTryRaise):
+    """A raise statement inside a try-block.
+    Similar to ``DynamicRaise`` but does not terminate.
+    """
+    Kind = 'dynamic'
 
 
 class Return(Terminator):
