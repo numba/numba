@@ -258,6 +258,7 @@ class BaseLower(object):
         for offset, block in sorted(self.blocks.items()):
             bb = self.blkmap[offset]
             self.builder.position_at_end(bb)
+            self.debug_print(f"# lower block: {offset}")
             self.lower_block(block)
         self.post_lower()
         return entry_block_tail
@@ -314,7 +315,8 @@ class BaseLower(object):
 
     def debug_print(self, msg):
         if config.DEBUG_JIT:
-            self.context.debug_print(self.builder, "DEBUGJIT: {0}".format(msg))
+            self.context.debug_print(
+                self.builder, f"DEBUGJIT [{self.fndesc.qualname}]: {msg}")
 
     def print_variable(self, msg, varname):
         """Helper to emit ``print(msg, varname)`` for debugging.
