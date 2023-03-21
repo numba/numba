@@ -155,9 +155,9 @@ class ObjectModeBackEnd(LoweringPass):
                    "deprecation.html#deprecation-of-object-mode-fall-"
                    "back-behaviour-when-using-jit")
             msg = ("\nFall-back from the nopython compilation path to the "
-                   "object mode compilation path has been detected, this is "
-                   "deprecated behaviour.\n\nFor more information visit %s" %
-                   url)
+                   "object mode compilation path has been detected. This is "
+                   "deprecated behaviour that will be removed in Numba 0.59.0."
+                   "\n\nFor more information visit %s" % url)
             warnings.warn(errors.NumbaDeprecationWarning(msg,
                                                          state.func_ir.loc))
             if state.flags.release_gil:

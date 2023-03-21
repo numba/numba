@@ -168,8 +168,6 @@ def disable_pickling(typ):
     """This is called on a type to disable pickling
     """
     NumbaPickler.disabled_types.add(typ)
-    # The following is needed for Py3.7
-    NumbaPickler.dispatch_table[typ] = _no_pickle
     # Return `typ` to allow use as a decorator
     return typ
 

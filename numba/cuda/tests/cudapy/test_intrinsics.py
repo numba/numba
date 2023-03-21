@@ -833,7 +833,7 @@ class TestCudaIntrinsic(CUDATestCase):
         arg2 = np.float16(4.)
         compiled[1, 1](ary, arg1, arg2)
         np.testing.assert_allclose(ary[0], arg2)
-        arg1 = np.float(5.)
+        arg1 = np.float16(5.)
         compiled[1, 1](ary, arg1, arg2)
         np.testing.assert_allclose(ary[0], arg1)
 
@@ -845,7 +845,7 @@ class TestCudaIntrinsic(CUDATestCase):
         arg2 = np.float16(4.)
         compiled[1, 1](ary, arg1, arg2)
         np.testing.assert_allclose(ary[0], arg1)
-        arg1 = np.float(5.)
+        arg1 = np.float16(5.)
         compiled[1, 1](ary, arg1, arg2)
         np.testing.assert_allclose(ary[0], arg2)
 

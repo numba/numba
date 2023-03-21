@@ -59,8 +59,8 @@ creating a specialized instance:
 .. autoclass:: numba.cuda.dispatcher.CUDADispatcher
    :members: inspect_asm, inspect_llvm, inspect_sass, inspect_types,
              get_regs_per_thread, specialize, specialized, extensions, forall,
-             get_shared_mem_per_block, get_const_mem_size,
-             get_local_mem_per_thread
+             get_shared_mem_per_block, get_max_threads_per_block,
+             get_const_mem_size, get_local_mem_per_thread
 
 
 
@@ -175,7 +175,7 @@ Synchronization and Atomic Operations
     indices for indexing into multiple dimensional arrays. The number of element
     in ``idx`` must match the number of dimension of ``array``.
 
-    Returns the value of ``array[idx]`` before the storing the new value.
+    Returns the value of ``array[idx]`` before storing the new value.
     Behaves like an atomic load.
 
 .. function:: numba.cuda.atomic.sub(array, idx, value)
@@ -185,7 +185,7 @@ Synchronization and Atomic Operations
     indices for indexing into multi-dimensional arrays. The number of elements
     in ``idx`` must match the number of dimensions of ``array``.
 
-    Returns the value of ``array[idx]`` before the storing the new value.
+    Returns the value of ``array[idx]`` before storing the new value.
     Behaves like an atomic load.
 
 .. function:: numba.cuda.atomic.and_(array, idx, value)
@@ -195,7 +195,7 @@ Synchronization and Atomic Operations
     integer indices for indexing into multi-dimensional arrays. The number
     of elements in ``idx`` must match the number of dimensions of ``array``.
 
-    Returns the value of ``array[idx]`` before the storing the new value.
+    Returns the value of ``array[idx]`` before storing the new value.
     Behaves like an atomic load.
 
 .. function:: numba.cuda.atomic.or_(array, idx, value)
@@ -205,7 +205,7 @@ Synchronization and Atomic Operations
     integer indices for indexing into multi-dimensional arrays. The number
     of elements in ``idx`` must match the number of dimensions of ``array``.
 
-    Returns the value of ``array[idx]`` before the storing the new value.
+    Returns the value of ``array[idx]`` before storing the new value.
     Behaves like an atomic load.
 
 .. function:: numba.cuda.atomic.xor(array, idx, value)
@@ -215,7 +215,7 @@ Synchronization and Atomic Operations
     integer indices for indexing into multi-dimensional arrays. The number
     of elements in ``idx`` must match the number of dimensions of ``array``.
 
-    Returns the value of ``array[idx]`` before the storing the new value.
+    Returns the value of ``array[idx]`` before storing the new value.
     Behaves like an atomic load.
 
 .. function:: numba.cuda.atomic.exch(array, idx, value)
@@ -225,7 +225,7 @@ Synchronization and Atomic Operations
     integer indices for indexing into multi-dimensional arrays. The number
     of elements in ``idx`` must match the number of dimensions of ``array``.
 
-    Returns the value of ``array[idx]`` before the storing the new value.
+    Returns the value of ``array[idx]`` before storing the new value.
     Behaves like an atomic load.
 
 .. function:: numba.cuda.atomic.inc(array, idx, value)
@@ -236,7 +236,7 @@ Synchronization and Atomic Operations
     The number of elements in ``idx`` must match the number of dimensions of
     ``array``.
 
-    Returns the value of ``array[idx]`` before the storing the new value.
+    Returns the value of ``array[idx]`` before storing the new value.
     Behaves like an atomic load.
 
 .. function:: numba.cuda.atomic.dec(array, idx, value)
@@ -248,7 +248,7 @@ Synchronization and Atomic Operations
     The number of elements in ``idx`` must match the number of dimensions of
     ``array``.
 
-    Returns the value of ``array[idx]`` before the storing the new value.
+    Returns the value of ``array[idx]`` before storing the new value.
     Behaves like an atomic load.
 
 .. function:: numba.cuda.atomic.max(array, idx, value)
@@ -259,8 +259,19 @@ Synchronization and Atomic Operations
     The number of element in ``idx`` must match the number of dimension of
     ``array``.
 
-    Returns the value of ``array[idx]`` before the storing the new value.
+    Returns the value of ``array[idx]`` before storing the new value.
     Behaves like an atomic load.
+
+.. function:: numba.cuda.atomic.cas(array, idx, old, value)
+
+    Perform ``if array[idx] == old: array[idx] = value``. Supports int32,
+    int64, uint32, uint64 indexes only. The ``idx`` argument can be an integer
+    or a tuple of integer indices for indexing into multi-dimensional arrays.
+    The number of elements in ``idx`` must match the number of dimensions of
+    ``array``.
+
+    Returns the value of ``array[idx]`` before storing the new value.
+    Behaves like an atomic compare and swap.
 
 
 .. function:: numba.cuda.syncthreads

@@ -558,12 +558,6 @@ def find_setupwiths(func_ir):
                                 'unsupported control flow due to raise '
                                 'statements inside with block'
                                 )
-                    # special case 3.7, return before POP_BLOCK
-                    if PYVERSION < (3, 8) and ir_utils.is_return(stmt):
-                            raise errors.CompilerError(
-                                'unsupported control flow: due to return '
-                                'statements inside with block'
-                                )
                     # if a pop_block, process it
                     if ir_utils.is_pop_block(stmt) and block in sus_pops:
                         # record the jump target of this block belonging to this setup

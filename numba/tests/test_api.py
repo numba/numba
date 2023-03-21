@@ -3,7 +3,7 @@ import warnings
 import numba
 from numba import jit, njit
 
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, always_test
 import unittest
 
 
@@ -16,6 +16,7 @@ class TestNumbaModule(TestCase):
         self.assertTrue(hasattr(numba, name), name)
         self.assertIn(name, numba.__all__)
 
+    @always_test
     def test_numba_module(self):
         # jit
         self.check_member("jit")

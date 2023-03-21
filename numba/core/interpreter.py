@@ -2298,11 +2298,8 @@ class Interpreter(object):
         exit_fn_obj = ir.Const(None, loc=self.loc)
         self.store(value=exit_fn_obj, name=exitfn)
 
-    def op_SETUP_EXCEPT(self, inst):
-        # Removed since python3.8
-        self._insert_try_block_begin()
-
     def op_SETUP_FINALLY(self, inst):
+        # Removed since python3.11
         self._insert_try_block_begin()
 
     def op_WITH_CLEANUP(self, inst):

@@ -1480,6 +1480,8 @@ class PropagateLiterals(FunctionPass):
         typemap = state.typemap
         flags = state.flags
 
+        accepted_functions = ('isinstance', 'hasattr')
+
         if not hasattr(func_ir, '_definitions') \
                 and not flags.enable_ssa:
             func_ir._definitions = build_definitions(func_ir.blocks)
@@ -1529,7 +1531,8 @@ class PropagateLiterals(FunctionPass):
                     fn = guard(get_definition, func_ir, value.func.name)
                     if fn is None:
                         continue
-                    if not (isinstance(fn, ir.Global) and fn.name == 'isinstance'):  # noqa: E501
+                    if not (isinstance(fn, ir.Global) and fn.name in
+                            accepted_functions):  # noqa: E501
                         continue
 
                     for arg in value.args:
@@ -1537,7 +1540,7 @@ class PropagateLiterals(FunctionPass):
                         iv = func_ir._definitions[arg.name]
                         assert len(iv) == 1  # SSA!
                         if isinstance(iv[0], ir.Expr) and iv[0].op == 'phi':
-                            msg = ('isinstance() cannot determine the '
+                            msg = (f'{fn.name}() cannot determine the '
                                    f'type of variable "{arg.unversioned_name}" '
                                    'due to a branch.')
                             raise errors.NumbaTypeError(msg, loc=assign.loc)
@@ -1582,7 +1585,8 @@ class LiteralPropagationSubPipelinePass(FunctionPass):
         for blk in func_ir.blocks.values():
             for asgn in blk.find_insts(ir.Assign):
                 if isinstance(asgn.value, (ir.Global, ir.FreeVar)):
-                    if asgn.value.value is isinstance:
+                    value = asgn.value.value
+                    if value is isinstance or value is hasattr:
                         found = True
                         break
             if found:

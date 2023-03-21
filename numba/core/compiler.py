@@ -29,7 +29,7 @@ from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                                      ParforPass, DumpParforDiagnostics,
                                      IRLegalization, NoPythonBackend,
                                      InlineOverloads, PreLowerStripPhis,
-                                     NativeLowering,
+                                     NativeLowering, NativeParforLowering,
                                      NoPythonSupportedFeatureValidation,
                                      )
 
@@ -156,6 +156,13 @@ detail""",
         default=False,
         doc=("Disable optimization for debug. "
              "Equivalent to adding optnone attribute in the LLVM Function.")
+    )
+
+    dbg_directives_only = Option(
+        type=bool,
+        default=False,
+        doc=("Make debug emissions directives-only. "
+             "Used when generating lineinfo.")
     )
 
 
@@ -584,7 +591,10 @@ class DefaultPassBuilder(object):
         # Annotate only once legalized
         pm.add_pass(AnnotateTypes, "annotate types")
         # lower
-        pm.add_pass(NativeLowering, "native lowering")
+        if state.flags.auto_parallel.enabled:
+            pm.add_pass(NativeParforLowering, "native parfor lowering")
+        else:
+            pm.add_pass(NativeLowering, "native lowering")
         pm.add_pass(NoPythonBackend, "nopython mode backend")
         pm.add_pass(DumpParforDiagnostics, "dump parfor diagnostics")
         pm.finalize()
