@@ -446,7 +446,7 @@ class TestFunctionInlining(MemoryLeakMixin, InliningBase):
         # block count changes with Python version due to bytecode differences.
         if utils.PYVERSION in ((3, 8), (3, 9)):
             bc = 33
-        elif utils.PYVERSION == (3, 10):
+        elif utils.PYVERSION in ((3, 10), (3, 11)):
             bc = 35
         else:
             raise ValueError(f"Unsupported Python version: {utils.PYVERSION}")
