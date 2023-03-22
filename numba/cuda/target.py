@@ -1,17 +1,21 @@
 import re
+from functools import cached_property
 import llvmlite.binding as ll
 from llvmlite import ir
 
 from numba.core import typing, types, debuginfo, itanium_mangler, cgutils
 from numba.core.dispatcher import Dispatcher
-from numba.core.utils import cached_property
+from numba.core.errors import NumbaInvalidConfigWarning
 from numba.core.base import BaseContext
 from numba.core.callconv import MinimalCallConv
 from numba.core.typing import cmathdecl
+from numba.core import datamodel
 
 from .cudadrv import nvvm
 from numba.cuda import codegen, nvvmutils
+from numba.cuda.models import cuda_data_manager
 
+from warnings import warn
 
 # -----------------------------------------------------------------------------
 # Typing
@@ -20,9 +24,10 @@ from numba.cuda import codegen, nvvmutils
 class CUDATypingContext(typing.BaseContext):
     def load_additional_registries(self):
         from . import cudadecl, cudamath, libdevicedecl, vector_types
-        from numba.core.typing import enumdecl
+        from numba.core.typing import enumdecl, cffi_utils
 
         self.install_registry(cudadecl.registry)
+        self.install_registry(cffi_utils.registry)
         self.install_registry(cudamath.registry)
         self.install_registry(cmathdecl.registry)
         self.install_registry(libdevicedecl.registry)
@@ -67,13 +72,18 @@ class CUDATargetContext(BaseContext):
 
     def __init__(self, typingctx, target='cuda'):
         super().__init__(typingctx, target)
+        self.data_model_manager = cuda_data_manager.chain(
+            datamodel.default_manager
+        )
 
     @property
     def DIBuilder(self):
         if nvvm.NVVM().is_nvvm70:
             return debuginfo.DIBuilder
         else:
-            return debuginfo.NvvmDIBuilder
+            msg = "debuginfo is not generated for CUDA toolkits < 11.2"
+            warn(NumbaInvalidConfigWarning(msg))
+            return debuginfo.DummyDIBuilder
 
     @property
     def enable_boundscheck(self):
@@ -95,6 +105,7 @@ class CUDATargetContext(BaseContext):
         from numba.cpython import rangeobj, iterators, enumimpl # noqa: F401
         from numba.cpython import unicode, charseq # noqa: F401
         from numba.cpython import cmathimpl
+        from numba.misc import cffiimpl
         from numba.np import arrayobj # noqa: F401
         from numba.np import npdatetime # noqa: F401
         from . import (
@@ -102,6 +113,7 @@ class CUDATargetContext(BaseContext):
         )
 
         self.install_registry(cudaimpl.registry)
+        self.install_registry(cffiimpl.registry)
         self.install_registry(printimpl.registry)
         self.install_registry(libdeviceimpl.registry)
         self.install_registry(cmathimpl.registry)
@@ -139,7 +151,7 @@ class CUDATargetContext(BaseContext):
         return itanium_mangler.mangle(name, argtypes, abi_tags=abi_tags,
                                       uid=uid)
 
-    def prepare_cuda_kernel(self, codelib, fndesc, debug,
+    def prepare_cuda_kernel(self, codelib, fndesc, debug, lineinfo,
                             nvvm_options, filename, linenum,
                             max_registers=None):
         """
@@ -156,6 +168,7 @@ class CUDATargetContext(BaseContext):
                        in a kernel call.
         fndesc:        The FunctionDescriptor of the source function.
         debug:         Whether to compile with debug.
+        lineinfo:      Whether to emit line info.
         nvvm_options:  Dict of NVVM options used when compiling the new library.
         filename:      The source filename that the function is contained in.
         linenum:       The source line that the function is on.
@@ -170,11 +183,12 @@ class CUDATargetContext(BaseContext):
                                                 max_registers=max_registers)
         library.add_linking_library(codelib)
         wrapper = self.generate_kernel_wrapper(library, fndesc, kernel_name,
-                                               debug, filename, linenum)
+                                               debug, lineinfo, filename,
+                                               linenum)
         return library, wrapper
 
     def generate_kernel_wrapper(self, library, fndesc, kernel_name, debug,
-                                filename, linenum):
+                                lineinfo, filename, linenum):
         """
         Generate the kernel wrapper in the given ``library``.
         The function being wrapped is described by ``fndesc``.
@@ -195,10 +209,12 @@ class CUDATargetContext(BaseContext):
         wrapfn = ir.Function(wrapper_module, wrapfnty, prefixed)
         builder = ir.IRBuilder(wrapfn.append_basic_block(''))
 
-        if debug:
-            debuginfo = self.DIBuilder(
-                module=wrapper_module, filepath=filename, cgctx=self,
-            )
+        if debug or lineinfo:
+            directives_only = lineinfo and not debug
+            debuginfo = self.DIBuilder(module=wrapper_module,
+                                       filepath=filename,
+                                       cgctx=self,
+                                       directives_only=directives_only)
             debuginfo.mark_subprogram(
                 wrapfn, kernel_name, fndesc.args, argtypes, linenum,
             )
@@ -263,7 +279,7 @@ class CUDATargetContext(BaseContext):
 
         nvvm.set_cuda_kernel(wrapfn)
         library.add_ir_module(wrapper_module)
-        if debug:
+        if debug or lineinfo:
             debuginfo.finalize()
         library.finalize()
         wrapfn = library.get_function(wrapfn.name)

@@ -49,9 +49,13 @@ def _gentmpfile(suffix):
         else:
             os.rmdir(tmpdir)
 
-def _check_external_compiler():
-    # see if the external compiler bound in numpy.distutil is present
-    # and working
+
+@functools.lru_cache(maxsize=1)
+def external_compiler_works():
+    """
+    Returns True if the "external compiler" bound in numpy.distutil is present
+    and working, False otherwise.
+    """
     compiler = new_compiler()
     customize_compiler(compiler)
     for suffix in ['.c', '.cxx']:
@@ -68,10 +72,6 @@ def _check_external_compiler():
             return False
     return True
 
-# boolean on whether the externally provided compiler is present and
-# functioning correctly
-_external_compiler_ok = _check_external_compiler()
-
 
 class _DummyExtension(object):
     libraries = []
@@ -80,7 +80,7 @@ class _DummyExtension(object):
 class Toolchain(object):
 
     def __init__(self):
-        if not _external_compiler_ok:
+        if not external_compiler_works():
             self._raise_external_compiler_error()
 
         self._verbose = False
@@ -90,15 +90,12 @@ class Toolchain(object):
         self._build_ext.finalize_options()
         self._py_lib_dirs = self._build_ext.library_dirs
         self._py_include_dirs = self._build_ext.include_dirs
-        np_include_dir = np.get_include()
-        np_lib_dir = os.path.abspath(os.path.join(np_include_dir, '..', 'lib'))
-        np_libraries = ['npymath',]
-        if sys.platform != 'win32':
-            np_libraries.append('m')
-
-        self._math_info = {'include_dirs': [np_include_dir,],
-                           'library_dirs': [np_lib_dir,],
-                           'libraries': np_libraries}
+        np_compile_args = {'include_dirs': [np.get_include(),],}
+        if sys.platform == 'win32':
+            np_compile_args['libraries'] = []
+        else:
+            np_compile_args['libraries'] = ['m',]
+        self._math_info = np_compile_args
 
     @property
     def verbose(self):
@@ -184,7 +181,7 @@ class Toolchain(object):
         """
         Get the library directories necessary to link with Python.
         """
-        return list(self._py_lib_dirs) + self._math_info['library_dirs']
+        return list(self._py_lib_dirs)
 
     def get_python_include_dirs(self):
         """

@@ -222,7 +222,7 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.log10`
 * :func:`math.log1p`
 * :func:`math.sqrt`
-* :func:`math.remainder`: Python 3.7+
+* :func:`math.remainder`
 * :func:`math.pow`
 * :func:`math.ceil`
 * :func:`math.floor`
@@ -294,3 +294,11 @@ Unsupported NumPy features:
 * array creation APIs.
 * array methods.
 * functions that returns a new array.
+
+
+CFFI support
+============
+
+The ``from_buffer()`` method of ``cffi.FFI`` objects is supported. This is
+useful for obtaining a pointer that can be passed to external C / C++ / PTX
+functions (see the :ref:`CUDA FFI documentation <cuda_ffi>`).

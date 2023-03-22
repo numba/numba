@@ -49,18 +49,6 @@ class ListAttribute(AttributeTemplate):
         assert not kws
         return signature(types.none)
 
-    @bound_function("list.copy")
-    def resolve_copy(self, list, args, kws):
-        assert not args
-        assert not kws
-        return signature(list)
-
-    @bound_function("list.count")
-    def resolve_count(self, list, args, kws):
-        item, = args
-        assert not kws
-        return signature(types.intp, list.dtype)
-
     @bound_function("list.extend")
     def resolve_extend(self, list, args, kws):
         iterable, = args
@@ -74,19 +62,6 @@ class ListAttribute(AttributeTemplate):
             sig = signature(types.none, iterable)
             sig = sig.replace(recvr = list.copy(dtype=unified))
             return sig
-
-    @bound_function("list.index")
-    def resolve_index(self, list, args, kws):
-        assert not kws
-        if len(args) == 1:
-            return signature(types.intp, list.dtype)
-        elif len(args) == 2:
-            if isinstance(args[1], types.Integer):
-                return signature(types.intp, list.dtype, types.intp)
-        elif len(args) == 3:
-            if (isinstance(args[1], types.Integer)
-                and isinstance(args[2], types.Integer)):
-                return signature(types.intp, list.dtype, types.intp, types.intp)
 
     @bound_function("list.insert")
     def resolve_insert(self, list, args, kws):
@@ -108,19 +83,6 @@ class ListAttribute(AttributeTemplate):
             idx, = args
             if isinstance(idx, types.Integer):
                 return signature(list.dtype, types.intp)
-
-    @bound_function("list.remove")
-    def resolve_remove(self, list, args, kws):
-        assert not kws
-        if len(args) == 1:
-            return signature(types.none, list.dtype)
-
-    @bound_function("list.reverse")
-    def resolve_reverse(self, list, args, kws):
-        assert not args
-        assert not kws
-        return signature(types.none)
-
 
 @infer_global(operator.add)
 class AddList(AbstractTemplate):
@@ -176,23 +138,3 @@ class ListCompare(AbstractTemplate):
 @infer_global(operator.eq)
 class ListEq(ListCompare): pass
     #key = operator.eq
-
-@infer_global(operator.ne)
-class ListNe(ListCompare): pass
-    #key = operator.ne
-
-@infer_global(operator.lt)
-class ListLt(ListCompare): pass
-    #key = operator.lt
-
-@infer_global(operator.le)
-class ListLe(ListCompare): pass
-    #key = operator.le
-
-@infer_global(operator.gt)
-class ListGt(ListCompare): pass
-    #key = operator.gt
-
-@infer_global(operator.ge)
-class ListGe(ListCompare): pass
-    #key = operator.ge

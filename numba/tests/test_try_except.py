@@ -12,7 +12,7 @@ from numba.core.errors import (
 )
 from numba.tests.support import (
     TestCase, unittest, captured_stdout, MemoryLeakMixin,
-    skip_parfors_unsupported, skip_unless_scipy,
+    skip_parfors_unsupported, skip_unless_scipy, expected_failure_py311
 )
 
 
@@ -689,6 +689,7 @@ class TestTryExceptOtherControlFlow(TestCase):
         self.assertEqual(list(udt(10, 5)), list(range(5)))
         self.assertEqual(list(udt(10, 10)), list(range(10)))
 
+    @expected_failure_py311
     def test_objmode(self):
         @njit
         def udt():
@@ -700,17 +701,14 @@ class TestTryExceptOtherControlFlow(TestCase):
 
         with self.assertRaises(CompilerError) as raises:
             udt()
-        if PYVERSION <= (3,7):
-            msg = ("unsupported control flow: due to return statements inside "
-                   "with block")
-        else:
-            msg = ("unsupported control flow: with-context contains branches "
-                   "(i.e. break/return/raise) that can leave the block ")
+        msg = ("unsupported control flow: with-context contains branches "
+               "(i.e. break/return/raise) that can leave the block ")
         self.assertIn(
             msg,
             str(raises.exception),
         )
 
+    @expected_failure_py311
     def test_objmode_output_type(self):
         def bar(x):
             return np.asarray(list(reversed(x.tolist())))
@@ -729,12 +727,8 @@ class TestTryExceptOtherControlFlow(TestCase):
 
         with self.assertRaises(CompilerError) as raises:
             test_objmode()
-        if PYVERSION == (3,7):
-            msg = ("unsupported control flow: due to return statements inside "
-                   "with block")
-        else:
-            msg = ("unsupported control flow: with-context contains branches "
-                   "(i.e. break/return/raise) that can leave the block ")
+        msg = ("unsupported control flow: with-context contains branches "
+               "(i.e. break/return/raise) that can leave the block ")
         self.assertIn(
             msg,
             str(raises.exception),

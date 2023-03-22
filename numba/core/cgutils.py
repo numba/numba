@@ -1168,7 +1168,8 @@ def snprintf(builder, buffer, bufsz, format, *args):
 
 
 def snprintf_stackbuffer(builder, bufsz, format, *args):
-    """Similar to `snprintf()` but the buffer is stack allocated to size *bufsz*.
+    """Similar to `snprintf()` but the buffer is stack allocated to size
+    *bufsz*.
 
     Returns the buffer pointer as i8*.
     """

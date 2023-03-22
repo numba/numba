@@ -218,7 +218,7 @@ lowering array expressions,
 :func:`~numba.npyufunc.array_exprs._lower_array_expr`.  The overall
 optimization process is as follows:
 
-* :func:`RewriteArrayExprs.match`: The rewrite pass looks for two or
+* :func:`RewriteArrayExprs.match`: The rewrite pass looks for one or
   more array operations that form an array expression.
 
 * :func:`RewriteArrayExprs.apply`: Once an array expression is found,

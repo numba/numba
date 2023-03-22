@@ -7,7 +7,7 @@ import sys
 import numpy as np
 
 from numba import jit
-from numba.tests.support import needs_blas
+from numba.tests.support import needs_blas, expected_failure_py311
 import unittest
 
 

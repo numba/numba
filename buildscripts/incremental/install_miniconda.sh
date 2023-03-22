@@ -12,4 +12,4 @@ else
   echo Error
 fi
 chmod +x miniconda.sh
-./miniconda.sh -b
+bash ./miniconda.sh -b
