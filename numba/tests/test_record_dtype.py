@@ -4,9 +4,7 @@ from numba import jit, literal_unroll, njit, typeof
 from numba.core import types
 from numba.core.compiler import compile_isolated
 from numba.core.itanium_mangler import mangle_type
-from numba.core.config import IS_WIN32
 from numba.core.errors import TypingError
-from numba.np.numpy_support import numpy_version
 import unittest
 from numba.np import numpy_support
 from numba.tests.support import TestCase, skip_ppc64le_issue6465
@@ -518,24 +516,7 @@ class TestRecordDtypeMakeCStruct(TestCase):
         # Correct size
         self.assertEqual(ty.size, ctypes.sizeof(Ref))
         # Is aligned?
-        # NumPy version < 1.16 misalign complex-128 types to 16bytes.
-        # (it seems to align on windows?!)
-        if numpy_version >= (1, 16) or IS_WIN32:
-            dtype = ty.dtype
-            self.assertTrue(dtype.isalignedstruct)
-        else:
-            with self.assertRaises(ValueError) as raises:
-                dtype = ty.dtype
-            # get numpy alignment
-            npalign = np.dtype(np.complex128).alignment
-            # llvm should align to alignment of double.
-            llalign = np.dtype(np.double).alignment
-            self.assertIn(
-                ("NumPy is using a different alignment ({}) "
-                 "than Numba/LLVM ({}) for complex128. "
-                 "This is likely a NumPy bug.").format(npalign, llalign),
-                str(raises.exception),
-            )
+        self.assertTrue(ty.dtype.isalignedstruct)
 
     def test_nestedarray_issue_8132(self):
         # issue#8132 is caused by misrepresenting the NestedArray. Instead of
@@ -1549,7 +1530,7 @@ class TestNestedArrays(TestCase):
         nbarr2 = np.recarray(1, dtype=recordwith2darray)
         args = (nbarr1, nbarr2)
         pyfunc = record_setitem_array
-        errmsg = "unsupported array index type"
+        errmsg = "Unsupported array index type"
         with self.assertRaisesRegex(TypingError, errmsg):
             self.get_cfunc(pyfunc, tuple((typeof(arg) for arg in args)))
 
