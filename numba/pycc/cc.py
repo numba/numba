@@ -1,6 +1,4 @@
 from setuptools import distutils as dutils
-dir_util = dutils.dir_util
-log = dutils.log
 from setuptools.command import build_ext
 from setuptools.extension import Extension
 
@@ -16,6 +14,8 @@ from numba.pycc.platform import Toolchain
 from numba import cext
 
 
+dir_util = dutils.dir_util
+log = dutils.log
 extension_libs = cext.get_extension_libs()
 
 
