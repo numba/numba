@@ -446,6 +446,34 @@ class TestRaising(TestCase):
 
         self.assertEqual(try_raise.py_func(3), try_raise(3))
 
+    def test_dynamic_raise(self):
+
+        @njit
+        def raise_(a):
+            raise ValueError(a)
+
+        @njit
+        def try_raise_(a):
+            try:
+                raise_(a)
+            except Exception:
+                raise ValueError(a)
+
+        args = [
+            1,
+            1.1,
+            'hello',
+            np.ones(3),
+            [1, 2],
+            (1, 2),
+            set([1, 2]),
+        ]
+        for fn in (raise_, try_raise_):
+            for arg in args:
+                with self.assertRaises(ValueError) as e:
+                    fn(arg)
+                self.assertEquals((arg,), e.exception.args)
+
 
 if __name__ == '__main__':
     unittest.main()

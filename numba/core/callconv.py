@@ -499,6 +499,9 @@ class CPUCallConv(BaseCallConv):
             msg = ('Error creating Python tuple from runtime exception '
                    'arguments')
             pyapi.err_set_string("PyExc_RuntimeError", msg)
+            # Return NULL to indicate an error was raised
+            fnty = builder.function.function_type
+            builder.ret(cgutils.get_null_value(fnty.return_type))
 
         # merge static and dynamic variables
         excinfo = pyapi.build_dynamic_excinfo_struct(static_exc_bytes, py_tuple)
@@ -571,15 +574,15 @@ class CPUCallConv(BaseCallConv):
         st_type_ptr = st_type.as_pointer()
         st_ptr = builder.bitcast(fn.args[0], st_type_ptr)
         # compile time values are stored as None
-        # TODO: It should be possible to remove "nb_types" as argument to this
-        # function and get the Numba type from the LLVM type
         nb_types = [typ for typ in nb_types if typ is not None]
 
         # convert native values into CPython objects
         objs = []
         for i, typ in enumerate(nb_types):
             val = builder.extract_value(builder.load(st_ptr), i)
-            obj = pyapi.from_native_value(typ, val)
+            env_manager = self.context.get_env_manager(builder,
+                                                       return_pyobject=True)
+            obj = pyapi.from_native_value(typ, val, env_manager=env_manager)
 
             # If object cannot be boxed, raise an exception
             if obj == cgutils.get_null_value(obj.type):
