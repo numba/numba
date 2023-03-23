@@ -1,7 +1,7 @@
 import numpy as np
 
 from numba import vectorize, guvectorize
-from numba import cuda, typeof, void
+from numba import cuda
 from numba.cuda.cudadrv import driver
 from numba.cuda.testing import (skip_unless_cuda_python, unittest,
                                 ContextResettingTestCase, ForeignArray)
@@ -9,8 +9,31 @@ from numba.cuda.testing import skip_on_cudasim, skip_if_external_memmgr
 from numba.tests.support import linux_only, override_config
 from unittest.mock import call, patch
 
-def array_reshape(arr, newshape, got):
-    got = arr.reshape(newshape)
+
+def array_reshape1d(arr, newshape, got):
+    y = arr.reshape(newshape)
+    for i in range(y.shape[0]):
+        got[i] = y[i]
+
+
+def array_reshape2d(arr, newshape, got):
+    y = arr.reshape(newshape)
+    for i in range(y.shape[0]):
+        for j in range(y.shape[1]):
+            got[i,j] = y[i,j]
+
+
+def array_reshape3d(arr, newshape, got):
+    y = arr.reshape(newshape)
+    for i in range(y.shape[0]):
+        for j in range(y.shape[1]):
+            for k in range(y.shape[2]):
+                got[i,j,k] = y[i,j,k]
+
+
+def array_reshape(arr, newshape):
+    return arr.reshape(newshape)
+
 
 @skip_on_cudasim('CUDA Array Interface is not supported in the simulator')
 class TestCudaArrayInterface(ContextResettingTestCase):
@@ -434,41 +457,54 @@ class TestCudaArrayInterface(ContextResettingTestCase):
             # Ensure that synchronize was not called
             mock_sync.assert_not_called()
 
-    def check_only_shape(self, kernelfunc, arr, shape, expected_shape):
-        sig = void(typeof(arr), typeof(shape), typeof(shape))
-        kernel = cuda.jit(sig)(kernelfunc)
-        got = numpy.zeros(expected_shape, dtype=arr.dtype)
-        kernel[1, arr.shape](arr, shape, got)
-        self.assertEqual(got.shape, expected_shape)
-        self.assertEqual(got.size, arr.size)
-
     @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
-    def test_cuda_reshape(self):
-        NX = 2
-        NY = 2
+    def test_array_reshape(self):
+        def check(pyfunc, kernelfunc, arr, shape):
+            kernel = cuda.jit(kernelfunc)
+            expected = pyfunc(arr, shape)
+            got = np.zeros(expected.shape, dtype=arr.dtype)
+            kernel[1, 1](arr, shape, got)
+            self.assertPreciseEqual(got, expected)
 
-        @cuda.jit('void(int32[:,::1])')
-        def f(arr):
-            x = cuda.shared.array(0, dtype=np.int32)
-            x[0] = 11
-            x[1] = 12
-            x[2] = 21
-            x[3] = 22
-            y = x.reshape(NX, NY)
+        def check_only_shape(kernelfunc, arr, shape, expected_shape):
+            kernel = cuda.jit(kernelfunc)
+            got = np.zeros(expected_shape, dtype=arr.dtype)
+            kernel[1, 1](arr, shape, got)
+            self.assertEqual(got.shape, expected_shape)
+            self.assertEqual(got.size, arr.size)
 
-            arr[0, 0] = y[0, 0]
-            arr[0, 1] = y[0, 1]
-            arr[1, 0] = y[1, 0]
-            arr[1, 1] = y[1, 1]
+        # 0-sized arrays
+        def check_empty(arr):
+            check(array_reshape, array_reshape1d, arr, 0)
+            check(array_reshape, array_reshape1d, arr, (0,))
+            check(array_reshape, array_reshape3d, arr, (1, 0, 2))
+            check_only_shape(array_reshape2d, arr, (0, -1), (0, 0))
+            check_only_shape(array_reshape2d, arr, (4, -1), (4, 0))
+            check_only_shape(array_reshape3d, arr, (-1, 0, 4), (0, 0, 4))
 
-        DYNSMEM = NX * NY * np.dtype(np.int32).itemsize
-        data = np.zeros((NX, NY), dtype=np.int32)
+        # C-contiguous
+        arr = np.arange(24)
+        check(array_reshape, array_reshape1d, arr, (24,))
+        check(array_reshape, array_reshape2d, arr, (4, 6))
+        check(array_reshape, array_reshape2d, arr, (8, 3))
+        check(array_reshape, array_reshape3d, arr, (8, 1, 3))
 
-        f[1, 1, 0, DYNSMEM](data)
-        self.assertEqual(data[0,0], 11)
-        self.assertEqual(data[0,1], 12)
-        self.assertEqual(data[1,0], 21)
-        self.assertEqual(data[1,1], 22)
+        arr = np.arange(24).reshape((1, 8, 1, 1, 3, 1))
+        check(array_reshape, array_reshape1d, arr, (24,))
+        check(array_reshape, array_reshape2d, arr, (4, 6))
+        check(array_reshape, array_reshape2d, arr, (8, 3))
+        check(array_reshape, array_reshape3d, arr, (8, 1, 3))
+
+        # Test negative shape value
+        arr = np.arange(25).reshape(5,5)
+        check(array_reshape, array_reshape1d, arr, -1)
+        check(array_reshape, array_reshape1d, arr, (-1,))
+        check(array_reshape, array_reshape2d, arr, (-1, 5))
+        check(array_reshape, array_reshape3d, arr, (5, -1, 5))
+        check(array_reshape, array_reshape3d, arr, (5, 5, -1))
+
+        arr = np.array([])
+        check_empty(arr)
 
 
 if __name__ == "__main__":
