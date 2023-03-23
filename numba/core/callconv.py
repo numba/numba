@@ -500,8 +500,12 @@ class CPUCallConv(BaseCallConv):
                    'arguments')
             pyapi.err_set_string("PyExc_RuntimeError", msg)
             # Return NULL to indicate an error was raised
-            # fnty = builder.function.function_type
-            # builder.ret(cgutils.get_null_value(fnty.return_type))
+            fnty = builder.function.function_type
+            if not isinstance(fnty.return_type, ir.VoidType):
+                # in some ufuncs, the return type is void
+                builder.ret(cgutils.get_null_value(fnty.return_type))
+            else:
+                builder.ret_void()
 
         # merge static and dynamic variables
         excinfo = pyapi.build_dynamic_excinfo_struct(static_exc_bytes, py_tuple)
