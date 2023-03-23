@@ -348,8 +348,10 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
 
         indices = []
 
-        # Generate 20 random slice cases
-        for i in range(20):
+        # Generate K random slice cases. The value of K is arbitrary, the intent is
+        # to create plenty of variation.
+        K = 20 
+        for _ in range(K):
             array_idx = self.rng.integers(0, 5, size=15)
             # Randomly select 4 slices from our list
             curr_idx = self.rng.choice(slice_choices, size=4).tolist()
@@ -357,9 +359,8 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
             _array_idx = self.rng.choice(4)
             curr_idx[_array_idx] = array_idx
             indices.append(tuple(curr_idx))
-        
-        # Generate 20 random integer cases 
-        for i in range(20):
+        # Generate K random integer cases 
+        for _ in range(K):
             array_idx = self.rng.integers(0, 5, size=15)
             # Randomly select 4 integers from our list
             curr_idx = self.rng.choice(integer_choices, size=4).tolist()
@@ -368,8 +369,8 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
             curr_idx[_array_idx] = array_idx
             indices.append(tuple(curr_idx))
 
-        # Generate 20 random ellipsis cases
-        for i in range(20):
+        # Generate K random ellipsis cases
+        for _ in range(K):
             array_idx = self.rng.integers(0, 5, size=15)
             # Randomly select 4 slices from our list
             curr_idx = self.rng.choice(slice_choices, size=4).tolist()
@@ -380,8 +381,8 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
             curr_idx[_array_idx[1]] = Ellipsis
             indices.append(tuple(curr_idx))
 
-        # Generate 20 random boolean cases
-        for i in range(20):
+        # Generate K random boolean cases
+        for _ in range(K):
             array_idx = self.rng.integers(0, 5, size=15)
             # Randomly select 4 slices from our list
             curr_idx = self.rng.choice(slice_choices, size=4).tolist()
@@ -392,37 +393,35 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
                 self.rng.choice(2, size=bool_arr_shape),
                 dtype=bool
             )
-
             indices.append(tuple(curr_idx))
 
         return indices
 
     def check_getitem_indices(self, arr_shape, index):
-        def get_item(array, idx):
+        @njit
+        def numba_get_item(array, idx):
             return array[idx]
 
         arr = np.random.randint(0, 11, size=arr_shape)
-        get_item_numba = njit(get_item)
-        orig = arr.copy()
+        get_item = numba_get_item.py_func
         orig_base = arr.base or arr
 
         expected = get_item(arr, index)
-        got = get_item_numba(arr, index)
+        got = numba_get_item(arr, index)
         # Sanity check: In advanced indexing, the result is always a copy.
-        assert expected.base is not orig_base
+        self.assertNotIn(expected.base, orig_base)
 
         # Note: Numba may not return the same array strides and
-        # contiguity as Numpy
+        # contiguity as NumPy
         self.assertEqual(got.shape, expected.shape)
         self.assertEqual(got.dtype, expected.dtype)
         np.testing.assert_equal(got, expected)
 
         # Check a copy was *really* returned by Numba
-        got.fill(42)
-        np.testing.assert_equal(arr, orig)
+        self.assertFalse(np.may_share_memory(got, expected))
 
     def check_setitem_indices(self, arr_shape, index):
-        @njit     
+        @njit
         def set_item(array, idx, item):
             array[idx] = item
 
@@ -443,7 +442,7 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
 
     def test_getitem(self):
         # Cases with a combination of integers + other objects
-        indices = self.indexing_cases
+        indices = self.indexing_cases.copy()
 
         # Cases with permutations of either integers or objects
         indices += self.generate_random_indices()
@@ -454,7 +453,7 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
 
     def test_setitem(self):
         # Cases with a combination of integers + other objects
-        indices = self.indexing_cases
+        indices = self.indexing_cases.copy()
 
         # Cases with permutations of either integers or objects
         indices += self.generate_random_indices()
@@ -464,26 +463,25 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
                 self.check_setitem_indices(self.shape, idx)
 
     def test_unsupported_condition_exceptions(self):
-        # Cases with more than one indexing array
-        idx = (0, 3, np.array([1, 2]), np.array([1, 2]))
-        with self.assertRaises(TypingError) as raises:
-            self.check_getitem_indices(self.shape, idx)
-        self.assertIn(
-            'Using more than one non-scalar array index is unsupported.',
-            str(raises.exception)
-        )
-
-        # Cases with more than one indexing subspace
-        # (The subspaces here are separated by slice(None))
-        idx = (0, np.array([1, 2]), slice(None), 3, 4)
-        with self.assertRaises(TypingError) as raises:
-            self.check_getitem_indices(self.shape, idx)
-        msg = "Using more than one indexing subspace (consecutive group " +\
-                "of integer or array indices) is unsupported."
-        self.assertIn(
-            msg,
-            str(raises.exception)
-        )
+        err_idx_cases = [
+            # Cases with more than one indexing array
+            ('Using more than one non-scalar array index is unsupported.',
+             (0, 3, np.array([1, 2]), np.array([1, 2]))),
+            # Cases with more than one indexing subspace
+            # (The subspaces here are separated by slice(None))
+            ("Using more than one indexing subspace is unsupported." + \
+             " An indexing subspace is a group of one or more consecutive" + \
+             " indices comprising integer or array types.",
+             (0, np.array([1, 2]), slice(None), 3, 4))
+        ]
+        
+        for err, idx in err_idx_cases:
+            with self.assertRaises(TypingError) as raises:
+                self.check_getitem_indices(self.shape, idx)
+            self.assertIn(
+                err,
+                str(raises.exception)
+            )
 
 
 if __name__ == '__main__':

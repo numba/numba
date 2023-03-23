@@ -34,12 +34,14 @@ def get_array_index_type(ary, idx):
     right_indices = []
     ellipsis_met = False
     advanced = False
-    has_integer = False
     num_newaxis = 0
 
     if not isinstance(idx, types.BaseTuple):
         idx = [idx]
 
+    # Here, a subspace is considered as a contiguous group of advanced indices.
+    # num_subspaces keeps track of the number of such
+    # contiguous groups.
     in_subspace = False
     num_subspaces = 0
     array_indices = 0
@@ -54,13 +56,23 @@ def get_array_index_type(ary, idx):
             ellipsis_met = True
             in_subspace = False
         elif isinstance(ty, types.SliceType):
+            # If we encounter a non-advanced index while in a
+            # subspace then that subspace ends.
             in_subspace = False
+        # In advanced indexing, any index broadcastable to an
+        # array is considered an advanced index. Hence all the
+        # branches below are considered as advanced indices.
         elif isinstance(ty, types.Integer):
             # Normalize integer index
             ty = types.intp if ty.signed else types.uintp
             # Integer indexing removes the given dimension
             ndim -= 1
+            # If we're within a subspace/contiguous group of
+            # advanced indices then no action is necessary
+            # since we've already counted that subspace once.
             if not in_subspace:
+                # If we're not within a subspace and we encounter
+                # this branch then we have a new subspace/group.
                 num_subspaces += 1
                 in_subspace = True
         elif (isinstance(ty, types.Array) and ty.ndim == 0
@@ -80,6 +92,8 @@ def get_array_index_type(ary, idx):
                     raise NumbaTypeError(msg)
                 ndim += ty.ndim - 1
             array_indices += 1
+            # The condition for activating advanced indexing is simply
+            # having at least one array with size > 1.
             advanced = True
             if not in_subspace:
                 num_subspaces += 1
@@ -100,8 +114,9 @@ def get_array_index_type(ary, idx):
 
         if num_subspaces > 1:
             # Advanced indexing limitation # 3
-            msg = ("Using more than one indexing subspace (consecutive group "
-                   "of integer or array indices) is unsupported.")
+            msg = ("Using more than one indexing subspace is unsupported."
+                   " An indexing subspace is a group of one or more"
+                   " consecutive indices comprising integer or array types.")
             raise NumbaTypeError(msg)
 
     # Only Numpy arrays support advanced indexing
