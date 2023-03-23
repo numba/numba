@@ -103,33 +103,38 @@ class _Kernel(serialize.ReduceMixin):
         if not link:
             link = []
 
+        def link_to_library_functions(library_functions, library_path,
+                                      prefix=None):
+            """
+            Dynamically links to library functions by searching for their names
+            in the specified library and linking to the corresponding source
+            file.
+            """
+            if prefix is not None:
+                library_functions = [f"{prefix}{fn}" for fn in
+                                     library_functions]
+
+            found_functions = [fn for fn in library_functions
+                               if f'{fn}' in lib.get_asm_str()]
+
+            if found_functions:
+                basedir = os.path.dirname(os.path.abspath(__file__))
+                source_file_path = os.path.join(basedir, library_path)
+                link.append(source_file_path)
+
         # A kernel needs cooperative launch if grid_sync is being used.
         self.cooperative = 'cudaCGGetIntrinsicHandle' in lib.get_asm_str()
         # We need to link against cudadevrt if grid sync is being used.
         if self.cooperative:
             link.append(get_cudalib('cudadevrt', static=True))
 
-        helper_found = [fn for fn in helper_functions
-                        if (f'{fn}' in lib.get_asm_str())]
+        # Link to the helper library functions if needed
+        link_to_library_functions(helper_functions, 'cuda_helperlib.cu')
 
-        if helper_found:
-            # Path to the source containing the foreign function
-
-            basedir = os.path.dirname(os.path.abspath(__file__))
-            helper_cu_path = os.path.join(basedir,
-                                          'cuda_helperlib.cu')
-            link.append(helper_cu_path)
-
-        res = [fn for fn in cuda_fp16_math_funcs
-               if (f'__numba_wrapper_{fn}' in lib.get_asm_str())]
-
-        if res:
-            # Path to the source containing the foreign function
-
-            basedir = os.path.dirname(os.path.abspath(__file__))
-            functions_cu_path = os.path.join(basedir,
-                                             'cpp_function_wrappers.cu')
-            link.append(functions_cu_path)
+        # Link to the CUDA FP16 math library functions if needed
+        link_to_library_functions(cuda_fp16_math_funcs,
+                                  'cpp_function_wrappers.cu',
+                                  '__numba_wrapper_')
 
         for filepath in link:
             lib.add_linking_file(filepath)
