@@ -20,8 +20,7 @@ from numba.np.numpy_support import (as_dtype, type_can_asarray, type_is_scalar,
 from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
                                  impl_ret_new_ref, impl_ret_untracked)
 from numba.np.arrayobj import (make_array, load_item, store_item,
-                               _empty_nd_impl, numpy_broadcast_shapes_list)
-from numba.np.arrayobj import __broadcast_shapes
+                               _empty_nd_impl)
 from numba.np.linalg import ensure_blas
 
 from numba.core.extending import intrinsic
@@ -602,11 +601,7 @@ def array_argmin_impl_datetime(arry):
     for view in it:
         v = view.item()
         if np.isnat(v):
-            if numpy_version >= (1, 18):
-                return idx
-            else:
-                idx += 1
-                continue
+            return idx
         if v < min_value:
             min_value = v
             min_idx = idx
@@ -690,11 +685,7 @@ def array_argmax_impl_datetime(arry):
     for view in it:
         v = view.item()
         if np.isnat(v):
-            if numpy_version >= (1, 18):
-                return idx
-            else:
-                idx += 1
-                continue
+            return idx
         if v > max_value:
             max_value = v
             max_idx = idx
@@ -1154,31 +1145,16 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
             return out.reshape(b.shape)
 
     elif isinstance(a, types.Array) and isinstance(b, types.Array):
-        m = max(a.ndim, b.ndim)
-        tup_init = (0,) * m
-
         def isclose_impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-            # Broadcast arrays of different types - cannot use
-            # np.broadcast_arrays for that
-            # this can be replaced by np.broadcast_shapes once the min NumPy
-            # version is increased to 1.20
-            shape = [1] * m
-            numpy_broadcast_shapes_list(shape, m, a.shape)
-            numpy_broadcast_shapes_list(shape, m, b.shape)
-
-            tup = tup_init  # tup is the final shape
-
-            for i in range(m):
-                tup = tuple_setitem(tup, i, shape[i])
-
-            a_ = np.broadcast_to(a, tup)
-            b_ = np.broadcast_to(b, tup)
+            shape = np.broadcast_shapes(a.shape, b.shape)
+            a_ = np.broadcast_to(a, shape)
+            b_ = np.broadcast_to(b, shape)
 
             out = np.zeros(len(a_), dtype=np.bool_)
             for i, (av, bv) in enumerate(np.nditer((a_, b_))):
                 out[i] = _isclose_item(av.item(), bv.item(), rtol, atol,
                                        equal_nan)
-            return np.broadcast_to(out, tup)
+            return np.broadcast_to(out, shape)
 
     else:
         def isclose_impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
@@ -2941,26 +2917,16 @@ def np_argwhere(a):
     # needs to be much more array-like for the array impl to work, Numba bug
     # in one of the underlying function calls?
 
-    use_scalar = (numpy_version >= (1, 18) and
-                  isinstance(a, (types.Number, types.Boolean)))
+    use_scalar = isinstance(a, (types.Number, types.Boolean))
     if type_can_asarray(a) and not use_scalar:
-        if numpy_version < (1, 18):
-            check = register_jitable(lambda x: not np.any(x))
-        else:
-            check = register_jitable(lambda x: True)
-
         def impl(a):
             arr = np.asarray(a)
-            if arr.shape == () and check(arr):
+            if arr.shape == ():
                 return np.zeros((0, 1), dtype=types.intp)
             return np.transpose(np.vstack(np.nonzero(arr)))
     else:
-        if numpy_version < (1, 18):
-            falseish = (0, 1)
-            trueish = (1, 1)
-        else:
-            falseish = (0, 0)
-            trueish = (1, 0)
+        falseish = (0, 0)
+        trueish = (1, 0)
 
         def impl(a):
             if a is not None and bool(a):
@@ -3348,7 +3314,7 @@ def _where_generic_impl(dtype, layout):
 
     def impl(condition, x, y):
         cond1, x1, y1 = np.asarray(condition), np.asarray(x), np.asarray(y)
-        shape = __broadcast_shapes(cond1.shape, x1.shape, y1.shape)
+        shape = np.broadcast_shapes(cond1.shape, x1.shape, y1.shape)
         cond_ = np.broadcast_to(cond1, shape)
         x_ = np.broadcast_to(x1, shape)
         y_ = np.broadcast_to(y1, shape)
@@ -4226,16 +4192,13 @@ def _np_correlate(a, v):
             a_op = op_conj
             b_op = op_nop
 
-    _NP_PRED = numpy_version > (1, 17)
-
     def impl(a, v):
         la = len(a)
         lv = len(v)
-        if _NP_PRED is True:
-            if la == 0:
-                raise ValueError("'a' cannot be empty")
-            if lv == 0:
-                raise ValueError("'v' cannot be empty")
+        if la == 0:
+            raise ValueError("'a' cannot be empty")
+        if lv == 0:
+            raise ValueError("'v' cannot be empty")
         if la < lv:
             return _np_correlate_core(b_op(v), a_op(a), Mode.VALID, -1)
         else:
@@ -4466,45 +4429,27 @@ def np_asarray_chkfinite(a, dtype=None):
 
 @register_jitable
 def np_bartlett_impl(M):
-    if numpy_version >= (1, 20):
-        n = np.arange(1. - M, M, 2)
-        return np.where(np.less_equal(n, 0), 1 + n / (M - 1), 1 - n / (M - 1))
-    else:
-        n = np.arange(M)
-        return np.where(np.less_equal(n, (M - 1) / 2.0), 2.0 * n / (M - 1),
-                        2.0 - 2.0 * n / (M - 1))
+    n = np.arange(1. - M, M, 2)
+    return np.where(np.less_equal(n, 0), 1 + n / (M - 1), 1 - n / (M - 1))
 
 
 @register_jitable
 def np_blackman_impl(M):
-    if numpy_version >= (1, 20):
-        n = np.arange(1. - M, M, 2)
-        return (0.42 + 0.5 * np.cos(np.pi * n / (M - 1)) +
-                0.08 * np.cos(2.0 * np.pi * n / (M - 1)))
-    else:
-        n = np.arange(M)
-        return (0.42 - 0.5 * np.cos(2.0 * np.pi * n / (M - 1)) +
-                0.08 * np.cos(4.0 * np.pi * n / (M - 1)))
+    n = np.arange(1. - M, M, 2)
+    return (0.42 + 0.5 * np.cos(np.pi * n / (M - 1)) +
+            0.08 * np.cos(2.0 * np.pi * n / (M - 1)))
 
 
 @register_jitable
 def np_hamming_impl(M):
-    if numpy_version >= (1, 20):
-        n = np.arange(1 - M, M, 2)
-        return 0.54 + 0.46 * np.cos(np.pi * n / (M - 1))
-    else:
-        n = np.arange(M)
-        return 0.54 - 0.46 * np.cos(2.0 * np.pi * n / (M - 1))
+    n = np.arange(1 - M, M, 2)
+    return 0.54 + 0.46 * np.cos(np.pi * n / (M - 1))
 
 
 @register_jitable
 def np_hanning_impl(M):
-    if numpy_version >= (1, 20):
-        n = np.arange(1 - M, M, 2)
-        return 0.5 + 0.5 * np.cos(np.pi * n / (M - 1))
-    else:
-        n = np.arange(M)
-        return 0.5 - 0.5 * np.cos(2.0 * np.pi * n / (M - 1))
+    n = np.arange(1 - M, M, 2)
+    return 0.5 + 0.5 * np.cos(np.pi * n / (M - 1))
 
 
 def window_generator(func):

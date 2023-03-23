@@ -19,7 +19,8 @@ from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                            NopythonRewrites, PreParforPass, ParforPass,
                            DumpParforDiagnostics, NativeLowering,
                            NativeParforLowering, IRLegalization,
-                           NoPythonBackend, NativeLowering)
+                           NoPythonBackend, NativeLowering,
+                           ParforFusionPass, ParforPreLoweringPass)
 
 from numba.core.compiler_machinery import FunctionPass, PassManager, register_pass
 import unittest
@@ -89,6 +90,8 @@ def gen_pipeline(state, test_pass):
             pm.add_pass(NopythonRewrites, "nopython rewrites")
         if state.flags.auto_parallel.enabled:
             pm.add_pass(ParforPass, "convert to parfors")
+            pm.add_pass(ParforFusionPass, "fuse parfors")
+            pm.add_pass(ParforPreLoweringPass, "parfor prelowering")
 
         pm.add_pass(test_pass, "inline test")
 
