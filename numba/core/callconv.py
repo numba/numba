@@ -578,10 +578,10 @@ class CPUCallConv(BaseCallConv):
 
         # convert native values into CPython objects
         objs = []
+        env_manager = self.context.get_env_manager(builder,
+                                                   return_pyobject=True)
         for i, typ in enumerate(nb_types):
             val = builder.extract_value(builder.load(st_ptr), i)
-            env_manager = self.context.get_env_manager(builder,
-                                                       return_pyobject=True)
             obj = pyapi.from_native_value(typ, val, env_manager=env_manager)
 
             # If object cannot be boxed, raise an exception

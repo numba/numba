@@ -823,7 +823,7 @@ class StaticTryRaise(Stmt):
             return f"static_try_raise {self.exc_class}({args})"
 
 
-class DynamicTryRaise(StaticTryRaise):
+class DynamicTryRaise(Stmt):
     """A raise statement inside a try-block.
     Similar to ``DynamicRaise`` but does not terminate.
     """
