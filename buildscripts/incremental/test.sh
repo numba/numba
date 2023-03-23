@@ -5,6 +5,13 @@ source activate $CONDA_ENV
 # Make sure any error below is reported as such
 set -v -e
 
+# If the build is a "Vanilla" variant, then remove the setuptools package. It
+# was installed at build time for setup.py to use, but is an _optional_ runtime
+# dependency of Numba and therefore shouldn't be present in "Vanilla" testing.
+if [ "${VANILLA_INSTALL}" == "yes" ]; then
+    conda remove -y setuptools
+fi
+
 # Ensure the README is correctly formatted
 if [ "$BUILD_DOC" == "yes" ]; then rstcheck README.rst; fi
 # Ensure that the documentation builds without warnings
