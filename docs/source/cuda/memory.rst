@@ -169,7 +169,7 @@ size 0:
       dyn_arr = cuda.shared.array(0, dtype=np.float32)
       ...
 
-and specify the size of dynamic shared array in bytes during kernel invocation:
+and specify the size of dynamic shared memory in bytes during kernel invocation:
 
 .. code-block:: python
 
@@ -181,7 +181,7 @@ In the above code the kernel launch is configured with 4 parameters:
 
    kernel_func[grid_dim, block_dim, stream, dyn_shared_mem_size]
 
-**Note:** that all dynamic shared memory arrays *alias*, so if you want to have
+**Note:** all dynamic shared memory arrays *alias*, so if you want to have
 multiple dynamic shared arrays, you need to take *disjoint* views of the arrays.
 For example, consider:
 
@@ -207,7 +207,7 @@ type ``float32``. When ``f32_arr[0]`` is set, this also sets the value of
 ``i32_arr[0]``, because they're pointing at the same memory. So we see as
 output:
 
-.. code-block:: python
+.. code-block:: pycon
 
    3.140000
    1078523331
@@ -238,7 +238,7 @@ This time we declare 8 dynamic shared memory bytes, using the first 4 for a
 ``float32`` value and the next 4 for an ``int32`` value. Now we can set both the
 ``int32`` and ``float32`` value without them aliasing:
 
-.. code-block:: python
+.. code-block:: pycon
 
    3.140000
    1
