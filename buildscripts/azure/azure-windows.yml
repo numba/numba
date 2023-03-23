@@ -8,21 +8,16 @@ jobs:
     vmImage: ${{ parameters.vmImage }}
   strategy:
     matrix:
+      py38_np121:
+        PYTHON: '3.8'
+        NUMPY: '1.21'
+        CONDA_ENV: 'testenv'
+        TEST_START_INDEX: 18
       py311_np124:
         PYTHON: '3.11'
         NUMPY: '1.24'
         CONDA_ENV: 'testenv'
         TEST_START_INDEX: 19
-      py310_np124:
-        PYTHON: '3.10'
-        NUMPY: '1.24'
-        CONDA_ENV: 'testenv'
-        TEST_START_INDEX: 20
-      py38_np121:
-        PYTHON: '3.8'
-        NUMPY: '1.21'
-        CONDA_ENV: 'testenv'
-        TEST_START_INDEX: 21
 
   steps:
     - task: CondaEnvironment@1
