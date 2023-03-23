@@ -70,13 +70,16 @@ class Status(IntEnum):
     ERR_CMP_FAILED = -5
 
 
-def new_dict(key, value):
-    """Construct a new dict.
+def new_dict(key, value, n_keys=0):
+    """Construct a new dict with enough space for *n_keys* without a resize.
 
     Parameters
     ----------
     key, value : TypeRef
         Key type and value type of the new dict.
+    n_keys : int, default 0
+        The number of keys to insert without needing a resize.
+        A value of 0 creates a dict with minimum size.
     """
     # With JIT disabled, ignore all arguments and return a Python dict.
     return dict()
@@ -213,41 +216,44 @@ def _imp_dtor(context, module):
 
 
 @intrinsic
-def _dict_new_minsize(typingctx, keyty, valty):
-    """Wrap numba_dict_new_minsize.
+def _dict_new_sized(typingctx, n_keys, keyty, valty):
+    """Wrap numba_dict_new_sized.
 
-    Allocate a new dictionary object with the minimum capacity.
+    Allocate a new dictionary object with enough space to hold
+    *n_keys* keys without needing a resize.
 
     Parameters
     ----------
     keyty, valty: Type
         Type of the key and value, respectively.
-
+    n_keys: int
+        The number of keys to insert without needing a resize.
+        A value of 0 creates a dict with minimum size.
     """
     resty = types.voidptr
-    sig = resty(keyty, valty)
+    sig = resty(n_keys, keyty, valty)
 
     def codegen(context, builder, sig, args):
-        fnty = ir.FunctionType(
-            ll_status,
-            [ll_dict_type.as_pointer(), ll_ssize_t, ll_ssize_t],
-        )
-        fn = cgutils.get_or_insert_function(builder.module, fnty,
-                                            'numba_dict_new_minsize')
+        n_keys = builder.bitcast(args[0], ll_ssize_t)
+
         # Determine sizeof key and value types
         ll_key = context.get_data_type(keyty.instance_type)
         ll_val = context.get_data_type(valty.instance_type)
         sz_key = context.get_abi_sizeof(ll_key)
         sz_val = context.get_abi_sizeof(ll_val)
+
         refdp = cgutils.alloca_once(builder, ll_dict_type, zfill=True)
-        status = builder.call(
-            fn,
-            [refdp, ll_ssize_t(sz_key), ll_ssize_t(sz_val)],
-        )
-        _raise_if_error(
-            context, builder, status,
-            msg="Failed to allocate dictionary",
-        )
+
+        argtys = [ll_dict_type.as_pointer(), ll_ssize_t, ll_ssize_t, ll_ssize_t]
+        fnty = ir.FunctionType(ll_status, argtys)
+        fn = ir.Function(builder.module, fnty, 'numba_dict_new_sized')
+
+        args = [refdp, n_keys, ll_ssize_t(sz_key), ll_ssize_t(sz_val)]
+        status = builder.call(fn, args)
+
+        allocated_failed_msg = "Failed to allocate dictionary"
+        _raise_if_error(context, builder, status, msg=allocated_failed_msg)
+
         dp = builder.load(refdp)
         return dp
 
@@ -645,9 +651,11 @@ def _make_dict(typingctx, keyty, valty, ptr):
 
 
 @overload(new_dict)
-def impl_new_dict(key, value):
+def impl_new_dict(key, value, n_keys=0):
     """Creates a new dictionary with *key* and *value* as the type
-    of the dictionary key and value, respectively.
+    of the dictionary key and value, respectively. *n_keys* is the
+    number of keys to insert without requiring a resize, where a
+    value of 0 creates a dictionary with minimum size.
     """
     if any([
         not isinstance(key, Type),
@@ -657,8 +665,10 @@ def impl_new_dict(key, value):
 
     keyty, valty = key, value
 
-    def imp(key, value):
-        dp = _dict_new_minsize(keyty, valty)
+    def imp(key, value, n_keys=0):
+        if n_keys < 0:
+            raise RuntimeError("expecting *n_keys* to be >= 0")
+        dp = _dict_new_sized(n_keys, keyty, valty)
         _dict_set_method_table(dp, keyty, valty)
         d = _make_dict(keyty, valty, dp)
         return d
@@ -813,7 +823,7 @@ def impl_pop(dct, key, default=None):
         elif ix < DKIX.EMPTY:
             raise AssertionError("internal dict error during lookup")
         else:
-            status = _dict_delitem(dct,hashed, ix)
+            status = _dict_delitem(dct, hashed, ix)
             if status != Status.OK:
                 raise AssertionError("internal dict error during delitem")
             return val
@@ -865,7 +875,7 @@ def impl_copy(d):
     key_type, val_type = d.key_type, d.value_type
 
     def impl(d):
-        newd = new_dict(key_type, val_type)
+        newd = new_dict(key_type, val_type, n_keys=len(d))
         for k, v in d.items():
             newd[k] = v
         return newd
@@ -1335,7 +1345,7 @@ def cast_LiteralStrKeyDict_LiteralStrKeyDict(context, builder, fromty, toty,
                                   toty.literal_value.items()):
         # these checks are just guards, typing should have picked up any
         # problems
-        if k1 != k2: # keys must be same
+        if k1 != k2:  # keys must be same
             msg = "LiteralDictionary keys are not the same {} != {}"
             raise LoweringError(msg.format(k1, k2))
         # values must be same ty

@@ -20,9 +20,9 @@ except ImportError:
 
 
 min_python_version = "3.8"
-max_python_version = "3.11"  # exclusive
+max_python_version = "3.12"  # exclusive
 min_numpy_build_version = "1.11"
-min_numpy_run_version = "1.18"
+min_numpy_run_version = "1.21"
 min_llvmlite_version = "0.40.0dev0"
 max_llvmlite_version = "0.41"
 
@@ -56,12 +56,6 @@ class build_doc(Command):
     def run(self):
         subprocess.run(['make', '-C', 'docs', 'html'])
 
-
-versioneer.VCS = 'git'
-versioneer.versionfile_source = 'numba/_version.py'
-versioneer.versionfile_build = 'numba/_version.py'
-versioneer.tag_prefix = ''
-versioneer.parentdir_prefix = 'numba-'
 
 cmdclass = versioneer.get_cmdclass()
 cmdclass['build_doc'] = build_doc
@@ -397,7 +391,7 @@ metadata = dict(
         # HTML templates for type annotations
         "numba.core.annotations": ["*.html"],
         # Various test data
-        "numba.cuda.tests.cudadrv.data": ["*.ptx", "*.cu"],
+        "numba.cuda.tests.data": ["*.ptx", "*.cu"],
         "numba.cuda.tests.doc_examples.ffi": ["*.cu"],
         "numba.tests": ["pycc_distutils_usecase/*.py"],
         # Some C files are needed by pycc

@@ -77,8 +77,6 @@ class _Kernel(serialize.ReduceMixin):
         self.extensions = extensions or []
 
         nvvm_options = {
-            'debug': self.debug,
-            'lineinfo': self.lineinfo,
             'fastmath': fastmath,
             'opt': 3 if opt else 0
         }
@@ -86,7 +84,7 @@ class _Kernel(serialize.ReduceMixin):
         cc = get_current_device().compute_capability
         cres = compile_cuda(self.py_func, types.void, self.argtypes,
                             debug=self.debug,
-                            lineinfo=self.lineinfo,
+                            lineinfo=lineinfo,
                             inline=inline,
                             fastmath=fastmath,
                             nvvm_options=nvvm_options,
@@ -96,7 +94,7 @@ class _Kernel(serialize.ReduceMixin):
         filename = code.co_filename
         linenum = code.co_firstlineno
         lib, kernel = tgt_ctx.prepare_cuda_kernel(cres.library, cres.fndesc,
-                                                  debug, nvvm_options,
+                                                  debug, lineinfo, nvvm_options,
                                                   filename, linenum,
                                                   max_registers)
 
@@ -863,7 +861,7 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
 
         return call_template, pysig, args, kws
 
-    def compile_device(self, args):
+    def compile_device(self, args, return_type=None):
         """Compile the device function for the given argument types.
 
         Each signature is compiled once by caching the compiled function inside
@@ -875,18 +873,19 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
             with self._compiling_counter:
 
                 debug = self.targetoptions.get('debug')
+                lineinfo = self.targetoptions.get('lineinfo')
                 inline = self.targetoptions.get('inline')
                 fastmath = self.targetoptions.get('fastmath')
 
                 nvvm_options = {
-                    'debug': debug,
                     'opt': 3 if self.targetoptions.get('opt') else 0,
                     'fastmath': fastmath
                 }
 
                 cc = get_current_device().compute_capability
-                cres = compile_cuda(self.py_func, None, args,
+                cres = compile_cuda(self.py_func, return_type, args,
                                     debug=debug,
+                                    lineinfo=lineinfo,
                                     inline=inline,
                                     fastmath=fastmath,
                                     nvvm_options=nvvm_options,
