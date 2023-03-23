@@ -1,27 +1,18 @@
 import math
 import numpy as np
+from functools import lru_cache
 from numba.core import typing
 from numba.cuda.mathimpl import (get_unary_impl_for_fn_and_ty,
                                  get_binary_impl_for_fn_and_ty)
 
-# this is lazily initialized to avoid circular imports
-_ufunc_db = None
-
-
-def _lazy_init_db():
-    global _ufunc_db
-
-    if _ufunc_db is None:
-        _ufunc_db = {}
-        _fill_ufunc_db(_ufunc_db)
-
 
 def get_ufunc_info(ufunc_key):
-    _lazy_init_db()
-    return _ufunc_db[ufunc_key]
+    return ufunc_db()[ufunc_key]
 
 
-def _fill_ufunc_db(ufunc_db):
+@lru_cache
+def ufunc_db():
+    # Imports here are at function scope to avoid circular imports
     from numba.cpython import cmathimpl, mathimpl
     from numba.np.npyfuncs import _check_arity_and_homogeneity
     from numba.np.npyfuncs import (np_complex_acosh_impl, np_complex_cos_impl,
@@ -163,110 +154,114 @@ def _fill_ufunc_db(ufunc_db):
     def np_real_atanh_impl(context, builder, sig, args):
         return np_unary_impl(math.atanh, context, builder, sig, args)
 
-    _ufunc_db[np.sin] = {
+    db = {}
+
+    db[np.sin] = {
         'f->f': np_real_sin_impl,
         'd->d': np_real_sin_impl,
         'F->F': np_complex_sin_impl,
         'D->D': np_complex_sin_impl,
     }
 
-    _ufunc_db[np.cos] = {
+    db[np.cos] = {
         'f->f': np_real_cos_impl,
         'd->d': np_real_cos_impl,
         'F->F': np_complex_cos_impl,
         'D->D': np_complex_cos_impl,
     }
 
-    _ufunc_db[np.tan] = {
+    db[np.tan] = {
         'f->f': np_real_tan_impl,
         'd->d': np_real_tan_impl,
         'F->F': cmathimpl.tan_impl,
         'D->D': cmathimpl.tan_impl,
     }
 
-    _ufunc_db[np.arcsin] = {
+    db[np.arcsin] = {
         'f->f': np_real_asin_impl,
         'd->d': np_real_asin_impl,
         'F->F': cmathimpl.asin_impl,
         'D->D': cmathimpl.asin_impl,
     }
 
-    _ufunc_db[np.arccos] = {
+    db[np.arccos] = {
         'f->f': np_real_acos_impl,
         'd->d': np_real_acos_impl,
         'F->F': cmathimpl.acos_impl,
         'D->D': cmathimpl.acos_impl,
     }
 
-    _ufunc_db[np.arctan] = {
+    db[np.arctan] = {
         'f->f': np_real_atan_impl,
         'd->d': np_real_atan_impl,
         'F->F': cmathimpl.atan_impl,
         'D->D': cmathimpl.atan_impl,
     }
 
-    _ufunc_db[np.arctan2] = {
+    db[np.arctan2] = {
         'ff->f': np_real_atan2_impl,
         'dd->d': np_real_atan2_impl,
     }
 
-    _ufunc_db[np.hypot] = {
+    db[np.hypot] = {
         'ff->f': np_real_hypot_impl,
         'dd->d': np_real_hypot_impl,
     }
 
-    _ufunc_db[np.sinh] = {
+    db[np.sinh] = {
         'f->f': np_real_sinh_impl,
         'd->d': np_real_sinh_impl,
         'F->F': np_complex_sinh_impl,
         'D->D': np_complex_sinh_impl,
     }
 
-    _ufunc_db[np.cosh] = {
+    db[np.cosh] = {
         'f->f': np_real_cosh_impl,
         'd->d': np_real_cosh_impl,
         'F->F': np_complex_cosh_impl,
         'D->D': np_complex_cosh_impl,
     }
 
-    _ufunc_db[np.tanh] = {
+    db[np.tanh] = {
         'f->f': np_real_tanh_impl,
         'd->d': np_real_tanh_impl,
         'F->F': np_complex_tanh_impl,
         'D->D': np_complex_tanh_impl,
     }
 
-    _ufunc_db[np.arcsinh] = {
+    db[np.arcsinh] = {
         'f->f': np_real_asinh_impl,
         'd->d': np_real_asinh_impl,
         'F->F': cmathimpl.asinh_impl,
         'D->D': cmathimpl.asinh_impl,
     }
 
-    _ufunc_db[np.arccosh] = {
+    db[np.arccosh] = {
         'f->f': np_real_acosh_impl,
         'd->d': np_real_acosh_impl,
         'F->F': np_complex_acosh_impl,
         'D->D': np_complex_acosh_impl,
     }
 
-    _ufunc_db[np.arctanh] = {
+    db[np.arctanh] = {
         'f->f': np_real_atanh_impl,
         'd->d': np_real_atanh_impl,
         'F->F': cmathimpl.atanh_impl,
         'D->D': cmathimpl.atanh_impl,
     }
 
-    ufunc_db[np.deg2rad] = {
+    db[np.deg2rad] = {
         'f->f': mathimpl.radians_float_impl,
         'd->d': mathimpl.radians_float_impl,
     }
 
-    ufunc_db[np.radians] = ufunc_db[np.deg2rad]
+    db[np.radians] = db[np.deg2rad]
 
-    ufunc_db[np.rad2deg] = {
+    db[np.rad2deg] = {
         'f->f': mathimpl.degrees_float_impl,
         'd->d': mathimpl.degrees_float_impl,
     }
 
-    ufunc_db[np.degrees] = ufunc_db[np.rad2deg]
+    db[np.degrees] = db[np.rad2deg]
+
+    return db
