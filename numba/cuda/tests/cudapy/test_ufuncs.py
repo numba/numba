@@ -37,9 +37,9 @@ class TestUFuncs(BasicUFuncTest, TestCase):
             (np.complex64(0.0), types.complex64),
             (np.complex64(0.5 + 0.5j), types.complex64),
 
-            (np.complex64(-0.5 - 0.5j), types.complex128),
-            (np.complex64(0.0), types.complex128),
-            (np.complex64(0.5 + 0.5j), types.complex128),
+            (np.complex128(-0.5 - 0.5j), types.complex128),
+            (np.complex128(0.0), types.complex128),
+            (np.complex128(0.5 + 0.5j), types.complex128),
 
             (np.array([-0.5 - 0.5j, 0.0, 0.5 + 0.5j], dtype='c8'),
              types.Array(types.complex64, 1, 'C')),
