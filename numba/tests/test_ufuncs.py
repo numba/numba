@@ -134,23 +134,26 @@ class BaseUFuncTest(MemoryLeakMixin):
                                float_output_type=None):
         ty = input_type
         if isinstance(ty, types.Array):
+            ndim = ty.ndim
             ty = ty.dtype
+        else:
+            ndim = 1
 
         if ty in types.signed_domain:
             if int_output_type:
-                output_type = types.Array(int_output_type, 1, 'C')
+                output_type = types.Array(int_output_type, ndim, 'C')
             else:
-                output_type = types.Array(ty, 1, 'C')
+                output_type = types.Array(ty, ndim, 'C')
         elif ty in types.unsigned_domain:
             if int_output_type:
-                output_type = types.Array(int_output_type, 1, 'C')
+                output_type = types.Array(int_output_type, ndim, 'C')
             else:
-                output_type = types.Array(ty, 1, 'C')
+                output_type = types.Array(ty, ndim, 'C')
         else:
             if float_output_type:
-                output_type = types.Array(float_output_type, 1, 'C')
+                output_type = types.Array(float_output_type, ndim, 'C')
             else:
-                output_type = types.Array(ty, 1, 'C')
+                output_type = types.Array(ty, ndim, 'C')
         return output_type
 
 
@@ -199,12 +202,12 @@ class BasicUFuncTest(BaseUFuncTest):
 
             if isinstance(args[0], np.ndarray):
                 results = [
-                    np.zeros(args[0].size,
+                    np.zeros(args[0].shape,
                              dtype=out_ty.dtype.name)
                     for out_ty in output_types
                 ]
                 expected = [
-                    np.zeros(args[0].size, dtype=out_ty.dtype.name)
+                    np.zeros(args[0].shape, dtype=out_ty.dtype.name)
                     for out_ty in output_types
                 ]
             else:

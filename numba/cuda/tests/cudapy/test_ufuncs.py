@@ -47,6 +47,14 @@ class TestUFuncs(BasicUFuncTest, TestCase):
              types.Array(types.complex128, 1, 'C')),
         ])
 
+        # Test with multiple dimensions
+        self.inputs.extend([
+            (np.linspace(0, 1).reshape((5, -1)),
+             types.Array(types.float64, 2, 'C')),
+            (np.linspace(0, 1).reshape((2, 5, -1)),
+             types.Array(types.float64, 3, 'C')),
+        ])
+
         self._low_occupancy_warnings = config.CUDA_LOW_OCCUPANCY_WARNINGS
         self._warn_on_implicit_copy = config.CUDA_WARN_ON_IMPLICIT_COPY
 
