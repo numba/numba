@@ -49,10 +49,17 @@ class TestUFuncs(BasicUFuncTest, TestCase):
 
         # Test with multiple dimensions
         self.inputs.extend([
+            # Basic 2D and 3D arrays
             (np.linspace(0, 1).reshape((5, -1)),
              types.Array(types.float64, 2, 'C')),
             (np.linspace(0, 1).reshape((2, 5, -1)),
              types.Array(types.float64, 3, 'C')),
+            # Complex data (i.e. interleaved)
+            (np.linspace(0, 1 + 1j).reshape(5, -1),
+             types.Array(types.complex128, 2, 'C')),
+            # F-ordered
+            (np.asfortranarray(np.linspace(0, 1).reshape((5, -1))),
+             types.Array(types.float64, 2, 'F')),
         ])
 
         self._low_occupancy_warnings = config.CUDA_LOW_OCCUPANCY_WARNINGS
