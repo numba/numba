@@ -288,8 +288,12 @@ Supported NumPy features:
 
 * accessing `ndarray` attributes `.shape`, `.strides`, `.ndim`, `.size`, etc..
 * indexing and slicing works.
-* The following ufuncs are supported, but the output array must be passed in as
-  a positional argument (see :ref:`cuda_ufunc_call_example`):
+* A subset of ufuncs are supported, but the output array must be passed in as a
+  positional argument (see :ref:`cuda_ufunc_call_example`). Note that ufuncs
+  execute sequentially in each thread - there is no automatic parallelisation
+  of ufuncs across threads over the elements of an input array.
+
+  The following ufuncs are supported:
 
   * :func:`numpy.sin`
   * :func:`numpy.cos`
