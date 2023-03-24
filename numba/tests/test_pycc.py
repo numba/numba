@@ -14,7 +14,8 @@ import llvmlite.binding as ll
 
 from numba.core import utils
 from numba.tests.support import (TestCase, tag, import_dynamic, temp_directory,
-                                 has_blas)
+                                 has_blas, needs_setuptools)
+
 import unittest
 
 
@@ -88,6 +89,7 @@ class BasePYCCTest(TestCase):
             sys.modules.pop(name, None)
 
 
+@needs_setuptools
 class TestCC(BasePYCCTest):
 
     def setUp(self):

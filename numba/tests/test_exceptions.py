@@ -158,7 +158,10 @@ class TestRaising(TestCase):
 
             # check exception and the injected frame are the same
             for expf, gotf in zip(expected_frames, got_frames):
-                self.assertEqual(expf, gotf)
+                # Note use of assertIn not assertEqual, Py 3.11 has markers (^)
+                # that point to the variable causing the problem, Numba doesn't
+                # do this so only the start of the string will match.
+                self.assertIn(gotf, expf)
 
     def check_raise_class(self, flags):
         pyfunc = raise_class(MyError)

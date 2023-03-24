@@ -48,6 +48,9 @@ from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                       needs_lapack, disabled_test, skip_unless_scipy,
                       needs_subprocess)
 from numba.core.extending import register_jitable
+from numba.core.bytecode import _fix_LOAD_GLOBAL_arg
+from numba.core import utils
+
 import cmath
 import unittest
 
@@ -128,6 +131,7 @@ _GLOBAL_INT_FOR_TESTING1 = 17
 _GLOBAL_INT_FOR_TESTING2 = 5
 
 TestNamedTuple = namedtuple('TestNamedTuple', ('part0', 'part1'))
+
 
 def null_comparer(a, b):
     """
@@ -415,7 +419,7 @@ class TestParforsBase(TestCase):
             return fast_inst
 
         def _assert_fast(instrs):
-            ops = ('fadd', 'fsub', 'fmul', 'fdiv', 'frem', 'fcmp')
+            ops = ('fadd', 'fsub', 'fmul', 'fdiv', 'frem', 'fcmp', 'call')
             for inst in instrs:
                 count = 0
                 for op in ops:
@@ -513,6 +517,16 @@ def get_optimized_numba_ir(test_func, args, **kws):
 
         flags = compiler.Flags()
         parfor_pass = numba.parfors.parfor.ParforPass(
+            tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
+            tp.state.return_type, tp.state.typingctx, tp.state.targetctx,
+            options, flags, tp.state.metadata, diagnostics=diagnostics)
+        parfor_pass.run()
+        parfor_pass = numba.parfors.parfor.ParforFusionPass(
+            tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
+            tp.state.return_type, tp.state.typingctx, tp.state.targetctx,
+            options, flags, tp.state.metadata, diagnostics=diagnostics)
+        parfor_pass.run()
+        parfor_pass = numba.parfors.parfor.ParforPreLoweringPass(
             tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
             tp.state.return_type, tp.state.typingctx, tp.state.targetctx,
             options, flags, tp.state.metadata, diagnostics=diagnostics)
@@ -3346,12 +3360,15 @@ class TestPrangeBase(TestParforsBase):
             # look for LOAD_GLOBALs that point to 'range'
             for instr in dis.Bytecode(pyfunc_code):
                 if instr.opname == 'LOAD_GLOBAL':
-                    if instr.arg == range_idx:
+                    if _fix_LOAD_GLOBAL_arg(instr.arg) == range_idx:
                         range_locations.append(instr.offset + 1)
             # add in 'prange' ref
             prange_names.append('prange')
             prange_names = tuple(prange_names)
             prange_idx = len(prange_names) - 1
+            if utils.PYVERSION == (3, 11):
+                # this is the inverse of _fix_LOAD_GLOBAL_arg
+                prange_idx = 1 + (prange_idx << 1)
             new_code = bytearray(pyfunc_code.co_code)
             assert len(patch_instance) <= len(range_locations)
             # patch up the new byte code
@@ -4462,11 +4479,6 @@ class TestParforsVectorizer(TestPrangeBase):
 
             return asm
 
-    # this is a common match pattern for something like:
-    # \n\tvsqrtpd\t-192(%rbx,%rsi,8), %zmm0\n
-    # to check vsqrtpd operates on zmm
-    match_vsqrtpd_on_zmm = re.compile('\n\s+vsqrtpd\s+.*zmm.*\n')
-
     @linux_only
     def test_vectorizer_fastmath_asm(self):
         """ This checks that if fastmath is set and the underlying hardware
@@ -4490,22 +4502,19 @@ class TestParforsVectorizer(TestPrangeBase):
                                        fastmath=True)
         slow_asm = self.get_gufunc_asm(will_vectorize, 'unsigned', arg,
                                        fastmath=False)
-
         for v in fast_asm.values():
             # should unwind and call vector sqrt then vector add
             # all on packed doubles using zmm's
             self.assertTrue('vaddpd' in v)
-            self.assertTrue('vsqrtpd' in v)
+            self.assertTrue('vsqrtpd' in v or '__svml_sqrt' in v)
             self.assertTrue('zmm' in v)
-            # make sure vsqrtpd operates on zmm
-            self.assertTrue(len(self.match_vsqrtpd_on_zmm.findall(v)) > 1)
 
         for v in slow_asm.values():
             # vector variants should not be present
             self.assertTrue('vaddpd' not in v)
             self.assertTrue('vsqrtpd' not in v)
             # check scalar variant is present
-            self.assertTrue('vsqrtsd' in v)
+            self.assertTrue('vsqrtsd' in v and '__svml_sqrt' not in v)
             self.assertTrue('vaddsd' in v)
             # check no zmm addressing is present
             self.assertTrue('zmm' not in v)
@@ -4550,11 +4559,9 @@ class TestParforsVectorizer(TestPrangeBase):
         for v in vec_asm.values():
             # should unwind and call vector sqrt then vector mov
             # all on packed doubles using zmm's
-            self.assertTrue('vsqrtpd' in v)
+            self.assertTrue('vsqrtpd' in v or '__svml_sqrt' in v)
             self.assertTrue('vmovupd' in v)
             self.assertTrue('zmm' in v)
-            # make sure vsqrtpd operates on zmm
-            self.assertTrue(len(self.match_vsqrtpd_on_zmm.findall(v)) > 1)
 
     @linux_only
     # needed as 32bit doesn't have equivalent signed/unsigned instruction

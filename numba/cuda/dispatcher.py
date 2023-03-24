@@ -844,7 +844,7 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
 
         return call_template, pysig, args, kws
 
-    def compile_device(self, args):
+    def compile_device(self, args, return_type=None):
         """Compile the device function for the given argument types.
 
         Each signature is compiled once by caching the compiled function inside
@@ -866,7 +866,7 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
                 }
 
                 cc = get_current_device().compute_capability
-                cres = compile_cuda(self.py_func, None, args,
+                cres = compile_cuda(self.py_func, return_type, args,
                                     debug=debug,
                                     lineinfo=lineinfo,
                                     inline=inline,

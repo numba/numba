@@ -315,3 +315,11 @@ Unsupported NumPy features:
 * array creation APIs.
 * array methods.
 * functions that returns a new array.
+
+
+CFFI support
+============
+
+The ``from_buffer()`` method of ``cffi.FFI`` objects is supported. This is
+useful for obtaining a pointer that can be passed to external C / C++ / PTX
+functions (see the :ref:`CUDA FFI documentation <cuda_ffi>`).
