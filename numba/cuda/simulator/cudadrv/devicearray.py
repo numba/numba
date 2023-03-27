@@ -83,9 +83,11 @@ class FakeWithinKernelCUDAArray(object):
 
             return obj
 
-        out = tuple(convert_fakes(o) for o in kwargs['out'])
+        out = kwargs.get('out')
+        if out:
+            kwargs['out'] = tuple(convert_fakes(o) for o in out)
         args = tuple(convert_fakes(a) for a in args)
-        return call(*args, out=out)
+        return call(*args, **kwargs)
 
 
 class FakeCUDAArray(object):
