@@ -19,11 +19,6 @@ from numba.tests.support import (TestCase, tag, import_dynamic, temp_directory,
 import unittest
 
 
-try:
-    import setuptools
-except ImportError:
-    setuptools = None
-
 _skip_reason = 'windows only'
 _windows_only = unittest.skipIf(not sys.platform.startswith('win'),
                                 _skip_reason)
@@ -39,6 +34,8 @@ def unset_macosx_deployment_target():
     if 'MACOSX_DEPLOYMENT_TARGET' in os.environ:
         del os.environ['MACOSX_DEPLOYMENT_TARGET']
 
+
+@needs_setuptools
 class TestCompilerChecks(TestCase):
 
     # NOTE: THIS TEST MUST ALWAYS RUN ON WINDOWS, DO NOT SKIP
@@ -268,6 +265,7 @@ class TestCC(BasePYCCTest):
             self.assertPreciseEqual(got, expect)
 
 
+@needs_setuptools
 class TestDistutilsSupport(TestCase):
 
     def setUp(self):
@@ -353,11 +351,9 @@ class TestDistutilsSupport(TestCase):
     def test_setup_py_distutils_nested(self):
         self.check_setup_nested_py("setup_distutils_nested.py")
 
-    @unittest.skipIf(setuptools is None, "test needs setuptools")
     def test_setup_py_setuptools(self):
         self.check_setup_py("setup_setuptools.py")
 
-    @unittest.skipIf(setuptools is None, "test needs setuptools")
     def test_setup_py_setuptools_nested(self):
         self.check_setup_nested_py("setup_setuptools_nested.py")
 

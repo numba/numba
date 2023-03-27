@@ -45,7 +45,6 @@ requirements:
     - python >=3.8
     # NumPy 1.22.0, 1.22.1, 1.22.2 are all broken for ufuncs, see #7756
     - numpy >=1.21, !=1.22.0, !=1.22.1, !=1.22.2
-    - setuptools
     - importlib_metadata       # [py<39]
     # On channel https://anaconda.org/numba/
     - llvmlite >=0.40.0dev0,<0.40
@@ -74,6 +73,7 @@ test:
     - cffi
     - scipy
     - ipython                  # [not aarch64]
+    # for pycc
     - setuptools
     - tbb  >=2021              # [not (aarch64 or ppc64le)]
     - llvm-openmp              # [osx]

@@ -184,7 +184,6 @@ vary with target operating system and hardware. The following lists them all
 
 * Required run time:
 
-  * ``setuptools``
   * ``numpy``
   * ``llvmlite``
 
@@ -222,6 +221,8 @@ vary with target operating system and hardware. The following lists them all
   * ``pygments`` - for "pretty" type annotation
   * ``gdb`` as an executable on the ``$PATH`` - if you would like to use the gdb
     support
+  * ``setuptools`` - permits the use of ``pycc`` for Ahead-of-Time (AOT)
+    compilation
   * Compiler toolchain mentioned above, if you would like to use ``pycc`` for
     Ahead-of-Time (AOT) compilation
   * ``r2pipe`` - required for assembly CFG inspection.
