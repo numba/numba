@@ -1036,7 +1036,7 @@ numba_unpickle(const char *data, int n, const char *hashed)
     PyObject *buf=NULL, *obj=NULL, *addr=NULL, *hashedbuf=NULL;
     static PyObject *loads=NULL;
 
-    /* Caching the pickle.loads function shaves a couple µs here. */
+    /* Caching the _numba_unpickle function shaves a couple µs here. */
     if (loads == NULL) {
         PyObject *picklemod;
         picklemod = PyImport_ImportModule("numba.core.serialize");
@@ -1066,6 +1066,32 @@ error:
     return obj;
 }
 #endif
+
+NUMBA_EXPORT_FUNC(PyObject *)
+numba_runtime_build_excinfo_struct(PyObject* struct_gv, PyObject* exc_args)
+{
+    PyObject *obj = NULL;
+    static PyObject *func = NULL;
+
+    /* Caching the function shaves a couple µs here. */
+    if (func == NULL)
+    {
+        PyObject *picklemod;
+        picklemod = PyImport_ImportModule("numba.core.serialize");
+        if (picklemod == NULL)
+            return NULL;
+        func = PyObject_GetAttrString(picklemod,
+                                      "runtime_build_excinfo_struct");
+        Py_DECREF(picklemod);
+        if (func == NULL)
+            return NULL;
+    }
+
+    obj = PyObject_CallFunctionObjArgs(func, struct_gv, exc_args, NULL);
+    // func returns None on failure (i.e. can't serialize one of the args).
+    // Is there a better way to handle this? raise an exception here?
+    return obj;
+}
 
 /*
  * Unicode helpers
