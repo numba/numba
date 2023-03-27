@@ -2926,12 +2926,12 @@ lower_getattr(types.DType, 'kind')(dtype_type)
 # static_getitem on Numba numerical types to create "array" types
 
 
-@lower_builtin('static_getitem', types.Boolean, types.Any)
 @lower_builtin('static_getitem', types.NumberClass, types.Any)
 def static_getitem_number_clazz(context, builder, sig, args):
-    """This handles the "static_getitem" that occurs when a Numba type a
-    __getitem__ made on it in input source e.g:
+    """This handles the "static_getitem" when a Numba type is subscripted e.g:
     var = typed.List.empty_list(float64[::1, :])
+    It only allows this on simple numerical types. Compound types, like
+    records, are not supported.
     """
     retty = sig.return_type
     if isinstance(retty, types.Array):

@@ -656,18 +656,16 @@ class StaticGetItemLiteralStrKeyDict(AbstractTemplate):
 
 @infer
 class StaticGetItemClass(AbstractTemplate):
-    """This handles the "static_getitem" that occurs when a Numba type has a
-    __getitem__ made on it in input source e.g:
+    """This handles the "static_getitem" when a Numba type is subscripted e.g:
     var = typed.List.empty_list(float64[::1, :])
-    it only allows this on simple numerical types i.e. compound types, like
+    It only allows this on simple numerical types. Compound types, like
     records, are not supported.
     """
     key = "static_getitem"
 
     def generic(self, args, kws):
         clazz, idx = args
-        accept = (types.NumberClass, types.Boolean)
-        if not isinstance(clazz, accept):
+        if not isinstance(clazz, types.NumberClass):
             return
         ret = clazz.dtype[idx]
         sig = signature(ret, *args)
