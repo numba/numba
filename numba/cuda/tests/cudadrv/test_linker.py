@@ -1,11 +1,10 @@
-import os.path
 import numpy as np
 import warnings
 from numba.cuda.testing import unittest
 from numba.cuda.testing import (skip_on_cudasim, skip_unless_cuda_python,
                                 skip_if_cuda_includes_missing,
                                 skip_with_cuda_python)
-from numba.cuda.testing import CUDATestCase
+from numba.cuda.testing import CUDATestCase, test_data_dir
 from numba.cuda.cudadrv.driver import (CudaAPIError, Linker,
                                        LinkerError, NvrtcError)
 from numba.cuda import require_context
@@ -118,7 +117,7 @@ class TestLinker(CUDATestCase):
         global bar  # must be a global; other it is recognized as a freevar
         bar = cuda.declare_device('bar', 'int32(int32)')
 
-        link = os.path.join(os.path.dirname(__file__), 'data', 'jitlink.ptx')
+        link = str(test_data_dir / 'jitlink.ptx')
 
         if eager:
             args = ['void(int32[:], int32[:])']
@@ -147,7 +146,7 @@ class TestLinker(CUDATestCase):
     def test_linking_cu(self):
         bar = cuda.declare_device('bar', 'int32(int32)')
 
-        link = os.path.join(os.path.dirname(__file__), 'data', 'jitlink.cu')
+        link = str(test_data_dir / 'jitlink.cu')
 
         @cuda.jit(link=[link])
         def kernel(r, x):
@@ -169,7 +168,7 @@ class TestLinker(CUDATestCase):
     def test_linking_cu_log_warning(self):
         bar = cuda.declare_device('bar', 'int32(int32)')
 
-        link = os.path.join(os.path.dirname(__file__), 'data', 'warn.cu')
+        link = str(test_data_dir / 'warn.cu')
 
         with warnings.catch_warnings(record=True) as w:
             ignore_internal_warnings()
@@ -188,7 +187,7 @@ class TestLinker(CUDATestCase):
     def test_linking_cu_error(self):
         bar = cuda.declare_device('bar', 'int32(int32)')
 
-        link = os.path.join(os.path.dirname(__file__), 'data', 'error.cu')
+        link = str(test_data_dir / 'error.cu')
 
         with self.assertRaises(NvrtcError) as e:
             @cuda.jit('void(int32)', link=[link])
@@ -229,8 +228,7 @@ class TestLinker(CUDATestCase):
     @skip_if_cuda_includes_missing
     @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_linking_cu_cuda_include(self):
-        link = os.path.join(os.path.dirname(__file__), 'data',
-                            'cuda_include.cu')
+        link = str(test_data_dir / 'cuda_include.cu')
 
         # An exception will be raised when linking this kernel due to the
         # compile failure if CUDA includes cannot be found by Nvrtc.

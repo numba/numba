@@ -138,7 +138,7 @@ class Loc(object):
 
 
         ret = [] # accumulates output
-        if lines and use_line:
+        if lines and use_line > 0:
 
             def count_spaces(string):
                 spaces = 0
@@ -181,7 +181,11 @@ class Loc(object):
 
         # if in the REPL source may not be available
         if not ret:
-            ret = "<source missing, REPL/exec in use?>"
+            if not lines:
+                ret = "<source missing, REPL/exec in use?>"
+            elif use_line <= 0:
+                ret = "<source line number missing>"
+
 
         err = _termcolor.filename('\nFile "%s", line %d:')+'\n%s'
         tmp = err % (self._get_path(), use_line, _termcolor.code(''.join(ret)))

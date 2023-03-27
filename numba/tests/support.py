@@ -100,6 +100,12 @@ skip_unless_py10 = unittest.skipUnless(
 
 skip_if_32bit = unittest.skipIf(_32bit, "Not supported on 32 bit")
 
+def expected_failure_py311(fn):
+    if utils.PYVERSION == (3, 11):
+        return unittest.expectedFailure(fn)
+    else:
+        return fn
+
 _msg = "SciPy needed for test"
 skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
 
@@ -169,6 +175,17 @@ needs_blas = unittest.skipUnless(has_blas, "BLAS needs SciPy 1.0+")
 # with this environment variable set.
 _exec_cond = os.environ.get('SUBPROC_TEST', None) == '1'
 needs_subprocess = unittest.skipUnless(_exec_cond, "needs subprocess harness")
+
+
+try:
+    import setuptools
+    has_setuptools = True
+except ImportError:
+    has_setuptools = False
+
+
+# decorator for a test that need setuptools
+needs_setuptools = unittest.skipUnless(has_setuptools, 'Test needs setuptools')
 
 
 def ignore_internal_warnings():
@@ -550,7 +567,7 @@ class TestCase(unittest.TestCase):
             _assertNumberEqual(first.imag, second.imag, delta)
         elif isinstance(first, (np.timedelta64, np.datetime64)):
             # Since Np 1.16 NaT == NaT is False, so special comparison needed
-            if numpy_support.numpy_version >= (1, 16) and np.isnat(first):
+            if np.isnat(first):
                 self.assertEqual(np.isnat(first), np.isnat(second))
             else:
                 _assertNumberEqual(first, second, delta)

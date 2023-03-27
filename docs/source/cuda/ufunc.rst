@@ -69,20 +69,6 @@ the CUDA ufunc functionality.  This may be accomplished as follows::
     def matmulcore(A, B, C):
         ...
 
-There are times when the gufunc kernel uses too many of a GPU's
-resources, which can cause the kernel launch to fail.  The user can
-explicitly control the maximum size of the thread block by setting
-the `max_blocksize` attribute on the compiled gufunc object.
-
-::
-
-    from numba import guvectorize
-
-    @guvectorize(..., target='cuda')
-    def very_complex_kernel(A, B, C):
-        ...
-
-    very_complex_kernel.max_blocksize = 32  # limits to 32 threads per block
 
 .. comment
 
