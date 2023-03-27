@@ -305,8 +305,9 @@ class _EnvReloader(object):
         LOOP_VECTORIZE = _readenv("NUMBA_LOOP_VECTORIZE", int,
                                   not (IS_WIN32 and IS_32BITS))
 
-        # Switch on  superword-level parallelism vectorization, default is on.
-        SLP_VECTORIZE = _readenv("NUMBA_SLP_VECTORIZE", int, 1)
+        # Enable superword-level parallelism vectorization, default is off
+        # since #8705 (miscompilation).
+        SLP_VECTORIZE = _readenv("NUMBA_SLP_VECTORIZE", int, 0)
 
         # Force dump of generated assembly
         DUMP_ASSEMBLY = _readenv("NUMBA_DUMP_ASSEMBLY", int, DEBUG)
