@@ -210,7 +210,7 @@ def build_ufunc_wrapper(library, ctx, fname, signature, cres):
 
 class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
     def __init__(self, py_func, signature, identity=None, cache=False,
-                 targetoptions={}):
+                 targetoptions={}, writable_args=()):
         # Force nopython mode
         targetoptions.update(dict(nopython=True))
         super(
@@ -220,7 +220,8 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
             signature=signature,
             identity=identity,
             cache=cache,
-            targetoptions=targetoptions)
+            targetoptions=targetoptions,
+            writable_args=writable_args)
 
     def build(self, cres):
         """
