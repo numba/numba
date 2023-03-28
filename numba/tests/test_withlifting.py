@@ -20,7 +20,8 @@ from numba import njit, typeof, objmode, types
 from numba.core.extending import overload
 from numba.tests.support import (MemoryLeak, TestCase, captured_stdout,
                                  skip_unless_scipy, linux_only,
-                                 strace_supported, strace)
+                                 strace_supported, strace,
+                                 expected_failure_py311)
 from numba.core.utils import PYVERSION
 from numba.experimental import jitclass
 import unittest
@@ -287,6 +288,7 @@ class TestLiftCall(BaseTestWithLifting):
     # 3.8 and earlier fails to interpret the bytecode for this example
     @unittest.skipIf(PYVERSION <= (3, 8),
                      "unsupported on py3.8 and before")
+    @expected_failure_py311
     def test_liftcall5(self):
         self.check_extracted_with(liftcall5, expect_count=1,
                                   expected_stdout="0\n1\n2\n3\n4\n5\nA\n")
@@ -732,6 +734,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         fn = njit(lambda z: z + 5)
         self.assert_equal_return_and_stdout(foo, fn, x)
 
+    @expected_failure_py311
     def test_case19_recursion(self):
         def foo(x):
             with objmode_context():

@@ -654,6 +654,24 @@ class StaticGetItemLiteralStrKeyDict(AbstractTemplate):
             sig = signature(ret, *args)
             return sig
 
+@infer
+class StaticGetItemClass(AbstractTemplate):
+    """This handles the "static_getitem" when a Numba type is subscripted e.g:
+    var = typed.List.empty_list(float64[::1, :])
+    It only allows this on simple numerical types. Compound types, like
+    records, are not supported.
+    """
+    key = "static_getitem"
+
+    def generic(self, args, kws):
+        clazz, idx = args
+        if not isinstance(clazz, types.NumberClass):
+            return
+        ret = clazz.dtype[idx]
+        sig = signature(ret, *args)
+        return sig
+
+
 # Generic implementation for "not in"
 
 @infer

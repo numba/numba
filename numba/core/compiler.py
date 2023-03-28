@@ -20,7 +20,7 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode,
                                        MakeFunctionToJitFunction,
                                        CanonicalizeLoopExit,
                                        CanonicalizeLoopEntry, LiteralUnroll,
-                                       ReconstructSSA,
+                                       ReconstructSSA, RewriteDynamicRaises,
                                        LiteralPropagationSubPipelinePass,
                                        )
 
@@ -31,6 +31,7 @@ from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                                      InlineOverloads, PreLowerStripPhis,
                                      NativeLowering, NativeParforLowering,
                                      NoPythonSupportedFeatureValidation,
+                                     ParforFusionPass, ParforPreLoweringPass
                                      )
 
 from numba.core.object_mode_passes import (ObjectModeFrontEnd,
@@ -618,6 +619,20 @@ class DefaultPassBuilder(object):
             pm.add_pass(NopythonRewrites, "nopython rewrites")
         if state.flags.auto_parallel.enabled:
             pm.add_pass(ParforPass, "convert to parfors")
+            pm.add_pass(ParforFusionPass, "fuse parfors")
+            pm.add_pass(ParforPreLoweringPass, "parfor prelowering")
+
+        pm.finalize()
+        return pm
+
+    @staticmethod
+    def define_parfor_gufunc_pipeline(state, name="parfor_gufunc_typed"):
+        """Returns the typed part of the nopython pipeline"""
+        pm = PassManager(name)
+        assert state.func_ir
+        pm.add_pass(IRProcessing, "processing IR")
+        pm.add_pass(NopythonTypeInference, "nopython frontend")
+        pm.add_pass(ParforPreLoweringPass, "parfor prelowering")
 
         pm.finalize()
         return pm
@@ -642,6 +657,8 @@ class DefaultPassBuilder(object):
             pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
             pm.add_pass(DeadBranchPrune, "dead branch pruning")
             pm.add_pass(GenericRewrites, "nopython rewrites")
+
+        pm.add_pass(RewriteDynamicRaises, "rewrite dynamic raises")
 
         # convert any remaining closures into functions
         pm.add_pass(MakeFunctionToJitFunction,

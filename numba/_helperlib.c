@@ -26,6 +26,14 @@
 
 #include "_arraystruct.h"
 
+
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 11)
+    /*
+     * For struct _frame
+     */
+    #include "internal/pycore_frame.h"
+#endif
+
 /*
  * Other helpers.
  */
@@ -822,8 +830,19 @@ static void traceback_add(const char *funcname, const char *filename, int lineno
     Py_DECREF(code);
     if (!frame)
         goto error;
-    frame->f_lineno = lineno;
 
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 11) /* 3.11 */
+
+    /* unsafe cast to our copy of _frame to access the f_lineno field */
+    typedef struct _frame py_frame;
+    py_frame* hacked_frame = (py_frame*)frame;
+    hacked_frame->f_lineno = lineno;
+
+#elif (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION < 11) /* <3.11 */
+    frame->f_lineno = lineno;
+#else
+    #error "Check if struct _frame has been changed in the new version"
+#endif
     PyErr_Restore(exc, val, tb);
     PyTraceBack_Here(frame);
     Py_DECREF(frame);
@@ -868,12 +887,17 @@ void traceback_add_loc(PyObject *loc) {
 static
 int reraise_exc_is_none(void) {
     /* Reraise */
-    PyThreadState *tstate = PyThreadState_GET();
     PyObject *tb, *type, *value;
+
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 11)
+    PyErr_GetExcInfo(&type, &value, &tb);
+#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 8)
+    PyThreadState *tstate = PyThreadState_GET();
     _PyErr_StackItem *tstate_exc = tstate->exc_info;
     type = tstate_exc->exc_type;
     value = tstate_exc->exc_value;
     tb = tstate_exc->exc_traceback;
+#endif
     if (type == Py_None) {
         PyErr_SetString(PyExc_RuntimeError,
                         "No active exception to reraise");
@@ -1012,7 +1036,7 @@ numba_unpickle(const char *data, int n, const char *hashed)
     PyObject *buf=NULL, *obj=NULL, *addr=NULL, *hashedbuf=NULL;
     static PyObject *loads=NULL;
 
-    /* Caching the pickle.loads function shaves a couple µs here. */
+    /* Caching the _numba_unpickle function shaves a couple µs here. */
     if (loads == NULL) {
         PyObject *picklemod;
         picklemod = PyImport_ImportModule("numba.core.serialize");
@@ -1042,6 +1066,32 @@ error:
     return obj;
 }
 #endif
+
+NUMBA_EXPORT_FUNC(PyObject *)
+numba_runtime_build_excinfo_struct(PyObject* struct_gv, PyObject* exc_args)
+{
+    PyObject *obj = NULL;
+    static PyObject *func = NULL;
+
+    /* Caching the function shaves a couple µs here. */
+    if (func == NULL)
+    {
+        PyObject *picklemod;
+        picklemod = PyImport_ImportModule("numba.core.serialize");
+        if (picklemod == NULL)
+            return NULL;
+        func = PyObject_GetAttrString(picklemod,
+                                      "runtime_build_excinfo_struct");
+        Py_DECREF(picklemod);
+        if (func == NULL)
+            return NULL;
+    }
+
+    obj = PyObject_CallFunctionObjArgs(func, struct_gv, exc_args, NULL);
+    // func returns None on failure (i.e. can't serialize one of the args).
+    // Is there a better way to handle this? raise an exception here?
+    return obj;
+}
 
 /*
  * Unicode helpers

@@ -1332,7 +1332,8 @@ class PythonAPI(object):
     def unserialize(self, structptr):
         """
         Unserialize some data.  *structptr* should be a pointer to
-        a {i8* data, i32 length} structure.
+        a {i8* data, i32 length, i8* hashbuf, i8* func_ptr, i32 alloc_flag}
+        structure.
         """
         fnty = ir.FunctionType(self.pyobj,
                              (self.voidptr, ir.IntType(32), self.voidptr))
@@ -1342,10 +1343,21 @@ class PythonAPI(object):
         hashed = self.builder.extract_value(self.builder.load(structptr), 2)
         return self.builder.call(fn, (ptr, n, hashed))
 
+    def build_dynamic_excinfo_struct(self, struct_gv, exc_args):
+        """
+        Serialize some data at runtime. Returns a pointer to a python tuple
+        (bytes_data, hash) where the first element is the serialized data as
+        bytes and the second its hash.
+        """
+        fnty = ir.FunctionType(self.pyobj, (self.pyobj, self.pyobj))
+        fn = self._get_function(fnty, name="numba_runtime_build_excinfo_struct")
+        return self.builder.call(fn, (struct_gv, exc_args))
+
     def serialize_uncached(self, obj):
         """
         Same as serialize_object(), but don't create a global variable,
-        simply return a literal {i8* data, i32 length, i8* hashbuf} structure.
+        simply return a literal for structure:
+        {i8* data, i32 length, i8* hashbuf, i8* func_ptr, i32 alloc_flag}
         """
         # First make the array constant
         data = serialize.dumps(obj)
@@ -1365,14 +1377,17 @@ class PythonAPI(object):
             arr.bitcast(self.voidptr),
             Constant(ir.IntType(32), arr.type.pointee.count),
             hasharr.bitcast(self.voidptr),
+            cgutils.get_null_value(self.voidptr),
+            Constant(ir.IntType(32), 0),
             ])
         return struct
 
     def serialize_object(self, obj):
         """
         Serialize the given object in the bitcode, and return it
-        as a pointer to a {i8* data, i32 length}, structure constant
-        (suitable for passing to unserialize()).
+        as a pointer to a
+        {i8* data, i32 length, i8* hashbuf, i8* fn_ptr, i32 alloc_flag},
+        structure constant (suitable for passing to unserialize()).
         """
         try:
             gv = self.module.__serialized[obj]
