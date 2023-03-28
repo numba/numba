@@ -5,6 +5,7 @@ Contains CUDA API functions
 # Imports here bring together parts of the API from other modules, so some of
 # them appear unused.
 from contextlib import contextmanager
+
 from .cudadrv.devices import require_context, reset, gpus  # noqa: F401
 from .kernel import FakeCUDAKernel
 from numba.core.sigutils import is_signature
@@ -14,6 +15,10 @@ from ..args import In, Out, InOut  # noqa: F401
 
 def select_device(dev=0):
     assert dev == 0, 'Only a single device supported by the simulator'
+
+
+def is_float16_supported():
+    return True
 
 
 class stream(object):
