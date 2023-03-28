@@ -1,4 +1,3 @@
-import os
 import numpy as np
 import warnings
 from numba.cuda.testing import skip_if_mvc_enabled, skip_unless_cc_53, unittest
@@ -213,8 +212,7 @@ class TestLinker(CUDATestCase):
     @skip_if_mvc_enabled('NVRTC not available when ctypes binding is used.')
     @TestCase.run_test_in_subprocess(envvars=_NUMBA_NVIDIA_BINDING_0_ENV)
     def test_linking_cu_ctypes_unsupported(self):
-        base = os.path.join("numba", "cuda", "tests")
-        link = os.path.join(base, 'data', 'jitlink.cu')
+        link = str(test_data_dir / 'jitlink.cu')
         msg = ('Linking CUDA source files is not supported with the ctypes '
                'binding')
 
