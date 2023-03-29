@@ -11,6 +11,8 @@ provided. However, first is a small section on how to suppress deprecation
 warnings that may be raised from Numba so as to prevent warnings propagating
 into code that is consuming Numba.
 
+.. _suppress_deprecation_warnings:
+
 Suppressing Deprecation warnings
 ================================
 All Numba deprecations are issued via ``NumbaDeprecationWarning`` or
@@ -135,6 +137,20 @@ deprecated, the result of which will be that ``numba.jit`` will by default
 compile in :term:`nopython mode` and :term:`object mode` compilation will
 become `opt-in` only.
 
+.. note::
+
+    It is relatively common for the ``numba.jit`` decorator to be used within
+    other decorators to provide an easy path to compilation. Due to this change,
+    deprecation warnings may be raised from such call sites. To avoid these
+    warnings, it's recommended to either
+    :ref:`suppress them <suppress_deprecation_warnings>` if the application does
+    not rely on :term:`object mode` `fall-back` or to check the documentation
+    for the decorator to see how to pass application appropriate options through
+    to the wrapped ``numba.jit`` decorator. An example of this within the Numba
+    API would be ``numba.vectorize``. This decorator simply forwards keyword
+    arguments to the internal ``numba.jit`` decorator call site such that e.g.
+    ``@vectorize(nopython=True)`` would be an appropriate declaration for a
+    ``nopython=True`` mode use of ``@vectorize``.
 
 Reason for deprecation
 ----------------------
