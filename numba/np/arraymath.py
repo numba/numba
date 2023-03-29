@@ -826,25 +826,16 @@ def _isclose_scalars(a_v, b_v, rtol=1e-05, atol=1e-08, equal_nan=False):
     a_v_isnan = np.isnan(a_v)
     b_v_isnan = np.isnan(b_v)
 
-    # only one of the values is NaN and the
-    # other is not.
-    if ( (not a_v_isnan and b_v_isnan) or
-            (a_v_isnan and not b_v_isnan) ):
+    if a_v_isnan != b_v_isnan:
         return False
 
-    # either both of the values are NaN
-    # or both are numbers
     if a_v_isnan and b_v_isnan:
-        if not equal_nan:
-            return False
-    else:
-        if np.isinf(a_v) or np.isinf(b_v):
-            return a_v == b_v
+        return equal_nan
 
-        if np.abs(a_v - b_v) > atol + rtol * np.abs(b_v * 1.0):
-            return False
+    if np.isinf(a_v) or np.isinf(b_v):
+        return a_v == b_v
 
-    return True
+    return np.abs(a_v - b_v) <= atol + rtol * np.abs(b_v * 1.0)
 
 
 @overload(np.allclose)
