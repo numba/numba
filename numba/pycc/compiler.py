@@ -100,7 +100,13 @@ class _ModuleCompiler(object):
 
     method_def_ptr = ir.PointerType(method_def_ty)
     # The structure type constructed by PythonAPI.serialize_uncached()
-    env_def_ty = ir.LiteralStructType((lt._void_star, lt._int32, lt._void_star))
+    # when updating this, also make sure to update `env_def_t` struct in
+    # numba/pycc/modulemixin.c
+    env_def_ty = ir.LiteralStructType((lt._void_star,
+                                       lt._int32,
+                                       lt._void_star,
+                                       lt._void_star,
+                                       lt._int32))
     env_def_ptr = ir.PointerType(env_def_ty)
 
     def __init__(self, export_entries, module_name, use_nrt=False,

@@ -17,7 +17,6 @@ from numba.core.ir_utils import (
     replace_var_names,
     remove_dels,
     legalize_names,
-    mk_unique_var,
     rename_labels,
     get_name_var_table,
     visit_vars_inner,
@@ -34,13 +33,34 @@ from numba.core.ir_utils import (
     get_global_func_typ,
 )
 from numba.core.typing import signature
+from numba.core import lowering
 from numba.parfors.parfor import ensure_parallel_support
 from numba.core.errors import (
     NumbaParallelSafetyWarning, NotDefinedError, CompilerError, InternalError,
 )
 from numba.parfors.parfor_lowering_utils import ParforLoweringBuilder
 
+
+class ParforLower(lowering.Lower):
+    """This is a custom lowering class that extends standard lowering so as
+    to accommodate parfor.Parfor nodes."""
+
+    # custom instruction lowering to handle parfor nodes
+    def lower_inst(self, inst):
+        if isinstance(inst, parfor.Parfor):
+            _lower_parfor_parallel(self, inst)
+        else:
+            super().lower_inst(inst)
+
+
 def _lower_parfor_parallel(lowerer, parfor):
+    if parfor.lowerer is None:
+        return _lower_parfor_parallel_std(lowerer, parfor)
+    else:
+        return parfor.lowerer(lowerer, parfor)
+
+
+def _lower_parfor_parallel_std(lowerer, parfor):
     """Lowerer that handles LLVM code generation for parfor.
     This function lowers a parfor IR node to LLVM.
     The general approach is as follows:
@@ -112,6 +132,7 @@ def _lower_parfor_parallel(lowerer, parfor):
     # init reduction array allocation here.
     nredvars = len(parfor_redvars)
     redarrs = {}
+    to_cleanup = []
     if nredvars > 0:
         # reduction arrays outer dimension equal to thread count
         scope = parfor.init_block.scope
@@ -210,6 +231,7 @@ def _lower_parfor_parallel(lowerer, parfor):
 
             # Remember mapping of original reduction array to the newly created per-worker reduction array.
             redarrs[redvar.name] = redarr_var
+            to_cleanup.append(redarr_var)
 
             init_val = parfor_reddict[red_name].init_val
 
@@ -244,6 +266,8 @@ def _lower_parfor_parallel(lowerer, parfor):
                         typ=redvar_typ,
                         name="redtoset",
                     )
+                    # rettoset is an array from np.full() and must be released
+                    to_cleanup.append(redtoset)
                 else:
                     redtoset = pfbdr.make_const_variable(
                         cval=init_val,
@@ -367,7 +391,7 @@ def _lower_parfor_parallel(lowerer, parfor):
         )
 
     # Cleanup reduction variable
-    for v in redarrs.values():
+    for v in to_cleanup:
         lowerer.lower_inst(ir.Del(v.name, loc=loc))
     # Restore the original typemap of the function that was replaced temporarily at the
     # Beginning of this function.
@@ -1373,7 +1397,7 @@ def _create_gufunc_for_parfor_body(
         list(param_dict.values()) + legal_loop_indices
     for name, var in var_table.items():
         if not (name in reserved_names):
-            new_var_dict[name] = mk_unique_var(name)
+            new_var_dict[name] = parfor.init_block.scope.redefine(name, loc).name
     replace_var_names(gufunc_ir.blocks, new_var_dict)
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_ir dump after renaming ")
@@ -1414,7 +1438,8 @@ def _create_gufunc_for_parfor_body(
                     strval = "{} =".format(inst.target.name)
                     strconsttyp = types.StringLiteral(strval)
 
-                    lhs = ir.Var(scope, mk_unique_var("str_const"), loc)
+                    lhs = scope.redefine("str_const", loc)
+                    # lhs = ir.Var(scope, mk_unique_var("str_const"), loc)
                     assign_lhs = ir.Assign(value=ir.Const(value=strval, loc=loc),
                                            target=lhs, loc=loc)
                     typemap[lhs.name] = strconsttyp
@@ -1506,6 +1531,20 @@ def _create_gufunc_for_parfor_body(
         flags.noalias = True
 
     fixup_var_define_in_scope(gufunc_ir.blocks)
+
+    class ParforGufuncCompiler(compiler.CompilerBase):
+        def define_pipelines(self):
+            from numba.core.compiler_machinery import PassManager
+            dpb = compiler.DefaultPassBuilder
+            pm = PassManager("full_parfor_gufunc")
+            parfor_gufunc_passes = dpb.define_parfor_gufunc_pipeline(self.state)
+            pm.passes.extend(parfor_gufunc_passes.passes)
+            lowering_passes = dpb.define_nopython_lowering_pipeline(self.state)
+            pm.passes.extend(lowering_passes.passes)
+
+            pm.finalize()
+            return [pm]
+
     kernel_func = compiler.compile_ir(
         typingctx,
         targetctx,
@@ -1513,7 +1552,8 @@ def _create_gufunc_for_parfor_body(
         gufunc_param_types,
         types.none,
         flags,
-        locals)
+        locals,
+        pipeline_class=ParforGufuncCompiler)
 
     flags.noalias = old_alias
 
@@ -1527,16 +1567,19 @@ def replace_var_with_array_in_block(vars, block, typemap, calltypes):
     new_block = []
     for inst in block.body:
         if isinstance(inst, ir.Assign) and inst.target.name in vars:
-            const_node = ir.Const(0, inst.loc)
-            const_var = ir.Var(inst.target.scope, mk_unique_var("$const_ind_0"), inst.loc)
+            loc = inst.loc
+            scope = inst.target.scope
+
+            const_node = ir.Const(0, loc)
+            const_var = scope.redefine("$const_ind_0", loc)
             typemap[const_var.name] = types.uintp
-            const_assign = ir.Assign(const_node, const_var, inst.loc)
+            const_assign = ir.Assign(const_node, const_var, loc)
             new_block.append(const_assign)
 
-            val_var = ir.Var(inst.target.scope, mk_unique_var("$val"), inst.loc)
+            val_var = scope.redefine("$val", loc)
             typemap[val_var.name] = typemap[inst.target.name]
-            new_block.append(ir.Assign(inst.value, val_var, inst.loc))
-            setitem_node = ir.SetItem(inst.target, const_var, val_var, inst.loc)
+            new_block.append(ir.Assign(inst.value, val_var, loc))
+            setitem_node = ir.SetItem(inst.target, const_var, val_var, loc)
             calltypes[setitem_node] = signature(
                 types.none, types.npytypes.Array(typemap[inst.target.name], 1, "C"), types.intp, typemap[inst.target.name])
             new_block.append(setitem_node)
@@ -1804,8 +1847,14 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         else:
             if i < num_inps:
                 # Scalar input, need to store the value in an array of size 1
-                typ = (context.get_data_type(aty)
-                       if not isinstance(aty, types.Boolean)
+                if isinstance(aty, types.Optional):
+                    # Unpack optional type
+                    unpacked_aty = aty.type
+                    arg = context.cast(builder, arg, aty, unpacked_aty)
+                else:
+                    unpacked_aty = aty
+                typ = (context.get_data_type(unpacked_aty)
+                       if not isinstance(unpacked_aty, types.Boolean)
                        else llvmlite.ir.IntType(1))
                 ptr = cgutils.alloca_once(builder, typ)
                 builder.store(arg, ptr)

@@ -210,7 +210,7 @@ def build_ufunc_wrapper(library, ctx, fname, signature, cres):
 
 class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
     def __init__(self, py_func, signature, identity=None, cache=False,
-                 targetoptions={}):
+                 targetoptions={}, writable_args=()):
         # Force nopython mode
         targetoptions.update(dict(nopython=True))
         super(
@@ -220,7 +220,8 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
             signature=signature,
             identity=identity,
             cache=cache,
-            targetoptions=targetoptions)
+            targetoptions=targetoptions,
+            writable_args=writable_args)
 
     def build(self, cres):
         """
@@ -683,7 +684,7 @@ def _iget_num_threads(typingctx):
 def get_thread_id():
     """
     Returns a unique ID for each thread in the range 0 (inclusive)
-    to `numba.get_num_threads()` (exclusive).
+    to :func:`~.get_num_threads` (exclusive).
     """
     # Called from the interpreter directly, this should return 0
     # Called from a sequential JIT region, this should return 0

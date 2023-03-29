@@ -1,3 +1,5 @@
+import functools
+
 from numba import jit, typeof
 from numba.core import cgutils, types, serialize, sigutils
 from numba.core.extending import is_jitted
@@ -83,6 +85,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                          cache=cache,
                          **targetoptions)(py_func)
         self._initialize(dispatcher, identity)
+        functools.update_wrapper(self, py_func)
 
     def _initialize(self, dispatcher, identity):
         identity = ufuncbuilder.parse_identity(identity)

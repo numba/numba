@@ -18,7 +18,8 @@ from numba.core.extending import overload, intrinsic
 from numba.core.typeconv import Conversion
 from numba.core.errors import (TypingError, LoweringError,
                                NumbaExperimentalFeatureWarning,
-                               NumbaTypeError, RequireLiteralValue)
+                               NumbaTypeError, RequireLiteralValue,
+                               NumbaPerformanceWarning)
 from numba.misc.special import literal_unroll
 from numba.core.typing.asnumbatype import as_numba_type
 
@@ -575,6 +576,15 @@ def indval_min(indval1, indval2):
         return min_impl
 
 
+@overload(min)
+def boolval_min(val1, val2):
+    if isinstance(val1, types.Boolean) and \
+       isinstance(val2, types.Boolean):
+        def bool_min_impl(val1, val2):
+            return val1 and val2
+        return bool_min_impl
+
+
 @overload(max)
 def indval_max(indval1, indval2):
     if isinstance(indval1, IndexValueType) and \
@@ -602,6 +612,15 @@ def indval_max(indval1, indval2):
                     return indval2
             return indval1
         return max_impl
+
+
+@overload(max)
+def boolval_max(val1, val2):
+    if isinstance(val1, types.Boolean) and \
+       isinstance(val2, types.Boolean):
+        def bool_max_impl(val1, val2):
+            return val1 or val2
+        return bool_max_impl
 
 
 greater_than = register_jitable(lambda a, b: a > b)
@@ -911,8 +930,8 @@ _getattr_default = _getattr_default_type()
 # getattr with no default arg, obj is an open type and name is forced as a
 # literal string. The _getattr_default marker is used to indicate "no default
 # was provided".
-@overload(getattr)
-def ol_getattr(obj, name):
+@overload(getattr, prefer_literal=True)
+def ol_getattr_2(obj, name):
     def impl(obj, name):
         return resolve_getattr(obj, name, _getattr_default)
     return impl
@@ -923,8 +942,66 @@ def ol_getattr(obj, name):
 # definition is: `getattr(object, name[, default]) -> value`, the `default`
 # is not a kwarg.
 @overload(getattr)
-def ol_getattr(obj, name, default):
+def ol_getattr_3(obj, name, default):
     def impl(obj, name, default):
         return resolve_getattr(obj, name, default)
+    return impl
+
+
+@intrinsic
+def resolve_hasattr(tyctx, obj, name):
+    if not isinstance(name, types.StringLiteral):
+        raise RequireLiteralValue("argument 'name' must be a literal string")
+    lname = name.literal_value
+    fn = tyctx.resolve_getattr(obj, lname)
+    # Whilst technically the return type could be a types.bool_, the literal
+    # value is resolvable at typing time. Propagating this literal information
+    # into the type system allows the compiler to prune branches based on a
+    # hasattr predicate. As a result the signature is based on literals. This is
+    # "safe" because the overload requires a literal string so each will be a
+    # different variant of (obj, literal(name)) -> literal(bool).
+    if fn is None:
+        retty = types.literal(False)
+    else:
+        retty = types.literal(True)
+    sig = retty(obj, name)
+    def impl(cgctx, builder, sig, ll_args):
+       return cgutils.false_bit if fn is None else cgutils.true_bit
+    return sig, impl
+
+# hasattr cannot be implemented as a getattr call and then catching
+# AttributeError because Numba doesn't support catching anything other than
+# "Exception", so lacks the specificity required. Instead this implementation
+# tries to resolve the attribute via typing information and returns True/False
+# based on that.
+@overload(hasattr)
+def ol_hasattr(obj, name):
+    def impl(obj, name):
+        return resolve_hasattr(obj, name)
+    return impl
+
+
+@overload(repr)
+def ol_repr_generic(obj):
+    missing_repr_format = f"<object type:{obj}>"
+    def impl(obj):
+        attr = '__repr__'
+        if hasattr(obj, attr) == True:
+            return getattr(obj, attr)()
+        else:
+            # There's no __str__ or __repr__ defined for this object, return
+            # something generic
+            return missing_repr_format
+    return impl
+
+
+@overload(str)
+def ol_str_generic(object=''):
+    def impl(object=""):
+        attr = '__str__'
+        if hasattr(object, attr) == True:
+            return getattr(object, attr)()
+        else:
+            return repr(object)
     return impl
 

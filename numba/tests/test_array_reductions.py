@@ -458,17 +458,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         q = np.array(1)
         _check(a, q)
 
-        if numpy_version < (1, 20):
-            # NumPy 1.20+ rewrites the interpolation part of percentile/quantile
-            # to use np.subtract which doesn't support bools.
-            a = True
-            q = False
-            _check(a, q)
-
-            a = np.array([False, True, True])
-            q = a
-            _check(a, q)
-
         a = 5
         q = q_upper_bound / 2
         _check(a, q)
@@ -1000,6 +989,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         assert_raises(arr1d, -2)
         assert_raises(arr2d, -3)
         assert_raises(arr2d, 2)
+        # Exceptions leak references
+        self.disable_leak_check()
 
     def test_argmax_axis_must_be_integer(self):
         arr = np.arange(6)
@@ -1072,6 +1063,9 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         assert_raises(arr1d, -2)
         assert_raises(arr2d, -3)
         assert_raises(arr2d, 2)
+
+        # Exceptions leak references
+        self.disable_leak_check()
 
     def test_argmin_axis_must_be_integer(self):
         arr = np.arange(6)

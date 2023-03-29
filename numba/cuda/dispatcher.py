@@ -27,6 +27,16 @@ from numba import _dispatcher
 
 from warnings import warn
 
+cuda_fp16_math_funcs = ['hsin', 'hcos',
+                        'hlog', 'hlog10',
+                        'hlog2',
+                        'hexp', 'hexp10',
+                        'hexp2',
+                        'hsqrt', 'hrsqrt',
+                        'hfloor', 'hceil',
+                        'hrcp', 'hrint',
+                        'htrunc', 'hdiv']
+
 
 class _Kernel(serialize.ReduceMixin):
     '''
@@ -66,24 +76,24 @@ class _Kernel(serialize.ReduceMixin):
         self.extensions = extensions or []
 
         nvvm_options = {
-            'debug': self.debug,
-            'lineinfo': self.lineinfo,
             'fastmath': fastmath,
             'opt': 3 if opt else 0
         }
 
+        cc = get_current_device().compute_capability
         cres = compile_cuda(self.py_func, types.void, self.argtypes,
                             debug=self.debug,
-                            lineinfo=self.lineinfo,
+                            lineinfo=lineinfo,
                             inline=inline,
                             fastmath=fastmath,
-                            nvvm_options=nvvm_options)
+                            nvvm_options=nvvm_options,
+                            cc=cc)
         tgt_ctx = cres.target_context
         code = self.py_func.__code__
         filename = code.co_filename
         linenum = code.co_firstlineno
         lib, kernel = tgt_ctx.prepare_cuda_kernel(cres.library, cres.fndesc,
-                                                  debug, nvvm_options,
+                                                  debug, lineinfo, nvvm_options,
                                                   filename, linenum,
                                                   max_registers)
 
@@ -95,6 +105,26 @@ class _Kernel(serialize.ReduceMixin):
         # We need to link against cudadevrt if grid sync is being used.
         if self.cooperative:
             link.append(get_cudalib('cudadevrt', static=True))
+
+        res = [fn for fn in cuda_fp16_math_funcs
+               if (f'__numba_wrapper_{fn}' in lib.get_asm_str())]
+
+        if res:
+            if not config.CUDA_USE_NVIDIA_BINDING:
+                s = "https://numba.readthedocs.io/en/stable/cuda/bindings.html"
+                msg = ("Use of float16 requires the use of the NVIDIA CUDA "
+                       "bindings and setting the "
+                       "NUMBA_CUDA_USE_NVIDIA_BINDING environment variable to "
+                       "1. Relevant documentation is available here:\n"
+                       f"{s}")
+                raise NotImplementedError(msg)
+
+            # Path to the source containing the foreign function
+
+            basedir = os.path.dirname(os.path.abspath(__file__))
+            functions_cu_path = os.path.join(basedir,
+                                             'cpp_function_wrappers.cu')
+            link.append(functions_cu_path)
 
         for filepath in link:
             lib.add_linking_file(filepath)
@@ -178,13 +208,6 @@ class _Kernel(serialize.ReduceMixin):
         self._codelibrary.get_cufunc()
 
     @property
-    def device(self):
-        """
-        Get current active context
-        """
-        return get_current_device()
-
-    @property
     def regs_per_thread(self):
         '''
         The number of registers used by each thread for this kernel.
@@ -192,11 +215,32 @@ class _Kernel(serialize.ReduceMixin):
         return self._codelibrary.get_cufunc().attrs.regs
 
     @property
+    def const_mem_size(self):
+        '''
+        The amount of constant memory used by this kernel.
+        '''
+        return self._codelibrary.get_cufunc().attrs.const
+
+    @property
     def shared_mem_per_block(self):
         '''
         The amount of shared memory used per block for this kernel.
         '''
         return self._codelibrary.get_cufunc().attrs.shared
+
+    @property
+    def max_threads_per_block(self):
+        '''
+        The maximum allowable threads per block.
+        '''
+        return self._codelibrary.get_cufunc().attrs.maxthreads
+
+    @property
+    def local_mem_per_thread(self):
+        '''
+        The amount of local memory used per thread for this kernel.
+        '''
+        return self._codelibrary.get_cufunc().attrs.local
 
     def inspect_llvm(self):
         '''
@@ -703,6 +747,26 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
             return {sig: overload.regs_per_thread
                     for sig, overload in self.overloads.items()}
 
+    def get_const_mem_size(self, signature=None):
+        '''
+        Returns the size in bytes of constant memory used by this kernel for
+        the device in the current context.
+
+        :param signature: The signature of the compiled kernel to get constant
+                          memory usage for. This may be omitted for a
+                          specialized kernel.
+        :return: The size in bytes of constant memory allocated by the
+                 compiled variant of the kernel for the given signature and
+                 current device.
+        '''
+        if signature is not None:
+            return self.overloads[signature.args].const_mem_size
+        if self.specialized:
+            return next(iter(self.overloads.values())).const_mem_size
+        else:
+            return {sig: overload.const_mem_size
+                    for sig, overload in self.overloads.items()}
+
     def get_shared_mem_per_block(self, signature=None):
         '''
         Returns the size in bytes of statically allocated shared memory
@@ -720,6 +784,46 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
             return next(iter(self.overloads.values())).shared_mem_per_block
         else:
             return {sig: overload.shared_mem_per_block
+                    for sig, overload in self.overloads.items()}
+
+    def get_max_threads_per_block(self, signature=None):
+        '''
+        Returns the maximum allowable number of threads per block
+        for this kernel. Exceeding this threshold will result in
+        the kernel failing to launch.
+
+        :param signature: The signature of the compiled kernel to get the max
+                          threads per block for. This may be omitted for a
+                          specialized kernel.
+        :return: The maximum allowable threads per block for the compiled
+                 variant of the kernel for the given signature and current
+                 device.
+        '''
+        if signature is not None:
+            return self.overloads[signature.args].max_threads_per_block
+        if self.specialized:
+            return next(iter(self.overloads.values())).max_threads_per_block
+        else:
+            return {sig: overload.max_threads_per_block
+                    for sig, overload in self.overloads.items()}
+
+    def get_local_mem_per_thread(self, signature=None):
+        '''
+        Returns the size in bytes of local memory per thread
+        for this kernel.
+
+        :param signature: The signature of the compiled kernel to get local
+                          memory usage for. This may be omitted for a
+                          specialized kernel.
+        :return: The amount of local memory allocated by the compiled variant
+                 of the kernel for the given signature and current device.
+        '''
+        if signature is not None:
+            return self.overloads[signature.args].local_mem_per_thread
+        if self.specialized:
+            return next(iter(self.overloads.values())).local_mem_per_thread
+        else:
+            return {sig: overload.local_mem_per_thread
                     for sig, overload in self.overloads.items()}
 
     def get_call_template(self, args, kws):
@@ -749,7 +853,7 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
 
         return call_template, pysig, args, kws
 
-    def compile_device(self, args):
+    def compile_device(self, args, return_type=None):
         """Compile the device function for the given argument types.
 
         Each signature is compiled once by caching the compiled function inside
@@ -761,20 +865,23 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
             with self._compiling_counter:
 
                 debug = self.targetoptions.get('debug')
+                lineinfo = self.targetoptions.get('lineinfo')
                 inline = self.targetoptions.get('inline')
                 fastmath = self.targetoptions.get('fastmath')
 
                 nvvm_options = {
-                    'debug': debug,
                     'opt': 3 if self.targetoptions.get('opt') else 0,
                     'fastmath': fastmath
                 }
 
-                cres = compile_cuda(self.py_func, None, args,
+                cc = get_current_device().compute_capability
+                cres = compile_cuda(self.py_func, return_type, args,
                                     debug=debug,
+                                    lineinfo=lineinfo,
                                     inline=inline,
                                     fastmath=fastmath,
-                                    nvvm_options=nvvm_options)
+                                    nvvm_options=nvvm_options,
+                                    cc=cc)
                 self.overloads[args] = cres
 
                 cres.target_context.insert_user_function(cres.entry_point,
@@ -906,10 +1013,6 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
 
         for _, defn in self.overloads.items():
             defn.inspect_types(file=file)
-
-    def bind(self):
-        for defn in self.overloads.values():
-            defn.bind()
 
     @classmethod
     def _rebuild(cls, py_func, targetoptions):

@@ -4,7 +4,7 @@ Generic helpers for LLVM code generation.
 
 
 import collections
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 import functools
 
 from llvmlite import ir
@@ -840,6 +840,42 @@ def is_scalar_neg(builder, value):
         builder, value, functools.partial(builder.fcmp_ordered, '<'), '<')
 
 
+@contextmanager
+def early_exit_if(builder, stack: ExitStack, cond):
+    """
+    The Python code::
+
+        with contextlib.ExitStack() as stack:
+            with early_exit_if(builder, stack, cond):
+                cleanup()
+            body()
+
+    emits the code::
+
+        if (cond) {
+            <cleanup>
+        }
+        else {
+            <body>
+        }
+
+    This can be useful for generating code with lots of early exits, without
+    having to increase the indentation each time.
+    """
+    then, otherwise = stack.enter_context(builder.if_else(cond, likely=False))
+    with then:
+        yield
+    stack.enter_context(otherwise)
+
+
+def early_exit_if_null(builder, stack, obj):
+    """
+    A convenience wrapper for :func:`early_exit_if`, for the common case where
+    the CPython API indicates an error by returning ``NULL``.
+    """
+    return early_exit_if(builder, stack, is_null(builder, obj))
+
+
 def guard_null(context, builder, value, exc_tuple):
     """
     Guard against *value* being null or zero.
@@ -1132,7 +1168,8 @@ def snprintf(builder, buffer, bufsz, format, *args):
 
 
 def snprintf_stackbuffer(builder, bufsz, format, *args):
-    """Similar to `snprintf()` but the buffer is stack allocated to size *bufsz*.
+    """Similar to `snprintf()` but the buffer is stack allocated to size
+    *bufsz*.
 
     Returns the buffer pointer as i8*.
     """

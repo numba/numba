@@ -17,7 +17,7 @@ from numba.tests.support import captured_stdout
 
 
 def _get_commit():
-    full = get_versions()['full'].split('.')[0]
+    full = get_versions()['full-revisionid']
     if not full:
         warnings.warn(
             "Cannot find git commit hash. Source links could be inaccurate.",

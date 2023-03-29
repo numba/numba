@@ -27,7 +27,7 @@ import numba.parfors.parfor
 from numba import (njit, prange, parallel_chunksize,
                    get_parallel_chunksize, set_parallel_chunksize,
                    set_num_threads, get_num_threads, typeof)
-from numba.core import (types, utils, typing, errors, ir, rewrites,
+from numba.core import (types, typing, errors, ir, rewrites,
                         typed_passes, inline_closurecall, config, compiler, cpu)
 from numba.extending import (overload_method, register_model,
                              typeof_impl, unbox, NativeValue, models)
@@ -48,6 +48,9 @@ from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                       needs_lapack, disabled_test, skip_unless_scipy,
                       needs_subprocess)
 from numba.core.extending import register_jitable
+from numba.core.bytecode import _fix_LOAD_GLOBAL_arg
+from numba.core import utils
+
 import cmath
 import unittest
 
@@ -128,6 +131,7 @@ _GLOBAL_INT_FOR_TESTING1 = 17
 _GLOBAL_INT_FOR_TESTING2 = 5
 
 TestNamedTuple = namedtuple('TestNamedTuple', ('part0', 'part1'))
+
 
 def null_comparer(a, b):
     """
@@ -235,6 +239,8 @@ class TestParforsBase(TestCase):
                 elif isinstance(x, np.number):
                     new_args.append(x.copy())
                 elif isinstance(x, numbers.Number):
+                    new_args.append(x)
+                elif x is None:
                     new_args.append(x)
                 elif isinstance(x, tuple):
                     new_args.append(copy.deepcopy(x))
@@ -413,7 +419,7 @@ class TestParforsBase(TestCase):
             return fast_inst
 
         def _assert_fast(instrs):
-            ops = ('fadd', 'fsub', 'fmul', 'fdiv', 'frem', 'fcmp')
+            ops = ('fadd', 'fsub', 'fmul', 'fdiv', 'frem', 'fcmp', 'call')
             for inst in instrs:
                 count = 0
                 for op in ops:
@@ -511,6 +517,16 @@ def get_optimized_numba_ir(test_func, args, **kws):
 
         flags = compiler.Flags()
         parfor_pass = numba.parfors.parfor.ParforPass(
+            tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
+            tp.state.return_type, tp.state.typingctx, tp.state.targetctx,
+            options, flags, tp.state.metadata, diagnostics=diagnostics)
+        parfor_pass.run()
+        parfor_pass = numba.parfors.parfor.ParforFusionPass(
+            tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
+            tp.state.return_type, tp.state.typingctx, tp.state.targetctx,
+            options, flags, tp.state.metadata, diagnostics=diagnostics)
+        parfor_pass.run()
+        parfor_pass = numba.parfors.parfor.ParforPreLoweringPass(
             tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
             tp.state.return_type, tp.state.typingctx, tp.state.targetctx,
             options, flags, tp.state.metadata, diagnostics=diagnostics)
@@ -1405,6 +1421,13 @@ class TestParfors(TestParforsBase):
         # this doesn't fuse due to mixed indices
         self.assertEqual(countParfors(test_impl, (numba.float64[:,:],)), 2)
 
+        def test_impl(A):
+            min_val = np.amin(A)
+            return A - min_val
+        self.check(test_impl, A)
+        # this doesn't fuse due to use of reduction variable
+        self.assertEqual(countParfors(test_impl, (numba.float64[:],)), 2)
+
     def test_use_of_reduction_var1(self):
         def test_impl():
             acc = 0
@@ -2123,6 +2146,18 @@ class TestParfors(TestParforsBase):
         self.assertEqual(countParfors(test_impl, cptypes), 2)
         self.check(test_impl, a, b, size)
 
+    def test_prange_optional(self):
+        def test_impl(arr, pred=None):
+            for i in prange(1):
+                if pred is not None:
+                    arr[i] = 0.0
+
+        arr = np.ones(10)
+        self.check(test_impl, arr, None,
+                   check_arg_equality=[np.testing.assert_almost_equal,
+                                       lambda x, y: x == y])
+        self.assertEqual(arr.sum(), 10.0)
+
     def test_untraced_value_tuple(self):
         # This is a test for issue #6478.
         def test_impl():
@@ -2180,6 +2215,76 @@ class TestParfors(TestParforsBase):
             return x
 
         self.check(test_impl, np.zeros((3, 1)))
+
+    def test_1array_control_flow(self):
+        # issue8146
+        def test_impl(arr, flag1, flag2):
+            inv = np.arange(arr.size)
+            if flag1:
+                return inv.astype(np.float64)
+            if flag2:
+                ret = inv[inv]
+            else:
+                ret = inv[inv - 1]
+            return ret / arr.size
+
+        arr = np.arange(100)
+        self.check(test_impl, arr, True, False)
+        self.check(test_impl, arr, True, True)
+        self.check(test_impl, arr, False, False)
+
+    def test_2array_1_control_flow(self):
+        # issue8146
+        def test_impl(arr, l, flag):
+            inv1 = np.arange(arr.size)
+            inv2 = np.arange(l, arr.size + l)
+            if flag:
+                ret = inv1[inv1]
+            else:
+                ret = inv1[inv1 - 1]
+            return ret / inv2
+
+        arr = np.arange(100)
+        self.check(test_impl, arr, 10, True)
+        self.check(test_impl, arr, 10, False)
+
+    def test_2array_2_control_flow(self):
+        # issue8146
+        def test_impl(arr, l, flag):
+            inv1 = np.arange(arr.size)
+            inv2 = np.arange(l, arr.size + l)
+            if flag:
+                ret1 = inv1[inv1]
+                ret2 = inv2[inv1]
+            else:
+                ret1 = inv1[inv1 - 1]
+                ret2 = inv2[inv1 - 1]
+            return ret1 / ret2
+
+        arr = np.arange(100)
+        self.check(test_impl, arr, 10, True)
+        self.check(test_impl, arr, 10, False)
+
+    def test_issue8515(self):
+        # issue8515: an array is filled in the first prange and
+        # then accessed with c[i - 1] in the next prange which
+        # should prevent fusion with the previous prange.
+        def test_impl(n):
+            r = np.zeros(n, dtype=np.intp)
+            c = np.zeros(n, dtype=np.intp)
+            for i in prange(n):
+                for j in range(i):
+                    c[i] += 1
+
+            for i in prange(n):
+                if i == 0:
+                    continue
+                r[i] = c[i] - c[i - 1]
+            return r[1:]
+
+        self.check(test_impl, 15)
+        self.assertEqual(countParfors(test_impl, (types.int64, )), 2)
+
 
 @skip_parfors_unsupported
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
@@ -3255,12 +3360,15 @@ class TestPrangeBase(TestParforsBase):
             # look for LOAD_GLOBALs that point to 'range'
             for instr in dis.Bytecode(pyfunc_code):
                 if instr.opname == 'LOAD_GLOBAL':
-                    if instr.arg == range_idx:
+                    if _fix_LOAD_GLOBAL_arg(instr.arg) == range_idx:
                         range_locations.append(instr.offset + 1)
             # add in 'prange' ref
             prange_names.append('prange')
             prange_names = tuple(prange_names)
             prange_idx = len(prange_names) - 1
+            if utils.PYVERSION == (3, 11):
+                # this is the inverse of _fix_LOAD_GLOBAL_arg
+                prange_idx = 1 + (prange_idx << 1)
             new_code = bytearray(pyfunc_code.co_code)
             assert len(patch_instance) <= len(range_locations)
             # patch up the new byte code
@@ -3269,29 +3377,9 @@ class TestPrangeBase(TestParforsBase):
                 new_code[idx] = prange_idx
             new_code = bytes(new_code)
 
-        # create new code parts
-        co_args = [pyfunc_code.co_argcount]
-
-        if utils.PYVERSION >= (3, 8):
-            co_args.append(pyfunc_code.co_posonlyargcount)
-        co_args.append(pyfunc_code.co_kwonlyargcount)
-        co_args.extend([pyfunc_code.co_nlocals,
-                        pyfunc_code.co_stacksize,
-                        pyfunc_code.co_flags,
-                        new_code,
-                        pyfunc_code.co_consts,
-                        prange_names,
-                        pyfunc_code.co_varnames,
-                        pyfunc_code.co_filename,
-                        pyfunc_code.co_name,
-                        pyfunc_code.co_firstlineno,
-                        pyfunc_code.co_lnotab,
-                        pyfunc_code.co_freevars,
-                        pyfunc_code.co_cellvars
-                        ])
-
         # create code object with prange mutation
-        prange_code = pytypes.CodeType(*co_args)
+        prange_code = pyfunc_code.replace(co_code=new_code,
+                                          co_names=prange_names)
 
         # get function
         pfunc = pytypes.FunctionType(prange_code, globals())
@@ -4391,11 +4479,6 @@ class TestParforsVectorizer(TestPrangeBase):
 
             return asm
 
-    # this is a common match pattern for something like:
-    # \n\tvsqrtpd\t-192(%rbx,%rsi,8), %zmm0\n
-    # to check vsqrtpd operates on zmm
-    match_vsqrtpd_on_zmm = re.compile('\n\s+vsqrtpd\s+.*zmm.*\n')
-
     @linux_only
     def test_vectorizer_fastmath_asm(self):
         """ This checks that if fastmath is set and the underlying hardware
@@ -4419,22 +4502,19 @@ class TestParforsVectorizer(TestPrangeBase):
                                        fastmath=True)
         slow_asm = self.get_gufunc_asm(will_vectorize, 'unsigned', arg,
                                        fastmath=False)
-
         for v in fast_asm.values():
             # should unwind and call vector sqrt then vector add
             # all on packed doubles using zmm's
             self.assertTrue('vaddpd' in v)
-            self.assertTrue('vsqrtpd' in v)
+            self.assertTrue('vsqrtpd' in v or '__svml_sqrt' in v)
             self.assertTrue('zmm' in v)
-            # make sure vsqrtpd operates on zmm
-            self.assertTrue(len(self.match_vsqrtpd_on_zmm.findall(v)) > 1)
 
         for v in slow_asm.values():
             # vector variants should not be present
             self.assertTrue('vaddpd' not in v)
             self.assertTrue('vsqrtpd' not in v)
             # check scalar variant is present
-            self.assertTrue('vsqrtsd' in v)
+            self.assertTrue('vsqrtsd' in v and '__svml_sqrt' not in v)
             self.assertTrue('vaddsd' in v)
             # check no zmm addressing is present
             self.assertTrue('zmm' not in v)
@@ -4479,11 +4559,9 @@ class TestParforsVectorizer(TestPrangeBase):
         for v in vec_asm.values():
             # should unwind and call vector sqrt then vector mov
             # all on packed doubles using zmm's
-            self.assertTrue('vsqrtpd' in v)
+            self.assertTrue('vsqrtpd' in v or '__svml_sqrt' in v)
             self.assertTrue('vmovupd' in v)
             self.assertTrue('zmm' in v)
-            # make sure vsqrtpd operates on zmm
-            self.assertTrue(len(self.match_vsqrtpd_on_zmm.findall(v)) > 1)
 
     @linux_only
     # needed as 32bit doesn't have equivalent signed/unsigned instruction

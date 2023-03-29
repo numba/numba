@@ -5,16 +5,34 @@ source activate $CONDA_ENV
 # Make sure any error below is reported as such
 set -v -e
 
+# If the build is a "Vanilla" variant, then remove the setuptools package. It
+# was installed at build time for setup.py to use, but is an _optional_ runtime
+# dependency of Numba and therefore shouldn't be present in "Vanilla" testing.
+# This package is "force" removed so that its removal doesn't uninstall
+# things that might depend on it (the dependencies are present but are not of
+# interest to Numba as those code paths are not used by Numba).
+if [ "${VANILLA_INSTALL}" == "yes" ]; then
+    conda remove --force -y setuptools
+fi
+
 # Ensure the README is correctly formatted
 if [ "$BUILD_DOC" == "yes" ]; then rstcheck README.rst; fi
 # Ensure that the documentation builds without warnings
 pushd docs
 if [ "$BUILD_DOC" == "yes" ]; then make SPHINXOPTS=-W clean html; fi
 popd
-# Run system info tool
-pushd bin
-numba -s
-popd
+# Run system and gdb info tools
+if [ "${VANILLA_INSTALL}" == "yes" ]; then
+    # Vanilla install has no access to pkg_resources as setuptools is removed,
+    # so run these via their modules.
+    python -m numba -s
+    python -m numba -g
+else
+    pushd bin
+    numba -s
+    numba -g
+    popd
+fi
 
 # switch off color messages
 export NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING=1
@@ -82,15 +100,11 @@ fi
 # Find catchsegv
 unamestr=`uname`
 if [[ "$unamestr" == 'Linux' ]]; then
-    if [[ "${BITS32}" == "yes" ]]; then
-        SEGVCATCH=""
-    else
-        SEGVCATCH=catchsegv
-    fi
+    SEGVCATCH=catchsegv
 elif [[ "$unamestr" == 'Darwin' ]]; then
-  SEGVCATCH=""
+    SEGVCATCH=""
 else
-  echo Error
+    echo Error
 fi
 
 # limit CPUs in use on PPC64LE, fork() issues
@@ -115,17 +129,17 @@ NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -g -m $TEST_NPR
 echo "INFO: All discovered tests:"
 python -m numba.runtests -l
 
-# Now run the Numba test suite with slicing
+# Now run the Numba test suite with sharding
 # Note that coverage is run from the checkout dir to match the "source"
 # directive in .coveragerc
-echo "INFO: Running slice of discovered tests: ($TEST_START_INDEX,None,$TEST_COUNT)"
+echo "INFO: Running shard of discovered tests: ($TEST_START_INDEX:$TEST_COUNT)"
 if [ "$RUN_COVERAGE" == "yes" ]; then
     export PYTHONPATH=.
     coverage erase
-    $SEGVCATCH coverage run runtests.py -b -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
+    $SEGVCATCH coverage run runtests.py -b -j "$TEST_START_INDEX:$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
 elif [ "$RUN_TYPEGUARD" == "yes" ]; then
     echo "INFO: Running with typeguard"
-    NUMBA_USE_TYPEGUARD=1 NUMBA_ENABLE_CUDASIM=1 PYTHONWARNINGS="ignore:::typeguard" $SEGVCATCH python runtests.py -b -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
+    NUMBA_USE_TYPEGUARD=1 NUMBA_ENABLE_CUDASIM=1 PYTHONWARNINGS="ignore:::typeguard" $SEGVCATCH python runtests.py -b -j "$TEST_START_INDEX:$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
 else
-    NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
+    NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -j "$TEST_START_INDEX:$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
 fi

@@ -368,7 +368,7 @@ def ufunc_find_matching_loop(ufunc, arg_types):
     # Separate logical input from explicit output arguments
     input_types = arg_types[:ufunc.nin]
     output_types = arg_types[ufunc.nin:]
-    assert(len(input_types) == ufunc.nin)
+    assert (len(input_types) == ufunc.nin)
 
     try:
         np_input_types = [as_dtype(x) for x in input_types]
@@ -712,6 +712,17 @@ def type_can_asarray(arr):
           types.Number, types.Boolean, types.containers.ListType)
 
     return isinstance(arr, ok)
+
+
+def type_is_scalar(typ):
+    """ Returns True if the type of 'typ' is a scalar type, according to
+    NumPy rules. False otherwise.
+    https://numpy.org/doc/stable/reference/arrays.scalars.html#built-in-scalar-types
+    """
+
+    ok = (types.Boolean, types.Number, types.UnicodeType, types.StringLiteral,
+          types.NPTimedelta, types.NPDatetime)
+    return isinstance(typ, ok)
 
 
 def check_is_integer(v, name):

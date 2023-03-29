@@ -1,14 +1,10 @@
-import sys
-
 import numpy as np
 import ctypes
 from numba import jit, literal_unroll, njit, typeof
 from numba.core import types
 from numba.core.compiler import compile_isolated
 from numba.core.itanium_mangler import mangle_type
-from numba.core.config import IS_WIN32
 from numba.core.errors import TypingError
-from numba.np.numpy_support import numpy_version
 import unittest
 from numba.np import numpy_support
 from numba.tests.support import TestCase, skip_ppc64le_issue6465
@@ -448,7 +444,7 @@ nested_array1_dtype = np.dtype([("array1", np.int16, (3,))], align=True)
 nested_array2_dtype = np.dtype([("array2", np.int16, (3, 2))], align=True)
 
 
-class TestRecordDtypeMakeCStruct(unittest.TestCase):
+class TestRecordDtypeMakeCStruct(TestCase):
     def test_two_scalars(self):
 
         class Ref(ctypes.Structure):
@@ -520,24 +516,7 @@ class TestRecordDtypeMakeCStruct(unittest.TestCase):
         # Correct size
         self.assertEqual(ty.size, ctypes.sizeof(Ref))
         # Is aligned?
-        # NumPy version < 1.16 misalign complex-128 types to 16bytes.
-        # (it seems to align on windows?!)
-        if numpy_version >= (1, 16) or IS_WIN32:
-            dtype = ty.dtype
-            self.assertTrue(dtype.isalignedstruct)
-        else:
-            with self.assertRaises(ValueError) as raises:
-                dtype = ty.dtype
-            # get numpy alignment
-            npalign = np.dtype(np.complex128).alignment
-            # llvm should align to alignment of double.
-            llalign = np.dtype(np.double).alignment
-            self.assertIn(
-                ("NumPy is using a different alignment ({}) "
-                 "than Numba/LLVM ({}) for complex128. "
-                 "This is likely a NumPy bug.").format(npalign, llalign),
-                str(raises.exception),
-            )
+        self.assertTrue(ty.dtype.isalignedstruct)
 
     def test_nestedarray_issue_8132(self):
         # issue#8132 is caused by misrepresenting the NestedArray. Instead of
@@ -556,7 +535,7 @@ class TestRecordDtypeMakeCStruct(unittest.TestCase):
         np.testing.assert_array_equal(extracted_array, data)
 
 
-class TestRecordDtype(unittest.TestCase):
+class TestRecordDtype(TestCase):
 
     def _createSampleArrays(self):
         '''
@@ -775,44 +754,42 @@ class TestRecordDtype(unittest.TestCase):
         attrs = 'abc'
         valtypes = types.float64, types.int16, types.complex64
         values = 1.23, 12345, 123 + 456j
-        old_refcnt = sys.getrefcount(nbval)
-
-        for attr, valtyp, val in zip(attrs, valtypes, values):
-            expected = getattr(npval, attr)
-            nbrecord = numpy_support.from_dtype(recordtype)
-
-            # Test with a record as either the first argument or the second
-            # argument (issue #870)
-            if revargs:
-                prefix = 'get_record_rev_'
-                argtypes = (valtyp, nbrecord)
-                args = (val, nbval)
-            else:
-                prefix = 'get_record_'
-                argtypes = (nbrecord, valtyp)
-                args = (nbval, val)
-
-            pyfunc = globals()[prefix + attr]
-            cfunc = self.get_cfunc(pyfunc, argtypes)
-
-            got = cfunc(*args)
-            try:
-                self.assertEqual(expected, got)
-            except AssertionError:
-                # On ARM, a LLVM misoptimization can produce buggy code,
-                # see https://llvm.org/bugs/show_bug.cgi?id=24669
-                import llvmlite.binding as ll
-                if attr != 'c':
-                    raise
-                if ll.get_default_triple() != 'armv7l-unknown-linux-gnueabihf':
-                    raise
-                self.assertEqual(val, got)
-            else:
-                self.assertEqual(nbval[attr], val)
-            del got, expected, args
-
         # Check for potential leaks (issue #441)
-        self.assertEqual(sys.getrefcount(nbval), old_refcnt)
+        with self.assertRefCount(nbval):
+            for attr, valtyp, val in zip(attrs, valtypes, values):
+                expected = getattr(npval, attr)
+                nbrecord = numpy_support.from_dtype(recordtype)
+
+                # Test with a record as either the first argument or the second
+                # argument (issue #870)
+                if revargs:
+                    prefix = 'get_record_rev_'
+                    argtypes = (valtyp, nbrecord)
+                    args = (val, nbval)
+                else:
+                    prefix = 'get_record_'
+                    argtypes = (nbrecord, valtyp)
+                    args = (nbval, val)
+
+                pyfunc = globals()[prefix + attr]
+                cfunc = self.get_cfunc(pyfunc, argtypes)
+
+                got = cfunc(*args)
+                try:
+                    self.assertEqual(expected, got)
+                except AssertionError:
+                    # On ARM, a LLVM misoptimization can produce buggy code,
+                    # see https://llvm.org/bugs/show_bug.cgi?id=24669
+                    import llvmlite.binding as ll
+                    if attr != 'c':
+                        raise
+                    triple = 'armv7l-unknown-linux-gnueabihf'
+                    if ll.get_default_triple() != triple:
+                        raise
+                    self.assertEqual(val, got)
+                else:
+                    self.assertEqual(nbval[attr], val)
+                del got, expected, args
 
     def test_record_args(self):
         self._test_record_args(False)
@@ -867,15 +844,14 @@ class TestRecordDtype(unittest.TestCase):
         indices = [0, 1, 2]
         for index, attr in zip(indices, attrs):
             nbary = self.nbsample1d.copy()
-            old_refcnt = sys.getrefcount(nbary)
-            res = cfunc(nbary, index)
-            self.assertEqual(nbary[index], res)
-            # Prove that this is a by-value copy
-            setattr(res, attr, 0)
-            self.assertNotEqual(nbary[index], res)
-            del res
             # Check for potential leaks
-            self.assertEqual(sys.getrefcount(nbary), old_refcnt)
+            with self.assertRefCount(nbary):
+                res = cfunc(nbary, index)
+                self.assertEqual(nbary[index], res)
+                # Prove that this is a by-value copy
+                setattr(res, attr, 0)
+                self.assertNotEqual(nbary[index], res)
+                del res
 
     def test_record_arg_transform(self):
         # Testing that transforming the name of a record type argument to a
@@ -1015,7 +991,7 @@ class TestRecordDtypeWithStructArraysAndDispatcher(TestRecordDtypeWithStructArra
 
 
 @skip_ppc64le_issue6465
-class TestRecordDtypeWithCharSeq(unittest.TestCase):
+class TestRecordDtypeWithCharSeq(TestCase):
 
     def _createSampleaArray(self):
         self.refsample1d = np.recarray(3, dtype=recordwithcharseq)
@@ -1129,7 +1105,7 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
             self.assertEqual(expected, got)
 
 
-class TestRecordArrayGetItem(unittest.TestCase):
+class TestRecordArrayGetItem(TestCase):
 
     # Test getitem when index is Literal[str]
 
@@ -1213,7 +1189,7 @@ class TestRecordArrayGetItem(unittest.TestCase):
         np.testing.assert_allclose(expected, got)
 
 
-class TestRecordArraySetItem(unittest.TestCase):
+class TestRecordArraySetItem(TestCase):
     """
     Test setitem when index is Literal[str]
     """
@@ -1554,7 +1530,7 @@ class TestNestedArrays(TestCase):
         nbarr2 = np.recarray(1, dtype=recordwith2darray)
         args = (nbarr1, nbarr2)
         pyfunc = record_setitem_array
-        errmsg = "unsupported array index type"
+        errmsg = "Unsupported array index type"
         with self.assertRaisesRegex(TypingError, errmsg):
             self.get_cfunc(pyfunc, tuple((typeof(arg) for arg in args)))
 
@@ -1731,6 +1707,73 @@ class TestNestedArrays(TestCase):
         copy.py_func(0, source, expected[0])
 
         np.testing.assert_array_equal(expected, got)
+
+    def test_issue_1469_1(self):
+        # Dimensions of nested arrays as a dtype are concatenated with the
+        # dimensions of the array.
+        nptype = np.dtype((np.float64, (4,)))
+        nbtype = types.Array(numpy_support.from_dtype(nptype), 2, 'C')
+        expected = types.Array(types.float64, 3, 'C')
+        self.assertEqual(nbtype, expected)
+
+    def test_issue_1469_2(self):
+        # Nesting nested arrays results in concatentated dimensions -
+        # In this example a 3D array of a 2D nested array of 2D nested arrays
+        # results in a 7D type.
+        nptype = np.dtype((np.dtype((np.float64, (5, 2))), (3, 6)))
+        nbtype = types.Array(numpy_support.from_dtype(nptype), 3, 'C')
+        expected = types.Array(types.float64, 7, 'C')
+        self.assertEqual(nbtype, expected)
+
+    def test_issue_1469_3(self):
+        # Nested arrays in record dtypes are accepted, but alignment is not
+        # guaranteed.
+        nptype = np.dtype([('a', np.float64,(4,))])
+        nbtype = types.Array(numpy_support.from_dtype(nptype), 2, 'C')
+
+        # Manual construction of expected array of record type
+        natype = types.NestedArray(types.float64, (4,))
+        fields = [('a', {'type': natype, 'offset': 0})]
+        rectype = types.Record(fields=fields, size=32, aligned=False)
+        expected = types.Array(rectype, 2, 'C', aligned=False)
+
+        self.assertEqual(nbtype, expected)
+
+    def test_issue_3158_1(self):
+        # A nested array dtype.
+        item = np.dtype([('some_field', np.int32)])
+        items = np.dtype([('items', item, 3)])
+
+        @njit
+        def fn(x):
+            return x[0]
+
+        arr = np.asarray([([(0,), (1,), (2,)],),
+                          ([(3,), (4,), (5,)],)],
+                         dtype=items)
+
+        expected = fn.py_func(arr)
+        actual = fn(arr)
+
+        self.assertEqual(expected, actual)
+
+    def test_issue_3158_2(self):
+        # A slightly more complex nested array dtype example.
+        dtype1 = np.dtype([('a', 'i8'), ('b', 'i4')])
+        dtype2 = np.dtype((dtype1, (2, 2)))
+        dtype3 = np.dtype([('x', '?'), ('y', dtype2)])
+
+        @njit
+        def fn(arr):
+            return arr[0]
+
+        arr = np.asarray([(False, [[(0, 1), (2, 3)], [(4, 5), (6, 7)]]),
+                          (True, [[(8, 9), (10, 11)], [(12, 13), (14, 15)]])],
+                         dtype=dtype3)
+        expected = fn.py_func(arr)
+        actual = fn(arr)
+
+        self.assertEqual(expected, actual)
 
 
 if __name__ == '__main__':

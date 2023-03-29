@@ -432,7 +432,7 @@ class TestIRCompounds(CheckEquality):
             blk = z_ir.blocks[label]
             ref = blk.body[:-1]
             idx = None
-            for i in range(len(ref)):
+            for i in range(len(ref) - 1):
                 # look for two adjacent Del
                 if (isinstance(ref[i], ir.Del) and
                         isinstance(ref[i + 1], ir.Del)):

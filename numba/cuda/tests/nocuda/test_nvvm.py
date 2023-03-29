@@ -62,10 +62,11 @@ class TestNvvmWithoutCuda(unittest.TestCase):
                         bytearray(range(256)))
         m = ir.Module()
         m.triple = 'nvptx64-nvidia-cuda'
+        nvvm.add_ir_version(m)
         gv = ir.GlobalVariable(m, c.type, "myconstant")
         gv.global_constant = True
         gv.initializer = c
-        nvvm.fix_data_layout(m)
+        m.data_layout = nvvm.NVVM().data_layout
 
         # Parse with LLVM then dump the parsed module into NVVM
         parsed = llvm.parse_assembly(str(m))

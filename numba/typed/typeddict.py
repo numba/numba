@@ -19,8 +19,9 @@ from numba.core.typing import signature
 
 
 @njit
-def _make_dict(keyty, valty):
-    return dictobject._as_meminfo(dictobject.new_dict(keyty, valty))
+def _make_dict(keyty, valty, n_keys=0):
+    return dictobject._as_meminfo(dictobject.new_dict(keyty, valty,
+                                                      n_keys=n_keys))
 
 
 @njit
@@ -84,21 +85,24 @@ class Dict(MutableMapping):
     Implements the MutableMapping interface.
     """
 
-    def __new__(cls, dcttype=None, meminfo=None):
+    def __new__(cls, dcttype=None, meminfo=None, n_keys=0):
         if config.DISABLE_JIT:
             return dict.__new__(dict)
         else:
             return object.__new__(cls)
 
     @classmethod
-    def empty(cls, key_type, value_type):
+    def empty(cls, key_type, value_type, n_keys=0):
         """Create a new empty Dict with *key_type* and *value_type*
         as the types for the keys and values of the dictionary respectively.
+
+        Optionally, allocate enough memory to hold *n_keys* without requiring
+        resizes. The default value of 0 returns a dict with minimum size.
         """
         if config.DISABLE_JIT:
             return dict()
         else:
-            return cls(dcttype=DictType(key_type, value_type))
+            return cls(dcttype=DictType(key_type, value_type), n_keys=n_keys)
 
     def __init__(self, *args, **kwargs):
         """
@@ -142,14 +146,15 @@ class Dict(MutableMapping):
                 k, v = item
                 self.__setitem__(k, v)
 
-    def _parse_arg(self, dcttype, meminfo=None):
+    def _parse_arg(self, dcttype, meminfo=None, n_keys=0):
         if not isinstance(dcttype, DictType):
             raise TypeError('*dcttype* must be a DictType')
 
         if meminfo is not None:
             opaque = meminfo
         else:
-            opaque = _make_dict(dcttype.key_type, dcttype.value_type)
+            opaque = _make_dict(dcttype.key_type, dcttype.value_type,
+                                n_keys=n_keys)
         return dcttype, opaque
 
     @property
@@ -234,12 +239,12 @@ class Dict(MutableMapping):
 
 
 @overload_classmethod(types.DictType, 'empty')
-def typeddict_empty(cls, key_type, value_type):
+def typeddict_empty(cls, key_type, value_type, n_keys=0):
     if cls.instance_type is not DictType:
         return
 
-    def impl(cls, key_type, value_type):
-        return dictobject.new_dict(key_type, value_type)
+    def impl(cls, key_type, value_type, n_keys=0):
+        return dictobject.new_dict(key_type, value_type, n_keys=n_keys)
 
     return impl
 
@@ -305,7 +310,7 @@ def unbox_dicttype(typ, val, c):
             sig = signature(typ, *argtypes)
             nil_typeref = context.get_constant_null(argtypes[1])
             args = (mi, nil_typeref)
-            is_error, dctobj = c.pyapi.call_jit_code(convert , sig, args)
+            is_error, dctobj = c.pyapi.call_jit_code(convert, sig, args)
             # decref here because we are stealing a reference.
             c.context.nrt.decref(c.builder, typ, dctobj)
 

@@ -12,13 +12,12 @@ part of your code can subsequently run at native machine code speed!
 
 Out of the box Numba works with the following:
 
-* OS: Windows (32 and 64 bit), OSX, Linux (32 and 64 bit). Unofficial support on
+* OS: Windows (32 and 64 bit), OSX, Linux (64 bit). Unofficial support on
   \*BSD.
-* Architecture: x86, x86_64, ppc64le, armv7l, armv8l (aarch64). Unofficial
-  support on M1/Arm64.
+* Architecture: x86, x86_64, ppc64le, armv8l (aarch64), M1/Arm64.
 * GPUs: Nvidia CUDA.
 * CPython
-* NumPy 1.18 - latest
+* NumPy 1.21 - 1.24
 
 How do I get it?
 ----------------
@@ -43,8 +42,8 @@ additional functionality:
 * ``colorama`` - enables support for color highlighting in backtraces/error
   messages.
 * ``pyyaml`` - enables configuration of Numba via a YAML config file.
-* ``icc_rt`` - allows the use of the Intel SVML (high performance short vector
-  math library, x86_64 only). Installation instructions are in the
+* ``intel-cmplr-lib-rt`` - allows the use of the Intel SVML (high performance
+  short vector math library, x86_64 only). Installation instructions are in the
   :ref:`performance tips <intel-svml>`.
 
 Will Numba work for my code?

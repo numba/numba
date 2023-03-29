@@ -584,6 +584,11 @@ class Parfor(ir.Expr, ir.Stmt):
         self.races = races
         self.redvars = []
         self.reddict = {}
+        # If the lowerer is None then the standard lowerer will be used.
+        # This can be set to a function to have that function act as the lowerer
+        # for this parfor.  This lowerer field will also prevent parfors from
+        # being fused unless they have use the same lowerer.
+        self.lowerer = None
         if config.DEBUG_ARRAY_OPT_STATS:
             fmt = 'Parallel for-loop #{} is produced from pattern \'{}\' at {}'
             print(fmt.format(
@@ -2888,6 +2893,29 @@ class ParforPass(ParforPassStates):
 
         dprint_func_ir(self.func_ir, "after parfor pass")
 
+    def _find_mask(self, arr_def):
+        """check if an array is of B[...M...], where M is a
+        boolean array, and other indices (if available) are ints.
+        If found, return B, M, M's type, and a tuple representing mask indices.
+        Otherwise, raise GuardException.
+        """
+        return _find_mask(self.typemap, self.func_ir, arr_def)
+
+    def _mk_parfor_loops(self, size_vars, scope, loc):
+        """
+        Create loop index variables and build LoopNest objects for a parfor.
+        """
+        return _mk_parfor_loops(self.typemap, size_vars, scope, loc)
+
+
+class ParforFusionPass(ParforPassStates):
+
+    """ParforFusionPass class is responsible for fusing parfors
+    """
+
+    def run(self):
+        """run parfor fusion pass"""
+
         # simplify CFG of parfor body loops since nested parfors with extra
         # jumps can be created with prange conversion
         n_parfors = simplify_parfor_body_CFG(self.func_ir.blocks)
@@ -2902,6 +2930,20 @@ class ParforPass(ParforPassStates):
             self.func_ir._definitions = build_definitions(self.func_ir.blocks)
             self.array_analysis.equiv_sets = dict()
             self.array_analysis.run(self.func_ir.blocks)
+
+            # Get parfor params to calculate reductions below.
+            _, parfors = get_parfor_params(self.func_ir.blocks,
+                                           self.options.fusion,
+                                           self.nested_fusion_info)
+
+            # Find reductions so that fusion can be disallowed if a
+            # subsequent parfor read a reduction variable.
+            for p in parfors:
+                p.redvars, p.reddict = get_parfor_reductions(self.func_ir,
+                                                             p,
+                                                             p.params,
+                                                             self.calltypes)
+
             # reorder statements to maximize fusion
             # push non-parfors down
             maximize_fusion(self.func_ir, self.func_ir.blocks, self.typemap,
@@ -2923,6 +2965,61 @@ class ParforPass(ParforPassStates):
             dprint_func_ir(self.func_ir, "after fusion")
             # remove dead code after fusion to remove extra arrays and variables
             simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
+
+    def fuse_parfors(self, array_analysis, blocks, func_ir, typemap):
+        for label, block in blocks.items():
+            equiv_set = array_analysis.get_equiv_set(label)
+            fusion_happened = True
+            while fusion_happened:
+                fusion_happened = False
+                new_body = []
+                i = 0
+                while i < len(block.body) - 1:
+                    stmt = block.body[i]
+                    next_stmt = block.body[i + 1]
+                    if isinstance(stmt, Parfor) and isinstance(next_stmt, Parfor):
+                        # we have to update equiv_set since they have changed due to
+                        # variables being renamed before fusion.
+                        equiv_set = array_analysis.get_equiv_set(label)
+                        stmt.equiv_set = equiv_set
+                        next_stmt.equiv_set = equiv_set
+                        fused_node, fuse_report = try_fuse(equiv_set, stmt, next_stmt,
+                            self.metadata["parfors"], func_ir, typemap)
+                        # accumulate fusion reports
+                        self.diagnostics.fusion_reports.append(fuse_report)
+                        if fused_node is not None:
+                            fusion_happened = True
+                            self.diagnostics.fusion_info[stmt.id].extend([next_stmt.id])
+                            new_body.append(fused_node)
+                            self.fuse_recursive_parfor(fused_node, equiv_set, func_ir, typemap)
+                            i += 2
+                            continue
+                    new_body.append(stmt)
+                    if isinstance(stmt, Parfor):
+                        self.fuse_recursive_parfor(stmt, equiv_set, func_ir, typemap)
+                    i += 1
+                new_body.append(block.body[-1])
+                block.body = new_body
+        return
+
+    def fuse_recursive_parfor(self, parfor, equiv_set, func_ir, typemap):
+        blocks = wrap_parfor_blocks(parfor)
+        maximize_fusion(self.func_ir, blocks, self.typemap)
+        dprint_func_ir(self.func_ir, "after recursive maximize fusion down", blocks)
+        arr_analysis = array_analysis.ArrayAnalysis(self.typingctx, self.func_ir,
+                                                self.typemap, self.calltypes)
+        arr_analysis.run(blocks, equiv_set)
+        self.fuse_parfors(arr_analysis, blocks, func_ir, typemap)
+        unwrap_parfor_blocks(parfor)
+
+
+class ParforPreLoweringPass(ParforPassStates):
+
+    """ParforPreLoweringPass class is responsible for preparing parfors for lowering.
+    """
+
+    def run(self):
+        """run parfor prelowering pass"""
 
         # push function call variables inside parfors so gufunc function
         # wouldn't need function variables as argument
@@ -2977,7 +3074,10 @@ class ParforPass(ParforPassStates):
 
             # Validate reduction in parfors.
             for p in parfors:
-                p.redvars, p.reddict = get_parfor_reductions(self.func_ir, p, p.params, self.calltypes)
+                p.redvars, p.reddict = get_parfor_reductions(self.func_ir,
+                                                             p,
+                                                             p.params,
+                                                             self.calltypes)
 
             # Validate parameters:
             for p in parfors:
@@ -2994,68 +3094,6 @@ class ParforPass(ParforPassStates):
                            after_fusion, name, n_parfors, parfor_ids))
                 else:
                     print('Function {} has no Parfor.'.format(name))
-
-        return
-
-    def _find_mask(self, arr_def):
-        """check if an array is of B[...M...], where M is a
-        boolean array, and other indices (if available) are ints.
-        If found, return B, M, M's type, and a tuple representing mask indices.
-        Otherwise, raise GuardException.
-        """
-        return _find_mask(self.typemap, self.func_ir, arr_def)
-
-    def _mk_parfor_loops(self, size_vars, scope, loc):
-        """
-        Create loop index variables and build LoopNest objects for a parfor.
-        """
-        return _mk_parfor_loops(self.typemap, size_vars, scope, loc)
-
-    def fuse_parfors(self, array_analysis, blocks, func_ir, typemap):
-        for label, block in blocks.items():
-            equiv_set = array_analysis.get_equiv_set(label)
-            fusion_happened = True
-            while fusion_happened:
-                fusion_happened = False
-                new_body = []
-                i = 0
-                while i < len(block.body) - 1:
-                    stmt = block.body[i]
-                    next_stmt = block.body[i + 1]
-                    if isinstance(stmt, Parfor) and isinstance(next_stmt, Parfor):
-                        # we have to update equiv_set since they have changed due to
-                        # variables being renamed before fusion.
-                        equiv_set = array_analysis.get_equiv_set(label)
-                        stmt.equiv_set = equiv_set
-                        next_stmt.equiv_set = equiv_set
-                        fused_node, fuse_report = try_fuse(equiv_set, stmt, next_stmt,
-                            self.metadata["parfors"], func_ir, typemap)
-                        # accumulate fusion reports
-                        self.diagnostics.fusion_reports.append(fuse_report)
-                        if fused_node is not None:
-                            fusion_happened = True
-                            self.diagnostics.fusion_info[stmt.id].extend([next_stmt.id])
-                            new_body.append(fused_node)
-                            self.fuse_recursive_parfor(fused_node, equiv_set, func_ir, typemap)
-                            i += 2
-                            continue
-                    new_body.append(stmt)
-                    if isinstance(stmt, Parfor):
-                        self.fuse_recursive_parfor(stmt, equiv_set, func_ir, typemap)
-                    i += 1
-                new_body.append(block.body[-1])
-                block.body = new_body
-        return
-
-    def fuse_recursive_parfor(self, parfor, equiv_set, func_ir, typemap):
-        blocks = wrap_parfor_blocks(parfor)
-        maximize_fusion(self.func_ir, blocks, self.typemap)
-        dprint_func_ir(self.func_ir, "after recursive maximize fusion down", blocks)
-        arr_analysis = array_analysis.ArrayAnalysis(self.typingctx, self.func_ir,
-                                                self.typemap, self.calltypes)
-        arr_analysis.run(blocks, equiv_set)
-        self.fuse_parfors(arr_analysis, blocks, func_ir, typemap)
-        unwrap_parfor_blocks(parfor)
 
 
 def _remove_size_arg(call_name, expr):
@@ -4026,6 +4064,13 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata, func_ir, typemap):
     # default report is None
     report = None
 
+    # fusion of parfors with different lowerers is not possible
+    if parfor1.lowerer != parfor2.lowerer:
+        dprint("try_fuse: parfors different lowerers")
+        msg = "- fusion failed: lowerer mismatch"
+        report = FusionReport(parfor1.id, parfor2.id, msg)
+        return None, report
+
     # fusion of parfors with different dimensions not supported yet
     if len(parfor1.loop_nests) != len(parfor2.loop_nests):
         dprint("try_fuse: parfors number of dimensions mismatch")
@@ -4091,6 +4136,9 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata, func_ir, typemap):
     p1_body_defs = set()
     for defs in p1_body_usedefs.defmap.values():
         p1_body_defs |= defs
+    # Add reduction variables from parfor1 to the set of body defs
+    # so that if parfor2 reads the reduction variable it won't fuse.
+    p1_body_defs |= set(parfor1.redvars)
 
     p2_usedefs = compute_use_defs(parfor2.loop_body)
     p2_uses = compute_use_defs({0: parfor2.init_block}).usemap[0]
@@ -4258,6 +4306,8 @@ def has_cross_iter_dep(
         # conservatively say we can't fuse.
         if array_accessed in non_indexed_arrays:
             return True
+
+        indexed_arrays.add(array_accessed)
 
         npsize = len(new_position)
         # See if we have not seen a npsize dimensioned array accessed before.

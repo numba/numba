@@ -2,6 +2,7 @@
 Implements custom ufunc dispatch mechanism for non-CPU devices.
 """
 
+from abc import ABCMeta, abstractmethod
 from collections import OrderedDict
 import operator
 import warnings
@@ -291,7 +292,7 @@ class UFuncMechanism(object):
         shape = args[0].shape
         if out is None:
             # No output is provided
-            devout = cr.device_array(shape, resty, stream=stream)
+            devout = cr.allocate_device_array(shape, resty, stream=stream)
 
             devarys.extend([devout])
             cr.launch(func, shape[0], stream, devarys)
@@ -319,7 +320,7 @@ class UFuncMechanism(object):
             # Return host array
             assert out.shape == shape
             assert out.dtype == resty
-            devout = cr.device_array(shape, resty, stream=stream)
+            devout = cr.allocate_device_array(shape, resty, stream=stream)
             devarys.extend([devout])
             cr.launch(func, shape[0], stream, devarys)
             return devout.copy_to_host(out, stream=stream).reshape(outshape)
@@ -336,7 +337,7 @@ class UFuncMechanism(object):
         """
         raise NotImplementedError
 
-    def device_array(self, shape, dtype, stream):
+    def allocate_device_array(self, shape, dtype, stream):
         """Implements device allocation
         Override in subclass
         """
@@ -376,19 +377,7 @@ class DeviceVectorize(_BaseUFuncBuilder):
     def pyfunc(self):
         return self.py_func
 
-    def add(self, sig=None, argtypes=None, restype=None):
-        # Handle argtypes
-        if argtypes is not None:
-            warnings.warn("Keyword argument argtypes is deprecated",
-                          DeprecationWarning)
-            assert sig is None
-            if restype is None:
-                sig = tuple(argtypes)
-            else:
-                sig = restype(*argtypes)
-        del argtypes
-        del restype
-
+    def add(self, sig=None):
         # compile core as device function
         args, return_type = sigutils.normalize_signature(sig)
         devfnsig = signature(return_type, *args)
@@ -429,9 +418,13 @@ class DeviceVectorize(_BaseUFuncBuilder):
 
 
 class DeviceGUFuncVectorize(_BaseUFuncBuilder):
-    def __init__(self, func, sig, identity=None, cache=False, targetoptions={}):
+    def __init__(self, func, sig, identity=None, cache=False, targetoptions={},
+                 writable_args=()):
         if cache:
             raise TypeError("caching is not supported")
+        if writable_args:
+            raise TypeError("writable_args are not supported")
+
         # Allow nopython flag to be set.
         if not targetoptions.pop('nopython', True):
             raise TypeError("nopython flag must be True")
@@ -445,30 +438,26 @@ class DeviceGUFuncVectorize(_BaseUFuncBuilder):
         self.identity = parse_identity(identity)
         self.signature = sig
         self.inputsig, self.outputsig = parse_signature(self.signature)
-        assert len(self.outputsig) == 1, "only support 1 output"
-        # { arg_dtype: (return_dtype), cudakernel }
+
+        # Maps from a tuple of input_dtypes to (output_dtypes, kernel)
         self.kernelmap = OrderedDict()
 
     @property
     def pyfunc(self):
         return self.py_func
 
-    def add(self, sig=None, argtypes=None, restype=None):
-        # Handle argtypes
-        if argtypes is not None:
-            warnings.warn("Keyword argument argtypes is deprecated",
-                          DeprecationWarning)
-            assert sig is None
-            if restype is None:
-                sig = tuple(argtypes)
-            else:
-                sig = restype(*argtypes)
-        del argtypes
-        del restype
-
+    def add(self, sig=None):
         indims = [len(x) for x in self.inputsig]
         outdims = [len(x) for x in self.outputsig]
         args, return_type = sigutils.normalize_signature(sig)
+
+        # It is only valid to specify types.none as a return type, or to not
+        # specify the return type (where the "Python None" is the return type)
+        valid_return_type = return_type in (types.none, None)
+        if not valid_return_type:
+            raise TypeError('guvectorized functions cannot return values: '
+                            f'signature {sig} specifies {return_type} return '
+                           'type')
 
         funcname = self.py_func.__name__
         src = expand_gufunc_template(self._kernel_template, indims,
@@ -482,8 +471,12 @@ class DeviceGUFuncVectorize(_BaseUFuncBuilder):
         outertys = list(_determine_gufunc_outer_types(args, indims + outdims))
         kernel = self._compile_kernel(fnobj, sig=tuple(outertys))
 
-        dtypes = tuple(np.dtype(str(t.dtype)) for t in outertys)
-        self.kernelmap[tuple(dtypes[:-1])] = dtypes[-1], kernel
+        nout = len(outdims)
+        dtypes = [np.dtype(str(t.dtype)) for t in outertys]
+        indtypes = tuple(dtypes[:-nout])
+        outdtypes = tuple(dtypes[-nout:])
+
+        self.kernelmap[indtypes] = outdtypes, kernel
 
     def _compile_kernel(self, fnobj, sig):
         raise NotImplementedError
@@ -635,49 +628,49 @@ class GUFuncSchedule(object):
         return pprint.pformat(dict(values))
 
 
-class GenerializedUFunc(object):
+class GeneralizedUFunc(object):
     def __init__(self, kernelmap, engine):
         self.kernelmap = kernelmap
         self.engine = engine
         self.max_blocksize = 2 ** 30
-        assert self.engine.nout == 1, "only support single output"
 
     def __call__(self, *args, **kws):
         callsteps = self._call_steps(self.engine.nin, self.engine.nout,
                                      args, kws)
-        callsteps.prepare_inputs()
-        indtypes, schedule, outdtype, kernel = self._schedule(
-            callsteps.norm_inputs, callsteps.output)
+        indtypes, schedule, outdtypes, kernel = self._schedule(
+            callsteps.inputs, callsteps.outputs)
         callsteps.adjust_input_types(indtypes)
-        callsteps.allocate_outputs(schedule, outdtype)
-        callsteps.prepare_kernel_parameters()
-        newparams, newretval = self._broadcast(schedule,
-                                               callsteps.kernel_parameters,
-                                               callsteps.kernel_returnvalue)
-        callsteps.launch_kernel(kernel, schedule.loopn, newparams + [newretval])
-        return callsteps.post_process_result()
 
-    def _schedule(self, inputs, out):
+        outputs = callsteps.prepare_outputs(schedule, outdtypes)
+        inputs = callsteps.prepare_inputs()
+        parameters = self._broadcast(schedule, inputs, outputs)
+
+        callsteps.launch_kernel(kernel, schedule.loopn, parameters)
+
+        return callsteps.post_process_outputs(outputs)
+
+    def _schedule(self, inputs, outs):
         input_shapes = [a.shape for a in inputs]
         schedule = self.engine.schedule(input_shapes)
 
         # find kernel
-        idtypes = tuple(i.dtype for i in inputs)
+        indtypes = tuple(i.dtype for i in inputs)
         try:
-            outdtype, kernel = self.kernelmap[idtypes]
+            outdtypes, kernel = self.kernelmap[indtypes]
         except KeyError:
             # No exact match, then use the first compatible.
             # This does not match the numpy dispatching exactly.
             # Later, we may just jit a new version for the missing signature.
-            idtypes = self._search_matching_signature(idtypes)
+            indtypes = self._search_matching_signature(indtypes)
             # Select kernel
-            outdtype, kernel = self.kernelmap[idtypes]
+            outdtypes, kernel = self.kernelmap[indtypes]
 
         # check output
-        if out is not None and schedule.output_shapes[0] != out.shape:
-            raise ValueError('output shape mismatch')
+        for sched_shape, out in zip(schedule.output_shapes, outs):
+            if out is not None and sched_shape != out.shape:
+                raise ValueError('output shape mismatch')
 
-        return idtypes, schedule, outdtype, kernel
+        return indtypes, schedule, outdtypes, kernel
 
     def _search_matching_signature(self, idtypes):
         """
@@ -693,7 +686,7 @@ class GenerializedUFunc(object):
         else:
             raise TypeError("no matching signature")
 
-    def _broadcast(self, schedule, params, retval):
+    def _broadcast(self, schedule, params, retvals):
         assert schedule.loopn > 0, "zero looping dimension"
 
         odim = 1 if not schedule.loopdims else schedule.loopn
@@ -706,8 +699,11 @@ class GenerializedUFunc(object):
             else:
                 # Broadcast vector input
                 newparams.append(self._broadcast_array(p, odim, cs))
-        newretval = retval.reshape(odim, *schedule.oshapes[0])
-        return newparams, newretval
+
+        newretvals = []
+        for retval, oshape in zip(retvals, schedule.oshapes):
+            newretvals.append(retval.reshape(odim, *oshape))
+        return tuple(newparams) + tuple(newretvals)
 
     def _broadcast_array(self, ary, newdim, innerdim):
         newshape = (newdim,) + innerdim
@@ -732,110 +728,177 @@ class GenerializedUFunc(object):
         raise NotImplementedError
 
 
-class GUFuncCallSteps(object):
+class GUFuncCallSteps(metaclass=ABCMeta):
+    """
+    Implements memory management and kernel launch operations for GUFunc calls.
+
+    One instance of this class is instantiated for each call, and the instance
+    is specific to the arguments given to the GUFunc call.
+
+    The base class implements the overall logic; subclasses provide
+    target-specific implementations of individual functions.
+    """
+
+    # The base class uses these slots; subclasses may provide additional slots.
     __slots__ = [
-        'args',
-        'kwargs',
-        'output',
-        'norm_inputs',
-        'kernel_returnvalue',
-        'kernel_parameters',
-        '_is_device_array',
-        '_need_device_conversion',
+        'outputs',
+        'inputs',
+        '_copy_result_to_host',
     ]
 
+    @abstractmethod
+    def launch_kernel(self, kernel, nelem, args):
+        """Implement the kernel launch"""
+
+    @abstractmethod
+    def is_device_array(self, obj):
+        """
+        Return True if `obj` is a device array for this target, False
+        otherwise.
+        """
+
+    @abstractmethod
+    def as_device_array(self, obj):
+        """
+        Return `obj` as a device array on this target.
+
+        May return `obj` directly if it is already on the target.
+        """
+
+    @abstractmethod
+    def to_device(self, hostary):
+        """
+        Copy `hostary` to the device and return the device array.
+        """
+
+    @abstractmethod
+    def allocate_device_array(self, shape, dtype):
+        """
+        Allocate a new uninitialized device array with the given shape and
+        dtype.
+        """
+
     def __init__(self, nin, nout, args, kwargs):
-        if nout > 1:
-            raise ValueError('multiple output is not supported')
-        self.args = args
-        self.kwargs = kwargs
+        outputs = kwargs.get('out')
 
-        user_output_is_device = False
-        self.output = self.kwargs.get('out')
-        if self.output is not None:
-            user_output_is_device = self.is_device_array(self.output)
-            if user_output_is_device:
-                self.output = self.as_device_array(self.output)
-        self._is_device_array = [self.is_device_array(a) for a in self.args]
-        self._need_device_conversion = (not any(self._is_device_array) and
-                                        not user_output_is_device)
+        # Ensure the user has passed a correct number of arguments
+        if outputs is None and len(args) not in (nin, (nin + nout)):
+            def pos_argn(n):
+                return f'{n} positional argument{"s" * (n != 1)}'
 
-        # Normalize inputs
-        inputs = []
-        for a, isdev in zip(self.args, self._is_device_array):
-            if isdev:
-                inputs.append(self.as_device_array(a))
+            msg = (f'This gufunc accepts {pos_argn(nin)} (when providing '
+                   f'input only) or {pos_argn(nin + nout)} (when providing '
+                   f'input and output). Got {pos_argn(len(args))}.')
+            raise TypeError(msg)
+
+        if outputs is not None and len(args) > nin:
+            raise ValueError("cannot specify argument 'out' as both positional "
+                             "and keyword")
+        else:
+            # If the user did not pass outputs either in the out kwarg or as
+            # positional arguments, then we need to generate an initial list of
+            # "placeholder" outputs using None as a sentry value
+            outputs = [outputs] * nout
+
+        # Ensure all output device arrays are Numba device arrays - for
+        # example, any output passed in that supports the CUDA Array Interface
+        # is converted to a Numba CUDA device array; others are left untouched.
+        all_user_outputs_are_host = True
+        self.outputs = []
+        for output in outputs:
+            if self.is_device_array(output):
+                self.outputs.append(self.as_device_array(output))
+                all_user_outputs_are_host = False
             else:
-                inputs.append(np.asarray(a))
-        self.norm_inputs = inputs[:nin]
+                self.outputs.append(output)
+
+        all_host_arrays = not any([self.is_device_array(a) for a in args])
+
+        # - If any of the arguments are device arrays, we leave the output on
+        #   the device.
+        self._copy_result_to_host = (all_host_arrays and
+                                     all_user_outputs_are_host)
+
+        # Normalize arguments - ensure they are either device- or host-side
+        # arrays (as opposed to lists, tuples, etc).
+        def normalize_arg(a):
+            if self.is_device_array(a):
+                convert = self.as_device_array
+            else:
+                convert = np.asarray
+
+            return convert(a)
+
+        normalized_args = [normalize_arg(a) for a in args]
+        self.inputs = normalized_args[:nin]
+
         # Check if there are extra arguments for outputs.
-        unused_inputs = inputs[nin:]
+        unused_inputs = normalized_args[nin:]
         if unused_inputs:
-            if self.output is not None:
-                raise ValueError("cannot specify 'out' as both a positional "
-                                 "and keyword argument")
-            else:
-                [self.output] = unused_inputs
+            self.outputs = unused_inputs
 
     def adjust_input_types(self, indtypes):
         """
         Attempt to cast the inputs to the required types if necessary
-        and if they are not device array.
+        and if they are not device arrays.
 
-        Side effect: Only affects the element of `norm_inputs` that requires
+        Side effect: Only affects the elements of `inputs` that require
         a type cast.
         """
-        for i, (ity, val) in enumerate(zip(indtypes, self.norm_inputs)):
+        for i, (ity, val) in enumerate(zip(indtypes, self.inputs)):
             if ity != val.dtype:
                 if not hasattr(val, 'astype'):
                     msg = ("compatible signature is possible by casting but "
                            "{0} does not support .astype()").format(type(val))
                     raise TypeError(msg)
                 # Cast types
-                self.norm_inputs[i] = val.astype(ity)
+                self.inputs[i] = val.astype(ity)
 
-    def allocate_outputs(self, schedule, outdtype):
-        # allocate output
-        if self._need_device_conversion or self.output is None:
-            retval = self.device_array(shape=schedule.output_shapes[0],
-                                       dtype=outdtype)
-        else:
-            retval = self.output
-        self.kernel_returnvalue = retval
+    def prepare_outputs(self, schedule, outdtypes):
+        """
+        Returns a list of output parameters that all reside on the target device.
 
-    def prepare_kernel_parameters(self):
-        params = []
-        for inp, isdev in zip(self.norm_inputs, self._is_device_array):
-            if isdev:
-                params.append(inp)
-            else:
-                params.append(self.to_device(inp))
-        assert all(self.is_device_array(a) for a in params)
-        self.kernel_parameters = params
+        Outputs that were passed-in to the GUFunc are used if they reside on the
+        device; other outputs are allocated as necessary.
+        """
+        outputs = []
+        for shape, dtype, output in zip(schedule.output_shapes, outdtypes,
+                                        self.outputs):
+            if output is None or self._copy_result_to_host:
+                output = self.allocate_device_array(shape, dtype)
+            outputs.append(output)
 
-    def post_process_result(self):
-        if self._need_device_conversion:
-            out = self.to_host(self.kernel_returnvalue, self.output)
-        elif self.output is None:
-            out = self.kernel_returnvalue
-        else:
-            out = self.output
-        return out
+        return outputs
 
     def prepare_inputs(self):
-        pass
+        """
+        Returns a list of input parameters that all reside on the target device.
+        """
+        def ensure_device(parameter):
+            if self.is_device_array(parameter):
+                convert = self.as_device_array
+            else:
+                convert = self.to_device
 
-    def launch_kernel(self, kernel, nelem, args):
-        raise NotImplementedError
+            return convert(parameter)
 
-    def is_device_array(self, obj):
-        raise NotImplementedError
+        return [ensure_device(p) for p in self.inputs]
 
-    def as_device_array(self, obj):
-        return obj
+    def post_process_outputs(self, outputs):
+        """
+        Moves the given output(s) to the host if necessary.
 
-    def to_device(self, hostary):
-        raise NotImplementedError
+        Returns a single value (e.g. an array) if there was one output, or a
+        tuple of arrays if there were multiple. Although this feels a little
+        jarring, it is consistent with the behavior of GUFuncs in general.
+        """
+        if self._copy_result_to_host:
+            outputs = [self.to_host(output, self_output)
+                       for output, self_output in zip(outputs, self.outputs)]
+        elif self.outputs[0] is not None:
+            outputs = self.outputs
 
-    def device_array(self, shape, dtype):
-        raise NotImplementedError
+        if len(outputs) == 1:
+            return outputs[0]
+        else:
+            return tuple(outputs)
