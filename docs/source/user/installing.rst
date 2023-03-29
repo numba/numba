@@ -64,7 +64,7 @@ have LLVM installed to use Numba (in fact, Numba will ignore all LLVM
 versions installed on the system) as the required components are bundled into
 the llvmlite wheel.
 
-To use CUDA with Numba installed by `pip`, you need to install the `CUDA SDK
+To use CUDA with Numba installed by ``pip``, you need to install the `CUDA SDK
 <https://developer.nvidia.com/cuda-downloads>`_ from NVIDIA.  Please refer to
 :ref:`cudatoolkit-lookup` for details. Numba can also detect CUDA libraries
 installed system-wide on Linux.
