@@ -8,16 +8,16 @@ jobs:
     vmImage: ${{ parameters.vmImage }}
   strategy:
     matrix:
-      py310_np123:
-        PYTHON: '3.10'
-        NUMPY: '1.23'
-        CONDA_ENV: 'testenv'
-        TEST_START_INDEX: 17
-      py38_np118:
+      py38_np121:
         PYTHON: '3.8'
-        NUMPY: '1.18'
+        NUMPY: '1.21'
         CONDA_ENV: 'testenv'
         TEST_START_INDEX: 18
+      py311_np124:
+        PYTHON: '3.11'
+        NUMPY: '1.24'
+        CONDA_ENV: 'testenv'
+        TEST_START_INDEX: 19
 
   steps:
     - task: CondaEnvironment@1
@@ -53,7 +53,7 @@ jobs:
         call activate %CONDA_ENV%
         set NUMBA_CAPTURED_ERRORS=new_style
         set NUMBA_ENABLE_CUDASIM=1
-        echo "Running slice of discovered tests: %TEST_START_INDEX%,None,%TEST_COUNT%"
+        echo "Running shard of discovered tests: %TEST_START_INDEX%,None,%TEST_COUNT%"
         python -m numba.runtests -b -v -g -m 2 -- numba.tests
       displayName: 'Test modified test files'
 
@@ -61,5 +61,6 @@ jobs:
         call activate %CONDA_ENV%
         set NUMBA_CAPTURED_ERRORS=new_style
         set NUMBA_ENABLE_CUDASIM=1
+        echo "Running shard of discovered tests: %TEST_START_INDEX%:%TEST_COUNT%"
         python runtests.py -m 2 -b -j "%TEST_START_INDEX%:%TEST_COUNT%"  --exclude-tags='long_running'  -- numba.tests
-      displayName: 'Test slice of test files'
+      displayName: 'Test shard of test files'

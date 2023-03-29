@@ -1398,6 +1398,8 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
             self.typeof_storemap(inst)
         elif isinstance(inst, (ir.Jump, ir.Branch, ir.Return, ir.Del)):
             pass
+        elif isinstance(inst, (ir.DynamicRaise, ir.DynamicTryRaise)):
+            pass
         elif isinstance(inst, (ir.StaticRaise, ir.StaticTryRaise)):
             pass
         elif isinstance(inst, ir.PopBlock):

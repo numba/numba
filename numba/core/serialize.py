@@ -9,6 +9,7 @@ import copyreg
 
 import pickle
 from numba import cloudpickle
+from llvmlite import ir
 
 
 #
@@ -58,6 +59,18 @@ def dumps(obj):
         pickled = buf.getvalue()
 
     return pickled
+
+
+def runtime_build_excinfo_struct(static_exc, exc_args):
+    exc, static_args, locinfo = cloudpickle.loads(static_exc)
+    real_args = []
+    exc_args_iter = iter(exc_args)
+    for arg in static_args:
+        if isinstance(arg, ir.Value):
+            real_args.append(next(exc_args_iter))
+        else:
+            real_args.append(arg)
+    return (exc, tuple(real_args), locinfo)
 
 
 # Alias to pickle.loads to allow `serialize.loads()`
@@ -192,8 +205,8 @@ NumbaPickler.dispatch_table[_CustomPickled] = _custom_reduce__custompickled
 
 
 class ReduceMixin(abc.ABC):
-    """A mixin class for objects that should be reduced by the NumbaPickler instead
-    of the standard pickler.
+    """A mixin class for objects that should be reduced by the NumbaPickler
+    instead of the standard pickler.
     """
     # Subclass MUST override the below methods
 

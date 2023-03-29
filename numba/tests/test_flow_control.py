@@ -4,7 +4,7 @@ import unittest
 from numba.core.controlflow import CFGraph, ControlFlowAnalysis
 from numba.core.compiler import compile_isolated, Flags
 from numba.core import types
-from numba.core.bytecode import FunctionIdentity, ByteCode
+from numba.core.bytecode import FunctionIdentity, ByteCode, _fix_LOAD_GLOBAL_arg
 from numba.core.utils import PYVERSION
 from numba.tests.support import TestCase
 
@@ -1116,7 +1116,7 @@ class TestRealCodeDomFront(TestCase):
         for inst in bc:
             # Find LOAD_GLOBAL that refers to "SET_BLOCK_<name>"
             if inst.opname == 'LOAD_GLOBAL':
-                gv = bc.co_names[inst.arg]
+                gv = bc.co_names[_fix_LOAD_GLOBAL_arg(inst.arg)]
                 if gv.startswith(prefix):
                     name = gv[len(prefix):]
                     # Find the block where this instruction resides

@@ -200,28 +200,49 @@ uses the `fall-back` compilation path. In future code such as::
 
 will simply not compile, a ``TypingError`` would be raised.
 
+A further consequence of this change is that the ``nopython`` keyword argument
+will become redundant as :term:`nopython mode` will be the default. As a result,
+following this change, supplying the keyword argument as ``nopython=False`` will
+trigger a warning stating that the implicit default has changed to ``True``.
+Essentially this keyword will have no effect following removal of this feature.
+
 Schedule
 --------
 This feature will be removed with respect to this schedule:
 
-* Deprecation warnings will be issued in version 0.44.0
-* Prominent notice will be given for a minimum of two releases prior to full
-  removal.
+* Deprecation warnings will be issued in version 0.44.0.
+* Prominent notice is given in 0.57.0.
+* Removal will take place in version 0.59.0.
 
 Recommendations
 ---------------
 Projects that need/rely on the deprecated behaviour should pin their dependency
-on Numba to a version prior to removal of this behaviour. Alternatively, to
-accommodate the scheduled deprecations, users with code compiled at present with
-``@jit`` can supply the ``nopython=True`` keyword argument, if the code
-continues to compile then the code is already ready for this change. If the code
-does not compile, continue using the ``@jit`` decorator without
-``nopython=True`` and profile the performance of the function. Then remove the
-decorator and again check the performance of the function. If there is no
-benefit to having the ``@jit`` decorator present consider removing it! If there
-is benefit to having the ``@jit`` decorator present, then to be future proof
-supply the keyword argument ``forceobj=True`` to ensure the function is always
-compiled in :term:`object mode`.
+on Numba to a version prior to removal of this behaviour.
+
+General advice to accommodate the scheduled deprecation:
+
+Users with code compiled at present with ``@jit`` can supply the
+``nopython=True`` keyword argument, if the code continues to compile then the
+code is already ready for this change. If the code does not compile, continue
+using the ``@jit`` decorator without ``nopython=True`` and profile the
+performance of the function. Then remove the decorator and again check the
+performance of the function. If there is no benefit to having the ``@jit``
+decorator present consider removing it! If there is benefit to having the
+``@jit`` decorator present, then to be future proof supply the keyword argument
+``forceobj=True`` to ensure the function is always compiled in
+:term:`object mode`.
+
+Advice for users of the "loop-lifting" feature:
+
+If object mode compilation with loop-lifting is needed it should be
+explicitly declared through supplying the keyword arguments ``forceobj=True``
+and ``looplift=True`` to the ``@jit`` decorator.
+
+Advice for users setting ``nopython=False``:
+
+This is essentially specifying the implicit default prior to removal of this
+feature, either remove the keyword argument or change the value to ``True``.
+
 
 
 .. _deprecation-of-generated-jit:
@@ -364,6 +385,71 @@ for example::
 
   print(foo(1.))
   print(foo("a string"))
+
+
+.. _deprecation-numba-pycc:
+
+Deprecation of the ``numba.pycc`` module
+========================================
+Numba has supported some degree of Ahead-of-Time (AOT) compilation through the
+use of the tools in the ``numba.pycc`` module. This capability is very important
+to the Numba project and following an assessment of the viability of the current
+approach, it was decided to deprecate it in favour of developing new technology
+to better meet current needs.
+
+Reason for deprecation
+----------------------
+
+There are a number of reasons for this deprecation.
+
+* ``numba.pycc`` tools create C-Extensions that have symbols that are only
+  usable from the Python interpreter, they are not compatible with calls made
+  from within code compiled using Numba's JIT compiler. This drastically reduces
+  the utility of AOT compiled functions.
+* ``numba.pycc`` has some reliance on ``setuptools`` (and ``distutils``) which
+  is something Numba is trying to reduce, particularly due to the upcoming
+  removal of ``distutils`` in Python 3.12.
+* The ``numba.pycc`` compilation chain is very limited in terms of its feature
+  set in comparison to Numba's JIT compiler, it also has numerous technical
+  issues to do with declaring and linking both internal and external libraries.
+* The number of users of ``numba.pycc`` is assumed to be quite small, this was
+  indicated through discussions at a Numba public meeting on 2022-10-04 and
+  issue #8509.
+* The Numba project is working on new innovations in the AOT compiler space and
+  the maintainers consider it a better use of resources to develop these than
+  maintain and develop ``numba.pycc``.
+
+Example(s) of the impact
+------------------------
+
+Any source code using ``numba.pycc`` would fail to work once the functionality
+has been removed.
+
+Schedule
+--------
+
+This feature will be removed with respect to this schedule:
+
+* Pending-deprecation warnings will be issued in version 0.57.0.
+* Deprecation warnings will be issued once a replacement is developed.
+* Deprecation warnings will be given for a minimum of two releases prior to full
+  removal.
+
+Recommendations
+---------------
+
+Projects that need/rely on the deprecated behaviour should pin their dependency
+on Numba to a version prior to removal of this behaviour, or consider following
+replacement instructions below that outline how to adjust to the change.
+
+Replacement
+-----------
+
+A replacement for this functionality is being developed as part of the Numba
+2023 development focus. The ``numba.pycc`` module will not be removed until this
+replacement functionality is able to provide similar utility and offer an
+upgrade path. At the point of the new technology being deemed suitable,
+replacement instructions will be issued.
 
 
 Deprecation of eager compilation of CUDA device functions

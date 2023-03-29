@@ -1717,6 +1717,8 @@ def _create_function_from_code_obj(fcode, func_env, func_arg, func_clo, glbls):
     * func_clo - string for the closure args
     * glbls - the function globals
     """
+    # in py3.11, func_arg contains '.'
+    func_arg = func_arg.replace('.', '_')
     sanitized_co_name = fcode.co_name.replace('<', '_').replace('>', '_')
     func_text = (f"def closure():\n{func_env}\n"
                  f"\tdef {sanitized_co_name}({func_arg}):\n"
@@ -2245,7 +2247,7 @@ def convert_code_obj_to_function(code_obj, caller_ir):
             freevars.append(freevar_def.value)
         else:
             msg = ("Cannot capture the non-constant value associated with "
-                   "variable '%s' in a function that will escape." % x)
+                   "variable '%s' in a function that may escape." % x)
             raise TypingError(msg, loc=code_obj.loc)
 
     func_env = "\n".join(["\tc_%d = %s" % (i, x) for i, x in enumerate(freevars)])

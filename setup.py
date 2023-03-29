@@ -1,12 +1,12 @@
 import os
 import platform
+import subprocess
 import sys
-from distutils import sysconfig
-from distutils.command import build
-from distutils.command.build_ext import build_ext
-from distutils.spawn import spawn
+import sysconfig
 
-from setuptools import Extension, find_packages, setup
+from setuptools import Command, Extension, find_packages, setup
+from setuptools.command.build_ext import build_ext
+
 import versioneer
 
 _version_module = None
@@ -20,9 +20,9 @@ except ImportError:
 
 
 min_python_version = "3.8"
-max_python_version = "3.11"  # exclusive
+max_python_version = "3.12"  # exclusive
 min_numpy_build_version = "1.11"
-min_numpy_run_version = "1.18"
+min_numpy_run_version = "1.21"
 min_llvmlite_version = "0.40.0dev0"
 max_llvmlite_version = "0.41"
 
@@ -50,18 +50,12 @@ def _guard_py_ver():
 _guard_py_ver()
 
 
-class build_doc(build.build):
+class build_doc(Command):
     description = "build documentation"
 
     def run(self):
-        spawn(['make', '-C', 'docs', 'html'])
+        subprocess.run(['make', '-C', 'docs', 'html'])
 
-
-versioneer.VCS = 'git'
-versioneer.versionfile_source = 'numba/_version.py'
-versioneer.versionfile_build = 'numba/_version.py'
-versioneer.tag_prefix = ''
-versioneer.parentdir_prefix = 'numba-'
 
 cmdclass = versioneer.get_cmdclass()
 cmdclass['build_doc'] = build_doc
@@ -137,14 +131,13 @@ def get_ext_modules():
     """
     Return a list of Extension instances for the setup() call.
     """
-    # Note we don't import Numpy at the toplevel, since setup.py
-    # should be able to run without Numpy for pip to discover the
-    # build dependencies
-    import numpy.distutils.misc_util as np_misc
-
-    # Inject required options for extensions compiled against the Numpy
-    # C API (include dirs, library dirs etc.)
-    np_compile_args = np_misc.get_info('npymath')
+    # Note we don't import NumPy at the toplevel, since setup.py
+    # should be able to run without NumPy for pip to discover the
+    # build dependencies. Need NumPy headers and libm linkage.
+    import numpy as np
+    np_compile_args = {'include_dirs': [np.get_include(),],}
+    if sys.platform != 'win32':
+        np_compile_args['libraries'] = ['m',]
 
     ext_devicearray = Extension(name='numba._devicearray',
                                 sources=['numba/_devicearray.cpp'],
@@ -182,7 +175,6 @@ def get_ext_modules():
                               depends=["numba/_pymodule.h",
                                        "numba/_helperlib.c",
                                        "numba/_lapack.c",
-                                       "numba/_npymath_exports.c",
                                        "numba/_random.c",
                                        "numba/mathnames.inc",
                                        ],
@@ -375,7 +367,6 @@ build_requires = ['numpy >={}'.format(min_numpy_build_version)]
 install_requires = [
     'llvmlite >={},<{}'.format(min_llvmlite_version, max_llvmlite_version),
     'numpy >={}'.format(min_numpy_run_version),
-    'setuptools',
     'importlib_metadata; python_version < "3.9"',
 ]
 
@@ -399,7 +390,7 @@ metadata = dict(
         # HTML templates for type annotations
         "numba.core.annotations": ["*.html"],
         # Various test data
-        "numba.cuda.tests.cudadrv.data": ["*.ptx", "*.cu"],
+        "numba.cuda.tests.data": ["*.ptx", "*.cu"],
         "numba.cuda.tests.doc_examples.ffi": ["*.cu"],
         "numba.tests": ["pycc_distutils_usecase/*.py"],
         # Some C files are needed by pycc

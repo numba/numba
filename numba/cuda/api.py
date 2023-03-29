@@ -85,6 +85,14 @@ def is_cuda_array(obj):
     return hasattr(obj, '__cuda_array_interface__')
 
 
+def is_float16_supported():
+    """Whether 16-bit floats are supported.
+
+    Returns True if float16 is supported, False otherwise.
+    """
+    return bool(config.CUDA_USE_NVIDIA_BINDING)
+
+
 @require_context
 def to_device(obj, stream=0, copy=True, to=None):
     """to_device(obj, stream=0, copy=True, to=None)

@@ -79,6 +79,7 @@ class DefaultOptions:
     debug = _mapping("debuginfo")
     boundscheck = _mapping("boundscheck")
     nogil = _mapping("release_gil")
+    writable_args = _mapping("writable_args")
 
     no_rewrites = _mapping("no_rewrites")
     no_cpython_wrapper = _mapping("no_cpython_wrapper")

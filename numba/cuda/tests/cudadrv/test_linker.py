@@ -1,15 +1,15 @@
-import os.path
 import numpy as np
 import warnings
-from numba.cuda.testing import unittest
+from numba.cuda.testing import skip_if_mvc_enabled, skip_unless_cc_53, unittest
 from numba.cuda.testing import (skip_on_cudasim, skip_unless_cuda_python,
-                                skip_if_cuda_includes_missing,
-                                skip_with_cuda_python)
-from numba.cuda.testing import CUDATestCase
-from numba.cuda.cudadrv.driver import Linker, LinkerError, NvrtcError
+                                skip_if_cuda_includes_missing)
+from numba.cuda.testing import CUDATestCase, test_data_dir
+from numba.cuda.cudadrv.driver import (CudaAPIError, Linker,
+                                       LinkerError, NvrtcError)
 from numba.cuda import require_context
-from numba.tests.support import ignore_internal_warnings
-from numba import cuda, void, float64, int64, int32, typeof
+from numba.tests.support import TestCase, ignore_internal_warnings
+from numba import cuda, void, float64, int64, int32, typeof, float32
+
 
 CONST1D = np.arange(10, dtype=np.float64)
 
@@ -79,6 +79,19 @@ def simple_smem(ary, dty):
     ary[i] = sm[i]
 
 
+def coop_smem2d(ary):
+    i, j = cuda.grid(2)
+    sm = cuda.shared.array((10, 20), float32)
+    sm[i, j] = (i + 1) / (j + 1)
+    cuda.syncthreads()
+    ary[i, j] = sm[i, j]
+
+
+def simple_maxthreads(ary):
+    i = cuda.grid(1)
+    ary[i] = i
+
+
 LMEM_SIZE = 1000
 
 
@@ -92,19 +105,20 @@ def simple_lmem(A, B, dty):
 
 @skip_on_cudasim('Linking unsupported in the simulator')
 class TestLinker(CUDATestCase):
+    _NUMBA_NVIDIA_BINDING_0_ENV = {'NUMBA_CUDA_USE_NVIDIA_BINDING': '0'}
 
     @require_context
     def test_linker_basic(self):
         '''Simply go through the constructor and destructor
         '''
-        linker = Linker.new()
+        linker = Linker.new(cc=(5, 3))
         del linker
 
     def _test_linking(self, eager):
         global bar  # must be a global; other it is recognized as a freevar
         bar = cuda.declare_device('bar', 'int32(int32)')
 
-        link = os.path.join(os.path.dirname(__file__), 'data', 'jitlink.ptx')
+        link = str(test_data_dir / 'jitlink.ptx')
 
         if eager:
             args = ['void(int32[:], int32[:])']
@@ -133,7 +147,7 @@ class TestLinker(CUDATestCase):
     def test_linking_cu(self):
         bar = cuda.declare_device('bar', 'int32(int32)')
 
-        link = os.path.join(os.path.dirname(__file__), 'data', 'jitlink.cu')
+        link = str(test_data_dir / 'jitlink.cu')
 
         @cuda.jit(link=[link])
         def kernel(r, x):
@@ -155,7 +169,7 @@ class TestLinker(CUDATestCase):
     def test_linking_cu_log_warning(self):
         bar = cuda.declare_device('bar', 'int32(int32)')
 
-        link = os.path.join(os.path.dirname(__file__), 'data', 'warn.cu')
+        link = str(test_data_dir / 'warn.cu')
 
         with warnings.catch_warnings(record=True) as w:
             ignore_internal_warnings()
@@ -174,7 +188,7 @@ class TestLinker(CUDATestCase):
     def test_linking_cu_error(self):
         bar = cuda.declare_device('bar', 'int32(int32)')
 
-        link = os.path.join(os.path.dirname(__file__), 'data', 'error.cu')
+        link = str(test_data_dir / 'error.cu')
 
         with self.assertRaises(NvrtcError) as e:
             @cuda.jit('void(int32)', link=[link])
@@ -189,14 +203,37 @@ class TestLinker(CUDATestCase):
         # Check the filename is reported correctly
         self.assertIn('in the compilation of "error.cu"', msg)
 
-    @skip_with_cuda_python
+    # We need to run the test in a subprocess because the Linker class
+    # that instantiates either the CudaPythonLinker or CtypesLinker
+    # sets USE_NV_BINDING = config.CUDA_USE_NVIDIA_BINDING at
+    # module import time, so overriding the config variable does
+    # not help.
+
+    @skip_if_mvc_enabled('NVRTC not available when ctypes binding is used.')
+    @TestCase.run_test_in_subprocess(envvars=_NUMBA_NVIDIA_BINDING_0_ENV)
     def test_linking_cu_ctypes_unsupported(self):
+        link = str(test_data_dir / 'jitlink.cu')
         msg = ('Linking CUDA source files is not supported with the ctypes '
                'binding')
+
         with self.assertRaisesRegex(NotImplementedError, msg):
-            @cuda.jit('void()', link=['jitlink.cu'])
+            @cuda.jit('void()', link=[link])
             def f():
                 pass
+
+    # Float16 math functions require linking in a .cu file, verify that
+    # we generate the appropriate exception and message if the NVIDIA
+    # bindings are not enabled or installed.
+
+    @skip_unless_cc_53
+    @TestCase.run_test_in_subprocess(envvars=_NUMBA_NVIDIA_BINDING_0_ENV)
+    def test_linking_float16_unsupported(self):
+        msg = ("Use of float16 requires the use of the NVIDIA CUDA "
+               "bindings and setting the ")
+        with self.assertRaisesRegex(NotImplementedError, msg):
+            @cuda.jit('void(float16[::1])')
+            def hexp10_vectors(x):
+                cuda.fp16.hexp10(x[0])
 
     def test_linking_unknown_filetype_error(self):
         expected_err = "Don't know how to link file with extension .cuh"
@@ -215,8 +252,7 @@ class TestLinker(CUDATestCase):
     @skip_if_cuda_includes_missing
     @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_linking_cu_cuda_include(self):
-        link = os.path.join(os.path.dirname(__file__), 'data',
-                            'cuda_include.cu')
+        link = str(test_data_dir / 'cuda_include.cu')
 
         # An exception will be raised when linking this kernel due to the
         # compile failure if CUDA includes cannot be found by Nvrtc.
@@ -280,12 +316,27 @@ class TestLinker(CUDATestCase):
         shared_mem_size = compiled_specialized.get_shared_mem_per_block()
         self.assertEqual(shared_mem_size, 800)
 
+    def test_get_max_threads_per_block(self):
+        compiled = cuda.jit("void(float32[:,::1])")(coop_smem2d)
+        max_threads = compiled.get_max_threads_per_block()
+        self.assertGreater(max_threads, 0)
+
+    def test_max_threads_exceeded(self):
+        compiled = cuda.jit("void(int32[::1])")(simple_maxthreads)
+        max_threads = compiled.get_max_threads_per_block()
+        nelem = max_threads + 1
+        ary = np.empty(nelem, dtype=np.int32)
+        try:
+            compiled[1, nelem](ary)
+        except CudaAPIError as e:
+            self.assertIn("cuLaunchKernel", e.msg)
+
     def test_get_local_mem_per_thread(self):
         sig = void(int32[::1], int32[::1], typeof(np.int32))
         compiled = cuda.jit(sig)(simple_lmem)
-        shared_mem_size = compiled.get_local_mem_per_thread()
+        local_mem_size = compiled.get_local_mem_per_thread()
         calc_size = np.dtype(np.int32).itemsize * LMEM_SIZE
-        self.assertGreaterEqual(shared_mem_size, calc_size)
+        self.assertGreaterEqual(local_mem_size, calc_size)
 
     def test_get_local_mem_per_specialized(self):
         compiled = cuda.jit(simple_lmem)

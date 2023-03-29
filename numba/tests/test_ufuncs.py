@@ -12,7 +12,7 @@ from numba import guvectorize, njit, typeof, vectorize
 from numba.core import types
 from numba.np.numpy_support import from_dtype
 from numba.core.errors import LoweringError, TypingError
-from numba.tests.support import TestCase, CompilationCache, MemoryLeakMixin
+from numba.tests.support import TestCase, MemoryLeakMixin
 from numba.core.typing.npydecl import supported_ufuncs
 from numba.np import numpy_support
 from numba.core.registry import cpu_target
@@ -124,8 +124,6 @@ class BaseUFuncTest(MemoryLeakMixin):
              types.Array(types.uint16, 1, 'C')),
         ]
 
-        self.cache = CompilationCache()
-
     @functools.lru_cache(maxsize=None)
     def _compile(self, pyfunc, args, nrt=False):
         # NOTE: to test the implementation of Numpy ufuncs, we disable
@@ -136,27 +134,32 @@ class BaseUFuncTest(MemoryLeakMixin):
                                float_output_type=None):
         ty = input_type
         if isinstance(ty, types.Array):
+            ndim = ty.ndim
             ty = ty.dtype
+        else:
+            ndim = 1
 
         if ty in types.signed_domain:
             if int_output_type:
-                output_type = types.Array(int_output_type, 1, 'C')
+                output_type = types.Array(int_output_type, ndim, 'C')
             else:
-                output_type = types.Array(ty, 1, 'C')
+                output_type = types.Array(ty, ndim, 'C')
         elif ty in types.unsigned_domain:
             if int_output_type:
-                output_type = types.Array(int_output_type, 1, 'C')
+                output_type = types.Array(int_output_type, ndim, 'C')
             else:
-                output_type = types.Array(ty, 1, 'C')
+                output_type = types.Array(ty, ndim, 'C')
         else:
             if float_output_type:
-                output_type = types.Array(float_output_type, 1, 'C')
+                output_type = types.Array(float_output_type, ndim, 'C')
             else:
-                output_type = types.Array(ty, 1, 'C')
+                output_type = types.Array(ty, ndim, 'C')
         return output_type
 
 
-class TestUFuncs(BaseUFuncTest, TestCase):
+class BasicUFuncTest(BaseUFuncTest):
+    def _make_ufunc_usecase(self, ufunc):
+        return _make_ufunc_usecase(ufunc)
 
     def basic_ufunc_test(self, ufunc, skip_inputs=[], additional_inputs=[],
                          int_output_type=None, float_output_type=None,
@@ -166,7 +169,7 @@ class TestUFuncs(BaseUFuncTest, TestCase):
         # the simplefilter() call below.
         self.reset_module_warnings(__name__)
 
-        pyfunc = _make_ufunc_usecase(ufunc)
+        pyfunc = self._make_ufunc_usecase(ufunc)
 
         inputs = list(self.inputs) + additional_inputs
 
@@ -199,12 +202,12 @@ class TestUFuncs(BaseUFuncTest, TestCase):
 
             if isinstance(args[0], np.ndarray):
                 results = [
-                    np.zeros(args[0].size,
+                    np.zeros(args[0].shape,
                              dtype=out_ty.dtype.name)
                     for out_ty in output_types
                 ]
                 expected = [
-                    np.zeros(args[0].size, dtype=out_ty.dtype.name)
+                    np.zeros(args[0].shape, dtype=out_ty.dtype.name)
                     for out_ty in output_types
                 ]
             else:
@@ -253,6 +256,8 @@ class TestUFuncs(BaseUFuncTest, TestCase):
                     else:
                         raise
 
+
+class TestUFuncs(BasicUFuncTest, TestCase):
     def basic_int_ufunc_test(self, name=None):
         skip_inputs = [
             types.float32,
@@ -599,7 +604,12 @@ class TestUFuncs(BaseUFuncTest, TestCase):
         self.basic_ufunc_test(np.trunc, kinds='f')
 
     def test_spacing_ufunc(self):
-        self.basic_ufunc_test(np.spacing, kinds='f')
+        # additional input to check inf behaviour as Numba uses a different alg
+        # to NumPy
+        additional = [(np.array([np.inf, -np.inf], dtype=np.float64),
+                       types.Array(types.float64, 1, 'C')),]
+        self.basic_ufunc_test(np.spacing, kinds='f',
+                              additional_inputs=additional)
 
     ############################################################################
     # Other tests
@@ -1342,6 +1352,7 @@ class _LoopTypesTester(TestCase):
              ('log10', 'D'): 5,
              ('tanh', 'F'): 2,
              ('cbrt', 'd'): 2,
+             ('logaddexp2', 'd'): 2,
              }
 
     def _arg_for_type(self, a_letter_type, index=0):

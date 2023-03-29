@@ -14,7 +14,6 @@
 #ifndef NUMBA_LIST_H
 #define NUMBA_LIST_H
 
-#include "Python.h"
 #include "cext.h"
 
 typedef void (*list_refcount_op_t)(const void*);
