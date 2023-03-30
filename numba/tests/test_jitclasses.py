@@ -1858,6 +1858,86 @@ def f(x, y):
         self.assertEqual(py_ops_not_defined > py_ops_defined,
                          jit_ops_not_defined > jit_ops_defined)
 
+    def test_arithmetic_logical_reflection(self):
+      class OperatorsDefined:
+          def __init__(self, x):
+              self.x = x
+
+          def __radd__(self, other):
+              return other.x + self.x
+
+          def __rsub__(self, other):
+              return other.x - self.x
+
+          def __rmul__(self, other):
+              return other.x * self.x
+
+          def __matmul__(self, other):
+              return self.x @ other.x
+
+          def __rmatmul__(self, other):
+              return other.x @ self.x
+
+          def __rtruediv__(self, other):
+              return other.x / self.x
+
+          def __rfloordiv__(self, other):
+              return other.x // self.x
+
+          def __rmod__(self, other):
+              return other.x % self.x
+
+          def __rpow__(self, other):
+              return other.x ** self.x
+
+          def __rlshift__(self, other):
+              return other.x << self.x
+
+          def __rrshift__(self, other):
+              return other.x >> self.x
+
+          def __rand__(self, other):
+              return other.x & self.x
+
+          def __rxor__(self, other):
+              return other.x ^ self.x
+
+          def __ror__(self, other):
+              return other.x | self.x
+
+      class NoOperatorsDefined:
+          def __init__(self, x):
+              self.x = x
+
+      float_op = ["+", "-", "*", "**", "/", "//", "%"]
+      int_op = [*float_op, "<<", ">>" , "&", "^", "|"]
+      array_op = [*float_op, "@"]
+
+      for test_type, test_op, test_value in [(int32, int_op, (2, 4)),
+                                             (float64, float_op, (2., 4.)),
+                                             (float64[::1], array_op, (np.array([1., 2., 4.]), np.array([20., -24., 1.])))]:
+          spec = {"x": test_type}
+          JitOperatorsDefined = jitclass(OperatorsDefined, spec)
+          JitNoOperatorsDefined = jitclass(NoOperatorsDefined, spec)
+
+          py_ops_defined = OperatorsDefined(test_value[0])
+          py_ops_not_defined = NoOperatorsDefined(test_value[1])
+
+          jit_ops_defined = JitOperatorsDefined(test_value[0])
+          jit_ops_not_defined = JitNoOperatorsDefined(test_value[1])
+
+          if "@" in test_op:
+              # regular __matmul__
+              self.assertEqual(py_ops_defined @ py_ops_not_defined, jit_ops_defined @ jit_ops_not_defined)
+
+          for op in test_op:
+              if (op == "@") or not ("array" in str(test_type)):
+                  self.assertEqual(eval(f"py_ops_not_defined {op} py_ops_defined"),
+                                   eval(f"jit_ops_not_defined {op} jit_ops_defined"))
+              else:
+                  self.assertTupleEqual(tuple(eval(f"py_ops_not_defined {op} py_ops_defined")),
+                                        tuple(eval(f"jit_ops_not_defined {op} jit_ops_defined")))
+
     def test_implicit_hash_compiles(self):
         # Ensure that classes with __hash__ implicitly defined as None due to
         # the presence of __eq__ are correctly handled by ignoring the __hash__
