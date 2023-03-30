@@ -323,10 +323,10 @@ imported with an ``pt`` prefix. For example, ``typing.Dict`` is imported as ``fr
 Release Notes
 '''''''''''''
 
-Pull Requests that add significant user-facing modifications, they may need to be mentioned in the release notes.
-To add a the release notes, you need to create a short ``.rst`` file with a summary and place it in 
+Pull Requests that add significant user-facing modifications may need to be mentioned in the release notes.
+To add a release note, a short ``.rst`` file needs creating containing a summary of the change and it needs to be placed in 
 ``docs/upcoming_changes``. The file ``docs/upcoming_changes/README.rst`` details the format
-and filename conventions.
+and file naming conventions.
 
 Stability
 '''''''''

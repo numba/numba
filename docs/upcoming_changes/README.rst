@@ -13,15 +13,15 @@ your user-facing changes as they should appear in the relase notes.
 Each file should be named like ``<PULL REQUEST>.<TYPE>.rst``, where
 ``<PULL REQUEST>`` is a pull request number, and ``<TYPE>`` is one of:
 
-* ``highlight``: Adds a highlight bullet point to use as a possibly highlight
+* ``highlight``: Adds a highlighted bullet point to use as a possible highlight
   of the release.
 * ``np_support``: Addition of new NumPy functionality.
-* ``deprecation``: Changes existing code to emit a DeprecationWarning.
+* ``deprecation``: Changes to existing code that will now emit a DeprecationWarning/PendingDeprecationWarning.
 * ``future``: Changes existing code to emit a FutureWarning.
 * ``expired``: Removal of a deprecated part of the API.
 * ``compatibility``: A change which requires users to change code and is not
   backwards compatible. (Not to be used for removal of deprecated features.)
-* ``cuda``: Changes in the CUDA API.
+* ``cuda``: Changes in the CUDA target implementation.
 * ``new_feature``: New user facing features like ``kwargs``.
 * ``improvement``: General improvements and edge-case changes which are
   not new features or compatibility related.
