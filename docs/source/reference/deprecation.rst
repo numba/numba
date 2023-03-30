@@ -468,68 +468,6 @@ upgrade path. At the point of the new technology being deemed suitable,
 replacement instructions will be issued.
 
 
-Deprecation of eager compilation of CUDA device functions
-=========================================================
-
-In future versions of Numba, the ``device`` kwarg to the ``@cuda.jit`` decorator
-will be obviated, and whether a device function or global kernel is compiled will
-be inferred from the context. With respect to kernel / device functions and lazy
-/ eager compilation, four cases were handled:
-
-1. ``device=True``, eager compilation with a signature provided
-2. ``device=False``, eager compilation with a signature provided
-3. ``device=True``, lazy compilation with no signature
-4. ``device=False``, lazy compilation with no signature
-
-The latter two cases can be differentiated without the ``device`` kwarg, because
-it can be inferred from the calling context - if the call is from the host, then
-a global kernel should be compiled, and if the call is from a kernel or another
-device function, then a device function should be compiled.
-
-The first two cases cannot be differentiated in the absence of the ``device``
-kwarg - without it, it will not be clear from a signature alone whether a device
-function or global kernel should be compiled. In order to resolve this, device
-functions will no longer be eagerly compiled. When a signature is provided to a
-device function, it will only be used to enforce the types of arguments that
-the function accepts.
-
-.. note::
-
-   In previous releases this notice stated that support for providing
-   signatures to device functions would be removed completely - however, this
-   precludes the common use case of enforcing the types that can be passed to a
-   device function (and the automatic insertion of casts that it implies) so
-   this notice has been updated to retain support for passing signatures.
-
-
-Schedule
---------
-
-- In Numba 0.54: Eager compilation of device functions will be deprecated.
-- In Numba 0.55: Eager compilation of device functions will be unsupported and
-  the provision of signatures for device functions will only enforce casting.
-
-
-Deprecation and removal of ``numba.core.base.BaseContext.add_user_function()``
-==============================================================================
-
-``add_user_function()``  offered the same functionality as
-``insert_user_function()``, only with a check that the function has already
-been inserted at least once.  It is now removed as it was no longer used
-internally and it was expected that it was not used externally.
-
-Recommendations
----------------
-
-Replace any uses of ``add_user_function()`` with ``insert_user_function()``.
-
-Schedule
---------
-
-- In Numba 0.55: ``add_user_function()`` was deprecated.
-- In Numba 0.56: ``add_user_function()`` was removed.
-
-
 Deprecation and removal of CUDA Toolkits < 11.0 and devices with CC < 5.3
 =========================================================================
 
