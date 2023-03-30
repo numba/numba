@@ -1863,20 +1863,11 @@ def f(x, y):
             def __init__(self, x):
                 self.x = x
 
-            def __add__(self, other):
-                return self.x + other.x
-
             def __radd__(self, other):
                 return other.x + self.x
 
-            def __sub__(self, other):
-                return self.x - other.x
-
             def __rsub__(self, other):
                 return other.x - self.x
-
-            def __mul__(self, other):
-                return self.x * other.x
 
             def __rmul__(self, other):
                 return other.x * self.x
@@ -1887,56 +1878,29 @@ def f(x, y):
             def __rmatmul__(self, other):
                 return other.x @ self.x
 
-            def __truediv__(self, other):
-                return self.x / other.x
-
             def __rtruediv__(self, other):
                 return other.x / self.x
-
-            def __floordiv__(self, other):
-                return self.x // other.x
 
             def __rfloordiv__(self, other):
                 return other.x // self.x
 
-            def __mod__(self, other):
-                return self.x % other.x
-
             def __rmod__(self, other):
                 return other.x % self.x
-
-            def __pow__(self, other):
-                return self.x ** other.x
 
             def __rpow__(self, other):
                 return other.x ** self.x
 
-            def __lshift__(self, other):
-                return self.x << other.x
-
             def __rlshift__(self, other):
                 return other.x << self.x
-
-            def __rshift__(self, other):
-                return self.x >> other.x
 
             def __rrshift__(self, other):
                 return other.x >> self.x
 
-            def __and__(self, other):
-                return self.x & other.x
-
             def __rand__(self, other):
                 return other.x & self.x
 
-            def __xor__(self, other):
-                return self.x ^ other.x
-
             def __rxor__(self, other):
                 return other.x ^ self.x
-
-            def __or__(self, other):
-                return self.x | other.x
 
             def __ror__(self, other):
                 return other.x | self.x
@@ -1949,10 +1913,10 @@ def f(x, y):
         int_op = [*float_op, "<<", ">>" , "&", "^", "|"]
         array_op = [*float_op, "@"]
 
-        for test_type, test_op, test_value in [(int64, int_op, (2, -4)),
-                                               (float64, float_op, (2., -4.)),
-                                               (int64[::1], int_op, (np.array([1, 2, 4]), np.array([20, -24, 0]))),
-                                               (float64[::1], array_op, (np.array([1., 2., 4.]), np.array([20., -24., 0.])))]:
+        for test_type, test_op, test_value in [(int64, int_op, (2, 4)),
+                                               (float64, float_op, (2., 4.)),
+                                               (int64[::1], int_op, (np.array([1, 2, 4]), np.array([20, 24, 1]))),
+                                               (float64[::1], array_op, (np.array([1., 2., 4.]), np.array([20., 24., 1.])))]:
 
             spec = {"x": test_type}
             JitOperatorsDefined = jitclass(OperatorsDefined, spec)
@@ -1964,6 +1928,10 @@ def f(x, y):
             jit_ops_defined = JitOperatorsDefined(test_value[0])
             jit_ops_not_defined = JitNoOperatorsDefined(test_value[1])
 
+          if "@" in test_op:
+              # regular __matmul__
+              self.assertEqual(py_ops_defined @ py_ops_not_defined, jit_ops_defined @ jit_ops_not_defined)
+              
             for op in test_op:
                 exec(f""""self.assertEqual(py_ops_not_defined {op} py_ops_defined,
                                            jit_ops_not_defined {op} jit_ops_defined)""")
