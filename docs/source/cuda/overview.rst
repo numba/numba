@@ -38,18 +38,19 @@ Supported GPUs
 --------------
 
 Numba supports CUDA-enabled GPUs with Compute Capability 3.5 or greater.
-Support for devices with Compute Capability less than 5.3 is deprecated, and
+Support for devices with Compute Capability less than 5.0 is deprecated, and
 will be removed in a future Numba release.
 
-Devices with Compute Capability 5.3 or greater include (but are not limited to):
+Devices with Compute Capability 5.0 or greater include (but are not limited to):
 
-- Embedded platforms: NVIDIA Jetson Nano, TX1, TX2, Xavier NX, AGX Xavier, AGX
-  Orin.
-- Desktop / Server GPUs: All GPUs with Pascal microarchitecture or later. E.g.
-  GTX 10 / 16 series, RTX 20 / 30 series, Quadro P / V / RTX series, RTX A
-  series, H100.
-- Laptop GPUs: All GPUs with Pascal microarchitecture or later. E.g. MX series,
-  Quadro P / T series (mobile), RTX 20 / 30 series (mobile), RTX A series (mobile).
+- Embedded platforms: NVIDIA Jetson Nano, Jetson Orin Nano, TX1, TX2, Xavier
+  NX, AGX Xavier, AGX Orin.
+- Desktop / Server GPUs: All GPUs with Maxwell microarchitecture or later. E.g.
+  GTX 9 / 10 / 16 series, RTX 20 / 30 / 40 series, Quadro / Tesla M / P / V /
+  RTX series, RTX A series, RTX Ada / SFF, A / L series, H100.
+- Laptop GPUs: All GPUs with Maxwell microarchitecture or later. E.g. MX series,
+  Quadro M / P / T series (mobile), RTX 20 / 30 series (mobile), RTX A series
+  (mobile).
 
 Software
 --------

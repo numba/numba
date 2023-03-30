@@ -14,9 +14,9 @@ Our supported platforms are:
 * Windows 7 and later (32-bit and 64-bit)
 * OS X 10.9 and later (64-bit and unofficial support on M1/Arm64)
 * \*BSD (unofficial support only)
-* NVIDIA GPUs of compute capability 5.3 and later
+* NVIDIA GPUs of compute capability 5.0 and later
 
-  * Compute capabilities 3.5 - 5.2 are supported, but deprecated.
+  * Compute capabilities 3.5 and 3.7 are supported, but deprecated.
 * ARMv8 (64-bit little-endian, such as the NVIDIA Jetson)
 
 :ref:`numba-parallel` is only available on 64-bit platforms.
