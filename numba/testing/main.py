@@ -773,8 +773,9 @@ class ParallelTestRunner(runner.TextTestRunner):
         splitted_tests = [self._ptests[i:i + chunk_size]
                           for i in range(0, len(self._ptests), chunk_size)]
 
+        mp = multiprocessing.get_context("spawn")
         for tests in splitted_tests:
-            pool = multiprocessing.Pool(self.nprocs)
+            pool = mp.Pool(self.nprocs)
             try:
                 self._run_parallel_tests(result, pool, child_runner, tests)
             except:
