@@ -73,6 +73,7 @@ NumPy features/enhancements:
 
   * ``np.argpartition``
   * ``np.isclose``
+  * ``np.nan_to_num``
   * ``np.new_axis``
   * ``np.union1d``
 
