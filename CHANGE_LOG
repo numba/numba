@@ -125,8 +125,6 @@ Version support/dependency changes:
 * The TBB threading-layer now requires version 2021.6 or later.
 * LLVM 14 is now supported on all platforms via ``llvmlite``.
 
-TODO: Attribution note on PR#8423.
-
 Pull-Requests:
 
 * PR `#5113 <https://github.com/numba/numba/pull/5113>`_: Fix error handling in the Interval extending example (`esc <https://github.com/esc>`_ `eric-wieser <https://github.com/eric-wieser>`_)
@@ -241,7 +239,8 @@ Pull-Requests:
 * PR `#8418 <https://github.com/numba/numba/pull/8418>`_: Fixes ravel failure on 1d arrays (#5229) (`cako <https://github.com/cako>`_)
 * PR `#8421 <https://github.com/numba/numba/pull/8421>`_: Update release checklist: add a task to check dependency pinnings on subsequent releases (e.g. PATCH) (`esc <https://github.com/esc>`_)
 * PR `#8422 <https://github.com/numba/numba/pull/8422>`_: Switch public CI builds to use gdb from conda packages. (`stuartarchibald <https://github.com/stuartarchibald>`_)
-* PR `#8423 <https://github.com/numba/numba/pull/8423>`_: Remove public facing and CI references to 32 bit linux support. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#8423 <https://github.com/numba/numba/pull/8423>`_: Remove public facing and CI references to 32 bit linux support. (`stuartarchibald <https://github.com/stuartarchibald>`_,
+  in addition, we are grateful for the contribution of `jamesobutler <https://github.com/jamesobutler>`_ towards a similar goal in PR `#8319 <https://github.com/numba/numba/pull/8319>`_)
 * PR `#8425 <https://github.com/numba/numba/pull/8425>`_: Post 0.56.2 cleanup (`esc <https://github.com/esc>`_)
 * PR `#8427 <https://github.com/numba/numba/pull/8427>`_: Shorten the time to verify test discovery. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#8429 <https://github.com/numba/numba/pull/8429>`_: changelog generator script (`esc <https://github.com/esc>`_)
