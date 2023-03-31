@@ -114,11 +114,11 @@ CUDA:
   * Packaging: NVIDIA-packaged CUDA toolkit conda packages.
   * Hardware: Hopper, Ada Lovelace, and AGX Orin.
 
-* `float16` support:
+* ``float16`` support:
 
   * Arithmetic operations are now fully supported.
-  * A new method, `is_fp16_supported()`, and device property, `supports_float16`,
-    for checking the availability of `float16` support.
+  * A new method, ``is_fp16_supported()``, and device property,
+    ``supports_float16``, for checking the availability of ``float16`` support.
 
 * Functionality:
 
@@ -130,7 +130,6 @@ CUDA:
 
 * Lineinfo quality improvement: enabling lineinfo no longer results in any
   changes to generated code.
-
 
 Deprecations:
 
