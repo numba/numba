@@ -23,6 +23,7 @@ Python language support enhancements:
 * Numba's unicode functionality in ``str.startswith`` now supports kwargs
   ``start`` and ``end``.
 * ``min`` and ``max`` now support boolean types.
+* Support is added for the ``dict(iterable)`` constructor.
 
 NumPy features/enhancements:
 
@@ -205,6 +206,7 @@ Pull-Requests:
 * PR `#8325 <https://github.com/numba/numba/pull/8325>`_: Remove use of mk_unique_var in stencil.py (`bszollosinagy <https://github.com/bszollosinagy>`_)
 * PR `#8326 <https://github.com/numba/numba/pull/8326>`_: Remove `mk_unique_var` from `parfor_lowering.py` (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
 * PR `#8331 <https://github.com/numba/numba/pull/8331>`_: Extend docs with info on how to call C functions from Numba (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
+* PR `#8334 <https://github.com/numba/numba/pull/8334>`_: Add dict(*iterable) constructor (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
 * PR `#8335 <https://github.com/numba/numba/pull/8335>`_: Remove deprecated pycc script and related source. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#8336 <https://github.com/numba/numba/pull/8336>`_: Fix typos of "Generalized" in GUFunc-related code (`gmarkall <https://github.com/gmarkall>`_)
 * PR `#8338 <https://github.com/numba/numba/pull/8338>`_: Calculate reductions before fusion so that use of reduction vars can stop fusion. (`DrTodd13 <https://github.com/DrTodd13>`_)
@@ -366,6 +368,7 @@ Pull-Requests:
 * PR `#8858 <https://github.com/numba/numba/pull/8858>`_: Update deprecation notice for objmode fallback RE ``@jit`` use. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#8864 <https://github.com/numba/numba/pull/8864>`_: Remove obsolete deprecation notices (`gmarkall <https://github.com/gmarkall>`_)
 * PR `#8866 <https://github.com/numba/numba/pull/8866>`_: Revise CUDA deprecation notices (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#8870 <https://github.com/numba/numba/pull/8870>`_: Fix opcode "spelling" change since Python 3.11 in CUDA debug test. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 
 Authors:
 
