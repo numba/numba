@@ -11,6 +11,7 @@ import time
 import unittest
 import warnings
 import zlib
+import subprocess
 
 from functools import lru_cache
 from io import StringIO
@@ -762,6 +763,10 @@ class ParallelTestRunner(runner.TextTestRunner):
         self.nprocs = nprocs
         self.useslice = parse_slice(useslice)
         self.runner_args = kwargs
+        # Related to https://github.com/numba/numba/issues/8873
+        # Also see https://github.com/python/cpython/issues/91401
+        if hasattr(subprocess, "_USE_VFORK"):
+            subprocess._USE_VFORK = False
 
     def _run_inner(self, result):
         # We hijack TextTestRunner.run()'s inner logic by passing this
