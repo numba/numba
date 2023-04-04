@@ -102,6 +102,18 @@ the beginning or the end of the index specification::
    >>> numba.float32[::1, :, :]
    array(float32, 3d, F)
 
+This style of type declaration is supported within Numba compiled-functions,
+e.g. declaring the type of a :ref:`typed.List <feature-typed-list>`.::
+
+    from numba import njit, types, typed
+
+    @njit
+    def example():
+        return typed.List.empty_list(types.float64[:, ::1])
+
+Note that this feature is only supported for simple numerical types. Application
+to compound types, e.g. record types, is not supported.
+
 Functions
 ---------
 

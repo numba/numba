@@ -6,7 +6,7 @@ import warnings
 from numba.core.compiler_machinery import (FunctionPass, AnalysisPass,
                                            SSACompliantMixin, register_pass)
 from numba.core import (errors, types, ir, bytecode, postproc, rewrites, config,
-                        transforms)
+                        transforms, consts)
 from numba.misc.special import literal_unroll
 from numba.core.analysis import (dead_branch_prune, rewrite_semantic_constants,
                                  find_literally_calls, compute_cfg_from_blocks,
@@ -1285,7 +1285,7 @@ class MixedContainerUnroller(FunctionPass):
         # 3. No multiple mix-tuple use
 
         # keep running the transform loop until it reports no more changes
-        while(True):
+        while (True):
             stat = self.apply_transform(state)
             mutated |= stat
             if not stat:
@@ -1480,6 +1480,8 @@ class PropagateLiterals(FunctionPass):
         typemap = state.typemap
         flags = state.flags
 
+        accepted_functions = ('isinstance', 'hasattr')
+
         if not hasattr(func_ir, '_definitions') \
                 and not flags.enable_ssa:
             func_ir._definitions = build_definitions(func_ir.blocks)
@@ -1529,7 +1531,8 @@ class PropagateLiterals(FunctionPass):
                     fn = guard(get_definition, func_ir, value.func.name)
                     if fn is None:
                         continue
-                    if not (isinstance(fn, ir.Global) and fn.name == 'isinstance'):  # noqa: E501
+                    if not (isinstance(fn, ir.Global) and fn.name in
+                            accepted_functions):  # noqa: E501
                         continue
 
                     for arg in value.args:
@@ -1537,7 +1540,7 @@ class PropagateLiterals(FunctionPass):
                         iv = func_ir._definitions[arg.name]
                         assert len(iv) == 1  # SSA!
                         if isinstance(iv[0], ir.Expr) and iv[0].op == 'phi':
-                            msg = ('isinstance() cannot determine the '
+                            msg = (f'{fn.name}() cannot determine the '
                                    f'type of variable "{arg.unversioned_name}" '
                                    'due to a branch.')
                             raise errors.NumbaTypeError(msg, loc=assign.loc)
@@ -1582,7 +1585,8 @@ class LiteralPropagationSubPipelinePass(FunctionPass):
         for blk in func_ir.blocks.values():
             for asgn in blk.find_insts(ir.Assign):
                 if isinstance(asgn.value, (ir.Global, ir.FreeVar)):
-                    if asgn.value.value is isinstance:
+                    value = asgn.value.value
+                    if value is isinstance or value is hasattr:
                         found = True
                         break
             if found:
@@ -1720,3 +1724,43 @@ class ReconstructSSA(FunctionPass):
                 typ = locals_dict[parent]
                 for derived in redefs:
                     locals_dict[derived] = typ
+
+
+@register_pass(mutates_CFG=False, analysis_only=False)
+class RewriteDynamicRaises(FunctionPass):
+    """Replace existing raise statements by dynamic raises in Numba IR.
+    """
+    _name = "Rewrite dynamic raises"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        func_ir = state.func_ir
+        changed = False
+
+        for block in func_ir.blocks.values():
+            for raise_ in block.find_insts((ir.Raise, ir.TryRaise)):
+                call_inst = guard(get_definition, func_ir, raise_.exception)
+                if call_inst is None:
+                    continue
+                exc_type = func_ir.infer_constant(call_inst.func.name)
+                exc_args = []
+                for exc_arg in call_inst.args:
+                    try:
+                        const = func_ir.infer_constant(exc_arg)
+                        exc_args.append(const)
+                    except consts.ConstantInferenceError:
+                        exc_args.append(exc_arg)
+                loc = raise_.loc
+
+                cls = {
+                    ir.TryRaise: ir.DynamicTryRaise,
+                    ir.Raise: ir.DynamicRaise,
+                }[type(raise_)]
+
+                dyn_raise = cls(exc_type, tuple(exc_args), loc)
+                block.insert_after(dyn_raise, raise_)
+                block.remove(raise_)
+                changed = True
+        return changed

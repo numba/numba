@@ -825,7 +825,7 @@ class TestSetReflection(BaseTest):
         got = cfunc(cset, cset)
         self.assertPreciseEqual(expected, got)
         self.assertPreciseEqual(pyset, cset)
-        self.assertPreciseEqual(sys.getrefcount(pyset), sys.getrefcount(cset))
+        self.assertRefCountEqual(pyset, cset)
 
     def test_reflect_clean(self):
         """

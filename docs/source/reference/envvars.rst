@@ -312,8 +312,10 @@ Compilation options
 .. envvar:: NUMBA_SLP_VECTORIZE
 
    If set to non-zero, enable LLVM superword-level parallelism vectorization.
+   Note that use of this feature has occasionally resulted in LLVM producing
+   miscompilations, hence it is off by default.
 
-   *Default value:* 1
+   *Default value:* 0
 
 .. envvar:: NUMBA_ENABLE_AVX
 

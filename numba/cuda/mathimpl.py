@@ -1,7 +1,7 @@
 import math
 import operator
 from llvmlite import ir
-from numba.core import types, typing, cgutils
+from numba.core import types, typing, cgutils, targetconfig
 from numba.core.imputils import Registry
 from numba.types import float32, float64, int64, uint64
 from numba.cuda import libdevice
@@ -42,7 +42,6 @@ unarys += [('sinh', 'sinhf', math.sinh)]
 unarys += [('atan', 'atanf', math.atan)]
 unarys += [('atanh', 'atanhf', math.atanh)]
 unarys += [('tan', 'tanf', math.tan)]
-unarys += [('tanh', 'tanhf', math.tanh)]
 unarys += [('trunc', 'truncf', math.trunc)]
 
 unarys_fastmath = {}
@@ -188,7 +187,7 @@ def impl_boolean(key, ty, libfunc):
     lower(key, ty)(lower_boolean_impl)
 
 
-def impl_unary(key, ty, libfunc):
+def get_lower_unary_impl(key, ty, libfunc):
     def lower_unary_impl(context, builder, sig, args):
         actual_libfunc = libfunc
         fast_replacement = None
@@ -201,7 +200,29 @@ def impl_unary(key, ty, libfunc):
         libfunc_impl = context.get_function(actual_libfunc,
                                             typing.signature(ty, ty))
         return libfunc_impl(builder, args)
+    return lower_unary_impl
 
+
+def get_unary_impl_for_fn_and_ty(fn, ty):
+    # tanh is a special case - because it is not registered like the other
+    # unary implementations, it does not appear in the unarys list. However,
+    # its implementation can be looked up by key like the other
+    # implementations, so we add it to the list we search here.
+    tanh_impls = ('tanh', 'tanhf', math.tanh)
+    for fname64, fname32, key in unarys + [tanh_impls]:
+        if fn == key:
+            if ty == float32:
+                impl = getattr(libdevice, fname32)
+            elif ty == float64:
+                impl = getattr(libdevice, fname64)
+
+            return get_lower_unary_impl(key, ty, impl)
+
+    raise RuntimeError(f"Implementation of {fn} for {ty} not found")
+
+
+def impl_unary(key, ty, libfunc):
+    lower_unary_impl = get_lower_unary_impl(key, ty, libfunc)
     lower(key, ty)(lower_unary_impl)
 
 
@@ -223,7 +244,7 @@ def impl_unary_int(key, ty, libfunc):
     lower(key, ty)(lower_unary_int_impl)
 
 
-def impl_binary(key, ty, libfunc):
+def get_lower_binary_impl(key, ty, libfunc):
     def lower_binary_impl(context, builder, sig, args):
         actual_libfunc = libfunc
         fast_replacement = None
@@ -236,7 +257,24 @@ def impl_binary(key, ty, libfunc):
         libfunc_impl = context.get_function(actual_libfunc,
                                             typing.signature(ty, ty, ty))
         return libfunc_impl(builder, args)
+    return lower_binary_impl
 
+
+def get_binary_impl_for_fn_and_ty(fn, ty):
+    for fname64, fname32, key in binarys:
+        if fn == key:
+            if ty == float32:
+                impl = getattr(libdevice, fname32)
+            elif ty == float64:
+                impl = getattr(libdevice, fname64)
+
+            return get_lower_binary_impl(key, ty, impl)
+
+    raise RuntimeError(f"Implementation of {fn} for {ty} not found")
+
+
+def impl_binary(key, ty, libfunc):
+    lower_binary_impl = get_lower_binary_impl(key, ty, libfunc)
     lower(key, ty, ty)(lower_binary_impl)
 
 
@@ -339,12 +377,45 @@ impl_ldexp(types.float32, libdevice.ldexpf)
 impl_ldexp(types.float64, libdevice.ldexp)
 
 
+def impl_tanh(ty, libfunc):
+    def lower_tanh_impl(context, builder, sig, args):
+        def get_compute_capability():
+            flags = targetconfig.ConfigStack().top()
+            return flags.compute_capability
+
+        def tanh_impl_libdevice():
+            tanh_sig = typing.signature(ty, ty)
+            libfunc_impl = context.get_function(libfunc, tanh_sig)
+            return libfunc_impl(builder, args)
+
+        def tanhf_impl_fastmath():
+            fnty = ir.FunctionType(ir.FloatType(), [ir.FloatType()])
+            asm = ir.InlineAsm(fnty, 'tanh.approx.f32 $0, $1;', '=f,f')
+            return builder.call(asm, args)
+
+        if ty == float32 and context.fastmath:
+            cc = get_compute_capability()
+            if cc >= (7,5):
+                return tanhf_impl_fastmath()
+
+        return tanh_impl_libdevice()
+
+    lower(math.tanh, ty)(lower_tanh_impl)
+
+
+impl_tanh(types.float32, libdevice.tanhf)
+impl_tanh(types.float64, libdevice.tanh)
+
+impl_unary_int(math.tanh, int64, libdevice.tanh)
+impl_unary_int(math.tanh, uint64, libdevice.tanh)
+
 # Complex power implementations - translations of _Py_c_pow from CPython
 # https://github.com/python/cpython/blob/a755410e054e1e2390de5830befc08fe80706c66/Objects/complexobject.c#L123-L151
 #
 # The complex64 variant casts all constants and some variables to ensure that
 # as much computation is done in single precision as possible. A small number
 # of operations are still done in 64-bit, but these come from libdevice code.
+
 
 def cpow_implement(fty, cty):
     def core(context, builder, sig, args):

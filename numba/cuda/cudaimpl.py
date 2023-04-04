@@ -6,9 +6,11 @@ from llvmlite import ir
 import llvmlite.binding as ll
 
 from numba.core.imputils import Registry, lower_cast
-from numba.core.typing.npydecl import parse_dtype, signature
+from numba.core.typing.npydecl import parse_dtype
 from numba.core.datamodel import models
 from numba.core import types, cgutils
+from numba.np import ufunc_db
+from numba.np.npyimpl import register_ufuncs
 from .cudadrv import nvvm
 from numba import cuda
 from numba.cuda import nvvmutils, stubs, errors
@@ -185,7 +187,7 @@ def ptx_threadfence_device(context, builder, sig, args):
 @lower(stubs.syncwarp)
 def ptx_syncwarp(context, builder, sig, args):
     mask = context.get_constant(types.int32, 0xFFFFFFFF)
-    mask_sig = signature(types.none, types.int32)
+    mask_sig = types.none(types.int32)
     return ptx_syncwarp_mask(context, builder, mask_sig, [mask])
 
 
@@ -708,7 +710,7 @@ lower(math.degrees, types.f4)(gen_deg_rad(_rad2deg))
 lower(math.degrees, types.f8)(gen_deg_rad(_rad2deg))
 
 
-def _normalize_indices(context, builder, indty, inds):
+def _normalize_indices(context, builder, indty, inds, aryty, valty):
     """
     Convert integer indices into tuple of intp
     """
@@ -719,6 +721,15 @@ def _normalize_indices(context, builder, indty, inds):
         indices = cgutils.unpack_tuple(builder, inds, count=len(indty))
     indices = [context.cast(builder, i, t, types.intp)
                for t, i in zip(indty, indices)]
+
+    dtype = aryty.dtype
+    if dtype != valty:
+        raise TypeError("expect %s but got %s" % (dtype, valty))
+
+    if aryty.ndim != len(indty):
+        raise TypeError("indexing %d-D array with %d-D index" %
+                        (aryty.ndim, len(indty)))
+
     return indty, indices
 
 
@@ -729,14 +740,8 @@ def _atomic_dispatcher(dispatch_fn):
         ary, inds, val = args
         dtype = aryty.dtype
 
-        indty, indices = _normalize_indices(context, builder, indty, inds)
-
-        if dtype != valty:
-            raise TypeError("expect %s but got %s" % (dtype, valty))
-
-        if aryty.ndim != len(indty):
-            raise TypeError("indexing %d-D array with %d-D index" %
-                            (aryty.ndim, len(indty)))
+        indty, indices = _normalize_indices(context, builder, indty, inds,
+                                            aryty, valty)
 
         lary = context.make_array(aryty)(context, builder, ary)
         ptr = cgutils.get_item_pointer(context, builder, aryty, lary, indices,
@@ -917,22 +922,32 @@ def ptx_atomic_nanmin(context, builder, dtype, ptr, val):
 
 
 @lower(stubs.atomic.compare_and_swap, types.Array, types.Any, types.Any)
-def ptx_atomic_cas_tuple(context, builder, sig, args):
-    aryty, oldty, valty = sig.args
-    ary, old, val = args
-    dtype = aryty.dtype
+def ptx_atomic_compare_and_swap(context, builder, sig, args):
+    sig = sig.return_type(sig.args[0], types.intp, sig.args[1], sig.args[2])
+    args = (args[0], context.get_constant(types.intp, 0), args[1], args[2])
+    return ptx_atomic_cas(context, builder, sig, args)
+
+
+@lower(stubs.atomic.cas, types.Array, types.intp, types.Any, types.Any)
+@lower(stubs.atomic.cas, types.Array, types.Tuple, types.Any, types.Any)
+@lower(stubs.atomic.cas, types.Array, types.UniTuple, types.Any, types.Any)
+def ptx_atomic_cas(context, builder, sig, args):
+    aryty, indty, oldty, valty = sig.args
+    ary, inds, old, val = args
+
+    indty, indices = _normalize_indices(context, builder, indty, inds, aryty,
+                                        valty)
 
     lary = context.make_array(aryty)(context, builder, ary)
-    zero = context.get_constant(types.intp, 0)
-    ptr = cgutils.get_item_pointer(context, builder, aryty, lary, (zero,))
+    ptr = cgutils.get_item_pointer(context, builder, aryty, lary, indices,
+                                   wraparound=True)
 
     if aryty.dtype in (cuda.cudadecl.integer_numba_types):
         lmod = builder.module
         bitwidth = aryty.dtype.bitwidth
         return nvvmutils.atomic_cmpxchg(builder, lmod, bitwidth, ptr, old, val)
     else:
-        raise TypeError('Unimplemented atomic compare_and_swap '
-                        'with %s array' % dtype)
+        raise TypeError('Unimplemented atomic cas with %s array' % aryty.dtype)
 
 
 # -----------------------------------------------------------------------------
@@ -1051,3 +1066,8 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
 @lower_constant(CUDADispatcher)
 def cuda_dispatcher_const(context, builder, ty, pyval):
     return context.get_dummy_value()
+
+
+# NumPy
+
+register_ufuncs(ufunc_db.get_ufuncs(), lower)

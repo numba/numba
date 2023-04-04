@@ -1,8 +1,8 @@
 import platform
 import numpy as np
 from numba import types
-from unittest import TestCase, skipIf
-from numba.tests.support import override_env_config
+import unittest
+from numba.tests.support import override_env_config, TestCase
 from numba.core.compiler import compile_isolated, Flags
 from numba.core.cpu_options import FastMathOptions
 
@@ -13,7 +13,7 @@ if _DEBUG:
     llvm.set_option("", "--debug-only=loop-vectorize")
 
 
-@skipIf(platform.machine() != 'x86_64', 'x86_64 only test')
+@unittest.skipIf(platform.machine() != 'x86_64', 'x86_64 only test')
 class TestVectorization(TestCase):
     """
     Tests to assert that code which should vectorize does indeed vectorize
@@ -40,6 +40,9 @@ class TestVectorization(TestCase):
         self.assertIn("vector.body", llvm_ir)
         self.assertIn("llvm.loop.isvectorized", llvm_ir)
 
+    # SLP is off by default due to miscompilations, see #8705. Put this into a
+    # subprocess to isolate any potential issues.
+    @TestCase.run_test_in_subprocess(envvars={'NUMBA_SLP_VECTORIZE': '1'})
     def test_slp(self):
         # Sample translated from:
         # https://www.llvm.org/docs/Vectorizers.html#the-slp-vectorizer
@@ -71,3 +74,7 @@ class TestVectorization(TestCase):
                               fastmath=True)
         self.assertIn("vector.body", llvm_ir)
         self.assertIn("llvm.loop.isvectorized", llvm_ir)
+
+
+if __name__ == '__main__':
+    unittest.main()

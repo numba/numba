@@ -384,16 +384,12 @@ def _create_timedelta_comparison_impl(ll_op, default_value):
                 else:
                     builder.store(builder.icmp_unsigned(ll_op, norm_a, norm_b), ret)
             with otherwise:
-                if numpy_support.numpy_version < (1, 16):
-                    # No scaling when comparing NaTs
-                    builder.store(builder.icmp_unsigned(ll_op, va, vb), ret)
+                # NaT ==/>=/>/</<= NaT is False
+                # NaT != <anything, including NaT> is True
+                if ll_op == '!=':
+                    builder.store(cgutils.true_bit, ret)
                 else:
-                    # NumPy >= 1.16 switched to NaT ==/>=/>/</<= NaT being
-                    # False and NaT != <anything, including NaT> being True
-                    if ll_op == '!=':
-                        builder.store(cgutils.true_bit, ret)
-                    else:
-                        builder.store(cgutils.false_bit, ret)
+                    builder.store(cgutils.false_bit, ret)
         res = builder.load(ret)
         return impl_ret_untracked(context, builder, sig.return_type, res)
 
@@ -411,14 +407,8 @@ def _create_timedelta_ordering_impl(ll_op):
                     context, builder, va, vb, ta, tb)
                 builder.store(builder.icmp_signed(ll_op, norm_a, norm_b), ret)
             with otherwise:
-                if numpy_support.numpy_version < (1, 16):
-                    # No scaling when comparing NaT with something else
-                    # (i.e. NaT is <= everything else, since it's the smallest
-                    #  int64 value)
-                    builder.store(builder.icmp_signed(ll_op, va, vb), ret)
-                else:
-                    # NumPy >= 1.16 switched to NaT >=/>/</<= NaT being False
-                    builder.store(cgutils.false_bit, ret)
+                # NaT >=/>/</<= NaT is False
+                builder.store(cgutils.false_bit, ret)
         res = builder.load(ret)
         return impl_ret_untracked(context, builder, sig.return_type, res)
 
@@ -674,14 +664,10 @@ def _create_datetime_comparison_impl(ll_op):
                 ret_val = builder.icmp_signed(ll_op, norm_a, norm_b)
                 builder.store(ret_val, ret)
             with otherwise:
-                if numpy_support.numpy_version < (1, 16):
-                    # No scaling when comparing NaTs
-                    ret_val = builder.icmp_signed(ll_op, va, vb)
+                if ll_op == '!=':
+                    ret_val = cgutils.true_bit
                 else:
-                    if ll_op == '!=':
-                        ret_val = cgutils.true_bit
-                    else:
-                        ret_val = cgutils.false_bit
+                    ret_val = cgutils.false_bit
                 builder.store(ret_val, ret)
         res = builder.load(ret)
         return impl_ret_untracked(context, builder, sig.return_type, res)
@@ -717,7 +703,7 @@ def _gen_datetime_max_impl(NAT_DOMINATES):
         in2_not_nat = is_not_nat(builder, in2)
         in1_ge_in2 = builder.icmp_signed('>=', in1, in2)
         res = builder.select(in1_ge_in2, in1, in2)
-        if NAT_DOMINATES and numpy_support.numpy_version >= (1, 18):
+        if NAT_DOMINATES:
             # NaT now dominates, like NaN
             in1, in2 = in2, in1
         res = builder.select(in1_not_nat, res, in2)
@@ -738,7 +724,7 @@ def _gen_datetime_min_impl(NAT_DOMINATES):
         in2_not_nat = is_not_nat(builder, in2)
         in1_le_in2 = builder.icmp_signed('<=', in1, in2)
         res = builder.select(in1_le_in2, in1, in2)
-        if NAT_DOMINATES and numpy_support.numpy_version >= (1, 18):
+        if NAT_DOMINATES:
             # NaT now dominates, like NaN
             in1, in2 = in2, in1
         res = builder.select(in1_not_nat, res, in2)
@@ -759,7 +745,7 @@ def _gen_timedelta_max_impl(NAT_DOMINATES):
         in2_not_nat = is_not_nat(builder, in2)
         in1_ge_in2 = builder.icmp_signed('>=', in1, in2)
         res = builder.select(in1_ge_in2, in1, in2)
-        if NAT_DOMINATES and numpy_support.numpy_version >= (1, 18):
+        if NAT_DOMINATES:
             # NaT now dominates, like NaN
             in1, in2 = in2, in1
         res = builder.select(in1_not_nat, res, in2)
@@ -780,7 +766,7 @@ def _gen_timedelta_min_impl(NAT_DOMINATES):
         in2_not_nat = is_not_nat(builder, in2)
         in1_le_in2 = builder.icmp_signed('<=', in1, in2)
         res = builder.select(in1_le_in2, in1, in2)
-        if NAT_DOMINATES and numpy_support.numpy_version >= (1, 18):
+        if NAT_DOMINATES:
             # NaT now dominates, like NaN
             in1, in2 = in2, in1
         res = builder.select(in1_not_nat, res, in2)

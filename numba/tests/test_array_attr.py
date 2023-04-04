@@ -23,6 +23,10 @@ def array_itemsize(a):
     return a.itemsize
 
 
+def array_nbytes(a):
+    return a.nbytes
+
+
 def array_shape(a, i):
     return a.shape[i]
 
@@ -52,6 +56,8 @@ def array_flags_f_contiguous(a):
 def nested_array_itemsize(a):
     return a.f.itemsize
 
+def nested_array_nbytes(a):
+    return a.f.nbytes
 
 def nested_array_shape(a):
     return a.f.shape
@@ -144,6 +150,9 @@ class TestArrayAttr(MemoryLeakMixin, TestCase):
     def test_itemsize(self):
         self.check_unary_with_arrays(array_itemsize)
 
+    def test_nbytes(self):
+        self.check_unary_with_arrays(array_nbytes)
+
     def test_dtype(self):
         pyfunc = array_dtype
         self.check_unary(pyfunc, self.a)
@@ -194,6 +203,12 @@ class TestNestedArrayAttr(MemoryLeakMixin, unittest.TestCase):
 
     def test_ndim(self):
         pyfunc = nested_array_ndim
+        cfunc = self.get_cfunc(pyfunc)
+
+        self.assertEqual(pyfunc(self.a), cfunc(self.a))
+
+    def test_nbytes(self):
+        pyfunc = nested_array_nbytes
         cfunc = self.get_cfunc(pyfunc)
 
         self.assertEqual(pyfunc(self.a), cfunc(self.a))
