@@ -231,6 +231,13 @@ def generated_jit(function=None, cache=False,
     function is called at compile-time with the *types* of the arguments
     and should return an implementation function for those types.
     """
+    url_s = "https://numba.readthedocs.io/en/stable/reference/deprecation.html"
+    url_anchor = "#deprecation-of-generated-jit"
+    url = f"{url_s}{url_anchor}"
+    msg = ("numba.generated_jit is deprecated. Please see the documentation "
+           f"at: {url} for more information and advice on a suitable "
+           "replacement.")
+    warnings.warn(msg, NumbaDeprecationWarning)
     dispatcher_args = {}
     if pipeline_class is not None:
         dispatcher_args['pipeline_class'] = pipeline_class

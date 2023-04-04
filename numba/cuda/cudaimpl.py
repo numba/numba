@@ -453,7 +453,7 @@ def fp16_div_impl(context, builder, sig, args):
     def fp16_div(x, y):
         return cuda.fp16.hdiv(x, y)
 
-    return context.compile_internal(builder, fp16_div, sig, args, )
+    return context.compile_internal(builder, fp16_div, sig, args)
 
 
 _fp16_cmp = """{{
