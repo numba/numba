@@ -45,7 +45,7 @@ FileStamp = pt.Tuple[float, int]
 IndexOverloadData = pt.Tuple[str, pt.Dict[str, FileStamp]]
 # Index data: what gets pickled and saved.
 # Tuple of Timestamp and size of main file + IndexOverloadData
-IndexData = pt.Tuple[pt.Tuple[float, int], IndexOverloadData]
+IndexData = pt.Tuple[pt.Tuple[float, int], pt.Dict[IndexKey, IndexOverloadData]]
 # This is the output of CompileResult._reduce
 ReducedCompileResult = pt.Tuple
 # CompileResult
