@@ -1,4 +1,3 @@
-import ctypes
 import json
 import locale
 import multiprocessing
@@ -10,11 +9,10 @@ from contextlib import redirect_stdout
 from datetime import datetime
 from io import StringIO
 from subprocess import check_output, PIPE, CalledProcessError
+import numpy as np
 import llvmlite.binding as llvmbind
 from llvmlite import __version__ as llvmlite_version
 from numba import cuda as cu, __version__ as version_number
-from numba import roc
-from numba.roc.hlc import hlc, libhlc
 from numba.cuda import cudadrv
 from numba.cuda.cudadrv.driver import driver as cudriver
 from numba.cuda.cudadrv.runtime import runtime as curuntime
@@ -60,11 +58,18 @@ _llvm_version = 'LLVM Version'
 _cu_dev_init = 'CUDA Device Init'
 _cu_drv_ver = 'CUDA Driver Version'
 _cu_rt_ver = 'CUDA Runtime Version'
+_cu_nvidia_bindings = 'NVIDIA CUDA Bindings'
+_cu_nvidia_bindings_used = 'NVIDIA CUDA Bindings In Use'
 _cu_detect_out, _cu_lib_test = 'CUDA Detect Output', 'CUDA Lib Test'
-# ROC information
-_roc_available, _roc_toolchains = 'ROC Available', 'ROC Toolchains'
-_hsa_agents_count, _hsa_agents = 'HSA Agents Count', 'HSA Agents'
-_hsa_gpus_count, _hsa_gpus = 'HSA Discrete GPUs Count', 'HSA Discrete GPUs'
+_cu_mvc_available = 'NVIDIA CUDA Minor Version Compatibility Available'
+_cu_mvc_needed = 'NVIDIA CUDA Minor Version Compatibility Needed'
+_cu_mvc_in_use = 'NVIDIA CUDA Minor Version Compatibility In Use'
+# NumPy info
+_numpy_version = 'NumPy Version'
+_numpy_supported_simd_features = 'NumPy Supported SIMD features'
+_numpy_supported_simd_dispatch = 'NumPy Supported SIMD dispatch'
+_numpy_supported_simd_baseline = 'NumPy Supported SIMD baseline'
+_numpy_AVX512_SKX_detected = 'NumPy AVX512_SKX detected'
 # SVML info
 _svml_state, _svml_loaded = 'SVML State', 'SVML Lib Loaded'
 _llvm_svml_patched = 'LLVM SVML Patched'
@@ -304,7 +309,6 @@ def get_sysinfo():
         _numba_version: version_number,
         _llvm_version: '.'.join(str(i) for i in llvmbind.llvm_version_info),
         _llvmlite_version: llvmlite_version,
-        _roc_available: roc.is_available(),
         _psutil: _psutil_import,
     }
 
@@ -335,7 +339,7 @@ def get_sysinfo():
         msg_not_found = "CUDA driver library cannot be found"
         msg_disabled_by_user = "CUDA is disabled"
         msg_end = " or no CUDA enabled devices are present."
-        msg_generic_problem = "CUDA device intialisation problem."
+        msg_generic_problem = "CUDA device initialisation problem."
         msg = getattr(e, 'msg', None)
         if msg is not None:
             if msg_not_found in msg:
@@ -359,79 +363,59 @@ def get_sysinfo():
             sys_info[_cu_detect_out] = output.getvalue()
             output.close()
 
-            dv = ctypes.c_int(0)
-            cudriver.cuDriverGetVersion(ctypes.byref(dv))
-            sys_info[_cu_drv_ver] = dv.value
-
-            rtver = ctypes.c_int(0)
-            curuntime.cudaRuntimeGetVersion(ctypes.byref(rtver))
-            sys_info[_cu_rt_ver] = rtver.value
+            cu_drv_ver = cudriver.get_version()
+            cu_rt_ver = curuntime.get_version()
+            sys_info[_cu_drv_ver] = '%s.%s' % cu_drv_ver
+            sys_info[_cu_rt_ver] = '%s.%s' % cu_rt_ver
 
             output = StringIO()
             with redirect_stdout(output):
                 cudadrv.libs.test(sys.platform, print_paths=False)
             sys_info[_cu_lib_test] = output.getvalue()
             output.close()
+
+            try:
+                from cuda import cuda  # noqa: F401
+                nvidia_bindings_available = True
+            except ImportError:
+                nvidia_bindings_available = False
+            sys_info[_cu_nvidia_bindings] = nvidia_bindings_available
+
+            nv_binding_used = bool(cudadrv.driver.USE_NV_BINDING)
+            sys_info[_cu_nvidia_bindings_used] = nv_binding_used
+
+            try:
+                from ptxcompiler import compile_ptx  # noqa: F401
+                from cubinlinker import CubinLinker  # noqa: F401
+                sys_info[_cu_mvc_available] = True
+            except ImportError:
+                sys_info[_cu_mvc_available] = False
+
+            sys_info[_cu_mvc_needed] = cu_rt_ver > cu_drv_ver
+            mvc_used = hasattr(cudadrv.driver, 'CubinLinker')
+            sys_info[_cu_mvc_in_use] = mvc_used
         except Exception as e:
             _warning_log.append(
                 "Warning (cuda): Probing CUDA failed "
                 "(device and driver present, runtime problem?)\n"
                 f"(cuda) {type(e)}: {e}")
 
-    # ROC information
-    # If no ROC try and report why
-    if not sys_info[_roc_available]:
-        from numba.roc.hsadrv.driver import hsa
-        try:
-            hsa.is_available
-        except Exception as e:
-            msg = str(e)
-        else:
-            msg = 'No ROC toolchains found.'
-        _warning_log.append(f"Warning (roc): Error initialising ROC: {msg}")
-
-    toolchains = []
+    # NumPy information
+    sys_info[_numpy_version] = np.version.full_version
     try:
-        libhlc.HLC()
-        toolchains.append('librocmlite library')
-    except Exception:
-        pass
-    try:
-        cmd = hlc.CmdLine().check_tooling()
-        toolchains.append('ROC command line tools')
-    except Exception:
-        pass
-    sys_info[_roc_toolchains] = toolchains
-
-    try:
-        # ROC might not be available due to lack of tool chain, but HSA
-        # agents may be listed
-        from numba.roc.hsadrv.driver import hsa, dgpu_count
-
-        def decode(x):
-            return x.decode('utf-8') if isinstance(x, bytes) else x
-
-        sys_info[_hsa_agents_count] = len(hsa.agents)
-        agents = []
-        for i, agent in enumerate(hsa.agents):
-            agents.append({
-                'Agent id': i,
-                'Vendor': decode(agent.vendor_name),
-                'Name': decode(agent.name),
-                'Type': agent.device,
-            })
-        sys_info[_hsa_agents] = agents
-
-        _dgpus = []
-        for a in hsa.agents:
-            if a.is_component and a.device == 'GPU':
-                _dgpus.append(decode(a.name))
-        sys_info[_hsa_gpus_count] = dgpu_count()
-        sys_info[_hsa_gpus] = ', '.join(_dgpus)
-    except Exception as e:
-        _warning_log.append(
-            "Warning (roc): No HSA Agents found, "
-            f"encountered exception when searching: {e}")
+        # NOTE: These consts were added in NumPy 1.20
+        from numpy.core._multiarray_umath import (__cpu_features__,
+                                                  __cpu_dispatch__,
+                                                  __cpu_baseline__,)
+    except ImportError:
+        sys_info[_numpy_AVX512_SKX_detected] = False
+    else:
+        feat_filtered = [k for k, v in __cpu_features__.items() if v]
+        sys_info[_numpy_supported_simd_features] = feat_filtered
+        sys_info[_numpy_supported_simd_dispatch] = __cpu_dispatch__
+        sys_info[_numpy_supported_simd_baseline] = __cpu_baseline__
+        sys_info[_numpy_AVX512_SKX_detected] = \
+            __cpu_features__.get("AVX512_SKX", False)
 
     # SVML information
     # Replicate some SVML detection logic from numba.__init__ here.
@@ -473,7 +457,13 @@ def get_sysinfo():
         return "Unknown import problem."
 
     try:
+        # check import is ok, this means the DSO linkage is working
         from numba.np.ufunc import tbbpool  # NOQA
+        # check that the version is compatible, this is a check performed at
+        # runtime (well, compile time), it will also ImportError if there's
+        # a problem.
+        from numba.np.ufunc.parallel import _check_tbb_version_compatible
+        _check_tbb_version_compatible()
         sys_info[_tbb_thread] = True
     except ImportError as e:
         # might be a missing symbol due to e.g. tbb libraries missing
@@ -606,20 +596,34 @@ def display_sysinfo(info=None, sep_pos=45):
         ("__CUDA Information__",),
         ("CUDA Device Initialized", info.get(_cu_dev_init, '?')),
         ("CUDA Driver Version", info.get(_cu_drv_ver, '?')),
-        ("CUDA Runtime Version",info.get(_cu_rt_ver, '?')),
+        ("CUDA Runtime Version", info.get(_cu_rt_ver, '?')),
+        ("CUDA NVIDIA Bindings Available", info.get(_cu_nvidia_bindings, '?')),
+        ("CUDA NVIDIA Bindings In Use",
+         info.get(_cu_nvidia_bindings_used, '?')),
+        ("CUDA Minor Version Compatibility Available",
+         info.get(_cu_mvc_available, '?')),
+        ("CUDA Minor Version Compatibility Needed",
+         info.get(_cu_mvc_needed, '?')),
+        ("CUDA Minor Version Compatibility In Use",
+         info.get(_cu_mvc_in_use, '?')),
         ("CUDA Detect Output:",),
         (info.get(_cu_detect_out, "None"),),
         ("CUDA Libraries Test Output:",),
         (info.get(_cu_lib_test, "None"),),
         ("",),
-        ("__ROC information__",),
-        ("ROC Available", info.get(_roc_available, '?')),
-        ("ROC Toolchains", info.get(_roc_toolchains, []) or 'None'),
-        ("HSA Agents Count", info.get(_hsa_agents_count, 0)),
-        ("HSA Agents:",),
-        (DisplaySeqMaps(info.get(_hsa_agents, {})) or ('None',)),
-        ('HSA Discrete GPUs Count', info.get(_hsa_gpus_count, 0)),
-        ('HSA Discrete GPUs', info.get(_hsa_gpus, 'None')),
+        ("__NumPy Information__",),
+        ("NumPy Version", info.get(_numpy_version, '?')),
+        ("NumPy Supported SIMD features",
+         DisplaySeq(info.get(_numpy_supported_simd_features, [])
+                    or ('None found.',))),
+        ("NumPy Supported SIMD dispatch",
+         DisplaySeq(info.get(_numpy_supported_simd_dispatch, [])
+                    or ('None found.',))),
+        ("NumPy Supported SIMD baseline",
+         DisplaySeq(info.get(_numpy_supported_simd_baseline, [])
+                    or ('None found.',))),
+        ("NumPy AVX512_SKX support detected",
+         info.get(_numpy_AVX512_SKX_detected, '?')),
         ("",),
         ("__SVML Information__",),
         ("SVML State, config.USING_SVML", info.get(_svml_state, '?')),

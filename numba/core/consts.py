@@ -111,5 +111,8 @@ class ConstantInference(object):
     def _infer_getattr(self, value, expr):
         if isinstance(value, (ModuleType, type)):
             # Allow looking up a constant on a class or module
-            return getattr(value, expr.attr)
+            try:
+                return getattr(value, expr.attr)
+            except AttributeError:
+                pass
         self._fail(expr)

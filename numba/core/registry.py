@@ -1,4 +1,5 @@
 import contextlib
+from functools import cached_property
 
 from numba.core.descriptors import TargetDescriptor
 from numba.core import utils, typing, dispatcher, cpu
@@ -25,12 +26,12 @@ class CPUTarget(TargetDescriptor):
     options = cpu.CPUTargetOptions
     _nested = _NestedContext()
 
-    @utils.cached_property
+    @cached_property
     def _toplevel_target_context(self):
         # Lazily-initialized top-level target context, for all threads
         return cpu.CPUContext(self.typing_context, self._target_name)
 
-    @utils.cached_property
+    @cached_property
     def _toplevel_typing_context(self):
         # Lazily-initialized top-level typing context, for all threads
         return typing.Context()
@@ -73,30 +74,30 @@ class CPUDispatcher(dispatcher.Dispatcher):
     targetdescr = cpu_target
 
 
-class TargetRegistry(utils.UniqueDict):
+class DelayedRegistry(utils.UniqueDict):
     """
-    A registry of API implementations for various backends.
+    A unique dictionary but with deferred initialisation of the values.
 
     Attributes
     ----------
     ondemand:
 
-        A dictionary of target-name -> function, where function is executed
-        the first time a target is used.  It is used for deferred
-        initialization for some targets (e.g. gpu).
+        A dictionary of key -> value, where value is executed
+        the first time it is is used.  It is used for part of a deferred
+        initialization strategy.
     """
     def __init__(self, *args, **kws):
         self.ondemand = utils.UniqueDict()
         self.key_type = kws.pop('key_type', None)
         self.value_type = kws.pop('value_type', None)
         self._type_check = self.key_type or self.value_type
-        super(TargetRegistry, self).__init__(*args, **kws)
+        super(DelayedRegistry, self).__init__(*args, **kws)
 
     def __getitem__(self, item):
         if item in self.ondemand:
             self[item] = self.ondemand[item]()
             del self.ondemand[item]
-        return super(TargetRegistry, self).__getitem__(item)
+        return super(DelayedRegistry, self).__getitem__(item)
 
     def __setitem__(self, key, value):
         if self._type_check:
@@ -109,4 +110,4 @@ class TargetRegistry(utils.UniqueDict):
                 check(key, self.key_type)
             if self.value_type is not None:
                 check(value, self.value_type)
-        return super(TargetRegistry, self).__setitem__(key, value)
+        return super(DelayedRegistry, self).__setitem__(key, value)

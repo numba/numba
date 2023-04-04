@@ -23,15 +23,18 @@ from functools import reduce
 from collections import defaultdict, OrderedDict, namedtuple
 from contextlib import contextmanager
 import operator
+from dataclasses import make_dataclass
 
+from llvmlite import ir as lir
+from numba.core.imputils import impl_ret_untracked
 import numba.core.ir
 from numba.core import types, typing, utils, errors, ir, analysis, postproc, rewrites, typeinfer, config, ir_utils
 from numba import prange, pndindex
-from numba.np.numpy_support import as_dtype
+from numba.np.npdatetime_helpers import datetime_minimum, datetime_maximum
+from numba.np.numpy_support import as_dtype, numpy_version
 from numba.core.typing.templates import infer_global, AbstractTemplate
 from numba.stencils.stencilparfor import StencilPass
-from numba.core.extending import register_jitable
-
+from numba.core.extending import register_jitable, lower_builtin
 
 from numba.core.ir_utils import (
     mk_unique_var,
@@ -75,7 +78,9 @@ from numba.core.ir_utils import (
     index_var_of_get_setitem,
     set_index_var_of_get_setitem,
     find_potential_aliases,
-    replace_var_names)
+    replace_var_names,
+    transfer_scope,
+)
 
 from numba.core.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
@@ -120,6 +125,7 @@ class internal_prange(object):
     def __new__(cls, *args):
         return range(*args)
 
+
 def min_parallel_impl(return_type, arg):
     # XXX: use prange for 1D arrays since pndindex returns a 1-tuple instead of
     # integer. This causes type and fusion issues.
@@ -127,13 +133,23 @@ def min_parallel_impl(return_type, arg):
         def min_1(in_arr):
             return in_arr[()]
     elif arg.ndim == 1:
-        def min_1(in_arr):
-            numba.parfors.parfor.init_prange()
-            min_checker(len(in_arr))
-            val = numba.cpython.builtins.get_type_max_value(in_arr.dtype)
-            for i in numba.parfors.parfor.internal_prange(len(in_arr)):
-                val = min(val, in_arr[i])
-            return val
+        if isinstance(arg.dtype, (types.NPDatetime, types.NPTimedelta)):
+            # NaT is always returned if it is in the array
+            def min_1(in_arr):
+                numba.parfors.parfor.init_prange()
+                min_checker(len(in_arr))
+                val = numba.cpython.builtins.get_type_max_value(in_arr.dtype)
+                for i in numba.parfors.parfor.internal_prange(len(in_arr)):
+                    val = datetime_minimum(val, in_arr[i])
+                return val
+        else:
+            def min_1(in_arr):
+                numba.parfors.parfor.init_prange()
+                min_checker(len(in_arr))
+                val = numba.cpython.builtins.get_type_max_value(in_arr.dtype)
+                for i in numba.parfors.parfor.internal_prange(len(in_arr)):
+                    val = min(val, in_arr[i])
+                return val
     else:
         def min_1(in_arr):
             numba.parfors.parfor.init_prange()
@@ -149,13 +165,23 @@ def max_parallel_impl(return_type, arg):
         def max_1(in_arr):
             return in_arr[()]
     elif arg.ndim == 1:
-        def max_1(in_arr):
-            numba.parfors.parfor.init_prange()
-            max_checker(len(in_arr))
-            val = numba.cpython.builtins.get_type_min_value(in_arr.dtype)
-            for i in numba.parfors.parfor.internal_prange(len(in_arr)):
-                val = max(val, in_arr[i])
-            return val
+        if isinstance(arg.dtype, (types.NPDatetime, types.NPTimedelta)):
+            # NaT is always returned if it is in the array
+            def max_1(in_arr):
+                numba.parfors.parfor.init_prange()
+                max_checker(len(in_arr))
+                val = numba.cpython.builtins.get_type_min_value(in_arr.dtype)
+                for i in numba.parfors.parfor.internal_prange(len(in_arr)):
+                    val = datetime_maximum(val, in_arr[i])
+                return val
+        else:
+            def max_1(in_arr):
+                numba.parfors.parfor.init_prange()
+                max_checker(len(in_arr))
+                val = numba.cpython.builtins.get_type_min_value(in_arr.dtype)
+                for i in numba.parfors.parfor.internal_prange(len(in_arr)):
+                    val = max(val, in_arr[i])
+                return val
     else:
         def max_1(in_arr):
             numba.parfors.parfor.init_prange()
@@ -429,7 +455,7 @@ swap_functions_map = {
 }
 
 def fill_parallel_impl(return_type, arr, val):
-    """Parallel implemention of ndarray.fill.  The array on
+    """Parallel implementation of ndarray.fill.  The array on
        which to operate is retrieved from get_call_name and
        is passed along with the value to fill.
     """
@@ -528,6 +554,7 @@ class Parfor(ir.Expr, ir.Stmt):
             equiv_set,
             pattern,
             flags,
+            *,  #only specify the options below by keyword
             no_sequential_lowering=False,
             races=set()):
         super(Parfor, self).__init__(
@@ -555,6 +582,13 @@ class Parfor(ir.Expr, ir.Stmt):
         # sequential lowering option
         self.no_sequential_lowering = no_sequential_lowering
         self.races = races
+        self.redvars = []
+        self.reddict = {}
+        # If the lowerer is None then the standard lowerer will be used.
+        # This can be set to a function to have that function act as the lowerer
+        # for this parfor.  This lowerer field will also prevent parfors from
+        # being fused unless they have use the same lowerer.
+        self.lowerer = None
         if config.DEBUG_ARRAY_OPT_STATS:
             fmt = 'Parallel for-loop #{} is produced from pattern \'{}\' at {}'
             print(fmt.format(
@@ -1570,7 +1604,7 @@ class ParforPassStates:
             self.typingctx, self.func_ir, self.typemap, self.calltypes,
         )
 
-        ir_utils._max_label = max(func_ir.blocks.keys())
+        ir_utils._the_max_label.update(max(func_ir.blocks.keys()))
         self.flags = flags
         self.metadata = metadata
         if "parfors" not in metadata:
@@ -1762,7 +1796,27 @@ class ConvertSetItemPass:
                         else:
                             # Handle A[:] = x
                             shape = equiv_set.get_shape(instr)
-                            if shape is not None:
+                            # Don't converted broadcasted setitems into parfors.
+                            if isinstance(index_typ, types.BaseTuple):
+                                # The sliced dims are those in the index that
+                                # are made of slices.  Count the numbers of slices
+                                # in the index tuple.
+                                sliced_dims = len(list(filter(
+                                    lambda x: isinstance(x, types.misc.SliceType),
+                                    index_typ.types)))
+                            elif isinstance(index_typ, types.misc.SliceType):
+                                # For singular indices there can be a bare slice
+                                # and if so there is one dimension being set.
+                                sliced_dims = 1
+                            else:
+                                sliced_dims = 0
+
+                            # Only create a parfor for this setitem if we know the
+                            # shape of the output and number of dimensions set is
+                            # equal to the number of dimensions on the right side.
+                            if (shape is not None and
+                                (not isinstance(value_typ, types.npytypes.Array) or
+                                 sliced_dims == value_typ.ndim)):
                                 new_instr = self._setitem_to_parfor(equiv_set,
                                         loc, target, index, value, shape=shape)
                                 self.rewritten.append(
@@ -1872,10 +1926,18 @@ class ConvertSetItemPass:
         return self.pass_states.typingctx.resolve_function_type(fnty, tuple(args), {})
 
 
-def _make_index_var(typemap, scope, index_vars, body_block):
+def _make_index_var(typemap, scope, index_vars, body_block, force_tuple=False):
+    """ When generating a SetItem call to an array in a parfor, the general
+    strategy is to generate a tuple if the array is more than 1 dimension.
+    If it is 1 dimensional then you can use a simple variable.  This routine
+    is also used when converting pndindex to parfor but pndindex requires a
+    tuple even if the iteration space is 1 dimensional.  The pndindex use of
+    this function will use force_tuple to make the output index a tuple even
+    if it is one dimensional.
+    """
     ndims = len(index_vars)
     loc = body_block.loc
-    if ndims > 1:
+    if ndims > 1 or force_tuple:
         tuple_var = ir.Var(scope, mk_unique_var(
             "$parfor_index_tuple_var"), loc)
         typemap[tuple_var.name] = types.containers.UniTuple(
@@ -1992,9 +2054,11 @@ class ConvertNumpyPass:
 
         # generate init block and body
         init_block = ir.Block(scope, loc)
-        init_block.body = mk_alloc(pass_states.typemap, pass_states.calltypes, lhs,
-                                   tuple(size_vars), el_typ, scope, loc,
-                                   pass_states.typemap[lhs.name])
+        init_block.body = mk_alloc(
+            pass_states.typingctx,
+            pass_states.typemap, pass_states.calltypes, lhs,
+            tuple(size_vars), el_typ, scope, loc,
+            pass_states.typemap[lhs.name])
         body_label = next_label()
         body_block = ir.Block(scope, loc)
         expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
@@ -2076,9 +2140,11 @@ class ConvertNumpyPass:
 
         # generate init block and body
         init_block = ir.Block(scope, loc)
-        init_block.body = mk_alloc(pass_states.typemap, pass_states.calltypes, lhs,
-                                   tuple(size_vars), el_typ, scope, loc,
-                                   pass_states.typemap[lhs.name])
+        init_block.body = mk_alloc(
+            pass_states.typingctx,
+            pass_states.typemap, pass_states.calltypes, lhs,
+            tuple(size_vars), el_typ, scope, loc,
+            pass_states.typemap[lhs.name])
         body_label = next_label()
         body_block = ir.Block(scope, loc)
         expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
@@ -2301,6 +2367,11 @@ class ConvertLoopPass:
                         and isinstance(inst.value, ir.Expr)
                         and inst.value.op == 'call'
                         and self._is_parallel_loop(inst.value.func.name, call_table)):
+                    # Here we've found a parallel loop, either prange or pndindex.
+                    # We create a parfor from this loop and then overwrite the contents
+                    # of the original loop header block to contain this parfor and then
+                    # a jump to the original loop exit block.  Other blocks in the
+                    # original loop are discarded.
                     body_labels = [ l for l in loop.body if
                                     l in blocks and l != loop.header ]
                     args = inst.value.args
@@ -2436,11 +2507,20 @@ class ConvertLoopPass:
                             in_arr, mask_var, mask_typ, mask_indices = result
                         else:
                             in_arr = args[0]
-                        size_vars = equiv_set.get_shape(in_arr
-                                        if mask_indices is None else mask_var)
-                        index_vars, loops = _mk_parfor_loops(
-                            pass_states.typemap, size_vars, scope, loc,
-                        )
+                        assert(isinstance(in_arr, ir.Var))
+                        in_arr_typ = pass_states.typemap[in_arr.name]
+                        if isinstance(in_arr_typ, types.Integer):
+                            index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
+                            pass_states.typemap[index_var.name] = types.uintp
+                            loops = [LoopNest(index_var, 0, in_arr, 1)]
+                            index_vars = [index_var]
+                        else:
+                            size_vars = equiv_set.get_shape(in_arr
+                                          if mask_indices is None else mask_var)
+                            index_vars, loops = _mk_parfor_loops(
+                                pass_states.typemap, size_vars, scope, loc,
+                            )
+                        assert(len(loops) > 0)
                         orig_index = index_vars
                         if mask_indices:
                             # replace mask indices if required;
@@ -2452,6 +2532,7 @@ class ConvertLoopPass:
                         body_block = ir.Block(scope, loc)
                         index_var, index_var_typ = _make_index_var(
                             pass_states.typemap, scope, index_vars, body_block,
+                            force_tuple=True
                         )
                         body = body_block.body + first_body_block.body
                         first_body_block.body = body
@@ -2539,19 +2620,23 @@ class ConvertLoopPass:
                                     equiv_set,
                                     ("prange", loop_kind, loop_replacing),
                                     pass_states.flags, races=races)
-                    # add parfor to entry block's jump target
-                    jump = blocks[entry].body[-1]
-                    jump.target = list(loop.exits)[0]
-                    blocks[jump.target].body.insert(0, parfor)
+
+                    blocks[loop.header].body = [parfor]
+                    # We have to insert the header_body after the parfor because in
+                    # a Numba loop this will be executed one more times before the
+                    # branch and may contain instructions such as variable renamings
+                    # that are relied upon later.
+                    blocks[loop.header].body.extend(header_body)
+                    blocks[loop.header].body.append(ir.Jump(list(loop.exits)[0], loc))
                     self.rewritten.append(dict(
                         old_loop=loop,
                         new=parfor,
                         reason='loop',
                     ))
                     # remove loop blocks from top level dict
-                    blocks.pop(loop.header)
                     for l in body_labels:
-                        blocks.pop(l)
+                        if l != loop.header:
+                            blocks.pop(l)
                     if config.DEBUG_ARRAY_OPT >= 1:
                         print("parfor from loop")
                         parfor.dump()
@@ -2696,7 +2781,7 @@ class ConvertLoopPass:
                 if isinstance(stmt, Parfor):
                     self._replace_loop_access_indices(stmt.loop_body, index_set, new_index)
 
-        # remove added indices for currect recursive parfor handling
+        # remove added indices for correct recursive parfor handling
         index_set -= added_indices
         return
 
@@ -2777,9 +2862,9 @@ class ParforPass(ParforPassStates):
     def _pre_run(self):
         # run array analysis, a pre-requisite for parfor translation
         self.array_analysis.run(self.func_ir.blocks)
-        # NOTE: Prepare _max_label. See #6102
-        ir_utils._max_label = max(ir_utils._max_label,
-                                  ir_utils.find_max_label(self.func_ir.blocks))
+        # NOTE: Prepare _the_max_label. See #6102
+        ir_utils._the_max_label.update(
+            ir_utils.find_max_label(self.func_ir.blocks))
 
     def run(self):
         """run parfor conversion pass: replace Numpy calls
@@ -2808,6 +2893,29 @@ class ParforPass(ParforPassStates):
 
         dprint_func_ir(self.func_ir, "after parfor pass")
 
+    def _find_mask(self, arr_def):
+        """check if an array is of B[...M...], where M is a
+        boolean array, and other indices (if available) are ints.
+        If found, return B, M, M's type, and a tuple representing mask indices.
+        Otherwise, raise GuardException.
+        """
+        return _find_mask(self.typemap, self.func_ir, arr_def)
+
+    def _mk_parfor_loops(self, size_vars, scope, loc):
+        """
+        Create loop index variables and build LoopNest objects for a parfor.
+        """
+        return _mk_parfor_loops(self.typemap, size_vars, scope, loc)
+
+
+class ParforFusionPass(ParforPassStates):
+
+    """ParforFusionPass class is responsible for fusing parfors
+    """
+
+    def run(self):
+        """run parfor fusion pass"""
+
         # simplify CFG of parfor body loops since nested parfors with extra
         # jumps can be created with prange conversion
         n_parfors = simplify_parfor_body_CFG(self.func_ir.blocks)
@@ -2822,21 +2930,96 @@ class ParforPass(ParforPassStates):
             self.func_ir._definitions = build_definitions(self.func_ir.blocks)
             self.array_analysis.equiv_sets = dict()
             self.array_analysis.run(self.func_ir.blocks)
+
+            # Get parfor params to calculate reductions below.
+            _, parfors = get_parfor_params(self.func_ir.blocks,
+                                           self.options.fusion,
+                                           self.nested_fusion_info)
+
+            # Find reductions so that fusion can be disallowed if a
+            # subsequent parfor read a reduction variable.
+            for p in parfors:
+                p.redvars, p.reddict = get_parfor_reductions(self.func_ir,
+                                                             p,
+                                                             p.params,
+                                                             self.calltypes)
+
             # reorder statements to maximize fusion
             # push non-parfors down
             maximize_fusion(self.func_ir, self.func_ir.blocks, self.typemap,
                                                             up_direction=False)
             dprint_func_ir(self.func_ir, "after maximize fusion down")
-            self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
+            self.fuse_parfors(self.array_analysis,
+                              self.func_ir.blocks,
+                              self.func_ir,
+                              self.typemap)
             dprint_func_ir(self.func_ir, "after first fuse")
             # push non-parfors up
             maximize_fusion(self.func_ir, self.func_ir.blocks, self.typemap)
             dprint_func_ir(self.func_ir, "after maximize fusion up")
             # try fuse again after maximize
-            self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
+            self.fuse_parfors(self.array_analysis,
+                              self.func_ir.blocks,
+                              self.func_ir,
+                              self.typemap)
             dprint_func_ir(self.func_ir, "after fusion")
             # remove dead code after fusion to remove extra arrays and variables
             simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
+
+    def fuse_parfors(self, array_analysis, blocks, func_ir, typemap):
+        for label, block in blocks.items():
+            equiv_set = array_analysis.get_equiv_set(label)
+            fusion_happened = True
+            while fusion_happened:
+                fusion_happened = False
+                new_body = []
+                i = 0
+                while i < len(block.body) - 1:
+                    stmt = block.body[i]
+                    next_stmt = block.body[i + 1]
+                    if isinstance(stmt, Parfor) and isinstance(next_stmt, Parfor):
+                        # we have to update equiv_set since they have changed due to
+                        # variables being renamed before fusion.
+                        equiv_set = array_analysis.get_equiv_set(label)
+                        stmt.equiv_set = equiv_set
+                        next_stmt.equiv_set = equiv_set
+                        fused_node, fuse_report = try_fuse(equiv_set, stmt, next_stmt,
+                            self.metadata["parfors"], func_ir, typemap)
+                        # accumulate fusion reports
+                        self.diagnostics.fusion_reports.append(fuse_report)
+                        if fused_node is not None:
+                            fusion_happened = True
+                            self.diagnostics.fusion_info[stmt.id].extend([next_stmt.id])
+                            new_body.append(fused_node)
+                            self.fuse_recursive_parfor(fused_node, equiv_set, func_ir, typemap)
+                            i += 2
+                            continue
+                    new_body.append(stmt)
+                    if isinstance(stmt, Parfor):
+                        self.fuse_recursive_parfor(stmt, equiv_set, func_ir, typemap)
+                    i += 1
+                new_body.append(block.body[-1])
+                block.body = new_body
+        return
+
+    def fuse_recursive_parfor(self, parfor, equiv_set, func_ir, typemap):
+        blocks = wrap_parfor_blocks(parfor)
+        maximize_fusion(self.func_ir, blocks, self.typemap)
+        dprint_func_ir(self.func_ir, "after recursive maximize fusion down", blocks)
+        arr_analysis = array_analysis.ArrayAnalysis(self.typingctx, self.func_ir,
+                                                self.typemap, self.calltypes)
+        arr_analysis.run(blocks, equiv_set)
+        self.fuse_parfors(arr_analysis, blocks, func_ir, typemap)
+        unwrap_parfor_blocks(parfor)
+
+
+class ParforPreLoweringPass(ParforPassStates):
+
+    """ParforPreLoweringPass class is responsible for preparing parfors for lowering.
+    """
+
+    def run(self):
+        """run parfor prelowering pass"""
 
         # push function call variables inside parfors so gufunc function
         # wouldn't need function variables as argument
@@ -2891,7 +3074,10 @@ class ParforPass(ParforPassStates):
 
             # Validate reduction in parfors.
             for p in parfors:
-                get_parfor_reductions(self.func_ir, p, p.params, self.calltypes)
+                p.redvars, p.reddict = get_parfor_reductions(self.func_ir,
+                                                             p,
+                                                             p.params,
+                                                             self.calltypes)
 
             # Validate parameters:
             for p in parfors:
@@ -2908,68 +3094,6 @@ class ParforPass(ParforPassStates):
                            after_fusion, name, n_parfors, parfor_ids))
                 else:
                     print('Function {} has no Parfor.'.format(name))
-
-        return
-
-    def _find_mask(self, arr_def):
-        """check if an array is of B[...M...], where M is a
-        boolean array, and other indices (if available) are ints.
-        If found, return B, M, M's type, and a tuple representing mask indices.
-        Otherwise, raise GuardException.
-        """
-        return _find_mask(self.typemap, self.func_ir, arr_def)
-
-    def _mk_parfor_loops(self, size_vars, scope, loc):
-        """
-        Create loop index variables and build LoopNest objects for a parfor.
-        """
-        return _mk_parfor_loops(self.typemap, size_vars, scope, loc)
-
-    def fuse_parfors(self, array_analysis, blocks):
-        for label, block in blocks.items():
-            equiv_set = array_analysis.get_equiv_set(label)
-            fusion_happened = True
-            while fusion_happened:
-                fusion_happened = False
-                new_body = []
-                i = 0
-                while i < len(block.body) - 1:
-                    stmt = block.body[i]
-                    next_stmt = block.body[i + 1]
-                    if isinstance(stmt, Parfor) and isinstance(next_stmt, Parfor):
-                        # we have to update equiv_set since they have changed due to
-                        # variables being renamed before fusion.
-                        equiv_set = array_analysis.get_equiv_set(label)
-                        stmt.equiv_set = equiv_set
-                        next_stmt.equiv_set = equiv_set
-                        fused_node, fuse_report = try_fuse(equiv_set, stmt, next_stmt,
-                            self.metadata["parfors"])
-                        # accumulate fusion reports
-                        self.diagnostics.fusion_reports.append(fuse_report)
-                        if fused_node is not None:
-                            fusion_happened = True
-                            self.diagnostics.fusion_info[stmt.id].extend([next_stmt.id])
-                            new_body.append(fused_node)
-                            self.fuse_recursive_parfor(fused_node, equiv_set)
-                            i += 2
-                            continue
-                    new_body.append(stmt)
-                    if isinstance(stmt, Parfor):
-                        self.fuse_recursive_parfor(stmt, equiv_set)
-                    i += 1
-                new_body.append(block.body[-1])
-                block.body = new_body
-        return
-
-    def fuse_recursive_parfor(self, parfor, equiv_set):
-        blocks = wrap_parfor_blocks(parfor)
-        maximize_fusion(self.func_ir, blocks, self.typemap)
-        dprint_func_ir(self.func_ir, "after recursive maximize fusion down", blocks)
-        arr_analysis = array_analysis.ArrayAnalysis(self.typingctx, self.func_ir,
-                                                self.typemap, self.calltypes)
-        arr_analysis.run(blocks, equiv_set)
-        self.fuse_parfors(arr_analysis, blocks)
-        unwrap_parfor_blocks(parfor)
 
 
 def _remove_size_arg(call_name, expr):
@@ -3251,13 +3375,14 @@ def _find_func_var(typemap, func, avail_vars, loc):
 
 
 def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes, metadata):
-    ir_utils._max_label = max(ir_utils._max_label,
-                              ir_utils.find_max_label(func_ir.blocks))
+    ir_utils._the_max_label.update(ir_utils.find_max_label(func_ir.blocks))
     parfor_found = False
     new_blocks = {}
+    scope = next(iter(func_ir.blocks.values())).scope
     for (block_label, block) in func_ir.blocks.items():
         block_label, parfor_found = _lower_parfor_sequential_block(
-            block_label, block, new_blocks, typemap, calltypes, parfor_found)
+            block_label, block, new_blocks, typemap, calltypes, parfor_found,
+            scope=scope)
         # old block stays either way
         new_blocks[block_label] = block
     func_ir.blocks = new_blocks
@@ -3275,8 +3400,8 @@ def _lower_parfor_sequential_block(
         new_blocks,
         typemap,
         calltypes,
-        parfor_found):
-    scope = block.scope
+        parfor_found,
+        scope):
     i = _find_first_parfor(block.body)
     while i != -1:
         parfor_found = True
@@ -3289,7 +3414,7 @@ def _lower_parfor_sequential_block(
         # previous block jump to parfor init block
         init_label = next_label()
         prev_block.body.append(ir.Jump(init_label, loc))
-        new_blocks[init_label] = inst.init_block
+        new_blocks[init_label] = transfer_scope(inst.init_block, scope)
         new_blocks[block_label] = prev_block
         block_label = next_label()
 
@@ -3333,8 +3458,9 @@ def _lower_parfor_sequential_block(
         # add parfor body to blocks
         for (l, b) in inst.loop_body.items():
             l, parfor_found = _lower_parfor_sequential_block(
-                l, b, new_blocks, typemap, calltypes, parfor_found)
-            new_blocks[l] = b
+                l, b, new_blocks, typemap, calltypes, parfor_found,
+                scope=scope)
+            new_blocks[l] = transfer_scope(b, scope)
         i = _find_first_parfor(block.body)
     return block_label, parfor_found
 
@@ -3454,6 +3580,14 @@ def get_parfor_outputs(parfor, parfor_params):
     outputs = list(set(outputs) & set(parfor_params))
     return sorted(outputs)
 
+
+_RedVarInfo = make_dataclass(
+    "_RedVarInfo",
+    ["init_val", "reduce_nodes", "redop"],
+    frozen=True,
+)
+
+
 def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=None,
         reduce_varnames=None, param_uses=None, param_nodes=None,
         var_to_param=None):
@@ -3528,7 +3662,11 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
                 else:
                     init_val = None
                     redop = None
-                reductions[param_name] = (init_val, reduce_nodes, redop)
+                reductions[param_name] = _RedVarInfo(
+                    init_val=init_val,
+                    reduce_nodes=reduce_nodes,
+                    redop=redop,
+                )
 
     return reduce_varnames, reductions
 
@@ -3556,30 +3694,43 @@ def get_reduction_init(nodes):
     Get initial value for known reductions.
     Currently, only += and *= are supported.
     """
-    require(len(nodes) >=1)
-    # there could be an extra assignment after the reduce node
+    require(len(nodes) >= 1)
+    # there could be multiple extra assignments after the reduce node
     # See: test_reduction_var_reuse
-    if isinstance(nodes[-1].value, ir.Var):
-        require(len(nodes) >=2)
-        require(nodes[-2].target.name == nodes[-1].value.name)
-        acc_expr = nodes[-2].value
-    else:
-        acc_expr = nodes[-1].value
+    acc_expr = list(filter(lambda x: isinstance(x.value, ir.Expr), nodes))[-1].value
     require(isinstance(acc_expr, ir.Expr) and acc_expr.op=='inplace_binop')
     if acc_expr.fn == operator.iadd or acc_expr.fn == operator.isub:
         return 0, acc_expr.fn
     if (  acc_expr.fn == operator.imul
-       or acc_expr.fn == operator.itruediv
-       or acc_expr.fn == operator.ifloordiv ):
+       or acc_expr.fn == operator.itruediv ):
         return 1, acc_expr.fn
     return None, None
 
 def supported_reduction(x, func_ir):
     if x.op == 'inplace_binop' or x.op == 'binop':
-        return True
+        if x.fn == operator.ifloordiv or x.fn == operator.floordiv:
+            raise errors.NumbaValueError(("Parallel floordiv reductions are not supported. "
+                              "If all divisors are integers then a floordiv "
+                              "reduction can in some cases be parallelized as "
+                              "a multiply reduction followed by a floordiv of "
+                              "the resulting product."), x.loc)
+        supps = [operator.iadd,
+                 operator.isub,
+                 operator.imul,
+                 operator.itruediv,
+                 operator.add,
+                 operator.sub,
+                 operator.mul,
+                 operator.truediv]
+        return x.fn in supps
     if x.op == 'call':
         callname = guard(find_callname, func_ir, x)
-        if callname == ('max', 'builtins') or callname == ('min', 'builtins'):
+        if callname in [
+            ('max', 'builtins'),
+            ('min', 'builtins'),
+            ('datetime_minimum', 'numba.np.npdatetime_helpers'),
+            ('datetime_maximum', 'numba.np.npdatetime_helpers'),
+        ]:
             return True
     return False
 
@@ -3738,6 +3889,22 @@ def parfor_defs(parfor, use_set=None, def_set=None):
 analysis.ir_extension_usedefs[Parfor] = parfor_defs
 
 
+def _parfor_use_alloca(parfor, alloca_set):
+    """
+    Reduction variables for parfors and the reduction variables within
+    nested parfors must be stack allocated.
+    """
+    alloca_set |= set(parfor.redvars)
+
+    blocks = wrap_parfor_blocks(parfor)
+    alloca_set |= analysis.must_use_alloca(blocks)
+
+    unwrap_parfor_blocks(parfor)
+
+
+analysis.ir_extension_use_alloca[Parfor] = _parfor_use_alloca
+
+
 def parfor_insert_dels(parfor, curr_dead_set):
     """insert dels in parfor. input: dead variable set right after parfor.
     returns the variables for which del was inserted.
@@ -3889,13 +4056,20 @@ def get_parfor_writes(parfor):
 
 FusionReport = namedtuple('FusionReport', ['first', 'second', 'message'])
 
-def try_fuse(equiv_set, parfor1, parfor2, metadata):
+def try_fuse(equiv_set, parfor1, parfor2, metadata, func_ir, typemap):
     """try to fuse parfors and return a fused parfor, otherwise return None
     """
     dprint("try_fuse: trying to fuse \n", parfor1, "\n", parfor2)
 
     # default report is None
     report = None
+
+    # fusion of parfors with different lowerers is not possible
+    if parfor1.lowerer != parfor2.lowerer:
+        dprint("try_fuse: parfors different lowerers")
+        msg = "- fusion failed: lowerer mismatch"
+        report = FusionReport(parfor1.id, parfor2.id, msg)
+        return None, report
 
     # fusion of parfors with different dimensions not supported yet
     if len(parfor1.loop_nests) != len(parfor2.loop_nests):
@@ -3938,9 +4112,16 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata):
             report = FusionReport(parfor1.id, parfor2.id, msg % i)
             return None, report
 
+    func_ir._definitions = build_definitions(func_ir.blocks)
     # TODO: make sure parfor1's reduction output is not used in parfor2
     # only data parallel loops
-    if has_cross_iter_dep(parfor1) or has_cross_iter_dep(parfor2):
+    p1_cross_dep, p1_ip, p1_ia, p1_non_ia = has_cross_iter_dep(parfor1, func_ir, typemap)
+    if not p1_cross_dep:
+        p2_cross_dep = has_cross_iter_dep(parfor2, func_ir, typemap, p1_ip, p1_ia, p1_non_ia)[0]
+    else:
+        p2_cross_dep = True
+
+    if p1_cross_dep or p2_cross_dep:
         dprint("try_fuse: parfor cross iteration dependency found")
         msg = ("- fusion failed: cross iteration dependency found "
                 "between loops #%s and #%s")
@@ -3955,6 +4136,9 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata):
     p1_body_defs = set()
     for defs in p1_body_usedefs.defmap.values():
         p1_body_defs |= defs
+    # Add reduction variables from parfor1 to the set of body defs
+    # so that if parfor2 reads the reduction variable it won't fuse.
+    p1_body_defs |= set(parfor1.redvars)
 
     p2_usedefs = compute_use_defs(parfor2.loop_body)
     p2_uses = compute_use_defs({0: parfor2.init_block}).usemap[0]
@@ -4035,28 +4219,238 @@ def remove_duplicate_definitions(blocks, nameset):
     return
 
 
-def has_cross_iter_dep(parfor):
-    # we conservatively assume there is cross iteration dependency when
-    # the parfor index is used in any expression since the expression could
-    # be used for indexing arrays
+def has_cross_iter_dep(
+        parfor,
+        func_ir,
+        typemap,
+        index_positions=None,
+        indexed_arrays=None,
+        non_indexed_arrays=None):
+    # We should assume there is cross iteration dependency unless we can
+    # prove otherwise.  Return True if there is a cross-iter dependency
+    # that should prevent fusion, False if fusion is okay.
+    # Also returns index_positions, indexed_arrays, and non_indexed_arrays
+    # who purpose is described below so that subsequent additional
+    # has_cross_iter_dep calls for other parfors can build on the same
+    # data structures to make sure that the array accesses generate no
+    # cross-iter dependencies both within a parfor but also across parfors.
+
     # TODO: make it more accurate using ud-chains
-    indices = {l.index_variable for l in parfor.loop_nests}
+
+    # Get the index variable used by this parfor.
+    # This will hold other variables with equivalent value, e.g., a = index_var
+    indices = {l.index_variable.name for l in parfor.loop_nests}
+    # This set will store variables that are (potentially recursively)
+    # defined in relation to an index variable, e.g., a = index_var + 1.
+    # A getitem that uses an index variable from this set will be considered
+    # as potentially having a cross-iter dependency and so won't fuse.
+    derived_from_indices = set()
+    # For the first parfor considered for fusion, the latter 3 args will be None
+    # and initialized to empty.  For the second parfor, the structures from the
+    # previous parfor are passed in so that cross-parfor violations of the
+    # below comments can prevent fusion.
+    #
+    # index_positions keeps track of which index positions have had an index
+    # variable used for them and which ones haven't for each possible array
+    # dimensionality.  After the first array access is seen, if subsequent
+    # ones use a parfor index for a different dimension then we conservatively
+    # say that we can't fuse.  For example, if a 2D array is accessed with
+    # a[parfor_index, 0] then index_positions[2] will be (True, False) and
+    # if a[0, parfor_index] happens later which is (False, True) then this
+    # conflicts with the previous value and will prevent fusion.
+    #
+    # indexed_arrays records arrays that are accessed with at least one
+    # parfor index.  If such an array is later accessed with indices that
+    # don't include a parfor index then conservatively assume we can't fuse.
+    #
+    # non_indexed_arrays holds arrays that are indexed without a parfor index.
+    # If an array first accessed without a parfor index is later indexed
+    # with one then conservatively assume we can't fuse.
+    if index_positions is None:
+        index_positions = {}
+    if indexed_arrays is None:
+        indexed_arrays = set()
+    if non_indexed_arrays is None:
+        non_indexed_arrays = set()
+
+    def add_check_position(new_position,
+                           array_accessed,
+                           index_positions,
+                           indexed_arrays,
+                           non_indexed_arrays):
+        """Returns True if there is a reason to prevent fusion based
+           on the rules described above.
+           new_position will be a list or tuple of booleans that
+           says whether the index in that spot is a parfor index
+           or not.  array_accessed is the array on which the access
+           is occurring."""
+
+        # Convert list indices to tuple for generality.
+        if isinstance(new_position, list):
+            new_position = tuple(new_position)
+
+        # If none of the indices are based on a parfor index.
+        if True not in new_position:
+            # See if this array has been accessed before with a
+            # a parfor index and if so say that we can't fuse.
+            if array_accessed in indexed_arrays:
+                return True
+            else:
+                # Either array is already in non_indexed arrays or we
+                # will add it.  Either way, this index usage can fuse.
+                non_indexed_arrays.add(array_accessed)
+                return False
+
+        # Fallthrough for cases where one of the indices is a parfor index.
+        # If this array was previously accessed without a parfor index then
+        # conservatively say we can't fuse.
+        if array_accessed in non_indexed_arrays:
+            return True
+
+        indexed_arrays.add(array_accessed)
+
+        npsize = len(new_position)
+        # See if we have not seen a npsize dimensioned array accessed before.
+        if npsize not in index_positions:
+            # If not then add current set of parfor/non-parfor indices and
+            # indicate it is safe as it is the first usage.
+            index_positions[npsize] = new_position
+            return False
+
+        # Here we have a subsequent access to a npsize-dimensioned array.
+        # Make sure we see the same combination of parfor/non-parfor index
+        # indices that we've seen before.  If not then return True saying
+        # that we can't fuse.
+        return index_positions[npsize] != new_position
+
+    def check_index(stmt_index,
+                    array_accessed,
+                    index_positions,
+                    indexed_arrays,
+                    non_indexed_arrays,
+                    derived_from_indices):
+        """Looks at the indices of a getitem or setitem to see if there
+           is a reason that they would prevent fusion.
+           Returns True if fusion should be prohibited, False otherwise.
+        """
+        if isinstance(stmt_index, ir.Var):
+            # If the array is 2+ dimensions then the index should be a tuple.
+            if isinstance(typemap[stmt_index.name], types.BaseTuple):
+                # Get how the index tuple is constructed.
+                fbs_res = guard(find_build_sequence, func_ir, stmt_index)
+                if fbs_res is not None:
+                    ind_seq, _ = fbs_res
+                    # If any indices are derived from an index is used then
+                    # return True to say we can't fuse.
+                    if (all([x.name in indices or
+                        x.name not in derived_from_indices for x in ind_seq])):
+                        # Get position in index tuple where parfor indices used.
+                        new_index_positions = [x.name in indices for x in ind_seq]
+                        # Make sure that we aren't accessing a given array with
+                        # different indices in a different order.
+                        return add_check_position(new_index_positions,
+                                                  array_accessed,
+                                                  index_positions,
+                                                  indexed_arrays,
+                                                  non_indexed_arrays)
+                    else:
+                        # index derived from a parfor index used so no fusion
+                        return True
+                else:
+                    # Don't know how the index tuple is built so
+                    # have to assume fusion can't happen.
+                    return True
+            else:
+                # Should be for 1D arrays.
+                if stmt_index.name in indices:
+                    # Array indexed by a parfor index variable.
+                    # Make sure this 1D access is consistent with prior ones.
+                    return add_check_position((True,),
+                                              array_accessed,
+                                              index_positions,
+                                              indexed_arrays,
+                                              non_indexed_arrays)
+                elif stmt_index.name in derived_from_indices:
+                    # If we ever index an array with something calculated
+                    # from an index then no fusion.
+                    return True
+                else:
+                    # Some kind of index that isn't a parfor index or
+                    # one derived from one, e.g., a constant.  Make sure
+                    # this is consistent with prior accessed of this array.
+                    return add_check_position((False,),
+                                              array_accessed,
+                                              index_positions,
+                                              indexed_arrays,
+                                              non_indexed_arrays)
+        else:
+            # We don't know how to handle non-Var indices so no fusion.
+            return True
+
+        # All branches above should cover all the cases and each should
+        # return so we should never get here.
+        raise errors.InternalError("Some code path in the parfor fusion "
+                                   "cross-iteration dependency checker "
+                                   "check_index didn't return a result.")
+
+    # Iterate through all the statements in the parfor.
     for b in parfor.loop_body.values():
         for stmt in b.body:
-            # GetItem/SetItem nodes are fine since can't have expression inside
-            # and only simple indices are possible
+            # Make sure SetItem accesses are fusion safe.
             if isinstance(stmt, (ir.SetItem, ir.StaticSetItem)):
+                if isinstance(typemap[stmt.target.name], types.npytypes.Array):
+                    # Check index safety with prior array accesses.
+                    if check_index(stmt.index,
+                                   stmt.target.name,
+                                   index_positions,
+                                   indexed_arrays,
+                                   non_indexed_arrays,
+                                   derived_from_indices):
+                        return True, index_positions, indexed_arrays, non_indexed_arrays
+                # Fusion safe so go to next statement.
                 continue
-            # tuples are immutable so no expression on parfor possible
-            if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Expr):
-                op = stmt.value.op
-                if op in ['build_tuple', 'getitem', 'static_getitem']:
-                    continue
-            # other statements can have potential violations
-            if not indices.isdisjoint(stmt.list_vars()):
-                dprint("has_cross_iter_dep found", indices, stmt)
-                return True
-    return False
+            elif isinstance(stmt, ir.Assign):
+                # If stmt of form a = parfor_index then add "a" to set of
+                # parfor indices.
+                if isinstance(stmt.value, ir.Var):
+                    if stmt.value.name in indices:
+                        indices.add(stmt.target.name)
+                        continue
+                elif isinstance(stmt.value, ir.Expr):
+                    op = stmt.value.op
+                    # Make sure getitem accesses are fusion safe.
+                    if op in ['getitem', 'static_getitem']:
+                        if isinstance(typemap[stmt.value.value.name], types.npytypes.Array):
+                            # Check index safety with prior array accesses.
+                            if check_index(stmt.value.index,
+                                           stmt.value.value.name,
+                                           index_positions,
+                                           indexed_arrays,
+                                           non_indexed_arrays,
+                                           derived_from_indices):
+                                return True, index_positions, indexed_arrays, non_indexed_arrays
+                        # Fusion safe so go to next statement.
+                        continue
+                    elif op == 'call':
+                        # If there is a call in the parfor body that takes some
+                        # array parameter then we have no way to analyze what
+                        # that call is doing so presume it is unsafe for fusion.
+                        if (any([isinstance(typemap[x.name], types.npytypes.Array)
+                            for x in stmt.value.list_vars()])):
+                            return True, index_positions, indexed_arrays, non_indexed_arrays
+
+                    # Get the vars used by this non-setitem/getitem statement.
+                    rhs_vars = [x.name for x in stmt.value.list_vars()]
+                    # If a parfor index is used as part of this statement or
+                    # something previous determined to be derived from a parfor
+                    # index then add the target variable to the set of
+                    # variables that are derived from parfors and so should
+                    # prevent fusion if used as an index.
+                    if (not indices.isdisjoint(rhs_vars) or
+                        not derived_from_indices.isdisjoint(rhs_vars)):
+                        derived_from_indices.add(stmt.target.name)
+
+    return False, index_positions, indexed_arrays, non_indexed_arrays
 
 
 def dprint(*s):
@@ -4657,7 +5051,8 @@ def dummy_return_in_loop_body(loop_body):
 class ReduceInfer(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
-        assert len(args) == 3
+        if len(args) != 3:
+            raise errors.NumbaAssertionError("len(args) != 3")
         assert isinstance(args[1], types.Array)
         return signature(args[1].dtype, *args)
 

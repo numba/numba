@@ -312,6 +312,10 @@ def list_mul(n, v):
     a = list(range(n))
     return a * v
 
+def list_mul2(n, v):
+    a = list(range(n))
+    return v * a
+
 def list_mul_inplace(n, v):
     a = list(range(n))
     a *= v
@@ -593,6 +597,20 @@ class TestLists(MemoryLeakMixin, TestCase):
             for start, stop in itertools.product(indices, indices):
                 self.check_index_result(pyfunc, cfunc, (16, v, start, stop))
 
+    def test_index_exception1(self):
+        pyfunc = list_index3
+        cfunc = jit(nopython=True)(pyfunc)
+        msg = 'arg "start" must be an Integer.'
+        with self.assertRaisesRegex(errors.TypingError, msg):
+            cfunc(10, 0, 'invalid', 5)
+
+    def test_index_exception2(self):
+        pyfunc = list_index3
+        cfunc = jit(nopython=True)(pyfunc)
+        msg = 'arg "stop" must be an Integer.'
+        with self.assertRaisesRegex(errors.TypingError, msg):
+            cfunc(10, 0, 0, 'invalid')
+
     def test_remove(self):
         pyfunc = list_remove
         cfunc = jit(nopython=True)(pyfunc)
@@ -655,6 +673,9 @@ class TestLists(MemoryLeakMixin, TestCase):
 
     def test_mul(self):
         self.check_mul(list_mul)
+
+    def test_mul2(self):
+        self.check_mul(list_mul2)
 
     def test_mul_inplace(self):
         self.check_mul(list_mul_inplace)
@@ -861,7 +882,7 @@ class TestListReflection(MemoryLeakMixin, TestCase):
         got = cfunc(clist, clist)
         self.assertPreciseEqual(expected, got)
         self.assertPreciseEqual(pylist, clist)
-        self.assertPreciseEqual(sys.getrefcount(pylist), sys.getrefcount(clist))
+        self.assertRefCountEqual(pylist, clist)
 
     def test_reflect_clean(self):
         """
@@ -917,6 +938,15 @@ class TestListManagedElements(ManagedListTestCase):
     def test_reflect_popped(self):
         def pyfunc(con):
             con.pop()
+
+        self._check_element_equal(pyfunc)
+
+    def test_reflect_insert(self):
+        """make sure list.insert() doesn't crash for refcounted objects (see #7553)
+        """
+
+        def pyfunc(con):
+            con.insert(1, np.arange(4).astype(np.intp))
 
         self._check_element_equal(pyfunc)
 
@@ -1766,7 +1796,7 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
                 l = ['a', 1, 2j]
             else:
                 l = ['b', 2]
-            return l[0]
+            return l[0], l[1], l[0], l[1] # defeat py310 inliner
 
         with self.assertRaises(errors.TypingError) as raises:
             foo(100)

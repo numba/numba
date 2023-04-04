@@ -160,8 +160,11 @@ class OmittedArgDataModel(DataModel):
     A data model for omitted arguments.  Only the "argument" representation
     is defined, other representations raise a NotImplementedError.
     """
-    # Omitted arguments don't produce any LLVM function argument.
+    # Omitted arguments are using a dummy value type
+    def get_value_type(self):
+        return ir.LiteralStructType([])
 
+    # Omitted arguments don't produce any LLVM function argument.
     def get_argument_type(self):
         return ()
 
@@ -896,7 +899,10 @@ class NestedArrayModel(ArrayModel):
         self._be_type = dmm.lookup(fe_type.dtype).get_data_type()
         super(NestedArrayModel, self).__init__(dmm, fe_type)
 
-    def get_data_type(self):
+    def as_storage_type(self):
+        """Return the LLVM type representation for the storage of
+        the nestedarray.
+        """
         ret = ir.ArrayType(self._be_type, self._fe_type.nitems)
         return ret
 
@@ -1077,6 +1083,7 @@ class UniTupleIter(StructModel):
         super(UniTupleIter, self).__init__(dmm, fe_type, members)
 
 
+@register_default(types.misc.SliceLiteral)
 @register_default(types.SliceType)
 class SliceModel(StructModel):
     def __init__(self, dmm, fe_type):

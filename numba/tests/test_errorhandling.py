@@ -20,7 +20,7 @@ from numba.core.compiler_machinery import PassManager
 from numba.core.types.functions import _err_reasons as error_reasons
 
 from numba.tests.support import (skip_parfors_unsupported, override_config,
-                                 SerialMixin)
+                                 SerialMixin, skip_unless_scipy)
 import unittest
 
 # used in TestMiscErrorHandling::test_handling_of_write_to_*_global
@@ -184,25 +184,6 @@ class TestMiscErrorHandling(unittest.TestCase):
         self.assertIn(expected, str(raises.exception))
 
 
-class TestConstantInferenceErrorHandling(unittest.TestCase):
-
-    def test_basic_error(self):
-        # issue 3717
-        @njit
-        def problem(a,b):
-            if a == b:
-                raise Exception("Equal numbers: %i %i", a, b)
-            return a * b
-
-        with self.assertRaises(errors.ConstantInferenceError) as raises:
-            problem(1,2)
-
-        msg1 = "Constant inference not possible for: arg(0, name=a)"
-        msg2 = 'raise Exception("Equal numbers: %i %i", a, b)'
-        self.assertIn(msg1, str(raises.exception))
-        self.assertIn(msg2, str(raises.exception))
-
-
 class TestErrorMessages(unittest.TestCase):
 
     def test_specific_error(self):
@@ -214,7 +195,7 @@ class TestErrorMessages(unittest.TestCase):
 
         @overload(foo)
         def ol_foo():
-            raise ValueError(given_reason)
+            raise errors.NumbaValueError(given_reason)
 
         @njit
         def call_foo():
@@ -246,6 +227,7 @@ class TestErrorMessages(unittest.TestCase):
         excstr = str(raises.exception)
         self.assertIn("No match", excstr)
 
+    @skip_unless_scipy
     def test_error_function_source_is_correct(self):
         """ Checks that the reported source location for an overload is the
         overload implementation source, not the actual function source from the
@@ -275,9 +257,10 @@ class TestErrorMessages(unittest.TestCase):
 
         excstr = str(raises.exception)
 
-        self.assertIn("Operator Overload in function 'add'", excstr)
-        # there'll be numerous matched templates that don't work
-        self.assertIn("<numerous>", excstr)
+        self.assertIn("Overload of function 'add'", excstr)
+        # there'll be numerous matched templates that don't work but as they
+        # are mostly "overload"s they'll just appear as "No match".
+        self.assertIn("No match.", excstr)
 
     def test_abstract_template_source(self):
         # hits AbstractTemplate
@@ -295,7 +278,7 @@ class TestErrorMessages(unittest.TestCase):
         # hits CallableTemplate
         @njit
         def foo():
-            return np.angle(1)
+            return np.angle(None)
 
         with self.assertRaises(errors.TypingError) as raises:
             foo()
@@ -341,7 +324,7 @@ class TestErrorMessages(unittest.TestCase):
                 raise errors.RequireLiteralValue(given_reason1)
 
             if arr.ndim != 1:
-                raise ValueError(given_reason2)
+                raise errors.NumbaValueError(given_reason2)
 
             sig = types.intp(x, arr)
 
@@ -443,7 +426,7 @@ class TestErrorMessages(unittest.TestCase):
             Particle(pos=1, mass=2)
 
         excstr = str(raises.exception)
-        self.assertIn("required positional argument: 'mass'", excstr)
+        self.assertIn("missing a required argument: 'mass'", excstr)
 
 
 class TestDeveloperSpecificErrorMessages(SerialMixin, unittest.TestCase):
@@ -451,16 +434,43 @@ class TestDeveloperSpecificErrorMessages(SerialMixin, unittest.TestCase):
     def test_bound_function_error_string(self):
         # See PR #5952
         def foo(x):
-            x.max(-1) # axis not supported
+            x.max(-1)
 
         with override_config('DEVELOPER_MODE', 1):
             with self.assertRaises(errors.TypingError) as raises:
                 njit("void(int64[:,:])")(foo)
 
         excstr = str(raises.exception)
-        self.assertIn("AssertionError()", excstr)
-        self.assertIn("BoundFunction(array.max for array(int64, 2d, A))",
-                      excstr)
+        self.assertIn("too many positional arguments", excstr)
+
+
+class TestCapturedErrorHandling(SerialMixin, unittest.TestCase):
+    """Checks that the way errors are captured changes depending on the env
+    var "NUMBA_CAPTURED_ERRORS".
+    """
+
+    def test_error_in_overload(self):
+
+        def bar(x):
+            pass
+
+        @overload(bar)
+        def ol_bar(x):
+            x.some_invalid_attr # doesn't exist!
+
+            def impl(x):
+                pass
+            return impl
+
+        for style, err_class in (('new_style', AttributeError),
+                                 ('old_style', errors.TypingError)):
+            with override_config('CAPTURED_ERRORS', style):
+                with self.assertRaises(err_class) as raises:
+                    @njit('void(int64)')
+                    def foo(x):
+                        bar(x)
+                expected = "object has no attribute 'some_invalid_attr'"
+                self.assertIn(expected, str(raises.exception))
 
 
 if __name__ == '__main__':

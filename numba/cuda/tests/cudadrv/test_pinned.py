@@ -1,10 +1,8 @@
 import numpy as np
+import platform
 
 from numba import cuda
 from numba.cuda.testing import unittest, ContextResettingTestCase
-
-
-REPEAT = 25
 
 
 class TestPinned(ContextResettingTestCase):
@@ -21,7 +19,12 @@ class TestPinned(ContextResettingTestCase):
         self.assertTrue(np.allclose(A, A0))
 
     def test_pinned(self):
-        A = np.arange(2 * 1024 * 1024) # 16 MB
+        machine = platform.machine()
+        if machine.startswith('arm') or machine.startswith('aarch64'):
+            count = 262144   # 2MB
+        else:
+            count = 2097152  # 16MB
+        A = np.arange(count)
         with cuda.pinned(A):
             self._run_copies(A)
 

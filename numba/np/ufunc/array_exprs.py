@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import numpy as np
 import operator
 
-from numba.core import types, utils, ir, rewrites, compiler
+from numba.core import types, targetconfig, ir, rewrites, compiler
 from numba.core.typing import npydecl
 from numba.np.ufunc.dufunc import DUFunc
 
@@ -329,6 +329,28 @@ def _legalize_parameter_names(var_list):
             var.name = old_name
 
 
+class _EraseInvalidLineRanges(ast.NodeTransformer):
+    def generic_visit(self, node: ast.AST) -> ast.AST:
+        node = super().generic_visit(node)
+        if hasattr(node, "lineno"):
+            if getattr(node, "end_lineno", None) is not None:
+                if node.lineno > node.end_lineno:
+                    del node.lineno
+                    del node.end_lineno
+        return node
+
+
+def _fix_invalid_lineno_ranges(astree: ast.AST):
+    """Inplace fixes invalid lineno ranges.
+    """
+    # Make sure lineno and end_lineno are present
+    ast.fix_missing_locations(astree)
+    # Delete invalid lineno ranges
+    _EraseInvalidLineRanges().visit(astree)
+    # Make sure lineno and end_lineno are present
+    ast.fix_missing_locations(astree)
+
+
 def _lower_array_expr(lowerer, expr):
     '''Lower an array expression built by RewriteArrayExprs.
     '''
@@ -354,7 +376,7 @@ def _lower_array_expr(lowerer, expr):
         ast_fn = ast_module.body[0]
         ast_fn.args.args = ast_args
         ast_fn.body[0].value, namespace = _arr_expr_to_ast(expr.expr)
-        ast.fix_missing_locations(ast_module)
+        _fix_invalid_lineno_ranges(ast_module)
 
     # 2. Compile the AST module and extract the Python function.
     code_obj = compile(ast_module, expr_filename, 'exec')
@@ -376,9 +398,10 @@ def _lower_array_expr(lowerer, expr):
             inner_sig_args.append(argty)
     inner_sig = outer_sig.return_type.dtype(*inner_sig_args)
 
+    flags = targetconfig.ConfigStack().top_or_none()
+    flags = compiler.Flags() if flags is None else flags.copy() # make sure it's a clone or a fresh instance
     # Follow the Numpy error model.  Note this also allows e.g. vectorizing
     # division (issue #1223).
-    flags = compiler.Flags()
     flags.error_model = 'numpy'
     cres = context.compile_subroutine(builder, impl, inner_sig, flags=flags,
                                       caching=False)

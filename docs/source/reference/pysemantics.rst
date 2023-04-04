@@ -71,4 +71,18 @@ with immutability assumption.  However, large global arrays are not copied to
 conserve memory.  The definition of "small" and "large" may change.
 
 
-.. todo:: This document needs completing.
+Zero initialization of variables
+--------------------------------
+
+Numba does not track variable liveness at runtime. For simplicity of
+implementation, all variables are zero-initialized. Example::
+
+    from numba import njit
+
+    @njit
+    def foo():
+        for i in range(0):
+            pass
+        print(i) # will print 0 and not raise UnboundLocalError
+
+    foo()

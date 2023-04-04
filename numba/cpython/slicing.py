@@ -5,11 +5,11 @@ Implement slices and various slice computations.
 from itertools import zip_longest
 
 from llvmlite import ir
-
-from numba.core import types, typing, utils, cgutils
-from numba.core.imputils import (lower_builtin, lower_getattr,
-                                    iternext_impl, impl_ret_borrowed,
-                                    impl_ret_new_ref, impl_ret_untracked)
+from numba.core import cgutils, types, typing, utils
+from numba.core.imputils import (impl_ret_borrowed, impl_ret_new_ref,
+                                 impl_ret_untracked, iternext_impl,
+                                 lower_builtin, lower_cast, lower_constant,
+                                 lower_getattr)
 
 
 def fix_index(builder, idx, size):
@@ -150,8 +150,13 @@ def get_defaults(context):
 
 @lower_builtin(slice, types.VarArg(types.Any))
 def slice_constructor_impl(context, builder, sig, args):
-    default_start_pos, default_start_neg, default_stop_pos, default_stop_neg, default_step = \
-        [context.get_constant(types.intp, x) for x in get_defaults(context)]
+    (
+        default_start_pos,
+        default_start_neg,
+        default_stop_pos,
+        default_stop_neg,
+        default_step,
+    ) = [context.get_constant(types.intp, x) for x in get_defaults(context)]
 
     slice_args = [None] * 3
 
@@ -232,4 +237,66 @@ def slice_indices(context, builder, sig, args):
         builder,
         sig.return_type,
         (sli.start, sli.stop, sli.step)
+    )
+
+
+def make_slice_from_constant(context, builder, ty, pyval):
+    sli = context.make_helper(builder, ty)
+    lty = context.get_value_type(types.intp)
+
+    (
+        default_start_pos,
+        default_start_neg,
+        default_stop_pos,
+        default_stop_neg,
+        default_step,
+    ) = [context.get_constant(types.intp, x) for x in get_defaults(context)]
+
+    step = pyval.step
+    if step is None:
+        step_is_neg = False
+        step = default_step
+    else:
+        step_is_neg = step < 0
+        step = lty(step)
+
+    start = pyval.start
+    if start is None:
+        if step_is_neg:
+            start = default_start_neg
+        else:
+            start = default_start_pos
+    else:
+        start = lty(start)
+
+    stop = pyval.stop
+    if stop is None:
+        if step_is_neg:
+            stop = default_stop_neg
+        else:
+            stop = default_stop_pos
+    else:
+        stop = lty(stop)
+
+    sli.start = start
+    sli.stop = stop
+    sli.step = step
+
+    return sli._getvalue()
+
+
+@lower_constant(types.SliceType)
+def constant_slice(context, builder, ty, pyval):
+    if isinstance(ty, types.Literal):
+        typ = ty.literal_type
+    else:
+        typ = ty
+
+    return make_slice_from_constant(context, builder, typ, pyval)
+
+
+@lower_cast(types.misc.SliceLiteral, types.SliceType)
+def cast_from_literal(context, builder, fromty, toty, val):
+    return make_slice_from_constant(
+        context, builder, toty, fromty.literal_value,
     )

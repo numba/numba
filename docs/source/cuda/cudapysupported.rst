@@ -23,6 +23,18 @@ For details please consult the
 `CUDA Programming Guide
 <http://docs.nvidia.com/cuda/cuda-c-programming-guide/#programming-model>`_.
 
+Floating Point Error Model
+--------------------------
+
+By default, CUDA Python kernels execute with the NumPy error model. In this
+model, division by zero raises no exception and instead produces a result of
+``inf``, ``-inf`` or ``nan``. This differs from the normal Python error model,
+in which division by zero raises a ``ZeroDivisionError``.
+
+When debug is enabled (by passing ``debug=True`` to the
+:func:`@cuda.jit <numba.cuda.jit>` decorator), the Python error model is used.
+This allows division-by-zero errors during kernel execution to be identified.
+
 Constructs
 ----------
 
@@ -33,12 +45,14 @@ The following Python constructs are not supported:
 * Comprehensions (either list, dict, set or generator comprehensions)
 * Generator (any ``yield`` statements)
 
-The ``raise`` statement is supported.
+The ``raise`` and ``assert`` statements are supported, with the following
+constraints:
 
-The ``assert`` statement is supported, but only has an effect when
-``debug=True`` is passed to the :func:`numba.cuda.jit` decorator. This is
-similar to the behavior of the ``assert`` keyword in CUDA C/C++, which is
-ignored unless compiling with device debug turned on.
+- They can only be used in kernels, not in device functions.
+- They only have an effect when ``debug=True`` is passed to the
+  :func:`@cuda.jit <numba.cuda.jit>` decorator. This is similar to the behavior
+  of the ``assert`` keyword in CUDA C/C++, which is ignored unless compiling
+  with device debug turned on.
 
 
 Printing of strings, integers, and floats is supported, but printing is an
@@ -46,7 +60,63 @@ asynchronous operation - in order to ensure that all output is printed after a
 kernel launch, it is necessary to call :func:`numba.cuda.synchronize`. Eliding
 the call to ``synchronize`` is acceptable, but output from a kernel may appear
 during other later driver operations (e.g. subsequent kernel launches, memory
-transfers, etc.), or fail to appear before the program execution completes.
+transfers, etc.), or fail to appear before the program execution completes. Up
+to 32 arguments may be passed to the ``print`` function - if more are passed
+then a format string will be emitted instead and a warning will be produced.
+This is due to a general limitation in CUDA printing, as outlined in the
+`section on limitations in printing
+<https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#limitations>`_
+in the CUDA C++ Programming Guide.
+
+
+Recursion
+---------
+
+Self-recursive device functions are supported, with the constraint that
+recursive calls must have the same argument types as the initial call to
+the function. For example, the following form of recursion is supported:
+
+.. code:: python
+
+   @cuda.jit("int64(int64)", device=True)
+   def fib(n):
+       if n < 2:
+           return n
+       return fib(n - 1) + fib(n - 2)
+
+(the ``fib`` function always has an ``int64`` argument), whereas the following
+is unsupported:
+
+.. code:: python
+
+   # Called with x := int64, y := float64
+   @cuda.jit
+   def type_change_self(x, y):
+       if x > 1 and y > 0:
+           return x + type_change_self(x - y, y)
+       else:
+           return y
+
+The outer call to ``type_change_self`` provides ``(int64, float64)`` arguments,
+but the inner call uses ``(float64, float64)`` arguments (because ``x - y`` /
+``int64 - float64`` results in a ``float64`` type). Therefore, this function is
+unsupported.
+
+Mutual recursion between functions (e.g. where a function ``func1()`` calls
+``func2()`` which again calls ``func1()``) is unsupported.
+
+.. note::
+
+   The call stack in CUDA is typically quite limited in size, so it is easier
+   to overflow it with recursive calls on CUDA devices than it is on CPUs.
+
+   Stack overflow will result in an Unspecified Launch Failure (ULF) during
+   kernel execution.  In order to identify whether a ULF is due to stack
+   overflow, programs can be run under `Compute Sanitizer
+   <https://docs.nvidia.com/compute-sanitizer/ComputeSanitizer/index.html>`_,
+   which explicitly states when stack overflow has occurred.
+
+.. _cuda-built-in-types:
 
 Built-in types
 ===============
@@ -59,9 +129,13 @@ The following built-in types support are inherited from CPU nopython mode.
 * bool
 * None
 * tuple
+* Enum, IntEnum
 
 See :ref:`nopython built-in types <pysupported-builtin-types>`.
 
+There is also some very limited support for character sequences (bytes and
+unicode strings) used in NumPy arrays. Note that this support can only be used
+with CUDA 11.2 onwards.
 
 Built-in functions
 ==================
@@ -148,7 +222,7 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.log10`
 * :func:`math.log1p`
 * :func:`math.sqrt`
-* :func:`math.remainder`: Python 3.7+
+* :func:`math.remainder`
 * :func:`math.pow`
 * :func:`math.ceil`
 * :func:`math.floor`
@@ -200,8 +274,9 @@ The following functions from the :mod:`operator` module are supported:
 * :func:`operator.truediv`
 * :func:`operator.xor`
 
+.. _cuda_numpy_support:
 
-Numpy support
+NumPy support
 =============
 
 Due to the CUDA programming model, dynamic memory allocation inside a kernel is
@@ -209,14 +284,46 @@ inefficient and is often not needed.  Numba disallows any memory allocating feat
 This disables a large number of NumPy APIs.  For best performance, users should write
 code such that each thread is dealing with a single element at a time.
 
-Supported numpy features:
+Supported NumPy features:
 
 * accessing `ndarray` attributes `.shape`, `.strides`, `.ndim`, `.size`, etc..
-* scalar ufuncs that have equivalents in the `math` module; i.e. ``np.sin(x[0])``, where x is a 1D array.
 * indexing and slicing works.
+* A subset of ufuncs are supported, but the output array must be passed in as a
+  positional argument (see :ref:`cuda_ufunc_call_example`). Note that ufuncs
+  execute sequentially in each thread - there is no automatic parallelisation
+  of ufuncs across threads over the elements of an input array.
 
-Unsupported numpy features:
+  The following ufuncs are supported:
+
+  * :func:`numpy.sin`
+  * :func:`numpy.cos`
+  * :func:`numpy.tan`
+  * :func:`numpy.arcsin`
+  * :func:`numpy.arccos`
+  * :func:`numpy.arctan`
+  * :func:`numpy.arctan2`
+  * :func:`numpy.hypot`
+  * :func:`numpy.sinh`
+  * :func:`numpy.cosh`
+  * :func:`numpy.tanh`
+  * :func:`numpy.arcsinh`
+  * :func:`numpy.arccosh`
+  * :func:`numpy.arctanh`
+  * :func:`numpy.deg2rad`
+  * :func:`numpy.radians`
+  * :func:`numpy.rad2deg`
+  * :func:`numpy.degrees`
+
+Unsupported NumPy features:
 
 * array creation APIs.
 * array methods.
 * functions that returns a new array.
+
+
+CFFI support
+============
+
+The ``from_buffer()`` method of ``cffi.FFI`` objects is supported. This is
+useful for obtaining a pointer that can be passed to external C / C++ / PTX
+functions (see the :ref:`CUDA FFI documentation <cuda_ffi>`).

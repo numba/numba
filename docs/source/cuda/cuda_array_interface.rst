@@ -30,7 +30,7 @@ that must contain the following entries:
 - **typestr**: ``str``
 
   The type string.  This has the same definition as ``typestr`` in the
-  `numpy array interface`_.
+  `NumPy array interface`_.
 
 - **data**: ``(integer, boolean)``
 
@@ -63,14 +63,14 @@ The following are optional entries:
 - **descr**
 
   This is for describing more complicated types.  This follows the same
-  specification as in the `numpy array interface`_.
+  specification as in the `NumPy array interface`_.
 
 - **mask**: ``None`` or object exposing the ``__cuda_array_interface__``
 
   If ``None`` then all values in **data** are valid. All elements of the mask
   array should be interpreted only as true or not true indicating which
   elements of this array are valid. This has the same definition as ``mask``
-  in the `numpy array interface`_.
+  in the `NumPy array interface`_.
 
   .. note:: Numba does not currently support working with masked CUDA arrays
             and will raise a ``NotImplementedError`` exception if one is passed
@@ -475,7 +475,7 @@ include:
 - is the pointer a managed memory?
 
 
-.. _numpy array interface: https://docs.scipy.org/doc/numpy-1.13.0/reference/arrays.interface.html#__array_interface__
+.. _NumPy array interface: https://docs.scipy.org/doc/numpy-1.13.0/reference/arrays.interface.html#__array_interface__
 
 
 Differences with CUDA Array Interface (Version 0)
@@ -513,6 +513,14 @@ The following Python libraries have adopted the CUDA Array Interface:
 - `ArrayViews <https://github.com/xnd-project/arrayviews>`_
 - `JAX <https://jax.readthedocs.io/en/latest/index.html>`_
 - `PyCUDA <https://documen.tician.de/pycuda/tutorial.html#interoperability-with-other-libraries-using-the-cuda-array-interface>`_
+- `DALI: the NVIDIA Data Loading Library <https://github.com/NVIDIA/DALI>`_ :
+
+    - `TensorGPU objects
+      <https://docs.nvidia.com/deeplearning/dali/user-guide/docs/data_types.html#nvidia.dali.backend.TensorGPU>`_
+      expose the CUDA Array Interface.
+    - `The External Source operator
+      <https://docs.nvidia.com/deeplearning/dali/user-guide/docs/supported_ops.html#nvidia.dali.fn.external_source>`_
+      consumes objects exporting the CUDA Array Interface.
 - The RAPIDS stack:
 
     - `cuDF <https://rapidsai.github.io/projects/cudf/en/0.11.0/10min-cudf-cupy.html>`_

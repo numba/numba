@@ -67,7 +67,7 @@ def MyStruct_get_vector(self):
 
 
 # This associates the proxy with MyStructType for the given set of
-# fields. Notice how we are not contraining the type of each field.
+# fields. Notice how we are not constraining the type of each field.
 # Field types remain generic.
 structref.define_proxy(MyStruct, MyStructType, ["name", "vector"])
 # magictoken.ex_structref_type_definition.end

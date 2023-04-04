@@ -197,11 +197,7 @@ class TestArgumentTypingError(unittest.TestCase):
         a = a.astype(a.dtype.newbyteorder())
         with self.assertRaises(TypingError) as raises:
             cfunc(1, a, a)
-        expected = textwrap.dedent("""\
-            This error may have been caused by the following argument(s):
-            - argument 1: Unsupported array dtype: {0}
-            - argument 2: Unsupported array dtype: {0}"""
-            ).format(a.dtype)
+        expected = f"Unsupported array dtype: {a.dtype}"
         self.assertIn(expected, str(raises.exception))
 
     def test_unsupported_type(self):

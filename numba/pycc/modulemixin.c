@@ -58,14 +58,13 @@ VISIBILITY_HIDDEN void **PYCC(_unused_) = {
     (void *) Numba_make_generator,
 };
 
-/* The LLVM-generated functions for atomic refcounting */
-extern void *nrt_atomic_add, *nrt_atomic_sub;
-
 /* The structure type constructed by PythonAPI.serialize_uncached() */
 typedef struct {
     const char *data;
     int len;
     const char *hashbuf;
+    const char *func_ptr;  // pointer to unwrap dyn args function
+    int alloc_flag;
 } env_def_t;
 
 /* Environment GlobalVariable address type */
@@ -142,8 +141,6 @@ PYCC(pycc_init_) (PyObject *module, PyMethodDef *defs,
 
 #if PYCC_USE_NRT
     NRT_MemSys_init();
-    NRT_MemSys_set_atomic_inc_dec((NRT_atomic_inc_dec_func) &nrt_atomic_add,
-                                  (NRT_atomic_inc_dec_func) &nrt_atomic_sub);
     if (init_nrt_python_module(module)) {
         goto error;
     }

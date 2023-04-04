@@ -7,29 +7,29 @@ Notes on Numba Runtime
 
 The *Numba Runtime (NRT)* provides the language runtime to the *nopython mode*
 Python subset.  NRT is a standalone C library with a Python binding.  This
-allows NPM runtime feature to be used without the GIL.  Currently, the only
-language feature implemented in NRT is memory management.
+allows :term:`NPM` runtime feature to be used without the GIL.  Currently, the 
+only language feature implemented in NRT is memory management.
 
 
 Memory Management
 =================
 
-NRT implements memory management for NPM code.  It uses *atomic reference count*
-for threadsafe, deterministic memory management.  NRT maintains a separate
-``MemInfo`` structure for storing information about each allocation.
+NRT implements memory management for :term:`NPM` code.  It uses *atomic 
+reference count* for threadsafe, deterministic memory management.  NRT maintains 
+a separate ``MemInfo`` structure for storing information about each allocation.
 
 Cooperating with CPython
 ------------------------
 
 For NRT to cooperate with CPython, the NRT python binding provides adaptors for
 converting python objects that export a memory region.  When such an
-object is used as an argument to a NPM function, a new ``MemInfo`` is created
-and it acquires a reference to the Python object.  When a NPM value is returned
-to the Python interpreter, the associated ``MemInfo`` (if any) is checked.  If
-the ``MemInfo`` references a Python object, the underlying Python object is
-released and returned instead.  Otherwise, the ``MemInfo`` is wrapped in a
-Python object and returned.  Additional process maybe required depending on
-the type.
+object is used as an argument to a :term:`NPM` function, a new ``MemInfo`` is 
+created and it acquires a reference to the Python object.  When a :term:`NPM` 
+value is returned to the Python interpreter, the associated ``MemInfo`` 
+(if any) is checked.  If the ``MemInfo`` references a Python object, the 
+underlying Python object is released and returned instead.  Otherwise, the 
+``MemInfo`` is wrapped in a Python object and returned. Additional process 
+maybe required depending on the type.
 
 The current implementation supports Numpy array and any buffer-exporting types.
 
@@ -101,7 +101,7 @@ Debugging Leaks in C
 --------------------
 
 The start of `numba/core/runtime/nrt.h
-<https://github.com/numba/numba/blob/master/numba/core/runtime/nrt.h>`_
+<https://github.com/numba/numba/blob/main/numba/core/runtime/nrt.h>`_
 has these lines:
 
 .. code-block:: C
@@ -176,6 +176,18 @@ Here is an example that uses the ``nrt_external.h``:
       return mi;
   }
 
+It is important to ensure that the NRT is initialized prior to making calls to
+it, calling ``numba.core.runtime.nrt.rtsys.initialize(context)`` from Python
+will have the desired effect. Similarly the code snippet:
+
+.. code-block:: Python
+
+  from numba.core.registry import cpu_target # Get the CPU target singleton
+  cpu_target.target_context # Access the target_context property to initialize
+
+will achieve the same specifically for Numba's CPU target (the default). Failure
+to initialize the NRT will result in access violations as function pointers for
+various internal atomic operations will be missing in the ``NRT_MemSys`` struct.
 
 Future Plan
 ===========
@@ -184,5 +196,5 @@ The plan for NRT is to make a standalone shared library that can be linked to
 Numba compiled code, including use within the Python interpreter and without
 the Python interpreter.  To make that work, we will be doing some refactoring:
 
-* numba NPM code references statically compiled code in "helperlib.c".  Those
-  functions should be moved to NRT.
+* numba :term:`NPM` code references statically compiled code in "helperlib.c".
+  Those functions should be moved to NRT.

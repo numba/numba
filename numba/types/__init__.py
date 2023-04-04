@@ -1,9 +1,3 @@
-import importlib
-
-
-def __getattr__(name):
-    """Redirect to numba.core.types
-    """
-    # Uses PEP-562
-    basemod = importlib.import_module(f"numba.core.types", __name__)
-    return getattr(basemod, name)
+import sys
+from numba.core.utils import _RedirectSubpackage
+sys.modules[__name__] = _RedirectSubpackage(locals(), "numba.core.types")

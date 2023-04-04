@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from llvmlite import ir
 
 from numba.core import types, typing, callconv, cpu, cgutils
+from numba.core.registry import cpu_target
 
 
 class TestCompileCache(unittest.TestCase):
@@ -14,8 +15,8 @@ class TestCompileCache(unittest.TestCase):
 
     @contextmanager
     def _context_builder_sig_args(self):
-        typing_context = typing.Context()
-        context = cpu.CPUContext(typing_context, 'cpu')
+        typing_context = cpu_target.typing_context
+        context = cpu_target.target_context
         lib = context.codegen().create_library('testing')
         with context.push_code_library(lib):
             module = ir.Module("test_module")
@@ -42,22 +43,27 @@ class TestCompileCache(unittest.TestCase):
         with self._context_builder_sig_args() as (
             context, builder, sig, args,
         ):
+            initial_cache_size = len(context.cached_internal_func)
             # Ensure the cache is empty to begin with
-            self.assertEqual(0, len(context.cached_internal_func))
+            self.assertEqual(initial_cache_size + 0,
+                             len(context.cached_internal_func))
 
             # After one compile, it should contain one entry
             context.compile_internal(builder, times2, sig, args)
-            self.assertEqual(1, len(context.cached_internal_func))
+            self.assertEqual(initial_cache_size + 1,
+                             len(context.cached_internal_func))
 
             # After a second compilation of the same thing, it should still contain
             # one entry
             context.compile_internal(builder, times2, sig, args)
-            self.assertEqual(1, len(context.cached_internal_func))
+            self.assertEqual(initial_cache_size + 1,
+                             len(context.cached_internal_func))
 
             # After compilation of another function, the cache should have grown by
             # one more.
             context.compile_internal(builder, times3, sig, args)
-            self.assertEqual(2, len(context.cached_internal_func))
+            self.assertEqual(initial_cache_size + 2,
+                             len(context.cached_internal_func))
 
             sig2 = typing.signature(types.float64, types.float64)
             llvm_fnty2 = context.call_conv.get_function_type(sig2.return_type,
@@ -72,7 +78,8 @@ class TestCompileCache(unittest.TestCase):
             # Ensure that the same function with a different signature does not
             # reuse an entry from the cache in error
             context.compile_internal(builder2, times3, sig2, args2)
-            self.assertEqual(3, len(context.cached_internal_func))
+            self.assertEqual(initial_cache_size + 3,
+                             len(context.cached_internal_func))
 
     def test_closures(self):
         """
@@ -90,13 +97,17 @@ class TestCompileCache(unittest.TestCase):
             clo11 = make_closure(1, 1)
             clo12 = make_closure(1, 2)
             clo22 = make_closure(2, 2)
+            initial_cache_size = len(context.cached_internal_func)
             res1 = context.compile_internal(builder, clo11, sig, args)
-            self.assertEqual(1, len(context.cached_internal_func))
+            self.assertEqual(initial_cache_size + 1,
+                             len(context.cached_internal_func))
             res2 = context.compile_internal(builder, clo12, sig, args)
-            self.assertEqual(2, len(context.cached_internal_func))
+            self.assertEqual(initial_cache_size + 2,
+                             len(context.cached_internal_func))
             # Same cell contents as above (first parameter isn't captured)
             res3 = context.compile_internal(builder, clo22, sig, args)
-            self.assertEqual(2, len(context.cached_internal_func))
+            self.assertEqual(initial_cache_size + 2,
+                             len(context.cached_internal_func))
 
     def test_error_model(self):
         """
@@ -120,16 +131,22 @@ class TestCompileCache(unittest.TestCase):
             py_context2 = context.subtarget(error_model=py_error_model)
             np_context = context.subtarget(error_model=np_error_model)
 
+            initial_cache_size = len(context.cached_internal_func)
+
             # Note the parent context's cache is shared by subtargets
-            self.assertEqual(0, len(context.cached_internal_func))
+            self.assertEqual(initial_cache_size + 0,
+                             len(context.cached_internal_func))
             # Compiling with the same error model reuses the same cache slot
             compile_inv(py_context1)
-            self.assertEqual(1, len(context.cached_internal_func))
+            self.assertEqual(initial_cache_size + 1,
+                             len(context.cached_internal_func))
             compile_inv(py_context2)
-            self.assertEqual(1, len(context.cached_internal_func))
+            self.assertEqual(initial_cache_size + 1,
+                             len(context.cached_internal_func))
             # Compiling with another error model creates a new cache slot
             compile_inv(np_context)
-            self.assertEqual(2, len(context.cached_internal_func))
+            self.assertEqual(initial_cache_size + 2,
+                             len(context.cached_internal_func))
 
 
 if __name__ == '__main__':

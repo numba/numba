@@ -1,7 +1,8 @@
-from ctypes import byref, c_int, sizeof
+from ctypes import byref, c_int, c_void_p, sizeof
+
 from numba.cuda.cudadrv.driver import (host_to_device, device_to_host, driver,
                                        launch_kernel)
-from numba.cuda.cudadrv import devices, drvapi
+from numba.cuda.cudadrv import devices, drvapi, driver as _driver
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.cuda.testing import skip_on_cudasim
 
@@ -62,6 +63,7 @@ ptx2 = '''
 @skip_on_cudasim('CUDA Driver API unsupported in the simulator')
 class TestCudaDriver(CUDATestCase):
     def setUp(self):
+        super().setUp()
         self.assertTrue(len(devices.gpus) > 0)
         self.context = devices.get_context()
         device = self.context.device
@@ -72,6 +74,7 @@ class TestCudaDriver(CUDATestCase):
             self.ptx = ptx1
 
     def tearDown(self):
+        super().tearDown()
         del self.context
 
     def test_cuda_driver_basic(self):
@@ -81,15 +84,21 @@ class TestCudaDriver(CUDATestCase):
         array = (c_int * 100)()
 
         memory = self.context.memalloc(sizeof(array))
-
         host_to_device(memory, array, sizeof(array))
+
+        ptr = memory.device_ctypes_pointer
+        stream = 0
+
+        if _driver.USE_NV_BINDING:
+            ptr = c_void_p(int(ptr))
+            stream = _driver.binding.CUstream(stream)
 
         launch_kernel(function.handle,  # Kernel
                       1,   1, 1,        # gx, gy, gz
                       100, 1, 1,        # bx, by, bz
                       0,                # dynamic shared mem
-                      0,                # stream
-                      [memory])         # arguments
+                      stream,           # stream
+                      [ptr])            # arguments
 
         device_to_host(array, memory, sizeof(array))
         for i, v in enumerate(array):
@@ -109,12 +118,16 @@ class TestCudaDriver(CUDATestCase):
             memory = self.context.memalloc(sizeof(array))
             host_to_device(memory, array, sizeof(array), stream=stream)
 
+            ptr = memory.device_ctypes_pointer
+            if _driver.USE_NV_BINDING:
+                ptr = c_void_p(int(ptr))
+
             launch_kernel(function.handle,  # Kernel
                           1,   1, 1,        # gx, gy, gz
                           100, 1, 1,        # bx, by, bz
                           0,                # dynamic shared mem
                           stream.handle,    # stream
-                          [memory])         # arguments
+                          [ptr])            # arguments
 
         device_to_host(array, memory, sizeof(array), stream=stream)
 
@@ -162,9 +175,13 @@ class TestCudaDriver(CUDATestCase):
         # Test properties of a stream created from an external stream object.
         # We use the driver API directly to create a stream, to emulate an
         # external library creating a stream
-        handle = drvapi.cu_stream()
-        driver.cuStreamCreate(byref(handle), 0)
-        ptr = handle.value
+        if _driver.USE_NV_BINDING:
+            handle = driver.cuStreamCreate(0)
+            ptr = int(handle)
+        else:
+            handle = drvapi.cu_stream()
+            driver.cuStreamCreate(byref(handle), 0)
+            ptr = handle.value
         s = self.context.create_external_stream(ptr)
 
         self.assertIn("External CUDA stream", repr(s))

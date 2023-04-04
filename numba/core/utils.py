@@ -6,6 +6,7 @@ import os
 import operator
 import timeit
 import math
+import sys
 import traceback
 import weakref
 import warnings
@@ -13,6 +14,7 @@ import threading
 import contextlib
 
 from types import ModuleType
+from importlib import import_module
 from collections.abc import Mapping, Sequence
 import numpy as np
 
@@ -22,6 +24,7 @@ from inspect import Parameter as pyParameter # noqa: F401
 
 from numba.core.config import (PYVERSION, MACHINE_BITS, # noqa: F401
                                DEVELOPER_MODE) # noqa: F401
+from numba.core import config
 from numba.core import types
 
 
@@ -95,6 +98,11 @@ INPLACE_BINOPS_TO_OPERATORS = {
     '>>=': operator.irshift,
     '@=': operator.imatmul,
 }
+
+
+ALL_BINOPS_TO_OPERATORS = {**BINOPS_TO_OPERATORS,
+                           **INPLACE_BINOPS_TO_OPERATORS}
+
 
 UNARY_BUITINS_TO_OPERATORS = {
     '+': operator.pos,
@@ -172,43 +180,83 @@ def shutting_down(globals=globals):
 # which atexit is True. Some of these finalizers may call shutting_down() to
 # check whether the interpreter is shutting down. For this to behave correctly,
 # we need to make sure that _at_shutdown is called before the finalizer exit
-# function. Since atexit operates as a LIFO stack, we first contruct a dummy
+# function. Since atexit operates as a LIFO stack, we first construct a dummy
 # finalizer then register atexit to ensure this ordering.
 weakref.finalize(lambda: None, lambda: None)
 atexit.register(_at_shutdown)
 
 
-class ConfigStack:
-    """A stack for tracking target configurations in the compiler.
+def use_new_style_errors():
+    """Returns True if new style errors are to be used, false otherwise"""
+    # This uses `config` so as to make sure it gets the current value from the
+    # module as e.g. some tests mutate the config with `override_config`.
+    return config.CAPTURED_ERRORS == 'new_style'
 
-    It stores the stack in a thread-local class attribute. All instances in the
-    same thread will see the same stack.
+
+def use_old_style_errors():
+    """Returns True if old style errors are to be used, false otherwise"""
+    # This uses `config` so as to make sure it gets the current value from the
+    # module as e.g. some tests mutate the config with `override_config`.
+    return config.CAPTURED_ERRORS == 'old_style'
+
+
+class ThreadLocalStack:
+    """A TLS stack container.
+
+    Uses the BORG pattern and stores states in threadlocal storage.
     """
-    tls = threading.local()
+    _tls = threading.local()
+    stack_name: str
+    _registered = {}
+
+    def __init_subclass__(cls, *, stack_name, **kwargs):
+        super().__init_subclass__(**kwargs)
+        # Register stack_name mapping to the new subclass
+        assert stack_name not in cls._registered, \
+            f"stack_name: '{stack_name}' already in use"
+        cls.stack_name = stack_name
+        cls._registered[stack_name] = cls
 
     def __init__(self):
-        tls = self.tls
+        # This class must not be used directly.
+        assert type(self) is not ThreadLocalStack
+        tls = self._tls
+        attr = f"stack_{self.stack_name}"
         try:
-            stk = tls.stack
+            tls_stack = getattr(tls, attr)
         except AttributeError:
-            tls.stack = stk = []
-        self._stk = stk
+            tls_stack = list()
+            setattr(tls, attr, tls_stack)
 
-    def push(self, data):
-        self._stk.append(data)
+        self._stack = tls_stack
+
+    def push(self, state):
+        """Push to the stack
+        """
+        self._stack.append(state)
 
     def pop(self):
-        return self._stk.pop()
+        """Pop from the stack
+        """
+        return self._stack.pop()
 
     def top(self):
-        return self._stk[-1]
+        """Get the top item on the stack.
+
+        Raises IndexError if the stack is empty. Users should check the size
+        of the stack beforehand.
+        """
+        return self._stack[-1]
 
     def __len__(self):
-        return len(self._stk)
+        return len(self._stack)
 
     @contextlib.contextmanager
-    def enter(self, flags):
-        self.push(flags)
+    def enter(self, state):
+        """A contextmanager that pushes ``state`` for the duration of the
+        context.
+        """
+        self.push(state)
         try:
             yield
         finally:
@@ -265,6 +313,45 @@ class ConfigOptions(object):
         return hash(tuple(sorted(self._values.items())))
 
 
+def order_by_target_specificity(target, templates, fnkey=''):
+    """This orders the given templates from most to least specific against the
+    current "target". "fnkey" is an indicative typing key for use in the
+    exception message in the case that there's no usable templates for the
+    current "target".
+    """
+    # No templates... return early!
+    if templates == []:
+        return []
+
+    from numba.core.target_extension import target_registry
+
+    # fish out templates that are specific to the target if a target is
+    # specified
+    DEFAULT_TARGET = 'generic'
+    usable = []
+    for ix, temp_cls in enumerate(templates):
+        # ? Need to do something about this next line
+        md = getattr(temp_cls, "metadata", {})
+        hw = md.get('target', DEFAULT_TARGET)
+        if hw is not None:
+            hw_clazz = target_registry[hw]
+            if target.inherits_from(hw_clazz):
+                usable.append((temp_cls, hw_clazz, ix))
+
+    # sort templates based on target specificity
+    def key(x):
+        return target.__mro__.index(x[1])
+    order = [x[0] for x in sorted(usable, key=key)]
+
+    if not order:
+        msg = (f"Function resolution cannot find any matches for function "
+               f"'{fnkey}' for the current target: '{target}'.")
+        from numba.core.errors import UnsupportedError
+        raise UnsupportedError(msg)
+
+    return order
+
+
 class SortedMap(Mapping):
     """Immutable
     """
@@ -292,28 +379,6 @@ class UniqueDict(dict):
         if key in self:
             raise AssertionError("key already in dictionary: %r" % (key,))
         super(UniqueDict, self).__setitem__(key, value)
-
-
-# Django's cached_property
-# see https://docs.djangoproject.com/en/dev/ref/utils/#django.utils.functional.cached_property    # noqa: E501
-
-class cached_property(object):
-    """
-    Decorator that converts a method with a single self argument into a
-    property cached on the instance.
-
-    Optional ``name`` argument allows you to make cached properties of other
-    methods. (e.g.  url = cached_property(get_absolute_url, name='url') )
-    """
-    def __init__(self, func, name=None):
-        self.func = func
-        self.name = name or func.__name__
-
-    def __get__(self, instance, type=None):
-        if instance is None:
-            return self
-        res = instance.__dict__[self.name] = self.func(instance)
-        return res
 
 
 def runonce(fn):
@@ -537,3 +602,63 @@ def unified_function_type(numba_types, require_precise=True):
         function = types.UndefinedFunctionType(mnargs, dispatchers)
 
     return function
+
+
+class _RedirectSubpackage(ModuleType):
+    """Redirect a subpackage to a subpackage.
+
+    This allows all references like:
+
+    >>> from numba.old_subpackage import module
+    >>> module.item
+
+    >>> import numba.old_subpackage.module
+    >>> numba.old_subpackage.module.item
+
+    >>> from numba.old_subpackage.module import item
+    """
+    def __init__(self, old_module_locals, new_module):
+        old_module = old_module_locals['__name__']
+        super().__init__(old_module)
+
+        self.__old_module_states = {}
+        self.__new_module = new_module
+
+        new_mod_obj = import_module(new_module)
+
+        # Map all sub-modules over
+        for k, v in new_mod_obj.__dict__.items():
+            # Get attributes so that `subpackage.xyz` and
+            # `from subpackage import xyz` work
+            setattr(self, k, v)
+            if isinstance(v, ModuleType):
+                # Map modules into the interpreter so that
+                # `import subpackage.xyz` works
+                sys.modules[f"{old_module}.{k}"] = sys.modules[v.__name__]
+
+        # copy across dunders so that package imports work too
+        for attr, value in old_module_locals.items():
+            if attr.startswith('__') and attr.endswith('__'):
+                if attr != "__builtins__":
+                    setattr(self, attr, value)
+                    self.__old_module_states[attr] = value
+
+    def __reduce__(self):
+        args = (self.__old_module_states, self.__new_module)
+        return _RedirectSubpackage, args
+
+
+def get_hashable_key(value):
+    """
+        Given a value, returns a key that can be used
+        as a hash. If the value is hashable, we return
+        the value, otherwise we return id(value).
+
+        See discussion in gh #6957
+    """
+    try:
+        hash(value)
+    except TypeError:
+        return id(value)
+    else:
+        return value

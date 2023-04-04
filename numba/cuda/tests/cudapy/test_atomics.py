@@ -2,8 +2,8 @@ import numpy as np
 from textwrap import dedent
 
 from numba import cuda, uint32, uint64, float32, float64
-from numba.cuda.testing import (unittest, CUDATestCase, skip_unless_cc_32,
-                                skip_unless_cc_50, cc_X_or_above)
+from numba.cuda.testing import (unittest, CUDATestCase, skip_unless_cc_50,
+                                cc_X_or_above)
 from numba.core import config
 
 
@@ -452,12 +452,24 @@ def gen_atomic_extreme_funcs(func):
 def atomic_compare_and_swap(res, old, ary, fill_val):
     gid = cuda.grid(1)
     if gid < res.size:
-        out = cuda.atomic.compare_and_swap(res[gid:], fill_val, ary[gid])
-        old[gid] = out
+        old[gid] = cuda.atomic.compare_and_swap(res[gid:], fill_val, ary[gid])
+
+
+def atomic_cas_1dim(res, old, ary, fill_val):
+    gid = cuda.grid(1)
+    if gid < res.size:
+        old[gid] = cuda.atomic.cas(res, gid, fill_val, ary[gid])
+
+
+def atomic_cas_2dim(res, old, ary, fill_val):
+    gid = cuda.grid(2)
+    if gid[0] < res.shape[0] and gid[1] < res.shape[1]:
+        old[gid] = cuda.atomic.cas(res, gid, fill_val, ary[gid])
 
 
 class TestCudaAtomics(CUDATestCase):
     def setUp(self):
+        super().setUp()
         np.random.seed(0)
 
     def test_atomic_add(self):
@@ -544,7 +556,8 @@ class TestCudaAtomics(CUDATestCase):
         if config.ENABLE_CUDASIM:
             return
 
-        asm = kernel.inspect_asm()
+        # Use the first (and only) definition
+        asm = next(iter(kernel.inspect_asm().values()))
         if cc_X_or_above(6, 0):
             if shared:
                 self.assertIn('atom.shared.add.f64', asm)
@@ -1108,11 +1121,9 @@ class TestCudaAtomics(CUDATestCase):
     def test_atomic_max_uint32(self):
         self.check_atomic_max(dtype=np.uint32, lo=0, hi=65535)
 
-    @skip_unless_cc_32
     def test_atomic_max_int64(self):
         self.check_atomic_max(dtype=np.int64, lo=-65535, hi=65535)
 
-    @skip_unless_cc_32
     def test_atomic_max_uint64(self):
         self.check_atomic_max(dtype=np.uint64, lo=0, hi=65535)
 
@@ -1157,11 +1168,9 @@ class TestCudaAtomics(CUDATestCase):
     def test_atomic_min_uint32(self):
         self.check_atomic_min(dtype=np.uint32, lo=0, hi=65535)
 
-    @skip_unless_cc_32
     def test_atomic_min_int64(self):
         self.check_atomic_min(dtype=np.int64, lo=-65535, hi=65535)
 
-    @skip_unless_cc_32
     def test_atomic_min_uint64(self):
         self.check_atomic_min(dtype=np.uint64, lo=0, hi=65535)
 
@@ -1253,12 +1262,14 @@ class TestCudaAtomics(CUDATestCase):
         gold = np.min(vals)
         np.testing.assert_equal(res, gold)
 
-    def check_compare_and_swap(self, n, fill, unfill, dtype):
+    def check_cas(self, n, fill, unfill, dtype, cas_func, ndim=1):
         res = [fill] * (n // 2) + [unfill] * (n // 2)
         np.random.shuffle(res)
         res = np.asarray(res, dtype=dtype)
+        if ndim == 2:
+            res.shape = (10, -1)
         out = np.zeros_like(res)
-        ary = np.random.randint(1, 10, size=res.size).astype(res.dtype)
+        ary = np.random.randint(1, 10, size=res.shape).astype(res.dtype)
 
         fill_mask = res == fill
         unfill_mask = res == unfill
@@ -1267,33 +1278,76 @@ class TestCudaAtomics(CUDATestCase):
         expect_res[fill_mask] = ary[fill_mask]
         expect_res[unfill_mask] = unfill
 
-        expect_out = np.zeros_like(out)
-        expect_out[fill_mask] = res[fill_mask]
-        expect_out[unfill_mask] = unfill
+        expect_out = res.copy()
 
-        cuda_func = cuda.jit(atomic_compare_and_swap)
-        cuda_func[10, 10](res, out, ary, fill)
+        cuda_func = cuda.jit(cas_func)
+        if ndim == 1:
+            cuda_func[10, 10](res, out, ary, fill)
+        else:
+            cuda_func[(10, 10), (10, 10)](res, out, ary, fill)
 
         np.testing.assert_array_equal(expect_res, res)
         np.testing.assert_array_equal(expect_out, out)
 
     def test_atomic_compare_and_swap(self):
-        self.check_compare_and_swap(n=100, fill=-99, unfill=-1, dtype=np.int32)
+        self.check_cas(n=100, fill=-99, unfill=-1, dtype=np.int32,
+                       cas_func=atomic_compare_and_swap)
 
     def test_atomic_compare_and_swap2(self):
-        self.check_compare_and_swap(n=100, fill=-45, unfill=-1, dtype=np.int64)
+        self.check_cas(n=100, fill=-45, unfill=-1, dtype=np.int64,
+                       cas_func=atomic_compare_and_swap)
 
     def test_atomic_compare_and_swap3(self):
         rfill = np.random.randint(50, 500, dtype=np.uint32)
         runfill = np.random.randint(1, 25, dtype=np.uint32)
-        self.check_compare_and_swap(n=100, fill=rfill, unfill=runfill,
-                                    dtype=np.uint32)
+        self.check_cas(n=100, fill=rfill, unfill=runfill, dtype=np.uint32,
+                       cas_func=atomic_compare_and_swap)
 
     def test_atomic_compare_and_swap4(self):
         rfill = np.random.randint(50, 500, dtype=np.uint64)
         runfill = np.random.randint(1, 25, dtype=np.uint64)
-        self.check_compare_and_swap(n=100, fill=rfill, unfill=runfill,
-                                    dtype=np.uint64)
+        self.check_cas(n=100, fill=rfill, unfill=runfill, dtype=np.uint64,
+                       cas_func=atomic_compare_and_swap)
+
+    def test_atomic_cas_1dim(self):
+        self.check_cas(n=100, fill=-99, unfill=-1, dtype=np.int32,
+                       cas_func=atomic_cas_1dim)
+
+    def test_atomic_cas_2dim(self):
+        self.check_cas(n=100, fill=-99, unfill=-1, dtype=np.int32,
+                       cas_func=atomic_cas_2dim, ndim=2)
+
+    def test_atomic_cas2_1dim(self):
+        self.check_cas(n=100, fill=-45, unfill=-1, dtype=np.int64,
+                       cas_func=atomic_cas_1dim)
+
+    def test_atomic_cas2_2dim(self):
+        self.check_cas(n=100, fill=-45, unfill=-1, dtype=np.int64,
+                       cas_func=atomic_cas_2dim, ndim=2)
+
+    def test_atomic_cas3_1dim(self):
+        rfill = np.random.randint(50, 500, dtype=np.uint32)
+        runfill = np.random.randint(1, 25, dtype=np.uint32)
+        self.check_cas(n=100, fill=rfill, unfill=runfill, dtype=np.uint32,
+                       cas_func=atomic_cas_1dim)
+
+    def test_atomic_cas3_2dim(self):
+        rfill = np.random.randint(50, 500, dtype=np.uint32)
+        runfill = np.random.randint(1, 25, dtype=np.uint32)
+        self.check_cas(n=100, fill=rfill, unfill=runfill, dtype=np.uint32,
+                       cas_func=atomic_cas_2dim, ndim=2)
+
+    def test_atomic_cas4_1dim(self):
+        rfill = np.random.randint(50, 500, dtype=np.uint64)
+        runfill = np.random.randint(1, 25, dtype=np.uint64)
+        self.check_cas(n=100, fill=rfill, unfill=runfill, dtype=np.uint64,
+                       cas_func=atomic_cas_1dim)
+
+    def test_atomic_cas4_2dim(self):
+        rfill = np.random.randint(50, 500, dtype=np.uint64)
+        runfill = np.random.randint(1, 25, dtype=np.uint64)
+        self.check_cas(n=100, fill=rfill, unfill=runfill, dtype=np.uint64,
+                       cas_func=atomic_cas_2dim, ndim=2)
 
     # Tests that the atomic add, min, and max operations return the old value -
     # in the simulator, they did not (see Issue #5458). The max and min have
@@ -1375,9 +1429,9 @@ class TestCudaAtomics(CUDATestCase):
     # Tests for atomic nanmin/nanmax
 
     # nanmax tests
-    def check_atomic_nanmax(self, dtype, lo, hi):
+    def check_atomic_nanmax(self, dtype, lo, hi, init_val):
         vals = np.random.randint(lo, hi, size=(32, 32)).astype(dtype)
-        vals[1::2] = np.nan
+        vals[1::2] = init_val
         res = np.zeros(1, dtype=vals.dtype)
         cuda_func = cuda.jit(atomic_nanmax)
         cuda_func[32, 32](res, vals)
@@ -1385,24 +1439,28 @@ class TestCudaAtomics(CUDATestCase):
         np.testing.assert_equal(res, gold)
 
     def test_atomic_nanmax_int32(self):
-        self.check_atomic_nanmax(dtype=np.int32, lo=-65535, hi=65535)
+        self.check_atomic_nanmax(dtype=np.int32, lo=-65535, hi=65535,
+                                 init_val=0)
 
     def test_atomic_nanmax_uint32(self):
-        self.check_atomic_nanmax(dtype=np.uint32, lo=0, hi=65535)
+        self.check_atomic_nanmax(dtype=np.uint32, lo=0, hi=65535,
+                                 init_val=0)
 
-    @skip_unless_cc_32
     def test_atomic_nanmax_int64(self):
-        self.check_atomic_nanmax(dtype=np.int64, lo=-65535, hi=65535)
+        self.check_atomic_nanmax(dtype=np.int64, lo=-65535, hi=65535,
+                                 init_val=0)
 
-    @skip_unless_cc_32
     def test_atomic_nanmax_uint64(self):
-        self.check_atomic_nanmax(dtype=np.uint64, lo=0, hi=65535)
+        self.check_atomic_nanmax(dtype=np.uint64, lo=0, hi=65535,
+                                 init_val=0)
 
     def test_atomic_nanmax_float32(self):
-        self.check_atomic_nanmax(dtype=np.float32, lo=-65535, hi=65535)
+        self.check_atomic_nanmax(dtype=np.float32, lo=-65535, hi=65535,
+                                 init_val=np.nan)
 
     def test_atomic_nanmax_double(self):
-        self.check_atomic_nanmax(dtype=np.float64, lo=-65535, hi=65535)
+        self.check_atomic_nanmax(dtype=np.float64, lo=-65535, hi=65535,
+                                 init_val=np.nan)
 
     def test_atomic_nanmax_double_shared(self):
         vals = np.random.randint(0, 32, size=32).astype(np.float64)
@@ -1427,9 +1485,9 @@ class TestCudaAtomics(CUDATestCase):
         np.testing.assert_equal(res, gold)
 
     # nanmin tests
-    def check_atomic_nanmin(self, dtype, lo, hi):
+    def check_atomic_nanmin(self, dtype, lo, hi, init_val):
         vals = np.random.randint(lo, hi, size=(32, 32)).astype(dtype)
-        vals[1::2] = np.nan
+        vals[1::2] = init_val
         res = np.array([65535], dtype=vals.dtype)
         cuda_func = cuda.jit(atomic_nanmin)
         cuda_func[32, 32](res, vals)
@@ -1438,24 +1496,28 @@ class TestCudaAtomics(CUDATestCase):
         np.testing.assert_equal(res, gold)
 
     def test_atomic_nanmin_int32(self):
-        self.check_atomic_nanmin(dtype=np.int32, lo=-65535, hi=65535)
+        self.check_atomic_nanmin(dtype=np.int32, lo=-65535, hi=65535,
+                                 init_val=0)
 
     def test_atomic_nanmin_uint32(self):
-        self.check_atomic_nanmin(dtype=np.uint32, lo=0, hi=65535)
+        self.check_atomic_nanmin(dtype=np.uint32, lo=0, hi=65535,
+                                 init_val=0)
 
-    @skip_unless_cc_32
     def test_atomic_nanmin_int64(self):
-        self.check_atomic_nanmin(dtype=np.int64, lo=-65535, hi=65535)
+        self.check_atomic_nanmin(dtype=np.int64, lo=-65535, hi=65535,
+                                 init_val=0)
 
-    @skip_unless_cc_32
     def test_atomic_nanmin_uint64(self):
-        self.check_atomic_nanmin(dtype=np.uint64, lo=0, hi=65535)
+        self.check_atomic_nanmin(dtype=np.uint64, lo=0, hi=65535,
+                                 init_val=0)
 
     def test_atomic_nanmin_float(self):
-        self.check_atomic_nanmin(dtype=np.float32, lo=-65535, hi=65535)
+        self.check_atomic_nanmin(dtype=np.float32, lo=-65535, hi=65535,
+                                 init_val=np.nan)
 
     def test_atomic_nanmin_double(self):
-        self.check_atomic_nanmin(dtype=np.float64, lo=-65535, hi=65535)
+        self.check_atomic_nanmin(dtype=np.float64, lo=-65535, hi=65535,
+                                 init_val=np.nan)
 
     def test_atomic_nanmin_double_shared(self):
         vals = np.random.randint(0, 32, size=32).astype(np.float64)

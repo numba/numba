@@ -1,9 +1,23 @@
 """
 Defines CPU Options for use in the CPU target
 """
+from abc import ABCMeta, abstractmethod
 
 
-class FastMathOptions(object):
+class AbstractOptionValue(metaclass=ABCMeta):
+    """Abstract base class for custom option values.
+    """
+    @abstractmethod
+    def encode(self) -> str:
+        """Returns an encoding of the values
+        """
+        ...
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self.encode()})"
+
+
+class FastMathOptions(AbstractOptionValue):
     """
     Options for controlling fast math optimization.
     """
@@ -41,14 +55,21 @@ class FastMathOptions(object):
 
     __nonzero__ = __bool__
 
-    def __repr__(self):
-        return f"FastMathOptions({self.flags})"
+    def encode(self) -> str:
+        return str(self.flags)
+
+    def __eq__(self, other):
+        if type(other) is type(self):
+            return self.flags == other.flags
+        return NotImplemented
 
 
-class ParallelOptions(object):
+class ParallelOptions(AbstractOptionValue):
     """
     Options for controlling auto parallelization.
     """
+    __slots__ = ("enabled", "comprehension", "reduction", "inplace_binop",
+                 "setitem", "numpy", "stencil", "fusion", "prange")
 
     def __init__(self, value):
         if isinstance(value, bool):
@@ -88,8 +109,21 @@ class ParallelOptions(object):
             msg = "Expect parallel option to be either a bool or a dict"
             raise ValueError(msg)
 
+    def _get_values(self):
+        """Get values as dictionary.
+        """
+        return {k: getattr(self, k) for k in self.__slots__}
 
-class InlineOptions(object):
+    def __eq__(self, other):
+        if type(other) is type(self):
+            return self._get_values() == other._get_values()
+        return NotImplemented
+
+    def encode(self) -> str:
+        return ", ".join(f"{k}={v}" for k, v in self._get_values().items())
+
+
+class InlineOptions(AbstractOptionValue):
     """
     Options for controlling inlining
     """
@@ -137,3 +171,11 @@ class InlineOptions(object):
         The raw value
         """
         return self._inline
+
+    def __eq__(self, other):
+        if type(other) is type(self):
+            return self.value == other.value
+        return NotImplemented
+
+    def encode(self) -> str:
+        return repr(self._inline)

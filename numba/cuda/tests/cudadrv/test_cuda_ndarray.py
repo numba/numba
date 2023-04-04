@@ -4,7 +4,6 @@ from numba.cuda.cudadrv import devicearray
 from numba import cuda
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.cuda.testing import skip_on_cudasim
-from numba.tests.support import override_config
 
 
 class TestCudaNDArray(CUDATestCase):
@@ -173,10 +172,14 @@ class TestCudaNDArray(CUDATestCase):
         array = cuda.to_device(original)[:, ::2]
         with self.assertRaises(ValueError) as e:
             array.view("i4")
-        self.assertEqual(
-            "To change to a dtype of a different size,"
-            " the array must be C-contiguous",
-            str(e.exception))
+
+        msg = str(e.exception)
+        self.assertIn('To change to a dtype of a different size,', msg)
+
+        contiguous_pre_np123 = 'the array must be C-contiguous' in msg
+        contiguous_post_np123 = 'the last axis must be contiguous' in msg
+        self.assertTrue(contiguous_pre_np123 or contiguous_post_np123,
+                        'Expected message to mention contiguity')
 
     def test_devicearray_view_bad_itemsize(self):
         original = np.array(np.arange(12), dtype="i2").reshape(4, 3)
@@ -322,46 +325,30 @@ class TestCudaNDArray(CUDATestCase):
     def test_devicearray_relaxed_strides(self):
         # From the reproducer in Issue #6824.
 
-        with override_config('NPY_RELAXED_STRIDES_CHECKING', 1):
-            # Construct a device array that is contiguous even though
-            # the strides for the first axis (800) are not equal to
-            # the strides * size (10 * 8 = 80) for the previous axis,
-            # because the first axis size is 1.
-            arr = devicearray.DeviceNDArray((1, 10), (800, 8), np.float64)
+        # Construct a device array that is contiguous even though
+        # the strides for the first axis (800) are not equal to
+        # the strides * size (10 * 8 = 80) for the previous axis,
+        # because the first axis size is 1.
+        arr = devicearray.DeviceNDArray((1, 10), (800, 8), np.float64)
 
-            # Ensure we still believe the array to be contiguous because
-            # strides checking is relaxed.
-            self.assertTrue(arr.flags['C_CONTIGUOUS'])
-            self.assertTrue(arr.flags['F_CONTIGUOUS'])
-
-    @skip_on_cudasim('DeviceNDArray class not present in simulator')
-    def test_devicearray_strict_strides(self):
-        # From the reproducer in Issue #6824.
-
-        with override_config('NPY_RELAXED_STRIDES_CHECKING', 0):
-            # Construct a device array that is not contiguous because
-            # the strides for the first axis (800) are not equal to
-            # the strides * size (10 * 8 = 80) for the previous axis.
-            arr = devicearray.DeviceNDArray((1, 10), (800, 8), np.float64)
-
-            # Ensure we don't believe the array to be contiguous becase strides
-            # checking is strict.
-            self.assertFalse(arr.flags['C_CONTIGUOUS'])
-            self.assertFalse(arr.flags['F_CONTIGUOUS'])
+        # Ensure we still believe the array to be contiguous because
+        # strides checking is relaxed.
+        self.assertTrue(arr.flags['C_CONTIGUOUS'])
+        self.assertTrue(arr.flags['F_CONTIGUOUS'])
 
     def test_c_f_contiguity_matches_numpy(self):
         # From the reproducer in Issue #4943.
 
         shapes = ((1, 4), (4, 1))
         orders = ('C', 'F')
-        with override_config('NPY_RELAXED_STRIDES_CHECKING', 1):
-            for shape, order in itertools.product(shapes, orders):
-                arr = np.ndarray(shape, order=order)
-                d_arr = cuda.to_device(arr)
-                self.assertEqual(arr.flags['C_CONTIGUOUS'],
-                                 d_arr.flags['C_CONTIGUOUS'])
-                self.assertEqual(arr.flags['F_CONTIGUOUS'],
-                                 d_arr.flags['F_CONTIGUOUS'])
+
+        for shape, order in itertools.product(shapes, orders):
+            arr = np.ndarray(shape, order=order)
+            d_arr = cuda.to_device(arr)
+            self.assertEqual(arr.flags['C_CONTIGUOUS'],
+                             d_arr.flags['C_CONTIGUOUS'])
+            self.assertEqual(arr.flags['F_CONTIGUOUS'],
+                             d_arr.flags['F_CONTIGUOUS'])
 
     @skip_on_cudasim('Typing not done in the simulator')
     def test_devicearray_typing_order_simple_c(self):
@@ -432,6 +419,41 @@ class TestCudaNDArray(CUDATestCase):
         dary = cuda.to_device(ary)
         got = np.asarray(dary)
         self.assertEqual(got.dtype, dary.dtype)
+
+    @skip_on_cudasim('DeviceNDArray class not present in simulator')
+    def test_issue_8477(self):
+        # Ensure that we can copy a zero-length device array to a zero-length
+        # host array when the strides of the device and host arrays differ -
+        # this should be possible because the strides are irrelevant when the
+        # length is zero. For more info see
+        # https://github.com/numba/numba/issues/8477.
+
+        # Create a device array with shape (0,) and strides (8,)
+        dev_array = devicearray.DeviceNDArray(shape=(0,), strides=(8,),
+                                              dtype=np.int8)
+
+        # Create a host array with shape (0,) and strides (0,)
+        host_array = np.ndarray(shape=(0,), strides=(0,), dtype=np.int8)
+
+        # Sanity check for this test - ensure our destination has the strides
+        # we expect, because strides can be ignored in some cases by the
+        # ndarray constructor - checking here ensures that we haven't failed to
+        # account for unexpected behaviour across different versions of NumPy
+        self.assertEqual(host_array.strides, (0,))
+
+        # Ensure that the copy succeeds in both directions
+        dev_array.copy_to_host(host_array)
+        dev_array.copy_to_device(host_array)
+
+        # Ensure that a device-to-device copy also succeeds when the strides
+        # differ - one way of doing this is to copy the host array across and
+        # use that for copies in both directions.
+        dev_array_from_host = cuda.to_device(host_array)
+        self.assertEqual(dev_array_from_host.shape, (0,))
+        self.assertEqual(dev_array_from_host.strides, (0,))
+
+        dev_array.copy_to_device(dev_array_from_host)
+        dev_array_from_host.copy_to_device(dev_array)
 
 
 class TestRecarray(CUDATestCase):

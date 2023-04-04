@@ -3,12 +3,13 @@
 import inspect
 from contextlib import contextmanager
 
-from numba.core import config
+from numba.core import config, targetconfig
 from numba.core.decorators import jit
 from numba.core.descriptors import TargetDescriptor
+from numba.core.extending import is_jitted
 from numba.core.options import TargetOptions, include_default_options
 from numba.core.registry import cpu_target
-from numba.core.extending_hardware import dispatcher_registry, hardware_registry
+from numba.core.target_extension import dispatcher_registry, target_registry
 from numba.core import utils, types, serialize, compiler, sigutils
 from numba.np.numpy_support import as_dtype
 from numba.np.ufunc import _internal
@@ -23,6 +24,8 @@ _options_mixin = include_default_options(
     "forceobj",
     "boundscheck",
     "fastmath",
+    "target_backend",
+    "writable_args"
 )
 
 
@@ -140,26 +143,27 @@ class UFuncDispatcher(serialize.ReduceMixin):
 
         # Use cache and compiler in a critical section
         with global_compiler_lock:
-            with store_overloads_on_success():
-                # attempt look up of existing
-                cres = self.cache.load_overload(sig, targetctx)
-                if cres is not None:
+            with targetconfig.ConfigStack().enter(flags.copy()):
+                with store_overloads_on_success():
+                    # attempt look up of existing
+                    cres = self.cache.load_overload(sig, targetctx)
+                    if cres is not None:
+                        return cres
+
+                    # Compile
+                    args, return_type = sigutils.normalize_signature(sig)
+                    cres = compiler.compile_extra(typingctx, targetctx,
+                                                  self.py_func, args=args,
+                                                  return_type=return_type,
+                                                  flags=flags, locals=locals)
+
+                    # cache lookup failed before so safe to save
+                    self.cache.save_overload(sig, cres)
+
                     return cres
 
-                # Compile
-                args, return_type = sigutils.normalize_signature(sig)
-                cres = compiler.compile_extra(typingctx, targetctx,
-                                              self.py_func, args=args,
-                                              return_type=return_type,
-                                              flags=flags, locals=locals)
 
-                # cache lookup failed before so safe to save
-                self.cache.save_overload(sig, cres)
-
-                return cres
-
-
-dispatcher_registry[hardware_registry['npyufunc']] = UFuncDispatcher
+dispatcher_registry[target_registry['npyufunc']] = UFuncDispatcher
 
 
 # Utility functions
@@ -252,6 +256,8 @@ class _BaseUFuncBuilder(object):
 class UFuncBuilder(_BaseUFuncBuilder):
 
     def __init__(self, py_func, identity=None, cache=False, targetoptions={}):
+        if is_jitted(py_func):
+            py_func = py_func.py_func
         self.py_func = py_func
         self.identity = parse_identity(identity)
         self.nb_func = jit(_target='npyufunc',
@@ -316,7 +322,7 @@ class GUFuncBuilder(_BaseUFuncBuilder):
 
     # TODO handle scalar
     def __init__(self, py_func, signature, identity=None, cache=False,
-                 targetoptions={}):
+                 targetoptions={}, writable_args=()):
         self.py_func = py_func
         self.identity = parse_identity(identity)
         self.nb_func = jit(_target='npyufunc', cache=cache)(py_func)
@@ -326,6 +332,9 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         self.cache = cache
         self._sigs = []
         self._cres = {}
+
+        transform_arg = _get_transform_arg(py_func)
+        self.writable_args = tuple([transform_arg(a) for a in writable_args])
 
     def _finalize_signature(self, cres, args, return_type):
         if not cres.objectmode and cres.signature.return_type != types.void:
@@ -361,7 +370,7 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         ufunc = _internal.fromfunc(
             self.py_func.__name__, self.py_func.__doc__,
             func_list, type_list, nin, nout, datalist,
-            keepalive, self.identity, self.signature,
+            keepalive, self.identity, self.signature, self.writable_args
         )
         return ufunc
 
@@ -369,7 +378,7 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         """
         Returns (dtype numbers, function ptr, EnvironmentObject)
         """
-        # Buider wrapper for ufunc entry point
+        # Builder wrapper for ufunc entry point
         signature = cres.signature
         info = build_gufunc_wrapper(
             self.py_func, cres, self.sin, self.sout,
@@ -387,3 +396,22 @@ class GUFuncBuilder(_BaseUFuncBuilder):
                 ty = a
             dtypenums.append(as_dtype(ty).num)
         return dtypenums, ptr, env
+
+
+def _get_transform_arg(py_func):
+    """Return function that transform arg into index"""
+    args = inspect.getfullargspec(py_func).args
+    pos_by_arg = {arg: i for i, arg in enumerate(args)}
+
+    def transform_arg(arg):
+        if isinstance(arg, int):
+            return arg
+
+        try:
+            return pos_by_arg[arg]
+        except KeyError:
+            msg = (f"Specified writable arg {arg} not found in arg list "
+                   f"{args} for function {py_func.__qualname__}")
+            raise RuntimeError(msg)
+
+    return transform_arg

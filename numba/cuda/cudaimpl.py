@@ -5,18 +5,21 @@ import math
 from llvmlite import ir
 import llvmlite.binding as ll
 
-from numba.core.imputils import Registry
-from numba.core.typing.npydecl import parse_dtype, signature
+from numba.core.imputils import Registry, lower_cast
+from numba.core.typing.npydecl import parse_dtype
+from numba.core.datamodel import models
 from numba.core import types, cgutils
+from numba.np import ufunc_db
+from numba.np.npyimpl import register_ufuncs
 from .cudadrv import nvvm
 from numba import cuda
-from numba.cuda import nvvmutils, stubs
-from numba.cuda.types import dim3, grid_group
-
+from numba.cuda import nvvmutils, stubs, errors
+from numba.cuda.types import dim3, grid_group, CUDADispatcher
 
 registry = Registry()
 lower = registry.lower
 lower_attr = registry.lower_getattr
+lower_constant = registry.lower_constant
 
 
 def initialize_dim3(builder, prefix):
@@ -51,11 +54,6 @@ def cuda_laneid(context, builder, sig, args):
     return nvvmutils.call_sreg(builder, 'laneid')
 
 
-@lower_attr(types.Module(cuda), 'warpsize')
-def cuda_warpsize(context, builder, sig, args):
-    return nvvmutils.call_sreg(builder, 'warpsize')
-
-
 @lower_attr(dim3, 'x')
 def dim3_x(context, builder, sig, args):
     return builder.extract_value(args, 0)
@@ -87,46 +85,6 @@ def ptx_sync_group(context, builder, sig, args):
     return builder.call(
         nvvmutils.declare_cudaCGSynchronize(lmod),
         (*args, flags))
-
-
-# -----------------------------------------------------------------------------
-
-@lower(cuda.grid, types.int32)
-def cuda_grid(context, builder, sig, args):
-    restype = sig.return_type
-    if restype == types.int32:
-        return nvvmutils.get_global_id(builder, dim=1)
-    elif isinstance(restype, types.UniTuple):
-        ids = nvvmutils.get_global_id(builder, dim=restype.count)
-        return cgutils.pack_array(builder, ids)
-    else:
-        raise ValueError('Unexpected return type %s from cuda.grid' % restype)
-
-
-def _nthreads_for_dim(builder, dim):
-    ntid = nvvmutils.call_sreg(builder, f"ntid.{dim}")
-    nctaid = nvvmutils.call_sreg(builder, f"nctaid.{dim}")
-    return builder.mul(ntid, nctaid)
-
-
-@lower(cuda.gridsize, types.int32)
-def cuda_gridsize(context, builder, sig, args):
-    restype = sig.return_type
-    nx = _nthreads_for_dim(builder, 'x')
-
-    if restype == types.int32:
-        return nx
-    elif isinstance(restype, types.UniTuple):
-        ny = _nthreads_for_dim(builder, 'y')
-
-        if restype.count == 2:
-            return cgutils.pack_array(builder, (nx, ny))
-        elif restype.count == 3:
-            nz = _nthreads_for_dim(builder, 'z')
-            return cgutils.pack_array(builder, (nx, ny, nz))
-
-    # Fallthrough to here indicates unexpected return type or tuple length
-    raise ValueError('Unexpected return type %s of cuda.gridsize' % restype)
 
 
 # -----------------------------------------------------------------------------
@@ -193,44 +151,6 @@ def ptx_lmem_alloc_array(context, builder, sig, args):
                           can_dynsized=False)
 
 
-@lower(stubs.syncthreads)
-def ptx_syncthreads(context, builder, sig, args):
-    assert not args
-    fname = 'llvm.nvvm.barrier0'
-    lmod = builder.module
-    fnty = ir.FunctionType(ir.VoidType(), ())
-    sync = cgutils.get_or_insert_function(lmod, fnty, fname)
-    builder.call(sync, ())
-    return context.get_dummy_value()
-
-
-@lower(stubs.syncthreads_count, types.i4)
-def ptx_syncthreads_count(context, builder, sig, args):
-    fname = 'llvm.nvvm.barrier0.popc'
-    lmod = builder.module
-    fnty = ir.FunctionType(ir.IntType(32), (ir.IntType(32),))
-    sync = cgutils.get_or_insert_function(lmod, fnty, fname)
-    return builder.call(sync, args)
-
-
-@lower(stubs.syncthreads_and, types.i4)
-def ptx_syncthreads_and(context, builder, sig, args):
-    fname = 'llvm.nvvm.barrier0.and'
-    lmod = builder.module
-    fnty = ir.FunctionType(ir.IntType(32), (ir.IntType(32),))
-    sync = cgutils.get_or_insert_function(lmod, fnty, fname)
-    return builder.call(sync, args)
-
-
-@lower(stubs.syncthreads_or, types.i4)
-def ptx_syncthreads_or(context, builder, sig, args):
-    fname = 'llvm.nvvm.barrier0.or'
-    lmod = builder.module
-    fnty = ir.FunctionType(ir.IntType(32), (ir.IntType(32),))
-    sync = cgutils.get_or_insert_function(lmod, fnty, fname)
-    return builder.call(sync, args)
-
-
 @lower(stubs.threadfence_block)
 def ptx_threadfence_block(context, builder, sig, args):
     assert not args
@@ -267,7 +187,7 @@ def ptx_threadfence_device(context, builder, sig, args):
 @lower(stubs.syncwarp)
 def ptx_syncwarp(context, builder, sig, args):
     mask = context.get_constant(types.int32, 0xFFFFFFFF)
-    mask_sig = signature(types.none, types.int32)
+    mask_sig = types.none(types.int32)
     return ptx_syncwarp_mask(context, builder, mask_sig, [mask])
 
 
@@ -403,6 +323,183 @@ def ptx_popc(context, builder, sig, args):
 @lower(stubs.fma, types.Any, types.Any, types.Any)
 def ptx_fma(context, builder, sig, args):
     return builder.fma(*args)
+
+
+def float16_float_ty_constraint(bitwidth):
+    typemap = {32: ('f32', 'f'), 64: ('f64', 'd')}
+
+    try:
+        return typemap[bitwidth]
+    except KeyError:
+        msg = f"Conversion between float16 and float{bitwidth} unsupported"
+        raise errors.CudaLoweringError(msg)
+
+
+@lower_cast(types.float16, types.Float)
+def float16_to_float_cast(context, builder, fromty, toty, val):
+    if fromty.bitwidth == toty.bitwidth:
+        return val
+
+    ty, constraint = float16_float_ty_constraint(toty.bitwidth)
+
+    fnty = ir.FunctionType(context.get_value_type(toty), [ir.IntType(16)])
+    asm = ir.InlineAsm(fnty, f"cvt.{ty}.f16 $0, $1;", f"={constraint},h")
+    return builder.call(asm, [val])
+
+
+@lower_cast(types.Float, types.float16)
+def float_to_float16_cast(context, builder, fromty, toty, val):
+    if fromty.bitwidth == toty.bitwidth:
+        return val
+
+    ty, constraint = float16_float_ty_constraint(fromty.bitwidth)
+
+    fnty = ir.FunctionType(ir.IntType(16), [context.get_value_type(fromty)])
+    asm = ir.InlineAsm(fnty, f"cvt.rn.f16.{ty} $0, $1;", f"=h,{constraint}")
+    return builder.call(asm, [val])
+
+
+def float16_int_constraint(bitwidth):
+    typemap = { 8: 'c', 16: 'h', 32: 'r', 64: 'l' }
+
+    try:
+        return typemap[bitwidth]
+    except KeyError:
+        msg = f"Conversion between float16 and int{bitwidth} unsupported"
+        raise errors.CudaLoweringError(msg)
+
+
+@lower_cast(types.float16, types.Integer)
+def float16_to_integer_cast(context, builder, fromty, toty, val):
+    bitwidth = toty.bitwidth
+    constraint = float16_int_constraint(bitwidth)
+    signedness = 's' if toty.signed else 'u'
+
+    fnty = ir.FunctionType(context.get_value_type(toty), [ir.IntType(16)])
+    asm = ir.InlineAsm(fnty,
+                       f"cvt.rni.{signedness}{bitwidth}.f16 $0, $1;",
+                       f"={constraint},h")
+    return builder.call(asm, [val])
+
+
+@lower_cast(types.Integer, types.float16)
+@lower_cast(types.IntegerLiteral, types.float16)
+def integer_to_float16_cast(context, builder, fromty, toty, val):
+    bitwidth = fromty.bitwidth
+    constraint = float16_int_constraint(bitwidth)
+    signedness = 's' if fromty.signed else 'u'
+
+    fnty = ir.FunctionType(ir.IntType(16),
+                           [context.get_value_type(fromty)])
+    asm = ir.InlineAsm(fnty,
+                       f"cvt.rn.f16.{signedness}{bitwidth} $0, $1;",
+                       f"=h,{constraint}")
+    return builder.call(asm, [val])
+
+
+def lower_fp16_binary(fn, op):
+    @lower(fn, types.float16, types.float16)
+    def ptx_fp16_binary(context, builder, sig, args):
+        fnty = ir.FunctionType(ir.IntType(16),
+                               [ir.IntType(16), ir.IntType(16)])
+        asm = ir.InlineAsm(fnty, f'{op}.f16 $0,$1,$2;', '=h,h,h')
+        return builder.call(asm, args)
+
+
+lower_fp16_binary(stubs.fp16.hadd, 'add')
+lower_fp16_binary(operator.add, 'add')
+lower_fp16_binary(operator.iadd, 'add')
+lower_fp16_binary(stubs.fp16.hsub, 'sub')
+lower_fp16_binary(operator.sub, 'sub')
+lower_fp16_binary(operator.isub, 'sub')
+lower_fp16_binary(stubs.fp16.hmul, 'mul')
+lower_fp16_binary(operator.mul, 'mul')
+lower_fp16_binary(operator.imul, 'mul')
+
+
+@lower(stubs.fp16.hneg, types.float16)
+def ptx_fp16_hneg(context, builder, sig, args):
+    fnty = ir.FunctionType(ir.IntType(16), [ir.IntType(16)])
+    asm = ir.InlineAsm(fnty, 'neg.f16 $0, $1;', '=h,h')
+    return builder.call(asm, args)
+
+
+@lower(operator.neg, types.float16)
+def operator_hneg(context, builder, sig, args):
+    return ptx_fp16_hneg(context, builder, sig, args)
+
+
+@lower(stubs.fp16.habs, types.float16)
+def ptx_fp16_habs(context, builder, sig, args):
+    fnty = ir.FunctionType(ir.IntType(16), [ir.IntType(16)])
+    asm = ir.InlineAsm(fnty, 'abs.f16 $0, $1;', '=h,h')
+    return builder.call(asm, args)
+
+
+@lower(abs, types.float16)
+def operator_habs(context, builder, sig, args):
+    return ptx_fp16_habs(context, builder, sig, args)
+
+
+@lower(stubs.fp16.hfma, types.float16, types.float16, types.float16)
+def ptx_hfma(context, builder, sig, args):
+    argtys = [ir.IntType(16), ir.IntType(16), ir.IntType(16)]
+    fnty = ir.FunctionType(ir.IntType(16), argtys)
+    asm = ir.InlineAsm(fnty, "fma.rn.f16 $0,$1,$2,$3;", "=h,h,h,h")
+    return builder.call(asm, args)
+
+
+@lower(operator.truediv, types.float16, types.float16)
+@lower(operator.itruediv, types.float16, types.float16)
+def fp16_div_impl(context, builder, sig, args):
+    def fp16_div(x, y):
+        return cuda.fp16.hdiv(x, y)
+
+    return context.compile_internal(builder, fp16_div, sig, args)
+
+
+_fp16_cmp = """{{
+          .reg .pred __$$f16_cmp_tmp;
+          setp.{op}.f16 __$$f16_cmp_tmp, $1, $2;
+          selp.u16 $0, 1, 0, __$$f16_cmp_tmp;
+        }}"""
+
+
+def _gen_fp16_cmp(op):
+    def ptx_fp16_comparison(context, builder, sig, args):
+        fnty = ir.FunctionType(ir.IntType(16), [ir.IntType(16), ir.IntType(16)])
+        asm = ir.InlineAsm(fnty, _fp16_cmp.format(op=op), '=h,h,h')
+        result = builder.call(asm, args)
+
+        zero = context.get_constant(types.int16, 0)
+        int_result = builder.bitcast(result, ir.IntType(16))
+        return builder.icmp_unsigned("!=", int_result, zero)
+    return ptx_fp16_comparison
+
+
+lower(stubs.fp16.heq, types.float16, types.float16)(_gen_fp16_cmp('eq'))
+lower(operator.eq, types.float16, types.float16)(_gen_fp16_cmp('eq'))
+lower(stubs.fp16.hne, types.float16, types.float16)(_gen_fp16_cmp('ne'))
+lower(operator.ne, types.float16, types.float16)(_gen_fp16_cmp('ne'))
+lower(stubs.fp16.hge, types.float16, types.float16)(_gen_fp16_cmp('ge'))
+lower(operator.ge, types.float16, types.float16)(_gen_fp16_cmp('ge'))
+lower(stubs.fp16.hgt, types.float16, types.float16)(_gen_fp16_cmp('gt'))
+lower(operator.gt, types.float16, types.float16)(_gen_fp16_cmp('gt'))
+lower(stubs.fp16.hle, types.float16, types.float16)(_gen_fp16_cmp('le'))
+lower(operator.le, types.float16, types.float16)(_gen_fp16_cmp('le'))
+lower(stubs.fp16.hlt, types.float16, types.float16)(_gen_fp16_cmp('lt'))
+lower(operator.lt, types.float16, types.float16)(_gen_fp16_cmp('lt'))
+
+
+def lower_fp16_minmax(fn, fname, op):
+    @lower(fn, types.float16, types.float16)
+    def ptx_fp16_minmax(context, builder, sig, args):
+        choice = _gen_fp16_cmp(op)(context, builder, sig, args)
+        return builder.select(choice, args[0], args[1])
+
+
+lower_fp16_minmax(stubs.fp16.hmax, 'max', 'gt')
+lower_fp16_minmax(stubs.fp16.hmin, 'min', 'lt')
 
 # See:
 # https://docs.nvidia.com/cuda/libdevice-users-guide/__nv_cbrt.html#__nv_cbrt
@@ -613,7 +710,7 @@ lower(math.degrees, types.f4)(gen_deg_rad(_rad2deg))
 lower(math.degrees, types.f8)(gen_deg_rad(_rad2deg))
 
 
-def _normalize_indices(context, builder, indty, inds):
+def _normalize_indices(context, builder, indty, inds, aryty, valty):
     """
     Convert integer indices into tuple of intp
     """
@@ -624,6 +721,15 @@ def _normalize_indices(context, builder, indty, inds):
         indices = cgutils.unpack_tuple(builder, inds, count=len(indty))
     indices = [context.cast(builder, i, t, types.intp)
                for t, i in zip(indty, indices)]
+
+    dtype = aryty.dtype
+    if dtype != valty:
+        raise TypeError("expect %s but got %s" % (dtype, valty))
+
+    if aryty.ndim != len(indty):
+        raise TypeError("indexing %d-D array with %d-D index" %
+                        (aryty.ndim, len(indty)))
+
     return indty, indices
 
 
@@ -634,14 +740,8 @@ def _atomic_dispatcher(dispatch_fn):
         ary, inds, val = args
         dtype = aryty.dtype
 
-        indty, indices = _normalize_indices(context, builder, indty, inds)
-
-        if dtype != valty:
-            raise TypeError("expect %s but got %s" % (dtype, valty))
-
-        if aryty.ndim != len(indty):
-            raise TypeError("indexing %d-D array with %d-D index" %
-                            (aryty.ndim, len(indty)))
+        indty, indices = _normalize_indices(context, builder, indty, inds,
+                                            aryty, valty)
 
         lary = context.make_array(aryty)(context, builder, ary)
         ptr = cgutils.get_item_pointer(context, builder, aryty, lary, indices,
@@ -822,22 +922,32 @@ def ptx_atomic_nanmin(context, builder, dtype, ptr, val):
 
 
 @lower(stubs.atomic.compare_and_swap, types.Array, types.Any, types.Any)
-def ptx_atomic_cas_tuple(context, builder, sig, args):
-    aryty, oldty, valty = sig.args
-    ary, old, val = args
-    dtype = aryty.dtype
+def ptx_atomic_compare_and_swap(context, builder, sig, args):
+    sig = sig.return_type(sig.args[0], types.intp, sig.args[1], sig.args[2])
+    args = (args[0], context.get_constant(types.intp, 0), args[1], args[2])
+    return ptx_atomic_cas(context, builder, sig, args)
+
+
+@lower(stubs.atomic.cas, types.Array, types.intp, types.Any, types.Any)
+@lower(stubs.atomic.cas, types.Array, types.Tuple, types.Any, types.Any)
+@lower(stubs.atomic.cas, types.Array, types.UniTuple, types.Any, types.Any)
+def ptx_atomic_cas(context, builder, sig, args):
+    aryty, indty, oldty, valty = sig.args
+    ary, inds, old, val = args
+
+    indty, indices = _normalize_indices(context, builder, indty, inds, aryty,
+                                        valty)
 
     lary = context.make_array(aryty)(context, builder, ary)
-    zero = context.get_constant(types.intp, 0)
-    ptr = cgutils.get_item_pointer(context, builder, aryty, lary, (zero,))
+    ptr = cgutils.get_item_pointer(context, builder, aryty, lary, indices,
+                                   wraparound=True)
 
     if aryty.dtype in (cuda.cudadecl.integer_numba_types):
         lmod = builder.module
         bitwidth = aryty.dtype.bitwidth
         return nvvmutils.atomic_cmpxchg(builder, lmod, bitwidth, ptr, old, val)
     else:
-        raise TypeError('Unimplemented atomic compare_and_swap '
-                        'with %s array' % dtype)
+        raise TypeError('Unimplemented atomic cas with %s array' % aryty.dtype)
 
 
 # -----------------------------------------------------------------------------
@@ -853,10 +963,6 @@ def ptx_nanosleep(context, builder, sig, args):
 # -----------------------------------------------------------------------------
 
 
-def _get_target_data(context):
-    return ll.create_target_data(nvvm.data_layout[context.address_size])
-
-
 def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
                    can_dynsized=False):
     elemcount = reduce(operator.mul, shape, 1)
@@ -868,7 +974,12 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
         raise ValueError("array length <= 0")
 
     # Check that we support the requested dtype
-    other_supported_type = isinstance(dtype, (types.Record, types.Boolean))
+    data_model = context.data_model_manager[dtype]
+    other_supported_type = (
+        isinstance(dtype, (types.Record, types.Boolean))
+        or isinstance(data_model, models.StructModel)
+        or dtype == types.float16
+    )
     if dtype not in types.number_domain and not other_supported_type:
         raise TypeError("unsupported type: %s" % dtype)
 
@@ -904,11 +1015,10 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
             gvmem.initializer = ir.Constant(laryty, ir.Undefined)
 
         # Convert to generic address-space
-        conv = nvvmutils.insert_addrspace_conv(lmod, ir.IntType(8), addrspace)
-        addrspaceptr = gvmem.bitcast(ir.PointerType(ir.IntType(8), addrspace))
-        dataptr = builder.call(conv, [addrspaceptr])
+        dataptr = builder.addrspacecast(gvmem, ir.PointerType(ir.IntType(8)),
+                                        'generic')
 
-    targetdata = _get_target_data(context)
+    targetdata = ll.create_target_data(nvvm.NVVM().data_layout)
     lldtype = context.get_data_type(dtype)
     itemsize = lldtype.get_abi_size(targetdata)
 
@@ -951,3 +1061,13 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
                            itemsize=context.get_constant(types.intp, itemsize),
                            meminfo=None)
     return ary._getvalue()
+
+
+@lower_constant(CUDADispatcher)
+def cuda_dispatcher_const(context, builder, ty, pyval):
+    return context.get_dummy_value()
+
+
+# NumPy
+
+register_ufuncs(ufunc_db.get_ufuncs(), lower)

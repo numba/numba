@@ -4,7 +4,6 @@ import operator
 import warnings
 
 from llvmlite import ir
-from llvmlite.llvmpy.core import Builder
 
 from numba.core import types, cgutils
 from numba.core import typing
@@ -161,7 +160,7 @@ def _get_equal(context, module, datamodel, container_element_type):
     argtypes = [fe_type, fe_type]
 
     def build_wrapper(fn):
-        builder = Builder(fn.append_basic_block())
+        builder = ir.IRBuilder(fn.append_basic_block())
         args = context.call_conv.decode_arguments(builder, argtypes, fn)
 
         sig = typing.signature(types.boolean, fe_type, fe_type)
@@ -182,7 +181,7 @@ def _get_equal(context, module, datamodel, container_element_type):
     equal_fn = cgutils.get_or_insert_function(
         module, equal_fnty, name='.numba_{}.{}_equal'.format(
             context.fndesc.mangled_name, container_element_type),)
-    builder = Builder(equal_fn.append_basic_block())
+    builder = ir.IRBuilder(equal_fn.append_basic_block())
     lhs = datamodel.load_from_data_pointer(builder, equal_fn.args[0])
     rhs = datamodel.load_from_data_pointer(builder, equal_fn.args[1])
 

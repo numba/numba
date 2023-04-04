@@ -10,38 +10,37 @@ it should really quack like the CPython `list`.
 """
 from collections.abc import MutableSequence
 
-from numba.core.types import ListType, TypeRef
+from numba.core.types import ListType
 from numba.core.imputils import numba_typeref_ctor
 from numba.core.dispatcher import Dispatcher
 from numba.core import types, config, cgutils
 from numba import njit, typeof
 from numba.core.extending import (
-    overload_method,
     overload,
     box,
     unbox,
     NativeValue,
     type_callable,
+    overload_classmethod,
 )
 from numba.typed import listobject
 from numba.core.errors import TypingError, LoweringError
 from numba.core.typing.templates import Signature
 import typing as pt
-import sys
 
 
 Int_or_Slice = pt.Union["pt.SupportsIndex", slice]
 
 
-if sys.version_info >= (3, 8):
-    T_co = pt.TypeVar('T_co', covariant=True)
+T_co = pt.TypeVar('T_co', covariant=True)
 
-    class _Sequence(pt.Protocol[T_co]):
-        def __getitem__(self, i: int) -> T_co:
-            ...
 
-        def __len__(self) -> int:
-            ...
+class _Sequence(pt.Protocol[T_co]):
+    def __getitem__(self, i: int) -> T_co:
+        ...
+
+    def __len__(self) -> int:
+        ...
 
 
 DEFAULT_ALLOCATED = listobject.DEFAULT_ALLOCATED
@@ -200,12 +199,13 @@ class List(MutableSequence, pt.Generic[T]):
     _legal_kwargs = ["lsttype", "meminfo", "allocated"]
 
     def __new__(cls,
+                *args,
                 lsttype=None,
                 meminfo=None,
                 allocated=DEFAULT_ALLOCATED,
                 **kwargs):
         if config.DISABLE_JIT:
-            return list.__new__(list)
+            return list(*args, **kwargs)
         else:
             return object.__new__(cls)
 
@@ -233,7 +233,7 @@ class List(MutableSequence, pt.Generic[T]):
         Parameters
         ----------
         args: iterable
-            The iterable to intialize the list from
+            The iterable to initialize the list from
         lsttype : numba.core.types.ListType; keyword-only
             Used internally for the list type.
         meminfo : MemInfo; keyword-only
@@ -443,8 +443,7 @@ class List(MutableSequence, pt.Generic[T]):
         return "{prefix}({body})".format(prefix=prefix, body=body)
 
 
-# XXX: should we have a better way to classmethod
-@overload_method(TypeRef, 'empty_list')
+@overload_classmethod(ListType, 'empty_list')
 def typedlist_empty(cls, item_type, allocated=DEFAULT_ALLOCATED):
     if cls.instance_type is not ListType:
         return
@@ -666,15 +665,15 @@ def impl_numba_typeref_ctor(cls, *args):
         # special case 0d Numpy arrays
         if isinstance(args[0], types.Array) and args[0].ndim == 0:
             def impl(cls, *args):
-                # Instatiate an empty list and populate it with the single
+                # Instantiate an empty list and populate it with the single
                 # value from the array.
                 r = List.empty_list(item_type)
                 r.append(args[0].item())
                 return r
         else:
             def impl(cls, *args):
-                # Instatiate an empty list and populate it with values from the
-                # iterable.
+                # Instantiate an empty list and populate it with values from
+                # the iterable.
                 r = List.empty_list(item_type)
                 for i in args[0]:
                     r.append(i)

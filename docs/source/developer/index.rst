@@ -8,6 +8,7 @@ Developer Manual
    :maxdepth: 2
 
    contributing.rst
+   release.rst
    repomap.rst
    architecture.rst
    dispatching.rst
@@ -28,4 +29,4 @@ Developer Manual
    debugging.rst
    event_api.rst
    target_extension.rst
-   roadmap.rst
+   mission.rst

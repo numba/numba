@@ -266,3 +266,20 @@ class DatetimeCmpGt(DatetimeCmpOp):
 @infer_global(operator.ge)
 class DatetimeCmpGE(DatetimeCmpOp):
     key = operator.ge
+
+
+@infer_global(npdatetime_helpers.datetime_minimum)
+@infer_global(npdatetime_helpers.datetime_maximum)
+class DatetimeMinMax(AbstractTemplate):
+    def generic(self, args, kws):
+        assert not kws
+        assert len(args) == 2
+        error_msg = "DatetimeMinMax requires both arguments to be NPDatetime type or both arguments to be NPTimedelta types"
+        assert isinstance(args[0], (types.NPDatetime, types.NPTimedelta)), error_msg
+        if isinstance(args[0], types.NPDatetime):
+            if not isinstance(args[1], types.NPDatetime):
+                raise TypeError(error_msg)
+        else:
+            if not isinstance(args[1], types.NPTimedelta):
+                raise TypeError(error_msg)
+        return signature(args[0], *args)

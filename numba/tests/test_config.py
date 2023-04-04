@@ -1,7 +1,9 @@
 import os
 import tempfile
+from textwrap import dedent
 import unittest
-from numba.tests.support import TestCase, temp_directory, override_env_config
+from numba.tests.support import (TestCase, temp_directory, override_env_config,
+                                 run_in_subprocess)
 from numba.core import config
 
 try:
@@ -23,6 +25,7 @@ class TestConfig(TestCase):
     def setUp(self):
         # use support.temp_directory, it can do the clean up
         self.tmppath = temp_directory('config_tmp')
+        self.maxDiff = 2500
         super(TestConfig, self).setUp()
 
     def mock_cfg_location(self):
@@ -101,6 +104,19 @@ class TestConfig(TestCase):
         # ensure an empty settings file does not impact config
         orig, curr = self.create_config_effect({})
         self.assertEqual(orig, curr)
+
+    def test_illegal_error_style_handling(self):
+        # ensure that illegal error styles are ignored
+        new_env = os.environ.copy()
+        new_env['NUMBA_CAPTURED_ERRORS'] = 'not_a_known_style'
+        source_compiled = "the source compiled"
+        code = ("from numba import njit\n@njit\ndef foo():\n\t"
+                f"print('{source_compiled}')\nfoo()")
+        out, err = run_in_subprocess(dedent(code), env=new_env)
+        expected = ("environ NUMBA_CAPTURED_ERRORS defined but failed to parse "
+                    "\'not_a_known_style\'")
+        self.assertIn(expected, err.decode('utf-8'))
+        self.assertIn(source_compiled, out.decode('utf-8'))
 
 
 if __name__ == '__main__':

@@ -3,6 +3,8 @@ from numba.core.types.common import (Dummy, IterableType, Opaque,
                                      SimpleIteratorType)
 from numba.core.typeconv import Conversion
 from numba.core.errors import TypingError, LiteralTypingError
+from numba.core.ir import UndefinedType
+from numba.core.utils import get_hashable_key
 
 
 class PyObject(Dummy):
@@ -38,7 +40,10 @@ class RawPointer(Opaque):
 
 
 class StringLiteral(Literal, Dummy):
-    pass
+
+    def can_convert_to(self, typingctx, other):
+        if isinstance(other, UnicodeType):
+            return Conversion.safe
 
 
 Literal.ctor_map[str] = StringLiteral
@@ -84,11 +89,14 @@ class Omitted(Opaque):
 
     def __init__(self, value):
         self._value = value
+        # Use helper function to support both hashable and non-hashable
+        # values. See discussion in gh #6957.
+        self._value_key = get_hashable_key(value)
         super(Omitted, self).__init__("omitted(default=%r)" % (value,))
 
     @property
     def key(self):
-        return type(self._value), id(self._value)
+        return type(self._value), self._value_key
 
     @property
     def value(self):
@@ -215,9 +223,6 @@ class Optional(Type):
         name = "OptionalType(%s)" % self.type
         super(Optional, self).__init__(name)
 
-    def __str__(self):
-        return "%s i.e. the type '%s or None'" % (self.name, self.type)
-
     @property
     def key(self):
         return self.type
@@ -292,6 +297,9 @@ class ExceptionClass(Callable, Phantom):
         return_type = ExceptionInstance(self.exc_class)
         return [typing.signature(return_type)], False
 
+    def get_impl_key(self, sig):
+        return type(self)
+
     @property
     def key(self):
         return self.exc_class
@@ -333,6 +341,11 @@ class SliceLiteral(Literal, SliceType):
         name = 'Literal[slice]({})'.format(value)
         members = 2 if value.step is None else 3
         SliceType.__init__(self, name=name, members=members)
+
+    @property
+    def key(self):
+        sl = self.literal_value
+        return sl.start, sl.stop, sl.step
 
 
 Literal.ctor_map[slice] = SliceLiteral
@@ -418,6 +431,9 @@ class ClassType(Callable, Opaque):
 
     def get_call_signatures(self):
         return (), True
+
+    def get_impl_key(self, sig):
+        return type(self)
 
     @property
     def methods(self):
@@ -506,6 +522,9 @@ class ContextManager(Callable, Phantom):
 
         posargs = list(args) + [v for k, v in sorted(kws.items())]
         return typing.signature(self, *posargs)
+
+    def get_impl_key(self, sig):
+        return type(self)
 
 
 class UnicodeType(IterableType, Hashable):

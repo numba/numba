@@ -2,12 +2,18 @@ import collections
 import sys
 import weakref
 import gc
+import operator
+from itertools import takewhile
 
 import unittest
+from numba import njit
 from numba.core.controlflow import CFGraph, Loop
-from numba.core.compiler import compile_extra, compile_isolated, Flags
-from numba.core import types
-from numba.tests.support import TestCase
+from numba.core.compiler import (compile_extra, compile_isolated, Flags,
+                                 CompilerBase, DefaultPassBuilder)
+from numba.core.untyped_passes import PreserveIR
+from numba.core.typed_passes import IRLegalization
+from numba.core import types, ir
+from numba.tests.support import TestCase, override_config, SerialMixin
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.enable_pyobject = True
@@ -382,6 +388,115 @@ class TestObjLifetime(TestCase):
         self.assertEqual(rec.alive, [])
         self.assertEqual(rec.recorded,
                          ['yield', 'p', 'bra', 'yield', 'p', 'bra', 'yield'])
+
+
+class TestExtendingVariableLifetimes(SerialMixin, TestCase):
+    # Test for `numba.config.EXTEND_VARIABLE_LIFETIMES` which moves the ir.Del
+    # nodes to just before a block's terminator, i.e. their lifetime is extended
+    # beyond the point of last use.
+
+    def test_lifetime_basic(self):
+
+        def get_ir(extend_lifetimes):
+            class IRPreservingCompiler(CompilerBase):
+
+                def define_pipelines(self):
+                    pm = DefaultPassBuilder.define_nopython_pipeline(self.state)
+                    pm.add_pass_after(PreserveIR, IRLegalization)
+                    pm.finalize()
+                    return [pm]
+
+            @njit(pipeline_class=IRPreservingCompiler)
+            def foo():
+                a = 10
+                b = 20
+                c = a + b
+                # a and b are now unused, standard behaviour is ir.Del for them here
+                d = c / c
+                return d
+
+            with override_config('EXTEND_VARIABLE_LIFETIMES', extend_lifetimes):
+                foo()
+                cres = foo.overloads[foo.signatures[0]]
+                func_ir = cres.metadata['preserved_ir']
+
+            return func_ir
+
+
+        def check(func_ir, expect):
+            # assert single block
+            self.assertEqual(len(func_ir.blocks), 1)
+            blk = next(iter(func_ir.blocks.values()))
+
+            # check sequencing
+            for expect_class, got_stmt in zip(expect, blk.body):
+                self.assertIsInstance(got_stmt, expect_class)
+
+        del_after_use_ir = get_ir(False)
+        # should be 3 assigns (a, b, c), 2 del (a, b), assign (d), del (c)
+        # assign for cast d to return, del (d), return
+        expect = [*((ir.Assign,) * 3), ir.Del, ir.Del, ir.Assign, ir.Del,
+                  ir.Assign, ir.Del, ir.Return]
+        check(del_after_use_ir, expect)
+
+        del_at_block_end_ir = get_ir(True)
+        # should be 4 assigns (a, b, c, d), assign for cast d to return,
+        # 4 dels (a, b, c, d) then the return.
+        expect = [*((ir.Assign,) * 4), ir.Assign, *((ir.Del,) * 4), ir.Return]
+        check(del_at_block_end_ir, expect)
+
+    def test_dbg_extend_lifetimes(self):
+
+        def get_ir(**options):
+            class IRPreservingCompiler(CompilerBase):
+
+                def define_pipelines(self):
+                    pm = DefaultPassBuilder.define_nopython_pipeline(self.state)
+                    pm.add_pass_after(PreserveIR, IRLegalization)
+                    pm.finalize()
+                    return [pm]
+
+            @njit(pipeline_class=IRPreservingCompiler, **options)
+            def foo():
+                a = 10
+                b = 20
+                c = a + b
+                # a and b are now unused, standard behaviour is ir.Del for them here
+                d = c / c
+                return d
+
+            foo()
+            cres = foo.overloads[foo.signatures[0]]
+            func_ir = cres.metadata['preserved_ir']
+
+            return func_ir
+
+        # _dbg_extend_lifetimes is on when debug=True
+        ir_debug = get_ir(debug=True)
+        # explicitly turn on _dbg_extend_lifetimes
+        ir_debug_ext = get_ir(debug=True, _dbg_extend_lifetimes=True)
+        # explicitly turn off _dbg_extend_lifetimes
+        ir_debug_no_ext = get_ir(debug=True, _dbg_extend_lifetimes=False)
+
+        def is_del_grouped_at_the_end(fir):
+            [blk] = fir.blocks.values()
+            # Mark all statements that are ir.Del
+            inst_is_del = [isinstance(stmt, ir.Del) for stmt in blk.body]
+            # Get the leading segment that are not dels
+            not_dels = list(takewhile(operator.not_, inst_is_del))
+            # Compute the starting position of the dels
+            begin = len(not_dels)
+            # Get the remaining segment that are all dels
+            all_dels = list(takewhile(operator.truth, inst_is_del[begin:]))
+            # Compute the ending position of the dels
+            end = begin + len(all_dels)
+            # If the dels are all grouped at the end (before the terminator),
+            # the end position will be the last position of the list
+            return end == len(inst_is_del) - 1
+
+        self.assertTrue(is_del_grouped_at_the_end(ir_debug))
+        self.assertTrue(is_del_grouped_at_the_end(ir_debug_ext))
+        self.assertFalse(is_del_grouped_at_the_end(ir_debug_no_ext))
 
 
 if __name__ == "__main__":

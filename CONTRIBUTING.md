@@ -21,9 +21,6 @@ changes, see **contributing patches** below.
 * Review a page of documentation, check it makes sense, that it's clear and
   still relevant, that the examples are present, good and working. Fix anything
   that needs updating in a pull request.
-* Make a file that is not `flake8` compliant meet the standard, a list of all
-  failing files is in the `exclude` section of the [`.flake8` config](https://github.com/numba/numba/blob/master/.flake8),
-  then create a pull request with the change.
 
 ## More involved things:
 
@@ -33,14 +30,15 @@ changes, see **contributing patches** below.
   documented, efficient and clear. Further, if the code is fixing a bug, making
   sure that tests are present demonstrating it is fixed! Look out for PRs with
   the [`needs initial review`](https://github.com/numba/numba/labels/needs%20initial%20review)
-  label.
+  label. There are also time boxed tasks available on the
+  [contributor self-service board](https://github.com/orgs/numba/projects/7).
 * Work on fixing or implementing something in the code base, there are a lot of
   [`good first issue's`](https://github.com/numba/numba/labels/good%20first%20issue)
   and [`good second issue's`](https://github.com/numba/numba/labels/good%20first%20issue).
   For implementing new features/functionality, the extension API is the best
   thing to use and a guide to using `@overload` in particular is
-  [here](https://numba.pydata.org/numba-doc/dev/extending/overloading-guide.html)
-  and the API documentation is [here](https://numba.pydata.org/numba-doc/latest/extending/high-level.html#implementing-functions).
+  [here](https://numba.readthedocs.io/en/latest/extending/overloading-guide.html)
+  and the API documentation is [here](https://numba.readthedocs.io/en/latest/extending/high-level.html#implementing-functions).
 
 ## Contributing patches
 
@@ -50,4 +48,4 @@ containing your work.  When you are done, open a pull request.
 # Further reading
 
 Please read the [contributing guide](
-https://numba.pydata.org/numba-doc/dev/developer/contributing.html).
+https://numba.readthedocs.io/en/latest/developer/contributing.html).

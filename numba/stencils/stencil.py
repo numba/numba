@@ -13,6 +13,8 @@ from numba.core.typing.templates import (CallableTemplate, signature,
                                          infer_global, AbstractTemplate)
 from numba.core.imputils import lower_builtin
 from numba.core.extending import register_jitable
+from numba.core.errors import NumbaValueError
+from numba.misc.special import literal_unroll
 import numba
 
 import operator
@@ -34,7 +36,16 @@ class StencilFuncLowerer(object):
 @register_jitable
 def raise_if_incompatible_array_sizes(a, *args):
     ashape = a.shape
-    for arg in args:
+
+    # We need literal_unroll here because the stencil might take
+    # multiple input arrays with different types that are not compatible
+    # (e.g. values as float[:] and flags as bool[:])
+    # When more than three total arrays are given, the second and third
+    # are iterated over in the loop below. Without literal_unroll, their
+    # types have to match.
+    # An example failing signature without literal_unroll might be
+    # (float[:], float[:], bool[:]) (Just (float[:], bool[:]) wouldn't fail)
+    for arg in literal_unroll(args):
         if a.ndim != arg.ndim:
             raise ValueError("Secondary stencil array does not have same number "
                              " of dimensions as the first stencil input.")
@@ -104,8 +115,7 @@ class StencilFunc(object):
                             index_var = ir.Var(scope, one_var, loc)
                             var_index_vars += [index_var]
 
-                        s_index_name = ir_utils.mk_unique_var("stencil_index")
-                        s_index_var  = ir.Var(scope, s_index_name, loc)
+                        s_index_var = scope.redefine("stencil_index", loc)
                         # Build a tuple from the index ir.Var's.
                         tuple_call = ir.Expr.build_tuple(var_index_vars, loc)
                         new_body.append(ir.Assign(tuple_call, s_index_var, loc))
@@ -190,7 +200,7 @@ class StencilFunc(object):
                         elif stmt_index_var.name in const_dict:
                             kernel_consts += [const_dict[stmt_index_var.name]]
                         else:
-                            raise ValueError("stencil kernel index is not "
+                            raise NumbaValueError("stencil kernel index is not "
                                 "constant, 'neighborhood' option required")
 
                     if ndim == 1:
@@ -199,14 +209,13 @@ class StencilFunc(object):
                         # adding the relative offset in stmt.value.index to
                         # the current absolute location in index0.
                         index_var = ir.Var(scope, index_names[0], loc)
-                        tmpname = ir_utils.mk_unique_var("stencil_index")
-                        tmpvar  = ir.Var(scope, tmpname, loc)
+                        tmpvar = scope.redefine("stencil_index", loc)
                         stmt_index_var_typ = typemap[stmt_index_var.name]
                         # If the array is indexed with a slice then we
                         # have to add the index value with a call to
                         # slice_addition.
                         if isinstance(stmt_index_var_typ, types.misc.SliceType):
-                            sa_var = ir.Var(scope, ir_utils.mk_unique_var("slice_addition"), loc)
+                            sa_var = scope.redefine("slice_addition", loc)
                             sa_func = numba.njit(slice_addition)
                             sa_func_typ = types.functions.Dispatcher(sa_func)
                             typemap[sa_var.name] = sa_func_typ
@@ -228,8 +237,7 @@ class StencilFunc(object):
                     else:
                         index_vars = []
                         sum_results = []
-                        s_index_name = ir_utils.mk_unique_var("stencil_index")
-                        s_index_var  = ir.Var(scope, s_index_name, loc)
+                        s_index_var = scope.redefine("stencil_index", loc)
                         const_index_vars = []
                         ind_stencils = []
 
@@ -240,19 +248,16 @@ class StencilFunc(object):
                         # to them and then reconstitute as a tuple that can
                         # index the array.
                         for dim in range(ndim):
-                            tmpname = ir_utils.mk_unique_var("const_index")
-                            tmpvar  = ir.Var(scope, tmpname, loc)
+                            tmpvar = scope.redefine("const_index", loc)
                             new_body.append(ir.Assign(ir.Const(dim, loc),
                                                       tmpvar, loc))
                             const_index_vars += [tmpvar]
                             index_var = ir.Var(scope, index_names[dim], loc)
                             index_vars += [index_var]
 
-                            tmpname = ir_utils.mk_unique_var("ind_stencil_index")
-                            tmpvar  = ir.Var(scope, tmpname, loc)
+                            tmpvar = scope.redefine("ind_stencil_index", loc)
                             ind_stencils += [tmpvar]
-                            getitemname = ir_utils.mk_unique_var("getitem")
-                            getitemvar  = ir.Var(scope, getitemname, loc)
+                            getitemvar = scope.redefine("getitem", loc)
                             getitemcall = ir.Expr.getitem(stmt_index_var,
                                                        const_index_vars[dim], loc)
                             new_body.append(ir.Assign(getitemcall, getitemvar, loc))
@@ -265,7 +270,7 @@ class StencilFunc(object):
                             # have to add the index value with a call to
                             # slice_addition.
                             if isinstance(one_index_typ, types.misc.SliceType):
-                                sa_var = ir.Var(scope, ir_utils.mk_unique_var("slice_addition"), loc)
+                                sa_var = scope.redefine("slice_addition", loc)
                                 sa_func = numba.njit(slice_addition)
                                 sa_func_typ = types.functions.Dispatcher(sa_func)
                                 typemap[sa_var.name] = sa_func_typ
@@ -293,8 +298,8 @@ class StencilFunc(object):
             # index used in the kernel specification.
             neighborhood = [[0,0] for _ in range(ndim)]
             if len(kernel_consts) == 0:
-                raise ValueError("Stencil kernel with no accesses to "
-                                 "relatively indexed arrays.")
+                raise NumbaValueError("Stencil kernel with no accesses to "
+                                      "relatively indexed arrays.")
 
             for index in kernel_consts:
                 if isinstance(index, tuple) or isinstance(index, list):
@@ -306,7 +311,7 @@ class StencilFunc(object):
                             neighborhood[i][0] = min(neighborhood[i][0], te)
                             neighborhood[i][1] = max(neighborhood[i][1], te)
                         else:
-                            raise ValueError(
+                            raise NumbaValueError(
                                 "stencil kernel index is not constant,"
                                 "'neighborhood' option required")
                     index_len = len(index)
@@ -315,10 +320,10 @@ class StencilFunc(object):
                     neighborhood[0][1] = max(neighborhood[0][1], index)
                     index_len = 1
                 else:
-                    raise ValueError(
+                    raise NumbaValueError(
                         "Non-tuple or non-integer used as stencil index.")
                 if index_len != ndim:
-                    raise ValueError(
+                    raise NumbaValueError(
                         "Stencil index does not match array dimensionality.")
 
         return (neighborhood, relatively_indexed)
@@ -330,8 +335,8 @@ class StencilFunc(object):
             ir_utils.dump_blocks(self.kernel_ir.blocks)
 
         if not isinstance(argtys[0], types.npytypes.Array):
-            raise ValueError("The first argument to a stencil kernel must "
-                             "be the primary input array.")
+            raise NumbaValueError("The first argument to a stencil kernel must "
+                                  "be the primary input array.")
 
         from numba.core import typed_passes
         typemap, return_type, calltypes, _ = typed_passes.type_inference_stage(
@@ -342,7 +347,7 @@ class StencilFunc(object):
                 None,
                 {})
         if isinstance(return_type, types.npytypes.Array):
-            raise ValueError(
+            raise NumbaValueError(
                 "Stencil kernel must return a scalar and not a numpy array.")
 
         real_ret = types.npytypes.Array(return_type, argtys[0].ndim,
@@ -374,9 +379,9 @@ class StencilFunc(object):
         """
         if (self.neighborhood is not None and
             len(self.neighborhood) != argtys[0].ndim):
-            raise ValueError("%d dimensional neighborhood specified "
-                             "for %d dimensional input array" %
-                             (len(self.neighborhood), argtys[0].ndim))
+            raise NumbaValueError("%d dimensional neighborhood specified "
+                                  "for %d dimensional input array" %
+                                  (len(self.neighborhood), argtys[0].ndim))
 
         argtys_extra = argtys
         sig_extra = ""
@@ -468,7 +473,7 @@ class StencilFunc(object):
             copy_calltypes)
 
         if "out" in name_var_table:
-            raise ValueError("Cannot use the reserved word 'out' in stencil kernels.")
+            raise NumbaValueError("Cannot use the reserved word 'out' in stencil kernels.")
 
         sentinel_name = ir_utils.get_unused_var_name("__sentinel__", name_var_table)
         if config.DEBUG_ARRAY_OPT >= 1:
@@ -510,12 +515,12 @@ class StencilFunc(object):
         standard_indexed = self.options.get("standard_indexing", [])
 
         if first_arg in standard_indexed:
-            raise ValueError("The first argument to a stencil kernel must "
-                             "use relative indexing, not standard indexing.")
+            raise NumbaValueError("The first argument to a stencil kernel must "
+                                  "use relative indexing, not standard indexing.")
 
         if len(set(standard_indexed) - set(kernel_copy.arg_names)) != 0:
-            raise ValueError("Standard indexing requested for an array name "
-                             "not present in the stencil kernel definition.")
+            raise NumbaValueError("Standard indexing requested for an array name "
+                                  "not present in the stencil kernel definition.")
 
         # Add index variables to getitems in the IR to transition the accesses
         # in the kernel from relative to regular Python indexing.  Returns the
@@ -571,6 +576,19 @@ class StencilFunc(object):
         shape_name = ir_utils.get_unused_var_name("full_shape", name_var_table)
         func_text += "    {} = {}.shape\n".format(shape_name, first_arg)
 
+        # Converts cval to a string constant
+        def cval_as_str(cval):
+            if not np.isfinite(cval):
+                # See if this is a string-repr numerical const, issue #7286
+                if np.isnan(cval):
+                    return "np.nan"
+                elif np.isinf(cval):
+                    if cval < 0:
+                        return "-np.inf"
+                    else:
+                        return "np.inf"
+            else:
+                return str(cval)
 
         # If we have to allocate the output array (the out argument was not used)
         # then us numpy.full if the user specified a cval stencil decorator option
@@ -578,25 +596,33 @@ class StencilFunc(object):
         if result is None:
             return_type_name = numpy_support.as_dtype(
                                return_type.dtype).type.__name__
+            out_init ="{} = np.empty({}, dtype=np.{})\n".format(
+                        out_name, shape_name, return_type_name)
+
             if "cval" in self.options:
                 cval = self.options["cval"]
-                if return_type.dtype != typing.typeof.typeof(cval):
-                    raise ValueError(
-                        "cval type does not match stencil return type.")
-                out_init ="{} = np.full({}, {}, dtype=np.{})\n".format(
-                            out_name, shape_name, cval, return_type_name)
+                cval_ty = typing.typeof.typeof(cval)
+                if not self._typingctx.can_convert(cval_ty, return_type.dtype):
+                    msg = "cval type does not match stencil return type."
+                    raise NumbaValueError(msg)
             else:
-                out_init ="{} = np.zeros({}, dtype=np.{})\n".format(
-                            out_name, shape_name, return_type_name)
+                 cval = 0
             func_text += "    " + out_init
+            for dim in range(the_array.ndim):
+                start_items = [":"] * the_array.ndim
+                end_items = [":"] * the_array.ndim
+                start_items[dim] = ":-{}".format(self.neighborhood[dim][0])
+                end_items[dim] = "-{}:".format(self.neighborhood[dim][1])
+                func_text += "    " + "{}[{}] = {}\n".format(out_name, ",".join(start_items), cval_as_str(cval))
+                func_text += "    " + "{}[{}] = {}\n".format(out_name, ",".join(end_items), cval_as_str(cval))
         else: # result is present, if cval is set then use it
             if "cval" in self.options:
                 cval = self.options["cval"]
                 cval_ty = typing.typeof.typeof(cval)
                 if not self._typingctx.can_convert(cval_ty, return_type.dtype):
                     msg = "cval type does not match stencil return type."
-                    raise ValueError(msg)
-                out_init = "{}[:] = {}\n".format(out_name, cval)
+                    raise NumbaValueError(msg)
+                out_init = "{}[:] = {}\n".format(out_name, cval_as_str(cval))
                 func_text += "    " + out_init
 
         offset = 1
@@ -652,7 +678,9 @@ class StencilFunc(object):
                            shape_name] + kernel_copy.arg_names + index_vars)
         for name, var in var_table.items():
             if not name in reserved_names:
-                new_var_dict[name] = ir_utils.mk_unique_var(name)
+                assert isinstance(var, ir.Var)
+                new_var = var.scope.redefine(var.name, var.loc)
+                new_var_dict[name] = new_var.name
         ir_utils.replace_var_names(stencil_ir.blocks, new_var_dict)
 
         stencil_stub_last_label = max(stencil_ir.blocks.keys()) + 1
@@ -726,6 +754,7 @@ class StencilFunc(object):
 
         # Compile the combined stencil function with the replaced loop
         # body in it.
+        ir_utils.fixup_var_define_in_scope(stencil_ir.blocks)
         new_func = compiler.compile_ir(
             self._typingctx,
             self._targetctx,

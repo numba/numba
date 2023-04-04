@@ -16,6 +16,7 @@ def load_tests(loader, tests, pattern):
         if gpus and gpus[0].compute_capability >= (2, 0):
             suite.addTests(load_testsuite(loader, join(this_dir, 'cudadrv')))
             suite.addTests(load_testsuite(loader, join(this_dir, 'cudapy')))
+            suite.addTests(load_testsuite(loader, join(this_dir, 'doc_examples')))
         else:
             print("skipped CUDA tests because GPU CC < 2.0")
     else:

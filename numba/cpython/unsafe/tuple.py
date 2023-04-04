@@ -36,6 +36,9 @@ def tuple_setitem(typingctx, tup, idx, val):
 @intrinsic
 def build_full_slice_tuple(tyctx, sz):
     """Creates a sz-tuple of full slices."""
+    if not isinstance(sz, types.IntegerLiteral):
+        raise errors.RequireLiteralValue(sz)
+
     size = int(sz.literal_value)
     tuple_type = types.UniTuple(dtype=types.slice2_type, count=size)
     sig = tuple_type(sz)

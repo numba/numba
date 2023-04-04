@@ -9,13 +9,14 @@ from numba.cuda.cudadrv import driver
 
 class TestContextStack(CUDATestCase):
     def setUp(self):
+        super().setUp()
         # Reset before testing
         cuda.close()
 
     def test_gpus_current(self):
         self.assertIs(cuda.gpus.current, None)
         with cuda.gpus[0]:
-            self.assertEqual(cuda.gpus.current.id, 0)
+            self.assertEqual(int(cuda.gpus.current.id), 0)
 
     def test_gpus_len(self):
         self.assertGreater(len(cuda.gpus), 0)
@@ -28,6 +29,7 @@ class TestContextStack(CUDATestCase):
 class TestContextAPI(CUDATestCase):
 
     def tearDown(self):
+        super().tearDown()
         cuda.close()
 
     def test_context_memory(self):
@@ -67,37 +69,51 @@ class TestContextAPI(CUDATestCase):
 
         with cuda.gpus[0]:
             devid = switch_gpu()
-        self.assertEqual(devid, 1)
+        self.assertEqual(int(devid), 1)
 
 
 @skip_on_cudasim('CUDA HW required')
 class Test3rdPartyContext(CUDATestCase):
     def tearDown(self):
+        super().tearDown()
         cuda.close()
 
     def test_attached_primary(self, extra_work=lambda: None):
         # Emulate primary context creation by 3rd party
         the_driver = driver.driver
-        hctx = driver.drvapi.cu_context()
-        the_driver.cuDevicePrimaryCtxRetain(byref(hctx), 0)
+        if driver.USE_NV_BINDING:
+            dev = driver.binding.CUdevice(0)
+            hctx = the_driver.cuDevicePrimaryCtxRetain(dev)
+        else:
+            dev = 0
+            hctx = driver.drvapi.cu_context()
+            the_driver.cuDevicePrimaryCtxRetain(byref(hctx), dev)
         try:
             ctx = driver.Context(weakref.proxy(self), hctx)
             ctx.push()
             # Check that the context from numba matches the created primary
             # context.
             my_ctx = cuda.current_context()
-            self.assertEqual(my_ctx.handle.value, ctx.handle.value)
+            if driver.USE_NV_BINDING:
+                self.assertEqual(int(my_ctx.handle), int(ctx.handle))
+            else:
+                self.assertEqual(my_ctx.handle.value, ctx.handle.value)
 
             extra_work()
         finally:
             ctx.pop()
-            the_driver.cuDevicePrimaryCtxRelease(0)
+            the_driver.cuDevicePrimaryCtxRelease(dev)
 
     def test_attached_non_primary(self):
         # Emulate non-primary context creation by 3rd party
         the_driver = driver.driver
-        hctx = driver.drvapi.cu_context()
-        the_driver.cuCtxCreate(byref(hctx), 0, 0)
+        if driver.USE_NV_BINDING:
+            flags = 0
+            dev = driver.binding.CUdevice(0)
+            hctx = the_driver.cuCtxCreate(flags, dev)
+        else:
+            hctx = driver.drvapi.cu_context()
+            the_driver.cuCtxCreate(byref(hctx), 0, 0)
         try:
             cuda.current_context()
         except RuntimeError as e:

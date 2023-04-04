@@ -1,6 +1,6 @@
 import numpy as np
 
-from numba import float32, jit
+from numba import float32, jit, njit
 from numba.np.ufunc import Vectorize
 from numba.core.errors import TypingError
 from numba.tests.support import TestCase
@@ -116,6 +116,29 @@ class TestUFuncs(TestCase):
                 dec(test)(z)
 
             self.assertIn(msg, str(raises.exception))
+
+    def test_optional_type_handling(self):
+        # Tests ufunc compilation with Optional type
+
+        @njit
+        def inner(x, y):
+            if y > 2:
+                z = None
+            else:
+                z = np.ones(4)
+            return np.add(x, z)
+
+        # This causes `z` to be np.ones(4) at runtime, success
+        self.assertPreciseEqual(inner(np.arange(4), 1),
+                                np.arange(1, 5).astype(np.float64))
+
+        with self.assertRaises(TypeError) as raises:
+            # This causes `z` to be None at runtime, TypeError raised on the
+            # type cast of the Optional.
+            inner(np.arange(4), 3)
+
+        msg = "expected array(float64, 1d, C), got None"
+        self.assertIn(msg, str(raises.exception))
 
 
 if __name__ == '__main__':

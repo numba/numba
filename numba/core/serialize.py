@@ -1,6 +1,7 @@
 """
 Serialization support for compiled functions.
 """
+import sys
 import abc
 import io
 import copyreg
@@ -8,6 +9,7 @@ import copyreg
 
 import pickle
 from numba import cloudpickle
+from llvmlite import ir
 
 
 #
@@ -52,11 +54,23 @@ def dumps(obj):
     """
     pickler = NumbaPickler
     with io.BytesIO() as buf:
-        p = pickler(buf)
+        p = pickler(buf, protocol=4)
         p.dump(obj)
         pickled = buf.getvalue()
 
     return pickled
+
+
+def runtime_build_excinfo_struct(static_exc, exc_args):
+    exc, static_args, locinfo = cloudpickle.loads(static_exc)
+    real_args = []
+    exc_args_iter = iter(exc_args)
+    for arg in static_args:
+        if isinstance(arg, ir.Value):
+            real_args.append(next(exc_args_iter))
+        else:
+            real_args.append(arg)
+    return (exc, tuple(real_args), locinfo)
 
 
 # Alias to pickle.loads to allow `serialize.loads()`
@@ -167,8 +181,6 @@ def disable_pickling(typ):
     """This is called on a type to disable pickling
     """
     NumbaPickler.disabled_types.add(typ)
-    # The following is needed for Py3.7
-    NumbaPickler.dispatch_table[typ] = _no_pickle
     # Return `typ` to allow use as a decorator
     return typ
 
@@ -193,8 +205,8 @@ NumbaPickler.dispatch_table[_CustomPickled] = _custom_reduce__custompickled
 
 
 class ReduceMixin(abc.ABC):
-    """A mixin class for objects that should be reduced by the NumbaPickler instead
-    of the standard pickler.
+    """A mixin class for objects that should be reduced by the NumbaPickler
+    instead of the standard pickler.
     """
     # Subclass MUST override the below methods
 
@@ -215,3 +227,33 @@ class ReduceMixin(abc.ABC):
 
     def __reduce__(self):
         return custom_reduce(self._reduce_class(), self._reduce_states())
+
+
+class PickleCallableByPath:
+    """Wrap a callable object to be pickled by path to workaround limitation
+    in pickling due to non-pickleable objects in function non-locals.
+
+    Note:
+    - Do not use this as a decorator.
+    - Wrapped object must be a global that exist in its parent module and it
+      can be imported by `from the_module import the_object`.
+
+    Usage:
+
+    >>> def my_fn(x):
+    >>>     ...
+    >>> wrapped_fn = PickleCallableByPath(my_fn)
+    >>> # refer to `wrapped_fn` instead of `my_fn`
+    """
+    def __init__(self, fn):
+        self._fn = fn
+
+    def __call__(self, *args, **kwargs):
+        return self._fn(*args, **kwargs)
+
+    def __reduce__(self):
+        return type(self)._rebuild, (self._fn.__module__, self._fn.__name__,)
+
+    @classmethod
+    def _rebuild(cls, modname, fn_path):
+        return cls(getattr(sys.modules[modname], fn_path))

@@ -20,7 +20,52 @@ from numba.core.typing.typeof import Purpose, typeof
 from numba.core.bytecode import get_code_object
 from numba.core.caching import NullCache, FunctionCache
 from numba.core import entrypoints
+from numba.core.retarget import BaseRetarget
 import numba.core.event as ev
+
+
+class _RetargetStack(utils.ThreadLocalStack, stack_name="retarget"):
+    def push(self, state):
+        super().push(state)
+        _dispatcher.set_use_tls_target_stack(len(self) > 0)
+
+    def pop(self):
+        super().pop()
+        _dispatcher.set_use_tls_target_stack(len(self) > 0)
+
+
+class TargetConfigurationStack:
+    """The target configuration stack.
+
+    Uses the BORG pattern and stores states in threadlocal storage.
+
+    WARNING: features associated with this class are experimental. The API
+    may change without notice.
+    """
+
+    def __init__(self):
+        self._stack = _RetargetStack()
+
+    def get(self):
+        """Get the current target from the top of the stack.
+
+        May raise IndexError if the stack is empty. Users should check the size
+        of the stack beforehand.
+        """
+        return self._stack.top()
+
+    def __len__(self):
+        """Size of the stack
+        """
+        return len(self._stack)
+
+    @classmethod
+    def switch_target(cls, retarget: BaseRetarget):
+        """Returns a contextmanager that pushes a new retarget handler,
+        an instance of `numba.core.retarget.BaseRetarget`, onto the
+        target-config stack for the duration of the context-manager.
+        """
+        return cls()._stack.enter(retarget)
 
 
 class OmittedArg(object):
@@ -167,7 +212,7 @@ _CompileStats = collections.namedtuple(
     '_CompileStats', ('cache_path', 'cache_hits', 'cache_misses'))
 
 
-class _CompilingCounter(object):
+class CompilingCounter(object):
     """
     A simple counter that increment in __enter__ and decrement in __exit__.
     """
@@ -210,6 +255,8 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         self.__code__ = self.func_code
         # a place to keep an active reference to the types of the active call
         self._types_active_call = []
+        # Default argument values match the py_func
+        self.__defaults__ = py_func.__defaults__
 
         argnames = tuple(pysig.parameters)
         default_values = self.py_func.__defaults__ or ()
@@ -228,7 +275,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                                         exact_match_required)
 
         self.doc = py_func.__doc__
-        self._compiling_counter = _CompilingCounter()
+        self._compiling_counter = CompilingCounter()
         weakref.finalize(self, self._make_finalizer())
 
     def _compilation_chain_init_hook(self):
@@ -611,7 +658,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         if signature is not None:
             cres = self.overloads[signature]
             lib = cres.library
-            return lib.get_disasm_cfg()
+            return lib.get_disasm_cfg(cres.fndesc.mangled_name)
 
         return dict((sig, self.inspect_disasm_cfg(sig))
                     for sig in self.signatures)
@@ -731,7 +778,7 @@ class _MemoMixin:
         """
         u = self.__uuid
         if u is None:
-            u = str(uuid.uuid1())
+            u = str(uuid.uuid4())
             self._set_uuid(u)
         return u
 
@@ -798,6 +845,9 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         self._type = types.Dispatcher(self)
         self.typingctx.insert_global(self, self._type)
 
+        # Remember target restriction
+        self._required_target_backend = targetoptions.get('target_backend')
+
     def dump(self, tab=''):
         print(f'{tab}DUMP {type(self).__name__}[{self.py_func.__name__}'
               f', type code={self._type._code}]')
@@ -863,6 +913,10 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         return self
 
     def compile(self, sig):
+        disp = self._get_dispatcher_for_current_target()
+        if disp is not self:
+            return disp.compile(sig)
+
         with ExitStack() as scope:
             cres = None
 
@@ -994,6 +1048,34 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         if not self._can_compile and len(self.overloads) == 1:
             cres = tuple(self.overloads.values())[0]
             return types.FunctionType(cres.signature)
+
+    def _get_retarget_dispatcher(self):
+        """Returns a dispatcher for the retarget request.
+        """
+        # Check TLS target configuration
+        tc = TargetConfigurationStack()
+        retarget = tc.get()
+        retarget.check_compatible(self)
+        disp = retarget.retarget(self)
+        return disp
+
+    def _get_dispatcher_for_current_target(self):
+        """Returns a dispatcher for the current target registered in
+        `TargetConfigurationStack`. `self` is returned if no target is
+        specified.
+        """
+        tc = TargetConfigurationStack()
+        if tc:
+            return self._get_retarget_dispatcher()
+        else:
+            return self
+
+    def _call_tls_target(self, *args, **kwargs):
+        """This is called when the C dispatcher logic sees a retarget request.
+        """
+        disp = self._get_retarget_dispatcher()
+        # Call the new dispatcher
+        return disp(*args, **kwargs)
 
 
 class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
@@ -1128,6 +1210,11 @@ class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
                         raise cres.typing_error
                     self.add_overload(cres)
                 return cres.entry_point
+
+    def _get_dispatcher_for_current_target(self):
+        # Lifted code does not honor the target switch currently.
+        # No work has been done to check if this can be allowed.
+        return self
 
 
 class LiftedLoop(LiftedCode):

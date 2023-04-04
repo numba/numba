@@ -20,7 +20,7 @@ from numba.core import types
 from numba.core.errors import TypingError
 from numba.tests.support import (TestCase, MemoryLeakMixin, override_config,
                                  forbid_codegen)
-from numba.typed import listobject
+from numba.typed import listobject, List
 
 
 class TestCreateAppendLength(MemoryLeakMixin, TestCase):
@@ -42,6 +42,14 @@ class TestCreateAppendLength(MemoryLeakMixin, TestCase):
             with forbid_codegen():
                 l = listobject.new_list(int32)
                 self.assertEqual(type(l), list)
+
+    def test_nonempty_list_create_no_jit(self):
+        # See Issue #6001: https://github.com/numba/numba/issues/6001
+        with override_config('DISABLE_JIT', True):
+            with forbid_codegen():
+                l = List([1, 2, 3])
+                self.assertEqual(type(l), list)
+                self.assertEqual(l, [1, 2, 3])
 
 
 class TestBool(MemoryLeakMixin, TestCase):
