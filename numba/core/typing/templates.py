@@ -387,7 +387,7 @@ class AbstractTemplate(FunctionTemplate):
         }
         return info
 
-    def get_cache_deps_info(self, sig):
+    def get_cache_deps_info(self, sig, dependency_getter_fc):
         """ default implementation
 
         Returning an empty dictionary means that the dependencies of this
@@ -886,14 +886,17 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         return info
 
     @functools.lru_cache()
-    def get_cache_deps_info(self, sig):
+    def get_cache_deps_info(self, sig, dependency_getter_fc):
         """ return a dictionary with information about other functions this
         function depends on
 
         :param sig: signature
+        :param dependency_getter_fc a function able to look into an overload
+          and retrieve the inner dependencies. This will be always
+          `caching.get_function_dependencies` but we pass it as an argument
+          to avoid the import
         :return: dictionary of filenames and file stamps
         """
-        from numba.core.caching import get_function_dependencies
         sig_args = sig.args
         deps = {}
         for (_, sig, _, _), (dispatcher, _) in self._impl_cache.items():
@@ -902,7 +905,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             if dispatcher is None:
                 continue
             ovrl = dispatcher.overloads[sig_args]
-            deps.update(get_function_dependencies(ovrl))
+            deps.update(dependency_getter_fc(ovrl))
         return deps
 
 

@@ -858,7 +858,7 @@ def get_deps_info(fc_ty: pt.Union[types.Dispatcher, types.Function], sig
             # overload
             # If the template does not have `get_cache_deps_info` it might be
             # a generated class for a global value in Registry.register_global
-            deps_stamps = [tmplt.get_cache_deps_info(tmplt, sig)
+            deps_stamps = [tmplt.get_cache_deps_info(tmplt, sig, get_function_dependencies)
                            for tmplt in fc_ty.templates
                            if hasattr(tmplt, 'get_cache_deps_info')]
             deps_stamps = {k: v for d in deps_stamps for k, v in d.items()}
