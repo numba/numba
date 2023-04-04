@@ -841,8 +841,12 @@ def _isclose_scalars(a, b, rtol, atol, equal_nan):
 @overload(np.allclose)
 def np_allclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     def impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-        ab, ba = np.broadcast_arrays(a, b)
-        for av, bv in np.nditer((ab, ba)):
+        a_arr = np.asarray(a)
+        b_arr = np.asarray(b)
+        ab_shape = np.broadcast_shapes(a_arr.shape, b_arr.shape)
+        a_bc = np.broadcast_to(a_arr, ab_shape)
+        b_bc = np.broadcast_to(b_arr, ab_shape)
+        for av, bv in np.nditer((a_bc, b_bc)):
             if not _isclose_scalars(av.item(), bv.item(), rtol=rtol,
                                     atol=atol, equal_nan=equal_nan):
                 return False
@@ -853,12 +857,16 @@ def np_allclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 @overload(np.isclose)
 def np_isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     def impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-        ab, ba = np.broadcast_arrays(a, b)
-        c = np.empty(ab.shape, dtype=np.bool_)
-        for av, bv, cv in np.nditer((ab, ba, c)):
+        a_arr = np.asarray(a)
+        b_arr = np.asarray(b)
+        ab_shape = np.broadcast_shapes(a_arr.shape, b_arr.shape)
+        a_bc = np.broadcast_to(a_arr, ab_shape)
+        b_bc = np.broadcast_to(b_arr, ab_shape)
+        c_bc = np.empty(ab_shape, dtype=np.bool_)
+        for av, bv, cv in np.nditer((a_bc, b_bc, c_bc)):
             cv[()] = _isclose_scalars(av.item(), bv.item(), rtol=rtol,
                                       atol=atol, equal_nan=equal_nan)
-        return c
+        return c_bc
     return impl
 
 
