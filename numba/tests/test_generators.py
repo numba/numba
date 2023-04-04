@@ -203,10 +203,10 @@ class TestGenerators(MemoryLeakMixin, TestCase):
                       str(raises.exception))
 
     def test_gen5_objmode(self):
-        cr = jit((), **forceobj_flags)(gen5)()
-        self.assertEqual(list(cr), [])
+        cgen = jit((), **forceobj_flags)(gen5)()
+        self.assertEqual(list(cgen), [])
         with self.assertRaises(StopIteration):
-            next(cr)
+            next(cgen)
 
     def check_gen6(self, **kwargs):
         cr = jit((types.int32,) * 2, **kwargs)(gen6)
