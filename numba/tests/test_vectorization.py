@@ -2,9 +2,9 @@ import platform
 import numpy as np
 from numba import types
 import unittest
+from numba import njit
 from numba.tests.support import override_env_config, TestCase
-from numba.core.compiler import compile_isolated, Flags
-from numba.core.cpu_options import FastMathOptions
+
 
 _DEBUG = False
 if _DEBUG:
@@ -22,11 +22,8 @@ class TestVectorization(TestCase):
         with override_env_config(
             "NUMBA_CPU_NAME", "skylake-avx512"
         ), override_env_config("NUMBA_CPU_FEATURES", ""):
-            _flags = Flags()
-            _flags.fastmath = FastMathOptions(fastmath)
-            _flags.nrt = True
-            jitted = compile_isolated(func, args_tuple, flags=_flags)
-            return jitted.library.get_llvm_str()
+            jitted = njit(args_tuple, fastmath=fastmath)(func)
+            return jitted.inspect_llvm(args_tuple)
 
     def test_nditer_loop(self):
         # see https://github.com/numba/numba/issues/5033
