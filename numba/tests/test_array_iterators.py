@@ -2,9 +2,8 @@ import itertools
 
 import numpy as np
 
-from numba import jit, typeof
+from numba import jit, njit, typeof
 from numba.core import types
-from numba.core.compiler import compile_isolated
 from numba.tests.support import TestCase, CompilationCache, MemoryLeakMixin, tag
 import unittest
 
@@ -129,22 +128,19 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
 
     def check_array_iter_1d(self, arr):
         pyfunc = array_iter
-        cres = compile_isolated(pyfunc, [typeof(arr)])
-        cfunc = cres.entry_point
+        cfunc = njit((typeof(arr),))(pyfunc)
         expected = pyfunc(arr)
         self.assertPreciseEqual(cfunc(arr), expected)
 
     def check_array_iter_items(self, arr):
         pyfunc = array_iter_items
-        cres = compile_isolated(pyfunc, [typeof(arr)])
-        cfunc = cres.entry_point
+        cfunc = njit((typeof(arr),))(pyfunc)
         expected = pyfunc(arr)
         self.assertPreciseEqual(cfunc(arr), expected)
 
     def check_array_view_iter(self, arr, index):
         pyfunc = array_view_iter
-        cres = compile_isolated(pyfunc, [typeof(arr), typeof(index)])
-        cfunc = cres.entry_point
+        cfunc = njit((typeof(arr), typeof(index),))(pyfunc)
         expected = pyfunc(arr, index)
         self.assertPreciseEqual(cfunc(arr, index), expected)
 
@@ -154,8 +150,7 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         if arrty is None:
             arrty = typeof(arr)
 
-        cres = compile_isolated(array_flat, [arrty, typeof(out)])
-        cfunc = cres.entry_point
+        cfunc = njit((arrty, typeof(out),))(array_flat)
 
         array_flat(arr, out)
         cfunc(arr, nb_out)
@@ -163,8 +158,7 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(out, nb_out)
 
     def check_array_unary(self, arr, arrty, func):
-        cres = compile_isolated(func, [arrty])
-        cfunc = cres.entry_point
+        cfunc = njit((arrty,))(func)
         self.assertPreciseEqual(cfunc(arr), func(arr))
 
     def check_array_flat_sum(self, arr, arrty):
@@ -376,8 +370,7 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         check(arr)
 
     def test_array_flat_premature_free(self):
-        cres = compile_isolated(array_flat_premature_free, [types.intp])
-        cfunc = cres.entry_point
+        cfunc = njit((types.intp,))(array_flat_premature_free)
         expect = array_flat_premature_free(6)
         got = cfunc(6)
         self.assertTrue(got.sum())
@@ -427,8 +420,7 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         self.check_array_flat_sum(arr, arrty)
 
     def test_array_ndenumerate_premature_free(self):
-        cres = compile_isolated(array_ndenumerate_premature_free, [types.intp])
-        cfunc = cres.entry_point
+        cfunc = njit((types.intp,))(array_ndenumerate_premature_free)
         expect = array_ndenumerate_premature_free(6)
         got = cfunc(6)
         self.assertTrue(got.sum())
@@ -436,8 +428,7 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
 
     def test_np_ndindex(self):
         func = np_ndindex
-        cres = compile_isolated(func, [types.int32, types.int32])
-        cfunc = cres.entry_point
+        cfunc = njit((types.int32, types.int32,))(func)
         self.assertPreciseEqual(cfunc(3, 4), func(3, 4))
         self.assertPreciseEqual(cfunc(3, 0), func(3, 0))
         self.assertPreciseEqual(cfunc(0, 3), func(0, 3))
@@ -454,8 +445,7 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
 
     def test_np_ndindex_empty(self):
         func = np_ndindex_empty
-        cres = compile_isolated(func, [])
-        cfunc = cres.entry_point
+        cfunc = njit((),)(func)
         self.assertPreciseEqual(cfunc(), func())
 
     def test_iter_next(self):
