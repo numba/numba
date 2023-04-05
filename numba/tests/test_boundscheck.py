@@ -1,15 +1,11 @@
 import numpy as np
 
-from numba.core.compiler import compile_isolated, DEFAULT_FLAGS
 from numba.cuda.testing import SerialMixin
 from numba import typeof, cuda, njit
 from numba.core.types import float64
 from numba.tests.support import MemoryLeakMixin, override_env_config
 from numba.core import config
 import unittest
-
-BOUNDSCHECK_FLAGS = DEFAULT_FLAGS.copy()
-BOUNDSCHECK_FLAGS.boundscheck = True
 
 
 def basic_array_access(a):
@@ -46,9 +42,7 @@ class TestBoundsCheckNoError(MemoryLeakMixin, unittest.TestCase):
             basic_array_access(a)
 
         at = typeof(a)
-        c_noboundscheck = compile_isolated(basic_array_access, [at],
-                                           flags=DEFAULT_FLAGS)
-        noboundscheck = c_noboundscheck.entry_point
+        noboundscheck = njit((at,))(basic_array_access)
         # Check that the default flag doesn't raise
         noboundscheck(a)
         # boundscheck(a) is tested in TestBoundsCheckError below
@@ -65,14 +59,8 @@ class TestBoundsCheckNoError(MemoryLeakMixin, unittest.TestCase):
 
         at = typeof(a)
         rt = float64[:]
-        c_noboundscheck = compile_isolated(slice_array_access, [at],
-                                           return_type=rt,
-                                           flags=DEFAULT_FLAGS)
-        noboundscheck = c_noboundscheck.entry_point
-        c_boundscheck = compile_isolated(slice_array_access, [at],
-                                         return_type=rt,
-                                         flags=BOUNDSCHECK_FLAGS)
-        boundscheck = c_boundscheck.entry_point
+        noboundscheck = njit(rt(at))(slice_array_access)
+        boundscheck = njit(rt(at), boundscheck=True)(slice_array_access)
         # Check that the default flag doesn't raise
         noboundscheck(a)
         noboundscheck(b)
@@ -94,14 +82,8 @@ class TestBoundsCheckNoError(MemoryLeakMixin, unittest.TestCase):
 
         at = typeof(a)
         rt = at.dtype[:]
-        c_noboundscheck = compile_isolated(fancy_array_access, [at],
-                                           return_type=rt,
-                                           flags=DEFAULT_FLAGS)
-        noboundscheck = c_noboundscheck.entry_point
-        c_boundscheck = compile_isolated(fancy_array_access, [at],
-                                         return_type=rt,
-                                         flags=BOUNDSCHECK_FLAGS)
-        boundscheck = c_boundscheck.entry_point
+        noboundscheck = njit(rt(at))(fancy_array_access)
+        boundscheck = njit(rt(at), boundscheck=True)(fancy_array_access)
         # Check that the default flag doesn't raise
         noboundscheck(a)
         noboundscheck(b)
@@ -164,9 +146,7 @@ class TestBoundsCheckError(unittest.TestCase):
             basic_array_access(a)
 
         at = typeof(a)
-        c_boundscheck = compile_isolated(basic_array_access, [at],
-                                         flags=BOUNDSCHECK_FLAGS)
-        boundscheck = c_boundscheck.entry_point
+        boundscheck = njit((at,), boundscheck=True)(basic_array_access)
 
         with self.assertRaises(IndexError):
             boundscheck(a)
@@ -183,10 +163,8 @@ class TestBoundsCheckError(unittest.TestCase):
 
         at = typeof(a)
         rt = float64[:]
-        c_boundscheck = compile_isolated(slice_array_access, [at],
-                                         return_type=rt,
-                                         flags=BOUNDSCHECK_FLAGS)
-        boundscheck = c_boundscheck.entry_point
+        boundscheck = njit(rt(at), boundscheck=True)(slice_array_access)
+
         with self.assertRaises(IndexError):
             boundscheck(a)
 
@@ -203,10 +181,8 @@ class TestBoundsCheckError(unittest.TestCase):
 
         at = typeof(a)
         rt = at.dtype[:]
-        c_boundscheck = compile_isolated(fancy_array_access, [at],
-                                         return_type=rt,
-                                         flags=BOUNDSCHECK_FLAGS)
-        boundscheck = c_boundscheck.entry_point
+        boundscheck = njit(rt(at), boundscheck=True)(fancy_array_access)
+
         with self.assertRaises(IndexError):
             boundscheck(a)
 
@@ -223,10 +199,8 @@ class TestBoundsCheckError(unittest.TestCase):
 
         at = typeof(a)
         rt = at.dtype[:]
-        c_boundscheck = compile_isolated(fancy_array_modify, [at],
-                                         return_type=rt,
-                                         flags=BOUNDSCHECK_FLAGS)
-        boundscheck = c_boundscheck.entry_point
+        boundscheck = njit(rt(at), boundscheck=True)(fancy_array_modify)
+
         with self.assertRaises(IndexError):
             boundscheck(a)
 
