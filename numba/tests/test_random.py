@@ -17,7 +17,6 @@ import unittest
 import numba
 from numba import jit, _helperlib, njit
 from numba.core import types
-from numba.core.compiler import compile_isolated
 from numba.tests.support import TestCase, compile_function, tag
 from numba.core.errors import TypingError
 
@@ -458,20 +457,19 @@ class TestRandom(BaseTest):
 
     def test_random_randrange(self):
         for tp, max_width in [(types.int64, 2**63), (types.int32, 2**31)]:
-            cr1 = compile_isolated(random_randrange1, (tp,))
-            cr2 = compile_isolated(random_randrange2, (tp, tp))
-            cr3 = compile_isolated(random_randrange3, (tp, tp, tp))
-            self._check_randrange(cr1.entry_point, cr2.entry_point,
-                                  cr3.entry_point, get_py_state_ptr(),
+            cf1 = njit((tp,))(random_randrange1)
+            cf2 = njit((tp, tp,),)(random_randrange2)
+            cf3 = njit((tp, tp, tp,))(random_randrange3)
+            self._check_randrange(cf1, cf2, cf3, get_py_state_ptr(),
                                   max_width, False)
 
     def test_numpy_randint(self):
         for tp, np_tp, max_width in [(types.int64, np.int64, 2**63),
                                      (types.int32, np.int32, 2**31)]:
-            cr1 = compile_isolated(numpy_randint1, (tp,))
-            cr2 = compile_isolated(numpy_randint2, (tp, tp))
-            self._check_randrange(cr1.entry_point, cr2.entry_point,
-                                  None, get_np_state_ptr(), max_width, True, np_tp)
+            cf1 = njit((tp,))(numpy_randint1)
+            cf2 = njit((tp, tp,))(numpy_randint2)
+            self._check_randrange(cf1, cf2, None, get_np_state_ptr(), max_width,
+                                  True, np_tp)
 
     def _check_randint(self, func, ptr, max_width):
         """
@@ -494,8 +492,8 @@ class TestRandom(BaseTest):
 
     def test_random_randint(self):
         for tp, max_width in [(types.int64, 2**63), (types.int32, 2**31)]:
-            cr = compile_isolated(random_randint, (tp, tp))
-            self._check_randint(cr.entry_point, get_py_state_ptr(), max_width)
+            cf = njit((tp, tp,))(random_randint)
+            self._check_randint(cf, get_py_state_ptr(), max_width)
 
     def _check_uniform(self, func, ptr):
         """
