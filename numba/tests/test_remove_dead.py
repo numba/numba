@@ -5,8 +5,8 @@
 
 import numba
 import numba.parfors.parfor
+from numba import njit
 from numba.core import ir_utils, cpu
-from numba.core.compiler import compile_isolated, Flags
 from numba.core import types, typing, ir, config, compiler
 from numba.core.registry import cpu_target
 from numba.core.annotations import type_annotations
@@ -62,11 +62,7 @@ class TestRemoveDead(unittest.TestCase):
     _numba_parallel_test_ = False
 
     def compile_parallel(self, func, arg_types):
-        fast_pflags = Flags()
-        fast_pflags.auto_parallel = cpu.ParallelOptions(True)
-        fast_pflags.nrt = True
-        fast_pflags.fastmath = cpu.FastMathOptions(True)
-        return compile_isolated(func, arg_types, flags=fast_pflags).entry_point
+        return njit(arg_types, parallel=True, fastmath=True)(func)
 
     def test1(self):
         typingctx = typing.Context()
