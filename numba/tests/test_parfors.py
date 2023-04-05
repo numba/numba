@@ -38,8 +38,7 @@ from numba.core.ir_utils import (find_callname, guard, build_definitions,
                             index_var_of_get_setitem)
 from numba.np.unsafe.ndarray import empty_inferred as unsafe_empty
 from numba.core.bytecode import ByteCodeIter
-from numba.core.compiler import (compile_isolated, Flags, CompilerBase,
-                                 DefaultPassBuilder)
+from numba.core.compiler import (CompilerBase, DefaultPassBuilder)
 from numba.core.compiler_machinery import register_pass, AnalysisPass
 from numba.core.typed_passes import IRLegalization
 from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
@@ -152,34 +151,19 @@ class TestParforsBase(TestCase):
 
     _numba_parallel_test_ = False
 
-    def __init__(self, *args):
-        # flags for njit()
-        self.cflags = Flags()
-        self.cflags.nrt = True
-
-        # flags for njit(parallel=True)
-        self.pflags = Flags()
-        self.pflags.auto_parallel = cpu.ParallelOptions(True)
-        self.pflags.nrt = True
-
-        # flags for njit(parallel=True, fastmath=True)
-        self.fast_pflags = Flags()
-        self.fast_pflags.auto_parallel = cpu.ParallelOptions(True)
-        self.fast_pflags.nrt = True
-        self.fast_pflags.fastmath = cpu.FastMathOptions(True)
-        super(TestParforsBase, self).__init__(*args)
-
-    def _compile_this(self, func, sig, flags):
-        return compile_isolated(func, sig, flags=flags)
+    def _compile_this(self, func, sig, **flags):
+        # This method originally used `compile_isolated` which returns a
+        # "CompileResult", hence this does the same.
+        return njit(sig, **flags)(func).overloads[sig]
 
     def compile_parallel(self, func, sig):
-        return self._compile_this(func, sig, flags=self.pflags)
+        return self._compile_this(func, sig, parallel=True)
 
     def compile_parallel_fastmath(self, func, sig):
-        return self._compile_this(func, sig, flags=self.fast_pflags)
+        return self._compile_this(func, sig, parallel=True, fastmath=True)
 
     def compile_njit(self, func, sig):
-        return self._compile_this(func, sig, flags=self.cflags)
+        return self._compile_this(func, sig)
 
     def compile_all(self, pyfunc, *args, **kwargs):
         sig = tuple([numba.typeof(x) for x in args])
