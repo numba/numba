@@ -391,6 +391,9 @@ Pull-Requests:
 * PR `#8864 <https://github.com/numba/numba/pull/8864>`_: Remove obsolete deprecation notices (`gmarkall <https://github.com/gmarkall>`_)
 * PR `#8866 <https://github.com/numba/numba/pull/8866>`_: Revise CUDA deprecation notices (`gmarkall <https://github.com/gmarkall>`_)
 * PR `#8870 <https://github.com/numba/numba/pull/8870>`_: Fix opcode "spelling" change since Python 3.11 in CUDA debug test. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#8879 <https://github.com/numba/numba/pull/8879>`_: Remove use of ``compile_isolated`` from generator tests. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#8880 <https://github.com/numba/numba/pull/8880>`_: Fix missing dependency guard on pyyaml in ``test_azure_config``. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#8881 <https://github.com/numba/numba/pull/8881>`_: Replace use of compile_isolated in test_obj_lifetime (`sklam <https://github.com/sklam>`_)
 
 Authors:
 
