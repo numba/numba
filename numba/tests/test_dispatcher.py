@@ -11,7 +11,6 @@ import numpy as np
 from numba import njit, jit, generated_jit, typeof, vectorize
 from numba.core import types, errors
 from numba import _dispatcher
-from numba.core.compiler import compile_isolated
 from numba.tests.support import TestCase, captured_stdout
 from numba.np.numpy_support import as_dtype
 from numba.core.dispatcher import Dispatcher
@@ -1032,7 +1031,10 @@ class TestBoxingDefaultError(unittest.TestCase):
         # Dummy type has no unbox support
         def foo(x):
             pass
-        cres = compile_isolated(foo, (types.Dummy("dummy_type"),))
+        argtys = (types.Dummy("dummy_type"),)
+        # This needs `compile_isolated`-like behaviour so as to bypass
+        # dispatcher type checking logic
+        cres = njit(argtys)(foo).overloads[argtys]
         with self.assertRaises(TypeError) as raises:
             # Can pass in whatever and the unbox logic will always raise
             # without checking the input value.
@@ -1040,13 +1042,11 @@ class TestBoxingDefaultError(unittest.TestCase):
         self.assertEqual(str(raises.exception), "can't unbox dummy_type type")
 
     def test_box_runtime_error(self):
+        @njit
         def foo():
             return unittest  # Module type has no boxing logic
-        cres = compile_isolated(foo, ())
         with self.assertRaises(TypeError) as raises:
-            # Can pass in whatever and the unbox logic will always raise
-            # without checking the input value.
-            cres.entry_point()
+            foo()
         pat = "cannot convert native Module.* to Python object"
         self.assertRegex(str(raises.exception), pat)
 
