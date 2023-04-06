@@ -32,12 +32,13 @@ else:
     Signature = pt.Any
 
 
-MagicTuple = pt.Tuple
-# IndexKey : sig, codege.magictuple, hashed code, hashed cells
+# CodegenMagicTuple is different for CPU (3-tuple) and GPU (2-tuple)
+CodegenMagicTuple = pt.Tuple[str, ...]
+# IndexKey : sig, codegen.magictuple, hashed code, hashed cells
 # the sig argument sometimes is a Signature and sometimes a tuple of types
 SignatureLike = pt.Union[Signature, pt.Tuple[types.Type, ...], str]
 IndexKey = pt.Tuple[
-    SignatureLike, MagicTuple, pt.Tuple[str, str]
+    SignatureLike, CodegenMagicTuple, pt.Tuple[str, str]
 ]
 # FileStamp: tuple of file timestamp and file size
 FileStamp = pt.Tuple[float, int]
