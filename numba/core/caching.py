@@ -33,7 +33,7 @@ else:
 
 
 MagicTuple = pt.Tuple
-# IndexKey : sig, codege.magictuple, hashed code, hashed cells
+# IndexKey : sig, codegen.magictuple, hashed code, hashed cells
 # the sig argument sometimes is a Signature and sometimes a tuple of types
 SignatureLike = pt.Union[Signature, pt.Tuple[types.Type, ...], str]
 IndexKey = pt.Tuple[
