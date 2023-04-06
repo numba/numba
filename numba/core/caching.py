@@ -694,7 +694,7 @@ class Cache(_Cache):
         with self._guard_against_spurious_io_errors():
             self._save_overload(sig, data)
 
-    def _save_overload(self, sig: SignatureLike, data: OverloadData):
+    def _save_overload(self, sig: SignatureLike, data: OverloadData) -> None:
         if not self._enabled:
             return
         if not self._impl.check_cachable(data):
