@@ -556,7 +556,7 @@ class IndexDataCacheFile(object):
         else:
             return overloads
 
-    def _save_index(self, overloads: pt.Dict[IndexKey, IndexOverloadData]):
+    def _save_index(self, overloads: pt.Dict[IndexKey, IndexOverloadData]) -> None:
         data: IndexData  # for python 3.7, otherwise put in next line
         data = self._source_stamp, overloads
         data_bytes = self._dump(data)
