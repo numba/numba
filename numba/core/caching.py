@@ -684,7 +684,7 @@ class Cache(_Cache):
             data = self._impl.rebuild(target_context, data)
         return data
 
-    def save_overload(self, sig: SignatureLike, data: OverloadData):
+    def save_overload(self, sig: SignatureLike, data: OverloadData) -> None:
         """
         Save the data for the given signature in the cache.
 
