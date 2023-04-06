@@ -42,7 +42,7 @@ IndexKey = pt.Tuple[
 ]
 # FileStamp: tuple of file timestamp and file size
 FileStamp = pt.Tuple[float, int]
-# IndexData: Tuple[ filename for cached code, Dict of file names to FileStamps
+# IndexData: Tuple of filename for cached code and Dict of file names to FileStamps
 IndexOverloadData = pt.Tuple[str, pt.Dict[str, FileStamp]]
 # Index data: what gets pickled and saved.
 # Tuple of Timestamp and size of main file + IndexOverloadData
@@ -557,7 +557,7 @@ class IndexDataCacheFile(object):
         else:
             return overloads
 
-    def _save_index(self, overloads: pt.Dict[IndexKey, IndexOverloadData]):
+    def _save_index(self, overloads: pt.Dict[IndexKey, IndexOverloadData]) -> None:
         data: IndexData  # for python 3.7, otherwise put in next line
         data = self._source_stamp, overloads
         data_bytes = self._dump(data)
@@ -685,7 +685,7 @@ class Cache(_Cache):
             data = self._impl.rebuild(target_context, data)
         return data
 
-    def save_overload(self, sig: SignatureLike, data: OverloadData):
+    def save_overload(self, sig: SignatureLike, data: OverloadData) -> None:
         """
         Save the data for the given signature in the cache.
 
@@ -695,7 +695,7 @@ class Cache(_Cache):
         with self._guard_against_spurious_io_errors():
             self._save_overload(sig, data)
 
-    def _save_overload(self, sig: SignatureLike, data: OverloadData):
+    def _save_overload(self, sig: SignatureLike, data: OverloadData) -> None:
         if not self._enabled:
             return
         if not self._impl.check_cachable(data):
