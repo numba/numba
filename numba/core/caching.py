@@ -41,7 +41,7 @@ IndexKey = pt.Tuple[
 ]
 # FileStamp: tuple of file timestamp and file size
 FileStamp = pt.Tuple[float, int]
-# IndexData: Tuple[ filename for cached code, Dict of file names to FileStamps
+# IndexData: Tuple of filename for cached code and Dict of file names to FileStamps
 IndexOverloadData = pt.Tuple[str, pt.Dict[str, FileStamp]]
 # Index data: what gets pickled and saved.
 # Tuple of Timestamp and size of main file + IndexOverloadData
