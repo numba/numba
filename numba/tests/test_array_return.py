@@ -1,7 +1,6 @@
 import numpy as np
 
-from numba.core.compiler import compile_isolated
-from numba import typeof
+from numba import typeof, njit
 from numba.tests.support import MemoryLeakMixin
 import unittest
 
@@ -22,8 +21,7 @@ class TestArrayReturn(MemoryLeakMixin, unittest.TestCase):
         a = np.arange(10)
         i = 2
         at, it = typeof(a), typeof(i)
-        cres = compile_isolated(array_return, (at, it))
-        cfunc = cres.entry_point
+        cfunc = njit((at, it))(array_return)
         self.assertIs(a, cfunc(a, i))
 
     def test_array_return_start_with_loop(self):
@@ -32,8 +30,7 @@ class TestArrayReturn(MemoryLeakMixin, unittest.TestCase):
         """
         a = np.arange(10)
         at = typeof(a)
-        cres = compile_isolated(array_return_start_with_loop, [at])
-        cfunc = cres.entry_point
+        cfunc = njit((at,))(array_return_start_with_loop)
         self.assertIs(a, cfunc(a))
 
 
