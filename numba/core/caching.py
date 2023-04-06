@@ -496,17 +496,18 @@ class IndexDataCacheFile(object):
         overloads = self._load_index()
         try:
             # If key already exists, we will overwrite the file
-            data_name, deps_filestamps = overloads[key]
+            # but we will update the filestamps in the index
+            data_filename, old_deps_filestamps = overloads[key]
         except KeyError:
             # Find an available name for the data file
             existing = set((name for name, filestamp in overloads.values()))
             for i in itertools.count(1):
-                data_name = self._data_name(i)
-                if data_name not in existing:
+                data_filename = self._data_name(i)
+                if data_filename not in existing:
                     break
-            overloads[key] = data_name, deps_filestamps
-            self._save_index(overloads)
-        self._save_data(data_name, data)
+        overloads[key] = data_filename, deps_filestamps
+        self._save_index(overloads)
+        self._save_data(data_filename, data)
 
     def load(self, key: IndexKey):
         """
