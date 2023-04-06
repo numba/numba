@@ -5,7 +5,6 @@ import itertools
 import numpy as np
 
 import numba
-from numba.core.compiler import compile_isolated
 from numba import jit, njit
 from numba.core import errors, ir, types, typing, typeinfer, utils
 from numba.core.typeconv import Conversion
@@ -44,8 +43,9 @@ class TestArgRetCasting(unittest.TestCase):
 
         args = (i32,)
         return_type = f32
-        cres = compile_isolated(foo, args, return_type)
-        self.assertTrue(isinstance(cres.entry_point(123), float))
+        cfunc = njit(return_type(*args))(foo)
+        cres = cfunc.overloads[args]
+        self.assertTrue(isinstance(cfunc(123), float))
         self.assertEqual(cres.signature.args, args)
         self.assertEqual(cres.signature.return_type, return_type)
 
@@ -56,7 +56,7 @@ class TestArgRetCasting(unittest.TestCase):
         args = (types.Array(i32, 1, 'C'),)
         return_type = f32
         try:
-            cres = compile_isolated(foo, args, return_type)
+            njit(return_type(*args))(foo)
         except errors.TypingError as e:
             pass
         else:
@@ -69,7 +69,8 @@ class TestArgRetCasting(unittest.TestCase):
 
         args = (u32,)
         return_type = u8
-        cres = compile_isolated(foo, args, return_type)
+        cfunc = njit(return_type(*args))(foo)
+        cres = cfunc.overloads[args]
         typemap = cres.type_annotation.typemap
         # Argument "iters" must be uint32
         self.assertEqual(typemap['iters'], u32)
@@ -509,14 +510,13 @@ class TestUnifyUseCases(unittest.TestCase):
                 res += a[i]
             return res
 
-        argtys = [types.Array(c128, 1, 'C')]
-        cres = compile_isolated(pyfunc, argtys)
-        return (pyfunc, cres)
+        argtys = (types.Array(c128, 1, 'C'),)
+        cfunc = njit(argtys)(pyfunc)
+        return (pyfunc, cfunc)
 
     def test_complex_unify_issue599(self):
-        pyfunc, cres = self._actually_test_complex_unify()
+        pyfunc, cfunc = self._actually_test_complex_unify()
         arg = np.array([1.0j])
-        cfunc = cres.entry_point
         self.assertEqual(cfunc(arg), pyfunc(arg))
 
     def test_complex_unify_issue599_multihash(self):
@@ -546,7 +546,7 @@ class TestUnifyUseCases(unittest.TestCase):
 
         args = (i32, i64)
         # Check if compilation is successful
-        cres = compile_isolated(foo, args)
+        njit(args)(foo)
 
 
 def issue_797(x0, y0, x1, y1, grid):
