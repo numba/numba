@@ -10,6 +10,7 @@ import os.path
 from collections import namedtuple
 from collections.abc import Sequence
 from types import MethodType, FunctionType
+import typing as pt
 
 import numba
 from numba.core import types, utils, targetconfig
@@ -19,6 +20,10 @@ from numba.core.errors import (
     InternalTargetMismatchError,
 )
 from numba.core.cpu_options import InlineOptions
+
+
+SignatureLike = pt.Union["Signature", pt.Tuple[types.Type, ...], str]
+
 
 # info store for inliner callback functions e.g. cost model
 _inline_info = namedtuple('inline_info',
@@ -387,7 +392,9 @@ class AbstractTemplate(FunctionTemplate):
         }
         return info
 
-    def get_cache_deps_info(self, sig, dependency_getter_fc):
+    def get_cache_deps_info(
+            self, sig:SignatureLike, dependency_getter_fc: pt.Callable
+    ):
         """ default implementation
 
         Returning an empty dictionary means that the dependencies of this
@@ -886,7 +893,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         return info
 
     @functools.lru_cache()
-    def get_cache_deps_info(self, sig, dependency_getter_fc):
+    def get_cache_deps_info(self, sig, dependency_getter_fc: Callable):
         """ return a dictionary with information about other functions this
         function depends on
 
