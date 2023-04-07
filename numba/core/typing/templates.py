@@ -393,7 +393,7 @@ class AbstractTemplate(FunctionTemplate):
         return info
 
     def get_cache_deps_info(
-            self, sig:SignatureLike, dependency_getter_fc: pt.Callable
+            self, sig: SignatureLike, dependency_getter_fc: pt.Callable
     ):
         """ default implementation
 
@@ -893,7 +893,9 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         return info
 
     @functools.lru_cache()
-    def get_cache_deps_info(self, sig, dependency_getter_fc: Callable):
+    def get_cache_deps_info(
+            self, sig: SignatureLike, dependency_getter_fc: pt.Callable
+    ):
         """ return a dictionary with information about other functions this
         function depends on
 
