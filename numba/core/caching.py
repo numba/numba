@@ -789,25 +789,6 @@ def make_library_cache(prefix):
 dep_types = (types.Dispatcher, types.Function)
 
 
-def get_dispatcher(fc_ty: pt.Union[types.Dispatcher, types.Function]):
-    """ Retrieve the dispatcher out of a function-like numba type
-    :param fc_ty: a function type
-    :return: a dispatcher object
-    """
-    if isinstance(fc_ty, types.Dispatcher):
-        dispatcher = fc_ty.dispatcher
-    elif isinstance(fc_ty, types.Function):
-        if hasattr(fc_ty, "key") and hasattr(fc_ty.key[0], "_dispatcher"):
-            dispatcher = fc_ty.key[0]._dispatcher
-        else:
-            # a type of Function with a dispatcher associated. Probably an
-            # overload of a built-in
-            return None
-    else:
-        raise TypeError
-    return dispatcher
-
-
 def get_function_dependencies(overload: OverloadData
                               ) -> pt.Dict[str, FileStamp]:
     """ Returns functions on which the overload depends, and their file stamps
@@ -853,7 +834,7 @@ def get_deps_info(fc_ty: pt.Union[types.Dispatcher, types.Function], sig
         deps_stamps = dispatcher.cache_deps_info(sig)
     elif isinstance(fc_ty, types.Function):
         if hasattr(fc_ty, "key") and hasattr(fc_ty.key[0], "_dispatcher"):
-            # TODO: explain which case is this
+            # this case captures DUFuncs and GUFuncs
             dispatcher = fc_ty.key[0]._dispatcher
             deps_stamps = dispatcher.cache_deps_info(sig)
         else:
