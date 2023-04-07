@@ -833,7 +833,7 @@ def get_deps_info(fc_ty: pt.Union[types.Dispatcher, types.Function], sig
         dispatcher = fc_ty.dispatcher
         deps_stamps = dispatcher.cache_deps_info(sig)
     elif isinstance(fc_ty, types.Function):
-        if hasattr(fc_ty, "key") and hasattr(fc_ty.key[0], "_dispatcher"):
+        if hasattr(fc_ty.typing_key, "_dispatcher"):
             # this case captures DUFuncs and GUFuncs
             dispatcher = fc_ty.key[0]._dispatcher
             deps_stamps = dispatcher.cache_deps_info(sig)
@@ -867,8 +867,8 @@ def get_impl_filenames(fc_ty: pt.Union[types.Dispatcher, types.Function]
         py_func = dispatcher.py_func
         py_files = [py_func.__code__.co_filename]
     elif isinstance(fc_ty, types.Function):
-        if hasattr(fc_ty, "key") and hasattr(fc_ty.key[0], "_dispatcher"):
-            # TODO: explain which case is this
+        if hasattr(fc_ty.typing_key, "_dispatcher"):
+            # this case captures DUFuncs and GUFuncs
             dispatcher = fc_ty.key[0]._dispatcher
             py_func = dispatcher.py_func
             py_files = [py_func.__code__.co_filename]
