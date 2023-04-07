@@ -518,6 +518,7 @@ class IndexDataCacheFile(object):
         if data_name is None:
             return
         if not are_filestamps_valid(deps_filestamps):
+            _cache_log("Some files have changed, cache has been invalidated")
             return
         try:
             return self._load_data(data_name)
