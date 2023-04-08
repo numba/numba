@@ -1,13 +1,12 @@
 import numpy as np
 import warnings
-from numba.cuda.testing import skip_if_mvc_enabled, skip_unless_cc_53, unittest
-from numba.cuda.testing import (skip_on_cudasim, skip_unless_cuda_python,
-                                skip_if_cuda_includes_missing)
+from numba.cuda.testing import unittest
+from numba.cuda.testing import (skip_on_cudasim, skip_if_cuda_includes_missing)
 from numba.cuda.testing import CUDATestCase, test_data_dir
 from numba.cuda.cudadrv.driver import (CudaAPIError, Linker,
                                        LinkerError, NvrtcError)
 from numba.cuda import require_context
-from numba.tests.support import TestCase, ignore_internal_warnings
+from numba.tests.support import ignore_internal_warnings
 from numba import cuda, void, float64, int64, int32, typeof, float32
 
 
@@ -143,7 +142,6 @@ class TestLinker(CUDATestCase):
     def test_linking_eager_compile(self):
         self._test_linking(eager=True)
 
-    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_linking_cu(self):
         bar = cuda.declare_device('bar', 'int32(int32)')
 
@@ -165,7 +163,6 @@ class TestLinker(CUDATestCase):
         expected = x * 2
         np.testing.assert_array_equal(r, expected)
 
-    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_linking_cu_log_warning(self):
         bar = cuda.declare_device('bar', 'int32(int32)')
 
@@ -184,7 +181,6 @@ class TestLinker(CUDATestCase):
         # Check the message pertaining to the unused variable is provided
         self.assertIn('declared but never referenced', str(w[0].message))
 
-    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_linking_cu_error(self):
         bar = cuda.declare_device('bar', 'int32(int32)')
 
@@ -203,38 +199,6 @@ class TestLinker(CUDATestCase):
         # Check the filename is reported correctly
         self.assertIn('in the compilation of "error.cu"', msg)
 
-    # We need to run the test in a subprocess because the Linker class
-    # that instantiates either the CudaPythonLinker or CtypesLinker
-    # sets USE_NV_BINDING = config.CUDA_USE_NVIDIA_BINDING at
-    # module import time, so overriding the config variable does
-    # not help.
-
-    @skip_if_mvc_enabled('NVRTC not available when ctypes binding is used.')
-    @TestCase.run_test_in_subprocess(envvars=_NUMBA_NVIDIA_BINDING_0_ENV)
-    def test_linking_cu_ctypes_unsupported(self):
-        link = str(test_data_dir / 'jitlink.cu')
-        msg = ('Linking CUDA source files is not supported with the ctypes '
-               'binding')
-
-        with self.assertRaisesRegex(NotImplementedError, msg):
-            @cuda.jit('void()', link=[link])
-            def f():
-                pass
-
-    # Float16 math functions require linking in a .cu file, verify that
-    # we generate the appropriate exception and message if the NVIDIA
-    # bindings are not enabled or installed.
-
-    @skip_unless_cc_53
-    @TestCase.run_test_in_subprocess(envvars=_NUMBA_NVIDIA_BINDING_0_ENV)
-    def test_linking_float16_unsupported(self):
-        msg = ("Use of float16 requires the use of the NVIDIA CUDA "
-               "bindings and setting the ")
-        with self.assertRaisesRegex(NotImplementedError, msg):
-            @cuda.jit('void(float16[::1])')
-            def hexp10_vectors(x):
-                cuda.fp16.hexp10(x[0])
-
     def test_linking_unknown_filetype_error(self):
         expected_err = "Don't know how to link file with extension .cuh"
         with self.assertRaisesRegex(RuntimeError, expected_err):
@@ -250,7 +214,6 @@ class TestLinker(CUDATestCase):
                 pass
 
     @skip_if_cuda_includes_missing
-    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_linking_cu_cuda_include(self):
         link = str(test_data_dir / 'cuda_include.cu')
 
