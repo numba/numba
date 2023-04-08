@@ -110,15 +110,6 @@ class _Kernel(serialize.ReduceMixin):
                if (f'__numba_wrapper_{fn}' in lib.get_asm_str())]
 
         if res:
-            if not config.CUDA_USE_NVIDIA_BINDING:
-                s = "https://numba.readthedocs.io/en/stable/cuda/bindings.html"
-                msg = ("Use of float16 requires the use of the NVIDIA CUDA "
-                       "bindings and setting the "
-                       "NUMBA_CUDA_USE_NVIDIA_BINDING environment variable to "
-                       "1. Relevant documentation is available here:\n"
-                       f"{s}")
-                raise NotImplementedError(msg)
-
             # Path to the source containing the foreign function
 
             basedir = os.path.dirname(os.path.abspath(__file__))
