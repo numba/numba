@@ -1,6 +1,5 @@
 import numpy as np
 from numba.cuda.testing import (skip_unless_cc_53,
-                                skip_unless_cuda_python,
                                 unittest,
                                 CUDATestCase,
                                 skip_on_cudasim)
@@ -383,7 +382,6 @@ class TestCudaMath(CUDATestCase):
         self.unary_template_uint64(math_cos, np.cos)
 
     @skip_unless_cc_53
-    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_math_fp16(self):
         self.unary_template_float16(math_sin, np.sin)
         self.unary_template_float16(math_cos, np.cos)
