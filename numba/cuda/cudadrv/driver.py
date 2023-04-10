@@ -11,6 +11,8 @@ system to freeze in some cases.
 
 """
 
+from numba.cuda.cudadrv import nvrtc_ctype_binding
+from numba.cuda.cudadrv.nvrtc_ctype_binding import NVRTCInterface
 import sys
 import os
 import ctypes
@@ -22,7 +24,7 @@ import threading
 import asyncio
 import pathlib
 from itertools import product
-from abc import ABCMeta, abstractmethod
+from abc import ABC, ABCMeta, abstractmethod
 from ctypes import (c_int, byref, c_size_t, c_char, c_char_p, addressof,
                     c_void_p, c_float, c_uint)
 import contextlib
@@ -2731,7 +2733,7 @@ class MVCLinker(Linker):
             raise LinkerError from e
 
     def add_cu(self, cu, name):
-        program = NvrtcProgram(cu, name)
+        program = NvidiaBindingNvrtcProgram(cu, name)
 
         if config.DUMP_ASSEMBLY:
             print(("ASSEMBLY %s" % name).center(80, '-'))
@@ -2825,9 +2827,17 @@ class CtypesLinker(Linker):
                 msg = "%s\n%s" % (e, self.error_log)
             raise LinkerError(msg)
 
-    def add_cu(self, path, name):
-        raise NotImplementedError("Linking CUDA source files is not supported "
-                                  "with the ctypes binding. ")
+    def add_cu(self, cu, name):
+        program = CtypesBindingNvrtcProgram(cu, name)
+
+        if config.DUMP_ASSEMBLY:
+            print(("ASSEMBLY %s" % name).center(80, '-'))
+            print(program.ptx.decode())
+            print('=' * 80)
+
+        # Link the program's PTX using the normal linker mechanism
+        ptx_name = os.path.splitext(name)[0] + ".ptx"
+        self.add_ptx(program.ptx.rstrip(b'\x00'), ptx_name)
 
     def complete(self):
         cubin_buf = c_void_p(0)
@@ -2847,18 +2857,14 @@ class CtypesLinker(Linker):
         return bytes(np.ctypeslib.as_array(cubin_ptr, shape=(size,)))
 
 
-class NvrtcProgram:
-    """NvrtcProgram is for the managing the lifetime of nvrtcProgram objects.
-
-    If an error occurs during an NVRTC call, an exception is raised. When an
-    instance of this class is deleted, it attempts to delete the underlying
-    nvrtcProgram."""
-
-    def __init__(self, src, name):
+class NvrtcProgram(ABC):
+    def __init__(self, nvrtc_binding, err_binding, src, name):
         # Create an nvrtcProgram
-        err, program = nvrtc.nvrtcCreateProgram(src, name.encode(), 0, [], [])
+        err, program = nvrtc_binding.nvrtcCreateProgram(src, name.encode(),
+                                                        0, [], [])
         self.check(err)
         self._program = program
+        self._nvrtc_binding = nvrtc_binding
 
         with driver.get_active_context() as ac:
             dev = driver.get_device(ac.devnum)
@@ -2874,19 +2880,19 @@ class NvrtcProgram:
         opts = [arch, include, b'-rdc', b'true']
 
         # Compile the program
-        err, = nvrtc.nvrtcCompileProgram(self._program, len(opts), opts)
+        err, = nvrtc_binding.nvrtcCompileProgram(self._program, len(opts), opts)
 
         # First check whether the call failed due to a "normal" compiler error
-        compile_error = (err == nvrtc.nvrtcResult.NVRTC_ERROR_COMPILATION)
+        compile_error = (err == err_binding.nvrtcResult.NVRTC_ERROR_COMPILATION)
         if not compile_error:
             # Check for any other error
             self.check(err)
 
         # Get log from compilation
-        err, log_size = nvrtc.nvrtcGetProgramLogSize(self._program)
+        err, log_size = nvrtc_binding.nvrtcGetProgramLogSize(self._program)
         self.check(err)
         log = b' ' * log_size
-        err, = nvrtc.nvrtcGetProgramLog(self._program, log)
+        err, = nvrtc_binding.nvrtcGetProgramLog(self._program, log)
         self.check(err)
 
         # If the compile failed, provide the log in an exception
@@ -2902,22 +2908,37 @@ class NvrtcProgram:
             warnings.warn(msg)
 
         # Get and cache the PTX
-        err, ptx_len = nvrtc.nvrtcGetPTXSize(self._program)
+        err, ptx_len = nvrtc_binding.nvrtcGetPTXSize(self._program)
         self.check(err)
         ptx = b' ' * ptx_len
-        err, = nvrtc.nvrtcGetPTX(self._program, ptx)
+        err, = nvrtc_binding.nvrtcGetPTX(self._program, ptx)
         self.check(err)
 
         self._ptx = ptx
 
     def __del__(self):
         if self._program:
-            err, = nvrtc.nvrtcDestroyProgram(self._program)
+            err, = self._nvrtc_binding.nvrtcDestroyProgram(self._program)
             self.check(err)
 
     @property
     def ptx(self):
         return self._ptx
+
+    @abstractmethod
+    def check(self, err):
+        pass
+
+
+class NvidiaBindingNvrtcProgram(NvrtcProgram):
+    """NividiaBindingNvrtcProgram is for the managing the lifetime of
+    nvrtcProgram objects.
+
+    If an error occurs during an NVRTC call, an exception is raised. When an
+    instance of this class is deleted, it attempts to delete the underlying
+    nvrtcProgram."""
+    def __init__(self, src, name):
+        super().__init__(nvrtc, nvrtc, src, name)
 
     def check(self, err):
         if isinstance(err, binding.CUresult):
@@ -2925,6 +2946,25 @@ class NvrtcProgram:
                 raise RuntimeError('CUDA Error calling NVRTC: {}'.format(err))
         elif isinstance(err, nvrtc.nvrtcResult):
             if err != nvrtc.nvrtcResult.NVRTC_SUCCESS:
+                raise RuntimeError('NVRTC Error: {}'.format(err))
+        else:
+            raise RuntimeError('Unknown error type: {}'.format(err))
+
+
+class CtypesBindingNvrtcProgram(NvrtcProgram):
+    """CtypesBindingNvrtcProgram is for the managing the lifetime of
+    nvrtcProgram objects.
+
+    If an error occurs during an NVRTC call, an exception is raised. When an
+    instance of this class is deleted, it attempts to delete the underlying
+    nvrtcProgram."""
+    def __init__(self, src, name):
+        self._nvrtc = NVRTCInterface()
+        super().__init__(self._nvrtc, nvrtc_ctype_binding, src, name)
+
+    def check(self, err):
+        if isinstance(err, nvrtc_ctype_binding.nvrtcResult):
+            if err != nvrtc_ctype_binding.nvrtcResult.NVRTC_SUCCESS:
                 raise RuntimeError('NVRTC Error: {}'.format(err))
         else:
             raise RuntimeError('Unknown error type: {}'.format(err))
@@ -2993,7 +3033,7 @@ class CudaPythonLinker(Linker):
             raise LinkerError("%s\n%s" % (e, self.error_log))
 
     def add_cu(self, cu, name):
-        program = NvrtcProgram(cu, name)
+        program = NvidiaBindingNvrtcProgram(cu, name)
 
         if config.DUMP_ASSEMBLY:
             print(("ASSEMBLY %s" % name).center(80, '-'))
