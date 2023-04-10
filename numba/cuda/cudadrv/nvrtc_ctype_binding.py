@@ -149,24 +149,6 @@ class NVRTCInterface(object):
         ]
         self._lib.nvrtcGetProgramLog.restype = c_int
 
-        self._lib.nvrtcAddNameExpression.argtypes = [
-            c_void_p,           # prog
-            c_char_p            # nameExpression
-        ]
-        self._lib.nvrtcAddNameExpression.restype = c_int
-
-        self._lib.nvrtcGetLoweredName.argtypes = [
-            c_void_p,           # prog
-            c_char_p,           # nameExpression
-            POINTER(c_char_p)   # loweredName
-        ]
-        self._lib.nvrtcGetLoweredName.restype = c_int
-
-        self._lib.nvrtcGetErrorString.argtypes = [
-            c_int               # result
-        ]
-        self._lib.nvrtcGetErrorString.restype = c_char_p
-
         self._lib.nvrtcVersion.argtypes = [
             POINTER(c_int),     # major
             POINTER(c_int)      # minor
@@ -246,36 +228,6 @@ class NVRTCInterface(object):
         code = self._lib.nvrtcGetProgramLogSize(prog, byref(size))
         return (nvrtcResult(code), size.value)
 
-    def nvrtcAddNameExpression(self, prog, name_expression):
-        """
-        Notes the given name expression denoting a __global__ function or
-        function template instantiation.
-        """
-        code = self._lib.nvrtcAddNameExpression(prog,
-                                                c_char_p(encode_str(name_expression)))
-        self._throw_on_error(code)
-        return
-
-    def nvrtcGetLoweredName(self, prog, name_expression):
-        """
-        Notes the given name expression denoting a __global__ function or
-        function template instantiation.
-        """
-        lowered_name = c_char_p()
-        code = self._lib.nvrtcGetLoweredName(prog,
-                                             c_char_p(encode_str(name_expression)),
-                                             byref(lowered_name))
-        self._throw_on_error(code)
-        return lowered_name.value.decode('utf-8')
-
-    def nvrtcGetErrorString(self, code):
-        """
-        Returns a text identifier for the given NVRTC status code.
-        """
-        code_int = c_int(code)
-        res = self._lib.nvrtcGetErrorString(code_int)
-        return res.decode('utf-8')
-
     def nvrtcVersion(self):
         """
         Returns the loaded NVRTC library version as a (major, minor) tuple.
@@ -283,11 +235,10 @@ class NVRTCInterface(object):
         major = c_int()
         minor = c_int()
         code = self._lib.nvrtcVersion(byref(major), byref(minor))
-        self._throw_on_error(code)
-        return (major.value, minor.value)
+        return (nvrtcResult(code), major.value, minor.value)
 
     def __str__(self):
-        (major, minor) = self.nvrtcVersion()
+        code, major, minor = self.nvrtcVersion()
         return 'NVRTC Interface (Version: %d.%d)' % (major, minor)
 
     def __repr__(self):
