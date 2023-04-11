@@ -119,6 +119,7 @@ def _specialize_box(typ):
         "__add__",
         "__floordiv__",
         "__lshift__",
+        "__matmul__",
         "__mod__",
         "__mul__",
         "__neg__",
@@ -142,18 +143,7 @@ def _specialize_box(typ):
         "__iand__",
         "__ior__",
         "__ixor__",
-        "__radd__",
-        "__rfloordiv__",
-        "__rlshift__",
-        "__rmod__",
-        "__rmul__",
-        "__rpow__",
-        "__rrshift__",
-        "__rsub__",
-        "__rtruediv__",
-        "__rand__",
-        "__ror__",
-        "__rxor__",
+        "__rmatmul__",
     }
     for name, func in typ.methods.items():
         if name == "__init__":
