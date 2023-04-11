@@ -1872,12 +1872,6 @@ def f(x, y):
           def __rmul__(self, other):
               return other.x * self.x
 
-          def __matmul__(self, other):
-              return self.x @ other.x
-
-          def __rmatmul__(self, other):
-              return other.x @ self.x
-
           def __rtruediv__(self, other):
               return other.x / self.x
 
