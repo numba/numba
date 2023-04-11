@@ -134,6 +134,7 @@ def _specialize_box(typ):
         "__iadd__",
         "__ifloordiv__",
         "__ilshift__",
+        "__imatmul__",
         "__imod__",
         "__imul__",
         "__ipow__",
