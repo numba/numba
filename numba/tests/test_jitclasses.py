@@ -1858,7 +1858,7 @@ def f(x, y):
         self.assertEqual(py_ops_not_defined > py_ops_defined,
                          jit_ops_not_defined > jit_ops_defined)
 
-	@skip_unless_scipy
+    @skip_unless_scipy
     def test_matmul_operator(self):
         class ArrayAt:
             def __init__(self, array):
