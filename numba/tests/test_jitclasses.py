@@ -1942,6 +1942,72 @@ def f(x, y):
                         tuple(eval(f"jit_ops_not_defined {op} jit_ops_defined"))
                     )
 
+    def test_matmul_operator(self):
+        class ArrayAt:
+            def __init__(self, array):
+                self.arr = array
+
+            def __matmul__(self, other):
+                return self.arr @ other.arr
+
+            def __rmatmul__(self, other):
+                return other.arr @ self.arr
+
+        class ArrayNoAt:
+            def __init__(self, array):
+                self.arr = array
+
+        n = 3
+        vec = np.random.random(size=(n,))
+        mat = np.random.random(size=(n, n))
+
+        vector_noat = ArrayNoAt(vec)
+        vector_at = ArrayAt(vec)
+        jit_vector_noat = jitclass(ArrayNoAt, spec={"arr": float64[::1]})(vec)
+        jit_vector_at = jitclass(ArrayAt, spec={"arr": float64[::1]})(vec)
+
+        matrix_noat = ArrayNoAt(mat)
+        matrix_at = ArrayAt(mat)
+        jit_matrix_noat = jitclass(ArrayNoAt, spec={"arr": float64[:, ::1]})(mat)
+        jit_matrix_at = jitclass(ArrayAt, spec={"arr": float64[:, ::1]})(mat)
+
+        # __matmul__
+        self.assertEqual(
+            vector_at @ vector_noat,
+            jit_vector_at @ jit_vector_noat
+        )
+        self.assertTupleEqual(
+            tuple(vector_at @ matrix_noat),
+            tuple(jit_vector_at @ jit_matrix_noat)
+        )
+        self.assertTupleEqual(
+            tuple(matrix_at @ vector_noat),
+            tuple(jit_matrix_at @ jit_vector_noat)
+        )
+        self.assertTupleEqual(
+            tuple((matrix_at @ matrix_noat).ravel()),
+            tuple((jit_matrix_at @ jit_matrix_noat).ravel())
+        )
+
+        # __rmatmul__
+        self.assertEqual(
+            vector_noat @ vector_at,
+            jit_vector_noat @ jit_vector_at
+        )
+        self.assertTupleEqual(
+            tuple(vector_noat @ matrix_at),
+            tuple(jit_vector_noat @ jit_matrix_at)
+        )
+        self.assertTupleEqual(
+            tuple(matrix_noat @ vector_at),
+            tuple(jit_matrix_noat @ jit_vector_at)
+        )
+        self.assertTupleEqual(
+            tuple((matrix_noat @ matrix_at).ravel()),
+            tuple((jit_matrix_noat @ jit_matrix_at).ravel())
+        )
+
+
     def test_implicit_hash_compiles(self):
         # Ensure that classes with __hash__ implicitly defined as None due to
         # the presence of __eq__ are correctly handled by ignoring the __hash__
