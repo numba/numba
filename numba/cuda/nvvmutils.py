@@ -15,12 +15,8 @@ def declare_atomic_cas_int(lmod, isize):
 
 
 def atomic_cmpxchg(builder, lmod, isize, ptr, cmp, val):
-    if nvvm.NVVM().is_nvvm70:
-        out = builder.cmpxchg(ptr, cmp, val, 'monotonic', 'monotonic')
-        return builder.extract_value(out, 0)
-    else:
-        return builder.call(declare_atomic_cas_int(lmod, isize),
-                            (ptr, cmp, val))
+    out = builder.cmpxchg(ptr, cmp, val, 'monotonic', 'monotonic')
+    return builder.extract_value(out, 0)
 
 
 def declare_atomic_add_float32(lmod):
