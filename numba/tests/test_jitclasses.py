@@ -17,7 +17,7 @@ from numba.core.runtime.nrt import MemInfo
 from numba.experimental import jitclass
 from numba.experimental.jitclass import _box
 from numba.experimental.jitclass.base import JitClassType
-from numba.tests.support import MemoryLeakMixin, TestCase, skip_if_typeguard
+from numba.tests.support import MemoryLeakMixin, TestCase, skip_if_typeguard, skip_unless_scipy
 
 
 class TestClass1(object):
@@ -1942,6 +1942,7 @@ def f(x, y):
                         tuple(eval(f"jit_ops_not_defined {op} jit_ops_defined"))
                     )
 
+	@skip_unless_scipy
     def test_matmul_operator(self):
         class ArrayAt:
             def __init__(self, array):
