@@ -17,10 +17,6 @@ Deprecations
 ============
 
 
-Future Changes
-==============
-
-
 Expired Deprecations
 ====================
 
@@ -47,3 +43,16 @@ Performance Improvements and Changes
 
 Changes
 =======
+
+
+Documentation Changes
+=====================
+
+
+Infrastructure Related Changes
+==============================
+
+
+Bug Fixes
+=========
+

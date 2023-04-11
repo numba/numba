@@ -20,11 +20,6 @@ filename = "docs/source/release/{version}-notes.rst"
     showcontent = true
 
 [[tool.towncrier.type]]
-    directory = "future"
-    name = "Future Changes"
-    showcontent = true
-
-[[tool.towncrier.type]]
     directory = "expired"
     name = "Expired Deprecations"
     showcontent = true
@@ -57,4 +52,19 @@ filename = "docs/source/release/{version}-notes.rst"
 [[tool.towncrier.type]]
     directory = "change"
     name = "Changes"
+    showcontent = true
+
+[[tool.towncrier.type]]
+    directory = "doc"
+    name = "Documentation Changes"
+    showcontent = true
+
+[[tool.towncrier.type]]
+    directory = "infrastructure"
+    name = "Infrastructure Related Changes"
+    showcontent = true
+
+[[tool.towncrier.type]]
+    directory = "bug_fix"
+    name = "Bug Fixes"
     showcontent = true
