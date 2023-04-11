@@ -1870,6 +1870,10 @@ def f(x, y):
             def __rmatmul__(self, other):
                 return other.arr @ self.arr
 
+            def __imatmul__(self, other):
+                self.arr = self.arr @ other.arr
+                return self
+
         class ArrayNoAt:
             def __init__(self, array):
                 self.arr = array
@@ -1885,8 +1889,8 @@ def f(x, y):
 
         matrix_noat = ArrayNoAt(mat)
         matrix_at = ArrayAt(mat)
-        jit_matrix_noat = jitclass(ArrayNoAt, spec={"arr": float64[:, ::1]})(mat)
-        jit_matrix_at = jitclass(ArrayAt, spec={"arr": float64[:, ::1]})(mat)
+        jit_matrix_noat = jitclass(ArrayNoAt, spec={"arr": float64[:,::1]})(mat)
+        jit_matrix_at = jitclass(ArrayAt, spec={"arr": float64[:,::1]})(mat)
 
         # __matmul__
         self.assertEqual(
@@ -1922,6 +1926,20 @@ def f(x, y):
         self.assertTupleEqual(
             tuple((matrix_noat @ matrix_at).ravel()),
             tuple((jit_matrix_noat @ jit_matrix_at).ravel())
+        )
+
+        # __imatmul__
+        vector_at @= matrix_noat
+        matrix_at @= matrix_noat
+        jit_vector_at @= jit_matrix_noat
+        jit_matrix_at @= jit_matrix_noat
+        self.assertTupleEqual(
+            tuple(vector_at.arr.ravel()),
+            tuple(jit_vector_at.arr.ravel())
+        )
+        self.assertTupleEqual(
+            tuple(matrix_at.arr.ravel()),
+            tuple(jit_matrix_at.arr.ravel())
         )
 
 
