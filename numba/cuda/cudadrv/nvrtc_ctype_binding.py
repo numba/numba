@@ -33,6 +33,7 @@ from ctypes.util import find_library
 from enum import IntEnum
 
 
+# NVRTC status codes
 class nvrtcResult(IntEnum):
     NVRTC_SUCCESS = 0
     NVRTC_ERROR_OUT_OF_MEMORY = 1
@@ -44,38 +45,8 @@ class nvrtcResult(IntEnum):
     NVRTC_ERROR_BUILTIN_OPERATION_FAILURE = 7
 
 
-# NVRTC status codes
-NVRTC_SUCCESS = 0
-NVRTC_ERROR_OUT_OF_MEMORY = 1
-NVRTC_ERROR_PROGRAM_CREATION_FAILURE = 2
-NVRTC_ERROR_INVALID_INPUT = 3
-NVRTC_ERROR_INVALID_PROGRAM = 4
-NVRTC_ERROR_INVALID_OPTION = 5
-NVRTC_ERROR_COMPILATION = 6
-NVRTC_ERROR_BUILTIN_OPERATION_FAILURE = 7
-
-
-def encode_str(s):
-    return s
-
-
 def encode_str_list(str_list):
-    return list(map(encode_str, str_list))
-
-
-class NVRTCException(Exception):
-    """
-    Exception wrapper for NVRTC error codes.
-    """
-    def __init__(self, msg):
-        Exception.__init__(self)
-        self._msg = msg
-
-    def __str__(self):
-        return 'NVRTC Error: %s' % self._msg
-
-    def __repr__(self):
-        return str(self)
+    return [s for s in str_list]
 
 
 class NVRTCInterface(object):
@@ -155,15 +126,6 @@ class NVRTCInterface(object):
         ]
         self._lib.nvrtcVersion.restype = c_int
 
-    def _throw_on_error(self, code):
-        """
-        Raises an NVRTCException is the given code is not NVRTC_SUCCESS.
-        """
-        if code == NVRTC_SUCCESS:
-            return
-        else:
-            raise NVRTCException(self.nvrtcGetErrorString(code))
-
     def nvrtcCreateProgram(self, src, name, num_headers, headers,
                            include_names):
         """
@@ -175,8 +137,8 @@ class NVRTCInterface(object):
         include_names_array = (c_char_p * len(include_names))()
         include_names_array[:] = encode_str_list(include_names)
         code = self._lib.nvrtcCreateProgram(byref(res),
-                                            c_char_p(encode_str(src)),
-                                            c_char_p(encode_str(name)),
+                                            c_char_p(src),
+                                            c_char_p(name),
                                             len(headers),
                                             headers_array, include_names_array)
 
@@ -239,7 +201,8 @@ class NVRTCInterface(object):
 
     def __str__(self):
         code, major, minor = self.nvrtcVersion()
-        return 'NVRTC Interface (Version: %d.%d)' % (major, minor)
+        return 'NVRTC Interface (Version: %d.%d, Status: %s)' % (
+            major, minor, nvrtcResult(code).name)
 
     def __repr__(self):
         return str(self)
