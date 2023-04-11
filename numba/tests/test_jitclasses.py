@@ -1922,8 +1922,13 @@ def f(x, y):
             jit_ops_defined = JitOperatorsDefined(test_value[0])
             jit_ops_not_defined = JitNoOperatorsDefined(test_value[1])
             
-            for obj in [py_ops_defined, py_ops_not_defined, jit_ops_defined, jit_ops_not_defined]
-                obj.x   # I haven't found a good way to remove "local variable 'XXX' is assigned to but never used"
+            for obj in [
+                py_ops_defined, py_ops_not_defined, 
+                jit_ops_defined, jit_ops_not_defined
+            ]:
+                obj.x   
+                # I haven't found a good way to remove 
+                # "local variable 'XXX' is assigned to but never used"
 
             for op in test_op:
                 if not ("array" in str(test_type)):
