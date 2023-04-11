@@ -1874,7 +1874,7 @@ def f(x, y):
 
             def __rtruediv__(self, other):
                 return other.x / self.x
- 
+
             def __rfloordiv__(self, other):
                 return other.x // self.x
 
@@ -1906,9 +1906,12 @@ def f(x, y):
         float_op = ["+", "-", "*", "**", "/", "//", "%"]
         int_op = [*float_op, "<<", ">>" , "&", "^", "|"]
 
-        for test_type, test_op, test_value in [(int32, int_op, (2, 4)),
-                                               (float64, float_op, (2., 4.)),
-                                               (float64[::1], float_op, (np.array([1., 2., 4.]), np.array([20., -24., 1.])))]:
+        for test_type, test_op, test_value in [
+            (int32, int_op, (2, 4)),
+            (float64, float_op, (2., 4.)),
+            (float64[::1], float_op, 
+                (np.array([1., 2., 4.]), np.array([20., -24., 1.])))
+        ]:
             spec = {"x": test_type}
             JitOperatorsDefined = jitclass(OperatorsDefined, spec)
             JitNoOperatorsDefined = jitclass(NoOperatorsDefined, spec)
@@ -1918,14 +1921,21 @@ def f(x, y):
 
             jit_ops_defined = JitOperatorsDefined(test_value[0])
             jit_ops_not_defined = JitNoOperatorsDefined(test_value[1])
+            
+            for obj in [py_ops_defined, py_ops_not_defined, jit_ops_defined, jit_ops_not_defined]
+                obj.x   # I haven't found a good way to remove "local variable 'XXX' is assigned to but never used"
 
             for op in test_op:
                 if not ("array" in str(test_type)):
-                    self.assertEqual(eval(f"py_ops_not_defined {op} py_ops_defined"),
-                                     eval(f"jit_ops_not_defined {op} jit_ops_defined"))
+                    self.assertEqual(
+                        eval(f"py_ops_not_defined {op} py_ops_defined"),
+                        eval(f"jit_ops_not_defined {op} jit_ops_defined")
+                    )
                 else:
-                    self.assertTupleEqual(tuple(eval(f"py_ops_not_defined {op} py_ops_defined")),
-                                          tuple(eval(f"jit_ops_not_defined {op} jit_ops_defined")))
+                    self.assertTupleEqual(
+                        tuple(eval(f"py_ops_not_defined {op} py_ops_defined")),
+                        tuple(eval(f"jit_ops_not_defined {op} jit_ops_defined"))
+                    )
 
     def test_implicit_hash_compiles(self):
         # Ensure that classes with __hash__ implicitly defined as None due to
