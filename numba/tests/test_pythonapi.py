@@ -23,6 +23,7 @@ def PyBytes_AsString(uni):
     # PyBytes_AsString function with PyBytes object as argument
     return _pyapi_bytes_as_string(uni._data, uni._length)
 
+
 @intrinsic
 def _pyapi_bytes_as_string_and_size(typingctx, csrc, size):
     # return a tuple containing the c-string and size
@@ -47,6 +48,7 @@ def _pyapi_bytes_as_string_and_size(typingctx, csrc, size):
 def PyBytes_AsStringAndSize(uni):
     return _pyapi_bytes_as_string_and_size(uni._data, uni._length)
 
+
 class TestPythonAPI(unittest.TestCase):
 
     def test_PyBytes_AsString(self):
@@ -62,7 +64,6 @@ class TestPythonAPI(unittest.TestCase):
         # bytes object
         self.assertEqual(obj, b'hello')
 
-
     def test_PyBytes_AsStringAndSize(self):
         cfunc = jit(nopython=True)(PyBytes_AsStringAndSize)
         tup = cfunc('hello\x00world')  # returns a tuple: cstring and its size
@@ -75,6 +76,7 @@ class TestPythonAPI(unittest.TestCase):
         # Use the cstring created from bytes_from_string_and_size to create
         # a python bytes object
         self.assertEqual(obj, b'hello\x00world')
+
 
 if __name__ == '__main__':
     unittest.main()
