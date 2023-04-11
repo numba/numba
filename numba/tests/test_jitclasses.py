@@ -1909,7 +1909,7 @@ def f(x, y):
         for test_type, test_op, test_value in [
             (int32, int_op, (2, 4)),
             (float64, float_op, (2., 4.)),
-            (float64[::1], float_op, 
+            (float64[::1], float_op,
                 (np.array([1., 2., 4.]), np.array([20., -24., 1.])))
         ]:
             spec = {"x": test_type}
@@ -1921,13 +1921,13 @@ def f(x, y):
 
             jit_ops_defined = JitOperatorsDefined(test_value[0])
             jit_ops_not_defined = JitNoOperatorsDefined(test_value[1])
-            
+
             for obj in [
-                py_ops_defined, py_ops_not_defined, 
+                py_ops_defined, py_ops_not_defined,
                 jit_ops_defined, jit_ops_not_defined
             ]:
-                obj.x   
-                # I haven't found a good way to remove 
+                obj.x
+                # I haven't found a good way to remove
                 # "local variable 'XXX' is assigned to but never used"
 
             for op in test_op:
