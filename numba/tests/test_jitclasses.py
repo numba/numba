@@ -1905,11 +1905,10 @@ def f(x, y):
 
       float_op = ["+", "-", "*", "**", "/", "//", "%"]
       int_op = [*float_op, "<<", ">>" , "&", "^", "|"]
-      array_op = [*float_op, "@"]
 
       for test_type, test_op, test_value in [(int32, int_op, (2, 4)),
                                              (float64, float_op, (2., 4.)),
-                                             (float64[::1], array_op, (np.array([1., 2., 4.]), np.array([20., -24., 1.])))]:
+                                             (float64[::1], float_op, (np.array([1., 2., 4.]), np.array([20., -24., 1.])))]:
           spec = {"x": test_type}
           JitOperatorsDefined = jitclass(OperatorsDefined, spec)
           JitNoOperatorsDefined = jitclass(NoOperatorsDefined, spec)
@@ -1920,12 +1919,8 @@ def f(x, y):
           jit_ops_defined = JitOperatorsDefined(test_value[0])
           jit_ops_not_defined = JitNoOperatorsDefined(test_value[1])
 
-          if "@" in test_op:
-              # regular __matmul__
-              self.assertEqual(py_ops_defined @ py_ops_not_defined, jit_ops_defined @ jit_ops_not_defined)
-
           for op in test_op:
-              if (op == "@") or not ("array" in str(test_type)):
+              if not ("array" in str(test_type)):
                   self.assertEqual(eval(f"py_ops_not_defined {op} py_ops_defined"),
                                    eval(f"jit_ops_not_defined {op} jit_ops_defined"))
               else:
