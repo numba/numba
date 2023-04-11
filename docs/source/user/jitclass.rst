@@ -227,7 +227,6 @@ The following dunder methods may be defined for jitclasses:
 * ``__add__``
 * ``__floordiv__``
 * ``__lshift__``
-* ``__matmul__``
 * ``__mod__``
 * ``__mul__``
 * ``__neg__``
@@ -254,7 +253,6 @@ The following dunder methods may be defined for jitclasses:
 * ``__radd__``
 * ``__rfloordiv__``
 * ``__rlshift__``
-* ``__rmatmul__``
 * ``__rmod__``
 * ``__rmul__``
 * ``__rpow__``
