@@ -393,6 +393,10 @@ class TestCudaMath(CUDATestCase):
         self.unary_template_float16(math_sqrt, np.sqrt)
         self.unary_template_float16(math_ceil, np.ceil)
         self.unary_template_float16(math_floor, np.floor)
+
+    @skip_on_cudasim("numpy does not support trunc for float16")
+    @skip_unless_cc_53
+    def test_math_fp16_trunc(self):
         self.unary_template_float16(math_trunc, np.trunc)
 
     #---------------------------------------------------------------------------
