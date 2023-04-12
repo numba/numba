@@ -25,6 +25,8 @@ py2_string_type = Opaque('str')
 unicode_type = UnicodeType('unicode_type')
 string = unicode_type
 unknown = Dummy('unknown')
+npy_rng = NumPyRandomGeneratorType('rng')
+npy_bitgen = NumPyRandomBitGeneratorType('bitgen')
 
 code_type = Opaque('code')
 pyfunc_type = Opaque('pyfunc')

@@ -220,8 +220,11 @@ class _EnvReloader(object):
         # (up to and including IR generation)
         DEBUG_FRONTEND = _readenv("NUMBA_DEBUG_FRONTEND", int, 0)
 
-        # Enable debug prints in nrtdynmod
+        # Enable debug prints in nrtdynmod and use of "safe" API functions
         DEBUG_NRT = _readenv("NUMBA_DEBUG_NRT", int, 0)
+
+        # Enable NRT statistics counters
+        NRT_STATS = _readenv("NUMBA_NRT_STATS", int, 0)
 
         # How many recently deserialized functions to retain regardless
         # of external references
@@ -302,8 +305,9 @@ class _EnvReloader(object):
         LOOP_VECTORIZE = _readenv("NUMBA_LOOP_VECTORIZE", int,
                                   not (IS_WIN32 and IS_32BITS))
 
-        # Switch on  superword-level parallelism vectorization, default is on.
-        SLP_VECTORIZE = _readenv("NUMBA_SLP_VECTORIZE", int, 1)
+        # Enable superword-level parallelism vectorization, default is off
+        # since #8705 (miscompilation).
+        SLP_VECTORIZE = _readenv("NUMBA_SLP_VECTORIZE", int, 0)
 
         # Force dump of generated assembly
         DUMP_ASSEMBLY = _readenv("NUMBA_DUMP_ASSEMBLY", int, DEBUG)
@@ -372,7 +376,7 @@ class _EnvReloader(object):
 
         # The default compute capability to target when compiling to PTX.
         CUDA_DEFAULT_PTX_CC = _readenv("NUMBA_CUDA_DEFAULT_PTX_CC", _parse_cc,
-                                       (5, 3))
+                                       (5, 0))
 
         # Disable CUDA support
         DISABLE_CUDA = _readenv("NUMBA_DISABLE_CUDA",
@@ -415,6 +419,9 @@ class _EnvReloader(object):
         # Whether the default stream is the per-thread default stream
         CUDA_PER_THREAD_DEFAULT_STREAM = _readenv(
             "NUMBA_CUDA_PER_THREAD_DEFAULT_STREAM", int, 0)
+
+        CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY = _readenv(
+            "NUMBA_CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY", int, 0)
 
         # Location of the CUDA include files
         if IS_WIN32:

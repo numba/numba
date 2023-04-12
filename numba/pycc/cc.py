@@ -1,6 +1,7 @@
-from distutils import dir_util, log
-from distutils.command import build_ext
-from distutils.extension import Extension
+from setuptools import distutils as dutils
+from setuptools.command import build_ext
+from setuptools.extension import Extension
+
 import os
 import shutil
 import sys
@@ -13,6 +14,8 @@ from numba.pycc.platform import Toolchain
 from numba import cext
 
 
+dir_util = dutils.dir_util
+log = dutils.log
 extension_libs = cext.get_extension_libs()
 
 
@@ -154,7 +157,7 @@ class CC(object):
         here = os.path.dirname(__file__)
         mixin_sources = self._mixin_sources[:]
         if self._use_nrt:
-            mixin_sources.append('../core/runtime/nrt.c')
+            mixin_sources.append('../core/runtime/nrt.cpp')
         return [os.path.join(here, f) for f in mixin_sources]
 
     def _get_mixin_defines(self):

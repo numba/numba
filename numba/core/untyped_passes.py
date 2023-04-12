@@ -6,14 +6,14 @@ import warnings
 from numba.core.compiler_machinery import (FunctionPass, AnalysisPass,
                                            SSACompliantMixin, register_pass)
 from numba.core import (errors, types, ir, bytecode, postproc, rewrites, config,
-                        transforms)
+                        transforms, consts)
 from numba.misc.special import literal_unroll
 from numba.core.analysis import (dead_branch_prune, rewrite_semantic_constants,
                                  find_literally_calls, compute_cfg_from_blocks,
                                  compute_use_defs)
 from numba.core.ir_utils import (guard, resolve_func_from_module, simplify_CFG,
                                  GuardException, convert_code_obj_to_function,
-                                 mk_unique_var, build_definitions,
+                                 build_definitions,
                                  replace_var_names, get_name_var_table,
                                  compile_to_numba_ir, get_definition,
                                  find_max_label, rename_labels,
@@ -866,7 +866,9 @@ class MixedContainerUnroller(FunctionPass):
                         if (isinstance(stmt.value, ir.Expr) and
                                 stmt.value.op == "typed_getitem"):
                             if isinstance(branch_ty, types.Literal):
-                                new_const_name = mk_unique_var("branch_const")
+                                scope = switch_ir.blocks[lbl].scope
+                                new_const_name = scope.redefine(
+                                    "branch_const", stmt.loc).name
                                 new_const_var = ir.Var(
                                     blk.scope, new_const_name, stmt.loc)
                                 new_const_val = ir.Const(
@@ -903,7 +905,9 @@ class MixedContainerUnroller(FunctionPass):
 
             new_var_dict = {}
             for name, var in var_table.items():
-                new_var_dict[name] = mk_unique_var(name)
+                scope = switch_ir.blocks[lbl].scope
+                new_var_dict[name] = scope.define(
+                    f"v{branch_ty}_{name}", var.loc).name
             replace_var_names(loop_blocks, new_var_dict)
 
             # clobber the sentinel body and then stuff in the rest
@@ -1043,8 +1047,8 @@ class MixedContainerUnroller(FunctionPass):
             # scan loop header
             iternexts = [_ for _ in
                          func_ir.blocks[loop.header].find_exprs('iternext')]
-            if len(iternexts) != 1:
-                return False
+            if len(iternexts) != 1: # needs to be an single iternext driven loop
+                continue
             for iternext in iternexts:
                 # Walk the canonicalised loop structure and check it
                 # Check loop form range(literal_unroll(container)))
@@ -1281,7 +1285,7 @@ class MixedContainerUnroller(FunctionPass):
         # 3. No multiple mix-tuple use
 
         # keep running the transform loop until it reports no more changes
-        while(True):
+        while (True):
             stat = self.apply_transform(state)
             mutated |= stat
             if not stat:
@@ -1358,14 +1362,11 @@ class IterLoopCanonicalization(FunctionPass):
         def get_range(a):
             return range(len(a))
 
-        def tokenise(x):
-            return mk_unique_var("CANONICALISER_%s" % x)
-
         iternext = [_ for _ in
                     func_ir.blocks[loop.header].find_exprs('iternext')][0]
         LOC = func_ir.blocks[loop.header].loc
-        get_range_var = ir.Var(func_ir.blocks[loop.header].scope,
-                               tokenise('get_range_gbl'), LOC)
+        scope = func_ir.blocks[loop.header].scope
+        get_range_var = scope.redefine("CANONICALISER_get_range_gbl", LOC)
         get_range_global = ir.Global('get_range', get_range, LOC)
         assgn = ir.Assign(get_range_global, get_range_var, LOC)
 
@@ -1389,8 +1390,7 @@ class IterLoopCanonicalization(FunctionPass):
             raise ValueError("problem")
 
         # create a range(len(tup)) and inject it
-        call_get_range_var = ir.Var(entry_block.scope,
-                                    tokenise('call_get_range'), LOC)
+        call_get_range_var = scope.redefine('CANONICALISER_call_get_range', LOC)
         make_call = ir.Expr.call(get_range_var, (stmt.value.value,), (), LOC)
         assgn_call = ir.Assign(make_call, call_get_range_var, LOC)
         entry_block.body.insert(idx, assgn_call)
@@ -1480,6 +1480,8 @@ class PropagateLiterals(FunctionPass):
         typemap = state.typemap
         flags = state.flags
 
+        accepted_functions = ('isinstance', 'hasattr')
+
         if not hasattr(func_ir, '_definitions') \
                 and not flags.enable_ssa:
             func_ir._definitions = build_definitions(func_ir.blocks)
@@ -1529,7 +1531,8 @@ class PropagateLiterals(FunctionPass):
                     fn = guard(get_definition, func_ir, value.func.name)
                     if fn is None:
                         continue
-                    if not (isinstance(fn, ir.Global) and fn.name == 'isinstance'):  # noqa: E501
+                    if not (isinstance(fn, ir.Global) and fn.name in
+                            accepted_functions):  # noqa: E501
                         continue
 
                     for arg in value.args:
@@ -1537,7 +1540,7 @@ class PropagateLiterals(FunctionPass):
                         iv = func_ir._definitions[arg.name]
                         assert len(iv) == 1  # SSA!
                         if isinstance(iv[0], ir.Expr) and iv[0].op == 'phi':
-                            msg = ('isinstance() cannot determine the '
+                            msg = (f'{fn.name}() cannot determine the '
                                    f'type of variable "{arg.unversioned_name}" '
                                    'due to a branch.')
                             raise errors.NumbaTypeError(msg, loc=assign.loc)
@@ -1582,7 +1585,8 @@ class LiteralPropagationSubPipelinePass(FunctionPass):
         for blk in func_ir.blocks.values():
             for asgn in blk.find_insts(ir.Assign):
                 if isinstance(asgn.value, (ir.Global, ir.FreeVar)):
-                    if asgn.value.value is isinstance:
+                    value = asgn.value.value
+                    if value is isinstance or value is hasattr:
                         found = True
                         break
             if found:
@@ -1720,3 +1724,43 @@ class ReconstructSSA(FunctionPass):
                 typ = locals_dict[parent]
                 for derived in redefs:
                     locals_dict[derived] = typ
+
+
+@register_pass(mutates_CFG=False, analysis_only=False)
+class RewriteDynamicRaises(FunctionPass):
+    """Replace existing raise statements by dynamic raises in Numba IR.
+    """
+    _name = "Rewrite dynamic raises"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        func_ir = state.func_ir
+        changed = False
+
+        for block in func_ir.blocks.values():
+            for raise_ in block.find_insts((ir.Raise, ir.TryRaise)):
+                call_inst = guard(get_definition, func_ir, raise_.exception)
+                if call_inst is None:
+                    continue
+                exc_type = func_ir.infer_constant(call_inst.func.name)
+                exc_args = []
+                for exc_arg in call_inst.args:
+                    try:
+                        const = func_ir.infer_constant(exc_arg)
+                        exc_args.append(const)
+                    except consts.ConstantInferenceError:
+                        exc_args.append(exc_arg)
+                loc = raise_.loc
+
+                cls = {
+                    ir.TryRaise: ir.DynamicTryRaise,
+                    ir.Raise: ir.DynamicRaise,
+                }[type(raise_)]
+
+                dyn_raise = cls(exc_type, tuple(exc_args), loc)
+                block.insert_after(dyn_raise, raise_)
+                block.remove(raise_)
+                changed = True
+        return changed

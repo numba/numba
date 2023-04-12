@@ -23,7 +23,7 @@ PyObject *
 ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args)
 {
     int nin, nout;
-    int nfuncs, ntypes, ndata;
+    int nfuncs, ntypes, ndata, n_writable_args;
     PyObject *func_list;
     PyObject *type_list;
     PyObject *data_list;
@@ -35,20 +35,22 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args)
     const char *name = NULL, *doc = NULL;
     char *signature = NULL;
     int identity;
+    PyObject *writable_args_tuple = NULL;
 
-    int i, j;
+    int i, j, idx, success;
     int custom_dtype = 0;
     PyUFuncGenericFunction *funcs;
     int *types;
     void **data;
     PyUFuncObject *ufunc;
 
-    if (!PyArg_ParseTuple(args, "OOO!O!iiOOi|s",
+    if (!PyArg_ParseTuple(args, "OOO!O!iiOOi|sO!",
                           &pyname, &pydoc,
                           &PyList_Type, &func_list,
                           &PyList_Type, &type_list,
                           &nin, &nout, &data_list,
-                          &object, &identity, &signature)) {
+                          &object, &identity, &signature,
+                          &PyTuple_Type, &writable_args_tuple)) {
         return NULL;
     }
     if (get_string(pyname, &name, "name should be str or None"))
@@ -203,6 +205,10 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args)
         data = NULL;
     }
 
+    for (idx = 0; idx < nout; idx++) {
+        ufunc->op_flags[idx + nin] |= NPY_ITER_READWRITE | NPY_ITER_UPDATEIFCOPY | NPY_ITER_ALLOCATE;
+    }
+
     /* Create the sentinel object to clean up dynamically-allocated fields
        when the ufunc is destroyed. */
     ufunc->obj = cleaner_new(ufunc, object);
@@ -212,6 +218,33 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args)
         PyArray_free(data);
         Py_DECREF(ufunc);
         return NULL;
+    }
+
+    /* update op_flags */
+    if (writable_args_tuple != NULL) {
+        n_writable_args = PyTuple_Size(writable_args_tuple);
+        if (n_writable_args > nin) {
+                PyErr_SetString(PyExc_ValueError, "Number of writable_args must be <= nin");
+                Py_DECREF(ufunc);
+                return NULL;
+        }
+        for (i = 0; i < n_writable_args; ++i) {
+            data_obj = PyTuple_GET_ITEM(writable_args_tuple, i);
+            success = 0;
+            if (PyLong_Check(data_obj)) {
+                j = PyLong_AsLong(data_obj);
+                if ((j >= 0) && (j < nin)) {
+                    ufunc->op_flags[j] |= NPY_ITER_READWRITE | NPY_ITER_UPDATEIFCOPY;
+                    success = 1;
+                }
+            }
+            if (!success) {
+                PyErr_SetString(PyExc_ValueError,
+                                "All values in writable_args must be integers between 0 and nin - 1");
+                Py_DECREF(ufunc);
+                return NULL;
+            }
+        }
     }
 
     return (PyObject *) ufunc;

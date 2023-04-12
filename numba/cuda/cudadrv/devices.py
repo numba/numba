@@ -4,7 +4,7 @@ Expose each GPU devices directly.
 This module implements a API that is like the "CUDA runtime" context manager
 for managing CUDA context stack and clean up.  It relies on thread-local globals
 to separate the context stack management of each thread. Contexts are also
-sharable among threads.  Only the main thread can destroy Contexts.
+shareable among threads.  Only the main thread can destroy Contexts.
 
 Note:
 - This module must be imported by the main-thread.

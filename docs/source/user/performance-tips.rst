@@ -193,19 +193,26 @@ Intel SVML
 
 Intel provides a short vector math library (SVML) that contains a large number
 of optimised transcendental functions available for use as compiler
-intrinsics. If the ``icc_rt`` package is present in the environment (or the SVML
-libraries are simply locatable!) then Numba automatically configures the LLVM
-back end to use the SVML intrinsic functions where ever possible. SVML provides
-both high and low accuracy versions of each intrinsic and the version that is
-used is determined through the use of the ``fastmath`` keyword. The default is
-to use high accuracy which is accurate to within ``1 ULP``, however if 
-``fastmath`` is set to ``True`` then the lower accuracy versions of the
-intrinsics are used (answers to within ``4 ULP``).
+intrinsics. If the ``intel-cmplr-lib-rt`` package is present in the
+environment (or the SVML libraries are simply locatable!) then Numba
+automatically configures the LLVM back end to use the SVML intrinsic functions
+where ever possible. SVML provides both high and low accuracy versions of each
+intrinsic and the version that is used is determined through the use of the
+``fastmath`` keyword. The default is to use high accuracy which is accurate to
+within ``1 ULP``, however if ``fastmath`` is set to ``True`` then the lower
+accuracy versions of the intrinsics are used (answers to within ``4 ULP``).
 
 
 First obtain SVML, using conda for example::
 
-    conda install -c numba icc_rt
+    conda install intel-cmplr-lib-rt
+
+.. note::
+    The SVML library was previously provided through the ``icc_rt`` conda
+    package. The ``icc_rt`` package has since become a meta-package and as of
+    version ``2021.1.1`` it has ``intel-cmplr-lib-rt`` amongst other packages as
+    a dependency. Installing the recommended ``intel-cmplr-lib-rt`` package
+    directly results in fewer installed packages.
 
 Rerunning the identity function example ``ident_np`` from above with various
 combinations of options to ``@njit`` and with/without SVML yields the following

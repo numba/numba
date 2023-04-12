@@ -150,6 +150,8 @@ Note that Numba's CI and the conda recipe for Linux build with the ``--werror``
 and ``--wall`` flags, so any contributions that change the CPython extensions
 should be tested with these flags too.
 
+.. _running-tests:
+
 Running tests
 '''''''''''''
 
@@ -252,6 +254,27 @@ A code review should try to assess the following criteria:
 * docstrings, comments
 * test coverage
 
+
+Policy on large scale changes to code formatting
+''''''''''''''''''''''''''''''''''''''''''''''''
+
+Please note that pull requests making large scale changes to format the code
+base are in general not accepted. Such changes often increase the likelihood of
+merge conflicts for other pull requests, which inevitably take time and
+resources to resolve. They also require a lot of effort to check as Numba aims
+to compile code that is valid even if it is not ideal. For example, in a test of
+``operator.eq``::
+
+    if x == None: # Valid code, even if the recommended form is `if x is None:`
+
+This tests Numba's compilation of comparison with ``None``, and therefore
+should not be changed, even though most style checkers will suggest it should.
+
+This policy has been adopted by the core developers so as to try and make best
+use of limited resources. Whilst it would be great to have an extremely tidy
+code base, priority is given to fixes and features over code formatting changes.
+
+
 Coding conventions
 ''''''''''''''''''
 
@@ -289,7 +312,7 @@ circumstances should ``type: ignore`` comments be used.
 
 If you are contributing a new feature, we encourage you to use type hints, even if the file is not currently in the
 checklist. If you want to contribute type hints to enable a new file to be in the checklist, please add the file to the
-``files`` variable in ``mypy.ini``, and decide what level of compliance you are targetting. Level 3 is basic static
+``files`` variable in ``mypy.ini``, and decide what level of compliance you are targeting. Level 3 is basic static
 checks, while levels 2 and 1 represent stricter checking. The levels are described in details in ``mypy.ini``.
 
 There is potential for confusion between the Numba module ``typing`` and Python built-in module ``typing`` used for type

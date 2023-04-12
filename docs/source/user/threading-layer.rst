@@ -276,6 +276,18 @@ the parallel code will only execute on 2 threads. However, we can later call
 size. And we do not have to worry about setting it before Numba gets imported.
 It only needs to be called before the parallel function is run.
 
+.. _numba-threading-layer-thread-id:
+
+Getting a Thread ID
+-------------------
+
+In some cases it may be beneficial to have access to a unique identifier for the
+current thread that is executing a parallel region in Numba. For that purpose,
+Numba provides the :func:`numba.get_thread_id` function. This function is the
+corollary of OpenMP's function ``omp_get_thread_num`` and returns an integer
+between 0 (inclusive) and the number of configured threads as described above
+(exclusive).
+
 API Reference
 ~~~~~~~~~~~~~
 
@@ -297,3 +309,5 @@ API Reference
 .. autofunction:: numba.set_num_threads
 
 .. autofunction:: numba.get_num_threads
+
+.. autofunction:: numba.get_thread_id

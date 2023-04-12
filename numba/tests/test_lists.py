@@ -597,6 +597,20 @@ class TestLists(MemoryLeakMixin, TestCase):
             for start, stop in itertools.product(indices, indices):
                 self.check_index_result(pyfunc, cfunc, (16, v, start, stop))
 
+    def test_index_exception1(self):
+        pyfunc = list_index3
+        cfunc = jit(nopython=True)(pyfunc)
+        msg = 'arg "start" must be an Integer.'
+        with self.assertRaisesRegex(errors.TypingError, msg):
+            cfunc(10, 0, 'invalid', 5)
+
+    def test_index_exception2(self):
+        pyfunc = list_index3
+        cfunc = jit(nopython=True)(pyfunc)
+        msg = 'arg "stop" must be an Integer.'
+        with self.assertRaisesRegex(errors.TypingError, msg):
+            cfunc(10, 0, 0, 'invalid')
+
     def test_remove(self):
         pyfunc = list_remove
         cfunc = jit(nopython=True)(pyfunc)
@@ -868,7 +882,7 @@ class TestListReflection(MemoryLeakMixin, TestCase):
         got = cfunc(clist, clist)
         self.assertPreciseEqual(expected, got)
         self.assertPreciseEqual(pylist, clist)
-        self.assertPreciseEqual(sys.getrefcount(pylist), sys.getrefcount(clist))
+        self.assertRefCountEqual(pylist, clist)
 
     def test_reflect_clean(self):
         """

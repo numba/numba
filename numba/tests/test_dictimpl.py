@@ -84,8 +84,8 @@ class Dict(object):
 
     def dict_new_minsize(self, key_size, val_size):
         dp = ctypes.c_void_p()
-        status = self.tc.numba_dict_new_minsize(
-            ctypes.byref(dp), key_size, val_size,
+        status = self.tc.numba_dict_new_sized(
+            ctypes.byref(dp), 0, key_size, val_size,
         )
         self.tc.assertEqual(status, 0)
         return dp
@@ -224,16 +224,18 @@ class TestDictImpl(TestCase):
             'test_dict',
             ctypes.c_int,
         )
-        # numba_dict_new_minsize(
+        # numba_dict_new_sized(
         #    NB_Dict **out,
+        #    Py_ssize_t n_keys,
         #    Py_ssize_t key_size,
         #    Py_ssize_t val_size
         # )
-        self.numba_dict_new_minsize = wrap(
-            'dict_new_minsize',
+        self.numba_dict_new_sized = wrap(
+            'dict_new_sized',
             ctypes.c_int,
             [
                 ctypes.POINTER(dict_t),  # out
+                ctypes.c_ssize_t,        # n_keys
                 ctypes.c_ssize_t,        # key_size
                 ctypes.c_ssize_t,        # val_size
             ],
@@ -647,5 +649,5 @@ class TestDictImpl(TestCase):
         set_parametrized_data._reset_overloads()
         set_parametrized_data.targetctx.init()
 
-        for ii in range(50):  # <- somtimes works a few times
+        for ii in range(50):  # <- sometimes works a few times
             self.assertIsNone(set_parametrized_data(x, y))

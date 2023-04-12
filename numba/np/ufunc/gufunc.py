@@ -16,7 +16,7 @@ class GUFunc(serialize.ReduceMixin):
     """
 
     def __init__(self, py_func, signature, identity=None, cache=None,
-                 is_dynamic=False, targetoptions={}):
+                 is_dynamic=False, targetoptions={}, writable_args=()):
         self.ufunc = None
         self._frozen = False
         self._is_dynamic = is_dynamic
@@ -26,7 +26,7 @@ class GUFunc(serialize.ReduceMixin):
         # is a property of GUFunc. Thus, we hold a reference to a GUFuncBuilder
         # object here
         self.gufunc_builder = GUFuncBuilder(
-            py_func, signature, identity, cache, targetoptions)
+            py_func, signature, identity, cache, targetoptions, writable_args)
         self.__name__ = self.gufunc_builder.py_func.__name__
         functools.update_wrapper(self, py_func)
 
@@ -39,6 +39,7 @@ class GUFunc(serialize.ReduceMixin):
             cache=gb.cache,
             is_dynamic=self._is_dynamic,
             targetoptions=gb.targetoptions,
+            writable_args=gb.writable_args,
             typesigs=gb._sigs,
             frozen=self._frozen,
         )
@@ -46,10 +47,10 @@ class GUFunc(serialize.ReduceMixin):
 
     @classmethod
     def _rebuild(cls, py_func, signature, identity, cache, is_dynamic,
-                 targetoptions, typesigs, frozen):
+                 targetoptions, writable_args, typesigs, frozen):
         self = cls(py_func=py_func, signature=signature, identity=identity,
                    cache=cache, is_dynamic=is_dynamic,
-                   targetoptions=targetoptions)
+                   targetoptions=targetoptions, writable_args=writable_args)
         for sig in typesigs:
             self.add(sig)
         self.build_ufunc()

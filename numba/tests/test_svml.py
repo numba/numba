@@ -19,7 +19,7 @@ import unittest
 needs_svml = unittest.skipUnless(config.USING_SVML,
                                  "SVML tests need SVML to be present")
 
-# a map of float64 vector lenghs with corresponding CPU architecture
+# a map of float64 vector lengths with corresponding CPU architecture
 vlen2cpu = {2: 'nehalem', 4: 'haswell', 8: 'skylake-avx512'}
 # force LLVM to use AVX512 registers for vectorization
 # https://reviews.llvm.org/D67259
@@ -73,13 +73,12 @@ svml_funcs = {
     "round":      [],  # round],
     "sind":       [],
     "sinh":    [np.sinh, math.sinh],
-    "sqrt":    [np.sqrt, math.sqrt],
     "tan":     [np.tan, math.tan],
     "tanh":    [np.tanh, math.tanh],
     "trunc":      [],  # np.trunc, math.trunc],
 }
 # TODO: these functions are not vectorizable with complex types
-complex_funcs_exclude = ["sqrt", "tan", "log10", "expm1", "log1p", "tanh", "log"]
+complex_funcs_exclude = ["tan", "log10", "expm1", "log1p", "tanh", "log"]
 
 # remove untested entries
 svml_funcs = {k: v for k, v in svml_funcs.items() if len(v) > 0}
@@ -130,15 +129,6 @@ def func_patterns(func, args, res, dtype, mode, vlen, fastmath, pad=' '*8):
                      #                     generating the failsafe scalar paths
         if vlen != 8 and (is_f32 or dtype == 'int32'):  # Issue #3016
             avoids += ['%zmm', '__svml_%s%d%s,' % (f, v*2, prec_suff)]
-    # special handling
-    if func == 'sqrt':
-        if mode == "scalar":
-            contains = ['sqrts']
-            avoids = [scalar_func, svml_func]  # LLVM uses CPU instruction
-        elif vlen == 8:
-            contains = ['vsqrtp']
-            avoids = [scalar_func, svml_func]  # LLVM uses CPU instruction
-        # else expect use of SVML for older architectures
     return body, contains, avoids
 
 
@@ -207,7 +197,7 @@ class TestSVMLGeneration(TestCase):
             fn, contains, avoids = combo_svml_usecase(dtype, mode, vlen,
                                                       flags['fastmath'],
                                                       flags['name'])
-            # look for specific patters in the asm for a given target
+            # look for specific patterns in the asm for a given target
             with override_env_config('NUMBA_CPU_NAME', vlen2cpu[vlen]), \
                  override_env_config('NUMBA_CPU_FEATURES', vlen2cpu_features[vlen]):
                 # recompile for overridden CPU
@@ -355,7 +345,7 @@ class TestSVML(TestCase):
         np.testing.assert_almost_equal(jitstd_result, py_expected, **kwargs)
         np.testing.assert_almost_equal(jitfast_result, py_expected, **kwargs)
 
-        # look for specific patters in the asm for a given target
+        # look for specific patterns in the asm for a given target
         with override_env_config('NUMBA_CPU_NAME', cpu_name), \
              override_env_config('NUMBA_CPU_FEATURES', cpu_features):
             # recompile for overridden CPU

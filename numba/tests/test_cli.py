@@ -272,7 +272,7 @@ class TestGDBCLIInfoBrokenGdbs(TestCase):
         stdout, stderr = run_cmd(cmdline, env=env)
         self.assertIn("Testing gdb binary failed", stdout)
         # NOTE: should 'python' ever add support for the same flags as the gdb
-        # commands used in the infomation gathering code in `numba_gdbinfo`
+        # commands used in the information gathering code in `numba_gdbinfo`
         # this test will fail, it's reasonably unlikely.
         self.assertIn("Unknown option", stdout)
 

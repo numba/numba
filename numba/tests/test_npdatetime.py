@@ -85,6 +85,9 @@ def min_usecase(x, y):
 def max_usecase(x, y):
     return max(x, y)
 
+def int_cast_usecase(x):
+    return int(x)
+
 def make_add_constant(const):
     def add_constant(x):
         return x + const
@@ -385,12 +388,11 @@ class TestTimedeltaArithmetic(TestCase):
             expected_val = expected
             not_expected_val = not expected
 
-            if numpy_version >= (1, 16):
-                # since np 1.16 all NaT == comparisons are False, including
-                # NaT==NaT, conversely != is True
-                if np.isnat(a) or np.isnat(a):
-                    expected_val = False
-                    not_expected_val = True
+            # all NaT comparisons are False, including NaT==NaT,
+            # conversely != is True
+            if np.isnat(a) or np.isnat(a):
+                expected_val = False
+                not_expected_val = True
 
             self.assertPreciseEqual(eq(a, b), expected_val)
             self.assertPreciseEqual(eq(b, a), expected_val)
@@ -421,12 +423,11 @@ class TestTimedeltaArithmetic(TestCase):
             expected_val = expected
             not_expected_val = not expected
 
-            if numpy_version >= (1, 16):
-                # since np 1.16 all NaT magnitude comparisons including equality
-                # are False (as NaT == NaT is now False)
-                if np.isnat(a) or np.isnat(a):
-                    expected_val = False
-                    not_expected_val = False
+            # since np 1.16 all NaT magnitude comparisons including equality
+            # are False (as NaT == NaT is now False)
+            if np.isnat(a) or np.isnat(a):
+                expected_val = False
+                not_expected_val = False
 
             self.assertPreciseEqual(lt(a, b), expected_val)
             self.assertPreciseEqual(ge(a, b), not_expected_val)
@@ -461,12 +462,11 @@ class TestTimedeltaArithmetic(TestCase):
             expected_val = expected
             not_expected_val = not expected
 
-            if numpy_version >= (1, 16):
-                # since np 1.16 all NaT magnitude comparisons including equality
-                # are False (as NaT == NaT is now False)
-                if np.isnat(a) or np.isnat(a):
-                    expected_val = False
-                    not_expected_val = False
+            # since np 1.16 all NaT magnitude comparisons including equality
+            # are False (as NaT == NaT is now False)
+            if np.isnat(a) or np.isnat(a):
+                expected_val = False
+                not_expected_val = False
             self.assertPreciseEqual(le(a, b), expected_val)
             self.assertPreciseEqual(gt(a, b), not_expected_val)
 
@@ -572,6 +572,27 @@ class TestTimedeltaArithmetic(TestCase):
 class TestTimedeltaArithmeticNoPython(TestTimedeltaArithmetic):
 
     jitargs = dict(nopython=True)
+
+    def test_int_cast(self):
+        f = self.jit(int_cast_usecase)
+        def check(a):
+            self.assertPreciseEqual(f(a), int(a))
+
+        for (delta, unit) in ((3, 'ns'), (-4, 'ns'), (30000, 'ns'),
+                        (-40000000, 'ns'), (1, 'Y')):
+            check(TD(delta, unit).astype('timedelta64[ns]'))
+
+        for time in ('2014', '2016', '2000', '2014-02', '2014-03', '2014-04',
+                     '2016-02', '2000-12-31', '2014-01-16', '2014-01-05',
+                     '2014-01-07', '2014-01-06', '2014-02-02', '2014-02-27',
+                     '2014-02-16', '2014-03-01', '2000-01-01T01:02:03.002Z',
+                     '2000-01-01T01:02:03Z'):
+            check(DT(time).astype('datetime64[ns]'))
+
+        with self.assertRaises(TypingError, msg=('Only datetime64[ns] can be ' +
+                                                 'converted, but got ' +
+                                                 'datetime64[y]')):
+            f(DT('2014'))
 
 
 class TestDatetimeArithmetic(TestCase):
@@ -705,20 +726,19 @@ class TestDatetimeArithmetic(TestCase):
             expected_val = expected
             not_expected_val = not expected
 
-            if numpy_version >= (1, 16):
-                # since np 1.16 all NaT comparisons bar != are False, including
-                # NaT==NaT
-                if np.isnat(a) or np.isnat(b):
-                    expected_val = False
-                    not_expected_val = True
-                    self.assertFalse(le(a, b), (a, b))
-                    self.assertFalse(ge(a, b), (a, b))
-                    self.assertFalse(le(b, a), (a, b))
-                    self.assertFalse(ge(b, a), (a, b))
-                    self.assertFalse(lt(a, b), (a, b))
-                    self.assertFalse(gt(a, b), (a, b))
-                    self.assertFalse(lt(b, a), (a, b))
-                    self.assertFalse(gt(b, a), (a, b))
+            # since np 1.16 all NaT comparisons bar != are False, including
+            # NaT==NaT
+            if np.isnat(a) or np.isnat(b):
+                expected_val = False
+                not_expected_val = True
+                self.assertFalse(le(a, b), (a, b))
+                self.assertFalse(ge(a, b), (a, b))
+                self.assertFalse(le(b, a), (a, b))
+                self.assertFalse(ge(b, a), (a, b))
+                self.assertFalse(lt(a, b), (a, b))
+                self.assertFalse(gt(a, b), (a, b))
+                self.assertFalse(lt(b, a), (a, b))
+                self.assertFalse(gt(b, a), (a, b))
 
             with self.silence_numpy_warnings():
                 self.assertPreciseEqual(eq(a, b), expected_val, (a, b, expected))
@@ -743,12 +763,11 @@ class TestDatetimeArithmetic(TestCase):
             expected_val = expected
             not_expected_val = not expected
 
-            if numpy_version >= (1, 16):
-                # since np 1.16 all NaT magnitude comparisons including equality
-                # are False (as NaT == NaT is now False)
-                if np.isnat(a) or np.isnat(b):
-                    expected_val = False
-                    not_expected_val = False
+            # since np 1.16 all NaT magnitude comparisons including equality
+            # are False (as NaT == NaT is now False)
+            if np.isnat(a) or np.isnat(b):
+                expected_val = False
+                not_expected_val = False
 
             with self.silence_numpy_warnings():
                 lt = self.jit(lt_usecase)

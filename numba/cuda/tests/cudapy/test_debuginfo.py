@@ -69,6 +69,9 @@ class TestCudaDebugInfo(CUDATestCase):
             x[0] = 0
 
     def test_wrapper_has_debuginfo(self):
+        if not NVVM().is_nvvm70:
+            self.skipTest("debuginfo not generated for NVVM 3.4")
+
         sig = (types.int32[::1],)
 
         @cuda.jit(sig, debug=True, opt=0)
@@ -77,30 +80,14 @@ class TestCudaDebugInfo(CUDATestCase):
 
         llvm_ir = f.inspect_llvm(sig)
 
-        if NVVM().is_nvvm70:
-            # NNVM 7.0 IR attaches a debug metadata reference to the
-            # definition
-            defines = [line for line in llvm_ir.splitlines()
-                       if 'define void @"_ZN6cudapy' in line]
+        defines = [line for line in llvm_ir.splitlines()
+                   if 'define void @"_ZN6cudapy' in line]
 
-            # Make sure we only found one definition
-            self.assertEqual(len(defines), 1)
+        # Make sure we only found one definition
+        self.assertEqual(len(defines), 1)
 
-            wrapper_define = defines[0]
-            self.assertIn('noinline !dbg', wrapper_define)
-        else:
-            # NVVM 3.4 subprogram debuginfo refers to the definition.
-            # '786478' is a constant referring to a subprogram.
-            disubprograms = [line for line in llvm_ir.splitlines()
-                             if '786478' in line]
-
-            # Make sure we only found one subprogram
-            self.assertEqual(len(disubprograms), 1)
-
-            wrapper_disubprogram = disubprograms[0]
-            # Check that the subprogram points to a wrapper (these are all in
-            # the "cudapy::" namespace).
-            self.assertIn('_ZN6cudapy', wrapper_disubprogram)
+        wrapper_define = defines[0]
+        self.assertIn('!dbg', wrapper_define)
 
     def test_debug_function_calls_internal_impl(self):
         # Calling a function in a module generated from an implementation
@@ -199,12 +186,13 @@ class TestCudaDebugInfo(CUDATestCase):
                                                              f1_debug,
                                                              f2_debug)
 
-    def check_warnings(self, warnings, warn_count):
+    def check_warnings(self, warnings, warning_expected):
         if NVVM().is_nvvm70:
             # We should not warn on NVVM 7.0.
             self.assertEqual(len(warnings), 0)
         else:
-            self.assertEqual(len(warnings), warn_count)
+            if warning_expected:
+                self.assertGreater(len(warnings), 0)
             # Each warning should warn about not generating debug info.
             for warning in warnings:
                 self.assertIs(warning.category, NumbaInvalidConfigWarning)
@@ -225,8 +213,8 @@ class TestCudaDebugInfo(CUDATestCase):
                     self._test_chained_device_function_two_calls(kernel_debug,
                                                                  f1_debug,
                                                                  f2_debug)
-                warn_count = kernel_debug + f1_debug + f2_debug
-                self.check_warnings(w, warn_count)
+                warning_expected = kernel_debug or f1_debug or f2_debug
+                self.check_warnings(w, warning_expected)
 
     def test_chained_device_three_functions(self):
         # Like test_chained_device_function, but with enough functions (three)

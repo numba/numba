@@ -606,14 +606,14 @@ class CallConstraint(object):
                             else self.args)
             folded = e.fold_arguments(folding_args, self.kws)
             requested = set()
-            unsatisified = set()
+            unsatisfied = set()
             for idx in e.requested_args:
                 maybe_arg = typeinfer.func_ir.get_definition(folded[idx])
                 if isinstance(maybe_arg, ir.Arg):
                     requested.add(maybe_arg.index)
                 else:
-                    unsatisified.add(idx)
-            if unsatisified:
+                    unsatisfied.add(idx)
+            if unsatisfied:
                 raise TypingError("Cannot request literal type.", loc=self.loc)
             elif requested:
                 raise ForceLiteralArg(requested, loc=self.loc)
@@ -1397,6 +1397,8 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
         elif isinstance(inst, ir.StoreMap):
             self.typeof_storemap(inst)
         elif isinstance(inst, (ir.Jump, ir.Branch, ir.Return, ir.Del)):
+            pass
+        elif isinstance(inst, (ir.DynamicRaise, ir.DynamicTryRaise)):
             pass
         elif isinstance(inst, (ir.StaticRaise, ir.StaticTryRaise)):
             pass

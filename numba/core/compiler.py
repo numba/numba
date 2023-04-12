@@ -20,7 +20,7 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode,
                                        MakeFunctionToJitFunction,
                                        CanonicalizeLoopExit,
                                        CanonicalizeLoopEntry, LiteralUnroll,
-                                       ReconstructSSA,
+                                       ReconstructSSA, RewriteDynamicRaises,
                                        LiteralPropagationSubPipelinePass,
                                        )
 
@@ -29,8 +29,9 @@ from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                                      ParforPass, DumpParforDiagnostics,
                                      IRLegalization, NoPythonBackend,
                                      InlineOverloads, PreLowerStripPhis,
-                                     NativeLowering,
+                                     NativeLowering, NativeParforLowering,
                                      NoPythonSupportedFeatureValidation,
+                                     ParforFusionPass, ParforPreLoweringPass
                                      )
 
 from numba.core.object_mode_passes import (ObjectModeFrontEnd,
@@ -156,6 +157,13 @@ detail""",
         default=False,
         doc=("Disable optimization for debug. "
              "Equivalent to adding optnone attribute in the LLVM Function.")
+    )
+
+    dbg_directives_only = Option(
+        type=bool,
+        default=False,
+        doc=("Make debug emissions directives-only. "
+             "Used when generating lineinfo.")
     )
 
 
@@ -584,7 +592,10 @@ class DefaultPassBuilder(object):
         # Annotate only once legalized
         pm.add_pass(AnnotateTypes, "annotate types")
         # lower
-        pm.add_pass(NativeLowering, "native lowering")
+        if state.flags.auto_parallel.enabled:
+            pm.add_pass(NativeParforLowering, "native parfor lowering")
+        else:
+            pm.add_pass(NativeLowering, "native lowering")
         pm.add_pass(NoPythonBackend, "nopython mode backend")
         pm.add_pass(DumpParforDiagnostics, "dump parfor diagnostics")
         pm.finalize()
@@ -608,6 +619,20 @@ class DefaultPassBuilder(object):
             pm.add_pass(NopythonRewrites, "nopython rewrites")
         if state.flags.auto_parallel.enabled:
             pm.add_pass(ParforPass, "convert to parfors")
+            pm.add_pass(ParforFusionPass, "fuse parfors")
+            pm.add_pass(ParforPreLoweringPass, "parfor prelowering")
+
+        pm.finalize()
+        return pm
+
+    @staticmethod
+    def define_parfor_gufunc_pipeline(state, name="parfor_gufunc_typed"):
+        """Returns the typed part of the nopython pipeline"""
+        pm = PassManager(name)
+        assert state.func_ir
+        pm.add_pass(IRProcessing, "processing IR")
+        pm.add_pass(NopythonTypeInference, "nopython frontend")
+        pm.add_pass(ParforPreLoweringPass, "parfor prelowering")
 
         pm.finalize()
         return pm
@@ -632,6 +657,8 @@ class DefaultPassBuilder(object):
             pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
             pm.add_pass(DeadBranchPrune, "dead branch pruning")
             pm.add_pass(GenericRewrites, "nopython rewrites")
+
+        pm.add_pass(RewriteDynamicRaises, "rewrite dynamic raises")
 
         # convert any remaining closures into functions
         pm.add_pass(MakeFunctionToJitFunction,
@@ -669,10 +696,9 @@ class DefaultPassBuilder(object):
             pm.add_pass(PreLowerStripPhis, "remove phis nodes")
         pm.add_pass(IRProcessing, "processing IR")
 
-        if utils.PYVERSION >= (3, 7):
-            # The following passes are needed to adjust for looplifting
-            pm.add_pass(CanonicalizeLoopEntry, "canonicalize loop entry")
-            pm.add_pass(CanonicalizeLoopExit, "canonicalize loop exit")
+        # The following passes are needed to adjust for looplifting
+        pm.add_pass(CanonicalizeLoopEntry, "canonicalize loop entry")
+        pm.add_pass(CanonicalizeLoopExit, "canonicalize loop exit")
 
         pm.add_pass(ObjectModeFrontEnd, "object mode frontend")
         pm.add_pass(InlineClosureLikes,

@@ -1,4 +1,5 @@
 import contextlib
+from functools import cached_property
 
 from numba.core.descriptors import TargetDescriptor
 from numba.core import utils, typing, dispatcher, cpu
@@ -25,12 +26,12 @@ class CPUTarget(TargetDescriptor):
     options = cpu.CPUTargetOptions
     _nested = _NestedContext()
 
-    @utils.cached_property
+    @cached_property
     def _toplevel_target_context(self):
         # Lazily-initialized top-level target context, for all threads
         return cpu.CPUContext(self.typing_context, self._target_name)
 
-    @utils.cached_property
+    @cached_property
     def _toplevel_typing_context(self):
         # Lazily-initialized top-level typing context, for all threads
         return typing.Context()

@@ -2,10 +2,11 @@ from abc import ABCMeta, abstractmethod, abstractproperty
 from typing import Dict as ptDict, Type as ptType
 import itertools
 import weakref
+from functools import cached_property
 
 import numpy as np
 
-from numba.core.utils import cached_property, get_hashable_key
+from numba.core.utils import get_hashable_key
 
 # Types are added to a global registry (_typecache) in order to assign
 # them unique integer codes for fast matching in _dispatcher.c.
@@ -112,6 +113,9 @@ class Type(metaclass=_TypeMetaclass):
         return self.name, ()
 
     def __repr__(self):
+        return self.name
+
+    def __str__(self):
         return self.name
 
     def __hash__(self):
@@ -443,7 +447,13 @@ class Literal(Type):
             ctx = typing.Context()
             try:
                 res = ctx.resolve_value_type(self.literal_value)
-            except ValueError:
+            except ValueError as e:
+
+                if "Int value is too large" in str(e):
+                    # If a string literal cannot create an IntegerLiteral
+                    # because of overflow we generate this message.
+                    msg = f"Cannot create literal type. {str(e)}"
+                    raise TypeError(msg)
                 # Not all literal types have a literal_value that can be
                 # resolved to a type, for example, LiteralStrKeyDict has a
                 # literal_value that is a python dict for which there's no

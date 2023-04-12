@@ -461,19 +461,21 @@ def _prepare_chrome_trace_data(listener: RecordingListener):
     for ts, rec in listener.buffer:
         data = rec.data
         cat = str(rec.kind)
+        ts_scaled = ts * 1_000_000   # scale to microseconds
         ph = 'B' if rec.is_start else 'E'
         name = data['name']
         args = data
         ev = dict(
-            cat=cat, pid=pid, tid=tid, ts=ts, ph=ph, name=name, args=args,
+            cat=cat, pid=pid, tid=tid, ts=ts_scaled, ph=ph, name=name,
+            args=args,
         )
         evs.append(ev)
     return evs
 
 
 def _setup_chrome_trace_exit_handler():
-    """Setup a RecordingListener and an exit handler to write the captured events
-    to file.
+    """Setup a RecordingListener and an exit handler to write the captured
+    events to file.
     """
     listener = RecordingListener()
     register("numba:run_pass", listener)
