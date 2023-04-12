@@ -17,7 +17,8 @@ from numba.core.runtime.nrt import MemInfo
 from numba.experimental import jitclass
 from numba.experimental.jitclass import _box
 from numba.experimental.jitclass.base import JitClassType
-from numba.tests.support import MemoryLeakMixin, TestCase, skip_if_typeguard, skip_unless_scipy
+from numba.tests.support import MemoryLeakMixin, TestCase, skip_if_typeguard
+from numba.tests.support import skip_unless_scipy
 
 
 class TestClass1(object):
@@ -1941,7 +1942,6 @@ def f(x, y):
             tuple(matrix_at.arr.ravel()),
             tuple(jit_matrix_at.arr.ravel())
         )
-
 
     def test_implicit_hash_compiles(self):
         # Ensure that classes with __hash__ implicitly defined as None due to
