@@ -7,7 +7,9 @@ import warnings
 from numba import cuda
 from numba.core.errors import NumbaWarning
 from numba.cuda.codegen import CUDACodeLibrary
-from numba.cuda.testing import CUDATestCase, skip_on_cudasim, test_data_dir
+from numba.cuda.testing import (CUDATestCase, skip_on_cudasim,
+                                skip_unless_cc_60, skip_if_cudadevrt_missing,
+                                skip_if_mvc_enabled, test_data_dir)
 from numba.tests.support import SerialMixin
 from numba.tests.test_caching import (DispatcherCacheUsecasesTest,
                                       skip_bad_access)
@@ -153,6 +155,9 @@ class CUDACachingTest(SerialMixin, DispatcherCacheUsecasesTest):
         f = mod.renamed_function2
         self.assertPreciseEqual(f(2), 8)
 
+    @skip_unless_cc_60
+    @skip_if_cudadevrt_missing
+    @skip_if_mvc_enabled('CG not supported with MVC')
     def test_cache_cg(self):
         # Functions using cooperative groups should be cacheable. See Issue
         # #8888: https://github.com/numba/numba/issues/8888
