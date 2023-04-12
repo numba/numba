@@ -3,6 +3,7 @@ from llvmlite import ir
 from numba.core import config, serialize
 from numba.core.codegen import Codegen, CodeLibrary
 from .cudadrv import devices, driver, nvvm, runtime
+from numba.cuda.cudadrv.libs import get_cudalib
 
 import os
 import subprocess
@@ -74,6 +75,8 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         # Files to link with the generated PTX. These are linked using the
         # Driver API at link time.
         self._linking_files = set()
+        # Should we link libcudadevrt?
+        self.needs_cudadevrt = False
 
         # Cache the LLVM IR string
         self._llvm_strs = None
@@ -156,6 +159,8 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
             linker.add_ptx(ptx.encode())
         for path in self._linking_files:
             linker.add_file_guess_ext(path)
+        if self.needs_cudadevrt:
+            linker.add_file_guess_ext(get_cudalib('cudadevrt', static=True))
 
         cubin = linker.complete()
         self._cubin_cache[cc] = cubin
@@ -283,12 +288,14 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
             cubin_cache=self._cubin_cache,
             linkerinfo_cache=self._linkerinfo_cache,
             max_registers=self._max_registers,
-            nvvm_options=self._nvvm_options
+            nvvm_options=self._nvvm_options,
+            needs_cudadevrt=self.needs_cudadevrt
         )
 
     @classmethod
     def _rebuild(cls, codegen, name, entry_name, llvm_strs, ptx_cache,
-                 cubin_cache, linkerinfo_cache, max_registers, nvvm_options):
+                 cubin_cache, linkerinfo_cache, max_registers, nvvm_options,
+                 needs_cudadevrt):
         """
         Rebuild an instance.
         """
@@ -301,6 +308,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
 
         instance._max_registers = max_registers
         instance._nvvm_options = nvvm_options
+        instance.needs_cudadevrt = needs_cudadevrt
 
         instance._finalized = True
 

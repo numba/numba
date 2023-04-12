@@ -153,6 +153,19 @@ class CUDACachingTest(SerialMixin, DispatcherCacheUsecasesTest):
         f = mod.renamed_function2
         self.assertPreciseEqual(f(2), 8)
 
+    def test_cache_cg(self):
+        # Functions using cooperative groups should be cacheable. See Issue
+        # #8888: https://github.com/numba/numba/issues/8888
+        self.check_pycache(0)
+        mod = self.import_module()
+        self.check_pycache(0)
+
+        mod.cg_usecase(0)
+        self.check_pycache(2)  # 1 index, 1 data
+
+        # Check the code runs ok from another process
+        self.run_in_separate_process()
+
     def _test_pycache_fallback(self):
         """
         With a disabled __pycache__, test there is a working fallback
