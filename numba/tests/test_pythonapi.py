@@ -69,7 +69,7 @@ class TestPythonAPI(unittest.TestCase):
         tup = cfunc('hello\x00world')  # returns a tuple: cstring and its size
 
         fn = ctypes.pythonapi.PyBytes_FromStringAndSize
-        fn.argtypes = [ctypes.c_void_p]
+        fn.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
         fn.restype = ctypes.py_object
         obj = fn(tup[0], tup[1])
 
