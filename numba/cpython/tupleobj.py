@@ -4,7 +4,6 @@ Implementation of tuple objects
 
 import operator
 
-import llvmlite.llvmpy.core as lc
 from llvmlite import ir
 
 from numba import typed
