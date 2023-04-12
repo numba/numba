@@ -828,7 +828,6 @@ def get_deps_info(fc_ty: pt.Union[types.Dispatcher, types.Function], sig
     :param fc_ty:
     :return: dictionary of filenames to FileStamp
     """
-    py_files = None
     if isinstance(fc_ty, types.Dispatcher):
         dispatcher = fc_ty.dispatcher
         deps_stamps = dispatcher.cache_deps_info(sig)
