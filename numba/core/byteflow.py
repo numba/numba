@@ -1058,7 +1058,7 @@ class TraceRunner(object):
         state.push(res)
 
     def op_CALL_FUNCTION_EX(self, state, inst):
-        if inst.arg & 1 and PYVERSION != (3, 10):
+        if inst.arg & 1 and PYVERSION < (3, 10):
             errmsg = "CALL_FUNCTION_EX with **kwargs not supported"
             raise UnsupportedError(errmsg)
         if inst.arg & 1:
