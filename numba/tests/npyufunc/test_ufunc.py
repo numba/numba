@@ -141,5 +141,33 @@ class TestUFuncs(TestCase):
         self.assertIn(msg, str(raises.exception))
 
 
+class TestUFuncsMisc(TestCase):
+    # Test for miscellaneous ufunc issues
+
+    def test_exp2(self):
+        # See issue #8898
+        @njit
+        def foo(x):
+            return np.exp2(x)
+
+        for ty in (np.int8, np.uint16):
+            x = ty(2)
+            expected = foo.py_func(x)
+            got = foo(x)
+            self.assertPreciseEqual(expected, got)
+
+    def test_log2(self):
+        # See issue #8898
+        @njit
+        def foo(x):
+            return np.log2(x)
+
+        for ty in (np.int8, np.uint16):
+            x = ty(2)
+            expected = foo.py_func(x)
+            got = foo(x)
+            self.assertPreciseEqual(expected, got)
+
+
 if __name__ == '__main__':
     unittest.main()
