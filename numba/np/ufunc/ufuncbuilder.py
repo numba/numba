@@ -325,7 +325,9 @@ class GUFuncBuilder(_BaseUFuncBuilder):
                  targetoptions={}, writable_args=()):
         self.py_func = py_func
         self.identity = parse_identity(identity)
-        self.nb_func = jit(_target='npyufunc', cache=cache)(py_func)
+        self.nb_func = jit(_target='npyufunc',
+                           cache=cache,
+                           **targetoptions)(py_func)
         self.signature = signature
         self.sin, self.sout = parse_signature(signature)
         self.targetoptions = targetoptions
