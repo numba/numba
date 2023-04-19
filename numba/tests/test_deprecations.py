@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from numba import jit, generated_jit, vectorize, guvectorize
 from numba.core.errors import (NumbaDeprecationWarning,
                                NumbaPendingDeprecationWarning, NumbaWarning)
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, needs_setuptools
 
 
 @contextmanager
@@ -244,11 +244,11 @@ class TestDeprecation(TestCase):
         # @jit call.
         with _catch_numba_deprecation_warnings() as w:
             @vectorize('float64(float64)', forceobj=True)
-            def foo(x):
+            def foo(x): # noqa : F811
                 return bar(x + 1)
 
             @jit
-            def bar(x):
+            def bar(x): # noqa : F811
                 return x
 
         msg = "The 'nopython' keyword argument was not supplied"
@@ -354,6 +354,7 @@ class TestDeprecation(TestCase):
             self.check_warning(w, "numba.generated_jit is deprecated",
                                NumbaDeprecationWarning)
 
+    @needs_setuptools
     @TestCase.run_test_in_subprocess
     def test_pycc_module(self):
         # checks import of module warns
@@ -366,6 +367,7 @@ class TestDeprecation(TestCase):
             expected_str = ("The 'pycc' module is pending deprecation.")
             self.check_warning(w, expected_str, NumbaPendingDeprecationWarning)
 
+    @needs_setuptools
     @TestCase.run_test_in_subprocess
     def test_pycc_CC(self):
         # check the most commonly used functionality (CC) warns
