@@ -775,10 +775,6 @@ def ol_isinstance(var, typs):
         msg = f'isinstance() does not support variables of type "{var_ty}".'
         raise NumbaTypeError(msg)
 
-    # Warn about the experimental nature of this feature.
-    msg = "Use of isinstance() detected. This is an experimental feature."
-    warnings.warn(msg, category=NumbaExperimentalFeatureWarning)
-
     t_typs = typs
 
     # Check the types that the var can be an instance of, it'll be a scalar,

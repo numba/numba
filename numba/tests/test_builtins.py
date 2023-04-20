@@ -1402,13 +1402,7 @@ class TestIsinstanceBuiltin(TestCase):
 
             foo(1.234)
 
-            self.assertEqual(len(w), 1)
-
-            self.assertEqual(w[0].category,
-                             errors.NumbaExperimentalFeatureWarning)
-            msg = ("Use of isinstance() detected. This is an experimental "
-                   "feature.")
-            self.assertIn(msg, str(w[0].message))
+            self.assertEqual(len(w), 0)
 
 
 class TestGetattrBuiltin(MemoryLeakMixin, TestCase):
