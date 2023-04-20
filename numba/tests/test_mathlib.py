@@ -5,7 +5,7 @@ import warnings
 
 import numpy as np
 
-from numba.core.compiler import compile_isolated, Flags
+from numba.core.compiler import Flags
 from numba.core import utils, types
 from numba.core.config import IS_WIN32, IS_32BITS
 from numba.tests.support import TestCase, CompilationCache, tag
