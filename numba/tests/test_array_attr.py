@@ -1,12 +1,11 @@
 import numpy as np
 
 import unittest
-from numba.core.compiler import compile_isolated
 from numba.np.numpy_support import from_dtype
 from numba import njit, typeof
 from numba.core import types
 from numba.tests.support import (TestCase, CompilationCache, MemoryLeakMixin,
-                                 tag, skip_parfors_unsupported)
+                                 skip_parfors_unsupported)
 from numba.core.errors import TypingError
 from numba.experimental import jitclass
 
@@ -196,8 +195,7 @@ class TestNestedArrayAttr(MemoryLeakMixin, unittest.TestCase):
         self.nbrecord = from_dtype(self.a.dtype)
 
     def get_cfunc(self, pyfunc):
-        cres = compile_isolated(pyfunc, (self.nbrecord,))
-        return cres.entry_point
+        return njit((self.nbrecord,))(pyfunc)
 
     def test_shape(self):
         pyfunc = nested_array_shape
