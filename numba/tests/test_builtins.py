@@ -1387,7 +1387,7 @@ class TestIsinstanceBuiltin(TestCase):
             self.assertEqual(got, expected)
 
     @TestCase.run_test_in_subprocess
-    def test_experimental_warning(self):
+    def test_no_experimental_warning(self):
         # Check that if the isinstance feature is in use then an experimental
         # warning is raised. Needs subproc as something else in the test suite
         # might triggered the warning already.
