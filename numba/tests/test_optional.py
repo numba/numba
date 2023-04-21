@@ -3,9 +3,8 @@ import itertools
 import numpy as np
 
 import unittest
-from numba.core.compiler import compile_isolated, Flags
-from numba import typeof, njit
-from numba.core import types, lowering
+from numba import jit, njit
+from numba.core import types
 from numba.tests.support import TestCase
 
 
@@ -75,58 +74,49 @@ class TestOptional(TestCase):
 
     def test_return_double_or_none(self):
         pyfunc = return_double_or_none
-        cres = compile_isolated(pyfunc, [types.boolean])
-        cfunc = cres.entry_point
+        cfunc = njit((types.boolean,))(pyfunc)
 
         for v in [True, False]:
             self.assertPreciseEqual(pyfunc(v), cfunc(v))
 
     def test_return_different_statement(self):
         pyfunc = return_different_statement
-        cres = compile_isolated(pyfunc, [types.boolean])
-        cfunc = cres.entry_point
+        cfunc = njit((types.boolean,))(pyfunc)
 
         for v in [True, False]:
             self.assertPreciseEqual(pyfunc(v), cfunc(v))
 
     def test_return_bool_optional_or_none(self):
         pyfunc = return_bool_optional_or_none
-        cres = compile_isolated(pyfunc, [types.int32, types.int32])
-        cfunc = cres.entry_point
+        cfunc = njit((types.int32, types.int32,))(pyfunc)
 
         for x, y in itertools.product((0, 1, 2), (0, 1)):
             self.assertPreciseEqual(pyfunc(x, y), cfunc(x, y))
 
     def test_is_this_a_none(self):
         pyfunc = is_this_a_none
-        cres = compile_isolated(pyfunc, [types.intp])
-        cfunc = cres.entry_point
+        cfunc = njit((types.intp,))(pyfunc)
 
         for v in [-1, 0, 1, 2]:
             self.assertPreciseEqual(pyfunc(v), cfunc(v))
 
     def test_is_this_a_none_objmode(self):
         pyfunc = is_this_a_none
-        flags = Flags()
-        flags.force_pyobject = True
-        cres = compile_isolated(pyfunc, [types.intp], flags=flags)
-        cfunc = cres.entry_point
-        self.assertTrue(cres.objectmode)
+        cfunc = jit((types.intp,), forceobj=True)(pyfunc)
+        self.assertTrue(cfunc.overloads[cfunc.signatures[0]].objectmode)
         for v in [-1, 0, 1, 2]:
             self.assertPreciseEqual(pyfunc(v), cfunc(v))
 
     def test_a_is_b_intp(self):
         pyfunc = a_is_b
-        cres = compile_isolated(pyfunc, [types.intp, types.intp])
-        cfunc = cres.entry_point
+        cfunc = njit((types.intp, types.intp))(pyfunc)
         # integer identity relies on `==`
         self.assertTrue(cfunc(1, 1))
         self.assertFalse(cfunc(1, 2))
 
     def test_a_is_not_b_intp(self):
         pyfunc = a_is_not_b
-        cres = compile_isolated(pyfunc, [types.intp, types.intp])
-        cfunc = cres.entry_point
+        cfunc = njit((types.intp, types.intp))(pyfunc)
         # integer identity relies on `==`
         self.assertFalse(cfunc(1, 1))
         self.assertTrue(cfunc(1, 2))
