@@ -2,7 +2,6 @@ import numpy as np
 import ctypes
 from numba import jit, literal_unroll, njit, typeof
 from numba.core import types
-from numba.core.compiler import compile_isolated
 from numba.core.itanium_mangler import mangle_type
 from numba.core.errors import TypingError
 import unittest
@@ -579,8 +578,7 @@ class TestRecordDtype(TestCase):
                 ary3[i]['d'] = "%d" % x
 
     def get_cfunc(self, pyfunc, argspec):
-        cres = compile_isolated(pyfunc, argspec)
-        return cres.entry_point
+        return njit(argspec)(pyfunc)
 
     def test_from_dtype(self):
         rec = numpy_support.from_dtype(recordtype)
@@ -1012,8 +1010,7 @@ class TestRecordDtypeWithCharSeq(TestCase):
 
     def get_cfunc(self, pyfunc):
         rectype = numpy_support.from_dtype(recordwithcharseq)
-        cres = compile_isolated(pyfunc, (rectype[:], types.intp))
-        return cres.entry_point
+        return njit((rectype[:], types.intp))(pyfunc)
 
     def test_return_charseq(self):
         pyfunc = get_charseq
@@ -1029,7 +1026,7 @@ class TestRecordDtypeWithCharSeq(TestCase):
         def pyfunc(arr, i):
             return arr[i].n
 
-        identity = jit(lambda x: x)   # an identity function
+        identity = njit(lambda x: x)   # an identity function
 
         @jit(nopython=True)
         def cfunc(arr, i):
@@ -1047,12 +1044,11 @@ class TestRecordDtypeWithCharSeq(TestCase):
 
         # compile
         rectype = numpy_support.from_dtype(recordwithcharseq)
-        cres = compile_isolated(pyfunc, (rectype[:], types.intp,
-                                         rectype.typeof('n')))
-        cfunc = cres.entry_point
+        sig = (rectype[::1], types.intp, types.Bytes(types.uint8, 1, 'C'))
+        cfunc = njit(sig)(pyfunc)
 
         for i in range(self.refsample1d.size):
-            chars = "{0}".format(hex(i + 10))
+            chars = bytes("{0}".format(hex(i + 10)), 'UTF-8')
             pyfunc(self.refsample1d, i, chars)
             cfunc(self.nbsample1d, i, chars)
             np.testing.assert_equal(self.refsample1d, self.nbsample1d)
@@ -1063,16 +1059,15 @@ class TestRecordDtypeWithCharSeq(TestCase):
         pyfunc = set_charseq
         # compile
         rectype = numpy_support.from_dtype(recordwithcharseq)
-        cres = compile_isolated(pyfunc, (rectype[:], types.intp,
-                                         rectype.typeof('n')))
-        cfunc = cres.entry_point
+        sig = (rectype[::1], types.intp, types.Bytes(types.uint8, 1, 'C'))
+        cfunc = njit(sig)(pyfunc)
 
         cs_near_overflow = "abcde"
 
         self.assertEqual(len(cs_near_overflow),
                          recordwithcharseq['n'].itemsize)
 
-        cfunc(self.nbsample1d, 0, cs_near_overflow)
+        cfunc(self.nbsample1d, 0, bytes(cs_near_overflow, 'UTF-8'))
         self.assertEqual(self.nbsample1d[0]['n'].decode('ascii'),
                          cs_near_overflow)
         # Check that we didn't overwrite
@@ -1084,14 +1079,13 @@ class TestRecordDtypeWithCharSeq(TestCase):
         pyfunc = set_charseq
         # compile
         rectype = numpy_support.from_dtype(recordwithcharseq)
-        cres = compile_isolated(pyfunc, (rectype[:], types.intp,
-                                         rectype.typeof('n')))
-        cfunc = cres.entry_point
+        sig = (rectype[::1], types.intp, types.Bytes(types.uint8, 1, 'C'))
+        cfunc = njit(sig)(pyfunc)
 
         cs_overflowed = "abcdef"
 
         pyfunc(self.refsample1d, 1, cs_overflowed)
-        cfunc(self.nbsample1d, 1, cs_overflowed)
+        cfunc(self.nbsample1d, 1, bytes(cs_overflowed, 'UTF-8'))
         np.testing.assert_equal(self.refsample1d, self.nbsample1d)
         self.assertEqual(self.refsample1d[1].n,
                          cs_overflowed[:-1].encode("ascii"))
@@ -1381,8 +1375,7 @@ class TestSubtyping(TestCase):
 class TestNestedArrays(TestCase):
 
     def get_cfunc(self, pyfunc, argspec):
-        cres = compile_isolated(pyfunc, argspec)
-        return cres.entry_point
+        return njit(argspec)(pyfunc)
 
     def test_record_write_array(self):
         # Testing writing to a 1D array within a structured type
