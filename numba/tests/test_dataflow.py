@@ -1,7 +1,7 @@
 import unittest
-from numba import jit
+from numba import jit, njit
 from numba.core import types
-from numba.tests.support import (TestCase, CompilationCache, no_pyobj_flags)
+from numba.tests.support import TestCase
 
 
 force_pyobj_jit_opt = {'forceobj': True}
@@ -20,21 +20,25 @@ def assignments2(a):
 
 # Use cases for issue #503
 
+@njit((types.intp, types.intp))
 def var_propagate1(a, b):
     c = (a if a > b else b) + 5
     return c
 
 
+@njit((types.intp, types.intp))
 def var_propagate2(a, b):
     c = 5 + (a if a > b else b + 12) / 2.0
     return c
 
 
+@njit((types.intp, types.intp))
 def var_propagate3(a, b):
     c = 5 + (a > b and a or b)
     return c
 
 
+@njit((types.intp, types.intp))
 def var_propagate4(a, b):
     c = 5 + (a - 1 and b + 1) or (a + 1 and b - 1)
     return c
@@ -73,9 +77,6 @@ def var_swapping(a, b, c, d, e):
 
 class TestDataFlow(TestCase):
 
-    def setUp(self):
-        self.cache = CompilationCache()
-
     def test_assignments(self, flags=force_pyobj_jit_opt):
         pyfunc = assignments
         cfunc = jit((types.int32,), **flags)(pyfunc)
@@ -92,13 +93,10 @@ class TestDataFlow(TestCase):
             cfunc("a")
 
     # The dataflow analysis must be good enough for native mode
-    # compilation to succeed, hence the no_pyobj_flags in the following tests.
+    # compilation to succeed, hence the use of njit in the following tests.
 
-    def run_propagate_func(self, pyfunc, args):
-        cr = self.cache.compile(pyfunc, (types.int32, types.int32),
-                                flags=no_pyobj_flags)
-        cfunc = cr.entry_point
-        self.assertPreciseEqual(cfunc(*args), pyfunc(*args))
+    def run_propagate_func(self, func, args):
+        self.assertPreciseEqual(func(*args), func.py_func(*args))
 
     def test_var_propagate1(self):
         self.run_propagate_func(var_propagate1, (2, 3))
