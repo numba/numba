@@ -101,47 +101,57 @@ def conditional_swap(x, y):
 
 class TestUnpack(MemoryLeakMixin, TestCase):
 
+    def check_nullary_npm(self, pyfunc):
+        cfunc = njit(pyfunc)
+        self.assertPreciseEqual(cfunc(), pyfunc())
+
+    def check_nullary_objmode(self, pyfunc):
+        cfunc = jit(forceobj=True)(pyfunc)
+        self.assertPreciseEqual(cfunc(), pyfunc())
+
     def test_unpack_list(self):
         pyfunc = unpack_list
         cfunc = jit(forceobj=True)(pyfunc)
         l = [1, 2, 3]
         self.assertEqual(cfunc(l), pyfunc(l))
 
-    def test_unpack_shape(self, flags=force_pyobj_flags):
+    def test_unpack_shape(self):
         pyfunc = unpack_shape
         cfunc = jit((types.Array(dtype=types.int32, ndim=3, layout='C'),),
-                    **flags)(pyfunc)
+                    forceobj=True)(pyfunc)
         a = np.zeros(shape=(1, 2, 3)).astype(np.int32)
         self.assertPreciseEqual(cfunc(a), pyfunc(a))
 
     def test_unpack_shape_npm(self):
-        self.test_unpack_shape(flags=no_pyobj_flags)
+        pyfunc = unpack_shape
+        cfunc = njit((types.Array(dtype=types.int32, ndim=3, layout='C'),),
+                     )(pyfunc)
+        a = np.zeros(shape=(1, 2, 3)).astype(np.int32)
+        self.assertPreciseEqual(cfunc(a), pyfunc(a))
 
-    def test_unpack_range(self, flags=nullary_force_pyobj_flags):
-        self.run_nullary_func(unpack_range, flags)
+    def test_unpack_range(self):
+        self.check_nullary_objmode(unpack_range)
 
     def test_unpack_range_npm(self):
-        self.test_unpack_range(flags=nullary_no_pyobj_flags)
+        self.check_nullary_npm(unpack_range)
 
-    def test_unpack_tuple(self, flags=nullary_force_pyobj_flags):
-        self.run_nullary_func(unpack_tuple, flags)
+    def test_unpack_tuple(self):
+        self.check_nullary_objmode(unpack_tuple)
 
     def test_unpack_tuple_npm(self):
-        self.test_unpack_tuple(flags=nullary_no_pyobj_flags)
+        self.check_nullary_npm(unpack_tuple)
 
-    def test_unpack_heterogeneous_tuple(self, flags=nullary_force_pyobj_flags):
-        self.run_nullary_func(unpack_heterogeneous_tuple, flags)
+    def test_unpack_heterogeneous_tuple(self):
+        self.check_nullary_objmode(unpack_heterogeneous_tuple)
 
     def test_unpack_heterogeneous_tuple_npm(self):
-        self.test_unpack_heterogeneous_tuple(flags=nullary_no_pyobj_flags)
+        self.check_nullary_npm(unpack_heterogeneous_tuple)
 
-    def test_unpack_nested_heterogeneous_tuple(self,
-                                               flags=nullary_force_pyobj_flags):
-        self.run_nullary_func(unpack_nested_heterogeneous_tuple, flags)
+    def test_unpack_nested_heterogeneous_tuple(self):
+        self.check_nullary_objmode(unpack_nested_heterogeneous_tuple)
 
     def test_unpack_nested_heterogeneous_tuple_npm(self):
-        self.test_unpack_nested_heterogeneous_tuple(
-            flags=nullary_no_pyobj_flags)
+        self.check_nullary_npm(unpack_nested_heterogeneous_tuple)
 
     def test_chained_unpack_assign(self, flags=force_pyobj_flags):
         pyfunc = chained_unpack_assign1
