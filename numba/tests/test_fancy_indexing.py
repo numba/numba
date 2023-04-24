@@ -306,22 +306,22 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
     shape = (5, 6, 7, 8, 9, 10)
     indexing_cases = [
         # Slices + Integers
-        (slice(4, 5), 3, np.array([0,1,3,4,2]), 1),
+        (slice(4, 5), 3, np.array([0, 1, 3, 4, 2]), 1),
         (3, np.array([0,1,3,4,2]), slice(None), slice(4)),
         (3, np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]]),
-         slice(None), slice(4)), # multidimensional
+         slice(None), slice(4)), # multi-dimensional
 
         # Ellipsis + Integers
         (Ellipsis, 1, np.array([0,1,3,4,2])),
         (np.array([0,1,3,4,2]), 3, Ellipsis),
         (np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]]),
-         3, Ellipsis), # multidimensional
+         3, Ellipsis), # multi-dimensional
 
         # Ellipsis + Slices + Integers
         (Ellipsis, 1, np.array([0,1,3,4,2]), 3, slice(1,5)),
         (np.array([0,1,3,4,2]), 3, Ellipsis, slice(1,5)),
         (np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]]),
-         3, Ellipsis, slice(1,5)), # multidimensional
+         3, Ellipsis, slice(1,5)), # multi-dimensional
 
         # Boolean Arrays + Integers
         (slice(4, 5), 3,

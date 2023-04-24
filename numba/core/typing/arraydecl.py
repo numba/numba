@@ -87,7 +87,7 @@ def get_array_index_type(ary, idx):
             if ty.ndim > 1:
                 if isinstance(ty.dtype, (types.Boolean,)):
                     msg = ("You may only use one dimensional boolean index per axis."
-                           " NumPy behaviour of multidimensional boolean indices for "
+                           " NumPy behaviour of multi-dimensional boolean indices for "
                            "implicitly indexing multiple axes is not supported.")
                     raise NumbaTypeError(msg)
                 ndim += ty.ndim - 1

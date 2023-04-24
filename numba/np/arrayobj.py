@@ -644,7 +644,7 @@ class Indexer(object):
 
     def loop_head(self):
         """
-        Start indexation loop.  Returns a index.
+        Start indexation loop.  Returns an index.
         *index* is an integer LLVM value representing the index over this
         dimension.
         """
@@ -758,11 +758,11 @@ class IntegerArrayIndexer(Indexer):
             def flat_imp_copy(ary):
                 return ary.copy().reshape(ary.size)
 
-            # If the index array is contigous, use the nocopy version
+            # If the index array is contiguous, use the no-copy version
             if idxty.is_contig:
                 flat_imp = flat_imp_nocopy
             # otherwise, use copy version since we don't support
-            # reshaping non-contigous arrays
+            # reshaping non-contiguous arrays
             else:
                 flat_imp = flat_imp_copy
 
@@ -777,7 +777,7 @@ class IntegerArrayIndexer(Indexer):
             self.idxty = idxty
             self.idxary = idxary
 
-        assert self.idxty.ndim == 1
+        assert self.idxty.ndim == 1, <message>
 
     def prepare(self):
         builder = self.builder
@@ -1715,11 +1715,11 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         def flat_imp_copy(ary):
             return ary.copy().reshape(ary.size)
 
-        # If the source array is contigous, use the nocopy version
+        # If the source array is contiguous, use the no-copy version
         if srcty.is_contig:
             flat_imp = flat_imp_nocopy
         # otherwise, use copy version since we don't support
-        # reshaping non-contigous arrays
+        # reshaping non-contiguous arrays
         else:
             flat_imp = flat_imp_copy
 
@@ -1757,6 +1757,8 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         store_item(context, builder, aryty, val, dest_ptr)
         next_idx = cgutils.increment_index(builder, cur)
         builder.store(next_idx, src_idx)
+    else:
+        assert 0, "Unreachable"
 
     indexer.end_loops()
 
