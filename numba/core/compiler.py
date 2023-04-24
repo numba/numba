@@ -3,8 +3,8 @@ import copy
 import warnings
 from numba.core.tracing import event
 
-from numba.core import (utils, errors, typing, interpreter, bytecode, postproc,
-                        config, callconv, cpu)
+from numba.core import (utils, errors, interpreter, bytecode, postproc, config,
+                        callconv, cpu)
 from numba.parfors.parfor import ParforDiagnostics
 from numba.core.errors import CompilerError
 from numba.core.environment import lookup_environment
@@ -301,22 +301,6 @@ def sanitize_compile_result_entries(entries):
 def compile_result(**entries):
     entries = sanitize_compile_result_entries(entries)
     return CompileResult(**entries)
-
-
-def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
-                     locals={}):
-    """
-    Compile the function in an isolated environment (typing and target
-    context).
-    Good for testing.
-    """
-    from numba.core.registry import cpu_target
-    typingctx = typing.Context()
-    targetctx = cpu.CPUContext(typingctx, target='cpu')
-    # Register the contexts in case for nested @jit or @overload calls
-    with cpu_target.nested_context(typingctx, targetctx):
-        return compile_extra(typingctx, targetctx, func, args, return_type,
-                             flags, locals)
 
 
 def run_frontend(func, inline_closures=False, emit_dels=False):

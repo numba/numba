@@ -33,7 +33,7 @@ import numpy as np
 from numba import testing, types
 from numba.core import errors, typing, utils, config, cpu
 from numba.core.typing import cffi_utils
-from numba.core.compiler import (compile_extra, compile_isolated, Flags,
+from numba.core.compiler import (compile_extra, Flags,
                                  DEFAULT_FLAGS, CompilerBase,
                                  DefaultPassBuilder)
 from numba.core.typed_passes import IRLegalization
