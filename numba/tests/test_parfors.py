@@ -8,7 +8,6 @@ import math
 import re
 import dis
 import numbers
-import os
 import platform
 import sys
 import subprocess
@@ -27,25 +26,24 @@ import numba.parfors.parfor
 from numba import (njit, prange, parallel_chunksize,
                    get_parallel_chunksize, set_parallel_chunksize,
                    set_num_threads, get_num_threads, typeof)
-from numba.core import (types, typing, errors, ir, rewrites,
+from numba.core import (types, errors, ir, rewrites,
                         typed_passes, inline_closurecall, config, compiler, cpu)
 from numba.extending import (overload_method, register_model,
                              typeof_impl, unbox, NativeValue, models)
 from numba.core.registry import cpu_target
 from numba.core.annotations import type_annotations
 from numba.core.ir_utils import (find_callname, guard, build_definitions,
-                            get_definition, is_getitem, is_setitem,
-                            index_var_of_get_setitem)
+                                 get_definition, is_getitem, is_setitem,
+                                 index_var_of_get_setitem)
 from numba.np.unsafe.ndarray import empty_inferred as unsafe_empty
-from numba.core.bytecode import ByteCodeIter
 from numba.core.compiler import (CompilerBase, DefaultPassBuilder)
 from numba.core.compiler_machinery import register_pass, AnalysisPass
 from numba.core.typed_passes import IRLegalization
 from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
-                      override_env_config, linux_only, tag,
-                      skip_parfors_unsupported, _32bit, needs_blas,
-                      needs_lapack, disabled_test, skip_unless_scipy,
-                      needs_subprocess, expected_failure_py312)
+                                 override_env_config, linux_only, tag,
+                                 skip_parfors_unsupported, _32bit, needs_blas,
+                                 needs_lapack, disabled_test, skip_unless_scipy,
+                                 needs_subprocess, expected_failure_py312)
 from numba.core.extending import register_jitable
 from numba.core.bytecode import _fix_LOAD_GLOBAL_arg
 from numba.core import utils
@@ -454,8 +452,8 @@ def example_kmeans_test(A, numCenter, numIter, init_centroids):
     return centroids
 
 def get_optimized_numba_ir(test_func, args, **kws):
-    typingctx = typing.Context()
-    targetctx = cpu.CPUContext(typingctx, 'cpu')
+    typingctx = cpu_target.typing_context
+    targetctx = cpu_target.target_context
     test_ir = compiler.run_frontend(test_func)
     if kws:
         options = cpu.ParallelOptions(kws)
@@ -464,58 +462,57 @@ def get_optimized_numba_ir(test_func, args, **kws):
 
     tp = TestPipeline(typingctx, targetctx, args, test_ir)
 
-    with cpu_target.nested_context(typingctx, targetctx):
-        typingctx.refresh()
-        targetctx.refresh()
+    typingctx.refresh()
+    targetctx.refresh()
 
-        inline_pass = inline_closurecall.InlineClosureCallPass(tp.state.func_ir,
-                                                               options,
-                                                               typed=True)
-        inline_pass.run()
+    inline_pass = inline_closurecall.InlineClosureCallPass(tp.state.func_ir,
+                                                            options,
+                                                            typed=True)
+    inline_pass.run()
 
-        rewrites.rewrite_registry.apply('before-inference', tp.state)
+    rewrites.rewrite_registry.apply('before-inference', tp.state)
 
-        tp.state.typemap, tp.state.return_type, tp.state.calltypes, _ = \
-        typed_passes.type_inference_stage(tp.state.typingctx,
-            tp.state.targetctx, tp.state.func_ir, tp.state.args, None)
+    tp.state.typemap, tp.state.return_type, tp.state.calltypes, _ = \
+    typed_passes.type_inference_stage(tp.state.typingctx,
+        tp.state.targetctx, tp.state.func_ir, tp.state.args, None)
 
-        type_annotations.TypeAnnotation(
-            func_ir=tp.state.func_ir,
-            typemap=tp.state.typemap,
-            calltypes=tp.state.calltypes,
-            lifted=(),
-            lifted_from=None,
-            args=tp.state.args,
-            return_type=tp.state.return_type,
-            html_output=config.HTML)
+    type_annotations.TypeAnnotation(
+        func_ir=tp.state.func_ir,
+        typemap=tp.state.typemap,
+        calltypes=tp.state.calltypes,
+        lifted=(),
+        lifted_from=None,
+        args=tp.state.args,
+        return_type=tp.state.return_type,
+        html_output=config.HTML)
 
-        diagnostics = numba.parfors.parfor.ParforDiagnostics()
+    diagnostics = numba.parfors.parfor.ParforDiagnostics()
 
-        preparfor_pass = numba.parfors.parfor.PreParforPass(
-            tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
-            tp.state.typingctx, tp.state.targetctx, options,
-            swapped=diagnostics.replaced_fns)
-        preparfor_pass.run()
+    preparfor_pass = numba.parfors.parfor.PreParforPass(
+        tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
+        tp.state.typingctx, tp.state.targetctx, options,
+        swapped=diagnostics.replaced_fns)
+    preparfor_pass.run()
 
-        rewrites.rewrite_registry.apply('after-inference', tp.state)
+    rewrites.rewrite_registry.apply('after-inference', tp.state)
 
-        flags = compiler.Flags()
-        parfor_pass = numba.parfors.parfor.ParforPass(
-            tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
-            tp.state.return_type, tp.state.typingctx, tp.state.targetctx,
-            options, flags, tp.state.metadata, diagnostics=diagnostics)
-        parfor_pass.run()
-        parfor_pass = numba.parfors.parfor.ParforFusionPass(
-            tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
-            tp.state.return_type, tp.state.typingctx, tp.state.targetctx,
-            options, flags, tp.state.metadata, diagnostics=diagnostics)
-        parfor_pass.run()
-        parfor_pass = numba.parfors.parfor.ParforPreLoweringPass(
-            tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
-            tp.state.return_type, tp.state.typingctx, tp.state.targetctx,
-            options, flags, tp.state.metadata, diagnostics=diagnostics)
-        parfor_pass.run()
-        test_ir._definitions = build_definitions(test_ir.blocks)
+    flags = compiler.Flags()
+    parfor_pass = numba.parfors.parfor.ParforPass(
+        tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
+        tp.state.return_type, tp.state.typingctx, tp.state.targetctx,
+        options, flags, tp.state.metadata, diagnostics=diagnostics)
+    parfor_pass.run()
+    parfor_pass = numba.parfors.parfor.ParforFusionPass(
+        tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
+        tp.state.return_type, tp.state.typingctx, tp.state.targetctx,
+        options, flags, tp.state.metadata, diagnostics=diagnostics)
+    parfor_pass.run()
+    parfor_pass = numba.parfors.parfor.ParforPreLoweringPass(
+        tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
+        tp.state.return_type, tp.state.typingctx, tp.state.targetctx,
+        options, flags, tp.state.metadata, diagnostics=diagnostics)
+    parfor_pass.run()
+    test_ir._definitions = build_definitions(test_ir.blocks)
 
     return test_ir, tp
 
