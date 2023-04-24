@@ -583,19 +583,6 @@ class TestCase(unittest.TestCase):
         else:
             _assertNumberEqual(first, second, delta)
 
-    def run_nullary_func(self, pyfunc, flags):
-        """
-        Compile the 0-argument *pyfunc* with the given *flags*, and check
-        it returns the same result as the pure Python function.
-        The got and expected results are returned.
-        """
-        cr = compile_isolated(pyfunc, (), flags=flags)
-        cfunc = cr.entry_point
-        expected = pyfunc()
-        got = cfunc()
-        self.assertPreciseEqual(got, expected)
-        return got, expected
-
     def subprocess_test_runner(self, test_module, test_class=None,
                                test_name=None, envvars=None, timeout=60):
         """
