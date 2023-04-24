@@ -210,37 +210,6 @@ def ignore_internal_warnings():
                             module=r'numba\.np\.ufunc\.parallel.*')
 
 
-class CompilationCache(object):
-    """
-    A cache of compilation results for various signatures and flags.
-    This can make tests significantly faster (or less slow).
-    """
-
-    def __init__(self):
-        self.typingctx = typing.Context()
-        self.targetctx = cpu.CPUContext(self.typingctx, 'cpu')
-        self.cr_cache = {}
-
-    def compile(self, func, args, return_type=None, flags=DEFAULT_FLAGS):
-        """
-        Compile the function or retrieve an already compiled result
-        from the cache.
-        """
-        from numba.core.registry import cpu_target
-
-        cache_key = (func, args, return_type, flags)
-        if cache_key in self.cr_cache:
-            cr = self.cr_cache[cache_key]
-        else:
-            # Register the contexts in case for nested @jit or @overload calls
-            # (same as compile_isolated())
-            with cpu_target.nested_context(self.typingctx, self.targetctx):
-                cr = compile_extra(self.typingctx, self.targetctx, func,
-                                   args, return_type, flags, locals={})
-            self.cr_cache[cache_key] = cr
-        return cr
-
-
 class TestCase(unittest.TestCase):
 
     longMessage = True
