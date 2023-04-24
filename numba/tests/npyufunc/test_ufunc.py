@@ -104,7 +104,7 @@ class TestUFuncs(TestCase):
         tests = []
         expect = "ufunc 'sin' called with an explicit output that is read-only"
         tests.append((jit(nopython=True), TypingError, expect))
-        tests.append((jit(nopython=False), ValueError,
+        tests.append((jit(forceobj=True), ValueError,
                       "output array is read-only"))
 
         for dec, exc, msg in tests:
