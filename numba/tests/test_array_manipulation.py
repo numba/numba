@@ -7,7 +7,7 @@ import unittest
 from numba import jit, njit, from_dtype, typeof
 from numba.core.errors import TypingError
 from numba.core import types, errors
-from numba.tests.support import (TestCase, MemoryLeakMixin, CompilationCache,)
+from numba.tests.support import TestCase, MemoryLeakMixin
 
 enable_pyobj_flags = {'forceobj': True}
 
@@ -190,11 +190,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
     """
     Check shape-changing operations on arrays.
     """
-
-    def setUp(self):
-        super(TestArrayManipulation, self).setUp()
-        self.ccache = CompilationCache()
-
     def test_array_reshape(self):
         pyfuncs_to_use = [array_reshape, numpy_array_reshape]
 
@@ -451,15 +446,12 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
     def test_expand_dims(self):
         pyfunc = expand_dims
-
-        def run(arr, axis):
-            cres = self.ccache.compile(pyfunc, (typeof(arr), typeof(axis)))
-            return cres.entry_point(arr, axis)
+        cfunc = njit(pyfunc)
 
         def check(arr, axis):
             expected = pyfunc(arr, axis)
             self.memory_leak_setup()
-            got = run(arr, axis)
+            got = cfunc(arr, axis)
             self.assertPreciseEqual(got, expected)
             del got
             self.memory_leak_teardown()
@@ -557,12 +549,11 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         self.check_atleast_nd(pyfunc, cfunc)
 
     def check_as_strided(self, pyfunc):
-        def run(arr):
-            cres = self.ccache.compile(pyfunc, (typeof(arr),))
-            return cres.entry_point(arr)
+        cfunc = njit(pyfunc)
+
         def check(arr):
             expected = pyfunc(arr)
-            got = run(arr)
+            got = cfunc(arr)
             self.assertPreciseEqual(got, expected)
 
         arr = np.arange(24)
