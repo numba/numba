@@ -4,7 +4,7 @@ import unittest
 from numba.np.numpy_support import from_dtype
 from numba import njit, typeof
 from numba.core import types
-from numba.tests.support import (TestCase, CompilationCache, MemoryLeakMixin,
+from numba.tests.support import (TestCase, MemoryLeakMixin,
                                  skip_parfors_unsupported)
 from numba.core.errors import TypingError
 from numba.experimental import jitclass
@@ -100,7 +100,6 @@ class TestArrayAttr(MemoryLeakMixin, TestCase):
 
     def setUp(self):
         super(TestArrayAttr, self).setUp()
-        self.ccache = CompilationCache()
         self.a = np.arange(20, dtype=np.int32).reshape(4, 5)
 
     def check_unary(self, pyfunc, arr):
@@ -127,8 +126,7 @@ class TestArrayAttr(MemoryLeakMixin, TestCase):
         self.check_unary(pyfunc, arr.reshape((1, 0, 2)))
 
     def get_cfunc(self, pyfunc, argspec):
-        cres = self.ccache.compile(pyfunc, argspec)
-        return cres.entry_point
+        return njit(argspec)(pyfunc)
 
     def test_shape(self):
         pyfunc = array_shape
