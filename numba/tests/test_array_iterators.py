@@ -4,7 +4,7 @@ import numpy as np
 
 from numba import jit, njit, typeof
 from numba.core import types
-from numba.tests.support import TestCase, CompilationCache, MemoryLeakMixin, tag
+from numba.tests.support import TestCase, MemoryLeakMixin
 import unittest
 
 
@@ -124,7 +124,6 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
 
     def setUp(self):
         super(TestArrayIterators, self).setUp()
-        self.ccache = CompilationCache()
 
     def check_array_iter_1d(self, arr):
         pyfunc = array_iter
@@ -275,29 +274,40 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
     def test_array_flat_empty(self):
         # Test .flat with various shapes of empty arrays, contiguous
         # and non-contiguous (see issue #846).
+
+        # Define a local checking function, Numba's `typeof` ends up aliasing
+        # 0d C and F ordered arrays, so the check needs to go via the compile
+        # result entry point to bypass type checking.
+        def check(arr, arrty):
+            cfunc = njit((arrty,))(array_flat_sum)
+            cres = cfunc.overloads[(arrty,)]
+            got = cres.entry_point(arr)
+            expected = cfunc.py_func(arr)
+            np.testing.assert_allclose(expected, got)
+
         arr = np.zeros(0, dtype=np.int32)
         arr = arr.reshape(0, 2)
         arrty = types.Array(types.int32, 2, layout='C')
-        self.check_array_flat_sum(arr, arrty)
+        check(arr, arrty)
         arrty = types.Array(types.int32, 2, layout='F')
-        self.check_array_flat_sum(arr, arrty)
+        check(arr, arrty)
         arrty = types.Array(types.int32, 2, layout='A')
-        self.check_array_flat_sum(arr, arrty)
+        check(arr, arrty)
         arr = arr.reshape(2, 0)
         arrty = types.Array(types.int32, 2, layout='C')
-        self.check_array_flat_sum(arr, arrty)
+        check(arr, arrty)
         arrty = types.Array(types.int32, 2, layout='F')
-        self.check_array_flat_sum(arr, arrty)
+        check(arr, arrty)
         arrty = types.Array(types.int32, 2, layout='A')
-        self.check_array_flat_sum(arr, arrty)
+        check(arr, arrty)
 
     def test_array_flat_getitem(self):
         # Test indexing of array.flat object
         pyfunc = array_flat_getitem
+        cfunc = njit(pyfunc)
         def check(arr, ind):
-            cr = self.ccache.compile(pyfunc, (typeof(arr), typeof(ind)))
             expected = pyfunc(arr, ind)
-            self.assertEqual(cr.entry_point(arr, ind), expected)
+            self.assertEqual(cfunc(arr, ind), expected)
 
         arr = np.arange(24).reshape(4, 2, 3)
         for i in range(arr.size):
@@ -322,14 +332,13 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
     def test_array_flat_setitem(self):
         # Test indexing of array.flat object
         pyfunc = array_flat_setitem
+        cfunc = njit(pyfunc)
         def check(arr, ind):
-            arrty = typeof(arr)
-            cr = self.ccache.compile(pyfunc, (arrty, typeof(ind), arrty.dtype))
             # Use np.copy() to keep the layout
             expected = np.copy(arr)
             got = np.copy(arr)
             pyfunc(expected, ind, 123)
-            cr.entry_point(got, ind, 123)
+            cfunc(got, ind, 123)
             self.assertPreciseEqual(got, expected)
 
         arr = np.arange(24).reshape(4, 2, 3)
@@ -355,10 +364,10 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
     def test_array_flat_len(self):
         # Test len(array.flat)
         pyfunc = array_flat_len
+        cfunc = njit(array_flat_len)
         def check(arr):
-            cr = self.ccache.compile(pyfunc, (typeof(arr),))
             expected = pyfunc(arr)
-            self.assertPreciseEqual(cr.entry_point(arr), expected)
+            self.assertPreciseEqual(cfunc(arr), expected)
 
         arr = np.arange(24).reshape(4, 2, 3)
         check(arr)
@@ -403,21 +412,31 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         self.check_array_ndenumerate_sum(arr, typeof(arr))
 
     def test_array_ndenumerate_empty(self):
+        # Define a local checking function, Numba's `typeof` ends up aliasing
+        # 0d C and F ordered arrays, so the check needs to go via the compile
+        # result entry point to bypass type checking.
+        def check(arr, arrty):
+            cfunc = njit((arrty,))(array_ndenumerate_sum)
+            cres = cfunc.overloads[(arrty,)]
+            got = cres.entry_point(arr)
+            expected = cfunc.py_func(arr)
+            np.testing.assert_allclose(expected, got)
+
         arr = np.zeros(0, dtype=np.int32)
         arr = arr.reshape(0, 2)
         arrty = types.Array(types.int32, 2, layout='C')
-        self.check_array_ndenumerate_sum(arr, arrty)
+        check(arr, arrty)
         arrty = types.Array(types.int32, 2, layout='F')
-        self.check_array_ndenumerate_sum(arr, arrty)
+        check(arr, arrty)
         arrty = types.Array(types.int32, 2, layout='A')
-        self.check_array_ndenumerate_sum(arr, arrty)
+        check(arr, arrty)
         arr = arr.reshape(2, 0)
         arrty = types.Array(types.int32, 2, layout='C')
-        self.check_array_flat_sum(arr, arrty)
+        check(arr, arrty)
         arrty = types.Array(types.int32, 2, layout='F')
-        self.check_array_flat_sum(arr, arrty)
+        check(arr, arrty)
         arrty = types.Array(types.int32, 2, layout='A')
-        self.check_array_flat_sum(arr, arrty)
+        check(arr, arrty)
 
     def test_array_ndenumerate_premature_free(self):
         cfunc = njit((types.intp,))(array_ndenumerate_premature_free)
