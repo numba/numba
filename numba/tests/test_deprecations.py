@@ -357,7 +357,7 @@ class TestDeprecation(TestCase):
     @needs_setuptools
     @TestCase.run_test_in_subprocess
     def test_pycc_module(self):
-        # checks import of module warns
+        # checks import of module warns.
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always",
