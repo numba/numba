@@ -18,7 +18,7 @@ set PYTHONFAULTHANDLER=1
 set NUMBA_CAPTURED_ERRORS=new_style
 
 @rem First check that the test discovery works
-python -m numba.tests.test_runtests
+python -m numba.tests.test_runtests -m
 @rem Now run the Numba test suite
 @rem Note that coverage is run from the checkout dir to match the "source"
 @rem directive in .coveragerc
