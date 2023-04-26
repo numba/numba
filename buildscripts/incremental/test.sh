@@ -119,8 +119,8 @@ if [[ $(uname) == "Darwin" ]]; then
     export SDKROOT=`pwd`/MacOSX10.10.sdk
 fi
 
-# First check that the test discovery works
-python -m numba.tests.test_runtests
+# First run Numba's Power-On-Self-Test to make sure testing will likely work
+python -m numba.misc.POST
 
 # Now run tests based on the changes identified via git
 NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -g -m $TEST_NPROCS -- numba.tests
