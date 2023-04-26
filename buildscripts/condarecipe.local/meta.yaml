@@ -34,7 +34,7 @@ requirements:
     - setuptools
     - importlib_metadata       # [py<39]
     # On channel https://anaconda.org/numba/
-    - llvmlite >=0.40.0rc1,<0.41
+    - llvmlite 0.40.*
     # TBB devel version is to match TBB libs.
     # NOTE: ppc64le and aarch64 are pending testing so excluded for now, win32
     # is not a supported parallel target.
@@ -45,7 +45,7 @@ requirements:
     - numpy >=1.21, !=1.22.0, !=1.22.1, !=1.22.2, <1.25
     - importlib_metadata       # [py<39]
     # On channel https://anaconda.org/numba/
-    - llvmlite >=0.40.0rc1,<0.41
+    - llvmlite 0.40.*
   run_constrained:
     # If TBB is present it must be at least version 2021.6
     - tbb >=2021.6    # [not (aarch64 or ppc64le or win32)]
