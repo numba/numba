@@ -218,6 +218,8 @@ Misc Support
   (also imports local copy of ``six``)
 - :ghfile:`numba/misc/appdirs.py` - Vendored package for determining application
   config directories on every platform
+- :ghfile:`numba/misc/POST.py` - A power-on-self-test script Numba uses in CI
+  to make sure the test runner and compilation is working.
 - :ghfile:`numba/core/compiler_lock.py` - Global compiler lock because Numba's
   usage of LLVM is not thread-safe
 - :ghfile:`numba/misc/special.py` - Python stub implementations of special Numba
