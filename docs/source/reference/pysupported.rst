@@ -139,8 +139,7 @@ Exception handling
 The ``raise`` statement is only supported in the following forms:
 
 * ``raise SomeException``
-* ``raise SomeException(<arguments>)``: in :term:`nopython mode`, constructor
-  arguments must be :term:`compile-time constants <compile-time constant>`
+* ``raise SomeException(<arguments>)``
 
 It is currently unsupported to re-raise an exception created in compiled code.
 
@@ -724,10 +723,10 @@ Typed Dict
   ``dict()`` was not supported in versions prior to 0.44.  Currently, calling
   ``dict()`` translates to calling ``numba.typed.Dict()``.
 
-Numba only supports the use of ``dict()`` without any arguments.  Such use is
-semantically equivalent to ``{}`` and ``numba.typed.Dict()``.  It will create
-an instance of ``numba.typed.Dict`` where the key-value types will be later
-inferred by usage.
+Numba supports the use of ``dict()``.  Such use is semantically equivalent to
+``{}`` and ``numba.typed.Dict()``. It will create an instance of
+``numba.typed.Dict`` where the key-value types will be later inferred by usage.
+Numba also supports, explicitly, the ``dict(iterable)`` constructor.
 
 Numba does not fully support the Python ``dict`` because it is an untyped
 container that can have any Python types as members. To generate efficient
@@ -930,6 +929,10 @@ The following built-in functions are supported:
 * :func:`enumerate`
 * :func:`filter`
 * :class:`float`
+* :func:`getattr`: the attribute must be a string literal and the return type
+  cannot be a function type (e.g. ``getattr(numpy, 'cos')`` is not supported as
+  it returns a function type).
+* :func:`hasattr`
 * :func:`hash` (see :ref:`pysupported-hashing` below)
 * :class:`int`: only the one-argument form
 * :func:`iter`: only the one-argument form
@@ -944,9 +947,11 @@ The following built-in functions are supported:
 * :class:`range`: The only permitted use of range is as a callable function
   (cannot pass range as an argument to a jitted function or return a range from
   a jitted function).
+* :func:`repr`
 * :func:`round`
 * :func:`sorted`: the ``key`` argument is not supported
 * :func:`sum`
+* :func:`str`
 * :func:`type`: only the one-argument form, and only on some types
   (e.g. numbers and named tuples)
 * :func:`zip`
@@ -1235,29 +1240,29 @@ Third-party modules
 Similarly to ctypes, Numba is able to call into `cffi`_-declared external
 functions, using the following C types and any derived pointer types:
 
-* :c:type:`char`
-* :c:type:`short`
-* :c:type:`int`
-* :c:type:`long`
-* :c:type:`long long`
-* :c:type:`unsigned char`
-* :c:type:`unsigned short`
-* :c:type:`unsigned int`
-* :c:type:`unsigned long`
-* :c:type:`unsigned long long`
-* :c:type:`int8_t`
-* :c:type:`uint8_t`
-* :c:type:`int16_t`
-* :c:type:`uint16_t`
-* :c:type:`int32_t`
-* :c:type:`uint32_t`
-* :c:type:`int64_t`
-* :c:type:`uint64_t`
-* :c:type:`float`
-* :c:type:`double`
-* :c:type:`ssize_t`
-* :c:type:`size_t`
-* :c:type:`void`
+* :c:expr:`char`
+* :c:expr:`short`
+* :c:expr:`int`
+* :c:expr:`long`
+* :c:expr:`long long`
+* :c:expr:`unsigned char`
+* :c:expr:`unsigned short`
+* :c:expr:`unsigned int`
+* :c:expr:`unsigned long`
+* :c:expr:`unsigned long long`
+* :c:expr:`int8_t`
+* :c:expr:`uint8_t`
+* :c:expr:`int16_t`
+* :c:expr:`uint16_t`
+* :c:expr:`int32_t`
+* :c:expr:`uint32_t`
+* :c:expr:`int64_t`
+* :c:expr:`uint64_t`
+* :c:expr:`float`
+* :c:expr:`double`
+* :c:expr:`ssize_t`
+* :c:expr:`size_t`
+* :c:expr:`void`
 
 The ``from_buffer()`` method of ``cffi.FFI`` and ``CompiledFFI`` objects is
 supported for passing Numpy arrays and other buffer-like objects.  Only

@@ -12,7 +12,7 @@
 # ------------------------------------------------------------------------------
 # These people are the default "owners" for everything in the repo unless a
 # later match is made, they will automatically be requested to review PRs.
-* @sklam @stuartarchibald @esc
+* @sklam @stuartarchibald
 
 # Owners of specific parts of the code, will be requested to review if a PR
 # touches code in the matched pattern

@@ -17,8 +17,8 @@ class CudaLoweringError(LoweringError):
     pass
 
 
-_launch_help_url = ("https://numba.pydata.org/numba-doc/"
-                    "latest/cuda/kernels.html#kernel-invocation")
+_launch_help_url = ("https://numba.readthedocs.io/en/stable/cuda/"
+                    "kernels.html#kernel-invocation")
 missing_launch_config_msg = """
 Kernel launch configuration was not specified. Use the syntax:
 

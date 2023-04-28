@@ -8,7 +8,7 @@ import sys
 import itertools
 from collections import namedtuple
 
-from llvmlite.llvmpy import core as lc
+import llvmlite.ir as ir
 
 import numpy as np
 import operator
@@ -26,7 +26,6 @@ from numba.core import errors
 from numba.cpython import builtins
 
 registry = Registry('npyimpl')
-lower = registry.lower
 
 
 ########################################################################
@@ -71,9 +70,9 @@ class _ScalarHelper(object):
         self.val = val
         self.base_type = ty
         intpty = ctxt.get_value_type(types.intp)
-        self.shape = [lc.Constant.int(intpty, 1)]
+        self.shape = [ir.Constant(intpty, 1)]
 
-        lty = ctxt.get_data_type(ty) if ty != types.boolean else lc.Type.int(1)
+        lty = ctxt.get_data_type(ty) if ty != types.boolean else ir.IntType(1)
         self._ptr = cgutils.alloca_once(bld, lty)
 
     def create_iter_indices(self):
@@ -95,14 +94,14 @@ class _ArrayIndexingHelper(namedtuple('_ArrayIndexingHelper',
     def update_indices(self, loop_indices, name):
         bld = self.array.builder
         intpty = self.array.context.get_value_type(types.intp)
-        ONE = lc.Constant.int(lc.Type.int(intpty.width), 1)
+        ONE = ir.Constant(ir.IntType(intpty.width), 1)
 
         # we are only interested in as many inner dimensions as dimensions
         # the indexed array has (the outer dimensions are broadcast, so
         # ignoring the outer indices produces the desired result.
         indices = loop_indices[len(loop_indices) - len(self.indices):]
         for src, dst, dim in zip(indices, self.indices, self.array.shape):
-            cond = bld.icmp(lc.ICMP_UGT, dim, ONE)
+            cond = bld.icmp_unsigned('>', dim, ONE)
             with bld.if_then(cond):
                 bld.store(src, dst)
 
@@ -127,11 +126,11 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder',
     """
     def create_iter_indices(self):
         intpty = self.context.get_value_type(types.intp)
-        ZERO = lc.Constant.int(lc.Type.int(intpty.width), 0)
+        ZERO = ir.Constant(ir.IntType(intpty.width), 0)
 
         indices = []
         for i in range(self.ndim):
-            x = cgutils.alloca_once(self.builder, lc.Type.int(intpty.width))
+            x = cgutils.alloca_once(self.builder, ir.IntType(intpty.width))
             self.builder.store(ZERO, x)
             indices.append(x)
         return _ArrayIndexingHelper(self, indices)
@@ -269,7 +268,7 @@ def _build_array(context, builder, array_ty, input_types, inputs):
             builder, _broadcast_onto, _broadcast_onto_sig,
             [arg_ndim, src_shape, dest_ndim, dest_shape])
         with cgutils.if_unlikely(builder,
-                                 builder.icmp(lc.ICMP_SLT, arg_result, ONE)):
+                                 builder.icmp_signed('<', arg_result, ONE)):
             msg = "unable to broadcast argument %d to output array" % (
                 arg_number,)
 
@@ -361,7 +360,7 @@ def numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
             else:
                 output = _prepare_argument(
                     context, builder,
-                    lc.Constant.null(context.get_value_type(ret_ty)), ret_ty)
+                    ir.Constant(context.get_value_type(ret_ty), None), ret_ty)
             arguments.append(output)
         elif context.enable_nrt:
             # Incref the output
@@ -383,7 +382,23 @@ def numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
     # assume outputs are all the same size, which numpy requires
 
     loopshape = outputs[0].shape
-    with cgutils.loop_nest(builder, loopshape, intp=intpty) as loop_indices:
+
+    # count the number of C and F layout arrays, respectively
+    input_layouts = [inp.layout for inp in inputs
+                     if isinstance(inp, _ArrayHelper)]
+    num_c_layout = len([x for x in input_layouts if x == 'C'])
+    num_f_layout = len([x for x in input_layouts if x == 'F'])
+
+    # Only choose F iteration order if more arrays are in F layout.
+    # Default to C order otherwise.
+    # This is a best effort for performance. NumPy has more fancy logic that
+    # uses array iterators in non-trivial cases.
+    if num_f_layout > num_c_layout:
+        order = 'F'
+    else:
+        order = 'C'
+
+    with cgutils.loop_nest(builder, loopshape, intp=intpty, order=order) as loop_indices:
         vals_in = []
         for i, (index, arg) in enumerate(zip(indices, inputs)):
             index.update_indices(loop_indices, i)
@@ -478,7 +493,7 @@ def _ufunc_db_function(ufunc):
 ################################################################################
 # Helper functions that register the ufuncs
 
-def register_ufunc_kernel(ufunc, kernel):
+def register_ufunc_kernel(ufunc, kernel, lower):
     def do_ufunc(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel)
 
@@ -493,7 +508,8 @@ def register_ufunc_kernel(ufunc, kernel):
     return kernel
 
 
-def register_unary_operator_kernel(operator, ufunc, kernel, inplace=False):
+def register_unary_operator_kernel(operator, ufunc, kernel, lower,
+                                   inplace=False):
     assert not inplace  # are there any inplace unary operators?
     def lower_unary_operator(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel)
@@ -501,7 +517,7 @@ def register_unary_operator_kernel(operator, ufunc, kernel, inplace=False):
     lower(operator, _arr_kind)(lower_unary_operator)
 
 
-def register_binary_operator_kernel(op, ufunc, kernel, inplace=False):
+def register_binary_operator_kernel(op, ufunc, kernel, lower, inplace=False):
     def lower_binary_operator(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel)
 
@@ -526,7 +542,7 @@ def register_binary_operator_kernel(op, ufunc, kernel, inplace=False):
 ################################################################################
 # Use the contents of ufunc_db to initialize the supported ufuncs
 
-@lower(operator.pos, types.Array)
+@registry.lower(operator.pos, types.Array)
 def array_positive_impl(context, builder, sig, args):
     '''Lowering function for +(array) expressions.  Defined here
     (numba.targets.npyimpl) since the remaining array-operator
@@ -541,11 +557,11 @@ def array_positive_impl(context, builder, sig, args):
                               _UnaryPositiveKernel)
 
 
-def _register_ufuncs():
+def register_ufuncs(ufuncs, lower):
     kernels = {}
-    # NOTE: Assuming ufunc implementation for the CPUContext.
-    for ufunc in ufunc_db.get_ufuncs():
-        kernels[ufunc] = register_ufunc_kernel(ufunc, _ufunc_db_function(ufunc))
+    for ufunc in ufuncs:
+        db_func = _ufunc_db_function(ufunc)
+        kernels[ufunc] = register_ufunc_kernel(ufunc, db_func, lower)
 
     for _op_map in (npydecl.NumpyRulesUnaryArrayOperator._op_map,
                     npydecl.NumpyRulesArrayOperator._op_map,
@@ -554,9 +570,9 @@ def _register_ufuncs():
             ufunc = getattr(np, ufunc_name)
             kernel = kernels[ufunc]
             if ufunc.nin == 1:
-                register_unary_operator_kernel(operator, ufunc, kernel)
+                register_unary_operator_kernel(operator, ufunc, kernel, lower)
             elif ufunc.nin == 2:
-                register_binary_operator_kernel(operator, ufunc, kernel)
+                register_binary_operator_kernel(operator, ufunc, kernel, lower)
             else:
                 raise RuntimeError("There shouldn't be any non-unary or binary operators")
 
@@ -566,14 +582,16 @@ def _register_ufuncs():
             ufunc = getattr(np, ufunc_name)
             kernel = kernels[ufunc]
             if ufunc.nin == 1:
-                register_unary_operator_kernel(operator, ufunc, kernel, inplace=True)
+                register_unary_operator_kernel(operator, ufunc, kernel, lower,
+                                               inplace=True)
             elif ufunc.nin == 2:
-                register_binary_operator_kernel(operator, ufunc, kernel, inplace=True)
+                register_binary_operator_kernel(operator, ufunc, kernel, lower,
+                                                inplace=True)
             else:
                 raise RuntimeError("There shouldn't be any non-unary or binary operators")
 
 
-_register_ufuncs()
+register_ufuncs(ufunc_db.get_ufuncs(), registry.lower)
 
 
 @intrinsic

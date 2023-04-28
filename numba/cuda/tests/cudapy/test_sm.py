@@ -1,10 +1,12 @@
-from numba import cuda, int32, float64
-
-from numba.cuda.testing import unittest, CUDATestCase
+from numba import cuda, int32, float64, void
+from numba.core.errors import TypingError
+from numba.core import types
+from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 
 import numpy as np
 from numba.np import numpy_support as nps
 
+from .extensions_usecases import test_struct_model_type, TestStruct
 
 recordwith2darray = np.dtype([('i', np.int32),
                               ('j', np.float32, (3, 2))])
@@ -40,7 +42,22 @@ class TestSharedMemoryIssue(CUDATestCase):
         self._check_shared_array_size((2, 3), 6)
 
     def test_issue_1051_shared_size_broken_3d(self):
+
         self._check_shared_array_size((2, 3, 4), 24)
+
+    def _check_shared_array_size_fp16(self, shape, expected, ty):
+        @cuda.jit
+        def s(a):
+            arr = cuda.shared.array(shape, dtype=ty)
+            a[0] = arr.size
+
+        result = np.zeros(1, dtype=np.float16)
+        s[1, 1](result)
+        self.assertEqual(result[0], expected)
+
+    def test_issue_fp16_support(self):
+        self._check_shared_array_size_fp16(2, 2, types.float16)
+        self._check_shared_array_size_fp16(2, 2, np.float16)
 
     def test_issue_2393(self):
         """
@@ -373,6 +390,54 @@ class TestSharedMemory(CUDATestCase):
         sm_slice_copy[nblocks, nthreads, 0, nshared](arr, d_result, chunksize)
         host_result = d_result.copy_to_host()
         np.testing.assert_array_equal(arr, host_result)
+
+    @skip_on_cudasim("Can't check typing in simulator")
+    def test_invalid_array_type(self):
+        rgx = ".*Cannot infer the type of variable 'arr'.*"
+
+        def unsupported_type():
+            arr = cuda.shared.array(10, dtype=np.dtype('O')) # noqa: F841
+        with self.assertRaisesRegex(TypingError, rgx):
+            cuda.jit(void())(unsupported_type)
+
+        rgx = ".*Invalid NumPy dtype specified: 'int33'.*"
+
+        def invalid_string_type():
+            arr = cuda.shared.array(10, dtype='int33') # noqa: F841
+        with self.assertRaisesRegex(TypingError, rgx):
+            cuda.jit(void())(invalid_string_type)
+
+    @skip_on_cudasim("Struct model array unsupported in simulator")
+    def test_struct_model_type_static(self):
+        nthreads = 64
+
+        @cuda.jit(void(int32[::1], int32[::1]))
+        def write_then_reverse_read_static(outx, outy):
+            # Test creation
+            arr = cuda.shared.array(nthreads, dtype=test_struct_model_type)
+
+            i = cuda.grid(1)
+            ri = nthreads - i - 1
+
+            if i < len(outx) and i < len(outy):
+                # Test set to arr
+                obj = TestStruct(int32(i), int32(i * 2))
+                arr[i] = obj
+
+                cuda.syncthreads()
+                # Test get from arr
+                outx[i] = arr[ri].x
+                outy[i] = arr[ri].y
+
+        arrx = np.zeros((nthreads,), dtype="int32")
+        arry = np.zeros((nthreads,), dtype="int32")
+
+        write_then_reverse_read_static[1, nthreads](arrx, arry)
+
+        for i, x in enumerate(arrx):
+            self.assertEqual(x, nthreads - i - 1)
+        for i, y in enumerate(arry):
+            self.assertEqual(y, (nthreads - i - 1) * 2)
 
 
 if __name__ == '__main__':

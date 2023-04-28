@@ -1,3 +1,4 @@
+import abc
 from contextlib import contextmanager
 from collections import defaultdict, namedtuple
 from copy import copy
@@ -8,7 +9,11 @@ from numba.core import (errors, types, typing, ir, funcdesc, rewrites,
 
 from numba.parfors.parfor import PreParforPass as _parfor_PreParforPass
 from numba.parfors.parfor import ParforPass as _parfor_ParforPass
+from numba.parfors.parfor import ParforFusionPass as _parfor_ParforFusionPass
+from numba.parfors.parfor import ParforPreLoweringPass as \
+    _parfor_ParforPreLoweringPass
 from numba.parfors.parfor import Parfor
+from numba.parfors.parfor_lowering import ParforLower
 
 from numba.core.compiler_machinery import (FunctionPass, LoweringPass,
                                            AnalysisPass, register_pass)
@@ -320,7 +325,7 @@ class ParforPass(FunctionPass):
             # parfor calls the compiler chain again with a string
             if not (config.DISABLE_PERFORMANCE_WARNINGS or
                     state.func_ir.loc.filename == '<string>'):
-                url = ("https://numba.pydata.org/numba-doc/latest/user/"
+                url = ("https://numba.readthedocs.io/en/stable/user/"
                        "parallel.html#diagnostics")
                 msg = ("\nThe keyword argument 'parallel=True' was specified "
                        "but no transformation for parallel execution was "
@@ -331,6 +336,64 @@ class ParforPass(FunctionPass):
 
         # Add reload function to initialize the parallel backend.
         state.reload_init.append(_reload_parfors)
+        return True
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class ParforFusionPass(FunctionPass):
+
+    _name = "parfor_fusion_pass"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        """
+        Do fusion of parfor nodes.
+        """
+        # Ensure we have an IR and type information.
+        assert state.func_ir
+        parfor_pass = _parfor_ParforFusionPass(state.func_ir,
+                                               state.typemap,
+                                               state.calltypes,
+                                               state.return_type,
+                                               state.typingctx,
+                                               state.targetctx,
+                                               state.flags.auto_parallel,
+                                               state.flags,
+                                               state.metadata,
+                                               state.parfor_diagnostics)
+        parfor_pass.run()
+
+        return True
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class ParforPreLoweringPass(FunctionPass):
+
+    _name = "parfor_prelowering_pass"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        """
+        Prepare parfors for lowering.
+        """
+        # Ensure we have an IR and type information.
+        assert state.func_ir
+        parfor_pass = _parfor_ParforPreLoweringPass(state.func_ir,
+                                                    state.typemap,
+                                                    state.calltypes,
+                                                    state.return_type,
+                                                    state.typingctx,
+                                                    state.targetctx,
+                                                    state.flags.auto_parallel,
+                                                    state.flags,
+                                                    state.metadata,
+                                                    state.parfor_diagnostics)
+        parfor_pass.run()
+
         return True
 
 
@@ -352,13 +415,22 @@ class DumpParforDiagnostics(AnalysisPass):
         return True
 
 
-@register_pass(mutates_CFG=True, analysis_only=False)
-class NativeLowering(LoweringPass):
+class BaseNativeLowering(abc.ABC, LoweringPass):
+    """The base class for a lowering pass. The lowering functionality must be
+    specified in inheriting classes by providing an appropriate lowering class
+    implementation in the overridden `lowering_class` property."""
 
-    _name = "native_lowering"
+    _name = None
 
     def __init__(self):
         LoweringPass.__init__(self)
+
+    @property
+    @abc.abstractmethod
+    def lowering_class(self):
+        """Returns the class that performs the lowering of the IR describing the
+        function that is the target of the current compilation."""
+        pass
 
     def run_pass(self, state):
         if state.library is None:
@@ -389,8 +461,8 @@ class NativeLowering(LoweringPass):
                     noalias=flags.noalias, abi_tags=[flags.get_mangle_string()])
 
             with targetctx.push_code_library(library):
-                lower = lowering.Lower(targetctx, library, fndesc, interp,
-                                       metadata=metadata)
+                lower = self.lowering_class(targetctx, library, fndesc, interp,
+                                            metadata=metadata)
                 lower.lower()
                 if not flags.no_cpython_wrapper:
                     lower.create_cpython_wrapper(flags.release_gil)
@@ -434,6 +506,28 @@ class NativeLowering(LoweringPass):
         return True
 
 
+@register_pass(mutates_CFG=True, analysis_only=False)
+class NativeLowering(BaseNativeLowering):
+    """Lowering pass for a native function IR described solely in terms of
+     Numba's standard `numba.core.ir` nodes."""
+    _name = "native_lowering"
+
+    @property
+    def lowering_class(self):
+        return lowering.Lower
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class NativeParforLowering(BaseNativeLowering):
+    """Lowering pass for a native function IR described using Numba's standard
+    `numba.core.ir` nodes and also parfor.Parfor nodes."""
+    _name = "native_parfor_lowering"
+
+    @property
+    def lowering_class(self):
+        return ParforLower
+
+
 @register_pass(mutates_CFG=False, analysis_only=True)
 class NoPythonSupportedFeatureValidation(AnalysisPass):
     """NoPython Mode check: Validates the IR to ensure that features in use are
@@ -460,7 +554,7 @@ class IRLegalization(AnalysisPass):
 
     def run_pass(self, state):
         # NOTE: this function call must go last, it checks and fixes invalid IR!
-        check_and_legalize_ir(state.func_ir)
+        check_and_legalize_ir(state.func_ir, flags=state.flags)
         return True
 
 

@@ -8,19 +8,31 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <math.h>
+#include <complex.h>
 #ifdef _MSC_VER
     #define int64_t signed __int64
     #define uint64_t unsigned __int64
     #define uint32_t unsigned __int32
+    #define _complex_float_t _Fcomplex
+    #define _complex_float_ctor(r, i) _FCbuild(r, i)
 #else
     #include <stdint.h>
+    #define _complex_float_t complex float
+    #define _complex_float_ctor(r, i) (r + I * i)
 #endif
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/ndarrayobject.h>
 #include <numpy/arrayscalars.h>
-#include <numpy/npy_math.h>
 
 #include "_arraystruct.h"
+
+
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 11)
+    /*
+     * For struct _frame
+     */
+    #include "internal/pycore_frame.h"
+#endif
 
 /*
  * Other helpers.
@@ -110,6 +122,30 @@ numba_ldexpf(float x, int exp)
     return x;
 }
 
+NUMBA_EXPORT_FUNC(double)
+numba_exp2(double x)
+{
+    return exp2(x);
+}
+
+NUMBA_EXPORT_FUNC(float)
+numba_exp2f(float x)
+{
+    return exp2f(x);
+}
+
+NUMBA_EXPORT_FUNC(double)
+numba_log2(double x)
+{
+    return log2(x);
+}
+
+NUMBA_EXPORT_FUNC(float)
+numba_log2f(float x)
+{
+    return log2f(x);
+}
+
 /* provide complex power */
 NUMBA_EXPORT_FUNC(void)
 numba_cpow(Py_complex *a, Py_complex *b, Py_complex *out) {
@@ -123,14 +159,14 @@ numba_cpow(Py_complex *a, Py_complex *b, Py_complex *out) {
 }
 
 NUMBA_EXPORT_FUNC(void)
-numba_cpowf(npy_cfloat *a, npy_cfloat *b, npy_cfloat *out) {
+numba_cpowf(_complex_float_t *a, _complex_float_t *b, _complex_float_t *out) {
     Py_complex _a, _b, _out;
-    _a.real = npy_crealf(*a);
-    _a.imag = npy_cimagf(*a);
-    _b.real = npy_crealf(*b);
-    _b.imag = npy_cimagf(*b);
+    _a.real = crealf(*a);
+    _a.imag = cimagf(*a);
+    _b.real = crealf(*b);
+    _b.imag = cimagf(*b);
     numba_cpow(&_a, &_b, &_out);
-    *out = npy_cpackf((float) _out.real, (float) _out.imag);
+    *out = _complex_float_ctor((float) _out.real, (float) _out.imag);
 }
 
 /* C99 math functions: redirect to system implementations */
@@ -183,17 +219,16 @@ numba_erfcf(float x)
     return erfcf(x);
 }
 
-/* Note npy_signbit() is actually a polymorphic macro */
-NUMBA_EXPORT_FUNC(int)
-numba_signbitf(float a)
+NUMBA_EXPORT_FUNC(float)
+numba_nextafterf(float a, float b)
 {
-    return npy_signbit(a);
+    return nextafterf(a, b);
 }
 
-NUMBA_EXPORT_FUNC(int)
-numba_signbit(npy_double a)
+NUMBA_EXPORT_FUNC(double)
+numba_nextafter(double a, double b)
 {
-    return npy_signbit(a);
+    return nextafter(a, b);
 }
 
 /* Unpack any Python complex-like object into a Py_complex structure */
@@ -819,8 +854,19 @@ static void traceback_add(const char *funcname, const char *filename, int lineno
     Py_DECREF(code);
     if (!frame)
         goto error;
-    frame->f_lineno = lineno;
 
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 11) /* 3.11 */
+
+    /* unsafe cast to our copy of _frame to access the f_lineno field */
+    typedef struct _frame py_frame;
+    py_frame* hacked_frame = (py_frame*)frame;
+    hacked_frame->f_lineno = lineno;
+
+#elif (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION < 11) /* <3.11 */
+    frame->f_lineno = lineno;
+#else
+    #error "Check if struct _frame has been changed in the new version"
+#endif
     PyErr_Restore(exc, val, tb);
     PyTraceBack_Here(frame);
     Py_DECREF(frame);
@@ -865,16 +911,17 @@ void traceback_add_loc(PyObject *loc) {
 static
 int reraise_exc_is_none(void) {
     /* Reraise */
-    PyThreadState *tstate = PyThreadState_GET();
     PyObject *tb, *type, *value;
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 7)
+
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 11)
+    PyErr_GetExcInfo(&type, &value, &tb);
+#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 8)
+    PyThreadState *tstate = PyThreadState_GET();
     _PyErr_StackItem *tstate_exc = tstate->exc_info;
-#else
-    PyThreadState *tstate_exc = tstate;
-#endif
     type = tstate_exc->exc_type;
     value = tstate_exc->exc_value;
     tb = tstate_exc->exc_traceback;
+#endif
     if (type == Py_None) {
         PyErr_SetString(PyExc_RuntimeError,
                         "No active exception to reraise");
@@ -1013,7 +1060,7 @@ numba_unpickle(const char *data, int n, const char *hashed)
     PyObject *buf=NULL, *obj=NULL, *addr=NULL, *hashedbuf=NULL;
     static PyObject *loads=NULL;
 
-    /* Caching the pickle.loads function shaves a couple µs here. */
+    /* Caching the _numba_unpickle function shaves a couple µs here. */
     if (loads == NULL) {
         PyObject *picklemod;
         picklemod = PyImport_ImportModule("numba.core.serialize");
@@ -1043,6 +1090,32 @@ error:
     return obj;
 }
 #endif
+
+NUMBA_EXPORT_FUNC(PyObject *)
+numba_runtime_build_excinfo_struct(PyObject* struct_gv, PyObject* exc_args)
+{
+    PyObject *obj = NULL;
+    static PyObject *func = NULL;
+
+    /* Caching the function shaves a couple µs here. */
+    if (func == NULL)
+    {
+        PyObject *picklemod;
+        picklemod = PyImport_ImportModule("numba.core.serialize");
+        if (picklemod == NULL)
+            return NULL;
+        func = PyObject_GetAttrString(picklemod,
+                                      "runtime_build_excinfo_struct");
+        Py_DECREF(picklemod);
+        if (func == NULL)
+            return NULL;
+    }
+
+    obj = PyObject_CallFunctionObjArgs(func, struct_gv, exc_args, NULL);
+    // func returns None on failure (i.e. can't serialize one of the args).
+    // Is there a better way to handle this? raise an exception here?
+    return obj;
+}
 
 /*
  * Unicode helpers

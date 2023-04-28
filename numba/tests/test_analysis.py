@@ -4,12 +4,12 @@ import types as pytypes
 
 import numpy as np
 from numba.core.compiler import compile_isolated, run_frontend, Flags, StateDict
-from numba import jit, njit
+from numba import jit, njit, literal_unroll
 from numba.core import types, errors, ir, rewrites, ir_utils, utils, cpu
 from numba.core import postproc
 from numba.core.inline_closurecall import InlineClosureCallPass
-from numba.tests.support import TestCase, MemoryLeakMixin, SerialMixin
-
+from numba.tests.support import (TestCase, MemoryLeakMixin, SerialMixin,
+                                 IRPreservingTestPipeline)
 from numba.core.analysis import dead_branch_prune, rewrite_semantic_constants
 from numba.core.untyped_passes import (ReconstructSSA, TranslateByteCode,
                                        IRProcessing, DeadBranchPrune,
@@ -660,29 +660,8 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
             co_consts[k] = v
         new_consts = tuple([v for _, v in sorted(co_consts.items())])
 
-        # create new code parts
-        co_args = [pyfunc_code.co_argcount]
-
-        if utils.PYVERSION >= (3, 8):
-            co_args.append(pyfunc_code.co_posonlyargcount)
-        co_args.append(pyfunc_code.co_kwonlyargcount)
-        co_args.extend([pyfunc_code.co_nlocals,
-                        pyfunc_code.co_stacksize,
-                        pyfunc_code.co_flags,
-                        pyfunc_code.co_code,
-                        new_consts,
-                        pyfunc_code.co_names,
-                        pyfunc_code.co_varnames,
-                        pyfunc_code.co_filename,
-                        pyfunc_code.co_name,
-                        pyfunc_code.co_firstlineno,
-                        pyfunc_code.co_lnotab,
-                        pyfunc_code.co_freevars,
-                        pyfunc_code.co_cellvars
-                        ])
-
         # create code object with mutation
-        new_code = pytypes.CodeType(*co_args)
+        new_code = pyfunc_code.replace(co_consts=new_consts)
 
         # get function
         return pytypes.FunctionType(new_code, globals())
@@ -1026,3 +1005,25 @@ class TestBranchPrunePostSemanticConstRewrites(TestBranchPruneBase):
         args = (np.zeros((5, 4, 3, 2)), np.zeros((1, 1)))
 
         self.assertPreciseEqual(impl(*args), impl.py_func(*args))
+
+    def test_tuple_const_propagation(self):
+        @njit(pipeline_class=IRPreservingTestPipeline)
+        def impl(*args):
+            s = 0
+            for arg in literal_unroll(args):
+                s += len(arg)
+            return s
+
+        inp = ((), (1, 2, 3), ())
+        self.assertPreciseEqual(impl(*inp), impl.py_func(*inp))
+
+        ol = impl.overloads[impl.signatures[0]]
+        func_ir = ol.metadata['preserved_ir']
+        # make sure one of the inplace binop args is a Const
+        binop_consts = set()
+        for blk in func_ir.blocks.values():
+            for expr in blk.find_exprs('inplace_binop'):
+                inst = blk.find_variable_assignment(expr.rhs.name)
+                self.assertIsInstance(inst.value, ir.Const)
+                binop_consts.add(inst.value.value)
+        self.assertEqual(binop_consts, {len(x) for x in inp})

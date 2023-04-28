@@ -9,8 +9,8 @@ from numba.core import types, itanium_mangler
 from numba.core.utils import _dynamic_modname, _dynamic_module
 
 
-def default_mangler(name, argtypes, *, abi_tags=()):
-    return itanium_mangler.mangle(name, argtypes, abi_tags=abi_tags)
+def default_mangler(name, argtypes, *, abi_tags=(), uid=None):
+    return itanium_mangler.mangle(name, argtypes, abi_tags=abi_tags, uid=uid)
 
 
 def qualifying_prefix(modname, qualname):
@@ -33,12 +33,12 @@ class FunctionDescriptor(object):
     __slots__ = ('native', 'modname', 'qualname', 'doc', 'typemap',
                  'calltypes', 'args', 'kws', 'restype', 'argtypes',
                  'mangled_name', 'unique_name', 'env_name', 'global_dict',
-                 'inline', 'noalias', 'abi_tags')
+                 'inline', 'noalias', 'abi_tags', 'uid')
 
     def __init__(self, native, modname, qualname, unique_name, doc,
                  typemap, restype, calltypes, args, kws, mangler=None,
                  argtypes=None, inline=False, noalias=False, env_name=None,
-                 global_dict=None, abi_tags=()):
+                 global_dict=None, abi_tags=(), uid=None):
         self.native = native
         self.modname = modname
         self.global_dict = global_dict
@@ -63,13 +63,14 @@ class FunctionDescriptor(object):
         mangler = default_mangler if mangler is None else mangler
         # The mangled name *must* be unique, else the wrong function can
         # be chosen at link time.
-        qualprefix = qualifying_prefix(self.modname, self.unique_name)
+        qualprefix = qualifying_prefix(self.modname, self.qualname)
+        self.uid = uid
         self.mangled_name = mangler(
-            qualprefix, self.argtypes, abi_tags=abi_tags,
+            qualprefix, self.argtypes, abi_tags=abi_tags, uid=uid,
         )
         if env_name is None:
             env_name = mangler(".NumbaEnv.{}".format(qualprefix),
-                               self.argtypes, abi_tags=abi_tags)
+                               self.argtypes, abi_tags=abi_tags, uid=uid)
         self.env_name = env_name
         self.inline = inline
         self.noalias = noalias
@@ -87,7 +88,7 @@ class FunctionDescriptor(object):
         """
         Return the module in which this function is supposed to exist.
         This may be a dummy module if the function was dynamically
-        generated. Raise exception if the module can't be found.
+        generated or the module can't be found.
         """
         if self.modname == _dynamic_modname:
             return _dynamic_module
@@ -96,9 +97,7 @@ class FunctionDescriptor(object):
                 # ensure module exist
                 return importlib.import_module(self.modname)
             except ImportError:
-                raise ModuleNotFoundError(
-                    f"can't compile {self.qualname}: "
-                    f"import of module {self.modname} failed") from None
+                return _dynamic_module
 
     def lookup_function(self):
         """
@@ -174,7 +173,8 @@ class FunctionDescriptor(object):
         self = cls(native, modname, qualname, unique_name, doc,
                    typemap, restype, calltypes,
                    args, kws, mangler=mangler, inline=inline, noalias=noalias,
-                   global_dict=global_dict, abi_tags=abi_tags)
+                   global_dict=global_dict, abi_tags=abi_tags,
+                   uid=func_ir.func_id.unique_id)
         return self
 
 
@@ -219,9 +219,12 @@ class ExternalFunctionDescriptor(FunctionDescriptor):
     def __init__(self, name, restype, argtypes):
         args = ["arg%d" % i for i in range(len(argtypes))]
 
+        def mangler(a, x, abi_tags, uid=None):
+            return a
         super(ExternalFunctionDescriptor, self
               ).__init__(native=True, modname=None, qualname=name,
                          unique_name=name, doc='', typemap=None,
                          restype=restype, calltypes=None, args=args,
                          kws=None,
-                         mangler=lambda a, x, abi_tags: a, argtypes=argtypes)
+                         mangler=mangler,
+                         argtypes=argtypes)

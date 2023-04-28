@@ -371,7 +371,7 @@ In order to debug code, it is possible to disable JIT compilation, which makes
 the ``jit`` decorator (and the ``njit`` decorator) act as if
 they perform no operation, and the invocation of decorated functions calls the
 original Python function instead of a compiled version. This can be toggled by
-setting the :envvar:`NUMBA_DISABLE_JIT` enviroment variable to ``1``.
+setting the :envvar:`NUMBA_DISABLE_JIT` environment variable to ``1``.
 
 When this mode is enabled, the ``vectorize`` and ``guvectorize`` decorators will
 still result in compilation of a ufunc, as there is no straightforward pure
@@ -403,12 +403,42 @@ debug info is available:
   * Other types are shown as a structure based on Numba's memory model
     representation of the type.
 
+Further, the Numba ``gdb`` printing extension can be loaded into ``gdb`` (if the
+``gdb`` has Python support) to permit the printing of variables as they would be
+in native Python. The extension does this by reinterpreting Numba's memory model
+representations as Python types. Information about the ``gdb`` installation that
+Numba is using, including the path to load the ``gdb`` printing extension, can
+be displayed by using the ``numba -g`` command. For best results ensure that the
+Python that ``gdb`` is using has a NumPy module accessible. An example output
+of the ``gdb`` information follows:
+
+.. code-block:: none
+  :emphasize-lines: 1
+
+    $ numba -g
+    GDB info:
+    --------------------------------------------------------------------------------
+    Binary location                               : <some path>/gdb
+    Print extension location                      : <some python path>/numba/misc/gdb_print_extension.py
+    Python version                                : 3.8
+    NumPy version                                 : 1.20.0
+    Numba printing extension supported            : True
+
+    To load the Numba gdb printing extension, execute the following from the gdb prompt:
+
+    source <some python path>/numba/misc/gdb_print_extension.py
+
+    --------------------------------------------------------------------------------
+
 Known issues:
 
 * Stepping depends heavily on optimization level. At full optimization
   (equivalent to O3), most of the variables are optimized out. It is often
-  beneficial to use the environment variable :envvar:`NUMBA_OPT` to adjust the
-  optimization level and :envvar:`NUMBA_EXTEND_VARIABLE_LIFETIMES` to extend
+  beneficial to use the jit option ``_dbg_optnone=True`` 
+  or the environment variable :envvar:`NUMBA_OPT` to adjust the 
+  optimization level and the jit option ``_dbg_extend_lifetimes=True`` 
+  (which is on by default if ``debug=True``) or
+  :envvar:`NUMBA_EXTEND_VARIABLE_LIFETIMES` to extend
   the lifetime of variables to the end of their scope so as to get a debugging
   experience closer to the semantics of Python execution.
 
@@ -432,6 +462,21 @@ Internal details:
   ``x``, ``x.1`` and ``x.2``.)
 
 * When debug is enabled, inlining of functions at LLVM IR level is disabled.
+
+JIT options for debug
+---------------------
+
+* ``debug`` (bool). Set to ``True`` to enable debug info. Defaults to ``False``.
+* ``_dbg_optnone`` (bool). Set to ``True`` to disable all LLVM optimization passes 
+  on the function. Defaults to ``False``. See :envvar:`NUMBA_OPT` for a global setting
+  to disable optimization.
+* ``_dbg_extend_lifetimes`` (bool). Set to ``True`` to extend the lifetime of
+  objects such that they more closely follow the semantics of Python.
+  Automatically set to ``True`` when 
+  ``debug=True``; otherwise, defaults to ``False``. Users can explicitly set this option 
+  to ``False`` to retain the normal execution semantics of compiled code.
+  See :envvar:`NUMBA_EXTEND_VARIABLE_LIFETIMES` for a global option to extend object 
+  lifetimes.
 
 Example debug usage
 -------------------
@@ -496,6 +541,55 @@ In the terminal:
     (gdb) bt
     #0  __main__::foo_241[abi:c8tJTC_2fWgEeGLSgydRTQUgiqKEZ6gEoDvQJmaQIA](long long) (a=123) at test1.py:8
     #1  0x00007ffff06439fa in cpython::__main__::foo_241[abi:c8tJTC_2fWgEeGLSgydRTQUgiqKEZ6gEoDvQJmaQIA](long long) ()
+
+
+Another example follows that makes use of the Numba ``gdb`` printing extension
+mentioned above, note the change in the print format once the extension is
+loaded with ``source`` :
+
+The Python source:
+
+.. code-block:: python
+  :linenos:
+
+    from numba import njit
+    import numpy as np
+
+    @njit(debug=True)
+    def foo(n):
+        x = np.arange(n)
+        y = (x[0], x[-1])
+        return x, y
+
+    foo(4)
+
+In the terminal:
+
+.. code-block:: none
+  :emphasize-lines: 1, 3, 4, 7, 12, 14, 16, 17, 20
+
+    $ NUMBA_OPT=0 NUMBA_EXTEND_VARIABLE_LIFETIMES=1 gdb -q python
+    Reading symbols from python...
+    (gdb) set breakpoint pending on
+    (gdb) break test2.py:8
+    No source file named test2.py.
+    Breakpoint 1 (test2.py:8) pending.
+    (gdb) run test2.py
+    Starting program: <path>/bin/python test2.py
+    ...
+    Breakpoint 1, __main__::foo_241[abi:c8tJTC_2fWgEeGLSgydRTQUgiqKEZ6gEoDvQJmaQIA](long long) (n=4) at test2.py:8
+    8           return x, y
+    (gdb) print x
+    $1 = {meminfo = 0x55555688f470 "\001", parent = 0x0, nitems = 4, itemsize = 8, data = 0x55555688f4a0, shape = {4}, strides = {8}}
+    (gdb) print y
+    $2 = {0, 3}
+    (gdb) source numba/misc/gdb_print_extension.py
+    (gdb) print x
+    $3 =
+    [0 1 2 3]
+    (gdb) print y
+    $4 = (0, 3)
+
 
 
 Globally override debug setting
@@ -703,7 +797,7 @@ the line in which the access violation occurred is printed.
 
 Continuing the example as a debugging session demonstration, first ``index``
 can be printed, and it is evidently 1e9. Printing ``c`` shows that it is a
-structure, so the type needs looking up and it can be seen that is it an
+structure, so the type needs looking up and it can be seen that it is an
 ``array(float64, 1d, C)`` type. Given the segfault came from an invalid access
 it would be informative to check the number of items in the array and compare
 that to the index requested. Inspecting the ``nitems`` member of the structure
@@ -780,12 +874,13 @@ breakpoint was hit, and after a ``continue`` was issued, it broke again at line
 Debugging in parallel regions
 -----------------------------
 
-The follow example is quite involved, it executes with ``gdb`` instrumentation
-from the outset as per the example above, but it also uses threads and makes use
-of the breakpoint functionality. Further, the last iteration of the parallel
-section calls the function ``work``, which is actually just a binding to
-``glibc``'s ``free(3)`` in this case, but could equally be some involved
-function that is presenting a segfault for unknown reasons.
+The following example is quite involved, it executes with ``gdb``
+instrumentation from the outset as per the example above, but it also uses
+threads and makes use of the breakpoint functionality. Further, the last
+iteration of the parallel section calls the function ``work``, which is
+actually just a binding to ``glibc``'s ``free(3)`` in this case, but could
+equally be some involved function that is presenting a segfault for unknown
+reasons.
 
 .. code-block:: python
   :linenos:

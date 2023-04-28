@@ -291,8 +291,6 @@ class CudaArraySetting(CUDATestCase):
             container=[
                 "Can't assign 3-D array to 1-D self",  # device
                 "could not broadcast input array from shape (2,3) "
-                "into shape (35)",  # simulator, NP < 1.20
-                "could not broadcast input array from shape (2,3) "
                 "into shape (35,)",  # simulator, NP >= 1.20
             ])
 
@@ -307,8 +305,6 @@ class CudaArraySetting(CUDATestCase):
             container=[
                 "Can't copy sequence with size 2 to array axis 0 with "
                 "dimension 5",  # device
-                "cannot copy sequence with size 2 to array axis with "
-                "dimension 5",  # simulator, NP < 1.20
                 "could not broadcast input array from shape (2,) into "
                 "shape (5,)",   # simulator, NP >= 1.20
             ])

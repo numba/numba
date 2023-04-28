@@ -117,7 +117,7 @@ implementation follows:
   is handled internally within Numba.
 - It is optional to provide memory info from the ``get_memory_info`` method, which
   provides a count of the total and free memory on the device for the context.
-  It is preferrable to implement the method, but this may not be practical for
+  It is preferable to implement the method, but this may not be practical for
   all allocators. If memory info is not provided, this method should raise a
   :class:`RuntimeError`.
 - The ``defer_cleanup`` method should return a context manager that ensures that

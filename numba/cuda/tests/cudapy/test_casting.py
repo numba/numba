@@ -6,8 +6,13 @@ from numba import cuda
 from numba.core import types
 from numba.cuda.testing import (CUDATestCase, skip_on_cudasim,
                                 skip_unless_cc_53)
+from numba.types import float16, float32
 import itertools
 import unittest
+
+
+def native_cast(x):
+    return float(x)
 
 
 def to_int8(x):
@@ -108,6 +113,7 @@ class TestCasting(CUDATestCase):
 
         return wrapper_fn
 
+    @skip_unless_cc_53
     def test_float_to_int(self):
         pyfuncs = (to_int8, to_int16, to_int32, to_int64)
         totys = (np.int8, np.int16, np.int32, np.int64)
@@ -128,9 +134,10 @@ class TestCasting(CUDATestCase):
         sizes = (8, 16, 32, 64)
 
         for pyfunc, size in zip(pyfuncs, sizes):
-            ptx, _ = compile_ptx(pyfunc, [f2], device=True)
+            ptx, _ = compile_ptx(pyfunc, (f2,), device=True)
             self.assertIn(f"cvt.rni.s{size}.f16", ptx)
 
+    @skip_unless_cc_53
     def test_float_to_uint(self):
         pyfuncs = (to_int8, to_int16, to_int32, to_int64)
         totys = (np.uint8, np.uint16, np.uint32, np.uint64)
@@ -149,9 +156,10 @@ class TestCasting(CUDATestCase):
         sizes = (8, 16, 32, 64)
 
         for pyfunc, size in zip(pyfuncs, sizes):
-            ptx, _ = compile_ptx(pyfunc, [f2], device=True)
+            ptx, _ = compile_ptx(pyfunc, (f2,), device=True)
             self.assertIn(f"cvt.rni.u{size}.f16", ptx)
 
+    @skip_unless_cc_53
     def test_int_to_float(self):
         pyfuncs = (to_float16, to_float32, to_float64)
         totys = (np.float16, np.float32, np.float64)
@@ -179,7 +187,7 @@ class TestCasting(CUDATestCase):
         sizes = (8, 16, 32, 64)
 
         for ty, size in zip(fromtys, sizes):
-            ptx, _ = compile_ptx(to_float16, [ty], device=True)
+            ptx, _ = compile_ptx(to_float16, (ty,), device=True)
             self.assertIn(f"cvt.rn.f16.s{size}", ptx)
 
     @skip_on_cudasim('Compilation unsupported in the simulator')
@@ -188,9 +196,10 @@ class TestCasting(CUDATestCase):
         sizes = (8, 16, 32, 64)
 
         for ty, size in zip(fromtys, sizes):
-            ptx, _ = compile_ptx(to_float16, [ty], device=True)
+            ptx, _ = compile_ptx(to_float16, (ty,), device=True)
             self.assertIn(f"cvt.rn.f16.u{size}", ptx)
 
+    @skip_unless_cc_53
     def test_float_to_float(self):
         pyfuncs = (to_float16, to_float32, to_float64)
         tys = (np.float16, np.float32, np.float64)
@@ -213,9 +222,10 @@ class TestCasting(CUDATestCase):
         postfixes = ("f32", "f64")
 
         for pyfunc, postfix in zip(pyfuncs, postfixes):
-            ptx, _ = compile_ptx(pyfunc, [f2], device=True)
+            ptx, _ = compile_ptx(pyfunc, (f2,), device=True)
             self.assertIn(f"cvt.{postfix}.f16", ptx)
 
+    @skip_unless_cc_53
     def test_float_to_complex(self):
         pyfuncs = (to_complex64, to_complex128)
         totys = (np.complex64, np.complex128)
@@ -233,6 +243,14 @@ class TestCasting(CUDATestCase):
                                                pyfunc(fromty(3.21)))
                     np.testing.assert_allclose(cfunc(-3.21),
                                                pyfunc(fromty(-3.21)) + 0j)
+
+    @skip_on_cudasim('Compilation unsupported in the simulator')
+    def test_native_cast(self):
+        float32_ptx, _ = cuda.compile_ptx(native_cast, (float32,), device=True)
+        self.assertIn("st.f32", float32_ptx)
+
+        float16_ptx, _ = cuda.compile_ptx(native_cast, (float16,), device=True)
+        self.assertIn("st.u16", float16_ptx)
 
 
 if __name__ == '__main__':
