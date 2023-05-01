@@ -402,7 +402,7 @@ Pull-Requests:
 * PR `#8909 <https://github.com/numba/numba/pull/8909>`_: Fix #8903. ``NumbaDeprecationWarning``s raised from ``@{gu,}vectorize``. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#8929 <https://github.com/numba/numba/pull/8929>`_: Update CHANGE_LOG for 0.57.0 final. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#8930 <https://github.com/numba/numba/pull/8930>`_: Fix year in change log (`jtilly <https://github.com/jtilly>`_)
-* PR `#8932 <https://github.com/numba/numba/pull/8932>`_: Fix 0.57 release changelog (`jtilly <https://github.com/jtilly>`_ `sklam <https://github.com/sklam>`_)
+* PR `#8932 <https://github.com/numba/numba/pull/8932>`_: Fix 0.57 release changelog (`sklam <https://github.com/sklam>`_)
 
 Authors:
 
