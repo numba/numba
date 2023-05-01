@@ -553,6 +553,8 @@ def setitem_array(context, builder, sig, args):
         # (NOTE: this also handles scalar broadcasting)
         fancy_setslice(context, builder, sig, args,
                        index_types, indices)
+        # To prevent:
+        # https://github.com/numba/numba/pull/8491#issuecomment-1305977791
         builder.module.add_named_metadata('numba_args_may_always_need_nrt',
                                           ['fancy_setslice'])
     else:
@@ -777,7 +779,7 @@ class IntegerArrayIndexer(Indexer):
             self.idxty = idxty
             self.idxary = idxary
 
-        assert self.idxty.ndim == 1, <message>
+        assert self.idxty.ndim == 1, "Index array not being flattened properly"
 
     def prepare(self):
         builder = self.builder
