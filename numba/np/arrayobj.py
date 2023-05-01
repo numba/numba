@@ -12,7 +12,7 @@ from llvmlite.ir import Constant
 
 import numpy as np
 
-from numba import pndindex, literal_unroll
+from numba import pndindex, literal_unroll, njit
 from numba.core import types, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, carray, farray, is_contiguous,
                                     is_fortran, check_is_integer,
@@ -754,6 +754,11 @@ class IntegerArrayIndexer(Indexer):
         self.ll_intp = self.context.get_value_type(types.intp)
 
         if idxty.ndim > 1:
+            if not context.enable_nrt:
+                raise NotImplementedError("This type of indexing is not"
+                                          " currently supported for"
+                                          " given compiler target.")
+
             def flat_imp_nocopy(ary):
                 return ary.reshape(ary.size)
 
@@ -767,11 +772,15 @@ class IntegerArrayIndexer(Indexer):
             # reshaping non-contiguous arrays
             else:
                 flat_imp = flat_imp_copy
+            flat_imp = njit(flat_imp)
 
             retty = types.Array(idxty.dtype, 1, idxty.layout, readonly=True)
-            sig = signature(retty, idxty)
-            res = context.compile_internal(builder, flat_imp, sig,
-                                           (idxary._getvalue(),))
+            fnop = self.context.typing_context.resolve_value_type(flat_imp)
+            callsig = fnop.get_call_type(
+                self.context.typing_context, {idxty}, {},
+            )
+            impl = self.context.get_function(fnop, callsig)
+            res = impl(self.builder, (idxary._getvalue(),))
             self.idxty = retty
             self.idxary = make_array(retty)(context, builder, res)
             self.idxary_instr = res
@@ -1663,6 +1672,9 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
     src_type = None
 
     if isinstance(srcty, types.Buffer):
+        if not context.enable_nrt:
+            raise NotImplementedError("This type of indexing is not currently"
+                                      " supported for given compiler target.")
         src_type = 'buffer'
         # Source is an array
         src_dtype = srcty.dtype
@@ -1727,8 +1739,13 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
 
         retty = types.Array(srcty.dtype, 1, srcty.layout, readonly=True)
         sig = signature(retty, srcty)
-        src_flat_instr = context.compile_internal(builder, flat_imp, sig,
-                                                  (src._getvalue(),))
+        flat_imp = njit(flat_imp)
+        fnop = context.typing_context.resolve_value_type(flat_imp)
+        callsig = fnop.get_call_type(
+            context.typing_context, {srcty}, {},
+        )
+        impl = context.get_function(fnop, callsig)
+        src_flat_instr = impl(builder, (src._getvalue(),))
         src_flat = make_array(retty)(context, builder, src_flat_instr)
         src_data = src_flat.data
 

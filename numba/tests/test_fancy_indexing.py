@@ -329,6 +329,13 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
          1),
         (3, np.array([True, False, True, False, True, False]),
          slice(None), slice(4)),
+
+        # Differently ordered arrays
+        # Ellipsis + Slices + Integers
+        (Ellipsis, 1, np.array([0,1,3,4,2], order='A'), 3, slice(1,5)),
+        (np.array([0,1,3,4,2], order='F'), 3, Ellipsis, slice(1,5)),
+        (np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]], order='A'),
+         3, Ellipsis, slice(1,5)), # multidimensional
     ]
 
     rng = np.random.default_rng(1)
