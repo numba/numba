@@ -1,16 +1,25 @@
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace, field, fields
 import dis
 from typing import Optional
+from collections import (
+    deque,
+    defaultdict,
+)
+from collections.abc import Mapping
 
 from . import bcinterp
 
 from numba_rvsdg.core.datastructures.byte_flow import ByteFlow
-from numba_rvsdg.core.datastructures.scfg import SCFG
+from numba_rvsdg.core.datastructures.scfg import (
+    SCFG,
+    ConcealedRegionView,
+)
 from numba_rvsdg.core.datastructures.basic_block import (
     BasicBlock,
     PythonBytecodeBlock,
     RegionBlock,
 )
+from numba_rvsdg.core.datastructures.labels import Label
 from numba_rvsdg.rendering.rendering import ByteFlowRenderer
 
 from .renderer import RvsdgRenderer
@@ -48,14 +57,24 @@ class Op:
 
 
 @dataclass(frozen=True)
+class DDGRegion(RegionBlock):
+    in_vars: set[str] = field(default_factory=set)
+    out_vars: set[str] = field(default_factory=set)
+
+    def render_rvsdg(self, renderer, digraph, label):
+        digraph.node(f"in_vars_{id(self)}", label=f"{'|'.join(self.in_vars)}", shape='record', rank="source")
+        digraph.node(f"out_vars_{id(self)}", label=f"{'|'.join(self.out_vars)}", shape='record', rank="sink")
+
+@dataclass(frozen=True)
 class DDGBlock(BasicBlock):
     in_effect: ValueState | None = None
     out_effect: ValueState | None = None
-    in_stackvars: tuple[ValueState, ...] = ()
-    out_stackvars: tuple[ValueState, ...] = ()
+    in_stackvars: list[ValueState] = ()
+    out_stackvars: list[ValueState] = ()
+    in_vars: dict[str, ValueState] = field(default_factory=dict)
     out_vars: dict[str, ValueState] = field(default_factory=dict)
 
-    def render_rvsdg(self, renderer, digraph, label, block):
+    def render_rvsdg(self, renderer, digraph, label):
         with digraph.subgraph(name="cluster_"+str(label)) as g:
             g.attr(color='lightgrey')
             g.attr(label=str(label))
@@ -68,6 +87,17 @@ class DDGBlock(BasicBlock):
                 self.render_valuestate(renderer, g, vs)
             for vs in self.out_vars.values():
                 self.render_valuestate(renderer, g, vs)
+            # Fill outgoing
+            out_stackvars_fields = "outgoing-stack|" + "|".join([f"<{x.short_identity()}> {x.name}" for x in self.out_stackvars])
+            out_vars_fields = "outgoing-vars|" + "|".join([f"<{x.short_identity()}> {x.name}" for x in self.out_vars.values()])
+            fields = f"<{self.out_effect.short_identity()}> env" + "|" + out_stackvars_fields + "|" + out_vars_fields
+            g.node(f"outgoing_{id(self)}", shape="record", label=f"{fields}")
+            for vs in self.out_stackvars:
+                self.add_vs_edge(renderer, vs, f"outgoing_{id(self)}:{vs.short_identity()}")
+            for vs in self.out_vars.values():
+                self.add_vs_edge(renderer, vs, f"outgoing_{id(self)}:{vs.short_identity()}")
+            self.add_vs_edge(renderer, self.out_effect, f"outgoing_{id(self)}:{self.out_effect.short_identity()}")
+            # Draw "head"
             g.node(str(label), shape="doublecircle", label="")
 
     def render_valuestate(self, renderer, digraph, vs: ValueState, *, follow=True):
@@ -114,12 +144,114 @@ def build_rvsdg(code):
     byteflow = ByteFlow.from_bytecode(code)
     byteflow = byteflow.restructure()
     rvsdg = convert_to_dataflow(byteflow)
+    rvsdg = propagate_states(rvsdg)
     RvsdgRenderer().render_scfg(rvsdg).view("rvsdg")
+
+
+def _compute_incoming_labels(graph: Mapping[Label, BasicBlock]) -> dict[Label, set[Label]]:
+    jump_table: dict[Label, set[Label]] = {}
+    blk: BasicBlock
+    for k in graph:
+        jump_table[k] = set()
+    for blk in graph.values():
+        for dst in blk.jump_targets:
+            jump_table[dst].add(blk.label)
+    return jump_table
+
+def _flatten_full_graph(scfg: SCFG):
+    from collections import ChainMap
+    regions = [_flatten_full_graph(elem.subregion)
+               for elem in scfg.graph.values()
+               if isinstance(elem, RegionBlock)]
+    out = ChainMap(*regions, scfg.graph)
+    for blk in out.values():
+        assert not isinstance(blk, RegionBlock), type(blk)
+    return out
+
+def view_toposorted_ddgblock_only(rvsdg: SCFG) -> list[list[DDGBlock]]:
+    """Return toposorted nested list of DDGBlock
+    """
+    from pprint import pprint
+    graph = _flatten_full_graph(rvsdg)
+    incoming_labels = _compute_incoming_labels(graph)
+    visited: set[Label] = set()
+    toposorted: list[list[Label]] = []
+
+    # Toposort
+    while incoming_labels:
+        level = []
+        for k, vs in incoming_labels.items():
+            if not (vs - visited):
+                # all incoming visited
+                level.append(k)
+        for k in level:
+            del incoming_labels[k]
+        visited |= set(level)
+        toposorted.append(level)
+
+    # Filter
+    output: list[list[DDGBlock]] = []
+    for level in toposorted:
+        filtered = [graph[k] for k in level if isinstance(graph[k], DDGBlock)]
+        if filtered:
+            output.append(filtered)
+
+    pprint(output)
+    return output
+
+
+
+# def _traverse_tree(graph: Mapping[Label, BasicBlock]):
+#     """BFS
+#     """
+#     def _find_head(incoming_labels):
+#         for k, vs in incoming_labels.items():
+#             if not vs:
+#                 return k
+#         raise Exception("unreachable")
+
+#     incoming_labels = _compute_incoming_labels(graph)
+#     pending = deque([graph[_find_head(incoming_labels)]])
+#     visited = set()
+#     while pending:
+#         node = pending.popleft()
+#         incomings = incoming_labels[node.label]
+#         assert len(incomings - visited) == 0, "all incomings must be already visited"
+#         yield incoming_labels[node.label], node
+#         visited.add(node.label)
+#         pending.extend([graph[x] for x in node.jump_targets if x not in visited])
 
 
 def convert_to_dataflow(byteflow: ByteFlow) -> SCFG:
     bcmap = {inst.offset: inst for inst in byteflow.bc}
-    return convert_scfg_to_dataflow(byteflow.scfg, bcmap)
+    rvsdg = convert_scfg_to_dataflow(byteflow.scfg, bcmap)
+    return rvsdg
+
+def propagate_states(rvsdg: SCFG) -> SCFG:
+    """Outside-In algorithm
+    """
+    # Propagate the outgoing states
+    topo_ddgblocks = view_toposorted_ddgblock_only(rvsdg)
+    block_vars: dict[Label, set[str]] = {}
+    live_vars: set[str] = set()
+    for blklevel in topo_ddgblocks:
+        new_vars: set[str] = set()
+        for blk in blklevel:
+            block_vars[blk.label] = live_vars.copy()
+            new_vars |= set(blk.out_vars)
+        live_vars |= new_vars
+
+    # Apply changes
+    for blklevel in topo_ddgblocks:
+        for blk in blklevel:
+            extra_vars = block_vars[blk.label] - set(blk.in_vars)
+            for k in extra_vars:
+                op = Op(opname="var.incoming", bc_inst=None)
+                vs = op.add_output(k)
+                blk.in_vars[k] = vs
+                blk.out_vars[k] = vs
+
+    return rvsdg
 
 
 def convert_scfg_to_dataflow(scfg, bcmap) -> SCFG:
@@ -130,10 +262,15 @@ def convert_scfg_to_dataflow(scfg, bcmap) -> SCFG:
             ddg = convert_bc_to_ddg(block, bcmap)
             rvsdg.add_block(ddg)
         elif isinstance(block, RegionBlock):
+            # Inside-out
             subregion = convert_scfg_to_dataflow(block.subregion, bcmap)
-            rvsdg.add_block(replace(block, subregion=subregion))
+            newattrs = {fd.name: getattr(block, fd.name) for fd in fields(block)}
+            newattrs.update(subregion=subregion)
+            newblk = DDGRegion(**newattrs)
+            rvsdg.add_block(newblk)
         else:
             rvsdg.add_block(block)
+
     return rvsdg
 
 
@@ -149,9 +286,10 @@ def convert_bc_to_ddg(block: PythonBytecodeBlock, bcmap: dict[int, dis.Bytecode]
         backedges=block.backedges,
         in_effect=in_effect,
         out_effect=converter.effect,
-        in_stackvars=tuple(converter.incoming_stackvars),
-        out_stackvars=tuple(converter.stack),
-        out_vars=converter.varmap,
+        in_stackvars=list(converter.incoming_stackvars),
+        out_stackvars=list(converter.stack),
+        in_vars=converter.incoming_vars.copy(),
+        out_vars=converter.varmap.copy(),
     )
 
     return blk

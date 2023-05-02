@@ -44,6 +44,8 @@ class RvsdgRenderer(object):
             subg.attr(color=color, label=regionblock.kind)
             for label, block in graph.items():
                 self.render_block(subg, label, block)
+            if hasattr(regionblock, "render_rvsdg"):
+                regionblock.render_rvsdg(self, subg, label)
         # render edges within this region
         self.render_edges(graph)
 
@@ -99,10 +101,10 @@ class RvsdgRenderer(object):
             self.render_control_variable_block(digraph, label, block)
         elif type(block) == BranchBlock:
             self.render_branching_block(digraph, label, block)
-        elif type(block) == RegionBlock:
+        elif isinstance(block, RegionBlock):
             self.render_region_block(digraph, label, block)
         else:
-            block.render_rvsdg(self, digraph, label, block)
+            block.render_rvsdg(self, digraph, label)
 
     def render_edges(self, blocks: Dict[Label, BasicBlock]):
         for label, block in blocks.items():
@@ -122,6 +124,7 @@ class RvsdgRenderer(object):
                 self.g.edge(
                     str(label), str(dst), style="dashed", color="grey", constraint="0"
                 )
+        # Render pending edges
         for (src, dst), attrs in self.edges.items():
             self.g.edge(src, dst, **attrs)
         self.edges.clear()
