@@ -777,7 +777,7 @@ class IntegerArrayIndexer(Indexer):
             retty = types.Array(idxty.dtype, 1, idxty.layout, readonly=True)
             fnop = self.context.typing_context.resolve_value_type(flat_imp)
             callsig = fnop.get_call_type(
-                self.context.typing_context, {idxty}, {},
+                self.context.typing_context, (idxty,), {},
             )
             impl = self.context.get_function(fnop, callsig)
             res = impl(self.builder, (idxary._getvalue(),))
