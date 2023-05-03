@@ -198,7 +198,6 @@ class RvsdgRenderer(object):
                     self._render_inter_states_in_region(src)
 
     def _render_inter_states_in_region(self, node: RegionBlock):
-        from .bc2ir import _find_region_exiting
         g = self.g
         # Connect region incoming to the incoming of head
         head = node.subregion[node.subregion.find_head()]
@@ -207,7 +206,7 @@ class RvsdgRenderer(object):
                 g.edge(f"incoming_{id(node)}:{name}",
                         f"incoming_{id(head)}:{name}")
         # Connection outgoing of exit to region outgoing
-        exit = node.subregion[_find_region_exiting(node.subregion)]
+        exit = node.subregion[node.exiting]
         if hasattr(exit, "out_vars"):
             for name in exit.out_vars:
                 g.edge(f"outgoing_{id(exit)}:{name}",

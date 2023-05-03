@@ -287,20 +287,12 @@ def _walk_all_regions(scfg: SCFG) -> Iterator[RegionBlock]:
             yield blk
 
 
-def _find_region_exiting(self: SCFG) -> Label:
-    exits = [node for node in self.graph
-             if not (set(self.graph[node].jump_targets) & set(self.graph))]
-    assert len(exits) == 1
-    [one] = exits
-    return one
-
-
 def propagate_states_to_parent_region_inplace(rvsdg: SCFG):
     for reg in _walk_all_regions(rvsdg):
         assert isinstance(reg, DDGRegion)
         subregion: SCFG = reg.subregion
         head = subregion[subregion.find_head()]
-        exit = subregion[_find_region_exiting(subregion)]
+        exit = subregion[reg.exiting]
         if isinstance(head, DDGProtocol):
             reg.in_vars.update(head.in_vars)
         if isinstance(exit, DDGProtocol):
