@@ -614,15 +614,6 @@ def array_itemset(context, builder, sig, args):
 # ------------------------------------------------------------------------------
 # Advanced / fancy indexing
 
-@njit
-def flat_imp_nocopy(ary):
-    return ary.reshape(ary.size)
-
-
-@njit
-def flat_imp_copy(ary):
-    return ary.copy().reshape(ary.size)
-
 
 class Indexer(object):
     """
@@ -771,6 +762,12 @@ class IntegerArrayIndexer(Indexer):
                                           " currently supported for"
                                           " given compiler target.")
 
+            def flat_imp_nocopy(ary):
+                return ary.reshape(ary.size)
+
+            def flat_imp_copy(ary):
+                return ary.copy().reshape(ary.size)
+
             # If the index array is contiguous, use the no-copy version
             if idxty.is_contig:
                 flat_imp = flat_imp_nocopy
@@ -779,6 +776,7 @@ class IntegerArrayIndexer(Indexer):
             else:
                 flat_imp = flat_imp_copy
 
+            flat_imp = njit(flat_imp)
             fnop = self.context.typing_context.resolve_value_type(flat_imp)
             callsig = fnop.get_call_type(
                 self.context.typing_context, (idxty,), {},
@@ -1728,6 +1726,12 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         src_type = 'scalar'
 
     if src_type == 'buffer':
+        def flat_imp_nocopy(ary):
+            return ary.reshape(ary.size)
+
+        def flat_imp_copy(ary):
+            return ary.copy().reshape(ary.size)
+
         # If the source array is contiguous, use the no-copy version
         if srcty.is_contig:
             flat_imp = flat_imp_nocopy
@@ -1736,6 +1740,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         else:
             flat_imp = flat_imp_copy
 
+        flat_imp = njit(flat_imp)
         fnop = context.typing_context.resolve_value_type(flat_imp)
         callsig = fnop.get_call_type(
             context.typing_context, {srcty}, {},
