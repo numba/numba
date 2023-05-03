@@ -22,9 +22,6 @@ Include C-extension here
 /* Numba C helpers */
 #include "_helperlib.c"
 
-/* Numpy C math function exports */
-#include "_npymath_exports.c"
-
 static PyObject *
 build_c_helpers_dict(void)
 {
@@ -58,6 +55,10 @@ build_c_helpers_dict(void)
     declmethod(frexpf);
     declmethod(ldexp);
     declmethod(ldexpf);
+    declmethod(exp2);
+    declmethod(exp2f);
+    declmethod(log2);
+    declmethod(log2f);
     declmethod(cpow);
     declmethod(cpowf);
     declmethod(erf);
@@ -68,8 +69,8 @@ build_c_helpers_dict(void)
     declmethod(gammaf);
     declmethod(lgamma);
     declmethod(lgammaf);
-    declmethod(signbit);
-    declmethod(signbitf);
+    declmethod(nextafter);
+    declmethod(nextafterf);
     declmethod(complex_adaptor);
     declmethod(adapt_ndarray);
     declmethod(ndarray_new);
@@ -91,6 +92,7 @@ build_c_helpers_dict(void)
     declmethod(unpack_slice);
     declmethod(do_raise);
     declmethod(unpickle);
+    declmethod(runtime_build_excinfo_struct);
     declmethod(attempt_nocopy_reshape);
     declmethod(get_pyobject_private_data);
     declmethod(set_pyobject_private_data);
@@ -131,7 +133,7 @@ build_c_helpers_dict(void)
 
     /* for dictionary support */
     declmethod(test_dict);
-    declmethod(dict_new_minsize);
+    declmethod(dict_new_sized);
     declmethod(dict_set_method_table);
     declmethod(dict_free);
     declmethod(dict_length);
@@ -176,37 +178,6 @@ build_c_helpers_dict(void)
 error:
     Py_XDECREF(dct);
     return NULL;
-}
-
-static int
-register_npymath_exports(PyObject *dct)
-{
-    size_t count = sizeof(npymath_exports) / sizeof(npymath_exports[0]);
-    size_t i;
-
-    for (i = 0; i < count; ++i) {
-        PyObject *ptr = PyLong_FromVoidPtr(npymath_exports[i].func);
-        if (ptr == NULL)
-            return -1;
-        if (PyDict_SetItemString(dct, npymath_exports[i].name, ptr) < 0) {
-            Py_DECREF(ptr);
-            return -1;
-        }
-        Py_DECREF(ptr);
-    }
-
-    return 0;
-}
-
-static PyObject *
-build_npymath_exports_dict(void)
-{
-    PyObject *dct = PyDict_New();
-    if (dct != NULL) {
-        if (register_npymath_exports(dct) < 0)
-            Py_CLEAR(dct);
-    }
-    return dct;
 }
 
 
@@ -292,7 +263,6 @@ MOD_INIT(_helperlib) {
     import_array();
 
     PyModule_AddObject(m, "c_helpers", build_c_helpers_dict());
-    PyModule_AddObject(m, "npymath_exports", build_npymath_exports_dict());
     PyModule_AddIntConstant(m, "long_min", LONG_MIN);
     PyModule_AddIntConstant(m, "long_max", LONG_MAX);
     PyModule_AddIntConstant(m, "py_buffer_size", sizeof(Py_buffer));

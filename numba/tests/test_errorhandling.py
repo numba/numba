@@ -184,25 +184,6 @@ class TestMiscErrorHandling(unittest.TestCase):
         self.assertIn(expected, str(raises.exception))
 
 
-class TestConstantInferenceErrorHandling(unittest.TestCase):
-
-    def test_basic_error(self):
-        # issue 3717
-        @njit
-        def problem(a,b):
-            if a == b:
-                raise Exception("Equal numbers: %i %i", a, b)
-            return a * b
-
-        with self.assertRaises(errors.ConstantInferenceError) as raises:
-            problem(1,2)
-
-        msg1 = "Constant inference not possible for: arg(0, name=a)"
-        msg2 = 'raise Exception("Equal numbers: %i %i", a, b)'
-        self.assertIn(msg1, str(raises.exception))
-        self.assertIn(msg2, str(raises.exception))
-
-
 class TestErrorMessages(unittest.TestCase):
 
     def test_specific_error(self):
@@ -278,7 +259,7 @@ class TestErrorMessages(unittest.TestCase):
 
         self.assertIn("Overload of function 'add'", excstr)
         # there'll be numerous matched templates that don't work but as they
-        # are mostly "overload_glue"s they'll just appear as "No match".
+        # are mostly "overload"s they'll just appear as "No match".
         self.assertIn("No match.", excstr)
 
     def test_abstract_template_source(self):

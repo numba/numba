@@ -1,3 +1,5 @@
+import functools
+
 from numba import jit, typeof
 from numba.core import cgutils, types, serialize, sigutils
 from numba.core.extending import is_jitted
@@ -79,10 +81,12 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
     def __init__(self, py_func, identity=None, cache=False, targetoptions={}):
         if is_jitted(py_func):
             py_func = py_func.py_func
-        dispatcher = jit(_target='npyufunc',
-                         cache=cache,
-                         **targetoptions)(py_func)
+        with ufuncbuilder._suppress_deprecation_warning_nopython_not_supplied():
+            dispatcher = jit(_target='npyufunc',
+                             cache=cache,
+                             **targetoptions)(py_func)
         self._initialize(dispatcher, identity)
+        functools.update_wrapper(self, py_func)
 
     def _initialize(self, dispatcher, identity):
         identity = ufuncbuilder.parse_identity(identity)

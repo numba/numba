@@ -660,29 +660,8 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
             co_consts[k] = v
         new_consts = tuple([v for _, v in sorted(co_consts.items())])
 
-        # create new code parts
-        co_args = [pyfunc_code.co_argcount]
-
-        if utils.PYVERSION >= (3, 8):
-            co_args.append(pyfunc_code.co_posonlyargcount)
-        co_args.append(pyfunc_code.co_kwonlyargcount)
-        co_args.extend([pyfunc_code.co_nlocals,
-                        pyfunc_code.co_stacksize,
-                        pyfunc_code.co_flags,
-                        pyfunc_code.co_code,
-                        new_consts,
-                        pyfunc_code.co_names,
-                        pyfunc_code.co_varnames,
-                        pyfunc_code.co_filename,
-                        pyfunc_code.co_name,
-                        pyfunc_code.co_firstlineno,
-                        pyfunc_code.co_lnotab,
-                        pyfunc_code.co_freevars,
-                        pyfunc_code.co_cellvars
-                        ])
-
         # create code object with mutation
-        new_code = pytypes.CodeType(*co_args)
+        new_code = pyfunc_code.replace(co_consts=new_consts)
 
         # get function
         return pytypes.FunctionType(new_code, globals())

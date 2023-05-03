@@ -9,26 +9,22 @@ from itertools import product
 import numpy as np
 
 from numba import njit, typeof, literally, prange
-from numba.core import types, ir, ir_utils, cgutils, errors
+from numba.core import types, ir, ir_utils, cgutils, errors, utils
 from numba.core.extending import (
     overload,
     overload_method,
     overload_attribute,
     register_model,
-    typeof_impl,
-    unbox,
-    NativeValue,
     models,
     make_attribute_wrapper,
     intrinsic,
     register_jitable,
 )
-from numba.core.datamodel.models import OpaqueModel
 from numba.core.cpu import InlineOptions
 from numba.core.compiler import DefaultPassBuilder, CompilerBase
 from numba.core.typed_passes import InlineOverloads
 from numba.core.typing import signature
-from numba.tests.support import (TestCase, unittest, skip_py38_or_later,
+from numba.tests.support import (TestCase, unittest,
                                  MemoryLeakMixin, IRPreservingTestPipeline,
                                  skip_parfors_unsupported,
                                  ignore_internal_warnings)
@@ -115,29 +111,6 @@ class InliningBase(TestCase):
             self.assertFalse(found == v)
 
         return fir  # for use in further analysis
-
-    def make_dummy_type(self):
-        """ Use to generate a dummy type """
-
-        # Use test_id to make sure no collision is possible.
-        test_id = self.id()
-        DummyType = type('DummyTypeFor{}'.format(test_id), (types.Opaque,), {})
-
-        dummy_type = DummyType("my_dummy")
-        register_model(DummyType)(OpaqueModel)
-
-        class Dummy(object):
-            pass
-
-        @typeof_impl.register(Dummy)
-        def typeof_dummy(val, c):
-            return dummy_type
-
-        @unbox(DummyType)
-        def unbox_dummy(typ, obj, c):
-            return NativeValue(c.context.get_dummy_value())
-
-        return Dummy, DummyType
 
 
 # used in _gen_involved
@@ -438,7 +411,6 @@ class TestFunctionInlining(MemoryLeakMixin, InliningBase):
 
         self.check(impl, inline_expect={'foo': True}, block_count=1)
 
-    @skip_py38_or_later
     def test_inline_involved(self):
 
         fortran = njit(inline='always')(_gen_involved())
@@ -471,8 +443,16 @@ class TestFunctionInlining(MemoryLeakMixin, InliningBase):
                 return foo(z) + 7 + x
             return bar(z + 2)
 
+        # block count changes with Python version due to bytecode differences.
+        if utils.PYVERSION in ((3, 8), (3, 9)):
+            bc = 33
+        elif utils.PYVERSION in ((3, 10), (3, 11)):
+            bc = 35
+        else:
+            raise ValueError(f"Unsupported Python version: {utils.PYVERSION}")
+
         self.check(impl, inline_expect={'foo': True, 'boz': True,
-                                        'fortran': True}, block_count=37)
+                                        'fortran': True}, block_count=bc)
 
     def test_inline_renaming_scheme(self):
         # See #7380, this checks that inlined variables have a name derived from

@@ -63,6 +63,8 @@ typedef struct {
     const char *data;
     int len;
     const char *hashbuf;
+    const char *func_ptr;  // pointer to unwrap dyn args function
+    int alloc_flag;
 } env_def_t;
 
 /* Environment GlobalVariable address type */
