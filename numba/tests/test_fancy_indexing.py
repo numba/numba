@@ -6,7 +6,10 @@ import unittest
 from numba import jit, njit
 from numba.core.errors import TypingError
 from numba.tests.support import MemoryLeakMixin, TestCase
+from numba.core.compiler import compile_isolated, Flags
 
+enable_pyobj_flags = Flags()
+enable_pyobj_flags.nrt = True
 
 def getitem_usecase(a, b):
     return a[b]
@@ -413,8 +416,8 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
         get_item = numba_get_item.py_func
         orig_base = arr.base or arr
 
-        expected = get_item(arr, index)
         got = numba_get_item(arr, index)
+        expected = get_item(arr, index)
         # Sanity check: In advanced indexing, the result is always a copy.
         self.assertNotIn(expected.base, orig_base)
 
@@ -479,7 +482,12 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
             ("Using more than one indexing subspace is unsupported." + \
              " An indexing subspace is a group of one or more consecutive" + \
              " indices comprising integer or array types.",
-             (0, np.array([1, 2]), slice(None), 3, 4))
+             (0, np.array([1, 2]), slice(None), 3, 4)),
+            (("Only a single one-dimensional boolean array" + \
+              " index is permitted for each axis of the source array being indexed." + \
+              " NumPy behaviour of multi-dimensional boolean indices for " + \
+              "implicitly indexing multiple axes is not supported."),
+             (0, np.array([[0,1,0,1,0,1], [1,0,1,0,1,0]], dtype=bool), slice(None), 3,))
         ]
         
         for err, idx in err_idx_cases:

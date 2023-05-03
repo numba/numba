@@ -553,8 +553,11 @@ def setitem_array(context, builder, sig, args):
         # (NOTE: this also handles scalar broadcasting)
         fancy_setslice(context, builder, sig, args,
                        index_types, indices)
-        # To prevent:
+        # To prevent the bug described at:
         # https://github.com/numba/numba/pull/8491#issuecomment-1305977791
+        # Without this metadata, the remove_unnecessary_nrt_usage ref pruner
+        # pass removes the manually added incref/decref at the end of fancy
+        # indexing procedure.
         builder.module.add_named_metadata('numba_args_may_always_need_nrt',
                                           ['fancy_setslice'])
     else:
@@ -610,6 +613,15 @@ def array_itemset(context, builder, sig, args):
 
 # ------------------------------------------------------------------------------
 # Advanced / fancy indexing
+
+@njit
+def flat_imp_nocopy(ary):
+    return ary.reshape(ary.size)
+
+
+@njit
+def flat_imp_copy(ary):
+    return ary.copy().reshape(ary.size)
 
 
 class Indexer(object):
@@ -759,12 +771,6 @@ class IntegerArrayIndexer(Indexer):
                                           " currently supported for"
                                           " given compiler target.")
 
-            def flat_imp_nocopy(ary):
-                return ary.reshape(ary.size)
-
-            def flat_imp_copy(ary):
-                return ary.copy().reshape(ary.size)
-
             # If the index array is contiguous, use the no-copy version
             if idxty.is_contig:
                 flat_imp = flat_imp_nocopy
@@ -772,13 +778,12 @@ class IntegerArrayIndexer(Indexer):
             # reshaping non-contiguous arrays
             else:
                 flat_imp = flat_imp_copy
-            flat_imp = njit(flat_imp)
 
-            retty = types.Array(idxty.dtype, 1, idxty.layout, readonly=True)
             fnop = self.context.typing_context.resolve_value_type(flat_imp)
             callsig = fnop.get_call_type(
                 self.context.typing_context, (idxty,), {},
             )
+            retty = callsig.return_type
             impl = self.context.get_function(fnop, callsig)
             res = impl(self.builder, (idxary._getvalue(),))
             self.idxty = retty
@@ -1723,12 +1728,6 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         src_type = 'scalar'
 
     if src_type == 'buffer':
-        def flat_imp_nocopy(ary):
-            return ary.reshape(ary.size)
-
-        def flat_imp_copy(ary):
-            return ary.copy().reshape(ary.size)
-
         # If the source array is contiguous, use the no-copy version
         if srcty.is_contig:
             flat_imp = flat_imp_nocopy
@@ -1737,13 +1736,11 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         else:
             flat_imp = flat_imp_copy
 
-        retty = types.Array(srcty.dtype, 1, srcty.layout, readonly=True)
-        sig = signature(retty, srcty)
-        flat_imp = njit(flat_imp)
         fnop = context.typing_context.resolve_value_type(flat_imp)
         callsig = fnop.get_call_type(
             context.typing_context, {srcty}, {},
         )
+        retty = callsig.return_type
         impl = context.get_function(fnop, callsig)
         src_flat_instr = impl(builder, (src._getvalue(),))
         src_flat = make_array(retty)(context, builder, src_flat_instr)
