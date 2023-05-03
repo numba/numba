@@ -144,7 +144,7 @@ class RvsdgRenderer(object):
         for label, block in blocks.items():
             for dst in block.jump_targets:
                 if dst in blocks:
-                    if type(block) == RegionBlock:
+                    if isinstance(block, RegionBlock):
                         if block.exiting is not None:
                             self.g.edge(str(block.exiting), str(dst))
                         else:
