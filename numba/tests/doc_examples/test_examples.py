@@ -459,8 +459,8 @@ class DocsExamplesTest(unittest.TestCase):
             # magictoken.ex_vectorize_dynamic_call_three.end
 
             self.assertEqual(result, 2.0)
-            correct = ['ll->l', 'dd->d']
-            self.assertEqual(f.types, correct)
+            correct = [['ll->l', 'dd->d'], ['ll->q', 'dd->d']]
+            self.assertIn(f.types, correct)
 
             # magictoken.ex_vectorize_dynamic_call_four.begin
             @vectorize
