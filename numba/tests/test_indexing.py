@@ -14,7 +14,6 @@ from numba.core.types import intp, ellipsis, slice2_type, slice3_type
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.enable_pyobject = True
-enable_pyobj_flags.nrt = True
 
 Noflags = Flags()
 Noflags.nrt = True
