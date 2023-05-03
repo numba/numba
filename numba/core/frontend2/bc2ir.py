@@ -1,6 +1,7 @@
 from dataclasses import dataclass, replace, field, fields
 import dis
-from typing import Optional
+from contextlib import contextmanager
+from typing import Optional, Iterator, Protocol, runtime_checkable
 from collections import (
     deque,
     defaultdict,
@@ -55,22 +56,39 @@ class Op:
     def short_identity(self) -> str:
         return f"Op({self.opname}, {id(self):x})"
 
+    @property
+    def outputs(self):
+        return list(self._outputs.values())
+
+
+@runtime_checkable
+class DDGProtocol(Protocol):
+    in_vars: set[str]
+    out_vars: set[str]
+
 
 @dataclass(frozen=True)
 class DDGRegion(RegionBlock):
     in_vars: set[str] = field(default_factory=set)
     out_vars: set[str] = field(default_factory=set)
 
+    @contextmanager
     def render_rvsdg(self, renderer, digraph, label):
-        digraph.node(f"in_vars_{id(self)}", label=f"{'|'.join(self.in_vars)}", shape='record', rank="source")
-        digraph.node(f"out_vars_{id(self)}", label=f"{'|'.join(self.out_vars)}", shape='record', rank="sink")
+        with digraph.subgraph(name=f"cluster_rvsdg_{id(self)}") as subg:
+            subg.attr(color="black", label="region", bgcolor="grey")
+            subg.node(f"incoming_{id(self)}", label=f"{'|'.join([f'<{k}> {k}' for k in self.in_vars])}", shape='record', rank="min")
+            subg.edge(f"incoming_{id(self)}", f"cluster_{label}", style="invis")
+            yield subg
+            subg.edge(f"cluster_{label}", f"outgoing_{id(self)}", style="invis")
+            subg.node(f"outgoing_{id(self)}", label=f"{'|'.join([f'<{k}> {k}' for k in self.out_vars])}", shape='record', rank="max")
+
 
 @dataclass(frozen=True)
 class DDGBlock(BasicBlock):
     in_effect: ValueState | None = None
     out_effect: ValueState | None = None
-    in_stackvars: list[ValueState] = ()
-    out_stackvars: list[ValueState] = ()
+    in_stackvars: list[ValueState] = field(default_factory=list)
+    out_stackvars: list[ValueState] = field(default_factory=list)
     in_vars: dict[str, ValueState] = field(default_factory=dict)
     out_vars: dict[str, ValueState] = field(default_factory=dict)
 
@@ -87,15 +105,23 @@ class DDGBlock(BasicBlock):
                 self.render_valuestate(renderer, g, vs)
             for vs in self.out_vars.values():
                 self.render_valuestate(renderer, g, vs)
+            # Fill incoming
+            in_vars_fields = "incoming-vars|" + "|".join([f"<{x}> {x}" for x in self.in_vars])
+            fields = "|" + in_vars_fields
+            g.node(f"incoming_{id(self)}", shape="record", label=f"{fields}", rank="source")
+
+            for vs in self.in_vars.values():
+                self.add_vs_edge(renderer, f"incoming_{id(self)}:{vs.name}", vs.parent.short_identity())
+
             # Fill outgoing
             out_stackvars_fields = "outgoing-stack|" + "|".join([f"<{x.short_identity()}> {x.name}" for x in self.out_stackvars])
-            out_vars_fields = "outgoing-vars|" + "|".join([f"<{x.short_identity()}> {x.name}" for x in self.out_vars.values()])
+            out_vars_fields = "outgoing-vars|" + "|".join([f"<{x.name}> {x.name}" for x in self.out_vars.values()])
             fields = f"<{self.out_effect.short_identity()}> env" + "|" + out_stackvars_fields + "|" + out_vars_fields
             g.node(f"outgoing_{id(self)}", shape="record", label=f"{fields}")
             for vs in self.out_stackvars:
-                self.add_vs_edge(renderer, vs, f"outgoing_{id(self)}:{vs.short_identity()}")
+                self.add_vs_edge(renderer, vs, f"outgoing_{id(self)}:{vs.name}")
             for vs in self.out_vars.values():
-                self.add_vs_edge(renderer, vs, f"outgoing_{id(self)}:{vs.short_identity()}")
+                self.add_vs_edge(renderer, vs, f"outgoing_{id(self)}:{vs.name}")
             self.add_vs_edge(renderer, self.out_effect, f"outgoing_{id(self)}:{self.out_effect.short_identity()}")
             # Draw "head"
             g.node(str(label), shape="doublecircle", label="")
@@ -145,7 +171,7 @@ def build_rvsdg(code):
     byteflow = byteflow.restructure()
     rvsdg = convert_to_dataflow(byteflow)
     rvsdg = propagate_states(rvsdg)
-    RvsdgRenderer().render_scfg(rvsdg).view("rvsdg")
+    RvsdgRenderer().render_rvsdg(rvsdg).view("rvsdg")
 
 
 def _compute_incoming_labels(graph: Mapping[Label, BasicBlock]) -> dict[Label, set[Label]]:
@@ -171,7 +197,6 @@ def _flatten_full_graph(scfg: SCFG):
 def view_toposorted_ddgblock_only(rvsdg: SCFG) -> list[list[DDGBlock]]:
     """Return toposorted nested list of DDGBlock
     """
-    from pprint import pprint
     graph = _flatten_full_graph(rvsdg)
     incoming_labels = _compute_incoming_labels(graph)
     visited: set[Label] = set()
@@ -196,7 +221,6 @@ def view_toposorted_ddgblock_only(rvsdg: SCFG) -> list[list[DDGBlock]]:
         if filtered:
             output.append(filtered)
 
-    pprint(output)
     return output
 
 
@@ -228,8 +252,12 @@ def convert_to_dataflow(byteflow: ByteFlow) -> SCFG:
     return rvsdg
 
 def propagate_states(rvsdg: SCFG) -> SCFG:
-    """Outside-In algorithm
-    """
+    propagate_states_ddgblock_only_inplace(rvsdg)
+    propagate_states_to_parent_region_inplace(rvsdg)
+    propagate_states_to_outgoing_inplace(rvsdg)
+    return rvsdg
+
+def propagate_states_ddgblock_only_inplace(rvsdg: SCFG):
     # Propagate the outgoing states
     topo_ddgblocks = view_toposorted_ddgblock_only(rvsdg)
     block_vars: dict[Label, set[str]] = {}
@@ -251,12 +279,50 @@ def propagate_states(rvsdg: SCFG) -> SCFG:
                 blk.in_vars[k] = vs
                 blk.out_vars[k] = vs
 
-    return rvsdg
+
+def _walk_all_regions(scfg: SCFG) -> Iterator[RegionBlock]:
+    for blk in scfg.graph.values():
+        if isinstance(blk, RegionBlock):
+            yield from _walk_all_regions(blk.subregion)
+            yield blk
+
+
+def _find_region_exiting(self: SCFG) -> Label:
+    exits = [node for node in self.graph
+             if not (set(self.graph[node].jump_targets) & set(self.graph))]
+    assert len(exits) == 1
+    [one] = exits
+    return one
+
+
+def propagate_states_to_parent_region_inplace(rvsdg: SCFG):
+    for reg in _walk_all_regions(rvsdg):
+        assert isinstance(reg, DDGRegion)
+        subregion: SCFG = reg.subregion
+        head = subregion[subregion.find_head()]
+        exit = subregion[_find_region_exiting(subregion)]
+        if isinstance(head, DDGProtocol):
+            reg.in_vars.update(head.in_vars)
+        if isinstance(exit, DDGProtocol):
+            reg.out_vars.update(reg.in_vars)
+            reg.out_vars.update(exit.out_vars)
+
+
+def propagate_states_to_outgoing_inplace(rvsdg: SCFG):
+    for src in rvsdg.graph.values():
+        for dst_label in src.jump_targets:
+            if dst_label in rvsdg.graph:
+                dst = rvsdg.graph[dst_label]
+                if isinstance(dst, DDGRegion):
+                    dst.in_vars.update(src.out_vars)
+                    dst.out_vars.update(dst.in_vars)
+                    propagate_states_to_outgoing_inplace(dst.subregion)
+
 
 
 def convert_scfg_to_dataflow(scfg, bcmap) -> SCFG:
     rvsdg = SCFG()
-    for label, block in scfg.graph.items():
+    for block in scfg.graph.values():
         # convert block
         if isinstance(block, PythonBytecodeBlock):
             ddg = convert_bc_to_ddg(block, bcmap)

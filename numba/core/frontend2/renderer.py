@@ -31,23 +31,57 @@ class RvsdgRenderer(object):
     def render_region_block(
         self, digraph: "Digraph", label: Label, regionblock: RegionBlock
     ):
-        # render subgraph
-        graph = regionblock.get_full_graph()
-        with digraph.subgraph(name=f"cluster_{label}") as subg:
-            color = "blue"
-            if regionblock.kind == "branch":
-                color = "green"
-            if regionblock.kind == "tail":
-                color = "purple"
-            if regionblock.kind == "head":
-                color = "red"
-            subg.attr(color=color, label=regionblock.kind)
-            for label, block in graph.items():
-                self.render_block(subg, label, block)
-            if hasattr(regionblock, "render_rvsdg"):
-                regionblock.render_rvsdg(self, subg, label)
-        # render edges within this region
-        self.render_edges(graph)
+
+        def render_subgraph(digraph, label):
+            # render subgraph
+            graph = regionblock.get_full_graph()
+            with digraph.subgraph(name=f"cluster_{label}") as subg:
+                color = "blue"
+                if regionblock.kind == "branch":
+                    color = "green"
+                if regionblock.kind == "tail":
+                    color = "purple"
+                if regionblock.kind == "head":
+                    color = "red"
+                subg.attr(color=color, label=regionblock.kind, bgcolor="white")
+                for label, block in graph.items():
+                    self.render_block(subg, label, block)
+            # render edges within this region
+            self.render_edges(graph)
+
+        if hasattr(regionblock, "render_rvsdg"):
+            # with regionblock.render_rvsdg(self, digraph, label) as digraph:
+            #     render_subgraph(digraph, label)
+            pass
+        else:
+            render_subgraph(digraph, label)
+
+    def render_region_block(
+        self, digraph: "Digraph", label: Label, regionblock: RegionBlock
+    ):
+        def render_subgraph(digraph, label):
+            # render subgraph
+            graph = regionblock.get_full_graph()
+            with digraph.subgraph(name=f"cluster_{label}") as subg:
+                subg.node(f"cluster_{label}", style="invis")
+                color = "blue"
+                if regionblock.kind == "branch":
+                    color = "green"
+                if regionblock.kind == "tail":
+                    color = "purple"
+                if regionblock.kind == "head":
+                    color = "red"
+                subg.attr(color=color, label=regionblock.kind, bgcolor="white")
+                for label, block in graph.items():
+                    self.render_block(subg, label, block)
+            # render edges within this region
+            self.render_edges(graph)
+
+        if hasattr(regionblock, "render_rvsdg"):
+                with regionblock.render_rvsdg(self, digraph, label) as digraph:
+                  render_subgraph(digraph, label)
+        else:
+            render_subgraph(digraph, label)
 
     def render_basic_block(self, digraph: "Digraph", label: Label, block: BasicBlock):
         if isinstance(label, PythonBytecodeLabel):
@@ -97,7 +131,7 @@ class RvsdgRenderer(object):
     def render_block(self, digraph: "Digraph", label: Label, block: BasicBlock):
         if type(block) == BasicBlock:
             self.render_basic_block(digraph, label, block)
-        elif type(block) == ControlVariableBlock:
+        elif isinstance(block, ControlVariableBlock):
             self.render_control_variable_block(digraph, label, block)
         elif type(block) == BranchBlock:
             self.render_branching_block(digraph, label, block)
@@ -129,21 +163,55 @@ class RvsdgRenderer(object):
             self.g.edge(src, dst, **attrs)
         self.edges.clear()
 
-    def render_byteflow(self, byteflow: ByteFlow):
-        self.bcmap_from_bytecode(byteflow.bc)
+    # def render_byteflow(self, byteflow: ByteFlow):
+    #     self.bcmap_from_bytecode(byteflow.bc)
 
-        # render nodes
-        for label, block in byteflow.scfg.graph.items():
-            self.render_block(self.g, label, block)
-        self.render_edges(byteflow.scfg.graph)
-        return self.g
+    #     # render nodes
+    #     for label, block in byteflow.scfg.graph.items():
+    #         self.render_block(self.g, label, block)
+    #     self.render_edges(byteflow.scfg.graph)
+    #     return self.g
 
-    def render_scfg(self, scfg):
+    def render_rvsdg(self, scfg):
         # render nodes
         for label, block in scfg.graph.items():
             self.render_block(self.g, label, block)
         self.render_edges(scfg.graph)
+        # render inter-states
+        self._render_inter_states(scfg)
         return self.g
+
+    def _render_inter_states(self, scfg: SCFG):
+        g = self.g
+        for src in scfg.graph.values():
+            if hasattr(src, "out_vars"):
+                for label in src.jump_targets:
+                    if label in scfg.graph:
+                        dst = scfg.graph[label]
+                        if hasattr(dst, "in_vars"):
+                            # Connect src outgoing to dst incoming
+                            for name in src.out_vars:
+                                g.edge(f"outgoing_{id(src)}:{name}",
+                                       f"incoming_{id(dst)}:{name}")
+                if isinstance(src, RegionBlock):
+                    self._render_inter_states(src.subregion)
+                    self._render_inter_states_in_region(src)
+
+    def _render_inter_states_in_region(self, node: RegionBlock):
+        from .bc2ir import _find_region_exiting
+        g = self.g
+        # Connect region incoming to the incoming of head
+        head = node.subregion[node.subregion.find_head()]
+        if hasattr(head, "in_vars"):
+            for name in head.in_vars:
+                g.edge(f"incoming_{id(node)}:{name}",
+                        f"incoming_{id(head)}:{name}")
+        # Connection outgoing of exit to region outgoing
+        exit = node.subregion[_find_region_exiting(node.subregion)]
+        if hasattr(exit, "out_vars"):
+            for name in exit.out_vars:
+                g.edge(f"outgoing_{id(exit)}:{name}",
+                        f"outgoing_{id(node)}:{name}")
 
 
 def render_func(func):
