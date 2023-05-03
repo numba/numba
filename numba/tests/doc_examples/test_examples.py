@@ -435,8 +435,8 @@ class DocsExamplesTest(unittest.TestCase):
             # magictoken.ex_vectorize_dynamic_call_one.end
 
             self.assertEqual(result, 12)
-            correct = ['ll->l']
-            self.assertEqual(f.types, correct)
+            correct = [['ll->l'], ['ll->q']]
+            self.assertIn(f.types, correct)
 
             # magictoken.ex_vectorize_dynamic_call_two.begin
             result = f(1.,2.)
@@ -447,8 +447,8 @@ class DocsExamplesTest(unittest.TestCase):
             # magictoken.ex_vectorize_dynamic_call_two.end
 
             self.assertEqual(result, 2.0)
-            correct = ['ll->l', 'dd->d']
-            self.assertEqual(f.types, correct)
+            correct = [['ll->l', 'dd->d'], ['ll->q', 'dd->d']]
+            self.assertIn(f.types, correct)
 
             # magictoken.ex_vectorize_dynamic_call_three.begin
             result = f(1,2.)
@@ -505,8 +505,8 @@ class DocsExamplesTest(unittest.TestCase):
 
             correct = np.array([10, 11, 12, 13, 14])
             np.testing.assert_array_equal(res, correct)
-            correct = ['ll->l']
-            self.assertEqual(g.types, correct)
+            correct = [['ll->l'], ['qq->q']]
+            self.assertIn(g.types, correct)
 
             # magictoken.ex_guvectorize_dynamic_call_two.begin
             x = np.arange(5, dtype=np.double)
@@ -521,8 +521,8 @@ class DocsExamplesTest(unittest.TestCase):
             # ['ll->l', 'dd->d']
             # magictoken.ex_guvectorize_dynamic_call_three.end
 
-            correct = ['ll->l', 'dd->d']
-            self.assertEqual(g.types, correct)
+            correct = [['ll->l', 'dd->d'], ['qq->q', 'dd->d']]
+            self.assertIn(g.types, correct)
 
             # magictoken.ex_guvectorize_dynamic_call_four.begin
             x = np.arange(5, dtype=np.int64)
