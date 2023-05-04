@@ -92,8 +92,9 @@ When working with a source checkout of Numba you will also need a development
 build of llvmlite. These are available from the ``numba/label/dev`` channel on
 `anaconda.org <https://anaconda.org/numba/llvmlite>`_.
 
-
-Then, to create an environment with a few of the most common dependencies::
+To create an environment with the required dependencies, noting the use of the 
+double-colon syntax (``numba/label/dev::llvmlite``) to install the latest
+development version of the llvmlite library::
 
    $ conda create -n numbaenv python=3.10 numba/label/dev::llvmlite numpy scipy jinja2 cffi
 
@@ -461,16 +462,16 @@ Main documentation
 ''''''''''''''''''
 
 This documentation is under the ``docs`` directory of the `Numba repository`_.
-It is built with `Sphinx <http://sphinx-doc.org/>`_ and
-`numpydoc <https://numpydoc.readthedocs.io/>`_, which are available using
-conda or pip; i.e. ``conda install sphinx numpydoc``.
+It is built with `Sphinx <http://sphinx-doc.org/>`_, `numpydoc
+<https://numpydoc.readthedocs.io/>`_ and the
+`sphinx-rtd-theme <https://sphinx-rtd-theme.readthedocs.io/en/stable/>`_.
 
-To build the documentation, you need the bootstrap theme::
+To install all dependencies for building the documentation, use::
 
-   $ pip install sphinx_bootstrap_theme
+   $ conda install sphinx numpydoc sphinx_rtd_theme
 
 You can edit the source files under ``docs/source/``, after which you can
-build and check the documentation::
+build and check the documentation under ``docs/``::
 
    $ make html
    $ open _build/html/index.html
