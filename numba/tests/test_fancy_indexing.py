@@ -311,20 +311,20 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
         # Slices + Integers
         (slice(4, 5), 3, np.array([0, 1, 3, 4, 2]), 1),
         (3, np.array([0,1,3,4,2]), slice(None), slice(4)),
-        (3, np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]]),
+        (3, np.array([[0, 1, 3, 4, 2], [0, 1, 2, 3, 2], [3, 1, 3, 4, 1]]),
          slice(None), slice(4)), # multi-dimensional
 
         # Ellipsis + Integers
         (Ellipsis, 1, np.array([0,1,3,4,2])),
         (np.array([0,1,3,4,2]), 3, Ellipsis),
-        (np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]]),
+        (np.array([[0, 1, 3, 4, 2], [0, 1, 2, 3, 2], [3, 1, 3, 4, 1]]),
          3, Ellipsis), # multi-dimensional
 
         # Ellipsis + Slices + Integers
         (Ellipsis, 1, np.array([0,1,3,4,2]), 3, slice(1,5)),
         (np.array([0,1,3,4,2]), 3, Ellipsis, slice(1,5)),
-        (np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]]),
-         3, Ellipsis, slice(1,5)), # multi-dimensional
+        (np.array([[0, 1, 3, 4, 2], [0, 1, 2, 3, 2], [3, 1, 3, 4, 1]]),
+         3, Ellipsis, slice(1, 5)), # multi-dimensional
 
         # Boolean Arrays + Integers
         (slice(4, 5), 3,
@@ -335,10 +335,10 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
 
         # Differently ordered arrays
         # Ellipsis + Slices + Integers
-        (Ellipsis, 1, np.array([0,1,3,4,2], order='A'), 3, slice(1,5)),
-        (np.array([0,1,3,4,2], order='F'), 3, Ellipsis, slice(1,5)),
-        (np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]], order='A'),
-         3, Ellipsis, slice(1,5)), # multidimensional
+        (Ellipsis, 1, np.array([0, 1, 3, 4, 2], order='A'), 3, slice(1, 5)),
+        (np.array([0, 1, 3, 4, 2], order='F'), 3, Ellipsis, slice(1, 5)),
+        (np.array([[0, 1, 3, 4, 2], [0, 1, 2, 3, 2], [3, 1, 3, 4, 1]], order='A'),
+         3, Ellipsis, slice(1, 5)), # multidimensional
     ]
 
     rng = np.random.default_rng(1)
@@ -487,7 +487,7 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
               " index is permitted for each axis of the source array being indexed." + \
               " NumPy behaviour of multi-dimensional boolean indices for " + \
               "implicitly indexing multiple axes is not supported."),
-             (0, np.array([[0,1,0,1,0,1], [1,0,1,0,1,0]], dtype=bool), slice(None), 3,))
+             (0, np.array([[0, 1, 0, 1, 0, 1], [1, 0, 1, 0, 1, 0]], dtype=bool), slice(None), 3,))
         ]
         
         for err, idx in err_idx_cases:
