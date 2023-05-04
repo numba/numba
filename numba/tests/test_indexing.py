@@ -176,9 +176,6 @@ class TestGetItem(TestCase):
             expected = pyfunc(a, *indices)
             self.assertPreciseEqual(cfunc(a, *indices), expected)
 
-    def test_1d_slicing_npm(self):
-        self.test_1d_slicing()
-
     def test_1d_slicing2(self):
         pyfunc = slicing_1d_usecase2
         cfunc = njit(pyfunc)
@@ -210,9 +207,6 @@ class TestGetItem(TestCase):
         for arg in args:
             self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
 
-    def test_1d_slicing2_npm(self):
-        self.test_1d_slicing2()
-
     def test_1d_slicing3(self):
         pyfunc = slicing_1d_usecase3
         cfunc = njit(pyfunc)
@@ -238,9 +232,6 @@ class TestGetItem(TestCase):
         for arg in args:
             self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
 
-    def test_1d_slicing3_npm(self):
-        self.test_1d_slicing3()
-
     def test_1d_slicing4(self):
         pyfunc = slicing_1d_usecase4
         cfunc = njit(pyfunc)
@@ -255,9 +246,6 @@ class TestGetItem(TestCase):
         self.assertFalse(a.flags['C_CONTIGUOUS'])
         self.assertFalse(a.flags['F_CONTIGUOUS'])
         self.assertEqual(pyfunc(a), cfunc(a))
-
-    def test_1d_slicing4_npm(self):
-        self.test_1d_slicing4()
 
     def check_1d_slicing_with_arg(self, pyfunc):
         args = list(range(-9, 10))
@@ -280,29 +268,17 @@ class TestGetItem(TestCase):
         pyfunc = slicing_1d_usecase5
         self.check_1d_slicing_with_arg(pyfunc)
 
-    def test_1d_slicing5_npm(self):
-        self.test_1d_slicing5()
-
     def test_1d_slicing6(self):
         pyfunc = slicing_1d_usecase6
         self.check_1d_slicing_with_arg(pyfunc)
-
-    def test_1d_slicing6_npm(self):
-        self.test_1d_slicing6()
 
     def test_1d_slicing7(self):
         pyfunc = slicing_1d_usecase7
         self.check_1d_slicing_with_arg(pyfunc)
 
-    def test_1d_slicing7_npm(self):
-        self.test_1d_slicing7()
-
     def test_1d_slicing8(self):
         pyfunc = slicing_1d_usecase8
         self.check_1d_slicing_with_arg(pyfunc)
-
-    def test_1d_slicing8_npm(self):
-        self.test_1d_slicing8()
 
     def test_2d_slicing(self):
         """
@@ -316,9 +292,6 @@ class TestGetItem(TestCase):
                      (0, 10, -1), (0, 10, 2)]:
             self.assertPreciseEqual(pyfunc(a, *args), cfunc(a, *args),
                                     msg="for args %s" % (args,))
-
-    def test_2d_slicing_npm(self):
-        self.test_2d_slicing()
 
     def test_2d_slicing2(self):
         """
@@ -355,9 +328,6 @@ class TestGetItem(TestCase):
             expected = pyfunc(a, *arg)
             self.assertPreciseEqual(cfunc(a, *arg), expected)
 
-    def test_2d_slicing2_npm(self):
-        self.test_2d_slicing2()
-
     def test_2d_slicing3(self):
         """
         arr_2d[a:b:c, d]
@@ -389,9 +359,6 @@ class TestGetItem(TestCase):
             expected = pyfunc(a, *arg)
             self.assertPreciseEqual(cfunc(a, *arg), expected)
 
-    def test_2d_slicing3_npm(self):
-        self.test_2d_slicing3()
-
     def test_3d_slicing(self):
         # C layout
         pyfunc = slicing_3d_usecase
@@ -417,9 +384,6 @@ class TestGetItem(TestCase):
         for arg in args:
             self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
 
-    def test_3d_slicing_npm(self):
-        self.test_3d_slicing()
-
     def test_3d_slicing2(self):
         # C layout
         pyfunc = slicing_3d_usecase2
@@ -444,9 +408,6 @@ class TestGetItem(TestCase):
 
         for arg in args:
             self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
-
-    def test_3d_slicing2_npm(self):
-        self.test_3d_slicing2()
 
     def test_1d_integer_indexing(self):
         # C layout
@@ -477,9 +438,6 @@ class TestGetItem(TestCase):
             assert idx.ndim == 0
             self.assertEqual(pyfunc(a, idx), cfunc(a, idx))
 
-    def test_1d_integer_indexing_npm(self):
-        self.test_1d_integer_indexing()
-
     def test_integer_indexing_1d_for_2d(self):
         # Test partial (1d) indexing of a 2d array
         pyfunc = integer_indexing_1d_usecase
@@ -494,9 +452,6 @@ class TestGetItem(TestCase):
 
         a = np.arange(20, dtype='i4').reshape(5, 4)[::2]
         self.assertPreciseEqual(pyfunc(a, 0), cfunc(a, 0))
-
-    def test_integer_indexing_1d_for_2d_npm(self):
-        self.test_integer_indexing_1d_for_2d()
 
     def test_2d_integer_indexing(self,
                                  pyfunc=integer_indexing_2d_usecase):
@@ -527,9 +482,6 @@ class TestGetItem(TestCase):
             i = np.array(i).astype(np.int32)
             j = np.array(j).astype(np.int32)
             self.assertEqual(pyfunc(a, i, j), cfunc(a, i, j))
-
-    def test_2d_integer_indexing_npm(self):
-        self.test_2d_integer_indexing()
 
     def test_2d_integer_indexing2(self):
         self.test_2d_integer_indexing(pyfunc=integer_indexing_2d_usecase2)
@@ -588,20 +540,11 @@ class TestGetItem(TestCase):
     def test_ellipsis1(self):
         self.check_ellipsis(ellipsis_usecase1)
 
-    def test_ellipsis1_npm(self):
-        self.test_ellipsis1()
-
     def test_ellipsis2(self):
         self.check_ellipsis(ellipsis_usecase2)
 
-    def test_ellipsis2_npm(self):
-        self.test_ellipsis2()
-
     def test_ellipsis3(self):
         self.check_ellipsis(ellipsis_usecase3)
-
-    def test_ellipsis3_npm(self):
-        self.test_ellipsis3()
 
     def test_ellipsis_issue1498(self):
         # This is an issue due to incorrect layout inferred for when
@@ -656,9 +599,6 @@ class TestGetItem(TestCase):
 
         a = np.arange(1, dtype='i4').reshape(())
         self.assertPreciseEqual(pyfunc(a), cfunc(a))
-
-    def test_empty_tuple_indexing_npm(self):
-        self.test_empty_tuple_indexing()
 
 
 class TestSetItem(TestCase):
@@ -768,21 +708,6 @@ class TestSetItem(TestCase):
             cleft = cfunc(np.zeros_like(arg), arg[slice(*test)], *test)
             self.assertPreciseEqual(pyleft, cleft)
 
-    def test_1d_slicing_set_npm(self):
-        self.test_1d_slicing_set()
-
-    def test_1d_slicing_set_list_npm(self):
-        self.test_1d_slicing_set_list()
-
-    def test_1d_slicing_set_tuple_npm(self):
-        self.test_1d_slicing_set_tuple()
-
-    def test_1d_slicing_broadcast_npm(self):
-        self.test_1d_slicing_broadcast()
-
-    def test_1d_slicing_add_npm(self):
-        self.test_1d_slicing_add()
-
     def test_2d_slicing_set(self):
         """
         2d to 2d slice assignment
@@ -823,12 +748,6 @@ class TestSetItem(TestCase):
             pyleft = pyfunc(arg.copy(), val, *test)
             cleft = cfunc(arg.copy(), val, *test)
             self.assertPreciseEqual(cleft, pyleft)
-
-    def test_2d_slicing_set_npm(self):
-        self.test_2d_slicing_set()
-
-    def test_2d_slicing_broadcast_npm(self):
-        self.test_2d_slicing_broadcast()
 
     def test_setitem(self):
         """
