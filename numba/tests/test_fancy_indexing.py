@@ -6,10 +6,7 @@ import unittest
 from numba import jit, njit
 from numba.core.errors import TypingError
 from numba.tests.support import MemoryLeakMixin, TestCase
-from numba.core.compiler import compile_isolated, Flags
 
-enable_pyobj_flags = Flags()
-enable_pyobj_flags.nrt = True
 
 def getitem_usecase(a, b):
     return a[b]
