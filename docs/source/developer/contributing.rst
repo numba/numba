@@ -92,9 +92,9 @@ When working with a source checkout of Numba you will also need a development
 build of llvmlite. These are available from the ``numba/label/dev`` channel on
 `anaconda.org <https://anaconda.org/numba/llvmlite>`_.
 
-Then, to create an environment with a few of the most common dependencies. Note
-the use of the double-colon syntax (``numba/label/dev::llvmlite``) to install
-the latest development version of the llvmlite library.
+To create an environment with the required dependencies, noting the use of the 
+double-colon syntax (``numba/label/dev::llvmlite``) to install the latest
+development version of the llvmlite library::
 
    $ conda create -n numbaenv python=3.10 numba/label/dev::llvmlite numpy scipy jinja2 cffi
 
