@@ -463,8 +463,8 @@ Main documentation
 
 This documentation is under the ``docs`` directory of the `Numba repository`_.
 It is built with `Sphinx <http://sphinx-doc.org/>`_, `numpydoc
-<https://numpydoc.readthedocs.io/>`_ and the `sphinx-rtd-theme
-<https://sphinx-rtd-theme.readthedocs.io/en/stable/>_`.
+<https://numpydoc.readthedocs.io/>`_ and the
+`sphinx-rtd-theme <https://sphinx-rtd-theme.readthedocs.io/en/stable/>`_.
 
 To install all dependencies for building the documentation, use::
 
