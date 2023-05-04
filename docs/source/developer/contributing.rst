@@ -475,39 +475,11 @@ build and check the documentation::
    $ make html
    $ open _build/html/index.html
 
-Core developers can upload this documentation to the Numba website
-at https://numba.pydata.org by using the ``gh-pages.py`` script under ``docs``::
-
-   $ python gh-pages.py version  # version can be 'dev' or '0.16' etc
-
-then verify the repository under the ``gh-pages`` directory and use
-``git push``.
-
 Web site homepage
 '''''''''''''''''
 
 The Numba homepage on https://numba.pydata.org can be fetched from here:
-https://github.com/numba/numba-webpage
-
-After pushing documentation to a new version, core developers will want to
-update the website.  Some notable files:
-
-* ``index.rst``       # Update main page
-* ``_templates/sidebar_versions.html``    # Update sidebar links
-* ``doc.rst``         # Update after adding a new version for numba docs
-* ``download.rst``    # Updata after uploading new numba version to pypi
-
-After updating run::
-
-   $ make html
-
-and check out ``_build/html/index.html``.  To push updates to the Web site::
-
-   $ python _scripts/gh-pages.py
-
-then verify the repository under the ``gh-pages`` directory.  Make sure the
-``CNAME`` file is present and contains a single line for ``numba.pydata.org``.
-Finally, use ``git push`` to update the website.
+https://github.com/numba/numba.github.com
 
 
 .. _typeguard: https://typeguard.readthedocs.io/en/latest/
