@@ -132,9 +132,31 @@ class RvsdgRenderer(object):
         if type(block) == BasicBlock:
             self.render_basic_block(digraph, label, block)
         elif isinstance(block, ControlVariableBlock):
-            self.render_control_variable_block(digraph, label, block)
-        elif type(block) == BranchBlock:
-            self.render_branching_block(digraph, label, block)
+            if hasattr(block, "in_vars"):
+                with digraph.subgraph(name=f"cluster_ctrlvar_{id(self)}") as subg:
+                    subg.attr(color='lightgrey', style='solid')
+                    self.render_control_variable_block(subg, label, block)
+                    label_inc = f"incoming_{id(block)}"
+                    label_out = f"outgoing_{id(block)}"
+                    subg.node(label_inc, label=f"{'|'.join([f'<{k}> {k}' for k in block.in_vars])}", shape='record')
+                    subg.node(label_out, label=f"{'|'.join([f'<{k}> {k}' for k in block.out_vars])}", shape='record')
+                    subg.edge(label_inc, str(label), style="invis", weight="1000")
+                    subg.edge(str(label), label_out, style="invis", weight="1000")
+            else:
+                self.render_control_variable_block(digraph, label, block)
+        elif isinstance(block, BranchBlock):
+            if hasattr(block, "in_vars"):
+                with digraph.subgraph(name=f"cluster_ctrlvar_{id(self)}") as subg:
+                    subg.attr(color='lightgrey', style='solid')
+                    self.render_branching_block(subg, label, block)
+                    label_inc = f"incoming_{id(block)}"
+                    label_out = f"outgoing_{id(block)}"
+                    subg.node(label_inc, label=f"{'|'.join([f'<{k}> {k}' for k in block.in_vars])}", shape='record')
+                    subg.node(label_out, label=f"{'|'.join([f'<{k}> {k}' for k in block.out_vars])}", shape='record')
+                    subg.edge(label_inc, str(label), style="invis", weight="1000")
+                    subg.edge(str(label), label_out, style="invis", weight="1000")
+            else:
+                self.render_branching_block(digraph, label, block)
         elif isinstance(block, RegionBlock):
             self.render_region_block(digraph, label, block)
         else:
@@ -146,11 +168,11 @@ class RvsdgRenderer(object):
                 if dst in blocks:
                     if isinstance(block, RegionBlock):
                         if block.exiting is not None:
-                            self.g.edge(str(block.exiting), str(dst))
+                            self.g.edge(str(block.exiting), str(dst), color="blue")
                         else:
-                            self.g.edge(str(label), str(dst))
+                            self.g.edge(str(label), str(dst), color="blue")
                     elif isinstance(block, BasicBlock):
-                        self.g.edge(str(label), str(dst))
+                        self.g.edge(str(label), str(dst), color="blue")
                     else:
                         raise Exception("unreachable")
             for dst in block.backedges:

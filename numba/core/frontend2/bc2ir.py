@@ -1,7 +1,7 @@
 from dataclasses import dataclass, replace, field, fields
 import dis
 from contextlib import contextmanager
-from typing import Optional, Iterator, Protocol, runtime_checkable
+from typing import Optional, Iterator, Protocol, runtime_checkable, Union
 from collections import (
     deque,
     defaultdict,
@@ -19,6 +19,8 @@ from numba_rvsdg.core.datastructures.basic_block import (
     BasicBlock,
     PythonBytecodeBlock,
     RegionBlock,
+    BranchBlock,
+    ControlVariableBlock,
 )
 from numba_rvsdg.core.datastructures.labels import Label
 from numba_rvsdg.rendering.rendering import ByteFlowRenderer
@@ -81,6 +83,16 @@ class DDGRegion(RegionBlock):
             yield subg
             subg.edge(f"cluster_{label}", f"outgoing_{id(self)}", style="invis")
             subg.node(f"outgoing_{id(self)}", label=f"{'|'.join([f'<{k}> {k}' for k in self.out_vars])}", shape='record', rank="max")
+
+@dataclass(frozen=True)
+class DDGBranch(BranchBlock):
+    in_vars: set[str] = field(default_factory=set)
+    out_vars: set[str] = field(default_factory=set)
+
+@dataclass(frozen=True)
+class DDGControlVariable(ControlVariableBlock):
+    in_vars: set[str] = field(default_factory=set)
+    out_vars: set[str] = field(default_factory=set)
 
 
 @dataclass(frozen=True)
@@ -159,7 +171,6 @@ class DDGBlock(BasicBlock):
         renderer.add_edge(src, dst, **kwargs)
 
 
-
 def render_scfg(byteflow):
     bfr = ByteFlowRenderer()
     bfr.bcmap_from_bytecode(byteflow.bc)
@@ -194,8 +205,12 @@ def _flatten_full_graph(scfg: SCFG):
         assert not isinstance(blk, RegionBlock), type(blk)
     return out
 
-def view_toposorted_ddgblock_only(rvsdg: SCFG) -> list[list[DDGBlock]]:
-    """Return toposorted nested list of DDGBlock
+
+DDGTypes = (DDGBlock, DDGControlVariable, DDGBranch)
+_DDGTypeAnn = Union[DDGBlock, DDGControlVariable, DDGBranch]
+
+def view_toposorted_ddgblock_only(rvsdg: SCFG) -> list[list[_DDGTypeAnn]]:
+    """Return toposorted nested list of DDGTypes
     """
     graph = _flatten_full_graph(rvsdg)
     incoming_labels = _compute_incoming_labels(graph)
@@ -215,9 +230,9 @@ def view_toposorted_ddgblock_only(rvsdg: SCFG) -> list[list[DDGBlock]]:
         toposorted.append(level)
 
     # Filter
-    output: list[list[DDGBlock]] = []
+    output: list[list[_DDGTypeAnn]] = []
     for level in toposorted:
-        filtered = [graph[k] for k in level if isinstance(graph[k], DDGBlock)]
+        filtered = [graph[k] for k in level if isinstance(graph[k], DDGTypes)]
         if filtered:
             output.append(filtered)
 
@@ -274,10 +289,14 @@ def propagate_states_ddgblock_only_inplace(rvsdg: SCFG):
         for blk in blklevel:
             extra_vars = block_vars[blk.label] - set(blk.in_vars)
             for k in extra_vars:
-                op = Op(opname="var.incoming", bc_inst=None)
-                vs = op.add_output(k)
-                blk.in_vars[k] = vs
-                blk.out_vars[k] = vs
+                if isinstance(blk, DDGBlock):
+                    op = Op(opname="var.incoming", bc_inst=None)
+                    vs = op.add_output(k)
+                    blk.in_vars[k] = vs
+                    blk.out_vars[k] = vs
+                else:
+                    blk.in_vars.add(k)
+                    blk.out_vars.add(k)
 
 
 def _walk_all_regions(scfg: SCFG) -> Iterator[RegionBlock]:
@@ -311,6 +330,14 @@ def propagate_states_to_outgoing_inplace(rvsdg: SCFG):
                     propagate_states_to_outgoing_inplace(dst.subregion)
 
 
+def _upgrade_dataclass(old, newcls, replacements=None):
+    if replacements is None:
+        replacements = {}
+    fieldnames = [fd.name for fd in fields(old)]
+    oldattrs = {k: getattr(old, k) for k in fieldnames
+                if k not in replacements}
+    return newcls(**oldattrs, **replacements)
+
 
 def convert_scfg_to_dataflow(scfg, bcmap) -> SCFG:
     rvsdg = SCFG()
@@ -322,12 +349,14 @@ def convert_scfg_to_dataflow(scfg, bcmap) -> SCFG:
         elif isinstance(block, RegionBlock):
             # Inside-out
             subregion = convert_scfg_to_dataflow(block.subregion, bcmap)
-            newattrs = {fd.name: getattr(block, fd.name) for fd in fields(block)}
-            newattrs.update(subregion=subregion)
-            newblk = DDGRegion(**newattrs)
-            rvsdg.add_block(newblk)
+            rvsdg.add_block(_upgrade_dataclass(block, DDGRegion,
+                                               dict(subregion=subregion)))
+        elif isinstance(block, BranchBlock):
+            rvsdg.add_block(_upgrade_dataclass(block, DDGBranch))
+        elif isinstance(block, ControlVariableBlock):
+            rvsdg.add_block(_upgrade_dataclass(block, DDGControlVariable))
         else:
-            rvsdg.add_block(block)
+            raise Exception("unreachable")
 
     return rvsdg
 
