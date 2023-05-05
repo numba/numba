@@ -1386,24 +1386,6 @@ class TestIsinstanceBuiltin(TestCase):
             got = foo(x)
             self.assertEqual(got, expected)
 
-    @TestCase.run_test_in_subprocess
-    def test_no_experimental_warning(self):
-        # Check that if the isinstance feature is in use then an experimental
-        # warning is raised. Needs subproc as something else in the test suite
-        # might triggered the warning already.
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always', errors.NumbaWarning)
-            ignore_internal_warnings()
-
-            @njit
-            def foo(x):
-                return isinstance(x, float)
-
-            foo(1.234)
-
-            self.assertEqual(len(w), 0)
-
 
 class TestGetattrBuiltin(MemoryLeakMixin, TestCase):
     # Tests the getattr() builtin
