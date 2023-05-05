@@ -139,7 +139,7 @@ class DDGBlock(BasicBlock):
                 self.add_vs_edge(renderer, f"incoming_{id(self)}:{vs.name}", vs.parent.short_identity())
 
             # Fill outgoing
-            out_stackvars_fields = "outgoing-stack|" + "|".join([f"<{x.short_identity()}> {x.name}" for x in self.out_stackvars])
+            out_stackvars_fields = "outgoing-stack|" + "|".join([f"<{x.name}> {x.name}" for x in self.out_stackvars])
             out_vars_fields = "outgoing-vars|" + "|".join([f"<{x.name}> {x.name}" for x in self.out_vars.values()])
             fields = f"<{self.out_effect.short_identity()}> env" + "|" + out_stackvars_fields + "|" + out_vars_fields
             g.node(f"outgoing_{id(self)}", shape="record", label=f"{fields}")
