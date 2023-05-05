@@ -1098,7 +1098,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             with self.assertRaisesRegex(exc, exc_msg):
                 cfunc(a, b, rtol, atol, equal_nan)
 
-
     def bincount_sequences(self):
         """
         Some test sequences for np.bincount()
