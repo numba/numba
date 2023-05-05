@@ -408,7 +408,7 @@ class SortedMap(Mapping[Tk, Tv], _tp.Generic[Tk, Tv]):
 
 class MutableSortedMap(MutableMapping[Tk, Tv], _tp.Generic[Tk, Tv]):
     def __init__(self, dct):
-        self._dct = dct
+        self._dct: dict[Tk, Tv] = dct
 
     def __getitem__(self, k: Tk) -> Tv:
         return self._dct[k]
