@@ -59,6 +59,14 @@ class Op:
     def short_identity(self) -> str:
         return f"Op({self.opname}, {id(self):x})"
 
+    def summary(self) -> str:
+        ins = ', '.join([k for k in self._inputs])
+        outs = ', '.join([k for k in self._outputs])
+        bc = "---"
+        if self.bc_inst is not None:
+            bc = f"{self.bc_inst.opname}({self.bc_inst.argrepr})"
+        return f"Op\n{self.opname}\n{bc}\n({ins}) -> ({outs}) "
+
     @property
     def outputs(self):
         return list(self._outputs.values())
@@ -154,25 +162,26 @@ class DDGBlock(BasicBlock):
 
     def render_op(self, renderer, digraph, op: Op):
         op_anchor = op.short_identity()
-        digraph.node(op_anchor, label=op_anchor,
+        digraph.node(op_anchor, label=op.summary(),
                      shape="box", style="rounded")
-        for vs in op._outputs.values():
-            self.add_vs_edge(renderer, op_anchor, vs)
+        for edgename, vs in op._outputs.items():
+            self.add_vs_edge(renderer, op_anchor, vs, taillabel=f"{edgename}")
             self.render_valuestate(renderer, digraph, vs, follow=False)
-        for vs in op._inputs.values():
-            self.add_vs_edge(renderer, vs, op_anchor)
+        for edgename, vs in op._inputs.items():
+            self.add_vs_edge(renderer, vs, op_anchor, headlabel=f"{edgename}")
             self.render_valuestate(renderer, digraph, vs)
 
-    def add_vs_edge(self, renderer, src, dst):
+    def add_vs_edge(self, renderer, src, dst, **attrs):
         is_effect = (isinstance(src, ValueState) and src.is_effect) or (isinstance(dst, ValueState) and dst.is_effect)
         if isinstance(src, ValueState):
             src = src.short_identity()
         if isinstance(dst, ValueState):
             dst = dst.short_identity()
+
+        kwargs = attrs
         if is_effect:
-            kwargs = dict(style="dotted")
-        else:
-            kwargs = {}
+            kwargs["style"] = "dotted"
+
         renderer.add_edge(src, dst, **kwargs)
 
 
@@ -401,10 +410,13 @@ class BC2DDG:
     def pop(self) -> ValueState:
         if not self.stack:
             op = Op(opname="stack.incoming", bc_inst=None)
-            vs = op.add_output(f"stack[{len(self.incoming_stackvars)}]")
+            vs = op.add_output(f"stack.{len(self.incoming_stackvars)}")
             self.stack.append(vs)
             self.incoming_stackvars.append(vs)
         return self.stack.pop()
+
+    def _decorate_varname(self, varname: str) -> str:
+        return f"var.{varname}"
 
     def store(self, varname: str, value: ValueState):
         self.varmap[varname] = value
@@ -432,8 +444,7 @@ class BC2DDG:
     def op_LOAD_GLOBAL(self, inst: dis.Instruction):
         op = Op(opname="global", bc_inst=inst)
         op.add_input("env", self.effect)
-        op.add_output("value")
-        self.push(op.add_output("out"))
+        self.push(op.add_output(f"{inst.argval}"))
 
     def op_LOAD_CONST(self, inst: dis.Instruction):
         op = Op(opname="const", bc_inst=inst)
@@ -443,10 +454,12 @@ class BC2DDG:
         tos = self.pop()
         op = Op(opname="store", bc_inst=inst)
         op.add_input("value", tos)
-        self.store(inst.argval, op.add_output(inst.argval))
+        varname = self._decorate_varname(inst.argval)
+        self.store(varname, op.add_output(varname))
 
     def op_LOAD_FAST(self, inst: dis.Instruction):
-        self.push(self.load(inst.argval))
+        varname = self._decorate_varname(inst.argval)
+        self.push(self.load(varname))
 
     def op_PRECALL(self, inst: dis.Instruction):
         pass # no-op
