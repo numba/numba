@@ -3371,8 +3371,6 @@ def ov_np_where_x_y(condition, x, y):
     x_arr = isinstance(x, types.Array)
     y_arr = isinstance(y, types.Array)
 
-    from numba.cpython.builtins import _isinstance_no_warn
-
     if cond_arr:
         x_dt = determine_dtype(x)
         y_dt = determine_dtype(y)
@@ -3380,8 +3378,8 @@ def ov_np_where_x_y(condition, x, y):
 
         # corner case - 0 dim values
         def check_0_dim(arg):
-            return _isinstance_no_warn(arg, types.Number) or (
-                _isinstance_no_warn(arg, types.Array) and arg.ndim == 0)
+            return isinstance(arg, types.Number) or (
+                isinstance(arg, types.Array) and arg.ndim == 0)
         special_0_case = all([check_0_dim(a) for a in (condition, x, y)])
         if special_0_case:
             return _where_zero_size_array_impl(dtype)
