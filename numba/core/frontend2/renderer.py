@@ -1,5 +1,6 @@
 
 import logging
+import contextlib
 from numba_rvsdg.core.datastructures.basic_block import (
     BasicBlock,
     RegionBlock,
@@ -15,7 +16,7 @@ from numba_rvsdg.core.datastructures.labels import (
 )
 from numba_rvsdg.core.datastructures.byte_flow import ByteFlow
 import dis
-from typing import Dict
+from typing import Dict, Callable
 
 
 class RvsdgRenderer(object):
@@ -50,9 +51,8 @@ class RvsdgRenderer(object):
             self.render_edges(graph)
 
         if hasattr(regionblock, "render_rvsdg"):
-            # with regionblock.render_rvsdg(self, digraph, label) as digraph:
-            #     render_subgraph(digraph, label)
-            pass
+            with regionblock.render_rvsdg(self, digraph, label) as digraph:
+                render_subgraph(digraph, label)
         else:
             render_subgraph(digraph, label)
 
@@ -132,35 +132,37 @@ class RvsdgRenderer(object):
         if type(block) == BasicBlock:
             self.render_basic_block(digraph, label, block)
         elif isinstance(block, ControlVariableBlock):
-            if hasattr(block, "in_vars"):
-                with digraph.subgraph(name=f"cluster_ctrlvar_{id(self)}") as subg:
-                    subg.attr(color='lightgrey', style='solid')
-                    self.render_control_variable_block(subg, label, block)
-                    label_inc = f"incoming_{id(block)}"
-                    label_out = f"outgoing_{id(block)}"
-                    subg.node(label_inc, label=f"{'|'.join([f'<{k}> {k}' for k in block.in_vars])}", shape='record')
-                    subg.node(label_out, label=f"{'|'.join([f'<{k}> {k}' for k in block.out_vars])}", shape='record')
-                    subg.edge(label_inc, str(label), style="invis", weight="1000")
-                    subg.edge(str(label), label_out, style="invis", weight="1000")
-            else:
-                self.render_control_variable_block(digraph, label, block)
+            with self._render_region_for_control_blocks(digraph, block, label) as subg:
+                self.render_control_variable_block(subg, label, block)
+
         elif isinstance(block, BranchBlock):
-            if hasattr(block, "in_vars"):
-                with digraph.subgraph(name=f"cluster_ctrlvar_{id(self)}") as subg:
-                    subg.attr(color='lightgrey', style='solid')
-                    self.render_branching_block(subg, label, block)
-                    label_inc = f"incoming_{id(block)}"
-                    label_out = f"outgoing_{id(block)}"
-                    subg.node(label_inc, label=f"{'|'.join([f'<{k}> {k}' for k in block.in_vars])}", shape='record')
-                    subg.node(label_out, label=f"{'|'.join([f'<{k}> {k}' for k in block.out_vars])}", shape='record')
-                    subg.edge(label_inc, str(label), style="invis", weight="1000")
-                    subg.edge(str(label), label_out, style="invis", weight="1000")
-            else:
-                self.render_branching_block(digraph, label, block)
+            with self._render_region_for_control_blocks(digraph, block, label) as subg:
+                self.render_branching_block(subg, label, block)
         elif isinstance(block, RegionBlock):
             self.render_region_block(digraph, label, block)
         else:
             block.render_rvsdg(self, digraph, label)
+
+    @contextlib.contextmanager
+    def _render_region_for_control_blocks(self, digraph, block, label):
+        context: Callable
+
+        if hasattr(block, "in_vars"):
+            @contextlib.contextmanager
+            def context():
+                with digraph.subgraph(name=f"cluster_controlregion_{id(self)}") as subg:
+                    subg.attr(color='lightgrey', style='solid', label="")
+                    yield subg
+                    label_inc = f"incoming_{id(block)}"
+                    label_out = f"outgoing_{id(block)}"
+                    subg.node(label_inc, label=f"{'|'.join([f'<{k}> {k}' for k in block.in_vars])}", shape='record')
+                    subg.node(label_out, label=f"{'|'.join([f'<{k}> {k}' for k in block.out_vars])}", shape='record')
+                    subg.edge(label_inc, str(label), style="invis", weight="1000")
+                    subg.edge(str(label), label_out, style="invis", weight="1000")
+        else:
+            context = lambda: contextlib.nullcontext(digraph)
+        with context() as subg:
+            yield subg
 
     def render_edges(self, blocks: Dict[Label, BasicBlock]):
         for label, block in blocks.items():
