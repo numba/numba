@@ -401,6 +401,11 @@ class BC2DDG:
             self.incoming_stackvars.append(vs)
         return self.stack.pop()
 
+    def top(self) -> ValueState:
+        tos = self.pop()
+        self.push(tos)
+        return tos
+
     def _decorate_varname(self, varname: str) -> str:
         return f"var.{varname}"
 
@@ -471,7 +476,7 @@ class BC2DDG:
         self.push(op.add_output("iter"))
 
     def op_FOR_ITER(self, inst: dis.Instruction):
-        tos = self.pop()
+        tos = self.top()
         op = Op(opname="foriter", bc_inst=inst)
         op.add_input("iter", tos)
         self.push(op.add_output("indvar"))
