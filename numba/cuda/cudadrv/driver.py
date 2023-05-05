@@ -2733,7 +2733,10 @@ class MVCLinker(Linker):
             raise LinkerError from e
 
     def add_cu(self, cu, name):
-        program = NvidiaBindingNvrtcProgram(cu, name)
+        if USE_NV_BINDING:
+            program = NvidiaBindingNvrtcProgram(cu, name)
+        else:
+            program = CtypesBindingNvrtcProgram(cu, name)
 
         if config.DUMP_ASSEMBLY:
             print(("ASSEMBLY %s" % name).center(80, '-'))
