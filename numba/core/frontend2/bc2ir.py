@@ -493,8 +493,18 @@ class BC2DDG:
         op.add_input("retval", tos)
         self.replace_effect(op.add_output("env", is_effect=True))
 
+    def op_JUMP_FORWARD(self, inst: dis.Instruction):
+        pass # no-op
+
     def op_JUMP_BACKWARD(self, inst: dis.Instruction):
         pass # no-op
+
+    def op_POP_JUMP_FORWARD_IF_FALSE(self, inst: dis.Instruction):
+        tos = self.pop()
+        op = Op("jump.if_false", bc_inst=inst)
+        op.add_input("env", self.effect)
+        op.add_input("pred", tos)
+        self.replace_effect(op.add_output("env", is_effect=True))
 
 
 def run_frontend(func): #, inline_closures=False, emit_dels=False):
