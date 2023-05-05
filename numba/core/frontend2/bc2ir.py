@@ -74,34 +74,34 @@ class Op:
 
 @runtime_checkable
 class DDGProtocol(Protocol):
-    in_vars: MutableSortedSet[str]
-    out_vars: MutableSortedSet[str]
+    incoming_states: MutableSortedSet[str]
+    outgoing_states: MutableSortedSet[str]
 
 
 @dataclass(frozen=True)
 class DDGRegion(RegionBlock):
-    in_vars: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
-    out_vars: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
+    incoming_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
+    outgoing_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
 
     @contextmanager
     def render_rvsdg(self, renderer, digraph, label):
         with digraph.subgraph(name=f"cluster_rvsdg_{id(self)}") as subg:
             subg.attr(color="black", label="region", bgcolor="grey")
-            subg.node(f"incoming_{id(self)}", label=f"{'|'.join([f'<{k}> {k}' for k in self.in_vars])}", shape='record', rank="min")
+            subg.node(f"incoming_{id(self)}", label=f"{'|'.join([f'<{k}> {k}' for k in self.incoming_states])}", shape='record', rank="min")
             subg.edge(f"incoming_{id(self)}", f"cluster_{label}", style="invis")
             yield subg
             subg.edge(f"cluster_{label}", f"outgoing_{id(self)}", style="invis")
-            subg.node(f"outgoing_{id(self)}", label=f"{'|'.join([f'<{k}> {k}' for k in self.out_vars])}", shape='record', rank="max")
+            subg.node(f"outgoing_{id(self)}", label=f"{'|'.join([f'<{k}> {k}' for k in self.outgoing_states])}", shape='record', rank="max")
 
 @dataclass(frozen=True)
 class DDGBranch(BranchBlock):
-    in_vars: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
-    out_vars: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
+    incoming_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
+    outgoing_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
 
 @dataclass(frozen=True)
 class DDGControlVariable(ControlVariableBlock):
-    in_vars: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
-    out_vars: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
+    incoming_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
+    outgoing_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
 
 
 @dataclass(frozen=True)
@@ -184,6 +184,14 @@ class DDGBlock(BasicBlock):
 
         renderer.add_edge(src, dst, **kwargs)
 
+    @property
+    def incoming_states(self) -> MutableSortedSet:
+        return MutableSortedSet(self.in_vars)
+
+    @property
+    def outgoing_states(self) -> MutableSortedSet:
+        return MutableSortedSet(self.out_vars)
+
 
 def render_scfg(byteflow):
     bfr = ByteFlowRenderer()
@@ -253,28 +261,6 @@ def view_toposorted_ddgblock_only(rvsdg: SCFG) -> list[list[_DDGTypeAnn]]:
     return output
 
 
-
-# def _traverse_tree(graph: Mapping[Label, BasicBlock]):
-#     """BFS
-#     """
-#     def _find_head(incoming_labels):
-#         for k, vs in incoming_labels.items():
-#             if not vs:
-#                 return k
-#         raise Exception("unreachable")
-
-#     incoming_labels = _compute_incoming_labels(graph)
-#     pending = deque([graph[_find_head(incoming_labels)]])
-#     visited = set()
-#     while pending:
-#         node = pending.popleft()
-#         incomings = incoming_labels[node.label]
-#         assert len(incomings - visited) == 0, "all incomings must be already visited"
-#         yield incoming_labels[node.label], node
-#         visited.add(node.label)
-#         pending.extend([graph[x] for x in node.jump_targets if x not in visited])
-
-
 def convert_to_dataflow(byteflow: ByteFlow) -> SCFG:
     bcmap = {inst.offset: inst for inst in byteflow.bc}
     rvsdg = convert_scfg_to_dataflow(byteflow.scfg, bcmap)
@@ -295,13 +281,13 @@ def propagate_states_ddgblock_only_inplace(rvsdg: SCFG):
         new_vars: set[str] = set()
         for blk in blklevel:
             block_vars[blk.label] = live_vars.copy()
-            new_vars |= set(blk.out_vars)
+            new_vars |= set(blk.outgoing_states)
         live_vars |= new_vars
 
     # Apply changes
     for blklevel in topo_ddgblocks:
         for blk in blklevel:
-            extra_vars = block_vars[blk.label] - set(blk.in_vars)
+            extra_vars = block_vars[blk.label] - set(blk.incoming_states)
             for k in extra_vars:
                 if isinstance(blk, DDGBlock):
                     op = Op(opname="var.incoming", bc_inst=None)
@@ -309,8 +295,8 @@ def propagate_states_ddgblock_only_inplace(rvsdg: SCFG):
                     blk.in_vars[k] = vs
                     blk.out_vars[k] = vs
                 else:
-                    blk.in_vars.add(k)
-                    blk.out_vars.add(k)
+                    blk.incoming_states.add(k)
+                    blk.outgoing_states.add(k)
 
 
 def _walk_all_regions(scfg: SCFG) -> Iterator[RegionBlock]:
@@ -327,10 +313,10 @@ def propagate_states_to_parent_region_inplace(rvsdg: SCFG):
         head = subregion[subregion.find_head()]
         exit = subregion[reg.exiting]
         if isinstance(head, DDGProtocol):
-            reg.in_vars.update(head.in_vars)
+            reg.incoming_states.update(head.incoming_states)
         if isinstance(exit, DDGProtocol):
-            reg.out_vars.update(reg.in_vars)
-            reg.out_vars.update(exit.out_vars)
+            reg.outgoing_states.update(reg.incoming_states)
+            reg.outgoing_states.update(exit.outgoing_states)
 
 
 def propagate_states_to_outgoing_inplace(rvsdg: SCFG):
@@ -339,8 +325,8 @@ def propagate_states_to_outgoing_inplace(rvsdg: SCFG):
             if dst_label in rvsdg.graph:
                 dst = rvsdg.graph[dst_label]
                 if isinstance(dst, DDGRegion):
-                    dst.in_vars.update(src.out_vars)
-                    dst.out_vars.update(dst.in_vars)
+                    dst.incoming_states.update(src.outgoing_states)
+                    dst.outgoing_states.update(dst.incoming_states)
                     propagate_states_to_outgoing_inplace(dst.subregion)
 
 

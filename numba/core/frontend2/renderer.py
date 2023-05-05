@@ -147,7 +147,7 @@ class RvsdgRenderer(object):
     def _render_region_for_control_blocks(self, digraph, block, label):
         context: Callable
 
-        if hasattr(block, "in_vars"):
+        if hasattr(block, "incoming_states"):
             @contextlib.contextmanager
             def context():
                 with digraph.subgraph(name=f"cluster_controlregion_{id(self)}") as subg:
@@ -155,8 +155,8 @@ class RvsdgRenderer(object):
                     yield subg
                     label_inc = f"incoming_{id(block)}"
                     label_out = f"outgoing_{id(block)}"
-                    subg.node(label_inc, label=f"{'|'.join([f'<{k}> {k}' for k in block.in_vars])}", shape='record')
-                    subg.node(label_out, label=f"{'|'.join([f'<{k}> {k}' for k in block.out_vars])}", shape='record')
+                    subg.node(label_inc, label=f"{'|'.join([f'<{k}> {k}' for k in block.incoming_states])}", shape='record')
+                    subg.node(label_out, label=f"{'|'.join([f'<{k}> {k}' for k in block.outgoing_states])}", shape='record')
                     subg.edge(label_inc, str(label), style="invis", weight="1000")
                     subg.edge(str(label), label_out, style="invis", weight="1000")
         else:
@@ -208,13 +208,13 @@ class RvsdgRenderer(object):
     def _render_inter_states(self, scfg: SCFG):
         g = self.g
         for src in scfg.graph.values():
-            if hasattr(src, "out_vars"):
+            if hasattr(src, "outgoing_states"):
                 for label in src.jump_targets:
                     if label in scfg.graph:
                         dst = scfg.graph[label]
-                        if hasattr(dst, "in_vars"):
+                        if hasattr(dst, "incoming_states"):
                             # Connect src outgoing to dst incoming
-                            for name in src.out_vars:
+                            for name in src.outgoing_states:
                                 g.edge(f"outgoing_{id(src)}:{name}",
                                        f"incoming_{id(dst)}:{name}")
                 if isinstance(src, RegionBlock):
@@ -225,14 +225,14 @@ class RvsdgRenderer(object):
         g = self.g
         # Connect region incoming to the incoming of head
         head = node.subregion[node.subregion.find_head()]
-        if hasattr(head, "in_vars"):
-            for name in head.in_vars:
+        if hasattr(head, "incoming_states"):
+            for name in head.incoming_states:
                 g.edge(f"incoming_{id(node)}:{name}",
                         f"incoming_{id(head)}:{name}")
         # Connection outgoing of exit to region outgoing
         exit = node.subregion[node.exiting]
-        if hasattr(exit, "out_vars"):
-            for name in exit.out_vars:
+        if hasattr(exit, "outgoing_states"):
+            for name in exit.outgoing_states:
                 g.edge(f"outgoing_{id(exit)}:{name}",
                         f"outgoing_{id(node)}:{name}")
 

@@ -359,7 +359,7 @@ class MutableSortedSet(MutableSet[T], _tp.Generic[T]):
     """Mutable Sorted Set
     """
 
-    def __init__(self, values: _tp.Sequence[T]=()):
+    def __init__(self, values: _tp.Iterable[T]=()):
         self._values = set(values)
 
     def __len__(self):
