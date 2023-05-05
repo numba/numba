@@ -1123,8 +1123,23 @@ def _isclose_item(x, y, rtol, atol, equal_nan):
 
 @overload(np.isclose)
 def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-    if not (type_can_asarray(a) and type_can_asarray(b)):
-        raise TypingError("Inputs for `np.isclose` must be array-like.")
+    if not type_can_asarray(a):
+        raise TypingError('The first argument "a" must be array-like')
+
+    if not type_can_asarray(b):
+        raise TypingError('The second argument "b" must be array-like')
+
+    if not isinstance(rtol, (float, types.Float)):
+        raise TypingError('The third argument "rtol" must be a '
+                          'floating point')
+
+    if not isinstance(atol, (float, types.Float)):
+        raise TypingError('The fourth argument "atol" must be a '
+                          'floating point')
+
+    if not isinstance(equal_nan, (bool, types.Boolean)):
+        raise TypingError('The fifth argument "equal_nan" must be a '
+                          'boolean')
 
     if isinstance(a, types.Array) and isinstance(b, types.Number):
         def isclose_impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):

@@ -1071,12 +1071,33 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def isclose_exception(self):
         pyfunc = isclose
         cfunc = jit(nopython=True)(pyfunc)
-        inputs = [('hello', 'world'), (2.0, None), ('a', 3.0)]
-        for (a, b) in inputs:
-            with self.assertRaises(TypingError) as raises:
-                cfunc(a, b)
-            self.assertIn("Inputs for `np.isclose` must be array-like.",
-                          str(raises.exception))
+        inps = [
+            (np.asarray([1e10, 1e-9, np.nan]),
+             np.asarray([1.0001e10, 1e-9]),
+             1e-05, 1e-08, False,
+             "shape mismatch: objects cannot be broadcast to a single shape",
+             ValueError),
+            ('hello', 3, False, 1e-08, False,
+             'The first argument "a" must be array-like',
+             TypingError),
+            (3, 'hello', False, 1e-08, False,
+             'The second argument "b" must be array-like',
+             TypingError),
+            (2, 3, False, 1e-08, False,
+             'The third argument "rtol" must be a floating point',
+             TypingError),
+            (2, 3, 1e-05, False, False,
+             'The fourth argument "atol" must be a floating point',
+             TypingError),
+            (2, 3, 1e-05, 1e-08, 1,
+             'The fifth argument "equal_nan" must be a boolean',
+             TypingError),
+        ]
+
+        for a, b, rtol, atol, equal_nan, exc_msg, exc in inps:
+            with self.assertRaisesRegex(exc, exc_msg):
+                cfunc(a, b, rtol, atol, equal_nan)
+
 
     def bincount_sequences(self):
         """
