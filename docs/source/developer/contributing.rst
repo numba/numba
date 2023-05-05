@@ -454,7 +454,7 @@ The Numba documentation is split over two repositories:
   `Numba repository <https://github.com/numba/numba>`_.
 
 * The `Numba homepage <https://numba.pydata.org>`_ has its sources in a
-  separate repository at https://github.com/numba/numba-webpage
+  separate repository at https://github.com/numba/numba.github.com.
 
 
 Main documentation
