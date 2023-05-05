@@ -754,7 +754,6 @@ def ol_isinstance(var, typs):
     # Warn about the experimental nature of this feature.
     msg = "Use of isinstance() detected. This is an experimental feature."
     warnings.warn(msg, category=NumbaExperimentalFeatureWarning)
-    assert 0 # find which tests use isinstance
 
     return ol_isinstance_no_warn(var, typs)
 
@@ -788,10 +787,6 @@ def ol_isinstance_no_warn(var, typs):
     if not isinstance(var_ty, supported_var_ty):
         msg = f'isinstance() does not support variables of type "{var_ty}".'
         raise NumbaTypeError(msg)
-
-    # # Warn about the experimental nature of this feature.
-    # msg = "Use of isinstance() detected. This is an experimental feature."
-    # warnings.warn(msg, category=NumbaExperimentalFeatureWarning)
 
     t_typs = typs
 
