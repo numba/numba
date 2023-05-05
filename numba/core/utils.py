@@ -12,10 +12,11 @@ import weakref
 import warnings
 import threading
 import contextlib
+import typing as _tp
 
 from types import ModuleType
 from importlib import import_module
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping, Sequence, MutableSet, MutableMapping
 import numpy as np
 
 from inspect import signature as pysignature # noqa: F401
@@ -352,7 +353,38 @@ def order_by_target_specificity(target, templates, fnkey=''):
     return order
 
 
-class SortedMap(Mapping):
+T = _tp.TypeVar('T')
+
+class MutableSortedSet(MutableSet[T], _tp.Generic[T]):
+    """Mutable Sorted Set
+    """
+
+    def __init__(self, values: _tp.Sequence[T]=()):
+        self._values = set(values)
+
+    def __len__(self):
+        return len(self._values)
+
+    def __iter__(self):
+        return iter(k for k in sorted(self._values))
+
+    def __contains__(self, x: T) -> bool:
+        return self._values.__contains__(x)
+
+    def add(self, x: T):
+        return self._values.add(x)
+
+    def discard(self, value: T):
+        self._values.discard(value)
+
+    def update(self, values):
+        self._values.update(values)
+
+
+Tk = _tp.TypeVar('Tk')
+Tv = _tp.TypeVar('Tv')
+
+class SortedMap(Mapping[Tk, Tv], _tp.Generic[Tk, Tv]):
     """Immutable
     """
 
@@ -372,6 +404,26 @@ class SortedMap(Mapping):
 
     def __iter__(self):
         return iter(k for k, v in self._values)
+
+
+class MutableSortedMap(MutableMapping[Tk, Tv], _tp.Generic[Tk, Tv]):
+    def __init__(self, dct):
+        self._dct = dct
+
+    def __getitem__(self, k: Tk) -> Tv:
+        return self._dct[k]
+
+    def __setitem__(self, k: Tk, v: Tv):
+        self._dct[k] = v
+
+    def __delitem__(self, k: Tk):
+        del self._dct[k]
+
+    def __len__(self) -> int:
+        return len(self._dct)
+
+    def __iter__(self) -> int:
+        return iter(k for k in sorted(self._dct))
 
 
 class UniqueDict(dict):

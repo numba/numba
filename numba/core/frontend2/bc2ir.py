@@ -27,6 +27,7 @@ from numba_rvsdg.rendering.rendering import ByteFlowRenderer
 
 from .renderer import RvsdgRenderer
 
+from numba.core.utils import MutableSortedSet, MutableSortedMap
 
 
 @dataclass(frozen=True)
@@ -65,14 +66,14 @@ class Op:
 
 @runtime_checkable
 class DDGProtocol(Protocol):
-    in_vars: set[str]
-    out_vars: set[str]
+    in_vars: MutableSortedSet[str]
+    out_vars: MutableSortedSet[str]
 
 
 @dataclass(frozen=True)
 class DDGRegion(RegionBlock):
-    in_vars: set[str] = field(default_factory=set)
-    out_vars: set[str] = field(default_factory=set)
+    in_vars: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
+    out_vars: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
 
     @contextmanager
     def render_rvsdg(self, renderer, digraph, label):
@@ -86,13 +87,13 @@ class DDGRegion(RegionBlock):
 
 @dataclass(frozen=True)
 class DDGBranch(BranchBlock):
-    in_vars: set[str] = field(default_factory=set)
-    out_vars: set[str] = field(default_factory=set)
+    in_vars: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
+    out_vars: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
 
 @dataclass(frozen=True)
 class DDGControlVariable(ControlVariableBlock):
-    in_vars: set[str] = field(default_factory=set)
-    out_vars: set[str] = field(default_factory=set)
+    in_vars: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
+    out_vars: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
 
 
 @dataclass(frozen=True)
@@ -101,8 +102,12 @@ class DDGBlock(BasicBlock):
     out_effect: ValueState | None = None
     in_stackvars: list[ValueState] = field(default_factory=list)
     out_stackvars: list[ValueState] = field(default_factory=list)
-    in_vars: dict[str, ValueState] = field(default_factory=dict)
-    out_vars: dict[str, ValueState] = field(default_factory=dict)
+    in_vars: MutableSortedMap[str, ValueState] = field(default_factory=MutableSortedMap)
+    out_vars: MutableSortedMap[str, ValueState] = field(default_factory=MutableSortedMap)
+
+    def __post_init__(self):
+        assert isinstance(self.in_vars, MutableSortedMap)
+        assert isinstance(self.out_vars, MutableSortedMap)
 
     def render_rvsdg(self, renderer, digraph, label):
         with digraph.subgraph(name="cluster_"+str(label)) as g:
@@ -375,8 +380,8 @@ def convert_bc_to_ddg(block: PythonBytecodeBlock, bcmap: dict[int, dis.Bytecode]
         out_effect=converter.effect,
         in_stackvars=list(converter.incoming_stackvars),
         out_stackvars=list(converter.stack),
-        in_vars=converter.incoming_vars.copy(),
-        out_vars=converter.varmap.copy(),
+        in_vars=MutableSortedMap(converter.incoming_vars),
+        out_vars=MutableSortedMap(converter.varmap),
     )
 
     return blk
