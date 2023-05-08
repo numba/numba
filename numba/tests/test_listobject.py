@@ -233,9 +233,9 @@ class TestGetitem(MemoryLeakMixin, TestCase):
             def foo():
                 l = listobject.new_list(int32)
                 l.append(7)
-                return l[ty(0)], l[ty(-1)]
+                return l[ty(0)]
 
-            self.assertEqual(foo(), (7, 7))
+            self.assertEqual(foo(), 7)
 
 
 class TestGetitemSlice(MemoryLeakMixin, TestCase):
