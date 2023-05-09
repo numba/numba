@@ -55,24 +55,17 @@ class NVRTCInterface(object):
     interfacing the high-level API with the NVRTC binary, but clients
     are free to use NVRTC directly through this class.
     """
-    def __init__(self, lib_path=''):
+    def __init__(self):
         self._lib = None
-        self._load_nvrtc_lib(lib_path)
+        self._load_nvrtc_lib()
 
-    def _load_nvrtc_lib(self, lib_path):
+    def _load_nvrtc_lib(self):
+        from numba.cuda.cudadrv.libs import open_cudalib
         """
         Loads the NVRTC shared library, with an optional search path in
         lib_path.
         """
-        def_lib_name = "nvrtc"
-
-        if len(lib_path) == 0:
-            name = def_lib_name
-        else:
-            name = lib_path
-
-        found_library = find_library(name)
-        self._lib = cdll.LoadLibrary(found_library)
+        self._lib = open_cudalib('nvrtc')
 
         self._lib.nvrtcCreateProgram.argtypes = [
             POINTER(c_void_p),  # prog
