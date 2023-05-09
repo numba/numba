@@ -238,7 +238,7 @@ def build_rvsdg(code):
     byteflow = ByteFlow.from_bytecode(code)
     byteflow = byteflow.restructure()
     canonicalize_scfg(byteflow.scfg)
-    render_scfg(byteflow)
+    # render_scfg(byteflow)
     rvsdg = convert_to_dataflow(byteflow)
     rvsdg = propagate_states(rvsdg)
     RvsdgRenderer().render_rvsdg(rvsdg).view("rvsdg")
@@ -251,7 +251,8 @@ def _compute_incoming_labels(graph: Mapping[Label, BasicBlock]) -> dict[Label, s
         jump_table[k] = set()
     for blk in graph.values():
         for dst in blk.jump_targets:
-            jump_table[dst].add(blk.label)
+            if dst in jump_table:
+                jump_table[dst].add(blk.label)
     return jump_table
 
 def _flatten_full_graph(scfg: SCFG):
