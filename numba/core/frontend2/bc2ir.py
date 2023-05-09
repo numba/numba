@@ -492,8 +492,12 @@ class BC2DDG:
         pass   # no-op
 
     def op_LOAD_GLOBAL(self, inst: dis.Instruction):
+        load_nil = inst.arg & 1
         op = Op(opname="global", bc_inst=inst)
         op.add_input("env", self.effect)
+        nil = op.add_output("nil")
+        if load_nil:
+            self.push(nil)
         self.push(op.add_output(f"{inst.argval}"))
 
     def op_LOAD_CONST(self, inst: dis.Instruction):
