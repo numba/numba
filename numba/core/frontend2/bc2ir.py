@@ -310,12 +310,12 @@ def convert_to_dataflow(byteflow: ByteFlow) -> SCFG:
 
 def propagate_states(rvsdg: SCFG) -> SCFG:
     # vars
+    propagate_stack(rvsdg)
     propagate_states_ddgblock_only_inplace(rvsdg)
     propagate_states_to_parent_region_inplace(rvsdg)
     propagate_states_to_outgoing_inplace(rvsdg)
 
     # stack
-    propagate_stack(rvsdg)
     return rvsdg
 
 def propagate_states_ddgblock_only_inplace(rvsdg: SCFG):
@@ -377,21 +377,107 @@ def propagate_states_to_outgoing_inplace(rvsdg: SCFG):
 
 
 
-# class RegionVisitor:
-#     def visit_linear(self, region: RegionBlock):
-#         pass
+class RegionVisitor:
 
-#     def visit_loop(self, region: RegionBlock):
-#         pass
+    def visit_block(self, block: BasicBlock, data):
+        pass
 
-#     def visit_branch(self, head: Label: RegionBlock):
-#         pass
+    def visit_loop(self, region: RegionBlock, data):
+        pass
 
-#     # def visit(self, scfg: SCFG):
-    #     for each in
+    def visit_switch(self, region: RegionBlock, data):
+        pass
+
+    def visit_linear(self, region: RegionBlock, data):
+        return self.visit_graph(region.subregion, data)
+
+    def visit_graph(self, scfg: SCFG, data):
+        toposorted = toposort_graph(scfg.graph)
+        label: Label
+        for lvl in toposorted:
+            for label in lvl:
+                data = self.visit(scfg[label], data)
+        return data
+
+    def visit(self, block: BasicBlock, data):
+        if isinstance(block, RegionBlock):
+            if block.kind == "loop":
+                fn = self.visit_loop
+            elif block.kind == "switch":
+                fn = self.visit_switch
+            else:
+                raise NotImplementedError('unreachable')
+            data = fn(block, data)
+        else:
+            data = self.visit_block(block, data)
+        return data
+
+
+class PropagateStack(RegionVisitor):
+    def __init__(self, _debug: bool=False):
+        super(PropagateStack, self).__init__()
+        self._stack_count = 0
+        self._debug = _debug
+
+    def debug_print(self, *args, **kwargs):
+        if self._debug:
+            print(*args, **kwargs)
+
+    def new_stack_var(self) -> str:
+        name = f"stack.exported.{self._stack_count}"
+        self._stack_count += 1
+        return name
+
+    def visit_block(self, block: BasicBlock, data):
+        if isinstance(block, DDGBlock):
+            data = data[:-len(block.in_stackvars)]
+            new_stack_vars = tuple([self.new_stack_var() for _ in block.out_stackvars])
+            data += new_stack_vars
+            for i, stackname in enumerate(new_stack_vars):
+                op = Op("stack.export", None)
+                op.add_input("0", block.out_stackvars[i])
+                block.out_vars[stackname] = op.add_output(stackname)
+            self.debug_print('---=', block.label, "stack", data)
+            return data
+        else:
+            return data
+
+    def visit_loop(self, region: RegionBlock, data):
+        self.debug_print("---LOOP_ENTER", region.label)
+        data = self.visit_linear(region, data)
+        self.debug_print('---LOOP_END=', region.label, "stack", data)
+        return data
+
+    def visit_switch(self, region: RegionBlock, data):
+        self.debug_print("---SWITCH_ENTER", region.label)
+        [header] = region.headers
+        data_at_head = self.visit_linear(region.subregion[header], data)
+        data_for_branches = []
+        for label, blk in region.subregion.graph.items():
+            if blk.kind == "branch":
+                data_for_branches.append(
+                    self.visit_linear(blk, data_at_head)
+                )
+        data_after_branches = min(data_for_branches, key=len)
+
+        exiting = region.exiting
+
+        data_at_tail = self.visit_linear(region.subregion[exiting], data_after_branches)
+
+        self.debug_print("data_at_head", data_at_head)
+        self.debug_print("data_for_branches", data_for_branches)
+        self.debug_print("data_after_branches", data_after_branches)
+        self.debug_print("data_at_tail", data_at_tail)
+        self.debug_print('---SWITCH_END=', region.label, "stack", data_at_tail)
+        return data_at_tail
+
+    def make_data(self):
+        return ()
+
 
 def propagate_stack(rvsdg: SCFG):
-    pass
+    visitor = PropagateStack()
+    visitor.visit_graph(rvsdg, visitor.make_data())
 
 
 def _upgrade_dataclass(old, newcls, replacements=None):
