@@ -199,9 +199,46 @@ def render_scfg(byteflow):
     bfr.render_scfg(byteflow.scfg).view("scfg")
 
 
+def canonicalize_scfg(scfg: SCFG):
+    todos = set(scfg.graph)
+    while todos:
+        label = todos.pop()
+        blk = scfg[label]
+        todos.discard(label)
+        if isinstance(blk, RegionBlock):
+            if blk.kind == 'head':
+                # Make sure that branches are in switch blocks
+                branches = blk.jump_targets
+                branch_targets = set()
+                for br in branches:
+                    branch_targets |= set(scfg[br].jump_targets)
+                [tail] = branch_targets
+                tailblk = scfg[tail]
+                switch_labels = {label, tail, *branches}
+                subregion_graph = {k:scfg[k] for k in switch_labels}
+                scfg.remove_blocks(switch_labels)
+                scfg.graph[label] = RegionBlock(
+                    label=label,
+                    kind="switch",
+                    _jump_targets=tailblk._jump_targets,
+                    backedges=tailblk.backedges,
+                    exiting=tailblk.exiting,
+                    headers={label},
+                    subregion=SCFG(graph=subregion_graph, clg=scfg.clg),
+                )
+                todos -= switch_labels
+            elif blk.kind == 'loop':
+                canonicalize_scfg(blk.subregion)
+                if blk.exiting not in blk.subregion:
+                    [exiting], _exit = blk.subregion.find_exiting_and_exits(set(blk.subregion.graph))
+                    scfg.graph[label] = replace(blk, exiting=exiting)
+
+
 def build_rvsdg(code):
     byteflow = ByteFlow.from_bytecode(code)
     byteflow = byteflow.restructure()
+    canonicalize_scfg(byteflow.scfg)
+    render_scfg(byteflow)
     rvsdg = convert_to_dataflow(byteflow)
     rvsdg = propagate_states(rvsdg)
     RvsdgRenderer().render_rvsdg(rvsdg).view("rvsdg")
@@ -267,9 +304,13 @@ def convert_to_dataflow(byteflow: ByteFlow) -> SCFG:
     return rvsdg
 
 def propagate_states(rvsdg: SCFG) -> SCFG:
+    # vars
     propagate_states_ddgblock_only_inplace(rvsdg)
     propagate_states_to_parent_region_inplace(rvsdg)
     propagate_states_to_outgoing_inplace(rvsdg)
+
+    # stack
+    propagate_stack(rvsdg)
     return rvsdg
 
 def propagate_states_ddgblock_only_inplace(rvsdg: SCFG):
@@ -328,6 +369,24 @@ def propagate_states_to_outgoing_inplace(rvsdg: SCFG):
                     dst.incoming_states.update(src.outgoing_states)
                     dst.outgoing_states.update(dst.incoming_states)
                     propagate_states_to_outgoing_inplace(dst.subregion)
+
+
+
+# class RegionVisitor:
+#     def visit_linear(self, region: RegionBlock):
+#         pass
+
+#     def visit_loop(self, region: RegionBlock):
+#         pass
+
+#     def visit_branch(self, head: Label: RegionBlock):
+#         pass
+
+#     # def visit(self, scfg: SCFG):
+    #     for each in
+
+def propagate_stack(rvsdg: SCFG):
+    pass
 
 
 def _upgrade_dataclass(old, newcls, replacements=None):
