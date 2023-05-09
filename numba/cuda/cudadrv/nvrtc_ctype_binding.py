@@ -26,10 +26,8 @@ from ctypes import (
     c_void_p,
     byref,
     c_char_p,
-    c_size_t,
-    cdll,
+    c_size_t
 )
-from ctypes.util import find_library
 from enum import IntEnum
 
 
