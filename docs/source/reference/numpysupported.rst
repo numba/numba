@@ -168,9 +168,9 @@ Array access
 Arrays support normal iteration.  Full basic indexing and slicing is
 supported along with passing ``None`` / ``np.newaxis`` as indices for
 additional resulting dimensions. A subset of advanced indexing is also
-supported: only one advanced index is allowed, and it has to be a
-one-dimensional array (it can be combined with an arbitrary number
-of basic indices as well).
+supported: only one advanced index is allowed which can be combined
+with an arbitrary number of valid basic indices (except for
+multi-dimensional boolean indexing, which is not supported.)
 
 .. seealso::
    `NumPy indexing <http://docs.scipy.org/doc/numpy/reference/arrays.indexing.html>`_

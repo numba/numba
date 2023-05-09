@@ -3,8 +3,7 @@ import itertools
 import numpy as np
 
 import unittest
-from numba import jit, typeof, njit
-from numba.core import types
+from numba import jit, njit
 from numba.core.errors import TypingError
 from numba.tests.support import MemoryLeakMixin, TestCase
 
@@ -303,20 +302,26 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
 
 class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
     # Every case has exactly one, one-dimensional array,
-    # otherwise it's not fancy indexing.
+    # Otherwise it's not fancy indexing
     shape = (5, 6, 7, 8, 9, 10)
     indexing_cases = [
         # Slices + Integers
         (slice(4, 5), 3, np.array([0, 1, 3, 4, 2]), 1),
         (3, np.array([0,1,3,4,2]), slice(None), slice(4)),
+        (3, np.array([[0, 1, 3, 4, 2], [0, 1, 2, 3, 2], [3, 1, 3, 4, 1]]),
+         slice(None), slice(4)), # multi-dimensional
 
         # Ellipsis + Integers
         (Ellipsis, 1, np.array([0,1,3,4,2])),
         (np.array([0,1,3,4,2]), 3, Ellipsis),
+        (np.array([[0, 1, 3, 4, 2], [0, 1, 2, 3, 2], [3, 1, 3, 4, 1]]),
+         3, Ellipsis), # multi-dimensional
 
         # Ellipsis + Slices + Integers
         (Ellipsis, 1, np.array([0,1,3,4,2]), 3, slice(1,5)),
         (np.array([0,1,3,4,2]), 3, Ellipsis, slice(1,5)),
+        (np.array([[0, 1, 3, 4, 2], [0, 1, 2, 3, 2], [3, 1, 3, 4, 1]]),
+         3, Ellipsis, slice(1, 5)), # multi-dimensional
 
         # Boolean Arrays + Integers
         (slice(4, 5), 3,
@@ -324,11 +329,16 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
          1),
         (3, np.array([True, False, True, False, True, False]),
          slice(None), slice(4)),
+
+        # Differently ordered arrays
+        # Ellipsis + Slices + Integers
+        (Ellipsis, 1, np.array([0, 1, 3, 4, 2], order='A'), 3, slice(1, 5)),
+        (np.array([0, 1, 3, 4, 2], order='F'), 3, Ellipsis, slice(1, 5)),
+        (np.array([[0, 1, 3, 4, 2], [0, 1, 2, 3, 2], [3, 1, 3, 4, 1]], order='A'),
+         3, Ellipsis, slice(1, 5)), # multidimensional
     ]
 
-    def setUp(self):
-        super().setUp()
-        self.rng = np.random.default_rng(1)
+    rng = np.random.default_rng(1)
 
     def generate_random_indices(self):
         N = min(self.shape)
@@ -403,8 +413,8 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
         get_item = numba_get_item.py_func
         orig_base = arr.base or arr
 
-        expected = get_item(arr, index)
         got = numba_get_item(arr, index)
+        expected = get_item(arr, index)
         # Sanity check: In advanced indexing, the result is always a copy.
         self.assertNotIn(expected.base, orig_base)
 
@@ -461,9 +471,6 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
 
     def test_unsupported_condition_exceptions(self):
         err_idx_cases = [
-            # Cases with multi-dimensional indexing array
-            ('Multi-dimensional indices are not supported.',
-             (0, 3, np.array([[1, 2], [2, 3]]))),
             # Cases with more than one indexing array
             ('Using more than one non-scalar array index is unsupported.',
              (0, 3, np.array([1, 2]), np.array([1, 2]))),
@@ -472,7 +479,12 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
             ("Using more than one indexing subspace is unsupported." + \
              " An indexing subspace is a group of one or more consecutive" + \
              " indices comprising integer or array types.",
-             (0, np.array([1, 2]), slice(None), 3, 4))
+             (0, np.array([1, 2]), slice(None), 3, 4)),
+            (("Only a single one-dimensional boolean array" + \
+              " index is permitted for each axis of the source array being indexed." + \
+              " NumPy behaviour of multi-dimensional boolean indices for " + \
+              "implicitly indexing multiple axes is not supported."),
+             (0, np.array([[0, 1, 0, 1, 0, 1], [1, 0, 1, 0, 1, 0]], dtype=bool), slice(None), 3,))
         ]
         
         for err, idx in err_idx_cases:

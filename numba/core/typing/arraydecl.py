@@ -85,9 +85,13 @@ def get_array_index_type(ary, idx):
         elif (isinstance(ty, types.Array)
               and isinstance(ty.dtype, (types.Integer, types.Boolean))):
             if ty.ndim > 1:
-                # Advanced indexing limitation # 1
-                raise NumbaTypeError(
-                    "Multi-dimensional indices are not supported.")
+                if isinstance(ty.dtype, (types.Boolean,)):
+                    msg = ("Only a single one-dimensional boolean array"
+                           " index is permitted for each axis of the source array being indexed."
+                           " NumPy behaviour of multi-dimensional boolean indices for "
+                           "implicitly indexing multiple axes is not supported.")
+                    raise NumbaTypeError(msg)
+                ndim += ty.ndim - 1
             array_indices += 1
             # The condition for activating advanced indexing is simply
             # having at least one array with size > 1.
