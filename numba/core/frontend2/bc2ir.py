@@ -269,14 +269,10 @@ def _flatten_full_graph(scfg: SCFG):
 DDGTypes = (DDGBlock, DDGControlVariable, DDGBranch)
 _DDGTypeAnn = Union[DDGBlock, DDGControlVariable, DDGBranch]
 
-def view_toposorted_ddgblock_only(rvsdg: SCFG) -> list[list[_DDGTypeAnn]]:
-    """Return toposorted nested list of DDGTypes
-    """
-    graph = _flatten_full_graph(rvsdg)
+def toposort_graph(graph: Mapping[Label, BasicBlock]) -> list[list[Label]]:
     incoming_labels = _compute_incoming_labels(graph)
     visited: set[Label] = set()
     toposorted: list[list[Label]] = []
-
     # Toposort
     while incoming_labels:
         level = []
@@ -288,6 +284,14 @@ def view_toposorted_ddgblock_only(rvsdg: SCFG) -> list[list[_DDGTypeAnn]]:
             del incoming_labels[k]
         visited |= set(level)
         toposorted.append(level)
+    return toposorted
+
+
+def view_toposorted_ddgblock_only(rvsdg: SCFG) -> list[list[_DDGTypeAnn]]:
+    """Return toposorted nested list of DDGTypes
+    """
+    graph = _flatten_full_graph(rvsdg)
+    toposorted = toposort_graph(graph)
 
     # Filter
     output: list[list[_DDGTypeAnn]] = []
