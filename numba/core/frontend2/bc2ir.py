@@ -431,13 +431,14 @@ class PropagateStack(RegionVisitor):
     def visit_block(self, block: BasicBlock, data):
         if isinstance(block, DDGBlock):
             nin = len(block.in_stackvars)
-            data = data[:-nin]
+            data = data[-nin:]
+            out_stackvars = block.out_stackvars[-nin:]
             new_stack_vars = tuple([self.new_stack_var()
-                                    for _ in block.out_stackvars[-nin:]])
+                                    for _ in out_stackvars])
             data += new_stack_vars
-            for i, stackname in enumerate(new_stack_vars, start=nin):
+            for i, stackname in enumerate(new_stack_vars):
                 op = Op("stack.export", None)
-                op.add_input("0", block.out_stackvars[i])
+                op.add_input("0", out_stackvars[i])
                 block.out_vars[stackname] = op.add_output(stackname)
             self.debug_print('---=', block.label, "stack", data)
             return data
