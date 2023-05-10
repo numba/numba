@@ -193,6 +193,14 @@ def render_scfg(byteflow):
     bfr.render_scfg(byteflow.scfg).view("scfg")
 
 
+def _fixup_region(scfg: SCFG, region: RegionBlock):
+    [exiting], _ = region.subregion.find_exiting_and_exits(region.subregion.graph.keys())
+    if exiting != region.exiting:
+        region = replace(region, exiting=exiting)
+        scfg.remove_blocks({region.label})
+        scfg.add_block(region)
+
+
 def canonicalize_scfg(scfg: SCFG):
     todos = set(scfg.graph)
     while todos:
@@ -211,6 +219,7 @@ def canonicalize_scfg(scfg: SCFG):
                 switch_labels = {label, tail, *branches}
                 subregion_graph = {k:scfg[k] for k in switch_labels}
                 scfg.remove_blocks(switch_labels)
+                subregion_scfg = SCFG(graph=subregion_graph, clg=scfg.clg)
                 scfg.graph[label] = RegionBlock(
                     label=label,
                     kind="switch",
@@ -218,14 +227,19 @@ def canonicalize_scfg(scfg: SCFG):
                     backedges=tailblk.backedges,
                     exiting=tailblk.exiting,
                     headers={label},
-                    subregion=SCFG(graph=subregion_graph, clg=scfg.clg),
+                    subregion=subregion_scfg,
                 )
                 todos -= switch_labels
                 # recursively walk into the subregions
                 canonicalize_scfg(subregion_graph[label].subregion)
+                _fixup_region(subregion_scfg, subregion_graph[label])
                 for br in branches:
                     canonicalize_scfg(subregion_graph[br].subregion)
+                    _fixup_region(subregion_scfg, subregion_graph[br])
                 canonicalize_scfg(subregion_graph[tail].subregion)
+                _fixup_region(subregion_scfg, subregion_graph[tail])
+
+                _fixup_region(scfg, scfg.graph[label])
             elif blk.kind == 'loop':
                 canonicalize_scfg(blk.subregion)
                 if blk.exiting not in blk.subregion:
