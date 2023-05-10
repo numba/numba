@@ -1,4 +1,6 @@
 import inspect
+import sys
+import types as py_types
 import typing as py_typing
 
 from numba.core.typing.typeof import typeof
@@ -31,15 +33,27 @@ class AsNumbaTypeRegistry:
 
         self.functions = [self._builtin_infer, self._numba_type_infer]
 
+        self.generic_superclasses = (py_typing._GenericAlias,)
+        self.union_superclasses = ()
+
+        # Support PEP 585 and PEP 604 on the relevant versions
+        if sys.version_info >= (3, 9):
+            self.generic_superclasses += (py_typing.GenericAlias,)
+            if sys.version_info >= (3, 10):
+                self.union_superclasses += (py_types.UnionType,)
+
     def _numba_type_infer(self, py_type):
         if isinstance(py_type, types.Type):
             return py_type
 
     def _builtin_infer(self, py_type):
-        if not isinstance(py_type, py_typing._GenericAlias):
-            return
+        is_generic = isinstance(py_type, self.generic_superclasses)
+        is_union = isinstance(py_type, self.union_superclasses) or (
+            is_generic and
+            getattr(py_type, "__origin__", None) is py_typing.Union
+        )
 
-        if getattr(py_type, "__origin__", None) is py_typing.Union:
+        if is_union:
             if len(py_type.__args__) != 2:
                 raise errors.TypingError(
                     "Cannot type Union of more than two types")
@@ -54,6 +68,9 @@ class AsNumbaTypeRegistry:
                 raise errors.TypingError(
                     "Cannot type Union that is not an Optional "
                     f"(neither type type {arg_2_py} is not NoneType")
+
+        if not is_generic:
+            return
 
         if getattr(py_type, "__origin__", None) is list:
             (element_py,) = py_type.__args__

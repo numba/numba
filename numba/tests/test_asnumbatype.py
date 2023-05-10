@@ -1,8 +1,8 @@
 """
 Tests for the as_numba_type() machinery.
 """
+import sys
 import typing as py_typing
-
 
 import unittest
 
@@ -66,6 +66,29 @@ class TestAsNumbaType(TestCase):
             types.Tuple([self.float_nb_type, self.complex_nb_type]),
         )
 
+    @unittest.skipIf(sys.version_info < (3, 9), "Requires Python 3.9")
+    def test_single_containers_pep585(self):
+        self.assertEqual(
+            as_numba_type(list[float]),
+            types.ListType(self.float_nb_type),
+        )
+        self.assertEqual(
+            as_numba_type(dict[float, str]),
+            types.DictType(self.float_nb_type, self.str_nb_type),
+        )
+        self.assertEqual(
+            as_numba_type(set[complex]),
+            types.Set(self.complex_nb_type),
+        )
+        self.assertEqual(
+            as_numba_type(tuple[float, float]),
+            types.Tuple([self.float_nb_type, self.float_nb_type]),
+        )
+        self.assertEqual(
+            as_numba_type(tuple[float, complex]),
+            types.Tuple([self.float_nb_type, self.complex_nb_type]),
+        )
+
     def test_optional(self):
         self.assertEqual(
             as_numba_type(py_typing.Optional[float]),
@@ -84,6 +107,22 @@ class TestAsNumbaType(TestCase):
         # TypingError if the right type is not NoneType.
         with self.assertRaises(TypingError) as raises:
             as_numba_type(py_typing.Union[int, float])
+        self.assertIn("Cannot type Union that is not an Optional",
+                      str(raises.exception))
+
+    @unittest.skipIf(sys.version_info < (3, 10), "Requires Python 3.10")
+    def test_optional_pep604(self):
+        self.assertEqual(
+            as_numba_type(str | None),
+            types.Optional(self.str_nb_type),
+        )
+        self.assertEqual(
+            as_numba_type(None | bool),
+            types.Optional(self.bool_nb_type),
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            as_numba_type(int | float)
         self.assertIn("Cannot type Union that is not an Optional",
                       str(raises.exception))
 
@@ -106,6 +145,57 @@ class TestAsNumbaType(TestCase):
                 [types.Optional(self.int_nb_type), self.float_nb_type])),
         )
 
+    @unittest.skipIf(sys.version_info < (3, 9), "Requires Python 3.9")
+    def test_nested_containers_pep585(self):
+        self.assertEqual(
+            as_numba_type(py_typing.List[list[int]]),
+            types.ListType(types.ListType(self.int_nb_type)),
+        )
+        self.assertEqual(
+            as_numba_type(list[list[int]]),
+            types.ListType(types.ListType(self.int_nb_type)),
+        )
+        self.assertEqual(
+            as_numba_type(list[py_typing.List[int]]),
+            types.ListType(types.ListType(self.int_nb_type)),
+        )
+        self.assertEqual(
+            as_numba_type(list[py_typing.Dict[float, bool]]),
+            types.ListType(
+                types.DictType(self.float_nb_type, self.bool_nb_type)
+            ),
+        )
+        self.assertEqual(
+            as_numba_type(py_typing.List[dict[float, bool]]),
+            types.ListType(
+                types.DictType(self.float_nb_type, self.bool_nb_type)
+            ),
+        )
+        self.assertEqual(
+            as_numba_type(list[dict[float, bool]]),
+            types.ListType(
+                types.DictType(self.float_nb_type, self.bool_nb_type)
+            ),
+        )
+        self.assertEqual(
+            as_numba_type(
+                set[py_typing.Tuple[py_typing.Optional[int], float]]),
+            types.Set(types.Tuple(
+                [types.Optional(self.int_nb_type), self.float_nb_type])),
+        )
+        self.assertEqual(
+            as_numba_type(
+                py_typing.Set[tuple[py_typing.Optional[int], float]]),
+            types.Set(types.Tuple(
+                [types.Optional(self.int_nb_type), self.float_nb_type])),
+        )
+        self.assertEqual(
+            as_numba_type(
+                set[tuple[py_typing.Optional[int], float]]),
+            types.Set(types.Tuple(
+                [types.Optional(self.int_nb_type), self.float_nb_type])),
+        )
+
     def test_jitclass_registers(self):
 
         @jitclass
@@ -120,6 +210,17 @@ class TestAsNumbaType(TestCase):
     def test_type_alias(self):
         Pair = py_typing.Tuple[int, int]
         ListOfPairs = py_typing.List[Pair]
+
+        pair_nb_type = types.Tuple((self.int_nb_type, self.int_nb_type))
+        self.assertEqual(as_numba_type(Pair), pair_nb_type)
+        self.assertEqual(
+            as_numba_type(ListOfPairs), types.ListType(pair_nb_type)
+        )
+
+    @unittest.skipIf(sys.version_info < (3, 9), "Requires Python 3.9")
+    def test_type_alias_pep585(self):
+        Pair = tuple[int, int]
+        ListOfPairs = list[Pair]
 
         pair_nb_type = types.Tuple((self.int_nb_type, self.int_nb_type))
         self.assertEqual(as_numba_type(Pair), pair_nb_type)
@@ -154,10 +255,43 @@ class TestAsNumbaType(TestCase):
                 str(raises.exception),
             )
 
+    @unittest.skipIf(sys.version_info < (3, 9), "Requires Python 3.9")
+    def test_any_throws_pep585(self):
+        Any = py_typing.Any
+
+        any_types = [
+            list[Any],
+            set[Any],
+            dict[float, Any],
+            dict[Any, float],
+            tuple[int, Any],
+        ]
+
+        for bad_py_type in any_types:
+            with self.assertRaises(TypingError) as raises:
+                as_numba_type(bad_py_type)
+            self.assertIn(
+                "Cannot infer numba type of python type",
+                str(raises.exception),
+            )
+
     def test_bad_union_throws(self):
         bad_unions = [
             py_typing.Union[str, int],
             py_typing.Union[int, type(None), py_typing.Tuple[bool, bool]],
+        ]
+
+        for bad_py_type in bad_unions:
+            with self.assertRaises(TypingError) as raises:
+                as_numba_type(bad_py_type)
+            self.assertIn("Cannot type Union", str(raises.exception))
+
+    @unittest.skipIf(sys.version_info < (3, 10), "Requires Python 3.10")
+    def test_bad_union_throws_pep604(self):
+        bad_unions = [
+            str | int,
+            py_typing.Union[str, int],
+            int | None | tuple[bool, bool]
         ]
 
         for bad_py_type in bad_unions:
