@@ -124,10 +124,6 @@ class DDGBlock(BasicBlock):
             # render body
             self.render_valuestate(renderer, g, self.in_effect)
             self.render_valuestate(renderer, g, self.out_effect)
-            for vs in self.in_stackvars:
-                self.render_valuestate(renderer, g, vs)
-            for vs in self.out_stackvars:
-                self.render_valuestate(renderer, g, vs)
             for vs in self.out_vars.values():
                 self.render_valuestate(renderer, g, vs)
             # Fill incoming
@@ -143,8 +139,6 @@ class DDGBlock(BasicBlock):
             out_vars_fields = "outgoing-vars|" + "|".join([f"<{x.name}> {x.name}" for x in self.out_vars.values()])
             fields = f"<{self.out_effect.short_identity()}> env" + "|" + out_stackvars_fields + "|" + out_vars_fields
             g.node(f"outgoing_{id(self)}", shape="record", label=f"{fields}")
-            for vs in self.out_stackvars:
-                self.add_vs_edge(renderer, vs, f"outgoing_{id(self)}:{vs.name}")
             for vs in self.out_vars.values():
                 self.add_vs_edge(renderer, vs, f"outgoing_{id(self)}:{vs.name}")
             self.add_vs_edge(renderer, self.out_effect, f"outgoing_{id(self)}:{self.out_effect.short_identity()}")
