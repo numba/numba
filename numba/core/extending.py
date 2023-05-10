@@ -53,8 +53,10 @@ def type_callable(func):
 
 
 # By default, an *overload* does not have a cpython wrapper because it is not
-# callable from python.
-_overload_default_jit_options = {'no_cpython_wrapper': True}
+# callable from python. It also has `nopython=True`, this has been default since
+# its inception!
+_overload_default_jit_options = {'no_cpython_wrapper': True,
+                                 'nopython':True}
 
 
 def overload(func, jit_options={}, strict=True, inline='never',

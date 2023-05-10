@@ -7,7 +7,11 @@ from numba.cuda.cuda_paths import get_conda_ctk
 from numba.cuda.cudadrv import driver, devices, libs
 from numba.core import config
 from numba.tests.support import TestCase
+from pathlib import Path
 import unittest
+
+numba_cuda_dir = Path(__file__).parent
+test_data_dir = numba_cuda_dir / 'tests' / 'data'
 
 
 class CUDATestCase(SerialMixin, TestCase):
@@ -109,6 +113,12 @@ def skip_if_cuda_includes_missing(fn):
     return unittest.skipUnless(cuda_h_file, reason)(fn)
 
 
+def skip_if_mvc_enabled(reason):
+    """Skip a test if Minor Version Compatibility is enabled"""
+    return unittest.skipIf(config.CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY,
+                           reason)
+
+
 def cc_X_or_above(major, minor):
     if not config.ENABLE_CUDASIM:
         cc = devices.get_context().device.compute_capability
@@ -127,6 +137,10 @@ def skip_unless_cc_53(fn):
 
 def skip_unless_cc_60(fn):
     return unittest.skipUnless(cc_X_or_above(6, 0), "requires cc >= 6.0")(fn)
+
+
+def skip_unless_cc_75(fn):
+    return unittest.skipUnless(cc_X_or_above(7, 5), "requires cc >= 7.5")(fn)
 
 
 def xfail_unless_cudasim(fn):

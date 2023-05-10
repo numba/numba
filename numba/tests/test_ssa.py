@@ -247,7 +247,7 @@ class TestReportedSSAIssues(SSABaseTest):
             for i in range(1):
                 arr = arr.reshape(3 * 2)
                 arr = arr.reshape(3, 2)
-            return(arr)
+            return (arr)
 
         np.testing.assert_allclose(foo(np.zeros((3, 2))),
                                    foo.py_func(np.zeros((3, 2))))

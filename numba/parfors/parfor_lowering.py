@@ -33,13 +33,34 @@ from numba.core.ir_utils import (
     get_global_func_typ,
 )
 from numba.core.typing import signature
+from numba.core import lowering
 from numba.parfors.parfor import ensure_parallel_support
 from numba.core.errors import (
     NumbaParallelSafetyWarning, NotDefinedError, CompilerError, InternalError,
 )
 from numba.parfors.parfor_lowering_utils import ParforLoweringBuilder
 
+
+class ParforLower(lowering.Lower):
+    """This is a custom lowering class that extends standard lowering so as
+    to accommodate parfor.Parfor nodes."""
+
+    # custom instruction lowering to handle parfor nodes
+    def lower_inst(self, inst):
+        if isinstance(inst, parfor.Parfor):
+            _lower_parfor_parallel(self, inst)
+        else:
+            super().lower_inst(inst)
+
+
 def _lower_parfor_parallel(lowerer, parfor):
+    if parfor.lowerer is None:
+        return _lower_parfor_parallel_std(lowerer, parfor)
+    else:
+        return parfor.lowerer(lowerer, parfor)
+
+
+def _lower_parfor_parallel_std(lowerer, parfor):
     """Lowerer that handles LLVM code generation for parfor.
     This function lowers a parfor IR node to LLVM.
     The general approach is as follows:
@@ -111,6 +132,7 @@ def _lower_parfor_parallel(lowerer, parfor):
     # init reduction array allocation here.
     nredvars = len(parfor_redvars)
     redarrs = {}
+    to_cleanup = []
     if nredvars > 0:
         # reduction arrays outer dimension equal to thread count
         scope = parfor.init_block.scope
@@ -209,6 +231,7 @@ def _lower_parfor_parallel(lowerer, parfor):
 
             # Remember mapping of original reduction array to the newly created per-worker reduction array.
             redarrs[redvar.name] = redarr_var
+            to_cleanup.append(redarr_var)
 
             init_val = parfor_reddict[red_name].init_val
 
@@ -243,6 +266,8 @@ def _lower_parfor_parallel(lowerer, parfor):
                         typ=redvar_typ,
                         name="redtoset",
                     )
+                    # rettoset is an array from np.full() and must be released
+                    to_cleanup.append(redtoset)
                 else:
                     redtoset = pfbdr.make_const_variable(
                         cval=init_val,
@@ -366,7 +391,7 @@ def _lower_parfor_parallel(lowerer, parfor):
         )
 
     # Cleanup reduction variable
-    for v in redarrs.values():
+    for v in to_cleanup:
         lowerer.lower_inst(ir.Del(v.name, loc=loc))
     # Restore the original typemap of the function that was replaced temporarily at the
     # Beginning of this function.
@@ -1506,6 +1531,20 @@ def _create_gufunc_for_parfor_body(
         flags.noalias = True
 
     fixup_var_define_in_scope(gufunc_ir.blocks)
+
+    class ParforGufuncCompiler(compiler.CompilerBase):
+        def define_pipelines(self):
+            from numba.core.compiler_machinery import PassManager
+            dpb = compiler.DefaultPassBuilder
+            pm = PassManager("full_parfor_gufunc")
+            parfor_gufunc_passes = dpb.define_parfor_gufunc_pipeline(self.state)
+            pm.passes.extend(parfor_gufunc_passes.passes)
+            lowering_passes = dpb.define_nopython_lowering_pipeline(self.state)
+            pm.passes.extend(lowering_passes.passes)
+
+            pm.finalize()
+            return [pm]
+
     kernel_func = compiler.compile_ir(
         typingctx,
         targetctx,
@@ -1513,7 +1552,8 @@ def _create_gufunc_for_parfor_body(
         gufunc_param_types,
         types.none,
         flags,
-        locals)
+        locals,
+        pipeline_class=ParforGufuncCompiler)
 
     flags.noalias = old_alias
 

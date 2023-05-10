@@ -481,13 +481,12 @@ def _legalize_with_head(blk):
     counters = defaultdict(int)
     for stmt in blk.body:
         counters[type(stmt)] += 1
-
     if counters.pop(ir.EnterWith) != 1:
         raise errors.CompilerError(
             "with's head-block must have exactly 1 ENTER_WITH",
             loc=blk.loc,
             )
-    if counters.pop(ir.Jump) != 1:
+    if counters.pop(ir.Jump, 0) != 1:
         raise errors.CompilerError(
             "with's head-block must have exactly 1 JUMP",
             loc=blk.loc,
@@ -509,12 +508,15 @@ def _cfg_nodes_in_region(cfg, region_begin, region_end):
     stack = [region_begin]
     while stack:
         tos = stack.pop()
-        succs, _ = zip(*cfg.successors(tos))
-        nodes = set([node for node in succs
-                     if node not in region_nodes and
-                     node != region_end])
-        stack.extend(nodes)
-        region_nodes |= nodes
+        succlist = list(cfg.successors(tos))
+        # a single block function will have a empty successor list
+        if succlist:
+            succs, _ = zip(*succlist)
+            nodes = set([node for node in succs
+                        if node not in region_nodes and
+                        node != region_end])
+            stack.extend(nodes)
+            region_nodes |= nodes
 
     return region_nodes
 
@@ -556,12 +558,6 @@ def find_setupwiths(func_ir):
                                 'unsupported control flow due to raise '
                                 'statements inside with block'
                                 )
-                    # special case 3.7, return before POP_BLOCK
-                    if PYVERSION < (3, 8) and ir_utils.is_return(stmt):
-                            raise errors.CompilerError(
-                                'unsupported control flow: due to return '
-                                'statements inside with block'
-                                )
                     # if a pop_block, process it
                     if ir_utils.is_pop_block(stmt) and block in sus_pops:
                         # record the jump target of this block belonging to this setup
@@ -588,7 +584,6 @@ def find_setupwiths(func_ir):
     # rewrite the CFG in case there are multiple POP_BLOCK statements for one
     # with
     func_ir = consolidate_multi_exit_withs(with_ranges_dict, blocks, func_ir)
-
     # here we need to turn the withs back into a list of tuples so that the
     # rest of the code can cope
     with_ranges_tuple = [(s, list(p)[0])
@@ -619,7 +614,7 @@ def find_setupwiths(func_ir):
     # now we need to rewrite the tuple such that we have SETUP_WITH matching the
     # successor of the block that contains the POP_BLOCK.
     with_ranges_tuple = [(s, func_ir.blocks[p].terminator.get_targets()[0])
-             for (s, p) in with_ranges_tuple]
+                         for (s, p) in with_ranges_tuple]
 
     # finally we check for nested with statements and reject them
     with_ranges_tuple = _eliminate_nested_withs(with_ranges_tuple)
@@ -754,7 +749,6 @@ def _eliminate_nested_withs(with_ranges):
 def consolidate_multi_exit_withs(withs: dict, blocks, func_ir):
     """Modify the FunctionIR to merge the exit blocks of with constructs.
     """
-    out = []
     for k in withs:
         vs : set = withs[k]
         if len(vs) > 1:

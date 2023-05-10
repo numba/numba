@@ -118,6 +118,22 @@ class TestRefOpPruning(TestCase):
                     raise ValueError
             return x
 
+        with set_refprune_flags('per_bb,fanout'):
+            self.check(func, (types.intp), basicblock=True, diamond=False,
+                       fanout=True, fanout_raise=False)
+
+    def test_fanout_3(self):
+        # fanout with raise
+        def func(n):
+            ary = np.arange(n)
+            # basically an impl of array.sum
+            c = 0
+            # The raise is from StopIteration of next(iterator) implicit in
+            # the for loop
+            for v in np.nditer(ary):
+                c += v.item()
+            return 1
+
         with set_refprune_flags('per_bb,fanout_raise'):
             self.check(func, (types.intp), basicblock=True, diamond=False,
                        fanout=False, fanout_raise=True)

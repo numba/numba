@@ -93,7 +93,7 @@ class TestParallelVectorizeDecor(unittest.TestCase, BaseVectorizeDecor):
 
 class TestCPUVectorizeJitted(unittest.TestCase, BaseVectorizeDecor):
     target = 'cpu'
-    wrapper = jit
+    wrapper = jit(nopython=True)
 
 
 class BaseVectorizeNopythonArg(unittest.TestCase, CheckWarningsMixin):
