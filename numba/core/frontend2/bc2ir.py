@@ -227,6 +227,11 @@ def canonicalize_scfg(scfg: SCFG):
                     subregion=SCFG(graph=subregion_graph, clg=scfg.clg),
                 )
                 todos -= switch_labels
+                # recursively walk into the subregions
+                canonicalize_scfg(subregion_graph[label].subregion)
+                for br in branches:
+                    canonicalize_scfg(subregion_graph[br].subregion)
+                canonicalize_scfg(subregion_graph[tail].subregion)
             elif blk.kind == 'loop':
                 canonicalize_scfg(blk.subregion)
                 if blk.exiting not in blk.subregion:
@@ -238,7 +243,7 @@ def build_rvsdg(code):
     byteflow = ByteFlow.from_bytecode(code)
     byteflow = byteflow.restructure()
     canonicalize_scfg(byteflow.scfg)
-    # render_scfg(byteflow)
+    render_scfg(byteflow)
     rvsdg = convert_to_dataflow(byteflow)
     rvsdg = propagate_states(rvsdg)
     RvsdgRenderer().render_rvsdg(rvsdg).view("rvsdg")
