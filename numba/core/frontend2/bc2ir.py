@@ -546,8 +546,14 @@ def convert_scfg_to_dataflow(scfg, bcmap) -> SCFG:
             rvsdg.add_block(_upgrade_dataclass(block, DDGBranch))
         elif isinstance(block, ControlVariableBlock):
             rvsdg.add_block(_upgrade_dataclass(block, DDGControlVariable))
+        elif isinstance(block, BasicBlock):
+            start_env = Op("start", bc_inst=None)
+            effect = start_env.add_output("env", is_effect=True)
+            newblk = _upgrade_dataclass(
+                block, DDGBlock, dict(in_effect=effect, out_effect=effect))
+            rvsdg.add_block(newblk)
         else:
-            raise Exception("unreachable")
+            raise Exception("unreachable", type(block))
 
     return rvsdg
 
