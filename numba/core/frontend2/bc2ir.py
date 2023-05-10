@@ -237,7 +237,7 @@ def build_rvsdg(code):
     byteflow = ByteFlow.from_bytecode(code)
     byteflow = byteflow.restructure()
     canonicalize_scfg(byteflow.scfg)
-    # render_scfg(byteflow)
+    render_scfg(byteflow)
     rvsdg = convert_to_dataflow(byteflow)
     rvsdg = propagate_states(rvsdg)
     RvsdgRenderer().render_rvsdg(rvsdg).view("rvsdg")
@@ -672,6 +672,16 @@ class BC2DDG:
         self.replace_effect(op.add_output("env", is_effect=True))
         self.push(op.add_output("out"))
 
+    def op_COMPARE_OP(self, inst: dis.Instruction):
+        rhs = self.pop()
+        lhs = self.pop()
+        op = Op(opname="compareop", bc_inst=inst)
+        op.add_input("env", self.effect)
+        op.add_input("lhs", lhs)
+        op.add_input("rhs", rhs)
+        self.replace_effect(op.add_output("env", is_effect=True))
+        self.push(op.add_output("out"))
+
     def op_RETURN_VALUE(self, inst: dis.Instruction):
         tos = self.pop()
         op = Op(opname="ret", bc_inst=inst)
@@ -692,6 +702,12 @@ class BC2DDG:
         op.add_input("pred", tos)
         self.replace_effect(op.add_output("env", is_effect=True))
 
+    def op_JUMP_IF_TRUE_OR_POP(self, inst: dis.Instruction):
+        tos = self.top()
+        op = Op("jump.if_false", bc_inst=inst)
+        op.add_input("env", self.effect)
+        op.add_input("pred", tos)
+        self.replace_effect(op.add_output("env", is_effect=True))
 
 def run_frontend(func): #, inline_closures=False, emit_dels=False):
     # func_id = bytecode.FunctionIdentity.from_function(func)
