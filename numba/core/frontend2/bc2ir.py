@@ -139,7 +139,7 @@ class DDGBlock(BasicBlock):
                 self.add_vs_edge(renderer, f"incoming_{id(self)}:{vs.name}", vs.parent.short_identity())
 
             # Fill outgoing
-            out_stackvars_fields = "outgoing-stack|" + "|".join([f"<{x.name}> {x.name}" for x in self.out_stackvars])
+            out_stackvars_fields = f"outgoing-nstack {len(self.out_stackvars)}"
             out_vars_fields = "outgoing-vars|" + "|".join([f"<{x.name}> {x.name}" for x in self.out_vars.values()])
             fields = f"<{self.out_effect.short_identity()}> env" + "|" + out_stackvars_fields + "|" + out_vars_fields
             g.node(f"outgoing_{id(self)}", shape="record", label=f"{fields}")
@@ -243,7 +243,7 @@ def build_rvsdg(code):
     byteflow = ByteFlow.from_bytecode(code)
     byteflow = byteflow.restructure()
     canonicalize_scfg(byteflow.scfg)
-    render_scfg(byteflow)
+    # render_scfg(byteflow)
     rvsdg = convert_to_dataflow(byteflow)
     rvsdg = propagate_states(rvsdg)
     RvsdgRenderer().render_rvsdg(rvsdg).view("rvsdg")
@@ -319,6 +319,7 @@ def propagate_states(rvsdg: SCFG) -> SCFG:
     propagate_states_ddgblock_only_inplace(rvsdg)
     propagate_states_to_parent_region_inplace(rvsdg)
     propagate_states_to_outgoing_inplace(rvsdg)
+    connect_stack(rvsdg)
 
     # stack
     return rvsdg
@@ -458,7 +459,7 @@ class PropagateStack(RegionVisitor):
         [header] = region.headers
         data_at_head = self.visit_linear(region.subregion[header], data)
         data_for_branches = []
-        for label, blk in region.subregion.graph.items():
+        for blk in region.subregion.graph.values():
             if blk.kind == "branch":
                 data_for_branches.append(
                     self.visit_linear(blk, data_at_head)
@@ -479,11 +480,34 @@ class PropagateStack(RegionVisitor):
     def make_data(self):
         return ()
 
+class ConnectStack(RegionVisitor):
+
+    def visit_block(self, block: BasicBlock, data):
+        if isinstance(block, DDGBlock):
+            imported_stackvars = [var for k, var in block.in_vars.items() if k.startswith("stack.exported.")]
+            n = len(block.in_stackvars)
+            for vs, inc in zip(block.in_stackvars, imported_stackvars[-n:]):
+                assert vs.parent is not None
+                vs.parent.add_input("0", inc)
+
+    def visit_loop(self, region: RegionBlock, data):
+        self.visit_linear(region, data)
+
+    def visit_switch(self, region: RegionBlock, data):
+        [header] = region.headers
+        self.visit_linear(region.subregion[header], data)
+        for blk in region.subregion.graph.values():
+            if blk.kind == "branch":
+                self.visit_linear(blk, None)
+        exiting = region.exiting
+        self.visit_linear(region.subregion[exiting], None)
 
 def propagate_stack(rvsdg: SCFG):
     visitor = PropagateStack()
     visitor.visit_graph(rvsdg, visitor.make_data())
 
+def connect_stack(rvsdg: SCFG):
+    ConnectStack().visit_graph(rvsdg, None)
 
 def _upgrade_dataclass(old, newcls, replacements=None):
     if replacements is None:
