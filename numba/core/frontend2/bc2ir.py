@@ -430,10 +430,12 @@ class PropagateStack(RegionVisitor):
 
     def visit_block(self, block: BasicBlock, data):
         if isinstance(block, DDGBlock):
-            data = data[:-len(block.in_stackvars)]
-            new_stack_vars = tuple([self.new_stack_var() for _ in block.out_stackvars])
+            nin = len(block.in_stackvars)
+            data = data[:-nin]
+            new_stack_vars = tuple([self.new_stack_var()
+                                    for _ in block.out_stackvars[-nin:]])
             data += new_stack_vars
-            for i, stackname in enumerate(new_stack_vars):
+            for i, stackname in enumerate(new_stack_vars, start=nin):
                 op = Op("stack.export", None)
                 op.add_input("0", block.out_stackvars[i])
                 block.out_vars[stackname] = op.add_output(stackname)
@@ -478,7 +480,8 @@ class ConnectStack(RegionVisitor):
 
     def visit_block(self, block: BasicBlock, data):
         if isinstance(block, DDGBlock):
-            imported_stackvars = [var for k, var in block.in_vars.items() if k.startswith("stack.exported.")]
+            imported_stackvars = [var for k, var in block.in_vars.items()
+                                  if k.startswith("stack.exported.")]
             n = len(block.in_stackvars)
             for vs, inc in zip(block.in_stackvars, imported_stackvars[-n:]):
                 assert vs.parent is not None
