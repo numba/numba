@@ -716,12 +716,18 @@ class BC2DDG:
         op.add_input("pred", tos)
         self.replace_effect(op.add_output("env", is_effect=True))
 
-    def op_JUMP_IF_TRUE_OR_POP(self, inst: dis.Instruction):
+    def _JUMP_IF_X_OR_POP(self, inst: dis.Instruction, *, opname):
         tos = self.top()
         op = Op("jump.if_false", bc_inst=inst)
         op.add_input("env", self.effect)
         op.add_input("pred", tos)
         self.replace_effect(op.add_output("env", is_effect=True))
+
+    def op_JUMP_IF_TRUE_OR_POP(self, inst: dis.Instruction):
+        self._JUMP_IF_X_OR_POP(inst, opname="jump_if_true")
+
+    def op_JUMP_IF_FALSE_OR_POP(self, inst: dis.Instruction):
+        self._JUMP_IF_X_OR_POP(inst, opname="jump_if_false")
 
 def run_frontend(func): #, inline_closures=False, emit_dels=False):
     # func_id = bytecode.FunctionIdentity.from_function(func)
