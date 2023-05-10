@@ -85,7 +85,7 @@ def unbox_float(typ, obj, c):
 
         dbval = c.pyapi.float_as_double(fobj)
         c.pyapi.decref(fobj)
-        with cgutil.early_exit_if(c.builder, stack, c.pyapi.c_api_error()):
+        with cgutils.early_exit_if(c.builder, stack, c.pyapi.c_api_error()):
             # for debugging
             c.builder.store(c.context.get_constant(float_ty, float('nan')), float_val)
             c.builder.store(cgutils.true_bit, is_error_ptr)
