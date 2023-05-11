@@ -146,6 +146,7 @@ class TestOperatorModule(CUDATestCase):
         self.operator_template(operator.floordiv)
 
     @skip_unless_cc_53
+    @skip_on_cudasim('NVVM not supported in the simulator')
     def test_fp16_binary(self):
         if not NVVM().is_nvvm70:
             self.skipTest('Skip due to incorrect float16 divide codegen '

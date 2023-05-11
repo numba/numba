@@ -653,6 +653,7 @@ class TestCudaIntrinsic(CUDATestCase):
         self.assertIn('mul.f16', ptx)
 
     @skip_unless_cc_53
+    @skip_on_cudasim('NVVM not supported in the simulator')
     def test_hdiv_scalar(self):
         if not NVVM().is_nvvm70:
             self.skipTest('Skip due to incorrect float16 divide codegen '
