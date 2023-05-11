@@ -83,14 +83,12 @@ class Op:
 class DDGProtocol(Protocol):
     incoming_states: MutableSortedSet[str]
     outgoing_states: MutableSortedSet[str]
-    del_states: MutableSortedSet[str]
 
 
 @dataclass(frozen=True)
 class DDGRegion(RegionBlock):
     incoming_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
     outgoing_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
-    del_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
 
     @contextmanager
     def render_rvsdg(self, renderer, digraph, label):
@@ -106,13 +104,11 @@ class DDGRegion(RegionBlock):
 class DDGBranch(BranchBlock):
     incoming_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
     outgoing_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
-    del_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
 
 @dataclass(frozen=True)
 class DDGControlVariable(ControlVariableBlock):
     incoming_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
     outgoing_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
-    del_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
 
 
 @dataclass(frozen=True)
@@ -123,7 +119,6 @@ class DDGBlock(BasicBlock):
     out_stackvars: list[ValueState] = field(default_factory=list)
     in_vars: MutableSortedMap[str, ValueState] = field(default_factory=MutableSortedMap)
     out_vars: MutableSortedMap[str, ValueState] = field(default_factory=MutableSortedMap)
-    del_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
 
     def __post_init__(self):
         assert isinstance(self.in_vars, MutableSortedMap)
@@ -289,7 +284,9 @@ class HandleConditionalPop:
 
     def op_FOR_ITER(self, inst: dis.Instruction):
         jump_target = inst.argval
-        return _BranchNPop(1, 1) # end of loop pop 1
+        # Bytecode semantic pop 1 for the iterator
+        # but we need an extra pop because the indvar is pushed
+        return _BranchNPop(1, 2)
 
 def _scfg_add_conditional_pop_stack(bcmap, scfg: SCFG):
     pop_records = {}
@@ -454,6 +451,9 @@ class RegionVisitor:
 
 
 class PropagateVars(RegionVisitor):
+    """
+    Depends on PropagateStack
+    """
     def __init__(self, _debug: bool=False):
         super(PropagateVars, self).__init__()
         self._stack_count = 0
@@ -467,12 +467,25 @@ class PropagateVars(RegionVisitor):
         assert isinstance(block, BasicBlock)
         if isinstance(block, DDGProtocol):
             if isinstance(block, DDGBlock):
+                fresh = set()
                 for k in data:
                     if k not in block.in_vars:
                         op = Op(opname="var.incoming", bc_inst=None)
                         vs = op.add_output(k)
                         block.in_vars[k] = vs
                         block.out_vars[k] = vs
+                        fresh.add(k)
+
+                # Compute popped stackvars
+                npop = max(0, len(block.in_stackvars) - len(block.out_stackvars))
+                stackvars = [x for x in block.out_vars
+                             if x.startswith("stack.exported.")]
+                popped = set(stackvars[len(stackvars) - npop:])
+                for k in popped:
+                    del block.out_vars[k]
+                    if k in fresh:
+                        del block.in_vars[k]
+
             else:
                 block.incoming_states.update(data)
                 block.outgoing_states.update(data)
@@ -573,7 +586,7 @@ class PropagateStack(RegionVisitor):
                 data_for_branches.append(
                     self.visit_linear(blk, data_at_head)
                 )
-        data_after_branches = min(data_for_branches, key=len)
+        data_after_branches = max(data_for_branches, key=len)
 
         exiting = region.exiting
 
