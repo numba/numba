@@ -407,7 +407,7 @@ def propagate_states(rvsdg: SCFG) -> SCFG:
     # vars
     propagate_stack(rvsdg)
     propagate_vars(rvsdg)
-    connect_stack(rvsdg)
+    connect_incoming_stack_vars(rvsdg)
 
     # stack
     return rvsdg
@@ -590,10 +590,11 @@ class PropagateStack(RegionVisitor):
         return ()
 
 
-class ConnectStack(RegionVisitor):
+class ConnectImportedStackVars(RegionVisitor):
 
     def visit_block(self, block: BasicBlock, data):
         if isinstance(block, DDGBlock):
+            # Connect stack.incoming node to the import stack variable.
             imported_stackvars = [var for k, var in block.in_vars.items()
                                   if k.startswith("stack.exported.")]
             n = len(block.in_stackvars)
@@ -617,8 +618,8 @@ def propagate_stack(rvsdg: SCFG):
     visitor = PropagateStack()
     visitor.visit_graph(rvsdg, visitor.make_data())
 
-def connect_stack(rvsdg: SCFG):
-    ConnectStack().visit_graph(rvsdg, None)
+def connect_incoming_stack_vars(rvsdg: SCFG):
+    ConnectImportedStackVars().visit_graph(rvsdg, None)
 
 def _upgrade_dataclass(old, newcls, replacements=None):
     if replacements is None:
