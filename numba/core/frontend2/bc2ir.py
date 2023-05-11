@@ -1,7 +1,14 @@
 from dataclasses import dataclass, replace, field, fields
 import dis
 from contextlib import contextmanager
-from typing import Optional, Iterator, Protocol, runtime_checkable, Union
+from typing import (
+    Optional,
+    Iterator,
+    Protocol,
+    runtime_checkable,
+    Union,
+    NamedTuple,
+)
 from collections import (
     deque,
     defaultdict,
@@ -22,7 +29,7 @@ from numba_rvsdg.core.datastructures.basic_block import (
     BranchBlock,
     ControlVariableBlock,
 )
-from numba_rvsdg.core.datastructures.labels import Label
+from numba_rvsdg.core.datastructures.labels import Label, PythonBytecodeLabel
 from numba_rvsdg.rendering.rendering import ByteFlowRenderer
 
 from .renderer import RvsdgRenderer
@@ -247,11 +254,81 @@ def canonicalize_scfg(scfg: SCFG):
                     scfg.graph[label] = replace(blk, exiting=exiting)
 
 
+class _BranchNPop(NamedTuple):
+    branch_index: int
+    npop: int
+
+
+@dataclass(frozen=True)
+class ExtraBasicBlock(BasicBlock):
+    inst_list: tuple[dis.Instruction, ...] = ()
+
+    def __str__(self):
+        args = '\n'.join(f'{x.opname}({x.argrepr})' for x in self.inst_list)
+        return f"ExtraBasicBlock({args})"
+
+
+@dataclass(frozen=True)
+class ExtraLabel(Label):
+    pass
+
+
+
+class HandleConditionalPop:
+    def handle(self, inst: dis.Instruction):
+        fn = getattr(self, f"op_{inst.opname}", self._op_default)
+        return fn(inst)
+
+    def _op_default(self, inst: dis.Instruction):
+        return
+
+    def op_FOR_ITER(self, inst: dis.Instruction):
+        jump_target = inst.argval
+        return _BranchNPop(1, 1) # end of loop pop 1
+
+def _scfg_add_conditional_pop_stack(bcmap, scfg: SCFG):
+    pop_records = {}
+    for blk in scfg.graph.values():
+        if isinstance(blk, PythonBytecodeBlock):
+            # Check if last instruction has conditional pop
+            last_inst = blk.get_instructions(bcmap)[-1]
+            handler = HandleConditionalPop()
+            res = handler.handle(last_inst)
+            if res is not None:
+                pop_records[blk._jump_targets[res.branch_index]] = blk.label, res
+
+    # print(pop_records)
+    # print('-' * 80)
+    def _replace_jump_targets(blk, idx, repl):
+        return replace(
+            blk,
+            _jump_targets=tuple(
+                [repl if i == idx else jt
+                for i, jt in enumerate(blk._jump_targets)]
+            )
+        )
+
+    for label, (parent_label, res) in pop_records.items():
+        newlabel = ExtraLabel(label.index)
+        scfg.graph[parent_label] = _replace_jump_targets(scfg.graph[parent_label], res.branch_index, newlabel)
+        ebb = ExtraBasicBlock(
+            newlabel,
+            (label,),
+            inst_list=(dis.Instruction(
+                        "POP_TOP", dis.opmap["POP_TOP"],
+                        arg=None, argval=None, argrepr="",
+                        offset=0, starts_line=None, is_jump_target=False
+                        ),) * res.npop,
+            )
+        scfg.graph[newlabel] = ebb
+
+
 def build_rvsdg(code):
     byteflow = ByteFlow.from_bytecode(code)
+    _scfg_add_conditional_pop_stack(byteflow.scfg.bcmap_from_bytecode(byteflow.bc), byteflow.scfg)
     byteflow = byteflow.restructure()
     canonicalize_scfg(byteflow.scfg)
-    render_scfg(byteflow)
+    # render_scfg(byteflow)
     rvsdg = convert_to_dataflow(byteflow)
     rvsdg = propagate_states(rvsdg)
     RvsdgRenderer().render_rvsdg(rvsdg).view("rvsdg")
@@ -546,6 +623,9 @@ def convert_scfg_to_dataflow(scfg, bcmap) -> SCFG:
             rvsdg.add_block(_upgrade_dataclass(block, DDGBranch))
         elif isinstance(block, ControlVariableBlock):
             rvsdg.add_block(_upgrade_dataclass(block, DDGControlVariable))
+        elif isinstance(block, ExtraBasicBlock):
+            ddg = convert_extra_bb(block)
+            rvsdg.add_block(ddg)
         elif isinstance(block, BasicBlock):
             start_env = Op("start", bc_inst=None)
             effect = start_env.add_output("env", is_effect=True)
@@ -558,8 +638,7 @@ def convert_scfg_to_dataflow(scfg, bcmap) -> SCFG:
     return rvsdg
 
 
-def convert_bc_to_ddg(block: PythonBytecodeBlock, bcmap: dict[int, dis.Bytecode]):
-    instlist = block.get_instructions(bcmap)
+def _convert_bytecode(block, instlist) -> DDGBlock:
     converter = BC2DDG()
     in_effect = converter.effect
     for inst in instlist:
@@ -575,8 +654,17 @@ def convert_bc_to_ddg(block: PythonBytecodeBlock, bcmap: dict[int, dis.Bytecode]
         in_vars=MutableSortedMap(converter.incoming_vars),
         out_vars=MutableSortedMap(converter.varmap),
     )
-
     return blk
+
+
+def convert_extra_bb(block: ExtraBasicBlock) -> DDGBlock:
+    instlist = block.inst_list
+    return _convert_bytecode(block, instlist)
+
+
+def convert_bc_to_ddg(block: PythonBytecodeBlock, bcmap: dict[int, dis.Bytecode]) -> DDGBlock:
+    instlist = block.get_instructions(bcmap)
+    return _convert_bytecode(block, instlist)
 
 class BC2DDG:
     def __init__(self):
@@ -625,6 +713,9 @@ class BC2DDG:
     def convert(self, inst: dis.Instruction):
         fn = getattr(self, f"op_{inst.opname}")
         fn(inst)
+
+    def op_POP_TOP(self, inst: dis.Instruction):
+        self.pop()
 
     def op_RESUME(self, inst: dis.Instruction):
         pass   # no-op
