@@ -17,6 +17,7 @@ import llvmlite.binding as ll
 
 
 IS_WIN32 = sys.platform.startswith('win32')
+IS_WIN64 = IS_WIN32 and '64bit' in platform.architecture()[0]
 IS_OSX = sys.platform.startswith('darwin')
 MACHINE_BITS = tuple.__itemsize__ * 8
 IS_32BITS = MACHINE_BITS == 32
