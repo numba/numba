@@ -4,7 +4,7 @@
 import sys
 import unittest
 from numba.tests.support import captured_stdout
-from numba.core.config import IS_WIN64
+from numba.core.config import IS_WIN32
 
 
 class MatplotlibBlocker:
@@ -436,7 +436,7 @@ class DocsExamplesTest(unittest.TestCase):
             # magictoken.ex_vectorize_dynamic_call_one.end
 
             self.assertEqual(result, 12)
-            if IS_WIN64:
+            if IS_WIN32:
                 correct = ['ll->q']
             else:
                 correct = ['ll->l']
@@ -451,7 +451,7 @@ class DocsExamplesTest(unittest.TestCase):
             # magictoken.ex_vectorize_dynamic_call_two.end
 
             self.assertEqual(result, 2.0)
-            if IS_WIN64:
+            if IS_WIN32:
                 correct = ['ll->q', 'dd->d']
             else:
                 correct = ['ll->l', 'dd->d']
@@ -466,7 +466,7 @@ class DocsExamplesTest(unittest.TestCase):
             # magictoken.ex_vectorize_dynamic_call_three.end
 
             self.assertEqual(result, 2.0)
-            if IS_WIN64:
+            if IS_WIN32:
                 correct = ['ll->q', 'dd->d']
             else:
                 correct = ['ll->l', 'dd->d']
@@ -515,7 +515,7 @@ class DocsExamplesTest(unittest.TestCase):
 
             correct = np.array([10, 11, 12, 13, 14])
             np.testing.assert_array_equal(res, correct)
-            if IS_WIN64:
+            if IS_WIN32:
                 correct = ['qq->q']
             else:
                 correct = ['ll->l']
@@ -534,7 +534,7 @@ class DocsExamplesTest(unittest.TestCase):
             # ['ll->l', 'dd->d']
             # magictoken.ex_guvectorize_dynamic_call_three.end
 
-            if IS_WIN64:
+            if IS_WIN32:
                 correct = ['qq->q', 'dd->d']
             else:
                 correct = ['ll->l', 'dd->d']
