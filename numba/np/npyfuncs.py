@@ -648,11 +648,13 @@ def np_complex_exp_impl(context, builder, sig, args):
 def np_real_exp2_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
-    ll_ty = args[0].type
-    fnty = llvmlite.ir.FunctionType(ll_ty, [ll_ty,])
-    fn = cgutils.insert_pure_function(builder.module, fnty,
-                                      name='llvm.exp2')
-    return builder.call(fn, [args[0]])
+    dispatch_table = {
+        types.float32: 'numba_exp2f',
+        types.float64: 'numba_exp2',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'exp2')
 
 
 def np_complex_exp2_impl(context, builder, sig, args):
@@ -685,11 +687,13 @@ def np_complex_log_impl(context, builder, sig, args):
 def np_real_log2_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
-    ll_ty = args[0].type
-    fnty = llvmlite.ir.FunctionType(ll_ty, [ll_ty,])
-    fn = cgutils.insert_pure_function(builder.module, fnty,
-                                      name='llvm.log2')
-    return builder.call(fn, [args[0]])
+    dispatch_table = {
+        types.float32: 'numba_log2f',
+        types.float64: 'numba_log2',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'log2')
 
 def np_complex_log2_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)

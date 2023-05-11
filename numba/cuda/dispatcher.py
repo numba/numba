@@ -16,7 +16,6 @@ from numba.cuda.args import wrap_arg
 from numba.cuda.compiler import compile_cuda, CUDACompiler
 from numba.cuda.cudadrv import driver
 from numba.cuda.cudadrv.devices import get_context
-from numba.cuda.cudadrv.libs import get_cudalib
 from numba.cuda.descriptor import cuda_target
 from numba.cuda.errors import (missing_launch_config_msg,
                                normalize_kernel_dimensions)
@@ -104,7 +103,7 @@ class _Kernel(serialize.ReduceMixin):
         self.cooperative = 'cudaCGGetIntrinsicHandle' in lib.get_asm_str()
         # We need to link against cudadevrt if grid sync is being used.
         if self.cooperative:
-            link.append(get_cudalib('cudadevrt', static=True))
+            lib.needs_cudadevrt = True
 
         res = [fn for fn in cuda_fp16_math_funcs
                if (f'__numba_wrapper_{fn}' in lib.get_asm_str())]

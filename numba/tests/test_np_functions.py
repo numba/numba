@@ -3760,14 +3760,32 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         pyfunc = np_allclose
         cfunc = jit(nopython=True)(pyfunc)
 
-        a = np.asarray([1e10, 1e-9, np.nan])
-        b = np.asarray([1.0001e10, 1e-9])
+        inps = [
+            (np.asarray([1e10, 1e-9, np.nan]),
+             np.asarray([1.0001e10, 1e-9]),
+             1e-05, 1e-08, False,
+             "shape mismatch: objects cannot be broadcast to a single shape",
+             ValueError),
+            ('hello', 3, False, 1e-08, False,
+             'The first argument "a" must be array-like',
+             TypingError),
+            (3, 'hello', False, 1e-08, False,
+             'The second argument "b" must be array-like',
+             TypingError),
+            (2, 3, False, 1e-08, False,
+             'The third argument "rtol" must be a floating point',
+             TypingError),
+            (2, 3, 1e-05, False, False,
+             'The fourth argument "atol" must be a floating point',
+             TypingError),
+            (2, 3, 1e-05, 1e-08, 1,
+             'The fifth argument "equal_nan" must be a boolean',
+             TypingError),
+        ]
 
-        with self.assertRaises(ValueError) as e:
-            cfunc(a, b)
-
-        self.assertIn(("shape mismatch: objects cannot be broadcast to "
-                       "a single shape"), str(e.exception))
+        for a, b, rtol, atol, equal_nan, exc_msg, exc in inps:
+            with self.assertRaisesRegex(exc, exc_msg):
+                cfunc(a, b, rtol, atol, equal_nan)
 
     def test_interp_basic(self):
         pyfunc = interp

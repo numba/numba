@@ -1150,6 +1150,23 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name=fname)
         return self.builder.call(fn, [kind, string, size])
 
+    def bytes_as_string(self, obj):
+        fnty = ir.FunctionType(self.cstring, [self.pyobj])
+        fname = "PyBytes_AsString"
+        fn = self._get_function(fnty, name=fname)
+        return self.builder.call(fn, [obj])
+
+    def bytes_as_string_and_size(self, obj, p_buffer, p_length):
+        fnty = ir.FunctionType(
+            ir.IntType(32),
+            [self.pyobj, self.cstring.as_pointer(), self.py_ssize_t.as_pointer()],
+        )
+        fname = "PyBytes_AsStringAndSize"
+        fn = self._get_function(fnty, name=fname)
+        result = self.builder.call(fn, [obj, p_buffer, p_length])
+        ok = self.builder.icmp_signed("!=", Constant(result.type, -1), result)
+        return ok
+
     def bytes_from_string_and_size(self, string, size):
         fnty = ir.FunctionType(self.pyobj, [self.cstring, self.py_ssize_t])
         fname = "PyBytes_FromStringAndSize"

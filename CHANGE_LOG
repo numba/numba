@@ -1,5 +1,5 @@
-Version 0.57.0 (TBC)
---------------------
+Version 0.57.0 (1 May, 2023)
+----------------------------
 
 This release continues to add new features, bug fixes and stability improvements
 to Numba. Please note that this release contains a significant number of both
@@ -390,10 +390,19 @@ Pull-Requests:
 * PR `#8858 <https://github.com/numba/numba/pull/8858>`_: Update deprecation notice for objmode fallback RE ``@jit`` use. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#8864 <https://github.com/numba/numba/pull/8864>`_: Remove obsolete deprecation notices (`gmarkall <https://github.com/gmarkall>`_)
 * PR `#8866 <https://github.com/numba/numba/pull/8866>`_: Revise CUDA deprecation notices (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#8869 <https://github.com/numba/numba/pull/8869>`_: Update CHANGE_LOG for 0.57.0rc1 (`stuartarchibald <https://github.com/stuartarchibald>`_ `esc <https://github.com/esc>`_ `gmarkall <https://github.com/gmarkall>`_)
 * PR `#8870 <https://github.com/numba/numba/pull/8870>`_: Fix opcode "spelling" change since Python 3.11 in CUDA debug test. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#8879 <https://github.com/numba/numba/pull/8879>`_: Remove use of ``compile_isolated`` from generator tests. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#8880 <https://github.com/numba/numba/pull/8880>`_: Fix missing dependency guard on pyyaml in ``test_azure_config``. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#8881 <https://github.com/numba/numba/pull/8881>`_: Replace use of compile_isolated in test_obj_lifetime (`sklam <https://github.com/sklam>`_)
+* PR `#8887 <https://github.com/numba/numba/pull/8887>`_: Update PyPI supported version tags (`bryant1410 <https://github.com/bryant1410>`_)
+* PR `#8896 <https://github.com/numba/numba/pull/8896>`_: Remove codecov install (now deleted from PyPI) (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#8902 <https://github.com/numba/numba/pull/8902>`_: Enable CALL_FUNCTION_EX fix for py3.11 (`sklam <https://github.com/sklam>`_)
+* PR `#8907 <https://github.com/numba/numba/pull/8907>`_: Work around issue #8898. Defer ``exp2`` (and ``log2``) calls to Numba internal symbols. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#8909 <https://github.com/numba/numba/pull/8909>`_: Fix #8903. ``NumbaDeprecationWarning``s raised from ``@{gu,}vectorize``. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#8929 <https://github.com/numba/numba/pull/8929>`_: Update CHANGE_LOG for 0.57.0 final. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#8930 <https://github.com/numba/numba/pull/8930>`_: Fix year in change log (`jtilly <https://github.com/jtilly>`_)
+* PR `#8932 <https://github.com/numba/numba/pull/8932>`_: Fix 0.57 release changelog (`sklam <https://github.com/sklam>`_)
 
 Authors:
 
@@ -404,6 +413,7 @@ Authors:
 * `aseyboldt <https://github.com/aseyboldt>`_
 * `Biswa96 <https://github.com/Biswa96>`_
 * `brandonwillard <https://github.com/brandonwillard>`_
+* `bryant1410 <https://github.com/bryant1410>`_
 * `bszollosinagy <https://github.com/bszollosinagy>`_
 * `cako <https://github.com/cako>`_
 * `cherieliu <https://github.com/cherieliu>`_
@@ -421,6 +431,7 @@ Authors:
 * `ianthomas23 <https://github.com/ianthomas23>`_
 * `jamesobutler <https://github.com/jamesobutler>`_
 * `jorgepiloto <https://github.com/jorgepiloto>`_
+* `jtilly <https://github.com/jtilly>`_
 * `k1m190r <https://github.com/k1m190r>`_
 * `kc611 <https://github.com/kc611>`_
 * `kozlov-alexey <https://github.com/kozlov-alexey>`_
