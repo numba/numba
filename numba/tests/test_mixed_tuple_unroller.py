@@ -1830,6 +1830,20 @@ class TestMore(TestCase):
             while x == 1:
                 x = 0
 
+    def test_literal_unroll_legalize_var_names(self):
+        # See issue #8939
+        test = np.array([(1, 2), (2, 3)], dtype=[("a1", "f8"), ("a2", "f8")])
+        fields = tuple(test.dtype.fields.keys())
+
+        @njit
+        def foo(arr):
+            res = 0
+            for k in literal_unroll(fields):
+                res = res + np.abs(arr[k]).sum()
+            return res
+
+        self.assertEqual(foo(test), 8.0)
+
 
 def capture(real_pass):
     """ Returns a compiler pass that captures the mutation state reported
