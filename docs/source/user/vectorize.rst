@@ -305,20 +305,15 @@ casted array was mutated instead.
 To solve this problem, one needs to tell the GUFunc engine that the ``invals``
 argument is writable. This can be achieved by passing ``writable_args=('invals',)``
 (specifying by name), or ``writable_args=(0,)`` (specifying by position) to
-``@guvectorize``. Now, the code above works as expected::
+``@guvectorize``. Now, the code above works as expected:
 
-   @guvectorize([(float64[:], float64[:])], '()->()', writable_args=('invals',))
-   def init_values(invals, outvals):
-       invals[0] = 6.5
-       outvals[0] = 4.2
-
-   >>> invals = np.zeros(shape=(3, 3), dtype=np.float32)
-   >>> outvals = init_values(invals)
-   >>> invals
-   array([[6.5, 6.5, 6.5],
-          [6.5, 6.5, 6.5],
-          [6.5, 6.5, 6.5]], dtype=float32)
-
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_guvectorize_overwrite`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.ex_guvectorize_overwrite_call_three.begin
+   :end-before: magictoken.ex_guvectorize_overwrite_call_three.end
+   :dedent: 12
+   :linenos:
 
 .. _dynamic-universal-functions:
 

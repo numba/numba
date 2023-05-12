@@ -240,7 +240,7 @@ class DocsExamplesTest(unittest.TestCase):
 
             self.assertIsInstance(result, np.ndarray)
             correct = np.array([0., 0.4, 0.8, 1.2, 1.6, 2. ])
-            np.testing.assert_array_almost_equal(result, correct, -16)
+            np.testing.assert_allclose(result, correct)
 
             # magictoken.ex_vectorize_return_call_three.begin
             a = np.arange(12).reshape(3, 4)
@@ -313,14 +313,17 @@ class DocsExamplesTest(unittest.TestCase):
 
             # magictoken.ex_guvectorize_call_two.begin
             a = np.arange(6).reshape(2, 3)
-            # a == array([[0, 1, 2], [3, 4, 5]])
+            # a == array([[0, 1, 2],
+            #             [3, 4, 5]])
 
             result1 = g(a, 10)
-            # result1 == array([[10, 11, 12], [13, 14, 15]])
+            # result1 == array([[10, 11, 12],
+            #                   [13, 14, 15]])
 
             result2 = g(a, np.array([10, 20]))
             g(a, np.array([10, 20]))
-            # result2 == array([[10, 11, 12], [23, 24, 25]])
+            # result2 == array([[10, 11, 12],
+            #                   [23, 24, 25]])
             # magictoken.ex_guvectorize_call_two.end
 
             self.assertIsInstance(result1, np.ndarray)
@@ -401,6 +404,10 @@ class DocsExamplesTest(unittest.TestCase):
             # outvals == array([[4.2, 4.2, 4.2],
             #                   [4.2, 4.2, 4.2],
             #                   [4.2, 4.2, 4.2]])
+            print(invals)
+            # invals == array([[0., 0., 0.],
+            #                  [0., 0., 0.],
+            #                  [0., 0., 0.]], dtype=float32)
             # magictoken.ex_guvectorize_overwrite_call_two.end
 
             self.assertIsInstance(invals, np.ndarray)
@@ -408,6 +415,44 @@ class DocsExamplesTest(unittest.TestCase):
                 [0., 0., 0.],
                 [0., 0., 0.],
                 [0., 0., 0.]], dtype=np.float32)
+            np.testing.assert_array_equal(invals, correct)
+
+            self.assertIsInstance(outvals, np.ndarray)
+            correct = np.array([
+                [4.2, 4.2, 4.2],
+                [4.2, 4.2, 4.2],
+                [4.2, 4.2, 4.2]])
+            np.testing.assert_array_equal(outvals, correct)
+
+            # magictoken.ex_guvectorize_overwrite_call_three.begin
+            @guvectorize(
+                [(float64[:], float64[:])],
+                '()->()',
+                writable_args=('invals',)
+            )
+            def init_values(invals, outvals):
+                invals[0] = 6.5
+                outvals[0] = 4.2
+
+            invals = np.zeros(shape=(3, 3), dtype=np.float32)
+            # invals == array([[0., 0., 0.],
+            #                  [0., 0., 0.],
+            #                  [0., 0., 0.]], dtype=float32)
+            outvals = init_values(invals)
+            # outvals == array([[4.2, 4.2, 4.2],
+            #                   [4.2, 4.2, 4.2],
+            #                   [4.2, 4.2, 4.2]])
+            print(invals)
+            # invals == array([[6.5, 6.5, 6.5],
+            #                  [6.5, 6.5, 6.5],
+            #                  [6.5, 6.5, 6.5]], dtype=float32)
+            # magictoken.ex_guvectorize_overwrite_call_three.end
+
+            self.assertIsInstance(invals, np.ndarray)
+            correct = np.array([
+                [6.5, 6.5, 6.5],
+                [6.5, 6.5, 6.5],
+                [6.5, 6.5, 6.5]])
             np.testing.assert_array_equal(invals, correct)
 
             self.assertIsInstance(outvals, np.ndarray)
@@ -506,9 +551,8 @@ class DocsExamplesTest(unittest.TestCase):
             x = np.arange(5, dtype=np.int64)
             y = 10
             res = np.zeros_like(x)
-            # res == array([10, 11, 12, 13, 14])
-
             g(x, y, res)
+            # res == array([10, 11, 12, 13, 14])
             print(g.types)
             # ['ll->l']
             # magictoken.ex_guvectorize_dynamic_call_one.end
@@ -525,8 +569,8 @@ class DocsExamplesTest(unittest.TestCase):
             x = np.arange(5, dtype=np.double)
             y = 2.2
             res = np.zeros_like(x)
-            # res == array([2.2, 3.2, 4.2, 5.2, 6.2])
             g(x, y, res)
+            # res == array([2.2, 3.2, 4.2, 5.2, 6.2])
             # magictoken.ex_guvectorize_dynamic_call_two.end
 
             # magictoken.ex_guvectorize_dynamic_call_three.begin
