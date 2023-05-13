@@ -334,7 +334,6 @@ def impl_pow_int(ty, libfunc):
 
 def impl_pow_int64(ty, int_ty):
     def lower_pow_impl_int64(context, builder, sig, args):
-        print("In lower_pow_impl_int64")
         return int_power_impl(context, builder, sig, args)
 
     lower(math.pow, ty, int_ty)(lower_pow_impl_int64)
