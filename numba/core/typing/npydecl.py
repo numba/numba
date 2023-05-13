@@ -14,7 +14,6 @@ from numba.np.numpy_support import (ufunc_find_matching_loop,
 from numba.core.errors import (TypingError, NumbaPerformanceWarning,
                                NumbaTypeError, NumbaAssertionError)
 from numba import pndindex
-from numba.core.overload_glue import glue_typing
 
 registry = Registry()
 infer = registry.register
@@ -272,39 +271,39 @@ class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
 
 # list of unary ufuncs to register
 
-_math_operations = [ "add", "subtract", "multiply",
-                     "logaddexp", "logaddexp2", "true_divide",
-                     "floor_divide", "negative", "positive", "power",
-                     "float_power", "remainder", "fmod", "absolute",
-                     "rint", "sign", "conjugate", "exp", "exp2",
-                     "log", "log2", "log10", "expm1", "log1p",
-                     "sqrt", "square", "cbrt", "reciprocal",
-                     "divide", "mod", "divmod", "abs", "fabs" , "gcd", "lcm"]
+math_operations = [ "add", "subtract", "multiply",
+                    "logaddexp", "logaddexp2", "true_divide",
+                    "floor_divide", "negative", "positive", "power",
+                    "float_power", "remainder", "fmod", "absolute",
+                    "rint", "sign", "conjugate", "exp", "exp2",
+                    "log", "log2", "log10", "expm1", "log1p",
+                    "sqrt", "square", "cbrt", "reciprocal",
+                    "divide", "mod", "divmod", "abs", "fabs" , "gcd", "lcm"]
 
-_trigonometric_functions = [ "sin", "cos", "tan", "arcsin",
-                             "arccos", "arctan", "arctan2",
-                             "hypot", "sinh", "cosh", "tanh",
-                             "arcsinh", "arccosh", "arctanh",
-                             "deg2rad", "rad2deg", "degrees",
-                             "radians" ]
+trigonometric_functions = [ "sin", "cos", "tan", "arcsin",
+                            "arccos", "arctan", "arctan2",
+                            "hypot", "sinh", "cosh", "tanh",
+                            "arcsinh", "arccosh", "arctanh",
+                            "deg2rad", "rad2deg", "degrees",
+                            "radians" ]
 
-_bit_twiddling_functions = ["bitwise_and", "bitwise_or",
-                            "bitwise_xor", "invert",
-                            "left_shift", "right_shift",
-                            "bitwise_not" ]
+bit_twiddling_functions = ["bitwise_and", "bitwise_or",
+                           "bitwise_xor", "invert",
+                           "left_shift", "right_shift",
+                           "bitwise_not" ]
 
-_comparison_functions = [ "greater", "greater_equal", "less",
-                          "less_equal", "not_equal", "equal",
-                          "logical_and", "logical_or",
-                          "logical_xor", "logical_not",
-                          "maximum", "minimum", "fmax", "fmin" ]
+comparison_functions = [ "greater", "greater_equal", "less",
+                         "less_equal", "not_equal", "equal",
+                         "logical_and", "logical_or",
+                         "logical_xor", "logical_not",
+                         "maximum", "minimum", "fmax", "fmin" ]
 
-_floating_functions = [ "isfinite", "isinf", "isnan", "signbit",
-                        "copysign", "nextafter", "modf", "ldexp",
-                        "frexp", "floor", "ceil", "trunc",
-                        "spacing" ]
+floating_functions = [ "isfinite", "isinf", "isnan", "signbit",
+                       "copysign", "nextafter", "modf", "ldexp",
+                       "frexp", "floor", "ceil", "trunc",
+                       "spacing" ]
 
-_logic_functions = [ "isnat" ]
+logic_functions = [ "isnat" ]
 
 
 # This is a set of the ufuncs that are not yet supported by Lowering. In order
@@ -317,7 +316,7 @@ _unsupported = set([ 'frexp',
                  ])
 
 
-def _numpy_ufunc(name):
+def register_numpy_ufunc(name, register_global=infer_global):
     func = getattr(np, name)
     class typing_class(Numpy_rules_ufunc):
         key = func
@@ -329,16 +328,16 @@ def _numpy_ufunc(name):
     aliases = ("abs", "bitwise_not", "divide", "abs")
 
     if name not in aliases:
-        infer_global(func, types.Function(typing_class))
+        register_global(func, types.Function(typing_class))
 
-all_ufuncs = sum([_math_operations, _trigonometric_functions,
-                  _bit_twiddling_functions, _comparison_functions,
-                  _floating_functions, _logic_functions], [])
+all_ufuncs = sum([math_operations, trigonometric_functions,
+                  bit_twiddling_functions, comparison_functions,
+                  floating_functions, logic_functions], [])
 
 supported_ufuncs = [x for x in all_ufuncs if x not in _unsupported]
 
 for func in supported_ufuncs:
-    _numpy_ufunc(func)
+    register_numpy_ufunc(func)
 
 all_ufuncs = [getattr(np, name) for name in all_ufuncs]
 supported_ufuncs = [getattr(np, name) for name in supported_ufuncs]
@@ -355,9 +354,7 @@ supported_array_operators = set(
     NumpyRulesInplaceArrayOperator._op_map.keys()
 )
 
-del _math_operations, _trigonometric_functions, _bit_twiddling_functions
-del _comparison_functions, _floating_functions, _unsupported
-del _numpy_ufunc
+del _unsupported
 
 
 # -----------------------------------------------------------------------------
@@ -413,8 +410,8 @@ def _numpy_redirect(fname):
                dict(key=numpy_function, method_name=fname))
     infer_global(numpy_function, types.Function(cls))
 
-for func in ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
-             'cumsum', 'cumprod', 'argsort', 'nonzero', 'ravel']:
+
+for func in ['sum', 'argsort', 'nonzero', 'ravel']:
     _numpy_redirect(func)
 
 
@@ -482,7 +479,7 @@ def _parse_nested_sequence(context, typ):
     heterogeneous, as long as it converts to the given dtype.
     """
     if isinstance(typ, (types.Buffer,)):
-        raise TypingError("%r not allowed in a homogeneous sequence" % typ)
+        raise TypingError("%s not allowed in a homogeneous sequence" % typ)
     elif isinstance(typ, (types.Sequence,)):
         n, dtype = _parse_nested_sequence(context, typ.dtype)
         return n + 1, dtype
@@ -495,12 +492,12 @@ def _parse_nested_sequence(context, typ):
         for i in range(1, typ.count):
             _n, dtype = _parse_nested_sequence(context, typ[i])
             if _n != n:
-                raise TypingError("type %r does not have a regular shape"
+                raise TypingError("type %s does not have a regular shape"
                                   % (typ,))
             dtypes.append(dtype)
         dtype = context.unify_types(*dtypes)
         if dtype is None:
-            raise TypingError("cannot convert %r to a homogeneous type" % typ)
+            raise TypingError("cannot convert %s to a homogeneous type" % typ)
         return n + 1, dtype
     else:
         # Scalar type => check it's valid as a Numpy array dtype
@@ -684,41 +681,3 @@ class NdIndex(AbstractTemplate):
         if all(isinstance(x, types.Integer) for x in shape):
             iterator_type = types.NumpyNdIndexType(len(shape))
             return signature(iterator_type, *args)
-
-
-@glue_typing(np.where)
-class Where(AbstractTemplate):
-
-    def generic(self, args, kws):
-        assert not kws
-
-        if len(args) == 1:
-            # 0-dim arrays return one result array
-            ary = args[0]
-            ndim = max(ary.ndim, 1)
-            retty = types.UniTuple(types.Array(types.intp, 1, 'C'), ndim)
-            return signature(retty, ary)
-
-        elif len(args) == 3:
-            cond, x, y = args
-            retdty = from_dtype(np.promote_types(
-                        as_dtype(getattr(args[1], 'dtype', args[1])),
-                        as_dtype(getattr(args[2], 'dtype', args[2]))))
-            if isinstance(cond, types.Array):
-                # array where()
-                if isinstance(x, types.Array) and isinstance(y, types.Array):
-                    if (cond.ndim == x.ndim == y.ndim):
-                        if x.layout == y.layout == cond.layout:
-                            retty = types.Array(retdty, x.ndim, x.layout)
-                        else:
-                            retty = types.Array(retdty, x.ndim, 'C')
-                        return signature(retty, *args)
-                else:
-                    # x and y both scalar
-                    retty = types.Array(retdty, cond.ndim, cond.layout)
-                    return signature(retty, *args)
-            else:
-                # scalar where()
-                if not isinstance(x, types.Array):
-                    retty = types.Array(retdty, 0, 'C')
-                    return signature(retty, *args)

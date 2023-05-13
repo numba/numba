@@ -60,7 +60,7 @@ prototype:
      float* return_value,
      float x,
      float y
-   )
+   );
 
 .. rubric:: Notes
 
@@ -87,6 +87,48 @@ For example, when:
 is declared, calling ``mul(a, b)`` inside a kernel will translate into a call to
 ``mul_f32_f32(a, b)`` in the compiled code.
 
+Passing pointers
+----------------
+
+Numba's calling convention requires multiple values to be passed for array
+arguments. These include the data pointer along with shape, stride, and other
+information. This is incompatible with the expectations of most C/C++ functions,
+which generally only expect a pointer to the data. To align the calling
+conventions between C device code and Python kernels it is necessary to declare
+array arguments using C pointer types.
+
+For example, a function with the following prototype:
+
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/ffi/functions.cu
+   :language: C
+   :caption: ``numba/cuda/tests/doc_examples/ffi/functions.cu``
+   :start-after: magictoken.ex_sum_reduce_proto.begin
+   :end-before: magictoken.ex_sum_reduce_proto.end
+   :linenos:
+
+would be declared as follows:
+
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_ffi.py
+   :language: python
+   :caption: from ``test_ex_from_buffer`` in ``numba/cuda/tests/doc_examples/test_ffi.py``
+   :start-after: magictoken.ex_from_buffer_decl.begin
+   :end-before: magictoken.ex_from_buffer_decl.end
+   :dedent: 8
+   :linenos:
+
+To obtain a pointer to array data for passing to foreign functions, use the
+``from_buffer()`` method of a ``cffi.FFI`` instance. For example, a kernel using
+the ``sum_reduce`` function could be defined as:
+
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_ffi.py
+   :language: python
+   :caption: from ``test_ex_from_buffer`` in ``numba/cuda/tests/doc_examples/test_ffi.py``
+   :start-after: magictoken.ex_from_buffer_kernel.begin
+   :end-before: magictoken.ex_from_buffer_kernel.end
+   :dedent: 8
+   :linenos:
+
+where ``result`` and ``array`` are both arrays of ``float32`` data.
 
 Linking and Calling functions
 -----------------------------
@@ -139,6 +181,8 @@ The foreign function is written as follows:
 .. literalinclude:: ../../../numba/cuda/tests/doc_examples/ffi/functions.cu
    :language: C
    :caption: ``numba/cuda/tests/doc_examples/ffi/functions.cu``
+   :start-after: magictoken.ex_mul_f32_f32.begin
+   :end-before: magictoken.ex_mul_f32_f32.end
    :linenos:
 
 The Python code and kernel are:

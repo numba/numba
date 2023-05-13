@@ -33,6 +33,7 @@ Glossary
       Shorthand for "a function :term:`JIT-compiled <JIT>` with Numba using
       the :ref:`@jit <jit>` decorator."
 
+   lifted loops
    loop-lifting
    loop-jitting
       A feature of compilation in :term:`object mode` where a loop can be

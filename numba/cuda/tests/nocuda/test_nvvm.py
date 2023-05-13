@@ -62,6 +62,7 @@ class TestNvvmWithoutCuda(unittest.TestCase):
                         bytearray(range(256)))
         m = ir.Module()
         m.triple = 'nvptx64-nvidia-cuda'
+        nvvm.add_ir_version(m)
         gv = ir.GlobalVariable(m, c.type, "myconstant")
         gv.global_constant = True
         gv.initializer = c

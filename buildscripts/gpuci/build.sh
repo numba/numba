@@ -24,6 +24,30 @@ else
   export NUMBA_CUDA_USE_NVIDIA_BINDING=0;
 fi;
 
+# Test with Minor Version Compatibility on CUDA 11.8
+if [ $CUDA_TOOLKIT_VER == "11.8" ]
+then
+  export NUMBA_CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY=1;
+else
+  export NUMBA_CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY=0;
+fi;
+
+# Test with different NumPy versions with each toolkit (it's not worth testing
+# the Cartesian product of versions here, we just need to test with different
+# CUDA and NumPy versions).
+declare -A CTK_NUMPY_VMAP=( ["11.0"]="1.21" ["11.1"]="1.22" ["11.2"]="1.23" ["11.5"]="1.24" ["11.8"]="1.24")
+NUMPY_VER="${CTK_NUMPY_VMAP[$CUDA_TOOLKIT_VER]}"
+
+# Use conda-forge for NumPy 1.24 - at the time of writing it is not available
+# on the defaults channel.
+
+if [ "${NUMPY}" == "1.24" ]; then
+  NUMPY_CHANNEL_PKG=conda-forge::numpy
+else
+  NUMPY_CHANNEL_PKG=numpy
+fi
+
+
 ################################################################################
 # SETUP - Check environment
 ################################################################################
@@ -39,8 +63,10 @@ gpuci_logger "Create testing env"
 gpuci_mamba_retry create -n numba_ci -y \
                   "python=${PYTHON_VER}" \
                   "cudatoolkit=${CUDA_TOOLKIT_VER}" \
+                  "rapidsai::cubinlinker" \
+                  "conda-forge::ptxcompiler" \
                   "numba/label/dev::llvmlite" \
-                  "numpy=1.21" \
+                  "${NUMPY_CHANNEL_PKG}=${NUMPY_VER}" \
                   "scipy" \
                   "cffi" \
                   "psutil" \

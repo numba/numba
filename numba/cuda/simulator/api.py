@@ -5,15 +5,20 @@ Contains CUDA API functions
 # Imports here bring together parts of the API from other modules, so some of
 # them appear unused.
 from contextlib import contextmanager
+
 from .cudadrv.devices import require_context, reset, gpus  # noqa: F401
 from .kernel import FakeCUDAKernel
-from numba.core.typing import Signature
+from numba.core.sigutils import is_signature
 from warnings import warn
 from ..args import In, Out, InOut  # noqa: F401
 
 
 def select_device(dev=0):
     assert dev == 0, 'Only a single device supported by the simulator'
+
+
+def is_float16_supported():
+    return True
 
 
 class stream(object):
@@ -44,7 +49,7 @@ def declare_device(*args, **kwargs):
 def detect():
     print('Found 1 CUDA devices')
     print('id %d    %20s %40s' % (0, 'SIMULATOR', '[SUPPORTED]'))
-    print('%40s: 5.3' % 'compute capability')
+    print('%40s: 5.0' % 'compute capability')
 
 
 def list_devices():
@@ -85,9 +90,11 @@ def jit(func_or_sig=None, device=False, debug=False, argtypes=None,
 
     if link is not None:
         raise NotImplementedError('Cannot link PTX in the simulator')
+
     # Check for first argument specifying types - in that case the
     # decorator is not being passed a function
-    if func_or_sig is None or isinstance(func_or_sig, (str, tuple, Signature)):
+    if (func_or_sig is None or is_signature(func_or_sig)
+            or isinstance(func_or_sig, list)):
         def jitwrapper(fn):
             return FakeCUDAKernel(fn,
                                   device=device,

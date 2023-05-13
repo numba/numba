@@ -213,8 +213,8 @@ rather than relative indexing::
 ``StencilFunc``
 ===============
 
-The stencil decorator returns a callable object of type ``StencilFunc``.
-``StencilFunc`` objects contains a number of attributes but the only one of
+The stencil decorator returns a callable object of type ``StencilFunc``. A
+``StencilFunc`` object contains a number of attributes but the only one of
 potential interest to users is the ``neighborhood`` attribute.
 If the ``neighborhood`` option was passed to the stencil decorator then
 the provided neighborhood is stored in this attribute.  Else, upon

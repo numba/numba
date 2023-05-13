@@ -20,12 +20,13 @@ labels: task
 * [ ] Create PR against the release branch to make `numba/testing/main.py`
       to refer to `origin/releaseX.Y` instead of `origin/main`.
 * [ ] Dependency version pinning on release branch
-  * [ ] Pin llvmlite to `>=0.A.0rc1,<0.A+1.0`.
+  * [ ] Pin llvmlite to `0.A.*`.
   * [ ] Pin NumPy if needed
   * [ ] Pin TBB if needed
 * [ ] Run the HEAD of the release branch through the build farm and confirm:
   * [ ] Build farm CPU testing has passed.
   * [ ] Build farm CUDA testing has passed.
+  * [ ] Build farm wheel testing has passed.
 * [ ] Annotated tag `X.Y.Zrc1` on release branch (no `v` prefix).
 * [ ] Build and upload conda packages on buildfarm (check "upload").
 * [ ] Build wheels and sdist on the buildfarm (check "upload").

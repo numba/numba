@@ -99,7 +99,8 @@ First, using explicit Numba types and explicit construction.
 
 .. code-block:: python
 
-    from numba import jitclass, types, typed
+    from numba import types, typed
+    from numba.experimental import jitclass
 
     # key and value types
     kv_ty = (types.int64, types.unicode_type)
@@ -131,7 +132,8 @@ example:
 
 .. code-block:: python
 
-    from numba import jitclass, typed, typeof
+    from numba import typed, typeof
+    from numba.experimental import jitclass
 
     d = typed.Dict()
     d[1] = "apple"
@@ -158,7 +160,8 @@ instance of the type specified.
 
 .. code-block:: python
 
-    from numba import jitclass, types
+    from numba import types
+    from numba.experimental import jitclass
 
     dict_ty = types.DictType(types.int64, types.unicode_type)
 
@@ -224,6 +227,7 @@ The following dunder methods may be defined for jitclasses:
 * ``__add__``
 * ``__floordiv__``
 * ``__lshift__``
+* ``__matmul__``
 * ``__mod__``
 * ``__mul__``
 * ``__neg__``
@@ -238,6 +242,7 @@ The following dunder methods may be defined for jitclasses:
 * ``__iadd__``
 * ``__ifloordiv__``
 * ``__ilshift__``
+* ``__imatmul__``
 * ``__imod__``
 * ``__imul__``
 * ``__ipow__``
@@ -247,6 +252,19 @@ The following dunder methods may be defined for jitclasses:
 * ``__iand__``
 * ``__ior__``
 * ``__ixor__``
+* ``__radd__``
+* ``__rfloordiv__``
+* ``__rlshift__``
+* ``__rmatmul__``
+* ``__rmod__``
+* ``__rmul__``
+* ``__rpow__``
+* ``__rrshift__``
+* ``__rsub__``
+* ``__rtruediv__``
+* ``__rand__``
+* ``__ror__``
+* ``__rxor__``
 
 Refer to the `Python Data Model documentation
 <https://docs.python.org/3/reference/datamodel.html>`_ for descriptions of
