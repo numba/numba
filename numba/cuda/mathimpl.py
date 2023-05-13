@@ -3,6 +3,7 @@ import operator
 from llvmlite import ir
 from numba.core import types, typing, cgutils, targetconfig
 from numba.core.imputils import Registry
+from numba.cpython.numbers import int_power_impl
 from numba.types import float32, float64, int64, uint64
 from numba.cuda import libdevice
 from numba import cuda
@@ -317,8 +318,9 @@ for fname64, fname32, key in binarys:
     impl64 = getattr(libdevice, fname64)
     impl_binary(key, float32, impl32)
     impl_binary(key, float64, impl64)
-    impl_binary_int(key, int64, impl64)
-    impl_binary_int(key, uint64, impl64)
+    if key != math.pow:
+        impl_binary_int(key, int64, impl64)
+        impl_binary_int(key, uint64, impl64)
 
 
 def impl_pow_int(ty, libfunc):
@@ -330,8 +332,18 @@ def impl_pow_int(ty, libfunc):
     lower(math.pow, ty, types.int32)(lower_pow_impl_int)
 
 
+def impl_pow_int64(ty, int_ty):
+    def lower_pow_impl_int64(context, builder, sig, args):
+        print("In lower_pow_impl_int64")
+        return int_power_impl(context, builder, sig, args)
+
+    lower(math.pow, ty, int_ty)(lower_pow_impl_int64)
+
+
 impl_pow_int(types.float32, libdevice.powif)
-impl_pow_int(types.float64, libdevice.powi)
+
+impl_pow_int64(types.float64, int64)
+impl_pow_int64(types.float64, uint64)
 
 
 def impl_modf(ty, libfunc):
