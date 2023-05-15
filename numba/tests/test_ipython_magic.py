@@ -17,9 +17,7 @@ class IPythonMagic(TestCase):
     @classmethod
     def setUpClass(cls):
         cls.ip = TerminalInteractiveShell()
-
-    def setUp(self):
-        self.ip.extension_manager.load_extension('numba')
+        cls.ip.extension_manager.load_extension('numba')
 
     def test_numba(self):
         ip = self.ip
