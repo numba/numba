@@ -251,3 +251,4 @@ config.USING_SVML = _try_enable_svml()
 def load_ipython_extension(ip):
     from .core.annotations.IpythonMagic import NumbaMagics
     ip.register_magics(NumbaMagics)
+    
