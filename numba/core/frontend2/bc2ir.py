@@ -487,7 +487,7 @@ class PropagateVars(RegionVisitor):
                         if k.startswith('tos.'):
                             if k in block.exported_stackvars:
                                 block.out_vars[k] = block.exported_stackvars[k]
-                        else:
+                        elif k not in block.out_vars:
                             block.out_vars[k] = vs
                         fresh.add(k)
 
