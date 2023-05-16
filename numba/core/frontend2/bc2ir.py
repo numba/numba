@@ -1,5 +1,7 @@
 from dataclasses import dataclass, replace, field, fields
 import dis
+import operator
+from functools import reduce
 from contextlib import contextmanager
 from typing import (
     Optional,
@@ -120,6 +122,8 @@ class DDGBlock(BasicBlock):
     in_vars: MutableSortedMap[str, ValueState] = field(default_factory=MutableSortedMap)
     out_vars: MutableSortedMap[str, ValueState] = field(default_factory=MutableSortedMap)
 
+    exported_stackvars: MutableSortedMap[str, ValueState] = field(default_factory=MutableSortedMap)
+
     def __post_init__(self):
         assert isinstance(self.in_vars, MutableSortedMap)
         assert isinstance(self.out_vars, MutableSortedMap)
@@ -132,6 +136,8 @@ class DDGBlock(BasicBlock):
             self.render_valuestate(renderer, g, self.in_effect)
             self.render_valuestate(renderer, g, self.out_effect)
             for vs in self.out_vars.values():
+                self.render_valuestate(renderer, g, vs)
+            for vs in self.in_stackvars:
                 self.render_valuestate(renderer, g, vs)
             # Fill incoming
             in_vars_fields = "incoming-vars|" + "|".join([f"<{x}> {x}" for x in self.in_vars])
@@ -283,10 +289,13 @@ class HandleConditionalPop:
         return
 
     def op_FOR_ITER(self, inst: dis.Instruction):
-        jump_target = inst.argval
         # Bytecode semantic pop 1 for the iterator
         # but we need an extra pop because the indvar is pushed
         return _BranchNPop(1, 2)
+
+    def op_JUMP_IF_TRUE_OR_POP(self, inst: dis.Instruction):
+        return _BranchNPop(0, 1)
+
 
 def _scfg_add_conditional_pop_stack(bcmap, scfg: SCFG):
     pop_records = {}
@@ -299,8 +308,9 @@ def _scfg_add_conditional_pop_stack(bcmap, scfg: SCFG):
             if res is not None:
                 pop_records[blk._jump_targets[res.branch_index]] = blk.label, res
 
-    # print(pop_records)
-    # print('-' * 80)
+
+    print(pop_records)
+    print('-' * 80)
     def _replace_jump_targets(blk, idx, repl):
         return replace(
             blk,
@@ -473,18 +483,12 @@ class PropagateVars(RegionVisitor):
                         op = Op(opname="var.incoming", bc_inst=None)
                         vs = op.add_output(k)
                         block.in_vars[k] = vs
-                        block.out_vars[k] = vs
+                        if k.startswith('tos.'):
+                            if k in block.exported_stackvars:
+                                block.out_vars[k] = block.exported_stackvars[k]
+                        else:
+                            block.out_vars[k] = vs
                         fresh.add(k)
-
-                # Compute popped stackvars
-                npop = max(0, len(block.in_stackvars) - len(block.out_stackvars))
-                stackvars = [x for x in block.out_vars
-                             if x.startswith("stack.exported.")]
-                popped = set(stackvars[len(stackvars) - npop:])
-                for k in popped:
-                    del block.out_vars[k]
-                    if k in fresh:
-                        del block.in_vars[k]
 
             else:
                 block.incoming_states.update(data)
@@ -521,7 +525,7 @@ class PropagateVars(RegionVisitor):
                 data_for_branches.append(
                     self.visit_linear(blk, data_at_head)
                 )
-        data_after_branches = max(data_for_branches, key=len)
+        data_after_branches = reduce(operator.or_, data_for_branches)
 
         exiting = region.exiting
 
@@ -541,32 +545,46 @@ class PropagateVars(RegionVisitor):
 class PropagateStack(RegionVisitor):
     def __init__(self, _debug: bool=False):
         super(PropagateStack, self).__init__()
-        self._stack_count = 0
         self._debug = _debug
 
     def debug_print(self, *args, **kwargs):
         if self._debug:
             print(*args, **kwargs)
 
-    def new_stack_var(self) -> str:
-        name = f"stack.exported.{self._stack_count}"
-        self._stack_count += 1
-        return name
-
     def visit_block(self, block: BasicBlock, data):
         if isinstance(block, DDGBlock):
             nin = len(block.in_stackvars)
-            data = data[-nin:]
-            out_stackvars = block.out_stackvars[-nin:]
-            new_stack_vars = tuple([self.new_stack_var()
-                                    for _ in out_stackvars])
-            data += new_stack_vars
-            for i, stackname in enumerate(new_stack_vars):
-                op = Op("stack.export", None)
-                op.add_input("0", out_stackvars[i])
-                block.out_vars[stackname] = op.add_output(stackname)
-            self.debug_print('---=', block.label, "stack", data)
-            return data
+            inherited = data[:len(data) - nin]
+            print("--- stack", data)
+            print("--- inherited stack", inherited)
+            out_stackvars = block.out_stackvars.copy()
+
+            counts = reversed(list(range(len(inherited) + len(out_stackvars))))
+            out_stack = block.out_stackvars[::-1]
+            out_data = tuple([f"tos.{i}" for i in counts])
+
+            unused_names = list(out_data)
+
+            for vs in reversed(out_stack):
+                k = unused_names.pop()
+                op = Op("stack.export", bc_inst=None)
+                op.add_input('0', vs)
+                block.exported_stackvars[k] = vs = op.add_output(k)
+                block.out_vars[k] = vs
+
+            for orig in reversed(inherited):
+                k = unused_names.pop()
+                import_op = Op("var.incoming", bc_inst=None)
+                block.in_vars[orig] = imported_vs = import_op.add_output(orig)
+
+                op = Op("stack.export", bc_inst=None)
+                op.add_input('0', imported_vs)
+                vs = op.add_output(k)
+                block.exported_stackvars[k] = vs
+                block.out_vars[k] = vs
+
+            self.debug_print('---=', block.label, "out stack", out_data)
+            return out_data
         else:
             return data
 
@@ -600,6 +618,7 @@ class PropagateStack(RegionVisitor):
         return data_at_tail
 
     def make_data(self):
+        # Stack data stored in a tuple
         return ()
 
 
@@ -609,7 +628,7 @@ class ConnectImportedStackVars(RegionVisitor):
         if isinstance(block, DDGBlock):
             # Connect stack.incoming node to the import stack variable.
             imported_stackvars = [var for k, var in block.in_vars.items()
-                                  if k.startswith("stack.exported.")]
+                                  if k.startswith("tos.")][::-1]
             n = len(block.in_stackvars)
             for vs, inc in zip(block.in_stackvars, imported_stackvars[-n:]):
                 assert vs.parent is not None
@@ -628,7 +647,7 @@ class ConnectImportedStackVars(RegionVisitor):
         self.visit_linear(region.subregion[exiting], None)
 
 def propagate_stack(rvsdg: SCFG):
-    visitor = PropagateStack()
+    visitor = PropagateStack(_debug=True)
     visitor.visit_graph(rvsdg, visitor.make_data())
 
 def connect_incoming_stack_vars(rvsdg: SCFG):
