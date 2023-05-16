@@ -20,7 +20,6 @@ class IPythonMagic(TestCase):
         cls.ip.extension_manager.load_extension('numba')
 
     def test_numba(self):
-        ip = self.ip
-        ip.run_cell_magic("numba", "", code)
-        ip.ex(f'{code}')
-        self.assertEqual(ip.user_ns['x'], 82.0)
+        self.ip.run_cell_magic("numba", "", code)
+        self.ip.ex(f'{code}')
+        self.assertEqual(self.ip.user_ns['x'], 82.0)
