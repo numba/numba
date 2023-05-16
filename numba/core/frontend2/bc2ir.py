@@ -260,14 +260,17 @@ def canonicalize_scfg(scfg: SCFG):
                     scfg.graph[label] = replace(blk, exiting=exiting)
 
 
-class _BranchNPop(NamedTuple):
-    branch_index: int
-    npop: int
+class _ExtraBranch(NamedTuple):
+    branch_instlists: tuple[tuple[tuple[str], ...], ...] = ()
 
 
 @dataclass(frozen=True)
 class ExtraBasicBlock(BasicBlock):
-    inst_list: tuple[dis.Instruction, ...] = ()
+    inst_list: tuple[str, ...] = ()
+
+    @classmethod
+    def make(cls, label, jump_target, instlist):
+        return ExtraBasicBlock(label, (jump_target,), inst_list=instlist)
 
     def __str__(self):
         args = '\n'.join(f'{x.opname}({x.argrepr})' for x in self.inst_list)
@@ -279,9 +282,8 @@ class ExtraLabel(Label):
     pass
 
 
-
 class HandleConditionalPop:
-    def handle(self, inst: dis.Instruction):
+    def handle(self, inst: dis.Instruction) -> _ExtraBranch:
         fn = getattr(self, f"op_{inst.opname}", self._op_default)
         return fn(inst)
 
@@ -291,14 +293,19 @@ class HandleConditionalPop:
     def op_FOR_ITER(self, inst: dis.Instruction):
         # Bytecode semantic pop 1 for the iterator
         # but we need an extra pop because the indvar is pushed
-        return _BranchNPop(1, 2)
+        br0 = ("FOR_ITER_STORE_INDVAR",)
+        br1 = ("POP",)
+        return _ExtraBranch((br0, br1))
 
     def op_JUMP_IF_TRUE_OR_POP(self, inst: dis.Instruction):
+        br0 = ("POP",)
+        br1 = ()
+        return _ExtraBranch((br0, br1))
         return _BranchNPop(0, 1)
 
 
 def _scfg_add_conditional_pop_stack(bcmap, scfg: SCFG):
-    pop_records = {}
+    extra_records = {}
     for blk in scfg.graph.values():
         if isinstance(blk, PythonBytecodeBlock):
             # Check if last instruction has conditional pop
@@ -306,10 +313,12 @@ def _scfg_add_conditional_pop_stack(bcmap, scfg: SCFG):
             handler = HandleConditionalPop()
             res = handler.handle(last_inst)
             if res is not None:
-                pop_records[blk._jump_targets[res.branch_index]] = blk.label, res
+                for branch_index, instlist in enumerate(res.branch_instlists):
+                    extra_records[blk._jump_targets[branch_index]] = blk.label, (branch_index, instlist)
 
 
-    print(pop_records)
+    from pprint import pprint
+    pprint(extra_records)
     print('-' * 80)
     def _replace_jump_targets(blk, idx, repl):
         return replace(
@@ -320,18 +329,10 @@ def _scfg_add_conditional_pop_stack(bcmap, scfg: SCFG):
             )
         )
 
-    for label, (parent_label, res) in pop_records.items():
+    for label, (parent_label, (branch_index, instlist)) in extra_records.items():
         newlabel = ExtraLabel(label.index)
-        scfg.graph[parent_label] = _replace_jump_targets(scfg.graph[parent_label], res.branch_index, newlabel)
-        ebb = ExtraBasicBlock(
-            newlabel,
-            (label,),
-            inst_list=(dis.Instruction(
-                        "POP_TOP", dis.opmap["POP_TOP"],
-                        arg=None, argval=None, argrepr="",
-                        offset=0, starts_line=None, is_jump_target=False
-                        ),) * res.npop,
-            )
+        scfg.graph[parent_label] = _replace_jump_targets(scfg.graph[parent_label], branch_index, newlabel)
+        ebb = ExtraBasicBlock.make(newlabel, label, instlist)
         scfg.graph[newlabel] = ebb
 
 
@@ -695,14 +696,17 @@ def convert_scfg_to_dataflow(scfg, bcmap) -> SCFG:
 
 def _convert_bytecode(block, instlist) -> DDGBlock:
     converter = BC2DDG()
-    in_effect = converter.effect
     for inst in instlist:
         converter.convert(inst)
+    return _converter_to_ddgblock(block, converter)
+
+
+def _converter_to_ddgblock(block, converter):
     blk = DDGBlock(
         label=block.label,
         _jump_targets=block._jump_targets,
         backedges=block.backedges,
-        in_effect=in_effect,
+        in_effect=converter.in_effect,
         out_effect=converter.effect,
         in_stackvars=list(converter.incoming_stackvars),
         out_stackvars=list(converter.stack),
@@ -714,7 +718,15 @@ def _convert_bytecode(block, instlist) -> DDGBlock:
 
 def convert_extra_bb(block: ExtraBasicBlock) -> DDGBlock:
     instlist = block.inst_list
-    return _convert_bytecode(block, instlist)
+    converter = BC2DDG()
+    for opname in block.inst_list:
+        if opname == "FOR_ITER_STORE_INDVAR":
+            converter.push(converter.load("indvar"))
+        elif opname == "POP":
+            converter.pop()
+        else:
+            assert False, opname
+    return _converter_to_ddgblock(block, converter)
 
 
 def convert_bc_to_ddg(block: PythonBytecodeBlock, bcmap: dict[int, dis.Bytecode]) -> DDGBlock:
@@ -726,6 +738,7 @@ class BC2DDG:
         self.stack: list[ValueState] = []
         start_env = Op("start", bc_inst=None)
         self.effect = start_env.add_output("env", is_effect=True)
+        self.in_effect = self.effect
         self.varmap: dict[str, ValueState] = {}
         self.incoming_vars: dict[str, ValueState] = {}
         self.incoming_stackvars: list[ValueState] = []
@@ -826,7 +839,8 @@ class BC2DDG:
         tos = self.top()
         op = Op(opname="foriter", bc_inst=inst)
         op.add_input("iter", tos)
-        self.push(op.add_output("indvar"))
+        # Store the indvar into an internal variable
+        self.store("indvar", op.add_output("indvar"))
 
     def op_BINARY_OP(self, inst: dis.Instruction):
         rhs = self.pop()
