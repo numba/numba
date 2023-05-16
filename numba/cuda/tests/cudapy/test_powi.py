@@ -1,6 +1,6 @@
 import math
 import numpy as np
-from numba import cuda, float64, int8, int32, void
+from numba import cuda, float64, int8, int32, void, int64, uint64
 from numba.cuda.testing import unittest, CUDATestCase
 
 
@@ -12,6 +12,16 @@ def cu_mat_power(A, power, power_A):
         return
 
     power_A[y, x] = math.pow(A[y, x], int32(power))
+
+
+def cu_mat_power_v2(A, power, power_A):
+    y, x = cuda.grid(2)
+
+    m, n = power_A.shape
+    if x >= n or y >= m:
+        return
+
+    power_A[y, x] = math.pow(A[y, x], power)
 
 
 def cu_mat_power_binop(A, power, power_A):
@@ -60,6 +70,32 @@ class TestCudaPowi(CUDATestCase):
         Aout = np.empty_like(A)
         kernel[1, A.shape](A, power, Aout)
         self.assertTrue(np.allclose(Aout, A ** power))
+
+    def test_powi_int64(self):
+        dec = cuda.jit(void(float64[:, :], int64, float64[:, :]))
+        kernel = dec(cu_mat_power_v2)
+
+        A = np.arange(10, dtype=np.float64).reshape(2, 5)
+        Aout = np.empty_like(A)
+
+        for power in range(1, 11):
+            power = np.int64(power)
+            kernel[1, A.shape](A, power, Aout)
+            result = np.allclose(Aout, A ** power)
+            self.assertTrue(result, f"Failed on int64 power {power}")
+
+    def test_powi_uint64(self):
+        dec = cuda.jit(void(float64[:, :], uint64, float64[:, :]))
+        kernel = dec(cu_mat_power_v2)
+
+        A = np.arange(10, dtype=np.float64).reshape(2, 5)
+        Aout = np.empty_like(A)
+
+        for power in range(1, 11):
+            power = np.uint64(power)
+            kernel[1, A.shape](A, power, Aout)
+            result = np.allclose(Aout, A ** power)
+            self.assertTrue(result, f"Failed on uint64 power {power}")
 
     def test_powi_binop(self):
         dec = cuda.jit(void(float64[:, :], int8, float64[:, :]))
