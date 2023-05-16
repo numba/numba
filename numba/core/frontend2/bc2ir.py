@@ -273,7 +273,7 @@ class ExtraBasicBlock(BasicBlock):
         return ExtraBasicBlock(label, (jump_target,), inst_list=instlist)
 
     def __str__(self):
-        args = '\n'.join(f'{x.opname}({x.argrepr})' for x in self.inst_list)
+        args = '\n'.join(f'{inst})' for inst in self.inst_list)
         return f"ExtraBasicBlock({args})"
 
 
@@ -341,7 +341,8 @@ def build_rvsdg(code):
     _scfg_add_conditional_pop_stack(byteflow.scfg.bcmap_from_bytecode(byteflow.bc), byteflow.scfg)
     byteflow = byteflow.restructure()
     canonicalize_scfg(byteflow.scfg)
-    # render_scfg(byteflow)
+    render_scfg(byteflow)
+    raise
     rvsdg = convert_to_dataflow(byteflow)
     rvsdg = propagate_states(rvsdg)
     RvsdgRenderer().render_rvsdg(rvsdg).view("rvsdg")
