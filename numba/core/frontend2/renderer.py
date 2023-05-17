@@ -170,7 +170,14 @@ class RvsdgRenderer(object):
                 if dst in blocks:
                     if isinstance(block, RegionBlock):
                         if block.exiting is not None:
-                            self.g.edge(str(block.exiting), str(dst), color="blue")
+
+                            def get_inner_most_region(blk):
+                                while isinstance(blk, RegionBlock):
+                                    out = blk
+                                    blk = blk.subregion.graph[blk.exiting]
+                                return out
+
+                            self.g.edge(str(get_inner_most_region(block).exiting), str(dst), color="blue")
                         else:
                             self.g.edge(str(label), str(dst), color="blue")
                     elif isinstance(block, BasicBlock):

@@ -454,7 +454,7 @@ def build_rvsdg(code):
     _scfg_add_conditional_pop_stack(bcmap, byteflow.scfg)
     byteflow = byteflow.restructure()
     canonicalize_scfg(byteflow.scfg)
-    render_scfg(byteflow)
+    # render_scfg(byteflow)
     rvsdg = convert_to_dataflow(byteflow)
     rvsdg = propagate_states(rvsdg)
     RvsdgRenderer().render_rvsdg(rvsdg).view("rvsdg")
