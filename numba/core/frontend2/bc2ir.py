@@ -31,7 +31,11 @@ from numba_rvsdg.core.datastructures.basic_block import (
     BranchBlock,
     ControlVariableBlock,
 )
-from numba_rvsdg.core.datastructures.labels import Label, PythonBytecodeLabel
+from numba_rvsdg.core.datastructures.labels import (
+    Label,
+    PythonBytecodeLabel,
+    SyntheticBranch,
+)
 from numba_rvsdg.rendering.rendering import ByteFlowRenderer
 
 from .renderer import RvsdgRenderer
@@ -214,7 +218,81 @@ def _fixup_region(scfg: SCFG, region: RegionBlock):
         scfg.add_block(region)
 
 
-def canonicalize_scfg(scfg: SCFG):
+
+
+class RegionVisitor:
+
+    def visit_block(self, block: BasicBlock, data):
+        pass
+
+    def visit_loop(self, region: RegionBlock, data):
+        pass
+
+    def visit_switch(self, region: RegionBlock, data):
+        pass
+
+    def visit_linear(self, region: RegionBlock, data):
+        return self.visit_graph(region.subregion, data)
+
+    def visit_graph(self, scfg: SCFG, data):
+        toposorted = toposort_graph(scfg.graph)
+        label: Label
+        for lvl in toposorted:
+            for label in lvl:
+                data = self.visit(scfg[label], data)
+        return data
+
+    def visit(self, block: BasicBlock, data):
+        if isinstance(block, RegionBlock):
+            if block.kind == "loop":
+                fn = self.visit_loop
+            elif block.kind == "switch":
+                fn = self.visit_switch
+            else:
+                raise NotImplementedError('unreachable')
+            data = fn(block, data)
+        else:
+            data = self.visit_block(block, data)
+        return data
+
+
+class RegionTransformer(RegionVisitor):
+
+    def visit_block(self, parent: SCFG, block: BasicBlock, data):
+        pass
+
+    def visit_loop(self, parent: SCFG, region: RegionBlock, data):
+        pass
+
+    def visit_switch(self, parent: SCFG, region: RegionBlock, data):
+        pass
+
+    def visit_linear(self, parent: SCFG, region: RegionBlock, data):
+        return self.visit_graph(parent, region.subregion, data)
+
+    def visit_graph(self, scfg: SCFG, data):
+        toposorted = toposort_graph(scfg.graph)
+        label: Label
+        for lvl in toposorted:
+            for label in lvl:
+                data = self.visit(scfg, scfg[label], data)
+        return data
+
+    def visit(self, parent: SCFG, block: BasicBlock, data):
+        if isinstance(block, RegionBlock):
+            if block.kind == "loop":
+                fn = self.visit_loop
+            elif block.kind == "switch":
+                fn = self.visit_switch
+            else:
+                raise NotImplementedError('unreachable', block.label, block.kind)
+            data = fn(parent, block, data)
+        else:
+            data = self.visit_block(parent, block, data)
+        return data
+
+
+def _canonicalize_scfg_switch(scfg: SCFG):
     todos = set(scfg.graph)
     while todos:
         label = todos.pop()
@@ -244,21 +322,57 @@ def canonicalize_scfg(scfg: SCFG):
                 )
                 todos -= switch_labels
                 # recursively walk into the subregions
-                canonicalize_scfg(subregion_graph[label].subregion)
+                _canonicalize_scfg_switch(subregion_graph[label].subregion)
                 _fixup_region(subregion_scfg, subregion_graph[label])
                 for br in branches:
-                    canonicalize_scfg(subregion_graph[br].subregion)
+                    _canonicalize_scfg_switch(subregion_graph[br].subregion)
                     _fixup_region(subregion_scfg, subregion_graph[br])
-                canonicalize_scfg(subregion_graph[tail].subregion)
+                _canonicalize_scfg_switch(subregion_graph[tail].subregion)
                 _fixup_region(subregion_scfg, subregion_graph[tail])
 
                 _fixup_region(scfg, scfg.graph[label])
             elif blk.kind == 'loop':
-                canonicalize_scfg(blk.subregion)
+                _canonicalize_scfg_switch(blk.subregion)
                 if blk.exiting not in blk.subregion:
                     [exiting], _exit = blk.subregion.find_exiting_and_exits(set(blk.subregion.graph))
                     scfg.graph[label] = replace(blk, exiting=exiting)
 
+
+class CanonicalizeLoop(RegionTransformer):
+    """
+    Make sure loops has plain header.
+    Preferably, the tail should be plain as well but it's hard to do with the
+    current numba_rvsdg API.
+    """
+    def visit_loop(self, parent: SCFG, region: RegionBlock, data):
+        # Fix header
+        [header], [entry] = parent.find_headers_and_entries(set(region.subregion.graph))
+        new_label = SyntheticBranch(region.subregion.clg.new_index())
+        region.subregion.insert_block(new_label, {}, {header})
+        parent.remove_blocks({region.label})
+        parent.add_block(replace(region, label=new_label, headers=(new_label,)))
+        parent.graph[entry] = replace(parent.graph[entry], _jump_targets=(new_label,))
+        # Fix tail
+
+        def get_inner_most_exiting(blk, exiting):
+            while isinstance(blk, RegionBlock):
+                parent, blk = blk, blk.subregion.graph[exiting]
+            return parent, blk
+
+        tail_parent, tail_bb = get_inner_most_exiting(region, region.exiting)
+        [backedge] = tail_bb.backedges
+        repl = {backedge: new_label}
+        new_tail_bb = replace(
+            tail_bb,
+            backedges=(new_label,),
+            _jump_targets=tuple([repl.get(x, x) for x in tail_bb._jump_targets])
+        )
+        tail_parent.subregion.graph[tail_bb.label] = new_tail_bb
+
+
+def canonicalize_scfg(scfg: SCFG):
+    CanonicalizeLoop().visit_graph(scfg, None)
+    _canonicalize_scfg_switch(scfg)
 
 class _ExtraBranch(NamedTuple):
     branch_instlists: tuple[tuple[tuple[str], ...], ...] = ()
@@ -301,7 +415,6 @@ class HandleConditionalPop:
         br0 = ("POP",)
         br1 = ()
         return _ExtraBranch((br0, br1))
-        return _BranchNPop(0, 1)
 
 
 def _scfg_add_conditional_pop_stack(bcmap, scfg: SCFG):
@@ -335,14 +448,13 @@ def _scfg_add_conditional_pop_stack(bcmap, scfg: SCFG):
         ebb = ExtraBasicBlock.make(newlabel, label, instlist)
         scfg.graph[newlabel] = ebb
 
-
 def build_rvsdg(code):
     byteflow = ByteFlow.from_bytecode(code)
-    _scfg_add_conditional_pop_stack(byteflow.scfg.bcmap_from_bytecode(byteflow.bc), byteflow.scfg)
+    bcmap = byteflow.scfg.bcmap_from_bytecode(byteflow.bc)
+    _scfg_add_conditional_pop_stack(bcmap, byteflow.scfg)
     byteflow = byteflow.restructure()
     canonicalize_scfg(byteflow.scfg)
     render_scfg(byteflow)
-    raise
     rvsdg = convert_to_dataflow(byteflow)
     rvsdg = propagate_states(rvsdg)
     RvsdgRenderer().render_rvsdg(rvsdg).view("rvsdg")
@@ -424,43 +536,6 @@ def propagate_states(rvsdg: SCFG) -> SCFG:
 def propagate_vars(rvsdg: SCFG):
     visitor = PropagateVars(_debug=True)
     visitor.visit_graph(rvsdg, visitor.make_data())
-
-
-class RegionVisitor:
-
-    def visit_block(self, block: BasicBlock, data):
-        pass
-
-    def visit_loop(self, region: RegionBlock, data):
-        pass
-
-    def visit_switch(self, region: RegionBlock, data):
-        pass
-
-    def visit_linear(self, region: RegionBlock, data):
-        return self.visit_graph(region.subregion, data)
-
-    def visit_graph(self, scfg: SCFG, data):
-        toposorted = toposort_graph(scfg.graph)
-        label: Label
-        for lvl in toposorted:
-            for label in lvl:
-                data = self.visit(scfg[label], data)
-        return data
-
-    def visit(self, block: BasicBlock, data):
-        if isinstance(block, RegionBlock):
-            if block.kind == "loop":
-                fn = self.visit_loop
-            elif block.kind == "switch":
-                fn = self.visit_switch
-            else:
-                raise NotImplementedError('unreachable')
-            data = fn(block, data)
-        else:
-            data = self.visit_block(block, data)
-        return data
-
 
 class PropagateVars(RegionVisitor):
     """
