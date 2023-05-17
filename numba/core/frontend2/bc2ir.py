@@ -448,7 +448,8 @@ def _scfg_add_conditional_pop_stack(bcmap, scfg: SCFG):
         ebb = ExtraBasicBlock.make(newlabel, label, instlist)
         scfg.graph[newlabel] = ebb
 
-def build_rvsdg(code):
+
+def build_rvsdg(code) -> SCFG:
     byteflow = ByteFlow.from_bytecode(code)
     bcmap = byteflow.scfg.bcmap_from_bytecode(byteflow.bc)
     _scfg_add_conditional_pop_stack(bcmap, byteflow.scfg)
@@ -458,6 +459,7 @@ def build_rvsdg(code):
     rvsdg = convert_to_dataflow(byteflow)
     rvsdg = propagate_states(rvsdg)
     RvsdgRenderer().render_rvsdg(rvsdg).view("rvsdg")
+    return rvsdg
 
 
 def _compute_incoming_labels(graph: Mapping[Label, BasicBlock]) -> dict[Label, set[Label]]:
@@ -970,6 +972,7 @@ class BC2DDG:
 
     def op_JUMP_IF_FALSE_OR_POP(self, inst: dis.Instruction):
         self._JUMP_IF_X_OR_POP(inst, opname="jump_if_false")
+
 
 def run_frontend(func): #, inline_closures=False, emit_dels=False):
     # func_id = bytecode.FunctionIdentity.from_function(func)
