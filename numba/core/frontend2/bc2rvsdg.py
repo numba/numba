@@ -5,24 +5,15 @@ from functools import reduce
 from contextlib import contextmanager
 from typing import (
     Optional,
-    Iterator,
     Protocol,
     runtime_checkable,
     Union,
     NamedTuple,
 )
-from collections import (
-    deque,
-    defaultdict,
-)
-from collections.abc import Mapping
-
-from . import bcinterp
 
 from numba_rvsdg.core.datastructures.byte_flow import ByteFlow
 from numba_rvsdg.core.datastructures.scfg import (
     SCFG,
-    ConcealedRegionView,
 )
 from numba_rvsdg.core.datastructures.basic_block import (
     BasicBlock,
@@ -33,14 +24,18 @@ from numba_rvsdg.core.datastructures.basic_block import (
 )
 from numba_rvsdg.core.datastructures.labels import (
     Label,
-    PythonBytecodeLabel,
     SyntheticBranch,
 )
 from numba_rvsdg.rendering.rendering import ByteFlowRenderer
 
-from .renderer import RvsdgRenderer
 
 from numba.core.utils import MutableSortedSet, MutableSortedMap
+
+from .renderer import RvsdgRenderer
+from .regionpasses import (
+    RegionVisitor,
+    RegionTransformer,
+)
 
 
 @dataclass(frozen=True)
@@ -218,80 +213,6 @@ def _fixup_region(scfg: SCFG, region: RegionBlock):
         scfg.add_block(region)
 
 
-
-
-class RegionVisitor:
-
-    def visit_block(self, block: BasicBlock, data):
-        pass
-
-    def visit_loop(self, region: RegionBlock, data):
-        pass
-
-    def visit_switch(self, region: RegionBlock, data):
-        pass
-
-    def visit_linear(self, region: RegionBlock, data):
-        return self.visit_graph(region.subregion, data)
-
-    def visit_graph(self, scfg: SCFG, data):
-        toposorted = toposort_graph(scfg.graph)
-        label: Label
-        for lvl in toposorted:
-            for label in lvl:
-                data = self.visit(scfg[label], data)
-        return data
-
-    def visit(self, block: BasicBlock, data):
-        if isinstance(block, RegionBlock):
-            if block.kind == "loop":
-                fn = self.visit_loop
-            elif block.kind == "switch":
-                fn = self.visit_switch
-            else:
-                raise NotImplementedError('unreachable')
-            data = fn(block, data)
-        else:
-            data = self.visit_block(block, data)
-        return data
-
-
-class RegionTransformer(RegionVisitor):
-
-    def visit_block(self, parent: SCFG, block: BasicBlock, data):
-        pass
-
-    def visit_loop(self, parent: SCFG, region: RegionBlock, data):
-        pass
-
-    def visit_switch(self, parent: SCFG, region: RegionBlock, data):
-        pass
-
-    def visit_linear(self, parent: SCFG, region: RegionBlock, data):
-        return self.visit_graph(parent, region.subregion, data)
-
-    def visit_graph(self, scfg: SCFG, data):
-        toposorted = toposort_graph(scfg.graph)
-        label: Label
-        for lvl in toposorted:
-            for label in lvl:
-                data = self.visit(scfg, scfg[label], data)
-        return data
-
-    def visit(self, parent: SCFG, block: BasicBlock, data):
-        if isinstance(block, RegionBlock):
-            if block.kind == "loop":
-                fn = self.visit_loop
-            elif block.kind == "switch":
-                fn = self.visit_switch
-            else:
-                raise NotImplementedError('unreachable', block.label, block.kind)
-            data = fn(parent, block, data)
-        else:
-            data = self.visit_block(parent, block, data)
-        return data
-
-
 def _canonicalize_scfg_switch(scfg: SCFG):
     todos = set(scfg.graph)
     while todos:
@@ -462,17 +383,6 @@ def build_rvsdg(code) -> SCFG:
     return rvsdg
 
 
-def _compute_incoming_labels(graph: Mapping[Label, BasicBlock]) -> dict[Label, set[Label]]:
-    jump_table: dict[Label, set[Label]] = {}
-    blk: BasicBlock
-    for k in graph:
-        jump_table[k] = set()
-    for blk in graph.values():
-        for dst in blk.jump_targets:
-            if dst in jump_table:
-                jump_table[dst].add(blk.label)
-    return jump_table
-
 def _flatten_full_graph(scfg: SCFG):
     from collections import ChainMap
     regions = [_flatten_full_graph(elem.subregion)
@@ -486,23 +396,6 @@ def _flatten_full_graph(scfg: SCFG):
 
 DDGTypes = (DDGBlock, DDGControlVariable, DDGBranch)
 _DDGTypeAnn = Union[DDGBlock, DDGControlVariable, DDGBranch]
-
-def toposort_graph(graph: Mapping[Label, BasicBlock]) -> list[list[Label]]:
-    incoming_labels = _compute_incoming_labels(graph)
-    visited: set[Label] = set()
-    toposorted: list[list[Label]] = []
-    # Toposort
-    while incoming_labels:
-        level = []
-        for k, vs in incoming_labels.items():
-            if not (vs - visited):
-                # all incoming visited
-                level.append(k)
-        for k in level:
-            del incoming_labels[k]
-        visited |= set(level)
-        toposorted.append(level)
-    return toposorted
 
 
 def view_toposorted_ddgblock_only(rvsdg: SCFG) -> list[list[_DDGTypeAnn]]:
