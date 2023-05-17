@@ -48,6 +48,9 @@ class ValueState:
     def short_identity(self) -> str:
         return f"ValueState({id(self.parent):x}, {self.name}, {self.out_index})"
 
+    def __hash__(self):
+        return id(self)
+
 
 @dataclass(frozen=True)
 class Op:
@@ -76,8 +79,15 @@ class Op:
         return f"Op\n{self.opname}\n{bc}\n({ins}) -> ({outs}) "
 
     @property
-    def outputs(self):
+    def outputs(self) -> list[ValueState]:
         return list(self._outputs.values())
+
+    @property
+    def inputs(self) -> list[ValueState]:
+        return list(self._inputs.values())
+
+    def __hash__(self):
+        return id(self)
 
 
 @runtime_checkable
@@ -197,6 +207,33 @@ class DDGBlock(BasicBlock):
     @property
     def outgoing_states(self) -> MutableSortedSet:
         return MutableSortedSet(self.out_vars)
+
+    def get_toposorted_ops(self) -> list[Op]:
+        res: list[Op] = []
+
+        avail: set[ValueState] = set(self.in_vars.values())
+        pending: list[Op] = [vs.parent for vs in self.out_vars.values()]
+        seen: set[Op] = set()
+
+        while pending:
+            op = pending[-1]
+            if op in seen:
+                pending.pop()
+                continue
+            incomings = set()
+            for vs in op._inputs.values():
+                if vs not in avail and vs.parent is not None:
+                    incomings.add(vs.parent)
+
+            if not incomings:
+                avail |= set(op._outputs.values())
+                pending.pop()
+                res.append(op)
+                seen.add(op)
+            else:
+                pending.extend(incomings)
+        return res
+
 
 
 def render_scfg(byteflow):
@@ -379,7 +416,7 @@ def build_rvsdg(code) -> SCFG:
     # render_scfg(byteflow)
     rvsdg = convert_to_dataflow(byteflow)
     rvsdg = propagate_states(rvsdg)
-    RvsdgRenderer().render_rvsdg(rvsdg).view("rvsdg")
+    # RvsdgRenderer().render_rvsdg(rvsdg).view("rvsdg")
     return rvsdg
 
 
@@ -793,9 +830,6 @@ class BC2DDG:
         arg0 = self.pop() # TODO
         args = [arg0, *args]
         callable = self.pop()  # TODO
-        arg0 = self.pop() # TODO
-        # TODO: handle kwnames
-        args = reversed([arg0, *[self.pop() for _ in range(argc)]])
         op = Op(opname="call", bc_inst=inst)
         op.add_input("env", self.effect)
         op.add_input("callee", callable)
@@ -869,15 +903,3 @@ class BC2DDG:
 
     def op_JUMP_IF_FALSE_OR_POP(self, inst: dis.Instruction):
         self._JUMP_IF_X_OR_POP(inst, opname="jump_if_false")
-
-
-def run_frontend(func): #, inline_closures=False, emit_dels=False):
-    # func_id = bytecode.FunctionIdentity.from_function(func)
-
-    rvsdg = build_rvsdg(func.__code__)
-
-    return rvsdg
-    # bc = bytecode.ByteCode(func_id=func_id)
-    # interp = bcinterp.Interpreter(func_id)
-    # func_ir = interp.interpret(bc)
-    # return func_ir
