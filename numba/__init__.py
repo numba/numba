@@ -117,6 +117,13 @@ def test(argv, **kwds):
     from numba.testing import _runtests as runtests
     return runtests.main(argv, **kwds)
 
+def load_ipython_extension(ip):
+    # A special IPython function that allows users to load the
+    # the numba extension as `%load_ext numba` to access the 
+    # Jupyter magic commmands
+    from .core.annotations.ipython_magic import NumbaMagics
+    ip.register_magics(NumbaMagics)
+
 __all__ = """
     cfunc
     from_dtype
@@ -246,9 +253,3 @@ config.USING_SVML = _try_enable_svml()
 # SVML state to "no SVML". See https://github.com/numba/numba/issues/4689 for
 # context.
 # ---------------------- WARNING WARNING WARNING ----------------------------
-
-
-def load_ipython_extension(ip):
-    from .core.annotations.IpythonMagic import NumbaMagics
-    ip.register_magics(NumbaMagics)
-    
