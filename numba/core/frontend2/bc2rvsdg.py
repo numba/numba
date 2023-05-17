@@ -788,6 +788,10 @@ class BC2DDG:
 
     def op_CALL(self, inst: dis.Instruction):
         argc: int = inst.argval
+        # TODO: handle kwnames
+        args = reversed([self.pop() for _ in range(argc)])
+        arg0 = self.pop() # TODO
+        args = [arg0, *args]
         callable = self.pop()  # TODO
         arg0 = self.pop() # TODO
         # TODO: handle kwnames
