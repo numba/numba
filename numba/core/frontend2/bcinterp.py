@@ -40,42 +40,10 @@ def run_frontend(func):
     func_ir = rvsdg_to_ir(func_id, rvsdg)
 
     return func_ir
-    # bc = bytecode.ByteCode(func_id=func_id)
-    # interp = bcinterp.Interpreter(func_id)
-    # func_ir = interp.interpret(bc)
-    # return func_ir
-
 
 def _get_first_bytecode(ops: list[Op]) -> dis.Instruction|None:
     for bc in (op.bc_inst for op in ops if op.bc_inst is not None):
         return bc
-
-
-# def _innermost_header(region: RegionBlock) -> BasicBlock:
-#     while True:
-#         [header] = region.headers
-#         region = region.subregion.graph[header]
-#         if not isinstance(region, RegionBlock):
-#             return region
-
-
-# def _innermost_exiting(region: RegionBlock) -> BasicBlock:
-#     while True:
-#         region = region.subregion.graph[region.exiting]
-#         if not isinstance(region, RegionBlock):
-#             return region
-
-def _get_label(label: Label) -> int:
-    # if isinstance(block, DDGBlock):
-    #     ops = block.get_toposorted_ops()
-    #     firstbc: dis.Instruction|None = _get_first_bytecode(ops)
-    #     if firstbc is not None:
-    #         return firstbc
-    return id(label)
-
-
-def _get_phi_name(varname: str, label: Label) -> str:
-    return f"$phi.{varname}.{id(label)}"
 
 
 _noop = {"var.incoming", "start"}
@@ -91,6 +59,8 @@ class RVSDG2IR(RegionVisitor):
 
     branch_predicate: ir.Var|None
 
+    _label_map: dict[Label, int]
+
     def __init__(self, func_id):
         self.func_id = func_id
         self.loc = self.first_loc = ir.Loc.from_function_id(func_id)
@@ -100,6 +70,8 @@ class RVSDG2IR(RegionVisitor):
         self.vsmap = {}
         self._current_block = None
         self.last_block_label = None
+
+        self._label_map = {}
 
     @property
     def current_block(self) -> ir.Block:
@@ -111,7 +83,16 @@ class RVSDG2IR(RegionVisitor):
     def last_block(self) -> ir.Block:
         return self.blocks[self.last_block_label]
 
+    def _get_phi_name(self, varname: str, label: Label) -> str:
+        suffix = str(self._get_label(label))
+        return f"$phi.{varname}.{suffix}"
+
+    def _get_label(self, label: Label) -> int:
+        num = self._label_map.setdefault(label, len(self._label_map))
+        return num
+
     def initialize(self):
+        self._label_map[None] = 0
         with self.set_block(0, ir.Block(scope=self.scope, loc=self.loc)):
             data = {}
             for i, k in enumerate(self.func_id.arg_names):
@@ -135,7 +116,7 @@ class RVSDG2IR(RegionVisitor):
                     firstbc.positions.col_offset,
                 )
             with self.set_block(
-                        _get_label(block.label),
+                        self._get_label(block.label),
                         ir.Block(scope=self.scope, loc=self.loc)):
                 for op in ops:
                     if op.opname in _noop:
@@ -155,7 +136,7 @@ class RVSDG2IR(RegionVisitor):
         elif isinstance(block, DDGControlVariable):
             # Emit body
             with self.set_block(
-                        _get_label(block.label),
+                        self._get_label(block.label),
                         ir.Block(scope=self.scope, loc=self.loc)):
                 for cp, v in block.variable_assignment.items():
                     const = ir.Const(v, loc=self.loc, use_literal_type=False)
@@ -164,14 +145,14 @@ class RVSDG2IR(RegionVisitor):
         elif isinstance(block, DDGBranch):
             # Emit body
             with self.set_block(
-                        _get_label(block.label),
+                        self._get_label(block.label),
                         ir.Block(scope=self.scope, loc=self.loc)):
 
                 assert len(block.branch_value_table) == 2, block.branch_value_table
                 cp = block.variable
                 cpvar = self.scope.get_exact(f"$.cp.{cp}")
-                truebr = _get_label(block.branch_value_table[1])
-                falsebr = _get_label(block.branch_value_table[0])
+                truebr = self._get_label(block.branch_value_table[1])
+                falsebr = self._get_label(block.branch_value_table[0])
                 br = ir.Branch(
                     cond=cpvar,
                     truebr=truebr,
@@ -190,7 +171,7 @@ class RVSDG2IR(RegionVisitor):
         inner_data = {}
         for k in  region.incoming_states:
             inner_data[k] = self.store(
-                data[k], _get_phi_name(k, region.label), redefine=False,
+                data[k], self._get_phi_name(k, region.label), redefine=False,
                 block=self.last_block)
 
         # Emit loop body
@@ -200,7 +181,7 @@ class RVSDG2IR(RegionVisitor):
         exit_data = {}
         for k in  region.outgoing_states:
             exit_data[k] = self.store(
-                out_data[k], _get_phi_name(k, region.label), redefine=False,
+                out_data[k], self._get_phi_name(k, region.label), redefine=False,
                 block=self.last_block)
 
         return exit_data
@@ -216,8 +197,8 @@ class RVSDG2IR(RegionVisitor):
         assert self.branch_predicate is not None
 
         # XXX: how to tell which target is which??
-        truebr = _get_label(header_block._jump_targets[0])
-        falsebr = _get_label(header_block._jump_targets[1])
+        truebr = self._get_label(header_block._jump_targets[0])
+        falsebr = self._get_label(header_block._jump_targets[1])
         br = ir.Branch(self.branch_predicate, truebr, falsebr, loc=self.loc)
         self.last_block.append(br)
 
@@ -233,7 +214,7 @@ class RVSDG2IR(RegionVisitor):
                 # Add jump to tail
                 [target] = blk.jump_targets
                 assert not self.last_block.is_terminated
-                self.last_block.append(ir.Jump(_get_label(target), loc=self.loc))
+                self.last_block.append(ir.Jump(self._get_label(target), loc=self.loc))
 
         # handle outgoing values from the branches
         names = reduce(operator.or_, map(set, data_for_branches))
@@ -242,10 +223,10 @@ class RVSDG2IR(RegionVisitor):
             for k in names:
                 if k in branch_data:
                     # Insert stores to export
-                    self.store(branch_data[k], _get_phi_name(k, region.label),
+                    self.store(branch_data[k], self._get_phi_name(k, region.label),
                                redefine=False,
-                               block=self.blocks[_get_label(blk.label)])
-        data_after_branches = {k: self.scope.get_exact(_get_phi_name(k, region.label))
+                               block=self.blocks[self._get_label(blk.label)])
+        data_after_branches = {k: self.scope.get_exact(self._get_phi_name(k, region.label))
                                for k in names}
 
         # Emit tail
