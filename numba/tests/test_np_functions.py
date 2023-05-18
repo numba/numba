@@ -645,6 +645,22 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x_types = [types.complex64, types.complex128]
         check(x_types, x_values)
 
+    def test_angle_return_type(self):
+        # see issue #8949
+        def numba_angle(x):
+            r = np.angle(x)
+            return r.dtype
+
+        pyfunc = numba_angle
+        x_values = [1., -1., 1. + 0j, -5 - 5j]
+        x_types = ['f4', 'f8', 'c8', 'c16']
+        for val, typ in zip(x_values, x_types):
+            x = np.array([val], dtype=typ)
+            cfunc = jit(nopython=True)(pyfunc)
+            expected = pyfunc(x)
+            got = cfunc(x)
+            self.assertEquals(expected, got)
+
     def test_angle_exceptions(self):
         pyfunc = angle1
         cfunc = jit(nopython=True)(pyfunc)

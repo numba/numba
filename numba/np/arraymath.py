@@ -3212,7 +3212,14 @@ def ov_np_angle(z, deg=False):
                 return np.arctan2(z.imag, z.real)
         return impl
     elif isinstance(z, types.Array):
-        ret_dtype = z.dtype
+        dtype = z.dtype
+
+        if isinstance(dtype, types.Complex):
+            ret_dtype = dtype.underlying_float
+        elif isinstance(dtype, types.Float):
+            ret_dtype = dtype
+        else:
+            return
 
         def impl(z, deg=False):
             out = np.zeros_like(z, dtype=ret_dtype)
