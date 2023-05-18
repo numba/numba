@@ -111,6 +111,8 @@ class CUDATargetContext(BaseContext):
         from . import (
             cudaimpl, printimpl, libdeviceimpl, mathimpl, vector_types
         )
+        # fix for #8940
+        from numba.np.unsafe import ndarray # noqa F401
 
         self.install_registry(cudaimpl.registry)
         self.install_registry(cffiimpl.registry)
