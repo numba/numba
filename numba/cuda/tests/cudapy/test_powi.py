@@ -71,31 +71,23 @@ class TestCudaPowi(CUDATestCase):
         kernel[1, A.shape](A, power, Aout)
         self.assertTrue(np.allclose(Aout, A ** power))
 
-    def test_powi_int64(self):
-        dec = cuda.jit(void(float64[:, :], int64, float64[:, :]))
+    def _run_test(self, dtype):
+        dec = cuda.jit(void(float64[:, :], dtype, float64[:, :]))
         kernel = dec(cu_mat_power_v2)
 
         A = np.arange(10, dtype=np.float64).reshape(2, 5)
         Aout = np.empty_like(A)
 
         for power in range(1, 11):
-            power = np.int64(power)
+            power = dtype(power)
             kernel[1, A.shape](A, power, Aout)
-            result = np.allclose(Aout, A ** power)
-            self.assertTrue(result, f"Failed on int64 power {power}")
+            np.testing.assert_allclose(Aout, A ** power)
+
+    def test_powi_int64(self):
+        self._run_test(int64)
 
     def test_powi_uint64(self):
-        dec = cuda.jit(void(float64[:, :], uint64, float64[:, :]))
-        kernel = dec(cu_mat_power_v2)
-
-        A = np.arange(10, dtype=np.float64).reshape(2, 5)
-        Aout = np.empty_like(A)
-
-        for power in range(1, 11):
-            power = np.uint64(power)
-            kernel[1, A.shape](A, power, Aout)
-            result = np.allclose(Aout, A ** power)
-            self.assertTrue(result, f"Failed on uint64 power {power}")
+        self._run_test(uint64)
 
     def test_powi_binop(self):
         dec = cuda.jit(void(float64[:, :], int8, float64[:, :]))
