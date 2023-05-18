@@ -211,8 +211,9 @@ class DDGBlock(BasicBlock):
     def get_toposorted_ops(self) -> list[Op]:
         res: list[Op] = []
 
-        avail: set[ValueState] = set(self.in_vars.values())
+        avail: set[ValueState] = {*self.in_vars.values(), self.in_effect}
         pending: list[Op] = [vs.parent for vs in self.out_vars.values()]
+        pending.append(self.out_effect.parent)
         seen: set[Op] = set()
 
         while pending:
