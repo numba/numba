@@ -331,55 +331,15 @@ def impl_pow_int(ty, libfunc):
 
     lower(math.pow, ty, types.int32)(lower_pow_impl_int)
 
-# Copied from cpython/numbers.py
-# Copied to eliminate test case failure in
-# test_import.py
-#
-# Also copied and modified to remove exception
-# raising which is not supported in CUDA.
+def register_int_power_impls():
+    # int_power_impl is used because libdevice.powi has slightly different
+    # semantics to math.pow. See Issue #8218 
+    from numba.cpython.numbers import int_power_impl
+    def impl_pow_int64(ty, int_ty):
+        lower(math.pow, ty, int_ty)(int_power_impl)
 
-
-def int_power_impl(context, builder, sig, args):
-    """
-    a ^ b, where a is an integer or real, and b an integer
-    """
-    is_integer = isinstance(sig.args[0], types.Integer)
-    tp = sig.return_type
-
-    def int_power(a, b):
-        # Ensure computations are done with a large enough width
-        r = tp(1)
-        a = tp(a)
-        if b < 0:
-            invert = True
-            exp = -b
-            if exp < 0:
-                return np.nan
-            if is_integer:
-                if a == 0:
-                    return -1 << (tp.bitwidth - 1)
-                if a != 1 and a != -1:
-                    return 0
-        else:
-            invert = False
-            exp = b
-        if exp > 0x10000:
-            # Optimization cutoff: fallback on the generic algorithm
-            return math.pow(a, float(b))
-        while exp != 0:
-            if exp & 1:
-                r *= a
-            exp >>= 1
-            a *= a
-
-        return 1.0 / r if invert else r
-
-    res = context.compile_internal(builder, int_power, sig, args)
-    return res
-
-
-def impl_pow_int64(ty, int_ty):
-    lower(math.pow, ty, int_ty)(int_power_impl)
+    impl_pow_int64(types.float64, int64)
+    impl_pow_int64(types.float64, uint64)
 
 
 impl_pow_int(types.float32, libdevice.powif)
