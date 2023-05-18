@@ -316,7 +316,9 @@ class _Kernel(serialize.ReduceMixin):
             class ExcInfo(Structure):
                 _fields_ = [('pickle_buf', c_void_p),
                             ('pickle_bufsz', c_int32),
-                            ('hash_buf', c_void_p)]
+                            ('hash_buf', c_void_p),
+                            ('unwrap_func_ptr', c_void_p),
+                            ('alloc_flag', c_int32)]
             excinfo_sz_ctype = sizeof(ExcInfo)
             excinfo_name = cufunc.name + "__excinfo__"
             excinfo_mem, excinfo_sz = \
@@ -324,6 +326,8 @@ class _Kernel(serialize.ReduceMixin):
             assert excinfo_sz == excinfo_sz_ctype
 
             excinfo_val = ExcInfo()
+            excinfo_mem.memset(0, stream=stream)
+
 
         # Prepare arguments
         retr = []                       # hold functors for writeback
@@ -350,6 +354,9 @@ class _Kernel(serialize.ReduceMixin):
 
         if self.debug:
             driver.device_to_host(ctypes.addressof(excval), excmem, excsz)
+            driver.device_to_host(ctypes.addressof(excinfo_val),
+                                  excinfo_mem,
+                                  excinfo_sz)
             if excval.value != 0:
                 # An error occurred
                 def load_symbol(name):
@@ -360,9 +367,13 @@ class _Kernel(serialize.ReduceMixin):
                     driver.device_to_host(ctypes.addressof(val), mem, sz)
                     return val.value
 
+                # Load exception from device
                 tid = [load_symbol("tid" + i) for i in 'zyx']
                 ctaid = [load_symbol("ctaid" + i) for i in 'zyx']
                 code = excval.value
+
+                # TODO: How do we unpack/create the exception so we can raise it?
+
                 exccls, exc_args, loc = self.call_helper.get_exception(code)
                 # Prefix the exception message with the source location
                 if loc is None:
