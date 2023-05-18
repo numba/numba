@@ -344,10 +344,6 @@ def register_int_power_impls():
 
 impl_pow_int(types.float32, libdevice.powif)
 
-impl_pow_int64(types.float64, int64)
-impl_pow_int64(types.float64, uint64)
-
-
 def impl_modf(ty, libfunc):
     retty = types.UniTuple(ty, 2)
 

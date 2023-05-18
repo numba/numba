@@ -10,6 +10,7 @@ from numba.core.base import BaseContext
 from numba.core.callconv import MinimalCallConv
 from numba.core.typing import cmathdecl
 from numba.core import datamodel
+from numba.cuda.mathimpl import register_int_power_impls
 
 from .cudadrv import nvvm
 from numba.cuda import codegen, nvvmutils, ufuncs
@@ -119,6 +120,7 @@ class CUDATargetContext(BaseContext):
         self.install_registry(cmathimpl.registry)
         self.install_registry(mathimpl.registry)
         self.install_registry(vector_types.impl_registry)
+        register_int_power_impls()
 
     def codegen(self):
         return self._internal_codegen
