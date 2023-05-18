@@ -34,7 +34,7 @@ xoroshiro128p_dtype = np.dtype([('s0', np.uint64), ('s1', np.uint64)],
 xoroshiro128p_type = from_dtype(xoroshiro128p_dtype)
 
 # When cudasim is enabled, Fake CUDA arrays are passed to some of the
-# @jit-decorated functions. This required the a fallback to object mode. With
+# @jit-decorated functions. This required fallback to object mode. With
 # Numba 0.59.0 this fallback must be explicitly enabled.
 # https://numba.readthedocs.io/en/stable/reference/deprecation.html#deprecation-of-object-mode-fall-back-behaviour-when-using-jit
 # In order to avoid the warning / future error, we explicitly specify that
