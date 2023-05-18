@@ -6,7 +6,7 @@ from numba.core.imputils import Registry
 from numba.types import float32, float64, int64, uint64
 from numba.cuda import libdevice
 from numba import cuda
-import numpy as np
+
 
 registry = Registry()
 lower = registry.lower
@@ -331,10 +331,12 @@ def impl_pow_int(ty, libfunc):
 
     lower(math.pow, ty, types.int32)(lower_pow_impl_int)
 
+
 def register_int_power_impls():
     # int_power_impl is used because libdevice.powi has slightly different
-    # semantics to math.pow. See Issue #8218 
+    # semantics to math.pow. See Issue #8218
     from numba.cpython.numbers import int_power_impl
+
     def impl_pow_int64(ty, int_ty):
         lower(math.pow, ty, int_ty)(int_power_impl)
 
@@ -343,6 +345,7 @@ def register_int_power_impls():
 
 
 impl_pow_int(types.float32, libdevice.powif)
+
 
 def impl_modf(ty, libfunc):
     retty = types.UniTuple(ty, 2)
