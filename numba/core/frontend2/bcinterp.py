@@ -209,6 +209,7 @@ class RVSDG2IR(RegionVisitor):
         # Emit header
         [header] = region.headers
         header_block = region.subregion[header]
+        assert header_block.kind == 'head'
         self.branch_predicate = None
         data_at_head = self.visit_linear(header_block, data)
         assert not self.last_block.is_terminated
@@ -225,10 +226,11 @@ class RVSDG2IR(RegionVisitor):
         branch_blocks = []
         for blk in region.subregion.graph.values():
             if blk.kind == "branch":
-                branch_blocks.append(blk)
+                branch_blocks.append(blk.subregion.graph[blk.exiting])
                 data_for_branches.append(
                     self.visit_linear(blk, data_at_head)
                 )
+                # Add jump to tail
                 [target] = blk.jump_targets
                 assert not self.last_block.is_terminated
                 self.last_block.append(ir.Jump(_get_label(target), loc=self.loc))
@@ -248,7 +250,9 @@ class RVSDG2IR(RegionVisitor):
 
         # Emit tail
         exiting = region.exiting
-        data_at_tail = self.visit_linear(region.subregion[exiting], data_after_branches)
+        exiting_block = region.subregion[exiting]
+        assert exiting_block.kind == 'tail'
+        data_at_tail = self.visit_linear(exiting_block, data_after_branches)
 
         return data_at_tail
 
