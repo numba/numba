@@ -341,9 +341,12 @@ class RVSDG2IR(RegionVisitor):
                 rhs=self.vsmap[rhs],
                 loc=self.loc,
             )
-            self.vsmap[out] = self.store(expr, f"${out.name}")
         else:
-            raise NotImplementedError
+            op = BINOPS_TO_OPERATORS[operator]
+            lhs = self.vsmap[lhs]
+            rhs = self.vsmap[rhs]
+            expr = ir.Expr.binop(op, lhs=lhs, rhs=rhs, loc=self.loc)
+        self.vsmap[out] = self.store(expr, f"${out.name}")
 
     def op_GET_ITER(self, op: Op, bc: dis.Instruction):
         [arg] = op.inputs
