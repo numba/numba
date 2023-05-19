@@ -88,7 +88,7 @@ class RegionTransformer(RegionVisitor):
         pass
 
     def visit_linear(self, parent: SCFG, region: RegionBlock, data):
-        return self.visit_graph(parent, region.subregion, data)
+        return self.visit_graph(region.subregion, data)
 
     def visit_graph(self, scfg: SCFG, data):
         toposorted = toposort_graph(scfg.graph)
@@ -104,6 +104,8 @@ class RegionTransformer(RegionVisitor):
                 fn = self.visit_loop
             elif block.kind == "switch":
                 fn = self.visit_switch
+            elif block.kind in {"head", "tail", "branch"}:
+                fn = self.visit_linear
             else:
                 raise NotImplementedError('unreachable', block.label, block.kind)
             data = fn(parent, block, data)
