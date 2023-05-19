@@ -370,6 +370,11 @@ class RVSDG2IR(RegionVisitor):
         pred = self.store(isvalid, "$foriter.isvalid")
         self.branch_predicate = pred
 
+    def op_JUMP_IF_TRUE_OR_POP(self, op: Op, bc: dis.Instruction):
+        [_env, pred] = op.inputs
+        [_env] = op.outputs
+        self.branch_predicate = self.store(self.vsmap[pred], "$jump_if")
+
     def op_RETURN_VALUE(self, op: Op, bc: dis.Instruction):
         [_env, retval] = op.inputs
         self.current_block.append(ir.Return(self.vsmap[retval], loc=self.loc))
