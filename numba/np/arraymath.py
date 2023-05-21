@@ -4198,9 +4198,9 @@ def _np_correlate(a, v, mode="valid"):
             raise ValueError("'v' cannot be empty")
 
         if la < lv:
-            return _np_correlate_core(b_op(v), a_op(a), corr_mode, -1)
+            return _np_correlate_core(b_op(v), a_op(a), mode, -1)
         else:
-            return _np_correlate_core(a_op(a), b_op(v), corr_mode, 1)
+            return _np_correlate_core(a_op(a), b_op(v), mode, 1)
 
     return impl
 
