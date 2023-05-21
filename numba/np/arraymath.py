@@ -4196,8 +4196,6 @@ def _np_correlate(a, v, mode="valid"):
             a_op = op_conj
             b_op = op_nop
 
-    _NP_PRED = numpy_version > (1, 17)
-
     def impl(a, v, mode="valid"):
         la = len(a)
         lv = len(v)
@@ -4214,11 +4212,10 @@ def _np_correlate(a, v, mode="valid"):
                 "supported are 'full', 'same', 'valid'"
             )
 
-        if _NP_PRED is True:
-            if la == 0:
-                raise ValueError("'a' cannot be empty")
-            if lv == 0:
-                raise ValueError("'v' cannot be empty")
+        if la == 0:
+            raise ValueError("'a' cannot be empty")
+        if lv == 0:
+            raise ValueError("'v' cannot be empty")
 
         if la < lv:
             return _np_correlate_core(b_op(v), a_op(a), corr_mode, -1)
