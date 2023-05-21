@@ -1384,6 +1384,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             else:
                 self.assertIn("'v' cannot be empty", str(raises.exception))
 
+        with self.assertRaises(ValueError) as raises:
+            cfunc(_b, _b, mode="invalid mode")
+
+            self.assertIn("Invalid 'mode'", str(raises.exception))
+
     def test_correlate_exceptions(self):
         # correlate supported 0 dimension arrays until 1.18
         self._test_correlate_convolve_exceptions(correlate)
