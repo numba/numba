@@ -4120,7 +4120,7 @@ def _np_correlate_core_impl(ap1, ap2, mode, direction):
         n2 = len(ap2)
 
         if n1 < n2:
-            raise ValueError("'len(ap1)' must greate than 'len(ap2)'")
+            raise ValueError("'len(ap1)' must greater than 'len(ap2)'")
 
         length = n1
         n = n2
