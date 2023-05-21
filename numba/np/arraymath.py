@@ -4143,16 +4143,18 @@ def _np_correlate_core_impl(ap1, ap2, mode, direction):
         else:
             raise ValueError("Invalid direction")
 
-        for i in range(n - n_left, n):
-            ret[idx] = innerprod(ap1[:i], ap2[-i:])
+        for i in range(n_left):
+            k = i + n - n_left
+            ret[idx] = innerprod(ap1[:k], ap2[-k:])
             idx = idx + inc
 
         for i in range(n1 - n2 + 1):
             ret[idx] = innerprod(ap1[i : i + n2], ap2)
             idx = idx + inc
 
-        for i in range(n - 1, n - 1 - n_right, -1):
-            ret[idx] = innerprod(ap1[-i:], ap2[:i])
+        for i in range(n_right):
+            k = n - i - 1
+            ret[idx] = innerprod(ap1[-k:], ap2[:k])
             idx = idx + inc
 
         return ret
