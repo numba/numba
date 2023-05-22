@@ -2,7 +2,7 @@ import dis
 from contextlib import contextmanager
 import builtins
 import operator
-from typing import Iterator
+from typing import Iterator, Union
 from functools import reduce
 
 from numba.core import (
@@ -68,7 +68,7 @@ class RVSDG2IR(RegionVisitor):
 
     branch_predicate: ir.Var|None
 
-    _label_map: dict[Label, int]
+    _label_map: dict[Union[Label, int], int]
 
     def __init__(self, func_id):
         self.func_id = func_id
@@ -98,6 +98,12 @@ class RVSDG2IR(RegionVisitor):
 
     def _get_label(self, label: Label) -> int:
         num = self._label_map.setdefault(label, len(self._label_map))
+        return num
+
+    def _get_temp_label(self) -> int:
+        num = len(self._label_map)
+        assert num not in self._label_map
+        self._label_map[num] = num
         return num
 
     def initialize(self):
@@ -153,22 +159,81 @@ class RVSDG2IR(RegionVisitor):
             return data
         elif isinstance(block, DDGBranch):
             # Emit body
-            with self.set_block(
+            if len(block.branch_value_table) == 2:
+                with self.set_block(
                         self._get_label(block.label),
                         ir.Block(scope=self.scope, loc=self.loc)):
+                    # Handle simple two-way branch
+                    assert set(block.branch_value_table.keys()) == {0, 1}
+                    cp = block.variable
+                    cpvar = self.scope.get_exact(f"$.cp.{cp}")
+                    truebr = self._get_label(block.branch_value_table[1])
+                    falsebr = self._get_label(block.branch_value_table[0])
+                    br = ir.Branch(
+                        cond=cpvar,
+                        truebr=truebr,
+                        falsebr=falsebr,
+                        loc=self.loc,
+                    )
+                    self.current_block.append(br)
+            else:
+                # with self.set_block(
+                #         self._get_label(block.label),
+                #         ir.Block(scope=self.scope, loc=self.loc)):
+                #     # Handle simple two-way branch
+                #     # assert set(block.branch_value_table.keys()) == {0, 1}
+                #     cp = block.variable
+                #     cpvar = self.scope.get_exact(f"$.cp.{cp}")
 
-                assert len(block.branch_value_table) == 2, block.branch_value_table
+                #     falsebr = self._get_label(block.branch_value_table[1])
+                #     truebr = self._get_label(block.branch_value_table[0])
+
+                #     const = self.store(ir.Const(0, loc=self.loc), "$.const")
+                #     cmp = ir.Expr.binop(operator.eq, const, cpvar, loc=self.loc)
+                #     pred = self.store(cmp, "$.pred")
+                #     br = ir.Branch(
+                #         cond=pred,
+                #         truebr=truebr,
+                #         falsebr=falsebr,
+                #         loc=self.loc,
+                #     )
+                #     self.current_block.append(br)
+                bvt = block.branch_value_table
                 cp = block.variable
                 cpvar = self.scope.get_exact(f"$.cp.{cp}")
-                truebr = self._get_label(block.branch_value_table[1])
-                falsebr = self._get_label(block.branch_value_table[0])
-                br = ir.Branch(
-                    cond=cpvar,
-                    truebr=truebr,
-                    falsebr=falsebr,
-                    loc=self.loc,
-                )
-                self.current_block.append(br)
+                labels = [(k, self._get_label(v)) for k, v in bvt.items()]
+
+                blocks = []
+                for _ in labels[:-1]:
+                    blocks.append((self._get_temp_label(),
+                                   ir.Block(scope=self.scope, loc=self.loc)))
+
+                # Jump into the first block
+                with self.set_block(
+                        self._get_label(block.label),
+                        ir.Block(scope=self.scope, loc=self.loc)):
+                    self.current_block.append(ir.Jump(blocks[-1][0], loc=self.loc))
+
+                # Handle jump tree
+                while blocks:
+                    cp_expect, cp_label = labels.pop()
+                    cur_label, cur_block = blocks.pop()
+                    with self.set_block(cur_label, cur_block):
+                        const = self.store(ir.Const(cp_expect, loc=self.loc), "$.const")
+                        cmp = ir.Expr.binop(operator.eq, const, cpvar, loc=self.loc)
+                        pred = self.store(cmp, "$.cmp")
+
+                        if not blocks:
+                            _, falsebr = labels.pop()
+                        else:
+                            falsebr, _ = blocks[-1]
+                        br = ir.Branch(
+                            cond=pred,
+                            truebr=cp_label,
+                            falsebr=falsebr,
+                            loc=self.loc
+                        )
+                        self.current_block.append(br)
 
             return data
         else:
@@ -202,14 +267,14 @@ class RVSDG2IR(RegionVisitor):
         assert header_block.kind == 'head'
         self.branch_predicate = None
         data_at_head = self.visit_linear(header_block, data)
-        assert not self.last_block.is_terminated
-        assert self.branch_predicate is not None
+        if not self.last_block.is_terminated:
+            assert self.branch_predicate is not None
 
-        # XXX: how to tell which target is which??
-        truebr = self._get_label(header_block._jump_targets[0])
-        falsebr = self._get_label(header_block._jump_targets[1])
-        br = ir.Branch(self.branch_predicate, truebr, falsebr, loc=self.loc)
-        self.last_block.append(br)
+            # XXX: how to tell which target is which??
+            truebr = self._get_label(header_block._jump_targets[0])
+            falsebr = self._get_label(header_block._jump_targets[1])
+            br = ir.Branch(self.branch_predicate, truebr, falsebr, loc=self.loc)
+            self.last_block.append(br)
 
         # Emit branches
         data_for_branches = []
@@ -251,6 +316,8 @@ class RVSDG2IR(RegionVisitor):
 
     @contextmanager
     def set_block(self, label: int, block: ir.Block) -> Iterator[ir.Block]:
+        if label == 2:
+            print("HERE")
         if self.last_block_label is not None:
             last_block = self.blocks[self.last_block_label]
             if not last_block.is_terminated:
@@ -280,6 +347,8 @@ class RVSDG2IR(RegionVisitor):
             target = self.scope.get_or_define(name, loc=self.loc)
         if block is None:
             block = self.current_block
+        if str(value) == "$phi.var.y.2":
+            print("HERE")
         stmt = ir.Assign(value=value, target=target, loc=self.loc)
         if block.is_terminated:
             block.insert_before_terminator(stmt)
@@ -338,6 +407,16 @@ class RVSDG2IR(RegionVisitor):
         expr = ir.Expr.call(callee, args, kwargs, loc=self.loc)
         self.vsmap[res] = self.store(expr, f"${res.name}")
 
+    def op_COMPARE_OP(self, op: Op, bc: dis.Instruction):
+        [_env, lhs, rhs] = op.inputs
+        [_env, out] = op.outputs
+        operator = bc.argrepr
+        op = BINOPS_TO_OPERATORS[operator]
+        lhs = self.vsmap[lhs]
+        rhs = self.vsmap[rhs]
+        expr = ir.Expr.binop(op, lhs=lhs, rhs=rhs, loc=self.loc)
+        self.vsmap[out] = self.store(expr, f"${out.name}")
+
     def op_BINARY_OP(self, op: Op, bc: dis.Instruction):
         [_env, lhs, rhs] = op.inputs
         [_env, out] = op.outputs
@@ -383,6 +462,18 @@ class RVSDG2IR(RegionVisitor):
         self.branch_predicate = pred
 
     def op_JUMP_IF_TRUE_OR_POP(self, op: Op, bc: dis.Instruction):
+        [_env, pred] = op.inputs
+        [_env] = op.outputs
+        not_fn = ir.Const(operator.not_, loc=self.loc)
+        res = ir.Expr.call(self.store(not_fn, "$not"), (self.vsmap[pred],), (), loc=self.loc)
+        self.branch_predicate = self.store(res, "$jump_if")
+
+    def op_JUMP_IF_FALSE_OR_POP(self, op: Op, bc: dis.Instruction):
+        [_env, pred] = op.inputs
+        [_env] = op.outputs
+        self.branch_predicate = self.store(self.vsmap[pred], "$jump_if")
+
+    def op_POP_JUMP_FORWARD_IF_FALSE(self, op: Op, bc: dis.Instruction):
         [_env, pred] = op.inputs
         [_env] = op.outputs
         not_fn = ir.Const(operator.not_, loc=self.loc)
