@@ -84,6 +84,25 @@ class TestUFuncs(BasicUFuncTest, TestCase):
         # call it just like it does for a CPU function
         return cuda.jit(args)(pyfunc)[1, 1]
 
+    def basic_int_ufunc_test(self, name=None):
+        skip_inputs = [
+            types.float32,
+            types.float64,
+            types.Array(types.float32, 1, 'C'),
+            types.Array(types.float32, 2, 'C'),
+            types.Array(types.float64, 1, 'C'),
+            types.Array(types.float64, 2, 'C'),
+            types.Array(types.float64, 3, 'C'),
+            types.Array(types.float64, 2, 'F'),
+            types.complex64,
+            types.complex128,
+            types.Array(types.complex64, 1, 'C'),
+            types.Array(types.complex64, 2, 'C'),
+            types.Array(types.complex128, 1, 'C'),
+            types.Array(types.complex128, 2, 'C'),
+        ]
+        self.basic_ufunc_test(name, skip_inputs=skip_inputs)
+
     ############################################################################
     # Trigonometric Functions
 
@@ -153,6 +172,21 @@ class TestUFuncs(BasicUFuncTest, TestCase):
 
     def test_radians_ufunc(self):
         self.basic_ufunc_test(np.radians, kinds='f')
+
+    def test_bitwise_and_ufunc(self):
+        self.basic_int_ufunc_test(np.bitwise_and)
+
+    def test_bitwise_or_ufunc(self):
+        self.basic_int_ufunc_test(np.bitwise_or)
+
+    def test_bitwise_xor_ufunc(self):
+        self.basic_int_ufunc_test(np.bitwise_xor)
+
+    def test_invert_ufunc(self):
+        self.basic_int_ufunc_test(np.invert)
+
+    def test_bitwise_not_ufunc(self):
+        self.basic_int_ufunc_test(np.bitwise_not)
 
 
 if __name__ == '__main__':

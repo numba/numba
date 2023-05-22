@@ -21,7 +21,7 @@ def get_ufunc_info(ufunc_key):
 @lru_cache
 def ufunc_db():
     # Imports here are at function scope to avoid circular imports
-    from numba.cpython import cmathimpl, mathimpl
+    from numba.cpython import cmathimpl, mathimpl, numbers
     from numba.np.npyfuncs import _check_arity_and_homogeneity
     from numba.np.npyfuncs import (np_complex_acosh_impl, np_complex_cos_impl,
                                    np_complex_sin_impl)
@@ -272,4 +272,55 @@ def ufunc_db():
 
     db[np.degrees] = db[np.rad2deg]
 
+    db[np.bitwise_and] = {
+        'll->l': numbers.int_and_impl,
+        'ii->i': numbers.int_and_impl,
+        '??->?': numbers.int_and_impl,
+        'bb->b': numbers.int_and_impl,
+        'hh->h': numbers.int_and_impl,
+        'qq->q': numbers.int_and_impl,
+    }
+
+    db[np.bitwise_or] = {
+        'll->l': numbers.int_or_impl,
+        'ii->i': numbers.int_or_impl,
+        '??->?': numbers.int_or_impl,
+        'bb->b': numbers.int_or_impl,
+        'hh->h': numbers.int_or_impl,
+        'qq->q': numbers.int_or_impl,
+    }
+
+    db[np.bitwise_xor] = {
+        'll->l': numbers.int_xor_impl,
+        'ii->i': numbers.int_xor_impl,
+        '??->?': numbers.int_xor_impl,
+        'bb->b': numbers.int_xor_impl,
+        'hh->h': numbers.int_xor_impl,
+        'qq->q': numbers.int_xor_impl,
+    }
+
+    db[np.invert] = {
+        'l->l': numbers.int_invert_impl,
+        'i->i': numbers.int_invert_impl,
+        '?->?': numbers.int_invert_impl,
+        'b->b': numbers.int_invert_impl,
+        'h->h': numbers.int_invert_impl,
+        'q->q': numbers.int_invert_impl,
+    }
+
+    db[np.bitwise_not] = db[np.invert]
+
+    db[np.left_shift] = {
+        'll->l': numbers.int_shl_impl,
+        'ii->i': numbers.int_shl_impl,
+        '??->?': numbers.int_shl_impl,
+        'qq->q': numbers.int_shl_impl,
+    }
+
+    db[np.right_shift] = {
+        'll->l': numbers.int_shr_impl,
+        'ii->i': numbers.int_shr_impl,
+        '??->?': numbers.int_shr_impl,
+        'qq->q': numbers.int_shr_impl,
+    }
     return db
