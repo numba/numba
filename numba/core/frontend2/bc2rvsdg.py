@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass, replace, field, fields
 import dis
 import operator
@@ -36,6 +37,8 @@ from .regionpasses import (
     RegionVisitor,
     RegionTransformer,
 )
+
+DEBUG_GRAPH = int(os.environ.get("DEBUG_GRAPH", "0"))
 
 
 @dataclass(frozen=True)
@@ -408,16 +411,18 @@ def _scfg_add_conditional_pop_stack(bcmap, scfg: SCFG):
         scfg.graph[newlabel] = ebb
 
 
-def build_rvsdg(code) -> SCFG:
+def build_rvsdg(code, argnames: tuple[str, ...]) -> SCFG:
     byteflow = ByteFlow.from_bytecode(code)
     bcmap = byteflow.scfg.bcmap_from_bytecode(byteflow.bc)
     _scfg_add_conditional_pop_stack(bcmap, byteflow.scfg)
     byteflow = byteflow.restructure()
     canonicalize_scfg(byteflow.scfg)
-    # render_scfg(byteflow)
-    rvsdg = convert_to_dataflow(byteflow)
+    if DEBUG_GRAPH:
+        render_scfg(byteflow)
+    rvsdg = convert_to_dataflow(byteflow, argnames)
     rvsdg = propagate_states(rvsdg)
-    # RvsdgRenderer().render_rvsdg(rvsdg).view("rvsdg")
+    if DEBUG_GRAPH:
+        RvsdgRenderer().render_rvsdg(rvsdg).view("rvsdg")
     return rvsdg
 
 
@@ -452,31 +457,30 @@ def view_toposorted_ddgblock_only(rvsdg: SCFG) -> list[list[_DDGTypeAnn]]:
     return output
 
 
-def convert_to_dataflow(byteflow: ByteFlow) -> SCFG:
+def convert_to_dataflow(byteflow: ByteFlow, argnames: tuple[str, ...]) -> SCFG:
     bcmap = {inst.offset: inst for inst in byteflow.bc}
-    rvsdg = convert_scfg_to_dataflow(byteflow.scfg, bcmap)
+    rvsdg = convert_scfg_to_dataflow(byteflow.scfg, bcmap, argnames)
     return rvsdg
 
 def propagate_states(rvsdg: SCFG) -> SCFG:
-    # vars
     propagate_stack(rvsdg)
     propagate_vars(rvsdg)
     connect_incoming_stack_vars(rvsdg)
-
-    # stack
     return rvsdg
 
 def propagate_vars(rvsdg: SCFG):
-    visitor = PropagateVars(_debug=True)
+    # Propagate variables
+    visitor = PropagateVars()
     visitor.visit_graph(rvsdg, visitor.make_data())
+
+
 
 class PropagateVars(RegionVisitor):
     """
     Depends on PropagateStack
     """
     def __init__(self, _debug: bool=False):
-        super(PropagateVars, self).__init__()
-        self._stack_count = 0
+        super().__init__()
         self._debug = _debug
 
     def debug_print(self, *args, **kwargs):
@@ -487,7 +491,6 @@ class PropagateVars(RegionVisitor):
         assert isinstance(block, BasicBlock)
         if isinstance(block, DDGProtocol):
             if isinstance(block, DDGBlock):
-                fresh = set()
                 for k in data:
                     if k not in block.in_vars:
                         op = Op(opname="var.incoming", bc_inst=None)
@@ -498,8 +501,6 @@ class PropagateVars(RegionVisitor):
                                 block.out_vars[k] = block.exported_stackvars[k]
                         elif k not in block.out_vars:
                             block.out_vars[k] = vs
-                        fresh.add(k)
-
             else:
                 block.incoming_states.update(data)
                 block.outgoing_states.update(data)
@@ -672,16 +673,16 @@ def _upgrade_dataclass(old, newcls, replacements=None):
     return newcls(**oldattrs, **replacements)
 
 
-def convert_scfg_to_dataflow(scfg, bcmap) -> SCFG:
+def convert_scfg_to_dataflow(scfg, bcmap, argnames: tuple[str, ...]) -> SCFG:
     rvsdg = SCFG()
     for block in scfg.graph.values():
         # convert block
         if isinstance(block, PythonBytecodeBlock):
-            ddg = convert_bc_to_ddg(block, bcmap)
+            ddg = convert_bc_to_ddg(block, bcmap, argnames)
             rvsdg.add_block(ddg)
         elif isinstance(block, RegionBlock):
             # Inside-out
-            subregion = convert_scfg_to_dataflow(block.subregion, bcmap)
+            subregion = convert_scfg_to_dataflow(block.subregion, bcmap, argnames)
             rvsdg.add_block(_upgrade_dataclass(block, DDGRegion,
                                                dict(subregion=subregion)))
         elif isinstance(block, BranchBlock):
@@ -703,8 +704,12 @@ def convert_scfg_to_dataflow(scfg, bcmap) -> SCFG:
     return rvsdg
 
 
-def _convert_bytecode(block, instlist) -> DDGBlock:
+def _convert_bytecode(block, instlist, argnames: tuple[str, ...]) -> DDGBlock:
     converter = BC2DDG()
+    assert argnames
+    if instlist[0].offset == 0:
+        for arg in argnames:
+            converter.load(f"var.{arg}")
     for inst in instlist:
         converter.convert(inst)
     return _converter_to_ddgblock(block, converter)
@@ -738,9 +743,13 @@ def convert_extra_bb(block: ExtraBasicBlock) -> DDGBlock:
     return _converter_to_ddgblock(block, converter)
 
 
-def convert_bc_to_ddg(block: PythonBytecodeBlock, bcmap: dict[int, dis.Bytecode]) -> DDGBlock:
+def convert_bc_to_ddg(
+            block: PythonBytecodeBlock,
+            bcmap: dict[int, dis.Bytecode],
+            argnames: tuple[str, ...],
+        ) -> DDGBlock:
     instlist = block.get_instructions(bcmap)
-    return _convert_bytecode(block, instlist)
+    return _convert_bytecode(block, instlist, argnames)
 
 class BC2DDG:
     def __init__(self):
