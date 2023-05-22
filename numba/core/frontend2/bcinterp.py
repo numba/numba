@@ -49,6 +49,12 @@ def _get_first_bytecode(ops: list[Op]) -> dis.Instruction|None:
         return bc
 
 
+def _innermost_exiting(blk: RegionBlock) -> BasicBlock:
+    while isinstance(blk, RegionBlock):
+        blk = blk.subregion.graph[blk.exiting]
+    return blk
+
+
 _noop = {"var.incoming", "start"}
 
 class RVSDG2IR(RegionVisitor):
@@ -210,7 +216,7 @@ class RVSDG2IR(RegionVisitor):
         branch_blocks = []
         for blk in region.subregion.graph.values():
             if blk.kind == "branch":
-                branch_blocks.append(blk.subregion.graph[blk.exiting])
+                branch_blocks.append(_innermost_exiting(blk))
                 data_for_branches.append(
                     self.visit_linear(blk, data_at_head)
                 )
@@ -228,7 +234,8 @@ class RVSDG2IR(RegionVisitor):
                 # (It should be a "zeroinitiailizer" but ir.Expr.null doesn't work)
                 rhs = branch_data.get(k, ir.Const(None, loc=self.loc))
                 # Insert stores to export
-                self.store(rhs, self._get_phi_name(k, region.label),
+                phiname = self._get_phi_name(k, region.label)
+                self.store(rhs, phiname,
                             redefine=False,
                             block=self.blocks[self._get_label(blk.label)])
         data_after_branches = {k: self.scope.get_exact(self._get_phi_name(k, region.label))
