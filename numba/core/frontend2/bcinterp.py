@@ -9,6 +9,7 @@ from numba.core import (
     ir,
     bytecode,
     ir_utils,
+    utils,
 )
 from numba.core.utils import (
     BINOPS_TO_OPERATORS,
@@ -27,14 +28,16 @@ from .bc2rvsdg import (
     Op,
     ValueState,
     Label,
+    DEBUG_GRAPH,
 )
 from .regionpasses import RegionVisitor
 
 
 def run_frontend(func):
 
-
-    rvsdg = build_rvsdg(func.__code__)
+    sig = utils.pySignature.from_callable(func)
+    argnames = tuple(sig.parameters)
+    rvsdg = build_rvsdg(func.__code__, argnames)
 
     func_id = bytecode.FunctionIdentity.from_function(func)
     func_ir = rvsdg_to_ir(func_id, rvsdg)
@@ -221,11 +224,13 @@ class RVSDG2IR(RegionVisitor):
         for blk, branch_data in zip(branch_blocks,
                                     data_for_branches, strict=True):
             for k in names:
-                if k in branch_data:
-                    # Insert stores to export
-                    self.store(branch_data[k], self._get_phi_name(k, region.label),
-                               redefine=False,
-                               block=self.blocks[self._get_label(blk.label)])
+                # Set undefined variable to None
+                # (It should be a "zeroinitiailizer" but ir.Expr.null doesn't work)
+                rhs = branch_data.get(k, ir.Const(None, loc=self.loc))
+                # Insert stores to export
+                self.store(rhs, self._get_phi_name(k, region.label),
+                            redefine=False,
+                            block=self.blocks[self._get_label(blk.label)])
         data_after_branches = {k: self.scope.get_exact(self._get_phi_name(k, region.label))
                                for k in names}
 
@@ -373,7 +378,9 @@ class RVSDG2IR(RegionVisitor):
     def op_JUMP_IF_TRUE_OR_POP(self, op: Op, bc: dis.Instruction):
         [_env, pred] = op.inputs
         [_env] = op.outputs
-        self.branch_predicate = self.store(self.vsmap[pred], "$jump_if")
+        not_fn = ir.Const(operator.not_, loc=self.loc)
+        res = ir.Expr.call(self.store(not_fn, "$not"), (self.vsmap[pred],), (), loc=self.loc)
+        self.branch_predicate = self.store(res, "$jump_if")
 
     def op_RETURN_VALUE(self, op: Op, bc: dis.Instruction):
         [_env, retval] = op.inputs
@@ -397,6 +404,7 @@ def rvsdg_to_ir(
         blocks=rvsdg2ir.blocks, is_generator=False, func_id=func_id,
         loc=rvsdg2ir.first_loc, definitions=defs,
         arg_count=len(func_id.arg_names), arg_names=func_id.arg_names)
-    fir.dump()
-    fir.render_dot().view()
+    # fir.dump()
+    if DEBUG_GRAPH:
+        fir.render_dot().view()
     return fir
