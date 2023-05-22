@@ -4211,7 +4211,6 @@ def np_convolve(a, v, mode="full"):
     _assert_1d(a, 'np.convolve')
     _assert_1d(v, 'np.convolve')
 
-
     def impl(a, v, mode="full"):
         la = len(a)
         lv = len(v)
