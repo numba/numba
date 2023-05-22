@@ -27,6 +27,7 @@ from numba import _dispatcher
 
 from warnings import warn
 from ctypes import Structure, c_void_p, c_int, c_int32, sizeof
+from numba import cloudpickle
 
 cuda_fp16_math_funcs = ['hsin', 'hcos',
                         'hlog', 'hlog10',
@@ -325,7 +326,7 @@ class _Kernel(serialize.ReduceMixin):
                 cufunc.module.get_global_symbol(excinfo_name)
             assert excinfo_sz == excinfo_sz_ctype
 
-            excinfo_val = ExcInfo()
+            excinfo_val = ExcInfo(None, 0, None, None, 0)
             excinfo_mem.memset(0, stream=stream)
 
 
@@ -372,7 +373,11 @@ class _Kernel(serialize.ReduceMixin):
                 ctaid = [load_symbol("ctaid" + i) for i in 'zyx']
                 code = excval.value
 
-                # TODO: How do we unpack/create the exception so we can raise it?
+                # Unpack he exception so we can raise it.
+                pickle_buf_val = excinfo_val.pickle_buf
+                pickle_bufsz_val = excinfo_val.pickle_bufsz
+                hash_buf_val = excinfo_val.hash_buf
+
 
                 exccls, exc_args, loc = self.call_helper.get_exception(code)
                 # Prefix the exception message with the source location
