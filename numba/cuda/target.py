@@ -7,7 +7,10 @@ from numba.core import typing, types, debuginfo, itanium_mangler, cgutils
 from numba.core.dispatcher import Dispatcher
 from numba.core.errors import NumbaInvalidConfigWarning
 from numba.core.base import BaseContext
-from numba.core.callconv import CPUCallConv, excinfo_ptr_t, excinfo_t
+from numba.core.callconv import (ALLOC_FLAG_IDX, HASH_BUF_IDX,
+                                 PICKLE_BUF_IDX, PICKLE_BUFSZ_IDX,
+                                 UNWRAP_FUNC_IDX, CPUCallConv, excinfo_ptr_t,
+                                excinfo_t)
 from numba.core.typing import cmathdecl
 from numba.core import datamodel
 
@@ -299,14 +302,18 @@ class CUDATargetContext(BaseContext):
 
                 with builder.if_then(changed2):
                     excinfo = builder.load(status.excinfoptr)
-                    pickle_buf = builder.extract_value(excinfo, 0)
-                    pickle_buf_sz = builder.extract_value(excinfo, 1)
-                    hash_buf = builder.extract_value(excinfo, 2)
+                    pickle_buf = builder.extract_value(excinfo, PICKLE_BUF_IDX)
+                    pickle_buf_sz = builder.extract_value(excinfo, PICKLE_BUFSZ_IDX)
+                    hash_buf = builder.extract_value(excinfo, HASH_BUF_IDX)
+                    unwrap_func = builder.extract_value(excinfo, UNWRAP_FUNC_IDX)
+                    alloc_flag = builder.extract_value(excinfo, ALLOC_FLAG_IDX)
 
                     g_excinfo = builder.load(gv_exception)
-                    builder.insert_value(g_excinfo, pickle_buf, 0)
-                    builder.insert_value(g_excinfo, pickle_buf_sz, 1)
-                    builder.insert_value(g_excinfo, hash_buf, 2)
+                    builder.insert_value(g_excinfo, pickle_buf, PICKLE_BUF_IDX)
+                    builder.insert_value(g_excinfo, pickle_buf_sz, PICKLE_BUFSZ_IDX)
+                    builder.insert_value(g_excinfo, hash_buf, HASH_BUF_IDX)
+                    builder.insert_value(g_excinfo, unwrap_func, UNWRAP_FUNC_IDX)
+                    builder.insert_value(g_excinfo, alloc_flag, ALLOC_FLAG_IDX)
 
         builder.ret_void()
 
