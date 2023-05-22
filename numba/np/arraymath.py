@@ -4223,9 +4223,9 @@ def np_convolve(a, v, mode="full"):
             raise ValueError("'v' cannot be empty")
 
         if la < lv:
-            return _np_correlate_core(v, a[::-1], corr_mode, 1)
+            return _np_correlate_core(v, a[::-1], mode, 1)
         else:
-            return _np_correlate_core(a, v[::-1], corr_mode, 1)
+            return _np_correlate_core(a, v[::-1], mode, 1)
 
     return impl
 
