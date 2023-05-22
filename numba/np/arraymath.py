@@ -5,7 +5,6 @@ Implementation of math operations on Array objects.
 
 import math
 from collections import namedtuple
-from enum import IntEnum
 import operator
 import warnings
 
