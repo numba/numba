@@ -41,6 +41,7 @@ def toposort_graph(graph: Mapping[Label, BasicBlock]) -> list[list[Label]]:
 
 
 class RegionVisitor:
+    direction = "forward"
 
     def visit_block(self, block: BasicBlock, data):
         pass
@@ -55,12 +56,21 @@ class RegionVisitor:
         return self.visit_graph(region.subregion, data)
 
     def visit_graph(self, scfg: SCFG, data):
-        toposorted = toposort_graph(scfg.graph)
+        toposorted = self._toposort_graph(scfg)
         label: Label
         for lvl in toposorted:
             for label in lvl:
                 data = self.visit(scfg[label], data)
         return data
+
+    def _toposort_graph(self, scfg: SCFG):
+        toposorted = toposort_graph(scfg.graph)
+        if self.direction == "forward":
+            return toposorted
+        elif self.direction == "backward":
+            return reversed(toposorted)
+        else:
+            assert False, f"invalid direction {self.direction!r}"
 
     def visit(self, block: BasicBlock, data):
         if isinstance(block, RegionBlock):
