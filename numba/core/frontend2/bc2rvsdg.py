@@ -10,6 +10,7 @@ from typing import (
     runtime_checkable,
     Union,
     NamedTuple,
+    Mapping,
 )
 
 from numba_rvsdg.core.datastructures.byte_flow import ByteFlow
@@ -88,6 +89,14 @@ class Op:
     @property
     def inputs(self) -> list[ValueState]:
         return list(self._inputs.values())
+
+    @property
+    def input_ports(self) -> Mapping[str, ValueState]:
+        return self._inputs
+
+    @property
+    def output_ports(self) -> Mapping[str, ValueState]:
+        return self._outputs
 
     def __hash__(self):
         return id(self)
