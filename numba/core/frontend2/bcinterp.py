@@ -367,13 +367,42 @@ class RVSDG2IR(RegionVisitor):
         except KeyError:
             return getattr(builtins, name, ir.UNDEFINED)
 
+    def debug_print(self, msg: str, *args):
+        msg_const = self.store(ir.Const(msg, loc=self.loc), "$.debug.msg")
+        fn = self.store(ir.Const(print, loc=self.loc), "$.debug.print")
+        res = ir.Expr.call(fn, (msg_const, *args), (), loc=self.loc)
+        self.store(res, "$.debug.res")
+
     def interpret_bytecode(self, op: Op):
         assert op.bc_inst is not None
         pos = op.bc_inst.positions
+        assert pos is not None
         self.loc = self.loc.with_lineno(pos.lineno, pos.col_offset)
+        # debug print
+        if self._emit_debug_print:
+            msg = f"[{op.bc_inst.offset:3}:({pos.lineno:3}:{pos.col_offset:3})] {op.bc_inst.opname}({op.bc_inst.argrepr}) "
+            self.debug_print(msg)
+
+            for k, vs in op.input_ports.items():
+                val = self.vsmap.get(vs, None)
+                if val is None:
+                    self.debug_print(f"   in {k:>6}: <undef>")
+                else:
+                    self.debug_print(f"   in {k:>6}:", val)
+
         # dispatch
         fn = getattr(self, f"op_{op.bc_inst.opname}")
         fn(op, op.bc_inst)
+
+        # debug print
+        if self._emit_debug_print:
+            for k, vs in op.output_ports.items():
+                val = self.vsmap.get(vs, None)
+                if val is None:
+                    self.debug_print(f"  out {k:>6}: <undef>")
+                else:
+                    self.debug_print(f"  out {k:>6}:", val)
+
 
     def op_LOAD_CONST(self, op: Op, bc: dis.Instruction):
         assert not op.inputs
