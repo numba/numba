@@ -70,6 +70,8 @@ class RVSDG2IR(RegionVisitor):
 
     _label_map: dict[Union[Label, int], int]
 
+    _emit_debug_print = False
+
     def __init__(self, func_id):
         self.func_id = func_id
         self.loc = self.first_loc = ir.Loc.from_function_id(func_id)
@@ -502,12 +504,17 @@ class RVSDG2IR(RegionVisitor):
         [_env] = op.outputs
         self.branch_predicate = self.store(self.vsmap[pred], "$jump_if")
 
-    def op_POP_JUMP_FORWARD_IF_FALSE(self, op: Op, bc: dis.Instruction):
+    def op_POP_JUMP_FORWARD_IF_TRUE(self, op: Op, bc: dis.Instruction):
         [_env, pred] = op.inputs
         [_env] = op.outputs
         not_fn = ir.Const(operator.not_, loc=self.loc)
         res = ir.Expr.call(self.store(not_fn, "$not"), (self.vsmap[pred],), (), loc=self.loc)
         self.branch_predicate = self.store(res, "$jump_if")
+
+    def op_POP_JUMP_FORWARD_IF_FALSE(self, op: Op, bc: dis.Instruction):
+        [_env, pred] = op.inputs
+        [_env] = op.outputs
+        self.branch_predicate = self.store(self.vsmap[pred], "$jump_if")
 
     def op_RETURN_VALUE(self, op: Op, bc: dis.Instruction):
         [_env, retval] = op.inputs
