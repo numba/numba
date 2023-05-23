@@ -1,3 +1,5 @@
+# Test this file with pytest
+
 import itertools
 from llvmlite.binding import view_dot_graph, get_function_cfg
 
@@ -12,9 +14,8 @@ DEFAULT_FLAGS = Flags()
 DEFAULT_FLAGS.nrt = True
 
 
-def compile(func):
+def compile(func, args):
     func_ir = bcinterp.run_frontend(func)
-    args = (types.intp, types.intp)
     return_type = None
 
     typingctx = typing.Context()
@@ -35,7 +36,7 @@ def compile(func):
 
 def test_sum1d():
     pyfunc = usecases.sum1d
-    cfunc = compile(pyfunc)
+    cfunc = compile(pyfunc, args=(types.intp, types.intp))
     ss = -1, 0, 1, 100, 200
     es = -1, 0, 1, 100, 200
 
@@ -45,7 +46,7 @@ def test_sum1d():
 
 def test_sum2d():
     pyfunc = usecases.sum2d
-    cfunc = compile(pyfunc)
+    cfunc = compile(pyfunc, args=(types.intp, types.intp))
     ss = -1, 0, 1, 100, 200
     es = -1, 0, 1, 100, 200
 
@@ -55,7 +56,7 @@ def test_sum2d():
 
 def test_x_or_y():
     pyfunc = lambda x, y: x or y
-    cfunc = compile(pyfunc)
+    cfunc = compile(pyfunc, args=(types.intp, types.intp))
     xx = True, False
     yy = True, False
     for args in itertools.product(xx, yy):
@@ -68,7 +69,7 @@ def test_x_or_y():
 
 def test_andor():
     pyfunc = usecases.andor
-    cfunc = compile(pyfunc)
+    cfunc = compile(pyfunc, args=(types.intp, types.intp))
     # Argument boundaries
     xs = -1, 0, 1, 9, 10, 11
     ys = -1, 0, 1, 9, 10, 11
