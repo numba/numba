@@ -80,7 +80,16 @@ def test_andor():
 
 # Not yet working... ----------------------------------------------------------
 
+def test_while_count():
+    pyfunc = usecases.while_count
+    cfunc = compile(pyfunc, args=(types.intp, types.intp))
+    # Argument boundaries
+    xs = -1, 0, 1, 9, 10, 11
+    ys = -1, 0, 1, 9, 10, 11
+
+    for args in itertools.product(xs, ys):
+        assert pyfunc(*args) == cfunc(*args)
 
 
-# if __name__ == "__main__":
-#     test_andor()
+if __name__ == "__main__":
+    test_while_count()
