@@ -273,30 +273,45 @@ def ufunc_db():
     db[np.degrees] = db[np.rad2deg]
 
     db[np.bitwise_and] = {
-        'll->l': numbers.int_and_impl,
-        'ii->i': numbers.int_and_impl,
         '??->?': numbers.int_and_impl,
         'bb->b': numbers.int_and_impl,
+        'BB->B': numbers.int_and_impl,
         'hh->h': numbers.int_and_impl,
+        'HH->H': numbers.int_and_impl,
+        'ii->i': numbers.int_and_impl,
+        'II->I': numbers.int_and_impl,
+        'll->l': numbers.int_and_impl,
+        'LL->L': numbers.int_and_impl,
         'qq->q': numbers.int_and_impl,
+        'QQ->Q': numbers.int_and_impl,
     }
 
     db[np.bitwise_or] = {
-        'll->l': numbers.int_or_impl,
-        'ii->i': numbers.int_or_impl,
         '??->?': numbers.int_or_impl,
         'bb->b': numbers.int_or_impl,
+        'BB->B': numbers.int_or_impl,
         'hh->h': numbers.int_or_impl,
+        'HH->H': numbers.int_or_impl,
+        'ii->i': numbers.int_or_impl,
+        'II->I': numbers.int_or_impl,
+        'll->l': numbers.int_or_impl,
+        'LL->L': numbers.int_or_impl,
         'qq->q': numbers.int_or_impl,
+        'QQ->Q': numbers.int_or_impl,
     }
 
     db[np.bitwise_xor] = {
-        'll->l': numbers.int_xor_impl,
-        'ii->i': numbers.int_xor_impl,
         '??->?': numbers.int_xor_impl,
         'bb->b': numbers.int_xor_impl,
+        'BB->B': numbers.int_xor_impl,
         'hh->h': numbers.int_xor_impl,
+        'HH->H': numbers.int_xor_impl,
+        'ii->i': numbers.int_xor_impl,
+        'II->I': numbers.int_xor_impl,
+        'll->l': numbers.int_xor_impl,
+        'LL->L': numbers.int_xor_impl,
         'qq->q': numbers.int_xor_impl,
+        'QQ->Q': numbers.int_xor_impl,
     }
 
     db[np.invert] = {
@@ -306,21 +321,37 @@ def ufunc_db():
         'b->b': numbers.int_invert_impl,
         'h->h': numbers.int_invert_impl,
         'q->q': numbers.int_invert_impl,
+        'L->L': numbers.int_invert_impl,
+        'I->I': numbers.int_invert_impl,
+        'H->H': numbers.int_invert_impl,
+        'Q->Q': numbers.int_invert_impl,
     }
 
     db[np.bitwise_not] = db[np.invert]
 
     db[np.left_shift] = {
-        'll->l': numbers.int_shl_impl,
+        'bb->b': numbers.int_shl_impl,
+        'BB->B': numbers.int_shl_impl,
+        'hh->h': numbers.int_shl_impl,
+        'HH->H': numbers.int_shl_impl,
         'ii->i': numbers.int_shl_impl,
-        '??->?': numbers.int_shl_impl,
+        'II->I': numbers.int_shl_impl,
+        'll->l': numbers.int_shl_impl,
+        'LL->L': numbers.int_shl_impl,
         'qq->q': numbers.int_shl_impl,
+        'QQ->Q': numbers.int_shl_impl,
     }
 
     db[np.right_shift] = {
-        'll->l': numbers.int_shr_impl,
+        'bb->b': numbers.int_shr_impl,
+        'BB->B': numbers.int_shr_impl,
+        'hh->h': numbers.int_shr_impl,
+        'HH->H': numbers.int_shr_impl,
         'ii->i': numbers.int_shr_impl,
-        '??->?': numbers.int_shr_impl,
+        'II->I': numbers.int_shr_impl,
+        'll->l': numbers.int_shr_impl,
+        'LL->L': numbers.int_shr_impl,
         'qq->q': numbers.int_shr_impl,
+        'QQ->Q': numbers.int_shr_impl,
     }
     return db

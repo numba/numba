@@ -62,6 +62,29 @@ class TestUFuncs(BasicUFuncTest, TestCase):
              types.Array(types.float64, 2, 'F')),
         ])
 
+        # Add tests for other integer types
+        self.inputs.extend([
+            (np.uint8(0), types.uint8),
+            (np.uint8(1), types.uint8),
+            (np.int8(-1), types.int8),
+            (np.int8(0), types.int8),
+
+            (np.uint16(0), types.uint16),
+            (np.uint16(1), types.uint16),
+            (np.int16(-1), types.int16),
+            (np.int16(0), types.int16),
+
+            (np.ulonglong(0), types.ulonglong),
+            (np.ulonglong(1), types.ulonglong),
+            (np.longlong(-1), types.longlong),
+            (np.longlong(0), types.longlong),
+
+            (np.array([0,1], dtype=np.ulonglong),
+             types.Array(types.ulonglong, 1, 'C')),
+            (np.array([0,1], dtype=np.longlong),
+             types.Array(types.longlong, 1, 'C')),
+        ])
+
         self._low_occupancy_warnings = config.CUDA_LOW_OCCUPANCY_WARNINGS
         self._warn_on_implicit_copy = config.CUDA_WARN_ON_IMPLICIT_COPY
 
@@ -187,6 +210,11 @@ class TestUFuncs(BasicUFuncTest, TestCase):
 
     def test_bitwise_not_ufunc(self):
         self.basic_int_ufunc_test(np.bitwise_not)
+
+    # Note: there is no entry for np.left_shift and np.right_shift
+    # because their implementations in NumPy have undefined behavior
+    # when the second argument is a negative. See the comment in
+    # numba/tests/test_ufuncs.py for more details.
 
 
 if __name__ == '__main__':
