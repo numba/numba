@@ -27,7 +27,6 @@ from .bc2rvsdg import (
     DDGRegion,
     Op,
     ValueState,
-    Label,
     DEBUG_GRAPH,
 )
 from .regionpasses import RegionVisitor
@@ -68,7 +67,7 @@ class RVSDG2IR(RegionVisitor):
 
     branch_predicate: ir.Var|None
 
-    _label_map: dict[Union[Label, int], int]
+    _label_map: dict[Union[str, int], int]
 
     _emit_debug_print = False
 
@@ -94,11 +93,11 @@ class RVSDG2IR(RegionVisitor):
     def last_block(self) -> ir.Block:
         return self.blocks[self.last_block_label]
 
-    def _get_phi_name(self, varname: str, label: Label) -> str:
+    def _get_phi_name(self, varname: str, label: str) -> str:
         suffix = str(self._get_label(label))
         return f"$phi.{varname}.{suffix}"
 
-    def _get_label(self, label: Label) -> int:
+    def _get_label(self, label: str) -> int:
         num = self._label_map.setdefault(label, len(self._label_map))
         return num
 
@@ -133,7 +132,7 @@ class RVSDG2IR(RegionVisitor):
                     firstbc.positions.col_offset,
                 )
             with self.set_block(
-                        self._get_label(block.label),
+                        self._get_label(block.name),
                         ir.Block(scope=self.scope, loc=self.loc)):
                 for op in ops:
                     if op.opname in _noop:
@@ -153,7 +152,7 @@ class RVSDG2IR(RegionVisitor):
         elif isinstance(block, DDGControlVariable):
             # Emit body
             with self.set_block(
-                        self._get_label(block.label),
+                        self._get_label(block.name),
                         ir.Block(scope=self.scope, loc=self.loc)):
                 for cp, v in block.variable_assignment.items():
                     const = ir.Const(v, loc=self.loc, use_literal_type=False)
@@ -163,7 +162,7 @@ class RVSDG2IR(RegionVisitor):
             # Emit body
             if len(block.branch_value_table) == 2:
                 with self.set_block(
-                        self._get_label(block.label),
+                        self._get_label(block.name),
                         ir.Block(scope=self.scope, loc=self.loc)):
                     # Handle simple two-way branch
                     assert set(block.branch_value_table.keys()) == {0, 1}
@@ -180,7 +179,7 @@ class RVSDG2IR(RegionVisitor):
                     self.current_block.append(br)
             else:
                 # with self.set_block(
-                #         self._get_label(block.label),
+                #         self._get_label(block.name),
                 #         ir.Block(scope=self.scope, loc=self.loc)):
                 #     # Handle simple two-way branch
                 #     # assert set(block.branch_value_table.keys()) == {0, 1}
@@ -212,7 +211,7 @@ class RVSDG2IR(RegionVisitor):
 
                 # Jump into the first block
                 with self.set_block(
-                        self._get_label(block.label),
+                        self._get_label(block.name),
                         ir.Block(scope=self.scope, loc=self.loc)):
                     self.current_block.append(ir.Jump(blocks[-1][0], loc=self.loc))
 
@@ -239,7 +238,7 @@ class RVSDG2IR(RegionVisitor):
 
             return data
         else:
-            raise NotImplementedError(block.label, type(block))
+            raise NotImplementedError(block.name, type(block))
 
     def visit_loop(self, region: RegionBlock, data):
         assert isinstance(region, DDGRegion)
@@ -247,7 +246,7 @@ class RVSDG2IR(RegionVisitor):
         inner_data = {}
         for k in  region.incoming_states:
             inner_data[k] = self.store(
-                data[k], self._get_phi_name(k, region.label), redefine=False,
+                data[k], self._get_phi_name(k, region.name), redefine=False,
                 block=self.last_block)
 
         # Emit loop body
@@ -257,7 +256,7 @@ class RVSDG2IR(RegionVisitor):
         exit_data = {}
         for k in  region.outgoing_states:
             exit_data[k] = self.store(
-                out_data[k], self._get_phi_name(k, region.label), redefine=False,
+                out_data[k], self._get_phi_name(k, region.name), redefine=False,
                 block=self.last_block)
 
         return exit_data
@@ -301,11 +300,11 @@ class RVSDG2IR(RegionVisitor):
                 # (It should be a "zeroinitiailizer" but ir.Expr.null doesn't work)
                 rhs = branch_data.get(k, ir.Const(None, loc=self.loc))
                 # Insert stores to export
-                phiname = self._get_phi_name(k, region.label)
+                phiname = self._get_phi_name(k, region.name)
                 self.store(rhs, phiname,
                             redefine=False,
-                            block=self.blocks[self._get_label(blk.label)])
-        data_after_branches = {k: self.scope.get_exact(self._get_phi_name(k, region.label))
+                            block=self.blocks[self._get_label(blk.name)])
+        data_after_branches = {k: self.scope.get_exact(self._get_phi_name(k, region.name))
                                for k in names}
 
         # Emit tail

@@ -5,15 +5,10 @@ from numba_rvsdg.core.datastructures.basic_block import (
     BasicBlock,
     RegionBlock,
     PythonBytecodeBlock,
-    ControlVariableBlock,
-    BranchBlock,
+    SyntheticAssignment as ControlVariableBlock,
+    SyntheticBranch as BranchBlock,
 )
 from numba_rvsdg.core.datastructures.scfg import SCFG
-from numba_rvsdg.core.datastructures.labels import (
-    Label,
-    PythonBytecodeLabel,
-    ControlLabel,
-)
 from numba_rvsdg.core.datastructures.byte_flow import ByteFlow
 import dis
 from typing import Dict, Callable
@@ -30,7 +25,7 @@ class RvsdgRenderer(object):
         self.edges[src, dst] = attrs
 
     def render_region_block(
-        self, digraph: "Digraph", label: Label, regionblock: RegionBlock
+        self, digraph: "Digraph", label: str, regionblock: RegionBlock
     ):
 
         def render_subgraph(digraph, label):
@@ -57,7 +52,7 @@ class RvsdgRenderer(object):
             render_subgraph(digraph, label)
 
     def render_region_block(
-        self, digraph: "Digraph", label: Label, regionblock: RegionBlock
+        self, digraph: "Digraph", label: str, regionblock: RegionBlock
     ):
         def render_subgraph(digraph, label):
             # render subgraph
@@ -83,52 +78,44 @@ class RvsdgRenderer(object):
         else:
             render_subgraph(digraph, label)
 
-    def render_basic_block(self, digraph: "Digraph", label: Label, block: BasicBlock):
-        if isinstance(label, PythonBytecodeLabel):
+    def render_basic_block(self, digraph: "Digraph", name: str, block: BasicBlock):
+        if name.startswith('python_bytecode'):
             instlist = block.get_instructions(self.bcmap)
-            body = label.__class__.__name__ + ": " + str(label.index) + "\l"
+            body = name + "\l"
             body += "\l".join(
                 [f"{inst.offset:3}: {inst.opname}" for inst in instlist] + [""]
             )
-        elif isinstance(label, ControlLabel):
-            body = label.__class__.__name__ + ": " + str(label.index)
         else:
-            raise Exception("Unknown label type: " + label)
-        digraph.node(str(label), shape="rect", label=body)
+            body = name + "\l" + str(block)
+
+        digraph.node(str(name), shape="rect", label=body)
 
     def render_control_variable_block(
-        self, digraph: "Digraph", label: Label, block: BasicBlock
+        self, digraph: "Digraph", name: str, block: BasicBlock
     ):
-        if isinstance(label, ControlLabel):
-            body = label.__class__.__name__ + ": " + str(label.index) + "\l"
+        if isinstance(name, str):
+            body = name + "\l"
             body += "\l".join(
                 (f"{k} = {v}" for k, v in block.variable_assignment.items())
             )
         else:
-            raise Exception("Unknown label type: " + label)
-        digraph.node(str(label), shape="rect", label=body)
+            raise Exception("Unknown name type: " + name)
+        digraph.node(str(name), shape="rect", label=body)
 
     def render_branching_block(
-        self, digraph: "Digraph", label: Label, block: BasicBlock
+        self, digraph: "Digraph", name: str, block: BasicBlock
     ):
-        if isinstance(label, ControlLabel):
-
-            def find_index(v):
-                if hasattr(v, "offset"):
-                    return v.offset
-                if hasattr(v, "index"):
-                    return v.index
-
-            body = label.__class__.__name__ + ": " + str(label.index) + "\l"
+        if isinstance(name, str):
+            body = name + "\l"
             body += f"variable: {block.variable}\l"
             body += "\l".join(
-                (f"{k}=>{find_index(v)}" for k, v in block.branch_value_table.items())
+                (f"{k}=>{v}" for k, v in block.branch_value_table.items())
             )
         else:
-            raise Exception("Unknown label type: " + label)
-        digraph.node(str(label), shape="rect", label=body)
+            raise Exception("Unknown name type: " + name)
+        digraph.node(str(name), shape="rect", label=body)
 
-    def render_block(self, digraph: "Digraph", label: Label, block: BasicBlock):
+    def render_block(self, digraph: "Digraph", label: str, block: BasicBlock):
         if type(block) == BasicBlock:
             self.render_basic_block(digraph, label, block)
         elif isinstance(block, ControlVariableBlock):
@@ -164,7 +151,7 @@ class RvsdgRenderer(object):
         with context() as subg:
             yield subg
 
-    def render_edges(self, blocks: Dict[Label, BasicBlock]):
+    def render_edges(self, blocks: Dict[str, BasicBlock]):
         for label, block in blocks.items():
             for dst in block.jump_targets:
                 if dst in blocks:

@@ -6,26 +6,24 @@ from numba_rvsdg.core.datastructures.basic_block import (
     BasicBlock,
     RegionBlock,
 )
-from numba_rvsdg.core.datastructures.labels import (
-    Label,
-)
 
-def _compute_incoming_labels(graph: Mapping[Label, BasicBlock]) -> dict[Label, set[Label]]:
-    jump_table: dict[Label, set[Label]] = {}
+
+def _compute_incoming_labels(graph: Mapping[str, BasicBlock]) -> dict[str, set[str]]:
+    jump_table: dict[str, set[str]] = {}
     blk: BasicBlock
     for k in graph:
         jump_table[k] = set()
     for blk in graph.values():
         for dst in blk.jump_targets:
             if dst in jump_table:
-                jump_table[dst].add(blk.label)
+                jump_table[dst].add(blk.name)
     return jump_table
 
 
-def toposort_graph(graph: Mapping[Label, BasicBlock]) -> list[list[Label]]:
+def toposort_graph(graph: Mapping[str, BasicBlock]) -> list[list[str]]:
     incoming_labels = _compute_incoming_labels(graph)
-    visited: set[Label] = set()
-    toposorted: list[list[Label]] = []
+    visited: set[str] = set()
+    toposorted: list[list[str]] = []
     # Toposort
     while incoming_labels:
         level = []
@@ -57,7 +55,7 @@ class RegionVisitor:
 
     def visit_graph(self, scfg: SCFG, data):
         toposorted = self._toposort_graph(scfg)
-        label: Label
+        label: str
         for lvl in toposorted:
             for label in lvl:
                 data = self.visit(scfg[label], data)
@@ -102,7 +100,7 @@ class RegionTransformer(RegionVisitor):
 
     def visit_graph(self, scfg: SCFG, data):
         toposorted = toposort_graph(scfg.graph)
-        label: Label
+        label: str
         for lvl in toposorted:
             for label in lvl:
                 data = self.visit(scfg, scfg[label], data)
@@ -117,7 +115,7 @@ class RegionTransformer(RegionVisitor):
             elif block.kind in {"head", "tail", "branch"}:
                 fn = self.visit_linear
             else:
-                raise NotImplementedError('unreachable', block.label, block.kind)
+                raise NotImplementedError('unreachable', block.name, block.kind)
             data = fn(parent, block, data)
         else:
             data = self.visit_block(parent, block, data)

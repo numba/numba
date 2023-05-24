@@ -21,14 +21,11 @@ from numba_rvsdg.core.datastructures.basic_block import (
     BasicBlock,
     PythonBytecodeBlock,
     RegionBlock,
-    BranchBlock,
-    ControlVariableBlock,
-)
-from numba_rvsdg.core.datastructures.labels import (
-    Label,
     SyntheticBranch,
+    SyntheticAssignment,
 )
 from numba_rvsdg.rendering.rendering import ByteFlowRenderer
+from numba_rvsdg.core.datastructures import block_names
 
 
 from numba.core.utils import MutableSortedSet, MutableSortedMap
@@ -124,12 +121,12 @@ class DDGRegion(RegionBlock):
             subg.node(f"outgoing_{id(self)}", label=f"{'|'.join([f'<{k}> {k}' for k in self.outgoing_states])}", shape='record', rank="max")
 
 @dataclass(frozen=True)
-class DDGBranch(BranchBlock):
+class DDGBranch(SyntheticBranch):
     incoming_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
     outgoing_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
 
 @dataclass(frozen=True)
-class DDGControlVariable(ControlVariableBlock):
+class DDGControlVariable(SyntheticAssignment):
     incoming_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
     outgoing_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
 
@@ -259,7 +256,7 @@ def _fixup_region(scfg: SCFG, region: RegionBlock):
     [exiting], _ = region.subregion.find_exiting_and_exits(region.subregion.graph.keys())
     if exiting != region.exiting:
         region = replace(region, exiting=exiting)
-        scfg.remove_blocks({region.label})
+        scfg.remove_blocks({region.name})
         scfg.add_block(region)
 
 
@@ -281,9 +278,9 @@ def _canonicalize_scfg_switch(scfg: SCFG):
                 switch_labels = {label, tail, *branches}
                 subregion_graph = {k:scfg[k] for k in switch_labels}
                 scfg.remove_blocks(switch_labels)
-                subregion_scfg = SCFG(graph=subregion_graph, clg=scfg.clg)
+                subregion_scfg = SCFG(graph=subregion_graph, name_gen=scfg.name_gen)
                 scfg.graph[label] = RegionBlock(
-                    label=label,
+                    name=label,
                     kind="switch",
                     _jump_targets=tailblk._jump_targets,
                     backedges=tailblk.backedges,
@@ -318,10 +315,10 @@ class CanonicalizeLoop(RegionTransformer):
     def visit_loop(self, parent: SCFG, region: RegionBlock, data):
         # Fix header
         [header], [entry] = parent.find_headers_and_entries(set(region.subregion.graph))
-        new_label = SyntheticBranch(region.subregion.clg.new_index())
-        region.subregion.insert_block(new_label, {}, {header})
-        parent.remove_blocks({region.label})
-        parent.add_block(replace(region, label=new_label, headers=(new_label,)))
+        new_label = parent.name_gen.new_block_name(block_names.SYNTH_BRANCH)
+        region.subregion.insert_SyntheticFill(new_label, {}, {header})
+        parent.remove_blocks({region.name})
+        parent.add_block(replace(region, name=new_label, headers=(new_label,)))
         parent.graph[entry] = replace(parent.graph[entry], _jump_targets=(new_label,))
         # Fix tail
 
@@ -338,7 +335,7 @@ class CanonicalizeLoop(RegionTransformer):
             backedges=(new_label,),
             _jump_targets=tuple([repl.get(x, x) for x in tail_bb._jump_targets])
         )
-        tail_parent.subregion.graph[tail_bb.label] = new_tail_bb
+        tail_parent.subregion.graph[tail_bb.name] = new_tail_bb
 
 
 def canonicalize_scfg(scfg: SCFG):
@@ -361,10 +358,6 @@ class ExtraBasicBlock(BasicBlock):
         args = '\n'.join(f'{inst})' for inst in self.inst_list)
         return f"ExtraBasicBlock({args})"
 
-
-@dataclass(frozen=True)
-class ExtraLabel(Label):
-    pass
 
 
 class HandleConditionalPop:
@@ -398,7 +391,7 @@ def _scfg_add_conditional_pop_stack(bcmap, scfg: SCFG):
             res = handler.handle(last_inst)
             if res is not None:
                 for branch_index, instlist in enumerate(res.branch_instlists):
-                    extra_records[blk._jump_targets[branch_index]] = blk.label, (branch_index, instlist)
+                    extra_records[blk._jump_targets[branch_index]] = blk.name, (branch_index, instlist)
 
 
     from pprint import pprint
@@ -414,7 +407,7 @@ def _scfg_add_conditional_pop_stack(bcmap, scfg: SCFG):
         )
 
     for label, (parent_label, (branch_index, instlist)) in extra_records.items():
-        newlabel = ExtraLabel(label.index)
+        newlabel = scfg.name_gen.new_block_name("numba.extrabasicblock")
         scfg.graph[parent_label] = _replace_jump_targets(scfg.graph[parent_label], branch_index, newlabel)
         ebb = ExtraBasicBlock.make(newlabel, label, instlist)
         scfg.graph[newlabel] = ebb
@@ -529,13 +522,13 @@ class PropagateVars(RegionVisitor):
         return self._apply(block, data)
 
     def visit_loop(self, region: RegionBlock, data):
-        self.debug_print("---LOOP_ENTER", region.label, data)
+        self.debug_print("---LOOP_ENTER", region.name, data)
         data = self.visit_linear(region, data)
-        self.debug_print('---LOOP_END=', region.label, "vars", data)
+        self.debug_print('---LOOP_END=', region.name, "vars", data)
         return data
 
     def visit_switch(self, region: RegionBlock, data):
-        self.debug_print("---SWITCH_ENTER", region.label)
+        self.debug_print("---SWITCH_ENTER", region.name)
         region.incoming_states.update(data)
         [header] = region.headers
         data_at_head = self.visit_linear(region.subregion[header], data)
@@ -555,7 +548,7 @@ class PropagateVars(RegionVisitor):
         self.debug_print("data_for_branches", data_for_branches)
         self.debug_print("data_after_branches", data_after_branches)
         self.debug_print("data_at_tail", data_at_tail)
-        self.debug_print('---SWITCH_END=', region.label, "vars", data_at_tail)
+        self.debug_print('---SWITCH_END=', region.name, "vars", data_at_tail)
         region.outgoing_states.update(data_at_tail)
         return set(region.outgoing_states)
 
@@ -603,19 +596,19 @@ class PropagateStack(RegionVisitor):
                 block.exported_stackvars[k] = vs
                 block.out_vars[k] = vs
 
-            self.debug_print('---=', block.label, "out stack", out_data)
+            self.debug_print('---=', block.name, "out stack", out_data)
             return out_data
         else:
             return data
 
     def visit_loop(self, region: RegionBlock, data):
-        self.debug_print("---LOOP_ENTER", region.label)
+        self.debug_print("---LOOP_ENTER", region.name)
         data = self.visit_linear(region, data)
-        self.debug_print('---LOOP_END=', region.label, "stack", data)
+        self.debug_print('---LOOP_END=', region.name, "stack", data)
         return data
 
     def visit_switch(self, region: RegionBlock, data):
-        self.debug_print("---SWITCH_ENTER", region.label)
+        self.debug_print("---SWITCH_ENTER", region.name)
         [header] = region.headers
         data_at_head = self.visit_linear(region.subregion[header], data)
         data_for_branches = []
@@ -634,7 +627,7 @@ class PropagateStack(RegionVisitor):
         self.debug_print("data_for_branches", data_for_branches)
         self.debug_print("data_after_branches", data_after_branches)
         self.debug_print("data_at_tail", data_at_tail)
-        self.debug_print('---SWITCH_END=', region.label, "stack", data_at_tail)
+        self.debug_print('---SWITCH_END=', region.name, "stack", data_at_tail)
         return data_at_tail
 
     def make_data(self):
@@ -694,9 +687,9 @@ def convert_scfg_to_dataflow(scfg, bcmap, argnames: tuple[str, ...]) -> SCFG:
             subregion = convert_scfg_to_dataflow(block.subregion, bcmap, argnames)
             rvsdg.add_block(_upgrade_dataclass(block, DDGRegion,
                                                dict(subregion=subregion)))
-        elif isinstance(block, BranchBlock):
+        elif isinstance(block, SyntheticBranch):
             rvsdg.add_block(_upgrade_dataclass(block, DDGBranch))
-        elif isinstance(block, ControlVariableBlock):
+        elif isinstance(block, SyntheticAssignment):
             rvsdg.add_block(_upgrade_dataclass(block, DDGControlVariable))
         elif isinstance(block, ExtraBasicBlock):
             ddg = convert_extra_bb(block)
@@ -726,7 +719,7 @@ def _convert_bytecode(block, instlist, argnames: tuple[str, ...]) -> DDGBlock:
 
 def _converter_to_ddgblock(block, converter):
     blk = DDGBlock(
-        label=block.label,
+        name=block.name,
         _jump_targets=block._jump_targets,
         backedges=block.backedges,
         in_effect=converter.in_effect,
