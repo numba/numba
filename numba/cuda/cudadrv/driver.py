@@ -37,15 +37,6 @@ from .drvapi import API_PROTOTYPES
 from .drvapi import cu_occupancy_b2d_size, cu_stream_callback_pyobj, cu_uuid
 from numba.cuda.cudadrv import enums, drvapi, _extras
 
-if config.CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY:
-    try:
-        from ptxcompiler import compile_ptx
-        from cubinlinker import CubinLinker, CubinLinkerError
-    except ImportError as ie:
-        msg = ("Minor version compatibility requires ptxcompiler and "
-               "cubinlinker packages to be available")
-        raise ImportError(msg) from ie
-
 USE_NV_BINDING = config.CUDA_USE_NVIDIA_BINDING
 
 if USE_NV_BINDING:
@@ -2670,12 +2661,25 @@ class Linker(metaclass=ABCMeta):
         """
 
 
+def _import_mvc_packages():
+    try:
+        from ptxcompiler import compile_ptx
+        from cubinlinker import CubinLinker, CubinLinkerError
+    except ImportError as err:
+        msg = ("Minor version compatibility requires ptxcompiler and "
+               "cubinlinker packages to be available")
+        raise ImportError(msg) from err
+
+
 class MVCLinker(Linker):
     """
     Linker supporting Minor Version Compatibility, backed by the cubinlinker
     package.
     """
     def __init__(self, max_registers=None, lineinfo=False, cc=None):
+        # At this point, we know MVC is requested so we lazily import
+        # ptxcompiler and cubinlinker.
+        _import_mvc_packages()
         if cc is None:
             raise RuntimeError("MVCLinker requires Compute Capability to be "
                                "specified, but cc is None")
