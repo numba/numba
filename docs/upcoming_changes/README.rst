@@ -16,8 +16,7 @@ Each file should be named like ``<PULL REQUEST>.<TYPE>.rst``, where
 * ``highlight``: Adds a highlighted bullet point to use as a possible highlight
   of the release.
 * ``np_support``: Addition of new NumPy functionality.
-* ``deprecation``: Changes to existing code that will now emit a DeprecationWarning/PendingDeprecationWarning.
-* ``future``: Changes existing code to emit a FutureWarning.
+* ``deprecation``: Changes to existing code that will now emit a deprecation warning.
 * ``expired``: Removal of a deprecated part of the API.
 * ``compatibility``: A change which requires users to change code and is not
   backwards compatible. (Not to be used for removal of deprecated features.)
@@ -27,6 +26,9 @@ Each file should be named like ``<PULL REQUEST>.<TYPE>.rst``, where
   not new features or compatibility related.
 * ``performance``: Performance changes that should not affect other behaviour.
 * ``change``: Other changes
+* ``doc``: Documentation related changes.
+* ``infrastructure``: Infrastructure/CI related changes. 
+* ``bug_fix``: Bug Fixes for exiting features/functionality.
 
 If you are unsure what pull request type to use, don't hesitate to ask in your
 PR.
@@ -37,4 +39,4 @@ notes.
 
 .. note::
     This README was adapted from the NumPy changelog readme under the terms of
-    the MIT licence.
+    the `BSD-3 licence <https://github.com/numpy/numpy/blob/c1ffdbc0c29d48ece717acb5bfbf811c935b41f6/LICENSE.txt>`_.
