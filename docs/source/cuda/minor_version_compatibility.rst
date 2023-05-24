@@ -37,7 +37,7 @@ To install with pip, use the NVIDIA package index:
 
 .. code:: bash
 
-   pip install ptxcompiler-cu11 cubinlinker-cu11 --extra-index-url=https://pypi.ngc.nvidia.com
+   pip install ptxcompiler-cu11 cubinlinker-cu11 --extra-index-url=https://pypi.nvidia.com
 
 MVC support is enabled by setting the environment variable:
 
