@@ -315,19 +315,18 @@ def ufunc_db():
     }
 
     db[np.invert] = {
-        'l->l': numbers.int_invert_impl,
-        'i->i': numbers.int_invert_impl,
         '?->?': numbers.int_invert_impl,
         'b->b': numbers.int_invert_impl,
+        'B->B': numbers.int_invert_impl,
         'h->h': numbers.int_invert_impl,
-        'q->q': numbers.int_invert_impl,
-        'L->L': numbers.int_invert_impl,
-        'I->I': numbers.int_invert_impl,
         'H->H': numbers.int_invert_impl,
+        'i->i': numbers.int_invert_impl,
+        'I->I': numbers.int_invert_impl,
+        'l->l': numbers.int_invert_impl,
+        'L->L': numbers.int_invert_impl,
+        'q->q': numbers.int_invert_impl,
         'Q->Q': numbers.int_invert_impl,
     }
-
-    db[np.bitwise_not] = db[np.invert]
 
     db[np.left_shift] = {
         'bb->b': numbers.int_shl_impl,
