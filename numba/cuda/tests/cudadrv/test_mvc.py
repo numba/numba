@@ -1,6 +1,8 @@
 import multiprocessing as mp
 import traceback
 from numba.cuda.testing import unittest, CUDATestCase
+from numba.cuda.testing import skip_on_cudasim
+from numba.tests.support import linux_only
 
 
 def child_test():
@@ -28,6 +30,8 @@ def child_test_wrapper(result_queue):
     result_queue.put((success, output))
 
 
+@linux_only
+@skip_on_cudasim('MVC tests not needed on simulator')
 class TestMinorVersionCompatibility(CUDATestCase):
     def test_mvc(self):
         # Run test with Minor Version Compatibility enabled in a child process
