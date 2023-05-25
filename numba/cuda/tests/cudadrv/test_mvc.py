@@ -30,7 +30,7 @@ def child_test_wrapper(result_queue):
 
 class TestMinorVersionCompatibility(CUDATestCase):
     def test_mvc(self):
-        # Run a test with MinorVersionCompatibility enabled in a child process
+        # Run test with Minor Version Compatibility enabled in a child process
         ctx = mp.get_context('spawn')
         result_queue = ctx.Queue()
         proc = ctx.Process(target=child_test_wrapper, args=(result_queue,))
