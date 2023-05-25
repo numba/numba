@@ -15,7 +15,7 @@ def child_test():
     def f():
         pass
 
-    f[1, 1, 0]()
+    f[1, 1]()
 
 
 def child_test_wrapper(result_queue):
