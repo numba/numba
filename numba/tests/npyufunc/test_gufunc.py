@@ -477,5 +477,25 @@ class TestGUVectorizePickling(TestCase):
         self.assertPreciseEqual(expect, got)
 
 
+class TestGUVectorizeJit(TestCase):
+    target = 'cpu'
+
+    def test_add(self):
+        @guvectorize(['int64[:], int64, int64[:]'], '(n),()->(n)',
+                     target=self.target)
+        def gu_add(x, y, res):
+            for i in range(x.shape[0]):
+                res[i] = x[i] + y
+
+        @jit(nopython=True)
+        def jit_add(x, y, res):
+            gu_add(x, y, res)
+
+        x = np.arange(40, dtype='i8').reshape(4, 2, 5)
+        y = 100
+        res = np.zeros_like(x)
+        jit_add(x, y, res)
+        self.assertPreciseEqual(res, x+y)
+
 if __name__ == '__main__':
     unittest.main()

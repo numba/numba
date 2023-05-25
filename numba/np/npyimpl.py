@@ -14,11 +14,13 @@ import numpy as np
 import operator
 
 from numba.np import arrayobj, ufunc_db, numpy_support
-from numba.core.imputils import Registry, impl_ret_new_ref, force_error_model
+from numba.core.imputils import (Registry, impl_ret_new_ref, force_error_model,
+                                 impl_ret_borrowed)
 from numba.core import typing, types, utils, cgutils, callconv
 from numba.np.numpy_support import (
     ufunc_find_matching_loop, select_array_wrapper, from_dtype, _ufunc_loop_sig
 )
+from numba.np.arrayobj import _getitem_array_generic
 from numba.core.typing import npydecl
 from numba.core.extending import overload, intrinsic
 
@@ -155,6 +157,36 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder',
         store_value = ctx.get_value_as_data(bld, self.base_type, value)
         assert ctx.get_data_type(self.base_type) == store_value.type
         bld.store(store_value, self._load_effective_address(indices))
+
+
+class _ArrayGUHelper(namedtuple('_ArrayHelper', ('context', 'builder',
+                                                 'shape', 'strides', 'data',
+                                                 'layout', 'base_type', 'ndim',
+                                                 'type', 'return_type'))):
+    """Helper class to handle array arguments/result.
+    It provides methods to generate code loading/storing specific
+    items as well as support code for handling indices.
+    """
+    def create_iter_indices(self):
+        intpty = self.context.get_value_type(types.intp)
+        ZERO = ir.Constant(ir.IntType(intpty.width), 0)
+
+        indices = []
+        for i in range(self.ndim - self.return_type.ndim):
+            x = cgutils.alloca_once(self.builder, ir.IntType(intpty.width))
+            self.builder.store(ZERO, x)
+            indices.append(x)
+        return _ArrayIndexingHelper(self, indices)
+
+    def load_data(self, indices):
+        context, builder = self.context, self.builder
+        index_types = (types.int64,) * (self.ndim - self.return_type.ndim)
+        ary = self.context.make_array(self.type)(context, builder, self.data)
+        aryty = self.type
+        res = _getitem_array_generic(self.context, self.builder,
+                                     self.return_type, aryty, ary,
+                                     index_types, indices)
+        return impl_ret_borrowed(context, builder, self.return_type, res)
 
 
 def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
@@ -410,6 +442,68 @@ def numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
 
     out = _pack_output_values(ufunc, context, builder, sig.return_type, [o.return_val for o in outputs])
     return impl_ret_new_ref(context, builder, sig.return_type, out)
+
+def numpy_gufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
+    arguments = []
+    expected_ndims = kernel_class.gufunc.expected_ndims()
+    for arg, ty, exp_ndim in zip(args, sig.args, expected_ndims):
+        if isinstance(ty, types.ArrayCompatible):
+            # Create an array helper that iteration returns a subarray
+            # with ndim specified by "exp_ndim"
+            arr = context.make_array(ty)(context, builder, arg)
+            shape = cgutils.unpack_tuple(builder, arr.shape, ty.ndim)
+            strides = cgutils.unpack_tuple(builder, arr.strides, ty.ndim)
+            return_type = ty.copy(ndim=exp_ndim)
+            ndim = ty.ndim
+            layout = ty.layout
+            base_type = ty.dtype
+            array_helper = _ArrayGUHelper(context, builder,
+                                          shape, strides, arg,
+                                          layout, base_type, ndim,
+                                          ty, return_type)
+            arguments.append(array_helper)
+        else:
+            scalar_helper = _ScalarHelper(context, builder, arg, ty)
+            arguments.append(scalar_helper)
+    ewise_types = [a.base_type for a in arguments]
+    kernel = kernel_class(context, builder, sig, ewise_types)
+
+    layouts = [arg.layout for arg in arguments
+               if isinstance(arg, _ArrayGUHelper)]
+    num_c_layout = len([x for x in layouts if x == 'C'])
+    num_f_layout = len([x for x in layouts if x == 'F'])
+
+    # Only choose F iteration order if more arrays are in F layout.
+    # Default to C order otherwise.
+    # This is a best effort for performance. NumPy has more fancy logic that
+    # uses array iterators in non-trivial cases.
+    if num_f_layout > num_c_layout:
+        order = 'F'
+    else:
+        order = 'C'
+
+    inputs = arguments[:ufunc.nin]
+    outputs = arguments[ufunc.nin:]
+
+    intpty = context.get_value_type(types.intp)
+    indices = [inp.create_iter_indices() for inp in arguments]
+    loopshape_ndim = outputs[0].ndim - outputs[0].return_type.ndim
+    loopshape = outputs[0].shape[ : loopshape_ndim]
+
+    with cgutils.loop_nest(builder, loopshape, intp=intpty, order=order) as loop_indices:
+        vals_in = []
+        for i, (index, arg) in enumerate(zip(indices, arguments)):
+            index.update_indices(loop_indices, i)
+            vals_in.append(arg.load_data(index.as_values()))
+
+        kernel.generate(*vals_in)
+
+        # vals_out = _unpack_output_values(ufunc, builder, kernel.generate(*vals_in))
+        # for val_out, output in zip(vals_out, outputs):
+        #     output.store_data(loop_indices, val_out)
+
+    # out = _pack_output_values(ufunc, context, builder, sig.return_type, [o.return_val for o in outputs])
+    # return impl_ret_new_ref(context, builder, sig.return_type, out)
 
 
 # Kernels are the code to be executed inside the multidimensional loop.
