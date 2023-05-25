@@ -392,7 +392,8 @@ def get_sysinfo():
                 sys_info[_cu_mvc_available] = False
 
             sys_info[_cu_mvc_needed] = cu_rt_ver > cu_drv_ver
-            sys_info[_cu_mvc_in_use] = config.CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY
+            sys_info[_cu_mvc_in_use] = bool(
+                config.CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY)
         except Exception as e:
             _warning_log.append(
                 "Warning (cuda): Probing CUDA failed "
