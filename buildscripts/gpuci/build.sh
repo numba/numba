@@ -63,7 +63,7 @@ gpuci_logger "Create testing env"
 gpuci_mamba_retry create -n numba_ci -y \
                   "python=${PYTHON_VER}" \
                   "cudatoolkit=${CUDA_TOOLKIT_VER}" \
-                  "rapidsai::cubinlinker" \
+                  "rapidsai-nightly::cubinlinker" \
                   "conda-forge::ptxcompiler" \
                   "numba/label/dev::llvmlite" \
                   "${NUMPY_CHANNEL_PKG}=${NUMPY_VER}" \
