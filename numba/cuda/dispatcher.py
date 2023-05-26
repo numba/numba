@@ -127,13 +127,12 @@ class _Kernel(serialize.ReduceMixin):
         if self.cooperative:
             lib.needs_cudadevrt = True
 
-
         # Link to the helper library functions if needed
         link_to_library_functions(helper_functions, 'cuda_helperlib.cu')
         # Link to the CUDA FP16 math library functions if needed
         res = link_to_library_functions(cuda_fp16_math_funcs,
-                                  'cpp_function_wrappers.cu',
-                                  '__numba_wrapper_')
+                                        'cpp_function_wrappers.cu',
+                                        '__numba_wrapper_')
 
         if res:
             if not config.CUDA_USE_NVIDIA_BINDING:
