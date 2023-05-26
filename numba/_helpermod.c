@@ -55,6 +55,10 @@ build_c_helpers_dict(void)
     declmethod(frexpf);
     declmethod(ldexp);
     declmethod(ldexpf);
+    declmethod(exp2);
+    declmethod(exp2f);
+    declmethod(log2);
+    declmethod(log2f);
     declmethod(cpow);
     declmethod(cpowf);
     declmethod(erf);
@@ -88,6 +92,7 @@ build_c_helpers_dict(void)
     declmethod(unpack_slice);
     declmethod(do_raise);
     declmethod(unpickle);
+    declmethod(runtime_build_excinfo_struct);
     declmethod(attempt_nocopy_reshape);
     declmethod(get_pyobject_private_data);
     declmethod(set_pyobject_private_data);

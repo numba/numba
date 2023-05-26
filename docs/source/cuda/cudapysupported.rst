@@ -274,6 +274,7 @@ The following functions from the :mod:`operator` module are supported:
 * :func:`operator.truediv`
 * :func:`operator.xor`
 
+.. _cuda_numpy_support:
 
 NumPy support
 =============
@@ -286,8 +287,32 @@ code such that each thread is dealing with a single element at a time.
 Supported NumPy features:
 
 * accessing `ndarray` attributes `.shape`, `.strides`, `.ndim`, `.size`, etc..
-* scalar ufuncs that have equivalents in the `math` module; i.e. ``np.sin(x[0])``, where x is a 1D array.
 * indexing and slicing works.
+* A subset of ufuncs are supported, but the output array must be passed in as a
+  positional argument (see :ref:`cuda_ufunc_call_example`). Note that ufuncs
+  execute sequentially in each thread - there is no automatic parallelisation
+  of ufuncs across threads over the elements of an input array.
+
+  The following ufuncs are supported:
+
+  * :func:`numpy.sin`
+  * :func:`numpy.cos`
+  * :func:`numpy.tan`
+  * :func:`numpy.arcsin`
+  * :func:`numpy.arccos`
+  * :func:`numpy.arctan`
+  * :func:`numpy.arctan2`
+  * :func:`numpy.hypot`
+  * :func:`numpy.sinh`
+  * :func:`numpy.cosh`
+  * :func:`numpy.tanh`
+  * :func:`numpy.arcsinh`
+  * :func:`numpy.arccosh`
+  * :func:`numpy.arctanh`
+  * :func:`numpy.deg2rad`
+  * :func:`numpy.radians`
+  * :func:`numpy.rad2deg`
+  * :func:`numpy.degrees`
 
 Unsupported NumPy features:
 

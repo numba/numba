@@ -265,7 +265,7 @@ def compile_ptx(pyfunc, sig, debug=False, lineinfo=False, device=False,
                      prec_div=, and fma=1)
     :type fastmath: bool
     :param cc: Compute capability to compile for, as a tuple
-               ``(MAJOR, MINOR)``. Defaults to ``(5, 3)``.
+               ``(MAJOR, MINOR)``. Defaults to ``(5, 0)``.
     :type cc: tuple
     :param opt: Enable optimizations. Defaults to ``True``.
     :type opt: bool

@@ -16,7 +16,6 @@ from numba.cuda.args import wrap_arg
 from numba.cuda.compiler import compile_cuda, CUDACompiler
 from numba.cuda.cudadrv import driver
 from numba.cuda.cudadrv.devices import get_context
-from numba.cuda.cudadrv.libs import get_cudalib
 from numba.cuda.descriptor import cuda_target
 from numba.cuda.errors import (missing_launch_config_msg,
                                normalize_kernel_dimensions)
@@ -120,19 +119,31 @@ class _Kernel(serialize.ReduceMixin):
                 source_file_path = os.path.join(basedir, library_path)
                 link.append(source_file_path)
 
+            return found_functions
+
         # A kernel needs cooperative launch if grid_sync is being used.
         self.cooperative = 'cudaCGGetIntrinsicHandle' in lib.get_asm_str()
         # We need to link against cudadevrt if grid sync is being used.
         if self.cooperative:
-            link.append(get_cudalib('cudadevrt', static=True))
+            lib.needs_cudadevrt = True
+
 
         # Link to the helper library functions if needed
         link_to_library_functions(helper_functions, 'cuda_helperlib.cu')
-
         # Link to the CUDA FP16 math library functions if needed
-        link_to_library_functions(cuda_fp16_math_funcs,
+        res = link_to_library_functions(cuda_fp16_math_funcs,
                                   'cpp_function_wrappers.cu',
                                   '__numba_wrapper_')
+
+        if res:
+            if not config.CUDA_USE_NVIDIA_BINDING:
+                s = "https://numba.readthedocs.io/en/stable/cuda/bindings.html"
+                msg = ("Use of float16 requires the use of the NVIDIA CUDA "
+                       "bindings and setting the "
+                       "NUMBA_CUDA_USE_NVIDIA_BINDING environment variable to "
+                       "1. Relevant documentation is available here:\n"
+                       f"{s}")
+                raise NotImplementedError(msg)
 
         for filepath in link:
             lib.add_linking_file(filepath)

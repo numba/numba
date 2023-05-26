@@ -12,7 +12,7 @@ from numba.core.typing import cmathdecl
 from numba.core import datamodel
 
 from .cudadrv import nvvm
-from numba.cuda import codegen, nvvmutils
+from numba.cuda import codegen, nvvmutils, ufuncs
 from numba.cuda.models import cuda_data_manager
 
 from warnings import warn
@@ -111,6 +111,8 @@ class CUDATargetContext(BaseContext):
         from . import (
             cudaimpl, printimpl, libdeviceimpl, mathimpl, vector_types
         )
+        # fix for #8940
+        from numba.np.unsafe import ndarray # noqa F401
 
         self.install_registry(cudaimpl.registry)
         self.install_registry(cffiimpl.registry)
@@ -374,6 +376,9 @@ class CUDATargetContext(BaseContext):
         # fpm.initialize()
         # fpm.run(func)
         # fpm.finalize()
+
+    def get_ufunc_info(self, ufunc_key):
+        return ufuncs.get_ufunc_info(ufunc_key)
 
 
 class CUDACallConv(MinimalCallConv):

@@ -8,6 +8,10 @@ Compiling code ahead of time
 While Numba's main use case is :term:`Just-in-Time compilation`, it also
 provides a facility for :term:`Ahead-of-Time compilation` (AOT).
 
+.. note:: To use this feature the ``setuptools`` package is required at
+          compilation time, but it is not a runtime dependency of the
+          extension module produced.
+
 .. note:: This module is pending deprecation. Please see
           :ref:`deprecation-numba-pycc` for more information.
 
@@ -20,7 +24,7 @@ Benefits
 
 #. AOT compilation produces a compiled extension module which does not depend
    on Numba: you can distribute the module on machines which do not have
-   Numba installed (but Numpy is required).
+   Numba installed (but NumPy is required).
 
 #. There is no compilation overhead at runtime (but see the
    ``@jit`` :ref:`cache <jit-cache>` option), nor any overhead of importing

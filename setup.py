@@ -23,8 +23,8 @@ min_python_version = "3.8"
 max_python_version = "3.12"  # exclusive
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.21"
-min_llvmlite_version = "0.40.0dev0"
-max_llvmlite_version = "0.41"
+min_llvmlite_version = "0.41.0dev0"
+max_llvmlite_version = "0.42"
 
 if sys.platform.startswith('linux'):
     # Patch for #2555 to make wheels without libpython
@@ -367,7 +367,6 @@ build_requires = ['numpy >={}'.format(min_numpy_build_version)]
 install_requires = [
     'llvmlite >={},<{}'.format(min_llvmlite_version, max_llvmlite_version),
     'numpy >={}'.format(min_numpy_run_version),
-    'setuptools',
     'importlib_metadata; python_version < "3.9"',
 ]
 
@@ -385,6 +384,7 @@ metadata = dict(
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
         "Topic :: Software Development :: Compilers",
     ],
     package_data={
