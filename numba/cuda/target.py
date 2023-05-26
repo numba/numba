@@ -9,7 +9,7 @@ from numba.core.errors import NumbaInvalidConfigWarning
 from numba.core.base import BaseContext
 from numba.core.callconv import (ALLOC_FLAG_IDX, HASH_BUF_IDX,
                                  PICKLE_BUF_IDX, PICKLE_BUFSZ_IDX,
-                                 UNWRAP_FUNC_IDX, CPUCallConv, excinfo_ptr_t,
+                                 UNWRAP_FUNC_IDX, CPUCallConv, MinimalCallConv, excinfo_ptr_t,
                                 excinfo_t)
 from numba.core.typing import cmathdecl
 from numba.core import datamodel
@@ -203,6 +203,7 @@ class CUDATargetContext(BaseContext):
         argtys = list(arginfo.argument_types)
         wrapfnty = ir.FunctionType(ir.VoidType(), argtys)
         wrapper_module = self.create_module("cuda.kernel.wrapper")
+
         fnty = ir.FunctionType(ir.IntType(32),
                                [self.call_conv.get_return_type(types.pyobject),
                                 ir.PointerType(excinfo_ptr_t)] + argtys)
@@ -271,6 +272,7 @@ class CUDATargetContext(BaseContext):
                     changed = builder.extract_value(xchg, 1)
 
                     xchg_lock = builder.cmpxchg(gv_exc_lock, old_exc_unlock,
+#                                                status.code, 'monotonic',
                                                 exc_lock, 'monotonic',
                                                 'monotonic')
                     changed2 = builder.extract_value(xchg_lock, 1)
@@ -309,11 +311,12 @@ class CUDATargetContext(BaseContext):
                     alloc_flag = builder.extract_value(excinfo, ALLOC_FLAG_IDX)
 
                     g_excinfo = builder.load(gv_exception)
-                    builder.insert_value(g_excinfo, pickle_buf, PICKLE_BUF_IDX)
-                    builder.insert_value(g_excinfo, pickle_buf_sz, PICKLE_BUFSZ_IDX)
-                    builder.insert_value(g_excinfo, hash_buf, HASH_BUF_IDX)
-                    builder.insert_value(g_excinfo, unwrap_func, UNWRAP_FUNC_IDX)
-                    builder.insert_value(g_excinfo, alloc_flag, ALLOC_FLAG_IDX)
+                    g_excinfo = builder.insert_value(g_excinfo, pickle_buf, PICKLE_BUF_IDX)
+                    g_excinfo = builder.insert_value(g_excinfo, pickle_buf_sz, PICKLE_BUFSZ_IDX)
+                    g_excinfo = builder.insert_value(g_excinfo, hash_buf, HASH_BUF_IDX)
+                    g_excinfo = builder.insert_value(g_excinfo, unwrap_func, UNWRAP_FUNC_IDX)
+                    g_excinfo = builder.insert_value(g_excinfo, alloc_flag, ALLOC_FLAG_IDX)
+                    builder.store(g_excinfo, gv_exception)
 
         builder.ret_void()
 
