@@ -1,6 +1,7 @@
 from struct import Struct
 import numpy as np
 import os
+from numba.cuda.cudadrv.devicearray import DeviceNDArray
 import sys
 import ctypes
 import functools
@@ -15,7 +16,7 @@ from numba.core.typing.typeof import Purpose, typeof
 from numba.cuda.api import get_current_device
 from numba.cuda.args import wrap_arg
 from numba.cuda.compiler import compile_cuda, CUDACompiler
-from numba.cuda.cudadrv import driver
+from numba.cuda.cudadrv import driver, drvapi
 from numba.cuda.cudadrv.devices import get_context
 from numba.cuda.descriptor import cuda_target
 from numba.cuda.errors import (missing_launch_config_msg,
@@ -26,8 +27,10 @@ from numba import cuda
 from numba import _dispatcher
 
 from warnings import warn
-from ctypes import Structure, c_void_p, c_int, c_int32, sizeof
+from ctypes import (Structure, c_void_p, c_int, c_int32, sizeof,
+                    PYFUNCTYPE, py_object)
 from numba import cloudpickle
+from numba import _helperlib
 
 cuda_fp16_math_funcs = ['hsin', 'hcos',
                         'hlog', 'hlog10',
@@ -324,6 +327,8 @@ class _Kernel(serialize.ReduceMixin):
             excinfo_name = cufunc.name + "__excinfo__"
             excinfo_mem, excinfo_sz = \
                 cufunc.module.get_global_symbol(excinfo_name)
+
+            print(f"excinfo_mem: {excinfo_mem}, excinfo_sz: {excinfo_sz}")           
             assert excinfo_sz == excinfo_sz_ctype
 
             excinfo_val = ExcInfo(None, 0, None, None, 0)
@@ -354,10 +359,31 @@ class _Kernel(serialize.ReduceMixin):
                              cooperative=self.cooperative)
 
         if self.debug:
+            cuda.synchronize()
             driver.device_to_host(ctypes.addressof(excval), excmem, excsz)
             driver.device_to_host(ctypes.addressof(excinfo_val),
                                   excinfo_mem,
                                   excinfo_sz)
+
+            pickle_buf_sz = excinfo_val.pickle_bufsz
+            print("_Kernel::launch:: excinfo_val.pickle_buf = ", excinfo_val.pickle_buf)
+
+            gpu_mem = cuda.cudadrv.driver.MemoryPointer(self.target_context,
+                                                        excinfo_val.pickle_buf,
+                                                        pickle_buf_sz)
+
+            pickle_buf_host = np.empty((excinfo_val.pickle_bufsz,),
+                                       dtype=np.byte)
+
+            driver.device_to_host(pickle_buf_host.ctypes.data,
+                                  gpu_mem.device_ctypes_pointer,
+                                  pickle_buf_sz)
+
+            print("Returned from device_to_host()")
+ 
+            print("#### excinfo_val = ", excinfo_val)
+            print("_Kernel::launch:: excinfo_val.pickle_buf = ", excinfo_val.pickle_buf)
+            print("_Kernel::launch:: excinfo_val.pickle_bufsz = ", excinfo_val.pickle_bufsz)
             if excval.value != 0:
                 # An error occurred
                 def load_symbol(name):
@@ -374,10 +400,21 @@ class _Kernel(serialize.ReduceMixin):
                 code = excval.value
 
                 # Unpack he exception so we can raise it.
-                pickle_buf_val = excinfo_val.pickle_buf
+                pickle_buf_ptr = excinfo_val.pickle_buf
                 pickle_bufsz_val = excinfo_val.pickle_bufsz
-                hash_buf_val = excinfo_val.hash_buf
+                print("bufsz = ", pickle_bufsz_val)
+                hash_buf_ptr = excinfo_val.hash_buf
 
+                unpickle_ptr = _helperlib.c_helpers['unpickle']
+                unpickle_fn = PYFUNCTYPE(py_object, c_void_p, c_int32, c_void_p)(unpickle_ptr)
+
+                print ("Calling numba_unpickle ")
+                print ("pickle buf = ", pickle_buf_ptr)
+                unpickled_exc = unpickle_fn(pickle_buf_host, pickle_bufsz_val, hash_buf_ptr)
+                print ("Unpickled = ", unpickled_exc)
+                if unpickled_exc is not None:
+                    print ("Unpickled = ", unpickled_exc)
+                    raise unpickled_exc
 
                 exccls, exc_args, loc = self.call_helper.get_exception(code)
                 # Prefix the exception message with the source location
