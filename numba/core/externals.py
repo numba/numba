@@ -8,6 +8,7 @@ from llvmlite import ir
 import llvmlite.binding as ll
 
 from numba.core import utils, intrinsics
+from numba.core.codegen import add_symbol
 from numba import _helperlib
 
 
@@ -15,7 +16,7 @@ def _add_missing_symbol(symbol, addr):
     """Add missing symbol into LLVM internal symtab
     """
     if not ll.address_of_symbol(symbol):
-        ll.add_symbol(symbol, addr)
+        add_symbol(symbol, addr)
 
 
 def _get_msvcrt_symbol(symbol):
@@ -149,7 +150,7 @@ class _ExternalMathFunctions(_Installer):
             # (under Windows, different versions of the C runtime can
             #  be loaded at the same time, for example msvcrt100 by
             #  CPython and msvcrt120 by LLVM)
-            ll.add_symbol(fname, c_helpers[fname])
+            add_symbol(fname, c_helpers[fname])
 
 
 c_math_functions = _ExternalMathFunctions()

@@ -435,7 +435,10 @@ class BaseNativeLowering(abc.ABC, LoweringPass):
     def run_pass(self, state):
         if state.library is None:
             codegen = state.targetctx.codegen()
-            state.library = codegen.create_library(state.func_id.func_qualname)
+            state.library = codegen.create_library(
+                state.func_id.func_qualname,
+                unique_name=state.func_id.unique_name,
+            )
             # Enable object caching upfront, so that the library can
             # be later serialized.
             state.library.enable_object_caching()
@@ -458,7 +461,8 @@ class BaseNativeLowering(abc.ABC, LoweringPass):
                 funcdesc.PythonFunctionDescriptor.from_specialized_function(
                     interp, typemap, restype, calltypes,
                     mangler=targetctx.mangler, inline=flags.forceinline,
-                    noalias=flags.noalias, abi_tags=[flags.get_mangle_string()])
+                    noalias=flags.noalias, abi_tags=[flags.get_mangle_string()],
+                    has_no_wrapper=flags.no_cpython_wrapper)
 
             with targetctx.push_code_library(library):
                 lower = self.lowering_class(targetctx, library, fndesc, interp,

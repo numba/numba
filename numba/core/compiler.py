@@ -259,7 +259,7 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
 
         # Load Environments
         for env in referenced_envs:
-            library.codegen.set_env(env.env_name, env)
+            library.set_env(env.env_name, env)
 
         return cr
 

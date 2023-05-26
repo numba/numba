@@ -2,7 +2,6 @@ from collections import namedtuple
 from weakref import finalize as _finalize
 
 from numba.core.runtime import nrtdynmod
-from llvmlite import binding as ll
 
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.typing.typeof import typeof_impl
@@ -27,6 +26,8 @@ class _Runtime(object):
             # Already initialized
             return
 
+        from numba.core.codegen import add_symbol
+
         # Switch stats on if the config requests them.
         if config.NRT_STATS:
             _nrt.memsys_enable_stats()
@@ -39,7 +40,7 @@ class _Runtime(object):
             else:
                 c_name = "NRT_" + py_name
             c_address = _nrt.c_helpers[py_name]
-            ll.add_symbol(c_name, c_address)
+            add_symbol(c_name, c_address)
 
         # Compile atomic operations
         self._library = nrtdynmod.compile_nrt_functions(ctx)

@@ -241,7 +241,7 @@ class DPUContext(BaseContext):
             # objects to keepalive with the function
             (library,),
         )
-        library.codegen.set_env(self.get_env_name(fndesc), env)
+        library.set_env(self.get_env_name(fndesc), env)
         return cfunc
 
 

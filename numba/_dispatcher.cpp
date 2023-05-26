@@ -550,7 +550,7 @@ Dispatcher_Insert(Dispatcher *self, PyObject *args, PyObject *kwds)
         return NULL;
     }
 
-    if (!cuda && !PyObject_TypeCheck(cfunc, &PyCFunction_Type) ) {
+    if (!cuda && cfunc != Py_None && !PyObject_TypeCheck(cfunc, &PyCFunction_Type) ) {
         PyErr_SetString(PyExc_TypeError, "must be builtin_function_or_method");
         return NULL;
     }

@@ -196,7 +196,9 @@ def user_function(fndesc, libs):
             builder, func, fndesc.restype, fndesc.argtypes, args)
         with cgutils.if_unlikely(builder, status.is_error):
             context.call_conv.return_status_propagate(builder, status)
-        assert sig.return_type == fndesc.restype
+        assert sig.return_type == fndesc.restype, \
+            (f"In {fndesc}, expected return type {fndesc.restype},"
+             f" but got {sig.return_type}")
         # Reconstruct optional return type
         retval = fix_returning_optional(context, builder, sig, status, retval)
         # If the data representations don't match up

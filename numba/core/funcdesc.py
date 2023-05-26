@@ -33,12 +33,12 @@ class FunctionDescriptor(object):
     __slots__ = ('native', 'modname', 'qualname', 'doc', 'typemap',
                  'calltypes', 'args', 'kws', 'restype', 'argtypes',
                  'mangled_name', 'unique_name', 'env_name', 'global_dict',
-                 'inline', 'noalias', 'abi_tags', 'uid')
+                 'inline', 'noalias', 'abi_tags', 'uid', 'cwrapper_name')
 
     def __init__(self, native, modname, qualname, unique_name, doc,
                  typemap, restype, calltypes, args, kws, mangler=None,
                  argtypes=None, inline=False, noalias=False, env_name=None,
-                 global_dict=None, abi_tags=(), uid=None):
+                 global_dict=None, abi_tags=(), uid=None, has_no_wrapper=False):
         self.native = native
         self.modname = modname
         self.global_dict = global_dict
@@ -75,6 +75,9 @@ class FunctionDescriptor(object):
         self.inline = inline
         self.noalias = noalias
         self.abi_tags = abi_tags
+        self.cwrapper_name = (None if has_no_wrapper else
+                              itanium_mangler.prepend_namespace(
+                                  self.mangled_name, ns='cpython'))
 
     def lookup_globals(self):
         """
@@ -120,8 +123,7 @@ class FunctionDescriptor(object):
         The LLVM-registered name for a CPython-compatible wrapper of the
         raw function (i.e. a PyCFunctionWithKeywords).
         """
-        return itanium_mangler.prepend_namespace(self.mangled_name,
-                                                 ns='cpython')
+        return self.cwrapper_name
 
     @property
     def llvm_cfunc_wrapper_name(self):
@@ -166,7 +168,8 @@ class FunctionDescriptor(object):
     @classmethod
     def _from_python_function(cls, func_ir, typemap, restype,
                               calltypes, native, mangler=None,
-                              inline=False, noalias=False, abi_tags=()):
+                              inline=False, noalias=False, abi_tags=(),
+                              has_no_wrapper=False):
         (qualname, unique_name, modname, doc, args, kws, global_dict,
          ) = cls._get_function_info(func_ir)
 
@@ -174,7 +177,8 @@ class FunctionDescriptor(object):
                    typemap, restype, calltypes,
                    args, kws, mangler=mangler, inline=inline, noalias=noalias,
                    global_dict=global_dict, abi_tags=abi_tags,
-                   uid=func_ir.func_id.unique_id)
+                   uid=func_ir.func_id.unique_id,
+                   has_no_wrapper=has_no_wrapper)
         return self
 
 
@@ -186,7 +190,8 @@ class PythonFunctionDescriptor(FunctionDescriptor):
 
     @classmethod
     def from_specialized_function(cls, func_ir, typemap, restype, calltypes,
-                                  mangler, inline, noalias, abi_tags):
+                                  mangler, inline, noalias, abi_tags,
+                                  has_no_wrapper):
         """
         Build a FunctionDescriptor for a given specialization of a Python
         function (in nopython mode).
@@ -194,7 +199,8 @@ class PythonFunctionDescriptor(FunctionDescriptor):
         return cls._from_python_function(func_ir, typemap, restype, calltypes,
                                          native=True, mangler=mangler,
                                          inline=inline, noalias=noalias,
-                                         abi_tags=abi_tags)
+                                         abi_tags=abi_tags,
+                                         has_no_wrapper=has_no_wrapper)
 
     @classmethod
     def from_object_mode_function(cls, func_ir):
@@ -227,4 +233,5 @@ class ExternalFunctionDescriptor(FunctionDescriptor):
                          restype=restype, calltypes=None, args=args,
                          kws=None,
                          mangler=mangler,
-                         argtypes=argtypes)
+                         argtypes=argtypes,
+                         has_no_wrapper=True)

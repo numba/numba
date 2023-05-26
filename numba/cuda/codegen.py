@@ -48,8 +48,8 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
     get_cufunc), which may be of different compute capabilities.
     """
 
-    def __init__(self, codegen, name, entry_name=None, max_registers=None,
-                 nvvm_options=None):
+    def __init__(self, codegen, name, unique_name, entry_name=None,
+                 max_registers=None, nvvm_options=None):
         """
         codegen:
             Codegen object.
@@ -63,7 +63,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         nvvm_options:
                 Dict of options to pass to NVVM.
         """
-        super().__init__(codegen, name)
+        super().__init__(codegen, name, unique_name)
 
         # The llvmlite module for this library.
         self._module = None
@@ -201,6 +201,9 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
     def get_sass(self, cc=None):
         return disassemble_cubin(self.get_cubin(cc=cc))
 
+    def add_addresses(self, addresses):
+        raise NotImplementedError("CUDACodeLibrary cannot bind addresses")
+
     def add_ir_module(self, mod):
         self._raise_if_finalized()
         if self._module is not None:
@@ -332,9 +335,6 @@ class JITCUDACodegen(Codegen):
         ir_module.data_layout = nvvm.NVVM().data_layout
         nvvm.add_ir_version(ir_module)
         return ir_module
-
-    def _add_module(self, module):
-        pass
 
     def magic_tuple(self):
         """

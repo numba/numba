@@ -49,7 +49,7 @@ class TestFuncDescMangledName(unittest.TestCase):
 
         fd = PythonFunctionDescriptor.from_specialized_function(
             func_ir, typemap, restype, calltypes, mangler, inline, noalias,
-            abi_tags=abi_tags,
+            abi_tags=abi_tags, has_no_wrapper=False
         )
 
         # mangled tag must exist in the mangled name

@@ -10,6 +10,7 @@ from numba.core.callwrapper import PyCallWrapper
 from numba.core.base import BaseContext
 from numba.core import (utils, types, config, cgutils, callconv, codegen,
                         externals, fastmathpass, intrinsics)
+from numba.core.image_gen import OrcJITCodegen
 from numba.core.options import TargetOptions, include_default_options
 from numba.core.runtime import rtsys
 from numba.core.compiler_lock import global_compiler_lock
@@ -53,6 +54,8 @@ class CPUContext(BaseContext):
         desired_engine = os.getenv("NUMBA_JIT_BACKEND", "mc")
         if desired_engine == "bad":
             self._internal_codegen = BadCodegen()
+        elif desired_engine == "orc":
+            self._internal_codegen = OrcJITCodegen()
         else:
             self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
 
@@ -241,6 +244,8 @@ class CPUContext(BaseContext):
         - env
             an execution environment (from _dynfunc)
         """
+        if not fndesc.llvm_cpython_wrapper_name:
+            return None
         # Code generation
         fnptr = library.get_pointer_to_function(
             fndesc.llvm_cpython_wrapper_name)
@@ -254,7 +259,7 @@ class CPUContext(BaseContext):
                                        # objects to keepalive with the function
                                        (library,)
                                        )
-        library.codegen.set_env(self.get_env_name(fndesc), env)
+        library.set_env(self.get_env_name(fndesc), env)
         return cfunc
 
     def calc_array_sizeof(self, ndim):

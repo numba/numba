@@ -5,6 +5,7 @@ import weakref
 import ctypes
 import html
 import textwrap
+from typing import TypeVar
 
 import llvmlite.binding as ll
 import llvmlite.ir as llvmir
@@ -515,6 +516,9 @@ class _CFG(object):
         return self.dot
 
 
+C = TypeVar("C", bound="Codegen")
+
+
 class CodeLibrary(metaclass=ABCMeta):
     """
     An interface for bundling LLVM code together and compiling it.
@@ -526,9 +530,10 @@ class CodeLibrary(metaclass=ABCMeta):
     _object_caching_enabled = False
     _disable_inspection = False
 
-    def __init__(self, codegen: "CPUCodegen", name: str):
+    def __init__(self, codegen: C, name: str, unique_name: str):
         self._codegen = codegen
         self._name = name
+        self._unique_name = unique_name
         ptc_name = f"{self.__class__.__name__}({self._name!r})"
         self._recorded_timings = PassTimingsCollection(ptc_name)
         # Track names of the dynamic globals
@@ -536,11 +541,19 @@ class CodeLibrary(metaclass=ABCMeta):
 
     @property
     def has_dynamic_globals(self):
+        """
+        References values that are owned by the Python process
+        """
         self._ensure_finalized()
         return len(self._dynamic_globals) > 0
 
     @property
     def recorded_timings(self):
+        """
+        LLVM profile timings
+
+        Optional
+        """
         return self._recorded_timings
 
     @property
@@ -552,7 +565,17 @@ class CodeLibrary(metaclass=ABCMeta):
 
     @property
     def name(self):
+        """
+        LLVM module name
+        """
         return self._name
+
+    @property
+    def unique_name(self):
+        """
+        A unique name for this function
+        """
+        return self._unique_name
 
     def __repr__(self):
         return "<Library %r at 0x%x>" % (self.name, id(self))
@@ -568,7 +591,7 @@ class CodeLibrary(metaclass=ABCMeta):
 
     def create_ir_module(self, name):
         """
-        Create an LLVM IR module for use by this library.
+        Create an llvmlite IR module for use by this library.
         """
         self._raise_if_finalized()
         ir_module = self._codegen._create_empty_module(name)
@@ -577,14 +600,14 @@ class CodeLibrary(metaclass=ABCMeta):
     @abstractmethod
     def add_linking_library(self, library):
         """
-        Add a library for linking into this library, without losing
+        Add another code library for linking into this library, without destroying
         the original library.
         """
 
     @abstractmethod
     def add_ir_module(self, ir_module):
         """
-        Add an LLVM IR module's contents to this library.
+        Add an llvmlite IR module's contents to this library.
         """
 
     @abstractmethod
@@ -598,19 +621,25 @@ class CodeLibrary(metaclass=ABCMeta):
     @abstractmethod
     def get_function(self, name):
         """
-        Return the function named ``name``.
+        Return the llvmlite function named ``name``.
+
+        This is used to create definitions in other
         """
 
     @abstractmethod
     def get_llvm_str(self):
         """
         Get the human-readable form of the LLVM module.
+
+        Does not actually need to be a string
         """
 
     @abstractmethod
     def get_asm_str(self):
         """
         Get the human-readable assembly.
+
+        Does not actually need to be a string
         """
 
     #
@@ -640,8 +669,8 @@ class CodeLibrary(metaclass=ABCMeta):
 
 class CPUCodeLibrary(CodeLibrary):
 
-    def __init__(self, codegen, name):
-        super().__init__(codegen, name)
+    def __init__(self, codegen, name, unique_name):
+        super().__init__(codegen, name, unique_name)
         self._linking_libraries = []   # maintain insertion order
         self._final_module = ll.parse_assembly(
             str(self._codegen._create_empty_module(self.name)))
@@ -740,7 +769,7 @@ class CPUCodeLibrary(CodeLibrary):
         require_global_compiler_lock()
 
         # Report any LLVM-related problems to the user
-        self._codegen._check_llvm_bugs()
+        _check_llvm_bugs()
 
         self._raise_if_finalized()
 
@@ -998,6 +1027,9 @@ class JITCodeLibrary(CPUCodeLibrary):
         with self._recorded_timings.record("Finalize object"):
             self._codegen._engine.finalize_object()
 
+    def set_env(self, env_name, env):
+        self.codegen.set_env(env_name, env)
+
 
 class RuntimeLinker(object):
     """
@@ -1133,13 +1165,6 @@ class Codegen(metaclass=ABCMeta):
         Create a new empty module suitable for the target.
         """
 
-    @abstractmethod
-    def _add_module(self, module):
-        """
-        Add a module to the execution engine. Ownership of the module is
-        transferred to the engine.
-        """
-
     @property
     def target_data(self):
         """
@@ -1203,6 +1228,13 @@ class CPUCodegen(Codegen):
             ir_module.data_layout = self._data_layout
         return ir_module
 
+    @abstractmethod
+    def _add_module(self, module):
+        """
+        Add a module to the execution engine. Ownership of the module is
+        transferred to the engine.
+        """
+
     def _module_pass_manager(self, **kwargs):
         pm = ll.create_module_pass_manager()
         self._tm.add_analysis_passes(pm)
@@ -1263,35 +1295,6 @@ class CPUCodegen(Codegen):
 
         return pmb
 
-    def _check_llvm_bugs(self):
-        """
-        Guard against some well-known LLVM bug(s).
-        """
-        # Check the locale bug at https://github.com/numba/numba/issues/1569
-        # Note we can't cache the result as locale settings can change
-        # across a process's lifetime.  Also, for this same reason,
-        # the check here is a mere heuristic (there may be a race condition
-        # between now and actually compiling IR).
-        ir = """
-            define double @func()
-            {
-                ret double 1.23e+01
-            }
-            """
-        mod = ll.parse_assembly(ir)
-        ir_out = str(mod)
-        if "12.3" in ir_out or "1.23" in ir_out:
-            # Everything ok
-            return
-        if "1.0" in ir_out:
-            loc = locale.getlocale()
-            raise RuntimeError(
-                "LLVM will produce incorrect floating-point code "
-                "in the current locale %s.\nPlease read "
-                "https://numba.readthedocs.io/en/stable/user/faq.html#llvm-locale-bug "
-                "for more information."
-                % (loc,))
-        raise AssertionError("Unexpected IR:\n%s\n" % (ir_out,))
 
     def magic_tuple(self):
         """
@@ -1442,3 +1445,55 @@ def get_host_cpu_features():
 
         # Set feature attributes
         return features.flatten()
+
+
+def _check_llvm_bugs():
+    """
+    Guard against some well-known LLVM bug(s).
+    """
+    # Check the locale bug at https://github.com/numba/numba/issues/1569
+    # Note we can't cache the result as locale settings can change
+    # across a process's lifetime.  Also, for this same reason,
+    # the check here is a mere heuristic (there may be a race condition
+    # between now and actually compiling IR).
+    ir = """
+        define double @func()
+        {
+            ret double 1.23e+01
+        }
+        """
+    mod = ll.parse_assembly(ir)
+    ir_out = str(mod)
+    if "12.3" in ir_out or "1.23" in ir_out:
+        # Everything ok
+        return
+    if "1.0" in ir_out:
+        loc = locale.getlocale()
+        raise RuntimeError(
+            "LLVM will produce incorrect floating-point code "
+            "in the current locale %s.\nPlease read "
+            "https://numba.readthedocs.io/en/stable/user/faq.html#llvm-locale-bug "
+            "for more information."
+            % (loc,))
+    raise AssertionError("Unexpected IR:\n%s\n" % (ir_out,))
+
+
+_registered_symbols = {}
+
+
+def add_symbol(name, address):
+    """
+    Registers a symbol globally in a way that can be used by Numba-generated
+    code.
+
+    This is intended as a replacement for llvmlite.binding.add_symbol to
+    facilitate OrcJIT migration.
+    """
+    if name not in _registered_symbols:
+        _registered_symbols[name] = address
+        ll.add_symbol(name, address)
+
+
+def _import_registered_symbols(builder):
+    for name, address in _registered_symbols.items():
+        builder.import_symbol(name, address)

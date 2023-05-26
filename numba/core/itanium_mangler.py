@@ -181,7 +181,7 @@ def prepend_namespace(mangled, ns):
     Prepend namespace to mangled name.
     """
     if not mangled.startswith(PREFIX):
-        raise ValueError('input is not a mangled name')
+        raise ValueError(f'{mangled} is not a mangled name')
     elif mangled.startswith(PREFIX + 'N'):
         # nested
         remaining = mangled[3:]

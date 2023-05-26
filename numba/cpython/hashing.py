@@ -9,7 +9,6 @@ import ctypes
 import warnings
 from collections import namedtuple
 
-import llvmlite.binding as ll
 from llvmlite import ir
 
 from numba import literal_unroll
@@ -17,6 +16,7 @@ from numba.core.extending import (
     overload, overload_method, intrinsic, register_jitable)
 from numba.core import errors
 from numba.core import types, utils
+from numba.core.codegen import add_symbol
 from numba.core.unsafe.bytes import grab_byte, grab_uint64_t
 from numba.cpython.randomimpl import (const_int, get_next_int, get_next_int32,
                                       get_state_ptr)
@@ -450,7 +450,7 @@ def _build_hashsecret():
         symbol_name = "_numba_hashsecret_{}".format(name)
         val = ctypes.c_uint64(val)
         addr = ctypes.addressof(val)
-        ll.add_symbol(symbol_name, addr)
+        add_symbol(symbol_name, addr)
         info[name] = _hashsecret_entry(symbol=symbol_name, value=val)
 
     inject('djbx33a_suffix', pyhashsecret.djbx33a.suffix)
