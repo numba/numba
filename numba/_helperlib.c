@@ -1057,6 +1057,7 @@ numba_unpickle(const char *data, int n, const char *hashed)
 NUMBA_EXPORT_FUNC(PyObject *)
 numba_unpickle(const char *data, int n, const char *hashed)
 {
+    printf("In numba_unpickle\n");
     PyObject *buf=NULL, *obj=NULL, *addr=NULL, *hashedbuf=NULL;
     static PyObject *loads=NULL;
 
@@ -1072,18 +1073,23 @@ numba_unpickle(const char *data, int n, const char *hashed)
             return NULL;
     }
 
+    printf("numba_unpickle: Got past the loads\n");
     buf = PyBytes_FromStringAndSize(data, n);
+    printf("numba_unpickle: buf = %p\n", buf);
     if (buf == NULL)
         return NULL;
     /* SHA1 produces 160 bit or 20 bytes */
     hashedbuf = PyBytes_FromStringAndSize(hashed, 20);
+    printf("numba_unpickle: hashedbuf = %p\n", hashedbuf);
     if (hashedbuf == NULL)
         goto error;
     addr = PyLong_FromVoidPtr((void*)data);
     if (addr == NULL)
         goto error;
+    printf("numba_unpickle: Calling PyObject_CallFunctionObjArgs\n");
     obj = PyObject_CallFunctionObjArgs(loads, addr, buf, hashedbuf, NULL);
 error:
+    printf("numba_unpickle: At error label\n");
     Py_XDECREF(addr);
     Py_XDECREF(hashedbuf);
     Py_DECREF(buf);
