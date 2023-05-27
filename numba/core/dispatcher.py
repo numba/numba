@@ -872,9 +872,9 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         sig_args = sig.args
         if isinstance(self.overloads[sig_args].type_annotation, str):
             # We assume this is because the function was loaded from cache
-            # When a function is cached, the type_annotation property is serialized
-            # as a string. Ref:
-            # https://github.com/numba/numba/blob/be990a818c377408a1f41c37c7720bc2ba0fb89a/numba/core/compiler.py#L207  # noqa: E501
+            # When a function is cached, the type_annotation property is
+            # serialized as a string. Ref:
+            # /numba/core/compiler.py#L207
             deps = self._cache.load_cached_deps(sig_args, self.targetctx)
         else:
             deps = get_function_dependencies(self.overloads[sig_args])
