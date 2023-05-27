@@ -517,21 +517,27 @@ class IndexDataCacheFile(object):
         data_name, deps_filestamps = overloads.get(key, (None, None))
         if data_name is None:
             return
+        if config.DEBUG_CACHE:
+            files = list(deps_filestamps.keys())
+            _cache_log(f'[cache] dependencies of cache file "{data_name}": {files}')
         if not are_filestamps_valid(deps_filestamps):
             _cache_log("Some files have changed, cache has been invalidated")
             return
         try:
-            return self._load_data(data_name)
+            cache_data = self._load_data(data_name)
         except OSError:
             # File could have been removed while the index still refers it.
             return
-
+        return cache_data
     def load_deps(self,  key: IndexKey) -> pt.Dict[str, FileStamp]:
         """
         Load the cached dependencies' FileStamps for the given key
         """
         overloads = self._load_index()
         data_name, deps_filestamps = overloads.get(key, (None, None))
+        if config.DEBUG_CACHE:
+            files = list(deps_filestamps.keys())
+            _cache_log(f'[cache] Loading dependencies of "{key}": {files}')
         return deps_filestamps
 
     def _load_index(self) -> pt.Dict[IndexKey, IndexOverloadData]:
@@ -817,6 +823,11 @@ def get_function_dependencies(overload: OverloadData
         # retrieve all dependencies of the function in fc_ty
         indirect_deps = get_deps_info(fc_ty, sig)
         deps.update(indirect_deps)
+
+    if config.DEBUG_CACHE:
+        files = list(deps.keys())
+        func = overload.library.name
+        _cache_log(f'[cache] dependencies of "{func}": {files}')
     return deps
 
 
