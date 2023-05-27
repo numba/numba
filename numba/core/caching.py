@@ -784,7 +784,7 @@ def make_library_cache(prefix):
     return LibraryCache
 
 
-# list of types for which the cache invalidatio is extended to their
+# list of types for which the cache invalidation is extended to their
 # definitions
 dep_types = (types.Dispatcher, types.Function)
 
