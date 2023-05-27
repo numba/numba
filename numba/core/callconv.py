@@ -264,7 +264,6 @@ class MinimalCallConv(BaseCallConv):
         arginfo.assign_names(self.get_arguments(fn),
                              ['arg.' + a for a in args])
         fn.args[0].name = ".ret"
-        return fn
 
     def get_arguments(self, func):
         """
@@ -853,8 +852,6 @@ class CPUCallConv(BaseCallConv):
                 'numba_args_may_always_need_nrt',
             )
             nmd.add(fn.module.add_metadata([fn]))
-
-        return fn
 
     def get_arguments(self, func):
         """

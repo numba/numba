@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import functools
 import inspect
+import warnings
 from contextlib import contextmanager
 import typing as pt
 
@@ -8,6 +9,7 @@ from numba.core import config, targetconfig
 from numba.core.decorators import jit
 from numba.core.descriptors import TargetDescriptor
 from numba.core.extending import is_jitted
+from numba.core.errors import NumbaDeprecationWarning
 from numba.core.options import TargetOptions, include_default_options
 from numba.core.registry import cpu_target
 from numba.core.target_extension import dispatcher_registry, target_registry
@@ -245,6 +247,20 @@ def parse_identity(identity):
     return identity
 
 
+@contextmanager
+def _suppress_deprecation_warning_nopython_not_supplied():
+    """This suppresses the NumbaDeprecationWarning that occurs through the use
+    of `jit` without the `nopython` kwarg. This use of `jit` occurs in a few
+    places in the `{g,}ufunc` mechanism in Numba, predominantly to wrap the
+    "kernel" function."""
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore',
+                                category=NumbaDeprecationWarning,
+                                message=(".*The 'nopython' keyword argument "
+                                         "was not supplied*"),)
+        yield
+
+
 # Class definitions
 
 class _BaseUFuncBuilder(object):
@@ -275,9 +291,10 @@ class UFuncBuilder(_BaseUFuncBuilder):
             py_func = py_func.py_func
         self.py_func = py_func
         self.identity = parse_identity(identity)
-        self.nb_func = jit(_target='npyufunc',
-                           cache=cache,
-                           **targetoptions)(py_func)
+        with _suppress_deprecation_warning_nopython_not_supplied():
+            self.nb_func = jit(_target='npyufunc',
+                               cache=cache,
+                               **targetoptions)(py_func)
         self._sigs = []
         self._cres = {}
 
@@ -340,7 +357,8 @@ class GUFuncBuilder(_BaseUFuncBuilder):
                  targetoptions={}, writable_args=()):
         self.py_func = py_func
         self.identity = parse_identity(identity)
-        self.nb_func = jit(_target='npyufunc', cache=cache)(py_func)
+        with _suppress_deprecation_warning_nopython_not_supplied():
+            self.nb_func = jit(_target='npyufunc', cache=cache)(py_func)
         self.signature = signature
         self.sin, self.sout = parse_signature(signature)
         self.targetoptions = targetoptions

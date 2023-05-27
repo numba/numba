@@ -6,7 +6,7 @@ import operator
 from itertools import takewhile
 
 import unittest
-from numba import njit
+from numba import njit, jit
 from numba.core.controlflow import CFGraph, Loop
 from numba.core.compiler import (compile_extra, compile_isolated, Flags,
                                  CompilerBase, DefaultPassBuilder)
@@ -248,8 +248,10 @@ class TestObjLifetime(TestCase):
     """
 
     def compile(self, pyfunc):
-        cr = compile_isolated(pyfunc, (types.pyobject,), flags=forceobj_flags)
-        return cr.entry_point
+        # Note: looplift must be disabled. The test require the function
+        #       control-flow to be unchanged.
+        cfunc = jit((types.pyobject,), forceobj=True, looplift=False)(pyfunc)
+        return cfunc
 
     def compile_and_record(self, pyfunc, raises=None):
         rec = RefRecorder()

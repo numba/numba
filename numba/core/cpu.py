@@ -98,6 +98,9 @@ class CPUContext(BaseContext):
         # load 3rd party extensions
         numba.core.entrypoints.init_all()
 
+        # fix for #8940
+        from numba.np.unsafe import ndarray # noqa F401
+
     @property
     def target_data(self):
         return self._internal_codegen.target_data

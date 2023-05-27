@@ -51,8 +51,6 @@ Documentation
 - :ghfile:`docs/Makefile` - Used to build Sphinx docs with ``make``
 - :ghfile:`docs/source` - ReST source for Numba documentation
 - :ghfile:`docs/_static/` - Static CSS and image assets for Numba docs
-- :ghfile:`docs/gh-pages.py` - Utility script to update Numba docs (stored
-  as gh-pages)
 - :ghfile:`docs/make.bat` - Not used (remove?)
 - :ghfile:`docs/requirements.txt` - Pip package requirements for building docs
   with Read the Docs.
