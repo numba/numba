@@ -1,8 +1,10 @@
 """
 Enum values for CUDA driver. Information about the values
 can be found on the official NVIDIA documentation website.
-ref: https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__TYPES.html#group__CUDA__TYPES
+ref: https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__TYPES.html
+anchor: #group__CUDA__TYPES
 """
+
 
 # Error codes
 
@@ -168,19 +170,19 @@ CU_MEMHOSTREGISTER_PORTABLE = 0x01
 # Flag for cuMemHostRegister()
 CU_MEMHOSTREGISTER_DEVICEMAP = 0x02
 
-# If set, the passed memory pointer is treated as pointing to some 
+# If set, the passed memory pointer is treated as pointing to some
 # memory-mapped I/O space, e.g. belonging to a third-party PCIe device.
-# On Windows the flag is a no-op. On Linux that memory is marked 
+# On Windows the flag is a no-op. On Linux that memory is marked
 # as non cache-coherent for the GPU and is expected
 # to be physically contiguous. It may return CUDA_ERROR_NOT_PERMITTED
 # if run as an unprivileged user, CUDA_ERROR_NOT_SUPPORTED on older
-# Linux kernel versions. On all other platforms, it is not supported 
-# and CUDA_ERROR_NOT_SUPPORTED is returned. 
+# Linux kernel versions. On all other platforms, it is not supported
+# and CUDA_ERROR_NOT_SUPPORTED is returned.
 # Flag for cuMemHostRegister()
 CU_MEMHOSTREGISTER_IOMEMORY = 0x04
 
 # If set, the passed memory pointer is treated as pointing to memory
-# that is considered read-only by the device. On platforms without 
+# that is considered read-only by the device. On platforms without
 # CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS_USES_HOST_PAGE_TABLES,
 # this flag is required in order to register memory mapped
 # to the CPU as read-only. Support for the use of this flag can be
@@ -268,7 +270,8 @@ CU_POINTER_ATTRIBUTE_MEMPOOL_HANDLE = 17
 CU_POINTER_ATTRIBUTE_MAPPING_SIZE = 18
 # The start address of the mapping that the pointer belongs to
 CU_POINTER_ATTRIBUTE_MAPPING_BASE_ADDR = 19
-# A process-wide unique id corresponding to the physical allocation the pointer belongs to
+# A process-wide unique id corresponding to the
+# physical allocation the pointer belongs to
 CU_POINTER_ATTRIBUTE_MEMORY_BLOCK_ID = 20
 
 
@@ -461,7 +464,8 @@ CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES = 8
 # in percent of the total shared memory. Refer to
 # CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_MULTIPROCESSOR.
 # This is only a hint, and the driver can choose a different ratio
-# if required to execute the function. See cuFuncSetAttribute, cuKernelSetAttribute
+# if required to execute the function.
+# See cuFuncSetAttribute, cuKernelSetAttribute
 CU_FUNC_ATTRIBUTE_PREFERRED_SHARED_MEMORY_CARVEOUT = 9
 
 # If this attribute is set, the kernel must launch with a valid cluster
@@ -494,7 +498,7 @@ CU_FUNC_ATTRIBUTE_REQUIRED_CLUSTER_DEPTH = 13
 
 # Whether the function can be launched with non-portable cluster size.
 # 1 is allowed, 0 is disallowed. A non-portable cluster size may only
-# function on the specific SKUs the program is tested on. 
+# function on the specific SKUs the program is tested on.
 # The launch might fail if the program is run on a different hardware platform.
 # For more details refer to link :
 # https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__TYPES.html#group__CUDA__TYPES
@@ -506,8 +510,8 @@ CU_FUNC_ATTRIBUTE_NON_PORTABLE_CLUSTER_SIZE_ALLOWED = 14
 CU_FUNC_ATTRIBUTE_CLUSTER_SCHEDULING_POLICY_PREFERENCE = 15
 
 
-
 # Device attributes
+
 CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK = 1
 CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X = 2
 CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y = 3
