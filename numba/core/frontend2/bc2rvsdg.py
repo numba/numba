@@ -11,6 +11,7 @@ from typing import (
     Union,
     NamedTuple,
     Mapping,
+    TypeVar
 )
 
 from numba_rvsdg.core.datastructures.byte_flow import ByteFlow
@@ -37,6 +38,12 @@ from .regionpasses import (
 )
 
 DEBUG_GRAPH = int(os.environ.get("DEBUG_GRAPH", "0"))
+
+
+T = TypeVar('T')
+def _just(v: Optional[T]) -> T:
+    assert v is not None
+    return v
 
 
 @dataclass(frozen=True)
@@ -249,7 +256,7 @@ class DDGBlock(BasicBlock):
 def render_scfg(byteflow):
     bfr = ByteFlowRenderer()
     bfr.bcmap_from_bytecode(byteflow.bc)
-    bfr.render_scfg(byteflow.scfg).view("scfg")
+    byteflow.scfg.view("scfg")
 
 
 def _fixup_region(scfg: SCFG, region: RegionBlock):
@@ -284,8 +291,8 @@ def _canonicalize_scfg_switch(scfg: SCFG):
                     kind="switch",
                     _jump_targets=tailblk._jump_targets,
                     backedges=tailblk.backedges,
-                    exiting=tailblk.exiting,
-                    headers={label},
+                    exiting=tailblk,
+                    header=label,
                     subregion=subregion_scfg,
                 )
                 todos -= switch_labels
@@ -301,6 +308,7 @@ def _canonicalize_scfg_switch(scfg: SCFG):
                 _fixup_region(scfg, scfg.graph[label])
             elif blk.kind == 'loop':
                 _canonicalize_scfg_switch(blk.subregion)
+
                 if blk.exiting not in blk.subregion:
                     [exiting], _exit = blk.subregion.find_exiting_and_exits(set(blk.subregion.graph))
                     scfg.graph[label] = replace(blk, exiting=exiting)
@@ -314,20 +322,22 @@ class CanonicalizeLoop(RegionTransformer):
     """
     def visit_loop(self, parent: SCFG, region: RegionBlock, data):
         # Fix header
-        [header], [entry] = parent.find_headers_and_entries(set(region.subregion.graph))
+        # [header], [entry] = parent.find_headers_and_entries(set(region.subregion.graph))
         new_label = parent.name_gen.new_block_name(block_names.SYNTH_BRANCH)
-        region.subregion.insert_SyntheticFill(new_label, {}, {header})
-        parent.remove_blocks({region.name})
-        parent.add_block(replace(region, name=new_label, headers=(new_label,)))
-        parent.graph[entry] = replace(parent.graph[entry], _jump_targets=(new_label,))
+        region.subregion.insert_SyntheticFill(new_label, {}, {region.header})
+        region.replace_header(new_label)
+        # parent.remove_blocks({region.name})
+        # parent.add_block(replace(region, name=new_label, headers=(new_label,)))
+        # parent.graph[region.name] =
+        # parent.graph[entry] = replace(parent.graph[entry], _jump_targets=(new_label,))
         # Fix tail
 
-        def get_inner_most_exiting(blk, exiting):
+        def get_inner_most_exiting(blk):
             while isinstance(blk, RegionBlock):
-                parent, blk = blk, blk.subregion.graph[exiting]
+                parent, blk = blk, blk.subregion.graph[blk.exiting]
             return parent, blk
 
-        tail_parent, tail_bb = get_inner_most_exiting(region, region.exiting)
+        tail_parent, tail_bb = get_inner_most_exiting(region)
         [backedge] = tail_bb.backedges
         repl = {backedge: new_label}
         new_tail_bb = replace(
@@ -418,13 +428,18 @@ def build_rvsdg(code, argnames: tuple[str, ...]) -> SCFG:
     bcmap = byteflow.scfg.bcmap_from_bytecode(byteflow.bc)
     _scfg_add_conditional_pop_stack(bcmap, byteflow.scfg)
     byteflow = byteflow.restructure()
+    # byteflow.scfg.view()
+    # render_scfg(byteflow)
     canonicalize_scfg(byteflow.scfg)
     if DEBUG_GRAPH:
         render_scfg(byteflow)
     rvsdg = convert_to_dataflow(byteflow, argnames)
     rvsdg = propagate_states(rvsdg)
-    if DEBUG_GRAPH:
-        RvsdgRenderer().render_rvsdg(rvsdg).view("rvsdg")
+    # if DEBUG_GRAPH:
+    #     # RvsdgRenderer().render_rvsdg(rvsdg).view("rvsdg")
+    from .regionrenderer import RegionRenderer
+    RegionRenderer().render(rvsdg).view("rvsdg")
+
     return rvsdg
 
 
@@ -530,7 +545,7 @@ class PropagateVars(RegionVisitor):
     def visit_switch(self, region: RegionBlock, data):
         self.debug_print("---SWITCH_ENTER", region.name)
         region.incoming_states.update(data)
-        [header] = region.headers
+        header = region.header
         data_at_head = self.visit_linear(region.subregion[header], data)
         data_for_branches = []
         for blk in region.subregion.graph.values():
@@ -609,7 +624,7 @@ class PropagateStack(RegionVisitor):
 
     def visit_switch(self, region: RegionBlock, data):
         self.debug_print("---SWITCH_ENTER", region.name)
-        [header] = region.headers
+        header = region.header
         data_at_head = self.visit_linear(region.subregion[header], data)
         data_for_branches = []
         for blk in region.subregion.graph.values():
@@ -651,7 +666,7 @@ class ConnectImportedStackVars(RegionVisitor):
         self.visit_linear(region, data)
 
     def visit_switch(self, region: RegionBlock, data):
-        [header] = region.headers
+        header = region.header
         self.visit_linear(region.subregion[header], data)
         for blk in region.subregion.graph.values():
             if blk.kind == "branch":

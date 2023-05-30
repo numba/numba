@@ -263,7 +263,7 @@ class RVSDG2IR(RegionVisitor):
 
     def visit_switch(self, region: RegionBlock, data):
         # Emit header
-        [header] = region.headers
+        header = region.header
         header_block = region.subregion[header]
         assert header_block.kind == 'head'
         self.branch_predicate = None
