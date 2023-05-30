@@ -602,7 +602,8 @@ class DefaultPassBuilder(object):
         return pm
 
     @staticmethod
-    def define_parfor_gufunc_nopython_lowering_pipeline(state, name='parfor_gufunc_nopython_lowering'):
+    def define_parfor_gufunc_nopython_lowering_pipeline(
+        state, name='parfor_gufunc_nopython_lowering'):
         pm = PassManager(name)
         # legalise
         pm.add_pass(NoPythonSupportedFeatureValidation,
