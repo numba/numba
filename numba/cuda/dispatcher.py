@@ -1,7 +1,5 @@
-from struct import Struct
 import numpy as np
 import os
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
 import sys
 import ctypes
 import functools
@@ -16,7 +14,7 @@ from numba.core.typing.typeof import Purpose, typeof
 from numba.cuda.api import get_current_device
 from numba.cuda.args import wrap_arg
 from numba.cuda.compiler import compile_cuda, CUDACompiler
-from numba.cuda.cudadrv import driver, drvapi
+from numba.cuda.cudadrv import driver
 from numba.cuda.cudadrv.devices import get_context
 from numba.cuda.descriptor import cuda_target
 from numba.cuda.errors import (missing_launch_config_msg,
@@ -29,7 +27,6 @@ from numba import _dispatcher
 from warnings import warn
 from ctypes import (Structure, c_void_p, c_int, c_int32, sizeof,
                     PYFUNCTYPE, py_object)
-from numba import cloudpickle
 from numba import _helperlib
 
 cuda_fp16_math_funcs = ['hsin', 'hcos',
@@ -328,12 +325,10 @@ class _Kernel(serialize.ReduceMixin):
             excinfo_mem, excinfo_sz = \
                 cufunc.module.get_global_symbol(excinfo_name)
 
-            print(f"excinfo_mem: {excinfo_mem}, excinfo_sz: {excinfo_sz}")           
             assert excinfo_sz == excinfo_sz_ctype
 
             excinfo_val = ExcInfo(None, 0, None, None, 0)
             excinfo_mem.memset(0, stream=stream)
-
 
         # Prepare arguments
         retr = []                       # hold functors for writeback
@@ -365,33 +360,6 @@ class _Kernel(serialize.ReduceMixin):
                                   excinfo_mem,
                                   excinfo_sz)
 
-            pickle_buf_sz = excinfo_val.pickle_bufsz
-            print("_Kernel::launch:: excinfo_val.pickle_buf = ", excinfo_val.pickle_buf)
-
-            gpu_mem = cuda.cudadrv.driver.MemoryPointer(self.target_context,
-                                                        excinfo_val.pickle_buf,
-                                                        pickle_buf_sz)
-
-            pickle_buf_host = np.empty((excinfo_val.pickle_bufsz,),
-                                       dtype=np.byte)
-
-            driver.device_to_host(pickle_buf_host.ctypes.data,
-                                  gpu_mem,
-                                  pickle_buf_sz)
-
-            gpu_mem2 = cuda.cudadrv.driver.MemoryPointer(self.target_context,
-                                                        excinfo_val.hash_buf,
-                                                        20)
-            hash_buf_host = np.empty((20,), dtype=np.byte)
-            driver.device_to_host(hash_buf_host.ctypes.data,
-                                  gpu_mem2,
-                                  20)
-
-            print("Returned from device_to_host()")
- 
-            print("#### excinfo_val = ", excinfo_val)
-            print("_Kernel::launch:: excinfo_val.pickle_buf = ", excinfo_val.pickle_buf)
-            print("_Kernel::launch:: excinfo_val.pickle_bufsz = ", excinfo_val.pickle_bufsz)
             if excval.value != 0:
                 # An error occurred
                 def load_symbol(name):
@@ -402,27 +370,45 @@ class _Kernel(serialize.ReduceMixin):
                     driver.device_to_host(ctypes.addressof(val), mem, sz)
                     return val.value
 
+                def load_exception_buffer(context, buf, buf_sz):
+                    gpu_mem = cuda.cudadrv.driver.MemoryPointer(context, buf,
+                                                                buf_sz)
+                    buf_host = np.empty((buf_sz,), dtype=np.byte)
+                    driver.device_to_host(buf_host.ctypes.data, gpu_mem,
+                                          buf_sz)
+                    return buf_host
+
                 # Load exception from device
                 tid = [load_symbol("tid" + i) for i in 'zyx']
                 ctaid = [load_symbol("ctaid" + i) for i in 'zyx']
                 code = excval.value
 
                 # Unpack he exception so we can raise it.
-                pickle_buf_ptr = excinfo_val.pickle_buf
-                pickle_bufsz_val = excinfo_val.pickle_bufsz
-                print("bufsz = ", pickle_bufsz_val)
-                hash_buf_ptr = excinfo_val.hash_buf
+                pickle_buf_sz = excinfo_val.pickle_bufsz
+                print("bufsz = ", pickle_buf_sz)
+
+                pickle_buf_host = load_exception_buffer(self.target_context,
+                                                        excinfo_val.pickle_buf,
+                                                        pickle_buf_sz)
+                # FROM `numba_unpickle` SHA1 produces 160 bit or 20 bytes */
+                hash_buf_host = load_exception_buffer(self.target_context,
+                                                      excinfo_val.hash_buf,
+                                                      20)
 
                 unpickle_ptr = _helperlib.c_helpers['unpickle']
-                unpickle_fn = PYFUNCTYPE(py_object, c_void_p, c_int32, c_void_p)(unpickle_ptr)
+                unpickle_fn_type = PYFUNCTYPE(py_object, c_void_p, c_int32,
+                                              c_void_p)
+                unpickle_fn = unpickle_fn_type(unpickle_ptr)
 
-                print ("Calling numba_unpickle ")
-                print ("pickle buf = ", pickle_buf_ptr)
-                unpickled_exc = unpickle_fn(pickle_buf_host.ctypes.data, pickle_bufsz_val, hash_buf_host.ctypes.data)
-                print ("Unpickled = ", unpickled_exc)
+                print("Calling numba_unpickle ")
+                unpickled_exc = unpickle_fn(pickle_buf_host.ctypes.data,
+                                            pickle_buf_sz,
+                                            hash_buf_host.ctypes.data)
+                print("Unpickled = ", unpickled_exc)
                 if unpickled_exc is not None:
-                    print ("Unpickled = ", unpickled_exc)
-                    raise unpickled_exc
+                    print("Unpickled 2 = ", unpickled_exc)
+                    exception_class, exception_args, _ = unpickled_exc
+                    raise exception_class(*exception_args)
 
                 exccls, exc_args, loc = self.call_helper.get_exception(code)
                 # Prefix the exception message with the source location
