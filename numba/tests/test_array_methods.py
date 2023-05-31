@@ -787,6 +787,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
     def test_np_where_no_isinstance_warn(self):
         # TODO: remove this test before Numba 0.58 release
+        # When _isinstance_no_warn has been removed.
         msg = 'Use of isinstance() detected. This is an experimental feature.'
         category = NumbaExperimentalFeatureWarning
         a = np.arange(10)
