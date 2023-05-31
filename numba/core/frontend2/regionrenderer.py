@@ -19,6 +19,7 @@ from .bc2rvsdg import (
     DDGControlVariable,
     DDGBranch,
     DDGRegion,
+    DDGProtocol,
     Op,
     ValueState,
     DEBUG_GRAPH,
@@ -206,13 +207,48 @@ class RegionRenderer(RegionVisitor):
                 data=dict(body=body),
             )
             builder.graph.add_node(nodename, node)
+
+            if isinstance(block, DDGProtocol):
+                # Insert incoming and outgoing
+                self._add_inout_ports(
+                    block,
+                    replace(builder, node_maker=node_maker),
+                )
+
+
         for dstnode in block.jump_targets:
             builder.graph.add_edge(nodename, self._id(dstnode))
         return builder
 
+    def _add_inout_ports(self, block, builder):
+        # Make outgoing node
+        outgoing_nodename = f"outgoing_{block.name}"
+        outgoing_node = builder.node_maker.make_node(
+            kind="ports",
+            ports=list(block.outgoing_states),
+            data=dict(body="outgoing"),
+        )
+        builder.graph.add_node(outgoing_nodename, outgoing_node)
+
+        # Make incoming node
+        incoming_nodename = f"incoming_{block.name}"
+        incoming_node = builder.node_maker.make_node(
+            kind="ports",
+            ports=list(block.incoming_states),
+            data=dict(body="incoming"),
+        )
+        builder.graph.add_node(incoming_nodename, incoming_node)
+
     def visit_linear(self, region: RegionBlock, builder: GraphBuilder):
         nodename = self._id(region.name)
         node_maker = builder.node_maker.subregion(f"regionouter_{nodename}")
+
+        if isinstance(region, DDGProtocol):
+            # Insert incoming and outgoing
+            self._add_inout_ports(
+                region,
+                replace(builder, node_maker=node_maker),
+            )
 
         subbuilder = replace(
             builder,
@@ -221,7 +257,41 @@ class RegionRenderer(RegionVisitor):
         node = subbuilder.node_maker.make_node(kind=f"{type(region).__name__}")
         subbuilder.graph.add_node(region.name, node)
         super().visit_linear(region, subbuilder)
+
+
+        # Connect in-out
+        header = region.subregion[region.header]
+        if isinstance(region, DDGProtocol) and isinstance(header, DDGProtocol):
+            for k in region.incoming_states:
+                builder.graph.add_edge(f"incoming_{region.name}", f"incoming_{header.name}", src_port=k, dst_port=k)
+        exiting = region.subregion[region.exiting]
+        if isinstance(region, DDGProtocol) and isinstance(exiting, DDGProtocol):
+            for k in region.outgoing_states & exiting.outgoing_states:
+                builder.graph.add_edge(f"outgoing_{exiting.name}", f"outgoing_{region.name}")#, src_port=k, dst_port=k)
         return builder
+
+    def visit_graph(self, scfg: SCFG, builder):
+        """Overriding
+        """
+        toposorted = self._toposort_graph(scfg)
+        label: str
+        last_label: str|None = None
+        for lvl in toposorted:
+            for label in lvl:
+                builder = self.visit(scfg[label], builder)
+
+                # Connect outgoing to incoming
+                if last_label is not None:
+                    last_node = scfg[last_label]
+                    node = scfg[label]
+                    self._connect_inout_ports(last_node, node, builder)
+                last_label = label
+        return builder
+
+    def _connect_inout_ports(self, last_node, node, builder):
+        if isinstance(last_node, DDGProtocol) and isinstance(node, DDGProtocol):
+            for k in last_node.outgoing_states:
+                builder.graph.add_edge(f"outgoing_{last_node.name}", f"incoming_{node.name}", src_port=k, dst_port=k)
 
     def visit_loop(self, region: RegionBlock, builder: GraphBuilder):
         return self.visit_linear(region, builder)
@@ -244,7 +314,6 @@ class RegionRenderer(RegionVisitor):
         rgr = RegionGraphvizRenderer()
         graph.render(rgr)
         return rgr.digraph
-
 
     def _id(self, nodename: str) -> str:
         return str(nodename)

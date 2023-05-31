@@ -181,7 +181,7 @@ class DDGBlock(BasicBlock):
 
         # Make outgoing node
         ports = []
-        outgoing_nodename = f"outgoing_{vs.short_identity()}"
+        outgoing_nodename = f"outgoing_{self.name}"
         for k, vs in self.out_vars.items():
             ports.append(k)
 
@@ -199,7 +199,7 @@ class DDGBlock(BasicBlock):
 
         # Make incoming node
         ports = []
-        incoming_nodename = f"incoming_{vs.short_identity()}"
+        incoming_nodename = f"incoming_{self.name}"
         for k, vs in self.in_vars.items():
             ports.append(k)
 
@@ -214,8 +214,6 @@ class DDGBlock(BasicBlock):
             data=dict(body="incoming"),
         )
         builder.graph.add_node(incoming_nodename, incoming_node)
-
-
 
     def _render_vs(self, builder, vs: ValueState):
         from .regionrenderer import GraphBuilder
