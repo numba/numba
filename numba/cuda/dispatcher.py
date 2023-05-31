@@ -371,8 +371,15 @@ class _Kernel(serialize.ReduceMixin):
                     return val.value
 
                 def load_exception_buffer(context, buf, buf_sz):
-                    gpu_mem = cuda.cudadrv.driver.MemoryPointer(context, buf,
-                                                                buf_sz)
+                    if driver.USE_NV_BINDING:
+                        gpu_mem = cuda.cudadrv.driver.MemoryPointer(context,
+                                                                    buf,
+                                                                    buf_sz)
+                    else:
+                        ctype_buf = c_void_p(buf)
+                        gpu_mem = cuda.cudadrv.driver.MemoryPointer(context,
+                                                                    ctype_buf,
+                                                                    buf_sz)
                     buf_host = np.empty((buf_sz,), dtype=np.byte)
                     driver.device_to_host(buf_host.ctypes.data, gpu_mem,
                                           buf_sz)
