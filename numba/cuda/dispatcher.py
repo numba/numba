@@ -376,8 +376,16 @@ class _Kernel(serialize.ReduceMixin):
                                        dtype=np.byte)
 
             driver.device_to_host(pickle_buf_host.ctypes.data,
-                                  gpu_mem.device_ctypes_pointer,
+                                  gpu_mem,
                                   pickle_buf_sz)
+
+            gpu_mem2 = cuda.cudadrv.driver.MemoryPointer(self.target_context,
+                                                        excinfo_val.hash_buf,
+                                                        20)
+            hash_buf_host = np.empty((20,), dtype=np.byte)
+            driver.device_to_host(hash_buf_host.ctypes.data,
+                                  gpu_mem2,
+                                  20)
 
             print("Returned from device_to_host()")
  
@@ -410,7 +418,7 @@ class _Kernel(serialize.ReduceMixin):
 
                 print ("Calling numba_unpickle ")
                 print ("pickle buf = ", pickle_buf_ptr)
-                unpickled_exc = unpickle_fn(pickle_buf_host, pickle_bufsz_val, hash_buf_ptr)
+                unpickled_exc = unpickle_fn(pickle_buf_host.ctypes.data, pickle_bufsz_val, hash_buf_host.ctypes.data)
                 print ("Unpickled = ", unpickled_exc)
                 if unpickled_exc is not None:
                     print ("Unpickled = ", unpickled_exc)
