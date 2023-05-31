@@ -153,6 +153,119 @@ class DDGBlock(BasicBlock):
         assert isinstance(self.in_vars, MutableSortedMap)
         assert isinstance(self.out_vars, MutableSortedMap)
 
+    def _gather_reachable(self, vs: ValueState, reached: set[ValueState]) -> set[ValueState]:
+        reached.add(vs)
+        if vs.parent is not None:
+            for ivs in vs.parent.inputs:
+                if ivs not in reached:
+                    self._gather_reachable(ivs, reached)
+        return reached
+
+    def render_graph(self, builder: "GraphBuilder"):
+        from .regionrenderer import GraphBuilder
+        assert isinstance(builder, GraphBuilder) # REMOVE ME
+
+        reached_vs: set[ValueState] = set()
+        for vs in [*self.out_vars.values(), _just(self.out_effect)]:
+            self._gather_reachable(vs, reached_vs)
+        reached_vs.add(_just(self.in_effect))
+        reached_vs.update(self.in_vars.values())
+
+        reached_op = {vs.parent for vs in reached_vs if vs.parent is not None}
+
+        for vs in reached_vs:
+            self._render_vs(builder, vs)
+
+        for op in reached_op:
+            self._render_op(builder, op)
+
+        # Make outgoing node
+        ports = []
+        outgoing_nodename = f"outgoing_{vs.short_identity()}"
+        for k, vs in self.out_vars.items():
+            ports.append(k)
+
+            builder.graph.add_edge(
+                vs.short_identity(),
+                outgoing_nodename,
+                dst_port=k)
+
+        outgoing_node = builder.node_maker.make_node(
+            kind="ports",
+            ports=ports,
+            data=dict(body="outgoing"),
+        )
+        builder.graph.add_node(outgoing_nodename, outgoing_node)
+
+        # Make incoming node
+        ports = []
+        incoming_nodename = f"incoming_{vs.short_identity()}"
+        for k, vs in self.in_vars.items():
+            ports.append(k)
+
+            builder.graph.add_edge(
+                incoming_nodename,
+                _just(vs.parent).short_identity(),
+                src_port=k)
+
+        incoming_node = builder.node_maker.make_node(
+            kind="ports",
+            ports=ports,
+            data=dict(body="incoming"),
+        )
+        builder.graph.add_node(incoming_nodename, incoming_node)
+
+
+
+    def _render_vs(self, builder, vs: ValueState):
+        from .regionrenderer import GraphBuilder
+        assert isinstance(builder, GraphBuilder) # REMOVE ME
+        if vs.is_effect:
+            node = builder.node_maker.make_node(
+                kind="effect",
+                data=dict(body=str(vs.name)),
+            )
+            builder.graph.add_node(vs.short_identity(), node)
+        else:
+            node = builder.node_maker.make_node(
+                kind="valuestate",
+                data=dict(body=str(vs.name)),
+            )
+            builder.graph.add_node(vs.short_identity(), node)
+
+    def _render_op(self, builder, op: Op):
+        from .regionrenderer import GraphBuilder
+        assert isinstance(builder, GraphBuilder) # REMOVE ME
+
+        op_anchor = op.short_identity()
+
+        node = builder.node_maker.make_node(
+            kind="op",
+            data=dict(body=str(op.summary())),
+        )
+        builder.graph.add_node(op_anchor, node)
+
+        # draw edge
+        for edgename, vs in op._outputs.items():
+            self._add_vs_edge(builder, op_anchor, vs, taillabel=f"{edgename}")
+        for edgename, vs in op._inputs.items():
+            self._add_vs_edge(builder, vs, op_anchor, headlabel=f"{edgename}")
+
+
+    def _add_vs_edge(self, builder, src, dst, **attrs):
+
+        is_effect = (isinstance(src, ValueState) and src.is_effect) or (isinstance(dst, ValueState) and dst.is_effect)
+        if isinstance(src, ValueState):
+            src = src.short_identity()
+        if isinstance(dst, ValueState):
+            dst = dst.short_identity()
+
+        kwargs = attrs
+        if is_effect:
+            kwargs["style"] = "dotted"
+
+        builder.graph.add_edge(src, dst, **kwargs)
+
     def render_rvsdg(self, renderer, digraph, label):
         with digraph.subgraph(name="cluster_"+str(label)) as g:
             g.attr(color='lightgrey')
@@ -183,38 +296,6 @@ class DDGBlock(BasicBlock):
             # Draw "head"
             g.node(str(label), shape="doublecircle", label="")
 
-    def render_valuestate(self, renderer, digraph, vs: ValueState, *, follow=True):
-        if vs.is_effect:
-            digraph.node(vs.short_identity(), shape="circle", label=str(vs.name))
-        else:
-            digraph.node(vs.short_identity(), shape="rect", label=str(vs.name))
-        if follow and vs.parent is not None:
-            op = vs.parent
-            self.render_op(renderer, digraph, op)
-
-    def render_op(self, renderer, digraph, op: Op):
-        op_anchor = op.short_identity()
-        digraph.node(op_anchor, label=op.summary(),
-                     shape="box", style="rounded")
-        for edgename, vs in op._outputs.items():
-            self.add_vs_edge(renderer, op_anchor, vs, taillabel=f"{edgename}")
-            self.render_valuestate(renderer, digraph, vs, follow=False)
-        for edgename, vs in op._inputs.items():
-            self.add_vs_edge(renderer, vs, op_anchor, headlabel=f"{edgename}")
-            self.render_valuestate(renderer, digraph, vs)
-
-    def add_vs_edge(self, renderer, src, dst, **attrs):
-        is_effect = (isinstance(src, ValueState) and src.is_effect) or (isinstance(dst, ValueState) and dst.is_effect)
-        if isinstance(src, ValueState):
-            src = src.short_identity()
-        if isinstance(dst, ValueState):
-            dst = dst.short_identity()
-
-        kwargs = attrs
-        if is_effect:
-            kwargs["style"] = "dotted"
-
-        renderer.add_edge(src, dst, **kwargs)
 
     @property
     def incoming_states(self) -> MutableSortedSet:
