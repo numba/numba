@@ -272,7 +272,6 @@ class CUDATargetContext(BaseContext):
                     changed = builder.extract_value(xchg, 1)
 
                     xchg_lock = builder.cmpxchg(gv_exc_lock, old_exc_unlock,
-#                                                status.code, 'monotonic',
                                                 exc_lock, 'monotonic',
                                                 'monotonic')
                     changed2 = builder.extract_value(xchg_lock, 1)
