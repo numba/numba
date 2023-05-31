@@ -392,7 +392,6 @@ class _Kernel(serialize.ReduceMixin):
 
                 # Unpack he exception so we can raise it.
                 pickle_buf_sz = excinfo_val.pickle_bufsz
-                print("bufsz = ", pickle_buf_sz)
 
                 pickle_buf_host = load_exception_buffer(self.target_context,
                                                         excinfo_val.pickle_buf,
@@ -407,13 +406,10 @@ class _Kernel(serialize.ReduceMixin):
                                               c_void_p)
                 unpickle_fn = unpickle_fn_type(unpickle_ptr)
 
-                print("Calling numba_unpickle ")
                 unpickled_exc = unpickle_fn(pickle_buf_host.ctypes.data,
                                             pickle_buf_sz,
                                             hash_buf_host.ctypes.data)
-                print("Unpickled = ", unpickled_exc)
                 if unpickled_exc is not None:
-                    print("Unpickled 2 = ", unpickled_exc)
                     exception_class, exception_args, _ = unpickled_exc
                     raise exception_class(*exception_args)
 
