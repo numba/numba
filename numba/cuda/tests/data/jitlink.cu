@@ -5,7 +5,7 @@
 // using the oldest supported toolkit version (10.2 at the time of writing).
 
 extern "C" __device__
-int bar(int *out, int a)
+int bar(int *out, void *, int a)
 {
   *out = a * 2;
   return 0;
@@ -16,7 +16,7 @@ int bar(int *out, int a)
 // always reserves the first parameter for a pointer to a returned value, even
 // if there is no return value.
 extern "C" __device__
-int array_mutator(void *out, int *a)
+int array_mutator(void *out, void *, int *a)
 {
   a[0] = a[1];
   return 0;

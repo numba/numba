@@ -4,6 +4,7 @@
 extern "C" __device__ int
 mul_f32_f32(
   float* return_value,
+  void *,
   float x,
   float y)
 {
@@ -21,6 +22,7 @@ extern "C"
 __device__ int
 sum_reduce(
   float* return_value,
+  void *,
   float* array,
   int n
 );
@@ -33,6 +35,7 @@ extern "C"
 __device__ int
 sum_reduce(
   float* return_value,
+  void *,
   float* array,
   int n
 )

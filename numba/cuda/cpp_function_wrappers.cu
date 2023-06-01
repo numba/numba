@@ -5,6 +5,7 @@
 #define UNARY_FUNCTION(fname) extern "C" __device__ int\
   FNDEF(fname)(						\
     short* return_value,\
+    void *not_used,\
   short x\
 )\
 {\
@@ -18,6 +19,7 @@
 extern "C" __device__ int
 FNDEF(hdiv)(
   short* return_value,
+  void *not_used,
   short x,
   short y
 )
