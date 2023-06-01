@@ -262,8 +262,8 @@ class CUDATargetContext(BaseContext):
             with builder.if_then(builder.not_(status.is_python_exc)):
                 # User exception raised
                 old = ir.Constant(gv_exc.type.pointee, None)
-                old_exc_unlock = ir.Constant(gv_exc_lock.type.pointee, 0)
-                exc_lock = ir.Constant(gv_exc_lock.type.pointee, 1)
+                old_exc_unlock = ir.Constant(gv_exc_lock.type.pointee, None)
+#                exc_lock = ir.Constant(gv_exc_lock.type.pointee, 1)
 
                 # Use atomic cmpxchg to prevent rewriting the error status
                 # Only the first error is recorded
@@ -274,7 +274,7 @@ class CUDATargetContext(BaseContext):
                     changed = builder.extract_value(xchg, 1)
 
                     xchg_lock = builder.cmpxchg(gv_exc_lock, old_exc_unlock,
-                                                exc_lock, 'monotonic',
+                                                status.code, 'monotonic',
                                                 'monotonic')
                     changed2 = builder.extract_value(xchg_lock, 1)
                 else:
@@ -288,7 +288,7 @@ class CUDATargetContext(BaseContext):
 
                     xchg2 = builder.call(casfn, [gv_exc_lock,
                                                  old_exc_unlock,
-                                                 exc_lock])
+                                                 status.code])
                     changed2 = builder.icmp_unsigned('==', xchg2,
                                                      old_exc_unlock)
 
