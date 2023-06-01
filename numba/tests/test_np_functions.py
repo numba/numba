@@ -20,7 +20,7 @@ from numba.core.config import IS_32BITS
 from numba.core.utils import pysignature
 from numba.np.extensions import cross2d
 from numba.tests.support import (TestCase, CompilationCache, MemoryLeakMixin,
-                                 needs_blas)
+                                 needs_blas, run_in_subprocess)
 import unittest
 
 
@@ -5410,12 +5410,12 @@ class TestRegistryImports(TestCase):
         code = dedent("""
             import numba
             import numpy as np
-            @njit
+            @numba.njit
             def foo():
                 np.array([1 for _ in range(1)])
             foo()
         """)
-        exec(code)
+        run_in_subprocess(code)
 
 
 if __name__ == '__main__':
