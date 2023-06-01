@@ -4697,5 +4697,24 @@ class TestParforReductionSetNumThreads(TestCase):
         self.assertPreciseEqual(expect, got)
 
 
+@skip_parfors_unsupported
+class TestDiagnosticEnvVar(TestCase):
+    @TestCase.run_test_in_subprocess()
+    def test_diagnostics_env_var1(self):
+        os.environ['NUMBA_PARALLEL_DIAGNOSTICS']='4'
+        with captured_stdout() as stdout:
+            @njit(parallel=True)
+            def impl():
+                n = 100
+                b = np.zeros((n), dtype=np.float64)
+                for i in prange(n):
+                    b[i] = 1
+                return b
+
+            impl()
+        the_output = stdout.getvalue()
+        self.assertIn("Parallel Accelerator Optimizing", the_output)
+
+
 if __name__ == "__main__":
     unittest.main()
