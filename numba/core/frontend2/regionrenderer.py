@@ -281,8 +281,6 @@ class RegionRenderer(RegionVisitor):
         exiting = region.subregion[region.exiting]
         if isinstance(region, DDGProtocol) and isinstance(exiting, DDGProtocol):
             assert isinstance(region, RegionBlock)
-            if "loop_region_0" == region.name and "head_region_0" == exiting.name:
-                breakpoint()
             for k in region.outgoing_states & exiting.outgoing_states:
                 builder.graph.add_edge(f"outgoing_{exiting.name}", f"outgoing_{region.name}", src_port=k, dst_port=k)
 

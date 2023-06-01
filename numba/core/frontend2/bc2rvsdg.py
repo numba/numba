@@ -31,7 +31,6 @@ from numba_rvsdg.core.datastructures import block_names
 
 from numba.core.utils import MutableSortedSet, MutableSortedMap
 
-from .renderer import RvsdgRenderer
 from .regionpasses import (
     RegionVisitor,
     RegionTransformer,
