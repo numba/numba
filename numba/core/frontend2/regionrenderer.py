@@ -39,9 +39,9 @@ class GraphEdge:
     dst: str
     src_port: str | None = None
     dst_port: str | None = None
-    headlabel: str = ""
-    taillabel: str = ""
-    style: str = ""
+    headlabel: str | None = None
+    taillabel: str | None = None
+    kind: str | None = None
 
 @dataclass(frozen=True)
 class GraphGroup:
@@ -124,11 +124,6 @@ class GraphBuilder:
         return cls(GraphBacking(), GraphNodeMaker(()))
 
 
-# @dataclass(frozen=True)
-# class GraphNode(GraphNode):
-#     body: str = ""
-
-
 class RegionGraphvizRenderer: # needs a abstract base class
     def __init__(self, g=None):
         from graphviz import Digraph
@@ -146,17 +141,28 @@ class RegionGraphvizRenderer: # needs a abstract base class
             ports = [f"<{x}> {x}" for x in node.ports]
             label = f"{node.data['body']} | {'|'.join(ports)}"
             self.digraph.node(k, label=label, shape="record")
+        elif node.kind == "cfg":
+            self.digraph.node(k, label=node.data["body"], shape="plain", fontcolor="blue")
         else:
             self.digraph.node(k, label=f"{k}\n{node.kind}\n{node.data.get('body', '')}", shape='rect')
 
     def render_edge(self, edge: GraphEdge):
         attrs = {}
-        if edge.headlabel:
+        if edge.headlabel is not None:
             attrs["headlabel"] = edge.headlabel
-        if edge.taillabel:
+        if edge.taillabel is not None:
             attrs["taillabel"] = edge.taillabel
-        if edge.style:
-            attrs["style"] = edge.style
+
+        if edge.kind is not None:
+            if edge.kind == "effect":
+                attrs["style"] = "dotted"
+            elif edge.kind == "meta":
+                attrs["style"] = "invis"
+            elif edge.kind == "cfg":
+                attrs["style"] = "solid"
+                attrs["color"] = "blue"
+            else:
+                raise ValueError(edge.kind)
 
         src = str(edge.src)
         dst = str(edge.dst)
@@ -185,17 +191,13 @@ class RegionGraphvizRenderer: # needs a abstract base class
 class RegionRenderer(RegionVisitor):
 
     def visit_block(self, block: BasicBlock, builder: GraphBuilder):
-        nodename = self._id(block.name)
+        nodename = block.name
         node_maker = builder.node_maker.subregion(f"metaregion_{nodename}")
 
         if isinstance(block, DDGBlock):
-            node = node_maker.make_node(
-                kind=f"{type(block).__name__}",
-            )
+            node = node_maker.make_node(kind="cfg", data=dict(body=nodename))
             builder.graph.add_node(nodename, node)
-
             block.render_graph(replace(builder, node_maker=node_maker))
-
         else:
             body = "(tbd)"
             if isinstance(block, DDGBranch):
@@ -203,7 +205,7 @@ class RegionRenderer(RegionVisitor):
             elif isinstance(block, DDGControlVariable):
                 body = f"variable_assignment:\n{block.variable_assignment}"
             node = node_maker.make_node(
-                kind=f"{type(block).__name__}",
+                kind="cfg",
                 data=dict(body=body),
             )
             builder.graph.add_node(nodename, node)
@@ -215,9 +217,8 @@ class RegionRenderer(RegionVisitor):
                     replace(builder, node_maker=node_maker),
                 )
 
-
         for dstnode in block.jump_targets:
-            builder.graph.add_edge(nodename, self._id(dstnode))
+            builder.graph.add_edge(nodename, dstnode, kind="cfg")
         return builder
 
     def _add_inout_ports(self, before_block, after_block, builder):
@@ -239,8 +240,11 @@ class RegionRenderer(RegionVisitor):
         )
         builder.graph.add_node(incoming_nodename, incoming_node)
 
+        # Add meta edge for implicit flow
+        builder.graph.add_edge(incoming_nodename, outgoing_nodename, kind="meta")
+
     def visit_linear(self, region: RegionBlock, builder: GraphBuilder):
-        nodename = self._id(region.name)
+        nodename = region.name
         node_maker = builder.node_maker.subregion(f"regionouter_{nodename}")
 
         if isinstance(region, DDGProtocol):
@@ -254,19 +258,25 @@ class RegionRenderer(RegionVisitor):
             builder,
             node_maker=node_maker.subregion(f"{region.kind}_{nodename}"),
         )
-        node = subbuilder.node_maker.make_node(kind=f"{type(region).__name__}")
-        subbuilder.graph.add_node(region.name, node)
+        node = node_maker.make_node(kind="cfg", data=dict(body=nodename))
+        builder.graph.add_node(region.name, node)
         super().visit_linear(region, subbuilder)
 
-
         self._connect_internal(region, builder)
+        # connect cfg edge
+        builder.graph.add_edge(region.name, region.header, kind="cfg")
         return builder
 
     def _connect_internal(self, region, builder):
         header = region.subregion[region.header]
         if isinstance(region, DDGProtocol) and isinstance(header, DDGProtocol):
             for k in region.incoming_states:
-                builder.graph.add_edge(f"incoming_{region.name}", f"incoming_{header.name}", src_port=k, dst_port=k)
+                builder.graph.add_edge(
+                    f"incoming_{region.name}",
+                    f"incoming_{header.name}",
+                    src_port=k,
+                    dst_port=k,
+                )
 
         exiting = region.subregion[region.exiting]
         if isinstance(region, DDGProtocol) and isinstance(exiting, DDGProtocol):
@@ -302,7 +312,7 @@ class RegionRenderer(RegionVisitor):
         return self.visit_linear(region, builder)
 
     def visit_switch(self, region: RegionBlock, builder: GraphBuilder):
-        nodename = self._id(region.name)
+        nodename = region.name
         node_maker = builder.node_maker.subregion(f"regionouter_{nodename}")
         if isinstance(region, DDGProtocol):
             # Insert incoming and outgoing
@@ -338,6 +348,3 @@ class RegionRenderer(RegionVisitor):
         rgr = RegionGraphvizRenderer()
         graph.render(rgr)
         return rgr.digraph
-
-    def _id(self, nodename: str) -> str:
-        return str(nodename)

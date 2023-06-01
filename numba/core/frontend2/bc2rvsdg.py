@@ -260,7 +260,7 @@ class DDGBlock(BasicBlock):
 
         kwargs = attrs
         if is_effect:
-            kwargs["style"] = "dotted"
+            kwargs["kind"] = "effect"
 
         builder.graph.add_edge(src, dst, **kwargs)
 
