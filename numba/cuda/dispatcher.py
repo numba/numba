@@ -395,7 +395,6 @@ class _Kernel(serialize.ReduceMixin):
                 # Load exception from device
                 tid = [load_symbol("tid" + i) for i in 'zyx']
                 ctaid = [load_symbol("ctaid" + i) for i in 'zyx']
-                code = excval.value
 
                 # Unpack he exception so we can raise it.
                 pickle_buf_sz = excinfo_val.pickle_bufsz
@@ -416,28 +415,27 @@ class _Kernel(serialize.ReduceMixin):
                 unpickled_exc = unpickle_fn(pickle_buf_host.ctypes.data,
                                             pickle_buf_sz,
                                             hash_buf_host.ctypes.data)
-                if unpickled_exc is not None:
-                    exception_class, exception_args, _ = unpickled_exc
-                    raise exception_class(*exception_args)
 
-                exccls, exc_args, loc = self.call_helper.get_exception(code)
-                # Prefix the exception message with the source location
-                if loc is None:
-                    locinfo = ''
-                else:
-                    sym, filepath, lineno = loc
-                    filepath = os.path.abspath(filepath)
-                    locinfo = 'In function %r, file %s, line %s, ' % (sym,
-                                                                      filepath,
-                                                                      lineno,)
-                # Prefix the exception message with the thread position
-                prefix = "%stid=%s ctaid=%s" % (locinfo, tid, ctaid)
-                if exc_args:
-                    exc_args = ("%s: %s" % (prefix, exc_args[0]),) + \
-                        exc_args[1:]
-                else:
-                    exc_args = prefix,
-                raise exccls(*exc_args)
+                if unpickled_exc is not None:
+                    exception_class, exc_args, exc_loc = unpickled_exc
+                    if exc_loc is None:
+                        locinfo = ''
+                    else:
+                        loc_func, loc_file, loc_lineno = exc_loc
+                        loc_file = os.path.abspath(loc_file)
+                        locinfo = (
+                            'In function %r, file %s, line %s, '
+                            % (loc_func, loc_file, loc_lineno,))
+
+                    # Prefix the exception message with the thread position
+                    prefix = "%stid=%s ctaid=%s" % (locinfo, tid, ctaid)
+                    if exc_args:
+                        exc_args = ("%s: %s" % (prefix, exc_args[0]),) + \
+                            exc_args[1:]
+                    else:
+                        exc_args = prefix,
+
+                    raise exception_class(*exc_args)
 
         # retrieve auto converted arrays
         for wb in retr:
