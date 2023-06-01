@@ -531,6 +531,13 @@ class TestRandom(BaseTest):
             paramlist=[{'low': 1.5, 'high': 1e6},
                        {'low': -2.5, 'high': 1e3},
                        {'low': 1.5, 'high': -2.5}])
+        
+    def test_numpy_uniform_impl3(self):
+        self._check_any_distrib_kwargs(
+            jit_with_kwargs("np.random.uniform", ['low', 'high', 'size']),
+            get_np_state_ptr(),
+            'uniform',
+            paramlist=[{'low' : 0.0, 'high' : 1.0, 'size': None}])
 
     def _check_triangular(self, func2, func3, ptr):
         """
