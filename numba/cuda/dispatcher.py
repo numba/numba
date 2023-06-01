@@ -327,8 +327,15 @@ class _Kernel(serialize.ReduceMixin):
 
             assert excinfo_sz == excinfo_sz_ctype
 
+            exclock_name = cufunc.name + "__exclock__"
+            exclock_mem, exclock_sz = \
+                cufunc.module.get_global_symbol(exclock_name)
+
+            assert exclock_sz == sizeof(c_int)
+
             excinfo_val = ExcInfo(None, 0, None, None, 0)
             excinfo_mem.memset(0, stream=stream)
+            exclock_mem.memset(0, stream=stream)
 
         # Prepare arguments
         retr = []                       # hold functors for writeback
