@@ -338,59 +338,55 @@ def render_scfg(byteflow):
     byteflow.scfg.view("scfg")
 
 
-def _fixup_region(scfg: SCFG, region: RegionBlock):
-    [exiting], _ = region.subregion.find_exiting_and_exits(region.subregion.graph.keys())
-    if exiting != region.exiting:
-        region = replace(region, exiting=exiting)
-        scfg.remove_blocks({region.name})
-        scfg.add_block(region)
-
-
 def _canonicalize_scfg_switch(scfg: SCFG):
     todos = set(scfg.graph)
     while todos:
         label = todos.pop()
-        blk = scfg[label]
         todos.discard(label)
-        if isinstance(blk, RegionBlock):
-            if blk.kind == 'head':
-                # Make sure that branches are in switch blocks
-                branches = blk.jump_targets
-                branch_targets = set()
+        block = scfg[label]
+        if isinstance(block, RegionBlock):
+            if block.kind == "head":
+                brlabels = block.jump_targets
+                branches = [scfg[brlabel] for brlabel in brlabels]
+                tail_label_candidates = set()
                 for br in branches:
-                    branch_targets |= set(scfg[br].jump_targets)
-                [tail] = branch_targets
-                tailblk = scfg[tail]
-                switch_labels = {label, tail, *branches}
-                subregion_graph = {k:scfg[k] for k in switch_labels}
+                    tail_label_candidates.update(br.jump_targets)
+                [taillabel] = tail_label_candidates
+                tail = scfg[taillabel]
+
+                # Make new SCFG
+                switch_labels = {label, taillabel, *brlabels}
+                subregion_graph = {k: scfg[k] for k in switch_labels}
                 scfg.remove_blocks(switch_labels)
                 subregion_scfg = SCFG(graph=subregion_graph, name_gen=scfg.name_gen)
-                scfg.graph[label] = RegionBlock(
-                    name=label,
+
+                todos -= switch_labels
+
+                # Make new region
+                new_label = scfg.name_gen.new_region_name("switch")
+                new_region = RegionBlock(
+                    name=new_label,
+                    _jump_targets=tail._jump_targets,
+                    backedges=tail.backedges,
                     kind="switch",
-                    _jump_targets=tailblk._jump_targets,
-                    backedges=tailblk.backedges,
-                    exiting=tailblk,
-                    header=label,
+                    parent_region=block.parent_region,
+                    header=block.name,
+                    exiting=taillabel,
                     subregion=subregion_scfg,
                 )
-                todos -= switch_labels
+                scfg.graph[new_label] = new_region
+
+                if block.parent_region.exiting not in scfg.graph:
+                    block.parent_region.replace_exiting(new_label)
+
                 # recursively walk into the subregions
                 _canonicalize_scfg_switch(subregion_graph[label].subregion)
-                _fixup_region(subregion_scfg, subregion_graph[label])
-                for br in branches:
+                for br in brlabels:
                     _canonicalize_scfg_switch(subregion_graph[br].subregion)
-                    _fixup_region(subregion_scfg, subregion_graph[br])
-                _canonicalize_scfg_switch(subregion_graph[tail].subregion)
-                _fixup_region(subregion_scfg, subregion_graph[tail])
+                _canonicalize_scfg_switch(subregion_graph[taillabel].subregion)
+            else:
+                _canonicalize_scfg_switch(block.subregion)
 
-                _fixup_region(scfg, scfg.graph[label])
-            elif blk.kind == 'loop':
-                _canonicalize_scfg_switch(blk.subregion)
-
-                if blk.exiting not in blk.subregion:
-                    [exiting], _exit = blk.subregion.find_exiting_and_exits(set(blk.subregion.graph))
-                    scfg.graph[label] = replace(blk, exiting=exiting)
 
 
 class CanonicalizeLoop(RegionTransformer):
@@ -427,9 +423,11 @@ class CanonicalizeLoop(RegionTransformer):
         tail_parent.subregion.graph[tail_bb.name] = new_tail_bb
 
 
+
 def canonicalize_scfg(scfg: SCFG):
     CanonicalizeLoop().visit_graph(scfg, None)
     _canonicalize_scfg_switch(scfg)
+
 
 class _ExtraBranch(NamedTuple):
     branch_instlists: tuple[tuple[tuple[str], ...], ...] = ()

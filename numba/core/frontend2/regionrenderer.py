@@ -211,7 +211,7 @@ class RegionRenderer(RegionVisitor):
             if isinstance(block, DDGProtocol):
                 # Insert incoming and outgoing
                 self._add_inout_ports(
-                    block,
+                    block, block,
                     replace(builder, node_maker=node_maker),
                 )
 
@@ -220,21 +220,21 @@ class RegionRenderer(RegionVisitor):
             builder.graph.add_edge(nodename, self._id(dstnode))
         return builder
 
-    def _add_inout_ports(self, block, builder):
+    def _add_inout_ports(self, before_block, after_block, builder):
         # Make outgoing node
-        outgoing_nodename = f"outgoing_{block.name}"
+        outgoing_nodename = f"outgoing_{before_block.name}"
         outgoing_node = builder.node_maker.make_node(
             kind="ports",
-            ports=list(block.outgoing_states),
+            ports=list(before_block.outgoing_states),
             data=dict(body="outgoing"),
         )
         builder.graph.add_node(outgoing_nodename, outgoing_node)
 
         # Make incoming node
-        incoming_nodename = f"incoming_{block.name}"
+        incoming_nodename = f"incoming_{after_block.name}"
         incoming_node = builder.node_maker.make_node(
             kind="ports",
-            ports=list(block.incoming_states),
+            ports=list(after_block.incoming_states),
             data=dict(body="incoming"),
         )
         builder.graph.add_node(incoming_nodename, incoming_node)
@@ -246,7 +246,7 @@ class RegionRenderer(RegionVisitor):
         if isinstance(region, DDGProtocol):
             # Insert incoming and outgoing
             self._add_inout_ports(
-                region,
+                region, region,
                 replace(builder, node_maker=node_maker),
             )
 
@@ -259,16 +259,22 @@ class RegionRenderer(RegionVisitor):
         super().visit_linear(region, subbuilder)
 
 
-        # Connect in-out
+        self._connect_internal(region, builder)
+        return builder
+
+    def _connect_internal(self, region, builder):
         header = region.subregion[region.header]
         if isinstance(region, DDGProtocol) and isinstance(header, DDGProtocol):
             for k in region.incoming_states:
                 builder.graph.add_edge(f"incoming_{region.name}", f"incoming_{header.name}", src_port=k, dst_port=k)
+
         exiting = region.subregion[region.exiting]
         if isinstance(region, DDGProtocol) and isinstance(exiting, DDGProtocol):
+            assert isinstance(region, RegionBlock)
+            if "loop_region_0" == region.name and "head_region_0" == exiting.name:
+                breakpoint()
             for k in region.outgoing_states & exiting.outgoing_states:
-                builder.graph.add_edge(f"outgoing_{exiting.name}", f"outgoing_{region.name}")#, src_port=k, dst_port=k)
-        return builder
+                builder.graph.add_edge(f"outgoing_{exiting.name}", f"outgoing_{region.name}", src_port=k, dst_port=k)
 
     def visit_graph(self, scfg: SCFG, builder):
         """Overriding
@@ -279,7 +285,6 @@ class RegionRenderer(RegionVisitor):
         for lvl in toposorted:
             for label in lvl:
                 builder = self.visit(scfg[label], builder)
-
                 # Connect outgoing to incoming
                 if last_label is not None:
                     last_node = scfg[last_label]
@@ -297,11 +302,30 @@ class RegionRenderer(RegionVisitor):
         return self.visit_linear(region, builder)
 
     def visit_switch(self, region: RegionBlock, builder: GraphBuilder):
-        self.visit_linear(region.subregion[region.header], builder)
+        nodename = self._id(region.name)
+        node_maker = builder.node_maker.subregion(f"regionouter_{nodename}")
+        if isinstance(region, DDGProtocol):
+            # Insert incoming and outgoing
+            self._add_inout_ports(
+                region, region,
+                replace(builder, node_maker=node_maker),
+            )
+        subbuilder = replace(
+            builder,
+            node_maker=node_maker.subregion(f"{region.kind}_{nodename}"),
+        )
+
+        head = region.subregion[region.header]
+        tail = region.subregion[region.exiting]
+        self.visit_linear(head, subbuilder)
         for blk in region.subregion.graph.values():
             if blk.kind == "branch":
-                self.visit_linear(blk, builder)
-        self.visit_linear(region.subregion[region.exiting], builder)
+                self._connect_inout_ports(head, blk, subbuilder)
+                self.visit_linear(blk, subbuilder)
+                self._connect_inout_ports(blk, tail, subbuilder)
+        self.visit_linear(tail, subbuilder)
+
+        self._connect_internal(region, builder)
         return builder
 
     def render(self, scfg):
