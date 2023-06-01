@@ -5414,8 +5414,12 @@ class TestRegistryImports(TestCase):
             def foo():
                 np.array([1 for _ in range(1)])
             foo()
+            print("OK")
         """)
-        run_in_subprocess(code)
+        result, error = run_in_subprocess(code)
+        # Assert that the bytestring "OK" was printed to stdout
+        self.assertEquals(b"OK", result.strip())
+        self.assertEquals(b"", error.strip())
 
 
 if __name__ == '__main__':
