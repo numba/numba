@@ -676,9 +676,10 @@ def uniform_impl(state, a_preprocessor, b_preprocessor):
 
 @overload(np.random.uniform)
 def np_uniform_impl3(low, high, size):
+    is_empty_tuple = lambda x :isinstance(x, types.Tuple) and len(x.types) == 0
     if (isinstance(low, (types.Float, types.Integer)) and isinstance(
             high, (types.Float, types.Integer)) and
-       is_nonelike(size)):
+       (is_nonelike(size) or is_empty_tuple(size))):
         return lambda low, high, size: np.random.uniform(low, high)
     if (isinstance(low, (types.Float, types.Integer)) and isinstance(
             high, (types.Float, types.Integer)) and
