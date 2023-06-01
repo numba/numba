@@ -6,6 +6,7 @@ import platform
 from functools import partial
 from itertools import product
 import warnings
+from textwrap import dedent
 
 import numpy as np
 
@@ -5399,6 +5400,22 @@ def foo():
 
         self.assertEqual(len(w), 1)
         self.assertIn('`np.MachAr` is deprecated', str(w[0]))
+
+
+class TestRegistryImports(TestCase):
+
+    def test_unsafe_import_in_registry(self):
+        # See 8940
+        # This should not fail
+        code = dedent("""
+            import numba
+            import numpy as np
+            @njit
+            def foo():
+                np.array([1 for _ in range(1)])
+            foo()
+        """)
+        exec(code)
 
 
 if __name__ == '__main__':
