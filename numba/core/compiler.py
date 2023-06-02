@@ -602,6 +602,26 @@ class DefaultPassBuilder(object):
         return pm
 
     @staticmethod
+    def define_parfor_gufunc_nopython_lowering_pipeline(
+            state, name='parfor_gufunc_nopython_lowering'):
+        pm = PassManager(name)
+        # legalise
+        pm.add_pass(NoPythonSupportedFeatureValidation,
+                    "ensure features that are in use are in a valid form")
+        pm.add_pass(IRLegalization,
+                    "ensure IR is legal prior to lowering")
+        # Annotate only once legalized
+        pm.add_pass(AnnotateTypes, "annotate types")
+        # lower
+        if state.flags.auto_parallel.enabled:
+            pm.add_pass(NativeParforLowering, "native parfor lowering")
+        else:
+            pm.add_pass(NativeLowering, "native lowering")
+        pm.add_pass(NoPythonBackend, "nopython mode backend")
+        pm.finalize()
+        return pm
+
+    @staticmethod
     def define_typed_pipeline(state, name="typed"):
         """Returns the typed part of the nopython pipeline"""
         pm = PassManager(name)
