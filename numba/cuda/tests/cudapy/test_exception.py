@@ -143,11 +143,7 @@ class TestException(CUDATestCase):
         self.assertEqual(r[0], 0, 'Expected result to be left unset')
         self.assertEqual(r[1], 0, 'Expected execution to stop')
 
-    @xfail_unless_cudasim
     def test_raise_in_device_function(self):
-        # This is an expected failure because reporting of exceptions raised in
-        # device functions does not work correctly - see Issue #8036:
-        # https://github.com/numba/numba/issues/8036
         msg = 'Device Function Error'
 
         @cuda.jit(device=True)
