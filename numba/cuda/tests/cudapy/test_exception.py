@@ -1,7 +1,7 @@
 import numpy as np
 
 from numba import cuda
-from numba.cuda.testing import unittest, xfail_unless_cudasim, CUDATestCase
+from numba.cuda.testing import unittest, CUDATestCase
 from numba.core import config
 
 
