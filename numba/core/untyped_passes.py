@@ -906,8 +906,14 @@ class MixedContainerUnroller(FunctionPass):
             new_var_dict = {}
             for name, var in var_table.items():
                 scope = switch_ir.blocks[lbl].scope
-                new_var_dict[name] = scope.define(
-                    f"v{branch_ty}_{name}", var.loc).name
+                try:
+                    scope.get_exact(name)
+                except errors.NotDefinedError:
+                    # is this correct? In case the scope doesn't have the
+                    # variable, we need to define it prior creating new
+                    # copies of it!
+                    scope.define(name, var.loc)
+                new_var_dict[name] = scope.redefine(name, var.loc).name
             replace_var_names(loop_blocks, new_var_dict)
 
             # clobber the sentinel body and then stuff in the rest
