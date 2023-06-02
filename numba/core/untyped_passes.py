@@ -909,11 +909,10 @@ class MixedContainerUnroller(FunctionPass):
                 try:
                     scope.get_exact(name)
                 except errors.NotDefinedError:
-                    # In case the scope doesn't have the
-                    # variable, we need to define it prior creating new
-                    # copies of it! This is because the scope of the function
-                    # and the scope of the function and the scope of the loop
-                    # are different and the variable needs to be redefined
+                    # In case the scope doesn't have the variable, we need to
+                    # define it prior creating new copies of it! This is
+                    # because the scope of the function and the scope of the
+                    # loop are different and the variable needs to be redefined
                     # within the scope of the loop.
                     scope.define(name, var.loc)
                 new_var_dict[name] = scope.redefine(name, var.loc).name
