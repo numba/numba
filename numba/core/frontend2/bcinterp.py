@@ -272,8 +272,8 @@ class RVSDG2IR(RegionVisitor):
             assert self.branch_predicate is not None
 
             # XXX: how to tell which target is which??
-            truebr = self._get_label(header_block._jump_targets[0])
-            falsebr = self._get_label(header_block._jump_targets[1])
+            truebr = self._get_label(header_block.jump_targets[0])
+            falsebr = self._get_label(header_block.jump_targets[1])
             br = ir.Branch(self.branch_predicate, truebr, falsebr, loc=self.loc)
             self.last_block.append(br)
 
@@ -314,6 +314,14 @@ class RVSDG2IR(RegionVisitor):
         data_at_tail = self.visit_linear(exiting_block, data_after_branches)
 
         return data_at_tail
+
+    def visit_linear(self, region: RegionBlock, data):
+        with self.set_block(
+                    self._get_label(region.name),
+                    ir.Block(scope=self.scope, loc=self.loc)):
+            # Ensures there's a block for all regions
+            pass
+        return super().visit_linear(region, data)
 
     @contextmanager
     def set_block(self, label: int, block: ir.Block) -> Iterator[ir.Block]:
