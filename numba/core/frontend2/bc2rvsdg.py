@@ -337,6 +337,12 @@ def render_scfg(byteflow):
     byteflow.scfg.view("scfg")
 
 
+def _repl_jump_targets(block: BasicBlock, repl: dict[str, str]):
+    if set(repl).intersection(set(block.jump_targets)):
+        targets = [repl.get(k, k) for k in block.jump_targets]
+        block = block.replace_jump_targets(tuple(targets))
+    return block
+
 def _canonicalize_scfg_switch(scfg: SCFG):
     todos = set(scfg.graph)
     while todos:
@@ -377,13 +383,11 @@ def _canonicalize_scfg_switch(scfg: SCFG):
                 for incoming_label, incoming_blk in scfg.graph.items():
                     if incoming_label != new_label and label in incoming_blk.jump_targets:
                         repl = {label: new_label}
-                        targets = [repl.get(k, k) for k in incoming_blk.jump_targets]
-                        scfg.graph[incoming_label] = incoming_blk.replace_jump_targets(targets)
+                        scfg.graph[incoming_label] = _repl_jump_targets(incoming_blk, repl)
 
-                # # fixup header
+                # fixup header
                 if block.parent_region.header not in scfg.graph:
                     block.parent_region.replace_header(new_label)
-                    assert False, "Necessary?"
                 # fixup exiting
                 if block.parent_region.exiting not in scfg.graph:
                     block.parent_region.replace_exiting(new_label)
@@ -393,7 +397,7 @@ def _canonicalize_scfg_switch(scfg: SCFG):
                 for br in brlabels:
                     _canonicalize_scfg_switch(subregion_graph[br].subregion)
                 _canonicalize_scfg_switch(subregion_graph[taillabel].subregion)
-            else:
+            elif block.kind == "loop":
                 _canonicalize_scfg_switch(block.subregion)
 
 
@@ -403,6 +407,9 @@ class CanonicalizeLoop(RegionTransformer):
     Make sure loops has plain header.
     Preferably, the tail should be plain as well but it's hard to do with the
     current numba_rvsdg API.
+
+    Doing this so we don't have to fixup backedges as backedges will always
+    point to a plain node.
     """
     def visit_loop(self, parent: SCFG, region: RegionBlock, data):
         # Fix header
@@ -430,6 +437,8 @@ class CanonicalizeLoop(RegionTransformer):
             _jump_targets=tuple([repl.get(x, x) for x in tail_bb._jump_targets])
         )
         tail_parent.subregion.graph[tail_bb.name] = new_tail_bb
+
+        self.visit_linear(parent, region, data)
 
 
 
