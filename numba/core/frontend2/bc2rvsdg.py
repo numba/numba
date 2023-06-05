@@ -366,7 +366,6 @@ def _canonicalize_scfg_switch(scfg: SCFG):
                 new_region = RegionBlock(
                     name=new_label,
                     _jump_targets=tail._jump_targets,
-                    backedges=tail.backedges,
                     kind="switch",
                     parent_region=block.parent_region,
                     header=block.name,
@@ -374,7 +373,18 @@ def _canonicalize_scfg_switch(scfg: SCFG):
                     subregion=subregion_scfg,
                 )
                 scfg.graph[new_label] = new_region
+                # fixup branch to label
+                for incoming_label, incoming_blk in scfg.graph.items():
+                    if incoming_label != new_label and label in incoming_blk.jump_targets:
+                        repl = {label: new_label}
+                        targets = [repl.get(k, k) for k in incoming_blk.jump_targets]
+                        scfg.graph[incoming_label] = incoming_blk.replace_jump_targets(targets)
 
+                # # fixup header
+                if block.parent_region.header not in scfg.graph:
+                    block.parent_region.replace_header(new_label)
+                    assert False, "Necessary?"
+                # fixup exiting
                 if block.parent_region.exiting not in scfg.graph:
                     block.parent_region.replace_exiting(new_label)
 
@@ -504,17 +514,16 @@ def build_rvsdg(code, argnames: tuple[str, ...]) -> SCFG:
     bcmap = byteflow.scfg.bcmap_from_bytecode(byteflow.bc)
     _scfg_add_conditional_pop_stack(bcmap, byteflow.scfg)
     byteflow = byteflow.restructure()
-    # byteflow.scfg.view()
-    # render_scfg(byteflow)
+    # if DEBUG_GRAPH:
+    #     render_scfg(byteflow)
     canonicalize_scfg(byteflow.scfg)
     if DEBUG_GRAPH:
         render_scfg(byteflow)
     rvsdg = convert_to_dataflow(byteflow, argnames)
     rvsdg = propagate_states(rvsdg)
-    # if DEBUG_GRAPH:
-    #     # RvsdgRenderer().render_rvsdg(rvsdg).view("rvsdg")
-    from .regionrenderer import RegionRenderer
-    RegionRenderer().render(rvsdg).view("rvsdg")
+    if DEBUG_GRAPH:
+        from .regionrenderer import RegionRenderer
+        RegionRenderer().render(rvsdg).view("rvsdg")
 
     return rvsdg
 

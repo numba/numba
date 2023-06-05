@@ -188,7 +188,7 @@ class RegionGraphvizRenderer: # needs a abstract base class
             yield type(self)(subg)
 
 
-class RegionRenderer(RegionVisitor):
+class RegionRenderer(RegionVisitor): # TODO: separate out base class logic vs RVSDG specifics
 
     def visit_block(self, block: BasicBlock, builder: GraphBuilder):
         nodename = block.name
@@ -322,6 +322,10 @@ class RegionRenderer(RegionVisitor):
             builder,
             node_maker=node_maker.subregion(f"{region.kind}_{nodename}"),
         )
+
+        node = node_maker.make_node(kind="cfg", data=dict(body=nodename))
+        builder.graph.add_node(region.name, node)
+        builder.graph.add_edge(region.name, region.header)
 
         head = region.subregion[region.header]
         tail = region.subregion[region.exiting]
