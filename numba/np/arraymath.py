@@ -5,7 +5,6 @@ Implementation of math operations on Array objects.
 
 import math
 from collections import namedtuple
-from enum import IntEnum
 import operator
 import warnings
 
@@ -4110,16 +4109,6 @@ def _np_correlate_core(ap1, ap2, mode, direction):
     pass
 
 
-class _corr_conv_Mode(IntEnum):
-    """
-    Enumerated modes for correlate/convolve as per:
-    https://github.com/numpy/numpy/blob/ac6b1a902b99e340cf7eeeeb7392c91e38db9dd8/numpy/core/numeric.py#L862-L870    # noqa: E501
-    """
-    VALID = 0
-    SAME = 1
-    FULL = 2
-
-
 @overload(_np_correlate_core)
 def _np_correlate_core_impl(ap1, ap2, mode, direction):
     a_dt = as_dtype(ap1.dtype)
@@ -4127,37 +4116,44 @@ def _np_correlate_core_impl(ap1, ap2, mode, direction):
     dt = np.promote_types(a_dt, b_dt)
     innerprod = _get_inner_prod(ap1.dtype, ap2.dtype)
 
-    Mode = _corr_conv_Mode
-
     def impl(ap1, ap2, mode, direction):
         # Implementation loosely based on `_pyarray_correlate` from
         # https://github.com/numpy/numpy/blob/3bce2be74f228684ca2895ad02b63953f37e2a9d/numpy/core/src/multiarray/multiarraymodule.c#L1191    # noqa: E501
-        # For "Mode":
-        # Convolve uses 'full' by default, this is denoted by the number 2
-        # Correlate uses 'valid' by default, this is denoted by the number 0
+        # For "mode":
+        # Convolve uses 'full' by default.
+        # Correlate uses 'valid' by default.
         # For "direction", +1 to write the return values out in order 0->N
         # -1 to write them out N->0.
 
-        if not (mode == Mode.VALID or mode == Mode.FULL):
-            raise ValueError("Invalid mode")
-
         n1 = len(ap1)
         n2 = len(ap2)
+
+        if n1 < n2:
+            # This should never occur when called by np.convolve because
+            # _np_correlate.impl swaps arguments based on length.
+            # The same applies for np.correlate.
+            raise ValueError("'len(ap1)' must greater than 'len(ap2)'")
+
         length = n1
         n = n2
-        if mode == Mode.VALID: # mode == valid == 0, correlate default
+        if mode == "valid":
             length = length - n + 1
             n_left = 0
             n_right = 0
-        elif mode == Mode.FULL: # mode == full == 2, convolve default
+        elif mode == "full":
             n_right = n - 1
             n_left = n - 1
             length = length + n - 1
+        elif mode == "same":
+            n_left = n // 2
+            n_right = n - n_left - 1
         else:
-            raise ValueError("Invalid mode")
+            raise ValueError(
+                "Invalid 'mode', "
+                "valid are 'full', 'same', 'valid'"
+            )
 
         ret = np.zeros(length, dt)
-        n = n - n_left
 
         if direction == 1:
             idx = 0
@@ -4169,23 +4165,26 @@ def _np_correlate_core_impl(ap1, ap2, mode, direction):
             raise ValueError("Invalid direction")
 
         for i in range(n_left):
-            ret[idx] = innerprod(ap1[:idx + 1], ap2[-(idx + 1):])
+            k = i + n - n_left
+            ret[idx] = innerprod(ap1[:k], ap2[-k:])
             idx = idx + inc
 
         for i in range(n1 - n2 + 1):
             ret[idx] = innerprod(ap1[i : i + n2], ap2)
             idx = idx + inc
 
-        for i in range(n_right, 0, -1):
-            ret[idx] = innerprod(ap1[-i:], ap2[:i])
+        for i in range(n_right):
+            k = n - i - 1
+            ret[idx] = innerprod(ap1[-k:], ap2[:k])
             idx = idx + inc
+
         return ret
 
     return impl
 
 
 @overload(np.correlate)
-def _np_correlate(a, v):
+def _np_correlate(a, v, mode="valid"):
     _assert_1d(a, 'np.correlate')
     _assert_1d(v, 'np.correlate')
 
@@ -4196,8 +4195,6 @@ def _np_correlate(a, v):
     @register_jitable
     def op_nop(x):
         return x
-
-    Mode = _corr_conv_Mode
 
     if a.dtype in types.complex_domain:
         if v.dtype in types.complex_domain:
@@ -4214,29 +4211,29 @@ def _np_correlate(a, v):
             a_op = op_conj
             b_op = op_nop
 
-    def impl(a, v):
+    def impl(a, v, mode="valid"):
         la = len(a)
         lv = len(v)
+
         if la == 0:
             raise ValueError("'a' cannot be empty")
         if lv == 0:
             raise ValueError("'v' cannot be empty")
+
         if la < lv:
-            return _np_correlate_core(b_op(v), a_op(a), Mode.VALID, -1)
+            return _np_correlate_core(b_op(v), a_op(a), mode, -1)
         else:
-            return _np_correlate_core(a_op(a), b_op(v), Mode.VALID, 1)
+            return _np_correlate_core(a_op(a), b_op(v), mode, 1)
 
     return impl
 
 
 @overload(np.convolve)
-def np_convolve(a, v):
+def np_convolve(a, v, mode="full"):
     _assert_1d(a, 'np.convolve')
     _assert_1d(v, 'np.convolve')
 
-    Mode = _corr_conv_Mode
-
-    def impl(a, v):
+    def impl(a, v, mode="full"):
         la = len(a)
         lv = len(v)
 
@@ -4246,9 +4243,9 @@ def np_convolve(a, v):
             raise ValueError("'v' cannot be empty")
 
         if la < lv:
-            return _np_correlate_core(v, a[::-1], Mode.FULL, 1)
+            return _np_correlate_core(v, a[::-1], mode, 1)
         else:
-            return _np_correlate_core(a, v[::-1], Mode.FULL, 1)
+            return _np_correlate_core(a, v[::-1], mode, 1)
 
     return impl
 
