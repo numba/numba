@@ -6,6 +6,7 @@ import platform
 from functools import partial
 from itertools import product
 import warnings
+from textwrap import dedent
 
 import numpy as np
 
@@ -19,7 +20,7 @@ from numba.core.config import IS_32BITS
 from numba.core.utils import pysignature
 from numba.np.extensions import cross2d
 from numba.tests.support import (TestCase, CompilationCache, MemoryLeakMixin,
-                                 needs_blas)
+                                 needs_blas, run_in_subprocess)
 import unittest
 
 
@@ -5365,6 +5366,26 @@ def foo():
 
         self.assertEqual(len(w), 1)
         self.assertIn('`np.MachAr` is deprecated', str(w[0]))
+
+
+class TestRegistryImports(TestCase):
+
+    def test_unsafe_import_in_registry(self):
+        # See 8940
+        # This should not fail
+        code = dedent("""
+            import numba
+            import numpy as np
+            @numba.njit
+            def foo():
+                np.array([1 for _ in range(1)])
+            foo()
+            print("OK")
+        """)
+        result, error = run_in_subprocess(code)
+        # Assert that the bytestring "OK" was printed to stdout
+        self.assertEquals(b"OK", result.strip())
+        self.assertEquals(b"", error.strip())
 
 
 if __name__ == '__main__':
