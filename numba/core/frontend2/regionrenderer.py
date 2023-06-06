@@ -137,6 +137,8 @@ class RegionGraphvizRenderer: # needs a abstract base class
             self.digraph.node(k, label=node.data["body"], shape='box', style='rounded')
         elif node.kind == "effect":
             self.digraph.node(k, label=node.data["body"], shape='circle')
+        elif node.kind == "meta":
+            self.digraph.node(k, label=node.data["body"], shape='plain', fontcolor="grey")
         elif node.kind == "ports":
             ports = [f"<{x}> {x}" for x in node.ports]
             label = f"{node.data['body']} | {'|'.join(ports)}"

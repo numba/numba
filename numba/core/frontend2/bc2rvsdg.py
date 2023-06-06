@@ -214,6 +214,13 @@ class DDGBlock(BasicBlock):
         )
         builder.graph.add_node(incoming_nodename, incoming_node)
 
+        # Make jump target node for debugging
+        jt_node = builder.node_maker.make_node(
+            kind="meta",
+            data=dict(body=f"jump-targets: {self._jump_targets}"),
+        )
+        builder.graph.add_node(f"jt_{self.name}", jt_node)
+
     def _render_vs(self, builder, vs: ValueState):
         from .regionrenderer import GraphBuilder
         assert isinstance(builder, GraphBuilder) # REMOVE ME
@@ -1005,22 +1012,28 @@ class BC2DDG:
     def op_JUMP_BACKWARD(self, inst: dis.Instruction):
         pass # no-op
 
-    def op_POP_JUMP_FORWARD_IF_FALSE(self, inst: dis.Instruction):
+    def _POP_JUMP_X_IF_Y(self, inst: dis.Instruction, *, opname: str):
         tos = self.pop()
-        op = Op("jump.if_false", bc_inst=inst)
+        op = Op(opname, bc_inst=inst)
         op.add_input("env", self.effect)
         op.add_input("pred", tos)
         self.replace_effect(op.add_output("env", is_effect=True))
 
+    def op_POP_JUMP_FORWARD_IF_FALSE(self, inst: dis.Instruction):
+        self._POP_JUMP_X_IF_Y(inst, opname="jump.if_false")
+
+    def op_POP_JUMP_BACKWARD_IF_TRUE(self, inst: dis.Instruction):
+        self._POP_JUMP_X_IF_Y(inst, opname="jump.if_true")
+
     def _JUMP_IF_X_OR_POP(self, inst: dis.Instruction, *, opname):
         tos = self.top()
-        op = Op("jump.if_false", bc_inst=inst)
+        op = Op(opname, bc_inst=inst)
         op.add_input("env", self.effect)
         op.add_input("pred", tos)
         self.replace_effect(op.add_output("env", is_effect=True))
 
     def op_JUMP_IF_TRUE_OR_POP(self, inst: dis.Instruction):
-        self._JUMP_IF_X_OR_POP(inst, opname="jump_if_true")
+        self._JUMP_IF_X_OR_POP(inst, opname="jump.if_true")
 
     def op_JUMP_IF_FALSE_OR_POP(self, inst: dis.Instruction):
-        self._JUMP_IF_X_OR_POP(inst, opname="jump_if_false")
+        self._JUMP_IF_X_OR_POP(inst, opname="jump.if_false")
