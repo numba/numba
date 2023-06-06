@@ -4,6 +4,7 @@ from collections import namedtuple
 from itertools import product
 from numba import vectorize
 from numba import cuda, int32, float32, float64
+from numba.cuda.cudadrv.driver import CudaAPIError, driver
 from numba.cuda.testing import skip_on_cudasim
 from numba.cuda.testing import CUDATestCase
 import unittest
@@ -226,6 +227,36 @@ class TestCUDAVectorize(CUDATestCase):
             return x ** 2
 
         self.assertEqual(bar.__name__, 'bar')
+
+    def test_no_transfer_for_device_data(self):
+        noise = np.random.randn(1, 3, 64, 64).astype(np.float32)
+        noise = cuda.to_device(noise)
+
+        # A mock of a CUDA function that always raises a CudaAPIError
+        def raising_transfer(*args, **kwargs):
+            raise CudaAPIError(999, 'Transfer not allowed')
+
+        old_HtoD = getattr(driver, 'cuMemcpyHtoD', None)
+        old_DtoH = getattr(driver, 'cuMemcpyDtoH', None)
+
+        setattr(driver, 'cuMemcpyHtoD', raising_transfer)
+        setattr(driver, 'cuMemcpyDtoH', raising_transfer)
+
+        try:
+            @vectorize(['float32(float32)'], target='cuda')
+            def func(noise):
+                return noise + 1.0
+
+            func(noise)
+        finally:
+            if old_HtoD is not None:
+                setattr(driver, 'cuMemcpyHtoD', old_HtoD)
+            else:
+                del driver.cuMemcpyHtoD_v2
+            if old_DtoH is not None:
+                setattr(driver, 'cuMemcpyDtoH', old_DtoH)
+            else:
+                del driver.cuMemcpyDtoH_v2
 
 
 if __name__ == '__main__':
