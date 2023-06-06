@@ -70,6 +70,7 @@ def test_x_or_y():
 def test_andor():
     pyfunc = usecases.andor
     cfunc = compile(pyfunc, args=(types.intp, types.intp))
+
     # Argument boundaries
     xs = -1, 0, 1, 9, 10, 11
     ys = -1, 0, 1, 9, 10, 11
@@ -83,13 +84,15 @@ def test_andor():
 def test_while_count():
     pyfunc = usecases.while_count
     cfunc = compile(pyfunc, args=(types.intp, types.intp))
+
     # Argument boundaries
     xs = -1, 0, 1, 9, 10, 11
     ys = -1, 0, 1, 9, 10, 11
 
     for args in itertools.product(xs, ys):
-        assert pyfunc(*args) == cfunc(*args)
+        assert pyfunc(*args) == cfunc(*args), args
 
 
 if __name__ == "__main__":
-    test_while_count()
+    test_sum1d()
+

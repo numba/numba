@@ -145,7 +145,17 @@ class RVSDG2IR(RegionVisitor):
                         self.vsmap[res] = self.store(self.vsmap[arg], f"${res.name}")
                     else:
                         raise NotImplementedError(op.opname, op)
-
+                if len(block._jump_targets) > 1:
+                    assert self.branch_predicate is not None
+                    truebr = self._get_label(block._jump_targets[1])
+                    falsebr = self._get_label(block._jump_targets[0])
+                    br = ir.Branch(
+                        cond=self.branch_predicate,
+                        truebr=truebr,
+                        falsebr=falsebr,
+                        loc=self.loc,
+                    )
+                    self.current_block.append(br)
             # Prepare outgoing variables
             data = {k: self.vsmap[vs] for k, vs in block.out_vars.items()}
             return data
@@ -235,7 +245,6 @@ class RVSDG2IR(RegionVisitor):
                             loc=self.loc
                         )
                         self.current_block.append(br)
-
             return data
         else:
             raise NotImplementedError(block.name, type(block))
@@ -271,9 +280,10 @@ class RVSDG2IR(RegionVisitor):
         if not self.last_block.is_terminated:
             assert self.branch_predicate is not None
 
-            # XXX: how to tell which target is which??
-            truebr = self._get_label(header_block.jump_targets[0])
-            falsebr = self._get_label(header_block.jump_targets[1])
+            # Jump-target 1 is when a the jump is taken.
+            # Jump-target 0 is when the jump fallthrough
+            truebr = self._get_label(header_block.jump_targets[1])
+            falsebr = self._get_label(header_block.jump_targets[0])
             br = ir.Branch(self.branch_predicate, truebr, falsebr, loc=self.loc)
             self.last_block.append(br)
 
@@ -287,9 +297,9 @@ class RVSDG2IR(RegionVisitor):
                     self.visit_linear(blk, data_at_head)
                 )
                 # Add jump to tail
-                [target] = blk.jump_targets
-                assert not self.last_block.is_terminated
-                self.last_block.append(ir.Jump(self._get_label(target), loc=self.loc))
+                if not self.last_block.is_terminated:
+                    [target] = blk.jump_targets
+                    self.last_block.append(ir.Jump(self._get_label(target), loc=self.loc))
 
         # handle outgoing values from the branches
         names = reduce(operator.or_, map(set, data_for_branches))
@@ -497,31 +507,37 @@ class RVSDG2IR(RegionVisitor):
 
         isvalid = ir.Expr.pair_second(value=pair, loc=self.loc)
         pred = self.store(isvalid, "$foriter.isvalid")
-        self.branch_predicate = pred
 
-    def op_JUMP_IF_TRUE_OR_POP(self, op: Op, bc: dis.Instruction):
-        [_env, pred] = op.inputs
-        [_env] = op.outputs
         not_fn = ir.Const(operator.not_, loc=self.loc)
-        res = ir.Expr.call(self.store(not_fn, "$not"), (self.vsmap[pred],), (), loc=self.loc)
-        self.branch_predicate = self.store(res, "$jump_if")
+        res = ir.Expr.call(self.store(not_fn, "$not"), (pred,), (), loc=self.loc)
+        self.branch_predicate = self.store(res, "$for_iter")
 
     def op_JUMP_IF_FALSE_OR_POP(self, op: Op, bc: dis.Instruction):
         [_env, pred] = op.inputs
         [_env] = op.outputs
+        not_fn = ir.Const(operator.not_, loc=self.loc)
+        res = ir.Expr.call(self.store(not_fn, "$not"), (self.vsmap[pred],), (), loc=self.loc)
+        self.branch_predicate = self.store(res, "$jump_if")
+
+    def op_JUMP_IF_TRUE_OR_POP(self, op: Op, bc: dis.Instruction):
+        [_env, pred] = op.inputs
+        [_env] = op.outputs
         self.branch_predicate = self.store(self.vsmap[pred], "$jump_if")
 
-    def op_POP_JUMP_FORWARD_IF_TRUE(self, op: Op, bc: dis.Instruction):
+    def op_POP_JUMP_FORWARD_IF_FALSE(self, op: Op, bc: dis.Instruction):
         [_env, pred] = op.inputs
         [_env] = op.outputs
         not_fn = ir.Const(operator.not_, loc=self.loc)
         res = ir.Expr.call(self.store(not_fn, "$not"), (self.vsmap[pred],), (), loc=self.loc)
         self.branch_predicate = self.store(res, "$jump_if")
 
-    def op_POP_JUMP_FORWARD_IF_FALSE(self, op: Op, bc: dis.Instruction):
+
+    def op_POP_JUMP_FORWARD_IF_TRUE(self, op: Op, bc: dis.Instruction):
         [_env, pred] = op.inputs
         [_env] = op.outputs
         self.branch_predicate = self.store(self.vsmap[pred], "$jump_if")
+
+    op_POP_JUMP_BACKWARD_IF_TRUE = op_POP_JUMP_FORWARD_IF_TRUE
 
     def op_RETURN_VALUE(self, op: Op, bc: dis.Instruction):
         [_env, retval] = op.inputs
