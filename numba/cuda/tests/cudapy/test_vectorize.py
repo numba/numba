@@ -229,12 +229,18 @@ class TestCUDAVectorize(CUDATestCase):
         self.assertEqual(bar.__name__, 'bar')
 
     def test_no_transfer_for_device_data(self):
+        # Initialize test data on the device prior to banning host <-> device
+        # transfer
+
         noise = np.random.randn(1, 3, 64, 64).astype(np.float32)
         noise = cuda.to_device(noise)
 
         # A mock of a CUDA function that always raises a CudaAPIError
+
         def raising_transfer(*args, **kwargs):
             raise CudaAPIError(999, 'Transfer not allowed')
+
+        # Use the mock for transfers between the host and device
 
         old_HtoD = getattr(driver, 'cuMemcpyHtoD', None)
         old_DtoH = getattr(driver, 'cuMemcpyDtoH', None)
@@ -242,21 +248,35 @@ class TestCUDAVectorize(CUDATestCase):
         setattr(driver, 'cuMemcpyHtoD', raising_transfer)
         setattr(driver, 'cuMemcpyDtoH', raising_transfer)
 
+        # Ensure that the mock functions are working as expected
+
+        with self.assertRaisesRegex(CudaAPIError, "Transfer not allowed"):
+            noise.copy_to_host()
+
+        with self.assertRaisesRegex(CudaAPIError, "Transfer not allowed"):
+            cuda.to_device([1])
+
         try:
+            # Check that defining and calling a ufunc with data on the device
+            # induces no transfers
+
             @vectorize(['float32(float32)'], target='cuda')
             def func(noise):
                 return noise + 1.0
 
             func(noise)
         finally:
+            # Replace our mocks with the original implementations. If there was
+            # no original implementation, simply remove ours.
+
             if old_HtoD is not None:
                 setattr(driver, 'cuMemcpyHtoD', old_HtoD)
             else:
-                del driver.cuMemcpyHtoD_v2
+                del driver.cuMemcpyHtoD
             if old_DtoH is not None:
                 setattr(driver, 'cuMemcpyDtoH', old_DtoH)
             else:
-                del driver.cuMemcpyDtoH_v2
+                del driver.cuMemcpyDtoH
 
 
 if __name__ == '__main__':
