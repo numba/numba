@@ -122,8 +122,8 @@ def skip_if_mvc_enabled(reason):
 def skip_if_mvc_libraries_unavailable(fn):
     libs_available = False
     try:
-        import cubinlinker
-        import ptxcompiler
+        import cubinlinker  # noqa: F401
+        import ptxcompiler  # noqa: F401
         libs_available = True
     except ImportError:
         pass
