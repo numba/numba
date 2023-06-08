@@ -3,7 +3,8 @@ from numba.core import types
 from numba.core.typing.npydecl import (parse_dtype, parse_shape,
                                        register_number_classes,
                                        register_numpy_ufunc,
-                                       trigonometric_functions)
+                                       trigonometric_functions,
+                                       comparison_functions)
 from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          AbstractTemplate, CallableTemplate,
                                          signature, Registry)
@@ -819,4 +820,7 @@ register_global(cuda, types.Module(cuda))
 # NumPy
 
 for func in trigonometric_functions:
+    register_numpy_ufunc(func, register_global)
+
+for func in comparison_functions:
     register_numpy_ufunc(func, register_global)
