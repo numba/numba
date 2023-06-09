@@ -6,6 +6,7 @@ import platform
 from functools import partial
 from itertools import product
 import warnings
+from textwrap import dedent
 
 import numpy as np
 
@@ -19,7 +20,7 @@ from numba.core.config import IS_32BITS
 from numba.core.utils import pysignature
 from numba.np.extensions import cross2d
 from numba.tests.support import (TestCase, CompilationCache, MemoryLeakMixin,
-                                 needs_blas)
+                                 needs_blas, run_in_subprocess)
 import unittest
 
 
@@ -643,6 +644,22 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x_values = np.array(x_values)
         x_types = [types.complex64, types.complex128]
         check(x_types, x_values)
+
+    def test_angle_return_type(self):
+        # see issue #8949
+        def numba_angle(x):
+            r = np.angle(x)
+            return r.dtype
+
+        pyfunc = numba_angle
+        x_values = [1., -1., 1. + 0j, -5 - 5j]
+        x_types = ['f4', 'f8', 'c8', 'c16']
+        for val, typ in zip(x_values, x_types):
+            x = np.array([val], dtype=typ)
+            cfunc = jit(nopython=True)(pyfunc)
+            expected = pyfunc(x)
+            got = cfunc(x)
+            self.assertEquals(expected, got)
 
     def test_angle_exceptions(self):
         pyfunc = angle1
@@ -5365,6 +5382,26 @@ def foo():
 
         self.assertEqual(len(w), 1)
         self.assertIn('`np.MachAr` is deprecated', str(w[0]))
+
+
+class TestRegistryImports(TestCase):
+
+    def test_unsafe_import_in_registry(self):
+        # See 8940
+        # This should not fail
+        code = dedent("""
+            import numba
+            import numpy as np
+            @numba.njit
+            def foo():
+                np.array([1 for _ in range(1)])
+            foo()
+            print("OK")
+        """)
+        result, error = run_in_subprocess(code)
+        # Assert that the bytestring "OK" was printed to stdout
+        self.assertEquals(b"OK", result.strip())
+        self.assertEquals(b"", error.strip())
 
 
 if __name__ == '__main__':
