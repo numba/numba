@@ -387,20 +387,20 @@ class TestNEP13WithoutSignature(TestCase):
         c = np.array([7, 8, 9], dtype=np.int64)
 
         all_np = new_ufunc(a, b, c)
-        assert isinstance(all_np, np.ndarray)
-        assert all_np.tolist() == [147, 258, 369]
+        self.assertIsInstance(all_np, np.ndarray)
+        self.assertEqual(all_np.tolist(), [147, 258, 369])
 
         nep13_1 = new_ufunc(NEP13Array(a), b, c)
-        assert isinstance(nep13_1, NEP13Array)
-        assert nep13_1.tolist() == [147, 258, 369]
+        self.assertIsInstance(nep13_1, NEP13Array)
+        self.assertEqual(nep13_1.tolist(), [147, 258, 369])
 
         nep13_2 = new_ufunc(a, NEP13Array(b), c)
-        assert isinstance(nep13_2, NEP13Array)
-        assert nep13_2.tolist() == [147, 258, 369]
+        self.assertIsInstance(nep13_2, NEP13Array)
+        self.assertEqual(nep13_2.tolist(), [147, 258, 369])
 
         nep13_3 = new_ufunc(a, b, NEP13Array(c))
-        assert isinstance(nep13_3, NEP13Array)
-        assert nep13_3.tolist() == [147, 258, 369]
+        self.assertIsInstance(nep13_3, NEP13Array)
+        self.assertEqual(nep13_3.tolist(), [147, 258, 369])
 
         # give it floats
         a = np.array([1.1, 2.2, 3.3], dtype=np.float64)
@@ -408,20 +408,20 @@ class TestNEP13WithoutSignature(TestCase):
         c = np.array([7.7, 8.8, 9.9], dtype=np.float64)
 
         all_np = new_ufunc(a, b, c)
-        assert isinstance(all_np, np.ndarray)
-        assert all_np.tolist() == [161.7, 283.8, 405.9]
+        self.assertIsInstance(all_np, np.ndarray)
+        self.assertEqual(all_np.tolist(), [161.7, 283.8, 405.9])
 
         nep13_1 = new_ufunc(NEP13Array(a), b, c)
-        assert isinstance(nep13_1, NEP13Array)
-        assert nep13_1.tolist() == [161.7, 283.8, 405.9]
+        self.assertIsInstance(nep13_1, NEP13Array)
+        self.assertEqual(nep13_1.tolist(), [161.7, 283.8, 405.9])
 
         nep13_2 = new_ufunc(a, NEP13Array(b), c)
-        assert isinstance(nep13_2, NEP13Array)
-        assert nep13_2.tolist() == [161.7, 283.8, 405.9]
+        self.assertIsInstance(nep13_2, NEP13Array)
+        self.assertEqual(nep13_2.tolist(), [161.7, 283.8, 405.9])
 
         nep13_3 = new_ufunc(a, b, NEP13Array(c))
-        assert isinstance(nep13_3, NEP13Array)
-        assert nep13_3.tolist() == [161.7, 283.8, 405.9]
+        self.assertIsInstance(nep13_3, NEP13Array)
+        self.assertEqual(nep13_3.tolist(), [161.7, 283.8, 405.9])
 
 
 class TestVectorizeDecorJitDisabled(TestVectorizeDecor):
