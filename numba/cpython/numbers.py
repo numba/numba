@@ -361,6 +361,58 @@ def int_ne_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
+def int_su_cmp(op):
+    def impl(context, builder, sig, args):
+        (left, right) = args
+        bb_lt_zero = builder.append_basic_block(".lt_zero")
+        bb_ge_zero = builder.append_basic_block(".ge_zero")
+        bb_exit = builder.append_basic_block(".cmp_exit")
+        cmp_zero = builder.icmp_signed('<', left, Constant(left.type, 0))
+        builder.cbranch(cmp_zero, bb_lt_zero, bb_ge_zero)
+
+        builder.position_at_end(bb_exit)
+        phi = builder.phi(ir.IntType(1))
+
+        with builder.goto_block(bb_lt_zero):
+            res = builder.icmp_unsigned(op, left, Constant(left.type, 0))
+            phi.add_incoming(res, bb_lt_zero)
+            builder.branch(bb_exit)
+
+        with builder.goto_block(bb_ge_zero):
+            res = builder.icmp_unsigned(op, left, right)
+            phi.add_incoming(res, bb_ge_zero)
+            builder.branch(bb_exit)
+
+        return impl_ret_untracked(context, builder, sig.return_type, phi)
+    return impl
+
+
+def int_us_cmp(op):
+    def impl(context, builder, sig, args):
+        (left, right) = args
+        bb_lt_zero = builder.append_basic_block(".lt_zero")
+        bb_ge_zero = builder.append_basic_block(".ge_zero")
+        bb_exit = builder.append_basic_block(".cmp_exit")
+        cmp_zero = builder.icmp_signed('<', right, Constant(right.type, 0))
+        builder.cbranch(cmp_zero, bb_lt_zero, bb_ge_zero)
+
+        builder.position_at_end(bb_exit)
+        phi = builder.phi(ir.IntType(1))
+
+        with builder.goto_block(bb_lt_zero):
+            res = builder.icmp_unsigned(op, Constant(right.type, 0), right)
+            phi.add_incoming(res, bb_lt_zero)
+            builder.branch(bb_exit)
+
+        with builder.goto_block(bb_ge_zero):
+            res = builder.icmp_unsigned(op, left, right)
+            phi.add_incoming(res, bb_ge_zero)
+            builder.branch(bb_exit)
+
+        return impl_ret_untracked(context, builder, sig.return_type, phi)
+    return impl
+
+
 def int_abs_impl(context, builder, sig, args):
     [x] = args
     ZERO = Constant(x.type, None)

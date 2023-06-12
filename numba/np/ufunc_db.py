@@ -620,6 +620,10 @@ def _fill_ufunc_db(ufunc_db):
         'FF->?': npyfuncs.np_complex_gt_impl,
         'DD->?': npyfuncs.np_complex_gt_impl,
     }
+    if numpy_version >= (1, 25):
+        ufunc_db[np.greater].update({
+            'qQ->?': numbers.int_su_cmp('>'),
+            'Qq->?': numbers.int_us_cmp('>')})
 
     ufunc_db[np.greater_equal] = {
         '??->?': numbers.int_uge_impl,
@@ -638,6 +642,10 @@ def _fill_ufunc_db(ufunc_db):
         'FF->?': npyfuncs.np_complex_ge_impl,
         'DD->?': npyfuncs.np_complex_ge_impl,
     }
+    if numpy_version >= (1, 25):
+        ufunc_db[np.greater_equal].update({
+            'qQ->?': numbers.int_su_cmp('>='),
+            'Qq->?': numbers.int_us_cmp('>=')})
 
     ufunc_db[np.less] = {
         '??->?': numbers.int_ult_impl,
@@ -656,6 +664,10 @@ def _fill_ufunc_db(ufunc_db):
         'FF->?': npyfuncs.np_complex_lt_impl,
         'DD->?': npyfuncs.np_complex_lt_impl,
     }
+    if numpy_version >= (1, 25):
+        ufunc_db[np.less].update({
+            'qQ->?': numbers.int_su_cmp('<'),
+            'Qq->?': numbers.int_us_cmp('<')})
 
     ufunc_db[np.less_equal] = {
         '??->?': numbers.int_ule_impl,
@@ -674,6 +686,10 @@ def _fill_ufunc_db(ufunc_db):
         'FF->?': npyfuncs.np_complex_le_impl,
         'DD->?': npyfuncs.np_complex_le_impl,
     }
+    if numpy_version >= (1, 25):
+        ufunc_db[np.less_equal].update({
+            'qQ->?': numbers.int_su_cmp('<='),
+            'Qq->?': numbers.int_us_cmp('<=')})
 
     ufunc_db[np.not_equal] = {
         '??->?': numbers.int_ne_impl,
@@ -692,6 +708,10 @@ def _fill_ufunc_db(ufunc_db):
         'FF->?': npyfuncs.np_complex_ne_impl,
         'DD->?': npyfuncs.np_complex_ne_impl,
     }
+    if numpy_version >= (1, 25):
+        ufunc_db[np.not_equal].update({
+            'qQ->?': numbers.int_su_cmp('!='),
+            'Qq->?': numbers.int_us_cmp('!=')})
 
     ufunc_db[np.equal] = {
         '??->?': numbers.int_eq_impl,
@@ -710,6 +730,10 @@ def _fill_ufunc_db(ufunc_db):
         'FF->?': npyfuncs.np_complex_eq_impl,
         'DD->?': npyfuncs.np_complex_eq_impl,
     }
+    if numpy_version >= (1, 25):
+        ufunc_db[np.equal].update({
+            'qQ->?': numbers.int_su_cmp('=='),
+            'Qq->?': numbers.int_us_cmp('==')})
 
     ufunc_db[np.logical_and] = {
         '??->?': npyfuncs.np_logical_and_impl,

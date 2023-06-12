@@ -586,16 +586,16 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
             xs, ys = np.zeros(n), np.zeros(n)
             xs[0], ys[0] = x0, y0
             for i in np.arange(n-1):
-                xs[i+1] = np.sin(a * ys[i]) + c * np.cos(a * xs[i])
-                ys[i+1] = np.sin(b * xs[i]) + d * np.cos(b * ys[i])
+                xs[i+1] = np.exp(a * ys[i]) + c * np.exp(a * xs[i])
+                ys[i+1] = np.exp(b * xs[i]) + d * np.exp(b * ys[i])
             object() # ensure object mode
             return xs, ys
 
         kwargs = dict(a=1.7, b=1.7, c=0.6, d=1.2, x0=0, y0=0, n=200)
         got = foo(**kwargs)
         expected = foo.py_func(**kwargs)
-        self.assertPreciseEqual(got[0], expected[0])
-        self .assertPreciseEqual(got[1], expected[1])
+        np.testing.assert_allclose(got[0], expected[0])
+        np.testing.assert_allclose(got[1], expected[1])
         [lifted] = foo.overloads[foo.signatures[0]].lifted
         self.assertEqual(len(lifted.nopython_signatures), 1)
 
