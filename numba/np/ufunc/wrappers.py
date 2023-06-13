@@ -531,7 +531,7 @@ def _prepare_call_to_object_mode(context, builder, pyapi, func,
                                                   "numba_ndarray_new")
 
     # Convert each llarray into pyobject
-    error_pointer = cgutils.alloca_once(builder, ir.IntType(1), name='error')
+    error_pointer = cgutils.alloca_once(builder, ir.IntType(1), name='.error')
     builder.store(cgutils.true_bit, error_pointer)
 
     # The PyObject* arguments to the kernel function

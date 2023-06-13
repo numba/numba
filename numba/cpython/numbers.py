@@ -135,8 +135,8 @@ def _int_divmod_impl(context, builder, sig, args, zerodiv_message):
         ty = ty.dtype
     a = context.cast(builder, va, ta, ty)
     b = context.cast(builder, vb, tb, ty)
-    quot = cgutils.alloca_once(builder, a.type, name="quot")
-    rem = cgutils.alloca_once(builder, a.type, name="rem")
+    quot = cgutils.alloca_once(builder, a.type, name=".quot")
+    rem = cgutils.alloca_once(builder, a.type, name=".rem")
 
     with builder.if_else(cgutils.is_scalar_zero(builder, b), likely=False
                          ) as (if_zero, if_non_zero):
@@ -734,8 +734,8 @@ def real_divmod_func_body(context, builder, vx, wx):
 @lower_builtin(divmod, types.Float, types.Float)
 def real_divmod_impl(context, builder, sig, args, loc=None):
     x, y = args
-    quot = cgutils.alloca_once(builder, x.type, name="quot")
-    rem = cgutils.alloca_once(builder, x.type, name="rem")
+    quot = cgutils.alloca_once(builder, x.type, name=".quot")
+    rem = cgutils.alloca_once(builder, x.type, name=".rem")
 
     with builder.if_else(cgutils.is_scalar_zero(builder, y), likely=False
                          ) as (if_zero, if_non_zero):

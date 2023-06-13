@@ -108,12 +108,12 @@ def _gettyperecord_impl(typingctx, codepoint):
         fn = cgutils.get_or_insert_function(
             builder.module,
             fnty, name="numba_gettyperecord")
-        upper = cgutils.alloca_once(builder, ll_intc, name='upper')
-        lower = cgutils.alloca_once(builder, ll_intc, name='lower')
-        title = cgutils.alloca_once(builder, ll_intc, name='title')
-        decimal = cgutils.alloca_once(builder, ll_uchar, name='decimal')
-        digit = cgutils.alloca_once(builder, ll_uchar, name='digit')
-        flags = cgutils.alloca_once(builder, ll_ushort, name='flags')
+        upper = cgutils.alloca_once(builder, ll_intc, name='.upper')
+        lower = cgutils.alloca_once(builder, ll_intc, name='.lower')
+        title = cgutils.alloca_once(builder, ll_intc, name='.title')
+        decimal = cgutils.alloca_once(builder, ll_uchar, name='.decimal')
+        digit = cgutils.alloca_once(builder, ll_uchar, name='.digit')
+        flags = cgutils.alloca_once(builder, ll_ushort, name='.flags')
 
         byref = [ upper, lower, title, decimal, digit, flags]
         builder.call(fn, [args[0]] + byref)

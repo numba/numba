@@ -1691,10 +1691,10 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     # Call do_scheduling with appropriate arguments
     dim_starts = cgutils.alloca_once(
         builder, sched_type, size=context.get_constant(
-            types.uintp, num_dim), name="dim_starts")
+            types.uintp, num_dim), name=".dim_starts")
     dim_stops = cgutils.alloca_once(
         builder, sched_type, size=context.get_constant(
-            types.uintp, num_dim), name="dim_stops")
+            types.uintp, num_dim), name=".dim_stops")
     for i in range(num_dim):
         start, stop, step = loop_ranges[i]
         if start.type != one_type:
@@ -1807,7 +1807,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         size=context.get_constant(
             types.intp,
             1 + num_args),
-        name="pargs")
+        name=".pargs")
     array_strides = []
     # sched goes first
     builder.store(builder.bitcast(sched, byte_ptr_t), args)
@@ -1906,7 +1906,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     # Prepare shapes, which is a single number (outer loop size), followed by
     # the size of individual shape variables.
     nshapes = len(sig_dim_dict) + 1
-    shapes = cgutils.alloca_once(builder, intp_t, size=nshapes, name="pshape")
+    shapes = cgutils.alloca_once(builder, intp_t, size=nshapes, name=".pshape")
     # For now, outer loop size is the same as number of threads
     builder.store(num_divisions, shapes)
     # Individual shape variables go next
@@ -1927,7 +1927,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     num_steps = num_args + 1 + len(array_strides)
     steps = cgutils.alloca_once(
         builder, intp_t, size=context.get_constant(
-            types.intp, num_steps), name="psteps")
+            types.intp, num_steps), name=".psteps")
     # First goes the step size for sched, which is 2 * num_dim
     builder.store(context.get_constant(types.intp, 2 * num_dim * sizeof_intp),
                   steps)

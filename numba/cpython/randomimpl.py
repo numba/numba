@@ -371,7 +371,7 @@ def _gauss_impl(state, loc_preprocessor, scale_preprocessor):
 
         state_ptr = get_state_ptr(context, builder, state)
 
-        ret = cgutils.alloca_once(builder, llty, name="result")
+        ret = cgutils.alloca_once(builder, llty, name=".result")
 
         gauss_ptr = get_gauss_ptr(builder, state_ptr)
         has_gauss_ptr = get_has_gauss_ptr(builder, state_ptr)
@@ -443,7 +443,7 @@ def _randrange_impl(context, builder, start, stop, step, ty, signed, state):
     state_ptr = get_state_ptr(context, builder, state)
     zero = ir.Constant(ty, 0)
     one = ir.Constant(ty, 1)
-    nptr = cgutils.alloca_once(builder, ty, name="n")
+    nptr = cgutils.alloca_once(builder, ty, name=".n")
 
     # n = stop - start
     builder.store(builder.sub(stop, start), nptr)
@@ -480,7 +480,7 @@ def _randrange_impl(context, builder, start, stop, step, ty, signed, state):
     nbits = builder.trunc(builder.call(fn, [nm1, cgutils.true_bit]), int32_t)
     nbits = builder.sub(ir.Constant(int32_t, ty.width), nbits)
 
-    rptr = cgutils.alloca_once(builder, ty, name="r")
+    rptr = cgutils.alloca_once(builder, ty, name=".r")
 
     def get_num():
         bbwhile = builder.append_basic_block("while")
@@ -1568,7 +1568,7 @@ def poisson_impl1(lam):
             def codegen(context, builder, sig, args):
                 state_ptr = get_np_state_ptr(context, builder)
 
-                retptr = cgutils.alloca_once(builder, int64_t, name="ret")
+                retptr = cgutils.alloca_once(builder, int64_t, name=".ret")
                 bbcont = builder.append_basic_block("bbcont")
                 bbend = builder.append_basic_block("bbend")
 

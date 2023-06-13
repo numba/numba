@@ -76,7 +76,7 @@ def normalize_timedeltas(context, builder, left, right, leftty, rightty):
     raise RuntimeError("cannot normalize %r and %r" % (leftty, rightty))
 
 
-def alloc_timedelta_result(builder, name='ret'):
+def alloc_timedelta_result(builder, name='.ret'):
     """
     Allocate a NaT-initialized datetime64 (or timedelta64) result slot.
     """
@@ -85,7 +85,7 @@ def alloc_timedelta_result(builder, name='ret'):
     return ret
 
 
-def alloc_boolean_result(builder, name='ret'):
+def alloc_boolean_result(builder, name='.ret'):
     """
     Allocate an uninitialized boolean result slot.
     """
@@ -285,7 +285,7 @@ def timedelta_over_timedelta(context, builder, sig, args):
     [ta, tb] = sig.args
     not_nan = are_not_nat(builder, [va, vb])
     ll_ret_type = context.get_value_type(sig.return_type)
-    ret = cgutils.alloca_once(builder, ll_ret_type, name='ret')
+    ret = cgutils.alloca_once(builder, ll_ret_type, name='.ret')
     builder.store(Constant(ll_ret_type, float('nan')), ret)
     with cgutils.if_likely(builder, not_nan):
         va, vb = normalize_timedeltas(context, builder, va, vb, ta, tb)
@@ -302,7 +302,7 @@ def timedelta_floor_div_timedelta(context, builder, sig, args):
     [ta, tb] = sig.args
     ll_ret_type = context.get_value_type(sig.return_type)
     not_nan = are_not_nat(builder, [va, vb])
-    ret = cgutils.alloca_once(builder, ll_ret_type, name='ret')
+    ret = cgutils.alloca_once(builder, ll_ret_type, name='.ret')
     zero = Constant(ll_ret_type, 0)
     one = Constant(ll_ret_type, 1)
     builder.store(zero, ret)

@@ -261,7 +261,7 @@ def frexp_impl(context, builder, sig, args):
     val, = args
     fltty = context.get_data_type(sig.args[0])
     intty = context.get_data_type(sig.return_type[1])
-    expptr = cgutils.alloca_once(builder, intty, name='exp')
+    expptr = cgutils.alloca_once(builder, intty, name='.exp')
     fnty = llvmlite.ir.FunctionType(fltty, (fltty, llvmlite.ir.PointerType(intty)))
     fname = {
         "float": "numba_frexpf",
