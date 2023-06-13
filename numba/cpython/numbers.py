@@ -364,52 +364,32 @@ def int_ne_impl(context, builder, sig, args):
 def int_su_cmp(op):
     def impl(context, builder, sig, args):
         (left, right) = args
-        bb_lt_zero = builder.append_basic_block(".lt_zero")
-        bb_ge_zero = builder.append_basic_block(".ge_zero")
-        bb_exit = builder.append_basic_block(".cmp_exit")
+        # This code is entirely too clever. It's taken from the NumPy source.
+        # What we're going to do is divide the range of a signed value at zero.
+        # If the signed value is less than zero, then we can treat zero as the
+        # unsigned value since the unsigned value is necessarily zero or larger
+        # and any signed comparison between a negative value and zero/infinity
+        # will yield the same result. If the signed value is greater than or
+        # equal to zero, then we can safely cast it to an unsigned value and do
+        # the expected unsigned-unsigned comparison operation.
         cmp_zero = builder.icmp_signed('<', left, Constant(left.type, 0))
-        builder.cbranch(cmp_zero, bb_lt_zero, bb_ge_zero)
-
-        builder.position_at_end(bb_exit)
-        phi = builder.phi(ir.IntType(1))
-
-        with builder.goto_block(bb_lt_zero):
-            res = builder.icmp_unsigned(op, left, Constant(left.type, 0))
-            phi.add_incoming(res, bb_lt_zero)
-            builder.branch(bb_exit)
-
-        with builder.goto_block(bb_ge_zero):
-            res = builder.icmp_unsigned(op, left, right)
-            phi.add_incoming(res, bb_ge_zero)
-            builder.branch(bb_exit)
-
-        return impl_ret_untracked(context, builder, sig.return_type, phi)
+        lt_zero = builder.icmp_signed(op, left, Constant(left.type, 0))
+        ge_zero = builder.icmp_unsigned(op, left, right)
+        res = builder.select(cmp_zero, lt_zero, ge_zero)
+        return impl_ret_untracked(context, builder, sig.return_type, res)
     return impl
 
 
 def int_us_cmp(op):
     def impl(context, builder, sig, args):
         (left, right) = args
-        bb_lt_zero = builder.append_basic_block(".lt_zero")
-        bb_ge_zero = builder.append_basic_block(".ge_zero")
-        bb_exit = builder.append_basic_block(".cmp_exit")
+        # This code is entirely too clever. See the sister implementation for
+        # details
         cmp_zero = builder.icmp_signed('<', right, Constant(right.type, 0))
-        builder.cbranch(cmp_zero, bb_lt_zero, bb_ge_zero)
-
-        builder.position_at_end(bb_exit)
-        phi = builder.phi(ir.IntType(1))
-
-        with builder.goto_block(bb_lt_zero):
-            res = builder.icmp_unsigned(op, Constant(right.type, 0), right)
-            phi.add_incoming(res, bb_lt_zero)
-            builder.branch(bb_exit)
-
-        with builder.goto_block(bb_ge_zero):
-            res = builder.icmp_unsigned(op, left, right)
-            phi.add_incoming(res, bb_ge_zero)
-            builder.branch(bb_exit)
-
-        return impl_ret_untracked(context, builder, sig.return_type, phi)
+        lt_zero = builder.icmp_signed(op, Constant(right.type, 0), right)
+        ge_zero = builder.icmp_unsigned(op, left, right)
+        res = builder.select(cmp_zero, lt_zero, ge_zero)
+        return impl_ret_untracked(context, builder, sig.return_type, res)
     return impl
 
 
