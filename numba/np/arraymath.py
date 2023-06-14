@@ -5,7 +5,6 @@ Implementation of math operations on Array objects.
 
 import math
 from collections import namedtuple
-from enum import IntEnum
 import operator
 import warnings
 
@@ -20,8 +19,7 @@ from numba.np.numpy_support import (as_dtype, type_can_asarray, type_is_scalar,
 from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
                                  impl_ret_new_ref, impl_ret_untracked)
 from numba.np.arrayobj import (make_array, load_item, store_item,
-                               _empty_nd_impl, numpy_broadcast_shapes_list)
-from numba.np.arrayobj import __broadcast_shapes
+                               _empty_nd_impl)
 from numba.np.linalg import ensure_blas
 
 from numba.core.extending import intrinsic
@@ -602,11 +600,7 @@ def array_argmin_impl_datetime(arry):
     for view in it:
         v = view.item()
         if np.isnat(v):
-            if numpy_version >= (1, 18):
-                return idx
-            else:
-                idx += 1
-                continue
+            return idx
         if v < min_value:
             min_value = v
             min_idx = idx
@@ -690,11 +684,7 @@ def array_argmax_impl_datetime(arry):
     for view in it:
         v = view.item()
         if np.isnat(v):
-            if numpy_version >= (1, 18):
-                return idx
-            else:
-                idx += 1
-                continue
+            return idx
         if v > max_value:
             max_value = v
             max_idx = idx
@@ -849,22 +839,22 @@ def _allclose_scalars(a_v, b_v, rtol=1e-05, atol=1e-08, equal_nan=False):
 def np_allclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 
     if not type_can_asarray(a):
-        raise TypeError('The first argument "a" must be array-like')
+        raise TypingError('The first argument "a" must be array-like')
 
     if not type_can_asarray(b):
-        raise TypeError('The second argument "b" must be array-like')
+        raise TypingError('The second argument "b" must be array-like')
 
-    if not isinstance(rtol, types.Float):
-        raise TypeError('The third argument "rtol" must be a '
-                        'floating point')
+    if not isinstance(rtol, (float, types.Float)):
+        raise TypingError('The third argument "rtol" must be a '
+                          'floating point')
 
-    if not isinstance(atol, types.Float):
+    if not isinstance(atol, (float, types.Float)):
         raise TypingError('The fourth argument "atol" must be a '
                           'floating point')
 
-    if not isinstance(equal_nan, types.Boolean):
-        raise TypeError('The fifth argument "equal_nan" must be a '
-                        'boolean')
+    if not isinstance(equal_nan, (bool, types.Boolean)):
+        raise TypingError('The fifth argument "equal_nan" must be a '
+                          'boolean')
 
     is_a_scalar = isinstance(a, types.Number)
     is_b_scalar = isinstance(b, types.Number)
@@ -1132,8 +1122,23 @@ def _isclose_item(x, y, rtol, atol, equal_nan):
 
 @overload(np.isclose)
 def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-    if not (type_can_asarray(a) and type_can_asarray(b)):
-        raise TypingError("Inputs for `np.isclose` must be array-like.")
+    if not type_can_asarray(a):
+        raise TypingError('The first argument "a" must be array-like')
+
+    if not type_can_asarray(b):
+        raise TypingError('The second argument "b" must be array-like')
+
+    if not isinstance(rtol, (float, types.Float)):
+        raise TypingError('The third argument "rtol" must be a '
+                          'floating point')
+
+    if not isinstance(atol, (float, types.Float)):
+        raise TypingError('The fourth argument "atol" must be a '
+                          'floating point')
+
+    if not isinstance(equal_nan, (bool, types.Boolean)):
+        raise TypingError('The fifth argument "equal_nan" must be a '
+                          'boolean')
 
     if isinstance(a, types.Array) and isinstance(b, types.Number):
         def isclose_impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
@@ -1154,31 +1159,16 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
             return out.reshape(b.shape)
 
     elif isinstance(a, types.Array) and isinstance(b, types.Array):
-        m = max(a.ndim, b.ndim)
-        tup_init = (0,) * m
-
         def isclose_impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-            # Broadcast arrays of different types - cannot use
-            # np.broadcast_arrays for that
-            # this can be replaced by np.broadcast_shapes once the min NumPy
-            # version is increased to 1.20
-            shape = [1] * m
-            numpy_broadcast_shapes_list(shape, m, a.shape)
-            numpy_broadcast_shapes_list(shape, m, b.shape)
-
-            tup = tup_init  # tup is the final shape
-
-            for i in range(m):
-                tup = tuple_setitem(tup, i, shape[i])
-
-            a_ = np.broadcast_to(a, tup)
-            b_ = np.broadcast_to(b, tup)
+            shape = np.broadcast_shapes(a.shape, b.shape)
+            a_ = np.broadcast_to(a, shape)
+            b_ = np.broadcast_to(b, shape)
 
             out = np.zeros(len(a_), dtype=np.bool_)
             for i, (av, bv) in enumerate(np.nditer((a_, b_))):
                 out[i] = _isclose_item(av.item(), bv.item(), rtol, atol,
                                        equal_nan)
-            return np.broadcast_to(out, tup)
+            return np.broadcast_to(out, shape)
 
     else:
         def isclose_impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
@@ -2941,26 +2931,16 @@ def np_argwhere(a):
     # needs to be much more array-like for the array impl to work, Numba bug
     # in one of the underlying function calls?
 
-    use_scalar = (numpy_version >= (1, 18) and
-                  isinstance(a, (types.Number, types.Boolean)))
+    use_scalar = isinstance(a, (types.Number, types.Boolean))
     if type_can_asarray(a) and not use_scalar:
-        if numpy_version < (1, 18):
-            check = register_jitable(lambda x: not np.any(x))
-        else:
-            check = register_jitable(lambda x: True)
-
         def impl(a):
             arr = np.asarray(a)
-            if arr.shape == () and check(arr):
+            if arr.shape == ():
                 return np.zeros((0, 1), dtype=types.intp)
             return np.transpose(np.vstack(np.nonzero(arr)))
     else:
-        if numpy_version < (1, 18):
-            falseish = (0, 1)
-            trueish = (1, 1)
-        else:
-            falseish = (0, 0)
-            trueish = (1, 0)
+        falseish = (0, 0)
+        trueish = (1, 0)
 
         def impl(a):
             if a is not None and bool(a):
@@ -3246,7 +3226,14 @@ def ov_np_angle(z, deg=False):
                 return np.arctan2(z.imag, z.real)
         return impl
     elif isinstance(z, types.Array):
-        ret_dtype = z.dtype
+        dtype = z.dtype
+
+        if isinstance(dtype, types.Complex):
+            ret_dtype = dtype.underlying_float
+        elif isinstance(dtype, types.Float):
+            ret_dtype = dtype
+        else:
+            return
 
         def impl(z, deg=False):
             out = np.zeros_like(z, dtype=ret_dtype)
@@ -3348,7 +3335,7 @@ def _where_generic_impl(dtype, layout):
 
     def impl(condition, x, y):
         cond1, x1, y1 = np.asarray(condition), np.asarray(x), np.asarray(y)
-        shape = __broadcast_shapes(cond1.shape, x1.shape, y1.shape)
+        shape = np.broadcast_shapes(cond1.shape, x1.shape, y1.shape)
         cond_ = np.broadcast_to(cond1, shape)
         x_ = np.broadcast_to(x1, shape)
         y_ = np.broadcast_to(y1, shape)
@@ -4122,16 +4109,6 @@ def _np_correlate_core(ap1, ap2, mode, direction):
     pass
 
 
-class _corr_conv_Mode(IntEnum):
-    """
-    Enumerated modes for correlate/convolve as per:
-    https://github.com/numpy/numpy/blob/ac6b1a902b99e340cf7eeeeb7392c91e38db9dd8/numpy/core/numeric.py#L862-L870    # noqa: E501
-    """
-    VALID = 0
-    SAME = 1
-    FULL = 2
-
-
 @overload(_np_correlate_core)
 def _np_correlate_core_impl(ap1, ap2, mode, direction):
     a_dt = as_dtype(ap1.dtype)
@@ -4139,37 +4116,44 @@ def _np_correlate_core_impl(ap1, ap2, mode, direction):
     dt = np.promote_types(a_dt, b_dt)
     innerprod = _get_inner_prod(ap1.dtype, ap2.dtype)
 
-    Mode = _corr_conv_Mode
-
     def impl(ap1, ap2, mode, direction):
         # Implementation loosely based on `_pyarray_correlate` from
         # https://github.com/numpy/numpy/blob/3bce2be74f228684ca2895ad02b63953f37e2a9d/numpy/core/src/multiarray/multiarraymodule.c#L1191    # noqa: E501
-        # For "Mode":
-        # Convolve uses 'full' by default, this is denoted by the number 2
-        # Correlate uses 'valid' by default, this is denoted by the number 0
+        # For "mode":
+        # Convolve uses 'full' by default.
+        # Correlate uses 'valid' by default.
         # For "direction", +1 to write the return values out in order 0->N
         # -1 to write them out N->0.
 
-        if not (mode == Mode.VALID or mode == Mode.FULL):
-            raise ValueError("Invalid mode")
-
         n1 = len(ap1)
         n2 = len(ap2)
+
+        if n1 < n2:
+            # This should never occur when called by np.convolve because
+            # _np_correlate.impl swaps arguments based on length.
+            # The same applies for np.correlate.
+            raise ValueError("'len(ap1)' must greater than 'len(ap2)'")
+
         length = n1
         n = n2
-        if mode == Mode.VALID: # mode == valid == 0, correlate default
+        if mode == "valid":
             length = length - n + 1
             n_left = 0
             n_right = 0
-        elif mode == Mode.FULL: # mode == full == 2, convolve default
+        elif mode == "full":
             n_right = n - 1
             n_left = n - 1
             length = length + n - 1
+        elif mode == "same":
+            n_left = n // 2
+            n_right = n - n_left - 1
         else:
-            raise ValueError("Invalid mode")
+            raise ValueError(
+                "Invalid 'mode', "
+                "valid are 'full', 'same', 'valid'"
+            )
 
         ret = np.zeros(length, dt)
-        n = n - n_left
 
         if direction == 1:
             idx = 0
@@ -4181,23 +4165,26 @@ def _np_correlate_core_impl(ap1, ap2, mode, direction):
             raise ValueError("Invalid direction")
 
         for i in range(n_left):
-            ret[idx] = innerprod(ap1[:idx + 1], ap2[-(idx + 1):])
+            k = i + n - n_left
+            ret[idx] = innerprod(ap1[:k], ap2[-k:])
             idx = idx + inc
 
         for i in range(n1 - n2 + 1):
             ret[idx] = innerprod(ap1[i : i + n2], ap2)
             idx = idx + inc
 
-        for i in range(n_right, 0, -1):
-            ret[idx] = innerprod(ap1[-i:], ap2[:i])
+        for i in range(n_right):
+            k = n - i - 1
+            ret[idx] = innerprod(ap1[-k:], ap2[:k])
             idx = idx + inc
+
         return ret
 
     return impl
 
 
 @overload(np.correlate)
-def _np_correlate(a, v):
+def _np_correlate(a, v, mode="valid"):
     _assert_1d(a, 'np.correlate')
     _assert_1d(v, 'np.correlate')
 
@@ -4208,8 +4195,6 @@ def _np_correlate(a, v):
     @register_jitable
     def op_nop(x):
         return x
-
-    Mode = _corr_conv_Mode
 
     if a.dtype in types.complex_domain:
         if v.dtype in types.complex_domain:
@@ -4226,32 +4211,7 @@ def _np_correlate(a, v):
             a_op = op_conj
             b_op = op_nop
 
-    _NP_PRED = numpy_version > (1, 17)
-
-    def impl(a, v):
-        la = len(a)
-        lv = len(v)
-        if _NP_PRED is True:
-            if la == 0:
-                raise ValueError("'a' cannot be empty")
-            if lv == 0:
-                raise ValueError("'v' cannot be empty")
-        if la < lv:
-            return _np_correlate_core(b_op(v), a_op(a), Mode.VALID, -1)
-        else:
-            return _np_correlate_core(a_op(a), b_op(v), Mode.VALID, 1)
-
-    return impl
-
-
-@overload(np.convolve)
-def np_convolve(a, v):
-    _assert_1d(a, 'np.convolve')
-    _assert_1d(v, 'np.convolve')
-
-    Mode = _corr_conv_Mode
-
-    def impl(a, v):
+    def impl(a, v, mode="valid"):
         la = len(a)
         lv = len(v)
 
@@ -4261,9 +4221,31 @@ def np_convolve(a, v):
             raise ValueError("'v' cannot be empty")
 
         if la < lv:
-            return _np_correlate_core(v, a[::-1], Mode.FULL, 1)
+            return _np_correlate_core(b_op(v), a_op(a), mode, -1)
         else:
-            return _np_correlate_core(a, v[::-1], Mode.FULL, 1)
+            return _np_correlate_core(a_op(a), b_op(v), mode, 1)
+
+    return impl
+
+
+@overload(np.convolve)
+def np_convolve(a, v, mode="full"):
+    _assert_1d(a, 'np.convolve')
+    _assert_1d(v, 'np.convolve')
+
+    def impl(a, v, mode="full"):
+        la = len(a)
+        lv = len(v)
+
+        if la == 0:
+            raise ValueError("'a' cannot be empty")
+        if lv == 0:
+            raise ValueError("'v' cannot be empty")
+
+        if la < lv:
+            return _np_correlate_core(v, a[::-1], mode, 1)
+        else:
+            return _np_correlate_core(a, v[::-1], mode, 1)
 
     return impl
 
@@ -4466,45 +4448,27 @@ def np_asarray_chkfinite(a, dtype=None):
 
 @register_jitable
 def np_bartlett_impl(M):
-    if numpy_version >= (1, 20):
-        n = np.arange(1. - M, M, 2)
-        return np.where(np.less_equal(n, 0), 1 + n / (M - 1), 1 - n / (M - 1))
-    else:
-        n = np.arange(M)
-        return np.where(np.less_equal(n, (M - 1) / 2.0), 2.0 * n / (M - 1),
-                        2.0 - 2.0 * n / (M - 1))
+    n = np.arange(1. - M, M, 2)
+    return np.where(np.less_equal(n, 0), 1 + n / (M - 1), 1 - n / (M - 1))
 
 
 @register_jitable
 def np_blackman_impl(M):
-    if numpy_version >= (1, 20):
-        n = np.arange(1. - M, M, 2)
-        return (0.42 + 0.5 * np.cos(np.pi * n / (M - 1)) +
-                0.08 * np.cos(2.0 * np.pi * n / (M - 1)))
-    else:
-        n = np.arange(M)
-        return (0.42 - 0.5 * np.cos(2.0 * np.pi * n / (M - 1)) +
-                0.08 * np.cos(4.0 * np.pi * n / (M - 1)))
+    n = np.arange(1. - M, M, 2)
+    return (0.42 + 0.5 * np.cos(np.pi * n / (M - 1)) +
+            0.08 * np.cos(2.0 * np.pi * n / (M - 1)))
 
 
 @register_jitable
 def np_hamming_impl(M):
-    if numpy_version >= (1, 20):
-        n = np.arange(1 - M, M, 2)
-        return 0.54 + 0.46 * np.cos(np.pi * n / (M - 1))
-    else:
-        n = np.arange(M)
-        return 0.54 - 0.46 * np.cos(2.0 * np.pi * n / (M - 1))
+    n = np.arange(1 - M, M, 2)
+    return 0.54 + 0.46 * np.cos(np.pi * n / (M - 1))
 
 
 @register_jitable
 def np_hanning_impl(M):
-    if numpy_version >= (1, 20):
-        n = np.arange(1 - M, M, 2)
-        return 0.5 + 0.5 * np.cos(np.pi * n / (M - 1))
-    else:
-        n = np.arange(M)
-        return 0.5 - 0.5 * np.cos(2.0 * np.pi * n / (M - 1))
+    n = np.arange(1 - M, M, 2)
+    return 0.5 + 0.5 * np.cos(np.pi * n / (M - 1))
 
 
 def window_generator(func):

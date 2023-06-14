@@ -6,7 +6,7 @@ import warnings
 from numba.core.compiler_machinery import (FunctionPass, AnalysisPass,
                                            SSACompliantMixin, register_pass)
 from numba.core import (errors, types, ir, bytecode, postproc, rewrites, config,
-                        transforms)
+                        transforms, consts)
 from numba.misc.special import literal_unroll
 from numba.core.analysis import (dead_branch_prune, rewrite_semantic_constants,
                                  find_literally_calls, compute_cfg_from_blocks,
@@ -906,8 +906,16 @@ class MixedContainerUnroller(FunctionPass):
             new_var_dict = {}
             for name, var in var_table.items():
                 scope = switch_ir.blocks[lbl].scope
-                new_var_dict[name] = scope.define(
-                    f"v{branch_ty}_{name}", var.loc).name
+                try:
+                    scope.get_exact(name)
+                except errors.NotDefinedError:
+                    # In case the scope doesn't have the variable, we need to
+                    # define it prior creating new copies of it! This is
+                    # because the scope of the function and the scope of the
+                    # loop are different and the variable needs to be redefined
+                    # within the scope of the loop.
+                    scope.define(name, var.loc)
+                new_var_dict[name] = scope.redefine(name, var.loc).name
             replace_var_names(loop_blocks, new_var_dict)
 
             # clobber the sentinel body and then stuff in the rest
@@ -1480,7 +1488,7 @@ class PropagateLiterals(FunctionPass):
         typemap = state.typemap
         flags = state.flags
 
-        accepted_functions = ('isinstance', 'hasattr')
+        accepted_functions = ('isinstance', '_isinstance_no_warn', 'hasattr')
 
         if not hasattr(func_ir, '_definitions') \
                 and not flags.enable_ssa:
@@ -1531,8 +1539,13 @@ class PropagateLiterals(FunctionPass):
                     fn = guard(get_definition, func_ir, value.func.name)
                     if fn is None:
                         continue
-                    if not (isinstance(fn, ir.Global) and fn.name in
-                            accepted_functions):  # noqa: E501
+
+                    is_isinstance_no_warn = isinstance(fn, ir.FreeVar) and \
+                        fn.name == '_isinstance_no_warn'
+
+                    if not (is_isinstance_no_warn or
+                            (isinstance(fn, ir.Global) and fn.name in
+                             accepted_functions)):
                         continue
 
                     for arg in value.args:
@@ -1580,13 +1593,16 @@ class LiteralPropagationSubPipelinePass(FunctionPass):
     def run_pass(self, state):
         # Determine whether to even attempt this pass... if there's no
         # `isinstance` as a global or as a freevar then just skip.
+        from numba.cpython.builtins import _isinstance_no_warn
+
         found = False
         func_ir = state.func_ir
         for blk in func_ir.blocks.values():
             for asgn in blk.find_insts(ir.Assign):
                 if isinstance(asgn.value, (ir.Global, ir.FreeVar)):
                     value = asgn.value.value
-                    if value is isinstance or value is hasattr:
+                    if value is isinstance or value is hasattr or \
+                            value is _isinstance_no_warn:
                         found = True
                         break
             if found:
@@ -1724,3 +1740,43 @@ class ReconstructSSA(FunctionPass):
                 typ = locals_dict[parent]
                 for derived in redefs:
                     locals_dict[derived] = typ
+
+
+@register_pass(mutates_CFG=False, analysis_only=False)
+class RewriteDynamicRaises(FunctionPass):
+    """Replace existing raise statements by dynamic raises in Numba IR.
+    """
+    _name = "Rewrite dynamic raises"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        func_ir = state.func_ir
+        changed = False
+
+        for block in func_ir.blocks.values():
+            for raise_ in block.find_insts((ir.Raise, ir.TryRaise)):
+                call_inst = guard(get_definition, func_ir, raise_.exception)
+                if call_inst is None:
+                    continue
+                exc_type = func_ir.infer_constant(call_inst.func.name)
+                exc_args = []
+                for exc_arg in call_inst.args:
+                    try:
+                        const = func_ir.infer_constant(exc_arg)
+                        exc_args.append(const)
+                    except consts.ConstantInferenceError:
+                        exc_args.append(exc_arg)
+                loc = raise_.loc
+
+                cls = {
+                    ir.TryRaise: ir.DynamicTryRaise,
+                    ir.Raise: ir.DynamicRaise,
+                }[type(raise_)]
+
+                dyn_raise = cls(exc_type, tuple(exc_args), loc)
+                block.insert_after(dyn_raise, raise_)
+                block.remove(raise_)
+                changed = True
+        return changed

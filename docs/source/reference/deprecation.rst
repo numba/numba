@@ -11,6 +11,8 @@ provided. However, first is a small section on how to suppress deprecation
 warnings that may be raised from Numba so as to prevent warnings propagating
 into code that is consuming Numba.
 
+.. _suppress_deprecation_warnings:
+
 Suppressing Deprecation warnings
 ================================
 All Numba deprecations are issued via ``NumbaDeprecationWarning`` or
@@ -130,11 +132,25 @@ Deprecation of :term:`object mode` `fall-back` behaviour when using ``@jit``
 The ``numba.jit`` decorator has for a long time followed the behaviour of first
 attempting to compile the decorated function in :term:`nopython mode` and should
 this compilation fail it will `fall-back` and try again to compile but this time
-in :term:`object mode`. It it this `fall-back` behaviour which is being
+in :term:`object mode`. It is this `fall-back` behaviour which is being
 deprecated, the result of which will be that ``numba.jit`` will by default
 compile in :term:`nopython mode` and :term:`object mode` compilation will
 become `opt-in` only.
 
+.. note::
+
+    It is relatively common for the ``numba.jit`` decorator to be used within
+    other decorators to provide an easy path to compilation. Due to this change,
+    deprecation warnings may be raised from such call sites. To avoid these
+    warnings, it's recommended to either
+    :ref:`suppress them <suppress_deprecation_warnings>` if the application does
+    not rely on :term:`object mode` `fall-back` or to check the documentation
+    for the decorator to see how to pass application appropriate options through
+    to the wrapped ``numba.jit`` decorator. An example of this within the Numba
+    API would be ``numba.vectorize``. This decorator simply forwards keyword
+    arguments to the internal ``numba.jit`` decorator call site such that e.g.
+    ``@vectorize(nopython=True)`` would be an appropriate declaration for a
+    ``nopython=True`` mode use of ``@vectorize``.
 
 Reason for deprecation
 ----------------------
@@ -452,74 +468,16 @@ upgrade path. At the point of the new technology being deemed suitable,
 replacement instructions will be issued.
 
 
-Deprecation of eager compilation of CUDA device functions
-=========================================================
-
-In future versions of Numba, the ``device`` kwarg to the ``@cuda.jit`` decorator
-will be obviated, and whether a device function or global kernel is compiled will
-be inferred from the context. With respect to kernel / device functions and lazy
-/ eager compilation, four cases were handled:
-
-1. ``device=True``, eager compilation with a signature provided
-2. ``device=False``, eager compilation with a signature provided
-3. ``device=True``, lazy compilation with no signature
-4. ``device=False``, lazy compilation with no signature
-
-The latter two cases can be differentiated without the ``device`` kwarg, because
-it can be inferred from the calling context - if the call is from the host, then
-a global kernel should be compiled, and if the call is from a kernel or another
-device function, then a device function should be compiled.
-
-The first two cases cannot be differentiated in the absence of the ``device``
-kwarg - without it, it will not be clear from a signature alone whether a device
-function or global kernel should be compiled. In order to resolve this, device
-functions will no longer be eagerly compiled. When a signature is provided to a
-device function, it will only be used to enforce the types of arguments that
-the function accepts.
-
-.. note::
-
-   In previous releases this notice stated that support for providing
-   signatures to device functions would be removed completely - however, this
-   precludes the common use case of enforcing the types that can be passed to a
-   device function (and the automatic insertion of casts that it implies) so
-   this notice has been updated to retain support for passing signatures.
-
-
-Schedule
---------
-
-- In Numba 0.54: Eager compilation of device functions will be deprecated.
-- In Numba 0.55: Eager compilation of device functions will be unsupported and
-  the provision of signatures for device functions will only enforce casting.
-
-
-Deprecation and removal of ``numba.core.base.BaseContext.add_user_function()``
-==============================================================================
-
-``add_user_function()``  offered the same functionality as
-``insert_user_function()``, only with a check that the function has already
-been inserted at least once.  It is now removed as it was no longer used
-internally and it was expected that it was not used externally.
-
-Recommendations
----------------
-
-Replace any uses of ``add_user_function()`` with ``insert_user_function()``.
-
-Schedule
---------
-
-- In Numba 0.55: ``add_user_function()`` was deprecated.
-- In Numba 0.56: ``add_user_function()`` was removed.
-
-
-Deprecation and removal of CUDA Toolkits < 11.0 and devices with CC < 5.3
+Deprecation and removal of CUDA Toolkits < 11.2 and devices with CC < 5.0
 =========================================================================
 
 - Support for CUDA toolkits less than 11.0 has been removed.
-- Support for devices with Compute Capability < 5.3 is deprecated and will be
+- Support for CUDA toolkits less than 11.2 will be removed in future.
+- Support for devices with Compute Capability < 5.0 is deprecated and will be
   removed in the future.
+- Previous deprecation notices stated that support for Compute Capability < 5.3
+  was deprecated - this has now been modified such that 5.0 - 5.2 is
+  undeprecated, and only support for devices with CC < 5.0 is deprecated.
 
 
 Recommendations
@@ -534,5 +492,6 @@ Schedule
 
 - In Numba 0.55.1: support for CC < 5.3 and CUDA toolkits < 10.2 was deprecated.
 - In Numba 0.56: support for CC < 3.5 and CUDA toolkits < 10.2 was removed.
-- In Numba 0.57: Support for CUDA toolkit 10.2 was removed. Support for CC < 5.3
-  will be removed.
+- In Numba 0.57: Support for CUDA toolkit 10.2 was removed.
+- In Numba 0.58: Support for CC < 5.0 and CUDA toolkits 11.0 and 11.1 will be
+  removed.

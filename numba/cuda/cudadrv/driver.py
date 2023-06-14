@@ -37,15 +37,6 @@ from .drvapi import API_PROTOTYPES
 from .drvapi import cu_occupancy_b2d_size, cu_stream_callback_pyobj, cu_uuid
 from numba.cuda.cudadrv import enums, drvapi, _extras
 
-if config.CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY:
-    try:
-        from ptxcompiler import compile_ptx
-        from cubinlinker import CubinLinker, CubinLinkerError
-    except ImportError as ie:
-        msg = ("Minor version compatibility requires ptxcompiler and "
-               "cubinlinker packages to be available")
-        raise ImportError(msg) from ie
-
 USE_NV_BINDING = config.CUDA_USE_NVIDIA_BINDING
 
 if USE_NV_BINDING:
@@ -703,6 +694,10 @@ class Device(object):
         finally:
             # reset at the driver level
             driver.cuDevicePrimaryCtxReset(self.id)
+
+    @property
+    def supports_float16(self):
+        return self.compute_capability >= (5, 3)
 
 
 def met_requirement_for_device(device):
@@ -2666,12 +2661,23 @@ class Linker(metaclass=ABCMeta):
         """
 
 
+_MVC_ERROR_MESSAGE = (
+    "Minor version compatibility requires ptxcompiler and cubinlinker packages "
+    "to be available"
+)
+
+
 class MVCLinker(Linker):
     """
     Linker supporting Minor Version Compatibility, backed by the cubinlinker
     package.
     """
     def __init__(self, max_registers=None, lineinfo=False, cc=None):
+        try:
+            from cubinlinker import CubinLinker
+        except ImportError as err:
+            raise ImportError(_MVC_ERROR_MESSAGE) from err
+
         if cc is None:
             raise RuntimeError("MVCLinker requires Compute Capability to be "
                                "specified, but cc is None")
@@ -2696,6 +2702,11 @@ class MVCLinker(Linker):
         return self._linker.error_log
 
     def add_ptx(self, ptx, name='<cudapy-ptx>'):
+        try:
+            from ptxcompiler import compile_ptx
+            from cubinlinker import CubinLinkerError
+        except ImportError as err:
+            raise ImportError(_MVC_ERROR_MESSAGE) from err
         compile_result = compile_ptx(ptx.decode(), self.ptx_compile_options)
         try:
             self._linker.add_cubin(compile_result.compiled_program, name)
@@ -2703,6 +2714,11 @@ class MVCLinker(Linker):
             raise LinkerError from e
 
     def add_file(self, path, kind):
+        try:
+            from cubinlinker import CubinLinkerError
+        except ImportError as err:
+            raise ImportError(_MVC_ERROR_MESSAGE) from err
+
         try:
             with open(path, 'rb') as f:
                 data = f.read()
@@ -2739,6 +2755,11 @@ class MVCLinker(Linker):
         self.add_ptx(program.ptx.rstrip(b'\x00'), ptx_name)
 
     def complete(self):
+        try:
+            from cubinlinker import CubinLinkerError
+        except ImportError as err:
+            raise ImportError(_MVC_ERROR_MESSAGE) from err
+
         try:
             return self._linker.complete()
         except CubinLinkerError as e:

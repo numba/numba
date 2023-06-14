@@ -48,6 +48,9 @@ from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                       needs_lapack, disabled_test, skip_unless_scipy,
                       needs_subprocess)
 from numba.core.extending import register_jitable
+from numba.core.bytecode import _fix_LOAD_GLOBAL_arg
+from numba.core import utils
+
 import cmath
 import unittest
 
@@ -128,6 +131,7 @@ _GLOBAL_INT_FOR_TESTING1 = 17
 _GLOBAL_INT_FOR_TESTING2 = 5
 
 TestNamedTuple = namedtuple('TestNamedTuple', ('part0', 'part1'))
+
 
 def null_comparer(a, b):
     """
@@ -513,6 +517,16 @@ def get_optimized_numba_ir(test_func, args, **kws):
 
         flags = compiler.Flags()
         parfor_pass = numba.parfors.parfor.ParforPass(
+            tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
+            tp.state.return_type, tp.state.typingctx, tp.state.targetctx,
+            options, flags, tp.state.metadata, diagnostics=diagnostics)
+        parfor_pass.run()
+        parfor_pass = numba.parfors.parfor.ParforFusionPass(
+            tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
+            tp.state.return_type, tp.state.typingctx, tp.state.targetctx,
+            options, flags, tp.state.metadata, diagnostics=diagnostics)
+        parfor_pass.run()
+        parfor_pass = numba.parfors.parfor.ParforPreLoweringPass(
             tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
             tp.state.return_type, tp.state.typingctx, tp.state.targetctx,
             options, flags, tp.state.metadata, diagnostics=diagnostics)
@@ -3346,12 +3360,15 @@ class TestPrangeBase(TestParforsBase):
             # look for LOAD_GLOBALs that point to 'range'
             for instr in dis.Bytecode(pyfunc_code):
                 if instr.opname == 'LOAD_GLOBAL':
-                    if instr.arg == range_idx:
+                    if _fix_LOAD_GLOBAL_arg(instr.arg) == range_idx:
                         range_locations.append(instr.offset + 1)
             # add in 'prange' ref
             prange_names.append('prange')
             prange_names = tuple(prange_names)
             prange_idx = len(prange_names) - 1
+            if utils.PYVERSION == (3, 11):
+                # this is the inverse of _fix_LOAD_GLOBAL_arg
+                prange_idx = 1 + (prange_idx << 1)
             new_code = bytearray(pyfunc_code.co_code)
             assert len(patch_instance) <= len(range_locations)
             # patch up the new byte code
@@ -4678,6 +4695,25 @@ class TestParforReductionSetNumThreads(TestCase):
         expect = udt.py_func(mask)
         got = udt(mask)
         self.assertPreciseEqual(expect, got)
+
+
+@skip_parfors_unsupported
+class TestDiagnosticEnvVar(TestCase):
+    @TestCase.run_test_in_subprocess()
+    def test_diagnostics_env_var1(self):
+        os.environ['NUMBA_PARALLEL_DIAGNOSTICS']='4'
+        with captured_stdout() as stdout:
+            @njit(parallel=True)
+            def impl():
+                n = 100
+                b = np.zeros((n), dtype=np.float64)
+                for i in prange(n):
+                    b[i] = 1
+                return b
+
+            impl()
+        the_output = stdout.getvalue()
+        self.assertIn("Parallel Accelerator Optimizing", the_output)
 
 
 if __name__ == "__main__":

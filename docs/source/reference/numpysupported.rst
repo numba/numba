@@ -453,10 +453,10 @@ The following top-level functions are supported:
 * :func:`numpy.broadcast_shapes`
 * :func:`numpy.column_stack`
 * :func:`numpy.concatenate` (only supports tuple arguments)
-* :func:`numpy.convolve` (only the 2 first arguments)
+* :func:`numpy.convolve` (all arguments)
 * :func:`numpy.copy` (only the first argument)
 * :func:`numpy.corrcoef` (only the 3 first arguments, requires SciPy)
-* :func:`numpy.correlate` (only the 2 first arguments)
+* :func:`numpy.correlate` (all arguments)
 * :func:`numpy.count_nonzero` (axis only supports scalar values)
 * :func:`numpy.cov` (only the 5 first arguments)
 * :func:`numpy.cross` (only the 2 first arguments; at least one of the input
@@ -817,9 +817,9 @@ are supported:
 * :func:`~numpy.lib.stride_tricks.as_strided` (the *strides* argument
   is mandatory, the *subok* argument is not supported)
 
-* :func:`~numpy.lib.stride_tricks.sliding_window_view` (requires NumPy
-  1.20 or later; the *subok* argument is not supported, the *writeable*
-  argument is not supported with the returned view always being writeable)
+* :func:`~numpy.lib.stride_tricks.sliding_window_view` (the *subok* argument is
+  not supported, the *writeable* argument is not supported with the returned
+  view always being writeable)
 
 .. _supported_ufuncs:
 

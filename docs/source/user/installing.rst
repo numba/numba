@@ -5,7 +5,8 @@ Installation
 Compatibility
 -------------
 
-Numba is compatible with Python 3.8--3.10, and NumPy versions 1.21--1.24.
+For software compatability, please see the section on :ref:`version support
+information<numba_support_info>` for details.
 
 Our supported platforms are:
 
@@ -14,9 +15,9 @@ Our supported platforms are:
 * Windows 7 and later (32-bit and 64-bit)
 * OS X 10.9 and later (64-bit and unofficial support on M1/Arm64)
 * \*BSD (unofficial support only)
-* NVIDIA GPUs of compute capability 5.3 and later
+* NVIDIA GPUs of compute capability 5.0 and later
 
-  * Compute capabilities 3.5 - 5.2 are supported, but deprecated.
+  * Compute capabilities 3.5 and 3.7 are supported, but deprecated.
 * ARMv8 (64-bit little-endian, such as the NVIDIA Jetson)
 
 :ref:`numba-parallel` is only available on 64-bit platforms.
@@ -64,7 +65,7 @@ have LLVM installed to use Numba (in fact, Numba will ignore all LLVM
 versions installed on the system) as the required components are bundled into
 the llvmlite wheel.
 
-To use CUDA with Numba installed by `pip`, you need to install the `CUDA SDK
+To use CUDA with Numba installed by ``pip``, you need to install the `CUDA SDK
 <https://developer.nvidia.com/cuda-downloads>`_ from NVIDIA.  Please refer to
 :ref:`cudatoolkit-lookup` for details. Numba can also detect CUDA libraries
 installed system-wide on Linux.
@@ -184,7 +185,6 @@ vary with target operating system and hardware. The following lists them all
 
 * Required run time:
 
-  * ``setuptools``
   * ``numpy``
   * ``llvmlite``
 
@@ -196,7 +196,7 @@ vary with target operating system and hardware. The following lists them all
   * ``llvm-openmp`` (OSX) - provides headers for compiling OpenMP support into
     Numba's threading backend
   * ``tbb-devel`` - provides TBB headers/libraries for compiling TBB support
-    into Numba's threading backend (2021 <= version < 2021.6 required).
+    into Numba's threading backend (version >= 2021.6 required).
   * ``importlib_metadata`` (for Python versions < 3.9)
 
 * Optional runtime are:
@@ -222,6 +222,8 @@ vary with target operating system and hardware. The following lists them all
   * ``pygments`` - for "pretty" type annotation
   * ``gdb`` as an executable on the ``$PATH`` - if you would like to use the gdb
     support
+  * ``setuptools`` - permits the use of ``pycc`` for Ahead-of-Time (AOT)
+    compilation
   * Compiler toolchain mentioned above, if you would like to use ``pycc`` for
     Ahead-of-Time (AOT) compilation
   * ``r2pipe`` - required for assembly CFG inspection.
@@ -260,7 +262,7 @@ information.
 +----------++--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
 | Numba     | Release date | Python                    | NumPy                      | llvmlite                     | LLVM              | TBB                         |
 +===========+==============+===========================+============================+==============================+===================+=============================+
-| 0.57.0    | TBC          | 3.8.x <= version < 3.12   | 1.21 <= version < 1.25     | 0.40.x                       | 11.x              | 2021.x                      |
+| 0.57.0    | 2023-05-01   | 3.8.x <= version < 3.12   | 1.21 <= version < 1.25     | 0.40.x                       | 14.x              | 2021.6 <= version           |
 +-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
 | 0.56.4    | 2022-11-03   | 3.7.x <= version < 3.11   | 1.18 <= version < 1.24     | 0.39.x                       | 11.x              | 2021.x                      |
 +-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+

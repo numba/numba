@@ -3,6 +3,11 @@ set NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING=1
 set NUMBA_CAPTURED_ERRORS=new_style
 set PYTHONFAULTHANDLER=1
 
+@rem no parallel target support for 32 bit windows and no TBB packages
+if "%ARCH%"=="32" (
+    set NUMBA_DISABLE_TBB=1
+)
+
 @rem Check Numba executable is there
 numba -h
 

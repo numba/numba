@@ -16,7 +16,6 @@ from numba.cuda.args import wrap_arg
 from numba.cuda.compiler import compile_cuda, CUDACompiler
 from numba.cuda.cudadrv import driver
 from numba.cuda.cudadrv.devices import get_context
-from numba.cuda.cudadrv.libs import get_cudalib
 from numba.cuda.descriptor import cuda_target
 from numba.cuda.errors import (missing_launch_config_msg,
                                normalize_kernel_dimensions)
@@ -100,12 +99,21 @@ class _Kernel(serialize.ReduceMixin):
         self.cooperative = 'cudaCGGetIntrinsicHandle' in lib.get_asm_str()
         # We need to link against cudadevrt if grid sync is being used.
         if self.cooperative:
-            link.append(get_cudalib('cudadevrt', static=True))
+            lib.needs_cudadevrt = True
 
         res = [fn for fn in cuda_fp16_math_funcs
                if (f'__numba_wrapper_{fn}' in lib.get_asm_str())]
 
         if res:
+            if not config.CUDA_USE_NVIDIA_BINDING:
+                s = "https://numba.readthedocs.io/en/stable/cuda/bindings.html"
+                msg = ("Use of float16 requires the use of the NVIDIA CUDA "
+                       "bindings and setting the "
+                       "NUMBA_CUDA_USE_NVIDIA_BINDING environment variable to "
+                       "1. Relevant documentation is available here:\n"
+                       f"{s}")
+                raise NotImplementedError(msg)
+
             # Path to the source containing the foreign function
 
             basedir = os.path.dirname(os.path.abspath(__file__))
@@ -826,7 +834,7 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
 
         return call_template, pysig, args, kws
 
-    def compile_device(self, args):
+    def compile_device(self, args, return_type=None):
         """Compile the device function for the given argument types.
 
         Each signature is compiled once by caching the compiled function inside
@@ -849,7 +857,7 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
                 }
 
                 cc = get_current_device().compute_capability
-                cres = compile_cuda(self.py_func, None, args,
+                cres = compile_cuda(self.py_func, return_type, args,
                                     debug=debug,
                                     lineinfo=lineinfo,
                                     inline=inline,

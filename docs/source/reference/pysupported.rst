@@ -139,8 +139,7 @@ Exception handling
 The ``raise`` statement is only supported in the following forms:
 
 * ``raise SomeException``
-* ``raise SomeException(<arguments>)``: in :term:`nopython mode`, constructor
-  arguments must be :term:`compile-time constants <compile-time constant>`
+* ``raise SomeException(<arguments>)``
 
 It is currently unsupported to re-raise an exception created in compiled code.
 
@@ -724,10 +723,10 @@ Typed Dict
   ``dict()`` was not supported in versions prior to 0.44.  Currently, calling
   ``dict()`` translates to calling ``numba.typed.Dict()``.
 
-Numba only supports the use of ``dict()`` without any arguments.  Such use is
-semantically equivalent to ``{}`` and ``numba.typed.Dict()``.  It will create
-an instance of ``numba.typed.Dict`` where the key-value types will be later
-inferred by usage.
+Numba supports the use of ``dict()``.  Such use is semantically equivalent to
+``{}`` and ``numba.typed.Dict()``. It will create an instance of
+``numba.typed.Dict`` where the key-value types will be later inferred by usage.
+Numba also supports, explicitly, the ``dict(iterable)`` constructor.
 
 Numba does not fully support the Python ``dict`` because it is an untyped
 container that can have any Python types as members. To generate efficient

@@ -1248,7 +1248,8 @@ class TestMixedInts(TestCase):
         return control_unsigned
 
     def run_binary(self, pyfunc, control_func, operands, types,
-                   expected_type=int, **assertPreciseEqualArgs):
+                   expected_type=int, force_type=lambda x: x,
+                   **assertPreciseEqualArgs):
         for xt, yt in types:
             cr = compile_isolated(pyfunc, (xt, yt), flags=Noflags)
             cfunc = cr.entry_point
@@ -1261,6 +1262,7 @@ class TestMixedInts(TestCase):
                 self.assertIsInstance(got, expected_type)
                 msg = ("mismatch for (%r, %r) with types %s"
                        % (x, y, (xt, yt)))
+                got, expected = force_type(got), force_type(expected)
                 self.assertPreciseEqual(got, expected, msg=msg,
                                         **assertPreciseEqualArgs)
 
@@ -1280,11 +1282,16 @@ class TestMixedInts(TestCase):
                         % (x, xt, got, expected))
 
     def run_arith_binop(self, pyfunc, opname, samples,
-                        expected_type=int):
+                        expected_type=int, force_type=lambda x: x,
+                        **assertPreciseEqualArgs):
         self.run_binary(pyfunc, self.get_control_signed(opname),
-                        samples, self.signed_pairs, expected_type)
+                        samples, self.signed_pairs, expected_type,
+                        force_type=force_type,
+                        **assertPreciseEqualArgs)
         self.run_binary(pyfunc, self.get_control_unsigned(opname),
-                        samples, self.unsigned_pairs, expected_type)
+                        samples, self.unsigned_pairs, expected_type,
+                        force_type=force_type,
+                        **assertPreciseEqualArgs)
 
     def test_add(self):
         self.run_arith_binop(self.op.add_usecase, 'add', self.int_samples)
@@ -1304,11 +1311,14 @@ class TestMixedInts(TestCase):
         self.run_arith_binop(self.op.mod_usecase, 'mod', samples)
 
     def test_pow(self):
+        extra_cast = {}
+        if utils.PYVERSION == (3, 11):
+            extra_cast["force_type"] = float
         pyfunc = self.op.pow_usecase
         # Only test with positive values, as otherwise trying to write the
         # control function in terms of Python or Numpy power turns out insane.
         samples = [x for x in self.int_samples if x >= 0]
-        self.run_arith_binop(pyfunc, 'pow', samples)
+        self.run_arith_binop(pyfunc, 'pow', samples, **extra_cast)
 
         # Now test all non-zero values, but only with signed types
         def control_signed(a, b):
@@ -1325,7 +1335,7 @@ class TestMixedInts(TestCase):
         signed_pairs = [(u, v) for u, v in self.type_pairs
                         if u.signed and v.signed]
         self.run_binary(pyfunc, control_signed,
-                        samples, signed_pairs)
+                        samples, signed_pairs, **extra_cast)
 
     def test_truediv(self):
 

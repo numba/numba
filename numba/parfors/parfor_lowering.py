@@ -54,6 +54,13 @@ class ParforLower(lowering.Lower):
 
 
 def _lower_parfor_parallel(lowerer, parfor):
+    if parfor.lowerer is None:
+        return _lower_parfor_parallel_std(lowerer, parfor)
+    else:
+        return parfor.lowerer(lowerer, parfor)
+
+
+def _lower_parfor_parallel_std(lowerer, parfor):
     """Lowerer that handles LLVM code generation for parfor.
     This function lowers a parfor IR node to LLVM.
     The general approach is as follows:
@@ -1524,6 +1531,20 @@ def _create_gufunc_for_parfor_body(
         flags.noalias = True
 
     fixup_var_define_in_scope(gufunc_ir.blocks)
+
+    class ParforGufuncCompiler(compiler.CompilerBase):
+        def define_pipelines(self):
+            from numba.core.compiler_machinery import PassManager
+            dpb = compiler.DefaultPassBuilder
+            pm = PassManager("full_parfor_gufunc")
+            parfor_gufunc_passes = dpb.define_parfor_gufunc_pipeline(self.state)
+            pm.passes.extend(parfor_gufunc_passes.passes)
+            lowering_passes = dpb.define_parfor_gufunc_nopython_lowering_pipeline(self.state)
+            pm.passes.extend(lowering_passes.passes)
+
+            pm.finalize()
+            return [pm]
+
     kernel_func = compiler.compile_ir(
         typingctx,
         targetctx,
@@ -1531,7 +1552,8 @@ def _create_gufunc_for_parfor_body(
         gufunc_param_types,
         types.none,
         flags,
-        locals)
+        locals,
+        pipeline_class=ParforGufuncCompiler)
 
     flags.noalias = old_alias
 

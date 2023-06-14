@@ -1,5 +1,4 @@
 import platform
-from functools import cached_property
 
 import llvmlite.binding as ll
 from llvmlite import ir
@@ -99,6 +98,9 @@ class CPUContext(BaseContext):
         # load 3rd party extensions
         numba.core.entrypoints.init_all()
 
+        # fix for #8940
+        from numba.np.unsafe import ndarray # noqa F401
+
     @property
     def target_data(self):
         return self._internal_codegen.target_data
@@ -111,7 +113,7 @@ class CPUContext(BaseContext):
     def codegen(self):
         return self._internal_codegen
 
-    @cached_property
+    @property
     def call_conv(self):
         return callconv.CPUCallConv(self)
 
@@ -124,13 +126,15 @@ class CPUContext(BaseContext):
             builder, envptr, _dynfunc._impl_info['offsetof_env_body'])
         return EnvBody(self, builder, ref=body_ptr, cast_ref=True)
 
-    def get_env_manager(self, builder):
+    def get_env_manager(self, builder, return_pyobject=False):
         envgv = self.declare_env_global(builder.module,
                                         self.get_env_name(self.fndesc))
         envarg = builder.load(envgv)
         pyapi = self.get_python_api(builder)
         pyapi.emit_environment_sentry(
-            envarg, debug_msg=self.fndesc.env_name,
+            envarg,
+            return_pyobject=return_pyobject,
+            debug_msg=self.fndesc.env_name,
         )
         env_body = self.get_env_body(builder, envarg)
         return pyapi.get_env_manager(self.environment, env_body, envarg)
