@@ -6,6 +6,7 @@ import numpy.core.umath_tests as ut
 
 from numba import void, float32, int64, jit, guvectorize
 from numba.np.ufunc import GUVectorize
+from numba.np.numpy_support import numpy_version
 from numba.tests.support import tag, TestCase
 
 
@@ -39,6 +40,15 @@ class TestGUFunc(TestCase):
 
     def test_gufunc(self):
         gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)',
+                             target=self.target)
+        gufunc.add((float32[:, :], float32[:, :], float32[:, :]))
+        gufunc = gufunc.build_ufunc()
+
+        self.check_matmul_gufunc(gufunc)
+
+    @unittest.skipIf(numpy_version < (1, 16), "NumPy > 1.15 required")
+    def test_gufunc_const_dims(self):
+        gufunc = GUVectorize(matmulcore, '(2,4),(4,5)->(2,5)',
                              target=self.target)
         gufunc.add((float32[:, :], float32[:, :], float32[:, :]))
         gufunc = gufunc.build_ufunc()
@@ -105,28 +115,36 @@ class TestGUFuncParallel(TestGUFunc):
 class TestDynamicGUFunc(TestCase):
     target = 'cpu'
 
+    def check_matmul_gufunc(self, gufunc, A, B, C):
+        gufunc(A, B, C)
+        Gold = ut.matrix_multiply(A, B)
+        np.testing.assert_allclose(C, Gold, rtol=1e-5, atol=1e-8)
+
     def test_dynamic_matmul(self):
-
-        def check_matmul_gufunc(gufunc, A, B, C):
-            Gold = ut.matrix_multiply(A, B)
-            gufunc(A, B, C)
-            np.testing.assert_allclose(C, Gold, rtol=1e-5, atol=1e-8)
-
         gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)',
                              target=self.target, is_dynamic=True)
         matrix_ct = 10
         Ai64 = np.arange(matrix_ct * 2 * 4, dtype=np.int64).reshape(matrix_ct, 2, 4)
         Bi64 = np.arange(matrix_ct * 4 * 5, dtype=np.int64).reshape(matrix_ct, 4, 5)
         Ci64 = np.arange(matrix_ct * 2 * 5, dtype=np.int64).reshape(matrix_ct, 2, 5)
-        check_matmul_gufunc(gufunc, Ai64, Bi64, Ci64)
+        self.check_matmul_gufunc(gufunc, Ai64, Bi64, Ci64)
 
         A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2, 4)
         B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(matrix_ct, 4, 5)
         C = np.arange(matrix_ct * 2 * 5, dtype=np.float32).reshape(matrix_ct, 2, 5)
-        check_matmul_gufunc(gufunc, A, B, C)  # trigger compilation
+        self.check_matmul_gufunc(gufunc, A, B, C)  # trigger compilation
 
         self.assertEqual(len(gufunc.types), 2)  # ensure two versions of gufunc
 
+    @unittest.skipIf(numpy_version < (1, 16), "NumPy > 1.15 required")
+    def test_dynamic_matmul_const_dims(self):
+        gufunc = GUVectorize(matmulcore, '(2,4),(4,5)->(2,5)',
+                             target=self.target, is_dynamic=True)
+        matrix_ct = 10
+        Ai64 = np.arange(matrix_ct * 2 * 4, dtype=np.int64).reshape(matrix_ct, 2, 4)
+        Bi64 = np.arange(matrix_ct * 4 * 5, dtype=np.int64).reshape(matrix_ct, 4, 5)
+        Ci64 = np.arange(matrix_ct * 2 * 5, dtype=np.int64).reshape(matrix_ct, 2, 5)
+        self.check_matmul_gufunc(gufunc, Ai64, Bi64, Ci64)
 
     def test_dynamic_ufunc_like(self):
 

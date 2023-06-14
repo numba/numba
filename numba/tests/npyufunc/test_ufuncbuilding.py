@@ -6,6 +6,7 @@ from numba.np.ufunc.ufuncbuilder import GUFuncBuilder
 from numba import vectorize, guvectorize
 from numba.np.ufunc import PyUFunc_One
 from numba.np.ufunc.dufunc import DUFunc as UFuncBuilder
+from numba.np.numpy_support import numpy_version
 from numba.tests.support import tag, TestCase
 from numba.core import config
 import unittest
@@ -353,6 +354,49 @@ class TestVectorizeDecor(TestCase):
         with self.assertRaises(ValueError) as raises:
             guvectorize(sigs, "(x,y),(x,y),(x,y)->")(guadd)
         # (error message depends on Numpy version)
+
+    @unittest.skipIf(numpy_version < (1, 16), "NumPy > 1.15 required")
+    def test_guvectorize_const_dims(self):
+        a = np.arange(10, dtype='int32').reshape(2, 5)
+        sigs = [
+            "(2,y),(2,y)->(2,y)",
+            "(x,5),(x,5)->(x,5)",
+            "(2,5),(2,5)->(2,5)",
+        ]
+        for sig in sigs:
+            ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
+                                sig)(guadd)
+            b = ufunc(a, a)
+            self.assertPreciseEqual(a + a, b)
+
+    @unittest.skipIf(numpy_version < (1, 16), "NumPy > 1.15 required")
+    def test_guvectorize_const_dims_invalid_layout(self):
+        a = np.arange(10, dtype='int32').reshape(2, 5)
+        sigs = [
+            "(2,y),(2,y)->(3,y)",
+            "(x,5),(x,5)->(x,2)",
+            "(2,5),(2,5)->(2,6)",
+        ]
+        for sig in sigs:
+            with self.assertRaises(NameError):
+                # This should trip at compile time
+                guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
+                                    sig)(guadd)
+
+    @unittest.skipIf(numpy_version < (1, 16), "NumPy > 1.15 required")
+    def test_guvectorize_const_dims_invalid_input_dims(self):
+        a = np.arange(18, dtype='int32').reshape(3, 6)
+        sigs = [
+            "(2,y),(2,y)->(2,y)",
+            "(x,5),(x,5)->(x,5)",
+            "(2,5),(2,5)->(2,5)",
+        ]
+        for sig in sigs:
+            ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
+                                sig)(guadd)
+            # This should trip at run time
+            with self.assertRaises(ValueError):
+                ufunc(a, a)
 
 
 class TestVectorizeDecorJitDisabled(TestVectorizeDecor):

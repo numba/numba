@@ -27,7 +27,7 @@ def parse_signature(sig):
                     tok = next(tokgen)
                     if tok[1] == ')':
                         break
-                    elif tok[0] == tokenize.NAME:
+                    elif tok[0] == tokenize.NAME or tok[0] == tokenize.NUMBER:
                         symbols.append(tok[1])
                     elif tok[1] == ',':
                         continue
