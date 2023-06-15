@@ -939,6 +939,7 @@ Dispatcher_call(Dispatcher *self, PyObject *args, PyObject *kws)
     int prealloc[24];
     int matches;
     PyObject *cfunc;
+    PyObject *setup_call = NULL, *exit_setup = NULL, *exit_setup_ret = NULL;
     PyThreadState *ts = PyThreadState_Get();
     PyObject *locals = NULL;
 
@@ -955,6 +956,17 @@ Dispatcher_call(Dispatcher *self, PyObject *args, PyObject *kws)
         return retval;
     }
 
+    // Callback to start a call
+    setup_call = PyObject_GetAttrString((PyObject*)self, "_setup_call");
+    if (setup_call) {
+        // Only if _setup_call is defined.
+        // _setup_call is expected to return a callable for the teardown.
+        exit_setup = PyObject_CallNoArgs(setup_call);
+        if (exit_setup == NULL) {
+            PyErr_Format(PyExc_RuntimeError, "_setup_call failed");
+            return NULL;
+        }
+    }
     /* If compilation is enabled, ensure that an exact match is found and if
      * not compile one */
     int exact_match_required = self->can_compile ? 1 : self->exact_match_required;
@@ -970,8 +982,9 @@ Dispatcher_call(Dispatcher *self, PyObject *args, PyObject *kws)
         }
     }
     if (self->fold_args) {
-        if (find_named_args(self, &args, &kws))
-            return NULL;
+        if (find_named_args(self, &args, &kws)) {
+            goto CLEANUP;
+        }
     }
     else
         Py_INCREF(args);
@@ -1047,6 +1060,25 @@ Dispatcher_call(Dispatcher *self, PyObject *args, PyObject *kws)
     }
 
 CLEANUP:
+    if (exit_setup) {
+        // Only if exit_setup is defined.
+        // Get the active exception before calling the teardown from _setup_call.
+        // If no active exception, all three values are NULL;
+        PyObject *errtype, *errvalue, *errtb;
+        PyErr_Fetch(&errtype, &errvalue, &errtb);
+        exit_setup_ret = PyObject_CallNoArgs(exit_setup);
+        // Restore the active exception if it's defined.
+        PyErr_Restore(errtype, errvalue, errtb);
+        if (exit_setup_ret == NULL) {
+            retval = NULL;
+        } else {
+            // Delete the return value from exit_setup.
+            Py_DECREF(exit_setup_ret);
+        }
+    }
+    Py_XDECREF(setup_call);
+    Py_XDECREF(exit_setup);
+
     if (tys != prealloc)
         delete[] tys;
     Py_DECREF(args);

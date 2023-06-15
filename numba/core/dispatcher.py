@@ -385,6 +385,21 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         """
         return self._compiling_counter
 
+    def _setup_call(self):
+        """This is used by Dispatcher_call.
+
+        This method must return a callable which is called in the equivalent
+        of the "finally" block of Dispatcher_call.
+        """
+        self._types_active_call = []
+        return self._teardown_call
+
+    def _teardown_call(self):
+        """Used by _setup_call. Performs clean up when Dispatcher_call ends.
+        """
+        self._types_active_call = None
+        return None
+
     def _compile_for_args(self, *args, **kws):
         """
         For internal use.  Compile a specialized version of the function
@@ -416,7 +431,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                 argtypes.append(self.typeof_pyval(a))
 
         return_val = None
-        self._types_active_call = []
+        self._types_active_call.clear()
         try:
             return_val = self.compile(tuple(argtypes))
         except errors.ForceLiteralArg as e:
@@ -486,8 +501,6 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                     e.patch_message('\n'.join((str(e).rstrip(), help_msg)))
             # ignore the FULL_TRACEBACKS config, this needs reporting!
             raise e
-        finally:
-            self._types_active_call = None
         return return_val
 
     def inspect_llvm(self, signature=None):
