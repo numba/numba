@@ -567,6 +567,41 @@ class TestDispatcher(BaseTest):
         self.assertIn("The decorated object is not a function", err_msg)
         self.assertIn(f"{type(BaseTest)}", err_msg)
 
+    def test_dispatcher_typeof_not_holding_references(self):
+        # Test issue #9008.
+        # Original reproducer uses psutil to monitor memory use by the Python
+        # process. Instead, the test below focuses on ensuring the type object
+        # returning from `Dispatcher.typeof_pyval` is not withheld by the
+        # dispatcher object in `Dispatcher._types_active_call`.
+        from numba.core.typing.typeof import typeof_impl
+
+        class MyNbType(types.Type):
+            live_objects = weakref.WeakSet()
+
+            def __init__(self):
+                super().__init__("MyType")
+                self.live_objects.add(self)
+
+        class MyType:
+            pass
+
+        @typeof_impl.register(MyType)
+        def _typeof_ctypes_function(val, c):
+            return MyNbType()
+
+        @njit
+        def foo():
+            pass
+
+        # Before
+        self.assertIsNone(foo._types_active_call)
+        self.assertEqual(len(MyNbType.live_objects), 0)
+        # Call typeof
+        foo.typeof_pyval(MyType())
+        # After
+        self.assertIsNone(foo._types_active_call)
+        self.assertEqual(len(MyNbType.live_objects), 0)
+
 
 class TestSignatureHandling(BaseTest):
     """
