@@ -114,7 +114,7 @@ def cuda_shared_array_integer(context, builder, sig, args):
     length = sig.args[0].literal_value
     dtype = parse_dtype(sig.args[1])
     return _generic_array(context, builder, shape=(length,), dtype=dtype,
-                          symbol_name=_get_unique_smem_id('._cudapy_smem'),
+                          symbol_name=_get_unique_smem_id('_cudapy_smem'),
                           addrspace=nvvm.ADDRSPACE_SHARED,
                           can_dynsized=True)
 
@@ -125,7 +125,7 @@ def cuda_shared_array_tuple(context, builder, sig, args):
     shape = [ s.literal_value for s in sig.args[0] ]
     dtype = parse_dtype(sig.args[1])
     return _generic_array(context, builder, shape=shape, dtype=dtype,
-                          symbol_name=_get_unique_smem_id('._cudapy_smem'),
+                          symbol_name=_get_unique_smem_id('_cudapy_smem'),
                           addrspace=nvvm.ADDRSPACE_SHARED,
                           can_dynsized=True)
 
@@ -135,7 +135,7 @@ def cuda_local_array_integer(context, builder, sig, args):
     length = sig.args[0].literal_value
     dtype = parse_dtype(sig.args[1])
     return _generic_array(context, builder, shape=(length,), dtype=dtype,
-                          symbol_name='._cudapy_lmem',
+                          symbol_name='_cudapy_lmem',
                           addrspace=nvvm.ADDRSPACE_LOCAL,
                           can_dynsized=False)
 
@@ -146,7 +146,7 @@ def ptx_lmem_alloc_array(context, builder, sig, args):
     shape = [ s.literal_value for s in sig.args[0] ]
     dtype = parse_dtype(sig.args[1])
     return _generic_array(context, builder, shape=shape, dtype=dtype,
-                          symbol_name='._cudapy_lmem',
+                          symbol_name='_cudapy_lmem',
                           addrspace=nvvm.ADDRSPACE_LOCAL,
                           can_dynsized=False)
 
