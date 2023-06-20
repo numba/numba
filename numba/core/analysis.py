@@ -260,7 +260,7 @@ def filter_nested_loops(cfg, loops):
             yield _fix_loop_exit(cfg, loop)
 
 
-def find_top_level_loops(cfg, loops=None):
+def find_top_level_loops(cfg):
     """
     A generator that yields toplevel loops given a control-flow-graph
     """
