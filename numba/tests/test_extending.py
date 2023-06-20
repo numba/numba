@@ -638,7 +638,7 @@ class TestPandasLike(TestCase):
         cfunc = jit(nopython=True)(npyufunc_usecase)
         ii = cfunc(i)
         self.assertIsInstance(ii, Index)
-        np.testing.assert_allclose(ii._data, np.cos(np.sin(i._data)))
+        self.assertPreciseEqual(ii._data, np.cos(np.sin(i._data)))
 
     def test_index_get_data(self):
         # The _data attribute is exposed with make_attribute_wrapper()
@@ -685,7 +685,7 @@ class TestPandasLike(TestCase):
         self.assertIsInstance(ss, Series)
         self.assertIsInstance(ss._index, Index)
         self.assertIs(ss._index._data, i._data)
-        np.testing.assert_allclose(ss._values, np.cos(np.sin(s._values)))
+        self.assertPreciseEqual(ss._values, np.cos(np.sin(s._values)))
 
     def test_series_constructor(self):
         i = Index(np.int32([42, 8, -5]))

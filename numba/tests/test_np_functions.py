@@ -4728,7 +4728,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             for M in [0, 1, 5, 12]:
                 expected = np_pyfunc(M)
                 got = np_nbfunc(M)
-                np.testing.assert_allclose(expected, got, atol=1e-6)
+                self.assertPreciseEqual(expected, got, prec='double')
 
             for M in ['a', 1.1, 1j]:
                 with self.assertRaises(TypingError) as raises:

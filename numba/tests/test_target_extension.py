@@ -770,9 +770,9 @@ class TestTargetOffload(TestCase):
 
         @njit
         def foo(x):
-            return np.exp(x)
+            return np.sin(x)
 
-        self.assertPreciseEqual(foo(5), np.exp(5))
+        self.assertPreciseEqual(foo(5), np.sin(5))
 
         @register_pass(mutates_CFG=False, analysis_only=False)
         class DispatcherSwitcher(FunctionPass):
@@ -843,9 +843,9 @@ class TestTargetOffload(TestCase):
         # that switches CPU calls for DPU calls
         @njit(pipeline_class=DPUOffloadCompiler)
         def foo(x):
-            return np.log(x), np.exp(x)  # np.log is DPU, np.exp is CPU
+            return np.sin(x), np.cos(x)  # np.sin is DPU, np.cos is CPU
 
-        self.assertPreciseEqual(foo(5), (np.log(5), np.exp(5)))
+        self.assertPreciseEqual(foo(5), (314159.0, np.cos(5)))
 
 
 if __name__ == "__main__":

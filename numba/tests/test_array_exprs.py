@@ -244,8 +244,8 @@ class TestArrayExpressions(MemoryLeakMixin, TestCase):
             return out
 
         expected = run_func(fn)
-        np.testing.assert_allclose(expected, run_func(control_cfunc))
-        np.testing.assert_allclose(expected, run_func(test_cfunc))
+        self.assertPreciseEqual(expected, run_func(control_cfunc))
+        self.assertPreciseEqual(expected, run_func(test_cfunc))
 
         return Namespace(locals())
 
