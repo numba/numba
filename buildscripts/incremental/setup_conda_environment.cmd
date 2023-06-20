@@ -16,7 +16,7 @@ set PIP_INSTALL=pip install -q
 
 @rem Use conda-forge for NumPy 1.24 - at the time of writing it is not available
 @rem on the defaults channel.
-if %NUMPY%==1.24 (set NUMPY_CHANNEL_PKG="conda-forge::numpy") else (set NUMPY_CHANNEL_PKG="numpy")
+if %NUMPY% GEQ 1.24 (set NUMPY_CHANNEL_PKG="conda-forge::numpy") else (set NUMPY_CHANNEL_PKG="numpy")
 
 @echo on
 
