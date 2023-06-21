@@ -480,22 +480,53 @@ class TestGUVectorizePickling(TestCase):
 class TestGUVectorizeJit(TestCase):
     target = 'cpu'
 
-    def test_add(self):
-        @guvectorize(['int64[:], int64, int64[:]'], '(n),()->(n)',
-                     target=self.target)
-        def gu_add(x, y, res):
-            for i in range(x.shape[0]):
-                res[i] = x[i] + y
-
+    def check_add_gufunc(self, gufunc):
         @jit(nopython=True)
         def jit_add(x, y, res):
-            gu_add(x, y, res)
+            gufunc(x, y, res)
 
-        x = np.arange(40, dtype='i8').reshape(4, 2, 5)
-        y = 100
+        x = np.arange(40, dtype='i4').reshape(4, 2, 5)
+        y = np.int32(100)
         res = np.zeros_like(x)
         jit_add(x, y, res)
         self.assertPreciseEqual(res, x+y)
+
+    def test_add_static(self):
+        @guvectorize('int32[:], int32, int32[:]', '(n),()->(n)',
+                     target=self.target)
+        def add(x, y, res):
+            for i in range(x.shape[0]):
+                res[i] = x[i] + y
+
+        self.check_add_gufunc(add)
+
+    @unittest.expectedFailure
+    def test_add_static_cast_args(self):
+        @guvectorize('int64[:], int64, int64[:]', '(n),()->(n)',
+                     target=self.target)
+        def add(x, y, res):
+            for i in range(x.shape[0]):
+                res[i] = x[i] + y
+
+        self.check_add_gufunc(add)
+
+    def test_add_dynamic(self):
+        @guvectorize('(n),()->(n)',target=self.target)
+        def add(x, y, res):
+            for i in range(x.shape[0]):
+                res[i] = x[i] + y
+
+        self.check_add_gufunc(add)
+
+    @unittest.expectedFailure
+    def test_object_mode(self):
+        @guvectorize('(n),()->(n)',target=self.target, forceobj=True)
+        def add(x, y, res):
+            for i in range(x.shape[0]):
+                res[i] = x[i] + y
+
+        self.check_add_gufunc(add)
+
 
 if __name__ == '__main__':
     unittest.main()

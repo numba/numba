@@ -27,18 +27,18 @@ def make_gufunc_kernel(_gufunc):
 
         def generate(self, *args):
             isig = self.inner_sig
-            # cast_args = [self.cast(val, inty, outty)
-            #              for val, inty, outty in
-            #              zip(args, osig.args, isig.args)]
-            # if self.cres.objectmode:
-            #     func_type = self.context.call_conv.get_function_type(
-            #         types.pyobject, [types.pyobject] * len(isig.args))
-            # else:
-            #     func_type = self.context.call_conv.get_function_type(
-            #         isig.return_type, isig.args)
+            osig = self.outer_sig
+            cast_args = [self.cast(val, inty, outty)
+                         for val, inty, outty in
+                         zip(args, osig.args, isig.args)]
+            if self.cres.objectmode:
+                # Need an example that reaches this part of the code to test it
+                func_type = self.context.call_conv.get_function_type(
+                    types.pyobject, [types.pyobject] * len(isig.args))
+            else:
+                func_type = self.context.call_conv.get_function_type(
+                    isig.return_type, isig.args)
             self.context.add_linking_libs((self.cres.library,))
-            func_type = self.context.call_conv.get_function_type(
-                isig.return_type, isig.args)
             module = self.builder.block.function.module
             entry_point = cgutils.get_or_insert_function(
                 module, func_type,
@@ -47,9 +47,8 @@ def make_gufunc_kernel(_gufunc):
 
             _, res = self.context.call_conv.call_function(
                 self.builder, entry_point, isig.return_type, isig.args,
-                args)
-            return res
-            # return self.cast(res, isig.return_type, osig.return_type)
+                cast_args)
+            return res  # no cast needed here as sig.return_type is always None
 
     GUFuncKernel.__name__ += _gufunc.__name__
     return GUFuncKernel
@@ -177,13 +176,8 @@ class GUFunc(serialize.ReduceMixin):
         ufunc = self.ufunc
         _handle_inputs_result = npydecl.Numpy_rules_ufunc._handle_inputs(
             ufunc, argtys, kws)
-        ewise_types, _, ndims, layout = _handle_inputs_result
-        # explicit_output_count = len(explicit_outputs)
-        # if explicit_output_count > 0:
-        #     ewise_types = tuple(base_types[:-len(explicit_outputs)])
-        # else:
-        #     ewise_types = tuple(base_types)
-        sig, cres = self.find_ewise_function(ewise_types)
+        ewise_types, _, _, _ = _handle_inputs_result
+        sig, _ = self.find_ewise_function(ewise_types)
 
         if sig is None:
             # Matching element-wise signature was not found; must
@@ -195,24 +189,12 @@ class GUFunc(serialize.ReduceMixin):
             # i.e. (n,m),(m)->(n)
             # plus ewise_types to build a numba function type
             fnty = self._get_signature(*ewise_types)
-            self._compile_for_argtys(fnty)
+            self.add(fnty)
             # double check to ensure there is a match
-            sig, cres = self.find_ewise_function(ewise_types)
+            sig, _ = self.find_ewise_function(ewise_types)
             assert sig is not None
 
         return signature(types.none, *argtys)
-
-        # if explicit_output_count > 0:
-        #     outtys = list(explicit_outputs)
-        # elif ufunc.nout == 1:
-        #     if ndims > 0:
-        #         outtys = [types.Array(sig.return_type, ndims, layout)]
-        #     else:
-        #         outtys = [sig.return_type]
-        # else:
-        #     raise NotImplementedError("typing gufuncs (nout > 1)")
-        # outtys.extend(argtys)
-        # return signature(*outtys)
 
     def find_ewise_function(self, ewise_types):
         """
@@ -223,12 +205,12 @@ class GUFunc(serialize.ReduceMixin):
         compilation result.  Will return two None's if no matching
         signature was found.
         """
-        # if self._frozen:
-        #     # If we cannot compile, coerce to the best matching loop
-        #     loop = ufunc_find_matching_loop(self, ewise_types)
-        #     if loop is None:
-        #         return None, None
-        #     ewise_types = tuple(loop.inputs + loop.outputs)[:len(ewise_types)]
+        if self._frozen:
+            # If we cannot compile, coerce to the best matching loop
+            loop = ufunc_find_matching_loop(self, ewise_types)
+            if loop is None:
+                return None, None
+            ewise_types = list(loop.inputs + loop.outputs)[:len(ewise_types)]
         for sig, cres in self._dispatcher.overloads.items():
             dtypes = self._get_ewise_dtypes(sig.args)
             if dtypes == ewise_types:
@@ -252,31 +234,6 @@ class GUFunc(serialize.ReduceMixin):
         sig1 = (_any,) * self.ufunc.nin
         targetctx.insert_func_defn(
             [(self._lower_me, self, sig) for sig in (sig0, sig1)])
-
-    # def _compile_for_argtys(self, argtys, return_type=None):
-    #     """
-    #     Given a tuple of argument types, compile the
-    #     guvectorize function for those inputs, generate a UFunc loop
-    #     wrapper, and register the loop with the Numpy ufunc object for
-    #     this DUFunc.
-    #     """
-    #     if self._frozen:
-    #         raise RuntimeError("compilation disabled for %s" % (self,))
-    #     assert isinstance(argtys, tuple)
-    #     if return_type is None:
-    #         sig = argtys
-    #     else:
-    #         sig = return_type(*argtys)
-    #     cres, argtys, return_type = ufuncbuilder._compile_element_wise_function(
-    #         self._dispatcher, self.targetoptions, sig)
-    #     actual_sig = ufuncbuilder._finalize_ufunc_signature(
-    #         cres, argtys, return_type)
-    #     dtypenums, ptr, env = ufuncbuilder._build_element_wise_ufunc_wrapper(
-    #         cres, actual_sig)
-    #     self._add_loop(int(ptr), dtypenums)
-    #     self._keepalive.append((ptr, cres.library, env))
-    #     self._lower_me.libs.append(cres.library)
-    #     return cres
 
     @property
     def is_dynamic(self):
