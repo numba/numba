@@ -961,7 +961,7 @@ Dispatcher_call(Dispatcher *self, PyObject *args, PyObject *kws)
     if (setup_call) {
         // Only if _setup_call is defined.
         // _setup_call is expected to return a callable for the teardown.
-        exit_setup = PyObject_CallNoArgs(setup_call);
+        exit_setup = PyObject_CallFunctionObjArgs(setup_call, NULL);
         if (exit_setup == NULL) {
             PyErr_Format(PyExc_RuntimeError, "_setup_call failed");
             return NULL;
@@ -1066,7 +1066,7 @@ CLEANUP:
         // If no active exception, all three values are NULL;
         PyObject *errtype, *errvalue, *errtb;
         PyErr_Fetch(&errtype, &errvalue, &errtb);
-        exit_setup_ret = PyObject_CallNoArgs(exit_setup);
+        exit_setup_ret = PyObject_CallFunctionObjArgs(exit_setup, NULL);
         // Restore the active exception if it's defined.
         PyErr_Restore(errtype, errvalue, errtb);
         if (exit_setup_ret == NULL) {
