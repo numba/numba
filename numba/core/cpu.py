@@ -1,9 +1,11 @@
+import os
 import platform
 
 import llvmlite.binding as ll
 from llvmlite import ir
 
 from numba import _dynfunc
+from numba.core.bad_gen import BadCodegen
 from numba.core.callwrapper import PyCallWrapper
 from numba.core.base import BaseContext
 from numba.core import (utils, types, config, cgutils, callconv, codegen,
@@ -48,7 +50,11 @@ class CPUContext(BaseContext):
     @global_compiler_lock
     def init(self):
         self.is32bit = (utils.MACHINE_BITS == 32)
-        self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
+        desired_engine = os.getenv("NUMBA_JIT_BACKEND", "mc")
+        if desired_engine == "bad":
+            self._internal_codegen = BadCodegen()
+        else:
+            self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
 
         # Add ARM ABI functions from libgcc_s
         if platform.machine() == 'armv7l':

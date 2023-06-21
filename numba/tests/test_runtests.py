@@ -2,6 +2,7 @@ import os
 import sys
 import subprocess
 
+import numba
 from numba import cuda
 import unittest
 import itertools
@@ -38,7 +39,10 @@ class TestCase(unittest.TestCase):
         return lines
 
     def check_listing_prefix(self, prefix):
-        listing = self.get_testsuite_listing([prefix])
+        # Setting the JIT backend to "bad" will cause all compilation to fail,
+        # ensuring no triggers compilation just to list the test suite.
+        subp_kwsargs = {"env": dict(os.environ, NUMBA_JIT_BACKEND="bad")}
+        listing = self.get_testsuite_listing([prefix], subp_kwargs=subp_kwsargs)
         for ln in listing[:-1]:
             errmsg = '{!r} not startswith {!r}'.format(ln, prefix)
             self.assertTrue(ln.startswith(prefix), msg=errmsg)
@@ -249,6 +253,22 @@ class TestCase(unittest.TestCase):
         self.assertEqual(sorted(start_indexes), expected)
         # 3. That the number of indexes matches the declared test count
         self.assertEqual(lim_start_index, pipe_yml['variables']['TEST_COUNT'])
+
+    def test_bad_fails(self):
+        # We need to check that setting "bad", actually triggers compilation
+        # failure, so we set up some weird environment variable to trigger
+        # compilation that we wouldn't normally do.
+        subp_kwsargs = {"env": dict(os.environ,
+                                    NUMBA_JIT_BACKEND="bad",
+                                    NUMBA_BAD_FAILS="1"),
+                        "stderr": subprocess.DEVNULL}
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.get_testsuite_listing([], subp_kwargs=subp_kwsargs)
+
+
+if os.environ.get("NUMBA_BAD_FAILS", "0") == "1":
+    # Trigger compilation so we can detect it
+    numba.njit(lambda x: x + 1)(7)
 
 
 if __name__ == '__main__':
