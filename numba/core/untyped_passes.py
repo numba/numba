@@ -18,6 +18,7 @@ from numba.core.ir_utils import (guard, resolve_func_from_module, simplify_CFG,
                                  compile_to_numba_ir, get_definition,
                                  find_max_label, rename_labels,
                                  transfer_scope, fixup_var_define_in_scope,
+                                 dead_code_elimination,
                                  )
 from numba.core.ssa import reconstruct_ssa
 from numba.core import interpreter
@@ -1695,6 +1696,152 @@ class SimplifyCFG(FunctionPass):
         state.func_ir.blocks = new_blks
         mutated = blks != new_blks
         return mutated
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class PruneEmptyLoops(FunctionPass):
+    """Remove loops that iterate over empty containers
+    """
+    _name = "prune_empty_loops"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def get_analysis_usage(self, AU):
+        AU.add_required(ReconstructSSA)
+
+    def is_call_to(self, state, call):
+        if isinstance(call, ir.Expr) and call.op == 'call':
+            func_inst = state.func_ir.get_definition(call.func)
+            return func_inst.value in (iter, enumerate, zip)
+        return False
+
+    def is_arg_constsized_zero(self, state, arg):
+        # deals with nested calls to enumerate(zip(iter ...)) calls
+        inst = state.func_ir.get_definition(arg)
+        if self.is_call_to(state, inst):
+            if inst.args:
+                args = inst.args
+                return any(
+                    [self.is_arg_constsized_zero(state, arg) for arg in args])
+            if inst.vararg:
+                return self.is_arg_constsized_zero(state, inst.vararg)
+
+        # There's a bug on type infer that wrongly determine the type of
+        # a PHI variable.
+        #     from numba import njit
+        #     @njit
+        #     def foo(pred):
+        #         if pred:
+        #             z = (1, 2)
+        #         else:
+        #             z = ()
+        #         for x in z:
+        #             print("here")
+        #     foo(True)
+        #     foo(False)
+        if isinstance(inst, ir.Expr) and inst.op == 'phi':
+            return False
+
+        # True when len(type(arg)) == 0
+        t = state.typemap.get(arg.name)
+        return isinstance(t, types.ConstSized) and len(t) == 0
+
+    def match_iter(self, state, getiter):
+        """
+        Return True if getiter operates on either [zip, enumerate, iter]
+
+        call_fn  := global(zip: <class 'zip'>)
+        call_ret := call_expr(func=call_fn, args=[...])
+               _ := getiter(value=call_ret)
+        """
+        func_ir = state.func_ir
+        call_expr = guard(get_definition, func_ir, getiter.value)
+        if call_expr and not (isinstance(call_expr, ir.Expr) and
+                              call_expr.op == 'call'):
+            return False
+
+        if not self.is_call_to(state, call_expr):
+            return False
+
+        for arg in call_expr.args:
+            if self.is_arg_constsized_zero(state, arg):
+                # store the call expr to be removed later
+                return True
+        return False
+
+    def find_dead_loops(self, state):
+        """
+        Find and return all dead loops. A loop is considered dead if it is
+        iterating over an empty container (i.e. empty tuple)
+        """
+        dead_loops = list()
+        cfg = compute_cfg_from_blocks(state.func_ir.blocks)
+        for loop in cfg.loops().values():
+            header = state.func_ir.blocks[loop.header]
+            for expr in header.find_exprs('iternext'):
+                expr = guard(get_definition, state.func_ir, expr.value.name)
+                if expr:
+                    if isinstance(expr, ir.Expr) and expr.op == 'getiter':
+                        # expr := getiter(value=Var)
+                        if self.is_arg_constsized_zero(state, expr.value) or \
+                           self.match_iter(state, expr):
+                            dead_loops.append(loop)
+        return dead_loops
+
+    def remove_dead_loops(self, state, dead_loops):
+        """
+        For each dead loop, change the branch to a direct jump to the exit
+        block. This function also removes the `pair_first` instruction, if
+        exists, since DCE won't remove it.
+        """
+        for loop in dead_loops:
+            # change branch into a direct jump to exit
+            header = state.func_ir.blocks[loop.header]
+            term = header.terminator
+            header.insert_before_terminator(ir.Jump(term.falsebr, term.loc))
+            header.remove(term)
+
+            # iterate over header and remove "pair_first", since
+            # dead_code_elimination won't remove it
+            for inst in header.find_insts(ir.Assign):
+                expr = inst.value
+                if isinstance(expr, ir.Expr) and expr.op == 'pair_first':
+                    header.remove(inst)
+                    if guard(get_definition, state.func_ir, inst.target.name):
+                        state.func_ir.remove_definition(inst.target.name)
+
+        dead_branch_prune(state.func_ir, state.args)
+
+    def run_pass(self, state):
+        # run as subpipeline
+        from numba.core.compiler_machinery import PassManager
+        from numba.core.typed_passes import PartialTypeInference
+        pm = PassManager("dead_loop_elimination_subpipeline")
+        if not state.flags.no_rewrites:
+            pm.add_pass(RewriteSemanticConstants, "Semantic const")
+            pm.add_pass(DeadBranchPrune, "Dead branch prune")
+            pm.add_pass(GenericRewrites, "Generic Rewrites")
+        pm.add_pass(PartialTypeInference, "performs partial type inference")
+        pm.finalize()
+        pm.run(state)
+
+        dead_loops = self.find_dead_loops(state)
+        if dead_loops:
+            self.remove_dead_loops(state, dead_loops)
+            state.func_ir.blocks = simplify_CFG(state.func_ir.blocks)
+            dead_code_elimination(state.func_ir)
+
+            # reset type inference now we are done with the partial results
+            state.typemap = None
+            state.calltypes = None
+
+            # Rebuild definitions
+            state.func_ir._definitions = build_definitions(state.func_ir.blocks)
+
+            return True
+
+        return False
 
 
 @register_pass(mutates_CFG=False, analysis_only=False)

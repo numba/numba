@@ -250,5 +250,145 @@ class TestIterationRefct(MemoryLeakMixin, TestCase):
         self.assertEqual(foo(sequence), foo.py_func(sequence))
 
 
+class TestIterationEmptyContainer(TestCase):
+    def testcase(self):
+        @njit
+        def empty_things():
+            for c in ():
+                if c:
+                    break
+                else:
+                    pass
+            for d in []:
+                if d:
+                    break
+                else:
+                    pass
+            for e in (((),)[-1]):
+                if e:
+                    break
+                else:
+                    pass
+
+        self.assertPreciseEqual(empty_things(), empty_things.py_func())
+
+    def test_simple_empty_list(self):
+        @njit
+        def func():
+            s = 0
+            for x in []:
+                s += x
+            return s
+
+        self.assertPreciseEqual(func(), func.py_func())
+
+    def test_simple_empty_tuple(self):
+        @njit
+        def func():
+            s = 0
+            for x in ():
+                s += x
+            return s
+
+        self.assertPreciseEqual(func(), func.py_func())
+
+    def test_iter(self):
+        from numba import literal_unroll
+
+        @njit
+        def func(containers):
+            s = -1
+            for container in literal_unroll(containers):
+                for x in iter(container):
+                    s += x
+            return s
+
+        inps = [
+            ((),),
+            ((), ()),
+            ((), (), ()),
+            ((), (0,), ()),
+        ]
+        for inp in inps:
+            self.assertPreciseEqual(func(inp), func.py_func(inp))
+
+    def test_zip(self):
+        @njit
+        def func(ca, cb):
+            s = -1
+            for x, y in zip(ca, cb):
+                s += x + y
+            return s
+
+        inps = [
+            ((), ()),
+            ((), (0, 2, 3)),
+            ((0, 2, 3), ()),
+        ]
+        for ca, cb in inps:
+            self.assertPreciseEqual(func(ca, cb), func.py_func(ca, cb))
+
+    def test_enumerate_empty(self):
+        @njit
+        def func(ca):
+            s = -1
+            for i, x in enumerate(ca):
+                s += x
+            return s
+
+        inps = [
+            (()),
+            ((0, 2, 3)),
+        ]
+        for ca in inps:
+            self.assertPreciseEqual(func(ca), func.py_func(ca))
+
+
+    def test_nested_iter(self):
+        @njit
+        def func(ca):
+            s = -1
+            for x in iter(iter(ca)):
+                s += x
+            return s
+        
+        inps = [
+            (()),
+            ((0, 2, 3)),
+        ]
+        for ca in inps:
+            self.assertPreciseEqual(func(ca), func.py_func(ca))
+            
+    def test_zip_iter_enumerate(self):
+        @njit
+        def func(ca, cb):
+            s = 0
+            for idx, (x, y) in enumerate(zip(iter(ca), iter(iter(cb)))):
+                s += x + y + idx
+            return s
+        
+        inps = [
+            ((), ()),
+            ((), (0, 2, 3)),
+            ((0, 2, 3), ()),
+        ]
+        for ca, cb in inps:
+            self.assertPreciseEqual(func(ca, cb), func.py_func(ca, cb))
+
+    def test_iteration_phi_node(self):
+        @njit
+        def func(pred):
+            if pred:
+                z = (1, 2)
+            else:
+                z = ()
+            for x in z:
+                print("here")
+
+        msg = "Cannot unify Tuple() and Tuple(Literal[int](1), Literal[int](2))"
+        for inp in (True,):
+            with self.assertRaises(errors.TypingError, msg=msg):
+                func(inp)
+
 if __name__ == '__main__':
     unittest.main()

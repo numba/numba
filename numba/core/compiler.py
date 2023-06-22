@@ -22,6 +22,7 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode,
                                        CanonicalizeLoopEntry, LiteralUnroll,
                                        ReconstructSSA, RewriteDynamicRaises,
                                        LiteralPropagationSubPipelinePass,
+                                       PruneEmptyLoops,
                                        )
 
 from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
@@ -697,6 +698,7 @@ class DefaultPassBuilder(object):
         if state.flags.enable_ssa:
             pm.add_pass(ReconstructSSA, "ssa")
 
+        pm.add_pass(PruneEmptyLoops, "remove dead loops")
         pm.add_pass(LiteralPropagationSubPipelinePass, "Literal propagation")
 
         pm.finalize()
