@@ -1543,16 +1543,14 @@ def ol_numpy_broadcast_shapes(*args):
     else:
         tup_init = (1,) * m
 
-        from numba.cpython.builtins import _isinstance_no_warn
-
         def impl(*args):
             # propagate args
             r = [1] * m
             tup = tup_init
             for arg in literal_unroll(args):
-                if _isinstance_no_warn(arg, tuple) and len(arg) > 0:
+                if isinstance(arg, tuple) and len(arg) > 0:
                     numpy_broadcast_shapes_list(r, m, arg)
-                elif _isinstance_no_warn(arg, int):
+                elif isinstance(arg, int):
                     numpy_broadcast_shapes_list(r, m, (arg,))
             for idx, elem in enumerate(r):
                 tup = tuple_setitem(tup, idx, elem)

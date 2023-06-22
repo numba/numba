@@ -1,4 +1,3 @@
-from itertools import product, cycle, permutations
 import gc
 import sys
 import warnings
@@ -8,10 +7,9 @@ import numpy as np
 from numba import jit, typeof
 from numba.core import types
 from numba.core.compiler import compile_isolated
-from numba.core.errors import (TypingError, LoweringError, NumbaValueError,
-                               NumbaExperimentalFeatureWarning)
+from numba.core.errors import TypingError, NumbaValueError
 from numba.np.numpy_support import as_dtype, numpy_version
-from numba.tests.support import (TestCase, CompilationCache, MemoryLeak,
+from numba.tests.support import (TestCase, CompilationCache,
                                  MemoryLeakMixin, tag, needs_blas)
 import unittest
 
@@ -784,23 +782,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
     def test_np_where_1(self):
         self.check_nonzero(np_where_1)
-
-    def test_np_where_no_isinstance_warn(self):
-        # TODO: remove this test before Numba 0.58 release
-        # When _isinstance_no_warn has been removed.
-        msg = 'Use of isinstance() detected. This is an experimental feature.'
-        category = NumbaExperimentalFeatureWarning
-        a = np.arange(10)
-        cfunc = jit(nopython=True)(np_where_3)
-
-        with warnings.catch_warnings(record=True) as catch:
-            cfunc(a < 5, a, 10 * a)
-
-            found = False
-            for w in catch:
-                if msg in str(w.message) and w.category == category:
-                    found = True
-            self.assertFalse(found)
 
     def test_np_where_3(self):
         pyfunc = np_where_3
