@@ -485,14 +485,14 @@ class TestGUVectorizeJit(TestCase):
         def jit_add(x, y, res):
             gufunc(x, y, res)
 
-        x = np.arange(40, dtype='i4').reshape(4, 2, 5)
+        x = np.arange(40, dtype='i8').reshape(4, 2, 5)
         y = np.int32(100)
         res = np.zeros_like(x)
         jit_add(x, y, res)
         self.assertPreciseEqual(res, x+y)
 
     def test_add_static(self):
-        @guvectorize('int32[:], int32, int32[:]', '(n),()->(n)',
+        @guvectorize('int64[:], int64, int64[:]', '(n),()->(n)',
                      target=self.target)
         def add(x, y, res):
             for i in range(x.shape[0]):
@@ -500,8 +500,8 @@ class TestGUVectorizeJit(TestCase):
 
         self.check_add_gufunc(add)
 
-    @unittest.expectedFailure
     def test_add_static_cast_args(self):
+        # cast the second argument from i32 -> i64
         @guvectorize('int64[:], int64, int64[:]', '(n),()->(n)',
                      target=self.target)
         def add(x, y, res):
@@ -526,6 +526,70 @@ class TestGUVectorizeJit(TestCase):
                 res[i] = x[i] + y
 
         self.check_add_gufunc(add)
+
+    # @unittest.expectedFailure
+    # def test_axis(self):
+    #     # issue https://github.com/numba/numba/issues/6773
+    #     @guvectorize(["f8[:],f8[:]"], "(n)->(n)")
+    #     def my_cumsum(x, res):
+    #         acc = 0
+    #         for i in range(x.shape[0]):
+    #             acc += x[i]
+    #             res[i] = acc
+
+    #     @jit(nopython=True)
+    #     def cumsum_jit(x):
+    #         y = my_cumsum(x, axis=0)
+    #         return y
+
+    #     x = np.ones((20, 30))
+    #     # Check regular call
+    #     y = my_cumsum(x, axis=0)
+    #     expected = np.cumsum(x, axis=0)
+    #     np.testing.assert_equal(y, expected)
+    #     # Check "out" kw
+    #     out_kw = np.zeros_like(y)
+    #     my_cumsum(x, out=out_kw, axis=0)
+    #     # np.testing.assert_equal(out_kw, expected)
+
+    def check_matmul(self, jit_func):
+        matrix_ct = 1001
+        A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2, 4)
+        B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(matrix_ct, 4, 5)
+        C = np.arange(matrix_ct * 2 * 5, dtype=np.float32).reshape(matrix_ct, 2, 5)
+
+        jit_func(A, B, C)
+        Gold = ut.matrix_multiply(A, B)
+
+        np.testing.assert_allclose(C, Gold, rtol=1e-5, atol=1e-8)
+
+    def test_njit_matmul_call(self):
+
+        gufunc = guvectorize('(m,n),(n,p)->(m,p)',
+                             target=self.target)(matmulcore)
+
+        @jit(nopython=True)
+        def matmul_jit(A, B, C):
+            return gufunc(A, B, C)
+
+        self.check_matmul(matmul_jit)
+
+    @unittest.expectedFailure
+    def test_axpy(self):
+        gufunc = GUVectorize(axpy, '(), (), () -> ()', target=self.target,
+                             is_dynamic=True)
+
+        @jit(nopython=True)
+        def axpy_jit(a, x, y, out):
+            gufunc(a, x, y, out)
+
+        x = np.arange(10, dtype=np.intp)
+        out = np.zeros_like(x)
+        axpy_jit(x, x, x, out)
+        print(out)
+        # print(axpy_jit(x, x, x, out))
+
+
 
 
 if __name__ == '__main__':

@@ -159,7 +159,7 @@ class GUFunc(serialize.ReduceMixin):
         """
         if typingctx is None:
             typingctx = self._dispatcher.targetdescr.typing_context
-        _ty_cls = type('gufuncTyping_' + self.__name__,
+        _ty_cls = type('GUFuncTyping_' + self.__name__,
                        (AbstractTemplate,),
                        dict(key=self, generic=self._type_me))
         typingctx.insert_user_function(self, _ty_cls)
