@@ -745,8 +745,21 @@ def ol_filter(func, iterable):
     return impl
 
 
+def _isinstance_no_warn(var, typs):
+    pass
+
+
 @overload(isinstance)
 def ol_isinstance(var, typs):
+    # Warn about the experimental nature of this feature.
+    msg = "Use of isinstance() detected. This is an experimental feature."
+    warnings.warn(msg, category=NumbaExperimentalFeatureWarning)
+
+    return ol_isinstance_no_warn(var, typs)
+
+
+@overload(_isinstance_no_warn)
+def ol_isinstance_no_warn(var, typs):
 
     def true_impl(var, typs):
         return True
