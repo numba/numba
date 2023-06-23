@@ -64,8 +64,7 @@ def open_cudalib(lib):
     return ctypes.CDLL(path)
 
 
-def check_static_lib(lib):
-    path = get_cudalib(lib, static=True)
+def check_static_lib(path):
     if not os.path.isfile(path):
         raise FileNotFoundError(f'{path} not found')
 
@@ -88,12 +87,14 @@ def test():
     # Check for the driver
     try:
         dlloader, candidates = locate_driver_and_loader()
-        locations = ", ".join(candidates)
-        print(f'Finding driver from candidates: {locations}...')
+        print('Finding driver from candidates:')
+        for location in candidates:
+            print(f'\t{location}')
         print(f'Using loader {dlloader}')
-        print('\ttrying to load driver', end='...')
+        print('\tTrying to load driver', end='...')
         dll, path = load_driver(dlloader, candidates)
-        print(f'\tok, loaded from {path}')
+        print('\tok')
+        print(f'\t\tLoaded from {path}')
     except CudaSupportError as e:
         print(f'\tERROR: failed to open driver: {e}')
         failed = True
@@ -132,10 +133,10 @@ def test():
     for lib in libs:
         path = get_cudalib(lib)
         print('Finding {} from {}'.format(lib, _get_source_variable(lib)))
-        print('\tlocated at', path)
+        print('\tLocated at', path)
 
         try:
-            print('\ttrying to open library', end='...')
+            print('\tTrying to open library', end='...')
             open_cudalib(lib)
             print('\tok')
         except OSError as e:
@@ -147,10 +148,12 @@ def test():
     path = get_cudalib(lib, static=True)
     print('Finding {} from {}'.format(lib, _get_source_variable(lib,
                                                                 static=True)))
-    print('\tlocated at', path)
+    print('\tLocated at', path)
 
     try:
-        check_static_lib(lib)
+        print('\tChecking library', end='...')
+        check_static_lib(path)
+        print('\tok')
     except FileNotFoundError as e:
         print('\tERROR: failed to find %s:\n%s' % (lib, e))
         failed = True
@@ -158,11 +161,15 @@ def test():
     # Check for libdevice
     where = _get_source_variable('libdevice')
     print(f'Finding libdevice from {where}')
-    print('\ttrying to open library', end='...')
     path = get_libdevice()
-    if path:
+    print('\tLocated at', path)
+
+    try:
+        print('\tChecking library', end='...')
+        check_static_lib(path)
         print('\tok')
-    else:
-        print('\tERROR: can\'t open libdevice')
+    except FileNotFoundError as e:
+        print('\tERROR: failed to find %s:\n%s' % (lib, e))
         failed = True
+
     return not failed
