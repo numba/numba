@@ -98,8 +98,7 @@ class TestInspect(CUDATestCase):
                 seen_function = True
         self.assertTrue(seen_function)
 
-        seen_lineinfo = 'line' in sass and 'inlined' in sass
-        self.assertTrue(seen_lineinfo)
+        self.assertRegex(sass, r'//## File ".*/test_inspect.py", line [0-9]')
 
         # Some instructions common to all supported architectures that should
         # appear in the output
