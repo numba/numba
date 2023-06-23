@@ -253,13 +253,13 @@ class _Kernel(serialize.ReduceMixin):
         '''
         return self._codelibrary.get_asm_str(cc=cc)
 
-    def inspect_sass(self):
+    def inspect_sass(self, debuginfo=False):
         '''
         Returns the SASS code for this kernel.
 
         Requires nvdisasm to be available on the PATH.
         '''
-        return self._codelibrary.get_sass()
+        return self._codelibrary.get_sass(debuginfo=debuginfo)
 
     def inspect_types(self, file=None):
         '''
@@ -979,7 +979,7 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
                 return {sig: overload.inspect_asm(cc)
                         for sig, overload in self.overloads.items()}
 
-    def inspect_sass(self, signature=None):
+    def inspect_sass(self, signature=None, debuginfo=False):
         '''
         Return this kernel's SASS assembly code for for the device in the
         current context.
@@ -996,9 +996,9 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
             raise RuntimeError('Cannot inspect SASS of a device function')
 
         if signature is not None:
-            return self.overloads[signature].inspect_sass()
+            return self.overloads[signature].inspect_sass(debuginfo=debuginfo)
         else:
-            return {sig: defn.inspect_sass()
+            return {sig: defn.inspect_sass(debuginfo=debuginfo)
                     for sig, defn in self.overloads.items()}
 
     def inspect_types(self, file=None):
