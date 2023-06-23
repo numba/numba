@@ -13,7 +13,7 @@ import tempfile
 CUDA_TRIPLE = 'nvptx64-nvidia-cuda'
 
 
-def disassemble_cubin(cubin):
+def disassemble_cubin(cubin, debuginfo=False):
     # nvdisasm only accepts input from a file, so we need to write out to a
     # temp file and clean up afterwards.
     fd = None
@@ -24,9 +24,14 @@ def disassemble_cubin(cubin):
             f.write(cubin)
 
         try:
-            cp = subprocess.run(['nvdisasm', fname], check=True,
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE)
+            if debuginfo:
+                cp = subprocess.run(['nvdisasm', '-gi', fname], check=True,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE)
+            else:
+                cp = subprocess.run(['nvdisasm', fname], check=True,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE)
         except FileNotFoundError as e:
             msg = ("nvdisasm is required for SASS inspection, and has not "
                    "been found.\n\nYou may need to install the CUDA "
@@ -198,8 +203,8 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         except KeyError:
             raise KeyError(f'No linkerinfo for CC {cc}')
 
-    def get_sass(self, cc=None):
-        return disassemble_cubin(self.get_cubin(cc=cc))
+    def get_sass(self, cc=None, debuginfo=False):
+        return disassemble_cubin(self.get_cubin(cc=cc), debuginfo=debuginfo)
 
     def add_ir_module(self, mod):
         self._raise_if_finalized()
