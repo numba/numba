@@ -98,6 +98,35 @@ def test():
         print(f'\tERROR: failed to open driver: {e}')
         failed = True
 
+    # Find the absolute location of the driver on Linux. Various driver-related
+    # issues have been reported by WSL2 users, and it is almost always due to a
+    # Linux (i.e. not- WSL2) driver being installed in a WSL2 system.
+    # Providing the absolute location of the driver indicates its version
+    # number in the soname (e.g. "libcuda.so.530.30.02"), which can be used to
+    # look up whether the driver was intended for "native" Linux.
+    if sys.platform == 'linux' and not failed:
+        pid = os.getpid()
+        mapsfile = f'/proc/{pid}/maps'
+        try:
+            with open(mapsfile) as f:
+                maps = f.read()
+        # It's difficult to predict all that might go wrong reading the maps
+        # file - in case various error conditions ensue (the file is not found,
+        # not readable, etc.) we use OSError to hopefully catch any of them.
+        except OSError:
+            # It's helpful to report that this went wrong to the user, but we
+            # don't set failed to True because this doesn't have any connection
+            # to actual CUDA functionality.
+            print(f'\tERROR: Could not open {mapsfile} to determine absolute '
+                  'path to libcuda.so')
+        else:
+            # In this case we could read the maps, so we can report the
+            # relevant ones to the user
+            locations = set(s for s in maps.split() if 'libcuda.so' in s)
+            print('\tMapped libcuda.so paths:')
+            for location in locations:
+                print(f'\t\t{location}')
+
     # Checks for dynamic libraries
     libs = 'nvvm cudart'.split()
     for lib in libs:
