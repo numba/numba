@@ -98,6 +98,9 @@ class TestInspect(CUDATestCase):
                 seen_function = True
         self.assertTrue(seen_function)
 
+        seen_lineinfo = 'line' in sass and 'inlined' in sass
+        self.assertTrue(seen_lineinfo)
+
         # Some instructions common to all supported architectures that should
         # appear in the output
         self.assertIn('S2R', sass)   # Special register to register
@@ -108,7 +111,7 @@ class TestInspect(CUDATestCase):
     def test_inspect_sass_eager(self):
         sig = (float32[::1], int32[::1])
 
-        @cuda.jit(sig)
+        @cuda.jit(sig, lineinfo=True)
         def add(x, y):
             i = cuda.grid(1)
             if i < len(x):
@@ -118,7 +121,7 @@ class TestInspect(CUDATestCase):
 
     @skip_without_nvdisasm('nvdisasm needed for inspect_sass()')
     def test_inspect_sass_lazy(self):
-        @cuda.jit
+        @cuda.jit(lineinfo=True)
         def add(x, y):
             i = cuda.grid(1)
             if i < len(x):
