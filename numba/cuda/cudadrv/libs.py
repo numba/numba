@@ -41,7 +41,7 @@ def open_libdevice():
         return bcfile.read()
 
 
-def get_cudalib(lib, platform=None, static=False):
+def get_cudalib(lib, static=False):
     """
     Find the path of a CUDA library based on a search of known locations. If
     the search fails, return a generic filename for the library (e.g.
@@ -54,7 +54,7 @@ def get_cudalib(lib, platform=None, static=False):
         dir_type = 'static_cudalib_dir' if static else 'cudalib_dir'
         libdir = get_cuda_paths()[dir_type].info
 
-    candidates = find_lib(lib, libdir, platform=platform, static=static)
+    candidates = find_lib(lib, libdir, static=static)
     namepattern = _staticnamepattern if static else _dllnamepattern
     return max(candidates) if candidates else namepattern % lib
 
@@ -80,7 +80,7 @@ def _get_source_variable(lib, static=False):
         return get_cuda_paths()[dir_type].by
 
 
-def test(_platform=None, print_paths=True):
+def test():
     """Test library lookup.  Path info is printed to stdout.
     """
     failed = False
@@ -101,31 +101,24 @@ def test(_platform=None, print_paths=True):
     # Checks for dynamic libraries
     libs = 'nvvm cudart'.split()
     for lib in libs:
-        path = get_cudalib(lib, _platform)
+        path = get_cudalib(lib)
         print('Finding {} from {}'.format(lib, _get_source_variable(lib)))
-        if print_paths:
-            print('\tlocated at', path)
-        else:
-            print('\tnamed ', os.path.basename(path))
+        print('\tlocated at', path)
 
-        if _platform in (None, sys.platform):
-            try:
-                print('\ttrying to open library', end='...')
-                open_cudalib(lib)
-                print('\tok')
-            except OSError as e:
-                print('\tERROR: failed to open %s:\n%s' % (lib, e))
-                failed = True
+        try:
+            print('\ttrying to open library', end='...')
+            open_cudalib(lib)
+            print('\tok')
+        except OSError as e:
+            print('\tERROR: failed to open %s:\n%s' % (lib, e))
+            failed = True
 
     # Check for cudadevrt (the only static library)
     lib = 'cudadevrt'
-    path = get_cudalib(lib, _platform, static=True)
+    path = get_cudalib(lib, static=True)
     print('Finding {} from {}'.format(lib, _get_source_variable(lib,
                                                                 static=True)))
-    if print_paths:
-        print('\tlocated at', path)
-    else:
-        print('\tnamed ', os.path.basename(path))
+    print('\tlocated at', path)
 
     try:
         check_static_lib(lib)
