@@ -110,7 +110,7 @@ If you are building Numba from source for other reasons, first follow the
 Once that is completed, you can download the latest Numba source code from
 `Github <https://github.com/numba/numba>`_::
 
-    $ git clone git://github.com/numba/numba.git
+    $ git clone https://github.com/numba/numba.git
 
 Source archives of the latest release can also be found on
 `PyPI <https://pypi.org/project/numba/>`_.  In addition to ``llvmlite``, you will also need:
