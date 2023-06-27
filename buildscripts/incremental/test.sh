@@ -44,9 +44,6 @@ export PYTHONFAULTHANDLER=1
 # enable new style error handling
 export NUMBA_CAPTURED_ERRORS="new_style"
 
-# Required to import _umath_tests under NumPy 1.25
-export NUMPY_EXPERIMENTAL_DTYPE_API=1
-
 # Disable NumPy dispatching to AVX512_SKX feature extensions if the chip is
 # reported to support the feature and NumPy >= 1.22 as this results in the use
 # of low accuracy SVML libm replacements in ufunc loops.

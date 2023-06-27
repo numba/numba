@@ -17,9 +17,6 @@ set PYTHONFAULTHANDLER=1
 @rem enable new style error handling
 set NUMBA_CAPTURED_ERRORS=new_style
 
-@rem required to import _umath_tests under NumPy 1.25
-set NUMPY_EXPERIMENTAL_DTYPE_API=1
-
 @rem First check that the test discovery works
 python -m numba.tests.test_runtests
 @rem Now run the Numba test suite

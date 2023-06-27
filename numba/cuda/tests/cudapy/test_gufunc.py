@@ -1,5 +1,4 @@
 import numpy as np
-import numpy.core.umath_tests as ut
 
 from collections import namedtuple
 from numba import void, int32, float32, float64
@@ -42,7 +41,7 @@ class TestCUDAGufunc(CUDATestCase):
                                                                    5)
 
         C = gufunc(A, B)
-        Gold = ut.matrix_multiply(A, B)
+        Gold = np.matmul(A, B)
         self.assertTrue(np.allclose(C, Gold))
 
     def test_gufunc_auto_transfer(self):
@@ -58,7 +57,7 @@ class TestCUDAGufunc(CUDATestCase):
         dB = cuda.to_device(B)
 
         C = gufunc(A, dB).copy_to_host()
-        Gold = ut.matrix_multiply(A, B)
+        Gold = np.matmul(A, B)
         self.assertTrue(np.allclose(C, Gold))
 
     def test_gufunc(self):
@@ -72,7 +71,7 @@ class TestCUDAGufunc(CUDATestCase):
                                                                    5)
 
         C = gufunc(A, B)
-        Gold = ut.matrix_multiply(A, B)
+        Gold = np.matmul(A, B)
         self.assertTrue(np.allclose(C, Gold))
 
     def test_gufunc_hidim(self):
@@ -84,7 +83,7 @@ class TestCUDAGufunc(CUDATestCase):
         B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(4, 25, 4, 5)
 
         C = gufunc(A, B)
-        Gold = ut.matrix_multiply(A, B)
+        Gold = np.matmul(A, B)
         self.assertTrue(np.allclose(C, Gold))
 
     def test_gufunc_new_axis(self):
@@ -94,7 +93,7 @@ class TestCUDAGufunc(CUDATestCase):
         X = np.random.randn(10, 3, 3)
         Y = np.random.randn(3, 3)
 
-        gold = ut.matrix_multiply(X, Y)
+        gold = np.matmul(X, Y)
 
         res1 = gufunc(X, Y)
         np.testing.assert_allclose(gold, res1)
@@ -122,7 +121,7 @@ class TestCUDAGufunc(CUDATestCase):
         C = dC.copy_to_host(stream=stream)
         stream.synchronize()
 
-        Gold = ut.matrix_multiply(A, B)
+        Gold = np.matmul(A, B)
 
         self.assertTrue(np.allclose(C, Gold))
 
