@@ -39,7 +39,7 @@ The most basic types can be expressed through simple expressions.  The
 symbols below refer to attributes of the main ``numba`` module (so if
 you read "boolean", it means that symbol can be accessed as ``numba.boolean``).
 Many types are available both as a canonical name and a shorthand alias,
-following Numpy's conventions.
+following NumPy's conventions.
 
 Numbers
 -------
@@ -101,6 +101,18 @@ the beginning or the end of the index specification::
    array(float32, 3d, C)
    >>> numba.float32[::1, :, :]
    array(float32, 3d, F)
+
+This style of type declaration is supported within Numba compiled-functions,
+e.g. declaring the type of a :ref:`typed.List <feature-typed-list>`.::
+
+    from numba import njit, types, typed
+
+    @njit
+    def example():
+        return typed.List.empty_list(types.float64[:, ::1])
+
+Note that this feature is only supported for simple numerical types. Application
+to compound types, e.g. record types, is not supported.
 
 Functions
 ---------
@@ -270,7 +282,7 @@ Inference
       reflected list(int64)
 
 
-Numpy scalars
+NumPy scalars
 -------------
 
 Instead of using :func:`~numba.typeof`, non-trivial scalars such as
@@ -278,7 +290,7 @@ structured types can also be constructed programmatically.
 
 .. function:: numba.from_dtype(dtype)
 
-   Create a Numba type corresponding to the given Numpy *dtype*::
+   Create a Numba type corresponding to the given NumPy *dtype*::
 
       >>> struct_dtype = np.dtype([('row', np.float64), ('col', np.float64)])
       >>> ty = numba.from_dtype(struct_dtype)
@@ -289,18 +301,18 @@ structured types can also be constructed programmatically.
 
 .. class:: numba.types.NPDatetime(unit)
 
-   Create a Numba type for Numpy datetimes of the given *unit*.  *unit*
-   should be a string amongst the codes recognized by Numpy (e.g.
+   Create a Numba type for NumPy datetimes of the given *unit*.  *unit*
+   should be a string amongst the codes recognized by NumPy (e.g.
    ``Y``, ``M``, ``D``, etc.).
 
 .. class:: numba.types.NPTimedelta(unit)
 
-   Create a Numba type for Numpy timedeltas of the given *unit*.  *unit*
-   should be a string amongst the codes recognized by Numpy (e.g.
+   Create a Numba type for NumPy timedeltas of the given *unit*.  *unit*
+   should be a string amongst the codes recognized by NumPy (e.g.
    ``Y``, ``M``, ``D``, etc.).
 
    .. seealso::
-      Numpy `datetime units <http://docs.scipy.org/doc/numpy/reference/arrays.datetime.html#datetime-units>`_.
+      NumPy `datetime units <http://docs.scipy.org/doc/numpy/reference/arrays.datetime.html#datetime-units>`_.
 
 
 Arrays

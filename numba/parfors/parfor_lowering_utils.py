@@ -1,7 +1,6 @@
 from collections import namedtuple
 
 from numba.core import types, ir
-from numba.core.ir_utils import mk_unique_var
 from numba.core.typing import signature
 
 
@@ -115,7 +114,7 @@ class ParforLoweringBuilder:
         res : ir.Var
         """
         loc = self._loc
-        var = ir.Var(self._scope, mk_unique_var(name), loc)
+        var = self._scope.redefine(name, loc)
         self._typemap[var.name] = typ
         assign = ir.Assign(rhs, var, loc)
         self._lowerer.lower_inst(assign)

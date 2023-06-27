@@ -1053,7 +1053,7 @@ class TestSetItem(TestCase):
         arr.flags.writeable = False
         with self.assertRaises((TypeError, errors.TypingError)) as raises:
             setitem_usecase(arr, 1, 42)
-        self.assertIn("Cannot modify value of type readonly array",
+        self.assertIn("Cannot modify readonly array of type:",
                       str(raises.exception))
 
 

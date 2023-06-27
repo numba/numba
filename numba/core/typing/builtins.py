@@ -645,11 +645,32 @@ class StaticGetItemLiteralStrKeyDict(AbstractTemplate):
         if not isinstance(tup, types.LiteralStrKeyDict):
             return
         if isinstance(idx, str):
-            lookup = tup.fields.index(idx)
+            if idx in tup.fields:
+                lookup = tup.fields.index(idx)
+            else:
+                raise errors.NumbaKeyError(f"Key '{idx}' is not in dict.")
             ret = tup.types[lookup]
         if ret is not None:
             sig = signature(ret, *args)
             return sig
+
+@infer
+class StaticGetItemClass(AbstractTemplate):
+    """This handles the "static_getitem" when a Numba type is subscripted e.g:
+    var = typed.List.empty_list(float64[::1, :])
+    It only allows this on simple numerical types. Compound types, like
+    records, are not supported.
+    """
+    key = "static_getitem"
+
+    def generic(self, args, kws):
+        clazz, idx = args
+        if not isinstance(clazz, types.NumberClass):
+            return
+        ret = clazz.dtype[idx]
+        sig = signature(ret, *args)
+        return sig
+
 
 # Generic implementation for "not in"
 
@@ -793,7 +814,7 @@ class NumberClassAttribute(AttributeTemplate):
 
     def resolve___call__(self, classty):
         """
-        Resolve a number class's constructor (e.g. calling int(...))
+        Resolve a NumPy number class's constructor (e.g. calling numpy.int32(...))
         """
         ty = classty.instance_type
 
@@ -804,7 +825,7 @@ class NumberClassAttribute(AttributeTemplate):
                 sig = fnty.get_call_type(self.context, (val, types.DType(ty)),
                                          {})
                 return sig.return_type
-            elif isinstance(val, (types.Number, types.Boolean)):
+            elif isinstance(val, (types.Number, types.Boolean, types.IntEnumMember)):
                  # Scalar constructor, e.g. np.int32(42)
                  return ty
             elif isinstance(val, (types.NPDatetime, types.NPTimedelta)):
@@ -838,7 +859,7 @@ class TypeRefAttribute(AttributeTemplate):
 
     def resolve___call__(self, classty):
         """
-        Resolve a number class's constructor (e.g. calling int(...))
+        Resolve a core number's constructor (e.g. calling int(...))
 
         Note:
 
@@ -878,7 +899,7 @@ class MinMaxBase(AbstractTemplate):
 
     def _unify_minmax(self, tys):
         for ty in tys:
-            if not isinstance(ty, types.Number):
+            if not isinstance(ty, (types.Number, types.NPDatetime, types.NPTimedelta)):
                 return
         return self.context.unify_types(*tys)
 
@@ -957,6 +978,13 @@ class Int(AbstractTemplate):
             return signature(arg, arg)
         if isinstance(arg, (types.Float, types.Boolean)):
             return signature(types.intp, arg)
+        if isinstance(arg, types.NPDatetime):
+            if arg.unit == 'ns':
+                return signature(types.int64, arg)
+            else:
+                raise errors.NumbaTypeError(f"Only datetime64[ns] can be converted, but got datetime64[{arg.unit}]")
+        if isinstance(arg, types.NPTimedelta):
+            return signature(types.int64, arg)
 
 
 @infer_global(float)
@@ -989,7 +1017,7 @@ class Complex(AbstractTemplate):
         if len(args) == 1:
             [arg] = args
             if arg not in types.number_domain:
-                raise TypeError("complex() only support for numbers")
+                raise errors.NumbaTypeError("complex() only support for numbers")
             if arg == types.float32:
                 return signature(types.complex64, arg)
             else:
@@ -999,7 +1027,7 @@ class Complex(AbstractTemplate):
             [real, imag] = args
             if (real not in types.number_domain or
                 imag not in types.number_domain):
-                raise TypeError("complex() only support for numbers")
+                raise errors.NumbaTypeError("complex() only support for numbers")
             if real == imag == types.float32:
                 return signature(types.complex64, real, imag)
             else:
@@ -1100,8 +1128,8 @@ class MinValInfer(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         assert len(args) == 1
-        assert isinstance(args[0], (types.DType, types.NumberClass))
-        return signature(args[0].dtype, *args)
+        if isinstance(args[0], (types.DType, types.NumberClass)):
+            return signature(args[0].dtype, *args)
 
 
 #------------------------------------------------------------------------------

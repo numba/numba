@@ -12,6 +12,7 @@ Implement parallel vectorize workqueue on top of Intel TBB.
 #undef _XOPEN_SOURCE
 #endif
 
+#include <tbb/version.h>
 #include <tbb/tbb.h>
 #include <string.h>
 #include <stdio.h>
@@ -20,15 +21,9 @@ Implement parallel vectorize workqueue on top of Intel TBB.
 
 #include "gufunc_scheduler.h"
 
-/* TBB 2019 U5 is the minimum required version as this is needed:
- * https://github.com/intel/tbb/blob/18070344d755ece04d169e6cc40775cae9288cee/CHANGES#L133-L134
- * and therefore
- * https://github.com/intel/tbb/blob/18070344d755ece04d169e6cc40775cae9288cee/CHANGES#L128-L129
- * from here:
- * https://github.com/intel/tbb/blob/2019_U5/include/tbb/tbb_stddef.h#L29
- */
-#if TBB_INTERFACE_VERSION < 12010
-#error "TBB version is too old, 2021 update 1, i.e. TBB_INTERFACE_VERSION >= 12010 required"
+/* TBB 2021.6 is the minimum version */
+#if (TBB_INTERFACE_VERSION < 12060)
+#error "TBB version is incompatible, 2021.6 or greater required, i.e. TBB_INTERFACE_VERSION >= 12060"
 #endif
 
 #define _DEBUG 0
@@ -76,7 +71,16 @@ get_num_threads(void)
 static int
 get_thread_id(void)
 {
-    return tbb::this_task_arena::current_thread_index();
+    int tid = tbb::this_task_arena::current_thread_index();
+    // This function may be called from pure python or from a sequential JIT
+    // region, in either case, the task_arena may not be initialised. This
+    // condition is intercepted and a thread ID of 0 is returned.
+    if (tid == tbb::task_arena::not_initialized)
+    {
+        return 0;
+    } else {
+        return tid;
+    }
 }
 
 // watch the arena, if it decides to create more threads/add threads into the
@@ -226,7 +230,7 @@ static void prepare_fork(void)
         {
             if (!tbb::finalize(tsh, std::nothrow))
             {
-                tbb::task_scheduler_handle::release(tsh);
+                tsh.release();
                 puts("Unable to join threads to shut down before fork(). "
                      "This can break multithreading in child processes.\n");
             }
@@ -251,7 +255,7 @@ static void reset_after_fork(void)
 
     if(need_reinit_after_fork)
     {
-        tsh = tbb::task_scheduler_handle::get();
+        tsh = tbb::attach();
         set_main_thread();
         tsh_was_initialized = true;
         need_reinit_after_fork = false;
@@ -289,7 +293,7 @@ static void launch_threads(int count)
     if(count < 1)
         count = tbb::task_arena::automatic;
 
-    tsh = tbb::task_scheduler_handle::get();
+    tsh = tbb::attach();
     tsh_was_initialized = true;
 
     tg = new tbb::task_group;
@@ -324,26 +328,20 @@ MOD_INIT(tbbpool)
     {
         md->m_free = (freefunc)unload_tbb;
     }
-    PyObject_SetAttrString(m, "launch_threads",
-                           PyLong_FromVoidPtr((void*)&launch_threads));
-    PyObject_SetAttrString(m, "synchronize",
-                           PyLong_FromVoidPtr((void*)&synchronize));
-    PyObject_SetAttrString(m, "ready",
-                           PyLong_FromVoidPtr((void*)&ready));
-    PyObject_SetAttrString(m, "add_task",
-                           PyLong_FromVoidPtr((void*)&add_task));
-    PyObject_SetAttrString(m, "parallel_for",
-                           PyLong_FromVoidPtr((void*)&parallel_for));
-    PyObject_SetAttrString(m, "do_scheduling_signed",
-                           PyLong_FromVoidPtr((void*)&do_scheduling_signed));
-    PyObject_SetAttrString(m, "do_scheduling_unsigned",
-                           PyLong_FromVoidPtr((void*)&do_scheduling_unsigned));
-    PyObject_SetAttrString(m, "set_num_threads",
-                           PyLong_FromVoidPtr((void*)&set_num_threads));
-    PyObject_SetAttrString(m, "get_num_threads",
-                           PyLong_FromVoidPtr((void*)&get_num_threads));
-    PyObject_SetAttrString(m, "get_thread_id",
-                           PyLong_FromVoidPtr((void*)&get_thread_id));
+
+    SetAttrStringFromVoidPointer(m, launch_threads);
+    SetAttrStringFromVoidPointer(m, synchronize);
+    SetAttrStringFromVoidPointer(m, ready);
+    SetAttrStringFromVoidPointer(m, add_task);
+    SetAttrStringFromVoidPointer(m, parallel_for);
+    SetAttrStringFromVoidPointer(m, do_scheduling_signed);
+    SetAttrStringFromVoidPointer(m, do_scheduling_unsigned);
+    SetAttrStringFromVoidPointer(m, set_num_threads);
+    SetAttrStringFromVoidPointer(m, get_num_threads);
+    SetAttrStringFromVoidPointer(m, get_thread_id);
+    SetAttrStringFromVoidPointer(m, set_parallel_chunksize);
+    SetAttrStringFromVoidPointer(m, get_parallel_chunksize);
+    SetAttrStringFromVoidPointer(m, get_sched_size);
 
     return MOD_SUCCESS_VAL(m);
 }

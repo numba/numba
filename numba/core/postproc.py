@@ -1,4 +1,5 @@
-from numba.core import utils, ir, analysis, transforms, ir_utils
+from functools import cached_property
+from numba.core import ir, analysis, transforms, ir_utils
 
 
 class YieldPoint(object):
@@ -34,21 +35,21 @@ class VariableLifetime(object):
     def __init__(self, blocks):
         self._blocks = blocks
 
-    @utils.cached_property
+    @cached_property
     def cfg(self):
         return analysis.compute_cfg_from_blocks(self._blocks)
 
-    @utils.cached_property
+    @cached_property
     def usedefs(self):
         return analysis.compute_use_defs(self._blocks)
 
-    @utils.cached_property
+    @cached_property
     def livemap(self):
         return analysis.compute_live_map(self.cfg, self._blocks,
                                          self.usedefs.usemap,
                                          self.usedefs.defmap)
 
-    @utils.cached_property
+    @cached_property
     def deadmaps(self):
         return analysis.compute_dead_maps(self.cfg, self._blocks, self.livemap,
                                           self.usedefs.defmap)
@@ -67,7 +68,7 @@ class PostProcessor(object):
     def __init__(self, func_ir):
         self.func_ir = func_ir
 
-    def run(self, emit_dels=False, extend_lifetimes=False):
+    def run(self, emit_dels: bool = False, extend_lifetimes: bool = False):
         """
         Run the following passes over Numba IR:
         - canonicalize the CFG

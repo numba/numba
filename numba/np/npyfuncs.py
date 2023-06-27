@@ -6,10 +6,11 @@ Python builtins
 
 
 import math
+
+import llvmlite.ir
 import numpy as np
 
-from llvmlite.llvmpy import core as lc
-
+from numba.core.extending import overload
 from numba.core.imputils import impl_ret_untracked
 from numba.core import typing, types, errors, lowering, cgutils
 from numba.core.extending import register_jitable
@@ -51,7 +52,7 @@ def _call_func_by_name_with_cast(context, builder, sig, args,
     # helper function facilitates that.
     mod = builder.module
     lty = context.get_argument_type(ty)
-    fnty = lc.Type.function(lty, [lty]*len(sig.args))
+    fnty = llvmlite.ir.FunctionType(lty, [lty]*len(sig.args))
     fn = cgutils.insert_pure_function(mod, fnty, name=func_name)
     cast_args = [context.cast(builder, arg, argty, ty)
                  for arg, argty in zip(args, sig.args) ]
@@ -95,7 +96,7 @@ def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
         call_argtys = [ty] + list(sig.args)
         call_argltys = [context.get_value_type(ty).as_pointer()
                         for ty in call_argtys]
-        fnty = lc.Type.function(lc.Type.void(), call_argltys)
+        fnty = llvmlite.ir.FunctionType(llvmlite.ir.VoidType(), call_argltys)
         # Note: the function isn't pure here (it writes to its pointer args)
         fn = cgutils.get_or_insert_function(mod, fnty, func_name)
         builder.call(fn, call_args)
@@ -103,7 +104,7 @@ def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
     else:
         argtypes = [context.get_argument_type(aty) for aty in sig.args]
         restype = context.get_argument_type(sig.return_type)
-        fnty = lc.Type.function(restype, argtypes)
+        fnty = llvmlite.ir.FunctionType(restype, argtypes)
         fn = cgutils.insert_pure_function(mod, fnty, name=func_name)
         retval = context.call_external_function(builder, fn, sig.args, args)
     return retval
@@ -132,9 +133,9 @@ def np_int_sdiv_impl(context, builder, sig, args):
     ZERO = context.get_constant(ty, 0)
     MINUS_ONE = context.get_constant(ty, -1)
     MIN_INT = context.get_constant(ty, 1 << (den.type.width-1))
-    den_is_zero = builder.icmp(lc.ICMP_EQ, ZERO, den)
-    den_is_minus_one = builder.icmp(lc.ICMP_EQ, MINUS_ONE, den)
-    num_is_min_int = builder.icmp(lc.ICMP_EQ, MIN_INT, num)
+    den_is_zero = builder.icmp_unsigned('==', ZERO, den)
+    den_is_minus_one = builder.icmp_unsigned('==', MINUS_ONE, den)
+    num_is_min_int = builder.icmp_unsigned('==', MIN_INT, num)
     could_cause_sigfpe = builder.and_(den_is_minus_one, num_is_min_int)
     force_zero = builder.or_(den_is_zero, could_cause_sigfpe)
     with builder.if_else(force_zero, likely=False) as (then, otherwise):
@@ -144,10 +145,10 @@ def np_int_sdiv_impl(context, builder, sig, args):
             bb_otherwise = builder.basic_block
             div = builder.sdiv(num, den)
             mod = builder.srem(num, den)
-            num_gt_zero = builder.icmp(lc.ICMP_SGT, num, ZERO)
-            den_gt_zero = builder.icmp(lc.ICMP_SGT, den, ZERO)
+            num_gt_zero = builder.icmp_signed('>', num, ZERO)
+            den_gt_zero = builder.icmp_signed('>', den, ZERO)
             not_same_sign = builder.xor(num_gt_zero, den_gt_zero)
-            mod_not_zero = builder.icmp(lc.ICMP_NE, mod, ZERO)
+            mod_not_zero = builder.icmp_unsigned('!=', mod, ZERO)
             needs_fixing = builder.and_(not_same_sign, mod_not_zero)
             fix_value = builder.select(needs_fixing, MINUS_ONE, ZERO)
             result_otherwise = builder.add(div, fix_value)
@@ -167,15 +168,15 @@ def np_int_srem_impl(context, builder, sig, args):
     ty = sig.args[0]  # any arg type will do, homogeneous
 
     ZERO = context.get_constant(ty, 0)
-    den_not_zero = builder.icmp(lc.ICMP_NE, ZERO, den)
+    den_not_zero = builder.icmp_unsigned('!=', ZERO, den)
     bb_no_if = builder.basic_block
     with cgutils.if_unlikely(builder, den_not_zero):
         bb_if = builder.basic_block
         mod = builder.srem(num,den)
-        num_gt_zero = builder.icmp(lc.ICMP_SGT, num, ZERO)
-        den_gt_zero = builder.icmp(lc.ICMP_SGT, den, ZERO)
+        num_gt_zero = builder.icmp_signed('>', num, ZERO)
+        den_gt_zero = builder.icmp_signed('>', den, ZERO)
         not_same_sign = builder.xor(num_gt_zero, den_gt_zero)
-        mod_not_zero = builder.icmp(lc.ICMP_NE, mod, ZERO)
+        mod_not_zero = builder.icmp_unsigned('!=', mod, ZERO)
         needs_fixing = builder.and_(not_same_sign, mod_not_zero)
         fix_value = builder.select(needs_fixing, den, ZERO)
         final_mod = builder.add(fix_value, mod)
@@ -200,7 +201,7 @@ def np_int_udiv_impl(context, builder, sig, args):
     ty = sig.args[0]  # any arg type will do, homogeneous
 
     ZERO = context.get_constant(ty, 0)
-    div_by_zero = builder.icmp(lc.ICMP_EQ, ZERO, den)
+    div_by_zero = builder.icmp_unsigned('==', ZERO, den)
     with builder.if_else(div_by_zero, likely=False) as (then, otherwise):
         with then:
             # division by zero
@@ -224,7 +225,7 @@ def np_int_urem_impl(context, builder, sig, args):
     ty = sig.args[0]  # any arg type will do, homogeneous
 
     ZERO = context.get_constant(ty, 0)
-    den_not_zero = builder.icmp(lc.ICMP_NE, ZERO, den)
+    den_not_zero = builder.icmp_unsigned('!=', ZERO, den)
     bb_no_if = builder.basic_block
     with cgutils.if_unlikely(builder, den_not_zero):
         bb_if = builder.basic_block
@@ -264,9 +265,9 @@ def np_real_mod_impl(context, builder, sig, args):
 
     ZERO = context.get_constant(ty, 0.0)
     res = builder.frem(in1, in2)
-    res_ne_zero = builder.fcmp(lc.FCMP_ONE, res, ZERO)
-    den_lt_zero = builder.fcmp(lc.FCMP_OLT, in2, ZERO)
-    res_lt_zero = builder.fcmp(lc.FCMP_OLT, res, ZERO)
+    res_ne_zero = builder.fcmp_ordered('!=', res, ZERO)
+    den_lt_zero = builder.fcmp_ordered('<', in2, ZERO)
+    res_lt_zero = builder.fcmp_ordered('<', res, ZERO)
     needs_fixing = builder.and_(res_ne_zero,
                                 builder.xor(den_lt_zero, res_lt_zero))
     fix_value = builder.select(needs_fixing, in2, ZERO)
@@ -280,9 +281,9 @@ def np_real_fmod_impl(context, builder, sig, args):
 
 
 def _fabs(context, builder, arg):
-    ZERO = lc.Constant.real(arg.type, 0.0)
+    ZERO = llvmlite.ir.Constant(arg.type, 0.0)
     arg_negated = builder.fsub(ZERO, arg)
-    arg_is_negative = builder.fcmp(lc.FCMP_OLT, arg, ZERO)
+    arg_is_negative = builder.fcmp_ordered('<', arg, ZERO)
     return builder.select(arg_is_negative, arg_negated, arg)
 
 
@@ -305,18 +306,18 @@ def np_complex_div_impl(context, builder, sig, args):
     assert all([i.type==ftype for i in [in1r, in1i, in2r, in2i]]), "mismatched types"
     out = context.make_helper(builder, sig.return_type)
 
-    ZERO = lc.Constant.real(ftype, 0.0)
-    ONE = lc.Constant.real(ftype, 1.0)
+    ZERO = llvmlite.ir.Constant(ftype, 0.0)
+    ONE = llvmlite.ir.Constant(ftype, 1.0)
 
     # if abs(denominator.real) >= abs(denominator.imag)
     in2r_abs = _fabs(context, builder, in2r)
     in2i_abs = _fabs(context, builder, in2i)
-    in2r_abs_ge_in2i_abs = builder.fcmp(lc.FCMP_OGE, in2r_abs, in2i_abs)
+    in2r_abs_ge_in2i_abs = builder.fcmp_ordered('>=', in2r_abs, in2i_abs)
     with builder.if_else(in2r_abs_ge_in2i_abs) as (then, otherwise):
         with then:
             # if abs(denominator.real) == 0 and abs(denominator.imag) == 0
-            in2r_is_zero = builder.fcmp(lc.FCMP_OEQ, in2r_abs, ZERO)
-            in2i_is_zero = builder.fcmp(lc.FCMP_OEQ, in2i_abs, ZERO)
+            in2r_is_zero = builder.fcmp_ordered('==', in2r_abs, ZERO)
+            in2i_is_zero = builder.fcmp_ordered('==', in2i_abs, ZERO)
             in2_is_zero = builder.and_(in2r_is_zero, in2i_is_zero)
             with builder.if_else(in2_is_zero) as (inn_then, inn_otherwise):
                 with inn_then:
@@ -363,30 +364,78 @@ def np_complex_div_impl(context, builder, sig, args):
 ########################################################################
 # NumPy logaddexp
 
+def _npy_logaddexp(x1, x2):
+    pass
+
+def _generate_logaddexp(fnoverload, const, log1pfn, expfn):
+    # Code generation for logaddexp and logaddexp2 is based on:
+    # https://github.com/numpy/numpy/blob/12c2b7dd62fc0c14b81c8892ed5f4f59cc94d09c/numpy/core/src/npymath/npy_math_internal.h.src#L467-L507
+
+    @overload(fnoverload, target='generic')
+    def ol_npy_logaddexp(x1, x2):
+        if x1 != x2:
+            return
+        shift = x1(const)
+        def impl(x1, x2):
+            x, y = x1, x2
+            if (x == y):
+                # Handles infinities of the same sign without warnings
+                return x + shift
+            else:
+                tmp = x - y
+                if (tmp > 0):
+                    return x + log1pfn(expfn(-tmp))
+                elif (tmp <= 0):
+                    return y + log1pfn(expfn(tmp))
+                else:
+                    # NaN
+                    return tmp
+        return impl
+
+def _npy_logaddexp(x1, x2):
+    pass
+
+
+_generate_logaddexp(_npy_logaddexp, _NPY_LOGE2, np.log1p, np.exp)
+
+
 def np_real_logaddexp_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
 
-    dispatch_table = {
-        types.float32: 'npy_logaddexpf',
-        types.float64: 'npy_logaddexp',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'logaddexp')
+    fnty = context.typing_context.resolve_value_type(_npy_logaddexp)
+    sig = fnty.get_call_type(context.typing_context, (*sig.args,), {})
+    impl = context.get_function(fnty, sig)
+    return impl(builder, args)
 
 ########################################################################
 # NumPy logaddexp2
+def _npy_logaddexp2(x1, x2):
+    pass
+
+def npy_log2_1p(x):
+    pass
+
+# The following npy_log2_1p function is a translation of:
+# https://github.com/numpy/numpy/blob/12c2b7dd62fc0c14b81c8892ed5f4f59cc94d09c/numpy/core/src/npymath/npy_math_internal.h.src#L457-L460
+
+@overload(npy_log2_1p, target='generic')
+def ol_npy_log2_1p(x):
+    LOG2E = x(_NPY_LOG2E)
+    def impl(x):
+        return LOG2E * np.log1p(x)
+    return impl
+
+
+_generate_logaddexp(_npy_logaddexp2, 1.0, npy_log2_1p, np.exp2)
+
 
 def np_real_logaddexp2_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
 
-    dispatch_table = {
-        types.float32: 'npy_logaddexp2f',
-        types.float64: 'npy_logaddexp2',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'logaddexp2')
+    fnty = context.typing_context.resolve_value_type(_npy_logaddexp2)
+    sig = fnty.get_call_type(context.typing_context, (*sig.args,), {})
+    impl = context.get_function(fnty, sig)
+    return impl(builder, args)
 
 
 ########################################################################
@@ -442,14 +491,14 @@ def np_complex_floor_div_impl(context, builder, sig, args):
     ftype = in1r.type
     assert all([i.type==ftype for i in [in1r, in1i, in2r, in2i]]), "mismatched types"
 
-    ZERO = lc.Constant.real(ftype, 0.0)
+    ZERO = llvmlite.ir.Constant(ftype, 0.0)
 
     out = context.make_helper(builder, sig.return_type)
     out.imag = ZERO
 
     in2r_abs = _fabs(context, builder, in2r)
     in2i_abs = _fabs(context, builder, in2i)
-    in2r_abs_ge_in2i_abs = builder.fcmp(lc.FCMP_OGE, in2r_abs, in2i_abs)
+    in2r_abs_ge_in2i_abs = builder.fcmp_ordered('>=', in2r_abs, in2i_abs)
 
     with builder.if_else(in2r_abs_ge_in2i_abs) as (then, otherwise):
         with then:
@@ -600,8 +649,8 @@ def np_real_exp2_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'npy_exp2f',
-        types.float64: 'npy_exp2',
+        types.float32: 'numba_exp2f',
+        types.float64: 'numba_exp2',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -639,8 +688,8 @@ def np_real_log2_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'npy_log2f',
-        types.float64: 'npy_log2',
+        types.float32: 'numba_log2f',
+        types.float64: 'numba_log2',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -818,7 +867,7 @@ def np_real_reciprocal_impl(context, builder, sig, args):
 def np_complex_reciprocal_impl(context, builder, sig, args):
     # based on the implementation in loops.c.src
     # Basically the same Smith method used for division, but with
-    # the numerator substitued by 1.0
+    # the numerator substituted by 1.0
     _check_arity_and_homogeneity(sig, args, 1)
 
     ty = sig.args[0]
@@ -832,7 +881,7 @@ def np_complex_reciprocal_impl(context, builder, sig, args):
     in1i = in1.imag
     in1r_abs = _fabs(context, builder, in1r)
     in1i_abs = _fabs(context, builder, in1i)
-    in1i_abs_le_in1r_abs = builder.fcmp(lc.FCMP_OLE, in1i_abs, in1r_abs)
+    in1i_abs_le_in1r_abs = builder.fcmp_ordered('<=', in1i_abs, in1r_abs)
 
     with builder.if_else(in1i_abs_le_in1r_abs) as (then, otherwise):
         with then:
@@ -1143,10 +1192,10 @@ def np_complex_ge_impl(context, builder, sig, args):
     yr = in2.real
     yi = in2.imag
 
-    xr_gt_yr = builder.fcmp(lc.FCMP_OGT, xr, yr)
-    no_nan_xi_yi = builder.fcmp(lc.FCMP_ORD, xi, yi)
-    xr_eq_yr = builder.fcmp(lc.FCMP_OEQ, xr, yr)
-    xi_ge_yi = builder.fcmp(lc.FCMP_OGE, xi, yi)
+    xr_gt_yr = builder.fcmp_ordered('>', xr, yr)
+    no_nan_xi_yi = builder.fcmp_ordered('ord', xi, yi)
+    xr_eq_yr = builder.fcmp_ordered('==', xr, yr)
+    xi_ge_yi = builder.fcmp_ordered('>=', xi, yi)
     first_term = builder.and_(xr_gt_yr, no_nan_xi_yi)
     second_term = builder.and_(xr_eq_yr, xi_ge_yi)
     return builder.or_(first_term, second_term)
@@ -1164,10 +1213,10 @@ def np_complex_le_impl(context, builder, sig, args):
     yr = in2.real
     yi = in2.imag
 
-    xr_lt_yr = builder.fcmp(lc.FCMP_OLT, xr, yr)
-    no_nan_xi_yi = builder.fcmp(lc.FCMP_ORD, xi, yi)
-    xr_eq_yr = builder.fcmp(lc.FCMP_OEQ, xr, yr)
-    xi_le_yi = builder.fcmp(lc.FCMP_OLE, xi, yi)
+    xr_lt_yr = builder.fcmp_ordered('<', xr, yr)
+    no_nan_xi_yi = builder.fcmp_ordered('ord', xi, yi)
+    xr_eq_yr = builder.fcmp_ordered('==', xr, yr)
+    xi_le_yi = builder.fcmp_ordered('<=', xi, yi)
     first_term = builder.and_(xr_lt_yr, no_nan_xi_yi)
     second_term = builder.and_(xr_eq_yr, xi_le_yi)
     return builder.or_(first_term, second_term)
@@ -1185,10 +1234,10 @@ def np_complex_gt_impl(context, builder, sig, args):
     yr = in2.real
     yi = in2.imag
 
-    xr_gt_yr = builder.fcmp(lc.FCMP_OGT, xr, yr)
-    no_nan_xi_yi = builder.fcmp(lc.FCMP_ORD, xi, yi)
-    xr_eq_yr = builder.fcmp(lc.FCMP_OEQ, xr, yr)
-    xi_gt_yi = builder.fcmp(lc.FCMP_OGT, xi, yi)
+    xr_gt_yr = builder.fcmp_ordered('>', xr, yr)
+    no_nan_xi_yi = builder.fcmp_ordered('ord', xi, yi)
+    xr_eq_yr = builder.fcmp_ordered('==', xr, yr)
+    xi_gt_yi = builder.fcmp_ordered('>', xi, yi)
     first_term = builder.and_(xr_gt_yr, no_nan_xi_yi)
     second_term = builder.and_(xr_eq_yr, xi_gt_yi)
     return builder.or_(first_term, second_term)
@@ -1206,10 +1255,10 @@ def np_complex_lt_impl(context, builder, sig, args):
     yr = in2.real
     yi = in2.imag
 
-    xr_lt_yr = builder.fcmp(lc.FCMP_OLT, xr, yr)
-    no_nan_xi_yi = builder.fcmp(lc.FCMP_ORD, xi, yi)
-    xr_eq_yr = builder.fcmp(lc.FCMP_OEQ, xr, yr)
-    xi_lt_yi = builder.fcmp(lc.FCMP_OLT, xi, yi)
+    xr_lt_yr = builder.fcmp_ordered('<', xr, yr)
+    no_nan_xi_yi = builder.fcmp_ordered('ord', xi, yi)
+    xr_eq_yr = builder.fcmp_ordered('==', xr, yr)
+    xi_lt_yi = builder.fcmp_ordered('<', xi, yi)
     first_term = builder.and_(xr_lt_yr, no_nan_xi_yi)
     second_term = builder.and_(xr_eq_yr, xi_lt_yi)
     return builder.or_(first_term, second_term)
@@ -1227,8 +1276,8 @@ def np_complex_eq_impl(context, builder, sig, args):
     yr = in2.real
     yi = in2.imag
 
-    xr_eq_yr = builder.fcmp(lc.FCMP_OEQ, xr, yr)
-    xi_eq_yi = builder.fcmp(lc.FCMP_OEQ, xi, yi)
+    xr_eq_yr = builder.fcmp_ordered('==', xr, yr)
+    xi_eq_yi = builder.fcmp_ordered('==', xi, yi)
     return builder.and_(xr_eq_yr, xi_eq_yi)
 
 
@@ -1244,8 +1293,8 @@ def np_complex_ne_impl(context, builder, sig, args):
     yr = in2.real
     yi = in2.imag
 
-    xr_ne_yr = builder.fcmp(lc.FCMP_UNE, xr, yr)
-    xi_ne_yi = builder.fcmp(lc.FCMP_UNE, xi, yi)
+    xr_ne_yr = builder.fcmp_unordered('!=', xr, yr)
+    xi_ne_yi = builder.fcmp_unordered('!=', xi, yi)
     return builder.or_(xr_ne_yr, xi_ne_yi)
 
 
@@ -1327,14 +1376,14 @@ def np_complex_logical_not_impl(context, builder, sig, args):
 def np_int_smax_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
     arg1, arg2 = args
-    arg1_sge_arg2 = builder.icmp(lc.ICMP_SGE, arg1, arg2)
+    arg1_sge_arg2 = builder.icmp_signed('>=', arg1, arg2)
     return builder.select(arg1_sge_arg2, arg1, arg2)
 
 
 def np_int_umax_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
     arg1, arg2 = args
-    arg1_uge_arg2 = builder.icmp(lc.ICMP_UGE, arg1, arg2)
+    arg1_uge_arg2 = builder.icmp_unsigned('>=', arg1, arg2)
     return builder.select(arg1_uge_arg2, arg1, arg2)
 
 
@@ -1343,11 +1392,11 @@ def np_real_maximum_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
 
     arg1, arg2 = args
-    arg1_nan = builder.fcmp(lc.FCMP_UNO, arg1, arg1)
-    any_nan = builder.fcmp(lc.FCMP_UNO, arg1, arg2)
+    arg1_nan = builder.fcmp_unordered('uno', arg1, arg1)
+    any_nan = builder.fcmp_unordered('uno', arg1, arg2)
     nan_result = builder.select(arg1_nan, arg1, arg2)
 
-    arg1_ge_arg2 = builder.fcmp(lc.FCMP_OGE, arg1, arg2)
+    arg1_ge_arg2 = builder.fcmp_ordered('>=', arg1, arg2)
     non_nan_result = builder.select(arg1_ge_arg2, arg1, arg2)
 
     return builder.select(any_nan, nan_result, non_nan_result)
@@ -1358,11 +1407,11 @@ def np_real_fmax_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
 
     arg1, arg2 = args
-    arg2_nan = builder.fcmp(lc.FCMP_UNO, arg2, arg2)
-    any_nan = builder.fcmp(lc.FCMP_UNO, arg1, arg2)
+    arg2_nan = builder.fcmp_unordered('uno', arg2, arg2)
+    any_nan = builder.fcmp_unordered('uno', arg1, arg2)
     nan_result = builder.select(arg2_nan, arg1, arg2)
 
-    arg1_ge_arg2 = builder.fcmp(lc.FCMP_OGE, arg1, arg2)
+    arg1_ge_arg2 = builder.fcmp_ordered('>=', arg1, arg2)
     non_nan_result = builder.select(arg1_ge_arg2, arg1, arg2)
 
     return builder.select(any_nan, nan_result, non_nan_result)
@@ -1414,14 +1463,14 @@ def np_complex_fmax_impl(context, builder, sig, args):
 def np_int_smin_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
     arg1, arg2 = args
-    arg1_sle_arg2 = builder.icmp(lc.ICMP_SLE, arg1, arg2)
+    arg1_sle_arg2 = builder.icmp_signed('<=', arg1, arg2)
     return builder.select(arg1_sle_arg2, arg1, arg2)
 
 
 def np_int_umin_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
     arg1, arg2 = args
-    arg1_ule_arg2 = builder.icmp(lc.ICMP_ULE, arg1, arg2)
+    arg1_ule_arg2 = builder.icmp_unsigned('<=', arg1, arg2)
     return builder.select(arg1_ule_arg2, arg1, arg2)
 
 
@@ -1430,11 +1479,11 @@ def np_real_minimum_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
 
     arg1, arg2 = args
-    arg1_nan = builder.fcmp(lc.FCMP_UNO, arg1, arg1)
-    any_nan = builder.fcmp(lc.FCMP_UNO, arg1, arg2)
+    arg1_nan = builder.fcmp_unordered('uno', arg1, arg1)
+    any_nan = builder.fcmp_unordered('uno', arg1, arg2)
     nan_result = builder.select(arg1_nan, arg1, arg2)
 
-    arg1_le_arg2 = builder.fcmp(lc.FCMP_OLE, arg1, arg2)
+    arg1_le_arg2 = builder.fcmp_ordered('<=', arg1, arg2)
     non_nan_result = builder.select(arg1_le_arg2, arg1, arg2)
 
     return builder.select(any_nan, nan_result, non_nan_result)
@@ -1445,11 +1494,11 @@ def np_real_fmin_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
 
     arg1, arg2 = args
-    arg1_nan = builder.fcmp(lc.FCMP_UNO, arg1, arg1)
-    any_nan = builder.fcmp(lc.FCMP_UNO, arg1, arg2)
+    arg1_nan = builder.fcmp_unordered('uno', arg1, arg1)
+    any_nan = builder.fcmp_unordered('uno', arg1, arg2)
     nan_result = builder.select(arg1_nan, arg2, arg1)
 
-    arg1_le_arg2 = builder.fcmp(lc.FCMP_OLE, arg1, arg2)
+    arg1_le_arg2 = builder.fcmp_ordered('<=', arg1, arg2)
     non_nan_result = builder.select(arg1_le_arg2, arg1, arg2)
 
     return builder.select(any_nan, nan_result, non_nan_result)
@@ -1568,15 +1617,18 @@ def np_complex_isinf_impl(context, builder, sig, args):
 
 def np_real_signbit_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
-
-    dispatch_table = {
-        types.float32: 'numba_signbitf',
-        types.float64: 'numba_signbit',
+    # there's no signbit intrinsic in LLVM, so just bitcast as int, mask the
+    # signbit and cmp against 0.
+    masks = {
+        types.float16: context.get_constant(types.uint16, 0x8000),
+        types.float32: context.get_constant(types.uint32, 0x80000000),
+        types.float64: context.get_constant(types.uint64, 0x8000000000000000),
     }
-    inner_sig = typing.signature(types.intc, *sig.args)
-
-    int_res = _dispatch_func_by_name_type(context, builder, inner_sig, args,
-                                          dispatch_table, 'signbit')
+    arg_ty = sig.args[0]
+    arg_int_ty = getattr(types, f'uint{arg_ty.bitwidth}')
+    arg_ll_int_ty = context.get_value_type(arg_int_ty)
+    int_res = builder.and_(builder.bitcast(args[0], arg_ll_int_ty),
+                           masks[arg_ty])
     bool_res = builder.icmp_unsigned('!=', int_res, int_res.type(0))
     return bool_res
 
@@ -1590,23 +1642,40 @@ def np_real_nextafter_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
 
     dispatch_table = {
-        types.float32: 'npy_nextafterf',
-        types.float64: 'npy_nextafter',
+        types.float32: 'numba_nextafterf',
+        types.float64: 'numba_nextafter',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
                                        dispatch_table, 'nextafter')
 
 def np_real_spacing_impl(context, builder, sig, args):
+    # This is different to how NumPy does it, NumPy has a specialisation of
+    # nextafter called _next, which is used. See:
+    # https://github.com/numpy/numpy/blob/12c2b7dd62fc0c14b81c8892ed5f4f59cc94d09c/numpy/core/src/npymath/ieee754.c.src#L32-L38
+    # Numba elects to use `nextafter` for a similar behaviour to save
+    # translating this very involved function. Further, the NumPy comments note
+    # that there is a lot of redundancy present between the two.
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'npy_spacingf',
-        types.float64: 'npy_spacing',
+        types.float32: 'numba_nextafterf',
+        types.float64: 'numba_nextafter',
     }
 
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'spacing')
+    [ty] = sig.args
+    inner_sig = typing.signature(sig.return_type, ty, ty)
+    ll_ty = args[0].type
+    ll_inf = ll_ty(np.inf)
+    fnty = llvmlite.ir.FunctionType(ll_ty, [ll_ty, ll_ty])
+    fn = cgutils.insert_pure_function(builder.module, fnty,
+                                      name='llvm.copysign')
+    ll_sinf = builder.call(fn, [ll_inf, args[0]])
+    inner_args = args + [ll_sinf,]
+    nextafter = _dispatch_func_by_name_type(context, builder, inner_sig,
+                                            inner_args, dispatch_table,
+                                            'nextafter')
+    return builder.fsub(nextafter, args[0])
 
 
 def np_real_ldexp_impl(context, builder, sig, args):

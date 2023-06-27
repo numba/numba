@@ -606,14 +606,14 @@ class CallConstraint(object):
                             else self.args)
             folded = e.fold_arguments(folding_args, self.kws)
             requested = set()
-            unsatisified = set()
+            unsatisfied = set()
             for idx in e.requested_args:
                 maybe_arg = typeinfer.func_ir.get_definition(folded[idx])
                 if isinstance(maybe_arg, ir.Arg):
                     requested.add(maybe_arg.index)
                 else:
-                    unsatisified.add(idx)
-            if unsatisified:
+                    unsatisfied.add(idx)
+            if unsatisfied:
                 raise TypingError("Cannot request literal type.", loc=self.loc)
             elif requested:
                 raise ForceLiteralArg(requested, loc=self.loc)
@@ -1155,7 +1155,7 @@ precise type that can be inferred from the other variables. Whilst sometimes
 the type of empty lists can be inferred, this is not always the case, see this
 documentation for help:
 
-https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-untyped-list-problem
+https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-untyped-list-problem
 """
             if offender is not None:
                 # This block deals with imprecise lists
@@ -1398,8 +1398,12 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
             self.typeof_storemap(inst)
         elif isinstance(inst, (ir.Jump, ir.Branch, ir.Return, ir.Del)):
             pass
+        elif isinstance(inst, (ir.DynamicRaise, ir.DynamicTryRaise)):
+            pass
         elif isinstance(inst, (ir.StaticRaise, ir.StaticTryRaise)):
             pass
+        elif isinstance(inst, ir.PopBlock):
+            pass # It's a marker statement
         elif type(inst) in typeinfer_extensions:
             # let external calls handle stmt if type matches
             f = typeinfer_extensions[type(inst)]
@@ -1530,13 +1534,13 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
                 sig = self.context.resolve_function_type(fnty.dispatcher_type,
                                                          pos_args, kw_args)
                 fndesc = disp.overloads[args].fndesc
-                fnty.overloads[args] = qualifying_prefix(fndesc.modname,
-                                                         fndesc.unique_name)
+                qual = qualifying_prefix(fndesc.modname, fndesc.qualname)
+                fnty.add_overloads(args, qual, fndesc.uid)
                 return sig
 
             fnid = frame.func_id
-            fnty.overloads[args] = qualifying_prefix(fnid.modname,
-                                                     fnid.unique_name)
+            qual = qualifying_prefix(fnid.modname, fnid.func_qualname)
+            fnty.add_overloads(args, qual, fnid.unique_id)
             # Resume propagation in parent frame
             return_type = frame.typeinfer.return_types_from_partial()
             # No known return type
@@ -1611,6 +1615,20 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
             literaled = [types.maybe_literal(x) for x in gvar.value]
             if all(literaled):
                 typ = types.Tuple(literaled)
+
+            # if any of the items in the tuple are arrays, they need to be
+            # typed as readonly, mutating an array in a global container
+            # is not supported (should be compile time constant etc).
+            def mark_array_ro(tup):
+                newtup = []
+                for item in tup.types:
+                    if isinstance(item, types.Array):
+                        item = item.copy(readonly=True)
+                    elif isinstance(item, types.BaseAnonymousTuple):
+                        item = mark_array_ro(item)
+                    newtup.append(item)
+                return types.BaseTuple.from_types(newtup)
+            typ = mark_array_ro(typ)
 
         self.sentry_modified_builtin(inst, gvar)
         # Setting literal_value for globals because they are handled
@@ -1710,6 +1728,7 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
         elif expr.op == 'make_function':
             self.lock_type(target.name, types.MakeFunctionLiteral(expr),
                            loc=inst.loc, literal_value=expr)
+
         else:
             msg = "Unsupported op-code encountered: %s" % expr
             raise UnsupportedError(msg, loc=inst.loc)

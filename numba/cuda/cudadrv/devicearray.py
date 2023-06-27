@@ -105,8 +105,12 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
                 self.alloc_size = _driver.device_memory_size(gpu_data)
         else:
             # Make NULL pointer for empty allocation
+            if _driver.USE_NV_BINDING:
+                null = _driver.binding.CUdeviceptr(0)
+            else:
+                null = c_void_p(0)
             gpu_data = _driver.MemoryPointer(context=devices.get_context(),
-                                             pointer=c_void_p(0), size=0)
+                                             pointer=null, size=0)
             self.alloc_size = 0
 
         self.gpu_data = gpu_data
@@ -114,10 +118,16 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
 
     @property
     def __cuda_array_interface__(self):
-        if self.device_ctypes_pointer.value is not None:
-            ptr = self.device_ctypes_pointer.value
+        if _driver.USE_NV_BINDING:
+            if self.device_ctypes_pointer is not None:
+                ptr = int(self.device_ctypes_pointer)
+            else:
+                ptr = 0
         else:
-            ptr = 0
+            if self.device_ctypes_pointer.value is not None:
+                ptr = self.device_ctypes_pointer.value
+            else:
+                ptr = 0
 
         return {
             'shape': tuple(self.shape),
@@ -191,7 +201,10 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
         """Returns the ctypes pointer to the GPU data buffer
         """
         if self.gpu_data is None:
-            return c_void_p(0)
+            if _driver.USE_NV_BINDING:
+                return _driver.binding.CUdeviceptr(0)
+            else:
+                return c_void_p(0)
         else:
             return self.gpu_data.device_ctypes_pointer
 
@@ -594,8 +607,9 @@ class DeviceNDArray(DeviceNDArrayBase):
 
     def ravel(self, order='C', stream=0):
         '''
-        Flatten the array without changing its contents, similar to
-        :meth:`numpy.ndarray.ravel`.
+        Flattens a contiguous array without changing its contents, similar to
+        :meth:`numpy.ndarray.ravel`. If the array is not contiguous, raises an
+        exception.
         '''
         stream = self._default_stream(stream)
         cls = type(self)
@@ -799,7 +813,7 @@ def array_core(ary):
     a view without the repeated dimensions.
 
     """
-    if not ary.strides:
+    if not ary.strides or not ary.size:
         return ary
     core_index = []
     for stride in ary.strides:
@@ -882,6 +896,8 @@ def check_array_compatibility(ary1, ary2):
     if ary1sq.shape != ary2sq.shape:
         raise ValueError('incompatible shape: %s vs. %s' %
                          (ary1.shape, ary2.shape))
-    if ary1sq.strides != ary2sq.strides:
+    # We check strides only if the size is nonzero, because strides are
+    # irrelevant (and can differ) for zero-length copies.
+    if ary1.size and ary1sq.strides != ary2sq.strides:
         raise ValueError('incompatible strides: %s vs. %s' %
                          (ary1.strides, ary2.strides))

@@ -230,9 +230,12 @@ def _fill_ufunc_db(ufunc_db):
         'QQ->Q': npyfuncs.np_int_udiv_impl,
         'ff->f': npyfuncs.np_real_floor_div_impl,
         'dd->d': npyfuncs.np_real_floor_div_impl,
-        'FF->F': npyfuncs.np_complex_floor_div_impl,
-        'DD->D': npyfuncs.np_complex_floor_div_impl,
     }
+    if numpy_version < (1, 22): # removed in 1.22+
+        ufunc_db[np.floor_divide].update({
+            'FF->F': npyfuncs.np_complex_floor_div_impl,
+            'DD->D': npyfuncs.np_complex_floor_div_impl,
+        })
 
     ufunc_db[np.remainder] = {
         'bb->b': npyfuncs.np_int_srem_impl,
@@ -875,13 +878,10 @@ def _fill_ufunc_db(ufunc_db):
         'Q->?': npyfuncs.np_int_isnan_impl,
         # boolean
         '?->?': npyfuncs.np_int_isnan_impl,
+        # datetime & timedelta
+        'm->?': npyfuncs.np_datetime_isnat_impl,
+        'M->?': npyfuncs.np_datetime_isnat_impl,
     }
-
-    if numpy_version >= (1, 18):
-        ufunc_db[np.isnan].update({
-            'm->?': npyfuncs.np_datetime_isnat_impl,
-            'M->?': npyfuncs.np_datetime_isnat_impl,
-        })
 
     ufunc_db[np.isinf] = {
         'f->?': npyfuncs.np_real_isinf_impl,
@@ -905,13 +905,10 @@ def _fill_ufunc_db(ufunc_db):
         'Q->?': npyfuncs.np_int_isinf_impl,
         # boolean
         '?->?': npyfuncs.np_int_isinf_impl,
+        # datetime & timedelta
+        'm->?': npyfuncs.np_int_isinf_impl,
+        'M->?': npyfuncs.np_int_isinf_impl,
     }
-
-    if numpy_version >= (1, 18):
-        ufunc_db[np.isinf].update({
-            'm->?': npyfuncs.np_int_isinf_impl,
-            'M->?': npyfuncs.np_int_isinf_impl,
-        })
 
     ufunc_db[np.isfinite] = {
         'f->?': npyfuncs.np_real_isfinite_impl,
@@ -1096,10 +1093,9 @@ def _fill_ufunc_db(ufunc_db):
         'md->m': npdatetime.timedelta_over_number,
     })
 
-    if numpy_version >= (1, 16):
-        ufunc_db[np.floor_divide].update({
-            'mm->q': npdatetime.timedelta_floor_div_timedelta,
-        })
+    ufunc_db[np.floor_divide].update({
+        'mm->q': npdatetime.timedelta_floor_div_timedelta,
+    })
 
     ufunc_db[np.equal].update({
         'MM->?': npdatetime.datetime_eq_datetime_impl,
@@ -1144,7 +1140,6 @@ def _fill_ufunc_db(ufunc_db):
         'mm->m': npdatetime.timedelta_fmin_impl,
     })
 
-    if numpy_version >= (1, 16):
-        ufunc_db[np.remainder].update({
-            'mm->m': npdatetime.timedelta_mod_timedelta,
-        })
+    ufunc_db[np.remainder].update({
+        'mm->m': npdatetime.timedelta_mod_timedelta,
+    })

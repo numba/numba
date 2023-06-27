@@ -3,6 +3,75 @@
 Frequently Asked Questions
 ==========================
 
+Installation
+============
+
+Numba could not be imported
+---------------------------
+
+If you are seeing an exception on importing Numba with an error message
+that starts with::
+
+    ImportError: Numba could not be imported.
+
+here are some common issues and things to try to fix it.
+
+#. Your installation has more than one version of Numba a given environment.
+
+   Common ways this occurs include:
+
+   * Installing Numba with conda and then installing again with pip.
+   * Installing Numba with pip and then updating to a new version with pip (pip
+     re-installations don't seem to always clean up very well).
+
+   To fix this the best approach is to create an entirely new environment and
+   install a single version of Numba in that environment using a package manager
+   of your choice.
+
+#. Your installation has Numba for Python version X but you are running with
+   Python version Y.
+
+   This occurs due to a variety of Python environment mix-up/mismatch problems.
+   The most common mismatch comes from installing Numba into the
+   site-packages/environment of one version of Python by using a base or
+   system installation of Python that is a different version, this typically
+   happens through the use of the "wrong" ``pip`` binary. This will obviously
+   cause problems as the C-Extensions on which Numba relies are bound to
+   specific Python versions. A way to check if this likely the problem is to
+   see if the path to the ``python`` binary at::
+
+       python -c 'import sys; print(sys.executable)'
+
+   matches the path to your installation tool and/or matches the reported
+   installation location and if the Python versions match up across all of
+   these. Note that Python version ``X.Y.A`` is compatible with ``X.Y.B``.
+
+   To fix this the best approach is to create an entirely new environment and
+   ensure that the installation tool used to install Numba is the one from that
+   environment/the Python versions at install and run time match.
+
+#. Your core system libraries are too old.
+
+   This is a somewhat rare occurrence, but there are occasions when a very old
+   (typically out of support) version of Linux is in use it doesn't have a
+   ``glibc`` library with sufficiently new versioned symbols for Numba's shared
+   libraries to resolve against. The fix for this is to update your OS system
+   libraries/update your OS.
+
+#. You are using an IDE e.g. Spyder.
+
+   There are some unknown issues in relation to installing Numba via IDEs, but
+   it would appear that these are likely variations of 1. or 2. with the same
+   suggested fixes. Also, try installation from outside of the IDE with the
+   command line.
+
+
+If you have an installation problem which is not one of the above problems,
+please do ask on `numba.discourse.group <https://numba.discourse.group/>`_ and
+if possible include the path where Numba is installed and also the output of::
+
+    python -c 'import sys; print(sys.executable)'
+
 
 Programming
 ===========
@@ -119,6 +188,12 @@ add the following lines:
 This tells LLVM to print debug information from the **loop-vectorize**
 pass to stderr.  Each function entry looks like:
 
+
+.. note::
+   Using ``--debug-only`` requires LLVM to be build with assertions enabled to
+   work. Use the build of llvmlite in the `Numba channel <https://anaconda.org/numba/llvmlite>`_
+   which is linked against LLVM with assertions enabled.
+
 .. code-block:: text
 
     LV: Checking a loop in "<low-level symbol name>" from <function name>
@@ -206,8 +281,8 @@ A more radical alternative is :ref:`ahead-of-time compilation <pycc>`.
 GPU Programming
 ===============
 
-How do I work around the ``CUDA intialized before forking`` error?
-------------------------------------------------------------------
+How do I work around the ``CUDA initialized before forking`` error?
+-------------------------------------------------------------------
 
 On Linux, the ``multiprocessing`` module in the Python standard library
 defaults to using the ``fork`` method for creating new processes.  Because of
@@ -223,7 +298,7 @@ available GPUs before starting the process pool.  In Python 3, you can change
 the process start method, as described in the `multiprocessing documentation
 <https://docs.python.org/3.9/library/multiprocessing.html#contexts-and-start-methods>`_.
 Switching from ``fork`` to ``spawn`` or ``forkserver`` will avoid the CUDA
-initalization issue, although the child processes will not inherit any global
+initialization issue, although the child processes will not inherit any global
 variables from their parent.
 
 

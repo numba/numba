@@ -6,6 +6,7 @@ import itertools
 import math
 import random
 import sys
+from numba.core.errors import TypingError
 
 import numpy as np
 
@@ -140,7 +141,7 @@ def copy_usecase_empty(a):
     s = set(a)
     s.clear()
     ss = s.copy()
-    s.add(42)
+    s.add(a[0])
     return len(ss), list(ss)
 
 def copy_usecase_deleted(a, b):
@@ -173,33 +174,6 @@ def union_usecase(a, b):
 def set_return_usecase(a):
     s = set(a)
     return s
-
-
-def make_operator_usecase(op):
-    code = """if 1:
-    def operator_usecase(a, b):
-        s = set(a) %(op)s set(b)
-        return list(s)
-    """ % dict(op=op)
-    return compile_function('operator_usecase', code, globals())
-
-def make_inplace_operator_usecase(op):
-    code = """if 1:
-    def inplace_operator_usecase(a, b):
-        sa = set(a)
-        sb = set(b)
-        sc = sa
-        sc %(op)s sb
-        return list(sc), list(sa)
-    """ % dict(op=op)
-    return compile_function('inplace_operator_usecase', code, globals())
-
-def make_comparison_usecase(op):
-    code = """if 1:
-    def comparison_usecase(a, b):
-        return set(a) %(op)s set(b)
-    """ % dict(op=op)
-    return compile_function('comparison_usecase', code, globals())
 
 
 def noop(x):
@@ -369,7 +343,6 @@ class TestSets(BaseTest):
         def check(arg):
             self.assertPreciseEqual(pyfunc(arg), cfunc(arg))
 
-        check((1, 2, 3, 2, 7))
         check(self.duplicates_array(200))
         check(self.sparse_array(200))
 
@@ -377,14 +350,13 @@ class TestSets(BaseTest):
         pyfunc = set_return_usecase
         cfunc = jit(nopython=True)(pyfunc)
 
-        arg = (1, 2, 3, 2, 7)
+        arg = self.duplicates_array(200)
         self.assertEqual(cfunc(arg), set(arg))
 
     def test_iterator(self):
         pyfunc = iterator_usecase
         check = self.unordered_checker(pyfunc)
 
-        check((1, 2, 3, 2, 7))
         check(self.duplicates_array(200))
         check(self.sparse_array(200))
 
@@ -392,29 +364,17 @@ class TestSets(BaseTest):
         pyfunc = update_usecase
         check = self.unordered_checker(pyfunc)
 
-        a, b, c = (1, 2, 4, 9), (2, 3, 5, 11, 42), (4, 5, 6, 42)
-        check(a, b, c)
-
         a = self.sparse_array(50)
         b = self.duplicates_array(50)
         c = self.sparse_array(50)
         check(a, b, c)
 
-    def test_bool(self):
-        pyfunc = bool_usecase
-        check = self.unordered_checker(pyfunc)
-
-        check([1])
-        check([1, 2])
-        check([False, False])
-        check([True, False])
-
     def test_remove(self):
         pyfunc = remove_usecase
         check = self.unordered_checker(pyfunc)
 
-        a = (1, 2, 3, 5, 8, 42)
-        b = (5, 2, 8)
+        a = self.sparse_array(50)
+        b = a[::10]
         check(a, b)
 
     def test_remove_error(self):
@@ -423,29 +383,18 @@ class TestSets(BaseTest):
 
         pyfunc = remove_usecase
         cfunc = jit(nopython=True)(pyfunc)
-        with self.assertRaises(KeyError) as raises:
-            cfunc((1, 2, 3), (5, ))
 
-    def test_refcounted_types_forbidden(self):
-        # References are leaked on exception
-        self.disable_leak_check()
-
-        pyfunc = constructor_usecase
-        cfunc = jit(nopython=True)(pyfunc)
-        with self.assertRaises(errors.NumbaValueError) as raises:
-            cfunc("abc")
-
-        excstr = str(raises.exception)
-        self.assertIn("Use of reference counted items in 'set()'", excstr)
-        self.assertIn("offending type is: 'unicode_type'", excstr)
+        # ensure that there will be a key error
+        items = tuple(set(self.sparse_array(3)))
+        a = items[1:]
+        b = (items[0],)
+        with self.assertRaises(KeyError):
+            cfunc(a, b)
 
     def test_discard(self):
         pyfunc = discard_usecase
         check = self.unordered_checker(pyfunc)
 
-        a = (1, 2, 3, 5, 8, 42)
-        b = (5, 2, 8)
-        check(a, b)
         a = self.sparse_array(50)
         b = self.sparse_array(50)
         check(a, b)
@@ -459,13 +408,17 @@ class TestSets(BaseTest):
         """
         pyfunc = add_discard_usecase
         check = self.unordered_checker(pyfunc)
-        check((1,), 5, 5)
+
+        # ensure a and b are different
+        a = b = None
+        while a == b:
+            a, b = self.sparse_array(2)
+        check((a,), b, b)
 
     def test_pop(self):
         pyfunc = pop_usecase
         check = self.unordered_checker(pyfunc)
 
-        check((2, 3, 55, 11, 8, 42))
         check(self.sparse_array(50))
 
     def test_contains(self):
@@ -474,17 +427,14 @@ class TestSets(BaseTest):
         def check(a, b):
             self.assertPreciseEqual(pyfunc(a, b), cfunc(a, b))
 
-        a = (1, 2, 3, 5, 42)
-        b = (5, 2, 8, 3)
+        a = self.sparse_array(50)
+        b = self.sparse_array(50)
         check(a, b)
 
     def _test_xxx_update(self, pyfunc):
         check = self.unordered_checker(pyfunc)
 
-        a, b = (1, 2, 4, 11), (2, 3, 5, 11, 42)
-        check(a, b)
-
-        sizes = (0, 50, 500)
+        sizes = (1, 50, 500)
         for na, nb in itertools.product(sizes, sizes):
             a = self.sparse_array(na)
             b = self.sparse_array(nb)
@@ -504,7 +454,7 @@ class TestSets(BaseTest):
         def check(a, b):
             self.assertPreciseEqual(pyfunc(a, b), cfunc(a, b))
 
-        a, b = map(set, [(1, 2, 4, 11), (2, 3, 5, 11, 42)])
+        a, b = map(set, [self.sparse_array(10), self.sparse_array(15)])
         args = [a & b, a - b, a | b, a ^ b]
         args = [tuple(x) for x in args]
         for a, b in itertools.product(args, args):
@@ -523,19 +473,18 @@ class TestSets(BaseTest):
         pyfunc = clear_usecase
         check = self.unordered_checker(pyfunc)
 
-        check((1, 2, 4, 11))
         check(self.sparse_array(50))
 
     def test_copy(self):
         # Source set doesn't have any deleted entries
         pyfunc = copy_usecase
         check = self.unordered_checker(pyfunc)
-        check((1, 2, 4, 11))
         check(self.sparse_array(50))
 
         pyfunc = copy_usecase_empty
         check = self.unordered_checker(pyfunc)
-        check((1,))
+        a = self.sparse_array(1)
+        check(a)
 
         # Source set has deleted entries
         pyfunc = copy_usecase_deleted
@@ -544,17 +493,50 @@ class TestSets(BaseTest):
         a = self.sparse_array(50)
         check(a, a[len(a) // 2])
 
+    def test_bool(self):
+        pyfunc = bool_usecase
+        check = self.unordered_checker(pyfunc)
+
+        check(self.sparse_array(1))
+        check(self.sparse_array(2))
+
     def _test_set_operator(self, pyfunc):
         check = self.unordered_checker(pyfunc)
 
         a, b = (1, 2, 4, 11), (2, 3, 5, 11, 42)
         check(a, b)
 
-        sizes = (0, 50, 500)
+        sizes = (1, 50, 500)
         for na, nb in itertools.product(sizes, sizes):
             a = self.sparse_array(na)
             b = self.sparse_array(nb)
             check(a, b)
+
+    def make_operator_usecase(self, op):
+        code = """if 1:
+        def operator_usecase(a, b):
+            s = set(a) %(op)s set(b)
+            return list(s)
+        """ % dict(op=op)
+        return compile_function('operator_usecase', code, globals())
+
+    def make_inplace_operator_usecase(self, op):
+        code = """if 1:
+        def inplace_operator_usecase(a, b):
+            sa = set(a)
+            sb = set(b)
+            sc = sa
+            sc %(op)s sb
+            return list(sc), list(sa)
+        """ % dict(op=op)
+        return compile_function('inplace_operator_usecase', code, globals())
+
+    def make_comparison_usecase(self, op):
+        code = """if 1:
+        def comparison_usecase(a, b):
+            return set(a) %(op)s set(b)
+        """ % dict(op=op)
+        return compile_function('comparison_usecase', code, globals())
 
     def test_difference(self):
         self._test_set_operator(difference_usecase)
@@ -569,81 +551,49 @@ class TestSets(BaseTest):
         self._test_set_operator(union_usecase)
 
     def test_and(self):
-        self._test_set_operator(make_operator_usecase('&'))
+        self._test_set_operator(self.make_operator_usecase('&'))
 
     def test_or(self):
-        self._test_set_operator(make_operator_usecase('|'))
+        self._test_set_operator(self.make_operator_usecase('|'))
 
     def test_sub(self):
-        self._test_set_operator(make_operator_usecase('-'))
+        self._test_set_operator(self.make_operator_usecase('-'))
 
     def test_xor(self):
-        self._test_set_operator(make_operator_usecase('^'))
+        self._test_set_operator(self.make_operator_usecase('^'))
 
     def test_eq(self):
-        self._test_set_operator(make_comparison_usecase('=='))
+        self._test_set_operator(self.make_comparison_usecase('=='))
 
     def test_ne(self):
-        self._test_set_operator(make_comparison_usecase('!='))
+        self._test_set_operator(self.make_comparison_usecase('!='))
 
     def test_le(self):
-        self._test_set_operator(make_comparison_usecase('<='))
+        self._test_set_operator(self.make_comparison_usecase('<='))
 
     def test_lt(self):
-        self._test_set_operator(make_comparison_usecase('<'))
+        self._test_set_operator(self.make_comparison_usecase('<'))
 
     def test_ge(self):
-        self._test_set_operator(make_comparison_usecase('>='))
+        self._test_set_operator(self.make_comparison_usecase('>='))
 
     def test_gt(self):
-        self._test_set_operator(make_comparison_usecase('>'))
+        self._test_set_operator(self.make_comparison_usecase('>'))
 
     def test_iand(self):
-        self._test_set_operator(make_inplace_operator_usecase('&='))
+        self._test_set_operator(self.make_inplace_operator_usecase('&='))
 
     def test_ior(self):
-        self._test_set_operator(make_inplace_operator_usecase('|='))
+        self._test_set_operator(self.make_inplace_operator_usecase('|='))
 
     def test_isub(self):
-        self._test_set_operator(make_inplace_operator_usecase('-='))
+        self._test_set_operator(self.make_inplace_operator_usecase('-='))
 
     def test_ixor(self):
-        self._test_set_operator(make_inplace_operator_usecase('^='))
+        self._test_set_operator(self.make_inplace_operator_usecase('^='))
 
 
-class OtherTypesTest(object):
-
-    def test_constructor(self):
-        pyfunc = empty_constructor_usecase
-        cfunc = jit(nopython=True)(pyfunc)
-        self.assertPreciseEqual(cfunc(), pyfunc())
-
-        pyfunc = constructor_usecase
-        cfunc = jit(nopython=True)(pyfunc)
-        def check(arg):
-            self.assertPreciseEqual(pyfunc(arg), cfunc(arg))
-
-        check(self.duplicates_array(200))
-        check(self.sparse_array(200))
-
-    def test_iterator(self):
-        pyfunc = iterator_usecase
-        check = self.unordered_checker(pyfunc)
-
-        check(self.duplicates_array(200))
-        check(self.sparse_array(200))
-
-    def test_update(self):
-        pyfunc = update_usecase
-        check = self.unordered_checker(pyfunc)
-
-        a = self.sparse_array(50)
-        b = self.duplicates_array(50)
-        c = self.sparse_array(50)
-        check(a, b, c)
-
-
-class TestFloatSets(OtherTypesTest, BaseTest):
+class TestFloatSets(TestSets):
     """
     Test sets with floating-point keys.
     """
@@ -654,7 +604,7 @@ class TestFloatSets(OtherTypesTest, BaseTest):
         return np.arange(stop, dtype=np.float32) * np.float32(0.1)
 
 
-class TestTupleSets(OtherTypesTest, BaseTest):
+class TestTupleSets(TestSets):
     """
     Test sets with tuple keys.
     """
@@ -664,6 +614,96 @@ class TestTupleSets(OtherTypesTest, BaseTest):
         c = (a & 0xaaaaaaaa).astype(np.int32)
         d = ((a >> 32) & 1).astype(np.bool_)
         return list(zip(b, c, d))
+
+
+class TestUnicodeSets(TestSets):
+    """
+    Test sets with unicode keys. For the purpose of testing refcounted sets.
+    """
+    def _range(self, stop):
+        return ['A{}'.format(i) for i in range(int(stop))]
+
+
+class TestSetsInvalidDtype(TestSets):
+
+    def _test_set_operator(self, pyfunc):
+        # it is invalid to apply some set operations on
+        # sets with different dtype
+        cfunc = jit(nopython=True)(pyfunc)
+
+        a = set([1, 2, 4, 11])
+        b = set(['a', 'b', 'c'])
+        msg = 'All Sets must be of the same type'
+        with self.assertRaisesRegex(TypingError, msg):
+            cfunc(a, b)
+
+
+class TestSetsInvalid(TestSets):
+
+    def symmetric_difference_usecase(a, b):
+        s = a.symmetric_difference(b)
+        return list(s)
+
+    def difference_usecase(a, b):
+        s = a.difference(b)
+        return list(s)
+
+    def intersection_usecase(a, b):
+        s = a.intersection(b)
+        return list(s)
+
+    def union_usecase(a, b):
+        s = a.union(b)
+        return list(s)
+
+    def _test_set_operator(self, pyfunc):
+        # it is invalid to apply some set operations on
+        # sets with different dtype
+        cfunc = jit(nopython=True)(pyfunc)
+
+        a = set([1, 2, 4, 11])
+        b = (1, 2, 3)
+        msg = 'All arguments must be Sets'
+        with self.assertRaisesRegex(TypingError, msg):
+            cfunc(a, b)
+
+    def test_difference(self):
+        self._test_set_operator(TestSetsInvalid.difference_usecase)
+
+    def test_intersection(self):
+        self._test_set_operator(TestSetsInvalid.intersection_usecase)
+
+    def test_symmetric_difference(self):
+        self._test_set_operator(TestSetsInvalid.symmetric_difference_usecase)
+
+    def test_union(self):
+        self._test_set_operator(TestSetsInvalid.union_usecase)
+
+    def make_operator_usecase(self, op):
+        code = """if 1:
+        def operator_usecase(a, b):
+            s = a %(op)s b
+            return list(s)
+        """ % dict(op=op)
+        return compile_function('operator_usecase', code, globals())
+
+    def make_inplace_operator_usecase(self, op):
+        code = """if 1:
+        def inplace_operator_usecase(a, b):
+            sa = a
+            sb = b
+            sc = sa
+            sc %(op)s sb
+            return list(sc), list(sa)
+        """ % dict(op=op)
+        return compile_function('inplace_operator_usecase', code, globals())
+
+    def make_comparison_usecase(self, op):
+        code = """if 1:
+        def comparison_usecase(a, b):
+            return set(a) %(op)s b
+        """ % dict(op=op)
+        return compile_function('comparison_usecase', code, globals())
 
 
 class TestUnboxing(BaseTest):
@@ -785,7 +825,7 @@ class TestSetReflection(BaseTest):
         got = cfunc(cset, cset)
         self.assertPreciseEqual(expected, got)
         self.assertPreciseEqual(pyset, cset)
-        self.assertPreciseEqual(sys.getrefcount(pyset), sys.getrefcount(cset))
+        self.assertRefCountEqual(pyset, cset)
 
     def test_reflect_clean(self):
         """

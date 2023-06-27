@@ -458,17 +458,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         q = np.array(1)
         _check(a, q)
 
-        if numpy_version < (1, 20):
-            # NumPy 1.20+ rewrites the interpolation part of percentile/quantile
-            # to use np.subtract which doesn't support bools.
-            a = True
-            q = False
-            _check(a, q)
-
-            a = np.array([False, True, True])
-            q = a
-            _check(a, q)
-
         a = 5
         q = q_upper_bound / 2
         _check(a, q)
@@ -686,8 +675,11 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         np.random.shuffle(arr)
         self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
         # Test with a NaT
-        arr[arr.size // 2] = 'NaT'
-        self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
+        if numpy_version != (1, 21) and 'median' not in pyfunc.__name__:
+            # There's problems with NaT handling in "median" on at least NumPy
+            # 1.21.{3, 4}. See https://github.com/numpy/numpy/issues/20376
+            arr[arr.size // 2] = 'NaT'
+            self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
         if 'median' not in pyfunc.__name__:
             # Test with (val, NaT)^N (and with the random NaT from above)
             # use a loop, there's some weird thing/bug with arr[1::2] = 'NaT'
@@ -997,6 +989,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         assert_raises(arr1d, -2)
         assert_raises(arr2d, -3)
         assert_raises(arr2d, 2)
+        # Exceptions leak references
+        self.disable_leak_check()
 
     def test_argmax_axis_must_be_integer(self):
         arr = np.arange(6)
@@ -1011,6 +1005,16 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     def test_argmax_method_axis(self):
         arr2d = np.arange(6).reshape(2, 3)
+
+        def argmax(arr):
+            return arr2d.argmax(axis=0)
+
+        self.assertPreciseEqual(argmax(arr2d),
+                                jit(nopython=True)(argmax)(arr2d))
+
+    def test_argmax_return_type(self):
+        # See issue #7853, return type should be intp not based on input type
+        arr2d = np.arange(6, dtype=np.uint8).reshape(2, 3)
 
         def argmax(arr):
             return arr2d.argmax(axis=0)
@@ -1060,6 +1064,9 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         assert_raises(arr2d, -3)
         assert_raises(arr2d, 2)
 
+        # Exceptions leak references
+        self.disable_leak_check()
+
     def test_argmin_axis_must_be_integer(self):
         arr = np.arange(6)
 
@@ -1073,6 +1080,16 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     def test_argmin_method_axis(self):
         arr2d = np.arange(6).reshape(2, 3)
+
+        def argmin(arr):
+            return arr2d.argmin(axis=0)
+
+        self.assertPreciseEqual(argmin(arr2d),
+                                jit(nopython=True)(argmin)(arr2d))
+
+    def test_argmin_return_type(self):
+        # See issue #7853, return type should be intp not based on input type
+        arr2d = np.arange(6, dtype=np.uint8).reshape(2, 3)
 
         def argmin(arr):
             return arr2d.argmin(axis=0)

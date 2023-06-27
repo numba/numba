@@ -3,121 +3,124 @@ trigger:
 
 variables:
   # Change the following along with adding new TEST_START_INDEX.
-  TEST_COUNT: 19
+  TEST_COUNT: 20
 
 jobs:
 # Mac and Linux use the same template with different matrixes
 - template: buildscripts/azure/azure-linux-macos.yml
   parameters:
     name: macOS
-    vmImage: macOS-10.14
+    vmImage: macos-11
     matrix:
-      py37_np117:
-        PYTHON: '3.7'
-        NUMPY: '1.17'
+      py38_np121:
+        PYTHON: '3.8'
+        NUMPY: '1.21'
         CONDA_ENV: 'azure_ci'
         TEST_START_INDEX: 0
-      py39_np120:
-        PYTHON: '3.9'
-        NUMPY: '1.20'
+      py311_np124:
+        PYTHON: '3.11'
+        NUMPY: '1.24'
         CONDA_ENV: 'azure_ci'
+        TEST_THREADING: 'tbb'
         TEST_START_INDEX: 1
 
 - template: buildscripts/azure/azure-linux-macos.yml
   parameters:
     name: Linux
-    vmImage: ubuntu-18.04
+    vmImage: ubuntu-20.04
     matrix:
-      py37_np117_32bit:
-        # 32 bit linux only has np 1.15
-        PYTHON: '3.7'
-        NUMPY: '1.17'
+      py38_np121_vanilla:
+        PYTHON: '3.8'
+        NUMPY: '1.21'
         CONDA_ENV: azure_ci
-        BITS32: yes
+        VANILLA_INSTALL: yes
         TEST_START_INDEX: 2
-      py37_np117_cov:
-        PYTHON: '3.7'
-        NUMPY: '1.17'
+      py38_np122_tbb:
+        PYTHON: '3.8'
+        NUMPY: '1.22'
+        CONDA_ENV: azure_ci
+        TEST_THREADING: 'tbb'
+        TEST_START_INDEX: 3
+      py38_np122_omp:
+        PYTHON: '3.8'
+        NUMPY: '1.22'
+        CONDA_ENV: azure_ci
+        TEST_THREADING: omp
+        TEST_START_INDEX: 4
+      py38_np122_workqueue:
+        PYTHON: '3.8'
+        NUMPY: '1.22'
+        CONDA_ENV: azure_ci
+        TEST_THREADING: workqueue
+        TEST_START_INDEX: 5
+      py38_np123_svml:
+        PYTHON: '3.8'
+        NUMPY: '1.23'
+        CONDA_ENV: azure_ci
+        TEST_SVML: yes
+        TEST_START_INDEX: 6
+      py38_np124:
+        PYTHON: '3.8'
+        NUMPY: '1.24'
+        CONDA_ENV: azure_ci
+        TEST_START_INDEX: 7
+      py39_np121:
+        PYTHON: '3.9'
+        NUMPY: '1.21'
+        CONDA_ENV: azure_ci
+        TEST_START_INDEX: 8
+      py39_np122_cov_doc:
+        PYTHON: '3.9'
+        NUMPY: '1.22'
         CONDA_ENV: azure_ci
         RUN_COVERAGE: yes
         RUN_FLAKE8: yes
         RUN_MYPY: yes
-        TEST_START_INDEX: 3
-      py37_np117_vanilla:
-        PYTHON: '3.7'
-        NUMPY: '1.17'
-        CONDA_ENV: azure_ci
-        VANILLA_INSTALL: yes
-        TEST_START_INDEX: 4
-      py37_np117_tbb:
-        PYTHON: '3.7'
-        NUMPY: '1.17'
-        CONDA_ENV: azure_ci
-        TEST_THREADING: 'tbb'
-        TEST_START_INDEX: 5
-      py37_np117_omp:
-        PYTHON: '3.7'
-        NUMPY: '1.17'
-        CONDA_ENV: azure_ci
-        TEST_THREADING: omp
-        TEST_START_INDEX: 6
-      py37_np117_workqueue:
-        PYTHON: '3.7'
-        NUMPY: '1.17'
-        CONDA_ENV: azure_ci
-        TEST_THREADING: workqueue
-        TEST_START_INDEX: 7
-      py37_np118_doc:
-        PYTHON: '3.7'
-        NUMPY: '1.18'
-        CONDA_ENV: azure_ci
         BUILD_DOC: yes
-        TEST_START_INDEX: 8
-      py37_np118_pickle5:
-        PYTHON: '3.7'
-        NUMPY: '1.18'
-        CONDA_ENV: azure_ci
-        TEST_PICKLE5: yes
         TEST_START_INDEX: 9
-      py37_np119_svml:
-        PYTHON: '3.7'
-        NUMPY: '1.19'
-        CONDA_ENV: azure_ci
-        TEST_SVML: yes
-        TEST_START_INDEX: 10
-      py37_np120:
-        PYTHON: '3.7'
-        NUMPY: '1.20'
-        CONDA_ENV: azure_ci
-        TEST_START_INDEX: 11
-      py38_np118:
-        PYTHON: '3.8'
-        NUMPY: '1.18'
-        CONDA_ENV: azure_ci
-        TEST_START_INDEX: 12
-      py38_np119_typeguard:
-        PYTHON: '3.8'
-        NUMPY: '1.19'
+      py39_np123_typeguard:
+        PYTHON: '3.9'
+        NUMPY: '1.23'
         CONDA_ENV: azure_ci
         RUN_TYPEGUARD: yes
+        TEST_START_INDEX: 10
+      py39_np124:
+        PYTHON: '3.9'
+        NUMPY: '1.24'
+        CONDA_ENV: azure_ci
+        TEST_START_INDEX: 11
+      py310_np121:
+        PYTHON: '3.10'
+        NUMPY: '1.21'
+        CONDA_ENV: azure_ci
+        TEST_START_INDEX: 12
+      py310_np122:
+        PYTHON: '3.10'
+        NUMPY: '1.22'
+        CONDA_ENV: azure_ci
         TEST_START_INDEX: 13
-      py38_np120:
-        PYTHON: '3.8'
-        NUMPY: '1.20'
+      py310_np123:
+        PYTHON: '3.10'
+        NUMPY: '1.23'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 14
-      py39_np119:
-        PYTHON: '3.9'
-        NUMPY: '1.19'
+      py310_np124:
+        PYTHON: '3.10'
+        NUMPY: '1.24'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 15
-      py39_np120:
-        PYTHON: '3.9'
-        NUMPY: '1.20'
+      py311_np123:
+        PYTHON: '3.11'
+        NUMPY: '1.23'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 16
+      py311_np124:
+        PYTHON: '3.11'
+        NUMPY: '1.24'
+        CONDA_ENV: azure_ci
+        TEST_START_INDEX: 17
 
 - template: buildscripts/azure/azure-windows.yml
   parameters:
     name: Windows
-    vmImage: vs2017-win2016
+    vmImage: windows-2019

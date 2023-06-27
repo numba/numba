@@ -125,11 +125,20 @@ traditional dynamic memory management.
    This function must be called on the device (i.e. from a kernel or
    device function). *shape* is either an integer or a tuple of integers
    representing the array's dimensions and must be a simple constant
-   expression. *type* is a :ref:`Numba type <numba-types>` of the elements
-   needing to be stored in the array.
+   expression. A "simple constant expression" includes, but is not limited to:
+   
+      #. A literal (e.g. ``10``)
+      #. A local variable whose right-hand side is a literal or a simple constant
+         expression (e.g. ``shape``, where ``shape`` is defined earlier in the function 
+         as ``shape = 10``)
+      #. A global variable that is defined in the jitted function's globals by the time
+         of compilation (e.g. ``shape``, where ``shape`` is defined using any expression
+         at global scope).
 
-   The returned array-like object can be read and written to like any normal
-   device array (e.g. through indexing).
+   The definition must result in a Python ``int`` (i.e. not a NumPy scalar or other
+   scalar / integer-like type). *type* is a :ref:`Numba type <numba-types>` of the
+   elements needing to be stored in the array. The returned array-like object can be
+   read and written to like any normal device array (e.g. through indexing).
 
    A common pattern is to have each thread populate one element in the
    shared array and then wait for all threads to finish using :func:`.syncthreads`.
@@ -147,6 +156,94 @@ traditional dynamic memory management.
 .. seealso::
    :ref:`Matrix multiplication example <cuda-matmul>`.
 
+Dynamic Shared Memory
+---------------------
+
+In order to use dynamic shared memory in kernel code declare a shared array of
+size 0:
+
+.. code-block:: python
+
+   @cuda.jit
+   def kernel_func(x):
+      dyn_arr = cuda.shared.array(0, dtype=np.float32)
+      ...
+
+and specify the size of dynamic shared memory in bytes during kernel invocation:
+
+.. code-block:: python
+
+   kernel_func[32, 32, 0, 128](x)
+
+In the above code the kernel launch is configured with 4 parameters:
+
+.. code-block:: python
+
+   kernel_func[grid_dim, block_dim, stream, dyn_shared_mem_size]
+
+**Note:** all dynamic shared memory arrays *alias*, so if you want to have
+multiple dynamic shared arrays, you need to take *disjoint* views of the arrays.
+For example, consider:
+
+.. code-block:: python
+
+   from numba import cuda
+   import numpy as np
+
+   @cuda.jit
+   def f():
+      f32_arr = cuda.shared.array(0, dtype=np.float32)
+      i32_arr = cuda.shared.array(0, dtype=np.int32)
+      f32_arr[0] = 3.14
+      print(f32_arr[0])
+      print(i32_arr[0])
+
+   f[1, 1, 0, 4]()
+   cuda.synchronize()
+
+This allocates 4 bytes of shared memory (large enough for one ``int32`` or one
+``float32``) and declares dynamic shared memory arrays of type ``int32`` and of
+type ``float32``. When ``f32_arr[0]`` is set, this also sets the value of
+``i32_arr[0]``, because they're pointing at the same memory. So we see as
+output:
+
+.. code-block:: pycon
+
+   3.140000
+   1078523331
+
+because 1078523331 is the ``int32`` represented by the bits of the ``float32``
+value 3.14.
+
+If we take disjoint views of the dynamic shared memory:
+
+.. code-block:: python
+
+   from numba import cuda
+   import numpy as np
+
+   @cuda.jit
+   def f_with_view():
+      f32_arr = cuda.shared.array(0, dtype=np.float32)
+      i32_arr = cuda.shared.array(0, dtype=np.int32)[1:] # 1 int32 = 4 bytes
+      f32_arr[0] = 3.14
+      i32_arr[0] = 1
+      print(f32_arr[0])
+      print(i32_arr[0])
+
+   f_with_view[1, 1, 0, 8]()
+   cuda.synchronize()
+
+This time we declare 8 dynamic shared memory bytes, using the first 4 for a
+``float32`` value and the next 4 for an ``int32`` value. Now we can set both the
+``int32`` and ``float32`` value without them aliasing:
+
+.. code-block:: pycon
+
+   3.140000
+   1
+
+
 .. _cuda-local-memory:
 
 Local memory
@@ -162,11 +259,22 @@ unlike traditional dynamic memory management.
 
    Allocate a local array of the given *shape* and *type* on the device.
    *shape* is either an integer or a tuple of integers representing the array's
-   dimensions and must be a simple constant expression. *type* is a :ref:`Numba
-   type <numba-types>` of the elements needing to be stored in the array. The
-   array is private to the current thread. An array-like object is returned
-   which can be read and written to like any standard array (e.g. through
-   indexing).
+   dimensions and must be a simple constant expression. A "simple constant expression" 
+   includes, but is not limited to:
+
+      #. A literal (e.g. ``10``)
+      #. A local variable whose right-hand side is a literal or a simple constant
+         expression (e.g. ``shape``, where ``shape`` is defined earlier in the function
+         as ``shape = 10``)
+      #. A global variable that is defined in the jitted function's globals by the time 
+         of compilation (e.g. ``shape``, where ``shape`` is defined using any expression
+         at global scope).
+
+   The definition must result in a Python ``int`` (i.e. not a NumPy scalar or other
+   scalar / integer-like type). *type* is a :ref:`Numba type <numba-types>`
+   of the elements needing to be stored in the array. The array is private to
+   the current thread. An array-like object is returned which can be read and
+   written to like any standard array (e.g. through indexing).
 
    .. seealso:: The Local Memory section of `Device Memory Accesses
       <https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#device-memory-accesses>`_

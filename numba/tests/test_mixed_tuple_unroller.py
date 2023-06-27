@@ -1818,6 +1818,47 @@ class TestMore(TestCase):
 
         self.assertEqual(foo(), foo.py_func())
 
+    def test_unroll_with_non_conformant_loops_present(self):
+        # See issue #8311
+
+        @njit('(Tuple((int64, float64)),)')
+        def foo(tup):
+            for t in literal_unroll(tup):
+                pass
+
+            x = 1
+            while x == 1:
+                x = 0
+
+    def test_literal_unroll_legalize_var_names01(self):
+        # See issue #8939
+        test = np.array([(1, 2), (2, 3)], dtype=[("a1", "f8"), ("a2", "f8")])
+        fields = tuple(test.dtype.fields.keys())
+
+        @njit
+        def foo(arr):
+            res = 0
+            for k in literal_unroll(fields):
+                res = res + np.abs(arr[k]).sum()
+            return res
+
+        self.assertEqual(foo(test), 8.0)
+
+    def test_literal_unroll_legalize_var_names02(self):
+        # See issue #8939
+        test = np.array([(1, 2), (2, 3)],
+                        dtype=[("a1[0]", "f8"), ("a2[1]", "f8")])
+        fields = tuple(test.dtype.fields.keys())
+
+        @njit
+        def foo(arr):
+            res = 0
+            for k in literal_unroll(fields):
+                res = res + np.abs(arr[k]).sum()
+            return res
+
+        self.assertEqual(foo(test), 8.0)
+
 
 def capture(real_pass):
     """ Returns a compiler pass that captures the mutation state reported

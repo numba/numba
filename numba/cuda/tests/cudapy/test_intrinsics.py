@@ -1,8 +1,13 @@
 import itertools
 import numpy as np
+import operator
 import re
 from numba import cuda, int64
-from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
+from numba.cuda import compile_ptx
+from numba.core.errors import TypingError
+from numba.core.types import f2
+from numba.cuda.testing import (unittest, CUDATestCase, skip_on_cudasim,
+                                skip_unless_cc_53, skip_unless_cuda_python)
 
 
 def simple_threadidx(ary):
@@ -67,6 +72,236 @@ def simple_fma(ary, a, b, c):
     ary[0] = cuda.fma(a, b, c)
 
 
+def simple_hadd(ary, a, b):
+    ary[0] = cuda.fp16.hadd(a[0], b[0])
+
+
+def simple_hadd_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hadd(a, b)
+
+
+def simple_hfma(ary, a, b, c):
+    ary[0] = cuda.fp16.hfma(a[0], b[0], c[0])
+
+
+def simple_hfma_scalar(ary, a, b, c):
+    ary[0] = cuda.fp16.hfma(a, b, c)
+
+
+def simple_hsub(ary, a, b):
+    ary[0] = cuda.fp16.hsub(a[0], b[0])
+
+
+def simple_hsub_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hsub(a, b)
+
+
+def simple_hmul(ary, a, b):
+    ary[0] = cuda.fp16.hmul(a[0], b[0])
+
+
+def simple_hmul_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hmul(a, b)
+
+
+def simple_hdiv_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hdiv(a, b)
+
+
+def simple_hdiv_kernel(ary, array_a, array_b):
+    i = cuda.grid(1)
+    if i < ary.size:
+        a = array_a[i]
+        b = array_b[i]
+        ary[i] = cuda.fp16.hdiv(a, b)
+
+
+def simple_hneg(ary, a):
+    ary[0] = cuda.fp16.hneg(a[0])
+
+
+def simple_hneg_scalar(ary, a):
+    ary[0] = cuda.fp16.hneg(a)
+
+
+def simple_habs(ary, a):
+    ary[0] = cuda.fp16.habs(a[0])
+
+
+def simple_habs_scalar(ary, a):
+    ary[0] = cuda.fp16.habs(a)
+
+
+def simple_heq_scalar(ary, a, b):
+    ary[0] = cuda.fp16.heq(a, b)
+
+
+def simple_hne_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hne(a, b)
+
+
+def simple_hge_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hge(a, b)
+
+
+def simple_hgt_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hgt(a, b)
+
+
+def simple_hle_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hle(a, b)
+
+
+def simple_hlt_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hlt(a, b)
+
+
+@cuda.jit(device=True)
+def hlt_func_1(x, y):
+    return cuda.fp16.hlt(x, y)
+
+
+@cuda.jit(device=True)
+def hlt_func_2(x, y):
+    return cuda.fp16.hlt(x, y)
+
+
+def test_multiple_hcmp_1(r, a, b, c):
+    # float16 predicates used in two separate functions
+    r[0] = hlt_func_1(a, b) and hlt_func_2(b, c)
+
+
+def test_multiple_hcmp_2(r, a, b, c):
+    # The same float16 predicate used in the caller and callee
+    r[0] = hlt_func_1(a, b) and cuda.fp16.hlt(b, c)
+
+
+def test_multiple_hcmp_3(r, a, b, c):
+    # Different float16 predicates used in the caller and callee
+    r[0] = hlt_func_1(a, b) and cuda.fp16.hge(c, b)
+
+
+def test_multiple_hcmp_4(r, a, b, c):
+    # The same float16 predicates used twice in a function
+    r[0] = cuda.fp16.hlt(a, b) and cuda.fp16.hlt(b, c)
+
+
+def test_multiple_hcmp_5(r, a, b, c):
+    # Different float16 predicates used in a function
+    r[0] = cuda.fp16.hlt(a, b) and cuda.fp16.hge(c, b)
+
+
+def simple_hmax_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hmax(a, b)
+
+
+def simple_hmin_scalar(ary, a, b):
+    ary[0] = cuda.fp16.hmin(a, b)
+
+
+def simple_hsin(r, x):
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.hsin(x[i])
+
+
+def simple_hcos(r, x):
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.hcos(x[i])
+
+
+def simple_hlog(r, x):
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.hlog(x[i])
+
+
+def simple_hlog2(r, x):
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.hlog2(x[i])
+
+
+def simple_hlog10(r, x):
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.hlog10(x[i])
+
+
+def simple_hexp(r, x):
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.hexp(x[i])
+
+
+def simple_hexp2(r, x):
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.hexp2(x[i])
+
+
+def simple_hsqrt(r, x):
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.hsqrt(x[i])
+
+
+def simple_hrsqrt(r, x):
+
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.hrsqrt(x[i])
+
+
+def numpy_hrsqrt(x, dtype):
+    return x ** -0.5
+
+
+def simple_hceil(r, x):
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.hceil(x[i])
+
+
+def simple_hfloor(r, x):
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.hfloor(x[i])
+
+
+def simple_hrcp(r, x):
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.hrcp(x[i])
+
+
+def simple_htrunc(r, x):
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.htrunc(x[i])
+
+
+def simple_hrint(r, x):
+    i = cuda.grid(1)
+
+    if i < len(r):
+        r[i] = cuda.fp16.hrint(x[i])
+
+
 def simple_cbrt(ary, a):
     ary[0] = cuda.cbrt(a)
 
@@ -119,7 +354,19 @@ def simple_warpsize(ary):
     ary[0] = cuda.warpsize
 
 
+def nonliteral_grid(x):
+    cuda.grid(x)
+
+
+def nonliteral_gridsize(x):
+    cuda.gridsize(x)
+
+
 class TestCudaIntrinsic(CUDATestCase):
+    def setUp(self):
+        super().setUp()
+        np.random.seed(0)
+
     def test_simple_threadidx(self):
         compiled = cuda.jit("void(int32[:])")(simple_threadidx)
         ary = np.ones(1, dtype=np.int32)
@@ -152,6 +399,16 @@ class TestCudaIntrinsic(CUDATestCase):
         c_res = c_contigous()
         f_res = f_contigous()
         self.assertTrue(np.all(c_res == f_res))
+
+    @skip_on_cudasim('Cudasim does not check types')
+    def test_nonliteral_grid_error(self):
+        with self.assertRaisesRegex(TypingError, 'RequireLiteralValue'):
+            cuda.jit('void(int32)')(nonliteral_grid)
+
+    @skip_on_cudasim('Cudasim does not check types')
+    def test_nonliteral_gridsize_error(self):
+        with self.assertRaisesRegex(TypingError, 'RequireLiteralValue'):
+            cuda.jit('void(int32)')(nonliteral_gridsize)
 
     def test_simple_grid1d(self):
         compiled = cuda.jit("void(int32[::1])")(simple_grid1d)
@@ -291,6 +548,306 @@ class TestCudaIntrinsic(CUDATestCase):
         ary = np.zeros(1, dtype=np.float64)
         compiled[1, 1](ary, 2., 3., 4.)
         np.testing.assert_allclose(ary[0], 2 * 3 + 4)
+
+    @skip_unless_cc_53
+    def test_hadd(self):
+        compiled = cuda.jit("void(f2[:], f2[:], f2[:])")(simple_hadd)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.array([3.], dtype=np.float16)
+        arg2 = np.array([4.], dtype=np.float16)
+        compiled[1, 1](ary, arg1, arg2)
+        np.testing.assert_allclose(ary[0], arg1 + arg2)
+
+    @skip_unless_cc_53
+    def test_hadd_scalar(self):
+        compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hadd_scalar)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.float16(3.1415926)
+        arg2 = np.float16(3.)
+        compiled[1, 1](ary, arg1, arg2)
+        ref = arg1 + arg2
+        np.testing.assert_allclose(ary[0], ref)
+
+    @skip_on_cudasim('Compilation unsupported in the simulator')
+    def test_hadd_ptx(self):
+        args = (f2[:], f2, f2)
+        ptx, _ = compile_ptx(simple_hadd_scalar, args, cc=(5, 3))
+        self.assertIn('add.f16', ptx)
+
+    @skip_unless_cc_53
+    def test_hfma(self):
+        compiled = cuda.jit("void(f2[:], f2[:], f2[:], f2[:])")(simple_hfma)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.array([2.], dtype=np.float16)
+        arg2 = np.array([3.], dtype=np.float16)
+        arg3 = np.array([4.], dtype=np.float16)
+        compiled[1, 1](ary, arg1, arg2, arg3)
+        np.testing.assert_allclose(ary[0], arg1 * arg2 + arg3)
+
+    @skip_unless_cc_53
+    def test_hfma_scalar(self):
+        compiled = cuda.jit("void(f2[:], f2, f2, f2)")(simple_hfma_scalar)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.float16(2.)
+        arg2 = np.float16(3.)
+        arg3 = np.float16(4.)
+        compiled[1, 1](ary, arg1, arg2, arg3)
+        ref = arg1 * arg2 + arg3
+        np.testing.assert_allclose(ary[0], ref)
+
+    @skip_on_cudasim('Compilation unsupported in the simulator')
+    def test_hfma_ptx(self):
+        args = (f2[:], f2, f2, f2)
+        ptx, _ = compile_ptx(simple_hfma_scalar, args, cc=(5, 3))
+        self.assertIn('fma.rn.f16', ptx)
+
+    @skip_unless_cc_53
+    def test_hsub(self):
+        compiled = cuda.jit("void(f2[:], f2[:], f2[:])")(simple_hsub)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.array([3.], dtype=np.float16)
+        arg2 = np.array([4.], dtype=np.float16)
+        compiled[1, 1](ary, arg1, arg2)
+        np.testing.assert_allclose(ary[0], arg1 - arg2)
+
+    @skip_unless_cc_53
+    def test_hsub_scalar(self):
+        compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hsub_scalar)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.float16(3.1415926)
+        arg2 = np.float16(1.57)
+        compiled[1, 1](ary, arg1, arg2)
+        ref = arg1 - arg2
+        np.testing.assert_allclose(ary[0], ref)
+
+    @skip_on_cudasim('Compilation unsupported in the simulator')
+    def test_hsub_ptx(self):
+        args = (f2[:], f2, f2)
+        ptx, _ = compile_ptx(simple_hsub_scalar, args, cc=(5, 3))
+        self.assertIn('sub.f16', ptx)
+
+    @skip_unless_cc_53
+    def test_hmul(self):
+        compiled = cuda.jit()(simple_hmul)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.array([3.], dtype=np.float16)
+        arg2 = np.array([4.], dtype=np.float16)
+        compiled[1, 1](ary, arg1, arg2)
+        np.testing.assert_allclose(ary[0], arg1 * arg2)
+
+    @skip_unless_cc_53
+    def test_hmul_scalar(self):
+        compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hmul_scalar)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.float16(3.1415926)
+        arg2 = np.float16(1.57)
+        compiled[1, 1](ary, arg1, arg2)
+        ref = arg1 * arg2
+        np.testing.assert_allclose(ary[0], ref)
+
+    @skip_on_cudasim('Compilation unsupported in the simulator')
+    def test_hmul_ptx(self):
+        args = (f2[:], f2, f2)
+        ptx, _ = compile_ptx(simple_hmul_scalar, args, cc=(5, 3))
+        self.assertIn('mul.f16', ptx)
+
+    @skip_unless_cc_53
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
+    def test_hdiv_scalar(self):
+        compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hdiv_scalar)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.float16(3.1415926)
+        arg2 = np.float16(1.57)
+        compiled[1, 1](ary, arg1, arg2)
+        ref = arg1 / arg2
+        np.testing.assert_allclose(ary[0], ref)
+
+    @skip_unless_cc_53
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
+    def test_hdiv(self):
+        compiled = cuda.jit("void(f2[:], f2[:], f2[:])")(simple_hdiv_kernel)
+        arry1 = np.random.randint(-65504, 65505, size=500).astype(np.float16)
+        arry2 = np.random.randint(-65504, 65505, size=500).astype(np.float16)
+        ary = np.zeros_like(arry1, dtype=np.float16)
+
+        compiled.forall(ary.size)(ary, arry1, arry2)
+        ref = arry1 / arry2
+        np.testing.assert_allclose(ary, ref)
+
+    @skip_unless_cc_53
+    def test_hneg(self):
+        compiled = cuda.jit("void(f2[:], f2[:])")(simple_hneg)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.array([3.], dtype=np.float16)
+        compiled[1, 1](ary, arg1)
+        np.testing.assert_allclose(ary[0], -arg1)
+
+    @skip_unless_cc_53
+    def test_hneg_scalar(self):
+        compiled = cuda.jit("void(f2[:], f2)")(simple_hneg_scalar)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.float16(3.1415926)
+        compiled[1, 1](ary, arg1)
+        ref = -arg1
+        np.testing.assert_allclose(ary[0], ref)
+
+    @skip_on_cudasim('Compilation unsupported in the simulator')
+    def test_hneg_ptx(self):
+        args = (f2[:], f2)
+        ptx, _ = compile_ptx(simple_hneg_scalar, args, cc=(5, 3))
+        self.assertIn('neg.f16', ptx)
+
+    @skip_unless_cc_53
+    def test_habs(self):
+        compiled = cuda.jit()(simple_habs)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.array([-3.], dtype=np.float16)
+        compiled[1, 1](ary, arg1)
+        np.testing.assert_allclose(ary[0], abs(arg1))
+
+    @skip_unless_cc_53
+    def test_habs_scalar(self):
+        compiled = cuda.jit("void(f2[:], f2)")(simple_habs_scalar)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.float16(-3.1415926)
+        compiled[1, 1](ary, arg1)
+        ref = abs(arg1)
+        np.testing.assert_allclose(ary[0], ref)
+
+    @skip_on_cudasim('Compilation unsupported in the simulator')
+    def test_habs_ptx(self):
+        args = (f2[:], f2)
+        ptx, _ = compile_ptx(simple_habs_scalar, args, cc=(5, 3))
+        self.assertIn('abs.f16', ptx)
+
+    @skip_unless_cc_53
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
+    def test_fp16_intrinsics_common(self):
+        kernels = (simple_hsin, simple_hcos,
+                   simple_hlog, simple_hlog2, simple_hlog10,
+                   simple_hsqrt, simple_hceil, simple_hfloor,
+                   simple_hrcp, simple_htrunc, simple_hrint,
+                   simple_hrsqrt)
+        exp_kernels = (simple_hexp, simple_hexp2)
+        expected_functions = (np.sin, np.cos,
+                              np.log, np.log2, np.log10,
+                              np.sqrt, np.ceil, np.floor,
+                              np.reciprocal, np.trunc, np.rint,
+                              numpy_hrsqrt)
+        expected_exp_functions = (np.exp, np.exp2)
+
+        # Generate random data
+        N = 32
+        np.random.seed(1)
+        x = np.random.randint(1, 65505, size=N).astype(np.float16)
+        r = np.zeros_like(x)
+        for kernel, fn in zip(kernels, expected_functions):
+            with self.subTest(fn=fn):
+                kernel = cuda.jit("void(f2[:], f2[:])")(kernel)
+                kernel[1,N](r, x)
+                expected = fn(x, dtype=np.float16)
+                np.testing.assert_allclose(r, expected)
+
+        x2 = np.random.randint(1, 10, size=N).astype(np.float16)
+        for kernel, fn in zip(exp_kernels, expected_exp_functions):
+            with self.subTest(fn=fn):
+                kernel = cuda.jit("void(f2[:], f2[:])")(kernel)
+                kernel[1,N](r, x2)
+                expected = fn(x2, dtype=np.float16)
+                np.testing.assert_allclose(r, expected)
+
+    @skip_unless_cc_53
+    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
+    def test_hexp10(self):
+        @cuda.jit()
+        def hexp10_vectors(r, x):
+            i = cuda.grid(1)
+
+            if i < len(r):
+                r[i] = cuda.fp16.hexp10(x[i])
+
+        # Generate random data
+        N = 32
+        np.random.seed(1)
+        x = np.random.rand(N).astype(np.float16)
+        r = np.zeros_like(x)
+
+        # Run the kernel
+        hexp10_vectors[1, N](r, x)
+        np.testing.assert_allclose(r, 10 ** x)
+
+    @skip_unless_cc_53
+    def test_fp16_comparison(self):
+        fns = (simple_heq_scalar, simple_hne_scalar, simple_hge_scalar,
+               simple_hgt_scalar, simple_hle_scalar, simple_hlt_scalar)
+        ops = (operator.eq, operator.ne, operator.ge,
+               operator.gt, operator.le, operator.lt)
+
+        for fn, op in zip(fns, ops):
+            with self.subTest(op=op):
+                kernel = cuda.jit("void(b1[:], f2, f2)")(fn)
+
+                expected = np.zeros(1, dtype=np.bool8)
+                got = np.zeros(1, dtype=np.bool8)
+                arg2 = np.float16(2)
+                arg3 = np.float16(3)
+                arg4 = np.float16(4)
+
+                # Check with equal arguments
+                kernel[1, 1](got, arg3, arg3)
+                expected = op(arg3, arg3)
+                self.assertEqual(expected, got[0])
+
+                # Check with LHS < RHS
+                kernel[1, 1](got, arg3, arg4)
+                expected = op(arg3, arg4)
+                self.assertEqual(expected, got[0])
+
+                # Check with LHS > RHS
+                kernel[1, 1](got, arg3, arg2)
+                expected = op(arg3, arg2)
+                self.assertEqual(expected, got[0])
+
+    @skip_unless_cc_53
+    def test_multiple_float16_comparisons(self):
+        functions = (test_multiple_hcmp_1,
+                     test_multiple_hcmp_2,
+                     test_multiple_hcmp_3,
+                     test_multiple_hcmp_4,
+                     test_multiple_hcmp_5)
+        for fn in functions:
+            with self.subTest(fn=fn):
+                compiled = cuda.jit("void(b1[:], f2, f2, f2)")(fn)
+                ary = np.zeros(1, dtype=np.bool8)
+                arg1 = np.float16(2.)
+                arg2 = np.float16(3.)
+                arg3 = np.float16(4.)
+                compiled[1, 1](ary, arg1, arg2, arg3)
+                self.assertTrue(ary[0])
+
+    @skip_unless_cc_53
+    def test_hmax(self):
+        compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hmax_scalar)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.float16(3.)
+        arg2 = np.float16(4.)
+        compiled[1, 1](ary, arg1, arg2)
+        np.testing.assert_allclose(ary[0], arg2)
+        arg1 = np.float16(5.)
+        compiled[1, 1](ary, arg1, arg2)
+        np.testing.assert_allclose(ary[0], arg1)
+
+    @skip_unless_cc_53
+    def test_hmin(self):
+        compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hmin_scalar)
+        ary = np.zeros(1, dtype=np.float16)
+        arg1 = np.float16(3.)
+        arg2 = np.float16(4.)
+        compiled[1, 1](ary, arg1, arg2)
+        np.testing.assert_allclose(ary[0], arg1)
+        arg1 = np.float16(5.)
+        compiled[1, 1](ary, arg1, arg2)
+        np.testing.assert_allclose(ary[0], arg2)
 
     def test_cbrt_f32(self):
         compiled = cuda.jit("void(float32[:], float32)")(simple_cbrt)

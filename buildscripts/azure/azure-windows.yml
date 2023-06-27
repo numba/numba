@@ -8,16 +8,16 @@ jobs:
     vmImage: ${{ parameters.vmImage }}
   strategy:
     matrix:
-      py39_np120:
-        PYTHON: '3.9'
-        NUMPY: '1.20'
-        CONDA_ENV: 'testenv'
-        TEST_START_INDEX: 17
-      py37_np117:
-        PYTHON: '3.7'
-        NUMPY: '1.17'
+      py38_np121:
+        PYTHON: '3.8'
+        NUMPY: '1.21'
         CONDA_ENV: 'testenv'
         TEST_START_INDEX: 18
+      py311_np124:
+        PYTHON: '3.11'
+        NUMPY: '1.24'
+        CONDA_ENV: 'testenv'
+        TEST_START_INDEX: 19
 
   steps:
     - task: CondaEnvironment@1
@@ -28,12 +28,6 @@ jobs:
     - script: |
         buildscripts\\incremental\\setup_conda_environment.cmd
       displayName: 'Before Install'
-
-    - script: |
-        # use TBB
-        call activate %CONDA_ENV%
-        conda install -y -c numba tbb=2021 tbb-devel
-      displayName: 'Add in TBB'
 
     - script: |
         buildscripts\\incremental\\build.cmd
@@ -51,18 +45,22 @@ jobs:
 
     - script: |
         call activate %CONDA_ENV%
+        set NUMBA_ENABLE_CUDASIM=1
         python -m numba.runtests -l
       displayName: 'List discovered tests'
 
     - script: |
         call activate %CONDA_ENV%
         set NUMBA_CAPTURED_ERRORS=new_style
-        echo "Running slice of discovered tests: %TEST_START_INDEX%,None,%TEST_COUNT%"
+        set NUMBA_ENABLE_CUDASIM=1
+        echo "Running shard of discovered tests: %TEST_START_INDEX%,None,%TEST_COUNT%"
         python -m numba.runtests -b -v -g -m 2 -- numba.tests
       displayName: 'Test modified test files'
 
     - script: |
         call activate %CONDA_ENV%
         set NUMBA_CAPTURED_ERRORS=new_style
-        python runtests.py -m 2 -b -j "%TEST_START_INDEX%,None,%TEST_COUNT%"  --exclude-tags='long_running'  -- numba.tests
-      displayName: 'Test slice of test files'
+        set NUMBA_ENABLE_CUDASIM=1
+        echo "Running shard of discovered tests: %TEST_START_INDEX%:%TEST_COUNT%"
+        python runtests.py -m 2 -b -j "%TEST_START_INDEX%:%TEST_COUNT%"  --exclude-tags='long_running'  -- numba.tests
+      displayName: 'Test shard of test files'
