@@ -423,6 +423,9 @@ class RVSDG2IR(RegionVisitor):
                     self.debug_print(f"  out {k:>6}:", val)
 
 
+    def op_PUSH_NULL(self, op: Op, bc: dis.Instruction):
+        pass
+
     def op_LOAD_CONST(self, op: Op, bc: dis.Instruction):
         assert not op.inputs
         [vs] = op.outputs
@@ -447,7 +450,7 @@ class RVSDG2IR(RegionVisitor):
     def op_CALL(self, op: Op, bc: dis.Instruction):
         [_env, callee, arg0, *args] = op.inputs
         [_env, res] = op.outputs
-        assert callee.name == "nil"
+        assert callee.name == "null"
         callee = arg0
         callee = self.vsmap[callee]
         args = [self.vsmap[vs] for vs in args]

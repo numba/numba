@@ -924,13 +924,18 @@ class BC2DDG:
     def op_RESUME(self, inst: dis.Instruction):
         pass   # no-op
 
+    def op_PUSH_NULL(self, inst: dis.Instruction):
+        op = Op(opname="push_null", bc_inst=inst)
+        null = op.add_output("null")
+        self.push(null)
+
     def op_LOAD_GLOBAL(self, inst: dis.Instruction):
-        load_nil = inst.arg & 1
+        load_null = inst.arg & 1
         op = Op(opname="global", bc_inst=inst)
         op.add_input("env", self.effect)
-        nil = op.add_output("nil")
-        if load_nil:
-            self.push(nil)
+        null = op.add_output("null")
+        if load_null:
+            self.push(null)
         self.push(op.add_output(f"{inst.argval}"))
 
     def op_LOAD_CONST(self, inst: dis.Instruction):
