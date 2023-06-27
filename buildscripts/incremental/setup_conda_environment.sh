@@ -27,10 +27,10 @@ source deactivate
 # Display root environment (for debugging)
 conda list
 
-# Use conda-forge for NumPy 1.24 - at the time of writing it is not available
+# Use conda-forge for NumPy 1.25 - at the time of writing it is not available
 # on the defaults channel.
 
-if [ "${NUMPY}" == "1.24" -o "${NUMPY}" == "1.25" ]; then
+if [ "${NUMPY}" == "1.25" ]; then
   NUMPY_CHANNEL_PKG=conda-forge::numpy
 else
   NUMPY_CHANNEL_PKG=numpy
