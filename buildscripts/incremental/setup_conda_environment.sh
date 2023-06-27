@@ -89,6 +89,9 @@ if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL "tbb>=2021.6" "tbb-devel>
 # Install typeguard
 if [ "$RUN_TYPEGUARD" == "yes" ]; then $CONDA_INSTALL "conda-forge::typeguard==3.0.1"; fi
 
+# Install RVSDG
+$PIP_INSTALL numba-rvsdg
+
 # environment dump for debug
 # echo "DEBUG ENV:"
 # echo "-------------------------------------------------------------------------"

@@ -4,3 +4,16 @@ trigger:
 variables:
   # Change the following along with adding new TEST_START_INDEX.
   TEST_COUNT: 20
+
+jobs:
+# Mac and Linux use the same template with different matrixes
+- template: buildscripts/azure/azure-linux-macos.yml
+  parameters:
+    name: Linux
+    vmImage: ubuntu-20.04
+    matrix:
+      py311_np124:
+        PYTHON: '3.11'
+        NUMPY: '1.24'
+        CONDA_ENV: azure_ci
+        TEST_START_INDEX: 17
