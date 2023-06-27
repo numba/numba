@@ -622,8 +622,8 @@ def _fill_ufunc_db(ufunc_db):
     }
     if numpy_version >= (1, 25):
         ufunc_db[np.greater].update({
-            'qQ->?': numbers.int_su_cmp('>'),
-            'Qq->?': numbers.int_us_cmp('>')})
+            'qQ->?': numbers.int_signed_unsigned_cmp('>'),
+            'Qq->?': numbers.int_unsigned_signed_cmp('>')})
 
     ufunc_db[np.greater_equal] = {
         '??->?': numbers.int_uge_impl,
@@ -644,8 +644,8 @@ def _fill_ufunc_db(ufunc_db):
     }
     if numpy_version >= (1, 25):
         ufunc_db[np.greater_equal].update({
-            'qQ->?': numbers.int_su_cmp('>='),
-            'Qq->?': numbers.int_us_cmp('>=')})
+            'qQ->?': numbers.int_signed_unsigned_cmp('>='),
+            'Qq->?': numbers.int_unsigned_signed_cmp('>=')})
 
     ufunc_db[np.less] = {
         '??->?': numbers.int_ult_impl,
@@ -666,8 +666,8 @@ def _fill_ufunc_db(ufunc_db):
     }
     if numpy_version >= (1, 25):
         ufunc_db[np.less].update({
-            'qQ->?': numbers.int_su_cmp('<'),
-            'Qq->?': numbers.int_us_cmp('<')})
+            'qQ->?': numbers.int_signed_unsigned_cmp('<'),
+            'Qq->?': numbers.int_unsigned_signed_cmp('<')})
 
     ufunc_db[np.less_equal] = {
         '??->?': numbers.int_ule_impl,
@@ -688,8 +688,8 @@ def _fill_ufunc_db(ufunc_db):
     }
     if numpy_version >= (1, 25):
         ufunc_db[np.less_equal].update({
-            'qQ->?': numbers.int_su_cmp('<='),
-            'Qq->?': numbers.int_us_cmp('<=')})
+            'qQ->?': numbers.int_signed_unsigned_cmp('<='),
+            'Qq->?': numbers.int_unsigned_signed_cmp('<=')})
 
     ufunc_db[np.not_equal] = {
         '??->?': numbers.int_ne_impl,
@@ -710,8 +710,8 @@ def _fill_ufunc_db(ufunc_db):
     }
     if numpy_version >= (1, 25):
         ufunc_db[np.not_equal].update({
-            'qQ->?': numbers.int_su_cmp('!='),
-            'Qq->?': numbers.int_us_cmp('!=')})
+            'qQ->?': numbers.int_signed_unsigned_cmp('!='),
+            'Qq->?': numbers.int_unsigned_signed_cmp('!=')})
 
     ufunc_db[np.equal] = {
         '??->?': numbers.int_eq_impl,
@@ -732,8 +732,8 @@ def _fill_ufunc_db(ufunc_db):
     }
     if numpy_version >= (1, 25):
         ufunc_db[np.equal].update({
-            'qQ->?': numbers.int_su_cmp('=='),
-            'Qq->?': numbers.int_us_cmp('==')})
+            'qQ->?': numbers.int_signed_unsigned_cmp('=='),
+            'Qq->?': numbers.int_unsigned_signed_cmp('==')})
 
     ufunc_db[np.logical_and] = {
         '??->?': npyfuncs.np_logical_and_impl,

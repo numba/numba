@@ -361,7 +361,7 @@ def int_ne_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def int_su_cmp(op):
+def int_signed_unsigned_cmp(op):
     def impl(context, builder, sig, args):
         (left, right) = args
         # This code is entirely too clever. It's taken from the NumPy source.
@@ -372,6 +372,7 @@ def int_su_cmp(op):
         # will yield the same result. If the signed value is greater than or
         # equal to zero, then we can safely cast it to an unsigned value and do
         # the expected unsigned-unsigned comparison operation.
+        # Original: https://github.com/numpy/numpy/pull/23713
         cmp_zero = builder.icmp_signed('<', left, Constant(left.type, 0))
         lt_zero = builder.icmp_signed(op, left, Constant(left.type, 0))
         ge_zero = builder.icmp_unsigned(op, left, right)
@@ -380,7 +381,7 @@ def int_su_cmp(op):
     return impl
 
 
-def int_us_cmp(op):
+def int_unsigned_signed_cmp(op):
     def impl(context, builder, sig, args):
         (left, right) = args
         # This code is entirely too clever. See the sister implementation for
