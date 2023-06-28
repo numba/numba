@@ -574,9 +574,8 @@ class TestGUVectorizeJit(TestCase):
 
         self.check_matmul(matmul_jit)
 
-    @unittest.expectedFailure
     def test_axpy(self):
-        gufunc = GUVectorize(axpy, '(), (), () -> ()', target=self.target,
+        gufunc = GUVectorize(axpy, '(),(),() -> ()', target=self.target,
                              is_dynamic=True)
 
         @jit(nopython=True)
@@ -586,10 +585,42 @@ class TestGUVectorizeJit(TestCase):
         x = np.arange(10, dtype=np.intp)
         out = np.zeros_like(x)
         axpy_jit(x, x, x, out)
-        print(out)
-        # print(axpy_jit(x, x, x, out))
+        self.assertPreciseEqual(out, x * x + x)
 
+    def test_output_scalar(self):
 
+        @guvectorize('(n),(m) -> ()')
+        def gufunc(x, y, res):
+            res[0] = x.sum() + y.sum()
+
+        @jit(nopython=True)
+        def jit_func(x, y, res):
+            gufunc(x, y, res)
+
+        x = np.arange(40, dtype='i8').reshape(4, 10)
+        y = np.arange(20, dtype='i8')
+        res = np.zeros(4, dtype='i8')
+        jit_func(x, y, res)
+        expected = np.zeros_like(res)
+        gufunc(x, y, expected)
+        self.assertPreciseEqual(res, expected)
+
+    def test_input_scalar(self):
+
+        @guvectorize('() -> ()')
+        def gufunc(x, res):
+            res[0] = x + 100
+
+        @jit(nopython=True)
+        def jit_func(x, res):
+            gufunc(x, res)
+
+        x = np.arange(40, dtype='i8').reshape(5, 2, 4)
+        res = np.zeros_like(x)
+        jit_func(x, res)
+        expected = np.zeros_like(res)
+        gufunc(x, expected)
+        self.assertPreciseEqual(res, expected)
 
 
 if __name__ == '__main__':

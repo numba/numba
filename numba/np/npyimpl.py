@@ -162,7 +162,7 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder',
 class _ArrayGUHelper(namedtuple('_ArrayHelper', ('context', 'builder',
                                                  'shape', 'strides', 'data',
                                                  'layout', 'base_type', 'ndim',
-                                                 'type', 'return_type'))):
+                                                 'inner_arr_ty', 'is_input_arg'))):
     """Helper class to handle array arguments/result.
     It provides methods to generate code loading/storing specific
     items as well as support code for handling indices.
@@ -172,21 +172,64 @@ class _ArrayGUHelper(namedtuple('_ArrayHelper', ('context', 'builder',
         ZERO = ir.Constant(ir.IntType(intpty.width), 0)
 
         indices = []
-        for i in range(self.ndim - self.return_type.ndim):
+        for i in range(self.ndim - self.inner_arr_ty.ndim):
             x = cgutils.alloca_once(self.builder, ir.IntType(intpty.width))
             self.builder.store(ZERO, x)
             indices.append(x)
         return _ArrayIndexingHelper(self, indices)
 
+    def _load_effective_address(self, indices):
+        context = self.context
+        builder = self.builder
+        arr_ty = types.Array(self.base_type, self.ndim, self.layout)
+        arr = context.make_array(arr_ty)(context, builder, self.data)
+
+        return cgutils.get_item_pointer2(context,
+                                         builder,
+                                         data=arr.data,
+                                         shape=self.shape,
+                                         strides=self.strides,
+                                         layout=self.layout,
+                                         inds=indices)
+
     def load_data(self, indices):
         context, builder = self.context, self.builder
-        index_types = (types.int64,) * (self.ndim - self.return_type.ndim)
-        ary = self.context.make_array(self.type)(context, builder, self.data)
-        aryty = self.type
-        res = _getitem_array_generic(self.context, self.builder,
-                                     self.return_type, aryty, ary,
-                                     index_types, indices)
-        return impl_ret_borrowed(context, builder, self.return_type, res)
+
+        if self.inner_arr_ty.ndim == 0 and self.is_input_arg:
+            # scalar case for input arguments
+            model = context.data_model_manager[self.base_type]
+            ptr = self._load_effective_address(indices)
+            return model.load_from_data_pointer(builder, ptr)
+        elif self.inner_arr_ty.ndim == 0 and not self.is_input_arg:
+            # In cases where the output inner dimension is 0: "(n),(m) -> ()"
+            # Output arrays are handled as 1d arrays with shape=(1,) as they
+            # can't be represented using scalars.
+            intpty = context.get_value_type(types.intp)
+            one = intpty(1)
+            eight = intpty(8)
+            fromty = types.Array(self.base_type, self.ndim, self.layout)
+            toty = types.Array(self.base_type, 1, self.layout)
+
+            arr_from = self.context.make_array(fromty)(context, builder, self.data)
+            arr_to = self.context.make_array(toty)(context, builder)
+            arrayobj.populate_array(arr_to,
+                                    data = self._load_effective_address(indices),
+                                    shape=cgutils.pack_array(builder, [one]),
+                                    strides=cgutils.pack_array(builder, [eight]),
+                                    itemsize=arr_from.itemsize,
+                                    meminfo=arr_from.meminfo,
+                                    parent=arr_from.parent)
+            return arr_to._getvalue()
+        else:
+            # generic case
+            # getitem n-dim array -> m-dim array, where N > M
+            index_types = (types.int64,) * (self.ndim - self.inner_arr_ty.ndim)
+            arrty = types.Array(self.base_type, self.ndim, self.layout)
+            arr = self.context.make_array(arrty)(context, builder, self.data)
+            res = _getitem_array_generic(context, builder,
+                                         self.inner_arr_ty, arrty, arr,
+                                         index_types, indices)
+            return impl_ret_borrowed(context, builder, self.inner_arr_ty, res)
 
 
 def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
@@ -443,24 +486,25 @@ def numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
     out = _pack_output_values(ufunc, context, builder, sig.return_type, [o.return_val for o in outputs])
     return impl_ret_new_ref(context, builder, sig.return_type, out)
 
-def numpy_gufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
+def numpy_gufunc_kernel(context, builder, sig, args, gufunc, kernel_class):
     arguments = []
     expected_ndims = kernel_class.gufunc.expected_ndims()
-    for arg, ty, exp_ndim in zip(args, sig.args, expected_ndims):
+    is_input = [True] * gufunc.nin + [False] * gufunc.nout
+    for arg, ty, exp_ndim, is_inp in zip(args, sig.args, expected_ndims, is_input):
         if isinstance(ty, types.ArrayCompatible):
             # Create an array helper that iteration returns a subarray
             # with ndim specified by "exp_ndim"
             arr = context.make_array(ty)(context, builder, arg)
             shape = cgutils.unpack_tuple(builder, arr.shape, ty.ndim)
             strides = cgutils.unpack_tuple(builder, arr.strides, ty.ndim)
-            return_type = ty.copy(ndim=exp_ndim)
+            inner_arr_ty = ty.copy(ndim=exp_ndim)
             ndim = ty.ndim
             layout = ty.layout
             base_type = ty.dtype
             array_helper = _ArrayGUHelper(context, builder,
                                           shape, strides, arg,
                                           layout, base_type, ndim,
-                                          ty, return_type)
+                                          inner_arr_ty, is_inp)
             arguments.append(array_helper)
         else:
             scalar_helper = _ScalarHelper(context, builder, arg, ty)
@@ -482,12 +526,12 @@ def numpy_gufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
     else:
         order = 'C'
 
-    inputs = arguments[:ufunc.nin]
-    outputs = arguments[ufunc.nin:]
+    inputs = arguments[:gufunc.nin]
+    outputs = arguments[gufunc.nin:]
 
     intpty = context.get_value_type(types.intp)
     indices = [inp.create_iter_indices() for inp in arguments]
-    loopshape_ndim = outputs[0].ndim - outputs[0].return_type.ndim
+    loopshape_ndim = outputs[0].ndim - outputs[0].inner_arr_ty.ndim
     loopshape = outputs[0].shape[ : loopshape_ndim]
 
     with cgutils.loop_nest(builder, loopshape, intp=intpty, order=order) as loop_indices:

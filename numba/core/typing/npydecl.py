@@ -58,9 +58,9 @@ class Numpy_rules_ufunc(AbstractTemplate):
         explicit_outputs = args[nin:]
 
         # all the explicit outputs must match the number max number of dimensions
-        if not all(d == ndims for d in arg_ndims[nin:]):
-            msg = "ufunc '{0}' called with unsuitable explicit output arrays."
-            raise TypingError(msg=msg.format(ufunc.__name__))
+        # if not all(d == ndims for d in arg_ndims[nin:]):
+        #     msg = "ufunc '{0}' called with unsuitable explicit output arrays."
+        #     raise TypingError(msg=msg.format(ufunc.__name__))
 
         if not all(isinstance(output, types.ArrayCompatible)
                    for output in explicit_outputs):

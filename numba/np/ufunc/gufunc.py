@@ -25,6 +25,13 @@ def make_gufunc_kernel(_gufunc):
             self.inner_sig, self.cres = self.gufunc.find_ewise_function(
                 ewise_types)
 
+        def cast(self, val, fromty, toty):
+            # Handle the case where "fromty" is an array and "toty" a scalar
+            if isinstance(fromty, types.Array) and not \
+                    isinstance(toty, types.Array):
+                return super().cast(val, fromty.dtype, toty)
+            return super().cast(val, fromty, toty)
+
         def generate(self, *args):
             isig = self.inner_sig
             osig = self.outer_sig
@@ -149,6 +156,10 @@ class GUFunc(serialize.ReduceMixin):
     def expected_ndims(self):
         parsed_sig = parse_signature(self.gufunc_builder.signature)
         return tuple(map(len, parsed_sig[0])) + tuple(map(len, parsed_sig[1]))
+        # ndims = list(map(len, parsed_sig[0]))
+        # for s in parsed_sig[1]:
+        #     ndims.append(len(s) or 1)
+        # return ndims
 
     def _install_type(self, typingctx=None):
         """Constructs and installs a typing class for a gufunc object in the
