@@ -2285,6 +2285,33 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, 15)
         self.assertEqual(countParfors(test_impl, (types.int64, )), 2)
 
+    def test_issue9029(self):
+        # issue9029: too many parfors executed in one function
+        # overflowed the stack.
+        def test_impl(i1, i2):
+            N = 30
+            S = 3
+            a = np.empty((N,N))
+            # The stack should overflow if there are 30*30*2 (# of parfors)
+            # iterations.
+            for y in range(N):
+                for x in range(N):
+                    values = np.ones(S)
+                    v = values[0]
+
+                    p2 = np.empty(S)
+                    for i in prange(i1, i2):
+                        p2[i] = 1
+                    j = p2[0]
+
+                    a[y,x] = v + j
+            return a
+
+        # We pass in 0 and 3 so that the function can't analyze the loop
+        # bounds on the prange to generate a signed loop whereas the
+        # np.ones will be an unsigned loop.
+        self.check(test_impl, 0, 3)
+
 
 @skip_parfors_unsupported
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
