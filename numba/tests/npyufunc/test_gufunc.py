@@ -511,7 +511,7 @@ class TestGUVectorizeJit(TestCase):
         self.check_add_gufunc(add)
 
     def test_add_dynamic(self):
-        @guvectorize('(n),()->(n)',target=self.target)
+        @guvectorize('(n),()->(n)', target=self.target)
         def add(x, y, res):
             for i in range(x.shape[0]):
                 res[i] = x[i] + y
@@ -520,7 +520,7 @@ class TestGUVectorizeJit(TestCase):
 
     @unittest.expectedFailure
     def test_object_mode(self):
-        @guvectorize('(n),()->(n)',target=self.target, forceobj=True)
+        @guvectorize('(n),()->(n)', target=self.target, forceobj=True)
         def add(x, y, res):
             for i in range(x.shape[0]):
                 res[i] = x[i] + y

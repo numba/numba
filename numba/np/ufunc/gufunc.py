@@ -3,7 +3,7 @@ from numba.core import types
 from numba.np.ufunc.ufuncbuilder import GUFuncBuilder
 from numba.np.ufunc.sigparse import parse_signature
 from numba.np.numpy_support import ufunc_find_matching_loop
-from numba.core import serialize, cgutils
+from numba.core import serialize, cgutils, errors
 from numba.core.typing import npydecl
 from numba.core.typing.templates import AbstractTemplate, signature
 import functools
@@ -39,9 +39,9 @@ def make_gufunc_kernel(_gufunc):
                          for val, inty, outty in
                          zip(args, osig.args, isig.args)]
             if self.cres.objectmode:
-                # Need an example that reaches this part of the code to test it
-                func_type = self.context.call_conv.get_function_type(
-                    types.pyobject, [types.pyobject] * len(isig.args))
+                msg = ('Calling a guvectorize function in object mode is not '
+                       'supported yet.')
+                raise errors.NumbaRuntimeError(msg)
             else:
                 func_type = self.context.call_conv.get_function_type(
                     isig.return_type, isig.args)
