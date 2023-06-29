@@ -132,7 +132,7 @@ Deprecation of :term:`object mode` `fall-back` behaviour when using ``@jit``
 The ``numba.jit`` decorator has for a long time followed the behaviour of first
 attempting to compile the decorated function in :term:`nopython mode` and should
 this compilation fail it will `fall-back` and try again to compile but this time
-in :term:`object mode`. It it this `fall-back` behaviour which is being
+in :term:`object mode`. It is this `fall-back` behaviour which is being
 deprecated, the result of which will be that ``numba.jit`` will by default
 compile in :term:`nopython mode` and :term:`object mode` compilation will
 become `opt-in` only.

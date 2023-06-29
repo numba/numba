@@ -252,7 +252,7 @@ A code review should try to assess the following criteria:
 * general design and correctness
 * code structure and maintainability
 * coding conventions
-* docstrings, comments
+* docstrings, comments and release notes (if necessary)
 * test coverage
 
 
@@ -320,6 +320,14 @@ There is potential for confusion between the Numba module ``typing`` and Python 
 hints, as well as between Numba types---such as ``Dict`` or ``Literal``---and ``typing`` types of the same name.
 To mitigate the risk of confusion we use a naming convention by which objects of the built-in ``typing`` module are
 imported with an ``pt`` prefix. For example, ``typing.Dict`` is imported as ``from typing import Dict as ptDict``.
+
+Release Notes
+'''''''''''''
+
+Pull Requests that add significant user-facing modifications may need to be mentioned in the release notes.
+To add a release note, a short ``.rst`` file needs creating containing a summary of the change and it needs to be placed in 
+``docs/upcoming_changes``. The file ``docs/upcoming_changes/README.rst`` details the format
+and file naming conventions.
 
 Stability
 '''''''''
@@ -455,7 +463,7 @@ The Numba documentation is split over two repositories:
   `Numba repository <https://github.com/numba/numba>`_.
 
 * The `Numba homepage <https://numba.pydata.org>`_ has its sources in a
-  separate repository at https://github.com/numba/numba-webpage
+  separate repository at https://github.com/numba/numba.github.com.
 
 
 Main documentation
@@ -476,39 +484,11 @@ build and check the documentation under ``docs/``::
    $ make html
    $ open _build/html/index.html
 
-Core developers can upload this documentation to the Numba website
-at https://numba.pydata.org by using the ``gh-pages.py`` script under ``docs``::
-
-   $ python gh-pages.py version  # version can be 'dev' or '0.16' etc
-
-then verify the repository under the ``gh-pages`` directory and use
-``git push``.
-
 Web site homepage
 '''''''''''''''''
 
 The Numba homepage on https://numba.pydata.org can be fetched from here:
-https://github.com/numba/numba-webpage
-
-After pushing documentation to a new version, core developers will want to
-update the website.  Some notable files:
-
-* ``index.rst``       # Update main page
-* ``_templates/sidebar_versions.html``    # Update sidebar links
-* ``doc.rst``         # Update after adding a new version for numba docs
-* ``download.rst``    # Updata after uploading new numba version to pypi
-
-After updating run::
-
-   $ make html
-
-and check out ``_build/html/index.html``.  To push updates to the Web site::
-
-   $ python _scripts/gh-pages.py
-
-then verify the repository under the ``gh-pages`` directory.  Make sure the
-``CNAME`` file is present and contains a single line for ``numba.pydata.org``.
-Finally, use ``git push`` to update the website.
+https://github.com/numba/numba.github.com
 
 
 .. _typeguard: https://typeguard.readthedocs.io/en/latest/

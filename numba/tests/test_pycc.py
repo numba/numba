@@ -1,5 +1,5 @@
 import contextlib
-import imp
+import importlib
 import os
 import shutil
 import subprocess
@@ -94,7 +94,7 @@ class TestCC(BasePYCCTest):
         self.skip_if_no_external_compiler() # external compiler needed
         from numba.tests import compile_with_pycc
         self._test_module = compile_with_pycc
-        imp.reload(self._test_module)
+        importlib.reload(self._test_module)
 
     @contextlib.contextmanager
     def check_cc_compiled(self, cc):

@@ -917,10 +917,6 @@ Built-in functions
 
 The following built-in functions are supported:
 
-.. warning::
-  Support for ``isinstance`` is an experimental feature. This feature is
-  automatically enabled by simply using ``isinstance`` in JIT compiled code.
-
 * :func:`abs`
 * :class:`bool`
 * :func:`chr`
@@ -936,7 +932,7 @@ The following built-in functions are supported:
 * :func:`hash` (see :ref:`pysupported-hashing` below)
 * :class:`int`: only the one-argument form
 * :func:`iter`: only the one-argument form
-* :func:`isinstance` (experimental support only)
+* :func:`isinstance`
 * :func:`len`
 * :func:`min`
 * :func:`map`

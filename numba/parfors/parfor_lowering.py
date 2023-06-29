@@ -1539,7 +1539,7 @@ def _create_gufunc_for_parfor_body(
             pm = PassManager("full_parfor_gufunc")
             parfor_gufunc_passes = dpb.define_parfor_gufunc_pipeline(self.state)
             pm.passes.extend(parfor_gufunc_passes.passes)
-            lowering_passes = dpb.define_nopython_lowering_pipeline(self.state)
+            lowering_passes = dpb.define_parfor_gufunc_nopython_lowering_pipeline(self.state)
             pm.passes.extend(lowering_passes.passes)
 
             pm.finalize()
