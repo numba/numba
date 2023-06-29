@@ -1,0 +1,7 @@
+
+Extende guvectorize support in JIT code
+=======================================
+
+This pull request extends generalized universal functions support in jitted
+functions. With most recent changes, it is now possible to call a
+``@guvectorize`` function from within a ``@jit`` one.
