@@ -527,31 +527,6 @@ class TestGUVectorizeJit(TestCase):
 
         self.check_add_gufunc(add)
 
-    # @unittest.expectedFailure
-    # def test_axis(self):
-    #     # issue https://github.com/numba/numba/issues/6773
-    #     @guvectorize(["f8[:],f8[:]"], "(n)->(n)")
-    #     def my_cumsum(x, res):
-    #         acc = 0
-    #         for i in range(x.shape[0]):
-    #             acc += x[i]
-    #             res[i] = acc
-
-    #     @jit(nopython=True)
-    #     def cumsum_jit(x):
-    #         y = my_cumsum(x, axis=0)
-    #         return y
-
-    #     x = np.ones((20, 30))
-    #     # Check regular call
-    #     y = my_cumsum(x, axis=0)
-    #     expected = np.cumsum(x, axis=0)
-    #     np.testing.assert_equal(y, expected)
-    #     # Check "out" kw
-    #     out_kw = np.zeros_like(y)
-    #     my_cumsum(x, out=out_kw, axis=0)
-    #     # np.testing.assert_equal(out_kw, expected)
-
     def check_matmul(self, jit_func):
         matrix_ct = 1001
         A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2, 4)
