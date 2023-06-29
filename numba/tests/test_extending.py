@@ -2071,6 +2071,7 @@ class TestOverloadPreferLiteral(TestCase):
 class TestIntrinsicPreferLiteral(TestCase):
     def test_intrinsic(self):
         def intrin(context, x):
+            # This intrinsic will return 0xcafe if `x` is a literal `1`.
             sig = signature(types.intp, x)
             if isinstance(x, types.IntegerLiteral):
                 # With prefer_literal=False, this branch will not be reached
