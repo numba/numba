@@ -15,6 +15,9 @@
 /numba/cuda/ @gmarkall
 /numba/parfors/ @DrTodd13
 /numba/stencils/ @DrTodd13
+/numba/core/byteflow.py @sklam
+/numba/core/typeinfer.py @sklam
+/numba/core/interpreter.py @sklam
 
 # ------------------------------------------------------------------------------
 # Information for contributors
