@@ -1,3 +1,30 @@
+Version 0.57.1 (21 June, 2023)
+------------------------------
+
+Pull-Requests:
+
+* PR `#8964 <https://github.com/numba/numba/pull/8964>`_: fix missing nopython keyword in cuda random module (`esc <https://github.com/esc>`_)
+* PR `#8965 <https://github.com/numba/numba/pull/8965>`_: fix return dtype for np.angle (`guilhermeleobas <https://github.com/guilhermeleobas>`_ `esc <https://github.com/esc>`_)
+* PR `#8982 <https://github.com/numba/numba/pull/8982>`_: Don't do the parfor diagnostics pass for the parfor gufunc. (`DrTodd13 <https://github.com/DrTodd13>`_)
+* PR `#8996 <https://github.com/numba/numba/pull/8996>`_: adding a test for 8940 (`esc <https://github.com/esc>`_)
+* PR `#8958 <https://github.com/numba/numba/pull/8958>`_: resurrect the import, this time in the registry initialization (`esc <https://github.com/esc>`_)
+* PR `#8947 <https://github.com/numba/numba/pull/8947>`_: Introduce internal _isinstance_no_warn (`guilhermeleobas <https://github.com/guilhermeleobas>`_ `esc <https://github.com/esc>`_)
+* PR `#8998 <https://github.com/numba/numba/pull/8998>`_: Fix 8939 (second attempt) (`esc <https://github.com/esc>`_)
+* PR `#8978 <https://github.com/numba/numba/pull/8978>`_: Import MVC packages when using MVCLinker. (`bdice <https://github.com/bdice>`_)
+* PR `#8895 <https://github.com/numba/numba/pull/8895>`_: CUDA: Enable caching functions that use CG (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#8976 <https://github.com/numba/numba/pull/8976>`_: Fix index URL for ptxcompiler/cubinlinker packages. (`bdice <https://github.com/bdice>`_)
+* PR `#9004 <https://github.com/numba/numba/pull/9004>`_: Skip MVC test when libraries unavailable (`gmarkall <https://github.com/gmarkall>`_ `esc <https://github.com/esc>`_)
+* PR `#9006 <https://github.com/numba/numba/pull/9006>`_: link to version support table instead of using explicit versions (`esc <https://github.com/esc>`_)
+* PR `#9005 <https://github.com/numba/numba/pull/9005>`_: Fix: Issue #8923 - avoid spurious device-to-host transfers in CUDA ufuncs (`gmarkall <https://github.com/gmarkall>`_)
+
+
+Authors:
+
+* `bdice <https://github.com/bdice>`_
+* `DrTodd13 <https://github.com/DrTodd13>`_
+* `esc <https://github.com/esc>`_
+* `gmarkall <https://github.com/gmarkall>`_
+
 Version 0.57.0 (1 May, 2023)
 ----------------------------
 
@@ -395,6 +422,7 @@ Pull-Requests:
 * PR `#8879 <https://github.com/numba/numba/pull/8879>`_: Remove use of ``compile_isolated`` from generator tests. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#8880 <https://github.com/numba/numba/pull/8880>`_: Fix missing dependency guard on pyyaml in ``test_azure_config``. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#8881 <https://github.com/numba/numba/pull/8881>`_: Replace use of compile_isolated in test_obj_lifetime (`sklam <https://github.com/sklam>`_)
+* PR `#8884 <https://github.com/numba/numba/pull/8884>`_: Pin llvmlite and NumPy on release branch (`sklam <https://github.com/sklam>`_)
 * PR `#8887 <https://github.com/numba/numba/pull/8887>`_: Update PyPI supported version tags (`bryant1410 <https://github.com/bryant1410>`_)
 * PR `#8896 <https://github.com/numba/numba/pull/8896>`_: Remove codecov install (now deleted from PyPI) (`gmarkall <https://github.com/gmarkall>`_)
 * PR `#8902 <https://github.com/numba/numba/pull/8902>`_: Enable CALL_FUNCTION_EX fix for py3.11 (`sklam <https://github.com/sklam>`_)
