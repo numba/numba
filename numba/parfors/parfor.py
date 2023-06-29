@@ -4220,24 +4220,16 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata, func_ir, typemap):
     overlap = p1_body_defs.intersection(p2_uses)
     # overlap are those variable defined in first parfor and used in the second
     if len(overlap) != 0:
-        is_safe = True # Assume safe until proven otherwise.
         # Get all the arrays
         _, p2arraynotindexed = get_array_indexed_with_parfor_index(
             parfor2.loop_body.values(),
             parfor2.index_var.name,
             parfor2.get_loop_nest_vars(),
             func_ir)
-        for var in overlap:
-            vtype = typemap[var]
-            if isinstance(vtype, types.ArrayCompatible):
-                if var in p2arraynotindexed:
-                    is_safe = False
-                    break
-            else:
-                is_safe = False
-                break
 
-        if not is_safe:
+        unsafe_var = [not isinstance(typemap[x], types.ArrayCompatible) or x in p2arraynotindexed for x in overlap]
+
+        if any(unsafe_var):
             dprint("try_fuse: parfor2 depends on parfor1 body")
             msg = ("- fusion failed: parallel loop %s has a dependency on the "
                     "body of parallel loop %s. ")
