@@ -7,6 +7,55 @@ import re
 import sys
 import warnings
 
+
+# ---------------------- WARNING WARNING WARNING ----------------------------
+# THIS MUST RUN FIRST, DO NOT MOVE... SEE DOCSTRING IN _ensure_critical_deps
+def _ensure_critical_deps():
+    """
+    Make sure the Python, NumPy and SciPy present are supported versions.
+    This has to be done _before_ importing anything from Numba such that
+    incompatible versions can be reported to the user. If this occurs _after_
+    importing things from Numba and there's an issue in e.g. a Numba c-ext, a
+    SystemError might have occurred which prevents reporting the likely cause of
+    the problem (incompatible versions of critical dependencies).
+    """
+    #NOTE THIS CODE SHOULD NOT IMPORT ANYTHING FROM NUMBA!
+
+    def extract_version(mod):
+        return tuple(map(int, mod.__version__.split('.')[:2]))
+
+    PYVERSION = sys.version_info[:2]
+
+    if PYVERSION < (3, 8):
+        msg = ("Numba needs Python 3.8 or greater. Got Python "
+               f"{PYVERSION[0]}.{PYVERSION[1]}.")
+        raise ImportError(msg)
+
+    import numpy as np
+    numpy_version = extract_version(np)
+
+    if numpy_version < (1, 21):
+        msg = (f"Numba needs NumPy 1.21 or greater. Got NumPy "
+               f"{numpy_version[0]}.{numpy_version[1]}.")
+        raise ImportError(msg)
+
+    try:
+        import scipy
+    except ImportError:
+        pass
+    else:
+        sp_version = extract_version(scipy)
+        if sp_version < (1, 0):
+            msg = ("Numba requires SciPy version 1.0 or greater. Got SciPy "
+                   f"{scipy.__version__}.")
+            raise ImportError(msg)
+
+
+_ensure_critical_deps()
+# END DO NOT MOVE
+# ---------------------- WARNING WARNING WARNING ----------------------------
+
+
 from ._version import get_versions
 from numba.misc.init_utils import generate_version_info
 
@@ -17,7 +66,6 @@ del generate_version_info
 
 
 from numba.core import config
-from numba.testing import _runtests as runtests
 from numba.core import types, errors
 
 # Re-export typeof
@@ -41,7 +89,9 @@ from numba.core.decorators import (cfunc, generated_jit, jit, njit, stencil,
 
 # Re-export vectorize decorators and the thread layer querying function
 from numba.np.ufunc import (vectorize, guvectorize, threading_layer,
-                            get_num_threads, set_num_threads)
+                            get_num_threads, set_num_threads,
+                            set_parallel_chunksize, get_parallel_chunksize,
+                            get_thread_id)
 
 # Re-export Numpy helpers
 from numba.np.numpy_support import carray, farray, from_dtype
@@ -52,10 +102,20 @@ from numba import experimental
 # Initialize withcontexts
 import numba.core.withcontexts
 from numba.core.withcontexts import objmode_context as objmode
+from numba.core.withcontexts import parallel_chunksize
+
+# Initialize target extensions
+import numba.core.target_extension
+
+# Initialize typed containers
+import numba.typed
 
 # Keep this for backward compatibility.
-test = runtests.main
-
+def test(argv, **kwds):
+    # To speed up the import time, avoid importing `unittest` and other test
+    # dependencies unless the user is actually trying to run tests.
+    from numba.testing import _runtests as runtests
+    return runtests.main(argv, **kwds)
 
 __all__ = """
     cfunc
@@ -76,11 +136,14 @@ __all__ = """
     literal_unroll
     get_num_threads
     set_num_threads
+    set_parallel_chunksize
+    get_parallel_chunksize
+    parallel_chunksize
     """.split() + types.__all__ + errors.__all__
 
 
-_min_llvmlite_version = (0, 33, 0)
-_min_llvm_version = (9, 0, 0)
+_min_llvmlite_version = (0, 41, 0)
+_min_llvm_version = (14, 0, 0)
 
 def _ensure_llvm():
     """
@@ -115,28 +178,6 @@ def _ensure_llvm():
         raise ImportError(msg)
 
     check_jit_execution()
-
-def _ensure_critical_deps():
-    """
-    Make sure Python, NumPy and SciPy have supported versions.
-    """
-    from numba.np.numpy_support import numpy_version
-    from numba.core.utils import PYVERSION
-
-    if PYVERSION < (3, 6):
-        raise ImportError("Numba needs Python 3.6 or greater")
-
-    if numpy_version < (1, 15):
-        raise ImportError("Numba needs NumPy 1.15 or greater")
-
-    try:
-        import scipy
-    except ImportError:
-        pass
-    else:
-        sp_version = tuple(map(int, scipy.__version__.split('.')[:2]))
-        if sp_version < (1, 0):
-            raise ImportError("Numba requires SciPy version 1.0 or greater")
 
 
 def _try_enable_svml():
@@ -187,7 +228,6 @@ def _try_enable_svml():
     return False
 
 _ensure_llvm()
-_ensure_critical_deps()
 
 # we know llvmlite is working as the above tests passed, import it now as SVML
 # needs to mutate runtime options (sets the `-vector-library`).
@@ -206,6 +246,3 @@ config.USING_SVML = _try_enable_svml()
 # SVML state to "no SVML". See https://github.com/numba/numba/issues/4689 for
 # context.
 # ---------------------- WARNING WARNING WARNING ----------------------------
-
-# Initialize typed containers
-import numba.typed

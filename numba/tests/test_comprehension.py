@@ -7,10 +7,11 @@ import numpy as np
 import numpy
 
 from numba.core.compiler import compile_isolated
-from numba import jit
+from numba import jit, typed
 from numba.core import types, utils
 from numba.core.errors import TypingError, LoweringError
 from numba.core.types.functions import _header_lead
+from numba.np.numpy_support import numpy_version
 from numba.tests.support import tag, _32bit, captured_stdout
 
 
@@ -360,6 +361,9 @@ class TestArrayComprehension(unittest.TestCase):
         self.check(comp_nest_with_array_conditional, 5,
                    assert_allocate_list=True)
 
+    @unittest.skipUnless(numpy_version < (1, 24),
+                         'Setting an array element with a sequence is removed '
+                         'in NumPy 1.24')
     def test_comp_nest_with_dependency(self):
         def comp_nest_with_dependency(n):
             l = np.array([[i * j for j in range(i+1)] for i in range(n)])
@@ -369,6 +373,16 @@ class TestArrayComprehension(unittest.TestCase):
             self.check(comp_nest_with_dependency, 5)
         self.assertIn(_header_lead, str(raises.exception))
         self.assertIn('array(undefined,', str(raises.exception))
+
+    def test_comp_unsupported_iter(self):
+        def comp_unsupported_iter():
+            val = zip([1, 2, 3], [4, 5, 6])
+            return np.array([a for a, b in val])
+        with self.assertRaises(TypingError) as raises:
+            self.check(comp_unsupported_iter)
+        self.assertIn(_header_lead, str(raises.exception))
+        self.assertIn('Unsupported iterator found in array comprehension',
+                      str(raises.exception))
 
     def test_no_array_comp(self):
         def no_array_comp1(n):
@@ -407,6 +421,10 @@ class TestArrayComprehension(unittest.TestCase):
         self.check(array_comp, l)
         # with array iterator
         self.check(array_comp, np.array(l))
+        # with tuple iterator (issue #7394)
+        self.check(array_comp, tuple(l))
+        # with typed.List iterator (issue #6550)
+        self.check(array_comp, typed.List(l))
 
     def test_array_comp_with_dtype(self):
         def array_comp(n):

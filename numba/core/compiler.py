@@ -6,7 +6,6 @@ from numba.core.tracing import event
 from numba.core import (utils, errors, typing, interpreter, bytecode, postproc,
                         config, callconv, cpu)
 from numba.parfors.parfor import ParforDiagnostics
-from numba.core.inline_closurecall import InlineClosureCallPass
 from numba.core.errors import CompilerError
 from numba.core.environment import lookup_environment
 
@@ -21,57 +20,155 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode,
                                        MakeFunctionToJitFunction,
                                        CanonicalizeLoopExit,
                                        CanonicalizeLoopEntry, LiteralUnroll,
-                                       ReconstructSSA,
+                                       ReconstructSSA, RewriteDynamicRaises,
+                                       LiteralPropagationSubPipelinePass,
                                        )
 
 from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                                      NopythonRewrites, PreParforPass,
                                      ParforPass, DumpParforDiagnostics,
                                      IRLegalization, NoPythonBackend,
-                                     InlineOverloads, PreLowerStripPhis)
+                                     InlineOverloads, PreLowerStripPhis,
+                                     NativeLowering, NativeParforLowering,
+                                     NoPythonSupportedFeatureValidation,
+                                     ParforFusionPass, ParforPreLoweringPass
+                                     )
 
 from numba.core.object_mode_passes import (ObjectModeFrontEnd,
                                            ObjectModeBackEnd)
+from numba.core.targetconfig import TargetConfig, Option, ConfigStack
 
 
-class Flags(utils.ConfigOptions):
-    # These options are all false by default, but the defaults are
-    # different with the @jit decorator (see targets.options.TargetOptions).
+class Flags(TargetConfig):
+    enable_looplift = Option(
+        type=bool,
+        default=False,
+        doc="Enable loop-lifting",
+    )
+    enable_pyobject = Option(
+        type=bool,
+        default=False,
+        doc="Enable pyobject mode (in general)",
+    )
+    enable_pyobject_looplift = Option(
+        type=bool,
+        default=False,
+        doc="Enable pyobject mode inside lifted loops",
+    )
+    enable_ssa = Option(
+        type=bool,
+        default=True,
+        doc="Enable SSA",
+    )
+    force_pyobject = Option(
+        type=bool,
+        default=False,
+        doc="Force pyobject mode inside the whole function",
+    )
+    release_gil = Option(
+        type=bool,
+        default=False,
+        doc="Release GIL inside the native function",
+    )
+    no_compile = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    debuginfo = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    boundscheck = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    forceinline = Option(
+        type=bool,
+        default=False,
+        doc="Force inlining of the function. Overrides _dbg_optnone.",
+    )
+    no_cpython_wrapper = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    no_cfunc_wrapper = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    auto_parallel = Option(
+        type=cpu.ParallelOptions,
+        default=cpu.ParallelOptions(False),
+        doc="""Enable automatic parallel optimization, can be fine-tuned by
+taking a dictionary of sub-options instead of a boolean, see parfor.py for
+detail""",
+    )
+    nrt = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    no_rewrites = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    error_model = Option(
+        type=str,
+        default="python",
+        doc="TODO",
+    )
+    fastmath = Option(
+        type=cpu.FastMathOptions,
+        default=cpu.FastMathOptions(False),
+        doc="TODO",
+    )
+    noalias = Option(
+        type=bool,
+        default=False,
+        doc="TODO",
+    )
+    inline = Option(
+        type=cpu.InlineOptions,
+        default=cpu.InlineOptions("never"),
+        doc="TODO",
+    )
+    # Defines a new target option for tracking the "target backend".
+    # This will be the XYZ in @jit(_target=XYZ).
+    target_backend = Option(
+        type=str,
+        default="cpu", # if not set, default to CPU
+        doc="backend"
+    )
 
-    OPTIONS = {
-        # Enable loop-lifting
-        'enable_looplift': False,
-        # Enable pyobject mode (in general)
-        'enable_pyobject': False,
-        # Enable pyobject mode inside lifted loops
-        'enable_pyobject_looplift': False,
-        # Enable SSA:
-        'enable_ssa': True,
-        # Force pyobject mode inside the whole function
-        'force_pyobject': False,
-        # Release GIL inside the native function
-        'release_gil': False,
-        'no_compile': False,
-        'debuginfo': False,
-        'boundscheck': False,
-        'forceinline': False,
-        'no_cpython_wrapper': False,
-        'no_cfunc_wrapper': False,
-        # Enable automatic parallel optimization, can be fine-tuned by taking
-        # a dictionary of sub-options instead of a boolean, see parfor.py for
-        # detail.
-        'auto_parallel': cpu.ParallelOptions(False),
-        'nrt': False,
-        'no_rewrites': False,
-        'error_model': 'python',
-        'fastmath': cpu.FastMathOptions(False),
-        'noalias': False,
-        'inline': cpu.InlineOptions('never'),
-    }
+    dbg_extend_lifetimes = Option(
+        type=bool,
+        default=False,
+        doc=("Extend variable lifetime for debugging. "
+             "This automatically turns on with debug=True."),
+    )
+
+    dbg_optnone = Option(
+        type=bool,
+        default=False,
+        doc=("Disable optimization for debug. "
+             "Equivalent to adding optnone attribute in the LLVM Function.")
+    )
+
+    dbg_directives_only = Option(
+        type=bool,
+        default=False,
+        doc=("Make debug emissions directives-only. "
+             "Used when generating lineinfo.")
+    )
 
 
 DEFAULT_FLAGS = Flags()
-DEFAULT_FLAGS.set('nrt')
+DEFAULT_FLAGS.nrt = True
 
 
 CR_FIELDS = ["typing_context",
@@ -166,6 +263,10 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
 
         return cr
 
+    @property
+    def codegen(self):
+        return self.target_context.codegen()
+
     def dump(self, tab=''):
         print(f'{tab}DUMP {type(self).__name__} {self.entry_point}')
         self.signature.dump(tab=tab + '  ')
@@ -180,20 +281,25 @@ _LowerResult = namedtuple("_LowerResult", [
 ])
 
 
-def compile_result(**kws):
-    keys = set(kws.keys())
+def sanitize_compile_result_entries(entries):
+    keys = set(entries.keys())
     fieldset = set(CR_FIELDS)
     badnames = keys - fieldset
     if badnames:
         raise NameError(*badnames)
     missing = fieldset - keys
     for k in missing:
-        kws[k] = None
+        entries[k] = None
     # Avoid keeping alive traceback variables
-    err = kws['typing_error']
+    err = entries['typing_error']
     if err is not None:
-        kws['typing_error'] = err.with_traceback(None)
-    return CompileResult(**kws)
+        entries['typing_error'] = err.with_traceback(None)
+    return entries
+
+
+def compile_result(**entries):
+    entries = sanitize_compile_result_entries(entries)
+    return CompileResult(**entries)
 
 
 def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
@@ -205,7 +311,7 @@ def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
     """
     from numba.core.registry import cpu_target
     typingctx = typing.Context()
-    targetctx = cpu.CPUContext(typingctx)
+    targetctx = cpu.CPUContext(typingctx, target='cpu')
     # Register the contexts in case for nested @jit or @overload calls
     with cpu_target.nested_context(typingctx, targetctx):
         return compile_extra(typingctx, targetctx, func, args, return_type,
@@ -226,6 +332,7 @@ def run_frontend(func, inline_closures=False, emit_dels=False):
     bc = bytecode.ByteCode(func_id=func_id)
     func_ir = interp.interpret(bc)
     if inline_closures:
+        from numba.core.inline_closurecall import InlineClosureCallPass
         inline_pass = InlineClosureCallPass(func_ir, cpu.ParallelOptions(False),
                                             {}, False)
         inline_pass.run()
@@ -371,41 +478,47 @@ class CompilerBase(object):
         """
         Populate and run compiler pipeline
         """
-        pms = self.define_pipelines()
-        for pm in pms:
-            pipeline_name = pm.pipeline_name
-            func_name = "%s.%s" % (self.state.func_id.modname,
-                                   self.state.func_id.func_qualname)
+        with ConfigStack().enter(self.state.flags.copy()):
+            pms = self.define_pipelines()
+            for pm in pms:
+                pipeline_name = pm.pipeline_name
+                func_name = "%s.%s" % (self.state.func_id.modname,
+                                       self.state.func_id.func_qualname)
 
-            event("Pipeline: %s for %s" % (pipeline_name, func_name))
-            self.state.metadata['pipeline_times'] = {pipeline_name:
-                                                     pm.exec_times}
-            is_final_pipeline = pm == pms[-1]
-            res = None
-            try:
-                pm.run(self.state)
-                if self.state.cr is not None:
+                event("Pipeline: %s for %s" % (pipeline_name, func_name))
+                self.state.metadata['pipeline_times'] = {pipeline_name:
+                                                         pm.exec_times}
+                is_final_pipeline = pm == pms[-1]
+                res = None
+                try:
+                    pm.run(self.state)
+                    if self.state.cr is not None:
+                        break
+                except _EarlyPipelineCompletion as e:
+                    res = e.result
                     break
-            except _EarlyPipelineCompletion as e:
-                res = e.result
-                break
-            except Exception as e:
-                self.state.status.fail_reason = e
-                if is_final_pipeline:
-                    raise e
-        else:
-            raise CompilerError("All available pipelines exhausted")
+                except Exception as e:
+                    if (utils.use_new_style_errors() and not
+                            isinstance(e, errors.NumbaError)):
+                        raise e
 
-        # Pipeline is done, remove self reference to release refs to user code
-        self.state.pipeline = None
+                    self.state.status.fail_reason = e
+                    if is_final_pipeline:
+                        raise e
+            else:
+                raise CompilerError("All available pipelines exhausted")
 
-        # organise a return
-        if res is not None:
-            # Early pipeline completion
-            return res
-        else:
-            assert self.state.cr is not None
-            return self.state.cr
+            # Pipeline is done, remove self reference to release refs to user
+            # code
+            self.state.pipeline = None
+
+            # organise a return
+            if res is not None:
+                # Early pipeline completion
+                return res
+            else:
+                assert self.state.cr is not None
+                return self.state.cr
 
     def _compile_bytecode(self):
         """
@@ -472,12 +585,39 @@ class DefaultPassBuilder(object):
     def define_nopython_lowering_pipeline(state, name='nopython_lowering'):
         pm = PassManager(name)
         # legalise
+        pm.add_pass(NoPythonSupportedFeatureValidation,
+                    "ensure features that are in use are in a valid form")
         pm.add_pass(IRLegalization,
                     "ensure IR is legal prior to lowering")
-
+        # Annotate only once legalized
+        pm.add_pass(AnnotateTypes, "annotate types")
         # lower
+        if state.flags.auto_parallel.enabled:
+            pm.add_pass(NativeParforLowering, "native parfor lowering")
+        else:
+            pm.add_pass(NativeLowering, "native lowering")
         pm.add_pass(NoPythonBackend, "nopython mode backend")
         pm.add_pass(DumpParforDiagnostics, "dump parfor diagnostics")
+        pm.finalize()
+        return pm
+
+    @staticmethod
+    def define_parfor_gufunc_nopython_lowering_pipeline(
+            state, name='parfor_gufunc_nopython_lowering'):
+        pm = PassManager(name)
+        # legalise
+        pm.add_pass(NoPythonSupportedFeatureValidation,
+                    "ensure features that are in use are in a valid form")
+        pm.add_pass(IRLegalization,
+                    "ensure IR is legal prior to lowering")
+        # Annotate only once legalized
+        pm.add_pass(AnnotateTypes, "annotate types")
+        # lower
+        if state.flags.auto_parallel.enabled:
+            pm.add_pass(NativeParforLowering, "native parfor lowering")
+        else:
+            pm.add_pass(NativeLowering, "native lowering")
+        pm.add_pass(NoPythonBackend, "nopython mode backend")
         pm.finalize()
         return pm
 
@@ -487,7 +627,6 @@ class DefaultPassBuilder(object):
         pm = PassManager(name)
         # typing
         pm.add_pass(NopythonTypeInference, "nopython frontend")
-        pm.add_pass(AnnotateTypes, "annotate types")
 
         # strip phis
         pm.add_pass(PreLowerStripPhis, "remove phis nodes")
@@ -500,6 +639,20 @@ class DefaultPassBuilder(object):
             pm.add_pass(NopythonRewrites, "nopython rewrites")
         if state.flags.auto_parallel.enabled:
             pm.add_pass(ParforPass, "convert to parfors")
+            pm.add_pass(ParforFusionPass, "fuse parfors")
+            pm.add_pass(ParforPreLoweringPass, "parfor prelowering")
+
+        pm.finalize()
+        return pm
+
+    @staticmethod
+    def define_parfor_gufunc_pipeline(state, name="parfor_gufunc_typed"):
+        """Returns the typed part of the nopython pipeline"""
+        pm = PassManager(name)
+        assert state.func_ir
+        pm.add_pass(IRProcessing, "processing IR")
+        pm.add_pass(NopythonTypeInference, "nopython frontend")
+        pm.add_pass(ParforPreLoweringPass, "parfor prelowering")
 
         pm.finalize()
         return pm
@@ -525,6 +678,8 @@ class DefaultPassBuilder(object):
             pm.add_pass(DeadBranchPrune, "dead branch pruning")
             pm.add_pass(GenericRewrites, "nopython rewrites")
 
+        pm.add_pass(RewriteDynamicRaises, "rewrite dynamic raises")
+
         # convert any remaining closures into functions
         pm.add_pass(MakeFunctionToJitFunction,
                     "convert make_function into JIT functions")
@@ -541,6 +696,8 @@ class DefaultPassBuilder(object):
 
         if state.flags.enable_ssa:
             pm.add_pass(ReconstructSSA, "ssa")
+
+        pm.add_pass(LiteralPropagationSubPipelinePass, "Literal propagation")
 
         pm.finalize()
         return pm
@@ -559,10 +716,9 @@ class DefaultPassBuilder(object):
             pm.add_pass(PreLowerStripPhis, "remove phis nodes")
         pm.add_pass(IRProcessing, "processing IR")
 
-        if utils.PYVERSION >= (3, 7):
-            # The following passes are needed to adjust for looplifting
-            pm.add_pass(CanonicalizeLoopEntry, "canonicalize loop entry")
-            pm.add_pass(CanonicalizeLoopExit, "canonicalize loop exit")
+        # The following passes are needed to adjust for looplifting
+        pm.add_pass(CanonicalizeLoopEntry, "canonicalize loop entry")
+        pm.add_pass(CanonicalizeLoopExit, "canonicalize loop exit")
 
         pm.add_pass(ObjectModeFrontEnd, "object mode frontend")
         pm.add_pass(InlineClosureLikes,
@@ -570,8 +726,8 @@ class DefaultPassBuilder(object):
         # convert any remaining closures into functions
         pm.add_pass(MakeFunctionToJitFunction,
                     "convert make_function into JIT functions")
-        pm.add_pass(AnnotateTypes, "annotate types")
         pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
+        pm.add_pass(AnnotateTypes, "annotate types")
         pm.add_pass(ObjectModeBackEnd, "object mode backend")
         pm.finalize()
         return pm

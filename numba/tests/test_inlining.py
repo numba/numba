@@ -18,7 +18,9 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, Fixup
 from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                            NopythonRewrites, PreParforPass, ParforPass,
                            DumpParforDiagnostics, NativeLowering,
-                           IRLegalization, NoPythonBackend)
+                           NativeParforLowering, IRLegalization,
+                           NoPythonBackend, NativeLowering,
+                           ParforFusionPass, ParforPreLoweringPass)
 
 from numba.core.compiler_machinery import FunctionPass, PassManager, register_pass
 import unittest
@@ -55,8 +57,8 @@ class InlineTestPass(FunctionPass):
         for i, stmt in enumerate(block.body):
             if guard(find_callname,state.func_ir, stmt.value) is not None:
                 inline_closure_call(state.func_ir, {}, block, i, lambda: None,
-                    state.typingctx, (), state.type_annotation.typemap,
-                    state.type_annotation.calltypes)
+                                    state.typingctx, state.targetctx, (),
+                                    state.typemap, state.calltypes)
                 break
         # also fix up the IR
         post_proc = postproc.PostProcessor(state.func_ir)
@@ -81,7 +83,6 @@ def gen_pipeline(state, test_pass):
                     "inline calls to locally defined closures")
         # typing
         pm.add_pass(NopythonTypeInference, "nopython frontend")
-        pm.add_pass(AnnotateTypes, "annotate types")
 
         if state.flags.auto_parallel.enabled:
             pm.add_pass(PreParforPass, "Preprocessing for parfors")
@@ -89,15 +90,21 @@ def gen_pipeline(state, test_pass):
             pm.add_pass(NopythonRewrites, "nopython rewrites")
         if state.flags.auto_parallel.enabled:
             pm.add_pass(ParforPass, "convert to parfors")
+            pm.add_pass(ParforFusionPass, "fuse parfors")
+            pm.add_pass(ParforPreLoweringPass, "parfor prelowering")
 
         pm.add_pass(test_pass, "inline test")
 
         # legalise
         pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
-
+        pm.add_pass(AnnotateTypes, "annotate types")
         pm.add_pass(PreserveIR, "preserve IR")
 
         # lower
+        if state.flags.auto_parallel.enabled:
+            pm.add_pass(NativeParforLowering, "native parfor lowering")
+        else:
+            pm.add_pass(NativeLowering, "native lowering")
         pm.add_pass(NoPythonBackend, "nopython mode backend")
         pm.add_pass(DumpParforDiagnostics, "dump parfor diagnostics")
         return pm
@@ -258,9 +265,9 @@ class TestInlining(TestCase):
                     if (guard(find_callname, state.func_ir, stmt.value)
                             is not None):
                         inline_closure_call(state.func_ir, {}, block, i,
-                            foo.py_func, state.typingctx,
-                            (state.type_annotation.typemap[stmt.value.args[0].name],),
-                            state.type_annotation.typemap, state.calltypes)
+                            foo.py_func, state.typingctx, state.targetctx,
+                            (state.typemap[stmt.value.args[0].name],),
+                             state.typemap, state.calltypes)
                         break
                 return True
 

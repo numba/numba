@@ -3,7 +3,7 @@ This file provides internal compiler utilities that support certain special
 operations with tuple and workarounds for limitations enforced in userland.
 """
 
-from numba.core import types, typing
+from numba.core import types, typing, errors
 from numba.core.cgutils import alloca_once
 from numba.core.extending import intrinsic
 
@@ -36,6 +36,9 @@ def tuple_setitem(typingctx, tup, idx, val):
 @intrinsic
 def build_full_slice_tuple(tyctx, sz):
     """Creates a sz-tuple of full slices."""
+    if not isinstance(sz, types.IntegerLiteral):
+        raise errors.RequireLiteralValue(sz)
+
     size = int(sz.literal_value)
     tuple_type = types.UniTuple(dtype=types.slice2_type, count=size)
     sig = tuple_type(sz)
@@ -57,4 +60,25 @@ def build_full_slice_tuple(tyctx, sz):
         res = context.compile_internal(builder, impl, inner_sig, inner_args)
         return res
 
+    return sig, codegen
+
+
+@intrinsic
+def unpack_single_tuple(tyctx, tup):
+    """This exists to handle the situation y = (*x,), the interpreter injects a
+    call to it in the case of a single value unpack. It's not possible at
+    interpreting time to differentiate between an unpack on a variable sized
+    container e.g. list and a fixed one, e.g. tuple. This function handles the
+    situation should it arise.
+    """
+    # See issue #6534
+    if not isinstance(tup, types.BaseTuple):
+        msg = (f"Only tuples are supported when unpacking a single item, "
+               f"got type: {tup}")
+        raise errors.UnsupportedError(msg)
+
+    sig = tup(tup)
+
+    def codegen(context, builder, signature, args):
+        return args[0] # there's only one tuple and it's a simple pass through
     return sig, codegen

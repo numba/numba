@@ -1,6 +1,4 @@
 /* Adapted from CPython3.7 Objects/dict-common.h */
-#include "Python.h"
-#include "../_pymodule.h"
 #include "cext.h"
 
 #ifndef NUMBA_DICT_COMMON_H
@@ -91,6 +89,20 @@ Parameters
 NUMBA_EXPORT_FUNC(int)
 numba_dict_new(NB_Dict **out, Py_ssize_t size, Py_ssize_t key_size, Py_ssize_t val_size);
 
+/* Allocate a new dict with enough space to hold n_keys without resizing.
+Parameters
+- NB_Dict **out
+    Output for the new dictionary.
+- Py_ssize_t n_keys
+    The number of keys to fit without needing resize.
+- Py_ssize_t key_size
+    Size of a key entry.
+- Py_ssize_t val_size
+    Size of a value entry.
+*/
+NUMBA_EXPORT_FUNC(int)
+numba_dict_new_sized(NB_Dict** out, Py_ssize_t n_keys, Py_ssize_t key_size, Py_ssize_t val_size);
+
 /* Free a dict */
 NUMBA_EXPORT_FUNC(void)
 numba_dict_free(NB_Dict *d);
@@ -98,12 +110,6 @@ numba_dict_free(NB_Dict *d);
 /* Returns length of a dict */
 NUMBA_EXPORT_FUNC(Py_ssize_t)
 numba_dict_length(NB_Dict *d);
-
-/* Allocates a new dict at the minimal size
-See numba_dict_new().
-*/
-NUMBA_EXPORT_FUNC(int)
-numba_dict_new_minsize(NB_Dict **out, Py_ssize_t key_size, Py_ssize_t val_size);
 
 /* Set the method table for type specific operations
 */

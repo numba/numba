@@ -29,7 +29,7 @@ class TestGUFuncScalar(CUDATestCase):
 
         # inp is (10000, 3)
         # out is (10000)
-        # The outter (leftmost) dimension must match or numpy broadcasting
+        # The outer (leftmost) dimension must match or numpy broadcasting
         # is performed. But, broadcasting on CUDA arrays is not supported.
 
         inp = np.arange(300, dtype=np.int32).reshape(100, 3)

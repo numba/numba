@@ -10,7 +10,7 @@ from numba.tests.support import (TestCase, override_config, override_env_config,
                       captured_stdout, forbid_codegen, skip_parfors_unsupported,
                       needs_blas)
 from numba import jit
-from numba.core import types, compiler
+from numba.core import types, compiler, utils
 from numba.core.compiler import compile_isolated, Flags
 from numba.core.cpu import ParallelOptions
 from numba.core.errors import NumbaPerformanceWarning
@@ -47,8 +47,8 @@ def supported_parfor(n):
     return a
 
 force_parallel_flags = Flags()
-force_parallel_flags.set("auto_parallel", ParallelOptions(True))
-force_parallel_flags.set('nrt')
+force_parallel_flags.auto_parallel = ParallelOptions(True)
+force_parallel_flags.nrt = True
 
 class DebugTestBase(TestCase):
 
@@ -71,7 +71,10 @@ class DebugTestBase(TestCase):
                 self.assert_fails(check_meth, out)
 
     def _check_dump_bytecode(self, out):
-        self.assertIn('BINARY_ADD', out)
+        if utils.PYVERSION >= (3, 11):
+            self.assertIn('BINARY_OP', out)
+        else:
+            self.assertIn('BINARY_ADD', out)
 
     def _check_dump_cfg(self, out):
         self.assertIn('CFG dominators', out)
@@ -84,8 +87,8 @@ class DebugTestBase(TestCase):
 
     def _check_dump_llvm(self, out):
         self.assertIn('--LLVM DUMP', out)
-        if compiler.Flags.OPTIONS['auto_parallel'].enabled == False:
-            self.assertIn('%"retval" = alloca', out)
+        if compiler.Flags.options["auto_parallel"].default.enabled == False:
+            self.assertRegex(out, r'store i64 %\"\.\d", i64\* %"retptr"', out)
 
     def _check_dump_func_opt_llvm(self, out):
         self.assertIn('--FUNCTION OPTIMIZED DUMP %s' % self.func_name, out)

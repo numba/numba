@@ -180,44 +180,56 @@ class TestCudaSync(CUDATestCase):
 
     def test_threadfence_codegen(self):
         # Does not test runtime behavior, just the code generation.
-        compiled = cuda.jit("void(int32[:])")(use_threadfence)
+        sig = (int32[:],)
+        compiled = cuda.jit(sig)(use_threadfence)
         ary = np.zeros(10, dtype=np.int32)
         compiled[1, 1](ary)
         self.assertEqual(123 + 321, ary[0])
         if not ENABLE_CUDASIM:
-            self.assertIn("membar.gl;", compiled.ptx)
+            self.assertIn("membar.gl;", compiled.inspect_asm(sig))
 
     def test_threadfence_block_codegen(self):
         # Does not test runtime behavior, just the code generation.
-        compiled = cuda.jit("void(int32[:])")(use_threadfence_block)
+        sig = (int32[:],)
+        compiled = cuda.jit(sig)(use_threadfence_block)
         ary = np.zeros(10, dtype=np.int32)
         compiled[1, 1](ary)
         self.assertEqual(123 + 321, ary[0])
         if not ENABLE_CUDASIM:
-            self.assertIn("membar.cta;", compiled.ptx)
+            self.assertIn("membar.cta;", compiled.inspect_asm(sig))
 
     def test_threadfence_system_codegen(self):
         # Does not test runtime behavior, just the code generation.
-        compiled = cuda.jit("void(int32[:])")(use_threadfence_system)
+        sig = (int32[:],)
+        compiled = cuda.jit(sig)(use_threadfence_system)
         ary = np.zeros(10, dtype=np.int32)
         compiled[1, 1](ary)
         self.assertEqual(123 + 321, ary[0])
         if not ENABLE_CUDASIM:
-            self.assertIn("membar.sys;", compiled.ptx)
+            self.assertIn("membar.sys;", compiled.inspect_asm(sig))
 
-    def test_syncthreads_count(self):
-        compiled = cuda.jit("void(int32[:], int32[:])")(use_syncthreads_count)
-        ary_in = np.ones(72, dtype=np.int32)
+    def _test_syncthreads_count(self, in_dtype):
+        compiled = cuda.jit(use_syncthreads_count)
+        ary_in = np.ones(72, dtype=in_dtype)
         ary_out = np.zeros(72, dtype=np.int32)
         ary_in[31] = 0
         ary_in[42] = 0
         compiled[1, 72](ary_in, ary_out)
         self.assertTrue(np.all(ary_out == 70))
 
-    def test_syncthreads_and(self):
-        compiled = cuda.jit("void(int32[:], int32[:])")(use_syncthreads_and)
+    def test_syncthreads_count(self):
+        self._test_syncthreads_count(np.int32)
+
+    def test_syncthreads_count_upcast(self):
+        self._test_syncthreads_count(np.int16)
+
+    def test_syncthreads_count_downcast(self):
+        self._test_syncthreads_count(np.int64)
+
+    def _test_syncthreads_and(self, in_dtype):
+        compiled = cuda.jit(use_syncthreads_and)
         nelem = 100
-        ary_in = np.ones(nelem, dtype=np.int32)
+        ary_in = np.ones(nelem, dtype=in_dtype)
         ary_out = np.zeros(nelem, dtype=np.int32)
         compiled[1, nelem](ary_in, ary_out)
         self.assertTrue(np.all(ary_out == 1))
@@ -225,16 +237,34 @@ class TestCudaSync(CUDATestCase):
         compiled[1, nelem](ary_in, ary_out)
         self.assertTrue(np.all(ary_out == 0))
 
-    def test_syncthreads_or(self):
-        compiled = cuda.jit("void(int32[:], int32[:])")(use_syncthreads_or)
+    def test_syncthreads_and(self):
+        self._test_syncthreads_and(np.int32)
+
+    def test_syncthreads_and_upcast(self):
+        self._test_syncthreads_and(np.int16)
+
+    def test_syncthreads_and_downcast(self):
+        self._test_syncthreads_and(np.int64)
+
+    def _test_syncthreads_or(self, in_dtype):
+        compiled = cuda.jit(use_syncthreads_or)
         nelem = 100
-        ary_in = np.zeros(nelem, dtype=np.int32)
+        ary_in = np.zeros(nelem, dtype=in_dtype)
         ary_out = np.zeros(nelem, dtype=np.int32)
         compiled[1, nelem](ary_in, ary_out)
         self.assertTrue(np.all(ary_out == 0))
         ary_in[31] = 1
         compiled[1, nelem](ary_in, ary_out)
         self.assertTrue(np.all(ary_out == 1))
+
+    def test_syncthreads_or(self):
+        self._test_syncthreads_or(np.int32)
+
+    def test_syncthreads_or_upcast(self):
+        self._test_syncthreads_or(np.int16)
+
+    def test_syncthreads_or_downcast(self):
+        self._test_syncthreads_or(np.int64)
 
 
 if __name__ == '__main__':

@@ -6,12 +6,12 @@ import ctypes
 import html
 import textwrap
 
-import llvmlite.llvmpy.core as lc
-import llvmlite.llvmpy.passes as lp
 import llvmlite.binding as ll
 import llvmlite.ir as llvmir
 
+from abc import abstractmethod, ABCMeta
 from numba.core import utils, config, cgutils
+from numba.core.llvm_bindings import create_pass_manager_builder
 from numba.core.runtime.nrtopt import remove_redundant_nrt_refct
 from numba.core.runtime import rtsys
 from numba.core.compiler_lock import require_global_compiler_lock
@@ -202,7 +202,7 @@ class _CFG(object):
             # when trying to render to pdf
             cmax = 200
             if len(fname) > cmax:
-                wstr = (f'CFG output filname "{fname}" exceeds maximum '
+                wstr = (f'CFG output filename "{fname}" exceeds maximum '
                         f'supported length, it will be truncated.')
                 warnings.warn(wstr, NumbaInvalidConfigWarning)
                 fname = fname[:cmax]
@@ -234,7 +234,7 @@ class _CFG(object):
         nrt_meminfo = re.compile("@NRT_MemInfo")
         ll_intrin_calls = re.compile(r".*call.*@llvm\..*")
         ll_function_call = re.compile(r".*call.*@.*")
-        ll_raise = re.compile(r"ret i32.*\!ret_is_raise.*")
+        ll_raise = re.compile(r"store .*\!numba_exception_output.*")
         ll_return = re.compile("ret i32 [^1],?.*")
 
         # wrapper function for line wrapping LLVM lines
@@ -515,7 +515,7 @@ class _CFG(object):
         return self.dot
 
 
-class CodeLibrary(object):
+class CodeLibrary(metaclass=ABCMeta):
     """
     An interface for bundling LLVM code together and compiling it.
     It is tied to a *codegen* instance (e.g. JITCPUCodegen) that will
@@ -526,18 +526,13 @@ class CodeLibrary(object):
     _object_caching_enabled = False
     _disable_inspection = False
 
-    def __init__(self, codegen: "BaseCPUCodegen", name: str):
+    def __init__(self, codegen: "CPUCodegen", name: str):
         self._codegen = codegen
         self._name = name
-        self._linking_libraries = []   # maintain insertion order
-        self._final_module = ll.parse_assembly(
-            str(self._codegen._create_empty_module(self._name)))
-        self._final_module.name = cgutils.normalize_ir_text(self._name)
-        self._shared_module = None
-        # Track names of the dynamic globals
-        self._dynamic_globals = []
         ptc_name = f"{self.__class__.__name__}({self._name!r})"
         self._recorded_timings = PassTimingsCollection(ptc_name)
+        # Track names of the dynamic globals
+        self._dynamic_globals = []
 
     @property
     def has_dynamic_globals(self):
@@ -555,8 +550,12 @@ class CodeLibrary(object):
         """
         return self._codegen
 
+    @property
+    def name(self):
+        return self._name
+
     def __repr__(self):
-        return "<Library %r at 0x%x>" % (self._name, id(self))
+        return "<Library %r at 0x%x>" % (self.name, id(self))
 
     def _raise_if_finalized(self):
         if self._finalized:
@@ -566,6 +565,88 @@ class CodeLibrary(object):
     def _ensure_finalized(self):
         if not self._finalized:
             self.finalize()
+
+    def create_ir_module(self, name):
+        """
+        Create an LLVM IR module for use by this library.
+        """
+        self._raise_if_finalized()
+        ir_module = self._codegen._create_empty_module(name)
+        return ir_module
+
+    @abstractmethod
+    def add_linking_library(self, library):
+        """
+        Add a library for linking into this library, without losing
+        the original library.
+        """
+
+    @abstractmethod
+    def add_ir_module(self, ir_module):
+        """
+        Add an LLVM IR module's contents to this library.
+        """
+
+    @abstractmethod
+    def finalize(self):
+        """
+        Finalize the library.  After this call, nothing can be added anymore.
+        Finalization involves various stages of code optimization and
+        linking.
+        """
+
+    @abstractmethod
+    def get_function(self, name):
+        """
+        Return the function named ``name``.
+        """
+
+    @abstractmethod
+    def get_llvm_str(self):
+        """
+        Get the human-readable form of the LLVM module.
+        """
+
+    @abstractmethod
+    def get_asm_str(self):
+        """
+        Get the human-readable assembly.
+        """
+
+    #
+    # Object cache hooks and serialization
+    #
+
+    def enable_object_caching(self):
+        self._object_caching_enabled = True
+        self._compiled_object = None
+        self._compiled = False
+
+    def _get_compiled_object(self):
+        if not self._object_caching_enabled:
+            raise ValueError("object caching not enabled in %s" % (self,))
+        if self._compiled_object is None:
+            raise RuntimeError("no compiled object yet for %s" % (self,))
+        return self._compiled_object
+
+    def _set_compiled_object(self, value):
+        if not self._object_caching_enabled:
+            raise ValueError("object caching not enabled in %s" % (self,))
+        if self._compiled:
+            raise ValueError("library already compiled: %s" % (self,))
+        self._compiled_object = value
+        self._disable_inspection = True
+
+
+class CPUCodeLibrary(CodeLibrary):
+
+    def __init__(self, codegen, name):
+        super().__init__(codegen, name)
+        self._linking_libraries = []   # maintain insertion order
+        self._final_module = ll.parse_assembly(
+            str(self._codegen._create_empty_module(self.name)))
+        self._final_module.name = cgutils.normalize_ir_text(self.name)
+        self._shared_module = None
 
     def _optimize_functions(self, ll_module):
         """
@@ -635,26 +716,11 @@ class CodeLibrary(object):
         self._shared_module = mod
         return mod
 
-    def create_ir_module(self, name):
-        """
-        Create a LLVM IR module for use by this library.
-        """
-        self._raise_if_finalized()
-        ir_module = self._codegen._create_empty_module(name)
-        return ir_module
-
     def add_linking_library(self, library):
-        """
-        Add a library for linking into this library, without losing
-        the original library.
-        """
         library._ensure_finalized()
         self._linking_libraries.append(library)
 
     def add_ir_module(self, ir_module):
-        """
-        Add a LLVM IR module's contents to this library.
-        """
         self._raise_if_finalized()
         assert isinstance(ir_module, llvmir.Module)
         ir = cgutils.normalize_ir_text(str(ir_module))
@@ -671,11 +737,6 @@ class CodeLibrary(object):
         self._final_module.link_in(ll_module)
 
     def finalize(self):
-        """
-        Finalize the library.  After this call, nothing can be added anymore.
-        Finalization involves various stages of code optimization and
-        linking.
-        """
         require_global_compiler_lock()
 
         # Report any LLVM-related problems to the user
@@ -684,7 +745,7 @@ class CodeLibrary(object):
         self._raise_if_finalized()
 
         if config.DUMP_FUNC_OPT:
-            dump("FUNCTION OPTIMIZED DUMP %s" % self._name,
+            dump("FUNCTION OPTIMIZED DUMP %s" % self.name,
                  self.get_llvm_str(), 'llvm')
 
         # Link libraries for shared code
@@ -738,14 +799,10 @@ class CodeLibrary(object):
         self._finalized = True
 
         if config.DUMP_OPTIMIZED:
-            dump("OPTIMIZED DUMP %s" % self._name, self.get_llvm_str(), 'llvm')
+            dump("OPTIMIZED DUMP %s" % self.name, self.get_llvm_str(), 'llvm')
 
         if config.DUMP_ASSEMBLY:
-            # CUDA backend cannot return assembly this early, so don't
-            # attempt to dump assembly if nothing is produced.
-            asm = self.get_asm_str()
-            if asm:
-                dump("ASSEMBLY %s" % self._name, self.get_asm_str(), 'asm')
+            dump("ASSEMBLY %s" % self.name, self.get_asm_str(), 'asm')
 
     def get_defined_functions(self):
         """
@@ -766,16 +823,10 @@ class CodeLibrary(object):
                           'Invalid result is returned.')
 
     def get_llvm_str(self):
-        """
-        Get the human-readable form of the LLVM module.
-        """
         self._sentry_cache_disable_inspection()
         return str(self._final_module)
 
     def get_asm_str(self):
-        """
-        Get the human-readable assembly.
-        """
         self._sentry_cache_disable_inspection()
         return str(self._codegen._tm.emit_assembly(self._final_module))
 
@@ -786,40 +837,18 @@ class CodeLibrary(object):
         self._sentry_cache_disable_inspection()
         return _CFG(self, name, py_func, **kwargs)
 
-    def get_disasm_cfg(self):
+    def get_disasm_cfg(self, mangled_name):
         """
-        Get the CFG of the disassembly of the ELF object
+        Get the CFG of the disassembly of the ELF object at symbol mangled_name.
 
         Requires python package: r2pipe
         Requires radare2 binary on $PATH.
         Notebook rendering requires python package: graphviz
+        Optionally requires a compiler toolchain (via pycc) to link the ELF to
+        get better disassembly results.
         """
         elf = self._get_compiled_object()
-        return disassemble_elf_to_cfg(elf)
-
-    #
-    # Object cache hooks and serialization
-    #
-
-    def enable_object_caching(self):
-        self._object_caching_enabled = True
-        self._compiled_object = None
-        self._compiled = False
-
-    def _get_compiled_object(self):
-        if not self._object_caching_enabled:
-            raise ValueError("object caching not enabled in %s" % (self,))
-        if self._compiled_object is None:
-            raise RuntimeError("no compiled object yet for %s" % (self,))
-        return self._compiled_object
-
-    def _set_compiled_object(self, value):
-        if not self._object_caching_enabled:
-            raise ValueError("object caching not enabled in %s" % (self,))
-        if self._compiled:
-            raise ValueError("library already compiled: %s" % (self,))
-        self._compiled_object = value
-        self._disable_inspection = True
+        return disassemble_elf_to_cfg(elf, mangled_name)
 
     @classmethod
     def _dump_elf(cls, buf):
@@ -880,7 +909,7 @@ class CodeLibrary(object):
         Serialize this library using its bitcode as the cached representation.
         """
         self._ensure_finalized()
-        return (self._name, 'bitcode', self._final_module.as_bitcode())
+        return (self.name, 'bitcode', self._final_module.as_bitcode())
 
     def serialize_using_object_code(self):
         """
@@ -891,7 +920,7 @@ class CodeLibrary(object):
         self._ensure_finalized()
         data = (self._get_compiled_object(),
                 self._get_module_for_linking().as_bitcode())
-        return (self._name, 'object', data)
+        return (self.name, 'object', data)
 
     @classmethod
     def _unserialize(cls, codegen, state):
@@ -916,7 +945,7 @@ class CodeLibrary(object):
             raise ValueError("unsupported serialization kind %r" % (kind,))
 
 
-class AOTCodeLibrary(CodeLibrary):
+class AOTCodeLibrary(CPUCodeLibrary):
 
     def emit_native_object(self):
         """
@@ -941,7 +970,7 @@ class AOTCodeLibrary(CodeLibrary):
         pass
 
 
-class JITCodeLibrary(CodeLibrary):
+class JITCodeLibrary(CPUCodeLibrary):
 
     def get_pointer_to_function(self, name):
         """
@@ -1025,7 +1054,6 @@ class RuntimeLinker(object):
             # Delete resolved
             del self._unresolved[name]
 
-
 def _proxy(old):
     @functools.wraps(old)
     def wrapper(self, *args, **kwargs):
@@ -1087,7 +1115,50 @@ class JitEngine(object):
         ll.ExecutionEngine.get_global_value_address
         )
 
-class BaseCPUCodegen(object):
+
+class Codegen(metaclass=ABCMeta):
+    """
+    Base Codegen class. It is expected that subclasses set the class attribute
+    ``_library_class``, indicating the CodeLibrary class for the target.
+
+    Subclasses should also initialize:
+
+    ``self._data_layout``: the data layout for the target.
+    ``self._target_data``: the binding layer ``TargetData`` for the target.
+    """
+
+    @abstractmethod
+    def _create_empty_module(self, name):
+        """
+        Create a new empty module suitable for the target.
+        """
+
+    @abstractmethod
+    def _add_module(self, module):
+        """
+        Add a module to the execution engine. Ownership of the module is
+        transferred to the engine.
+        """
+
+    @property
+    def target_data(self):
+        """
+        The LLVM "target data" object for this codegen instance.
+        """
+        return self._target_data
+
+    def create_library(self, name, **kwargs):
+        """
+        Create a :class:`CodeLibrary` object for use with this codegen
+        instance.
+        """
+        return self._library_class(self, name, **kwargs)
+
+    def unserialize_library(self, serialized):
+        return self._library_class._unserialize(self, serialized)
+
+
+class CPUCodegen(Codegen):
 
     def __init__(self, module_name):
         initialize_llvm()
@@ -1126,28 +1197,11 @@ class BaseCPUCodegen(object):
                                       self._library_class._object_getbuffer_hook)
 
     def _create_empty_module(self, name):
-        ir_module = lc.Module(cgutils.normalize_ir_text(name))
+        ir_module = llvmir.Module(cgutils.normalize_ir_text(name))
         ir_module.triple = ll.get_process_triple()
         if self._data_layout:
             ir_module.data_layout = self._data_layout
         return ir_module
-
-    @property
-    def target_data(self):
-        """
-        The LLVM "target data" object for this codegen instance.
-        """
-        return self._target_data
-
-    def create_library(self, name):
-        """
-        Create a :class:`CodeLibrary` object for use with this codegen
-        instance.
-        """
-        return self._library_class(self, name)
-
-    def unserialize_library(self, serialized):
-        return self._library_class._unserialize(self, serialized)
 
     def _module_pass_manager(self, **kwargs):
         pm = ll.create_module_pass_manager()
@@ -1155,16 +1209,27 @@ class BaseCPUCodegen(object):
         cost = kwargs.pop("cost", None)
         with self._pass_manager_builder(**kwargs) as pmb:
             pmb.populate(pm)
-        if cost is not None and cost == "cheap":
+        # If config.OPT==0 do not include these extra passes to help with
+        # vectorization.
+        if cost is not None and cost == "cheap" and config.OPT != 0:
             # This knocks loops into rotated form early to reduce the likelihood
             # of vectorization failing due to unknown PHI nodes.
             pm.add_loop_rotate_pass()
-            # This helps the refprune pass which can only deal with arguments to
-            # NRT function pairs that are literally the same i.e. it doesn't
-            # attempt to resolve arguments by tracing through the IR etc.
-            # Instcombine resolves a lot of this, it only runs as part of the
-            # cheap pass as the full opt pass will likely include it anyway.
-            pm.add_instruction_combining_pass()
+            if ll.llvm_version_info[0] < 12:
+                # LLVM 11 added LFTR to the IV Simplification pass,
+                # this interacted badly with the existing use of the
+                # InstructionCombiner here and ended up with PHI nodes that
+                # prevented vectorization from working. The desired
+                # vectorization effects can be achieved with this in LLVM 11
+                # (and also < 11) but at a potentially slightly higher cost:
+                pm.add_licm_pass()
+                pm.add_cfg_simplification_pass()
+            else:
+                # These passes are required to get SVML to vectorize tests
+                # properly on LLVM 14
+                pm.add_instruction_combining_pass()
+                pm.add_jump_threading_pass()
+
         if config.LLVM_REFPRUNE_PASS:
             pm.add_refprune_pass(_parse_refprune_flags())
         return pm
@@ -1191,10 +1256,10 @@ class BaseCPUCodegen(object):
         loop_vectorize = kwargs.pop('loop_vectorize', config.LOOP_VECTORIZE)
         slp_vectorize = kwargs.pop('slp_vectorize', config.SLP_VECTORIZE)
 
-        pmb = lp.create_pass_manager_builder(opt=opt_level,
-                                             loop_vectorize=loop_vectorize,
-                                             slp_vectorize=slp_vectorize,
-                                             **kwargs)
+        pmb = create_pass_manager_builder(opt=opt_level,
+                                          loop_vectorize=loop_vectorize,
+                                          slp_vectorize=slp_vectorize,
+                                          **kwargs)
 
         return pmb
 
@@ -1223,7 +1288,7 @@ class BaseCPUCodegen(object):
             raise RuntimeError(
                 "LLVM will produce incorrect floating-point code "
                 "in the current locale %s.\nPlease read "
-                "https://numba.pydata.org/numba-doc/latest/user/faq.html#llvm-locale-bug "
+                "https://numba.readthedocs.io/en/stable/user/faq.html#llvm-locale-bug "
                 "for more information."
                 % (loc,))
         raise AssertionError("Unexpected IR:\n%s\n" % (ir_out,))
@@ -1262,7 +1327,8 @@ class BaseCPUCodegen(object):
             return config.CPU_FEATURES
         return get_host_cpu_features()
 
-class AOTCPUCodegen(BaseCPUCodegen):
+
+class AOTCPUCodegen(CPUCodegen):
     """
     A codegen implementation suitable for Ahead-Of-Time compilation
     (e.g. generation of object files).
@@ -1273,7 +1339,7 @@ class AOTCPUCodegen(BaseCPUCodegen):
     def __init__(self, module_name, cpu_name=None):
         # By default, use generic cpu model for the arch
         self._cpu_name = cpu_name or ''
-        BaseCPUCodegen.__init__(self, module_name)
+        CPUCodegen.__init__(self, module_name)
 
     def _customize_tm_options(self, options):
         cpu_name = self._cpu_name
@@ -1293,7 +1359,7 @@ class AOTCPUCodegen(BaseCPUCodegen):
         pass
 
 
-class JITCPUCodegen(BaseCPUCodegen):
+class JITCPUCodegen(CPUCodegen):
     """
     A codegen implementation suitable for Just-In-Time compilation.
     """

@@ -18,16 +18,20 @@ Here's some guidelines to help the review process go smoothly.
    noted here: https://help.github.com/articles/closing-issues-using-keywords/
 
 3. If your pull request is not ready for review but you want to make use of the
-   continuous integration testing facilities please label it with `[WIP]` and
-   then remove the label when you'd like it to be reviewed.
+   continuous integration testing facilities here, please click the arrow besides
+   "Create Pull Request" and choose "Create Draft Pull Request".
+   When it's ready for review, you can click the button "ready to review" near
+   the end of the pull request
+   (besides "This pull request is still a work in progress".)
+   The maintainers will then be automatically notified to review it.
 
 4. Once review has taken place please do not add features or make changes out of
    the scope of those requested by the reviewer (doing this just add delays as
    already reviewed code ends up having to be re-reviewed/it is hard to tell
-   what is new etc!). Further, please do not rebase your branch on master/force
+   what is new etc!). Further, please do not rebase your branch on main/force
    push/rewrite history, doing any of these causes the context of any comments
-   made by reviewers to be lost. If conflicts occur against master they should
-   be resolved by merging master into the branch used for making the pull
+   made by reviewers to be lost. If conflicts occur against main they should
+   be resolved by merging main into the branch used for making the pull
    request.
 
 Many thanks in advance for your cooperation!

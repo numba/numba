@@ -2,14 +2,20 @@ import numpy as np
 
 from numba import vectorize, guvectorize
 from numba import cuda
+from numba.cuda.cudadrv import driver
 from numba.cuda.testing import unittest, ContextResettingTestCase, ForeignArray
 from numba.cuda.testing import skip_on_cudasim, skip_if_external_memmgr
-from numba.tests.support import override_config
+from numba.tests.support import linux_only, override_config
 from unittest.mock import call, patch
 
 
 @skip_on_cudasim('CUDA Array Interface is not supported in the simulator')
 class TestCudaArrayInterface(ContextResettingTestCase):
+    def assertPointersEqual(self, a, b):
+        if driver.USE_NV_BINDING:
+            self.assertEqual(int(a.device_ctypes_pointer),
+                             int(b.device_ctypes_pointer))
+
     def test_as_cuda_array(self):
         h_arr = np.arange(10)
         self.assertFalse(cuda.is_cuda_array(h_arr))
@@ -23,8 +29,13 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         np.testing.assert_array_equal(wrapped.copy_to_host(), h_arr)
         np.testing.assert_array_equal(d_arr.copy_to_host(), h_arr)
         # d_arr and wrapped must be the same buffer
-        self.assertEqual(wrapped.device_ctypes_pointer.value,
-                         d_arr.device_ctypes_pointer.value)
+        self.assertPointersEqual(wrapped, d_arr)
+
+    def get_stream_value(self, stream):
+        if driver.USE_NV_BINDING:
+            return int(stream.handle)
+        else:
+            return stream.handle.value
 
     @skip_if_external_memmgr('Ownership not relevant with external memmgr')
     def test_ownership(self):
@@ -59,7 +70,10 @@ class TestCudaArrayInterface(ContextResettingTestCase):
 
         @cuda.jit
         def mutate(arr, val):
-            arr[cuda.grid(1)] += val
+            i = cuda.grid(1)
+            if i >= len(arr):
+                return
+            arr[i] += val
 
         val = 7
         mutate.forall(wrapped.size)(wrapped, val)
@@ -100,8 +114,7 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         out = ForeignArray(cuda.device_array(h_arr.shape))
         returned = vadd(h_arr, val, out=out)
         np.testing.assert_array_equal(returned.copy_to_host(), h_arr + val)
-        self.assertEqual(returned.device_ctypes_pointer.value,
-                         out._arr.device_ctypes_pointer.value)
+        self.assertPointersEqual(returned, out._arr)
 
     def test_array_views(self):
         """Views created via array interface support:
@@ -261,11 +274,34 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         c_arr = cuda.device_array(10)
         self.assertIsNone(c_arr.__cuda_array_interface__['stream'])
 
+        mapped_arr = cuda.mapped_array(10)
+        self.assertIsNone(mapped_arr.__cuda_array_interface__['stream'])
+
+    @linux_only
+    def test_produce_managed_no_stream(self):
+        managed_arr = cuda.managed_array(10)
+        self.assertIsNone(managed_arr.__cuda_array_interface__['stream'])
+
     def test_produce_stream(self):
         s = cuda.stream()
         c_arr = cuda.device_array(10, stream=s)
         cai_stream = c_arr.__cuda_array_interface__['stream']
-        self.assertEqual(s.handle.value, cai_stream)
+        stream_value = self.get_stream_value(s)
+        self.assertEqual(stream_value, cai_stream)
+
+        s = cuda.stream()
+        mapped_arr = cuda.mapped_array(10, stream=s)
+        cai_stream = mapped_arr.__cuda_array_interface__['stream']
+        stream_value = self.get_stream_value(s)
+        self.assertEqual(stream_value, cai_stream)
+
+    @linux_only
+    def test_produce_managed_stream(self):
+        s = cuda.stream()
+        managed_arr = cuda.managed_array(10, stream=s)
+        cai_stream = managed_arr.__cuda_array_interface__['stream']
+        stream_value = self.get_stream_value(s)
+        self.assertEqual(stream_value, cai_stream)
 
     def test_consume_no_stream(self):
         # Create a foreign array with no stream
@@ -283,7 +319,9 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         # Ensure that an imported array has the stream as its default stream
         c_arr = cuda.as_cuda_array(f_arr)
         self.assertTrue(c_arr.stream.external)
-        self.assertEqual(c_arr.stream.handle.value, s.handle.value)
+        stream_value = self.get_stream_value(s)
+        imported_stream_value = self.get_stream_value(c_arr.stream)
+        self.assertEqual(stream_value, imported_stream_value)
 
     def test_consume_no_sync(self):
         # Create a foreign array with no stream

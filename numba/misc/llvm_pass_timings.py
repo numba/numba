@@ -4,8 +4,8 @@ import heapq
 from collections import namedtuple
 from collections.abc import Sequence
 from contextlib import contextmanager
+from functools import cached_property
 
-from numba.core.utils import cached_property
 from numba.core import config
 
 import llvmlite.binding as llvm
@@ -52,6 +52,7 @@ PassTimingRecord = namedtuple(
         "wall_time",
         "wall_percent",
         "pass_name",
+        "instruction",
     ],
 )
 
@@ -216,6 +217,7 @@ class ProcessedPassTimings:
                 "System Time": "system",
                 "User+System": "user_system",
                 "Wall Time": "wall",
+                "Instr": "instruction",
                 "Name": "pass_name",
             }
             for ln in line_iter:
@@ -229,22 +231,29 @@ class ProcessedPassTimings:
             assert headers[-1] == 'pass_name'
             # compute the list of available attributes from the column headers
             attrs = []
+            n = r"\s*((?:[0-9]+\.)?[0-9]+)"
+            pat = ""
             for k in headers[:-1]:
-                attrs.append(f"{k}_time")
-                attrs.append(f"{k}_percent")
+                if k == "instruction":
+                    pat += n
+                else:
+                    attrs.append(f"{k}_time")
+                    attrs.append(f"{k}_percent")
+                    pat += f"\\s+(?:{n}\\s*\\({n}%\\)|-+)"
+
             # put default value 0.0 to all missing attributes
             missing = {}
             for k in PassTimingRecord._fields:
                 if k not in attrs and k != 'pass_name':
                     missing[k] = 0.0
             # parse timings
-            n = r"\s*((?:[0-9]+\.)?[0-9]+)"
-            pat = f"\\s+{n}\\s*\\({n}%\\)" * (len(headers) - 1) + r"\s*(.*)"
+            pat += r"\s*(.*)"
             for ln in line_iter:
                 m = re.match(pat, ln)
                 if m is not None:
                     raw_data = list(m.groups())
-                    data = {k: float(v) for k, v in zip(attrs, raw_data)}
+                    data = {k: float(v) if v is not None else 0.0
+                            for k, v in zip(attrs, raw_data)}
                     data.update(missing)
                     pass_name = raw_data[-1]
                     rec = PassTimingRecord(

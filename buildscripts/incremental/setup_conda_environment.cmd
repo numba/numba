@@ -5,7 +5,6 @@ set CONDA_CONFIG=cmd /C conda config
 %CONDA_CONFIG% --set remote_connect_timeout_secs 30.15
 %CONDA_CONFIG% --set remote_max_retries 10
 %CONDA_CONFIG% --set remote_read_timeout_secs 120.2
-%CONDA_CONFIG% --set restore_free_channel true
 %CONDA_CONFIG% --set show_channel_urls true
 cmd /C conda info
 %CONDA_CONFIG% --show
@@ -15,26 +14,30 @@ cmd /C conda info
 set CONDA_INSTALL=cmd /C conda install -q -y
 set PIP_INSTALL=pip install -q
 
+@rem Use conda-forge for NumPy 1.24 - at the time of writing it is not available
+@rem on the defaults channel.
+if %NUMPY%==1.24 (set NUMPY_CHANNEL_PKG="conda-forge::numpy") else (set NUMPY_CHANNEL_PKG="numpy")
+
 @echo on
 
 @rem Deactivate any environment
 call deactivate
 @rem Display root environment (for debugging)
 conda list
-@rem Clean up any left-over from a previous build
-conda remove --all -q -y -n %CONDA_ENV%
 @rem Scipy, CFFI, jinja2 and IPython are optional dependencies, but exercised in the test suite
-conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip scipy jinja2 ipython gitpython
+conda create -n %CONDA_ENV% -q -y python=%PYTHON% %NUMPY_CHANNEL_PKG%=%NUMPY% cffi pip scipy jinja2 ipython gitpython pyyaml
 
 call activate %CONDA_ENV%
 @rem Install latest llvmlite build
-%CONDA_INSTALL% -c numba llvmlite
+%CONDA_INSTALL% -c numba/label/dev llvmlite=0.41
+@rem Install required backports for older Pythons
+if %PYTHON% LSS 3.9 (%CONDA_INSTALL% importlib_metadata)
 @rem Install dependencies for building the documentation
 if "%BUILD_DOC%" == "yes" (%CONDA_INSTALL% sphinx sphinx_rtd_theme pygments)
 @rem Install dependencies for code coverage (codecov.io)
 if "%RUN_COVERAGE%" == "yes" (%PIP_INSTALL% codecov)
 @rem Install TBB
-%CONDA_INSTALL% tbb tbb-devel
+%CONDA_INSTALL% "tbb>=2021.6" "tbb-devel>=2021.6"
 if %errorlevel% neq 0 exit /b %errorlevel%
 
 echo "DEBUG ENV:"

@@ -11,7 +11,8 @@ from numba.np.numpy_support import (ufunc_find_matching_loop,
                              supported_ufunc_loop, as_dtype,
                              from_dtype, as_dtype, resolve_output_type,
                              carray, farray, _ufunc_loop_sig)
-from numba.core.errors import TypingError, NumbaPerformanceWarning
+from numba.core.errors import (TypingError, NumbaPerformanceWarning,
+                               NumbaTypeError, NumbaAssertionError)
 from numba import pndindex
 
 registry = Registry()
@@ -94,6 +95,9 @@ class Numpy_rules_ufunc(AbstractTemplate):
         return self.key
 
     def generic(self, args, kws):
+        # First, strip optional types, ufunc loops are typed on concrete types
+        args = [x.type if isinstance(x, types.Optional) else x for x in args]
+
         ufunc = self.ufunc
         base_types, explicit_outputs, ndims, layout = self._handle_inputs(
             ufunc, args, kws)
@@ -126,7 +130,33 @@ class Numpy_rules_ufunc(AbstractTemplate):
             ret_tys = ufunc_loop.outputs[-implicit_output_count:]
             if ndims > 0:
                 assert layout is not None
-                ret_tys = [types.Array(dtype=ret_ty, ndim=ndims, layout=layout)
+                # If either of the types involved in the ufunc operation have a
+                # __array_ufunc__ method then invoke the first such one to
+                # determine the output type of the ufunc.
+                array_ufunc_type = None
+                for a in args:
+                    if hasattr(a, "__array_ufunc__"):
+                        array_ufunc_type = a
+                        break
+                output_type = types.Array
+                if array_ufunc_type is not None:
+                    output_type = array_ufunc_type.__array_ufunc__(ufunc, "__call__", *args, **kws)
+                    if output_type is NotImplemented:
+                        msg = (f"unsupported use of ufunc {ufunc} on "
+                               f"{array_ufunc_type}")
+                        # raise TypeError here because
+                        # NumpyRulesArrayOperator.generic is capturing
+                        # TypingError
+                        raise NumbaTypeError(msg)
+                    elif not issubclass(output_type, types.Array):
+                        msg = (f"ufunc {ufunc} on {array_ufunc_type}"
+                               f"cannot return non-array {output_type}")
+                        # raise TypeError here because
+                        # NumpyRulesArrayOperator.generic is capturing
+                        # TypingError
+                        raise TypeError(msg)
+
+                ret_tys = [output_type(dtype=ret_ty, ndim=ndims, layout=layout)
                            for ret_ty in ret_tys]
                 ret_tys = [resolve_output_type(self.context, args, ret_ty)
                            for ret_ty in ret_tys]
@@ -241,39 +271,39 @@ class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
 
 # list of unary ufuncs to register
 
-_math_operations = [ "add", "subtract", "multiply",
-                     "logaddexp", "logaddexp2", "true_divide",
-                     "floor_divide", "negative", "positive", "power",
-                     "remainder", "fmod", "absolute",
-                     "rint", "sign", "conjugate", "exp", "exp2",
-                     "log", "log2", "log10", "expm1", "log1p",
-                     "sqrt", "square", "reciprocal",
-                     "divide", "mod", "divmod", "abs", "fabs" , "gcd", "lcm"]
+math_operations = [ "add", "subtract", "multiply",
+                    "logaddexp", "logaddexp2", "true_divide",
+                    "floor_divide", "negative", "positive", "power",
+                    "float_power", "remainder", "fmod", "absolute",
+                    "rint", "sign", "conjugate", "exp", "exp2",
+                    "log", "log2", "log10", "expm1", "log1p",
+                    "sqrt", "square", "cbrt", "reciprocal",
+                    "divide", "mod", "divmod", "abs", "fabs" , "gcd", "lcm"]
 
-_trigonometric_functions = [ "sin", "cos", "tan", "arcsin",
-                             "arccos", "arctan", "arctan2",
-                             "hypot", "sinh", "cosh", "tanh",
-                             "arcsinh", "arccosh", "arctanh",
-                             "deg2rad", "rad2deg", "degrees",
-                             "radians" ]
+trigonometric_functions = [ "sin", "cos", "tan", "arcsin",
+                            "arccos", "arctan", "arctan2",
+                            "hypot", "sinh", "cosh", "tanh",
+                            "arcsinh", "arccosh", "arctanh",
+                            "deg2rad", "rad2deg", "degrees",
+                            "radians" ]
 
-_bit_twiddling_functions = ["bitwise_and", "bitwise_or",
-                            "bitwise_xor", "invert",
-                            "left_shift", "right_shift",
-                            "bitwise_not" ]
+bit_twiddling_functions = ["bitwise_and", "bitwise_or",
+                           "bitwise_xor", "invert",
+                           "left_shift", "right_shift",
+                           "bitwise_not" ]
 
-_comparison_functions = [ "greater", "greater_equal", "less",
-                          "less_equal", "not_equal", "equal",
-                          "logical_and", "logical_or",
-                          "logical_xor", "logical_not",
-                          "maximum", "minimum", "fmax", "fmin" ]
+comparison_functions = [ "greater", "greater_equal", "less",
+                         "less_equal", "not_equal", "equal",
+                         "logical_and", "logical_or",
+                         "logical_xor", "logical_not",
+                         "maximum", "minimum", "fmax", "fmin" ]
 
-_floating_functions = [ "isfinite", "isinf", "isnan", "signbit",
-                        "copysign", "nextafter", "modf", "ldexp",
-                        "frexp", "floor", "ceil", "trunc",
-                        "spacing" ]
+floating_functions = [ "isfinite", "isinf", "isnan", "signbit",
+                       "copysign", "nextafter", "modf", "ldexp",
+                       "frexp", "floor", "ceil", "trunc",
+                       "spacing" ]
 
-_logic_functions = [ "isnat" ]
+logic_functions = [ "isnat" ]
 
 
 # This is a set of the ufuncs that are not yet supported by Lowering. In order
@@ -285,32 +315,29 @@ _unsupported = set([ 'frexp',
                      'modf',
                  ])
 
-# A list of ufuncs that are in fact aliases of other ufuncs. They need to insert the
-# resolve method, but not register the ufunc itself
-_aliases = set(["bitwise_not", "mod", "abs"])
 
-# In python3 np.divide is mapped to np.true_divide
-if np.divide == np.true_divide:
-    _aliases.add("divide")
-
-def _numpy_ufunc(name):
+def register_numpy_ufunc(name, register_global=infer_global):
     func = getattr(np, name)
     class typing_class(Numpy_rules_ufunc):
         key = func
 
     typing_class.__name__ = "resolve_{0}".format(name)
 
-    if not name in _aliases:
-        infer_global(func, types.Function(typing_class))
+    # A list of ufuncs that are in fact aliases of other ufuncs. They need to
+    # insert the resolve method, but not register the ufunc itself
+    aliases = ("abs", "bitwise_not", "divide", "abs")
 
-all_ufuncs = sum([_math_operations, _trigonometric_functions,
-                  _bit_twiddling_functions, _comparison_functions,
-                  _floating_functions, _logic_functions], [])
+    if name not in aliases:
+        register_global(func, types.Function(typing_class))
+
+all_ufuncs = sum([math_operations, trigonometric_functions,
+                  bit_twiddling_functions, comparison_functions,
+                  floating_functions, logic_functions], [])
 
 supported_ufuncs = [x for x in all_ufuncs if x not in _unsupported]
 
 for func in supported_ufuncs:
-    _numpy_ufunc(func)
+    register_numpy_ufunc(func)
 
 all_ufuncs = [getattr(np, name) for name in all_ufuncs]
 supported_ufuncs = [getattr(np, name) for name in supported_ufuncs]
@@ -327,9 +354,7 @@ supported_array_operators = set(
     NumpyRulesInplaceArrayOperator._op_map.keys()
 )
 
-del _math_operations, _trigonometric_functions, _bit_twiddling_functions
-del _comparison_functions, _floating_functions, _unsupported
-del _aliases, _numpy_ufunc
+del _unsupported
 
 
 # -----------------------------------------------------------------------------
@@ -385,9 +410,8 @@ def _numpy_redirect(fname):
                dict(key=numpy_function, method_name=fname))
     infer_global(numpy_function, types.Function(cls))
 
-for func in ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
-             'cumsum', 'cumprod', 'argmin', 'argmax', 'argsort',
-             'nonzero', 'ravel']:
+
+for func in ['sum', 'argsort', 'nonzero', 'ravel']:
     _numpy_redirect(func)
 
 
@@ -425,7 +449,8 @@ def parse_shape(shape):
     if isinstance(shape, types.Integer):
         ndim = 1
     elif isinstance(shape, (types.Tuple, types.UniTuple)):
-        if all(isinstance(s, types.Integer) for s in shape):
+        int_tys = (types.Integer, types.IntEnumMember)
+        if all(isinstance(s, int_tys) for s in shape):
             ndim = len(shape)
     return ndim
 
@@ -439,9 +464,13 @@ def parse_dtype(dtype):
     elif isinstance(dtype, types.TypeRef):
         return dtype.instance_type
     elif isinstance(dtype, types.StringLiteral):
-        dt = getattr(np, dtype.literal_value, None)
-        if dt is not None:
-            return from_dtype(dt)
+        dtstr = dtype.literal_value
+        try:
+            dt = np.dtype(dtstr)
+        except TypeError:
+            msg = f"Invalid NumPy dtype specified: '{dtstr}'"
+            raise TypingError(msg)
+        return from_dtype(dt)
 
 def _parse_nested_sequence(context, typ):
     """
@@ -450,25 +479,25 @@ def _parse_nested_sequence(context, typ):
     heterogeneous, as long as it converts to the given dtype.
     """
     if isinstance(typ, (types.Buffer,)):
-        raise TypingError("%r not allowed in a homogeneous sequence" % typ)
+        raise TypingError("%s not allowed in a homogeneous sequence" % typ)
     elif isinstance(typ, (types.Sequence,)):
         n, dtype = _parse_nested_sequence(context, typ.dtype)
         return n + 1, dtype
     elif isinstance(typ, (types.BaseTuple,)):
         if typ.count == 0:
-            # Mimick Numpy's behaviour
+            # Mimic Numpy's behaviour
             return 1, types.float64
         n, dtype = _parse_nested_sequence(context, typ[0])
         dtypes = [dtype]
         for i in range(1, typ.count):
             _n, dtype = _parse_nested_sequence(context, typ[i])
             if _n != n:
-                raise TypingError("type %r does not have a regular shape"
+                raise TypingError("type %s does not have a regular shape"
                                   % (typ,))
             dtypes.append(dtype)
         dtype = context.unify_types(*dtypes)
         if dtype is None:
-            raise TypingError("cannot convert %r to a homogeneous type" % typ)
+            raise TypingError("cannot convert %s to a homogeneous type" % typ)
         return n + 1, dtype
     else:
         # Scalar type => check it's valid as a Numpy array dtype
@@ -476,288 +505,17 @@ def _parse_nested_sequence(context, typ):
         return 0, typ
 
 
-@infer_global(np.array)
-class NpArray(CallableTemplate):
-    """
-    Typing template for np.array().
-    """
-
-    def generic(self):
-        def typer(object, dtype=None):
-            ndim, seq_dtype = _parse_nested_sequence(self.context, object)
-            if dtype is None:
-                dtype = seq_dtype
-            else:
-                dtype = parse_dtype(dtype)
-                if dtype is None:
-                    return
-            return types.Array(dtype, ndim, 'C')
-
-        return typer
-
-
-@infer_global(np.empty)
-@infer_global(np.zeros)
-@infer_global(np.ones)
-class NdConstructor(CallableTemplate):
-    """
-    Typing template for np.empty(), .zeros(), .ones().
-    """
-
-    def generic(self):
-        def typer(shape, dtype=None):
-            if dtype is None:
-                nb_dtype = types.double
-            else:
-                nb_dtype = parse_dtype(dtype)
-
-            ndim = parse_shape(shape)
-            if nb_dtype is not None and ndim is not None:
-                return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
-
-        return typer
-
-
-@infer_global(np.empty_like)
-@infer_global(np.zeros_like)
-class NdConstructorLike(CallableTemplate):
-    """
-    Typing template for np.empty_like(), .zeros_like(), .ones_like().
-    """
-
-    def generic(self):
-        """
-        np.empty_like(array) -> empty array of the same shape and layout
-        np.empty_like(scalar) -> empty 0-d array of the scalar type
-        """
-        def typer(arg, dtype=None):
-            if dtype is not None:
-                nb_dtype = parse_dtype(dtype)
-            elif isinstance(arg, types.Array):
-                nb_dtype = arg.dtype
-            else:
-                nb_dtype = arg
-            if nb_dtype is not None:
-                if isinstance(arg, types.Array):
-                    layout = arg.layout if arg.layout != 'A' else 'C'
-                    return arg.copy(dtype=nb_dtype, layout=layout, readonly=False)
-                else:
-                    return types.Array(nb_dtype, 0, 'C')
-
-        return typer
-
-
-infer_global(np.ones_like)(NdConstructorLike)
-
-
-@infer_global(np.full)
-class NdFull(CallableTemplate):
-
-    def generic(self):
-        def typer(shape, fill_value, dtype=None):
-            if dtype is None:
-                nb_dtype = fill_value
-            else:
-                nb_dtype = parse_dtype(dtype)
-
-            ndim = parse_shape(shape)
-            if nb_dtype is not None and ndim is not None:
-                return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
-
-        return typer
-
-@infer_global(np.full_like)
-class NdFullLike(CallableTemplate):
-
-    def generic(self):
-        """
-        np.full_like(array, val) -> array of the same shape and layout
-        np.full_like(scalar, val) -> 0-d array of the scalar type
-        """
-        def typer(arg, fill_value, dtype=None):
-            if dtype is not None:
-                nb_dtype = parse_dtype(dtype)
-            elif isinstance(arg, types.Array):
-                nb_dtype = arg.dtype
-            else:
-                nb_dtype = arg
-            if nb_dtype is not None:
-                if isinstance(arg, types.Array):
-                    return arg.copy(dtype=nb_dtype, readonly=False)
-                else:
-                    return types.Array(dtype=nb_dtype, ndim=0, layout='C')
-
-        return typer
-
-
-@infer_global(np.identity)
-class NdIdentity(AbstractTemplate):
-
-    def generic(self, args, kws):
-        assert not kws
-        n = args[0]
-        if not isinstance(n, types.Integer):
-            return
-        if len(args) >= 2:
-            nb_dtype = parse_dtype(args[1])
-        else:
-            nb_dtype = types.float64
-
-        if nb_dtype is not None:
-            return_type = types.Array(ndim=2, dtype=nb_dtype, layout='C')
-            return signature(return_type, *args)
-
-
 def _infer_dtype_from_inputs(inputs):
     return dtype
-
-
-@infer_global(np.linspace)
-class NdLinspace(AbstractTemplate):
-
-    def generic(self, args, kws):
-        assert not kws
-        bounds = args[:2]
-        if not all(isinstance(arg, types.Number) for arg in bounds):
-            return
-        if len(args) >= 3:
-            num = args[2]
-            if not isinstance(num, types.Integer):
-                return
-        if len(args) >= 4:
-            # Not supporting the other arguments as it would require
-            # keyword arguments for reasonable use.
-            return
-        if any(isinstance(arg, types.Complex) for arg in bounds):
-            dtype = types.complex128
-        else:
-            dtype = types.float64
-        return_type = types.Array(ndim=1, dtype=dtype, layout='C')
-        return signature(return_type, *args)
-
-
-@infer_global(np.frombuffer)
-class NdFromBuffer(CallableTemplate):
-
-    def generic(self):
-        def typer(buffer, dtype=None):
-            if not isinstance(buffer, types.Buffer) or buffer.layout != 'C':
-                return
-            if dtype is None:
-                nb_dtype = types.float64
-            else:
-                nb_dtype = parse_dtype(dtype)
-
-            if nb_dtype is not None:
-                return types.Array(dtype=nb_dtype, ndim=1, layout='C',
-                                   readonly=not buffer.mutable)
-
-        return typer
-
-
-@infer_global(np.sort)
-class NdSort(CallableTemplate):
-
-    def generic(self):
-        def typer(a):
-            if isinstance(a, types.Array) and a.ndim == 1:
-                return a
-
-        return typer
-
-
-@infer_global(np.asfortranarray)
-class AsFortranArray(CallableTemplate):
-
-    def generic(self):
-        def typer(a):
-            if isinstance(a, types.Array):
-                return a.copy(layout='F', ndim=max(a.ndim, 1))
-
-        return typer
-
-
-@infer_global(np.ascontiguousarray)
-class AsContiguousArray(CallableTemplate):
-
-    def generic(self):
-        def typer(a):
-            if isinstance(a, types.Array):
-                return a.copy(layout='C', ndim=max(a.ndim, 1))
-
-        return typer
-
-
-@infer_global(np.copy)
-class NdCopy(CallableTemplate):
-
-    def generic(self):
-        def typer(a):
-            if isinstance(a, types.Array):
-                layout = 'F' if a.layout == 'F' else 'C'
-                return a.copy(layout=layout, readonly=False)
-
-        return typer
-
-
-@infer_global(np.expand_dims)
-class NdExpandDims(CallableTemplate):
-
-    def generic(self):
-        def typer(a, axis):
-            if (not isinstance(a, types.Array)
-                or not isinstance(axis, types.Integer)):
-                return
-
-            layout = a.layout if a.ndim <= 1 else 'A'
-            return a.copy(ndim=a.ndim + 1, layout=layout)
-
-        return typer
-
-
-class BaseAtLeastNdTemplate(AbstractTemplate):
-
-    def generic(self, args, kws):
-        assert not kws
-        if not args or not all(isinstance(a, types.Array) for a in args):
-            return
-
-        rets = [self.convert_array(a) for a in args]
-        if len(rets) > 1:
-            retty = types.BaseTuple.from_types(rets)
-        else:
-            retty = rets[0]
-        return signature(retty, *args)
-
-
-@infer_global(np.atleast_1d)
-class NdAtLeast1d(BaseAtLeastNdTemplate):
-
-    def convert_array(self, a):
-        return a.copy(ndim=max(a.ndim, 1))
-
-
-@infer_global(np.atleast_2d)
-class NdAtLeast2d(BaseAtLeastNdTemplate):
-
-    def convert_array(self, a):
-        return a.copy(ndim=max(a.ndim, 2))
-
-
-@infer_global(np.atleast_3d)
-class NdAtLeast3d(BaseAtLeastNdTemplate):
-
-    def convert_array(self, a):
-        return a.copy(ndim=max(a.ndim, 3))
 
 
 def _homogeneous_dims(context, func_name, arrays):
     ndim = arrays[0].ndim
     for a in arrays:
         if a.ndim != ndim:
-            raise TypeError("%s(): all the input arrays "
-                            "must have same number of dimensions"
-                            % func_name)
+            msg = (f"{func_name}(): all the input arrays must have same number "
+                   "of dimensions")
+            raise NumbaTypeError(msg)
     return ndim
 
 def _sequence_of_arrays(context, func_name, arrays,
@@ -786,51 +544,6 @@ def _choose_concatenation_layout(arrays):
     return 'F' if all(a.layout == 'F' for a in arrays) else 'C'
 
 
-@infer_global(np.concatenate)
-class NdConcatenate(CallableTemplate):
-
-    def generic(self):
-        def typer(arrays, axis=None):
-            if axis is not None and not isinstance(axis, types.Integer):
-                # Note Numpy allows axis=None, but it isn't documented:
-                # https://github.com/numpy/numpy/issues/7968
-                return
-
-            dtype, ndim = _sequence_of_arrays(self.context,
-                                              "np.concatenate", arrays)
-            if ndim == 0:
-                raise TypeError("zero-dimensional arrays cannot be concatenated")
-
-            layout = _choose_concatenation_layout(arrays)
-
-            return types.Array(dtype, ndim, layout)
-
-        return typer
-
-
-@infer_global(np.stack)
-class NdStack(CallableTemplate):
-
-    def generic(self):
-        def typer(arrays, axis=None):
-            if axis is not None and not isinstance(axis, types.Integer):
-                # Note Numpy allows axis=None, but it isn't documented:
-                # https://github.com/numpy/numpy/issues/7968
-                return
-
-            dtype, ndim = _sequence_of_arrays(self.context,
-                                                "np.stack", arrays)
-
-            # This diverges from Numpy's behaviour, which simply inserts
-            # a new stride at the requested axis (therefore can return
-            # a 'A' array).
-            layout = 'F' if all(a.layout == 'F' for a in arrays) else 'C'
-
-            return types.Array(dtype, ndim + 1, layout)
-
-        return typer
-
-
 class BaseStackTemplate(CallableTemplate):
 
     def generic(self):
@@ -839,48 +552,6 @@ class BaseStackTemplate(CallableTemplate):
                                               self.func_name, arrays)
 
             ndim = max(ndim, self.ndim_min)
-            layout = _choose_concatenation_layout(arrays)
-
-            return types.Array(dtype, ndim, layout)
-
-        return typer
-
-
-@infer_global(np.hstack)
-class NdStack(BaseStackTemplate):
-    func_name = "np.hstack"
-    ndim_min = 1
-
-@infer_global(np.vstack)
-class NdStack(BaseStackTemplate):
-    func_name = "np.vstack"
-    ndim_min = 2
-
-@infer_global(np.dstack)
-class NdStack(BaseStackTemplate):
-    func_name = "np.dstack"
-    ndim_min = 3
-
-
-
-def _column_stack_dims(context, func_name, arrays):
-    # column_stack() allows stacking 1-d and 2-d arrays together
-    for a in arrays:
-        if a.ndim < 1 or a.ndim > 2:
-            raise TypeError("np.column_stack() is only defined on "
-                            "1-d and 2-d arrays")
-    return 2
-
-
-@infer_global(np.column_stack)
-class NdColumnStack(CallableTemplate):
-
-    def generic(self):
-        def typer(arrays):
-            dtype, ndim = _sequence_of_arrays(self.context,
-                                              "np.column_stack", arrays,
-                                              dim_chooser=_column_stack_dims)
-
             layout = _choose_concatenation_layout(arrays)
 
             return types.Array(dtype, ndim, layout)
@@ -944,54 +615,6 @@ class MatMulTyperMixin(object):
             return types.Array(a.dtype, out_ndim, 'C')
         else:
             return a.dtype
-
-
-@infer_global(np.dot)
-class Dot(MatMulTyperMixin, CallableTemplate):
-    func_name = "np.dot()"
-
-    def generic(self):
-        def typer(a, b, out=None):
-            # NOTE: np.dot() and the '@' operator have distinct semantics
-            # for >2-D arrays, but we don't support them.
-            return self.matmul_typer(a, b, out)
-
-        return typer
-
-
-@infer_global(np.vdot)
-class VDot(CallableTemplate):
-
-    def generic(self):
-        def typer(a, b):
-            if not isinstance(a, types.Array) or not isinstance(b, types.Array):
-                return
-            if not all(x.ndim == 1 for x in (a, b)):
-                raise TypingError("np.vdot() only supported on 1-D arrays")
-            if not all(x.layout in 'CF' for x in (a, b)):
-                warnings.warn("np.vdot() is faster on contiguous arrays, called on %s"
-                              % ((a, b),), NumbaPerformanceWarning)
-            if not all(x.dtype == a.dtype for x in (a, b)):
-                raise TypingError("np.vdot() arguments must all have "
-                                  "the same dtype")
-            if not isinstance(a.dtype, (types.Float, types.Complex)):
-                raise TypingError("np.vdot() only supported on "
-                                  "float and complex arrays")
-            return a.dtype
-
-        return typer
-
-
-@infer_global(operator.matmul)
-class MatMul(MatMulTyperMixin, AbstractTemplate):
-    key = operator.matmul
-    func_name = "'@'"
-
-    def generic(self, args, kws):
-        assert not kws
-        restype = self.matmul_typer(*args)
-        if restype is not None:
-            return signature(restype, *args)
 
 
 def _check_linalg_matrix(a, func_name):
@@ -1058,200 +681,3 @@ class NdIndex(AbstractTemplate):
         if all(isinstance(x, types.Integer) for x in shape):
             iterator_type = types.NumpyNdIndexType(len(shape))
             return signature(iterator_type, *args)
-
-
-# We use the same typing key for np.round() and np.around() to
-# re-use the implementations automatically.
-@infer_global(np.round)
-@infer_global(np.around, typing_key=np.round)
-class Round(AbstractTemplate):
-
-    def generic(self, args, kws):
-        assert not kws
-        assert 1 <= len(args) <= 3
-
-        arg = args[0]
-        if len(args) == 1:
-            decimals = types.intp
-            out = None
-        else:
-            decimals = args[1]
-            if len(args) == 2:
-                out = None
-            else:
-                out = args[2]
-
-        supported_scalars = (types.Integer, types.Float, types.Complex)
-        if isinstance(arg, supported_scalars):
-            assert out is None
-            return signature(arg, *args)
-        if (isinstance(arg, types.Array) and isinstance(arg.dtype, supported_scalars) and
-            isinstance(out, types.Array) and isinstance(out.dtype, supported_scalars) and
-            out.ndim == arg.ndim):
-            # arg can only be complex if out is complex too
-            if (not isinstance(arg.dtype, types.Complex)
-                or isinstance(out.dtype, types.Complex)):
-                return signature(out, *args)
-
-
-@infer_global(np.where)
-class Where(AbstractTemplate):
-
-    def generic(self, args, kws):
-        assert not kws
-
-        if len(args) == 1:
-            # 0-dim arrays return one result array
-            ary = args[0]
-            ndim = max(ary.ndim, 1)
-            retty = types.UniTuple(types.Array(types.intp, 1, 'C'), ndim)
-            return signature(retty, ary)
-
-        elif len(args) == 3:
-            cond, x, y = args
-            retdty = from_dtype(np.promote_types(
-                        as_dtype(getattr(args[1], 'dtype', args[1])),
-                        as_dtype(getattr(args[2], 'dtype', args[2]))))
-            if isinstance(cond, types.Array):
-                # array where()
-                if isinstance(x, types.Array) and isinstance(y, types.Array):
-                    if (cond.ndim == x.ndim == y.ndim):
-                        if x.layout == y.layout == cond.layout:
-                            retty = types.Array(retdty, x.ndim, x.layout)
-                        else:
-                            retty = types.Array(retdty, x.ndim, 'C')
-                        return signature(retty, *args)
-                else:
-                    # x and y both scalar
-                    retty = types.Array(retdty, cond.ndim, cond.layout)
-                    return signature(retty, *args)
-            else:
-                # scalar where()
-                if not isinstance(x, types.Array):
-                    retty = types.Array(retdty, 0, 'C')
-                    return signature(retty, *args)
-
-
-@infer_global(np.sinc)
-class Sinc(AbstractTemplate):
-
-    def generic(self, args, kws):
-        assert not kws
-        assert len(args) == 1
-        arg = args[0]
-        supported_scalars = (types.Float, types.Complex)
-        if (isinstance(arg, supported_scalars) or
-              (isinstance(arg, types.Array) and
-               isinstance(arg.dtype, supported_scalars))):
-            return signature(arg, arg)
-
-
-@infer_global(np.angle)
-class Angle(CallableTemplate):
-    """
-    Typing template for np.angle()
-    """
-    def generic(self):
-        def typer(z, deg=False):
-            if isinstance(z, types.Array):
-                dtype = z.dtype
-            else:
-                dtype = z
-            if isinstance(dtype, types.Complex):
-                ret_dtype = dtype.underlying_float
-            elif isinstance(dtype, types.Float):
-                ret_dtype = dtype
-            else:
-                return
-            if isinstance(z, types.Array):
-                return z.copy(dtype=ret_dtype)
-            else:
-                return ret_dtype
-        return typer
-
-
-@infer_global(np.diag)
-class DiagCtor(CallableTemplate):
-    """
-    Typing template for np.diag()
-    """
-    def generic(self):
-        def typer(ref, k=0):
-            if isinstance(ref, types.Array):
-                if ref.ndim == 1:
-                    rdim = 2
-                elif ref.ndim == 2:
-                    rdim = 1
-                else:
-                    return None
-                if isinstance(k, (int, types.Integer)):
-                    return types.Array(ndim=rdim, dtype=ref.dtype, layout='C')
-        return typer
-
-
-@infer_global(np.take)
-class Take(AbstractTemplate):
-
-    def generic(self, args, kws):
-        assert not kws
-        assert len(args) == 2
-        arr, ind = args
-        if isinstance(ind, types.Number):
-            retty = arr.dtype
-        elif isinstance(ind, types.Array):
-            retty = types.Array(ndim=ind.ndim, dtype=arr.dtype, layout='C')
-        elif isinstance(ind, types.List):
-            retty = types.Array(ndim=1, dtype=arr.dtype, layout='C')
-        elif isinstance(ind, types.BaseTuple):
-            retty = types.Array(ndim=np.ndim(ind), dtype=arr.dtype, layout='C')
-        else:
-            return None
-
-        return signature(retty, *args)
-
-# -----------------------------------------------------------------------------
-# Numba helpers
-
-@infer_global(carray)
-class NumbaCArray(CallableTemplate):
-    layout = 'C'
-
-    def generic(self):
-        func_name = self.key.__name__
-
-        def typer(ptr, shape, dtype=types.none):
-            if ptr is types.voidptr:
-                ptr_dtype = None
-            elif isinstance(ptr, types.CPointer):
-                ptr_dtype = ptr.dtype
-            else:
-                raise TypeError("%s(): pointer argument expected, got '%s'"
-                                % (func_name, ptr))
-
-            if dtype is types.none:
-                if ptr_dtype is None:
-                    raise TypeError("%s(): explicit dtype required for void* argument"
-                                    % (func_name,))
-                dtype = ptr_dtype
-            elif isinstance(dtype, types.DTypeSpec):
-                dtype = dtype.dtype
-                if ptr_dtype is not None and dtype != ptr_dtype:
-                    raise TypeError("%s(): mismatching dtype '%s' for pointer type '%s'"
-                                    % (func_name, dtype, ptr))
-            else:
-                raise TypeError("%s(): invalid dtype spec '%s'"
-                                % (func_name, dtype))
-
-            ndim = parse_shape(shape)
-            if ndim is None:
-                raise TypeError("%s(): invalid shape '%s'"
-                                % (func_name, shape))
-
-            return types.Array(dtype, ndim, self.layout)
-
-        return typer
-
-
-@infer_global(farray)
-class NumbaFArray(NumbaCArray):
-    layout = 'F'

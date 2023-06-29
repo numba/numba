@@ -1,4 +1,4 @@
-from llvmlite.llvmpy.core import Type
+from llvmlite import ir
 from numba.core import cgutils, types
 from numba.core.imputils import Registry
 from numba.cuda import libdevice, libdevicefuncs
@@ -12,8 +12,8 @@ def libdevice_implement(func, retty, nbargs):
         lmod = builder.module
         fretty = context.get_value_type(retty)
         fargtys = [context.get_value_type(arg.ty) for arg in nbargs]
-        fnty = Type.function(fretty, fargtys)
-        fn = lmod.get_or_insert_function(fnty, name=func)
+        fnty = ir.FunctionType(fretty, fargtys)
+        fn = cgutils.get_or_insert_function(lmod, fnty, func)
         return builder.call(fn, args)
 
     key = getattr(libdevice, func[5:])
@@ -38,8 +38,8 @@ def libdevice_implement_multiple_returns(func, retty, prototype_args):
 
         fretty = context.get_value_type(retty)
 
-        fnty = Type.function(fretty, fargtys)
-        fn = lmod.get_or_insert_function(fnty, name=func)
+        fnty = ir.FunctionType(fretty, fargtys)
+        fn = cgutils.get_or_insert_function(lmod, fnty, func)
 
         # For returned values that are returned through a pointer, we need to
         # allocate variables on the stack and pass a pointer to them.

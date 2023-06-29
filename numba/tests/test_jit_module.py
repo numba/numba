@@ -1,16 +1,13 @@
 import os
 import sys
-import shutil
 import inspect
-import importlib
 import contextlib
-import uuid
 import numpy as np
 import logging
 from io import StringIO
 
 import unittest
-from numba.tests.support import temp_directory, SerialMixin
+from numba.tests.support import SerialMixin, create_temp_module
 from numba.core import dispatcher
 
 
@@ -49,45 +46,10 @@ class Foo(object):
 jit_module({jit_options})
 """
 
-    def _format_jit_options(self, **jit_options):
-        if not jit_options:
-            return ''
-        out = []
-        for key, value in jit_options.items():
-            if isinstance(value, str):
-                value = '"{}"'.format(value)
-            out.append('{}={}'.format(key, value))
-        return ', '.join(out)
-
-    @contextlib.contextmanager
-    def create_temp_jitted_module(self, source_lines=None, **jit_options):
-        # Use try/finally so cleanup happens even when an exception is raised
-        try:
-            if source_lines is None:
-                source_lines = self.source_lines
-            tempdir = temp_directory('test_jit_module')
-            # Generate random module name
-            temp_module_name = 'test_module_{}'.format(
-                str(uuid.uuid4()).replace('-', '_'))
-            temp_module_path = os.path.join(tempdir, temp_module_name + '.py')
-
-            jit_options = self._format_jit_options(**jit_options)
-            with open(temp_module_path, 'w') as f:
-                lines = source_lines.format(jit_options=jit_options)
-                f.write(lines)
-            # Add test_module to sys.path so it can be imported
-            sys.path.insert(0, tempdir)
-            test_module = importlib.import_module(temp_module_name)
-            yield test_module
-        finally:
-            sys.modules.pop(temp_module_name, None)
-            sys.path.remove(tempdir)
-            shutil.rmtree(tempdir)
-
     def test_create_temp_jitted_module(self):
         sys_path_original = list(sys.path)
         sys_modules_original = dict(sys.modules)
-        with self.create_temp_jitted_module() as test_module:
+        with create_temp_module(self.source_lines) as test_module:
             temp_module_dir = os.path.dirname(test_module.__file__)
             self.assertEqual(temp_module_dir, sys.path[0])
             self.assertEqual(sys.path[1:], sys_path_original)
@@ -100,7 +62,7 @@ jit_module({jit_options})
         try:
             sys_path_original = list(sys.path)
             sys_modules_original = dict(sys.modules)
-            with self.create_temp_jitted_module():
+            with create_temp_module(self.source_lines):
                 raise ValueError("Something went wrong!")
         except ValueError:
             # Test that modifications to sys.path / sys.modules are reverted
@@ -108,7 +70,7 @@ jit_module({jit_options})
             self.assertEqual(sys.modules, sys_modules_original)
 
     def test_jit_module(self):
-        with self.create_temp_jitted_module() as test_module:
+        with create_temp_module(self.source_lines) as test_module:
             self.assertIsInstance(test_module.inc, dispatcher.Dispatcher)
             self.assertIsInstance(test_module.add, dispatcher.Dispatcher)
             self.assertIsInstance(test_module.inc_add, dispatcher.Dispatcher)
@@ -130,7 +92,8 @@ jit_module({jit_options})
                        "error_model": "numpy",
                        "boundscheck": False,
                        }
-        with self.create_temp_jitted_module(**jit_options) as test_module:
+        with create_temp_module(self.source_lines,
+                                **jit_options) as test_module:
             self.assertEqual(test_module.inc.targetoptions, jit_options)
 
     def test_jit_module_jit_options_override(self):
@@ -150,8 +113,8 @@ jit_module({jit_options})
                        "error_model": "numpy",
                        "boundscheck": False,
                        }
-        with self.create_temp_jitted_module(source_lines=source_lines,
-                                            **jit_options) as test_module:
+        with create_temp_module(source_lines=source_lines,
+                                **jit_options) as test_module:
             self.assertEqual(test_module.add.targetoptions, jit_options)
             # Test that manual jit-wrapping overrides jit_module options
             self.assertEqual(test_module.inc.targetoptions,
@@ -165,7 +128,8 @@ jit_module({jit_options})
                        "error_model": "numpy",
                        }
         with captured_logs(logger) as logs:
-            with self.create_temp_jitted_module(**jit_options) as test_module:
+            with create_temp_module(self.source_lines,
+                                    **jit_options) as test_module:
                 logs = logs.getvalue()
                 expected = ["Auto decorating function",
                             "from module {}".format(test_module.__name__),
@@ -177,5 +141,5 @@ jit_module({jit_options})
         # Test there's no logging for INFO level
         logger.setLevel(logging.INFO)
         with captured_logs(logger) as logs:
-            with self.create_temp_jitted_module():
+            with create_temp_module(self.source_lines):
                 self.assertEqual(logs.getvalue(), '')

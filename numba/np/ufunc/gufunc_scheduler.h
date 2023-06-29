@@ -40,6 +40,9 @@ extern "C"
 
 void do_scheduling_signed(uintp num_dim, intp *starts, intp *ends, uintp num_threads, intp *sched, intp debug);
 void do_scheduling_unsigned(uintp num_dim, intp *starts, intp *ends, uintp num_threads, uintp *sched, intp debug);
+uintp set_parallel_chunksize(uintp);
+uintp get_parallel_chunksize(void);
+uintp get_sched_size(uintp num_threads, uintp num_dim, intp *starts, intp *ends);
 
 #ifdef __cplusplus
 }

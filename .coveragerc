@@ -10,9 +10,11 @@ parallel = True
 omit =
     */__main__.py
     # Vendored packages
-    numba/appdirs.py
-    numba/six.py
-    numba/testing/ddt.py
+    numba/misc/appdirs.py
+    numba/cloudpickle/__init__.py
+    numba/cloudpickle/cloudpickle.py
+    numba/cloudpickle/cloudpickle_fast.py
+    numba/cloudpickle/compat.py
     numba/_version.py
 
 exclude_lines =

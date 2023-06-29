@@ -1,5 +1,6 @@
 import numpy as np
-from numba import jit, njit
+from numba import jit, njit, errors
+from numba.extending import register_jitable
 from numba.tests import usecases
 import unittest
 
@@ -77,6 +78,8 @@ tup_str = ('a', 'b')
 tup_mixed = (1, 'a')
 tup_float = (1.2, 3.5)
 tup_npy_ints = (np.uint64(12), np.int8(3))
+tup_tup_array = ((np.ones(5),),)
+mixed_tup_tup_array = (('Z', np.ones(5),), 2j, 'A')
 
 def global_int_tuple():
     return tup_int[0] + tup_int[1]
@@ -98,6 +101,27 @@ def global_float_tuple():
 
 def global_npy_int_tuple():
     return tup_npy_ints[0] + tup_npy_ints[1]
+
+
+def global_write_to_arr_in_tuple():
+    tup_tup_array[0][0][0] = 10.
+
+
+def global_write_to_arr_in_mixed_tuple():
+    mixed_tup_tup_array[0][1][0] = 10.
+
+
+_glbl_np_bool_T = np.bool_(True)
+_glbl_np_bool_F = np.bool_(False)
+
+
+@register_jitable # consumer function
+def _sink(*args):
+    pass
+
+def global_npy_bool():
+    _sink(_glbl_np_bool_T, _glbl_np_bool_F)
+    return _glbl_np_bool_T, _glbl_np_bool_F
 
 
 class TestGlobals(unittest.TestCase):
@@ -216,6 +240,24 @@ class TestGlobals(unittest.TestCase):
 
     def test_global_npy_int_tuple(self):
         pyfunc = global_npy_int_tuple
+        jitfunc = njit(pyfunc)
+        self.assertEqual(pyfunc(), jitfunc())
+
+    def test_global_write_to_arr_in_tuple(self):
+        # Test writing to an array in a global tuple
+        # See issue https://github.com/numba/numba/issues/7120
+        for func in (global_write_to_arr_in_tuple,
+                     global_write_to_arr_in_mixed_tuple):
+            jitfunc = njit(func)
+            with self.assertRaises(errors.TypingError) as e:
+                jitfunc()
+            msg = "Cannot modify readonly array of type:"
+            self.assertIn(msg, str(e.exception))
+
+    def test_global_npy_bool(self):
+        # Test global NumPy bool
+        # See issue https://github.com/numba/numba/issues/6979
+        pyfunc = global_npy_bool
         jitfunc = njit(pyfunc)
         self.assertEqual(pyfunc(), jitfunc())
 

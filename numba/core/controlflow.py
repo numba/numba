@@ -2,13 +2,14 @@ import collections
 import functools
 import sys
 
-from numba.core import utils
 from numba.core.ir import Loc
 from numba.core.errors import UnsupportedError
 
 # List of bytecodes creating a new block in the control flow graph
 # (in addition to explicit jump labels).
-NEW_BLOCKERS = frozenset(['SETUP_LOOP', 'FOR_ITER', 'SETUP_WITH'])
+NEW_BLOCKERS = frozenset([
+    'SETUP_LOOP', 'FOR_ITER', 'SETUP_WITH', 'BEFORE_WITH'
+])
 
 
 class CFBlock(object):
@@ -180,8 +181,8 @@ class CFGraph(object):
         the nodes in its dominance frontier.
 
         The dominance frontier _df(N) is the set of all nodes that are
-        immediate successors to blocks dominanted by N but which aren't
-        stricly dominanted by N
+        immediate successors to blocks dominated by N but which aren't
+        strictly dominated by N
         """
         return self._df
 
@@ -194,47 +195,47 @@ class CFGraph(object):
         """
         return self._domtree
 
-    @utils.cached_property
+    @functools.cached_property
     def _exit_points(self):
         return self._find_exit_points()
 
-    @utils.cached_property
+    @functools.cached_property
     def _doms(self):
         return self._find_dominators()
 
-    @utils.cached_property
+    @functools.cached_property
     def _back_edges(self):
         return self._find_back_edges()
 
-    @utils.cached_property
+    @functools.cached_property
     def _topo_order(self):
         return self._find_topo_order()
 
-    @utils.cached_property
+    @functools.cached_property
     def _descs(self):
         return self._find_descendents()
 
-    @utils.cached_property
+    @functools.cached_property
     def _loops(self):
         return self._find_loops()
 
-    @utils.cached_property
+    @functools.cached_property
     def _in_loops(self):
         return self._find_in_loops()
 
-    @utils.cached_property
+    @functools.cached_property
     def _post_doms(self):
         return self._find_post_dominators()
 
-    @utils.cached_property
+    @functools.cached_property
     def _idom(self):
         return self._find_immediate_dominators()
 
-    @utils.cached_property
+    @functools.cached_property
     def _df(self):
         return self._find_dominance_frontier()
 
-    @utils.cached_property
+    @functools.cached_property
     def _domtree(self):
         return self._find_dominator_tree()
 
@@ -421,15 +422,22 @@ class CFGraph(object):
         post_order = []
         seen = set()
 
-        def _dfs_rec(node):
+        post_order = []
+
+        # DFS
+        def dfs_rec(node):
             if node not in seen:
                 seen.add(node)
+                stack.append((post_order.append, node))
                 for dest in succs[node]:
                     if (node, dest) not in back_edges:
-                        _dfs_rec(dest)
-                post_order.append(node)
+                        stack.append((dfs_rec, dest))
 
-        _dfs_rec(self._entry_point)
+        stack = [(dfs_rec, self._entry_point)]
+        while stack:
+            cb, data = stack.pop()
+            cb(data)
+
         return post_order
 
     def _find_immediate_dominators(self):
@@ -784,7 +792,7 @@ class ControlFlowAnalysis(object):
             elif inst.is_jump:
                 # this catches e.g. try... except
                 l = Loc(self.bytecode.func_id.filename, inst.lineno)
-                if inst.opname in {"SETUP_EXCEPT", "SETUP_FINALLY"}:
+                if inst.opname in {"SETUP_FINALLY"}:
                     msg = "'try' block not supported until python3.7 or later"
                 else:
                     msg = "Use of unsupported opcode (%s) found" % inst.opname
@@ -847,6 +855,7 @@ class ControlFlowAnalysis(object):
     def _iter_inst(self):
         for inst in self.bytecode:
             if self._use_new_block(inst):
+                self._guard_with_as(inst)
                 self._start_new_block(inst)
             self._curblock.body.append(inst.offset)
             yield inst
@@ -866,6 +875,18 @@ class ControlFlowAnalysis(object):
         self._curblock = CFBlock(inst.offset)
         self.blocks[inst.offset] = self._curblock
         self.blockseq.append(inst.offset)
+
+    def _guard_with_as(self, current_inst):
+        """Checks if the next instruction after a SETUP_WITH is something other
+        than a POP_TOP, if it is something else it'll be some sort of store
+        which is not supported (this corresponds to `with CTXMGR as VAR(S)`)."""
+        if current_inst.opname == "SETUP_WITH":
+            next_op = self.bytecode[current_inst.next].opname
+            if next_op != "POP_TOP":
+                msg = ("The 'with (context manager) as "
+                       "(variable):' construct is not "
+                       "supported.")
+                raise UnsupportedError(msg)
 
     def op_SETUP_LOOP(self, inst):
         end = inst.get_jump_target()
@@ -905,6 +926,11 @@ class ControlFlowAnalysis(object):
     op_JUMP_IF_FALSE = _op_ABSOLUTE_JUMP_IF
     op_JUMP_IF_TRUE = _op_ABSOLUTE_JUMP_IF
 
+    op_POP_JUMP_FORWARD_IF_FALSE = _op_ABSOLUTE_JUMP_IF
+    op_POP_JUMP_BACKWARD_IF_FALSE = _op_ABSOLUTE_JUMP_IF
+    op_POP_JUMP_FORWARD_IF_TRUE = _op_ABSOLUTE_JUMP_IF
+    op_POP_JUMP_BACKWARD_IF_TRUE = _op_ABSOLUTE_JUMP_IF
+
     def _op_ABSOLUTE_JUMP_OR_POP(self, inst):
         self.jump(inst.get_jump_target())
         self.jump(inst.next, pops=1)
@@ -920,6 +946,8 @@ class ControlFlowAnalysis(object):
     def op_JUMP_FORWARD(self, inst):
         self.jump(inst.get_jump_target())
         self._force_new_block = True
+
+    op_JUMP_BACKWARD = op_JUMP_FORWARD
 
     def op_RETURN_VALUE(self, inst):
         self._curblock.terminating = True

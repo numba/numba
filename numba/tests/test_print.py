@@ -6,14 +6,15 @@ import unittest
 from numba.core.compiler import compile_isolated, Flags
 from numba import jit
 from numba.core import types, errors, utils
-from numba.tests.support import captured_stdout, tag, TestCase
+from numba.tests.support import (captured_stdout, tag, TestCase,
+                                 EnableNRTStatsMixin)
 
 
 enable_pyobj_flags = Flags()
-enable_pyobj_flags.set("enable_pyobject")
+enable_pyobj_flags.enable_pyobject = True
 
 force_pyobj_flags = Flags()
-force_pyobj_flags.set("force_pyobject")
+force_pyobj_flags.force_pyobject = True
 
 
 def print_value(x):
@@ -43,7 +44,7 @@ def make_print_closure(x):
     return jit(nopython=True)(x)
 
 
-class TestPrint(TestCase):
+class TestPrint(EnableNRTStatsMixin, TestCase):
 
     def test_print_values(self):
         """

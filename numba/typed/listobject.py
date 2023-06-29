@@ -173,9 +173,10 @@ def _list_codegen_set_method_table(context, builder, lp, itemty):
         [ll_list_type, vtablety.as_pointer()]
     )
 
-    setmethod_fn = builder.module.get_or_insert_function(
+    setmethod_fn = cgutils.get_or_insert_function(
+        builder.module,
         setmethod_fnty,
-        name='numba_list_set_method_table')
+        'numba_list_set_method_table')
     vtable = cgutils.alloca_once(builder, vtablety, zfill=True)
 
     # install item incref/decref
@@ -229,7 +230,8 @@ def _call_list_free(context, builder, ptr):
         ir.VoidType(),
         [ll_list_type],
     )
-    free = builder.module.get_or_insert_function(fnty, name='numba_list_free')
+    free = cgutils.get_or_insert_function(builder.module, fnty,
+                                          'numba_list_free')
     builder.call(free, [ptr])
 
 
@@ -244,7 +246,7 @@ def _imp_dtor(context, module):
         [llvoidptr, llsize, llvoidptr],
     )
     fname = '_numba_list_dtor'
-    fn = module.get_or_insert_function(fnty, name=fname)
+    fn = cgutils.get_or_insert_function(module, fnty, fname)
 
     if fn.is_declaration:
         # Set linkage
@@ -321,7 +323,7 @@ def _list_new_codegen(context, builder, itemty, new_size, error_handler):
         ll_status,
         [ll_list_type.as_pointer(), ll_ssize_t, ll_ssize_t],
     )
-    fn = builder.module.get_or_insert_function(fnty, name='numba_list_new')
+    fn = cgutils.get_or_insert_function(builder.module, fnty, 'numba_list_new')
     # Determine sizeof item types
     ll_item = context.get_data_type(itemty)
     sz_item = context.get_abi_sizeof(ll_item)
@@ -424,7 +426,7 @@ def _list_length(typingctx, l):
             [ll_list_type],
         )
         fname = 'numba_list_size_address'
-        fn = builder.module.get_or_insert_function(fnty, name=fname)
+        fn = cgutils.get_or_insert_function(builder.module, fnty, fname)
         fn.attributes.add('alwaysinline')
         fn.attributes.add('readonly')
         fn.attributes.add('nounwind')
@@ -461,8 +463,8 @@ def _list_allocated(typingctx, l):
             ll_ssize_t,
             [ll_list_type],
         )
-        fn = builder.module.get_or_insert_function(fnty,
-                                                   name='numba_list_allocated')
+        fn = cgutils.get_or_insert_function(builder.module, fnty,
+                                            'numba_list_allocated')
         [l] = args
         [tl] = sig.args
         lp = _container_get_data(context, builder, tl, l)
@@ -496,8 +498,8 @@ def _list_is_mutable(typingctx, l):
             ll_status,
             [ll_list_type],
         )
-        fn = builder.module.get_or_insert_function(
-            fnty, name='numba_list_is_mutable')
+        fn = cgutils.get_or_insert_function(builder.module, fnty,
+                                            'numba_list_is_mutable')
         [l] = args
         [tl] = sig.args
         lp = _container_get_data(context, builder, tl, l)
@@ -541,8 +543,8 @@ def _list_set_is_mutable(typingctx, l, is_mutable):
             ir.VoidType(),
             [ll_list_type, cgutils.intp_t],
         )
-        fn = builder.module.get_or_insert_function(
-            fnty, name='numba_list_set_is_mutable')
+        fn = cgutils.get_or_insert_function(builder.module, fnty,
+                                            'numba_list_set_is_mutable')
         [l, i] = args
         [tl, ti] = sig.args
         lp = _container_get_data(context, builder, tl, l)
@@ -565,8 +567,8 @@ def _list_append(typingctx, l, item):
         )
         [l, item] = args
         [tl, titem] = sig.args
-        fn = builder.module.get_or_insert_function(fnty,
-                                                   name='numba_list_append')
+        fn = cgutils.get_or_insert_function(builder.module, fnty,
+                                            'numba_list_append')
 
         dm_item = context.data_model_manager[titem]
 
@@ -704,7 +706,7 @@ def _gen_getitem(borrowed):
                 [ll_list_type],
             )
             fname = 'numba_list_base_ptr'
-            fn = builder.module.get_or_insert_function(fnty, fname)
+            fn = cgutils.get_or_insert_function(builder.module, fnty, fname)
             fn.attributes.add('alwaysinline')
             fn.attributes.add('nounwind')
             fn.attributes.add('readonly')
@@ -762,9 +764,9 @@ def impl_getitem(l, index):
     if index in index_types:
         if IS_NOT_NONE:
             def integer_non_none_impl(l, index):
-                index = handle_index(l, index)
                 castedindex = _cast(index, indexty)
-                status, item = _list_getitem(l, castedindex)
+                handledindex = handle_index(l, castedindex)
+                status, item = _list_getitem(l, handledindex)
                 if status == ListStatus.LIST_OK:
                     return _nonoptional(item)
                 else:
@@ -803,8 +805,8 @@ def _list_setitem(typingctx, l, index, item):
         )
         [l, index, item] = args
         [tl, tindex, titem] = sig.args
-        fn = builder.module.get_or_insert_function(fnty,
-                                                   name='numba_list_setitem')
+        fn = cgutils.get_or_insert_function(builder.module, fnty,
+                                            'numba_list_setitem')
 
         dm_item = context.data_model_manager[titem]
         data_item = dm_item.as_data(builder, item)
@@ -940,8 +942,8 @@ def _list_delitem(typingctx, l, index):
         )
         [tl, tindex] = sig.args
         [l, index] = args
-        fn = builder.module.get_or_insert_function(
-            fnty, name='numba_list_delitem')
+        fn = cgutils.get_or_insert_function(builder.module, fnty,
+                                            'numba_list_delitem')
 
         lp = _container_get_data(context, builder, tl, l)
         status = builder.call(fn, [lp, index])
@@ -964,8 +966,8 @@ def _list_delete_slice(typingctx, l, start, stop, step):
         )
         [l, start, stop, step] = args
         [tl, tstart, tstop, tstep] = sig.args
-        fn = builder.module.get_or_insert_function(
-            fnty, name='numba_list_delete_slice')
+        fn = cgutils.get_or_insert_function(builder.module, fnty,
+                                            'numba_list_delete_slice')
 
         lp = _container_get_data(context, builder, tl, l)
         status = builder.call(
@@ -1132,7 +1134,7 @@ def impl_insert(l, index, item):
                 l.append(l[0])
                 # reverse iterate over the list and shift all elements
                 i = len(l) - 1
-                while(i > index):
+                while (i > index):
                     l[i] = l[i - 1]
                     i -= 1
                 # finally, insert the item
@@ -1305,6 +1307,13 @@ def ol_getitem_unchecked(lst, index):
         _, item = _list_getitem(lst, castedindex)
         return _nonoptional(item)
     return impl
+
+
+@overload_attribute(types.ListType, '__hash__')
+def ol_list_hash(lst):
+    if not isinstance(lst, types.ListType):
+        return
+    return lambda lst: None
 
 
 @overload_attribute(types.ListType, '_dtype')

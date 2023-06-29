@@ -4,8 +4,9 @@ Implementation of compiled C callbacks (@cfunc).
 
 
 import ctypes
+from functools import cached_property
 
-from numba.core import utils, compiler, registry
+from numba.core import compiler, registry
 from numba.core.caching import NullCache, FunctionCache
 from numba.core.dispatcher import _FunctionCompiler
 from numba.core.typing import signature
@@ -16,14 +17,14 @@ from numba.core.compiler_lock import global_compiler_lock
 class _CFuncCompiler(_FunctionCompiler):
 
     def _customize_flags(self, flags):
-        flags.set('no_cpython_wrapper', True)
-        flags.set('no_cfunc_wrapper', False)
+        flags.no_cpython_wrapper = True
+        flags.no_cfunc_wrapper = False
         # Disable compilation of the IR module, because we first want to
         # add the cfunc wrapper.
-        flags.set('no_compile', True)
+        flags.no_compile = True
         # Object mode is not currently supported in C callbacks
         # (no reliable way to get the environment)
-        flags.set('enable_pyobject', False)
+        flags.enable_pyobject = False
         if flags.force_pyobject:
             raise NotImplementedError("object mode not allowed in C callbacks")
         return flags
@@ -96,7 +97,7 @@ class CFunc(object):
         """
         return self._wrapper_address
 
-    @utils.cached_property
+    @cached_property
     def cffi(self):
         """
         A cffi function pointer representing the C callback.
@@ -107,7 +108,7 @@ class CFunc(object):
         # spurious mismatches (such as "int32_t" vs. "int").
         return ffi.cast("void *", self.address)
 
-    @utils.cached_property
+    @cached_property
     def ctypes(self):
         """
         A ctypes function object representing the C callback.

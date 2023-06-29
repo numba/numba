@@ -5,7 +5,7 @@ import warnings
 
 import numpy as np
 
-from numba import typed, njit, errors
+from numba import typed, njit, errors, typeof
 from numba.core import types
 from numba.experimental import structref
 from numba.extending import overload_method, overload_attribute
@@ -57,6 +57,9 @@ class MyStruct(structref.StructRefProxy):
     @property
     def prop(self):
         return self.values, self.counter
+
+    def __hash__(self):
+        return compute_fields(self)
 
 
 @structref.register
@@ -226,6 +229,14 @@ class TestStructRefBasic(MemoryLeakMixin, TestCase):
             # the second field is now an integer.
             td['b'] = MyStruct(2.3, 1)
 
+    def test_MyStructType_hash_no_typeof_recursion(self):
+        # Tests that __hash__ is not called prematurely in typeof
+        # causing infinite recursion (see #8241).
+        st = MyStruct(1, 2)
+        typeof(st)
+
+        self.assertEqual(hash(st), 3)
+
 
 @overload_method(MyStructType, "testme")
 def _ol_mystructtype_testme(self, arg):
@@ -283,6 +294,7 @@ class TestStructRefCaching(MemoryLeakMixin, TestCase):
         self._cache_override = override_config('CACHE_DIR', self._cache_dir)
         self._cache_override.__enter__()
         warnings.simplefilter("error")
+        warnings.filterwarnings(action="ignore", module="typeguard")
 
     def tearDown(self):
         self._cache_override.__exit__(None, None, None)

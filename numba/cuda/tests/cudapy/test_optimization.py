@@ -22,21 +22,23 @@ removed_by_opt = ( '__local_depot0', 'call.uni', 'st.param.b64')
 class TestOptimization(CUDATestCase):
     def test_eager_opt(self):
         # Optimization should occur by default
-        kernel = cuda.jit((float64[::1],))(kernel_func)
+        sig = (float64[::1],)
+        kernel = cuda.jit(sig)(kernel_func)
         ptx = kernel.inspect_asm()
 
         for fragment in removed_by_opt:
             with self.subTest(fragment=fragment):
-                self.assertNotIn(fragment, ptx)
+                self.assertNotIn(fragment, ptx[sig])
 
     def test_eager_noopt(self):
         # Optimization disabled
-        kernel = cuda.jit((float64[::1],), opt=False)(kernel_func)
+        sig = (float64[::1],)
+        kernel = cuda.jit(sig, opt=False)(kernel_func)
         ptx = kernel.inspect_asm()
 
         for fragment in removed_by_opt:
             with self.subTest(fragment=fragment):
-                self.assertIn(fragment, ptx)
+                self.assertIn(fragment, ptx[sig])
 
     def test_lazy_opt(self):
         # Optimization should occur by default
@@ -66,14 +68,16 @@ class TestOptimization(CUDATestCase):
 
     def test_device_opt(self):
         # Optimization should occur by default
-        device = cuda.jit(device=True)(device_func)
-        ptx = device.inspect_ptx((float64, float64, float64)).decode('utf-8')
+        sig = (float64, float64, float64)
+        device = cuda.jit(sig, device=True)(device_func)
+        ptx = device.inspect_asm(sig)
         self.assertIn('fma.rn.f64', ptx)
 
     def test_device_noopt(self):
         # Optimization disabled
-        device = cuda.jit(device=True, opt=False)(device_func)
-        ptx = device.inspect_ptx((float64, float64, float64)).decode('utf-8')
+        sig = (float64, float64, float64)
+        device = cuda.jit(sig, device=True, opt=False)(device_func)
+        ptx = device.inspect_asm(sig)
         # Fused-multiply adds should be disabled when not optimizing
         self.assertNotIn('fma.rn.f64', ptx)
 
