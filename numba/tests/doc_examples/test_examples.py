@@ -3,7 +3,8 @@
 
 import sys
 import unittest
-from numba.tests.support import captured_stdout
+
+from numba.tests.support import TestCase, captured_stdout
 
 
 class MatplotlibBlocker:
@@ -16,7 +17,7 @@ class MatplotlibBlocker:
             raise ImportError(msg)
 
 
-class DocsExamplesTest(unittest.TestCase):
+class DocsExamplesTest(TestCase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -200,8 +201,9 @@ class DocsExamplesTest(unittest.TestCase):
     def test_guvectorize_scalar_return(self):
         with captured_stdout():
             # magictoken.ex_guvectorize_scalar_return.begin
-            from numba import guvectorize, int64
             import numpy as np
+
+            from numba import guvectorize, int64
 
             @guvectorize([(int64[:], int64, int64[:])], '(n),()->()')
             def g(x, y, res):
@@ -219,6 +221,31 @@ class DocsExamplesTest(unittest.TestCase):
 
             self.assertIsInstance(result, np.integer)
             self.assertEqual(result, 20)
+
+    def test_guvectorize_jit(self):
+        with captured_stdout():
+            # magictoken.gufunc_jit.begin
+            import numpy as np
+
+            from numba import jit, guvectorize
+
+            @guvectorize('(n)->(n)')
+            def copy(x, res):
+                for i in range(x.shape[0]):
+                    res[i] = x[i]
+
+            @jit(nopython=True)
+            def jit_fn(x, res):
+                copy(x, res)
+            # magictoken.gufunc_jit.end
+
+            # magictoken.gufunc_jit_call.begin
+            x = np.arange(5, dtype='i4')
+            res = np.zeros_like(x)
+            jit_fn(x, res)
+            # At this point, result == [0, 1, 2, 3, 4].
+            # magictoken.gufunc_jit_call.end
+            self.assertPreciseEqual(x, res)
 
 
 if __name__ == '__main__':

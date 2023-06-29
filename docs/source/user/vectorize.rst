@@ -478,3 +478,13 @@ One can also verify that NumPy ufunc casting rules are working as expected::
 If you need precise support for various type signatures, you should not rely on dynamic
 compilation and instead, specify the types them as first
 argument in the :func:`~numba.guvectorize` decorator.
+
+``@guvectorize`` functions can also be called from jitted ones. For instance:
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_guvectorize_jit`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.gufunc_jit.begin
+   :end-before: magictoken.gufunc_jit.end
+   :dedent: 12
+   :linenos:
