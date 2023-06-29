@@ -166,6 +166,8 @@ class _ArrayGUHelper(namedtuple('_ArrayHelper', ('context', 'builder',
     """Helper class to handle array arguments/result.
     It provides methods to generate code loading/storing specific
     items as well as support code for handling indices.
+
+    Contrary to _ArrayHelper, this class can create a view to a subarray
     """
     def create_iter_indices(self):
         intpty = self.context.get_value_type(types.intp)
@@ -201,24 +203,28 @@ class _ArrayGUHelper(namedtuple('_ArrayHelper', ('context', 'builder',
             ptr = self._load_effective_address(indices)
             return model.load_from_data_pointer(builder, ptr)
         elif self.inner_arr_ty.ndim == 0 and not self.is_input_arg:
-            # In cases where the output inner dimension is 0: "(n),(m) -> ()"
-            # Output arrays are handled as 1d arrays with shape=(1,) as they
-            # can't be represented using scalars.
+            # Output arrays are handled as 1d with shape=(1,) when its
+            # signature represents a scalar. For instance: "(n),(m) -> ()"
             intpty = context.get_value_type(types.intp)
             one = intpty(1)
-            eight = intpty(8)
+
             fromty = types.Array(self.base_type, self.ndim, self.layout)
             toty = types.Array(self.base_type, 1, self.layout)
+            itemsize = intpty(arrayobj.get_itemsize(context, fromty))
 
-            arr_from = self.context.make_array(fromty)(context, builder, self.data)
+            # create a view from the original ndarray to a 1d array
+            arr_from = self.context.make_array(fromty)(context,
+                                                       builder,
+                                                       self.data)
             arr_to = self.context.make_array(toty)(context, builder)
-            arrayobj.populate_array(arr_to,
-                                    data = self._load_effective_address(indices),
-                                    shape=cgutils.pack_array(builder, [one]),
-                                    strides=cgutils.pack_array(builder, [eight]),
-                                    itemsize=arr_from.itemsize,
-                                    meminfo=arr_from.meminfo,
-                                    parent=arr_from.parent)
+            arrayobj.populate_array(
+                arr_to,
+                data=self._load_effective_address(indices),
+                shape=cgutils.pack_array(builder, [one]),
+                strides=cgutils.pack_array(builder, [itemsize]),
+                itemsize=arr_from.itemsize,
+                meminfo=arr_from.meminfo,
+                parent=arr_from.parent)
             return arr_to._getvalue()
         else:
             # generic case
@@ -486,11 +492,12 @@ def numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
     out = _pack_output_values(ufunc, context, builder, sig.return_type, [o.return_val for o in outputs])
     return impl_ret_new_ref(context, builder, sig.return_type, out)
 
+
 def numpy_gufunc_kernel(context, builder, sig, args, gufunc, kernel_class):
     arguments = []
     expected_ndims = kernel_class.gufunc.expected_ndims()
     is_input = [True] * gufunc.nin + [False] * gufunc.nout
-    for arg, ty, exp_ndim, is_inp in zip(args, sig.args, expected_ndims, is_input):
+    for arg, ty, exp_ndim, is_inp in zip(args, sig.args, expected_ndims, is_input):  # noqa: E501
         if isinstance(ty, types.ArrayCompatible):
             # Create an array helper that iteration returns a subarray
             # with ndim specified by "exp_ndim"
@@ -526,28 +533,22 @@ def numpy_gufunc_kernel(context, builder, sig, args, gufunc, kernel_class):
     else:
         order = 'C'
 
-    inputs = arguments[:gufunc.nin]
     outputs = arguments[gufunc.nin:]
-
     intpty = context.get_value_type(types.intp)
     indices = [inp.create_iter_indices() for inp in arguments]
     loopshape_ndim = outputs[0].ndim - outputs[0].inner_arr_ty.ndim
     loopshape = outputs[0].shape[ : loopshape_ndim]
 
-    with cgutils.loop_nest(builder, loopshape, intp=intpty, order=order) as loop_indices:
+    with cgutils.loop_nest(builder,
+                           loopshape,
+                           intp=intpty,
+                           order=order) as loop_indices:
         vals_in = []
         for i, (index, arg) in enumerate(zip(indices, arguments)):
             index.update_indices(loop_indices, i)
             vals_in.append(arg.load_data(index.as_values()))
 
         kernel.generate(*vals_in)
-
-        # vals_out = _unpack_output_values(ufunc, builder, kernel.generate(*vals_in))
-        # for val_out, output in zip(vals_out, outputs):
-        #     output.store_data(loop_indices, val_out)
-
-    # out = _pack_output_values(ufunc, context, builder, sig.return_type, [o.return_val for o in outputs])
-    # return impl_ret_new_ref(context, builder, sig.return_type, out)
 
 
 # Kernels are the code to be executed inside the multidimensional loop.
