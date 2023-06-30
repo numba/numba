@@ -1011,6 +1011,27 @@ class BC2DDG:
         self.replace_effect(op.add_output("env", is_effect=True))
         self.push(op.add_output("out"))
 
+    def op_BINARY_SUBSCR(self, inst: dis.Instruction):
+        index = self.pop()
+        target = self.pop()
+        op = Op(opname="binary_subscr", bc_inst=inst)
+        op.add_input("env", self.effect)
+        op.add_input("index", index)
+        op.add_input("target", target)
+        self.replace_effect(op.add_output("env", is_effect=True))
+        self.push(op.add_output("out"))
+
+    def op_STORE_SUBSCR(self, inst: dis.Instruction):
+        index = self.pop()
+        target = self.pop()
+        value = self.pop()
+        op = Op(opname="store_subscr", bc_inst=inst)
+        op.add_input("env", self.effect)
+        op.add_input("index", index)
+        op.add_input("target", target)
+        op.add_input("value", value)
+        self.replace_effect(op.add_output("env", is_effect=True))
+
     def op_RETURN_VALUE(self, inst: dis.Instruction):
         tos = self.pop()
         op = Op(opname="ret", bc_inst=inst)

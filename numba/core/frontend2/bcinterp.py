@@ -360,20 +360,22 @@ class RVSDG2IR(RegionVisitor):
             print("end dump blk".center(80, '='))
 
     def store(self, value, name, *, redefine=True, block=None) -> ir.Var:
+        target: ir.Var
         if redefine:
             target = self.scope.redefine(name, loc=self.loc)
         else:
             target = self.scope.get_or_define(name, loc=self.loc)
+        stmt = ir.Assign(value=value, target=target, loc=self.loc)
+        self.append(stmt, block=block)
+        return target
+
+    def append(self, stmt: ir.Stmt, block=None):
         if block is None:
             block = self.current_block
-        if str(value) == "$phi.var.y.2":
-            print("HERE")
-        stmt = ir.Assign(value=value, target=target, loc=self.loc)
         if block.is_terminated:
             block.insert_before_terminator(stmt)
         else:
             block.append(stmt)
-        return target
 
     def get_global_value(self, name):
         """THIS IS COPIED from interpreter.py
@@ -495,6 +497,24 @@ class RVSDG2IR(RegionVisitor):
             rhs = self.vsmap[rhs]
             expr = ir.Expr.binop(op, lhs=lhs, rhs=rhs, loc=self.loc)
         self.vsmap[out] = self.store(expr, f"${out.name}")
+
+    def op_BINARY_SUBSCR(self, op: Op, bc: dis.Instruction):
+        [_env, index, target] = op.inputs
+        [_env, out] = op.outputs
+        index = self.vsmap[index]
+        target = self.vsmap[target]
+        expr = ir.Expr.getitem(target, index=index, loc=self.loc)
+        self.vsmap[out] = self.store(expr, f"${out.name}")
+
+    def op_STORE_SUBSCR(self, op: Op, bc: dis.Instruction):
+        [_env, index, target, value] = op.inputs
+        [_env] = op.outputs
+        index = self.vsmap[index]
+        target = self.vsmap[target]
+        value = self.vsmap[value]
+        stmt = ir.SetItem(target=target, index=index, value=value,
+                          loc=self.loc)
+        self.append(stmt)
 
     def op_GET_ITER(self, op: Op, bc: dis.Instruction):
         [arg] = op.inputs
