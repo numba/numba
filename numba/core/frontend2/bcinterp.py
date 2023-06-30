@@ -397,6 +397,17 @@ class RVSDG2IR(RegionVisitor):
         except KeyError:
             return getattr(builtins, name, ir.UNDEFINED)
 
+    def get_closure_value(self, index):
+        """
+        Get a value from the cell contained in this function's closure.
+        If not set, return a ir.UNDEFINED.
+        """
+        cell = self.func_id.func.__closure__[index]
+        try:
+            return cell.cell_contents
+        except ValueError:
+            return ir.UNDEFINED
+
     def debug_print(self, msg: str, *args):
         msg_const = self.store(ir.Const(msg, loc=self.loc), "$.debug.msg")
         fn = self.store(ir.Const(print, loc=self.loc), "$.debug.print")
@@ -457,6 +468,25 @@ class RVSDG2IR(RegionVisitor):
         getattr = ir.Expr.getattr(self.vsmap[item], bc.argval, loc=self.loc)
         self.store_vsmap(getattr, res)
 
+    def op_LOAD_METHOD(self, op: Op, bc: dis.Instruction):
+        [_nil, res] = op.outputs
+        [item] = op.inputs
+        getattr = ir.Expr.getattr(self.vsmap[item], bc.argval, loc=self.loc)
+        self.store_vsmap(getattr, res)
+
+    def op_LOAD_DEREF(self, op: Op, bc: dis.Instruction):
+        [out] = op.outputs
+        code = self.func_id.code
+        name = bc.argval
+        if name in code.co_cellvars:
+            raise NotImplementedError
+            gl = self.get(name)
+        elif name in code.co_freevars:
+            idx = code.co_freevars.index(name)
+            value = self.get_closure_value(idx)
+            gl = ir.FreeVar(idx, name, value, loc=self.loc)
+            self.store_vsmap(gl, out)
+
     def op_STORE_FAST(self, op: Op, bc: dis.Instruction):
         [incvar] = op.inputs
         [res] = op.outputs
@@ -499,10 +529,10 @@ class RVSDG2IR(RegionVisitor):
         expr = ir.Expr.binop(op, lhs=lhs, rhs=rhs, loc=self.loc)
         self.store_vsmap(expr, out)
 
-    def op_BINARY_OP(self, op: Op, bc: dis.Instruction):
+    def _binop(self, operator, op):
         [_env, lhs, rhs] = op.inputs
         [_env, out] = op.outputs
-        operator = bc.argrepr
+
         if "=" in operator:
             operator = operator[:-1]
             immuop = BINOPS_TO_OPERATORS[operator]
@@ -519,6 +549,18 @@ class RVSDG2IR(RegionVisitor):
             lhs = self.vsmap[lhs]
             rhs = self.vsmap[rhs]
             expr = ir.Expr.binop(op, lhs=lhs, rhs=rhs, loc=self.loc)
+        self.store_vsmap(expr, out)
+
+    def op_BINARY_OP(self, op: Op, bc: dis.Instruction):
+        self._binop(bc.argrepr, op)
+
+    def op_IS_OP(self, op: Op, bc: dis.Instruction):
+        self._binop("is", op)
+
+    def op_UNARY_NOT(self, op: Op, bc: dis.Instruction):
+        [val] = op.inputs
+        [out] = op.outputs
+        expr = ir.Expr.unary('not', value=self.vsmap[val], loc=self.loc)
         self.store_vsmap(expr, out)
 
     def op_BINARY_SUBSCR(self, op: Op, bc: dis.Instruction):
@@ -599,17 +641,41 @@ class RVSDG2IR(RegionVisitor):
         res = ir.Expr.call(self.store(not_fn, "$not"), (self.vsmap[pred],), (), loc=self.loc)
         self.branch_predicate = self.store(res, "$jump_if")
 
-
     def op_POP_JUMP_FORWARD_IF_TRUE(self, op: Op, bc: dis.Instruction):
         [_env, pred] = op.inputs
         [_env] = op.outputs
         self.branch_predicate = self.store(self.vsmap[pred], "$jump_if")
 
+    def op_POP_JUMP_FORWARD_IF_NONE(self, op: Op, bc: dis.Instruction):
+        [_env, pred] = op.inputs
+        [_env] = op.outputs
+        op = BINOPS_TO_OPERATORS["is"]
+        none = self.store(value=ir.Const(None, loc=self.loc),
+                          name=f"$constNone{bc.offset}")
+        isnone = ir.Expr.binop(op, lhs=self.vsmap[pred], rhs=none, loc=self.loc)
+        self.branch_predicate = self.store(isnone, "$jump_if")
+
+    def op_POP_JUMP_FORWARD_IF_NOT_NONE(self, op: Op, bc: dis.Instruction):
+        [_env, pred] = op.inputs
+        [_env] = op.outputs
+        op = BINOPS_TO_OPERATORS["is not"]
+        none = self.store(value=ir.Const(None, loc=self.loc),
+                          name=f"$constNone{bc.offset}")
+        isnotnone = ir.Expr.binop(op, lhs=self.vsmap[pred], rhs=none, loc=self.loc)
+        self.branch_predicate = self.store(isnotnone, "$jump_if")
+
     op_POP_JUMP_BACKWARD_IF_TRUE = op_POP_JUMP_FORWARD_IF_TRUE
 
     def op_RETURN_VALUE(self, op: Op, bc: dis.Instruction):
         [_env, retval] = op.inputs
-        self.current_block.append(ir.Return(self.vsmap[retval], loc=self.loc))
+        self.append(ir.Return(self.vsmap[retval], loc=self.loc))
+        assert self.current_block.is_terminated
+
+    def op_RAISE_VARARGS(self, op: Op, bc: dis.Instruction):
+        [_env, exc] = op.inputs
+        # XXX: temporary implementation
+        self.append(ir.Raise(exception=self.vsmap[exc], loc=self.loc))
+        assert self.current_block.is_terminated
 
 
 def rvsdg_to_ir(

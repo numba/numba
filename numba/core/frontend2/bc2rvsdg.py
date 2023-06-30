@@ -969,7 +969,19 @@ class BC2DDG:
         obj = self.pop()
         attr = inst.argval
         op = Op(opname=f"load_attr.{attr}", bc_inst=inst)
-        op.add_input("out", obj)
+        op.add_input("obj", obj)
+        self.push(op.add_output("out"))
+
+    def op_LOAD_METHOD(self, inst: dis.Instruction):
+        obj = self.pop()
+        attr = inst.argval
+        op = Op(opname=f"load_method.{attr}", bc_inst=inst)
+        op.add_input("obj", obj)
+        self.push(op.add_output("null"))
+        self.push(op.add_output("out"))
+
+    def op_LOAD_DEREF(self, inst: dis.Instruction):
+        op = Op(opname="load_deref", bc_inst=inst)
         self.push(op.add_output("out"))
 
     def op_PRECALL(self, inst: dis.Instruction):
@@ -1013,25 +1025,32 @@ class BC2DDG:
         # Store the indvar into an internal variable
         self.store("indvar", op.add_output("indvar"))
 
-    def op_BINARY_OP(self, inst: dis.Instruction):
+    def _binaryop(self, opname: str, inst: dis.Instruction):
         rhs = self.pop()
         lhs = self.pop()
-        op = Op(opname="binaryop", bc_inst=inst)
+        op = Op(opname=opname, bc_inst=inst)
         op.add_input("env", self.effect)
         op.add_input("lhs", lhs)
         op.add_input("rhs", rhs)
         self.replace_effect(op.add_output("env", is_effect=True))
         self.push(op.add_output("out"))
 
+    def op_BINARY_OP(self, inst: dis.Instruction):
+        self._binaryop("binaryop", inst)
+
     def op_COMPARE_OP(self, inst: dis.Instruction):
-        rhs = self.pop()
-        lhs = self.pop()
-        op = Op(opname="compareop", bc_inst=inst)
-        op.add_input("env", self.effect)
-        op.add_input("lhs", lhs)
-        op.add_input("rhs", rhs)
-        self.replace_effect(op.add_output("env", is_effect=True))
+        self._binaryop("compareop", inst)
+
+    def op_IS_OP(self, inst: dis.Instruction):
+        self._binaryop("is_op", inst)
+
+    def _unaryop(self, opname: str, inst: dis.Instruction):
+        op = Op(opname=opname, bc_inst=inst)
+        op.add_input("val", self.pop())
         self.push(op.add_output("out"))
+
+    def op_UNARY_NOT(self, inst: dis.Instruction):
+        self._unaryop("not", inst)
 
     def op_BINARY_SUBSCR(self, inst: dis.Instruction):
         index = self.pop()
@@ -1095,6 +1114,26 @@ class BC2DDG:
         op.add_input("retval", tos)
         self.replace_effect(op.add_output("env", is_effect=True))
 
+    def op_RAISE_VARARGS(self, inst: dis.Instruction):
+        if inst.arg == 0:
+            exc = None
+            # # No re-raising within a try-except block.
+            # # But we allow bare reraise.
+            # if state.has_active_try():
+            #     raise UnsupportedError(
+            #         "The re-raising of an exception is not yet supported.",
+            #         loc=self.get_debug_loc(inst.lineno),
+            #     )
+            raise NotImplementedError
+        elif inst.arg == 1:
+            exc = self.pop()
+        else:
+            raise ValueError("Multiple argument raise is not supported.")
+        op = Op(opname="raise_varargs", bc_inst=inst)
+        op.add_input("env", self.effect)
+        op.add_input("exc", exc)
+        self.replace_effect(op.add_output("env", is_effect=True))
+
     def op_JUMP_FORWARD(self, inst: dis.Instruction):
         pass # no-op
 
@@ -1108,11 +1147,23 @@ class BC2DDG:
         op.add_input("pred", tos)
         self.replace_effect(op.add_output("env", is_effect=True))
 
+    def op_POP_JUMP_FORWARD_IF_TRUE(self, inst: dis.Instruction):
+        self._POP_JUMP_X_IF_Y(inst, opname="jump.if_true")
+
     def op_POP_JUMP_FORWARD_IF_FALSE(self, inst: dis.Instruction):
         self._POP_JUMP_X_IF_Y(inst, opname="jump.if_false")
 
     def op_POP_JUMP_BACKWARD_IF_TRUE(self, inst: dis.Instruction):
         self._POP_JUMP_X_IF_Y(inst, opname="jump.if_true")
+
+    def op_POP_JUMP_BACKWARD_IF_FALSE(self, inst: dis.Instruction):
+        self._POP_JUMP_X_IF_Y(inst, opname="jump.if_false")
+
+    def op_POP_JUMP_FORWARD_IF_NONE(self, inst: dis.Instruction):
+        self._POP_JUMP_X_IF_Y(inst, opname="jump.if_none")
+
+    def op_POP_JUMP_FORWARD_IF_NOT_NONE(self, inst: dis.Instruction):
+        self._POP_JUMP_X_IF_Y(inst, opname="jump.if_not_none")
 
     def _JUMP_IF_X_OR_POP(self, inst: dis.Instruction, *, opname):
         tos = self.top()
