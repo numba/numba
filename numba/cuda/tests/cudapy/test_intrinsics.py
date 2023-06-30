@@ -6,8 +6,9 @@ from numba import cuda, int64
 from numba.cuda import compile_ptx
 from numba.core.errors import TypingError
 from numba.core.types import f2
+from numba.cuda.cudadrv.nvvm import NVVM
 from numba.cuda.testing import (unittest, CUDATestCase, skip_on_cudasim,
-                                skip_unless_cc_53, skip_unless_cuda_python)
+                                skip_unless_cc_53)
 
 
 def simple_threadidx(ary):
@@ -652,18 +653,22 @@ class TestCudaIntrinsic(CUDATestCase):
         self.assertIn('mul.f16', ptx)
 
     @skip_unless_cc_53
-    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
+    @skip_on_cudasim('NVVM not supported in the simulator')
     def test_hdiv_scalar(self):
+        if not NVVM().is_nvvm70:
+            self.skipTest('Skip due to incorrect float16 divide codegen '
+                          'in earlier versions of nvvm.')
+
         compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hdiv_scalar)
         ary = np.zeros(1, dtype=np.float16)
         arg1 = np.float16(3.1415926)
         arg2 = np.float16(1.57)
+
         compiled[1, 1](ary, arg1, arg2)
         ref = arg1 / arg2
         np.testing.assert_allclose(ary[0], ref)
 
     @skip_unless_cc_53
-    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_hdiv(self):
         compiled = cuda.jit("void(f2[:], f2[:], f2[:])")(simple_hdiv_kernel)
         arry1 = np.random.randint(-65504, 65505, size=500).astype(np.float16)
@@ -721,7 +726,6 @@ class TestCudaIntrinsic(CUDATestCase):
         self.assertIn('abs.f16', ptx)
 
     @skip_unless_cc_53
-    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_fp16_intrinsics_common(self):
         kernels = (simple_hsin, simple_hcos,
                    simple_hlog, simple_hlog2, simple_hlog10,
@@ -757,7 +761,6 @@ class TestCudaIntrinsic(CUDATestCase):
                 np.testing.assert_allclose(r, expected)
 
     @skip_unless_cc_53
-    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     def test_hexp10(self):
         @cuda.jit()
         def hexp10_vectors(r, x):

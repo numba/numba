@@ -1,6 +1,7 @@
 import numpy as np
+from numba.cuda.cudadrv.nvvm import NVVM
 from numba.cuda.testing import (unittest, CUDATestCase, skip_unless_cc_53,
-                                skip_on_cudasim, skip_unless_cuda_python)
+                                skip_on_cudasim)
 from numba import cuda
 from numba.core.types import f2, b1
 from numba.cuda import compile_ptx
@@ -144,9 +145,13 @@ class TestOperatorModule(CUDATestCase):
     def test_floordiv(self):
         self.operator_template(operator.floordiv)
 
-    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     @skip_unless_cc_53
+    @skip_on_cudasim('NVVM not supported in the simulator')
     def test_fp16_binary(self):
+        if not NVVM().is_nvvm70:
+            self.skipTest('Skip due to incorrect float16 divide codegen '
+                          'in earlier versions of nvvm.')
+
         functions = (simple_fp16add, simple_fp16sub, simple_fp16mul,
                      simple_fp16_div_scalar)
         ops = (operator.add, operator.sub, operator.mul, operator.truediv)
@@ -173,7 +178,6 @@ class TestOperatorModule(CUDATestCase):
                 ptx, _ = compile_ptx(fn, args, cc=(5, 3))
                 self.assertIn(instr, ptx)
 
-    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     @skip_unless_cc_53
     def test_mixed_fp16_binary_arithmetic(self):
         functions = (simple_fp16add, simple_fp16sub, simple_fp16mul,
@@ -205,7 +209,6 @@ class TestOperatorModule(CUDATestCase):
                 ptx, _ = compile_ptx(fn, args, cc=(5, 3))
                 self.assertIn(instr, ptx)
 
-    @skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
     @skip_unless_cc_53
     def test_fp16_inplace_binary(self):
         functions = (simple_fp16_iadd, simple_fp16_isub, simple_fp16_imul,
