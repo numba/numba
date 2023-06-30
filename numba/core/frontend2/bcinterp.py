@@ -427,7 +427,6 @@ class RVSDG2IR(RegionVisitor):
                 else:
                     self.debug_print(f"  out {k:>6}:", val)
 
-
     def op_PUSH_NULL(self, op: Op, bc: dis.Instruction):
         pass
 

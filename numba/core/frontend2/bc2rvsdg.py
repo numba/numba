@@ -934,6 +934,9 @@ class BC2DDG:
     def op_RESUME(self, inst: dis.Instruction):
         pass   # no-op
 
+    def op_COPY_FREE_VARS(self, inst: dis.Instruction):
+        pass   # no-op
+
     def op_PUSH_NULL(self, inst: dis.Instruction):
         op = Op(opname="push_null", bc_inst=inst)
         null = op.add_output("null")
