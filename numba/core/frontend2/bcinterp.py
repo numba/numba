@@ -441,6 +441,12 @@ class RVSDG2IR(RegionVisitor):
         const = ir.Const(value, loc=self.loc)
         self.vsmap[res] = self.store(const, f"${res.name}")
 
+    def op_LOAD_ATTR(self, op: Op, bc: dis.Instruction):
+        [res] = op.outputs
+        [item] = op.inputs
+        getattr = ir.Expr.getattr(self.vsmap[item], bc.argval, loc=self.loc)
+        self.vsmap[res] = self.store(getattr, f"${res.name}")
+
     def op_STORE_FAST(self, op: Op, bc: dis.Instruction):
         [incvar] = op.inputs
         [res] = op.outputs

@@ -953,6 +953,13 @@ class BC2DDG:
         varname = self._decorate_varname(inst.argval)
         self.push(self.load(varname))
 
+    def op_LOAD_ATTR(self, inst: dis.Instruction):
+        obj = self.pop()
+        attr = inst.argval
+        op = Op(opname=f"load_attr.{attr}", bc_inst=inst)
+        op.add_input("out", obj)
+        self.push(op.add_output("out"))
+
     def op_PRECALL(self, inst: dis.Instruction):
         pass # no-op
 
