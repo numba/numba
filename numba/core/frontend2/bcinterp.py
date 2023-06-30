@@ -516,12 +516,21 @@ class RVSDG2IR(RegionVisitor):
                           loc=self.loc)
         self.append(stmt)
 
-    def op_BUILD_TUPLE(self, op: Op,  bc: dis.Instruction):
+    def op_BUILD_TUPLE(self, op: Op, bc: dis.Instruction):
         items = op.inputs
         [out] = op.outputs
         expr = ir.Expr.build_tuple(items=[self.vsmap[it] for it in items],
                                    loc=self.loc)
         self.vsmap[out] = self.store(expr, f"${out.name}")
+
+    def op_BUILD_SLICE(self, op: Op, bc: dis.Instruction):
+        args = tuple([self.vsmap[v] for v in op.inputs])
+        [out] = op.outputs
+        assert len(args) in (2, 3), "expected (start, stop, [step])"
+        slicegv = ir.Global("slice", slice, loc=self.loc)
+        slicevar = self.store(value=slicegv, name=f"$slicevar", redefine=True)
+        sliceinst = ir.Expr.call(slicevar, args, (), loc=self.loc)
+        self.vsmap[out] = self.store(sliceinst, f"${out.name}")
 
     def op_GET_ITER(self, op: Op, bc: dis.Instruction):
         [arg] = op.inputs

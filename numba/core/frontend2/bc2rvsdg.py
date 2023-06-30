@@ -1041,6 +1041,31 @@ class BC2DDG:
             op.add_input(str(i), it)
         self.push(op.add_output("out"))
 
+    def op_BUILD_SLICE(self, inst: dis.Instruction):
+        argc = inst.arg
+        if argc == 2:
+            tos = self.pop()
+            tos1 = self.pop()
+            start = tos1
+            stop = tos
+            step = None
+        elif argc == 3:
+            tos = self.pop()
+            tos1 = self.pop()
+            tos2 = self.pop()
+            start = tos2
+            stop = tos1
+            step = tos
+        else:
+            raise Exception("unreachable")
+
+        op = Op(opname="build_slice", bc_inst=inst)
+        op.add_input("start", start)
+        op.add_input("stop", stop)
+        if step is not None:
+            op.add_input("step", step)
+        self.push(op.add_output("out"))
+
     def op_RETURN_VALUE(self, inst: dis.Instruction):
         tos = self.pop()
         op = Op(opname="ret", bc_inst=inst)
