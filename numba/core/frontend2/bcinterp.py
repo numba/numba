@@ -458,14 +458,29 @@ class RVSDG2IR(RegionVisitor):
         var = self.vsmap[incvar]
         self.vsmap[res] = self.store(var, bc.argval)
 
+    def op_KW_NAMES(self, op: Op, bc: dis.Instruction):
+        pass   # do nothing
+
     def op_CALL(self, op: Op, bc: dis.Instruction):
         [_env, callee, arg0, *args] = op.inputs
         [_env, res] = op.outputs
         assert callee.name == "null"
         callee = arg0
         callee = self.vsmap[callee]
-        args = [self.vsmap[vs] for vs in args]
-        kwargs = () # TODO
+
+        if op.opname == "call.kw":
+            kw_names_op = args[-1].parent
+            assert kw_names_op.opname == "kw_names"
+            args = args[:-1]
+            names = self.func_id.code.co_consts[kw_names_op.bc_inst.arg]
+            args = [self.vsmap[vs] for vs in args]
+            kwargs = list(zip(names, args[-len(names):]))
+            args = args[:-len(names)]
+        else:
+            assert op.opname == "call"
+            args = [self.vsmap[vs] for vs in args]
+            kwargs = ()
+
         expr = ir.Expr.call(callee, args, kwargs, loc=self.loc)
         self.store_vsmap(expr, res)
 

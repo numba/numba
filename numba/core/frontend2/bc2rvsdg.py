@@ -878,6 +878,7 @@ class BC2DDG:
         self.varmap: dict[str, ValueState] = {}
         self.incoming_vars: dict[str, ValueState] = {}
         self.incoming_stackvars: list[ValueState] = []
+        self._kw_names: ValueState|None = None
 
     def push(self, val: ValueState):
         self.stack.append(val)
@@ -917,6 +918,15 @@ class BC2DDG:
     def convert(self, inst: dis.Instruction):
         fn = getattr(self, f"op_{inst.opname}")
         fn(inst)
+
+    def set_kw_names(self, kw_vs: ValueState):
+        assert self._kw_names is None
+        self._kw_names = kw_vs
+
+    def pop_kw_names(self):
+        res = self._kw_names
+        self._kw_names = None
+        return res
 
     def op_POP_TOP(self, inst: dis.Instruction):
         self.pop()
@@ -963,18 +973,28 @@ class BC2DDG:
     def op_PRECALL(self, inst: dis.Instruction):
         pass # no-op
 
+    def op_KW_NAMES(self, inst: dis.Instruction):
+        op = Op(opname="kw_names", bc_inst=inst)
+        self.set_kw_names(op.add_output("out"))
+
     def op_CALL(self, inst: dis.Instruction):
         argc: int = inst.argval
-        # TODO: handle kwnames
         args = reversed([self.pop() for _ in range(argc)])
         arg0 = self.pop() # TODO
+        kw_names = self.pop_kw_names()
+
         args = [arg0, *args]
         callable = self.pop()  # TODO
-        op = Op(opname="call", bc_inst=inst)
+        opname = "call" if kw_names is None else "call.kw"
+        op = Op(opname=opname, bc_inst=inst)
         op.add_input("env", self.effect)
         op.add_input("callee", callable)
         for i, arg in enumerate(args):
             op.add_input(f"arg.{i}", arg)
+
+        if kw_names is not None:
+            op.add_input(f"kw_names", kw_names)
+
         self.replace_effect(op.add_output("env", is_effect=True))
         self.push(op.add_output("ret"))
 
