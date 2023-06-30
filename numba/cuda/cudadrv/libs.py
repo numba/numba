@@ -99,7 +99,7 @@ def test(_platform=None, print_paths=True):
         failed = True
 
     # Checks for dynamic libraries
-    libs = 'nvvm cudart'.split()
+    libs = 'nvvm nvrtc cudart'.split()
     for lib in libs:
         path = get_cudalib(lib, _platform)
         print('Finding {} from {}'.format(lib, _get_source_variable(lib)))
