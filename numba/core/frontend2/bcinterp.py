@@ -341,16 +341,15 @@ class RVSDG2IR(RegionVisitor):
 
     @contextmanager
     def set_block(self, label: int, block: ir.Block) -> Iterator[ir.Block]:
-        if label == 2:
-            print("HERE")
         if self.last_block_label is not None:
             last_block = self.blocks[self.last_block_label]
             if not last_block.is_terminated:
                 last_block.append(ir.Jump(label, loc=self.loc))
 
-            print("begin dump last blk".center(80, '-'))
-            last_block.dump()
-            print("end dump last blk".center(80, '='))
+            if self._emit_debug_print:
+                print("begin dump last blk".center(80, '-'))
+                last_block.dump()
+                print("end dump last blk".center(80, '='))
 
         self.blocks[label] = block
         old = self._current_block
@@ -361,9 +360,10 @@ class RVSDG2IR(RegionVisitor):
             self.last_block_label = label
             self._current_block = old
             # dump
-            print(f"begin dump blk: {label}".center(80, '-'))
-            block.dump()
-            print("end dump blk".center(80, '='))
+            if self._emit_debug_print:
+                print(f"begin dump blk: {label}".center(80, '-'))
+                block.dump()
+                print("end dump blk".center(80, '='))
 
     def store(self, value, name, *, redefine=True, block=None) -> ir.Var:
         target: ir.Var

@@ -684,8 +684,8 @@ class PropagateStack(RegionVisitor):
         if isinstance(block, DDGBlock):
             nin = len(block.in_stackvars)
             inherited = data[:len(data) - nin]
-            print("--- stack", data)
-            print("--- inherited stack", inherited)
+            self.debug_print("--- stack", data)
+            self.debug_print("--- inherited stack", inherited)
             out_stackvars = block.out_stackvars.copy()
 
             counts = reversed(list(range(len(inherited) + len(out_stackvars))))
@@ -776,7 +776,7 @@ class ConnectImportedStackVars(RegionVisitor):
         self.visit_linear(region.subregion[exiting], None)
 
 def propagate_stack(rvsdg: SCFG):
-    visitor = PropagateStack(_debug=True)
+    visitor = PropagateStack(_debug=False)
     visitor.visit_graph(rvsdg, visitor.make_data())
 
 def connect_incoming_stack_vars(rvsdg: SCFG):
@@ -824,7 +824,6 @@ def convert_scfg_to_dataflow(scfg, bcmap, argnames: tuple[str, ...]) -> SCFG:
 
 def _convert_bytecode(block, instlist, argnames: tuple[str, ...]) -> DDGBlock:
     converter = BC2DDG()
-    assert argnames
     if instlist[0].offset == 0:
         for arg in argnames:
             converter.load(f"var.{arg}")
