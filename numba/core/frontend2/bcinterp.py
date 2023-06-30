@@ -516,6 +516,13 @@ class RVSDG2IR(RegionVisitor):
                           loc=self.loc)
         self.append(stmt)
 
+    def op_BUILD_TUPLE(self, op: Op,  bc: dis.Instruction):
+        items = op.inputs
+        [out] = op.outputs
+        expr = ir.Expr.build_tuple(items=[self.vsmap[it] for it in items],
+                                   loc=self.loc)
+        self.vsmap[out] = self.store(expr, f"${out.name}")
+
     def op_GET_ITER(self, op: Op, bc: dis.Instruction):
         [arg] = op.inputs
         [res] = op.outputs

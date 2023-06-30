@@ -1032,6 +1032,15 @@ class BC2DDG:
         op.add_input("value", value)
         self.replace_effect(op.add_output("env", is_effect=True))
 
+    def op_BUILD_TUPLE(self, inst: dis.Instruction):
+        count = inst.arg
+        assert isinstance(count, int)
+        items = list(reversed([self.pop() for _ in range(count)]))
+        op = Op(opname="build_tuple", bc_inst=inst)
+        for i, it in enumerate(items):
+            op.add_input(str(i), it)
+        self.push(op.add_output("out"))
+
     def op_RETURN_VALUE(self, inst: dis.Instruction):
         tos = self.pop()
         op = Op(opname="ret", bc_inst=inst)
