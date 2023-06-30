@@ -369,6 +369,9 @@ class RVSDG2IR(RegionVisitor):
         self.append(stmt, block=block)
         return target
 
+    def store_vsmap(self, val, vs):
+        self.vsmap[vs] = self.store(val, f"${vs.name}")
+
     def append(self, stmt: ir.Stmt, block=None):
         if block is None:
             block = self.current_block
@@ -433,7 +436,7 @@ class RVSDG2IR(RegionVisitor):
         [vs] = op.outputs
         # TODO: handle non scalar
         value = ir.Const(bc.argval, loc=self.loc)
-        self.vsmap[vs] = self.store(value, f"${vs.name}")
+        self.store_vsmap(value, vs)
 
     def op_LOAD_GLOBAL(self, op: Op, bc: dis.Instruction):
         # intentionally ignoring the nil
@@ -441,13 +444,13 @@ class RVSDG2IR(RegionVisitor):
         value = self.get_global_value(bc.argval)
         # TODO: handle non scalar
         const = ir.Const(value, loc=self.loc)
-        self.vsmap[res] = self.store(const, f"${res.name}")
+        self.store_vsmap(const, res)
 
     def op_LOAD_ATTR(self, op: Op, bc: dis.Instruction):
         [res] = op.outputs
         [item] = op.inputs
         getattr = ir.Expr.getattr(self.vsmap[item], bc.argval, loc=self.loc)
-        self.vsmap[res] = self.store(getattr, f"${res.name}")
+        self.store_vsmap(getattr, res)
 
     def op_STORE_FAST(self, op: Op, bc: dis.Instruction):
         [incvar] = op.inputs
@@ -464,7 +467,7 @@ class RVSDG2IR(RegionVisitor):
         args = [self.vsmap[vs] for vs in args]
         kwargs = () # TODO
         expr = ir.Expr.call(callee, args, kwargs, loc=self.loc)
-        self.vsmap[res] = self.store(expr, f"${res.name}")
+        self.store_vsmap(expr, res)
 
     def op_COMPARE_OP(self, op: Op, bc: dis.Instruction):
         [_env, lhs, rhs] = op.inputs
@@ -474,7 +477,7 @@ class RVSDG2IR(RegionVisitor):
         lhs = self.vsmap[lhs]
         rhs = self.vsmap[rhs]
         expr = ir.Expr.binop(op, lhs=lhs, rhs=rhs, loc=self.loc)
-        self.vsmap[out] = self.store(expr, f"${out.name}")
+        self.store_vsmap(expr, out)
 
     def op_BINARY_OP(self, op: Op, bc: dis.Instruction):
         [_env, lhs, rhs] = op.inputs
@@ -496,7 +499,7 @@ class RVSDG2IR(RegionVisitor):
             lhs = self.vsmap[lhs]
             rhs = self.vsmap[rhs]
             expr = ir.Expr.binop(op, lhs=lhs, rhs=rhs, loc=self.loc)
-        self.vsmap[out] = self.store(expr, f"${out.name}")
+        self.store_vsmap(expr, out)
 
     def op_BINARY_SUBSCR(self, op: Op, bc: dis.Instruction):
         [_env, index, target] = op.inputs
@@ -504,7 +507,7 @@ class RVSDG2IR(RegionVisitor):
         index = self.vsmap[index]
         target = self.vsmap[target]
         expr = ir.Expr.getitem(target, index=index, loc=self.loc)
-        self.vsmap[out] = self.store(expr, f"${out.name}")
+        self.store_vsmap(expr, out)
 
     def op_STORE_SUBSCR(self, op: Op, bc: dis.Instruction):
         [_env, index, target, value] = op.inputs
@@ -521,7 +524,7 @@ class RVSDG2IR(RegionVisitor):
         [out] = op.outputs
         expr = ir.Expr.build_tuple(items=[self.vsmap[it] for it in items],
                                    loc=self.loc)
-        self.vsmap[out] = self.store(expr, f"${out.name}")
+        self.store_vsmap(expr, out)
 
     def op_BUILD_SLICE(self, op: Op, bc: dis.Instruction):
         args = tuple([self.vsmap[v] for v in op.inputs])
@@ -530,13 +533,13 @@ class RVSDG2IR(RegionVisitor):
         slicegv = ir.Global("slice", slice, loc=self.loc)
         slicevar = self.store(value=slicegv, name=f"$slicevar", redefine=True)
         sliceinst = ir.Expr.call(slicevar, args, (), loc=self.loc)
-        self.vsmap[out] = self.store(sliceinst, f"${out.name}")
+        self.store_vsmap(sliceinst, out)
 
     def op_GET_ITER(self, op: Op, bc: dis.Instruction):
         [arg] = op.inputs
         [res] = op.outputs
         expr = ir.Expr.getiter(value=self.vsmap[arg], loc=self.loc)
-        self.vsmap[res] = self.store(expr, f"${res.name}")
+        self.store_vsmap(expr, res)
 
     def op_FOR_ITER(self, op: Op, bc: dis.Instruction):
         [iterator] = op.inputs
