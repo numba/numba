@@ -116,6 +116,12 @@ class RVSDG2IR(RegionVisitor):
                 data[f"var.{k}"] = self.store(val, str(k))
             return data
 
+    def finalize(self):
+        if self.last_block_label is not None:
+            last_block = self.blocks[self.last_block_label]
+            if not last_block.is_terminated:
+                last_block.append(ir.StaticRaise(AssertionError, (), loc=self.loc))
+
     def visit_block(self, block: BasicBlock, data):
         if isinstance(block, DDGBlock):
             # Prepare incoming variables
@@ -613,6 +619,7 @@ def rvsdg_to_ir(
     rvsdg2ir = RVSDG2IR(func_id)
     data = rvsdg2ir.initialize()
     rvsdg2ir.visit_graph(rvsdg, data)
+    rvsdg2ir.finalize()
 
     for blk in rvsdg2ir.blocks.values():
         blk.verify()
