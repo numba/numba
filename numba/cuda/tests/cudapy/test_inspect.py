@@ -148,6 +148,21 @@ class TestInspect(CUDATestCase):
 
         self.assertIn('nvdisasm is required', str(raises.exception))
 
+    @skip_without_nvdisasm('nvdisasm needed for inspect_sass()')
+    def test_inspect_cfg(self):
+        sig = (float32[::1], int32[::1])
+
+        @cuda.jit(sig)
+        def add(x, y):
+            i = cuda.grid(1)
+            if i < len(x):
+                x[i] += y[i]
+
+        self.assertRegex(
+            add.inspect_cfg(signature=sig),
+            r'digraph\s*\w\s*{(.|\n)*\n}'
+        )
+
 
 if __name__ == '__main__':
     unittest.main()

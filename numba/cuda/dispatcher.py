@@ -253,6 +253,14 @@ class _Kernel(serialize.ReduceMixin):
         '''
         return self._codelibrary.get_asm_str(cc=cc)
 
+    def inspect_cfg(self):
+        '''
+        Returns the CFG for this kernel.
+
+        Requires nvdisasm to be available on the PATH.
+        '''
+        return self._codelibrary.get_cfg()
+
     def inspect_sass(self):
         '''
         Returns the SASS code for this kernel.
@@ -978,6 +986,28 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
             else:
                 return {sig: overload.inspect_asm(cc)
                         for sig, overload in self.overloads.items()}
+
+    def inspect_cfg(self, signature=None):
+        '''
+        Return this kernel's CFG for the device in the
+        current context.
+
+        :param signature: A tuple of argument types.
+        :return: The CFG for the given signature, or a dict of CFGs
+                 for all previously-encountered signatures.
+
+        CFG for the device in the current context is returned.
+
+        Requires nvdisasm to be available on the PATH.
+        '''
+        if self.targetoptions.get('device'):
+            raise RuntimeError('Cannot get the CFG of a device function')
+
+        if signature is not None:
+            return self.overloads[signature].inspect_cfg()
+        else:
+            return {sig: defn.inspect_cfg()
+                    for sig, defn in self.overloads.items()}
 
     def inspect_sass(self, signature=None):
         '''

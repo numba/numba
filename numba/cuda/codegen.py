@@ -42,6 +42,34 @@ def disassemble_cubin(cubin):
             os.unlink(fname)
 
 
+def disassemble_cubin_for_cfg(cubin):
+    # nvdisasm only accepts input from a file, so we need to write out to a
+    # temp file and clean up afterwards.
+    fd = None
+    fname = None
+    try:
+        fd, fname = tempfile.mkstemp()
+        with open(fname, 'wb') as f:
+            f.write(cubin)
+
+        try:
+            cp = subprocess.run(['nvdisasm', '-cfg', fname], check=True,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE)
+        except FileNotFoundError as e:
+            msg = ("nvdisasm is required for the CFG, and has not "
+                   "been found.\n\nYou may need to install the CUDA "
+                   "toolkit and ensure that it is available on your "
+                   "PATH.\n")
+            raise RuntimeError(msg) from e
+        return cp.stdout.decode('utf-8')
+    finally:
+        if fd is not None:
+            os.close(fd)
+        if fname is not None:
+            os.unlink(fname)
+
+
 class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
     """
     The CUDACodeLibrary generates PTX, SASS, cubins for multiple different
@@ -201,6 +229,9 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
 
     def get_sass(self, cc=None):
         return disassemble_cubin(self.get_cubin(cc=cc))
+
+    def get_cfg(self, cc=None):
+        return disassemble_cubin_for_cfg(self.get_cubin(cc=cc))
 
     def add_ir_module(self, mod):
         self._raise_if_finalized()
