@@ -327,6 +327,13 @@ Supported NumPy features:
   * :func:`numpy.minimum`
   * :func:`numpy.fmax`
   * :func:`numpy.fmin`
+  * :func:`numpy.bitwise_and`
+  * :func:`numpy.bitwise_or`
+  * :func:`numpy.bitwise_xor`
+  * :func:`numpy.invert`
+  * :func:`numpy.bitwise_not`
+  * :func:`numpy.left_shift`
+  * :func:`numpy.right_shift`
 
 Unsupported NumPy features:
 

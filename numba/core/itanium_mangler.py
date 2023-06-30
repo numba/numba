@@ -1,7 +1,7 @@
 """
 Itanium CXX ABI Mangler
 
-Reference: http://mentorembedded.github.io/cxx-abi/abi.html
+Reference: https://itanium-cxx-abi.github.io/cxx-abi/abi.html
 
 The basics of the mangling scheme.
 
