@@ -148,7 +148,7 @@ class TestInspect(CUDATestCase):
 
         self.assertIn('nvdisasm is required', str(raises.exception))
 
-    @skip_without_nvdisasm('nvdisasm needed for inspect_cfg()')
+    @skip_without_nvdisasm('nvdisasm needed for inspect_sass_cfg()')
     def test_inspect_sass_cfg(self):
         sig = (float32[::1], int32[::1])
 
