@@ -259,7 +259,7 @@ class _Kernel(serialize.ReduceMixin):
 
         Requires nvdisasm to be available on the PATH.
         '''
-        return self._codelibrary.get_cfg()
+        return self._codelibrary.get_sass_cfg()
 
     def inspect_sass(self):
         '''

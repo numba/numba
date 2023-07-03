@@ -212,7 +212,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
     def get_sass(self, cc=None):
         return disassemble_cubin(self.get_cubin(cc=cc))
 
-    def get_cfg(self, cc=None):
+    def get_sass_cfg(self, cc=None):
         return disassemble_cubin_for_cfg(self.get_cubin(cc=cc))
 
     def add_ir_module(self, mod):
