@@ -148,7 +148,7 @@ class TestInspect(CUDATestCase):
 
         self.assertIn('nvdisasm is required', str(raises.exception))
 
-    @skip_without_nvdisasm('nvdisasm needed for inspect_sass()')
+    @skip_without_nvdisasm('nvdisasm needed for inspect_cfg()')
     def test_inspect_cfg(self):
         sig = (float32[::1], int32[::1])
 
@@ -159,7 +159,7 @@ class TestInspect(CUDATestCase):
                 x[i] += y[i]
 
         self.assertRegex(
-            add.inspect_cfg(signature=sig),
+            add.inspect_sass_cfg(signature=sig),
             r'digraph\s*\w\s*{(.|\n)*\n}'
         )
 
