@@ -1,5 +1,5 @@
 
-Extende guvectorize support in JIT code
+Enhance guvectorize support in JIT code
 =======================================
 
 This pull request extends generalized universal functions support in jitted
