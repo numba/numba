@@ -140,7 +140,7 @@ class GUFunc(serialize.ReduceMixin):
     def _num_args_match(self, *args):
         parsed_sig = parse_signature(self.gufunc_builder.signature)
         # parsed_sig[1] has always length 1
-        return len(args) == len(parsed_sig[0]) + 1
+        return len(args) == len(parsed_sig[0]) + len(parsed_sig[1])
 
     def _get_signature(self, *args):
         parsed_sig = parse_signature(self.gufunc_builder.signature)
@@ -158,9 +158,10 @@ class GUFunc(serialize.ReduceMixin):
                 l.append(types.Array(ewise_types[idx], ndim, 'A'))
 
         # add return type to signature
-        retty = ewise_types[-1]
-        ret_ndim = len(parsed_sig[-1][0]) or 1  # small hack to return scalar
-        l.append(types.Array(retty, ret_ndim, 'A'))
+        for idx, sig_dim in enumerate(parsed_sig[1]):
+            retty = ewise_types[idx]
+            ret_ndim = len(sig_dim) or 1  # small hack to return scalars
+            l.append(types.Array(retty, ret_ndim, 'A'))
 
         return types.none(*l)
 
