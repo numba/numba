@@ -482,17 +482,12 @@ class ForAll(object):
         if self.ntasks == 0:
             return
 
-        if self.dispatcher.specialized:
-            specialized = self.dispatcher
-        else:
-            specialized = self.dispatcher.specialize(*args)
-        blockdim = self._compute_thread_per_block(specialized)
+        blockdim = self._compute_thread_per_block(args)
+        griddim = (self.ntasks + blockdim - 1) // blockdim
+        self.dispatcher[griddim, blockdim, self.stream, self.sharedmem](*args)
         griddim = (self.ntasks + blockdim - 1) // blockdim
 
-        return specialized[griddim, blockdim, self.stream,
-                           self.sharedmem](*args)
-
-    def _compute_thread_per_block(self, dispatcher):
+    def _compute_thread_per_block(self, args):
         tpb = self.thread_per_block
         # Prefer user-specified config
         if tpb != 0:
@@ -500,9 +495,11 @@ class ForAll(object):
         # Else, ask the driver to give a good config
         else:
             ctx = get_context()
-            # Dispatcher is specialized, so there's only one definition - get
-            # it so we can get the cufunc from the code library
-            kernel = next(iter(dispatcher.overloads.values()))
+            typingctx = self.dispatcher.typingctx
+            argtypes = tuple([typingctx.resolve_argument_type(a) for a in args])
+            kernel = self.dispatcher.overloads.get(argtypes)
+            if not kernel:
+                kernel = self.dispatcher.compile(argtypes)
             kwargs = dict(
                 func=kernel._codelibrary.get_cufunc(),
                 b2d_func=0,     # dynamic-shared memory is constant to blksz
