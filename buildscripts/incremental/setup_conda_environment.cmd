@@ -14,9 +14,7 @@ cmd /C conda info
 set CONDA_INSTALL=cmd /C conda install -q -y
 set PIP_INSTALL=pip install -q
 
-@rem Use conda-forge for NumPy 1.25 - at the time of writing it is not available
-@rem on the defaults channel.
-if %NUMPY%==1.25 (set NUMPY_CHANNEL_PKG="conda-forge::numpy") else (set NUMPY_CHANNEL_PKG="numpy")
+set NUMPY_CHANNEL_PKG="numpy"
 
 @echo on
 

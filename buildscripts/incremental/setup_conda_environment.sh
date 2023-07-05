@@ -30,11 +30,7 @@ conda list
 # Use conda-forge for NumPy 1.25 - at the time of writing it is not available
 # on the defaults channel.
 
-if [ "${NUMPY}" == "1.25" ]; then
-  NUMPY_CHANNEL_PKG=conda-forge::numpy
-else
-  NUMPY_CHANNEL_PKG=numpy
-fi
+NUMPY_CHANNEL_PKG=numpy
 
 # If VANILLA_INSTALL is yes, then only Python, NumPy and pip are installed, this
 # is to catch tests/code paths that require an optional package and are not
