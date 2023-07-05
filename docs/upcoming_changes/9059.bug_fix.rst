@@ -1,0 +1,7 @@
+
+Fix parameter names for ``random`` functions
+============================================
+
+This corrects a bunch of parameter names that did not match the names in
+``random`` and ``numpy.random`` so that using name parameters will work
+properly for these functions. Positional parameters worked correctly.
