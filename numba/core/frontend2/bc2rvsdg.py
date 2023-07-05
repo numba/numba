@@ -351,6 +351,8 @@ def _repl_jump_targets(block: BasicBlock, repl: dict[str, str]):
     return block
 
 def _canonicalize_scfg_switch(scfg: SCFG):
+    """Introduce "switch" region to enclose "head", "branch", "tail" regions.
+    """
     todos = set(scfg.graph)
     while todos:
         label = todos.pop()
@@ -411,25 +413,22 @@ def _canonicalize_scfg_switch(scfg: SCFG):
 
 class CanonicalizeLoop(RegionTransformer):
     """
-    Make sure loops has plain header.
-    Preferably, the tail should be plain as well but it's hard to do with the
-    current numba_rvsdg API.
+    Make sure loops has non-region header.
+
+    Preferably, the exiting block should be non-region as well but
+    it's hard to do with the current numba_rvsdg API.
 
     Doing this so we don't have to fixup backedges as backedges will always
-    point to a plain node.
+    point to a non-region node in ``_canonicalize_scfg_switch``.
     """
     def visit_loop(self, parent: SCFG, region: RegionBlock, data):
         # Fix header
-        # [header], [entry] = parent.find_headers_and_entries(set(region.subregion.graph))
+        # Introduce a SyntheticFill block that just jump to the original header
         new_label = parent.name_gen.new_block_name(block_names.SYNTH_BRANCH)
         region.subregion.insert_SyntheticFill(new_label, {}, {region.header})
         region.replace_header(new_label)
-        # parent.remove_blocks({region.name})
-        # parent.add_block(replace(region, name=new_label, headers=(new_label,)))
-        # parent.graph[region.name] =
-        # parent.graph[entry] = replace(parent.graph[entry], _jump_targets=(new_label,))
-        # Fix tail
 
+        # Fix exiting block's backedges to point to the new header
         def get_inner_most_exiting(blk):
             while isinstance(blk, RegionBlock):
                 parent, blk = blk, blk.subregion.graph[blk.exiting]
@@ -473,6 +472,11 @@ class ExtraBasicBlock(BasicBlock):
 
 
 class HandleConditionalPop:
+    """Introduce pop-stack operations to the bytecode to correctly model
+    operations that conditionally pop elements from the stack. Numba-rvsdg does
+    not handle this. For example, FOR_ITER pop the stack when the iterator is
+    exhausted.
+    """
     def handle(self, inst: dis.Instruction) -> _ExtraBranch:
         fn = getattr(self, f"op_{inst.opname}", self._op_default)
         return fn(inst)
