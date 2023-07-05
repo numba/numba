@@ -6,6 +6,7 @@ import platform
 from functools import partial
 from itertools import product
 import warnings
+from textwrap import dedent
 
 import numpy as np
 
@@ -19,7 +20,7 @@ from numba.core.config import IS_32BITS
 from numba.core.utils import pysignature
 from numba.np.extensions import cross2d
 from numba.tests.support import (TestCase, CompilationCache, MemoryLeakMixin,
-                                 needs_blas)
+                                 needs_blas, run_in_subprocess)
 import unittest
 
 
@@ -187,12 +188,12 @@ def split(a, indices, axis=0):
     return np.split(a, indices, axis=axis)
 
 
-def correlate(a, v):
-    return np.correlate(a, v)
+def correlate(a, v, mode="valid"):
+    return np.correlate(a, v, mode=mode)
 
 
-def convolve(a, v):
-    return np.convolve(a, v)
+def convolve(a, v, mode="full"):
+    return np.convolve(a, v, mode=mode)
 
 
 def tri_n(N):
@@ -644,6 +645,22 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x_types = [types.complex64, types.complex128]
         check(x_types, x_values)
 
+    def test_angle_return_type(self):
+        # see issue #8949
+        def numba_angle(x):
+            r = np.angle(x)
+            return r.dtype
+
+        pyfunc = numba_angle
+        x_values = [1., -1., 1. + 0j, -5 - 5j]
+        x_types = ['f4', 'f8', 'c8', 'c16']
+        for val, typ in zip(x_values, x_types):
+            x = np.array([val], dtype=typ)
+            cfunc = jit(nopython=True)(pyfunc)
+            expected = pyfunc(x)
+            got = cfunc(x)
+            self.assertEquals(expected, got)
+
     def test_angle_exceptions(self):
         pyfunc = angle1
         cfunc = jit(nopython=True)(pyfunc)
@@ -1071,12 +1088,32 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def isclose_exception(self):
         pyfunc = isclose
         cfunc = jit(nopython=True)(pyfunc)
-        inputs = [('hello', 'world'), (2.0, None), ('a', 3.0)]
-        for (a, b) in inputs:
-            with self.assertRaises(TypingError) as raises:
-                cfunc(a, b)
-            self.assertIn("Inputs for `np.isclose` must be array-like.",
-                          str(raises.exception))
+        inps = [
+            (np.asarray([1e10, 1e-9, np.nan]),
+             np.asarray([1.0001e10, 1e-9]),
+             1e-05, 1e-08, False,
+             "shape mismatch: objects cannot be broadcast to a single shape",
+             ValueError),
+            ('hello', 3, False, 1e-08, False,
+             'The first argument "a" must be array-like',
+             TypingError),
+            (3, 'hello', False, 1e-08, False,
+             'The second argument "b" must be array-like',
+             TypingError),
+            (2, 3, False, 1e-08, False,
+             'The third argument "rtol" must be a floating point',
+             TypingError),
+            (2, 3, 1e-05, False, False,
+             'The fourth argument "atol" must be a floating point',
+             TypingError),
+            (2, 3, 1e-05, 1e-08, 1,
+             'The fifth argument "equal_nan" must be a boolean',
+             TypingError),
+        ]
+
+        for a, b, rtol, atol, equal_nan, exc_msg, exc in inps:
+            with self.assertRaisesRegex(exc, exc_msg):
+                cfunc(a, b, rtol, atol, equal_nan)
 
     def bincount_sequences(self):
         """
@@ -1339,8 +1376,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         lengths = (1, 2, 3, 7)
         dts = [np.int8, np.int32, np.int64, np.float32, np.float64,
                np.complex64, np.complex128]
+        modes = ["full", "valid", "same"]
 
-        for dt1, dt2, n, m in itertools.product(dts, dts, lengths, lengths):
+        for dt1, dt2, n, m, mode in itertools.product(
+            dts, dts, lengths, lengths, modes
+        ):
             a = np.arange(n, dtype=dt1)
             v = np.arange(m, dtype=dt2)
 
@@ -1349,8 +1389,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             if np.issubdtype(dt2, np.complexfloating):
                 v = (v + 1j * v).astype(dt2)
 
-            expected = pyfunc(a, v)
-            got = cfunc(a, v)
+            expected = pyfunc(a, v, mode=mode)
+            got = cfunc(a, v, mode=mode)
+
             self.assertPreciseEqual(expected, got)
 
         _a = np.arange(12).reshape(4, 3)
@@ -1379,6 +1420,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 self.assertIn("'a' cannot be empty", str(raises.exception))
             else:
                 self.assertIn("'v' cannot be empty", str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(_b, _b, mode="invalid mode")
+
+            self.assertIn("Invalid 'mode'", str(raises.exception))
 
     def test_correlate_exceptions(self):
         # correlate supported 0 dimension arrays until 1.18
@@ -3760,14 +3806,32 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         pyfunc = np_allclose
         cfunc = jit(nopython=True)(pyfunc)
 
-        a = np.asarray([1e10, 1e-9, np.nan])
-        b = np.asarray([1.0001e10, 1e-9])
+        inps = [
+            (np.asarray([1e10, 1e-9, np.nan]),
+             np.asarray([1.0001e10, 1e-9]),
+             1e-05, 1e-08, False,
+             "shape mismatch: objects cannot be broadcast to a single shape",
+             ValueError),
+            ('hello', 3, False, 1e-08, False,
+             'The first argument "a" must be array-like',
+             TypingError),
+            (3, 'hello', False, 1e-08, False,
+             'The second argument "b" must be array-like',
+             TypingError),
+            (2, 3, False, 1e-08, False,
+             'The third argument "rtol" must be a floating point',
+             TypingError),
+            (2, 3, 1e-05, False, False,
+             'The fourth argument "atol" must be a floating point',
+             TypingError),
+            (2, 3, 1e-05, 1e-08, 1,
+             'The fifth argument "equal_nan" must be a boolean',
+             TypingError),
+        ]
 
-        with self.assertRaises(ValueError) as e:
-            cfunc(a, b)
-
-        self.assertIn(("shape mismatch: objects cannot be broadcast to "
-                       "a single shape"), str(e.exception))
+        for a, b, rtol, atol, equal_nan, exc_msg, exc in inps:
+            with self.assertRaisesRegex(exc, exc_msg):
+                cfunc(a, b, rtol, atol, equal_nan)
 
     def test_interp_basic(self):
         pyfunc = interp
@@ -5365,6 +5429,26 @@ def foo():
 
         self.assertEqual(len(w), 1)
         self.assertIn('`np.MachAr` is deprecated', str(w[0]))
+
+
+class TestRegistryImports(TestCase):
+
+    def test_unsafe_import_in_registry(self):
+        # See 8940
+        # This should not fail
+        code = dedent("""
+            import numba
+            import numpy as np
+            @numba.njit
+            def foo():
+                np.array([1 for _ in range(1)])
+            foo()
+            print("OK")
+        """)
+        result, error = run_in_subprocess(code)
+        # Assert that the bytestring "OK" was printed to stdout
+        self.assertEquals(b"OK", result.strip())
+        self.assertEquals(b"", error.strip())
 
 
 if __name__ == '__main__':

@@ -764,9 +764,9 @@ def impl_getitem(l, index):
     if index in index_types:
         if IS_NOT_NONE:
             def integer_non_none_impl(l, index):
-                index = handle_index(l, index)
                 castedindex = _cast(index, indexty)
-                status, item = _list_getitem(l, castedindex)
+                handledindex = handle_index(l, castedindex)
+                status, item = _list_getitem(l, handledindex)
                 if status == ListStatus.LIST_OK:
                     return _nonoptional(item)
                 else:

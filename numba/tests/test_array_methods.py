@@ -1,4 +1,4 @@
-from itertools import product, cycle, permutations
+from itertools import product, cycle
 import gc
 import sys
 import warnings
@@ -8,9 +8,9 @@ import numpy as np
 from numba import jit, typeof
 from numba.core import types
 from numba.core.compiler import compile_isolated
-from numba.core.errors import TypingError, LoweringError, NumbaValueError
+from numba.core.errors import TypingError, NumbaValueError
 from numba.np.numpy_support import as_dtype, numpy_version
-from numba.tests.support import (TestCase, CompilationCache, MemoryLeak,
+from numba.tests.support import (TestCase, CompilationCache,
                                  MemoryLeakMixin, tag, needs_blas)
 import unittest
 

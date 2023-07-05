@@ -105,7 +105,10 @@ class UFuncMechanism(object):
         """
         for i, ary in enumerate(self.arrays):
             if ary is not None:
-                self.argtypes[i] = np.asarray(ary).dtype
+                dtype = getattr(ary, 'dtype')
+                if dtype is None:
+                    dtype = np.asarray(ary).dtype
+                self.argtypes[i] = dtype
 
     def _resolve_signature(self):
         """Resolve signature.
