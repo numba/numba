@@ -4227,7 +4227,7 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata, func_ir, typemap):
             parfor2.get_loop_nest_vars(),
             func_ir)
 
-        unsafe_var = [not isinstance(typemap[x], types.ArrayCompatible) or x in p2arraynotindexed for x in overlap]
+        unsafe_var = (not isinstance(typemap[x], types.ArrayCompatible) or x in p2arraynotindexed for x in overlap)
 
         if any(unsafe_var):
             dprint("try_fuse: parfor2 depends on parfor1 body")
