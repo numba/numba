@@ -313,6 +313,13 @@ Supported NumPy features:
   * :func:`numpy.radians`
   * :func:`numpy.rad2deg`
   * :func:`numpy.degrees`
+  * :func:`numpy.bitwise_and`
+  * :func:`numpy.bitwise_or`
+  * :func:`numpy.bitwise_xor`
+  * :func:`numpy.invert`
+  * :func:`numpy.bitwise_not`
+  * :func:`numpy.left_shift`
+  * :func:`numpy.right_shift`
 
 Unsupported NumPy features:
 

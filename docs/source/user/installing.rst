@@ -110,7 +110,7 @@ If you are building Numba from source for other reasons, first follow the
 Once that is completed, you can download the latest Numba source code from
 `Github <https://github.com/numba/numba>`_::
 
-    $ git clone git://github.com/numba/numba.git
+    $ git clone https://github.com/numba/numba.git
 
 Source archives of the latest release can also be found on
 `PyPI <https://pypi.org/project/numba/>`_.  In addition to ``llvmlite``, you will also need:
@@ -263,6 +263,8 @@ information.
 | Numba     | Release date | Python                    | NumPy                      | llvmlite                     | LLVM              | TBB                         |
 +===========+==============+===========================+============================+==============================+===================+=============================+
 | 0.58.0    | UNRELEASED   | 3.8.x <= version < 3.12   | 1.21 <= version < 1.26     | 0.41.x                       | 14.x              | 2021.6 <= version           |
++-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
+| 0.57.1    | 2023-06-21   | 3.8.x <= version < 3.12   | 1.21 <= version < 1.25     | 0.40.x                       | 14.x              | 2021.6 <= version           |
 +-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
 | 0.57.0    | 2023-05-01   | 3.8.x <= version < 3.12   | 1.21 <= version < 1.25     | 0.40.x                       | 14.x              | 2021.6 <= version           |
 +-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+

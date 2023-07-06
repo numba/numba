@@ -1488,7 +1488,7 @@ class PropagateLiterals(FunctionPass):
         typemap = state.typemap
         flags = state.flags
 
-        accepted_functions = ('isinstance', '_isinstance_no_warn', 'hasattr')
+        accepted_functions = ('isinstance', 'hasattr')
 
         if not hasattr(func_ir, '_definitions') \
                 and not flags.enable_ssa:
@@ -1540,12 +1540,8 @@ class PropagateLiterals(FunctionPass):
                     if fn is None:
                         continue
 
-                    is_isinstance_no_warn = isinstance(fn, ir.FreeVar) and \
-                        fn.name == '_isinstance_no_warn'
-
-                    if not (is_isinstance_no_warn or
-                            (isinstance(fn, ir.Global) and fn.name in
-                             accepted_functions)):
+                    if not (isinstance(fn, ir.Global) and fn.name in
+                            accepted_functions):
                         continue
 
                     for arg in value.args:
@@ -1593,7 +1589,6 @@ class LiteralPropagationSubPipelinePass(FunctionPass):
     def run_pass(self, state):
         # Determine whether to even attempt this pass... if there's no
         # `isinstance` as a global or as a freevar then just skip.
-        from numba.cpython.builtins import _isinstance_no_warn
 
         found = False
         func_ir = state.func_ir
@@ -1601,8 +1596,7 @@ class LiteralPropagationSubPipelinePass(FunctionPass):
             for asgn in blk.find_insts(ir.Assign):
                 if isinstance(asgn.value, (ir.Global, ir.FreeVar)):
                     value = asgn.value.value
-                    if value is isinstance or value is hasattr or \
-                            value is _isinstance_no_warn:
+                    if value is isinstance or value is hasattr:
                         found = True
                         break
             if found:
