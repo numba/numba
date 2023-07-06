@@ -12,7 +12,7 @@ jobs:
     name: macOS
     vmImage: macos-11
     matrix:
-      py38_np121:
+      py38_np122:
         PYTHON: '3.8'
         NUMPY: '1.22'
         CONDA_ENV: 'azure_ci'

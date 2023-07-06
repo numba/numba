@@ -14,8 +14,6 @@ cmd /C conda info
 set CONDA_INSTALL=cmd /C conda install -q -y
 set PIP_INSTALL=pip install -q
 
-set NUMPY_CHANNEL_PKG="numpy"
-
 @echo on
 
 @rem Deactivate any environment
@@ -23,7 +21,7 @@ call deactivate
 @rem Display root environment (for debugging)
 conda list
 @rem Scipy, CFFI, jinja2 and IPython are optional dependencies, but exercised in the test suite
-conda create -n %CONDA_ENV% -q -y python=%PYTHON% %NUMPY_CHANNEL_PKG%=%NUMPY% cffi pip scipy jinja2 ipython gitpython pyyaml
+conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip scipy jinja2 ipython gitpython pyyaml
 
 call activate %CONDA_ENV%
 @rem Install latest llvmlite build
