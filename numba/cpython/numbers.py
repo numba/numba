@@ -364,7 +364,7 @@ def int_ne_impl(context, builder, sig, args):
 def int_signed_unsigned_cmp(op):
     def impl(context, builder, sig, args):
         (left, right) = args
-        # This code is entirely too clever. It's taken from the NumPy source.
+        # This code is translated from the NumPy source.
         # What we're going to do is divide the range of a signed value at zero.
         # If the signed value is less than zero, then we can treat zero as the
         # unsigned value since the unsigned value is necessarily zero or larger
