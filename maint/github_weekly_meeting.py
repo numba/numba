@@ -1,9 +1,7 @@
 #! /usr/bin/env python
 
-import sys, os
-from datetime import datetime, timedelta
-from pprint import pprint
-from getpass import getpass
+import sys
+import os
 
 from github3 import login
 import github3
@@ -54,6 +52,7 @@ def fetch(orgname, reponame, last_num, gh):
         'max_iss_num': max_iss_num,
     }
 
+
 def display(data):
     print("## 1. New Issues")
     for line in reversed(data['opened_issues']):
@@ -88,15 +87,25 @@ def main(numba_last_num, llvmlite_last_num, user=None, password=None):
 
     # combine data
     data = {
-        'opened_issues': llvmlite_data['opened_issues'] + numba_data['opened_issues'],
-        'closed_issues': llvmlite_data['closed_issues'] + numba_data['closed_issues'],
-        'opened_prs': llvmlite_data['opened_prs'] + numba_data['opened_prs'],
-        'closed_prs': llvmlite_data['closed_prs'] + numba_data['closed_prs'],
+        'opened_issues':
+            llvmlite_data['opened_issues'] +
+            numba_data['opened_issues'],
+        'closed_issues':
+            llvmlite_data['closed_issues'] +
+            numba_data['closed_issues'],
+        'opened_prs':
+            llvmlite_data['opened_prs'] +
+            numba_data['opened_prs'],
+        'closed_prs':
+            llvmlite_data['closed_prs'] +
+        numba_data['closed_prs'],
     }
 
     display(data)
 
-    print(f"(last numba: {numba_data['max_iss_num']}; llvmlite {llvmlite_data['max_iss_num']})")
+    print(f"(last numba: {numba_data['max_iss_num']};"
+          f"llvmlite {llvmlite_data['max_iss_num']})")
+
 
 help_msg = """
 Usage:
