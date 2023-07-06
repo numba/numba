@@ -9,8 +9,7 @@ from github3 import login
 import github3
 
 
-def fetch(target_repo, last_num, gh):
-    orgname, reponame = target_repo.split('/', 1)
+def fetch(orgname, reponame, last_num, gh):
 
     repo = gh.repository(orgname, reponame)
     issues = repo.issues(state='all')
@@ -38,15 +37,8 @@ def fetch(target_repo, last_num, gh):
             # Is Issues
             where = {'opened': opened_issues, 'closed': closed_issues}
 
-        fmt = '- [{}#{}]({}) - {}'
-        if merged:
-            fmt = "- merged " + fmt
-        line = fmt.format(
-            reponame,
-            info['number'],
-            info['html_url'],
-            info['title'],
-            )
+        line = f"{' - merged ' if merged else ''}- [{reponame}"\
+               f"#{info['number']}]({info['html_url']}) - {info['title']}"
 
         # Is issue already merged
         if issue.is_closed():
@@ -90,8 +82,9 @@ def main(numba_last_num, llvmlite_last_num, user=None, password=None):
         gh = login(str(user), password=str(password))
     else:
         gh = github3
-    numba_data = fetch("numba/numba", numba_last_num, gh)
-    llvmlite_data = fetch("numba/llvmlite", llvmlite_last_num, gh)
+
+    numba_data = fetch("numba", "numba", numba_last_num, gh)
+    llvmlite_data = fetch("numba", "llvmlite", llvmlite_last_num, gh)
 
     # combine data
     data = {
