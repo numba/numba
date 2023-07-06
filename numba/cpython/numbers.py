@@ -384,8 +384,7 @@ def int_signed_unsigned_cmp(op):
 def int_unsigned_signed_cmp(op):
     def impl(context, builder, sig, args):
         (left, right) = args
-        # This code is entirely too clever. See the sister implementation for
-        # details
+        # See the function `int_signed_unsigned_cmp` for implementation notes.
         cmp_zero = builder.icmp_signed('<', right, Constant(right.type, 0))
         lt_zero = builder.icmp_signed(op, Constant(right.type, 0), right)
         ge_zero = builder.icmp_unsigned(op, left, right)
