@@ -23,17 +23,14 @@ def ufunc_db():
     # Imports here are at function scope to avoid circular imports
     from numba.cpython import cmathimpl, mathimpl, numbers
     from numba.np import npyfuncs
-    from numba.np.npyfuncs import _check_arity_and_homogeneity
-    from numba.np.npyfuncs import (np_complex_acosh_impl, np_complex_cos_impl,
-                                   np_complex_sin_impl)
 
     def np_unary_impl(fn, context, builder, sig, args):
-        _check_arity_and_homogeneity(sig, args, 1)
+        npyfuncs._check_arity_and_homogeneity(sig, args, 1)
         impl = get_unary_impl_for_fn_and_ty(fn, sig.args[0])
         return impl(context, builder, sig, args)
 
     def np_binary_impl(fn, context, builder, sig, args):
-        _check_arity_and_homogeneity(sig, args, 2)
+        npyfuncs._check_arity_and_homogeneity(sig, args, 2)
         impl = get_binary_impl_for_fn_and_ty(fn, sig.args[0])
         return impl(context, builder, sig, args)
 
@@ -67,7 +64,7 @@ def ufunc_db():
     def np_complex_sinh_impl(context, builder, sig, args):
         # npymath does not provide a complex sinh. The code in funcs.inc.src
         # is translated here...
-        _check_arity_and_homogeneity(sig, args, 1)
+        npyfuncs._check_arity_and_homogeneity(sig, args, 1)
 
         ty = sig.args[0]
         fty = ty.underlying_float
@@ -93,7 +90,7 @@ def ufunc_db():
     def np_complex_cosh_impl(context, builder, sig, args):
         # npymath does not provide a complex cosh. The code in funcs.inc.src
         # is translated here...
-        _check_arity_and_homogeneity(sig, args, 1)
+        npyfuncs._check_arity_and_homogeneity(sig, args, 1)
 
         ty = sig.args[0]
         fty = ty.underlying_float
@@ -119,7 +116,7 @@ def ufunc_db():
     def np_complex_tanh_impl(context, builder, sig, args):
         # npymath does not provide complex tan functions. The code
         # in funcs.inc.src for tanh is translated here...
-        _check_arity_and_homogeneity(sig, args, 1)
+        npyfuncs._check_arity_and_homogeneity(sig, args, 1)
 
         ty = sig.args[0]
         fty = ty.underlying_float
@@ -168,15 +165,15 @@ def ufunc_db():
     db[np.sin] = {
         'f->f': np_real_sin_impl,
         'd->d': np_real_sin_impl,
-        'F->F': np_complex_sin_impl,
-        'D->D': np_complex_sin_impl,
+        'F->F': npyfuncs.np_complex_sin_impl,
+        'D->D': npyfuncs.np_complex_sin_impl,
     }
 
     db[np.cos] = {
         'f->f': np_real_cos_impl,
         'd->d': np_real_cos_impl,
-        'F->F': np_complex_cos_impl,
-        'D->D': np_complex_cos_impl,
+        'F->F': npyfuncs.np_complex_cos_impl,
+        'D->D': npyfuncs.np_complex_cos_impl,
     }
 
     db[np.tan] = {
@@ -248,8 +245,8 @@ def ufunc_db():
     db[np.arccosh] = {
         'f->f': np_real_acosh_impl,
         'd->d': np_real_acosh_impl,
-        'F->F': np_complex_acosh_impl,
-        'D->D': np_complex_acosh_impl,
+        'F->F': npyfuncs.np_complex_acosh_impl,
+        'D->D': npyfuncs.np_complex_acosh_impl,
     }
 
     db[np.arctanh] = {
