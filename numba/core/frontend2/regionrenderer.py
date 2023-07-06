@@ -25,6 +25,7 @@ from .bc2rvsdg import (
     DEBUG_GRAPH,
 )
 
+
 @dataclass(frozen=True)
 class GraphNode:
     kind: str
@@ -32,6 +33,7 @@ class GraphNode:
     ports: tuple[str, ...] = ()
 
     data: dict[str, Any] = field(default_factory=dict)
+
 
 @dataclass(frozen=True)
 class GraphEdge:
@@ -42,6 +44,7 @@ class GraphEdge:
     headlabel: str | None = None
     taillabel: str | None = None
     kind: str | None = None
+
 
 @dataclass(frozen=True)
 class GraphGroup:
@@ -80,11 +83,15 @@ class GraphBacking:
             if edge.src_port is not None:
                 node = self._nodes[edge.src]
                 if edge.src_port not in node.ports:
-                    raise ValueError(f"missing port {edge.src_port!r} in node {edge.src!r}")
+                    raise ValueError(
+                        f"missing port {edge.src_port!r} in node {edge.src!r}"
+                    )
             if edge.dst_port is not None:
                 node = self._nodes[edge.dst]
                 if edge.dst_port not in node.ports:
-                    raise ValueError(f"missing port {edge.dst_port!r} in node {edge.dst!r}")
+                    raise ValueError(
+                        f"missing port {edge.dst_port!r} in node {edge.dst!r}"
+                    )
 
     def render(self, renderer):
         self._render_group(renderer, self._groups)
@@ -99,7 +106,6 @@ class GraphBacking:
         for k in group.nodes:
             node = self._nodes[k]
             renderer.render_node(k, node)
-
 
 
 @dataclass(frozen=True)
@@ -124,7 +130,7 @@ class GraphBuilder:
         return cls(GraphBacking(), GraphNodeMaker(()))
 
 
-class RegionGraphvizRenderer: # needs a abstract base class
+class RegionGraphvizRenderer:  # needs a abstract base class
     def __init__(self, g=None):
         from graphviz import Digraph
 
@@ -132,21 +138,31 @@ class RegionGraphvizRenderer: # needs a abstract base class
 
     def render_node(self, k: str, node: GraphNode):
         if node.kind == "valuestate":
-            self.digraph.node(k, label=node.data["body"], shape='rect')
+            self.digraph.node(k, label=node.data["body"], shape="rect")
         elif node.kind == "op":
-            self.digraph.node(k, label=node.data["body"], shape='box', style='rounded')
+            self.digraph.node(
+                k, label=node.data["body"], shape="box", style="rounded"
+            )
         elif node.kind == "effect":
-            self.digraph.node(k, label=node.data["body"], shape='circle')
+            self.digraph.node(k, label=node.data["body"], shape="circle")
         elif node.kind == "meta":
-            self.digraph.node(k, label=node.data["body"], shape='plain', fontcolor="grey")
+            self.digraph.node(
+                k, label=node.data["body"], shape="plain", fontcolor="grey"
+            )
         elif node.kind == "ports":
             ports = [f"<{x}> {x}" for x in node.ports]
             label = f"{node.data['body']} | {'|'.join(ports)}"
             self.digraph.node(k, label=label, shape="record")
         elif node.kind == "cfg":
-            self.digraph.node(k, label=node.data["body"], shape="plain", fontcolor="blue")
+            self.digraph.node(
+                k, label=node.data["body"], shape="plain", fontcolor="blue"
+            )
         else:
-            self.digraph.node(k, label=f"{k}\n{node.kind}\n{node.data.get('body', '')}", shape='rect')
+            self.digraph.node(
+                k,
+                label=f"{k}\n{node.kind}\n{node.data.get('body', '')}",
+                shape="rect",
+            )
 
     def render_edge(self, edge: GraphEdge):
         attrs = {}
@@ -180,18 +196,19 @@ class RegionGraphvizRenderer: # needs a abstract base class
         with self.digraph.subgraph(name=f"cluster_{name}") as subg:
             attrs = dict(color="black", bgcolor="white")
             if name.startswith("regionouter"):
-                attrs["bgcolor"] ="grey"
+                attrs["bgcolor"] = "grey"
             elif name.startswith("loop_"):
                 attrs["color"] = "blue"
             elif name.startswith("switch_"):
-                attrs["color"] ="green"
+                attrs["color"] = "green"
 
             subg.attr(**attrs)
             yield type(self)(subg)
 
 
-class RegionRenderer(RegionVisitor): # TODO: separate out base class logic vs RVSDG specifics
-
+class RegionRenderer(
+    RegionVisitor
+):  # TODO: separate out base class logic vs RVSDG specifics
     def visit_block(self, block: BasicBlock, builder: GraphBuilder):
         nodename = block.name
         node_maker = builder.node_maker.subregion(f"metaregion_{nodename}")
@@ -215,7 +232,8 @@ class RegionRenderer(RegionVisitor): # TODO: separate out base class logic vs RV
             if isinstance(block, DDGProtocol):
                 # Insert incoming and outgoing
                 self._add_inout_ports(
-                    block, block,
+                    block,
+                    block,
                     replace(builder, node_maker=node_maker),
                 )
 
@@ -243,7 +261,9 @@ class RegionRenderer(RegionVisitor): # TODO: separate out base class logic vs RV
         builder.graph.add_node(incoming_nodename, incoming_node)
 
         # Add meta edge for implicit flow
-        builder.graph.add_edge(incoming_nodename, outgoing_nodename, kind="meta")
+        builder.graph.add_edge(
+            incoming_nodename, outgoing_nodename, kind="meta"
+        )
 
     def visit_linear(self, region: RegionBlock, builder: GraphBuilder):
         nodename = region.name
@@ -252,7 +272,8 @@ class RegionRenderer(RegionVisitor): # TODO: separate out base class logic vs RV
         if isinstance(region, DDGProtocol):
             # Insert incoming and outgoing
             self._add_inout_ports(
-                region, region,
+                region,
+                region,
                 replace(builder, node_maker=node_maker),
             )
 
@@ -281,17 +302,23 @@ class RegionRenderer(RegionVisitor): # TODO: separate out base class logic vs RV
                 )
 
         exiting = region.subregion[region.exiting]
-        if isinstance(region, DDGProtocol) and isinstance(exiting, DDGProtocol):
+        if isinstance(region, DDGProtocol) and isinstance(
+            exiting, DDGProtocol
+        ):
             assert isinstance(region, RegionBlock)
             for k in region.outgoing_states & exiting.outgoing_states:
-                builder.graph.add_edge(f"outgoing_{exiting.name}", f"outgoing_{region.name}", src_port=k, dst_port=k)
+                builder.graph.add_edge(
+                    f"outgoing_{exiting.name}",
+                    f"outgoing_{region.name}",
+                    src_port=k,
+                    dst_port=k,
+                )
 
     def visit_graph(self, scfg: SCFG, builder):
-        """Overriding
-        """
+        """Overriding"""
         toposorted = self._toposort_graph(scfg)
         label: str
-        last_label: str|None = None
+        last_label: str | None = None
         for lvl in toposorted:
             for label in lvl:
                 builder = self.visit(scfg[label], builder)
@@ -304,9 +331,16 @@ class RegionRenderer(RegionVisitor): # TODO: separate out base class logic vs RV
         return builder
 
     def _connect_inout_ports(self, last_node, node, builder):
-        if isinstance(last_node, DDGProtocol) and isinstance(node, DDGProtocol):
+        if isinstance(last_node, DDGProtocol) and isinstance(
+            node, DDGProtocol
+        ):
             for k in last_node.outgoing_states:
-                builder.graph.add_edge(f"outgoing_{last_node.name}", f"incoming_{node.name}", src_port=k, dst_port=k)
+                builder.graph.add_edge(
+                    f"outgoing_{last_node.name}",
+                    f"incoming_{node.name}",
+                    src_port=k,
+                    dst_port=k,
+                )
 
     def visit_loop(self, region: RegionBlock, builder: GraphBuilder):
         return self.visit_linear(region, builder)
@@ -317,7 +351,8 @@ class RegionRenderer(RegionVisitor): # TODO: separate out base class logic vs RV
         if isinstance(region, DDGProtocol):
             # Insert incoming and outgoing
             self._add_inout_ports(
-                region, region,
+                region,
+                region,
                 replace(builder, node_maker=node_maker),
             )
         subbuilder = replace(

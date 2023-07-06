@@ -11,9 +11,11 @@ from typing import (
     Union,
     NamedTuple,
     Mapping,
-    TypeVar
+    TypeVar,
+    TYPE_CHECKING,
 )
 
+from collections import ChainMap
 from numba_rvsdg.core.datastructures.byte_flow import ByteFlow
 from numba_rvsdg.core.datastructures.scfg import (
     SCFG,
@@ -36,10 +38,16 @@ from .regionpasses import (
     RegionTransformer,
 )
 
+if TYPE_CHECKING:
+    from numba.core.frontend2.regionrenderer import GraphBuilder
+
+
 DEBUG_GRAPH = int(os.environ.get("DEBUG_GRAPH", "0"))
 
 
-T = TypeVar('T')
+T = TypeVar("T")
+
+
 def _just(v: Optional[T]) -> T:
     assert v is not None
     return v
@@ -53,7 +61,8 @@ class ValueState:
     is_effect: bool = False
 
     def short_identity(self) -> str:
-        return f"ValueState({id(self.parent):x}, {self.name}, {self.out_index})"
+        args = f"{id(self.parent):x}, {self.name}, {self.out_index}"
+        return f"ValueState({args})"
 
     def __hash__(self):
         return id(self)
@@ -70,7 +79,12 @@ class Op:
         self._inputs[name] = vs
 
     def add_output(self, name: str, is_effect=False) -> ValueState:
-        vs = ValueState(parent=self, name=name, out_index=len(self._outputs), is_effect=is_effect)
+        vs = ValueState(
+            parent=self,
+            name=name,
+            out_index=len(self._outputs),
+            is_effect=is_effect,
+        )
         self._outputs[name] = vs
         return vs
 
@@ -78,8 +92,8 @@ class Op:
         return f"Op({self.opname}, {id(self):x})"
 
     def summary(self) -> str:
-        ins = ', '.join([k for k in self._inputs])
-        outs = ', '.join([k for k in self._outputs])
+        ins = ", ".join([k for k in self._inputs])
+        outs = ", ".join([k for k in self._outputs])
         bc = "---"
         if self.bc_inst is not None:
             bc = f"{self.bc_inst.opname}({self.bc_inst.argrepr})"
@@ -113,28 +127,58 @@ class DDGProtocol(Protocol):
 
 @dataclass(frozen=True)
 class DDGRegion(RegionBlock):
-    incoming_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
-    outgoing_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
+    incoming_states: MutableSortedSet[str] = field(
+        default_factory=MutableSortedSet
+    )
+    outgoing_states: MutableSortedSet[str] = field(
+        default_factory=MutableSortedSet
+    )
 
     @contextmanager
     def render_rvsdg(self, renderer, digraph, label):
         with digraph.subgraph(name=f"cluster_rvsdg_{id(self)}") as subg:
             subg.attr(color="black", label="region", bgcolor="grey")
-            subg.node(f"incoming_{id(self)}", label=f"{'|'.join([f'<{k}> {k}' for k in self.incoming_states])}", shape='record', rank="min")
-            subg.edge(f"incoming_{id(self)}", f"cluster_{label}", style="invis")
+            inc_labels = [f"<{k}> {k}" for k in self.incoming_states]
+            subg.node(
+                f"incoming_{id(self)}",
+                label=f"{'|'.join(inc_labels)}",
+                shape="record",
+                rank="min",
+            )
+            subg.edge(
+                f"incoming_{id(self)}", f"cluster_{label}", style="invis"
+            )
             yield subg
-            subg.edge(f"cluster_{label}", f"outgoing_{id(self)}", style="invis")
-            subg.node(f"outgoing_{id(self)}", label=f"{'|'.join([f'<{k}> {k}' for k in self.outgoing_states])}", shape='record', rank="max")
+            subg.edge(
+                f"cluster_{label}", f"outgoing_{id(self)}", style="invis"
+            )
+            out_labels = [f"<{k}> {k}" for k in self.outgoing_states]
+            subg.node(
+                f"outgoing_{id(self)}",
+                label=f"{'|'.join(out_labels)}",
+                shape="record",
+                rank="max",
+            )
+
 
 @dataclass(frozen=True)
 class DDGBranch(SyntheticBranch):
-    incoming_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
-    outgoing_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
+    incoming_states: MutableSortedSet[str] = field(
+        default_factory=MutableSortedSet
+    )
+    outgoing_states: MutableSortedSet[str] = field(
+        default_factory=MutableSortedSet
+    )
+
 
 @dataclass(frozen=True)
 class DDGControlVariable(SyntheticAssignment):
-    incoming_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
-    outgoing_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
+    incoming_states: MutableSortedSet[str] = field(
+        default_factory=MutableSortedSet
+    )
+    outgoing_states: MutableSortedSet[str] = field(
+        default_factory=MutableSortedSet
+    )
 
 
 @dataclass(frozen=True)
@@ -143,16 +187,24 @@ class DDGBlock(BasicBlock):
     out_effect: ValueState | None = None
     in_stackvars: list[ValueState] = field(default_factory=list)
     out_stackvars: list[ValueState] = field(default_factory=list)
-    in_vars: MutableSortedMap[str, ValueState] = field(default_factory=MutableSortedMap)
-    out_vars: MutableSortedMap[str, ValueState] = field(default_factory=MutableSortedMap)
+    in_vars: MutableSortedMap[str, ValueState] = field(
+        default_factory=MutableSortedMap
+    )
+    out_vars: MutableSortedMap[str, ValueState] = field(
+        default_factory=MutableSortedMap
+    )
 
-    exported_stackvars: MutableSortedMap[str, ValueState] = field(default_factory=MutableSortedMap)
+    exported_stackvars: MutableSortedMap[str, ValueState] = field(
+        default_factory=MutableSortedMap
+    )
 
     def __post_init__(self):
         assert isinstance(self.in_vars, MutableSortedMap)
         assert isinstance(self.out_vars, MutableSortedMap)
 
-    def _gather_reachable(self, vs: ValueState, reached: set[ValueState]) -> set[ValueState]:
+    def _gather_reachable(
+        self, vs: ValueState, reached: set[ValueState]
+    ) -> set[ValueState]:
         reached.add(vs)
         if vs.parent is not None:
             for ivs in vs.parent.inputs:
@@ -161,9 +213,6 @@ class DDGBlock(BasicBlock):
         return reached
 
     def render_graph(self, builder: "GraphBuilder"):
-        from .regionrenderer import GraphBuilder
-        assert isinstance(builder, GraphBuilder) # REMOVE ME
-
         reached_vs: set[ValueState] = set()
         for vs in [*self.out_vars.values(), _just(self.out_effect)]:
             self._gather_reachable(vs, reached_vs)
@@ -185,9 +234,8 @@ class DDGBlock(BasicBlock):
             ports.append(k)
 
             builder.graph.add_edge(
-                vs.short_identity(),
-                outgoing_nodename,
-                dst_port=k)
+                vs.short_identity(), outgoing_nodename, dst_port=k
+            )
 
         outgoing_node = builder.node_maker.make_node(
             kind="ports",
@@ -205,7 +253,8 @@ class DDGBlock(BasicBlock):
             builder.graph.add_edge(
                 incoming_nodename,
                 _just(vs.parent).short_identity(),
-                src_port=k)
+                src_port=k,
+            )
 
         incoming_node = builder.node_maker.make_node(
             kind="ports",
@@ -221,9 +270,7 @@ class DDGBlock(BasicBlock):
         )
         builder.graph.add_node(f"jt_{self.name}", jt_node)
 
-    def _render_vs(self, builder, vs: ValueState):
-        from .regionrenderer import GraphBuilder
-        assert isinstance(builder, GraphBuilder) # REMOVE ME
+    def _render_vs(self, builder: "GraphBuilder", vs: ValueState):
         if vs.is_effect:
             node = builder.node_maker.make_node(
                 kind="effect",
@@ -238,9 +285,6 @@ class DDGBlock(BasicBlock):
             builder.graph.add_node(vs.short_identity(), node)
 
     def _render_op(self, builder, op: Op):
-        from .regionrenderer import GraphBuilder
-        assert isinstance(builder, GraphBuilder) # REMOVE ME
-
         op_anchor = op.short_identity()
 
         node = builder.node_maker.make_node(
@@ -255,10 +299,10 @@ class DDGBlock(BasicBlock):
         for edgename, vs in op._inputs.items():
             self._add_vs_edge(builder, vs, op_anchor, headlabel=f"{edgename}")
 
-
     def _add_vs_edge(self, builder, src, dst, **attrs):
-
-        is_effect = (isinstance(src, ValueState) and src.is_effect) or (isinstance(dst, ValueState) and dst.is_effect)
+        is_effect = (isinstance(src, ValueState) and src.is_effect) or (
+            isinstance(dst, ValueState) and dst.is_effect
+        )
         if isinstance(src, ValueState):
             src = src.short_identity()
         if isinstance(dst, ValueState):
@@ -269,37 +313,6 @@ class DDGBlock(BasicBlock):
             kwargs["kind"] = "effect"
 
         builder.graph.add_edge(src, dst, **kwargs)
-
-    def render_rvsdg(self, renderer, digraph, label):
-        with digraph.subgraph(name="cluster_"+str(label)) as g:
-            g.attr(color='lightgrey')
-            g.attr(label=str(label))
-            # render body
-            self.render_valuestate(renderer, g, self.in_effect)
-            self.render_valuestate(renderer, g, self.out_effect)
-            for vs in self.out_vars.values():
-                self.render_valuestate(renderer, g, vs)
-            for vs in self.in_stackvars:
-                self.render_valuestate(renderer, g, vs)
-            # Fill incoming
-            in_vars_fields = "incoming-vars|" + "|".join([f"<{x}> {x}" for x in self.in_vars])
-            fields = "|" + in_vars_fields
-            g.node(f"incoming_{id(self)}", shape="record", label=f"{fields}", rank="source")
-
-            for vs in self.in_vars.values():
-                self.add_vs_edge(renderer, f"incoming_{id(self)}:{vs.name}", vs.parent.short_identity())
-
-            # Fill outgoing
-            out_stackvars_fields = f"stack_effect {len(self.out_stackvars) - len(self.in_stackvars)}"
-            out_vars_fields = "outgoing-vars|" + "|".join([f"<{x.name}> {x.name}" for x in self.out_vars.values()])
-            fields = f"<{self.out_effect.short_identity()}> env" + "|" + out_stackvars_fields + "|" + out_vars_fields
-            g.node(f"outgoing_{id(self)}", shape="record", label=f"{fields}")
-            for vs in self.out_vars.values():
-                self.add_vs_edge(renderer, vs, f"outgoing_{id(self)}:{vs.name}")
-            self.add_vs_edge(renderer, self.out_effect, f"outgoing_{id(self)}:{self.out_effect.short_identity()}")
-            # Draw "head"
-            g.node(str(label), shape="doublecircle", label="")
-
 
     @property
     def incoming_states(self) -> MutableSortedSet:
@@ -337,7 +350,6 @@ class DDGBlock(BasicBlock):
         return res
 
 
-
 def render_scfg(byteflow):
     bfr = ByteFlowRenderer()
     bfr.bcmap_from_bytecode(byteflow.bc)
@@ -350,9 +362,9 @@ def _repl_jump_targets(block: BasicBlock, repl: dict[str, str]):
         block = block.replace_jump_targets(tuple(targets))
     return block
 
+
 def _canonicalize_scfg_switch(scfg: SCFG):
-    """Introduce "switch" region to enclose "head", "branch", "tail" regions.
-    """
+    """Introduce "switch" region to enclose "head", "branch", "tail" regions."""
     todos = set(scfg.graph)
     while todos:
         label = todos.pop()
@@ -372,7 +384,9 @@ def _canonicalize_scfg_switch(scfg: SCFG):
                 switch_labels = {label, taillabel, *brlabels}
                 subregion_graph = {k: scfg[k] for k in switch_labels}
                 scfg.remove_blocks(switch_labels)
-                subregion_scfg = SCFG(graph=subregion_graph, name_gen=scfg.name_gen)
+                subregion_scfg = SCFG(
+                    graph=subregion_graph, name_gen=scfg.name_gen
+                )
 
                 todos -= switch_labels
 
@@ -390,9 +404,13 @@ def _canonicalize_scfg_switch(scfg: SCFG):
                 scfg.graph[new_label] = new_region
                 # fixup branch to label
                 for incoming_label, incoming_blk in scfg.graph.items():
-                    if incoming_label != new_label and label in incoming_blk.jump_targets:
+                    if (
+                        incoming_label != new_label
+                        and label in incoming_blk.jump_targets
+                    ):
                         repl = {label: new_label}
-                        scfg.graph[incoming_label] = _repl_jump_targets(incoming_blk, repl)
+                        replblk = _repl_jump_targets(incoming_blk, repl)
+                        scfg.graph[incoming_label] = replblk
 
                 # fixup header
                 if block.parent_region.header not in scfg.graph:
@@ -410,7 +428,6 @@ def _canonicalize_scfg_switch(scfg: SCFG):
                 _canonicalize_scfg_switch(block.subregion)
 
 
-
 class CanonicalizeLoop(RegionTransformer):
     """
     Make sure loops has non-region header.
@@ -421,6 +438,7 @@ class CanonicalizeLoop(RegionTransformer):
     Doing this so we don't have to fixup backedges as backedges will always
     point to a non-region node in ``_canonicalize_scfg_switch``.
     """
+
     def visit_loop(self, parent: SCFG, region: RegionBlock, data):
         # Fix header
         # Introduce a SyntheticFill block that just jump to the original header
@@ -440,12 +458,13 @@ class CanonicalizeLoop(RegionTransformer):
         new_tail_bb = replace(
             tail_bb,
             backedges=(new_label,),
-            _jump_targets=tuple([repl.get(x, x) for x in tail_bb._jump_targets])
+            _jump_targets=tuple(
+                [repl.get(x, x) for x in tail_bb._jump_targets]
+            ),
         )
         tail_parent.subregion.graph[tail_bb.name] = new_tail_bb
 
         self.visit_linear(parent, region, data)
-
 
 
 def canonicalize_scfg(scfg: SCFG):
@@ -466,9 +485,8 @@ class ExtraBasicBlock(BasicBlock):
         return ExtraBasicBlock(label, (jump_target,), inst_list=instlist)
 
     def __str__(self):
-        args = '\n'.join(f'{inst})' for inst in self.inst_list)
+        args = "\n".join(f"{inst})" for inst in self.inst_list)
         return f"ExtraBasicBlock({args})"
-
 
 
 class HandleConditionalPop:
@@ -477,6 +495,7 @@ class HandleConditionalPop:
     not handle this. For example, FOR_ITER pop the stack when the iterator is
     exhausted.
     """
+
     def handle(self, inst: dis.Instruction) -> _ExtraBranch:
         fn = getattr(self, f"op_{inst.opname}", self._op_default)
         return fn(inst)
@@ -506,25 +525,26 @@ def _scfg_add_conditional_pop_stack(bcmap, scfg: SCFG):
             handler = HandleConditionalPop()
             res = handler.handle(last_inst)
             if res is not None:
-                for branch_index, instlist in enumerate(res.branch_instlists):
-                    extra_records[blk._jump_targets[branch_index]] = blk.name, (branch_index, instlist)
+                for br_index, instlist in enumerate(res.branch_instlists):
+                    k = blk._jump_targets[br_index]
+                    extra_records[k] = blk.name, (br_index, instlist)
 
-
-    from pprint import pprint
-    pprint(extra_records)
-    print('-' * 80)
     def _replace_jump_targets(blk, idx, repl):
         return replace(
             blk,
             _jump_targets=tuple(
-                [repl if i == idx else jt
-                for i, jt in enumerate(blk._jump_targets)]
-            )
+                [
+                    repl if i == idx else jt
+                    for i, jt in enumerate(blk._jump_targets)
+                ]
+            ),
         )
 
-    for label, (parent_label, (branch_index, instlist)) in extra_records.items():
+    for label, (parent_label, (br_index, instlist)) in extra_records.items():
         newlabel = scfg.name_gen.new_block_name("numba.extrabasicblock")
-        scfg.graph[parent_label] = _replace_jump_targets(scfg.graph[parent_label], branch_index, newlabel)
+        scfg.graph[parent_label] = _replace_jump_targets(
+            scfg.graph[parent_label], br_index, newlabel
+        )
         ebb = ExtraBasicBlock.make(newlabel, label, instlist)
         scfg.graph[newlabel] = ebb
 
@@ -543,16 +563,18 @@ def build_rvsdg(code, argnames: tuple[str, ...]) -> SCFG:
     rvsdg = propagate_states(rvsdg)
     if DEBUG_GRAPH:
         from .regionrenderer import RegionRenderer
+
         RegionRenderer().render(rvsdg).view("rvsdg")
 
     return rvsdg
 
 
 def _flatten_full_graph(scfg: SCFG):
-    from collections import ChainMap
-    regions = [_flatten_full_graph(elem.subregion)
-               for elem in scfg.graph.values()
-               if isinstance(elem, RegionBlock)]
+    regions = [
+        _flatten_full_graph(elem.subregion)
+        for elem in scfg.graph.values()
+        if isinstance(elem, RegionBlock)
+    ]
     out = ChainMap(*regions, scfg.graph)
     for blk in out.values():
         assert not isinstance(blk, RegionBlock), type(blk)
@@ -563,26 +585,11 @@ DDGTypes = (DDGBlock, DDGControlVariable, DDGBranch)
 _DDGTypeAnn = Union[DDGBlock, DDGControlVariable, DDGBranch]
 
 
-def view_toposorted_ddgblock_only(rvsdg: SCFG) -> list[list[_DDGTypeAnn]]:
-    """Return toposorted nested list of DDGTypes
-    """
-    graph = _flatten_full_graph(rvsdg)
-    toposorted = toposort_graph(graph)
-
-    # Filter
-    output: list[list[_DDGTypeAnn]] = []
-    for level in toposorted:
-        filtered = [graph[k] for k in level if isinstance(graph[k], DDGTypes)]
-        if filtered:
-            output.append(filtered)
-
-    return output
-
-
 def convert_to_dataflow(byteflow: ByteFlow, argnames: tuple[str, ...]) -> SCFG:
     bcmap = {inst.offset: inst for inst in byteflow.bc}
     rvsdg = convert_scfg_to_dataflow(byteflow.scfg, bcmap, argnames)
     return rvsdg
+
 
 def propagate_states(rvsdg: SCFG) -> SCFG:
     propagate_stack(rvsdg)
@@ -590,18 +597,19 @@ def propagate_states(rvsdg: SCFG) -> SCFG:
     connect_incoming_stack_vars(rvsdg)
     return rvsdg
 
+
 def propagate_vars(rvsdg: SCFG):
     # Propagate variables
     visitor = PropagateVars()
     visitor.visit_graph(rvsdg, visitor.make_data())
 
 
-
 class PropagateVars(RegionVisitor):
     """
     Depends on PropagateStack
     """
-    def __init__(self, _debug: bool=False):
+
+    def __init__(self, _debug: bool = False):
         super().__init__()
         self._debug = _debug
 
@@ -618,7 +626,7 @@ class PropagateVars(RegionVisitor):
                         op = Op(opname="var.incoming", bc_inst=None)
                         vs = op.add_output(k)
                         block.in_vars[k] = vs
-                        if k.startswith('tos.'):
+                        if k.startswith("tos."):
                             if k in block.exported_stackvars:
                                 block.out_vars[k] = block.exported_stackvars[k]
                         elif k not in block.out_vars:
@@ -644,7 +652,7 @@ class PropagateVars(RegionVisitor):
     def visit_loop(self, region: RegionBlock, data):
         self.debug_print("---LOOP_ENTER", region.name, data)
         data = self.visit_linear(region, data)
-        self.debug_print('---LOOP_END=', region.name, "vars", data)
+        self.debug_print("---LOOP_END=", region.name, "vars", data)
         return data
 
     def visit_switch(self, region: RegionBlock, data):
@@ -655,28 +663,29 @@ class PropagateVars(RegionVisitor):
         data_for_branches = []
         for blk in region.subregion.graph.values():
             if blk.kind == "branch":
-                data_for_branches.append(
-                    self.visit_linear(blk, data_at_head)
-                )
+                data_for_branches.append(self.visit_linear(blk, data_at_head))
         data_after_branches = reduce(operator.or_, data_for_branches)
 
         exiting = region.exiting
 
-        data_at_tail = self.visit_linear(region.subregion[exiting], data_after_branches)
+        data_at_tail = self.visit_linear(
+            region.subregion[exiting], data_after_branches
+        )
 
         self.debug_print("data_at_head", data_at_head)
         self.debug_print("data_for_branches", data_for_branches)
         self.debug_print("data_after_branches", data_after_branches)
         self.debug_print("data_at_tail", data_at_tail)
-        self.debug_print('---SWITCH_END=', region.name, "vars", data_at_tail)
+        self.debug_print("---SWITCH_END=", region.name, "vars", data_at_tail)
         region.outgoing_states.update(data_at_tail)
         return set(region.outgoing_states)
 
     def make_data(self):
         return {}
 
+
 class PropagateStack(RegionVisitor):
-    def __init__(self, _debug: bool=False):
+    def __init__(self, _debug: bool = False):
         super(PropagateStack, self).__init__()
         self._debug = _debug
 
@@ -687,7 +696,7 @@ class PropagateStack(RegionVisitor):
     def visit_block(self, block: BasicBlock, data):
         if isinstance(block, DDGBlock):
             nin = len(block.in_stackvars)
-            inherited = data[:len(data) - nin]
+            inherited = data[: len(data) - nin]
             self.debug_print("--- stack", data)
             self.debug_print("--- inherited stack", inherited)
             out_stackvars = block.out_stackvars.copy()
@@ -701,7 +710,7 @@ class PropagateStack(RegionVisitor):
             for vs in reversed(out_stack):
                 k = unused_names.pop()
                 op = Op("stack.export", bc_inst=None)
-                op.add_input('0', vs)
+                op.add_input("0", vs)
                 block.exported_stackvars[k] = vs = op.add_output(k)
                 block.out_vars[k] = vs
 
@@ -711,12 +720,12 @@ class PropagateStack(RegionVisitor):
                 block.in_vars[orig] = imported_vs = import_op.add_output(orig)
 
                 op = Op("stack.export", bc_inst=None)
-                op.add_input('0', imported_vs)
+                op.add_input("0", imported_vs)
                 vs = op.add_output(k)
                 block.exported_stackvars[k] = vs
                 block.out_vars[k] = vs
 
-            self.debug_print('---=', block.name, "out stack", out_data)
+            self.debug_print("---=", block.name, "out stack", out_data)
             return out_data
         else:
             return data
@@ -724,7 +733,7 @@ class PropagateStack(RegionVisitor):
     def visit_loop(self, region: RegionBlock, data):
         self.debug_print("---LOOP_ENTER", region.name)
         data = self.visit_linear(region, data)
-        self.debug_print('---LOOP_END=', region.name, "stack", data)
+        self.debug_print("---LOOP_END=", region.name, "stack", data)
         return data
 
     def visit_switch(self, region: RegionBlock, data):
@@ -734,20 +743,20 @@ class PropagateStack(RegionVisitor):
         data_for_branches = []
         for blk in region.subregion.graph.values():
             if blk.kind == "branch":
-                data_for_branches.append(
-                    self.visit_linear(blk, data_at_head)
-                )
+                data_for_branches.append(self.visit_linear(blk, data_at_head))
         data_after_branches = max(data_for_branches, key=len)
 
         exiting = region.exiting
 
-        data_at_tail = self.visit_linear(region.subregion[exiting], data_after_branches)
+        data_at_tail = self.visit_linear(
+            region.subregion[exiting], data_after_branches
+        )
 
         self.debug_print("data_at_head", data_at_head)
         self.debug_print("data_for_branches", data_for_branches)
         self.debug_print("data_after_branches", data_after_branches)
         self.debug_print("data_at_tail", data_at_tail)
-        self.debug_print('---SWITCH_END=', region.name, "stack", data_at_tail)
+        self.debug_print("---SWITCH_END=", region.name, "stack", data_at_tail)
         return data_at_tail
 
     def make_data(self):
@@ -756,12 +765,12 @@ class PropagateStack(RegionVisitor):
 
 
 class ConnectImportedStackVars(RegionVisitor):
-
     def visit_block(self, block: BasicBlock, data):
         if isinstance(block, DDGBlock):
             # Connect stack.incoming node to the import stack variable.
-            imported_stackvars = [var for k, var in block.in_vars.items()
-                                  if k.startswith("tos.")][::-1]
+            imported_stackvars = [
+                var for k, var in block.in_vars.items() if k.startswith("tos.")
+            ][::-1]
             n = len(block.in_stackvars)
             for vs, inc in zip(block.in_stackvars, imported_stackvars[-n:]):
                 assert vs.parent is not None
@@ -779,19 +788,23 @@ class ConnectImportedStackVars(RegionVisitor):
         exiting = region.exiting
         self.visit_linear(region.subregion[exiting], None)
 
+
 def propagate_stack(rvsdg: SCFG):
     visitor = PropagateStack(_debug=False)
     visitor.visit_graph(rvsdg, visitor.make_data())
 
+
 def connect_incoming_stack_vars(rvsdg: SCFG):
     ConnectImportedStackVars().visit_graph(rvsdg, None)
+
 
 def _upgrade_dataclass(old, newcls, replacements=None):
     if replacements is None:
         replacements = {}
     fieldnames = [fd.name for fd in fields(old)]
-    oldattrs = {k: getattr(old, k) for k in fieldnames
-                if k not in replacements}
+    oldattrs = {
+        k: getattr(old, k) for k in fieldnames if k not in replacements
+    }
     return newcls(**oldattrs, **replacements)
 
 
@@ -804,9 +817,12 @@ def convert_scfg_to_dataflow(scfg, bcmap, argnames: tuple[str, ...]) -> SCFG:
             rvsdg.add_block(ddg)
         elif isinstance(block, RegionBlock):
             # Inside-out
-            subregion = convert_scfg_to_dataflow(block.subregion, bcmap, argnames)
-            rvsdg.add_block(_upgrade_dataclass(block, DDGRegion,
-                                               dict(subregion=subregion)))
+            subregion = convert_scfg_to_dataflow(
+                block.subregion, bcmap, argnames
+            )
+            rvsdg.add_block(
+                _upgrade_dataclass(block, DDGRegion, dict(subregion=subregion))
+            )
         elif isinstance(block, SyntheticBranch):
             rvsdg.add_block(_upgrade_dataclass(block, DDGBranch))
         elif isinstance(block, SyntheticAssignment):
@@ -818,7 +834,8 @@ def convert_scfg_to_dataflow(scfg, bcmap, argnames: tuple[str, ...]) -> SCFG:
             start_env = Op("start", bc_inst=None)
             effect = start_env.add_output("env", is_effect=True)
             newblk = _upgrade_dataclass(
-                block, DDGBlock, dict(in_effect=effect, out_effect=effect))
+                block, DDGBlock, dict(in_effect=effect, out_effect=effect)
+            )
             rvsdg.add_block(newblk)
         else:
             raise Exception("unreachable", type(block))
@@ -852,7 +869,6 @@ def _converter_to_ddgblock(block, converter):
 
 
 def convert_extra_bb(block: ExtraBasicBlock) -> DDGBlock:
-    instlist = block.inst_list
     converter = BC2DDG()
     for opname in block.inst_list:
         if opname == "FOR_ITER_STORE_INDVAR":
@@ -865,12 +881,13 @@ def convert_extra_bb(block: ExtraBasicBlock) -> DDGBlock:
 
 
 def convert_bc_to_ddg(
-            block: PythonBytecodeBlock,
-            bcmap: dict[int, dis.Bytecode],
-            argnames: tuple[str, ...],
-        ) -> DDGBlock:
+    block: PythonBytecodeBlock,
+    bcmap: dict[int, dis.Bytecode],
+    argnames: tuple[str, ...],
+) -> DDGBlock:
     instlist = block.get_instructions(bcmap)
     return _convert_bytecode(block, instlist, argnames)
+
 
 class BC2DDG:
     def __init__(self):
@@ -881,7 +898,7 @@ class BC2DDG:
         self.varmap: dict[str, ValueState] = {}
         self.incoming_vars: dict[str, ValueState] = {}
         self.incoming_stackvars: list[ValueState] = []
-        self._kw_names: ValueState|None = None
+        self._kw_names: ValueState | None = None
 
     def push(self, val: ValueState):
         self.stack.append(val)
@@ -935,10 +952,10 @@ class BC2DDG:
         self.pop()
 
     def op_RESUME(self, inst: dis.Instruction):
-        pass   # no-op
+        pass  # no-op
 
     def op_COPY_FREE_VARS(self, inst: dis.Instruction):
-        pass   # no-op
+        pass  # no-op
 
     def op_PUSH_NULL(self, inst: dis.Instruction):
         op = Op(opname="push_null", bc_inst=inst)
@@ -989,7 +1006,7 @@ class BC2DDG:
         self.push(op.add_output("out"))
 
     def op_PRECALL(self, inst: dis.Instruction):
-        pass # no-op
+        pass  # no-op
 
     def op_KW_NAMES(self, inst: dis.Instruction):
         op = Op(opname="kw_names", bc_inst=inst)
@@ -998,7 +1015,7 @@ class BC2DDG:
     def op_CALL(self, inst: dis.Instruction):
         argc: int = inst.argval
         args = reversed([self.pop() for _ in range(argc)])
-        arg0 = self.pop() # TODO
+        arg0 = self.pop()  # TODO
         kw_names = self.pop_kw_names()
 
         args = [arg0, *args]
@@ -1011,7 +1028,7 @@ class BC2DDG:
             op.add_input(f"arg.{i}", arg)
 
         if kw_names is not None:
-            op.add_input(f"kw_names", kw_names)
+            op.add_input("kw_names", kw_names)
 
         self.replace_effect(op.add_output("env", is_effect=True))
         self.push(op.add_output("ret"))
@@ -1139,10 +1156,10 @@ class BC2DDG:
         self.replace_effect(op.add_output("env", is_effect=True))
 
     def op_JUMP_FORWARD(self, inst: dis.Instruction):
-        pass # no-op
+        pass  # no-op
 
     def op_JUMP_BACKWARD(self, inst: dis.Instruction):
-        pass # no-op
+        pass  # no-op
 
     def _POP_JUMP_X_IF_Y(self, inst: dis.Instruction, *, opname: str):
         tos = self.pop()

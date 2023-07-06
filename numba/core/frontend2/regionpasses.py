@@ -8,7 +8,9 @@ from numba_rvsdg.core.datastructures.basic_block import (
 )
 
 
-def _compute_incoming_labels(graph: Mapping[str, BasicBlock]) -> dict[str, set[str]]:
+def _compute_incoming_labels(
+    graph: Mapping[str, BasicBlock]
+) -> dict[str, set[str]]:
     jump_table: dict[str, set[str]] = {}
     blk: BasicBlock
     for k in graph:
@@ -77,7 +79,7 @@ class RegionVisitor:
             elif block.kind == "switch":
                 fn = self.visit_switch
             else:
-                raise NotImplementedError('unreachable')
+                raise NotImplementedError("unreachable")
             data = fn(block, data)
         else:
             data = self.visit_block(block, data)
@@ -85,7 +87,6 @@ class RegionVisitor:
 
 
 class RegionTransformer(RegionVisitor):
-
     def visit_block(self, parent: SCFG, block: BasicBlock, data):
         pass
 
@@ -115,7 +116,9 @@ class RegionTransformer(RegionVisitor):
             elif block.kind in {"head", "tail", "branch"}:
                 fn = self.visit_linear
             else:
-                raise NotImplementedError('unreachable', block.name, block.kind)
+                raise NotImplementedError(
+                    "unreachable", block.name, block.kind
+                )
             data = fn(parent, block, data)
         else:
             data = self.visit_block(parent, block, data)

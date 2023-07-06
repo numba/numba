@@ -16,7 +16,6 @@ import typing as _tp
 
 from types import ModuleType
 from importlib import import_module
-from collections.abc import Mapping, Sequence, MutableSet, MutableMapping
 import numpy as np
 
 from inspect import signature as pysignature # noqa: F401
@@ -27,6 +26,12 @@ from numba.core.config import (PYVERSION, MACHINE_BITS, # noqa: F401
                                DEVELOPER_MODE) # noqa: F401
 from numba.core import config
 from numba.core import types
+
+if PYVERSION <= (3, 8):
+    # This is needed for Python-3.8 and before due to the lack of PEP-585.
+    from typing import MutableSet, MutableMapping, Mapping, Sequence
+else:
+    from collections.abc import Mapping, Sequence, MutableSet, MutableMapping
 
 
 def erase_traceback(exc_value):
@@ -355,11 +360,12 @@ def order_by_target_specificity(target, templates, fnkey=''):
 
 T = _tp.TypeVar('T')
 
+
 class MutableSortedSet(MutableSet[T], _tp.Generic[T]):
     """Mutable Sorted Set
     """
 
-    def __init__(self, values: _tp.Iterable[T]=()):
+    def __init__(self, values: _tp.Iterable[T] = ()):
         self._values = set(values)
 
     def __len__(self):
@@ -383,6 +389,7 @@ class MutableSortedSet(MutableSet[T], _tp.Generic[T]):
 
 Tk = _tp.TypeVar('Tk')
 Tv = _tp.TypeVar('Tv')
+
 
 class SortedMap(Mapping[Tk, Tv], _tp.Generic[Tk, Tv]):
     """Immutable
