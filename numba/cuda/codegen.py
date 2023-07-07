@@ -28,8 +28,8 @@ def run_nvdisasm(cubin, flags):
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE)
         except FileNotFoundError as e:
-            msg = ("nvdisasm has not been found. You may need"
-                   "to install the CUDA toolkit and ensure that"
+            msg = ("nvdisasm has not been found. You may need "
+                   "to install the CUDA toolkit and ensure that "
                    "it is available on your PATH.\n")
             raise RuntimeError(msg) from e
         return cp.stdout.decode('utf-8')
