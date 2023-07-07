@@ -19,6 +19,7 @@ from numba.cuda.cudadrv.devices import get_context
 from numba.cuda.descriptor import cuda_target
 from numba.cuda.errors import (missing_launch_config_msg,
                                normalize_kernel_dimensions)
+from numba.cuda import types as cuda_types
 
 from numba import cuda
 from numba import _dispatcher
@@ -38,7 +39,7 @@ cuda_fp16_math_funcs = ['hsin', 'hcos',
 
 class _Kernel(serialize.ReduceMixin):
     '''
-    CUDA Kernel for a given set of argument types. When called, this
+    CUDA Kernel specialized for a given set of argument types. When called, this
     object launches the kernel on the device.
     '''
 
@@ -562,9 +563,10 @@ class CUDACache(Cache):
 
 class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
     '''
-    CUDA Dispatcher object. When configured and called with the given
-    argumets, the dispatcher will launch on the device associated with
-    the current context.
+    CUDA Dispatcher object. When configured and called, the dispatcher will
+    specialize itself for the given arguments (if no suitable specialized
+    version already exists) & compute capability, and launch on the device
+    associated with the current context.
 
     Dispatcher objects are not to be constructed by the user, but instead are
     created using the :func:`numba.cuda.jit` decorator.
@@ -580,6 +582,25 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
     def __init__(self, py_func, targetoptions, pipeline_class=CUDACompiler):
         super().__init__(py_func, targetoptions=targetoptions,
                          pipeline_class=pipeline_class)
+
+        # The following properties are for specialization of CUDADispatchers. A
+        # specialized CUDADispatcher is one that is compiled for exactly one
+        # set of argument types, and bypasses some argument type checking for
+        # faster kernel launches.
+
+        # Is this a specialized dispatcher?
+        self._specialized = False
+
+        # If we produced specialized dispatchers, we cache them for each set of
+        # argument types
+        self.specializations = {}
+
+    @property
+    def _numba_type_(self):
+        return cuda_types.CUDADispatcher(self)
+
+    def enable_caching(self):
+        self._cache = CUDACache(self.py_func)
 
     @functools.lru_cache(maxsize=128)
     def configure(self, griddim, blockdim, stream=0, sharedmem=0):
@@ -616,8 +637,10 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
     @property
     def extensions(self):
         '''
-        A list of objects that must have a `prepare_args` function.
-        The arguments to `prepare_args` are:
+        A list of objects that must have a `prepare_args` function. When a
+        specialized kernel is called, each argument will be passed through
+        to the `prepare_args` (from the last object in this list to the
+        first). The arguments to `prepare_args` are:
 
         - `ty` the numba type of the argument
         - `val` the argument value itself
@@ -640,7 +663,10 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         '''
         Compile if necessary and invoke this kernel with *args*.
         '''
-        kernel = _dispatcher.Dispatcher._cuda_call(self, *args)
+        if self.specialized:
+            kernel = next(iter(self.overloads.values()))
+        else:
+            kernel = _dispatcher.Dispatcher._cuda_call(self, *args)
 
         kernel.launch(args, griddim, blockdim, stream, sharedmem)
 
@@ -664,20 +690,55 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
             else:
                 raise
 
+    def specialize(self, *args):
+        '''
+        Create a new instance of this dispatcher specialized for the given
+        *args*.
+        '''
+        cc = get_current_device().compute_capability
+        argtypes = tuple(
+            [self.typingctx.resolve_argument_type(a) for a in args])
+        if self.specialized:
+            raise RuntimeError('Dispatcher already specialized')
+
+        specialization = self.specializations.get((cc, argtypes))
+        if specialization:
+            return specialization
+
+        targetoptions = self.targetoptions
+        specialization = CUDADispatcher(self.py_func,
+                                        targetoptions=targetoptions)
+        specialization.compile(argtypes)
+        specialization.disable_compile()
+        specialization._specialized = True
+        self.specializations[cc, argtypes] = specialization
+        return specialization
+
+    @property
+    def specialized(self):
+        """
+        True if the Dispatcher has been specialized.
+        """
+        return self._specialized
+
     def get_regs_per_thread(self, signature=None):
         '''
         Returns the number of registers used by each thread in this kernel for
         the device in the current context.
 
         :param signature: The signature of the compiled kernel to get register
-                          usage for.
+                          usage for. This may be omitted for a specialized
+                          kernel.
         :return: The number of registers used by the compiled variant of the
                  kernel for the given signature and current device.
         '''
         if signature is not None:
             return self.overloads[signature.args].regs_per_thread
-        return {sig: overload.regs_per_thread
-                for sig, overload in self.overloads.items()}
+        if self.specialized:
+            return next(iter(self.overloads.values())).regs_per_thread
+        else:
+            return {sig: overload.regs_per_thread
+                    for sig, overload in self.overloads.items()}
 
     def get_const_mem_size(self, signature=None):
         '''
@@ -685,15 +746,19 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         the device in the current context.
 
         :param signature: The signature of the compiled kernel to get constant
-                          memory usage for.
+                          memory usage for. This may be omitted for a
+                          specialized kernel.
         :return: The size in bytes of constant memory allocated by the
                  compiled variant of the kernel for the given signature and
                  current device.
         '''
         if signature is not None:
             return self.overloads[signature.args].const_mem_size
-        return {sig: overload.const_mem_size
-                for sig, overload in self.overloads.items()}
+        if self.specialized:
+            return next(iter(self.overloads.values())).const_mem_size
+        else:
+            return {sig: overload.const_mem_size
+                    for sig, overload in self.overloads.items()}
 
     def get_shared_mem_per_block(self, signature=None):
         '''
@@ -701,14 +766,18 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         for this kernel.
 
         :param signature: The signature of the compiled kernel to get shared
-                          memory usage for.
+                          memory usage for. This may be omitted for a
+                          specialized kernel.
         :return: The amount of shared memory allocated by the compiled variant
                  of the kernel for the given signature and current device.
         '''
         if signature is not None:
             return self.overloads[signature.args].shared_mem_per_block
-        return {sig: overload.shared_mem_per_block
-                for sig, overload in self.overloads.items()}
+        if self.specialized:
+            return next(iter(self.overloads.values())).shared_mem_per_block
+        else:
+            return {sig: overload.shared_mem_per_block
+                    for sig, overload in self.overloads.items()}
 
     def get_max_threads_per_block(self, signature=None):
         '''
@@ -717,15 +786,19 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         the kernel failing to launch.
 
         :param signature: The signature of the compiled kernel to get the max
-                          threads per block for.
+                          threads per block for. This may be omitted for a
+                          specialized kernel.
         :return: The maximum allowable threads per block for the compiled
                  variant of the kernel for the given signature and current
                  device.
         '''
         if signature is not None:
             return self.overloads[signature.args].max_threads_per_block
-        return {sig: overload.max_threads_per_block
-                for sig, overload in self.overloads.items()}
+        if self.specialized:
+            return next(iter(self.overloads.values())).max_threads_per_block
+        else:
+            return {sig: overload.max_threads_per_block
+                    for sig, overload in self.overloads.items()}
 
     def get_local_mem_per_thread(self, signature=None):
         '''
@@ -733,14 +806,18 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         for this kernel.
 
         :param signature: The signature of the compiled kernel to get local
-                          memory usage for.
+                          memory usage for. This may be omitted for a
+                          specialized kernel.
         :return: The amount of local memory allocated by the compiled variant
                  of the kernel for the given signature and current device.
         '''
         if signature is not None:
             return self.overloads[signature.args].local_mem_per_thread
-        return {sig: overload.local_mem_per_thread
-                for sig, overload in self.overloads.items()}
+        if self.specialized:
+            return next(iter(self.overloads.values())).local_mem_per_thread
+        else:
+            return {sig: overload.local_mem_per_thread
+                    for sig, overload in self.overloads.items()}
 
     def get_call_template(self, args, kws):
         # Originally copied from _DispatcherBase.get_call_template. This
@@ -815,14 +892,19 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
 
     def compile(self, sig):
         '''
-        Compile and bind to the current context a version of this kernel.
+        Compile and bind to the current context a version of this kernel
+        specialized for the given signature.
         '''
         argtypes, return_type = sigutils.normalize_signature(sig)
         assert return_type is None or return_type == types.none
 
-        kernel = self.overloads.get(argtypes)
-        if kernel is not None:
-            return kernel
+        # Do we already have an in-memory compiled kernel?
+        if self.specialized:
+            return next(iter(self.overloads.values()))
+        else:
+            kernel = self.overloads.get(argtypes)
+            if kernel is not None:
+                return kernel
 
         # Can we load from the disk cache?
         kernel = self._cache.load_overload(sig, self.targetctx)
