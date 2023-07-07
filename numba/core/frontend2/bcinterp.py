@@ -47,7 +47,7 @@ def run_frontend(func):
 def _get_first_bytecode(ops: list[Op]) -> dis.Instruction | None:
     for bc in (op.bc_inst for op in ops if op.bc_inst is not None):
         return bc
-
+    return None
 
 def _innermost_exiting(blk: RegionBlock) -> BasicBlock:
     while isinstance(blk, RegionBlock):
@@ -92,6 +92,7 @@ class RVSDG2IR(RegionVisitor):
 
     @property
     def last_block(self) -> ir.Block:
+        assert self.last_block_label is not None  # for typing
         return self.blocks[self.last_block_label]
 
     def _get_phi_name(self, varname: str, label: str) -> str:
@@ -184,96 +185,102 @@ class RVSDG2IR(RegionVisitor):
         elif isinstance(block, DDGBranch):
             # Emit body
             if len(block.branch_value_table) == 2:
-                with self.set_block(
-                    self._get_label(block.name),
-                    ir.Block(scope=self.scope, loc=self.loc),
-                ):
-                    # Handle simple two-way branch
-                    assert set(block.branch_value_table.keys()) == {0, 1}
-                    cp = block.variable
-                    cpvar = self.scope.get_exact(f"$.cp.{cp}")
-                    truebr = self._get_label(block.branch_value_table[1])
-                    falsebr = self._get_label(block.branch_value_table[0])
-                    br = ir.Branch(
-                        cond=cpvar,
-                        truebr=truebr,
-                        falsebr=falsebr,
-                        loc=self.loc,
-                    )
-                    self.current_block.append(br)
+                self._emit_two_way_switch(block)
             else:
-                # with self.set_block(
-                #         self._get_label(block.name),
-                #         ir.Block(scope=self.scope, loc=self.loc)):
-                #     # Handle simple two-way branch
-                #     # assert set(block.branch_value_table.keys()) == {0, 1}
-                #     cp = block.variable
-                #     cpvar = self.scope.get_exact(f"$.cp.{cp}")
-
-                #     falsebr = self._get_label(block.branch_value_table[1])
-                #     truebr = self._get_label(block.branch_value_table[0])
-
-                #     const = self.store(ir.Const(0, loc=self.loc), "$.const")
-                #     cmp = ir.Expr.binop(operator.eq, const, cpvar,
-                #                         loc=self.loc)
-                #     pred = self.store(cmp, "$.pred")
-                #     br = ir.Branch(
-                #         cond=pred,
-                #         truebr=truebr,
-                #         falsebr=falsebr,
-                #         loc=self.loc,
-                #     )
-                #     self.current_block.append(br)
-                bvt = block.branch_value_table
-                cp = block.variable
-                cpvar = self.scope.get_exact(f"$.cp.{cp}")
-                labels = [(k, self._get_label(v)) for k, v in bvt.items()]
-
-                blocks = []
-                for _ in labels[:-1]:
-                    blocks.append(
-                        (
-                            self._get_temp_label(),
-                            ir.Block(scope=self.scope, loc=self.loc),
-                        )
-                    )
-
-                # Jump into the first block
-                with self.set_block(
-                    self._get_label(block.name),
-                    ir.Block(scope=self.scope, loc=self.loc),
-                ):
-                    self.current_block.append(
-                        ir.Jump(blocks[-1][0], loc=self.loc)
-                    )
-
-                # Handle jump tree
-                while blocks:
-                    cp_expect, cp_label = labels.pop()
-                    cur_label, cur_block = blocks.pop()
-                    with self.set_block(cur_label, cur_block):
-                        const = self.store(
-                            ir.Const(cp_expect, loc=self.loc), "$.const"
-                        )
-                        cmp = ir.Expr.binop(
-                            operator.eq, const, cpvar, loc=self.loc
-                        )
-                        pred = self.store(cmp, "$.cmp")
-
-                        if not blocks:
-                            _, falsebr = labels.pop()
-                        else:
-                            falsebr, _ = blocks[-1]
-                        br = ir.Branch(
-                            cond=pred,
-                            truebr=cp_label,
-                            falsebr=falsebr,
-                            loc=self.loc,
-                        )
-                        self.current_block.append(br)
+                self._emit_n_way_switch(block)
             return data
         else:
             raise NotImplementedError(block.name, type(block))
+
+    def _emit_two_way_switch(self, block):
+        with self.set_block(
+            self._get_label(block.name),
+            ir.Block(scope=self.scope, loc=self.loc),
+        ):
+            # Handle simple two-way branch
+            assert set(block.branch_value_table.keys()) == {0, 1}
+            cp = block.variable
+            cpvar = self.scope.get_exact(f"$.cp.{cp}")
+            truebr = self._get_label(block.branch_value_table[1])
+            falsebr = self._get_label(block.branch_value_table[0])
+            br = ir.Branch(
+                cond=cpvar,
+                truebr=truebr,
+                falsebr=falsebr,
+                loc=self.loc,
+            )
+            self.current_block.append(br)
+
+    def _emit_n_way_switch(self, block):
+        # with self.set_block(
+        #         self._get_label(block.name),
+        #         ir.Block(scope=self.scope, loc=self.loc)):
+        #     # Handle simple two-way branch
+        #     # assert set(block.branch_value_table.keys()) == {0, 1}
+        #     cp = block.variable
+        #     cpvar = self.scope.get_exact(f"$.cp.{cp}")
+
+        #     falsebr = self._get_label(block.branch_value_table[1])
+        #     truebr = self._get_label(block.branch_value_table[0])
+
+        #     const = self.store(ir.Const(0, loc=self.loc), "$.const")
+        #     cmp = ir.Expr.binop(operator.eq, const, cpvar,
+        #                         loc=self.loc)
+        #     pred = self.store(cmp, "$.pred")
+        #     br = ir.Branch(
+        #         cond=pred,
+        #         truebr=truebr,
+        #         falsebr=falsebr,
+        #         loc=self.loc,
+        #     )
+        #     self.current_block.append(br)
+        bvt = block.branch_value_table
+        cp = block.variable
+        cpvar = self.scope.get_exact(f"$.cp.{cp}")
+        labels = [(k, self._get_label(v)) for k, v in bvt.items()]
+
+        blocks = []
+        for _ in labels[:-1]:
+            blocks.append(
+                (
+                    self._get_temp_label(),
+                    ir.Block(scope=self.scope, loc=self.loc),
+                )
+            )
+
+        # Jump into the first block
+        with self.set_block(
+            self._get_label(block.name),
+            ir.Block(scope=self.scope, loc=self.loc),
+        ):
+            self.current_block.append(
+                ir.Jump(blocks[-1][0], loc=self.loc)
+            )
+
+        # Handle jump tree
+        while blocks:
+            cp_expect, cp_label = labels.pop()
+            cur_label, cur_block = blocks.pop()
+            with self.set_block(cur_label, cur_block):
+                const = self.store(
+                    ir.Const(cp_expect, loc=self.loc), "$.const"
+                )
+                cmp = ir.Expr.binop(
+                    operator.eq, const, cpvar, loc=self.loc
+                )
+                pred = self.store(cmp, "$.cmp")
+
+                if not blocks:
+                    _, falsebr = labels.pop()
+                else:
+                    falsebr, _ = blocks[-1]
+                br = ir.Branch(
+                    cond=pred,
+                    truebr=cp_label,
+                    falsebr=falsebr,
+                    loc=self.loc,
+                )
+                self.current_block.append(br)
 
     def visit_loop(self, region: RegionBlock, data):
         assert isinstance(region, DDGRegion)
@@ -310,7 +317,7 @@ class RVSDG2IR(RegionVisitor):
         self.branch_predicate = None
         data_at_head = self.visit_linear(header_block, data)
         if not self.last_block.is_terminated:
-            assert self.branch_predicate is not None
+            assert self.branch_predicate is not None  # for typing
 
             # Jump-target 1 is when a the jump is taken.
             # Jump-target 0 is when the jump fallthrough
@@ -336,7 +343,7 @@ class RVSDG2IR(RegionVisitor):
                     )
 
         # handle outgoing values from the branches
-        names = reduce(operator.or_, map(set, data_for_branches))
+        names: set[str] = reduce(operator.or_, map(set, data_for_branches))
         for blk, branch_data in zip(
             branch_blocks, data_for_branches, strict=True
         ):
@@ -513,7 +520,7 @@ class RVSDG2IR(RegionVisitor):
 
     def op_LOAD_DEREF(self, op: Op, bc: dis.Instruction):
         [out] = op.outputs
-        code = self.func_id.code
+        code = self.func_id.code    # type: ignore
         name = bc.argval
         if name in code.co_cellvars:
             raise NotImplementedError
@@ -534,36 +541,39 @@ class RVSDG2IR(RegionVisitor):
         pass  # do nothing
 
     def op_CALL(self, op: Op, bc: dis.Instruction):
-        [_env, callee, arg0, *args] = op.inputs
+        [_env, callee_or_null, arg0_or_callee, *args] = op.inputs
         [_env, res] = op.outputs
-        assert callee.name == "null"
-        callee = arg0
-        callee = self.vsmap[callee]
+        if callee_or_null.name != "null":
+            raise NotImplementedError
+        callee = self.vsmap[arg0_or_callee]
 
         if op.opname == "call.kw":
             kw_names_op = args[-1].parent
+            assert kw_names_op is not None   # for typing
+            assert kw_names_op.bc_inst is not None # for typing
             assert kw_names_op.opname == "kw_names"
             args = args[:-1]
-            names = self.func_id.code.co_consts[kw_names_op.bc_inst.arg]
-            args = [self.vsmap[vs] for vs in args]
-            kwargs = list(zip(names, args[-len(names) :]))
-            args = args[: -len(names)]
+            co = self.func_id.code      # type: ignore
+            names = co.co_consts[kw_names_op.bc_inst.arg]
+            argvars = [self.vsmap[vs] for vs in args]
+            kwargs = tuple(zip(names, args[-len(names) :]))
+            argvars = argvars[: -len(names)]
         else:
             assert op.opname == "call"
-            args = [self.vsmap[vs] for vs in args]
+            argvars = [self.vsmap[vs] for vs in args]
             kwargs = ()
 
-        expr = ir.Expr.call(callee, args, kwargs, loc=self.loc)
+        expr = ir.Expr.call(callee, argvars, kwargs, loc=self.loc)
         self.store_vsmap(expr, res)
 
     def op_COMPARE_OP(self, op: Op, bc: dis.Instruction):
         [_env, lhs, rhs] = op.inputs
         [_env, out] = op.outputs
         operator = bc.argrepr
-        op = BINOPS_TO_OPERATORS[operator]
-        lhs = self.vsmap[lhs]
-        rhs = self.vsmap[rhs]
-        expr = ir.Expr.binop(op, lhs=lhs, rhs=rhs, loc=self.loc)
+        op = BINOPS_TO_OPERATORS[operator]   # type: ignore
+        lhs_var = self.vsmap[lhs]
+        rhs_var = self.vsmap[rhs]
+        expr = ir.Expr.binop(op, lhs=lhs_var, rhs=rhs_var, loc=self.loc)
         self.store_vsmap(expr, out)
 
     def _binop(self, operator, op):
@@ -603,19 +613,19 @@ class RVSDG2IR(RegionVisitor):
     def op_BINARY_SUBSCR(self, op: Op, bc: dis.Instruction):
         [_env, index, target] = op.inputs
         [_env, out] = op.outputs
-        index = self.vsmap[index]
-        target = self.vsmap[target]
-        expr = ir.Expr.getitem(target, index=index, loc=self.loc)
+        index_var = self.vsmap[index]
+        target_var = self.vsmap[target]
+        expr = ir.Expr.getitem(target_var, index=index_var, loc=self.loc)
         self.store_vsmap(expr, out)
 
     def op_STORE_SUBSCR(self, op: Op, bc: dis.Instruction):
         [_env, index, target, value] = op.inputs
         [_env] = op.outputs
-        index = self.vsmap[index]
-        target = self.vsmap[target]
-        value = self.vsmap[value]
+        index_var = self.vsmap[index]
+        target_var = self.vsmap[target]
+        value_var = self.vsmap[value]
         stmt = ir.SetItem(
-            target=target, index=index, value=value, loc=self.loc
+            target=target_var, index=index_var, value=value_var, loc=self.loc
         )
         self.append(stmt)
 
@@ -694,7 +704,7 @@ class RVSDG2IR(RegionVisitor):
     def op_POP_JUMP_FORWARD_IF_NONE(self, op: Op, bc: dis.Instruction):
         [_env, pred] = op.inputs
         [_env] = op.outputs
-        op = BINOPS_TO_OPERATORS["is"]
+        op = BINOPS_TO_OPERATORS["is"]  # type: ignore
         none = self.store(
             value=ir.Const(None, loc=self.loc), name=f"$constNone{bc.offset}"
         )
@@ -706,7 +716,7 @@ class RVSDG2IR(RegionVisitor):
     def op_POP_JUMP_FORWARD_IF_NOT_NONE(self, op: Op, bc: dis.Instruction):
         [_env, pred] = op.inputs
         [_env] = op.outputs
-        op = BINOPS_TO_OPERATORS["is not"]
+        op = BINOPS_TO_OPERATORS["is not"]  # type: ignore
         none = self.store(
             value=ir.Const(None, loc=self.loc), name=f"$constNone{bc.offset}"
         )
@@ -748,8 +758,8 @@ def rvsdg_to_ir(
         func_id=func_id,
         loc=rvsdg2ir.first_loc,
         definitions=defs,
-        arg_count=len(func_id.arg_names),
-        arg_names=func_id.arg_names,
+        arg_count=len(func_id.arg_names),   # type: ignore
+        arg_names=func_id.arg_names,        # type: ignore
     )
     # fir.dump()
     if DEBUG_GRAPH:

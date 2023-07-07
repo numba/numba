@@ -57,10 +57,14 @@ class GraphGroup:
 
 
 class GraphBacking:
+    _nodes: dict[str, GraphNode]
+    _groups: GraphGroup
+    _edges: set[GraphEdge]
+
     def __init__(self):
-        self._nodes: dict[str, GraphNode] = {}
-        self._groups: GraphGroup = GraphGroup.make()
-        self._edges: set[GraphEdge] = set()
+        self._nodes = {}
+        self._groups = GraphGroup.make()
+        self._edges = set()
 
     def add_node(self, name: str, node: GraphNode):
         assert name not in self._nodes

@@ -15,5 +15,6 @@ jobs:
       py311_np124:
         PYTHON: '3.11'
         NUMPY: '1.24'
+        RUN_MYPY: yes
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 17

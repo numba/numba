@@ -86,7 +86,7 @@ class RegionVisitor:
         return data
 
 
-class RegionTransformer(RegionVisitor):
+class RegionTransformer:
     def visit_block(self, parent: SCFG, block: BasicBlock, data):
         pass
 

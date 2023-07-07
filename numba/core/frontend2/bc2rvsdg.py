@@ -49,6 +49,8 @@ T = TypeVar("T")
 
 
 def _just(v: Optional[T]) -> T:
+    """Unpack optional type.
+    """
     assert v is not None
     return v
 
@@ -325,9 +327,11 @@ class DDGBlock(BasicBlock):
     def get_toposorted_ops(self) -> list[Op]:
         res: list[Op] = []
 
-        avail: set[ValueState] = {*self.in_vars.values(), self.in_effect}
-        pending: list[Op] = [vs.parent for vs in self.out_vars.values()]
-        pending.append(self.out_effect.parent)
+        avail: set[ValueState] = {*self.in_vars.values(), _just(self.in_effect)}
+        pending: list[Op] = [vs.parent for vs in self.out_vars.values()
+                             if vs.parent is not None]
+        assert self.out_effect is not None  # for typing
+        pending.append(_just(self.out_effect.parent))
         seen: set[Op] = set()
 
         while pending:
@@ -473,7 +477,7 @@ def canonicalize_scfg(scfg: SCFG):
 
 
 class _ExtraBranch(NamedTuple):
-    branch_instlists: tuple[tuple[tuple[str], ...], ...] = ()
+    branch_instlists: tuple[tuple[str, ...], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -496,21 +500,21 @@ class HandleConditionalPop:
     exhausted.
     """
 
-    def handle(self, inst: dis.Instruction) -> _ExtraBranch:
+    def handle(self, inst: dis.Instruction) -> _ExtraBranch | None:
         fn = getattr(self, f"op_{inst.opname}", self._op_default)
         return fn(inst)
 
-    def _op_default(self, inst: dis.Instruction):
+    def _op_default(self, inst: dis.Instruction) -> None:
         return
 
-    def op_FOR_ITER(self, inst: dis.Instruction):
+    def op_FOR_ITER(self, inst: dis.Instruction) -> _ExtraBranch:
         # Bytecode semantic pop 1 for the iterator
         # but we need an extra pop because the indvar is pushed
         br0 = ("FOR_ITER_STORE_INDVAR",)
         br1 = ("POP",)
         return _ExtraBranch((br0, br1))
 
-    def op_JUMP_IF_TRUE_OR_POP(self, inst: dis.Instruction):
+    def op_JUMP_IF_TRUE_OR_POP(self, inst: dis.Instruction) -> _ExtraBranch:
         br0 = ("POP",)
         br1 = ()
         return _ExtraBranch((br0, br1))
@@ -853,7 +857,7 @@ def _convert_bytecode(block, instlist, argnames: tuple[str, ...]) -> DDGBlock:
     return _converter_to_ddgblock(block, converter)
 
 
-def _converter_to_ddgblock(block, converter):
+def _converter_to_ddgblock(block, converter) -> DDGBlock:
     blk = DDGBlock(
         name=block.name,
         _jump_targets=block._jump_targets,
@@ -890,15 +894,23 @@ def convert_bc_to_ddg(
 
 
 class BC2DDG:
+    stack: list[ValueState]
+    effect: ValueState
+    in_effect: ValueState
+    varmap: dict[str, ValueState]
+    incoming_vars: dict[str, ValueState]
+    incoming_stackvars: list[ValueState]
+    _kw_names: ValueState | None
+
     def __init__(self):
-        self.stack: list[ValueState] = []
+        self.stack = []
         start_env = Op("start", bc_inst=None)
         self.effect = start_env.add_output("env", is_effect=True)
         self.in_effect = self.effect
-        self.varmap: dict[str, ValueState] = {}
-        self.incoming_vars: dict[str, ValueState] = {}
-        self.incoming_stackvars: list[ValueState] = []
-        self._kw_names: ValueState | None = None
+        self.varmap = {}
+        self.incoming_vars = {}
+        self.incoming_stackvars = []
+        self._kw_names = None
 
     def push(self, val: ValueState):
         self.stack.append(val)
@@ -963,6 +975,7 @@ class BC2DDG:
         self.push(null)
 
     def op_LOAD_GLOBAL(self, inst: dis.Instruction):
+        assert isinstance(inst.arg, int)  # for typing
         load_null = inst.arg & 1
         op = Op(opname="global", bc_inst=inst)
         op.add_input("env", self.effect)
@@ -1014,11 +1027,11 @@ class BC2DDG:
 
     def op_CALL(self, inst: dis.Instruction):
         argc: int = inst.argval
-        args = reversed([self.pop() for _ in range(argc)])
+        arg1plus = reversed([self.pop() for _ in range(argc)])
         arg0 = self.pop()  # TODO
         kw_names = self.pop_kw_names()
 
-        args = [arg0, *args]
+        args: list[ValueState] = [arg0, *arg1plus]
         callable = self.pop()  # TODO
         opname = "call" if kw_names is None else "call.kw"
         op = Op(opname=opname, bc_inst=inst)
