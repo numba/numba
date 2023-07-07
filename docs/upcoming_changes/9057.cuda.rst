@@ -1,4 +1,4 @@
 Remove specialize from CUDADispatcher
 =====================================
 
-This PR removes specialize from cuda/dispatcher.py.
+This PR removes specialize from ForAll in cuda/dispatcher.py.
