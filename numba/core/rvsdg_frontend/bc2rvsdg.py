@@ -37,7 +37,7 @@ from .regionpasses import (
 )
 
 if TYPE_CHECKING:
-    from numba.core.frontend2.regionrenderer import GraphBuilder
+    from numba.core.rvsdg_frontend.regionrenderer import GraphBuilder
 
 
 DEBUG_GRAPH = int(os.environ.get("DEBUG_GRAPH", "0"))

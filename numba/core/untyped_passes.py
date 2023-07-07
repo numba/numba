@@ -96,7 +96,7 @@ class RVSDGFrontend(FunctionPass):
         FunctionPass.__init__(self)
 
     def run_pass(self, state):
-        from numba.core.frontend2 import bcinterp
+        from numba.core.rvsdg_frontend import bcinterp
         from numba.core.bytecode import FunctionIdentity
 
         func_id: FunctionIdentity = state['func_id']
