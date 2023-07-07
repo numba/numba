@@ -16,7 +16,7 @@ from numba.core.utils import (
     INPLACE_BINOPS_TO_OPERATORS,
 )
 
-from .bc2rvsdg import (
+from .rvsdg.bc2rvsdg import (
     build_rvsdg,
     SCFG,
     BasicBlock,
@@ -29,7 +29,7 @@ from .bc2rvsdg import (
     ValueState,
     DEBUG_GRAPH,
 )
-from .regionpasses import RegionVisitor
+from .rvsdg.regionpasses import RegionVisitor
 
 
 def run_frontend(func):

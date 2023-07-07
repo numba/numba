@@ -1,7 +1,6 @@
 from collections.abc import Mapping
-from numba_rvsdg.core.datastructures.scfg import (
-    SCFG,
-)
+
+from numba_rvsdg.core.datastructures.scfg import SCFG
 from numba_rvsdg.core.datastructures.basic_block import (
     BasicBlock,
     RegionBlock,

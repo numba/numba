@@ -8,8 +8,8 @@ from numba_rvsdg.core.datastructures.basic_block import (
     RegionBlock,
 )
 from numba_rvsdg.core.datastructures.scfg import SCFG
-from .regionpasses import RegionVisitor
 
+from .regionpasses import RegionVisitor
 from .bc2rvsdg import (
     DDGBlock,
     DDGControlVariable,
