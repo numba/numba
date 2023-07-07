@@ -49,6 +49,7 @@ def _get_first_bytecode(ops: list[Op]) -> dis.Instruction | None:
         return bc
     return None
 
+
 def _innermost_exiting(blk: RegionBlock) -> BasicBlock:
     while isinstance(blk, RegionBlock):
         blk = blk.subregion.graph[blk.exiting]
@@ -253,9 +254,7 @@ class RVSDG2IR(RegionVisitor):
             self._get_label(block.name),
             ir.Block(scope=self.scope, loc=self.loc),
         ):
-            self.current_block.append(
-                ir.Jump(blocks[-1][0], loc=self.loc)
-            )
+            self.current_block.append(ir.Jump(blocks[-1][0], loc=self.loc))
 
         # Handle jump tree
         while blocks:
@@ -265,9 +264,7 @@ class RVSDG2IR(RegionVisitor):
                 const = self.store(
                     ir.Const(cp_expect, loc=self.loc), "$.const"
                 )
-                cmp = ir.Expr.binop(
-                    operator.eq, const, cpvar, loc=self.loc
-                )
+                cmp = ir.Expr.binop(operator.eq, const, cpvar, loc=self.loc)
                 pred = self.store(cmp, "$.cmp")
 
                 if not blocks:
@@ -464,7 +461,9 @@ class RVSDG2IR(RegionVisitor):
         self.loc = self.loc.with_lineno(pos.lineno, pos.col_offset)
         # debug print
         if self._emit_debug_print:
-            where = f"{op.bc_inst.offset:3}:({pos.lineno:3}:{pos.col_offset:3})"
+            where = (
+                f"{op.bc_inst.offset:3}:({pos.lineno:3}:{pos.col_offset:3})"
+            )
             msg = f"[{where}] {op.bc_inst.opname}({op.bc_inst.argrepr}) "
             self.debug_print(msg)
 
@@ -520,7 +519,7 @@ class RVSDG2IR(RegionVisitor):
 
     def op_LOAD_DEREF(self, op: Op, bc: dis.Instruction):
         [out] = op.outputs
-        code = self.func_id.code    # type: ignore
+        code = self.func_id.code  # type: ignore
         name = bc.argval
         if name in code.co_cellvars:
             raise NotImplementedError
@@ -549,11 +548,11 @@ class RVSDG2IR(RegionVisitor):
 
         if op.opname == "call.kw":
             kw_names_op = args[-1].parent
-            assert kw_names_op is not None   # for typing
-            assert kw_names_op.bc_inst is not None # for typing
+            assert kw_names_op is not None  # for typing
+            assert kw_names_op.bc_inst is not None  # for typing
             assert kw_names_op.opname == "kw_names"
             args = args[:-1]
-            co = self.func_id.code      # type: ignore
+            co = self.func_id.code  # type: ignore
             names = co.co_consts[kw_names_op.bc_inst.arg]
             argvars = [self.vsmap[vs] for vs in args]
             kwargs = tuple(zip(names, args[-len(names) :]))
@@ -570,7 +569,7 @@ class RVSDG2IR(RegionVisitor):
         [_env, lhs, rhs] = op.inputs
         [_env, out] = op.outputs
         operator = bc.argrepr
-        op = BINOPS_TO_OPERATORS[operator]   # type: ignore
+        op = BINOPS_TO_OPERATORS[operator]  # type: ignore
         lhs_var = self.vsmap[lhs]
         rhs_var = self.vsmap[rhs]
         expr = ir.Expr.binop(op, lhs=lhs_var, rhs=rhs_var, loc=self.loc)
@@ -758,8 +757,8 @@ def rvsdg_to_ir(
         func_id=func_id,
         loc=rvsdg2ir.first_loc,
         definitions=defs,
-        arg_count=len(func_id.arg_names),   # type: ignore
-        arg_names=func_id.arg_names,        # type: ignore
+        arg_count=len(func_id.arg_names),  # type: ignore
+        arg_names=func_id.arg_names,  # type: ignore
     )
     # fir.dump()
     if DEBUG_GRAPH:

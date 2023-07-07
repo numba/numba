@@ -1,6 +1,5 @@
 from typing import Any
 from dataclasses import dataclass, replace, field
-from itertools import groupby
 from contextlib import contextmanager
 from collections import defaultdict
 
@@ -8,21 +7,14 @@ from numba_rvsdg.core.datastructures.basic_block import (
     BasicBlock,
     RegionBlock,
 )
+from numba_rvsdg.core.datastructures.scfg import SCFG
 from .regionpasses import RegionVisitor
 
 from .bc2rvsdg import (
-    build_rvsdg,
-    SCFG,
-    BasicBlock,
-    RegionBlock,
     DDGBlock,
     DDGControlVariable,
     DDGBranch,
-    DDGRegion,
     DDGProtocol,
-    Op,
-    ValueState,
-    DEBUG_GRAPH,
 )
 
 

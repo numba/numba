@@ -17,9 +17,7 @@ from typing import (
 
 from collections import ChainMap
 from numba_rvsdg.core.datastructures.byte_flow import ByteFlow
-from numba_rvsdg.core.datastructures.scfg import (
-    SCFG,
-)
+from numba_rvsdg.core.datastructures.scfg import SCFG
 from numba_rvsdg.core.datastructures.basic_block import (
     BasicBlock,
     PythonBytecodeBlock,
@@ -49,8 +47,7 @@ T = TypeVar("T")
 
 
 def _just(v: Optional[T]) -> T:
-    """Unpack optional type.
-    """
+    """Unpack optional type."""
     assert v is not None
     return v
 
