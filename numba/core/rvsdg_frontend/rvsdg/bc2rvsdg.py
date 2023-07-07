@@ -563,9 +563,9 @@ def build_rvsdg(code, argnames: tuple[str, ...]) -> SCFG:
     rvsdg = convert_to_dataflow(byteflow, argnames)
     rvsdg = propagate_states(rvsdg)
     if DEBUG_GRAPH:
-        from .regionrenderer import RegionRenderer
+        from .regionrenderer import RVSDGRenderer, to_graphviz
 
-        RegionRenderer().render(rvsdg).view("rvsdg")
+        to_graphviz(RVSDGRenderer().render(rvsdg)).view("rvsdg")
 
     return rvsdg
 
