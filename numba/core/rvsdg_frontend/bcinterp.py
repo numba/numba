@@ -59,7 +59,10 @@ def _innermost_exiting(blk: RegionBlock) -> BasicBlock:
 _noop = {"var.incoming", "start"}
 
 
-class RVSDG2IR(RegionVisitor):
+_Data = dict[str, ir.Var]
+
+
+class RVSDG2IR(RegionVisitor[_Data]):
     blocks: dict[int, ir.Block]
     func_id: bytecode.FunctionIdentity
     scope: ir.Scope
@@ -68,9 +71,7 @@ class RVSDG2IR(RegionVisitor):
     _current_block: ir.Block | None
     last_block_label: int | None
     branch_predicate: ir.Var | None
-
-    _label_map: dict[Union[str, int], int]
-
+    _label_map: dict[Union[str, int, None], int]
     _emit_debug_print = False
 
     def __init__(self, func_id):
@@ -110,11 +111,11 @@ class RVSDG2IR(RegionVisitor):
         self._label_map[num] = num
         return num
 
-    def initialize(self):
+    def initialize(self) -> _Data:
         self._label_map[None] = 0
         with self.set_block(0, ir.Block(scope=self.scope, loc=self.loc)):
-            data = {}
-            for i, k in enumerate(self.func_id.arg_names):
+            data: _Data = {}
+            for i, k in enumerate(self.func_id.arg_names):  # type: ignore
                 val = ir.Arg(index=i, name=k, loc=self.loc)
                 data[f"var.{k}"] = self.store(val, str(k))
             return data
@@ -127,7 +128,7 @@ class RVSDG2IR(RegionVisitor):
                     ir.StaticRaise(AssertionError, (), loc=self.loc)
                 )
 
-    def visit_block(self, block: BasicBlock, data):
+    def visit_block(self, block: BasicBlock, data: _Data) -> _Data:
         if isinstance(block, DDGBlock):
             # Prepare incoming variables
             for k, vs in block.in_vars.items():
@@ -261,9 +262,7 @@ class RVSDG2IR(RegionVisitor):
             cp_expect, cp_label = labels.pop()
             cur_label, cur_block = blocks.pop()
             with self.set_block(cur_label, cur_block):
-                const = self.store(
-                    ir.Const(cp_expect, loc=self.loc), "$.const"
-                )
+                const = self.store(ir.Const(cp_expect, loc=self.loc), "$.const")
                 cmp = ir.Expr.binop(operator.eq, const, cpvar, loc=self.loc)
                 pred = self.store(cmp, "$.cmp")
 
@@ -279,10 +278,10 @@ class RVSDG2IR(RegionVisitor):
                 )
                 self.current_block.append(br)
 
-    def visit_loop(self, region: RegionBlock, data):
+    def visit_loop(self, region: RegionBlock, data: _Data) -> _Data:
         assert isinstance(region, DDGRegion)
         # Prepare incoming states
-        inner_data = {}
+        inner_data: _Data = {}
         for k in region.incoming_states:
             inner_data[k] = self.store(
                 data[k],
@@ -306,7 +305,7 @@ class RVSDG2IR(RegionVisitor):
 
         return exit_data
 
-    def visit_switch(self, region: RegionBlock, data):
+    def visit_switch(self, region: RegionBlock, data: _Data) -> _Data:
         # Emit header
         header = region.header
         header_block = region.subregion[header]
@@ -320,9 +319,7 @@ class RVSDG2IR(RegionVisitor):
             # Jump-target 0 is when the jump fallthrough
             truebr = self._get_label(header_block.jump_targets[1])
             falsebr = self._get_label(header_block.jump_targets[0])
-            br = ir.Branch(
-                self.branch_predicate, truebr, falsebr, loc=self.loc
-            )
+            br = ir.Branch(self.branch_predicate, truebr, falsebr, loc=self.loc)
             self.last_block.append(br)
 
         # Emit branches
@@ -340,7 +337,8 @@ class RVSDG2IR(RegionVisitor):
                     )
 
         # handle outgoing values from the branches
-        names: set[str] = reduce(operator.or_, map(set, data_for_branches))
+        names: set[str] = reduce(
+            operator.or_, map(set, data_for_branches))  # type: ignore
         for blk, branch_data in zip(
             branch_blocks, data_for_branches, strict=True
         ):
@@ -370,7 +368,7 @@ class RVSDG2IR(RegionVisitor):
 
         return data_at_tail
 
-    def visit_linear(self, region: RegionBlock, data):
+    def visit_linear(self, region: RegionBlock, data: _Data) -> _Data:
         with self.set_block(
             self._get_label(region.name),
             ir.Block(scope=self.scope, loc=self.loc),
@@ -461,9 +459,7 @@ class RVSDG2IR(RegionVisitor):
         self.loc = self.loc.with_lineno(pos.lineno, pos.col_offset)
         # debug print
         if self._emit_debug_print:
-            where = (
-                f"{op.bc_inst.offset:3}:({pos.lineno:3}:{pos.col_offset:3})"
-            )
+            where = f"{op.bc_inst.offset:3}:({pos.lineno:3}:{pos.col_offset:3})"
             msg = f"[{where}] {op.bc_inst.opname}({op.bc_inst.argrepr}) "
             self.debug_print(msg)
 
@@ -707,9 +703,7 @@ class RVSDG2IR(RegionVisitor):
         none = self.store(
             value=ir.Const(None, loc=self.loc), name=f"$constNone{bc.offset}"
         )
-        isnone = ir.Expr.binop(
-            op, lhs=self.vsmap[pred], rhs=none, loc=self.loc
-        )
+        isnone = ir.Expr.binop(op, lhs=self.vsmap[pred], rhs=none, loc=self.loc)
         self.branch_predicate = self.store(isnone, "$jump_if")
 
     def op_POP_JUMP_FORWARD_IF_NOT_NONE(self, op: Op, bc: dis.Instruction):

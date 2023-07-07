@@ -144,13 +144,9 @@ class DDGRegion(RegionBlock):
                 shape="record",
                 rank="min",
             )
-            subg.edge(
-                f"incoming_{id(self)}", f"cluster_{label}", style="invis"
-            )
+            subg.edge(f"incoming_{id(self)}", f"cluster_{label}", style="invis")
             yield subg
-            subg.edge(
-                f"cluster_{label}", f"outgoing_{id(self)}", style="invis"
-            )
+            subg.edge(f"cluster_{label}", f"outgoing_{id(self)}", style="invis")
             out_labels = [f"<{k}> {k}" for k in self.outgoing_states]
             subg.node(
                 f"outgoing_{id(self)}",
@@ -325,8 +321,9 @@ class DDGBlock(BasicBlock):
         res: list[Op] = []
 
         avail: set[ValueState] = {*self.in_vars.values(), _just(self.in_effect)}
-        pending: list[Op] = [vs.parent for vs in self.out_vars.values()
-                             if vs.parent is not None]
+        pending: list[Op] = [
+            vs.parent for vs in self.out_vars.values() if vs.parent is not None
+        ]
         assert self.out_effect is not None  # for typing
         pending.append(_just(self.out_effect.parent))
         seen: set[Op] = set()
@@ -429,7 +426,7 @@ def _canonicalize_scfg_switch(scfg: SCFG):
                 _canonicalize_scfg_switch(block.subregion)
 
 
-class CanonicalizeLoop(RegionTransformer):
+class CanonicalizeLoop(RegionTransformer[None]):
     """
     Make sure loops has non-region header.
 
@@ -440,7 +437,7 @@ class CanonicalizeLoop(RegionTransformer):
     point to a non-region node in ``_canonicalize_scfg_switch``.
     """
 
-    def visit_loop(self, parent: SCFG, region: RegionBlock, data):
+    def visit_loop(self, parent: SCFG, region: RegionBlock, data: None):
         # Fix header
         # Introduce a SyntheticFill block that just jump to the original header
         new_label = parent.name_gen.new_block_name(block_names.SYNTH_BRANCH)
@@ -466,6 +463,12 @@ class CanonicalizeLoop(RegionTransformer):
         tail_parent.subregion.graph[tail_bb.name] = new_tail_bb
 
         self.visit_linear(parent, region, data)
+
+    def visit_block(self, parent: SCFG, block: BasicBlock, data: None):
+        pass  # no-op
+
+    def visit_switch(self, parent: SCFG, block: BasicBlock, data: None):
+        pass  # no-op
 
 
 def canonicalize_scfg(scfg: SCFG):
@@ -605,7 +608,10 @@ def propagate_vars(rvsdg: SCFG):
     visitor.visit_graph(rvsdg, visitor.make_data())
 
 
-class PropagateVars(RegionVisitor):
+_pvData = set[str]
+
+
+class PropagateVars(RegionVisitor[_pvData]):
     """
     Depends on PropagateStack
     """
@@ -618,7 +624,7 @@ class PropagateVars(RegionVisitor):
         if self._debug:
             print(*args, **kwargs)
 
-    def _apply(self, block: BasicBlock, data):
+    def _apply(self, block: BasicBlock, data: _pvData) -> _pvData:
         assert isinstance(block, BasicBlock)
         if isinstance(block, DDGProtocol):
             if isinstance(block, DDGBlock):
@@ -641,22 +647,22 @@ class PropagateVars(RegionVisitor):
         else:
             return data
 
-    def visit_linear(self, region: RegionBlock, data):
+    def visit_linear(self, region: RegionBlock, data: _pvData) -> _pvData:
         region.incoming_states.update(data)
         data = self.visit_graph(region.subregion, data)
         region.outgoing_states.update(data)
         return set(region.outgoing_states)
 
-    def visit_block(self, block: BasicBlock, data):
+    def visit_block(self, block: BasicBlock, data: _pvData) -> _pvData:
         return self._apply(block, data)
 
-    def visit_loop(self, region: RegionBlock, data):
+    def visit_loop(self, region: RegionBlock, data: _pvData) -> _pvData:
         self.debug_print("---LOOP_ENTER", region.name, data)
         data = self.visit_linear(region, data)
         self.debug_print("---LOOP_END=", region.name, "vars", data)
         return data
 
-    def visit_switch(self, region: RegionBlock, data):
+    def visit_switch(self, region: RegionBlock, data: _pvData) -> _pvData:
         self.debug_print("---SWITCH_ENTER", region.name)
         region.incoming_states.update(data)
         header = region.header
@@ -681,11 +687,14 @@ class PropagateVars(RegionVisitor):
         region.outgoing_states.update(data_at_tail)
         return set(region.outgoing_states)
 
-    def make_data(self):
-        return {}
+    def make_data(self) -> _pvData:
+        return set()
 
 
-class PropagateStack(RegionVisitor):
+_psData = tuple[str, ...]
+
+
+class PropagateStack(RegionVisitor[_psData]):
     def __init__(self, _debug: bool = False):
         super(PropagateStack, self).__init__()
         self._debug = _debug
@@ -694,7 +703,7 @@ class PropagateStack(RegionVisitor):
         if self._debug:
             print(*args, **kwargs)
 
-    def visit_block(self, block: BasicBlock, data):
+    def visit_block(self, block: BasicBlock, data: _psData) -> _psData:
         if isinstance(block, DDGBlock):
             nin = len(block.in_stackvars)
             inherited = data[: len(data) - nin]
@@ -731,13 +740,13 @@ class PropagateStack(RegionVisitor):
         else:
             return data
 
-    def visit_loop(self, region: RegionBlock, data):
+    def visit_loop(self, region: RegionBlock, data: _psData) -> _psData:
         self.debug_print("---LOOP_ENTER", region.name)
         data = self.visit_linear(region, data)
         self.debug_print("---LOOP_END=", region.name, "stack", data)
         return data
 
-    def visit_switch(self, region: RegionBlock, data):
+    def visit_switch(self, region: RegionBlock, data: _psData) -> _psData:
         self.debug_print("---SWITCH_ENTER", region.name)
         header = region.header
         data_at_head = self.visit_linear(region.subregion[header], data)
@@ -760,13 +769,13 @@ class PropagateStack(RegionVisitor):
         self.debug_print("---SWITCH_END=", region.name, "stack", data_at_tail)
         return data_at_tail
 
-    def make_data(self):
+    def make_data(self) -> _psData:
         # Stack data stored in a tuple
         return ()
 
 
-class ConnectImportedStackVars(RegionVisitor):
-    def visit_block(self, block: BasicBlock, data):
+class ConnectImportedStackVars(RegionVisitor[None]):
+    def visit_block(self, block: BasicBlock, data: None):
         if isinstance(block, DDGBlock):
             # Connect stack.incoming node to the import stack variable.
             imported_stackvars = [
@@ -777,10 +786,10 @@ class ConnectImportedStackVars(RegionVisitor):
                 assert vs.parent is not None
                 vs.parent.add_input("0", inc)
 
-    def visit_loop(self, region: RegionBlock, data):
+    def visit_loop(self, region: RegionBlock, data: None):
         self.visit_linear(region, data)
 
-    def visit_switch(self, region: RegionBlock, data):
+    def visit_switch(self, region: RegionBlock, data: None):
         header = region.header
         self.visit_linear(region.subregion[header], data)
         for blk in region.subregion.graph.values():
@@ -803,9 +812,7 @@ def _upgrade_dataclass(old, newcls, replacements=None):
     if replacements is None:
         replacements = {}
     fieldnames = [fd.name for fd in fields(old)]
-    oldattrs = {
-        k: getattr(old, k) for k in fieldnames if k not in replacements
-    }
+    oldattrs = {k: getattr(old, k) for k in fieldnames if k not in replacements}
     return newcls(**oldattrs, **replacements)
 
 
