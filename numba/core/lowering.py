@@ -1,7 +1,8 @@
-from collections import namedtuple, defaultdict
+from collections import namedtuple, defaultdict, OrderedDict
 import operator
 import warnings
 from functools import partial
+import re
 
 import llvmlite.ir
 from llvmlite.ir import Constant, IRBuilder
@@ -68,6 +69,8 @@ class BaseLower(object):
                                       filepath=func_ir.loc.filename,
                                       cgctx=context,
                                       directives_only=directives_only)
+
+        self.fndesc.global_dict = {"llvm_lines": OrderedDict()}
 
         # Subclass initialization
         self.init()
@@ -269,6 +272,7 @@ class BaseLower(object):
             self.builder.position_at_end(bb)
             self.debug_print(f"# lower block: {offset}")
             self.lower_block(block)
+        self.fndesc.global_dict["llvm_func_def"] = self._get_llvm_module_def()
         self.post_lower()
         return entry_block_tail
 
@@ -284,6 +288,51 @@ class BaseLower(object):
                                    loc=self.loc, errcls_=defaulterrcls):
                 self.lower_inst(inst)
         self.post_block(block)
+
+    def _get_llvm_module_def(self):
+        s1 = str(self.builder.module.functions[0])
+        result = re.findall(r'define(.*)\)', s1)
+        s2 = "define" + result[0] + ")"
+        s3 = s2.replace(
+            self.builder.module.functions[0].name,
+            self.builder.module.name.split('$')[0]
+        )
+        return s3
+
+    def _get_llvm_module_blocks(self):
+        s = str(self.builder.module.functions[0])
+        braces = ['{','}']
+        result = "\n".join(
+            [_ for _ in s.split('\n') if "define" not in _ and _ not in braces]
+        )
+        self.block_dict = OrderedDict()
+        key = None
+        for text in result.strip().split('\n'):
+            if text[-1] == ':':
+                key = text[:-1]
+                self.block_dict[key] = []
+            else:
+                if key:
+                    llvm_instr = text.strip()
+                    self.block_dict[key].append(llvm_instr)
+                else:
+                    continue
+        return self.block_dict
+
+    def _diff_llvm(self, llvm1, llvm2):
+        diff = OrderedDict()
+        for k in llvm1:
+            n = len(llvm2[k])
+            diff[k] = [
+                llvm2[k][i] for i in range(n) if llvm2[k][i] not in llvm1[k]
+            ]
+        return diff
+
+    def _sum_llvm(self, llvm1, llvm2):
+        sum_ = OrderedDict()
+        for k in llvm1:
+            sum_[k] = llvm1[k] + llvm2[k]
+        return sum_
 
     def create_cpython_wrapper(self, release_gil=False):
         """
@@ -455,6 +504,8 @@ class Lower(BaseLower):
             pass
 
     def lower_inst(self, inst):
+        line = inst.loc.line
+        before = self._get_llvm_module_blocks()
         # Set debug location for all subsequent LL instructions
         self.debuginfo.mark_location(self.builder, self.loc.line)
         self.debug_print(str(inst))
@@ -592,6 +643,16 @@ class Lower(BaseLower):
 
         else:
             raise NotImplementedError(type(inst))
+
+        after = self._get_llvm_module_blocks()
+        diff = self._diff_llvm(before, after)
+        try:
+            self.fndesc.global_dict["llvm_lines"][line] = self._sum_llvm(
+                self.fndesc.global_dict["llvm_lines"][line],
+                diff
+            )
+        except KeyError:
+            self.fndesc.global_dict["llvm_lines"][line] = diff
 
     def lower_setitem(self, target_var, index_var, value_var, signature):
         target = self.loadvar(target_var.name)
