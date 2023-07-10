@@ -50,6 +50,7 @@ from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
 from numba.core.extending import register_jitable
 from numba.core.bytecode import _fix_LOAD_GLOBAL_arg
 from numba.core import utils
+from numba.np.numpy_support import numpy_version
 
 import cmath
 import unittest
@@ -1421,9 +1422,14 @@ class TestParfors(TestParforsBase):
         # this doesn't fuse due to mixed indices
         self.assertEqual(countParfors(test_impl, (numba.float64[:,:],)), 2)
 
-        def test_impl(A):
-            min_val = np.amin(A)
-            return A - min_val
+        if numpy_version < (1, 25):
+            def test_impl(A):
+                min_val = np.amin(A)
+                return A - min_val
+        else:
+            def test_impl(A):
+                min_val = np.min(A)
+                return A - min_val
         self.check(test_impl, A)
         # this doesn't fuse due to use of reduction variable
         self.assertEqual(countParfors(test_impl, (numba.float64[:],)), 2)
