@@ -282,6 +282,7 @@ _options_mixin = include_default_options(
     "error_model",
     "inline",
     "forceinline",
+    "noalias",
     # Add "target_backend" as a accepted option for the CPU in @jit(...)
     "target_backend",
     "_dbg_extend_lifetimes",
@@ -328,3 +329,5 @@ class CPUTargetOptions(_options_mixin, TargetOptions):
         if flags.forceinline:
             # forceinline turns off optnone, just like clang.
             flags.optnone = False
+
+        flags.inherit_if_not_set("noalias")

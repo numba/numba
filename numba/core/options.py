@@ -90,6 +90,7 @@ class DefaultOptions:
     error_model = _mapping("error_model")
     inline = _mapping("inline")
     forceinline = _mapping("forceinline")
+    noalias = _mapping("noalias")
 
     target_backend = _mapping("target_backend")
 
