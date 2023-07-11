@@ -1,7 +1,0 @@
-Fix towncrier
-=============
-
-Pin ``towncrier`` to ``23.6`` and ``importlib_resources`` to ``<6``. Newer
-``importlib_resources`` removed API used by ``towncrier``. The pinning can be 
-removed once newer version of ``towncrier`` is released.
-(The upstream patch is https://github.com/twisted/towncrier/pull/529)
