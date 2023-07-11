@@ -1907,6 +1907,65 @@ def numpy_logspace(start, stop, num=50):
     return impl
 
 
+@overload(np.geomspace)
+def numpy_geomspace(start, stop, num=50):
+    if not all(isinstance(arg, types.Number) for arg in [start, stop]):
+        msg = 'The arguments "start" and "stop" must be numbers'
+        raise errors.TypingError(msg)
+
+    if not isinstance(num, (int, types.Integer)):
+        msg = 'The argument "num" must be an integer'
+        raise errors.TypingError(msg)
+    
+    if any(isinstance(arg, types.Complex) for arg in [start, stop]):
+        def impl(start, stop, num=50):
+            if start == 0 or stop == 0:
+                raise ValueError('Geometric sequence cannot include zero')
+            both_negative = (np.sign(start) == -1) & (np.sign(stop) == -1)
+            out_sign = 1
+            if (start.real == 0) & (stop.real == 0):
+                start = start.imag
+                stop = stop.imag
+                out_sign = 1j
+            if both_negative:
+                start = -start
+                stop = -stop
+                out_sign = -out_sign
+            logstart = np.log10(start)
+            logstop = np.log10(stop)
+            result = np.logspace(logstart, logstop, num)
+            # Make sure the endpoints match the start and stop arguments. This is
+            # necessary because np.exp(np.log(x)) is not necessarily equal to x.
+            if num > 0:
+                result[0] = start
+                if num > 1:
+                    result[-1] = stop
+            return out_sign * result
+    
+    else:
+        def impl(start, stop, num=50):
+            if start == 0 or stop == 0:
+                raise ValueError('Geometric sequence cannot include zero')
+            both_negative = (np.sign(start) == -1) & (np.sign(stop) == -1)
+            out_sign = 1
+            if both_negative:
+                start = -start
+                stop = -stop
+                out_sign = -out_sign
+            logstart = np.log10(start)
+            logstop = np.log10(stop)
+            result = np.logspace(logstart, logstop, num)
+            # Make sure the endpoints match the start and stop arguments. This is
+            # necessary because np.exp(np.log(x)) is not necessarily equal to x.
+            if num > 0:
+                result[0] = start
+                if num > 1:
+                    result[-1] = stop
+            return out_sign * result
+    
+    return impl
+
+
 @overload(np.rot90)
 def numpy_rot90(arr, k=1):
     # supporting axes argument it needs to be included in np.flip
