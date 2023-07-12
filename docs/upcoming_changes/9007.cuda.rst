@@ -1,0 +1,5 @@
+
+Add NumPy comparison ufunc in CUDA
+==================================
+this PR adds support for comparison ufuncs for the CUDA target 
+(eg. numpy.greater, numpy.greater_equal, numpy.less_equal, etc.).

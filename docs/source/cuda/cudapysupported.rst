@@ -313,6 +313,20 @@ Supported NumPy features:
   * :func:`numpy.radians`
   * :func:`numpy.rad2deg`
   * :func:`numpy.degrees`
+  * :func:`numpy.greater`
+  * :func:`numpy.greater_equal`
+  * :func:`numpy.less`
+  * :func:`numpy.less_equal`
+  * :func:`numpy.not_equal`
+  * :func:`numpy.equal`
+  * :func:`numpy.logical_and`
+  * :func:`numpy.logical_or`
+  * :func:`numpy.logical_xor`
+  * :func:`numpy.logical_not`
+  * :func:`numpy.maximum`
+  * :func:`numpy.minimum`
+  * :func:`numpy.fmax`
+  * :func:`numpy.fmin`
   * :func:`numpy.bitwise_and`
   * :func:`numpy.bitwise_or`
   * :func:`numpy.bitwise_xor`
