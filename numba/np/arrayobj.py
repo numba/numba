@@ -1909,14 +1909,18 @@ def numpy_logspace(start, stop, num=50):
 
 @overload(np.geomspace)
 def numpy_geomspace(start, stop, num=50):
-    if not all(isinstance(arg, types.Number) for arg in [start, stop]):
-        msg = 'The arguments "start" and "stop" must be numbers'
+    if not isinstance(start, types.Number):
+        msg = 'The argument "start" must be a number'
         raise errors.TypingError(msg)
 
-    if not isinstance(num, (int, types.Integer)):
+    if not isinstance(stop, types.Number):
+        msg = 'The argument "stop" must be a number'
+        raise errors.TypingError(msg)
+
+    if not isinstance(num, types.Integer):
         msg = 'The argument "num" must be an integer'
         raise errors.TypingError(msg)
-    
+
     if any(isinstance(arg, types.Complex) for arg in [start, stop]):
         def impl(start, stop, num=50):
             if start == 0 or stop == 0:
@@ -1934,14 +1938,15 @@ def numpy_geomspace(start, stop, num=50):
             logstart = np.log10(start)
             logstop = np.log10(stop)
             result = np.logspace(logstart, logstop, num)
-            # Make sure the endpoints match the start and stop arguments. This is
-            # necessary because np.exp(np.log(x)) is not necessarily equal to x.
+            # Make sure the endpoints match the start and stop arguments.
+            # This is necessary because np.exp(np.log(x)) is not necessarily
+            # equal to x.
             if num > 0:
                 result[0] = start
                 if num > 1:
                     result[-1] = stop
             return out_sign * result
-    
+
     else:
         def impl(start, stop, num=50):
             if start == 0 or stop == 0:
@@ -1955,14 +1960,15 @@ def numpy_geomspace(start, stop, num=50):
             logstart = np.log10(start)
             logstop = np.log10(stop)
             result = np.logspace(logstart, logstop, num)
-            # Make sure the endpoints match the start and stop arguments. This is
-            # necessary because np.exp(np.log(x)) is not necessarily equal to x.
+            # Make sure the endpoints match the start and stop arguments.
+            # This is necessary because np.exp(np.log(x)) is not necessarily
+            # equal to x.
             if num > 0:
                 result[0] = start
                 if num > 1:
                     result[-1] = stop
             return out_sign * result
-    
+
     return impl
 
 
