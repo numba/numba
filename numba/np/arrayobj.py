@@ -1917,7 +1917,7 @@ def numpy_geomspace(start, stop, num=50):
         msg = 'The argument "stop" must be a number'
         raise errors.TypingError(msg)
 
-    if not isinstance(num, types.Integer):
+    if not isinstance(num, (int, types.Integer)):
         msg = 'The argument "num" must be an integer'
         raise errors.TypingError(msg)
 
