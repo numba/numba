@@ -30,6 +30,9 @@ def np_around_unary(val):
 def np_round_array(arr, decimals, out):
     np.round(arr, decimals, out)
 
+def np_round__array(arr, decimals, out):
+    np.round(arr, decimals, out)
+
 def np_round_binary(val, decimals):
     return np.round(val, decimals)
 
@@ -365,6 +368,9 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_around_array(self):
         self.check_round_array(np_around_array)
 
+    def test_round__array(self):
+        self.check_round_array(np_round__array)
+
     def test_around_bad_array(self):
         for pyfunc in (np_round_unary, np_around_unary):
             cfunc = jit(nopython=True)(pyfunc)
@@ -373,7 +379,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                 cfunc(None)
 
     def test_around_bad_out(self):
-        for py_func in (np_round_array, np_around_array):
+        for py_func in (np_round_array, np_around_array, np_round__array):
             cfunc = jit(nopython=True)(py_func)
             msg = '.*The argument "out" must be an array if it is provided.*'
             with self.assertRaisesRegex(TypingError, msg):

@@ -356,7 +356,6 @@ def get_accumulator(dtype, value):
 
 
 @overload(np.prod)
-@overload(np.product)
 @overload_method(types.Array, "prod")
 def array_prod(a):
     if isinstance(a, types.Array):
@@ -399,7 +398,6 @@ def array_cumsum(a):
 
 
 @overload(np.cumprod)
-@overload(np.cumproduct)
 @overload_method(types.Array, "cumprod")
 def array_cumprod(a):
     if isinstance(a, types.Array):
@@ -801,7 +799,6 @@ def array_argmax(arr, axis=None):
 
 
 @overload(np.all)
-@overload(np.alltrue)
 @overload_method(types.Array, "all")
 def np_all(a):
     def flat_all(a):
@@ -908,7 +905,6 @@ def np_allclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 
 
 @overload(np.any)
-@overload(np.sometrue)
 @overload_method(types.Array, "any")
 def np_any(a):
     def flat_any(a):
@@ -3144,6 +3140,7 @@ def round_ndigits(x, ndigits):
 
 @overload(np.around)
 @overload(np.round)
+@overload(np.round_)
 def impl_np_round(a, decimals=0, out=None):
     if not type_can_asarray(a):
         raise TypingError('The argument "a" must be array-like')
