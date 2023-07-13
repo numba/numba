@@ -1,16 +1,11 @@
-"""
-From NumbaPro
-
-"""
-
 from collections import namedtuple, OrderedDict
 import dis
 import inspect
 import itertools
 from types import CodeType, ModuleType
 
-from numba.core import errors, utils
-
+from numba.core import errors, utils, serialize
+from numba.core.utils import PYVERSION
 
 opcode_info = namedtuple('opcode_info', ['argsize'])
 
@@ -86,12 +81,38 @@ class ByteCodeInst(object):
         return self.opcode in TERM_OPS
 
     def get_jump_target(self):
+        # With Python 3.10 the addressing of "bytecode" instructions has
+        # changed from using bytes to using 16-bit words instead. As a
+        # consequence the code to determine where a jump will lead had to be
+        # adapted.
+        # See also:
+        # https://bugs.python.org/issue26647
+        # https://bugs.python.org/issue27129
+        # https://github.com/python/cpython/pull/25069
         assert self.is_jump
-        if self.opcode in JREL_OPS:
-            return self.next + self.arg
+        if PYVERSION == (3, 11):
+            if self.opcode in (dis.opmap[k]
+                               for k in ("JUMP_BACKWARD",
+                                         "POP_JUMP_BACKWARD_IF_TRUE",
+                                         "POP_JUMP_BACKWARD_IF_FALSE",
+                                         "POP_JUMP_BACKWARD_IF_NONE",
+                                         "POP_JUMP_BACKWARD_IF_NOT_NONE",)):
+                return self.offset - (self.arg - 1) * 2
+        elif PYVERSION > (3, 11):
+            raise NotImplementedError(PYVERSION)
+
+        if PYVERSION >= (3, 10):
+            if self.opcode in JREL_OPS:
+                return self.next + self.arg * 2
+            else:
+                assert self.opcode in JABS_OPS
+                return self.arg * 2 - 2
         else:
-            assert self.opcode in JABS_OPS
-            return self.arg
+            if self.opcode in JREL_OPS:
+                return self.next + self.arg
+            else:
+                assert self.opcode in JABS_OPS
+                return self.arg
 
     def __repr__(self):
         return '%s(arg=%s, lineno=%d)' % (self.opname, self.arg, self.lineno)
@@ -134,7 +155,15 @@ def _unpack_opargs(code):
                 arg |= code[i + j] << (8 * j)
             i += ARG_LEN
             if op == EXTENDED_ARG:
+                # This is a deviation from what dis does...
+                # In python 3.11 it seems like EXTENDED_ARGs appear more often
+                # and are also used as jump targets. So as to not have to do
+                # "book keeping" for where EXTENDED_ARGs have been "skipped"
+                # they are replaced with NOPs so as to provide a legal jump
+                # target and also ensure that the bytecode offsets are correct.
+                yield (offset, OPCODE_NOP, arg, i)
                 extended_arg = arg << 8 * ARG_LEN
+                offset = i
                 continue
         else:
             arg = None
@@ -186,12 +215,13 @@ class ByteCodeIter(object):
         return buf
 
 
-class ByteCode(object):
+class _ByteCode(object):
     """
     The decoded bytecode of a function, and related information.
     """
     __slots__ = ('func_id', 'co_names', 'co_varnames', 'co_consts',
-                 'co_cellvars', 'co_freevars', 'table', 'labels')
+                 'co_cellvars', 'co_freevars', 'exception_entries',
+                 'table', 'labels')
 
     def __init__(self, func_id):
         code = func_id.code
@@ -209,6 +239,7 @@ class ByteCode(object):
         self.co_consts = code.co_consts
         self.co_cellvars = code.co_cellvars
         self.co_freevars = code.co_freevars
+
         self.table = table
         self.labels = sorted(labels)
 
@@ -223,7 +254,7 @@ class ByteCode(object):
                 table[adj_offset].lineno = lineno
         # Assign unfilled lineno
         # Start with first bytecode's lineno
-        known = table[_FIXED_OFFSET].lineno
+        known = code.co_firstlineno
         for inst in table.values():
             if inst.lineno >= 0:
                 known = inst.lineno
@@ -232,7 +263,7 @@ class ByteCode(object):
         return table
 
     def __iter__(self):
-        return utils.itervalues(self.table)
+        return iter(self.table.values())
 
     def __getitem__(self, offset):
         return self.table[offset]
@@ -248,7 +279,8 @@ class ByteCode(object):
                 return ' '
 
         return '\n'.join('%s %10s\t%s' % ((label_marker(i),) + i)
-                         for i in utils.iteritems(self.table))
+                         for i in self.table.items()
+                         if i[1].opname != "CACHE")
 
     @classmethod
     def _compute_used_globals(cls, func, table, co_consts, co_names):
@@ -264,7 +296,7 @@ class ByteCode(object):
         # Look for LOAD_GLOBALs in the bytecode
         for inst in table.values():
             if inst.opname == 'LOAD_GLOBAL':
-                name = co_names[inst.arg]
+                name = co_names[_fix_LOAD_GLOBAL_arg(inst.arg)]
                 if name not in d:
                     try:
                         value = globs[name]
@@ -288,7 +320,53 @@ class ByteCode(object):
                                           self.co_consts, self.co_names)
 
 
-class FunctionIdentity(object):
+def _fix_LOAD_GLOBAL_arg(arg):
+    if PYVERSION >= (3, 11):
+        assert PYVERSION == (3, 11) # reminder to check newer versions
+        return arg >> 1
+    return arg
+
+
+class ByteCodePy311(_ByteCode):
+    def __init__(self, func_id):
+        super().__init__(func_id)
+
+        def fixup_eh(ent):
+            from dis import _ExceptionTableEntry
+            # Patch up the exception table offset
+            # because we add a NOP in _patched_opargs
+            out = _ExceptionTableEntry(
+                start=ent.start + _FIXED_OFFSET, end=ent.end + _FIXED_OFFSET,
+                target=ent.target + _FIXED_OFFSET,
+                depth=ent.depth, lasti=ent.lasti,
+            )
+            return out
+
+        entries = dis.Bytecode(func_id.code).exception_entries
+        self.exception_entries = tuple(map(fixup_eh, entries))
+
+    def find_exception_entry(self, offset):
+        """
+        Returns the exception entry for the given instruction offset
+        """
+        candidates = []
+        for ent in self.exception_entries:
+            if ent.start <= offset <= ent.end:
+                candidates.append((ent.depth, ent))
+        if candidates:
+            ent = max(candidates)[1]
+            return ent
+
+
+if PYVERSION == (3, 11):
+    ByteCode = ByteCodePy311
+elif PYVERSION < (3, 11):
+    ByteCode = _ByteCode
+else:
+    raise NotImplementedError(PYVERSION)
+
+
+class FunctionIdentity(serialize.ReduceMixin):
     """
     A function's identity and metadata.
 
@@ -336,6 +414,7 @@ class FunctionIdentity(object):
         # variables, so we make sure to disambiguate using an unique id.
         uid = next(cls._unique_ids)
         self.unique_name = '{}${}'.format(self.func_qualname, uid)
+        self.unique_id = uid
 
         return self
 
@@ -343,3 +422,16 @@ class FunctionIdentity(object):
         """Copy the object and increment the unique counter.
         """
         return self.from_function(self.func)
+
+    def _reduce_states(self):
+        """
+        NOTE: part of ReduceMixin protocol
+        """
+        return dict(pyfunc=self.func)
+
+    @classmethod
+    def _rebuild(cls, pyfunc):
+        """
+        NOTE: part of ReduceMixin protocol
+        """
+        return cls.from_function(pyfunc)

@@ -13,7 +13,7 @@ import unittest
 from numba.np import numpy_support
 
 enable_pyobj_flags = Flags()
-enable_pyobj_flags.set("enable_pyobject")
+enable_pyobj_flags.enable_pyobject = True
 
 no_pyobj_flags = Flags()
 
@@ -516,7 +516,7 @@ class TestMathLib(TestCase):
             with warnings.catch_warnings():
                 warnings.simplefilter("error", RuntimeWarning)
                 self.assertRaisesRegexp(RuntimeWarning,
-                                        'overflow encountered in .*_scalars',
+                                        'overflow encountered in .*scalar',
                                         naive_hypot, val, val)
 
     def test_hypot_npm(self):

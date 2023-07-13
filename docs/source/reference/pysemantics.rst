@@ -3,6 +3,20 @@
 Deviations from Python Semantics
 ================================
 
+Bounds Checking
+---------------
+
+By default, instead of causing an :class:`IndexError`, accessing an
+out-of-bound index of an array in a Numba-compiled function will return
+invalid values or lead to an access violation error (it's reading from
+invalid memory locations). Bounds checking can be enabled on a specific
+function via the :ref:`boundscheck <jit-decorator-boundscheck>`
+option of the jit decorator. Additionally, the :envvar:`NUMBA_BOUNDSCHECK`
+can be set to 0 or 1 to globally override this flag.
+
+.. note::
+  Bounds checking will slow down typical functions so it is recommended to only
+  use this flag for debugging purposes.
 
 Exceptions and Memory Allocation
 --------------------------------
@@ -57,4 +71,18 @@ with immutability assumption.  However, large global arrays are not copied to
 conserve memory.  The definition of "small" and "large" may change.
 
 
-.. todo:: This document needs completing.
+Zero initialization of variables
+--------------------------------
+
+Numba does not track variable liveness at runtime. For simplicity of
+implementation, all variables are zero-initialized. Example::
+
+    from numba import njit
+
+    @njit
+    def foo():
+        for i in range(0):
+            pass
+        print(i) # will print 0 and not raise UnboundLocalError
+
+    foo()

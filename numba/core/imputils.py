@@ -17,7 +17,8 @@ class Registry(object):
     """
     A registry of function and attribute implementations.
     """
-    def __init__(self):
+    def __init__(self, name='unspecified'):
+        self.name = name
         self.functions = []
         self.getattrs = []
         self.setattrs = []
@@ -116,6 +117,9 @@ class Registry(object):
             return impl
         return decorate
 
+    def __repr__(self):
+        return f"Lowering Registry<{self.name}>"
+
 
 class RegistryLoader(BaseRegistryLoader):
     """
@@ -126,7 +130,7 @@ class RegistryLoader(BaseRegistryLoader):
 
 # Global registry for implementations of builtin operations
 # (functions, attributes, type casts)
-builtin_registry = Registry()
+builtin_registry = Registry('builtin_registry')
 
 lower_builtin = builtin_registry.lower
 lower_getattr = builtin_registry.lower_getattr

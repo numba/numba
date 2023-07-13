@@ -1,0 +1,97 @@
+# Numba's codeowners file is dual purpose, it:
+#
+# 1. Provides information to github about who should be requested to review a PR
+# 2. Provides contributors/czars general information about who to contact
+#    first about various parts of the code base. A lot of concepts in Numba are
+#    necessarily spread throughout the code base, consequently some of the
+#    "code ownership"/first contact is concept based opposed to file/directory
+#    based.
+#
+# ------------------------------------------------------------------------------
+# Information for github
+# ------------------------------------------------------------------------------
+# Owners of specific parts of the code, will be requested to review if a PR
+# touches code in the matched pattern
+/numba/cuda/ @gmarkall
+/numba/parfors/ @DrTodd13
+/numba/stencils/ @DrTodd13
+/numba/core/byteflow.py @sklam
+/numba/core/typeinfer.py @sklam
+/numba/core/interpreter.py @sklam
+
+# ------------------------------------------------------------------------------
+# Information for contributors
+# ------------------------------------------------------------------------------
+# This section provides a rough list of who to contact first for help with
+# various parts/concepts in the code base, first contact does not imply
+# ownership!
+#
+# Parts of the code base:
+#
+# * Parfors/Parallel Accelerator (@DrTodd13)
+#       - Array Analysis (@DrTodd13)
+#       - Parfors transforms (@DrTodd13)
+# * Stencils (@DrTodd13)
+# * Experimental:
+#       - Jitclasses (@sklam)
+#       - StructRef (@sklam)
+# * Typed containers:
+#       - Typed.List (@esc)
+#       - Typed.Dict (@sklam)
+# * Documentation (Needs first contact/owner)
+# * NumPy (Needs first contact/owner)
+#       - ufuncs (Needs first contact/owner)
+#       - linalg (@stuartarchibald)
+#       - Implementation of specific functions (Needs first contact/owner)
+#       - Parallel backends/threading layers (@stuartarchibald)
+# * CPython implementation (Needs first contact/owner)
+# * Extension API (Needs first contact/owner)
+# * AOT (Needs first contact/owner)
+# * Compiler:
+#       - Type inference (@sklam)
+#       - Bytecode analysis/CFA/DFA (@sklam)
+#       - Compiler Pipeline infrastructure (@stuartarchibald)
+#       - Compiler passes:
+#               - Rewrites (Needs first contact/owner)
+#               - Branch pruning (@stuartarchibald)
+#               - Literal unroll (@stuartarchibald)
+#               - Rewrite Semantic Constants (@stuartarchibald)
+#               - MakeFunction To Jit function (@stuartarchibald)
+#               - Overload and function inlining (@stuartarchibald)
+#               - With Lifting (@sklam)
+#               - Exception handling (@sklam)
+#               - Literally (@sklam)
+#               - SSA (@sklam)
+#               - lowering.py, codegen.py (@sklam)
+#       - Datamodels/call conventions (@sklam)
+#       - Inlining in general (@stuartarchibald)
+#
+# Additional Concepts:
+#
+# * Reference counting and NRT (@sklam)
+# * Testing (Needs first contact/owner)
+# * CI:
+#       - public CI (azure) (Needs first contact/owner)
+#       - Numba build farm (@esc)
+# * Integration testing (https://github.com/numba/numba-integration-testing)
+#   (@esc)
+# * ASV profiling (@esc)
+# * Type Annotations (@luk-f-a and @EPronovost)
+# * Ufunc/GUfunc (Needs first contact/owner)
+# * Profiling (Needs first contact/owner (and code!))
+# * Debugging:
+#       - DWARF (@sklam)
+#       - gdb support (@stuartarchibald)
+# * Hardware targets:
+#       - The CUDA target (@gmarkall)
+#       - The ROCm target (@stuartarchibald)
+#       - ARM* (@stuartarchibald)
+#       - POWER (Needs first contact/owner)
+#       - X86* (Needs first contact/owner)
+# * OS:
+#       - Linux (@stuartarchibald)
+#       - OSX
+#       - Windows
+#       - BSD (@stuartarchibald)
+#
+# Anything not covered by someone else... ping @sklam and @stuartarchibald

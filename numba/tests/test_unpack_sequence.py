@@ -7,13 +7,13 @@ from numba import typeof
 from numba.tests.support import TestCase, MemoryLeakMixin, tag
 
 enable_pyobj_flags = Flags()
-enable_pyobj_flags.set("enable_pyobject")
+enable_pyobj_flags.enable_pyobject = True
 
 force_pyobj_flags = Flags()
-force_pyobj_flags.set("force_pyobject")
+force_pyobj_flags.force_pyobject = True
 
 no_pyobj_flags = Flags()
-no_pyobj_flags.set("nrt")
+no_pyobj_flags.nrt = True
 
 
 def unpack_list(l):
@@ -235,4 +235,3 @@ class TestUnpack(MemoryLeakMixin, TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-

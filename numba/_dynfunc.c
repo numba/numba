@@ -25,8 +25,8 @@ typedef struct {
 
 
 static PyMemberDef env_members[] = {
-    {"globals", T_OBJECT, offsetof(EnvironmentObject, globals), READONLY},
-    {"consts", T_OBJECT, offsetof(EnvironmentObject, consts), READONLY},
+    {"globals", T_OBJECT, offsetof(EnvironmentObject, globals), READONLY, NULL},
+    {"consts", T_OBJECT, offsetof(EnvironmentObject, consts), READONLY, NULL},
     {NULL}  /* Sentinel */
 };
 
@@ -88,43 +88,78 @@ env_new(PyTypeObject* type, PyObject* args, PyObject* kwds)
 
 static PyTypeObject EnvironmentType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    "_dynfunc.Environment",   /*tp_name*/
-    sizeof(EnvironmentObject), /*tp_basicsize*/
-    0,                         /*tp_itemsize*/
-    (destructor) env_dealloc,  /*tp_dealloc*/
-    0,                         /*tp_print*/
-    0,                         /*tp_getattr*/
-    0,                         /*tp_setattr*/
-    0,                         /*tp_compare*/
-    0,                         /*tp_repr*/
-    0,                         /*tp_as_number*/
-    0,                         /*tp_as_sequence*/
-    0,                         /*tp_as_mapping*/
-    0,                         /*tp_hash */
-    0,                         /*tp_call*/
-    0,                         /*tp_str*/
-    0,                         /*tp_getattro*/
-    0,                         /*tp_setattro*/
-    0,                         /*tp_as_buffer*/
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC, /*tp_flags*/
-    0,                         /* tp_doc */
-    (traverseproc) env_traverse, /* tp_traverse */
-    (inquiry) env_clear,       /* tp_clear */
-    0,                         /* tp_richcompare */
-    0,                         /* tp_weaklistoffset */
-    0,                         /* tp_iter */
-    0,                         /* tp_iternext */
-    0,                         /* tp_methods */
-    env_members,               /* tp_members */
-    0,                         /* tp_getset */
-    0,                         /* tp_base */
-    0,                         /* tp_dict */
-    0,                         /* tp_descr_get */
-    0,                         /* tp_descr_set */
-    0,                         /* tp_dictoffset */
-    0,                         /* tp_init */
-    0,                         /* tp_alloc */
-    env_new,                   /* tp_new */
+    "_dynfunc.Environment",                  /* tp_name */
+    sizeof(EnvironmentObject),               /* tp_basicsize */
+    0,                                       /* tp_itemsize */
+    (destructor) env_dealloc,                /* tp_dealloc */
+    0,                                       /* tp_vectorcall_offset */
+    0,                                       /* tp_getattr*/
+    0,                                       /* tp_setattr */
+    0,                                       /* tp_as_async */
+    0,                                       /* tp_repr */
+    0,                                       /* tp_as_number */
+    0,                                       /* tp_as_sequence */
+    0,                                       /* tp_as_mapping */
+    0,                                       /* tp_hash */
+    0,                                       /* tp_call */
+    0,                                       /* tp_str */
+    0,                                       /* tp_getattro */
+    0,                                       /* tp_setattro */
+    0,                                       /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC, /* tp_flags */
+    0,                                       /* tp_doc */
+    (traverseproc) env_traverse,             /* tp_traverse */
+    (inquiry) env_clear,                     /* tp_clear */
+    0,                                       /* tp_richcompare */
+    0,                                       /* tp_weaklistoffset */
+    0,                                       /* tp_iter */
+    0,                                       /* tp_iternext */
+    0,                                       /* tp_methods */
+    env_members,                             /* tp_members */
+    0,                                       /* tp_getset */
+    0,                                       /* tp_base */
+    0,                                       /* tp_dict */
+    0,                                       /* tp_descr_get */
+    0,                                       /* tp_descr_set */
+    0,                                       /* tp_dictoffset */
+    0,                                       /* tp_init */
+    0,                                       /* tp_alloc */
+    env_new,                                 /* tp_new */
+    0,                                       /* tp_free */
+    0,                                       /* tp_is_gc */
+    0,                                       /* tp_bases */
+    0,                                       /* tp_mro */
+    0,                                       /* tp_cache */
+    0,                                       /* tp_subclasses */
+    0,                                       /* tp_weaklist */
+    0,                                       /* tp_del */
+    0,                                       /* tp_version_tag */
+    0,                                       /* tp_finalize */
+/* The docs suggest Python 3.8 has no tp_vectorcall
+ * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Doc/c-api/typeobj.rst?plain=1#L146
+ * but the header has it:
+ * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Include/cpython/object.h#L257
+ */
+    0,                                       /* tp_vectorcall */
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 8)
+/* This is Python 3.8 only.
+ * See: https://github.com/python/cpython/blob/3.8/Include/cpython/object.h
+ * there's a tp_print preserved for backwards compatibility. xref:
+ * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Include/cpython/object.h#L260
+ */
+    0,                                       /* tp_print */
+#endif
+
+/* WARNING: Do not remove this, only modify it! It is a version guard to
+ * act as a reminder to update this struct on Python version update! */
+#if (PY_MAJOR_VERSION == 3)
+#if ! ((PY_MINOR_VERSION == 8) || (PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11))
+#error "Python minor version is not supported."
+#endif
+#else
+#error "Python major version is not supported."
+#endif
+/* END WARNING*/
 };
 
 /* A closure object is created for each call to make_function(), and stored
@@ -179,43 +214,78 @@ closure_dealloc(ClosureObject *clo)
 
 static PyTypeObject ClosureType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    "_dynfunc._Closure",    /*tp_name*/
-    sizeof(ClosureObject),     /*tp_basicsize*/
-    0,                         /*tp_itemsize*/
-    (destructor) closure_dealloc, /*tp_dealloc*/
-    0,                         /*tp_print*/
-    0,                         /*tp_getattr*/
-    0,                         /*tp_setattr*/
-    0,                         /*tp_compare*/
-    0,                         /*tp_repr*/
-    0,                         /*tp_as_number*/
-    0,                         /*tp_as_sequence*/
-    0,                         /*tp_as_mapping*/
-    0,                         /*tp_hash */
-    0,                         /*tp_call*/
-    0,                         /*tp_str*/
-    0,                         /*tp_getattro*/
-    0,                         /*tp_setattro*/
-    0,                         /*tp_as_buffer*/
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC, /*tp_flags*/
-    0,                         /* tp_doc */
-    (traverseproc) closure_traverse, /* tp_traverse */
-    0,                         /* tp_clear */
-    0,                         /* tp_richcompare */
-    offsetof(ClosureObject, weakreflist), /* tp_weaklistoffset */
-    0,                         /* tp_iter */
-    0,                         /* tp_iternext */
-    0,                         /* tp_methods */
-    0,                         /* tp_members */
-    0,                         /* tp_getset */
-    0,                         /* tp_base */
-    0,                         /* tp_dict */
-    0,                         /* tp_descr_get */
-    0,                         /* tp_descr_set */
-    0,                         /* tp_dictoffset */
-    0,                         /* tp_init */
-    0,                         /* tp_alloc */
-    0,                         /* tp_new */
+    "_dynfunc._Closure",                     /* tp_name */
+    sizeof(ClosureObject),                   /* tp_basicsize */
+    0,                                       /* tp_itemsize */
+    (destructor) closure_dealloc,            /* tp_dealloc */
+    0,                                       /* tp_vectorcall_offset */
+    0,                                       /* tp_getattr */
+    0,                                       /* tp_setattr */
+    0,                                       /* tp_as_async */
+    0,                                       /* tp_repr */
+    0,                                       /* tp_as_number */
+    0,                                       /* tp_as_sequence */
+    0,                                       /* tp_as_mapping */
+    0,                                       /* tp_hash */
+    0,                                       /* tp_call */
+    0,                                       /* tp_str */
+    0,                                       /* tp_getattro */
+    0,                                       /* tp_setattro */
+    0,                                       /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC, /* tp_flags */
+    0,                                       /* tp_doc */
+    (traverseproc) closure_traverse,         /* tp_traverse */
+    0,                                       /* tp_clear */
+    0,                                       /* tp_richcompare */
+    offsetof(ClosureObject, weakreflist),    /* tp_weaklistoffset */
+    0,                                       /* tp_iter */
+    0,                                       /* tp_iternext */
+    0,                                       /* tp_methods */
+    0,                                       /* tp_members */
+    0,                                       /* tp_getset */
+    0,                                       /* tp_base */
+    0,                                       /* tp_dict */
+    0,                                       /* tp_descr_get */
+    0,                                       /* tp_descr_set */
+    0,                                       /* tp_dictoffset */
+    0,                                       /* tp_init */
+    0,                                       /* tp_alloc */
+    0,                                       /* tp_new */
+    0,                                       /* tp_free */
+    0,                                       /* tp_is_gc */
+    0,                                       /* tp_bases */
+    0,                                       /* tp_mro */
+    0,                                       /* tp_cache */
+    0,                                       /* tp_subclasses */
+    0,                                       /* tp_weaklist */
+    0,                                       /* tp_del */
+    0,                                       /* tp_version_tag */
+    0,                                       /* tp_finalize */
+/* The docs suggest Python 3.8 has no tp_vectorcall
+ * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Doc/c-api/typeobj.rst?plain=1#L146
+ * but the header has it:
+ * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Include/cpython/object.h#L257
+ */
+    0,                                       /* tp_vectorcall */
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 8)
+/* This is Python 3.8 only.
+ * See: https://github.com/python/cpython/blob/3.8/Include/cpython/object.h
+ * there's a tp_print preserved for backwards compatibility. xref:
+ * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Include/cpython/object.h#L260
+ */
+    0,                                       /* tp_print */
+#endif
+
+/* WARNING: Do not remove this, only modify it! It is a version guard to
+ * act as a reminder to update this struct on Python version update! */
+#if (PY_MAJOR_VERSION == 3)
+#if ! ((PY_MINOR_VERSION == 8) || (PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10 || (PY_MINOR_VERSION == 11)))
+#error "Python minor version is not supported."
+#endif
+#else
+#error "Python major version is not supported."
+#endif
+/* END WARNING*/
 };
 
 
@@ -242,8 +312,8 @@ dup_string(PyObject *strobj)
 
 /* Create and initialize a new Closure object */
 static ClosureObject *
-closure_new(PyObject *module, PyObject *name, PyObject *doc,
-            PyCFunction fnaddr, EnvironmentObject *env, PyObject *keepalive)
+closure_new(PyObject *name, PyObject *doc, PyCFunction fnaddr,
+            EnvironmentObject *env, PyObject *keepalive)
 {
     ClosureObject *clo = (ClosureObject *) PyType_GenericAlloc(&ClosureType, 0);
     if (clo == NULL)
@@ -278,7 +348,7 @@ pycfunction_new(PyObject *module, PyObject *name, PyObject *doc,
     PyObject *modname = NULL;
     ClosureObject *closure = NULL;
 
-    closure = closure_new(module, name, doc, fnaddr, env, keepalive);
+    closure = closure_new(name, doc, fnaddr, env, keepalive);
     if (closure == NULL) goto FAIL;
 
     modname = PyObject_GetAttrString(module, "__name__");
@@ -344,13 +414,7 @@ generator_dealloc(GeneratorObject *gen)
         PyObject_ClearWeakRefs((PyObject *) gen);
     /* XXX The finalizer may be called after the LLVM module has been
        destroyed (typically at interpreter shutdown) */
-#if PY_MAJOR_VERSION >= 3
-#if PY_MINOR_VERSION >= 7
     if (!_Py_IsFinalizing())
-#else
-    if (!_Py_Finalizing)
-#endif
-#endif
         if (gen->finalizer != NULL)
             gen->finalizer(gen->state);
     Py_XDECREF(gen->env);
@@ -380,10 +444,10 @@ static PyTypeObject GeneratorType = {
     offsetof(GeneratorObject, state),         /* tp_basicsize*/
     1,                                        /* tp_itemsize*/
     (destructor) generator_dealloc,           /* tp_dealloc*/
-    0,                                        /* tp_print*/
+    0,                                        /* tp_vectorcall_offset*/
     0,                                        /* tp_getattr*/
     0,                                        /* tp_setattr*/
-    0,                                        /* tp_compare*/
+    0,                                        /* tp_as_async*/
     0,                                        /* tp_repr*/
     0,                                        /* tp_as_number*/
     0,                                        /* tp_as_sequence*/
@@ -395,7 +459,7 @@ static PyTypeObject GeneratorType = {
     0,                                        /* tp_setattro*/
     0,                                        /* tp_as_buffer*/
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC
-                       | Py_TPFLAGS_BASETYPE,  /* tp_flags*/
+                       | Py_TPFLAGS_BASETYPE, /* tp_flags*/
     0,                                        /* tp_doc */
     (traverseproc) generator_traverse,        /* tp_traverse */
     (inquiry) generator_clear,                /* tp_clear */
@@ -414,6 +478,41 @@ static PyTypeObject GeneratorType = {
     0,                                        /* tp_init */
     0,                                        /* tp_alloc */
     0,                                        /* tp_new */
+    0,                                        /* tp_free */
+    0,                                        /* tp_is_gc */
+    0,                                        /* tp_bases */
+    0,                                        /* tp_mro */
+    0,                                        /* tp_cache */
+    0,                                        /* tp_subclasses */
+    0,                                        /* tp_weaklist */
+    0,                                        /* tp_del */
+    0,                                        /* tp_version_tag */
+    0,                                        /* tp_finalize */
+/* The docs suggest Python 3.8 has no tp_vectorcall
+ * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Doc/c-api/typeobj.rst?plain=1#L146
+ * but the header has it:
+ * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Include/cpython/object.h#L257
+ */
+    0,                                        /* tp_vectorcall */
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 8)
+/* This is Python 3.8 only.
+ * See: https://github.com/python/cpython/blob/3.8/Include/cpython/object.h
+ * there's a tp_print preserved for backwards compatibility. xref:
+ * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Include/cpython/object.h#L260
+ */
+    0,                                        /* tp_print */
+#endif
+
+/* WARNING: Do not remove this, only modify it! It is a version guard to
+ * act as a reminder to update this struct on Python version update! */
+#if (PY_MAJOR_VERSION == 3)
+#if ! ((PY_MINOR_VERSION == 8) || (PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11))
+#error "Python minor version is not supported."
+#endif
+#else
+#error "Python major version is not supported."
+#endif
+/* END WARNING*/
 };
 
 /* Dynamically create a new generator object */

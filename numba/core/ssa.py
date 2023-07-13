@@ -28,16 +28,20 @@ def reconstruct_ssa(func_ir):
 
     Produces minimal SSA using Choi et al algorithm.
     """
-    _logger.debug("BEFORE SSA".center(80, "-"))
-    _logger.debug(func_ir.dump_to_string())
-    _logger.debug("=" * 80)
-
     func_ir.blocks = _run_ssa(func_ir.blocks)
 
-    _logger.debug("AFTER SSA".center(80, "-"))
-    _logger.debug(func_ir.dump_to_string())
-    _logger.debug("=" * 80)
     return func_ir
+
+
+class _CacheListVars:
+    def __init__(self):
+        self._saved = {}
+
+    def get(self, inst):
+        got = self._saved.get(inst)
+        if got is None:
+            self._saved[inst] = got = inst.list_vars()
+        return got
 
 
 def _run_ssa(blocks):
@@ -46,9 +50,14 @@ def _run_ssa(blocks):
     if not blocks:
         # Empty blocks?
         return {}
-
+    # Run CFG on the blocks
+    cfg = compute_cfg_from_blocks(blocks)
+    df_plus = _iterated_domfronts(cfg)
     # Find SSA violators
     violators = _find_defs_violators(blocks)
+    # Make cache for .list_vars()
+    cache_list_vars = _CacheListVars()
+
     # Process one SSA-violating variable at a time
     for varname in violators:
         _logger.debug(
@@ -60,58 +69,33 @@ def _run_ssa(blocks):
         _logger.debug("Replaced assignments: %s", pformat(defmap))
         # Fix up the RHS
         # Re-associate the variable uses with the reaching definition
-        blocks = _fix_ssa_vars(blocks, varname, defmap)
+        blocks = _fix_ssa_vars(blocks, varname, defmap, cfg, df_plus,
+                               cache_list_vars)
+
+    # Post-condition checks.
+    # CFG invariant
+    cfg_post = compute_cfg_from_blocks(blocks)
+    if cfg_post != cfg:
+        raise errors.CompilerError("CFG mutated in SSA pass")
     return blocks
 
 
-def _fix_ssa_vars(blocks, varname, defmap):
+def _fix_ssa_vars(blocks, varname, defmap, cfg, df_plus, cache_list_vars):
     """Rewrite all uses to ``varname`` given the definition map
     """
     states = _make_states(blocks)
     states['varname'] = varname
     states['defmap'] = defmap
     states['phimap'] = phimap = defaultdict(list)
-    states['cfg'] = cfg = compute_cfg_from_blocks(blocks)
-    states['df+'] = _iterated_domfronts(cfg)
-    newblocks = _run_block_rewrite(blocks, states, _FixSSAVars())
-    # check for unneeded phi nodes
-    _remove_unneeded_phis(phimap)
+    states['cfg'] = cfg
+    states['phi_locations'] = _compute_phi_locations(df_plus, defmap)
+    newblocks = _run_block_rewrite(blocks, states, _FixSSAVars(cache_list_vars))
     # insert phi nodes
     for label, philist in phimap.items():
         curblk = newblocks[label]
         # Prepend PHI nodes to the block
         curblk.body = philist + curblk.body
     return newblocks
-
-
-def _remove_unneeded_phis(phimap):
-    """Remove unneeded PHIs from the phimap
-    """
-    all_phis = []
-    for philist in phimap.values():
-        all_phis.extend(philist)
-    unneeded_phis = set()
-    # Find unneeded PHIs.
-    for phi in all_phis:
-        ivs = phi.value.incoming_values
-        # It's unneeded if the incomings are either undefined or
-        # the PHI node target is itself
-        if all(iv is ir.UNDEFINED or iv == phi.target for iv in ivs):
-            unneeded_phis.add(phi)
-    # Fix up references to unneeded PHIs
-    for phi in all_phis:
-        for unneed in unneeded_phis:
-            if unneed is not phi:
-                # If the unneeded PHI is in the current phi's incoming values
-                if unneed.target in phi.value.incoming_values:
-                    # Replace the unneeded PHI with an UNDEFINED
-                    idx = phi.value.incoming_values.index(unneed.target)
-                    phi.value.incoming_values[idx] = ir.UNDEFINED
-    # Remove unneeded phis
-    for philist in phimap.values():
-        for unneeded in unneeded_phis:
-            if unneeded in philist:
-                philist.remove(unneeded)
 
 
 def _iterated_domfronts(cfg):
@@ -130,6 +114,17 @@ def _iterated_domfronts(cfg):
                 vs |= inner
                 keep_going = True
     return domfronts
+
+
+def _compute_phi_locations(iterated_df, defmap):
+    # See basic algorithm in Ch 4.1 in Inria SSA Book
+    # Compute DF+(defs)
+    # DF of all DFs is the union of all DFs
+    phi_locations = set()
+    for deflabel, defstmts in defmap.items():
+        if defstmts:
+            phi_locations |= iterated_df[deflabel]
+    return phi_locations
 
 
 def _fresh_vars(blocks, varname):
@@ -272,6 +267,10 @@ class _FreshVarHandler(_BaseHandler):
             if len(defmap) == 0:
                 newtarget = assign.target
                 _logger.debug("first assign: %s", newtarget)
+                if newtarget.name not in scope.localvars:
+                    wmsg = f"variable {newtarget.name!r} is not in scope."
+                    warnings.warn(errors.NumbaIRAssumptionWarning(wmsg,
+                                  loc=assign.loc))
             else:
                 newtarget = scope.redefine(assign.target.name, loc=assign.loc)
             assign = ir.Assign(
@@ -294,11 +293,15 @@ class _FixSSAVars(_BaseHandler):
     See Ch 5 of the Inria SSA book for reference. The method names used here
     are similar to the names used in the pseudocode in the book.
     """
+
+    def __init__(self, cache_list_vars):
+        self._cache_list_vars = cache_list_vars
+
     def on_assign(self, states, assign):
         rhs = assign.value
         if isinstance(rhs, ir.Inst):
             newdef = self._fix_var(
-                states, assign, assign.value.list_vars(),
+                states, assign, self._cache_list_vars.get(assign.value),
             )
             # Has a replacement that is not the current variable
             if newdef is not None and newdef.target is not ir.UNDEFINED:
@@ -315,23 +318,25 @@ class _FixSSAVars(_BaseHandler):
         elif isinstance(rhs, ir.Var):
             newdef = self._fix_var(states, assign, [rhs])
             # Has a replacement that is not the current variable
-            if newdef is not None and states['varname'] != newdef.target.name:
-                return ir.Assign(
-                    target=assign.target,
-                    value=newdef.target,
-                    loc=assign.loc,
-                )
+            if newdef is not None and newdef.target is not ir.UNDEFINED:
+                if states['varname'] != newdef.target.name:
+                    return ir.Assign(
+                        target=assign.target,
+                        value=newdef.target,
+                        loc=assign.loc,
+                    )
 
         return assign
 
     def on_other(self, states, stmt):
         newdef = self._fix_var(
-            states, stmt, stmt.list_vars(),
+            states, stmt, self._cache_list_vars.get(stmt),
         )
-        if newdef is not None and states['varname'] != newdef.target.name:
-            replmap = {states['varname']: newdef.target}
-            stmt = copy(stmt)
-            ir_utils.replace_vars_stmt(stmt, replmap)
+        if newdef is not None and newdef.target is not ir.UNDEFINED:
+            if states['varname'] != newdef.target.name:
+                replmap = {states['varname']: newdef.target}
+                stmt = copy(stmt)
+                ir_utils.replace_vars_stmt(stmt, replmap)
         return stmt
 
     def _fix_var(self, states, stmt, used_vars):
@@ -380,32 +385,31 @@ class _FixSSAVars(_BaseHandler):
         cfg = states['cfg']
         defmap = states['defmap']
         phimap = states['phimap']
-        domfronts = states['df+']
-        for deflabel, defstmt in defmap.items():
-            df = domfronts[deflabel]
-            if label in df:
-                scope = states['scope']
-                loc = states['block'].loc
-                # fresh variable
-                freshvar = scope.redefine(states['varname'], loc=loc)
-                # insert phi
-                phinode = ir.Assign(
-                    target=freshvar,
-                    value=ir.Expr.phi(loc=loc),
-                    loc=loc,
+        phi_locations = states['phi_locations']
+
+        if label in phi_locations:
+            scope = states['scope']
+            loc = states['block'].loc
+            # fresh variable
+            freshvar = scope.redefine(states['varname'], loc=loc)
+            # insert phi
+            phinode = ir.Assign(
+                target=freshvar,
+                value=ir.Expr.phi(loc=loc),
+                loc=loc,
+            )
+            _logger.debug("insert phi node %s at %s", phinode, label)
+            defmap[label].insert(0, phinode)
+            phimap[label].append(phinode)
+            # Find incoming values for the Phi node
+            for pred, _ in cfg.predecessors(label):
+                incoming_def = self._find_def_from_bottom(
+                    states, pred, loc=loc,
                 )
-                _logger.debug("insert phi node %s at %s", phinode, label)
-                defmap[label].insert(0, phinode)
-                phimap[label].append(phinode)
-                # Find incoming values for the Phi node
-                for pred, _ in cfg.predecessors(label):
-                    incoming_def = self._find_def_from_bottom(
-                        states, pred, loc=loc,
-                    )
-                    _logger.debug("incoming_def %s", incoming_def)
-                    phinode.value.incoming_values.append(incoming_def.target)
-                    phinode.value.incoming_blocks.append(pred)
-                return phinode
+                _logger.debug("incoming_def %s", incoming_def)
+                phinode.value.incoming_values.append(incoming_def.target)
+                phinode.value.incoming_blocks.append(pred)
+            return phinode
         else:
             idom = cfg.immediate_dominators()[label]
             if idom == label:
@@ -430,15 +434,18 @@ class _FixSSAVars(_BaseHandler):
             return self._find_def_from_top(states, label, loc=loc)
 
     def _stmt_index(self, defstmt, block, stop=-1):
-        """Find the postitional index of the statement at ``block``.
+        """Find the positional index of the statement at ``block``.
 
         Assumptions:
         - no two statements can point to the same object.
         """
-        try:
-            return block.body.index(defstmt, 0, stop)
-        except ValueError:
-            return len(block.body)
+        # Compare using id() as IR node equality is for semantic equivalence
+        # opposed to direct equality (the location and scope are not considered
+        # as part of the equality measure, this is important here).
+        for i in range(len(block.body))[:stop]:
+            if block.body[i] is defstmt:
+                return i
+        return len(block.body)
 
 
 def _warn_about_uninitialized_variable(varname, loc):

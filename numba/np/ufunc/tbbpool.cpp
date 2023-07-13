@@ -12,33 +12,27 @@ Implement parallel vectorize workqueue on top of Intel TBB.
 #undef _XOPEN_SOURCE
 #endif
 
+#include <tbb/version.h>
 #include <tbb/tbb.h>
 #include <string.h>
 #include <stdio.h>
+#include <thread>
 #include "workqueue.h"
 
 #include "gufunc_scheduler.h"
 
-/* TBB 2019 U5 is the minimum required version as this is needed:
- * https://github.com/intel/tbb/blob/18070344d755ece04d169e6cc40775cae9288cee/CHANGES#L133-L134
- * and therefore
- * https://github.com/intel/tbb/blob/18070344d755ece04d169e6cc40775cae9288cee/CHANGES#L128-L129
- * from here:
- * https://github.com/intel/tbb/blob/2019_U5/include/tbb/tbb_stddef.h#L29
- */
-#if TBB_INTERFACE_VERSION < 11006
-#error "TBB version is too old, 2019 update 5, i.e. TBB_INTERFACE_VERSION >= 11005 required"
+/* TBB 2021.6 is the minimum version */
+#if (TBB_INTERFACE_VERSION < 12060)
+#error "TBB version is incompatible, 2021.6 or greater required, i.e. TBB_INTERFACE_VERSION >= 12060"
 #endif
-
-#define TSI_INIT(count) tbb::task_scheduler_init(count)
-#define TSI_TERMINATE(tsi) tsi->blocking_terminate(std::nothrow)
 
 #define _DEBUG 0
 #define _TRACE_SPLIT 0
 
 static tbb::task_group *tg = NULL;
-static tbb::task_scheduler_init *tsi = NULL;
-static int tsi_count = 0;
+
+static tbb::task_scheduler_handle tsh;
+static bool tsh_was_initialized = false;
 
 #ifdef _MSC_VER
 #define THREAD_LOCAL(ty) __declspec(thread) ty
@@ -77,7 +71,16 @@ get_num_threads(void)
 static int
 get_thread_id(void)
 {
-    return tbb::task_arena::current_thread_index();
+    int tid = tbb::this_task_arena::current_thread_index();
+    // This function may be called from pure python or from a sequential JIT
+    // region, in either case, the task_arena may not be initialised. This
+    // condition is intercepted and a thread ID of 0 is returned.
+    if (tid == tbb::task_arena::not_initialized)
+    {
+        return 0;
+    } else {
+        return tid;
+    }
 }
 
 // watch the arena, if it decides to create more threads/add threads into the
@@ -202,12 +205,18 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
     });
 }
 
-void ignore_blocking_terminate_assertion( const char*, int, const char*, const char * )
+static std::thread::id init_thread_id;
+static THREAD_LOCAL(bool) need_reinit_after_fork = false;
+
+static void set_main_thread()
 {
-    tbb::internal::runtime_warning("Unable to wait for threads to shut down before fork(). It can break multithreading in child process\n");
+    init_thread_id = std::this_thread::get_id();
 }
 
-void ignore_assertion( const char*, int, const char*, const char * ) {}
+static bool is_main_thread()
+{
+    return std::this_thread::get_id() == init_thread_id;
+}
 
 static void prepare_fork(void)
 {
@@ -215,11 +224,25 @@ static void prepare_fork(void)
     {
         puts("Suspending TBB: prepare fork");
     }
-    if(tsi)
+    if (tsh_was_initialized)
     {
-        assertion_handler_type orig = tbb::set_assertion_handler(ignore_blocking_terminate_assertion);
-        TSI_TERMINATE(tsi);
-        tbb::set_assertion_handler(orig);
+        if(is_main_thread())
+        {
+            if (!tbb::finalize(tsh, std::nothrow))
+            {
+                tsh.release();
+                puts("Unable to join threads to shut down before fork(). "
+                     "This can break multithreading in child processes.\n");
+            }
+            tsh_was_initialized = false;
+            need_reinit_after_fork = true;
+        }
+        else
+        {
+            fprintf(stderr, "Numba: Attempted to fork from a non-main thread, "
+                            "the TBB library may be in an invalid state in the "
+                            "child process.\n");
+        }
     }
 }
 
@@ -229,14 +252,19 @@ static void reset_after_fork(void)
     {
         puts("Resuming TBB: after fork");
     }
-    if(tsi)
-        tsi->initialize(tsi_count);
+
+    if(need_reinit_after_fork)
+    {
+        tsh = tbb::attach();
+        set_main_thread();
+        tsh_was_initialized = true;
+        need_reinit_after_fork = false;
+    }
 }
 
-#if PY_MAJOR_VERSION >= 3
 static void unload_tbb(void)
 {
-    if(tsi)
+    if (tg)
     {
         if(_DEBUG)
         {
@@ -245,28 +273,35 @@ static void unload_tbb(void)
         tg->wait();
         delete tg;
         tg = NULL;
-        assertion_handler_type orig = tbb::set_assertion_handler(ignore_assertion);
-        tsi->terminate(); // no blocking terminate is needed here
-        tbb::set_assertion_handler(orig);
-        delete tsi;
-        tsi = NULL;
+    }
+    if (tsh_was_initialized)
+    {
+        // blocking terminate is not strictly required here, ignore return value
+        (void)tbb::finalize(tsh, std::nothrow);
+        tsh_was_initialized = false;
     }
 }
-#endif
 
 static void launch_threads(int count)
 {
-    if(tsi)
+    if(tg)
         return;
+
     if(_DEBUG)
         puts("Using TBB");
+
     if(count < 1)
-        count = tbb::task_scheduler_init::automatic;
-    tsi = new TSI_INIT(tsi_count = count);
+        count = tbb::task_arena::automatic;
+
+    tsh = tbb::attach();
+    tsh_was_initialized = true;
+
     tg = new tbb::task_group;
     tg->run([] {}); // start creating threads asynchronously
 
     _INIT_NUM_THREADS = count;
+
+    set_main_thread();
 
 #ifndef _MSC_VER
     pthread_atfork(prepare_fork, reset_after_fork, reset_after_fork);
@@ -282,41 +317,31 @@ static void ready(void)
 {
 }
 
-
 MOD_INIT(tbbpool)
 {
     PyObject *m;
     MOD_DEF(m, "tbbpool", "No docs", NULL)
     if (m == NULL)
         return MOD_ERROR_VAL;
-#if PY_MAJOR_VERSION >= 3
     PyModuleDef *md = PyModule_GetDef(m);
     if (md)
     {
         md->m_free = (freefunc)unload_tbb;
     }
-#endif
 
-    PyObject_SetAttrString(m, "launch_threads",
-                           PyLong_FromVoidPtr((void*)&launch_threads));
-    PyObject_SetAttrString(m, "synchronize",
-                           PyLong_FromVoidPtr((void*)&synchronize));
-    PyObject_SetAttrString(m, "ready",
-                           PyLong_FromVoidPtr((void*)&ready));
-    PyObject_SetAttrString(m, "add_task",
-                           PyLong_FromVoidPtr((void*)&add_task));
-    PyObject_SetAttrString(m, "parallel_for",
-                           PyLong_FromVoidPtr((void*)&parallel_for));
-    PyObject_SetAttrString(m, "do_scheduling_signed",
-                           PyLong_FromVoidPtr((void*)&do_scheduling_signed));
-    PyObject_SetAttrString(m, "do_scheduling_unsigned",
-                           PyLong_FromVoidPtr((void*)&do_scheduling_unsigned));
-    PyObject_SetAttrString(m, "set_num_threads",
-                           PyLong_FromVoidPtr((void*)&set_num_threads));
-    PyObject_SetAttrString(m, "get_num_threads",
-                           PyLong_FromVoidPtr((void*)&get_num_threads));
-    PyObject_SetAttrString(m, "get_thread_id",
-                           PyLong_FromVoidPtr((void*)&get_thread_id));
+    SetAttrStringFromVoidPointer(m, launch_threads);
+    SetAttrStringFromVoidPointer(m, synchronize);
+    SetAttrStringFromVoidPointer(m, ready);
+    SetAttrStringFromVoidPointer(m, add_task);
+    SetAttrStringFromVoidPointer(m, parallel_for);
+    SetAttrStringFromVoidPointer(m, do_scheduling_signed);
+    SetAttrStringFromVoidPointer(m, do_scheduling_unsigned);
+    SetAttrStringFromVoidPointer(m, set_num_threads);
+    SetAttrStringFromVoidPointer(m, get_num_threads);
+    SetAttrStringFromVoidPointer(m, get_thread_id);
+    SetAttrStringFromVoidPointer(m, set_parallel_chunksize);
+    SetAttrStringFromVoidPointer(m, get_parallel_chunksize);
+    SetAttrStringFromVoidPointer(m, get_sched_size);
 
     return MOD_SUCCESS_VAL(m);
 }

@@ -25,7 +25,7 @@ class TestStoreSlice(TestCase):
         obs_expected = obs_got.copy()
 
         flags = Flags()
-        flags.set("nrt")
+        flags.nrt = True
         cres = compile_isolated(usecase, (types.float64[:], types.intp),
                                 flags=flags)
         cres.entry_point(obs_got, n)

@@ -3,6 +3,75 @@
 Frequently Asked Questions
 ==========================
 
+Installation
+============
+
+Numba could not be imported
+---------------------------
+
+If you are seeing an exception on importing Numba with an error message
+that starts with::
+
+    ImportError: Numba could not be imported.
+
+here are some common issues and things to try to fix it.
+
+#. Your installation has more than one version of Numba a given environment.
+
+   Common ways this occurs include:
+
+   * Installing Numba with conda and then installing again with pip.
+   * Installing Numba with pip and then updating to a new version with pip (pip
+     re-installations don't seem to always clean up very well).
+
+   To fix this the best approach is to create an entirely new environment and
+   install a single version of Numba in that environment using a package manager
+   of your choice.
+
+#. Your installation has Numba for Python version X but you are running with
+   Python version Y.
+
+   This occurs due to a variety of Python environment mix-up/mismatch problems.
+   The most common mismatch comes from installing Numba into the
+   site-packages/environment of one version of Python by using a base or
+   system installation of Python that is a different version, this typically
+   happens through the use of the "wrong" ``pip`` binary. This will obviously
+   cause problems as the C-Extensions on which Numba relies are bound to
+   specific Python versions. A way to check if this likely the problem is to
+   see if the path to the ``python`` binary at::
+
+       python -c 'import sys; print(sys.executable)'
+
+   matches the path to your installation tool and/or matches the reported
+   installation location and if the Python versions match up across all of
+   these. Note that Python version ``X.Y.A`` is compatible with ``X.Y.B``.
+
+   To fix this the best approach is to create an entirely new environment and
+   ensure that the installation tool used to install Numba is the one from that
+   environment/the Python versions at install and run time match.
+
+#. Your core system libraries are too old.
+
+   This is a somewhat rare occurrence, but there are occasions when a very old
+   (typically out of support) version of Linux is in use it doesn't have a
+   ``glibc`` library with sufficiently new versioned symbols for Numba's shared
+   libraries to resolve against. The fix for this is to update your OS system
+   libraries/update your OS.
+
+#. You are using an IDE e.g. Spyder.
+
+   There are some unknown issues in relation to installing Numba via IDEs, but
+   it would appear that these are likely variations of 1. or 2. with the same
+   suggested fixes. Also, try installation from outside of the IDE with the
+   command line.
+
+
+If you have an installation problem which is not one of the above problems,
+please do ask on `numba.discourse.group <https://numba.discourse.group/>`_ and
+if possible include the path where Numba is installed and also the output of::
+
+    python -c 'import sys; print(sys.executable)'
+
 
 Programming
 ===========
@@ -102,8 +171,8 @@ Does Numba vectorize array computations (SIMD)?
 Numba doesn't implement such optimizations by itself, but it lets LLVM
 apply them.
 
-Why my loop is not vectorized?
-------------------------------
+Why has my loop not vectorized?
+-------------------------------
 
 Numba enables the loop-vectorize optimization in LLVM by default.
 While it is a powerful optimization, not all loops are applicable.
@@ -118,6 +187,12 @@ add the following lines:
 
 This tells LLVM to print debug information from the **loop-vectorize**
 pass to stderr.  Each function entry looks like:
+
+
+.. note::
+   Using ``--debug-only`` requires LLVM to be build with assertions enabled to
+   work. Use the build of llvmlite in the `Numba channel <https://anaconda.org/numba/llvmlite>`_
+   which is linked against LLVM with assertions enabled.
 
 .. code-block:: text
 
@@ -150,6 +225,16 @@ In this case, vectorization is rejected because the vectorized code may behave
 differently.  This is a case to try turning on ``fastmath=True`` to allow
 fastmath instructions.
 
+Why are the ``typed`` containers slower when used from the interpreter?
+-----------------------------------------------------------------------
+
+The Numba ``typed`` containers found in ``numba.typed`` e.g.
+``numba.typed.List`` store their data in an efficient form for access from JIT
+compiled code. When these containers are used from the CPython interpreter, the
+data involved has to be converted from/to the container format. This process is
+relatively costly and as a result impacts performance. In JIT compiled code no
+such penalty exists and so operations on the containers are much quicker and
+often faster than the pure Python equivalent.
 
 Does Numba automatically parallelize code?
 ------------------------------------------
@@ -196,8 +281,8 @@ A more radical alternative is :ref:`ahead-of-time compilation <pycc>`.
 GPU Programming
 ===============
 
-How do I work around the ``CUDA intialized before forking`` error?
-------------------------------------------------------------------
+How do I work around the ``CUDA initialized before forking`` error?
+-------------------------------------------------------------------
 
 On Linux, the ``multiprocessing`` module in the Python standard library
 defaults to using the ``fork`` method for creating new processes.  Because of
@@ -211,9 +296,9 @@ functions inside the child processes or after the process pool is created.
 However, this is not always possible, as you might want to query the number of
 available GPUs before starting the process pool.  In Python 3, you can change
 the process start method, as described in the `multiprocessing documentation
-<https://docs.python.org/3.6/library/multiprocessing.html#contexts-and-start-methods>`_.
+<https://docs.python.org/3.9/library/multiprocessing.html#contexts-and-start-methods>`_.
 Switching from ``fork`` to ``spawn`` or ``forkserver`` will avoid the CUDA
-initalization issue, although the child processes will not inherit any global
+initialization issue, although the child processes will not inherit any global
 variables from their parent.
 
 
@@ -264,6 +349,13 @@ value, for example::
    import locale
    locale.setlocale(locale.LC_NUMERIC, 'C')
 
+How do I get Numba development builds?
+--------------------------------------
+
+Pre-release versions of Numba can be installed with conda::
+
+    $ conda install -c numba/label/dev numba
+
 
 Miscellaneous
 =============
@@ -285,7 +377,37 @@ LLVM-based Python JIT compiler.
 you don't have access to the ACM site but would like to read the paper.
 
 Other related papers
---------------------
+~~~~~~~~~~~~~~~~~~~~
 A paper describing ParallelAccelerator technology, that is activated when the
 ``parallel=True`` jit option is used, can be found `here
 <http://drops.dagstuhl.de/opus/volltexte/2017/7269/pdf/LIPIcs-ECOOP-2017-4.pdf>`_.
+
+How do I write a minimal working reproducer for a problem with Numba?
+---------------------------------------------------------------------
+
+A minimal working reproducer for Numba should include:
+
+1. The source code of the function(s) that reproduce the problem.
+2. Some example data and a demonstration of calling the reproducing code with
+   that data. As Numba compiles based on type information, unless your problem
+   is numerical, it's fine to just provide dummy data of the right type, e.g.
+   use ``numpy.ones`` of the correct ``dtype``/size/shape for arrays.
+3. Ideally put 1. and 2. into a script with all the correct imports. Make sure
+   your script actually executes and reproduces the problem before submitting
+   it! The target is to make it so that the script can just be copied directly
+   from the `issue tracker <https://github.com/numba/numba/issues>`_ and run by
+   someone else such that they can see the same problem as you are having.
+
+Having made a reproducer, now remove every part of the code that does not
+contribute directly to reproducing the problem to create a "minimal" reproducer.
+This means removing imports that aren't used, removing variables that aren't
+used or have no effect, removing lines of code which have no effect, reducing
+the complexity of expressions, and shrinking input data to the minimal amount
+required to trigger the problem.
+
+Doing the above really helps out the Numba issue triage process and will enable
+a faster response to your problem!
+
+`Suggested further reading
+<http://matthewrocklin.com/blog/work/2018/02/28/minimal-bug-reports>`_ on
+writing minimal working reproducers.

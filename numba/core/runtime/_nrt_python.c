@@ -10,6 +10,7 @@
 #include <numpy/arrayscalars.h>
 
 #include "../../_arraystruct.h"
+#include "../../_numba_common.h"
 #include "nrt.h"
 
 
@@ -54,6 +55,8 @@ int MemInfo_init(MemInfoObject *self, PyObject *args, PyObject *kwds) {
         return -1;
     }
     raw_ptr = PyLong_AsVoidPtr(raw_ptr_obj);
+    NRT_Debug(nrt_debug_print("MemInfo_init self=%p raw_ptr=%p\n", self, raw_ptr));
+
     if(PyErr_Occurred()) return -1;
     self->meminfo = (NRT_MemInfo *)raw_ptr;
     assert (NRT_MemInfo_refcount(self->meminfo) > 0 && "0 refcount");
@@ -108,6 +111,26 @@ MemInfo_get_refcount(MemInfoObject *self, void *closure) {
     return PyLong_FromSize_t(refct);
 }
 
+static
+PyObject*
+MemInfo_get_external_allocator(MemInfoObject *self, void *closure) {
+    void *p = NRT_MemInfo_external_allocator(self->meminfo);
+    return PyLong_FromVoidPtr(p);
+}
+
+static
+PyObject*
+MemInfo_get_parent(MemInfoObject *self, void *closure) {
+    void *p = NRT_MemInfo_parent(self->meminfo);
+    if (p) {
+        Py_INCREF(p);
+        return (PyObject*)p;
+    } else {
+        Py_INCREF(Py_None);
+        return Py_None;
+    }
+}
+
 static void
 MemInfo_dealloc(MemInfoObject *self)
 {
@@ -135,31 +158,38 @@ static PyGetSetDef MemInfo_getsets[] = {
      (getter)MemInfo_get_refcount, NULL,
      "Get the refcount",
      NULL},
+    {"external_allocator",
+     (getter)MemInfo_get_external_allocator, NULL,
+     "Get the external allocator",
+     NULL},
+    {"parent",
+     (getter)MemInfo_get_parent, NULL,
+     NULL},
     {NULL}  /* Sentinel */
 };
 
 
 static PyTypeObject MemInfoType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    "_nrt_python._MemInfo",                   /* tp_name*/
-    sizeof(MemInfoObject),                    /* tp_basicsize*/
-    0,                                        /* tp_itemsize*/
-    (destructor)MemInfo_dealloc,              /* tp_dealloc*/
-    0,                                        /* tp_print*/
-    0,                                        /* tp_getattr*/
-    0,                                        /* tp_setattr*/
-    0,                                        /* tp_compare*/
-    0,                                        /* tp_repr*/
-    0,                                        /* tp_as_number*/
-    0,                                        /* tp_as_sequence*/
-    0,                                        /* tp_as_mapping*/
+    "_nrt_python._MemInfo",                   /* tp_name */
+    sizeof(MemInfoObject),                    /* tp_basicsize */
+    0,                                        /* tp_itemsize */
+    (destructor)MemInfo_dealloc,              /* tp_dealloc */
+    0,                                        /* tp_vectorcall_offset */
+    0,                                        /* tp_getattr */
+    0,                                        /* tp_setattr */
+    0,                                        /* tp_as_async */
+    0,                                        /* tp_repr */
+    0,                                        /* tp_as_number */
+    0,                                        /* tp_as_sequence */
+    0,                                        /* tp_as_mapping */
     0,                                        /* tp_hash */
-    0,                                        /* tp_call*/
-    0,                                        /* tp_str*/
-    0,                                        /* tp_getattro*/
-    0,                                        /* tp_setattro*/
-    &MemInfo_bufferProcs,                      /* tp_as_buffer*/
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,  /* tp_flags*/
+    0,                                        /* tp_call */
+    0,                                        /* tp_str */
+    0,                                        /* tp_getattro */
+    0,                                        /* tp_setattro */
+    &MemInfo_bufferProcs,                     /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /* tp_flags */
     0,                                        /* tp_doc */
     0,                                        /* tp_traverse */
     0,                                        /* tp_clear */
@@ -178,8 +208,42 @@ static PyTypeObject MemInfoType = {
     (initproc)MemInfo_init,                   /* tp_init */
     0,                                        /* tp_alloc */
     0,                                        /* tp_new */
-};
+    0,                                        /* tp_free */
+    0,                                        /* tp_is_gc */
+    0,                                        /* tp_bases */
+    0,                                        /* tp_mro */
+    0,                                        /* tp_cache */
+    0,                                        /* tp_subclasses */
+    0,                                        /* tp_weaklist */
+    0,                                        /* tp_del */
+    0,                                        /* tp_version_tag */
+    0,                                        /* tp_finalize */
+/* The docs suggest Python 3.8 has no tp_vectorcall
+ * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Doc/c-api/typeobj.rst?plain=1#L146
+ * but the header has it:
+ * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Include/cpython/object.h#L257
+ */
+    0,                                        /* tp_vectorcall */
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 8)
+/* This is Python 3.8 only.
+ * See: https://github.com/python/cpython/blob/3.8/Include/cpython/object.h
+ * there's a tp_print preserved for backwards compatibility. xref:
+ * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Include/cpython/object.h#L260
+ */
+    0,                                        /* tp_print */
+#endif
 
+/* WARNING: Do not remove this, only modify it! It is a version guard to
+ * act as a reminder to update this struct on Python version update! */
+#if (PY_MAJOR_VERSION == 3)
+#if ! ((PY_MINOR_VERSION == 8) || (PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11))
+#error "Python minor version is not supported."
+#endif
+#else
+#error "Python major version is not supported."
+#endif
+/* END WARNING*/
+};
 
 /*
 Return a MemInfo* as a MemInfoObject*
@@ -284,9 +348,23 @@ RETURN_ARRAY_COPY:
     return NULL;
 }
 
+/**
+ * This function is used during the boxing of ndarray type.
+ * `arystruct` is a structure containing essential information from the
+ *             unboxed array.
+ * `retty` is the subtype of the NumPy PyArray_Type this function should return.
+ *         This is related to `numba.core.types.Array.box_type`.
+ * `ndim` is the number of dimension of the array.
+ * `writeable` corresponds to the "writable" flag in NumPy ndarray.
+ * `descr` is the NumPy data type description.
+ *
+ * This function was renamed in 0.52.0 to specify that it acquires references.
+ * It used to steal the reference of the arystruct.
+ * Refer to https://github.com/numba/numba/pull/6446
+ */
 NUMBA_EXPORT_FUNC(PyObject *)
-NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
-                            int writeable, PyArray_Descr *descr)
+NRT_adapt_ndarray_to_python_acqref(arystruct_t* arystruct, PyTypeObject *retty,
+                            int ndim, int writeable, PyArray_Descr *descr)
 {
     PyArrayObject *array;
     MemInfoObject *miobj = NULL;
@@ -294,7 +372,13 @@ NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
     npy_intp *shape, *strides;
     int flags = 0;
 
-    if (!PyArray_DescrCheck(descr)) {
+    if (descr == NULL) {
+        PyErr_Format(PyExc_RuntimeError,
+                     "In 'NRT_adapt_ndarray_to_python', 'descr' is NULL");
+        return NULL;
+    }
+
+    if (!NUMBA_PyArray_DescrCheck(descr)) {
         PyErr_Format(PyExc_TypeError,
                      "expected dtype object, got '%.200s'",
                      Py_TYPE(descr)->tp_name);
@@ -304,9 +388,6 @@ NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
     if (arystruct->parent) {
         PyObject *obj = try_to_return_parent(arystruct, ndim, descr);
         if (obj) {
-            /* Release NRT reference to the numpy array */
-            if (arystruct->meminfo)
-                NRT_MemInfo_release(arystruct->meminfo);
             return obj;
         }
     }
@@ -317,10 +398,14 @@ NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
         args = PyTuple_New(1);
         /* SETITEM steals reference */
         PyTuple_SET_ITEM(args, 0, PyLong_FromVoidPtr(arystruct->meminfo));
+        NRT_Debug(nrt_debug_print("NRT_adapt_ndarray_to_python arystruct->meminfo=%p\n", arystruct->meminfo));
         /*  Note: MemInfo_init() does not incref.  This function steals the
-         *        NRT reference.
+         *        NRT reference, which we need to acquire.
          */
+        NRT_Debug(nrt_debug_print("NRT_adapt_ndarray_to_python_acqref created MemInfo=%p\n", miobj));
+        NRT_MemInfo_acquire(arystruct->meminfo);
         if (MemInfo_init(miobj, args, NULL)) {
+            NRT_Debug(nrt_debug_print("MemInfo_init failed.\n"));
             return NULL;
         }
         Py_DECREF(args);
@@ -329,7 +414,7 @@ NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
     shape = arystruct->shape_and_strides;
     strides = shape + ndim;
     Py_INCREF((PyObject *) descr);
-    array = (PyArrayObject *) PyArray_NewFromDescr(&PyArray_Type, descr, ndim,
+    array = (PyArrayObject *) PyArray_NewFromDescr(retty, descr, ndim,
                                                    shape, strides, arystruct->data,
                                                    flags, (PyObject *) miobj);
 

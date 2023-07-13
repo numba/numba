@@ -1,22 +1,13 @@
-import sys
 import numpy as np
 
 import unittest
-from numba.core.compiler import compile_isolated, Flags
 from numba import jit, njit
 from numba.core import types
 from numba.tests.support import TestCase, MemoryLeakMixin
-from numba import testing
 from numba.core.datamodel.testing import test_factory
 
-
-enable_pyobj_flags = Flags()
-enable_pyobj_flags.set("enable_pyobject")
-
-forceobj_flags = Flags()
-forceobj_flags.set("force_pyobject")
-
-no_pyobj_flags = Flags()
+forceobj_flags = {'nopython': False, 'forceobj': True}
+nopython_flags = {'nopython': True}
 
 
 def make_consumer(gen_func):
@@ -129,6 +120,19 @@ def gen_optional_and_type_unification_error():
         i = yield i
 
 
+def gen_changing_tuple_type():
+    # https://github.com/numba/numba/issues/7295
+    yield 1, 2
+    yield 3, 4
+
+
+def gen_changing_number_type():
+    # additional test for https://github.com/numba/numba/issues/7295
+    yield 1
+    yield 3.5
+    yield 67.8j
+
+
 class TestGenerators(MemoryLeakMixin, TestCase):
     def check_generator(self, pygen, cgen):
         self.assertEqual(next(cgen), next(pygen))
@@ -140,100 +144,97 @@ class TestGenerators(MemoryLeakMixin, TestCase):
         with self.assertRaises(StopIteration):
             next(cgen)
 
-    def check_gen1(self, flags=no_pyobj_flags):
+    def check_gen1(self, **kwargs):
         pyfunc = gen1
-        cr = compile_isolated(pyfunc, (types.int32,), flags=flags)
+        cr = jit((types.int32,), **kwargs)(pyfunc)
         pygen = pyfunc(8)
-        cgen = cr.entry_point(8)
+        cgen = cr(8)
         self.check_generator(pygen, cgen)
 
     def test_gen1(self):
-        self.check_gen1()
+        self.check_gen1(**nopython_flags)
 
     def test_gen1_objmode(self):
-        self.check_gen1(flags=forceobj_flags)
+        self.check_gen1(**forceobj_flags)
 
-    def check_gen2(self, flags=no_pyobj_flags):
+    def check_gen2(self, **kwargs):
         pyfunc = gen2
-        cr = compile_isolated(pyfunc, (types.int32,), flags=flags)
+        cr = jit((types.int32,), **kwargs)(pyfunc)
         pygen = pyfunc(8)
-        cgen = cr.entry_point(8)
+        cgen = cr(8)
         self.check_generator(pygen, cgen)
 
     def test_gen2(self):
-        self.check_gen2()
+        self.check_gen2(**nopython_flags)
 
     def test_gen2_objmode(self):
-        self.check_gen2(flags=forceobj_flags)
+        self.check_gen2(**forceobj_flags)
 
-    def check_gen3(self, flags=no_pyobj_flags):
+    def check_gen3(self, **kwargs):
         pyfunc = gen3
-        cr = compile_isolated(pyfunc, (types.int32,), flags=flags)
+        cr = jit((types.int32,), **kwargs)(pyfunc)
         pygen = pyfunc(8)
-        cgen = cr.entry_point(8)
+        cgen = cr(8)
         self.check_generator(pygen, cgen)
 
     def test_gen3(self):
-        self.check_gen3()
+        self.check_gen3(**nopython_flags)
 
     def test_gen3_objmode(self):
-        self.check_gen3(flags=forceobj_flags)
+        self.check_gen3(**forceobj_flags)
 
-    def check_gen4(self, flags=no_pyobj_flags):
+    def check_gen4(self, **kwargs):
         pyfunc = gen4
-        cr = compile_isolated(pyfunc, (types.int32,) * 3, flags=flags)
+        cr = jit((types.int32,) * 3, **kwargs)(pyfunc)
         pygen = pyfunc(5, 6, 7)
-        cgen = cr.entry_point(5, 6, 7)
+        cgen = cr(5, 6, 7)
         self.check_generator(pygen, cgen)
 
     def test_gen4(self):
-        self.check_gen4()
+        self.check_gen4(**nopython_flags)
 
     def test_gen4_objmode(self):
-        self.check_gen4(flags=forceobj_flags)
+        self.check_gen4(**forceobj_flags)
 
     def test_gen5(self):
-        with self.assertTypingError() as cm:
-            compile_isolated(gen5, ())
+        with self.assertTypingError() as raises:
+            jit((), **nopython_flags)(gen5)
         self.assertIn("Cannot type generator: it does not yield any value",
-                      str(cm.exception))
+                      str(raises.exception))
 
     def test_gen5_objmode(self):
-        cr = compile_isolated(gen5, (), flags=forceobj_flags)
-        cgen = cr.entry_point()
+        cgen = jit((), **forceobj_flags)(gen5)()
         self.assertEqual(list(cgen), [])
         with self.assertRaises(StopIteration):
             next(cgen)
 
-    def check_gen6(self, flags=no_pyobj_flags):
-        pyfunc = gen6
-        cr = compile_isolated(pyfunc, (types.int32,) * 2, flags=flags)
-        cgen = cr.entry_point(5, 6)
+    def check_gen6(self, **kwargs):
+        cr = jit((types.int32,) * 2, **kwargs)(gen6)
+        cgen = cr(5, 6)
         l = []
         for i in range(3):
             l.append(next(cgen))
         self.assertEqual(l, [14] * 3)
 
     def test_gen6(self):
-        self.check_gen6()
+        self.check_gen6(**nopython_flags)
 
     def test_gen6_objmode(self):
-        self.check_gen6(flags=forceobj_flags)
+        self.check_gen6(**forceobj_flags)
 
-    def check_gen7(self, flags=no_pyobj_flags):
+    def check_gen7(self, **kwargs):
         pyfunc = gen7
-        cr = compile_isolated(pyfunc, (types.Array(types.float64, 1, 'C'),),
-                              flags=flags)
+        cr = jit((types.Array(types.float64, 1, 'C'),), **kwargs)(pyfunc)
         arr = np.linspace(1, 10, 7)
         pygen = pyfunc(arr.copy())
-        cgen = cr.entry_point(arr)
+        cgen = cr(arr)
         self.check_generator(pygen, cgen)
 
     def test_gen7(self):
-        self.check_gen7()
+        self.check_gen7(**nopython_flags)
 
     def test_gen7_objmode(self):
-        self.check_gen7(flags=forceobj_flags)
+        self.check_gen7(**forceobj_flags)
 
     def check_gen8(self, **jit_args):
         pyfunc = gen8
@@ -254,18 +255,18 @@ class TestGenerators(MemoryLeakMixin, TestCase):
     def test_gen8_objmode(self):
         self.check_gen8(forceobj=True)
 
-    def check_gen9(self, flags=no_pyobj_flags):
+    def check_gen9(self, **kwargs):
         pyfunc = gen_bool
-        cr = compile_isolated(pyfunc, (), flags=flags)
+        cr = jit((), **kwargs)(pyfunc)
         pygen = pyfunc()
-        cgen = cr.entry_point()
+        cgen = cr()
         self.check_generator(pygen, cgen)
 
     def test_gen9(self):
-        self.check_gen9(flags=no_pyobj_flags)
+        self.check_gen9(**nopython_flags)
 
     def test_gen9_objmode(self):
-        self.check_gen9(flags=forceobj_flags)
+        self.check_gen9(**forceobj_flags)
 
     def check_consume_generator(self, gen_func):
         cgen = jit(nopython=True)(gen_func)
@@ -286,69 +287,71 @@ class TestGenerators(MemoryLeakMixin, TestCase):
 
     # Check generator storage of some types
 
-    def check_ndindex(self, flags=no_pyobj_flags):
+    def check_ndindex(self, **kwargs):
         pyfunc = gen_ndindex
-        cr = compile_isolated(pyfunc, (types.UniTuple(types.intp, 2),),
-                              flags=flags)
+        cr = jit((types.UniTuple(types.intp, 2),), **kwargs)(pyfunc)
         shape = (2, 3)
         pygen = pyfunc(shape)
-        cgen = cr.entry_point(shape)
+        cgen = cr(shape)
         self.check_generator(pygen, cgen)
 
     def test_ndindex(self):
-        self.check_ndindex()
+        self.check_ndindex(**nopython_flags)
 
     def test_ndindex_objmode(self):
-        self.check_ndindex(flags=forceobj_flags)
+        self.check_ndindex(**forceobj_flags)
 
-    def check_np_flat(self, pyfunc, flags=no_pyobj_flags):
-        cr = compile_isolated(pyfunc, (types.Array(types.int32, 2, "C"),),
-                              flags=flags)
+    def check_np_flat(self, pyfunc, **kwargs):
+        cr = jit((types.Array(types.int32, 2, "C"),), **kwargs)(pyfunc)
         arr = np.arange(6, dtype=np.int32).reshape((2, 3))
-        self.check_generator(pyfunc(arr), cr.entry_point(arr))
-        cr = compile_isolated(pyfunc, (types.Array(types.int32, 2, "A"),),
-                              flags=flags)
+        self.check_generator(pyfunc(arr), cr(arr))
+        crA = jit((types.Array(types.int32, 2, "A"),), **kwargs)(pyfunc)
         arr = arr.T
-        self.check_generator(pyfunc(arr), cr.entry_point(arr))
+        self.check_generator(pyfunc(arr), crA(arr))
 
     def test_np_flat(self):
-        self.check_np_flat(gen_flat)
+        self.check_np_flat(gen_flat, **nopython_flags)
 
     def test_np_flat_objmode(self):
-        self.check_np_flat(gen_flat, flags=forceobj_flags)
+        self.check_np_flat(gen_flat, **forceobj_flags)
 
     def test_ndenumerate(self):
-        self.check_np_flat(gen_ndenumerate)
+        self.check_np_flat(gen_ndenumerate, **nopython_flags)
 
     def test_ndenumerate_objmode(self):
-        self.check_np_flat(gen_ndenumerate, flags=forceobj_flags)
+        self.check_np_flat(gen_ndenumerate, **forceobj_flags)
 
     def test_type_unification_error(self):
         pyfunc = gen_unification_error
-        with self.assertTypingError() as e:
-            compile_isolated(pyfunc, (), flags=no_pyobj_flags)
+        with self.assertTypingError() as raises:
+            jit((), **nopython_flags)(pyfunc)
 
         msg = ("Can't unify yield type from the following types: complex128, "
                "none")
-        self.assertIn(msg, str(e.exception))
+        self.assertIn(msg, str(raises.exception))
 
     def test_optional_expansion_type_unification_error(self):
         pyfunc = gen_optional_and_type_unification_error
-        with self.assertTypingError() as e:
-            compile_isolated(pyfunc, (), flags=no_pyobj_flags)
+        with self.assertTypingError() as raises:
+            jit((), **nopython_flags)(pyfunc)
 
         msg = ("Can't unify yield type from the following types: complex128, "
                "int%s, none")
-        self.assertIn(msg % types.intp.bitwidth, str(e.exception))
+        self.assertIn(msg % types.intp.bitwidth, str(raises.exception))
 
+    def test_changing_tuple_type(self):
+        # test https://github.com/numba/numba/issues/7295
+        pyfunc = gen_changing_tuple_type
+        expected = list(pyfunc())
+        got = list(njit(pyfunc)())
+        self.assertEqual(expected, got)
 
-class TestGenExprs(MemoryLeakMixin, TestCase):
-    @testing.allow_interpreter_mode
-    def test_return_generator_expr(self):
-        pyfunc = return_generator_expr
-        cr = compile_isolated(pyfunc, ())
-        cfunc = cr.entry_point
-        self.assertEqual(sum(cfunc([1, 2, 3])), sum(pyfunc([1, 2, 3])))
+    def test_changing_number_type(self):
+        # additional test for https://github.com/numba/numba/issues/7295
+        pyfunc = gen_changing_number_type
+        expected = list(pyfunc())
+        got = list(njit(pyfunc)())
+        self.assertEqual(expected, got)
 
 
 def nrt_gen0(ary):
@@ -376,8 +379,7 @@ class TestNrtArrayGen(MemoryLeakMixin, TestCase):
         np.testing.assert_equal(py_ary, c_ary)
         self.assertEqual(py_res, c_res)
         # Check reference count
-        self.assertEqual(sys.getrefcount(py_ary),
-                         sys.getrefcount(c_ary))
+        self.assertRefCountEqual(py_ary, c_ary)
 
     def test_nrt_gen1(self):
         pygen = nrt_gen1
@@ -396,10 +398,8 @@ class TestNrtArrayGen(MemoryLeakMixin, TestCase):
         np.testing.assert_equal(py_ary2, c_ary2)
         self.assertEqual(py_res, c_res)
         # Check reference count
-        self.assertEqual(sys.getrefcount(py_ary1),
-                         sys.getrefcount(c_ary1))
-        self.assertEqual(sys.getrefcount(py_ary2),
-                         sys.getrefcount(c_ary2))
+        self.assertRefCountEqual(py_ary1, c_ary1)
+        self.assertRefCountEqual(py_ary2, c_ary2)
 
     def test_combine_gen0_gen1(self):
         """
@@ -439,8 +439,7 @@ class TestNrtArrayGen(MemoryLeakMixin, TestCase):
         np.testing.assert_equal(py_ary, c_ary)
         self.assertEqual(py_res, c_res)
         # Check reference count
-        self.assertEqual(sys.getrefcount(py_ary),
-                         sys.getrefcount(c_ary))
+        self.assertRefCountEqual(py_ary, c_ary)
 
     def test_nrt_gen0_no_iter(self):
         """
@@ -462,8 +461,7 @@ class TestNrtArrayGen(MemoryLeakMixin, TestCase):
         np.testing.assert_equal(py_ary, c_ary)
 
         # Check reference count
-        self.assertEqual(sys.getrefcount(py_ary),
-                         sys.getrefcount(c_ary))
+        self.assertRefCountEqual(py_ary, c_ary)
 
 
 # TODO: fix nested generator and MemoryLeakMixin
@@ -495,8 +493,7 @@ class TestNrtNestedGen(TestCase):
 
         np.testing.assert_equal(py_res, c_res)
 
-        self.assertEqual(sys.getrefcount(py_res),
-                         sys.getrefcount(c_res))
+        self.assertRefCountEqual(py_res, c_res)
 
         # The below test will fail due to generator finalizer not invoked.
         # This kept a reference of the c_old.
@@ -526,8 +523,7 @@ class TestNrtNestedGen(TestCase):
         self.assertIs(py_old, py_arr)
         self.assertIs(c_old, c_arr)
 
-        self.assertEqual(sys.getrefcount(py_old),
-                         sys.getrefcount(c_old))
+        self.assertRefCountEqual(py_old, c_old)
 
     def test_nrt_nested_nopython_gen(self):
         """

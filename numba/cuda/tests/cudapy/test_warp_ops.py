@@ -91,13 +91,6 @@ def use_independent_scheduling(arr):
     arr[i] = ballot
 
 
-def _safe_skip():
-    if config.ENABLE_CUDASIM:
-        return False
-    else:
-        return cuda.cudadrv.nvvm.NVVM_VERSION >= (1, 4)
-
-
 def _safe_cc_check(cc):
     if config.ENABLE_CUDASIM:
         return True
@@ -105,9 +98,7 @@ def _safe_cc_check(cc):
         return cuda.get_current_device().compute_capability >= cc
 
 
-@unittest.skipUnless(_safe_skip(),
-                     "Warp Operations require at least CUDA 9"
-                     "and are not yet implemented for the CudaSim")
+@skip_on_cudasim("Warp Operations are not yet implemented on cudasim")
 class TestCudaWarpOperations(CUDATestCase):
     def test_useful_syncwarp(self):
         compiled = cuda.jit("void(int32[:])")(useful_syncwarp)
@@ -155,7 +146,8 @@ class TestCudaWarpOperations(CUDATestCase):
 
     def test_shfl_sync_types(self):
         types = int32, int64, float32, float64
-        values = np.int32(-1), np.int64(1 << 42), np.float32(np.pi), np.float64(np.pi)
+        values = (np.int32(-1), np.int64(1 << 42),
+                  np.float32(np.pi), np.float64(np.pi))
         for typ, val in zip(types, values):
             compiled = cuda.jit((typ[:], typ))(use_shfl_sync_with_val)
             nelem = 32
@@ -232,13 +224,52 @@ class TestCudaWarpOperations(CUDATestCase):
         self.assertTrue(np.all(ary_out == 0))
 
     @unittest.skipUnless(_safe_cc_check((7, 0)),
-                         "Independent scheduling requires at least Volta Architecture")
+                         "Independent scheduling requires at least Volta "
+                         "Architecture")
     def test_independent_scheduling(self):
         compiled = cuda.jit("void(uint32[:])")(use_independent_scheduling)
         arr = np.empty(32, dtype=np.uint32)
         exp = np.tile((0x11111111, 0x22222222, 0x44444444, 0x88888888), 8)
         compiled[1, 32](arr)
         self.assertTrue(np.all(arr == exp))
+
+    def test_activemask(self):
+        @cuda.jit
+        def use_activemask(x):
+            i = cuda.grid(1)
+            if (i % 2) == 0:
+                # Even numbered threads fill in even numbered array entries
+                # with binary "...01010101"
+                x[i] = cuda.activemask()
+            else:
+                # Odd numbered threads fill in odd numbered array entries
+                # with binary "...10101010"
+                x[i] = cuda.activemask()
+
+        out = np.zeros(32, dtype=np.uint32)
+        use_activemask[1, 32](out)
+
+        # 0x5 = 0101: The pattern from even-numbered threads
+        # 0xA = 1010: The pattern from odd-numbered threads
+        expected = np.tile((0x55555555, 0xAAAAAAAA), 16)
+        np.testing.assert_equal(expected, out)
+
+    def test_lanemask_lt(self):
+        @cuda.jit
+        def use_lanemask_lt(x):
+            i = cuda.grid(1)
+            x[i] = cuda.lanemask_lt()
+
+        out = np.zeros(32, dtype=np.uint32)
+        use_lanemask_lt[1, 32](out)
+
+        # A string of 1s that grows from the LSB for each entry:
+        # 0, 1, 3, 7, F, 1F, 3F, 7F, FF, 1FF, etc.
+        # or in binary:
+        # ...0001, ....0011, ...0111, etc.
+        expected = np.asarray([(2 ** i) - 1 for i in range(32)],
+                              dtype=np.uint32)
+        np.testing.assert_equal(expected, out)
 
 
 if __name__ == '__main__':

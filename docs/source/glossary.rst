@@ -33,6 +33,7 @@ Glossary
       Shorthand for "a function :term:`JIT-compiled <JIT>` with Numba using
       the :ref:`@jit <jit>` decorator."
 
+   lifted loops
    loop-lifting
    loop-jitting
       A feature of compilation in :term:`object mode` where a loop can be
@@ -46,6 +47,7 @@ Glossary
       "lowering" stems from the fact that LLVM IR is low-level and
       machine-specific while Numba IR is high-level and abstract.
 
+   NPM
    nopython mode
       A Numba compilation mode that generates code that does not access the
       Python C API.  This compilation mode produces the highest performance

@@ -1,5 +1,5 @@
-from llvmlite.llvmpy.core import Type, Builder, Constant
-import llvmlite.llvmpy.core as lc
+from llvmlite.ir import Constant, IRBuilder
+import llvmlite.ir
 
 from numba.core import types, config, cgutils
 
@@ -104,10 +104,10 @@ class PyCallWrapper(object):
         # This is the signature of PyCFunctionWithKeywords
         # (see CPython's methodobject.h)
         pyobj = self.context.get_argument_type(types.pyobject)
-        wrapty = Type.function(pyobj, [pyobj, pyobj, pyobj])
-        wrapper = self.module.add_function(wrapty, name=wrapname)
+        wrapty = llvmlite.ir.FunctionType(pyobj, [pyobj, pyobj, pyobj])
+        wrapper = llvmlite.ir.Function(self.module, wrapty, name=wrapname)
 
-        builder = Builder(wrapper.append_basic_block('entry'))
+        builder = IRBuilder(wrapper.append_basic_block('entry'))
 
         # - `closure` will receive the `self` pointer stored in the
         #   PyCFunction object (see _dynfunc.c)
@@ -130,7 +130,10 @@ class PyCallWrapper(object):
         parseok = api.unpack_tuple(args, self.fndesc.qualname,
                                    nargs, nargs, *objs)
 
-        pred = builder.icmp(lc.ICMP_EQ, parseok, Constant.null(parseok.type))
+        pred = builder.icmp_unsigned(
+            '==',
+            parseok,
+            Constant(parseok.type, None))
         with cgutils.if_unlikely(builder, pred):
             builder.ret(api.get_null_object())
 
@@ -158,9 +161,20 @@ class PyCallWrapper(object):
         if self.release_gil:
             cleanup_manager = _GilManager(builder, api, cleanup_manager)
 
+        # We elect to not inline the top level user function into the call
+        # wrapper, this incurs an overhead of a function call, however, it
+        # increases optimisation stability in that the optimised user function
+        # is what will actually be run and it is this function that all the
+        # inspection tools "see". Further, this makes optimisation "stable" in
+        # that calling the user function from e.g. C or from this wrapper will
+        # result in the same code executing, were inlining permitted this may
+        # not be the case as the inline could trigger additional optimisation
+        # as the function goes into the wrapper, this resulting in the executing
+        # instruction stream being different from that of the instruction stream
+        # present in the user function.
         status, retval = self.context.call_conv.call_function(
             builder, self.func, self.fndesc.restype, self.fndesc.argtypes,
-            innerargs)
+            innerargs, attrs=('noinline',))
         # Do clean up
         self.debug_print(builder, "# callwrapper: emit_cleanup")
         cleanup_manager.emit_cleanup()
@@ -190,7 +204,8 @@ class PyCallWrapper(object):
 
         env_body = self.context.get_env_body(builder, envptr)
 
-        api.emit_environment_sentry(envptr, return_pyobject=True)
+        api.emit_environment_sentry(envptr, return_pyobject=True,
+                                    debug_msg=self.fndesc.env_name)
         env_manager = api.get_env_manager(self.env, env_body, envptr)
         return env_manager
 

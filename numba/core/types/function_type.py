@@ -4,7 +4,7 @@ __all__ = ['FunctionType', 'UndefinedFunctionType', 'FunctionPrototype',
 
 from abc import ABC, abstractmethod
 from .abstract import Type
-from .. import types
+from .. import types, errors
 
 
 class FunctionType(Type):
@@ -42,6 +42,17 @@ class FunctionType(Type):
 
     def get_call_type(self, context, args, kws):
         from numba.core import typing
+
+        if kws:
+            # First-class functions carry only the type signature
+            # information and function address value. So, it is not
+            # possible to determine the positional arguments
+            # corresponding to the keyword arguments in the call
+            # expression. For instance, the definition of the
+            # first-class function may not use the same argument names
+            # that the caller assumes. [numba/issues/5540].
+            raise errors.UnsupportedError(
+                'first-class function call cannot use keyword arguments')
 
         if len(args) != self.nargs:
             raise ValueError(
