@@ -5022,7 +5022,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             res = np_trim_zeros(arr, trim='b')
             self.assertPreciseEqual(res, arr[slc])
 
-
         # test_trailing_skip
         slc = np.s_[2:]
         for arr in values:
