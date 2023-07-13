@@ -5002,6 +5002,64 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc(arr, trim)
             self.assertPreciseEqual(expected, got)
 
+    def test_trim_zeros_NumPy(self):
+        # https://github.com/numpy/numpy/blob/9d8d46ad615a7e13256b930146ac369f651016c0/numpy/lib/tests/test_function_base.py#L1251-L1313
+        a = np.array([0, 0, 1, 0, 2, 3, 4, 0])
+        b = a.astype(float)
+        c = a.astype(complex)
+        # d = a.astype(object)
+        values = [a, b, c]
+
+        # test_basic
+        slc = np.s_[2:-1]
+        for arr in values:
+            res = np_trim_zeros(arr)
+            self.assertPreciseEqual(res, arr[slc])
+
+        # test_leading_skip
+        slc = np.s_[:-1]
+        for arr in values:
+            res = np_trim_zeros(arr, trim='b')
+            self.assertPreciseEqual(res, arr[slc])
+
+
+        # test_trailing_skip
+        slc = np.s_[2:]
+        for arr in values:
+            res = np_trim_zeros(arr, trim='F')
+            self.assertPreciseEqual(res, arr[slc])
+
+        # test_all_zero
+        for _arr in values:
+            arr = np.zeros_like(_arr, dtype=_arr.dtype)
+
+            res1 = np_trim_zeros(arr, trim='B')
+            assert len(res1) == 0
+
+            res2 = np_trim_zeros(arr, trim='f')
+            assert len(res2) == 0
+
+        # test_size_zero
+        arr = np.zeros(0)
+        res = np_trim_zeros(arr)
+        self.assertPreciseEqual(arr, res)
+
+        # test_overflow
+        for arr in [np.array([0, 2**62, 0]), np.array([0, 2**63, 0]),
+                    np.array([0, 2**64, 0])]:
+            slc = np.s_[1:2]
+            res = np_trim_zeros(arr)
+            self.assertPreciseEqual(res, arr[slc])
+
+        # test_no_trim
+        arr = np.array([None, 1, None])
+        res = np_trim_zeros(arr)
+        self.assertPreciseEqual(arr, res)
+
+        # test_list_to_list
+        res = np_trim_zeros(a.tolist())
+        assert isinstance(res, list)
+
     def test_trim_zeros_exceptions(self):
         self.disable_leak_check()
         cfunc = jit(nopython=True)(np_trim_zeros)
