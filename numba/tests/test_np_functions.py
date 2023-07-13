@@ -3045,11 +3045,18 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         def inputs():
             #start, stop
-            yield 1, 60
-            yield -60, -1
             yield -1, -60
             yield 1.0, 60.0
             yield -60.0, -1.0
+            yield 1, 1000
+            yield 1000, 1
+            yield 1, 256
+            yield -1000, -1
+            yield -1, np.complex64(2j)
+            yield np.complex64(2j), -1
+            yield -1.0, np.complex64(2j)
+            yield np.complex64(1j), np.complex64(1000j)
+            yield np.complex64(-1 + 0j), np.complex64(1 + 0j)
             yield np.complex64(1), np.complex64(2)
             yield np.complex64(2j), np.complex64(4j)
             yield np.complex64(2), np.complex64(4j)
@@ -3061,9 +3068,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
 
         for start, stop in inputs():
-            np.testing.assert_allclose(pyfunc(start, stop),
-                                       cfunc(start, stop),
-                                       rtol=1.05e-07)
+            self.assertPreciseEqual(pyfunc(start, stop),
+                                    cfunc(start, stop),
+                                    abs_tol=1e-06)
 
     def test_geomspace2_exception(self):
         cfunc = jit(nopython=True)(geomspace2)
@@ -3080,39 +3087,33 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertIn('The argument "stop" must be a number',
                       str(raises.exception))
 
+        with self.assertRaises(ValueError) as raises:
+            cfunc(0, 5)
+        self.assertIn('Geometric sequence cannot include zero',
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(5, 0)
+        self.assertIn('Geometric sequence cannot include zero',
+                      str(raises.exception))
+
     def test_geomspace3_basic(self):
 
         def inputs():
-            #start, stop
-            yield 1, 60
-            yield -60, -1
-            yield -1, -60
-            yield 1.0, 60.0
-            yield -60.0, -1.0
-            yield np.complex64(1), np.complex64(2)
-            yield np.complex64(2j), np.complex64(4j)
-            yield np.complex64(2), np.complex64(4j)
-            yield np.complex64(1 + 2j), np.complex64(3 + 4j)
-            yield np.complex64(1 - 2j), np.complex64(3 - 4j)
-            yield np.complex64(-1 + 2j), np.complex64(3 + 4j)
-
-        pyfunc = geomspace3
-        cfunc = jit(nopython=True)(pyfunc)
-
-        for start, stop in inputs():
-            np.testing.assert_allclose(pyfunc(start, stop),
-                                       cfunc(start, stop),
-                                       rtol=1.05e-07)
-
-    def test_geomspace3_with_num_basic(self):
-
-        def inputs():
             #start, stop, num
-            yield 1, 60, 20
-            yield -60, -1, 40
             yield -1, -60, 50
             yield 1.0, 60.0, 70
             yield -60.0, -1.0, 80
+            yield 1, 1000, 4
+            yield 1, 1000, 3
+            yield 1000, 1, 4
+            yield 1, 256, 9
+            yield -1000, -1, 4
+            yield -1, np.complex64(2j), 10
+            yield np.complex64(2j), -1, 20
+            yield -1.0, np.complex64(2j), 30
+            yield np.complex64(1j), np.complex64(1000j), 4
+            yield np.complex64(-1 + 0j), np.complex64(1 + 0j), 5
             yield np.complex64(1), np.complex64(2), 40
             yield np.complex64(2j), np.complex64(4j), 50
             yield np.complex64(2), np.complex64(4j), 60
@@ -3124,9 +3125,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
 
         for start, stop, num in inputs():
-            np.testing.assert_allclose(pyfunc(start, stop, num),
-                                       cfunc(start, stop, num),
-                                       rtol=1.05e-07)
+            self.assertPreciseEqual(pyfunc(start, stop, num),
+                                    cfunc(start, stop, num),
+                                    abs_tol=1e-06)
 
     def test_geomspace3_exception(self):
         cfunc = jit(nopython=True)(geomspace3)
@@ -3134,18 +3135,28 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.disable_leak_check()
 
         with self.assertRaises(TypingError) as raises:
-            cfunc("abc", 5)
+            cfunc("abc", 5, 10)
         self.assertIn('The argument "start" must be a number',
                       str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
-            cfunc(5, "abc")
+            cfunc(5, "abc", 10)
         self.assertIn('The argument "stop" must be a number',
                       str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
-            cfunc(0, 5, "abc")
+            cfunc(5, 10, "abc")
         self.assertIn('The argument "num" must be an integer',
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(0, 5, 5)
+        self.assertIn('Geometric sequence cannot include zero',
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(5, 0, 5)
+        self.assertIn('Geometric sequence cannot include zero',
                       str(raises.exception))
 
     def test_rot90_basic(self):
