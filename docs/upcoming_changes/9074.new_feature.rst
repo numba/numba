@@ -1,0 +1,5 @@
+
+Add np.trim_zeros
+=================
+
+Pull request 9074 adds ``np.trim_zeros()`` support to Numba.
