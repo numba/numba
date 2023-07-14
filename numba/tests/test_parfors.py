@@ -4,7 +4,7 @@
 #
 
 
-from math import sqrt
+import math
 import re
 import dis
 import numbers
@@ -460,7 +460,7 @@ def example_kmeans_test(A, numCenter, numIter, init_centroids):
     N, D = A.shape
 
     for l in range(numIter):
-        dist = np.array([[sqrt(np.sum((A[i,:]-centroids[j,:])**2))
+        dist = np.array([[math.sqrt(np.sum((A[i,:]-centroids[j,:])**2))
                                 for j in range(numCenter)] for i in range(N)])
         labels = np.array([dist[i,:].argmin() for i in range(N)])
 
@@ -2311,6 +2311,16 @@ class TestParfors(TestParforsBase):
         # bounds on the prange to generate a signed loop whereas the
         # np.ones will be an unsigned loop.
         self.check(test_impl, 0, 3)
+
+    def test_fusion_no_side_effects(self):
+        def test_impl(a, b):
+            X = np.ones(100)
+            b = math.ceil(b)
+            Y = np.ones(100)
+            c = int(max(a, b))
+            return X + Y + c
+        self.check(test_impl, 3.7, 4.3)
+        self.assertEqual(countParfors(test_impl, (types.float64, types.float64)), 1)
 
 
 @skip_parfors_unsupported
