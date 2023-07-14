@@ -1,3 +1,10 @@
+"""
+This file contains logic to convert RVSDG into Numba IR.
+
+Key APIs:
+- function `run_frontend()`
+- function `rvsdg_to_ir()`
+"""
 import dis
 from contextlib import contextmanager
 import builtins
@@ -33,7 +40,6 @@ from .rvsdg.regionpasses import RegionVisitor
 
 
 def run_frontend(func):
-
     sig = utils.pySignature.from_callable(func)
     argnames = tuple(sig.parameters)
     rvsdg = build_rvsdg(func.__code__, argnames)
@@ -51,6 +57,8 @@ def _get_first_bytecode(ops: list[Op]) -> dis.Instruction | None:
 
 
 def _innermost_exiting(blk: RegionBlock) -> BasicBlock:
+    # This will iterate through the RegionBlocks until it finds an exiting
+    # attribute that is not a RegionBlock.
     while isinstance(blk, RegionBlock):
         blk = blk.subregion.graph[blk.exiting]
     return blk
@@ -312,6 +320,9 @@ class RVSDG2IR(RegionVisitor[_Data]):
         assert header_block.kind == "head"
         self.branch_predicate = None
         data_at_head = self.visit_linear(header_block, data)
+        # NOTE: This check is needed due to the mess that the responsibility of
+        #       terminating the block is unclear. Some rvsdg block is
+        #       fallthrough but some have jumps.
         if not self.last_block.is_terminated:
             assert self.branch_predicate is not None  # for typing
 
@@ -344,7 +355,7 @@ class RVSDG2IR(RegionVisitor[_Data]):
         ):
             for k in names:
                 # Set undefined variable to None
-                # (It should be a "zeroinitiailizer" but ir.Expr.null doesn't
+                # (It should be a "zeroinitializer" but ir.Expr.null doesn't
                 #  work)
                 rhs = branch_data.get(k, ir.Const(None, loc=self.loc))
                 # Insert stores to export
@@ -355,12 +366,12 @@ class RVSDG2IR(RegionVisitor[_Data]):
                     redefine=False,
                     block=self.blocks[self._get_label(blk.name)],
                 )
+        # Emit tail
         data_after_branches = {
             k: self.scope.get_exact(self._get_phi_name(k, region.name))
             for k in names
         }
 
-        # Emit tail
         exiting = region.exiting
         exiting_block = region.subregion[exiting]
         assert exiting_block.kind == "tail"
@@ -379,6 +390,16 @@ class RVSDG2IR(RegionVisitor[_Data]):
 
     @contextmanager
     def set_block(self, label: int, block: ir.Block) -> Iterator[ir.Block]:
+        """A context manager that set the current block for other IR building
+        methods.
+
+        In addition,
+
+        - It closes any existing block in ``last_block_label`` by jumping to the
+          new block.
+        - If there is a existing block, it will be restored as the current block
+          after the context manager.
+        """
         if self.last_block_label is not None:
             last_block = self.blocks[self.last_block_label]
             if not last_block.is_terminated:

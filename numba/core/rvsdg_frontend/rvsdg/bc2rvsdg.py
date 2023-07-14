@@ -318,9 +318,17 @@ class DDGBlock(BasicBlock):
         return MutableSortedSet(self.out_vars)
 
     def get_toposorted_ops(self) -> list[Op]:
+        """Get a topologically sorted list of ``Op`` according
+        to the data-dependence.
+
+        Operations stored later in the list may depend on earlier operations,
+        but the reverse can never be true.
+        """
         res: list[Op] = []
 
+        # Initially, the available states are the inputs
         avail: set[ValueState] = {*self.in_vars.values(), _just(self.in_effect)}
+        # Seed the pending Operations using the outputs.
         pending: list[Op] = [
             vs.parent for vs in self.out_vars.values() if vs.parent is not None
         ]
@@ -333,12 +341,16 @@ class DDGBlock(BasicBlock):
             if op in seen:
                 pending.pop()
                 continue
+            # Get the set of incoming states that are not yet available
+            # to the current operation.
+            # NOTE: for stable ordering, change the following to a ordered-set.
             incomings = set()
             for vs in op._inputs.values():
                 if vs not in avail and vs.parent is not None:
                     incomings.add(vs.parent)
 
             if not incomings:
+                # All incoming states are already available
                 avail |= set(op._outputs.values())
                 pending.pop()
                 res.append(op)
