@@ -1648,14 +1648,15 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
 
         # Check shapes are equal
         shape_error = cgutils.false_bit
-        assert len(index_shape) == len(src_shapes)
+        assert len(index_shape) == len(src_shapes")
 
         for u, v in zip(src_shapes, index_shape):
             shape_error = builder.or_(shape_error,
                                       builder.icmp_signed('!=', u, v))
 
         with builder.if_then(shape_error, likely=False):
-            msg = "cannot assign slice from input of different size"
+            msg = (f"cannot assign slice of shape {src_shapes}"
+                f" from input of shape {index_shape}")
             context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
         # Check for array overlap
@@ -1688,7 +1689,8 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         shape_error = builder.icmp_signed('!=', index_shape[0], seq_len)
 
         with builder.if_then(shape_error, likely=False):
-            msg = "cannot assign slice from input of different size"
+            msg = (f"cannot assign slice of shape {seq_len}"
+                f" from input of shape {index_shape[0]}")
             context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
         def src_getitem(source_indices):
