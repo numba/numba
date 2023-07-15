@@ -1655,8 +1655,8 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
                                       builder.icmp_signed('!=', u, v))
 
         with builder.if_then(shape_error, likely=False):
-            msg = (f"cannot assign slice of shape {src_shapes}"
-                f" from input of shape {index_shape}")
+            msg = (f"cannot assign slice of shape {src_shapes} from input of"
+                   f" shape {index_shape}")
             context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
         # Check for array overlap
@@ -1690,7 +1690,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
 
         with builder.if_then(shape_error, likely=False):
             msg = (f"cannot assign slice of shape {seq_len}"
-                f" from input of shape {index_shape[0]}")
+                   f" from input of shape {index_shape[0]}")
             context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
         def src_getitem(source_indices):
