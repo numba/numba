@@ -249,17 +249,38 @@ def lower_cast_function_type_to_function_type(
 def lower_cast_dispatcher_to_function_type(context, builder, fromty, toty, val):
     toty = toty.get_precise()
 
-    pyapi = context.get_python_api(builder)
+    sig = toty.signature
+    dispatcher = fromty.dispatcher
+    llvoidptr = context.get_value_type(types.voidptr)
+
+    # Compile to the expected function type
+    dispatcher.compile(sig)
+    cres = dispatcher.get_compile_result(sig)
+
+    # Declare cfunc in the current module
+    wrapper_name = cres.fndesc.llvm_cfunc_wrapper_name
+    llfnptr = context.get_value_type(toty.ftype)
+    llfnty = llfnptr.pointee
+    fn = cgutils.get_or_insert_function(builder.module, llfnty, wrapper_name)
+    addr = builder.bitcast(fn, llvoidptr)
+
     sfunc = cgutils.create_struct_proxy(toty)(context, builder)
+    sfunc.addr = addr
 
-    gil_state = pyapi.gil_ensure()
-    addr = lower_get_wrapper_address(
-        context, builder, val, toty.signature,
-        failure_mode='return_exc')
-    sfunc.addr = pyapi.long_as_voidptr(addr)
-    pyapi.decref(addr)
-    pyapi.gil_release(gil_state)
+    # Link-in the dispatcher library
+    context.active_code_library.add_linking_library(cres.library)
 
-    llty = context.get_value_type(types.voidptr)
-    sfunc.pyaddr = builder.ptrtoint(val, llty)
+    if False:
+        pyapi = context.get_python_api(builder)
+        sfunc = cgutils.create_struct_proxy(toty)(context, builder)
+
+        gil_state = pyapi.gil_ensure()
+        addr = lower_get_wrapper_address(
+            context, builder, val, toty.signature,
+            failure_mode='return_exc')
+        sfunc.addr = pyapi.long_as_voidptr(addr)
+        pyapi.decref(addr)
+        pyapi.gil_release(gil_state)
+
+    sfunc.pyaddr = builder.ptrtoint(val, llvoidptr)
     return sfunc._getvalue()
