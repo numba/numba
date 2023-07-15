@@ -1000,7 +1000,8 @@ class _IntrinsicTemplate(_TemplateTargetHelperMixin, AbstractTemplate):
 
 
 def make_intrinsic_template(handle, defn, name, *, prefer_literal=False,
-                            kwargs={}):
+                            kwargs=None):
+   kwargs = MappingProxyType({} if kwargs is None else kwargs)
     """
     Make a template class for a intrinsic handle *handle* defined by the
     function *defn*.  The *name* is used for naming the new template class.
