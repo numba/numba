@@ -1648,7 +1648,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
 
         # Check shapes are equal
         shape_error = cgutils.false_bit
-        assert len(index_shape) == len(src_shapes")
+        assert len(index_shape) == len(src_shapes)
 
         for u, v in zip(src_shapes, index_shape):
             shape_error = builder.or_(shape_error,
