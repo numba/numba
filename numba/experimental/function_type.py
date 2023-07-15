@@ -9,7 +9,7 @@ from numba.core.imputils import lower_constant, lower_cast
 from numba.core.ccallback import CFunc
 from numba.core import cgutils
 from llvmlite import ir
-from numba.core import types
+from numba.core import types, errors
 from numba.core.types import (FunctionType, UndefinedFunctionType,
                               FunctionPrototype, WrapperAddressProtocol)
 from numba.core.dispatcher import Dispatcher
@@ -254,23 +254,28 @@ def lower_cast_dispatcher_to_function_type(context, builder, fromty, toty, val):
     llvoidptr = context.get_value_type(types.voidptr)
 
     # Compile to the expected function type
-    dispatcher.compile(sig)
-    cres = dispatcher.get_compile_result(sig)
+    try:
+        cres = dispatcher.get_compile_result(sig)
+    except errors.NumbaError:
+        cres = None
 
-    # Declare cfunc in the current module
-    wrapper_name = cres.fndesc.llvm_cfunc_wrapper_name
-    llfnptr = context.get_value_type(toty.ftype)
-    llfnty = llfnptr.pointee
-    fn = cgutils.get_or_insert_function(builder.module, llfnty, wrapper_name)
-    addr = builder.bitcast(fn, llvoidptr)
+    if cres is not None:
+        # Declare cfunc in the current module
+        wrapper_name = cres.fndesc.llvm_cfunc_wrapper_name
+        llfnptr = context.get_value_type(toty.ftype)
+        llfnty = llfnptr.pointee
+        fn = cgutils.get_or_insert_function(
+            builder.module, llfnty, wrapper_name,
+        )
+        addr = builder.bitcast(fn, llvoidptr)
 
-    sfunc = cgutils.create_struct_proxy(toty)(context, builder)
-    sfunc.addr = addr
+        sfunc = cgutils.create_struct_proxy(toty)(context, builder)
+        sfunc.addr = addr
 
-    # Link-in the dispatcher library
-    context.active_code_library.add_linking_library(cres.library)
+        # Link-in the dispatcher library
+        context.active_code_library.add_linking_library(cres.library)
 
-    if False:
+    else:
         pyapi = context.get_python_api(builder)
         sfunc = cgutils.create_struct_proxy(toty)(context, builder)
 
