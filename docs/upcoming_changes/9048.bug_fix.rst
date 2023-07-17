@@ -1,0 +1,17 @@
+Dynamically Allocate Parfor Schedules
+=====================================
+
+This PR fixes an issue where a parallel region is executed in a loop
+many times.  The previous code used an alloca to allocate the parfor
+schedule on the stack but if there are many such parfors in a loop
+then the stack will overflow.  The new code does a pair of
+allocation/deallocation calls into the Numba parallel runtime before
+and after the parallel region respectively.  At the moment, these
+calls redirect to malloc/free although other mechanisms such as
+pooling are possible and may be implemented later.  This PR also
+adds a warning in cases where a prange loop is not converted to a
+parfor.  This can happen if there is exceptional control flow in the
+loop.  These are related in that the original issue had a prange
+loop that wasn't converted to a parfor and therefore all the parfors
+inside the body of the prange were running in parallel and adding to
+the stack each time.
