@@ -14,9 +14,9 @@ import numpy as np
 
 from numba import pndindex, literal_unroll
 from numba.core import types, typing, errors, cgutils, extending
-from numba.np.numpy_support import (as_dtype, carray, farray, is_contiguous,
-                                    is_fortran, check_is_integer,
-                                    type_is_scalar)
+from numba.np.numpy_support import (as_dtype, from_dtype, carray, farray,
+                                    is_contiguous, is_fortran,
+                                    check_is_integer, type_is_scalar)
 from numba.np.numpy_support import type_can_asarray, is_nonelike, numpy_version
 from numba.core.imputils import (lower_builtin, lower_getattr,
                                  lower_getattr_generic,
@@ -1922,12 +1922,18 @@ def numpy_geomspace(start, stop, num=50):
         raise errors.TypingError(msg)
 
     if any(isinstance(arg, types.Complex) for arg in [start, stop]):
+        result_dtype = from_dtype(np.result_type(as_dtype(start),
+                                                 as_dtype(stop), None))
+
         def impl(start, stop, num=50):
             if start == 0 or stop == 0:
                 raise ValueError('Geometric sequence cannot include zero')
+            start = result_dtype(start)
+            stop = result_dtype(stop)
+            both_imaginary = (start.real == 0) & (stop.real == 0)
             both_negative = (np.sign(start) == -1) & (np.sign(stop) == -1)
             out_sign = 1
-            if (start.real == 0) & (stop.real == 0):
+            if both_imaginary:
                 start = start.imag
                 stop = stop.imag
                 out_sign = 1j
@@ -1935,8 +1941,6 @@ def numpy_geomspace(start, stop, num=50):
                 start = -start
                 stop = -stop
                 out_sign = -out_sign
-            start = np.complex64(start)
-            stop = np.complex64(stop)
             logstart = np.log10(start)
             logstop = np.log10(stop)
             result = np.logspace(logstart, logstop, num)
