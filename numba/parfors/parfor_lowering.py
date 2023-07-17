@@ -110,10 +110,12 @@ def _lower_parfor_parallel_std(lowerer, parfor):
             rv = ir.Var(scope, racevar, loc)
             lowerer._alloca_var(rv.name, rvtyp)
 
-    alias_map = {}
-    arg_aliases = {}
-    numba.parfors.parfor.find_potential_aliases_parfor(parfor, parfor.params, typemap,
-                                        lowerer.func_ir, alias_map, arg_aliases)
+    #alias_map = {}
+    #arg_aliases = {}
+    alias_map, arg_aliases = numba.parfors.parfor.find_potential_aliases_parfor(
+                                 parfor, parfor.params, typemap,
+                                 lowerer.func_ir, parfor.flags)
+                                 #lowerer.func_ir, False, alias_map, arg_aliases)
     if config.DEBUG_ARRAY_OPT:
         print("alias_map", alias_map)
         print("arg_aliases", arg_aliases)
@@ -1041,7 +1043,7 @@ def _create_gufunc_for_parfor_body(
     for the parfor body inserted.
     '''
     if config.DEBUG_ARRAY_OPT >= 1:
-        print("starting _create_gufunc_for_parfor_body")
+        print("starting _create_gufunc_for_parfor_body", has_aliases)
 
     loc = parfor.init_block.loc
 

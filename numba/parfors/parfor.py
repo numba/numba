@@ -2947,7 +2947,7 @@ class ParforFusionPass(ParforPassStates):
             # reorder statements to maximize fusion
             # push non-parfors down
             maximize_fusion(self.func_ir, self.func_ir.blocks, self.typemap,
-                                                            up_direction=False)
+                            self.flags, up_direction=False)
             dprint_func_ir(self.func_ir, "after maximize fusion down")
             self.fuse_parfors(self.array_analysis,
                               self.func_ir.blocks,
@@ -2955,7 +2955,8 @@ class ParforFusionPass(ParforPassStates):
                               self.typemap)
             dprint_func_ir(self.func_ir, "after first fuse")
             # push non-parfors up
-            maximize_fusion(self.func_ir, self.func_ir.blocks, self.typemap)
+            maximize_fusion(self.func_ir, self.func_ir.blocks, self.typemap,
+                            self.flags)
             dprint_func_ir(self.func_ir, "after maximize fusion up")
             # try fuse again after maximize
             self.fuse_parfors(self.array_analysis,
@@ -3004,7 +3005,7 @@ class ParforFusionPass(ParforPassStates):
 
     def fuse_recursive_parfor(self, parfor, equiv_set, func_ir, typemap):
         blocks = wrap_parfor_blocks(parfor)
-        maximize_fusion(self.func_ir, blocks, self.typemap)
+        maximize_fusion(self.func_ir, blocks, self.typemap, self.flags)
         dprint_func_ir(self.func_ir, "after recursive maximize fusion down", blocks)
         arr_analysis = array_analysis.ArrayAnalysis(self.typingctx, self.func_ir,
                                                 self.typemap, self.calltypes)
@@ -3954,7 +3955,7 @@ def parfor_insert_dels(parfor, curr_dead_set):
 postproc.ir_extension_insert_dels[Parfor] = parfor_insert_dels
 
 
-def maximize_fusion(func_ir, blocks, typemap, up_direction=True):
+def maximize_fusion(func_ir, blocks, typemap, flags, up_direction=True):
     """
     Reorder statements to maximize parfor fusion. Push all parfors up or down
     so they are adjacent.
@@ -3964,7 +3965,8 @@ def maximize_fusion(func_ir, blocks, typemap, up_direction=True):
                                  blocks,
                                  func_ir.arg_names,
                                  typemap,
-                                 func_ir
+                                 func_ir,
+                                 flags
                              )
     for block in blocks.values():
         order_changed = True
@@ -4671,14 +4673,18 @@ def _add_liveness_return_block(blocks, lives, typemap):
     return return_label, tuple_var
 
 
-def find_potential_aliases_parfor(parfor, args, typemap, func_ir, alias_map, arg_aliases):
+def find_potential_aliases_parfor(parfor, args, typemap, func_ir, flags,
+                                  alias_map=None, arg_aliases=None):
     blocks = wrap_parfor_blocks(parfor)
-    ir_utils.find_potential_aliases(
-        blocks, args, typemap, func_ir, alias_map, arg_aliases)
+    alias_map, arg_aliases = ir_utils.find_potential_aliases(
+        blocks, args, typemap, func_ir, flags,
+        alias_map=alias_map, arg_aliases=arg_aliases)
     unwrap_parfor_blocks(parfor)
-    return
+    return alias_map, arg_aliases
+
 
 ir_utils.alias_analysis_extensions[Parfor] = find_potential_aliases_parfor
+
 
 def simplify_parfor_body_CFG(blocks):
     """simplify CFG of body loops in parfors"""

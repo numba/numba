@@ -597,12 +597,12 @@ def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases
         alias_map, arg_aliases = find_potential_aliases(blocks, args, typemap,
                                                         func_ir)
     if config.DEBUG_ARRAY_OPT >= 1:
-        print("args:", args)
-        print("alias map:", alias_map)
-        print("arg_aliases:", arg_aliases)
-        print("live_map:", live_map)
-        print("usemap:", usedefs.usemap)
-        print("defmap:", usedefs.defmap)
+        print("remove dead args:", args)
+        print("remove dead alias map:", alias_map)
+        print("remove dead arg_aliases:", arg_aliases)
+        print("remove dead live_map:", live_map)
+        print("remove dead usemap:", usedefs.usemap)
+        print("remove dead defmap:", usedefs.defmap)
     # keep set for easier search
     alias_set = set(alias_map.keys())
 
@@ -812,13 +812,18 @@ def get_canonical_alias(v, alias_map):
     v_aliases = sorted(list(alias_map[v]))
     return v_aliases[0]
 
-def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
-                                                           arg_aliases=None):
+def find_potential_aliases(blocks, args, typemap, func_ir, flags,
+                           alias_map=None, arg_aliases=None):
     "find all array aliases and argument aliases to avoid remove as dead"
     if alias_map is None:
         alias_map = {}
     if arg_aliases is None:
-        arg_aliases = set(a for a in args if not is_immutable_type(a, typemap))
+        if flags.noalias:
+            arg_aliases = {}
+        else:
+            arg_aliases = set(a for a in args if not is_immutable_type(a, typemap))
+    if config.DEBUG_ARRAY_OPT >= 1:
+        print("find_potential_aliases", args, alias_map, arg_aliases)
 
     # update definitions since they are not guaranteed to be up-to-date
     # FIXME keep definitions up-to-date to avoid the need for rebuilding
