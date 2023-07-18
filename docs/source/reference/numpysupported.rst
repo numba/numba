@@ -488,6 +488,7 @@ The following top-level functions are supported:
 * :func:`numpy.hamming`
 * :func:`numpy.hanning`
 * :func:`numpy.histogram` (only the 3 first arguments)
+* :func:`numpy.hsplit`
 * :func:`numpy.hstack`
 * :func:`numpy.identity`
 * :func:`numpy.isclose`
@@ -544,6 +545,7 @@ The following top-level functions are supported:
 * :func:`numpy.union1d` (For unicode arrays, only supports arrays of the same dtype)
 * :func:`numpy.unique` (only the first argument)
 * :func:`numpy.vander`
+* :func:`numpy.vsplit`
 * :func:`numpy.vstack`
 * :func:`numpy.where`
 * :func:`numpy.zeros` (only the 2 first arguments)
