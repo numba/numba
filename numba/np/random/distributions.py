@@ -24,40 +24,24 @@ from numba.np.numpy_support import numpy_version
 # https://github.com/numpy/numpy/blob/7cfef93c77599bd387ecc6a15d186c5a46024dac/numpy/random/src/distributions/distributions.c
 
 
-if numpy_version >= (1, 21):
-    @register_jitable
-    def np_log1p(x):
-        return np.log1p(x)
+@register_jitable
+def np_log1p(x):
+    return np.log1p(x)
 
-    @register_jitable
-    def np_log1pf(x):
-        return np.log1p(float32(x))
 
-    @register_jitable
-    def random_rayleigh(bitgen, mode):
-        return mode * np.sqrt(2.0 * random_standard_exponential(bitgen))
-else:
-    @register_jitable
-    def np_log1p(x):
-        return np.log(1.0 + x)
+@register_jitable
+def np_log1pf(x):
+    return np.log1p(float32(x))
 
-    @register_jitable
-    def np_log1pf(x):
-        f32_one = np.float32(1.0)
-        return np.log(f32_one + float32(x))
 
-    @register_jitable
-    def random_rayleigh(bitgen, mode):
-        return mode * np.sqrt(-2.0 * np.log(1.0 - next_double(bitgen)))
+@register_jitable
+def random_rayleigh(bitgen, mode):
+    return mode * np.sqrt(2.0 * random_standard_exponential(bitgen))
 
-if numpy_version >= (1, 22):
-    @register_jitable
-    def np_expm1(x):
-        return np.expm1(x)
-else:
-    @register_jitable
-    def np_expm1(x):
-        return np.exp(x) - 1.0
+
+@register_jitable
+def np_expm1(x):
+    return np.expm1(x)
 
 
 @register_jitable
