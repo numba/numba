@@ -6173,6 +6173,48 @@ def np_split(ary, indices_or_sections, axis=0):
         return np_array_split(ary, indices_or_sections, axis=axis)
 
 
+@overload(np.vsplit)
+def numpy_vsplit(ary, indices_or_sections):
+    if not isinstance(ary, types.Array):
+        msg = 'The argument "ary" must be an array'
+        raise errors.TypingError(msg)
+
+    if not isinstance(indices_or_sections, (types.Integer, types.Array)):
+        msg = ('The argument "indices_or_sections" '
+               'must be an integer or an array')
+        raise errors.TypingError(msg)
+
+    def impl(ary, indices_or_sections):
+        if ary.ndim < 2:
+            raise ValueError(('vsplit only works on '
+                              'arrays of 2 or more dimensions'))
+        return np.split(ary, indices_or_sections, axis=0)
+
+    return impl
+
+
+@overload(np.hsplit)
+def numpy_hsplit(ary, indices_or_sections):
+    if not isinstance(ary, types.Array):
+        msg = 'The argument "ary" must be an array'
+        raise errors.TypingError(msg)
+
+    if not isinstance(indices_or_sections, (types.Integer, types.Array)):
+        msg = ('The argument "indices_or_sections" '
+               'must be an integer or an array')
+        raise errors.TypingError(msg)
+
+    def impl(ary, indices_or_sections):
+        if ary.ndim == 0:
+            raise ValueError(('hsplit only works on '
+                              'arrays of 1 or more dimensions'))
+        if ary.ndim > 1:
+            return np.split(ary, indices_or_sections, axis=1)
+        return np.split(ary, indices_or_sections, axis=0)
+
+    return impl
+
+
 # -----------------------------------------------------------------------------
 # Sorting
 

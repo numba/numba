@@ -196,6 +196,14 @@ def split(a, indices, axis=0):
     return np.split(a, indices, axis=axis)
 
 
+def vsplit(a, indices_or_sections):
+    return np.vsplit(a, indices_or_sections)
+
+
+def hsplit(a, indices_or_sections):
+    return np.hsplit(a, indices_or_sections)
+
+
 def correlate(a, v, mode="valid"):
     return np.correlate(a, v, mode=mode)
 
@@ -3390,6 +3398,90 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as raises:
             njit(split)(np.ones(5), [3], axis=-3)
         self.assertIn("np.split: Argument axis out of bounds",
+                      str(raises.exception))
+
+    def test_vsplit_basic(self):
+        # split and array_split have more comprehensive tests of splitting.
+        # only do simple test on vsplit
+        def inputs():
+            yield np.array([[1, 2, 3, 4], [1, 2, 3, 4]]), 2
+            yield np.array([[1., 2., 3., 4.], [1., 2., 3., 4.]]), 2
+
+        pyfunc = vsplit
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for a, ind_or_sec in inputs():
+            self.assertPreciseEqual(pyfunc(a, ind_or_sec),
+                                    cfunc(a, ind_or_sec))
+
+    def test_vsplit_exception(self):
+        cfunc = jit(nopython=True)(vsplit)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(1, 2)
+        self.assertIn('The argument "ary" must be an array',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc", 2)
+        self.assertIn('The argument "ary" must be an array',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.array([[1, 2, 3, 4], [1, 2, 3, 4]]), "abc")
+        self.assertIn(('The argument "indices_or_sections" must be an '
+                       'integer or an array'),
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.array(1), 2)
+        self.assertIn('vsplit only works on arrays of 2 or more dimensions',
+                      str(raises.exception))
+
+    def test_hsplit_basic(self):
+        # split and array_split have more comprehensive tests of splitting.
+        # only do simple test on hsplit
+        def inputs():
+            #test_1D_array
+            yield np.array([1, 2, 3, 4]), 2
+            yield np.array([1., 2., 3., 4.]), 2
+            #test_2D_array
+            yield np.array([[1, 2, 3, 4], [1, 2, 3, 4]]), 2
+            yield np.array([[1., 2., 3., 4.], [1., 2., 3., 4.]]), 2
+
+        pyfunc = hsplit
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for a, ind_or_sec in inputs():
+            self.assertPreciseEqual(pyfunc(a, ind_or_sec),
+                                    cfunc(a, ind_or_sec))
+
+    def test_hsplit_exception(self):
+        cfunc = jit(nopython=True)(hsplit)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(1, 2)
+        self.assertIn('The argument "ary" must be an array',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc", 2)
+        self.assertIn('The argument "ary" must be an array',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.array([[1, 2, 3, 4], [1, 2, 3, 4]]), "abc")
+        self.assertIn(('The argument "indices_or_sections" must be an '
+                       'integer or an array'),
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.array(1), 2)
+        self.assertIn('hsplit only works on arrays of 1 or more dimensions',
                       str(raises.exception))
 
     def test_roll_basic(self):
