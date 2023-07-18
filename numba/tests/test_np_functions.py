@@ -3070,7 +3070,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for start, stop in inputs():
             self.assertPreciseEqual(pyfunc(start, stop),
                                     cfunc(start, stop),
-                                    abs_tol=1e-07)
+                                    abs_tol=1e-12)
 
     def test_geomspace2_exception(self):
         cfunc = jit(nopython=True)(geomspace2)
@@ -3127,7 +3127,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for start, stop, num in inputs():
             self.assertPreciseEqual(pyfunc(start, stop, num),
                                     cfunc(start, stop, num),
-                                    abs_tol=1e-07)
+                                    abs_tol=1e-14)
 
     def test_geomspace3_exception(self):
         cfunc = jit(nopython=True)(geomspace3)
@@ -3171,18 +3171,19 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         y = cfunc3(1, 1e6, num=100)
         self.assertEqual(y[-1], 10 ** 6)
         y = cfunc3(1, 1e6, num=7)
-        self.assertPreciseEqual(y, pfunc3(1,1e6, num=7), abs_tol=1e-7)
+        # self.assertPreciseEqual(y, pfunc3(1,1e6, num=7), abs_tol=1e-7)
+        self.assertPreciseEqual(y, pfunc3(1,1e6, num=7))
 
         y = cfunc3(8, 2, num=3)
-        self.assertPreciseEqual(y, pfunc3(8, 2, num=3), abs_tol=1e-7)
+        self.assertPreciseEqual(y, pfunc3(8, 2, num=3))
         self.assertTrue([x == 0 for x in y.imag])
 
         y = cfunc3(-1, -100, num=3)
-        self.assertPreciseEqual(y, pfunc3(-1, -100, num=3), abs_tol=1e-7)
+        self.assertPreciseEqual(y, pfunc3(-1, -100, num=3))
         self.assertTrue([x == 0 for x in y.imag])
 
         y = cfunc3(-100, -1, num=3)
-        self.assertPreciseEqual(y, pfunc3(-100, -1, num=3), abs_tol=1e-7)
+        self.assertPreciseEqual(y, pfunc3(-100, -1, num=3))
         self.assertTrue([x == 0 for x in y.imag])
 
         # test_boundaries_match_start_and_stop_exactly
@@ -3207,44 +3208,42 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # test_complex
         # Purely imaginary
         y = cfunc3(1j, 16j, num=5)
-        self.assertPreciseEqual(y, pfunc3(1j, 16j, num=5), abs_tol=1e-7)
+        self.assertPreciseEqual(y, pfunc3(1j, 16j, num=5), abs_tol=1e-14)
         self.assertTrue([x == 0 for x in y.real])
 
         y = cfunc3(-4j, -324j, num=5)
-        self.assertPreciseEqual(y, pfunc3(-4j, -324j, num=5), abs_tol=1e-7)
+        self.assertPreciseEqual(y, pfunc3(-4j, -324j, num=5), abs_tol=1e-13)
         self.assertTrue([x == 0 for x in y.real])
 
         y = cfunc3(1 + 1j, 1000 + 1000j, num=4)
         self.assertPreciseEqual(y,
                                 pfunc3(1 + 1j, 1000 + 1000j, num=4),
-                                abs_tol=1e-7)
+                                abs_tol=1e-13)
 
         y = cfunc3(-1 + 1j, -1000 + 1000j, num=4)
         self.assertPreciseEqual(y,
                                 pfunc3(-1 + 1j, -1000 + 1000j, num=4),
-                                abs_tol=1e-7)
+                                abs_tol=1e-13)
 
         # Logarithmic spirals
         y = cfunc3(-1 + 0j, 1 + 0j, num=3)
-        self.assertPreciseEqual(y,
-                                pfunc3(-1 + 0j, 1 + 0j, num=3),
-                                abs_tol=1e-7)
+        self.assertPreciseEqual(y, pfunc3(-1 + 0j, 1 + 0j, num=3))
 
         y = cfunc3(0 + 3j, -3 + 0j, 3)
-        self.assertPreciseEqual(y, pfunc3(0 + 3j, -3 + 0j, 3), abs_tol=1e-7)
+        self.assertPreciseEqual(y, pfunc3(0 + 3j, -3 + 0j, 3), abs_tol=1e-15)
         y = cfunc3(0 + 3j, 3 + 0j, 3)
-        self.assertPreciseEqual(y, pfunc3(0 + 3j, 3 + 0j, 3), abs_tol=1e-7)
+        self.assertPreciseEqual(y, pfunc3(0 + 3j, 3 + 0j, 3), abs_tol=1e-15)
         y = cfunc3(-3 + 0j, 0 - 3j, 3)
-        self.assertPreciseEqual(y, pfunc3(-3 + 0j, 0 - 3j, 3), abs_tol=1e-7)
+        self.assertPreciseEqual(y, pfunc3(-3 + 0j, 0 - 3j, 3), abs_tol=1e-15)
         y = cfunc3(0 + 3j, -3 + 0j, 3)
-        self.assertPreciseEqual(y, pfunc3(0 + 3j, -3 + 0j, 3), abs_tol=1e-7)
+        self.assertPreciseEqual(y, pfunc3(0 + 3j, -3 + 0j, 3), abs_tol=1e-15)
         y = cfunc3(-2 - 3j, 5 + 7j, 7)
-        self.assertPreciseEqual(y, pfunc3(-2 - 3j, 5 + 7j, 7), abs_tol=1e-7)
+        self.assertPreciseEqual(y, pfunc3(-2 - 3j, 5 + 7j, 7), abs_tol=1e-14)
 
         y = cfunc3(3j, -5, 2)
-        self.assertPreciseEqual(y, pfunc3(3j, -5, 2), abs_tol=1e-7)
+        self.assertPreciseEqual(y, pfunc3(3j, -5, 2))
         y = cfunc3(-5, 3j, 2)
-        self.assertPreciseEqual(y, pfunc3(-5, 3j, 2), abs_tol=1e-7)
+        self.assertPreciseEqual(y, pfunc3(-5, 3j, 2))
 
     def test_rot90_basic(self):
         pyfunc = rot90
