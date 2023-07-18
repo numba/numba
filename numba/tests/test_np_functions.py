@@ -3171,7 +3171,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         y = cfunc3(1, 1e6, num=100)
         self.assertEqual(y[-1], 10 ** 6)
         y = cfunc3(1, 1e6, num=7)
-        # self.assertPreciseEqual(y, pfunc3(1,1e6, num=7), abs_tol=1e-7)
         self.assertPreciseEqual(y, pfunc3(1,1e6, num=7))
 
         y = cfunc3(8, 2, num=3)
