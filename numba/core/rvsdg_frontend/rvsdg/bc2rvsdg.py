@@ -517,6 +517,8 @@ class HandleConditionalPop:
         return fn(inst)
 
     def _op_default(self, inst: dis.Instruction) -> None:
+        # Being defensive
+        assert not inst.opname.endswith("OR_POP")
         return
 
     def op_FOR_ITER(self, inst: dis.Instruction) -> _ExtraBranch:
@@ -527,6 +529,11 @@ class HandleConditionalPop:
         return _ExtraBranch((br0, br1))
 
     def op_JUMP_IF_TRUE_OR_POP(self, inst: dis.Instruction) -> _ExtraBranch:
+        br0 = ("POP",)
+        br1 = ()
+        return _ExtraBranch((br0, br1))
+
+    def op_JUMP_IF_FALSE_OR_POP(self, inst: dis.Instruction) -> _ExtraBranch:
         br0 = ("POP",)
         br1 = ()
         return _ExtraBranch((br0, br1))
