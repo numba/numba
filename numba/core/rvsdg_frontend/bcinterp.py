@@ -519,7 +519,7 @@ class RVSDG2IR(RegionVisitor[_Data]):
         [_nil, res] = op.outputs
         value = self.get_global_value(bc.argval)
         # TODO: handle non scalar
-        const = ir.Const(value, loc=self.loc)
+        const = ir.Global(bc.argval, value, loc=self.loc)
         self.store_vsmap(const, res)
 
     def op_LOAD_ATTR(self, op: Op, bc: dis.Instruction):
@@ -618,7 +618,8 @@ class RVSDG2IR(RegionVisitor[_Data]):
         self._binop(bc.argrepr, op)
 
     def op_IS_OP(self, op: Op, bc: dis.Instruction):
-        self._binop("is", op)
+        opname = 'is not' if bc.argval == 1 else 'is'
+        self._binop(opname, op)
 
     def op_UNARY_NOT(self, op: Op, bc: dis.Instruction):
         [val] = op.inputs
