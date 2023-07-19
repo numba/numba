@@ -222,6 +222,48 @@ class RVSDG2IR(RegionVisitor[_Data]):
             self.current_block.append(br)
 
     def _emit_n_way_switch(self, block):
+        """
+        This handles emitting a switch block with N cases. It does the following:
+
+        - The branch value table in the block provides information about the
+          case index and the case label in this switch.
+        - Emit a block that unconditionally jumps to the first case block.
+        - In each case block:
+            - Compare the control variable to the expected case index for
+              that case.
+            - Branch to the target label on true, or the next case on false.
+        - There is no default case. The control variable must match a case index
+
+        ┌───────────────────────┐
+        │  current block        │
+        └───────────┬───────────┘
+                    │
+                    └─────────┐
+                              ▼
+                    ┌───────────────────┐
+                    │   case 0          │
+                    └─────────┬─────────┘
+                              │
+                              │
+                              ▼
+                    ┌───────────────────┐
+                    │  case 1           │
+                    └─────────┬─────────┘
+                              │
+                              │
+                              ▼
+                    ┌───────────────────┐
+                    │  case N-1         │
+                    └─────────┬─────────┘
+                              │
+                    ┌─────────┘
+                    │
+                    ▼
+        ┌───────────────────────┐
+        │ subsequent blocks     │
+        └───────────────────────┘
+
+        """
         # with self.set_block(
         #         self._get_label(block.name),
         #         ir.Block(scope=self.scope, loc=self.loc)):
@@ -245,6 +287,7 @@ class RVSDG2IR(RegionVisitor[_Data]):
         #     )
         #     self.current_block.append(br)
         bvt = block.branch_value_table
+        # The control variable
         cp = block.variable
         cpvar = self.scope.get_exact(f"$.cp.{cp}")
         labels = [(k, self._get_label(v)) for k, v in bvt.items()]
@@ -474,6 +517,11 @@ class RVSDG2IR(RegionVisitor[_Data]):
         self.store(res, "$.debug.res")
 
     def interpret_bytecode(self, op: Op):
+        """Interpret a single Op containing bytecode instructions.
+
+        Internally, it dispatches to methods with names following the pattern
+        `op_<opname>`.
+        """
         assert op.bc_inst is not None
         pos = op.bc_inst.positions
         assert pos is not None
@@ -564,10 +612,16 @@ class RVSDG2IR(RegionVisitor[_Data]):
         callee = self.vsmap[arg0_or_callee]
 
         if op.opname == "call.kw":
+            # If this is a keyword call, the last value-state in `args` has
+            # the names of the keyword arguments. This corresponds to the
+            # `kw_names` special state in the CPython interpreter.
             kw_names_op = args[-1].parent
             assert kw_names_op is not None  # for typing
             assert kw_names_op.bc_inst is not None  # for typing
             assert kw_names_op.opname == "kw_names"
+            # Now that we handled the `kw_names`, remove it from the list of
+            # actual arguments. The last `len(kw_names)` values in it will go
+            # in the `kwargs`. All values before that is the positional args.
             args = args[:-1]
             co = self.func_id.code  # type: ignore
             names = co.co_consts[kw_names_op.bc_inst.arg]
@@ -637,7 +691,6 @@ class RVSDG2IR(RegionVisitor[_Data]):
 
     def op_STORE_SUBSCR(self, op: Op, bc: dis.Instruction):
         [_env, index, target, value] = op.inputs
-        [_env] = op.outputs
         index_var = self.vsmap[index]
         target_var = self.vsmap[target]
         value_var = self.vsmap[value]
