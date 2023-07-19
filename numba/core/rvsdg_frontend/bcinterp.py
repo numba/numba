@@ -223,7 +223,8 @@ class RVSDG2IR(RegionVisitor[_Data]):
 
     def _emit_n_way_switch(self, block):
         """
-        This handles emitting a switch block with N cases. It does the following:
+        This handles emitting a switch block with N cases. It does the
+        following:
 
         - The branch value table in the block provides information about the
           case index and the case label in this switch.
