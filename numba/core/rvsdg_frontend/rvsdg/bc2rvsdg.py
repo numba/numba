@@ -429,7 +429,7 @@ class CanonicalizeLoop(RegionTransformer[None]):
     def visit_loop(self, parent: SCFG, region: RegionBlock, data: None):
         # Fix header
         # Introduce a SyntheticFill block that just jump to the original header
-        new_label = parent.name_gen.new_block_name(block_names.SYNTH_BRANCH)
+        new_label = parent.name_gen.new_block_name(block_names.SYNTH_FILL)
         region.subregion.insert_SyntheticFill(new_label, {}, {region.header})
         region.replace_header(new_label)
 
