@@ -53,10 +53,22 @@ def _just(v: Optional[T]) -> T:
 
 @dataclass(frozen=True)
 class ValueState:
+    """For representing a RVSDG Value (State).
+
+    For most compiler passes, Value and State can be treated as the same.
+    """
     parent: Optional["Op"]
+    """Optional. The parent Op that output this ValueState.
+    """
     name: str
+    """Name of the Value(State).
+    """
     out_index: int
+    """The output port index in the parent Op.
+    """
     is_effect: bool = False
+    """True if-and-only-if this is a state.
+    """
 
     def short_identity(self) -> str:
         args = f"{id(self.parent):x}, {self.name}, {self.out_index}"
@@ -68,10 +80,23 @@ class ValueState:
 
 @dataclass(frozen=True)
 class Op:
+    """For representing a RVSDG operation.
+
+    An Op has inputs and outputs ports that are ValueStates.
+    An Op can optionally have a bytecode instruction associated with it.
+    """
     opname: str
+    """Operation name.
+    """
     bc_inst: Optional[dis.Instruction]
+    """Optional. The bytecode instruction.
+    """
     _inputs: dict[str, ValueState] = field(default_factory=dict)
+    """The input ports.
+    """
     _outputs: dict[str, ValueState] = field(default_factory=dict)
+    """The output ports.
+    """
 
     def add_input(self, name, vs: ValueState):
         self._inputs[name] = vs
