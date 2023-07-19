@@ -3,7 +3,6 @@ from dataclasses import dataclass, replace, field, fields
 import dis
 import operator
 from functools import reduce
-from contextlib import contextmanager
 from typing import (
     Optional,
     Protocol,
@@ -132,28 +131,6 @@ class DDGRegion(RegionBlock):
     outgoing_states: MutableSortedSet[str] = field(
         default_factory=MutableSortedSet
     )
-
-    @contextmanager
-    def render_rvsdg(self, renderer, digraph, label):
-        with digraph.subgraph(name=f"cluster_rvsdg_{id(self)}") as subg:
-            subg.attr(color="black", label="region", bgcolor="grey")
-            inc_labels = [f"<{k}> {k}" for k in self.incoming_states]
-            subg.node(
-                f"incoming_{id(self)}",
-                label=f"{'|'.join(inc_labels)}",
-                shape="record",
-                rank="min",
-            )
-            subg.edge(f"incoming_{id(self)}", f"cluster_{label}", style="invis")
-            yield subg
-            subg.edge(f"cluster_{label}", f"outgoing_{id(self)}", style="invis")
-            out_labels = [f"<{k}> {k}" for k in self.outgoing_states]
-            subg.node(
-                f"outgoing_{id(self)}",
-                label=f"{'|'.join(out_labels)}",
-                shape="record",
-                rank="max",
-            )
 
 
 @dataclass(frozen=True)
