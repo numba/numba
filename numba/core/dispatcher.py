@@ -339,8 +339,8 @@ class _DispatcherBase(_dispatcher.Dispatcher):
     def add_overload(self, cres):
         args = tuple(cres.signature.args)
         sig = [a._code for a in args]
-        print(type(cres), cres.entry_point)
-        self._insert(sig, cres.entry_point, cres.objectmode)
+        if cres.entry_point:
+            self._insert(sig, cres.entry_point, cres.objectmode)
         self.overloads[args] = cres
 
     def fold_argument_types(self, args, kws):

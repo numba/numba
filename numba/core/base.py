@@ -839,7 +839,7 @@ class BaseContext(object):
                                              impl, sig.args,
                                              sig.return_type, flags,
                                              locals=locals)
-
+            library.finalize()
             # Allow inlining the function inside callers.
             self.active_code_library.add_linking_library(cres.library)
             return cres
