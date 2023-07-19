@@ -974,15 +974,13 @@ Floating functions
  copysign            Yes          Yes
  nextafter           Yes          Yes
  modf                Yes          No
- ldexp               Yes (*)      Yes
+ ldexp               Yes          Yes
  frexp               Yes          No
  floor               Yes          Yes
  ceil                Yes          Yes
  trunc               Yes          Yes
  spacing             Yes          Yes
 ==============  =============  ===============
-
-(\*) not supported on windows 32 bit
 
 
 Datetime functions

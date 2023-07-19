@@ -301,9 +301,7 @@ class _EnvReloader(object):
         DUMP_OPTIMIZED = _readenv("NUMBA_DUMP_OPTIMIZED", int, DEBUG)
 
         # Force disable loop vectorize
-        # Loop vectorizer is disabled on 32-bit win32 due to a bug (#649)
-        LOOP_VECTORIZE = _readenv("NUMBA_LOOP_VECTORIZE", int,
-                                  not (IS_WIN32 and IS_32BITS))
+        LOOP_VECTORIZE = _readenv("NUMBA_LOOP_VECTORIZE", int, 1)
 
         # Enable superword-level parallelism vectorization, default is off
         # since #8705 (miscompilation).

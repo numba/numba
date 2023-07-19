@@ -584,26 +584,13 @@ class TestFunctionTypeExtensions(TestCase):
                 self._name = fname
                 if fname == 'cos':
                     # test for double-precision math function
-                    if IS_WIN32 and IS_32BITS:
-                        # 32-bit Windows math library does not provide
-                        # a double-precision cos function, so
-                        # disabling the function
-                        addr = None
-                        signature = None
-                    else:
-                        addr = ctypes.cast(self.lib.cos, ctypes.c_voidp).value
-                        signature = float64(float64)
+                    addr = ctypes.cast(self.lib.cos, ctypes.c_voidp).value
+                    signature = float64(float64)
                 elif fname == 'sinf':
                     # test for single-precision math function
-                    if IS_WIN32 and IS_32BITS:
-                        # 32-bit Windows math library provides sin
-                        # (instead of sinf) that is a single-precision
-                        # sin function
-                        addr = ctypes.cast(self.lib.sin, ctypes.c_voidp).value
-                    else:
-                        # Other 32/64 bit platforms define sinf as the
-                        # single-precision sin function
-                        addr = ctypes.cast(self.lib.sinf, ctypes.c_voidp).value
+                    # Other 32/64 bit platforms define sinf as the
+                    # single-precision sin function
+                    addr = ctypes.cast(self.lib.sinf, ctypes.c_voidp).value
                     signature = float32(float32)
                 else:
                     raise NotImplementedError(
