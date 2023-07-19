@@ -557,7 +557,7 @@ def _scfg_add_conditional_pop_stack(bcmap, scfg: SCFG):
         )
 
     for label, (parent_label, (br_index, instlist)) in extra_records.items():
-        newlabel = scfg.name_gen.new_block_name("numba.extrabasicblock")
+        newlabel = scfg.name_gen.new_block_name("python.extrabasicblock")
         scfg.graph[parent_label] = _replace_jump_targets(
             scfg.graph[parent_label], br_index, newlabel
         )
