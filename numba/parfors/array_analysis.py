@@ -1083,11 +1083,12 @@ class ArrayAnalysis(object):
     parfor optimizations.
     """
 
-    def __init__(self, context, func_ir, typemap, calltypes):
+    def __init__(self, context, func_ir, typemap, calltypes, flags):
         self.context = context
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
+        self.flags = flags
 
         # EquivSet of variables, indexed by block number
         self.equiv_sets = {}
@@ -1135,7 +1136,8 @@ class ArrayAnalysis(object):
             blocks,
             self.func_ir.arg_names,
             self.typemap,
-            self.func_ir
+            self.func_ir,
+            self.flags
         )
 
         aa_count_save = ArrayAnalysis.aa_count

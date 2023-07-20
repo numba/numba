@@ -31,6 +31,7 @@ from numba.core.ir_utils import (
     transfer_scope,
     find_max_label,
     get_global_func_typ,
+    find_potential_aliases,
 )
 from numba.core.typing import signature
 from numba.core import lowering
@@ -110,12 +111,41 @@ def _lower_parfor_parallel_std(lowerer, parfor):
             rv = ir.Var(scope, racevar, loc)
             lowerer._alloca_var(rv.name, rvtyp)
 
-    #alias_map = {}
-    #arg_aliases = {}
+    func_alias_map, func_arg_aliases = find_potential_aliases(
+        lowerer.func_ir.blocks,
+        lowerer.func_ir.arg_names,
+        typemap,
+        lowerer.func_ir,
+        parfor.flags)
+    if config.DEBUG_ARRAY_OPT:
+        print("func_alias_map", func_alias_map)
+        print("pre func_arg_aliases", func_arg_aliases)
+    # Arguments that can alias in the main function are filtered by
+    # those used by the parfor region and they can therefore also
+    # alias there.
+    func_arg_aliases = func_arg_aliases.intersection(set(parfor.params))
+    # Filter non-argument aliasing information by variables that will
+    # be passed to the outlined parfor function.  For those whose keys
+    # are parfor params then look at their values that records which
+    # vars might alias.  If none of those are parfor params (except the
+    # duplicate of the key), then don't add this variable to the list
+    # of argument aliases for the outlined region.
+    for amk in func_alias_map.keys():
+        if amk not in parfor.params:
+            continue
+        amk_aliases = func_alias_map[amk].intersection(set(parfor.params))
+        if len(amk_aliases) > 1:
+            func_arg_aliases.add(amk)
+    if config.DEBUG_ARRAY_OPT:
+        print("func_arg_aliases", func_arg_aliases)
+    if len(func_arg_aliases) == 1:
+        func_arg_aliases = set()
+
     alias_map, arg_aliases = numba.parfors.parfor.find_potential_aliases_parfor(
                                  parfor, parfor.params, typemap,
-                                 lowerer.func_ir, parfor.flags)
-                                 #lowerer.func_ir, False, alias_map, arg_aliases)
+                                 lowerer.func_ir, parfor.flags,
+                                 alias_map={},
+                                 arg_aliases=func_arg_aliases)
     if config.DEBUG_ARRAY_OPT:
         print("alias_map", alias_map)
         print("arg_aliases", arg_aliases)
@@ -341,7 +371,7 @@ def _lower_parfor_parallel_std(lowerer, parfor):
          func_arg_types,
          exp_name_to_tuple_var) = _create_gufunc_for_parfor_body(
             lowerer, parfor, typemap, typingctx, targetctx, flags, {},
-            bool(alias_map), index_var_typ, parfor.races)
+            bool(alias_map) or bool(arg_aliases), index_var_typ, parfor.races)
     finally:
         numba.parfors.parfor.sequential_parfor_lowering = False
 
@@ -1527,7 +1557,11 @@ def _create_gufunc_for_parfor_body(
         print("typemap", typemap)
 
     old_alias = flags.noalias
-    if not has_aliases:
+    if has_aliases:
+        if config.DEBUG_ARRAY_OPT:
+            print("Aliases found so resetting noalias flag.")
+        flags.noalias = False
+    else:
         if config.DEBUG_ARRAY_OPT:
             print("No aliases found so adding noalias flag.")
         flags.noalias = True

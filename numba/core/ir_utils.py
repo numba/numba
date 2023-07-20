@@ -570,14 +570,14 @@ def remove_args(blocks):
     return
 
 
-def dead_code_elimination(func_ir, typemap=None, alias_map=None,
+def dead_code_elimination(func_ir, flags, typemap=None, alias_map=None,
                           arg_aliases=None):
     """ Performs dead code elimination and leaves the IR in a valid state on
     exit
     """
     do_post_proc = False
-    while (remove_dead(func_ir.blocks, func_ir.arg_names, func_ir, typemap,
-                       alias_map, arg_aliases)):
+    while (remove_dead(func_ir.blocks, func_ir.arg_names, func_ir, flags,
+                       typemap=typemap, alias_map=alias_map, arg_aliases=arg_aliases)):
         do_post_proc = True
 
     if do_post_proc:
@@ -585,7 +585,7 @@ def dead_code_elimination(func_ir, typemap=None, alias_map=None,
         post_proc.run()
 
 
-def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases=None):
+def remove_dead(blocks, args, func_ir, flags, *, typemap=None, alias_map=None, arg_aliases=None):
     """dead code elimination using liveness and CFG info.
     Returns True if something has been removed, or False if nothing is removed.
     """
@@ -595,7 +595,7 @@ def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases
     call_table, _ = get_call_table(blocks)
     if alias_map is None or arg_aliases is None:
         alias_map, arg_aliases = find_potential_aliases(blocks, args, typemap,
-                                                        func_ir)
+                                                        func_ir, flags)
     if config.DEBUG_ARRAY_OPT >= 1:
         print("remove dead args:", args)
         print("remove dead alias map:", alias_map)
@@ -618,7 +618,7 @@ def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases
                 print("succ live_map", out_blk, live_map[out_blk])
             lives |= live_map[out_blk]
         removed |= remove_dead_block(block, lives, call_table, arg_aliases,
-                                     alias_map, alias_set, func_ir, typemap)
+                                     alias_map, alias_set, func_ir, typemap, flags)
 
     return removed
 
@@ -629,7 +629,7 @@ remove_dead_extensions = {}
 
 
 def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
-                                                  alias_set, func_ir, typemap):
+                      alias_set, func_ir, typemap, flags):
     """remove dead code using liveness info.
     Mutable arguments (e.g. arrays) that are not definitely assigned are live
     after return of function.
@@ -655,7 +655,7 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
         if type(stmt) in remove_dead_extensions:
             f = remove_dead_extensions[type(stmt)]
             stmt = f(stmt, lives, lives_n_aliases, arg_aliases, alias_map, func_ir,
-                     typemap)
+                     typemap, flags)
             if stmt is None:
                 if config.DEBUG_ARRAY_OPT >= 2:
                     print("Statement was removed.")
@@ -818,8 +818,10 @@ def find_potential_aliases(blocks, args, typemap, func_ir, flags,
     if alias_map is None:
         alias_map = {}
     if arg_aliases is None:
+        if config.DEBUG_ARRAY_OPT >= 1:
+            print("find_potential_aliases flags", flags, type(flags))
         if flags.noalias:
-            arg_aliases = {}
+            arg_aliases = set()
         else:
             arg_aliases = set(a for a in args if not is_immutable_type(a, typemap))
     if config.DEBUG_ARRAY_OPT >= 1:
@@ -834,7 +836,7 @@ def find_potential_aliases(blocks, args, typemap, func_ir, flags,
         for instr in bl.body:
             if type(instr) in alias_analysis_extensions:
                 f = alias_analysis_extensions[type(instr)]
-                f(instr, args, typemap, func_ir, alias_map, arg_aliases)
+                f(instr, args, typemap, func_ir, flags, alias_map=alias_map, arg_aliases=arg_aliases)
             if isinstance(instr, ir.Assign):
                 expr = instr.value
                 lhs = instr.target.name
@@ -1501,7 +1503,7 @@ def restore_copy_var_names(blocks, save_copies, typemap):
     return var_rename_map
 
 
-def simplify(func_ir, typemap, calltypes, metadata):
+def simplify(func_ir, typemap, calltypes, metadata, flags):
     # get copies in to blocks and out from blocks
     in_cps, _ = copy_propagate(func_ir.blocks, typemap)
     # table mapping variable names to ir.Var objects to help replacement
@@ -1519,7 +1521,7 @@ def simplify(func_ir, typemap, calltypes, metadata):
     # remove dead code to enable fusion
     if config.DEBUG_ARRAY_OPT >= 1:
         dprint_func_ir(func_ir, "after copy prop")
-    remove_dead(func_ir.blocks, func_ir.arg_names, func_ir, typemap)
+    remove_dead(func_ir.blocks, func_ir.arg_names, func_ir, flags, typemap=typemap)
     func_ir.blocks = simplify_CFG(func_ir.blocks)
     if config.DEBUG_ARRAY_OPT >= 1:
         dprint_func_ir(func_ir, "after simplify")

@@ -1599,13 +1599,14 @@ class ParforPassStates:
         self.swapped_fns = diagnostics.replaced_fns
         self.fusion_info = diagnostics.fusion_info
         self.nested_fusion_info = diagnostics.nested_fusion_info
+        self.flags = flags
 
         self.array_analysis = array_analysis.ArrayAnalysis(
             self.typingctx, self.func_ir, self.typemap, self.calltypes,
+            self.flags
         )
 
         ir_utils._the_max_label.update(max(func_ir.blocks.keys()))
-        self.flags = flags
         self.metadata = metadata
         if "parfors" not in metadata:
             metadata["parfors"] = {}
@@ -2920,11 +2921,19 @@ class ParforFusionPass(ParforPassStates):
         # jumps can be created with prange conversion
         n_parfors = simplify_parfor_body_CFG(self.func_ir.blocks)
         # simplify before fusion
-        simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
+        simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"], self.flags)
         # need two rounds of copy propagation to enable fusion of long sequences
         # of parfors like test_fuse_argmin (some PYTHONHASHSEED values since
         # apply_copies_parfor depends on set order for creating dummy assigns)
-        simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
+        simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"], self.flags)
+
+        self.alias_map, self.arg_aliases = find_potential_aliases(
+                                               self.func_ir.blocks,
+                                               self.func_ir.arg_names,
+                                               self.typemap,
+                                               self.func_ir,
+                                               self.flags
+                                           )
 
         if self.options.fusion and n_parfors >= 2:
             self.func_ir._definitions = build_definitions(self.func_ir.blocks)
@@ -2947,7 +2956,8 @@ class ParforFusionPass(ParforPassStates):
             # reorder statements to maximize fusion
             # push non-parfors down
             maximize_fusion(self.func_ir, self.func_ir.blocks, self.typemap,
-                            self.flags, up_direction=False)
+                            self.flags, self.alias_map, self.arg_aliases,
+                            up_direction=False)
             dprint_func_ir(self.func_ir, "after maximize fusion down")
             self.fuse_parfors(self.array_analysis,
                               self.func_ir.blocks,
@@ -2956,7 +2966,7 @@ class ParforFusionPass(ParforPassStates):
             dprint_func_ir(self.func_ir, "after first fuse")
             # push non-parfors up
             maximize_fusion(self.func_ir, self.func_ir.blocks, self.typemap,
-                            self.flags)
+                            self.flags, self.alias_map, self.arg_aliases)
             dprint_func_ir(self.func_ir, "after maximize fusion up")
             # try fuse again after maximize
             self.fuse_parfors(self.array_analysis,
@@ -2965,7 +2975,7 @@ class ParforFusionPass(ParforPassStates):
                               self.typemap)
             dprint_func_ir(self.func_ir, "after fusion")
             # remove dead code after fusion to remove extra arrays and variables
-            simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
+            simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"], self.flags)
 
     def fuse_parfors(self, array_analysis, blocks, func_ir, typemap):
         for label, block in blocks.items():
@@ -3027,7 +3037,7 @@ class ParforPreLoweringPass(ParforPassStates):
         push_call_vars(self.func_ir.blocks, {}, {}, self.typemap)
         dprint_func_ir(self.func_ir, "after push call vars")
         # simplify again
-        simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
+        simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"], self.flags)
         dprint_func_ir(self.func_ir, "after optimization")
         if config.DEBUG_ARRAY_OPT >= 1:
             print("variable types: ", sorted(self.typemap.items()))
@@ -3064,7 +3074,7 @@ class ParforPreLoweringPass(ParforPassStates):
                                 self.typemap)
         if sequential_parfor_lowering:
             lower_parfor_sequential(
-                self.typingctx, self.func_ir, self.typemap, self.calltypes, self.metadata)
+                self.typingctx, self.func_ir, self.typemap, self.calltypes, self.metadata, self.flags)
         else:
             # prepare for parallel lowering
             # add parfor params to parfors here since lowering is destructive
@@ -3375,7 +3385,7 @@ def _find_func_var(typemap, func, avail_vars, loc):
     raise errors.UnsupportedRewriteError("ufunc call variable not found", loc=loc)
 
 
-def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes, metadata):
+def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes, metadata, flags):
     ir_utils._the_max_label.update(ir_utils.find_max_label(func_ir.blocks))
     parfor_found = False
     new_blocks = {}
@@ -3391,7 +3401,7 @@ def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes, metadata):
     if parfor_found:
         func_ir.blocks = rename_labels(func_ir.blocks)
     dprint_func_ir(func_ir, "after parfor sequential lowering")
-    simplify(func_ir, typemap, calltypes, metadata["parfors"])
+    simplify(func_ir, typemap, calltypes, metadata["parfors"], flags)
     dprint_func_ir(func_ir, "after parfor sequential simplify")
 
 
@@ -3955,19 +3965,20 @@ def parfor_insert_dels(parfor, curr_dead_set):
 postproc.ir_extension_insert_dels[Parfor] = parfor_insert_dels
 
 
-def maximize_fusion(func_ir, blocks, typemap, flags, up_direction=True):
+def maximize_fusion(func_ir, blocks, typemap, flags, alias_map, arg_aliases,
+                    up_direction=True):
     """
     Reorder statements to maximize parfor fusion. Push all parfors up or down
     so they are adjacent.
     """
     call_table, _ = get_call_table(blocks)
-    alias_map, arg_aliases = find_potential_aliases(
-                                 blocks,
-                                 func_ir.arg_names,
-                                 typemap,
-                                 func_ir,
-                                 flags
-                             )
+    #alias_map, arg_aliases = find_potential_aliases(
+    #                             blocks,
+    #                             func_ir.arg_names,
+    #                             typemap,
+    #                             func_ir,
+    #                             flags
+    #                         )
     for block in blocks.values():
         order_changed = True
         while order_changed:
@@ -4473,7 +4484,7 @@ def get_parfor_pattern_vars(parfor):
                     out.add(v.name)
     return out
 
-def remove_dead_parfor(parfor, lives, lives_n_aliases, arg_aliases, alias_map, func_ir, typemap):
+def remove_dead_parfor(parfor, lives, lives_n_aliases, arg_aliases, alias_map, func_ir, typemap, flags):
     """ remove dead code inside parfor including get/sets
     """
 
@@ -4565,7 +4576,7 @@ def remove_dead_parfor(parfor, lives, lives_n_aliases, arg_aliases, alias_map, f
       is used.
     """
     remove_dead_parfor_recursive(
-        parfor, lives, arg_aliases, alias_map, func_ir, typemap)
+        parfor, lives, arg_aliases, alias_map, func_ir, typemap, flags)
 
     # remove parfor if empty
     is_empty = len(parfor.init_block.body) == 0
@@ -4612,7 +4623,7 @@ ir_utils.remove_dead_extensions[Parfor] = remove_dead_parfor
 
 
 def remove_dead_parfor_recursive(parfor, lives, arg_aliases, alias_map,
-                                                             func_ir, typemap):
+                                 func_ir, typemap, flags):
     """create a dummy function from parfor and call remove dead recursively
     """
     blocks = parfor.loop_body.copy()  # shallow copy is enough
@@ -4647,7 +4658,7 @@ def remove_dead_parfor_recursive(parfor, lives, arg_aliases, alias_map,
     blocks[0].body.append(ir.Jump(first_body_block, ir.Loc("parfors_dummy", -1)))
 
     # args var including aliases is ok
-    remove_dead(blocks, arg_aliases, func_ir, typemap, alias_map, arg_aliases)
+    remove_dead(blocks, arg_aliases, func_ir, flags, typemap=typemap, alias_map=alias_map, arg_aliases=arg_aliases)
     typemap.pop(tuple_var.name)  # remove dummy tuple type
     blocks[0].body.pop()  # remove dummy jump
     blocks[last_label].body.pop()  # remove branch
@@ -4673,7 +4684,7 @@ def _add_liveness_return_block(blocks, lives, typemap):
     return return_label, tuple_var
 
 
-def find_potential_aliases_parfor(parfor, args, typemap, func_ir, flags,
+def find_potential_aliases_parfor(parfor, args, typemap, func_ir, flags, *,
                                   alias_map=None, arg_aliases=None):
     blocks = wrap_parfor_blocks(parfor)
     alias_map, arg_aliases = ir_utils.find_potential_aliases(
