@@ -235,20 +235,19 @@ class CPUContext(BaseContext):
         """
         Returns
         -------
-        (cfunc, fnptr)
+        cfunc
 
         - cfunc
-            callable function (Can be None)
-        - fnptr
-            callable function address
-        - env
-            an execution environment (from _dynfunc)
+            callable function.
+            It's used as dictionary key thus must uniquely identifiable.
         """
-        if not fndesc.llvm_cpython_wrapper_name:
-            return None
-        # Code generation
-        fnptr = library.get_pointer_to_function(
-            fndesc.llvm_cpython_wrapper_name)
+
+        if fndesc.llvm_cpython_wrapper_name:
+            # Code generation
+            fnptr = library.get_pointer_to_function(
+                fndesc.llvm_cpython_wrapper_name)
+        else:
+            fnptr = 0
 
         # Note: we avoid reusing the original docstring to avoid encoding
         # issues on Python 2, see issue #1908
@@ -259,7 +258,8 @@ class CPUContext(BaseContext):
                                        # objects to keepalive with the function
                                        (library,)
                                        )
-        library.set_env(self.get_env_name(fndesc), env)
+        if fndesc.llvm_cpython_wrapper_name:
+            library.set_env(self.get_env_name(fndesc), env)
         return cfunc
 
     def calc_array_sizeof(self, ndim):
