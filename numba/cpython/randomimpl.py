@@ -200,37 +200,31 @@ def get_next_int(context, builder, state_ptr, nbits, is_numpy):
 @overload(random.seed)
 def seed_impl(a):
     if isinstance(a, types.Integer):
-        @intrinsic
-        def _impl(typingcontext, seed):
-            def codegen(context, builder, sig, args):
-                seed_value, = args
-                fnty = ir.FunctionType(ir.VoidType(), (rnd_state_ptr_t, int32_t))
-                fn = cgutils.get_or_insert_function(builder.function.module, fnty,
-                                                    'numba_rnd_init')
-                builder.call(fn, (get_state_ptr(context, builder, 'py'),
-                                  seed_value))
-                return context.get_constant(types.none, None)
-
-            return signature(types.void, types.uint32), codegen
-
-        return lambda a: _impl(a)
+        fn = register_jitable(_seed_impl('py'))
+        def impl(a):
+            return fn(a)
+        return impl
 
 
 @overload(np.random.seed)
 def seed_impl(seed):
     if isinstance(seed, types.Integer):
-        @intrinsic
-        def _impl(typingcontext, seed):
-            def codegen(context, builder, sig, args):
-                seed_value, = args
-                fnty = ir.FunctionType(ir.VoidType(), (rnd_state_ptr_t, int32_t))
-                fn = cgutils.get_or_insert_function(builder.function.module, fnty,
-                                                    'numba_rnd_init')
-                builder.call(fn, (get_state_ptr(context, builder, 'np'),
-                                  seed_value))
-                return context.get_constant(types.none, None)
-            return signature(types.void, types.uint32), codegen
-        return lambda seed: _impl(seed)
+        return _seed_impl('np')
+
+
+def _seed_impl(state_type):
+    @intrinsic
+    def _impl(typingcontext, seed):
+        def codegen(context, builder, sig, args):
+            seed_value, = args
+            fnty = ir.FunctionType(ir.VoidType(), (rnd_state_ptr_t, int32_t))
+            fn = cgutils.get_or_insert_function(builder.function.module, fnty,
+                                                'numba_rnd_init')
+            builder.call(fn, (get_state_ptr(context, builder, state_type),
+                              seed_value))
+            return context.get_constant(types.none, None)
+        return signature(types.void, types.uint32), codegen
+    return lambda seed: _impl(seed)
 
 
 @overload(random.random)
@@ -262,13 +256,13 @@ def random_impl0():
 @overload(np.random.random_sample)
 @overload(np.random.sample)
 @overload(np.random.ranf)
-def random_impl1(size):
+def random_impl1(size=None):
     if is_nonelike(size):
-        return lambda size: np.random.random()
+        return lambda size=None: np.random.random()
     if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
                                            and isinstance(size.dtype,
                                                           types.Integer)):
-        def _impl(size):
+        def _impl(size=None):
             out = np.empty(size)
             out_flat = out.flat
             for idx in range(out.size):
@@ -283,10 +277,10 @@ def gauss_impl(mu, sigma):
     if isinstance(mu, (types.Float, types.Integer)) and isinstance(
             sigma, (types.Float, types.Integer)):
         @intrinsic
-        def _impl(typingcontext, loc, scale):
-            loc_preprocessor = _double_preprocessor(loc)
-            scale_preprocessor = _double_preprocessor(scale)
-            return signature(types.float64, loc, scale),\
+        def _impl(typingcontext, mu, sigma):
+            loc_preprocessor = _double_preprocessor(mu)
+            scale_preprocessor = _double_preprocessor(sigma)
+            return signature(types.float64, mu, sigma),\
                    _gauss_impl("py", loc_preprocessor, scale_preprocessor)
         return lambda mu, sigma: _impl(mu, sigma)
 
@@ -519,9 +513,9 @@ def _randrange_impl(context, builder, start, stop, step, ty, signed, state):
 
 
 @overload(random.randrange)
-def randrange_impl_1(stop):
-    if isinstance(stop, types.Integer):
-        return lambda stop: random.randrange(0, stop, 1)
+def randrange_impl_1(start):
+    if isinstance(start, types.Integer):
+        return lambda start: random.randrange(0, start, 1)
 
 
 @overload(random.randrange)
@@ -572,9 +566,9 @@ def randint_impl_1(a, b):
 
 
 @overload(np.random.randint)
-def np_randint_impl_1(high):
-    if isinstance(high, types.Integer):
-        return lambda high: np.random.randint(0, high)
+def np_randint_impl_1(low):
+    if isinstance(low, types.Integer):
+        return lambda low: np.random.randint(0, low)
 
 
 @overload(np.random.randint)
@@ -623,26 +617,9 @@ def np_randint_impl_3(low, high, size):
         return _impl
 
 
-@overload(random.uniform)
-def uniform_impl0():
-    return lambda: random.uniform(0.0, 1.0)
-
-
 @overload(np.random.uniform)
 def np_uniform_impl0():
     return lambda: np.random.uniform(0.0, 1.0)
-
-
-@overload(random.uniform)
-def uniform_impl1(a):
-    if isinstance(a, (types.Float, types.Integer)):
-        return lambda a: random.uniform(a, 1.0)
-
-
-@overload(np.random.uniform)
-def np_uniform_impl1(low):
-    if isinstance(low, (types.Float, types.Integer)):
-        return lambda low: np.random.uniform(low, 1.0)
 
 
 @overload(random.uniform)
@@ -650,10 +627,10 @@ def uniform_impl2(a, b):
     if isinstance(a, (types.Float, types.Integer)) and isinstance(
             b, (types.Float, types.Integer)):
         @intrinsic
-        def _impl(typingcontext, low, high):
-            low_preprocessor = _double_preprocessor(low)
-            high_preprocessor = _double_preprocessor(high)
-            return signature(types.float64, low, high), uniform_impl(
+        def _impl(typingcontext, a, b):
+            low_preprocessor = _double_preprocessor(a)
+            high_preprocessor = _double_preprocessor(b)
+            return signature(types.float64, a, b), uniform_impl(
                 'py', low_preprocessor, high_preprocessor)
         return lambda a, b: _impl(a, b)
 
@@ -757,13 +734,14 @@ def triangular_impl_3(left, mode, right):
 
 
 @overload(np.random.triangular)
-def triangular_impl(left, mode, right, size):
+def triangular_impl(left, mode, right, size=None):
     if is_nonelike(size):
-        return lambda left, mode, right, size: np.random.triangular(left, mode, right)
+        return lambda left, mode, right, size: np.random.triangular(left, mode,
+                                                                    right)
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                             isinstance(size.dtype,
                                                        types.Integer))):
-        def _impl(left, mode, right, size):
+        def _impl(left, mode, right, size=None):
             out = np.empty(size)
             out_flat = out.flat
             for idx in range(out.size):
@@ -776,132 +754,83 @@ def triangular_impl(left, mode, right, size):
 def gammavariate_impl(alpha, beta):
     if isinstance(alpha, (types.Float, types.Integer)) and isinstance(
             beta, (types.Float, types.Integer)):
-        def _impl(alpha, beta):
-            """Gamma distribution.  Taken from CPython.
-            """
-            SG_MAGICCONST = 1.0 + math.log(4.5)
-            # alpha > 0, beta > 0, mean is alpha*beta, variance is alpha*beta**2
-
-            # Warning: a few older sources define the gamma distribution in terms
-            # of alpha > -1.0
-            if alpha <= 0.0 or beta <= 0.0:
-                raise ValueError('gammavariate: alpha and beta must be > 0.0')
-
-            if alpha > 1.0:
-                # Uses R.C.H. Cheng, "The generation of Gamma
-                # variables with non-integral shape parameters",
-                # Applied Statistics, (1977), 26, No. 1, p71-74
-                ainv = math.sqrt(2.0 * alpha - 1.0)
-                bbb = alpha - math.log(4.0)
-                ccc = alpha + ainv
-
-                while 1:
-                    u1 = random.random()
-                    if not 1e-7 < u1 < .9999999:
-                        continue
-                    u2 = 1.0 - random.random()
-                    v = math.log(u1 / (1.0 - u1)) / ainv
-                    x = alpha * math.exp(v)
-                    z = u1 * u1 * u2
-                    r = bbb + ccc * v - x
-                    if r + SG_MAGICCONST - 4.5 * z >= 0.0 or r >= math.log(z):
-                        return x * beta
-
-            elif alpha == 1.0:
-                # expovariate(1)
-
-                # Adjust due to cpython
-                # commit 63d152232e1742660f481c04a811f824b91f6790
-                return -math.log(1.0 - random.random()) * beta
-
-            else:  # alpha is between 0 and 1 (exclusive)
-                # Uses ALGORITHM GS of Statistical Computing - Kennedy & Gentle
-                while 1:
-                    u = random.random()
-                    b = (math.e + alpha) / math.e
-                    p = b * u
-                    if p <= 1.0:
-                        x = p ** (1.0 / alpha)
-                    else:
-                        x = -math.log((b - p) / alpha)
-                    u1 = random.random()
-                    if p > 1.0:
-                        if u1 <= x ** (alpha - 1.0):
-                            break
-                    elif u1 <= math.exp(-x):
-                        break
-                return x * beta
-
-        return _impl
+        return _gammavariate_impl(random.random)
 
 
 @overload(np.random.standard_gamma)
 @overload(np.random.gamma)
-def gammavariate_impl(shape):
+def ol_np_random_gamma1(shape):
     if isinstance(shape, (types.Float, types.Integer)):
         return lambda shape: np.random.gamma(shape, 1.0)
 
 
 @overload(np.random.gamma)
-def gammavariate_impl(shape, scale):
+def ol_np_random_gamma2(shape, scale):
     if isinstance(shape, (types.Float, types.Integer)) and isinstance(
             scale, (types.Float, types.Integer)):
-        def _impl(shape, scale):
-            """Gamma distribution.  Taken from CPython.
-            """
-            SG_MAGICCONST = 1.0 + math.log(4.5)
-            # alpha > 0, beta > 0, mean is alpha*beta, variance is alpha*beta**2
+        fn = register_jitable(_gammavariate_impl(np.random.random))
+        def impl(shape, scale):
+            return fn(shape, scale)
+        return impl
 
-            # Warning: a few older sources define the gamma distribution in terms
-            # of alpha > -1.0
-            if shape <= 0.0 or scale <= 0.0:
-                raise ValueError('gammavariate: alpha and beta must be > 0.0')
 
-            if shape > 1.0:
-                # Uses R.C.H. Cheng, "The generation of Gamma
-                # variables with non-integral shape parameters",
-                # Applied Statistics, (1977), 26, No. 1, p71-74
-                ainv = math.sqrt(2.0 * shape - 1.0)
-                bbb = shape - math.log(4.0)
-                ccc = shape + ainv
+def _gammavariate_impl(_random):
+    def _impl(alpha, beta):
+        """Gamma distribution.  Taken from CPython.
+        """
+        SG_MAGICCONST = 1.0 + math.log(4.5)
+        # alpha > 0, beta > 0, mean is alpha*beta, variance is alpha*beta**2
 
-                while 1:
-                    u1 = np.random.random()
-                    if not 1e-7 < u1 < .9999999:
-                        continue
-                    u2 = 1.0 - np.random.random()
-                    v = math.log(u1/(1.0-u1))/ainv
-                    x = shape * math.exp(v)
-                    z = u1*u1*u2
-                    r = bbb+ccc*v-x
-                    if r + SG_MAGICCONST - 4.5*z >= 0.0 or r >= math.log(z):
-                        return x * scale
+        # Warning: a few older sources define the gamma distribution in terms
+        # of alpha > -1.0
+        if alpha <= 0.0 or beta <= 0.0:
+            raise ValueError('gammavariate: alpha and beta must be > 0.0')
 
-            elif shape == 1.0:
-                # expovariate(1)
+        if alpha > 1.0:
+            # Uses R.C.H. Cheng, "The generation of Gamma
+            # variables with non-integral shape parameters",
+            # Applied Statistics, (1977), 26, No. 1, p71-74
+            ainv = math.sqrt(2.0 * alpha - 1.0)
+            bbb = alpha - math.log(4.0)
+            ccc = alpha + ainv
 
-                # Adjust due to cpython
-                # commit 63d152232e1742660f481c04a811f824b91f6790
-                return -math.log(1.0 - np.random.random()) * scale
+            while 1:
+                u1 = _random()
+                if not 1e-7 < u1 < .9999999:
+                    continue
+                u2 = 1.0 - _random()
+                v = math.log(u1/(1.0-u1))/ainv
+                x = alpha*math.exp(v)
+                z = u1*u1*u2
+                r = bbb+ccc*v-x
+                if r + SG_MAGICCONST - 4.5*z >= 0.0 or r >= math.log(z):
+                    return x * beta
 
-            else:   # alpha is between 0 and 1 (exclusive)
-                # Uses ALGORITHM GS of Statistical Computing - Kennedy & Gentle
-                while 1:
-                    u = np.random.random()
-                    b = (math.e + shape) / math.e
-                    p = b*u
-                    if p <= 1.0:
-                        x = p ** (1.0 / shape)
-                    else:
-                        x = -math.log((b-p) / shape)
-                    u1 = np.random.random()
-                    if p > 1.0:
-                        if u1 <= x ** (shape - 1.0):
-                            break
-                    elif u1 <= math.exp(-x):
+        elif alpha == 1.0:
+            # expovariate(1)
+
+            # Adjust due to cpython
+            # commit 63d152232e1742660f481c04a811f824b91f6790
+            return -math.log(1.0 - _random()) * beta
+
+        else:   # alpha is between 0 and 1 (exclusive)
+            # Uses ALGORITHM GS of Statistical Computing - Kennedy & Gentle
+            while 1:
+                u = _random()
+                b = (math.e + alpha)/math.e
+                p = b*u
+                if p <= 1.0:
+                    x = p ** (1.0/alpha)
+                else:
+                    x = -math.log((b-p)/alpha)
+                u1 = _random()
+                if p > 1.0:
+                    if u1 <= x ** (alpha - 1.0):
                         break
-                return x * scale
-        return _impl
+                elif u1 <= math.exp(-x):
+                    break
+            return x * beta
+    return _impl
 
 
 @overload(np.random.gamma)
@@ -940,36 +869,31 @@ def standard_gamma_impl(shape, size):
 def betavariate_impl(alpha, beta):
     if isinstance(alpha, (types.Float, types.Integer)) and isinstance(
             beta, (types.Float, types.Integer)):
-        def _impl(alpha, beta):
-            """Beta distribution.  Taken from CPython.
-            """
-            # This version due to Janne Sinkkonen, and matches all the std
-            # texts (e.g., Knuth Vol 2 Ed 3 pg 134 "the beta distribution").
-            y = random.gammavariate(alpha, 1.)
-            if y == 0.0:
-                return 0.0
-            else:
-                return y / (y + random.gammavariate(beta, 1.))
-
-        return _impl
+        return _betavariate_impl(random.gammavariate)
 
 
 @overload(np.random.beta)
-def betavariate_impl(a, b):
+def ol_np_random_beta(a, b):
     if isinstance(a, (types.Float, types.Integer)) and isinstance(
             b, (types.Float, types.Integer)):
-        def _impl(a, b):
-            """Beta distribution.  Taken from CPython.
-            """
-            # This version due to Janne Sinkkonen, and matches all the std
-            # texts (e.g., Knuth Vol 2 Ed 3 pg 134 "the beta distribution").
-            y = np.random.gamma(a, 1.)
-            if y == 0.0:
-                return 0.0
-            else:
-                return y / (y + np.random.gamma(b, 1.))
+        fn =  register_jitable(_betavariate_impl(np.random.gamma))
+        def impl(a, b):
+            return fn(a, b)
+        return impl
 
-        return _impl
+
+def _betavariate_impl(gamma):
+    def _impl(alpha, beta):
+        """Beta distribution.  Taken from CPython.
+        """
+        # This version due to Janne Sinkkonen, and matches all the std
+        # texts (e.g., Knuth Vol 2 Ed 3 pg 134 "the beta distribution").
+        y = gamma(alpha, 1.)
+        if y == 0.0:
+            return 0.0
+        else:
+            return y / (y + gamma(beta, 1.))
+    return _impl
 
 
 @overload(np.random.beta)
@@ -1068,7 +992,8 @@ def np_log_normal_impl1(mean):
 def np_log_normal_impl2(mean, sigma):
     if isinstance(mean, (types.Float, types.Integer)) and isinstance(
             sigma, (types.Float, types.Integer)):
-        return lambda mean, sigma: math.exp(np.random.normal(mean, sigma))
+        fn = register_jitable(_lognormvariate_impl(np.random.normal))
+        return lambda mean, sigma: fn(mean, sigma)
 
 
 @overload(np.random.lognormal)
@@ -1090,7 +1015,12 @@ def lognormal_impl(mean, sigma, size):
 @overload(random.lognormvariate)
 def lognormvariate_impl(mu, sigma):
     if isinstance(mu, types.Float) and isinstance(sigma, types.Float):
-       return lambda mu, sigma: math.exp(random.gauss(mu, sigma))
+        fn = register_jitable(_lognormvariate_impl(random.gauss))
+        return lambda mu, sigma: fn(mu, sigma)
+
+
+def _lognormvariate_impl(_gauss):
+    return lambda mu, sigma: math.exp(_gauss(mu, sigma))
 
 
 @overload(random.paretovariate)
@@ -1111,7 +1041,7 @@ def pareto_impl(a):
         def _impl(a):
             # Same as paretovariate() - 1.
             u = 1.0 - np.random.random()
-            return 1.0 / u ** (1.0 / a) - 1
+            return 1.0 / u ** (1.0/a) - 1
 
         return _impl
 
@@ -1149,9 +1079,9 @@ def weibullvariate_impl(alpha, beta):
 def weibull_impl(a):
     if isinstance(a, (types.Float, types.Integer)):
         def _impl(a):
-            # Same as weibullvariate(1.0, beta)
+            # Same as weibullvariate(1.0, a)
             u = 1.0 - np.random.random()
-            return (-math.log(u)) ** (1.0 / a)
+            return (-math.log(u)) ** (1.0/a)
 
         return _impl
 
@@ -1326,17 +1256,17 @@ def chisquare_impl(df):
 
 
 @overload(np.random.chisquare)
-def chisquare_impl2(p, size):
+def chisquare_impl2(df, size):
     if is_nonelike(size):
-        return lambda p, size: np.random.chisquare(p)
+        return lambda df, size: np.random.chisquare(df)
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                             isinstance(size.dtype,
                                                        types.Integer))):
-        def _impl(p, size):
+        def _impl(df, size):
             out = np.empty(size)
             out_flat = out.flat
             for idx in range(out.size):
-                out_flat[idx] = np.random.chisquare(p)
+                out_flat[idx] = np.random.chisquare(df)
             return out
         return _impl
 
@@ -1742,13 +1672,13 @@ def rayleigh_impl0():
 @overload(np.random.rayleigh)
 def rayleigh_impl1(scale):
     if isinstance(scale, (types.Float, types.Integer)):
-        return rayleigh_impl
+        def impl(scale):
+            if scale <= 0.0:
+                raise ValueError("rayleigh(): scale <= 0")
+            return scale * math.sqrt(-2.0 * math.log(1.0 - np.random.random()))
+        return impl
 
 
-def rayleigh_impl(scale):
-    if scale <= 0.0:
-        raise ValueError("rayleigh(): mode <= 0")
-    return scale * math.sqrt(-2.0 * math.log(1.0 - np.random.random()))
 
 
 @overload(np.random.rayleigh)
