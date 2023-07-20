@@ -204,7 +204,7 @@ class BaseImageCodegen(Codegen):
             cpu_name = image_configuration.cpu_name
         tm_options['cpu'] = cpu_name
         tm_options['reloc'] = 'pic'
-        tm_options['codemodel'] = 'default'
+        tm_options['codemodel'] = 'jitdefault'
         tm_options['features'] = image_configuration.features
         self._target_machine = target.create_target_machine(**tm_options)
         self._tm_features = image_configuration.features
