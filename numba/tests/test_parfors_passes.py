@@ -35,6 +35,7 @@ class MyPipeline(object):
         self.state.return_type = None
         self.state.calltypes = None
         self.state.metadata = {}
+        self.state.flags = compiler.DEFAULT_FLAGS
 
 
 class BaseTest(TestCase):

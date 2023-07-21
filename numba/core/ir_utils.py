@@ -18,6 +18,7 @@ from numba.core.analysis import (compute_live_map, compute_use_defs,
 from numba.core.errors import (TypingError, UnsupportedError,
                                NumbaPendingDeprecationWarning,
                                CompilerError)
+from numba.core.compiler import Flags
 
 import copy
 
@@ -1781,13 +1782,14 @@ def get_ir_of_code(glbls, fcode):
             self.state.typemap = None
             self.state.return_type = None
             self.state.calltypes = None
+            self.state.flags = Flags()
     state = DummyPipeline(ir).state
     rewrites.rewrite_registry.apply('before-inference', state)
     # call inline pass to handle cases like stencils and comprehensions
     swapped = {} # TODO: get this from diagnostics store
     import numba.core.inline_closurecall
     inline_pass = numba.core.inline_closurecall.InlineClosureCallPass(
-        ir, numba.core.cpu.ParallelOptions(False), swapped)
+        ir, numba.core.cpu.ParallelOptions(False), state.flags, swapped)
     inline_pass.run()
 
     # TODO: DO NOT ADD MORE THINGS HERE!

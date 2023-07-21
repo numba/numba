@@ -74,7 +74,8 @@ class TestBranchPruneBase(MemoryLeakMixin, TestCase):
 
         # run closure inlining to ensure that nonlocals in closures are visible
         inline_pass = InlineClosureCallPass(func_ir,
-                                            cpu.ParallelOptions(False),)
+                                            cpu.ParallelOptions(False),
+                                            Flags())
         inline_pass.run()
 
         # Remove all Dels, and re-run postproc
