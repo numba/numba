@@ -70,12 +70,13 @@ class InlineClosureCallPass(object):
     closures, and inlines the body of the closure function to the call site.
     """
 
-    def __init__(self, func_ir, parallel_options, swapped={}, typed=False):
+    def __init__(self, func_ir, parallel_options, flags, swapped={}, typed=False):
         self.func_ir = func_ir
         self.parallel_options = parallel_options
         self.swapped = swapped
         self._processed_stencils = []
         self.typed = typed
+        self.flags = flags
 
     def run(self):
         """Run inline closure call pass.
@@ -143,7 +144,7 @@ class InlineClosureCallPass(object):
                 del self.func_ir.blocks[dead]
 
             # run dead code elimination
-            dead_code_elimination(self.func_ir)
+            dead_code_elimination(self.func_ir, self.flags)
             # do label renaming
             self.func_ir.blocks = rename_labels(self.func_ir.blocks)
 

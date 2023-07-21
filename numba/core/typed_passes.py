@@ -660,7 +660,7 @@ class InlineOverloads(FunctionPass):
             for dead in cfg.dead_nodes():
                 del state.func_ir.blocks[dead]
             # clean up blocks
-            dead_code_elimination(state.func_ir,
+            dead_code_elimination(state.func_ir, state.flags,
                                   typemap=state.typemap)
             # clean up unconditional branches that appear due to inlined
             # functions introducing blocks
@@ -860,7 +860,7 @@ class DeadCodeElimination(FunctionPass):
         FunctionPass.__init__(self)
 
     def run_pass(self, state):
-        dead_code_elimination(state.func_ir, state.typemap)
+        dead_code_elimination(state.func_ir, state.flags, typemap=state.typemap)
         return True
 
 

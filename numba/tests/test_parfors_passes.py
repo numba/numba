@@ -54,7 +54,7 @@ class BaseTest(TestCase):
             targetctx.refresh()
 
             inline_pass = inline_closurecall.InlineClosureCallPass(
-                tp.state.func_ir, options, typed=True
+                tp.state.func_ir, options, tp.state.flags, typed=True
             )
             inline_pass.run()
 
