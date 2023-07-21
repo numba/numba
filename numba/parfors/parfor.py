@@ -3015,10 +3015,14 @@ class ParforFusionPass(ParforPassStates):
 
     def fuse_recursive_parfor(self, parfor, equiv_set, func_ir, typemap):
         blocks = wrap_parfor_blocks(parfor)
-        maximize_fusion(self.func_ir, blocks, self.typemap, self.flags)
+        maximize_fusion(self.func_ir, blocks, self.typemap, self.flags,
+                        self.alias_map, self.arg_aliases)
         dprint_func_ir(self.func_ir, "after recursive maximize fusion down", blocks)
-        arr_analysis = array_analysis.ArrayAnalysis(self.typingctx, self.func_ir,
-                                                self.typemap, self.calltypes)
+        arr_analysis = array_analysis.ArrayAnalysis(self.typingctx,
+                                                    self.func_ir,
+                                                    self.typemap,
+                                                    self.calltypes,
+                                                    self.flags)
         arr_analysis.run(blocks, equiv_set)
         self.fuse_parfors(arr_analysis, blocks, func_ir, typemap)
         unwrap_parfor_blocks(parfor)
