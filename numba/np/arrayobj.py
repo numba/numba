@@ -1908,26 +1908,26 @@ def numpy_logspace(start, stop, num=50):
 
 
 @overload(np.rot90)
-def numpy_rot90(arr, k=1):
+def numpy_rot90(m, k=1):
     # supporting axes argument it needs to be included in np.flip
     if not isinstance(k, (int, types.Integer)):
         raise errors.TypingError('The second argument "k" must be an integer')
-    if not isinstance(arr, types.Array):
-        raise errors.TypingError('The first argument "arr" must be an array')
+    if not isinstance(m, types.Array):
+        raise errors.TypingError('The first argument "m" must be an array')
 
-    if arr.ndim < 2:
+    if m.ndim < 2:
         raise errors.NumbaValueError('Input must be >= 2-d.')
 
-    def impl(arr, k=1):
+    def impl(m, k=1):
         k = k % 4
         if k == 0:
-            return arr[:]
+            return m[:]
         elif k == 1:
-            return np.swapaxes(np.fliplr(arr), 0, 1)
+            return np.swapaxes(np.fliplr(m), 0, 1)
         elif k == 2:
-            return np.flipud(np.fliplr(arr))
+            return np.flipud(np.fliplr(m))
         elif k == 3:
-            return np.fliplr(np.swapaxes(arr, 0, 1))
+            return np.fliplr(np.swapaxes(m, 0, 1))
         else:
             raise AssertionError  # unreachable
 
@@ -2072,9 +2072,9 @@ def array_reshape_vararg(context, builder, sig, args):
 
 
 @overload(np.reshape)
-def np_reshape(a, shape):
-    def np_reshape_impl(a, shape):
-        return a.reshape(shape)
+def np_reshape(a, newshape):
+    def np_reshape_impl(a, newshape):
+        return a.reshape(newshape)
     return np_reshape_impl
 
 
@@ -2440,9 +2440,9 @@ def np_shape(a):
 
 
 @overload(np.unique)
-def np_unique(a):
-    def np_unique_impl(a):
-        b = np.sort(a.ravel())
+def np_unique(ar):
+    def np_unique_impl(ar):
+        b = np.sort(ar.ravel())
         head = list(b[:1])
         tail = [x for i, x in enumerate(b[1:]) if b[i] != x]
         return np.array(head + tail)
@@ -5935,13 +5935,13 @@ def array_dot(arr, other):
 
 
 @overload(np.fliplr)
-def np_flip_lr(a):
+def np_flip_lr(m):
 
-    if not type_can_asarray(a):
-        raise errors.TypingError("Cannot np.fliplr on %s type" % a)
+    if not type_can_asarray(m):
+        raise errors.TypingError("Cannot np.fliplr on %s type" % m)
 
-    def impl(a):
-        A = np.asarray(a)
+    def impl(m):
+        A = np.asarray(m)
         # this handling is superfluous/dead as < 2d array cannot be indexed as
         # present below and so typing fails. If the typing doesn't fail due to
         # some future change, this will catch it.
@@ -5952,13 +5952,13 @@ def np_flip_lr(a):
 
 
 @overload(np.flipud)
-def np_flip_ud(a):
+def np_flip_ud(m):
 
-    if not type_can_asarray(a):
-        raise errors.TypingError("Cannot np.flipud on %s type" % a)
+    if not type_can_asarray(m):
+        raise errors.TypingError("Cannot np.flipud on %s type" % m)
 
-    def impl(a):
-        A = np.asarray(a)
+    def impl(m):
+        A = np.asarray(m)
         # this handling is superfluous/dead as a 0d array cannot be indexed as
         # present below and so typing fails. If the typing doesn't fail due to
         # some future change, this will catch it.
@@ -5999,15 +5999,15 @@ def _build_flip_slice_tuple(tyctx, sz):
 
 
 @overload(np.flip)
-def np_flip(a):
+def np_flip(m):
     # a constant value is needed for the tuple slice, types.Array.ndim can
     # provide this and so at presnet only type.Array is support
-    if not isinstance(a, types.Array):
-        raise errors.TypingError("Cannot np.flip on %s type" % a)
+    if not isinstance(m, types.Array):
+        raise errors.TypingError("Cannot np.flip on %s type" % m)
 
-    def impl(a):
-        sl = _build_flip_slice_tuple(a.ndim)
-        return a[sl]
+    def impl(m):
+        sl = _build_flip_slice_tuple(m.ndim)
+        return m[sl]
 
     return impl
 
@@ -6409,21 +6409,21 @@ def ol_bool(arr):
 
 
 @overload(np.swapaxes)
-def numpy_swapaxes(arr, axis1, axis2):
+def numpy_swapaxes(a, axis1, axis2):
     if not isinstance(axis1, (int, types.Integer)):
         raise errors.TypingError('The second argument "axis1" must be an '
                                  'integer')
     if not isinstance(axis2, (int, types.Integer)):
         raise errors.TypingError('The third argument "axis2" must be an '
                                  'integer')
-    if not isinstance(arr, types.Array):
-        raise errors.TypingError('The first argument "arr" must be an array')
+    if not isinstance(a, types.Array):
+        raise errors.TypingError('The first argument "a" must be an array')
 
     # create tuple list for transpose
-    ndim = arr.ndim
+    ndim = a.ndim
     axes_list = tuple(range(ndim))
 
-    def impl(arr, axis1, axis2):
+    def impl(a, axis1, axis2):
         axis1 = normalize_axis("np.swapaxes", "axis1", ndim, axis1)
         axis2 = normalize_axis("np.swapaxes", "axis2", ndim, axis2)
 
@@ -6435,7 +6435,7 @@ def numpy_swapaxes(arr, axis1, axis2):
 
         axes_tuple = tuple_setitem(axes_list, axis1, axis2)
         axes_tuple = tuple_setitem(axes_tuple, axis2, axis1)
-        return np.transpose(arr, axes_tuple)
+        return np.transpose(a, axes_tuple)
 
     return impl
 
