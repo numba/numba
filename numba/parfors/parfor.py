@@ -3995,6 +3995,7 @@ def maximize_fusion(func_ir, blocks, typemap, flags, alias_map, arg_aliases,
                                 up_direction
                             )
 
+
 def maximize_fusion_inner(func_ir, block, call_table, alias_map,
                           arg_aliases, up_direction=True):
     order_changed = False
