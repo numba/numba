@@ -617,6 +617,7 @@ def remove_dead(blocks, args, func_ir, flags, *, typemap=None, alias_map=None, a
             if config.DEBUG_ARRAY_OPT >= 2:
                 print("succ live_map", out_blk, live_map[out_blk])
             lives |= live_map[out_blk]
+        lives |= set(args)
         removed |= remove_dead_block(block, lives, call_table, arg_aliases,
                                      alias_map, alias_set, func_ir, typemap, flags)
 
