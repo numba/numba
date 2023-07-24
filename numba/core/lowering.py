@@ -70,7 +70,7 @@ class BaseLower(object):
                                       cgctx=context,
                                       directives_only=directives_only)
 
-        self.metadata["llvm_lines"] = OrderedDict()
+        # self.metadata["llvm_lines"] = OrderedDict()
 
         # Subclass initialization
         self.init()
@@ -272,7 +272,7 @@ class BaseLower(object):
             self.builder.position_at_end(bb)
             self.debug_print(f"# lower block: {offset}")
             self.lower_block(block)
-        self.metadata["llvm_func_def"] = self._get_llvm_module_def()
+        # self.metadata["llvm_func_def"] = self._get_llvm_module_def()
         self.post_lower()
         return entry_block_tail
 
@@ -646,13 +646,14 @@ class Lower(BaseLower):
 
         after = self._get_llvm_module_blocks()
         diff = self._diff_llvm(before, after)
-        try:
-            self.metadata["llvm_lines"][line] = self._sum_llvm(
-                self.metadata["llvm_lines"][line],
-                diff
-            )
-        except KeyError:
-            self.metadata["llvm_lines"][line] = diff
+        print(line, diff)
+        # try:
+        #     self.metadata["llvm_lines"][line] = self._sum_llvm(
+        #         self.metadata["llvm_lines"][line],
+        #         diff
+        #     )
+        # except KeyError:
+        #     self.metadata["llvm_lines"][line] = diff
 
     def lower_setitem(self, target_var, index_var, value_var, signature):
         target = self.loadvar(target_var.name)
