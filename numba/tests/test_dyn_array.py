@@ -34,8 +34,8 @@ def np_hstack(a, b, c):
 def np_vstack(a, b, c):
     return np.vstack((a, b, c))
 
-def np_row_stack(a,b,c):
-    return np.row_stack((a,b,c))
+def np_row_stack(a, b, c):
+    return np.row_stack((a, b, c))
 
 def np_dstack(a, b, c):
     return np.dstack((a, b, c))
@@ -1757,27 +1757,21 @@ class TestNpStack(MemoryLeakMixin, TestCase):
         self.check_stack(pyfunc, cfunc, (a, b, a))
 
     def test_vstack(self):
-        pyfunc = np_vstack
-        cfunc = nrtjit(pyfunc)
-
         # Since np.row_stack is an alias for np.vstack, it does not need a
         # separate Numba implementation. For every test for np.vstack, the same
         # test for np.row_stack has been added.
-        pyfunc_rowstack = np_row_stack
-        cfunc_rowstack = nrtjit(pyfunc_rowstack)
+        for pyfunc in [np_vstack, np_row_stack]:
+            cfunc = nrtjit(pyfunc)
 
-        self.check_xxstack(pyfunc, cfunc)
-        self.check_xxstack(pyfunc_rowstack,cfunc_rowstack)
-        # 1d
-        a = np.arange(5)
-        b = a + 10
-        self.check_stack(pyfunc, cfunc, (a, b, b))
-        self.check_stack(pyfunc_rowstack, cfunc_rowstack, (a, b, b))
-        # 2d
-        a = np.arange(6).reshape((3, 2))
-        b = np.arange(8).reshape((4, 2)) + 100
-        self.check_stack(pyfunc, cfunc, (a, b, b))
-        self.check_stack(pyfunc_rowstack, cfunc_rowstack, (a, b, b))
+            self.check_xxstack(pyfunc, cfunc)
+            # 1d
+            a = np.arange(5)
+            b = a + 10
+            self.check_stack(pyfunc, cfunc, (a, b, b))
+            # 2d
+            a = np.arange(6).reshape((3, 2))
+            b = np.arange(8).reshape((4, 2)) + 100
+            self.check_stack(pyfunc, cfunc, (a, b, b))
 
     def test_dstack(self):
         pyfunc = np_dstack
