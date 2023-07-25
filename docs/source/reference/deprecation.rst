@@ -531,6 +531,8 @@ Schedule
 
 - In Numba 0.58: support for ``NUMBA_CAPTURED_ERRORS='old_style'`` is 
   deprecated.
+- In Numba 0.59: the use of ``NUMBA_CAPTURED_ERRORS='old_style'`` will raise 
+  deprecation warnings.
 - In Numba 0.60: support for ``NUMBA_CAPTURED_ERRORS='new_style'`` becomes the
   default.
 - In Numba 0.61: support for ``NUMBA_CAPTURED_ERRORS='old_style'`` will be 
