@@ -104,51 +104,70 @@ def polyutils_trimseq(seq):
 
 
 @overload(poly.polyadd)
-def numpy_polyadd(a1, a2):
-    if not isinstance(a1, types.Array):
-        msg = 'The argument "a1" must be an array'
+def numpy_polyadd(c1, c2):
+    if not isinstance(c1, types.Array):
+        msg = 'The argument "c1" must be an array'
         raise errors.TypingError(msg)
     
-    if not isinstance(a2, types.Array):
-        msg = 'The argument "a2" must be an array'
+    if not isinstance(c2, types.Array):
+        msg = 'The argument "c2" must be an array'
         raise errors.TypingError(msg)
     
-    def impl(a1, a2):
-        arr1 = np.atleast_1d(a1).astype(np.float64)
-        arr2 = np.atleast_1d(a2).astype(np.float64)
-        diff = len(a2) - len(a1)
+    def impl(c1, c2):
+        arr1 = np.atleast_1d(c1).astype(np.float64)
+        arr2 = np.atleast_1d(c2).astype(np.float64)
+        diff = len(c2) - len(c1)
         if diff > 0:
             zr = np.zeros(diff) #, a1.dtype)
-            arr1 = np.concatenate((a1, zr))
+            arr1 = np.concatenate((c1, zr))
         if diff < 0:
             zr = np.zeros(-diff) #, a2.dtype)
-            arr2 = np.concatenate((a2, zr))
+            arr2 = np.concatenate((c2, zr))
         val = arr1 + arr2
         return _trimseq(val)
     
     return impl
 
+
 @overload(poly.polysub)
-def numpy_polysub(a1, a2):
-    if not isinstance(a1, types.Array):
-        msg = 'The argument "a1" must be an array'
+def numpy_polysub(c1, c2):
+    if not isinstance(c1, (types.Array, types.Integer)):
+        msg = 'The argument "c1" must be an array'
         raise errors.TypingError(msg)
     
-    if not isinstance(a2, types.Array):
-        msg = 'The argument "a2" must be an array'
+    if not isinstance(c2, (types.Array, types.Integer)):
+        msg = 'The argument "c2" must be an array'
         raise errors.TypingError(msg)
     
-    def impl(a1, a2):
-        arr1 = np.atleast_1d(a1).astype(np.float64)
-        arr2 = np.atleast_1d(a2).astype(np.float64)
-        diff = len(a2) - len(a1)
+    def impl(c1, c2):
+        arr1 = np.atleast_1d(c1).astype(np.float64)
+        arr2 = np.atleast_1d(c2).astype(np.float64)
+        diff = len(c2) - len(c1)
         if diff > 0:
             zr = np.zeros(diff) #, a1.dtype)
-            arr1 = np.concatenate((a1, zr))
+            arr1 = np.concatenate((c1, zr))
         if diff < 0:
             zr = np.zeros(-diff) #, a2.dtype)
-            arr2 = np.concatenate((a2, zr))
+            arr2 = np.concatenate((c2, zr))
         val = arr1 - arr2
         return _trimseq(val)
     
+    return impl
+
+
+@overload(poly.polymul)
+def numpy_polymul(c1, c2):
+    if not isinstance(c1, types.Array):
+        msg = 'The argument "c1" must be an array'
+        raise errors.TypingError(msg)
+    
+    if not isinstance(c2, types.Array):
+        msg = 'The argument "c2" must be an array'
+        raise errors.TypingError(msg)
+    
+    # p is an array, x is a scalar
+    def impl(c1, c2):
+        val = np.convolve(c1, c2)
+        return val.astype(np.float64)
+
     return impl

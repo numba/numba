@@ -6,18 +6,23 @@ from numpy.polynomial import polynomial as poly
 from numpy.polynomial import polyutils as pu
 
 from numba import jit, njit
-from numba.tests.support import TestCase, tag, needs_lapack, EnableNRTStatsMixin
+from numba.tests.support import (TestCase, tag, needs_lapack,
+                                 EnableNRTStatsMixin, MemoryLeakMixin)
+from numba.core.errors import TypingError
 import unittest
 
 
 def roots_fn(p):
     return np.roots(p)
 
-def polyadd(p1,p2):
-    return poly.polyadd(p1,p2)
+def polyadd(c1,c2):
+    return poly.polyadd(c1,c2)
 
-def polysub(p1,p2):
-    return poly.polysub(p1,p2)
+def polysub(c1,c2):
+    return poly.polysub(c1,c2)
+
+def polymul(c1,c2):
+    return poly.polymul(c1,c2)
 
 def trimseq(seq):
     return pu.trimseq(seq)
@@ -127,14 +132,26 @@ class TestPoly1D(TestPolynomialBase):
         # but works fine if type conv to complex first
         cfunc(x.astype(np.complex128))
 
-    def test_trimseq(self):
+class TestPolynomial(MemoryLeakMixin, TestCase):
+
+    def test_trimseq_basic(self):
         pyfunc = trimseq
         cfunc = njit(trimseq)
         for i in range(5):
             coefs = np.array([1] + [0]*i)
             self.assertPreciseEqual(pyfunc(coefs), cfunc(coefs))
 
-    def test_polyadd(self):
+    def test_trimseq_exception(self):
+        cfunc = njit(trimseq)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc")
+        self.assertIn('The argument "seq" must be an array',
+                      str(raises.exception))
+
+    def test_polyadd_basic(self):
         pyfunc = polyadd
         cfunc = njit(polyadd)
         for i in range(5):
@@ -144,7 +161,22 @@ class TestPoly1D(TestPolynomialBase):
                 p2 = np.array([0]*j + [1])
                 self.assertPreciseEqual(pyfunc(p1,p2), cfunc(p1,p2), msg=msg)
 
-    def test_polysub(self):
+    def test_polyadd_exception(self):
+        cfunc = njit(polyadd)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc",np.array([1,2,3]))
+        self.assertIn('The argument "c1" must be an array',
+                      str(raises.exception))
+        
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.array([1,2,3]),"abc")
+        self.assertIn('The argument "c2" must be an array',
+                      str(raises.exception))
+
+    def test_polysub_basic(self):
         pyfunc = polysub
         cfunc = njit(polysub)
         for i in range(5):
@@ -156,3 +188,45 @@ class TestPoly1D(TestPolynomialBase):
                                         cfunc(p1,p2),
                                         msg=msg,
                                         ignore_sign_on_zero=True)
+
+    def test_polysub_exception(self):
+        cfunc = njit(polysub)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc",np.array([1,2,3]))
+        self.assertIn('The argument "c1" must be an array',
+                      str(raises.exception))
+        
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.array([1,2,3]),"abc")
+        self.assertIn('The argument "c2" must be an array',
+                      str(raises.exception))
+
+    def test_polymul_basic(self):
+        pyfunc = polymul
+        cfunc = njit(polymul)
+        for i in range(5):
+            for j in range(5):
+                msg = f"At i={i}, j={j}"
+                p1 = np.array([0]*i + [1])
+                p2 = np.array([0]*j + [1])
+                self.assertPreciseEqual(pyfunc(p1,p2),
+                                        cfunc(p1,p2),
+                                        msg=msg)
+
+    def test_polymul_exception(self):
+        cfunc = njit(polymul)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc",np.array([1,2,3]))
+        self.assertIn('The argument "c1" must be an array',
+                      str(raises.exception))
+        
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.array([1,2,3]),"abc")
+        self.assertIn('The argument "c2" must be an array',
+                      str(raises.exception))
