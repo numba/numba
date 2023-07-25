@@ -2,8 +2,7 @@ import numpy as np
 from textwrap import dedent
 
 from numba import cuda, uint32, uint64, float32, float64
-from numba.cuda.testing import (unittest, CUDATestCase, skip_unless_cc_50,
-                                cc_X_or_above)
+from numba.cuda.testing import unittest, CUDATestCase, cc_X_or_above
 from numba.core import config
 
 
@@ -559,17 +558,24 @@ class TestCudaAtomics(CUDATestCase):
         # Use the first (and only) definition
         asm = next(iter(kernel.inspect_asm().values()))
         if cc_X_or_above(6, 0):
-            if shared:
-                self.assertIn('atom.shared.add.f64', asm)
+            if cuda.runtime.get_version() > (12, 1):
+                # CUDA 12.2 and above generate a more optimized reduction
+                # instruction, because the result does not need to be
+                # placed in a register.
+                inst = 'red'
             else:
-                self.assertIn('atom.add.f64', asm)
+                inst = 'atom'
+
+            if shared:
+                inst = f'{inst}.shared'
+
+            self.assertIn(f'{inst}.add.f64', asm)
         else:
             if shared:
                 self.assertIn('atom.shared.cas.b64', asm)
             else:
                 self.assertIn('atom.cas.b64', asm)
 
-    @skip_unless_cc_50
     def test_atomic_add_double(self):
         idx = np.random.randint(0, 32, size=32, dtype=np.int64)
         ary = np.zeros(32, np.float64)
@@ -615,7 +621,6 @@ class TestCudaAtomics(CUDATestCase):
         np.testing.assert_equal(ary, orig + 1)
         self.assertCorrectFloat64Atomics(cuda_func)
 
-    @skip_unless_cc_50
     def test_atomic_add_double_global(self):
         idx = np.random.randint(0, 32, size=32, dtype=np.int64)
         ary = np.zeros(32, np.float64)
