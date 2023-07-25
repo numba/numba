@@ -146,7 +146,22 @@ class TestInspect(CUDATestCase):
         with self.assertRaises(RuntimeError) as raises:
             f.inspect_sass()
 
-        self.assertIn('nvdisasm is required', str(raises.exception))
+        self.assertIn('nvdisasm has not been found', str(raises.exception))
+
+    @skip_without_nvdisasm('nvdisasm needed for inspect_sass_cfg()')
+    def test_inspect_sass_cfg(self):
+        sig = (float32[::1], int32[::1])
+
+        @cuda.jit(sig)
+        def add(x, y):
+            i = cuda.grid(1)
+            if i < len(x):
+                x[i] += y[i]
+
+        self.assertRegex(
+            add.inspect_sass_cfg(signature=sig),
+            r'digraph\s*\w\s*{(.|\n)*\n}'
+        )
 
 
 if __name__ == '__main__':
