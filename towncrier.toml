@@ -1,0 +1,70 @@
+[tool.towncrier]
+package = "numba"
+
+directory = "docs/upcoming_changes"
+filename = "docs/source/release/{version}-notes.rst"
+
+[[tool.towncrier.type]]
+    directory = "highlight"
+    name = "Highlights"
+    showcontent = true
+
+[[tool.towncrier.type]]
+    directory = "np_support"
+    name = "NumPy Support"
+    showcontent = true
+
+[[tool.towncrier.type]]
+    directory = "deprecation"
+    name = "Deprecations"
+    showcontent = true
+
+[[tool.towncrier.type]]
+    directory = "expired"
+    name = "Expired Deprecations"
+    showcontent = true
+
+[[tool.towncrier.type]]
+    directory = "compatibility"
+    name = "Compatibility Notes"
+    showcontent = true
+
+[[tool.towncrier.type]]
+    directory = "cuda"
+    name = "CUDA API Changes"
+    showcontent = true
+
+[[tool.towncrier.type]]
+    directory = "new_feature"
+    name = "New Features"
+    showcontent = true
+
+[[tool.towncrier.type]]
+    directory = "improvement"
+    name = "Improvements"
+    showcontent = true
+
+[[tool.towncrier.type]]
+    directory = "performance"
+    name = "Performance Improvements and Changes"
+    showcontent = true
+
+[[tool.towncrier.type]]
+    directory = "change"
+    name = "Changes"
+    showcontent = true
+
+[[tool.towncrier.type]]
+    directory = "doc"
+    name = "Documentation Changes"
+    showcontent = true
+
+[[tool.towncrier.type]]
+    directory = "infrastructure"
+    name = "Infrastructure Related Changes"
+    showcontent = true
+
+[[tool.towncrier.type]]
+    directory = "bug_fix"
+    name = "Bug Fixes"
+    showcontent = true

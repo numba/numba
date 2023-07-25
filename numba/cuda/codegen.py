@@ -24,7 +24,8 @@ def disassemble_cubin(cubin):
             f.write(cubin)
 
         try:
-            cp = subprocess.run(['nvdisasm', fname], check=True,
+            lineinfo_flag = '-gi'
+            cp = subprocess.run(['nvdisasm', lineinfo_flag, fname], check=True,
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE)
         except FileNotFoundError as e:
