@@ -3,6 +3,7 @@ from itertools import product
 
 import numpy as np
 from numpy.polynomial import polynomial as poly
+from numpy.polynomial import polyutils as pu
 
 from numba import jit, njit
 from numba.tests.support import TestCase, tag, needs_lapack, EnableNRTStatsMixin
@@ -17,6 +18,9 @@ def polyadd(p1,p2):
 
 def polysub(p1,p2):
     return poly.polysub(p1,p2)
+
+def trimseq(seq):
+    return pu.trimseq(seq)
 
 
 class TestPolynomialBase(EnableNRTStatsMixin, TestCase):
@@ -123,7 +127,13 @@ class TestPoly1D(TestPolynomialBase):
         # but works fine if type conv to complex first
         cfunc(x.astype(np.complex128))
 
-    
+    def test_trimseq(self):
+        pyfunc = trimseq
+        cfunc = njit(trimseq)
+        for i in range(5):
+            coefs = np.array([1] + [0]*i)
+            self.assertPreciseEqual(pyfunc(coefs), cfunc(coefs))
+
     def test_polyadd(self):
         pyfunc = polyadd
         cfunc = njit(polyadd)

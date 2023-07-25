@@ -5,6 +5,7 @@ Implementation of operations involving polynomials.
 
 import numpy as np
 from numpy.polynomial import polynomial as poly
+from numpy.polynomial import polyutils as pu
 
 from numba import jit
 from numba.core import types, errors
@@ -60,7 +61,7 @@ def roots_impl(p):
 
 
 @register_jitable
-def trimseq(seq):
+def _trimseq(seq):
     """Remove small Poly series coefficients.
 
     Parameters
@@ -90,6 +91,18 @@ def trimseq(seq):
         return seq[:i+1]
 
 
+@overload(pu.trimseq)
+def polyutils_trimseq(seq):
+    if not isinstance(seq, types.Array):
+        msg = 'The argument "seq" must be an array'
+        raise errors.TypingError(msg)
+    
+    def impl(seq):
+        return _trimseq(seq)
+    
+    return impl
+
+
 @overload(poly.polyadd)
 def numpy_polyadd(a1, a2):
     if not isinstance(a1, types.Array):
@@ -111,7 +124,7 @@ def numpy_polyadd(a1, a2):
             zr = np.zeros(-diff) #, a2.dtype)
             arr2 = np.concatenate((a2, zr))
         val = arr1 + arr2
-        return trimseq(val)
+        return _trimseq(val)
     
     return impl
 
@@ -136,6 +149,6 @@ def numpy_polysub(a1, a2):
             zr = np.zeros(-diff) #, a2.dtype)
             arr2 = np.concatenate((a2, zr))
         val = arr1 - arr2
-        return trimseq(val)
+        return _trimseq(val)
     
     return impl
