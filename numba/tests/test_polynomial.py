@@ -2,14 +2,21 @@ import gc
 from itertools import product
 
 import numpy as np
+from numpy.polynomial import polynomial as poly
 
-from numba import jit
+from numba import jit, njit
 from numba.tests.support import TestCase, tag, needs_lapack, EnableNRTStatsMixin
 import unittest
 
 
 def roots_fn(p):
     return np.roots(p)
+
+def polyadd(p1,p2):
+    return poly.polyadd(p1,p2)
+
+def polysub(p1,p2):
+    return poly.polysub(p1,p2)
 
 
 class TestPolynomialBase(EnableNRTStatsMixin, TestCase):
@@ -115,3 +122,27 @@ class TestPoly1D(TestPolynomialBase):
         self.assert_no_domain_change("eigvals", cfunc, (x,))
         # but works fine if type conv to complex first
         cfunc(x.astype(np.complex128))
+
+    
+    def test_polyadd(self):
+        pyfunc = polyadd
+        cfunc = njit(polyadd)
+        for i in range(5):
+            for j in range(5):
+                msg = f"At i={i}, j={j}"
+                p1 = np.array([0]*i + [1])
+                p2 = np.array([0]*j + [1])
+                self.assertPreciseEqual(pyfunc(p1,p2), cfunc(p1,p2), msg=msg)
+
+    def test_polysub(self):
+        pyfunc = polysub
+        cfunc = njit(polysub)
+        for i in range(5):
+            for j in range(5):
+                msg = f"At i={i}, j={j}"
+                p1 = np.array([0]*i + [1])
+                p2 = np.array([0]*j + [1])
+                self.assertPreciseEqual(pyfunc(p1,p2),
+                                        cfunc(p1,p2),
+                                        msg=msg,
+                                        ignore_sign_on_zero=True)

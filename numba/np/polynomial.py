@@ -4,12 +4,12 @@ Implementation of operations involving polynomials.
 
 
 import numpy as np
+from numpy.polynomial import polynomial as poly
 
 from numba import jit
-from numba.core import types
-from numba.core.extending import overload
+from numba.core import types, errors
+from numba.core.extending import overload, register_jitable
 from numba.np import numpy_support as np_support
-
 
 @overload(np.roots)
 def roots_impl(p):
@@ -57,3 +57,85 @@ def roots_impl(p):
             return roots
 
     return roots_impl
+
+
+@register_jitable
+def trimseq(seq):
+    """Remove small Poly series coefficients.
+
+    Parameters
+    ----------
+    seq : sequence
+        Sequence of Poly series coefficients. This routine fails for
+        empty sequences.
+
+    Returns
+    -------
+    series : sequence
+        Subsequence with trailing zeros removed. If the resulting sequence
+        would be empty, return the first element. The returned sequence may
+        or may not be a view.
+
+    Notes
+    -----
+    Do not lose the type info if the sequence contains unknown objects.
+
+    """
+    if len(seq) == 0:
+        return seq
+    else:
+        for i in range(len(seq) - 1, -1, -1):
+            if seq[i] != 0:
+                break
+        return seq[:i+1]
+
+
+@overload(poly.polyadd)
+def numpy_polyadd(a1, a2):
+    if not isinstance(a1, types.Array):
+        msg = 'The argument "a1" must be an array'
+        raise errors.TypingError(msg)
+    
+    if not isinstance(a2, types.Array):
+        msg = 'The argument "a2" must be an array'
+        raise errors.TypingError(msg)
+    
+    def impl(a1, a2):
+        arr1 = np.atleast_1d(a1).astype(np.float64)
+        arr2 = np.atleast_1d(a2).astype(np.float64)
+        diff = len(a2) - len(a1)
+        if diff > 0:
+            zr = np.zeros(diff) #, a1.dtype)
+            arr1 = np.concatenate((a1, zr))
+        if diff < 0:
+            zr = np.zeros(-diff) #, a2.dtype)
+            arr2 = np.concatenate((a2, zr))
+        val = arr1 + arr2
+        return trimseq(val)
+    
+    return impl
+
+@overload(poly.polysub)
+def numpy_polysub(a1, a2):
+    if not isinstance(a1, types.Array):
+        msg = 'The argument "a1" must be an array'
+        raise errors.TypingError(msg)
+    
+    if not isinstance(a2, types.Array):
+        msg = 'The argument "a2" must be an array'
+        raise errors.TypingError(msg)
+    
+    def impl(a1, a2):
+        arr1 = np.atleast_1d(a1).astype(np.float64)
+        arr2 = np.atleast_1d(a2).astype(np.float64)
+        diff = len(a2) - len(a1)
+        if diff > 0:
+            zr = np.zeros(diff) #, a1.dtype)
+            arr1 = np.concatenate((a1, zr))
+        if diff < 0:
+            zr = np.zeros(-diff) #, a2.dtype)
+            arr2 = np.concatenate((a2, zr))
+        val = arr1 - arr2
+        return trimseq(val)
+    
+    return impl
