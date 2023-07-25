@@ -1,0 +1,13 @@
+
+Add support for value ``max`` to ``NUMBA_OPT``.
+===============================================
+
+The optimisation level that Numba applies when compiling can be set through the
+environment variable ``NUMBA_OPT``. This has historically been a value between
+0 and 3 (inclusive). Support for the value ``max`` has now been added, this is a
+Numba-specific optimisation level which will result in Numba running a -O3-like
+optimistion before reference counting operations are pruned and then running
+another -O3-like optimisation afterwards. This may or may not benefit the
+run-time or compile-time performance of user code, but it has been added as it
+is similar to the compilation behaviour prior to Numba 0.54 and some users found
+it leads to better performance for their programs.

@@ -1187,10 +1187,30 @@ class CPUCodegen(Codegen):
         self._engine = JitEngine(engine)
         self._target_data = engine.target_data
         self._data_layout = str(self._target_data)
-        self._mpm_cheap = self._module_pass_manager(loop_vectorize=False,
+
+        if config.OPT._raw_value == 'max':
+            # If the OPT level is set to 'max' then run the cheap pass at O3
+            # with loop-vectorize enabled. This _may_ result in more optimised
+            # code, but it also may have the opposite effect. It may also
+            # increase compilation time, but also may have the opposite effect.
+            # This behaviour is present so that users can choose what's
+            # appropriate for their application if they wish to, but there's a
+            # reasonable default present.
+            loopvect = True
+            opt_level = 3
+        else:
+            # The default behaviour is to do an opt=0 pass to try and inline as
+            # much as possible with the cheapest cost of doing so. This is so
+            # that the ref-op pruner pass that runs after the cheap pass will
+            # have the largest possible scope for working on pruning references.
+            loopvect = False
+            opt_level = 0
+
+        self._mpm_cheap = self._module_pass_manager(loop_vectorize=loopvect,
                                                     slp_vectorize=False,
-                                                    opt=0,
+                                                    opt=opt_level,
                                                     cost="cheap")
+
         self._mpm_full = self._module_pass_manager()
 
         self._engine.set_object_cache(self._library_class._object_compiled_hook,

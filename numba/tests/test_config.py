@@ -2,6 +2,7 @@ import os
 import tempfile
 from textwrap import dedent
 import unittest
+from unittest import mock
 from numba.tests.support import (TestCase, temp_directory, override_env_config,
                                  run_in_subprocess)
 from numba.core import config
@@ -117,6 +118,76 @@ class TestConfig(TestCase):
                     "\'not_a_known_style\'")
         self.assertIn(expected, err.decode('utf-8'))
         self.assertIn(source_compiled, out.decode('utf-8'))
+
+
+class TestNumbaOptLevel(TestCase):
+    # Tests that the setting of NUMBA_OPT influences the "cheap" module pass.
+    # Spot checks NUMBA_OPT={'max', '3', '0'}
+
+    def check(self, expected, opt_value, raw_value):
+        # local imports for state-safety
+        from numba import config, njit
+
+        # check opt value and its raw_value
+        self.assertEqual(config.OPT, opt_value)
+        self.assertEqual(config.OPT._raw_value, raw_value)
+
+        # Patch the CPUCodegen to make capture calls to the
+        # `_module_pass_manager` through a `side_effect` function that asserts
+        # that the kwargs being passed are as expected per the "NUMBA_OPT"
+        # level. The `side_effect` function immediately raises with a knwon
+        # message to abort further stages compilation once the check is
+        # complete.
+        from numba.core.codegen import CPUCodegen
+        side_effect_message = "expected side effect"
+
+        def side_effect(*args, **kwargs):
+            self.assertEqual(kwargs, expected)
+            raise RuntimeError(side_effect_message)
+
+        with mock.patch.object(CPUCodegen, '_module_pass_manager',
+                               side_effect=side_effect):
+            with self.assertRaises(RuntimeError) as raises:
+                njit(lambda : ...)()
+
+            self.assertIn(side_effect_message, str(raises.exception))
+
+    @TestCase.run_test_in_subprocess(envvars={'NUMBA_OPT': 'max'})
+    def test_opt_max(self):
+        # NUMBA_OPT='max' should set opt to 3 and enable loop_vectorize
+        expected = {'loop_vectorize': True,
+                    'slp_vectorize': False,
+                    'opt': 3,
+                    'cost': 'cheap'}
+        self.check(expected, 3, 'max')
+
+    @TestCase.run_test_in_subprocess(envvars={'NUMBA_OPT': '3'})
+    def test_opt_3(self):
+        # NUMBA_OPT='3' should not impact opt or loop_vectorize
+        expected = {'loop_vectorize': False,
+                    'slp_vectorize': False,
+                    'opt': 0,
+                    'cost': 'cheap'}
+        self.check(expected, 3, 3)
+
+    @TestCase.run_test_in_subprocess(envvars={'NUMBA_OPT': '0'})
+    def test_opt_0(self):
+        # NUMBA_OPT='0' should not impact opt or loop_vectorize
+        expected = {'loop_vectorize': False,
+                    'slp_vectorize': False,
+                    'opt': 0,
+                    'cost': 'cheap'}
+        self.check(expected, 0, 0)
+
+    @TestCase.run_test_in_subprocess()
+    def test_opt_default(self):
+        # NUMBA_OPT is not set, the default should not impact opt or
+        # loop_vectorize
+        expected = {'loop_vectorize': False,
+                    'slp_vectorize': False,
+                    'opt': 0,
+                    'cost': 'cheap'}
+        self.check(expected, 3, 3)
 
 
 if __name__ == '__main__':
