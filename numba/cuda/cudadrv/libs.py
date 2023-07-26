@@ -107,7 +107,7 @@ def test():
     # look up whether the driver was intended for "native" Linux.
     if sys.platform == 'linux' and not failed:
         pid = os.getpid()
-        mapsfile = os.path.join('proc', f'{pid}', 'maps')
+        mapsfile = os.path.join(os.path.sep, 'proc', f'{pid}', 'maps')
         try:
             with open(mapsfile) as f:
                 maps = f.read()
