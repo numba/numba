@@ -196,6 +196,10 @@ def hsplit(a, ind_or_sec):
     return np.hsplit(a, ind_or_sec)
 
 
+def dsplit(a, ind_or_sec):
+    return np.dsplit(a, ind_or_sec)
+
+
 def correlate(a, v, mode="valid"):
     return np.correlate(a, v, mode=mode)
 
@@ -3281,6 +3285,61 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as raises:
             cfunc(np.array(1), 2)
         self.assertIn('hsplit only works on arrays of 1 or more dimensions',
+                      str(raises.exception))
+
+    def test_dsplit_basic(self):
+        # split and array_split have more comprehensive tests of splitting.
+        # only do simple test on dsplit
+        def inputs():
+            #test_3D_array
+            np.array([[[1, 2, 3, 4],
+                       [1, 2, 3, 4]],
+                      [[1, 2, 3, 4],
+                       [1, 2, 3, 4]]]), 2
+            yield np.arange(16.0).reshape(2, 2, 4), 2
+            yield np.arange(16.0).reshape(2, 2, 4), np.array([3, 6])
+            yield np.arange(16.0).reshape(2, 2, 4), [3, 6]
+            yield np.arange(16.0).reshape(2, 2, 4), (3, 6)
+            yield np.arange(8.0).reshape(2, 2, 2), 2
+
+        pyfunc = hsplit
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for a, ind_or_sec in inputs():
+            self.assertPreciseEqual(pyfunc(a, ind_or_sec),
+                                    cfunc(a, ind_or_sec))
+
+    def test_dsplit_exception(self):
+        cfunc = jit(nopython=True)(dsplit)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(1, 2)
+        self.assertIn('The argument "ary" must be an array',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc", 2)
+        self.assertIn('The argument "ary" must be an array',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.array([[1, 2, 3, 4], [1, 2, 3, 4]]), "abc")
+        self.assertIn(('The argument "indices_or_sections" '
+                       'must be an integer, an array, a list, or a tuple'),
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.array(1), 2)
+        self.assertIn('dsplit only works on arrays of 3 or more '
+                      'dimensions',
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.array([1, 2]), 2)
+        self.assertIn('dsplit only works on arrays of 3 or more '
+                      'dimensions',
                       str(raises.exception))
 
     def test_roll_basic(self):

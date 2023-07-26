@@ -6146,6 +6146,27 @@ def numpy_hsplit(ary, indices_or_sections):
     return impl
 
 
+@overload(np.dsplit)
+def numpy_dsplit(ary, indices_or_sections):
+    if not isinstance(ary, types.Array):
+        msg = 'The argument "ary" must be an array'
+        raise errors.TypingError(msg)
+
+    if not isinstance(indices_or_sections, (types.Integer, types.Array,
+                                            types.List, types.UniTuple)):
+        msg = ('The argument "indices_or_sections" '
+               'must be an integer, an array, a list, or a tuple')
+        raise errors.TypingError(msg)
+
+    def impl(ary, indices_or_sections):
+        if ary.ndim < 3:
+            raise ValueError('dsplit only works on arrays of 3 or more '
+                             'dimensions')
+        return np.split(ary, indices_or_sections, axis=2)
+
+    return impl
+
+
 # -----------------------------------------------------------------------------
 # Sorting
 
