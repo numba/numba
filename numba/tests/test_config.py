@@ -114,9 +114,14 @@ class TestConfig(TestCase):
         code = ("from numba import njit\n@njit\ndef foo():\n\t"
                 f"print('{source_compiled}')\nfoo()")
         out, err = run_in_subprocess(dedent(code), env=new_env)
-        expected = ("environ NUMBA_CAPTURED_ERRORS defined but failed to parse "
-                    "\'not_a_known_style\'")
-        self.assertIn(expected, err.decode('utf-8'))
+        expected = ("Environment variable \'NUMBA_CAPTURED_ERRORS\' is defined "
+                    "but its associated value \'not_a_known_style\' could not "
+                    "be parsed.")
+        err_msg = err.decode('utf-8')
+        self.assertIn(expected, err_msg)
+        ex_expected = ("The parse failed with exception: Invalid style in "
+                       "NUMBA_CAPTURED_ERRORS: not_a_known_style")
+        self.assertIn(ex_expected, err_msg)
         self.assertIn(source_compiled, out.decode('utf-8'))
 
 
