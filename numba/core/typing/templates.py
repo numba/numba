@@ -9,7 +9,7 @@ import inspect
 import os.path
 from collections import namedtuple
 from collections.abc import Sequence
-from types import MethodType, FunctionType
+from types import MethodType, FunctionType, MappingProxyType
 
 import numba
 from numba.core import types, utils, targetconfig
@@ -1001,11 +1001,11 @@ class _IntrinsicTemplate(_TemplateTargetHelperMixin, AbstractTemplate):
 
 def make_intrinsic_template(handle, defn, name, *, prefer_literal=False,
                             kwargs=None):
-   kwargs = MappingProxyType({} if kwargs is None else kwargs)
     """
     Make a template class for a intrinsic handle *handle* defined by the
     function *defn*.  The *name* is used for naming the new template class.
     """
+    kwargs = MappingProxyType({} if kwargs is None else kwargs)
     base = _IntrinsicTemplate
     name = "_IntrinsicTemplate_%s" % (name)
     dct = dict(key=handle, _definition_func=staticmethod(defn),
