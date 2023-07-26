@@ -1,4 +1,4 @@
-Added support for np.vsplit() and np.hsplit() functions.
+Added support for np.vsplit(), np.hsplit(), np.dsplit().
 ========================================================
 
-This PR improves on `#4074 <https://github.com/numba/numba/issues/4074>` by adding support for np.vsplit() and np.hsplit().
+This PR improves on `#4074 <https://github.com/numba/numba/issues/4074>` by adding support for ``np.vsplit()``, ``np.hsplit()``, ``and np.dsplit()``.
