@@ -14,9 +14,9 @@ import numpy as np
 
 from numba import pndindex, literal_unroll
 from numba.core import types, typing, errors, cgutils, extending
-from numba.np.numpy_support import (as_dtype, carray, farray, is_contiguous,
-                                    is_fortran, check_is_integer,
-                                    type_is_scalar)
+from numba.np.numpy_support import (as_dtype, from_dtype, carray, farray,
+                                    is_contiguous, is_fortran,
+                                    check_is_integer, type_is_scalar)
 from numba.np.numpy_support import type_can_asarray, is_nonelike, numpy_version
 from numba.core.imputils import (lower_builtin, lower_getattr,
                                  lower_getattr_generic,
@@ -1543,16 +1543,14 @@ def ol_numpy_broadcast_shapes(*args):
     else:
         tup_init = (1,) * m
 
-        from numba.cpython.builtins import _isinstance_no_warn
-
         def impl(*args):
             # propagate args
             r = [1] * m
             tup = tup_init
             for arg in literal_unroll(args):
-                if _isinstance_no_warn(arg, tuple) and len(arg) > 0:
+                if isinstance(arg, tuple) and len(arg) > 0:
                     numpy_broadcast_shapes_list(r, m, arg)
-                elif _isinstance_no_warn(arg, int):
+                elif isinstance(arg, int):
                     numpy_broadcast_shapes_list(r, m, (arg,))
             for idx, elem in enumerate(r):
                 tup = tuple_setitem(tup, idx, elem)
@@ -1905,6 +1903,77 @@ def numpy_logspace(start, stop, num=50):
     def impl(start, stop, num=50):
         y = np.linspace(start, stop, num)
         return np.power(10.0, y)
+
+    return impl
+
+
+@overload(np.geomspace)
+def numpy_geomspace(start, stop, num=50):
+    if not isinstance(start, types.Number):
+        msg = 'The argument "start" must be a number'
+        raise errors.TypingError(msg)
+
+    if not isinstance(stop, types.Number):
+        msg = 'The argument "stop" must be a number'
+        raise errors.TypingError(msg)
+
+    if not isinstance(num, (int, types.Integer)):
+        msg = 'The argument "num" must be an integer'
+        raise errors.TypingError(msg)
+
+    if any(isinstance(arg, types.Complex) for arg in [start, stop]):
+        result_dtype = from_dtype(np.result_type(as_dtype(start),
+                                                 as_dtype(stop), None))
+
+        def impl(start, stop, num=50):
+            if start == 0 or stop == 0:
+                raise ValueError('Geometric sequence cannot include zero')
+            start = result_dtype(start)
+            stop = result_dtype(stop)
+            both_imaginary = (start.real == 0) & (stop.real == 0)
+            both_negative = (np.sign(start) == -1) & (np.sign(stop) == -1)
+            out_sign = 1
+            if both_imaginary:
+                start = start.imag
+                stop = stop.imag
+                out_sign = 1j
+            if both_negative:
+                start = -start
+                stop = -stop
+                out_sign = -out_sign
+            logstart = np.log10(start)
+            logstop = np.log10(stop)
+            result = np.logspace(logstart, logstop, num)
+            # Make sure the endpoints match the start and stop arguments.
+            # This is necessary because np.exp(np.log(x)) is not necessarily
+            # equal to x.
+            if num > 0:
+                result[0] = start
+                if num > 1:
+                    result[-1] = stop
+            return out_sign * result
+
+    else:
+        def impl(start, stop, num=50):
+            if start == 0 or stop == 0:
+                raise ValueError('Geometric sequence cannot include zero')
+            both_negative = (np.sign(start) == -1) & (np.sign(stop) == -1)
+            out_sign = 1
+            if both_negative:
+                start = -start
+                stop = -stop
+                out_sign = -out_sign
+            logstart = np.log10(start)
+            logstop = np.log10(stop)
+            result = np.logspace(logstart, logstop, num)
+            # Make sure the endpoints match the start and stop arguments.
+            # This is necessary because np.exp(np.log(x)) is not necessarily
+            # equal to x.
+            if num > 0:
+                result[0] = start
+                if num > 1:
+                    result[-1] = stop
+            return out_sign * result
 
     return impl
 

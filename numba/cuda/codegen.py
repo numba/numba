@@ -13,7 +13,7 @@ import tempfile
 CUDA_TRIPLE = 'nvptx64-nvidia-cuda'
 
 
-def disassemble_cubin(cubin):
+def run_nvdisasm(cubin, flags):
     # nvdisasm only accepts input from a file, so we need to write out to a
     # temp file and clean up afterwards.
     fd = None
@@ -24,14 +24,13 @@ def disassemble_cubin(cubin):
             f.write(cubin)
 
         try:
-            cp = subprocess.run(['nvdisasm', fname], check=True,
+            cp = subprocess.run(['nvdisasm', *flags, fname], check=True,
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE)
         except FileNotFoundError as e:
-            msg = ("nvdisasm is required for SASS inspection, and has not "
-                   "been found.\n\nYou may need to install the CUDA "
-                   "toolkit and ensure that it is available on your "
-                   "PATH.\n")
+            msg = ("nvdisasm has not been found. You may need "
+                   "to install the CUDA toolkit and ensure that "
+                   "it is available on your PATH.\n")
             raise RuntimeError(msg) from e
         return cp.stdout.decode('utf-8')
     finally:
@@ -39,6 +38,18 @@ def disassemble_cubin(cubin):
             os.close(fd)
         if fname is not None:
             os.unlink(fname)
+
+
+def disassemble_cubin(cubin):
+    # Request lineinfo in disassembly
+    flags = ['-gi']
+    return run_nvdisasm(cubin, flags)
+
+
+def disassemble_cubin_for_cfg(cubin):
+    # Request control flow graph in disassembly
+    flags = ['-cfg']
+    return run_nvdisasm(cubin, flags)
 
 
 class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
@@ -200,6 +211,9 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
 
     def get_sass(self, cc=None):
         return disassemble_cubin(self.get_cubin(cc=cc))
+
+    def get_sass_cfg(self, cc=None):
+        return disassemble_cubin_for_cfg(self.get_cubin(cc=cc))
 
     def add_ir_module(self, mod):
         self._raise_if_finalized()
