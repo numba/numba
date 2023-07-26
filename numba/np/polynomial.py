@@ -60,37 +60,6 @@ def roots_impl(p):
     return roots_impl
 
 
-@register_jitable
-def _trimseq(seq):
-    """Remove small Poly series coefficients.
-
-    Parameters
-    ----------
-    seq : sequence
-        Sequence of Poly series coefficients. This routine fails for
-        empty sequences.
-
-    Returns
-    -------
-    series : sequence
-        Subsequence with trailing zeros removed. If the resulting sequence
-        would be empty, return the first element. The returned sequence may
-        or may not be a view.
-
-    Notes
-    -----
-    Do not lose the type info if the sequence contains unknown objects.
-
-    """
-    if len(seq) == 0:
-        return seq
-    else:
-        for i in range(len(seq) - 1, -1, -1):
-            if seq[i] != 0:
-                break
-        return seq[:i+1]
-
-
 @overload(pu.trimseq)
 def polyutils_trimseq(seq):
     if not isinstance(seq, types.Array):
@@ -98,7 +67,13 @@ def polyutils_trimseq(seq):
         raise errors.TypingError(msg)
     
     def impl(seq):
-        return _trimseq(seq)
+        if len(seq) == 0:
+            return seq
+        else:
+            for i in range(len(seq) - 1, -1, -1):
+                if seq[i] != 0:
+                    break
+            return seq[:i+1]
     
     return impl
 
@@ -124,7 +99,7 @@ def numpy_polyadd(c1, c2):
             zr = np.zeros(-diff) #, a2.dtype)
             arr2 = np.concatenate((c2, zr))
         val = arr1 + arr2
-        return _trimseq(val)
+        return pu.trimseq(val)
     
     return impl
 
@@ -150,7 +125,7 @@ def numpy_polysub(c1, c2):
             zr = np.zeros(-diff) #, a2.dtype)
             arr2 = np.concatenate((c2, zr))
         val = arr1 - arr2
-        return _trimseq(val)
+        return pu.trimseq(val)
     
     return impl
 
@@ -167,7 +142,7 @@ def numpy_polymul(c1, c2):
     
     # p is an array, x is a scalar
     def impl(c1, c2):
-        val = np.convolve(c1, c2)
-        return val.astype(np.float64)
+        val = np.convolve(c1, c2).astype(np.float64)
+        return pu.trimseq(val)
 
     return impl
