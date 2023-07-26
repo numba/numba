@@ -1,8 +1,7 @@
 import itertools
 from llvmlite import ir
-from numba.core import cgutils
+from numba.core import cgutils, targetconfig
 from .cudadrv import nvvm
-from .api import current_context
 
 
 def declare_atomic_cas_int(lmod, isize):
@@ -31,7 +30,8 @@ def declare_atomic_add_float32(lmod):
 
 
 def declare_atomic_add_float64(lmod):
-    if current_context().device.compute_capability >= (6, 0):
+    flags = targetconfig.ConfigStack().top()
+    if flags.compute_capability >= (6, 0):
         fname = 'llvm.nvvm.atomic.load.add.f64.p0f64'
     else:
         fname = '___numba_atomic_double_add'
