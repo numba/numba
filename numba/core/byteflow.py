@@ -1,13 +1,13 @@
 """
 Implement python 3.8+ bytecode analysis
 """
-
+import dis
 from pprint import pformat
 import logging
 from collections import namedtuple, defaultdict, deque
 from functools import total_ordering
 
-from numba.core.utils import UniqueDict, PYVERSION
+from numba.core.utils import UniqueDict, PYVERSION, ALL_BINOPS_TO_OPERATORS
 from numba.core.controlflow import NEW_BLOCKERS, CFGraph
 from numba.core.ir import Loc
 from numba.core.errors import UnsupportedError
@@ -15,11 +15,13 @@ from numba.core.errors import UnsupportedError
 
 _logger = logging.getLogger(__name__)
 
-
 _EXCEPT_STACK_OFFSET = 6
-_FINALLY_POP = _EXCEPT_STACK_OFFSET if PYVERSION >= (3, 8) else 1
+_FINALLY_POP = _EXCEPT_STACK_OFFSET
 _NO_RAISE_OPS = frozenset({
     'LOAD_CONST',
+    'NOP',
+    'LOAD_DEREF',
+    'PRECALL',
 })
 
 
@@ -101,6 +103,7 @@ class Flow(object):
             state = runner.pending.popleft()
             if state not in runner.finished:
                 _logger.debug("stack: %s", state._stack)
+                _logger.debug("state.pc_initial: %s", state)
                 first_encounter[state.pc_initial] = state
                 # Loop over the state until it is terminated.
                 while True:
@@ -108,27 +111,10 @@ class Flow(object):
                     # Terminated?
                     if state.has_terminated():
                         break
-                    elif (state.has_active_try() and
-                            state.get_inst().opname not in _NO_RAISE_OPS):
-                        # Is in a *try* block
-                        state.fork(pc=state.get_inst().next)
-                        tryblk = state.get_top_block('TRY')
-                        state.pop_block_and_above(tryblk)
-                        nstack = state.stack_depth
-                        kwargs = {}
-                        if nstack > tryblk['entry_stack']:
-                            kwargs['npop'] = nstack - tryblk['entry_stack']
-                        handler = tryblk['handler']
-                        kwargs['npush'] = {
-                            BlockKind('EXCEPT'): _EXCEPT_STACK_OFFSET,
-                            BlockKind('FINALLY'): _FINALLY_POP
-                        }[handler['kind']]
-                        kwargs['extra_block'] = handler
-                        state.fork(pc=tryblk['end'], **kwargs)
-                        break
                     else:
-                        state.advance_pc()
-                        # Must the new PC be a new block?
+                        if self._run_handle_exception(runner, state):
+                            break
+
                         if self._is_implicit_new_block(state):
                             # check if this is a with...as, abort if so
                             self._guard_with_as(state)
@@ -148,6 +134,59 @@ class Flow(object):
         for state in sorted(runner.finished, key=lambda x: x.pc_initial):
             self.block_infos[state.pc_initial] = si = adapt_state_infos(state)
             _logger.debug("block_infos %s:\n%s", state, si)
+
+    if PYVERSION == (3, 11):
+        def _run_handle_exception(self, runner, state):
+            if not state.in_with() and (
+                    state.has_active_try() and
+                    state.get_inst().opname not in _NO_RAISE_OPS):
+                # Is in a *try* block
+                state.fork(pc=state.get_inst().next)
+                runner._adjust_except_stack(state)
+                return True
+            else:
+                state.advance_pc()
+
+                # Must the new PC be a new block?
+                if not state.in_with() and state.is_in_exception():
+                    _logger.debug("3.11 exception %s PC=%s",
+                                  state.get_exception(), state._pc)
+                    eh = state.get_exception()
+                    eh_top = state.get_top_block('TRY')
+                    if eh_top and eh_top['end'] == eh.target:
+                        # Same exception
+                        eh_block = None
+                    else:
+                        eh_block = state.make_block("TRY", end=eh.target)
+                        eh_block['end_offset'] = eh.end
+                        eh_block['stack_depth'] = eh.depth
+                        eh_block['push_lasti'] = eh.lasti
+                        state.fork(pc=state._pc, extra_block=eh_block)
+                        return True
+    elif PYVERSION < (3, 11):
+        def _run_handle_exception(self, runner, state):
+            if (state.has_active_try() and
+                    state.get_inst().opname not in _NO_RAISE_OPS):
+                # Is in a *try* block
+                state.fork(pc=state.get_inst().next)
+                tryblk = state.get_top_block('TRY')
+                state.pop_block_and_above(tryblk)
+                nstack = state.stack_depth
+                kwargs = {}
+                if nstack > tryblk['entry_stack']:
+                    kwargs['npop'] = nstack - tryblk['entry_stack']
+                handler = tryblk['handler']
+                kwargs['npush'] = {
+                    BlockKind('EXCEPT'): _EXCEPT_STACK_OFFSET,
+                    BlockKind('FINALLY'): _FINALLY_POP
+                }[handler['kind']]
+                kwargs['extra_block'] = handler
+                state.fork(pc=tryblk['end'], **kwargs)
+                return True
+            else:
+                state.advance_pc()
+    else:
+        raise NotImplementedError(PYVERSION)
 
     def _build_cfg(self, all_states):
         graph = CFGraph()
@@ -253,13 +292,17 @@ class Flow(object):
         than a POP_TOP, if it is something else it'll be some sort of store
         which is not supported (this corresponds to `with CTXMGR as VAR(S)`)."""
         current_inst = state.get_inst()
-        if current_inst.opname == "SETUP_WITH":
+        if current_inst.opname in {"SETUP_WITH", "BEFORE_WITH"}:
             next_op = self._bytecode[current_inst.next].opname
             if next_op != "POP_TOP":
                 msg = ("The 'with (context manager) as "
                        "(variable):' construct is not "
                        "supported.")
                 raise UnsupportedError(msg)
+
+
+def _is_null_temp_reg(reg):
+    return reg.startswith("$null$")
 
 
 class TraceRunner(object):
@@ -274,9 +317,21 @@ class TraceRunner(object):
         return Loc(self.debug_filename, lineno)
 
     def dispatch(self, state):
+        if PYVERSION > (3, 11):
+            raise NotImplementedError(PYVERSION)
+        elif PYVERSION == (3, 11) and state._blockstack:
+            state: State
+            while state._blockstack:
+                topblk = state._blockstack[-1]
+                blk_end = topblk['end']
+                if blk_end is not None and blk_end <= state.pc_initial:
+                    state._blockstack.pop()
+                else:
+                    break
         inst = state.get_inst()
-        _logger.debug("dispatch pc=%s, inst=%s", state._pc, inst)
-        _logger.debug("stack %s", state._stack)
+        if inst.opname != "CACHE":
+            _logger.debug("dispatch pc=%s, inst=%s", state._pc, inst)
+            _logger.debug("stack %s", state._stack)
         fn = getattr(self, "op_{}".format(inst.opname), None)
         if fn is not None:
             fn(state, inst)
@@ -284,7 +339,53 @@ class TraceRunner(object):
             msg = "Use of unsupported opcode (%s) found" % inst.opname
             raise UnsupportedError(msg, loc=self.get_debug_loc(inst.lineno))
 
+    def _adjust_except_stack(self, state):
+        """
+        Adjust stack when entering an exception handler to match expectation
+        by the bytecode.
+        """
+        tryblk = state.get_top_block('TRY')
+        state.pop_block_and_above(tryblk)
+        nstack = state.stack_depth
+        kwargs = {}
+        expected_depth = tryblk['stack_depth']
+        if nstack > expected_depth:
+            # Pop extra item in the stack
+            kwargs['npop'] = nstack - expected_depth
+        # Set extra stack itemcount due to the exception values.
+        extra_stack = 1
+        if tryblk['push_lasti']:
+            extra_stack += 1
+        kwargs['npush'] = extra_stack
+        state.fork(pc=tryblk['end'], **kwargs)
+
     def op_NOP(self, state, inst):
+        state.append(inst)
+
+    def op_RESUME(self, state, inst):
+        state.append(inst)
+
+    def op_CACHE(self, state, inst):
+        state.append(inst)
+
+    def op_PRECALL(self, state, inst):
+        state.append(inst)
+
+    def op_PUSH_NULL(self, state, inst):
+        state.push(state.make_null())
+        state.append(inst)
+
+    def op_RETURN_GENERATOR(self, state, inst):
+        # This impl doesn't follow what CPython does. CPython is hacking
+        # the frame stack in the interpreter. From usage, it always
+        # has a POP_TOP after it so we push a dummy value to the stack.
+        #
+        # Example bytecode:
+        # >          0	NOP(arg=None, lineno=80)
+        #            2	RETURN_GENERATOR(arg=None, lineno=80)
+        #            4	POP_TOP(arg=None, lineno=80)
+        #            6	RESUME(arg=0, lineno=80)
+        state.push(state.make_temp())
         state.append(inst)
 
     def op_FORMAT_VALUE(self, state, inst):
@@ -324,10 +425,28 @@ class TraceRunner(object):
     def op_POP_TOP(self, state, inst):
         state.pop()
 
-    def op_LOAD_GLOBAL(self, state, inst):
-        res = state.make_temp()
-        state.append(inst, res=res)
-        state.push(res)
+    if PYVERSION == (3, 11):
+        def op_LOAD_GLOBAL(self, state, inst):
+            res = state.make_temp()
+            idx = inst.arg >> 1
+            state.append(inst, idx=idx, res=res)
+            # ignoring the NULL
+            if inst.arg & 1:
+                state.push(state.make_null())
+            state.push(res)
+    elif PYVERSION < (3, 11):
+        def op_LOAD_GLOBAL(self, state, inst):
+            res = state.make_temp()
+            state.append(inst, res=res)
+            state.push(res)
+    else:
+        raise NotImplementedError(PYVERSION)
+
+    def op_COPY_FREE_VARS(self, state, inst):
+        state.append(inst)
+
+    def op_MAKE_CELL(self, state, inst):
+        state.append(inst)
 
     def op_LOAD_DEREF(self, state, inst):
         res = state.make_temp()
@@ -626,7 +745,35 @@ class TraceRunner(object):
     op_JUMP_IF_FALSE_OR_POP = _op_JUMP_IF_OR_POP
     op_JUMP_IF_TRUE_OR_POP = _op_JUMP_IF_OR_POP
 
+    def op_POP_JUMP_FORWARD_IF_NONE(self, state, inst):
+        self._op_POP_JUMP_IF(state, inst)
+
+    def op_POP_JUMP_FORWARD_IF_NOT_NONE(self, state, inst):
+        self._op_POP_JUMP_IF(state, inst)
+
+    def op_POP_JUMP_BACKWARD_IF_NONE(self, state, inst):
+        self._op_POP_JUMP_IF(state, inst)
+
+    def op_POP_JUMP_BACKWARD_IF_NOT_NONE(self, state, inst):
+        self._op_POP_JUMP_IF(state, inst)
+
+    def op_POP_JUMP_FORWARD_IF_FALSE(self, state, inst):
+        self._op_POP_JUMP_IF(state, inst)
+
+    def op_POP_JUMP_FORWARD_IF_TRUE(self, state, inst):
+        self._op_POP_JUMP_IF(state, inst)
+
+    def op_POP_JUMP_BACKWARD_IF_FALSE(self, state, inst):
+        self._op_POP_JUMP_IF(state, inst)
+
+    def op_POP_JUMP_BACKWARD_IF_TRUE(self, state, inst):
+        self._op_POP_JUMP_IF(state, inst)
+
     def op_JUMP_FORWARD(self, state, inst):
+        state.append(inst)
+        state.fork(pc=inst.get_jump_target())
+
+    def op_JUMP_BACKWARD(self, state, inst):
         state.append(inst)
         state.fork(pc=inst.get_jump_target())
 
@@ -651,24 +798,49 @@ class TraceRunner(object):
         state.append(inst, value=val, res=res)
         state.push(res)
 
-    def op_RAISE_VARARGS(self, state, inst):
-        in_exc_block = any([
-            state.get_top_block("EXCEPT") is not None,
-            state.get_top_block("FINALLY") is not None
-        ])
-        if inst.arg == 0:
-            exc = None
-            if in_exc_block:
-                raise UnsupportedError(
-                    "The re-raising of an exception is not yet supported.",
-                    loc=self.get_debug_loc(inst.lineno),
-                )
-        elif inst.arg == 1:
-            exc = state.pop()
-        else:
-            raise ValueError("Multiple argument raise is not supported.")
-        state.append(inst, exc=exc)
-        state.terminate()
+    if PYVERSION == (3, 11):
+        def op_RAISE_VARARGS(self, state, inst):
+            if inst.arg == 0:
+                exc = None
+                # No re-raising within a try-except block.
+                # But we allow bare reraise.
+                if state.has_active_try():
+                    raise UnsupportedError(
+                        "The re-raising of an exception is not yet supported.",
+                        loc=self.get_debug_loc(inst.lineno),
+                    )
+            elif inst.arg == 1:
+                exc = state.pop()
+            else:
+                raise ValueError("Multiple argument raise is not supported.")
+            state.append(inst, exc=exc)
+
+            if state.has_active_try():
+                self._adjust_except_stack(state)
+            else:
+                state.terminate()
+
+    elif PYVERSION < (3, 11):
+        def op_RAISE_VARARGS(self, state, inst):
+            in_exc_block = any([
+                state.get_top_block("EXCEPT") is not None,
+                state.get_top_block("FINALLY") is not None
+            ])
+            if inst.arg == 0:
+                exc = None
+                if in_exc_block:
+                    raise UnsupportedError(
+                        "The re-raising of an exception is not yet supported.",
+                        loc=self.get_debug_loc(inst.lineno),
+                    )
+            elif inst.arg == 1:
+                exc = state.pop()
+            else:
+                raise ValueError("Multiple argument raise is not supported.")
+            state.append(inst, exc=exc)
+            state.terminate()
+    else:
+        raise NotImplementedError
 
     def op_BEGIN_FINALLY(self, state, inst):
         temps = []
@@ -692,6 +864,9 @@ class TraceRunner(object):
     def op_CALL_FINALLY(self, state, inst):
         pass
 
+    def op_WITH_EXCEPT_START(self, state, inst):
+        state.terminate()  # do not support
+
     def op_WITH_CLEANUP_START(self, state, inst):
         # we don't emulate the exact stack behavior
         state.append(inst)
@@ -708,6 +883,36 @@ class TraceRunner(object):
                 end=inst.get_jump_target(),
             )
         )
+
+    def op_BEFORE_WITH(self, state, inst):
+        # Almost the same as py3.10 SETUP_WITH just lacking the finally block.
+        cm = state.pop()    # the context-manager
+
+        yielded = state.make_temp()
+        exitfn = state.make_temp(prefix='setup_with_exitfn')
+
+        state.push(exitfn)
+        state.push(yielded)
+
+        # Gather all exception entries for this WITH. There maybe multiple
+        # entries; esp. for nested WITHs.
+        bc = state._bytecode
+        ehhead = bc.find_exception_entry(inst.next)
+        ehrelated = [ehhead]
+        for eh in bc.exception_entries:
+            if eh.target == ehhead.target:
+                ehrelated.append(eh)
+        end = max(eh.end for eh in ehrelated)
+        state.append(inst, contextmanager=cm, exitfn=exitfn, end=end)
+
+        state.push_block(
+            state.make_block(
+                kind='WITH',
+                end=end,
+            )
+        )
+        # Forces a new block
+        state.fork(pc=inst.next)
 
     def op_SETUP_WITH(self, state, inst):
         cm = state.pop()    # the context-manager
@@ -738,6 +943,8 @@ class TraceRunner(object):
         state.fork(pc=inst.next)
 
     def _setup_try(self, kind, state, next, end):
+        # Forces a new block
+        # Fork to the body of the finally
         handler_block = state.make_block(
             kind=kind,
             end=None,
@@ -755,12 +962,10 @@ class TraceRunner(object):
             )
         )
 
-    def op_SETUP_EXCEPT(self, state, inst):
-        # Opcode removed since py3.8
-        state.append(inst)
-        self._setup_try(
-            'EXCEPT', state, next=inst.next, end=inst.get_jump_target(),
-        )
+    def op_PUSH_EXC_INFO(self, state, inst):
+        tos = state.pop()
+        state.push(state.make_temp("exception"))
+        state.push(tos)
 
     def op_SETUP_FINALLY(self, state, inst):
         state.append(inst)
@@ -768,18 +973,25 @@ class TraceRunner(object):
             'FINALLY', state, next=inst.next, end=inst.get_jump_target(),
         )
 
-    def op_POP_EXCEPT(self, state, inst):
-        blk = state.pop_block()
-        if blk['kind'] not in {BlockKind('EXCEPT'), BlockKind('FINALLY')}:
-            raise UnsupportedError(
-                "POP_EXCEPT got an unexpected block: {}".format(blk['kind']),
-                loc=self.get_debug_loc(inst.lineno),
-            )
-        state.pop()
-        state.pop()
-        state.pop()
-        # Forces a new block
-        state.fork(pc=inst.next)
+    if PYVERSION == (3, 11):
+        def op_POP_EXCEPT(self, state, inst):
+            state.pop()
+
+    elif PYVERSION < (3, 11):
+        def op_POP_EXCEPT(self, state, inst):
+            blk = state.pop_block()
+            if blk['kind'] not in {BlockKind('EXCEPT'), BlockKind('FINALLY')}:
+                raise UnsupportedError(
+                    f"POP_EXCEPT got an unexpected block: {blk['kind']}",
+                    loc=self.get_debug_loc(inst.lineno),
+                )
+            state.pop()
+            state.pop()
+            state.pop()
+            # Forces a new block
+            state.fork(pc=inst.next)
+    else:
+        raise NotImplementedError(PYVERSION)
 
     def op_POP_BLOCK(self, state, inst):
         blk = state.pop_block()
@@ -807,6 +1019,25 @@ class TraceRunner(object):
         target = state.pop()
         state.append(inst, target=target, index=index)
 
+    def op_CALL(self, state, inst):
+        narg = inst.arg
+        args = list(reversed([state.pop() for _ in range(narg)]))
+        callable_or_firstarg = state.pop()
+        null_or_callable = state.pop()
+        if _is_null_temp_reg(null_or_callable):
+            callable = callable_or_firstarg
+        else:
+            callable = null_or_callable
+            args = [callable_or_firstarg, *args]
+        res = state.make_temp()
+
+        kw_names = state.pop_kw_names()
+        state.append(inst, func=callable, args=args, kw_names=kw_names, res=res)
+        state.push(res)
+
+    def op_KW_NAMES(self, state, inst):
+        state.set_kw_names(inst.arg)
+
     def op_CALL_FUNCTION(self, state, inst):
         narg = inst.arg
         args = list(reversed([state.pop() for _ in range(narg)]))
@@ -827,7 +1058,7 @@ class TraceRunner(object):
         state.push(res)
 
     def op_CALL_FUNCTION_EX(self, state, inst):
-        if inst.arg & 1 and PYVERSION != (3, 10):
+        if inst.arg & 1 and PYVERSION < (3, 10):
             errmsg = "CALL_FUNCTION_EX with **kwargs not supported"
             raise UnsupportedError(errmsg)
         if inst.arg & 1:
@@ -836,6 +1067,11 @@ class TraceRunner(object):
             varkwarg = None
         vararg = state.pop()
         func = state.pop()
+
+        if PYVERSION == (3, 11):
+            if _is_null_temp_reg(state.peek(1)):
+                state.pop() # pop NULL, it's not used
+
         res = state.make_temp()
         state.append(inst, func=func, vararg=vararg, varkwarg=varkwarg, res=res)
         state.push(res)
@@ -862,6 +1098,12 @@ class TraceRunner(object):
 
     def op_DUP_TOP_TWO(self, state, inst):
         self._dup_topx(state, inst, count=2)
+
+    def op_COPY(self, state, inst):
+        state.push(state.peek(inst.arg))
+
+    def op_SWAP(self, state, inst):
+        state.swap(inst.arg)
 
     def op_ROT_TWO(self, state, inst):
         first = state.pop()
@@ -978,12 +1220,9 @@ class TraceRunner(object):
         state.push(dct)
 
     def op_MAP_ADD(self, state, inst):
-        # NOTE: https://docs.python.org/3/library/dis.html#opcode-MAP_ADD
-        # Python >= 3.8: TOS and TOS1 are value and key respectively
-        # Python < 3.8: TOS and TOS1 are key and value respectively
         TOS = state.pop()
         TOS1 = state.pop()
-        key, value = (TOS, TOS1) if PYVERSION < (3, 8) else (TOS1, TOS)
+        key, value = (TOS1, TOS)
         index = inst.arg
         target = state.peek(index)
         setitemvar = state.make_temp()
@@ -1046,6 +1285,15 @@ class TraceRunner(object):
         # no-op in Numba
         pass
 
+    def op_BINARY_OP(self, state, inst):
+        op = dis._nb_ops[inst.arg][1]
+        rhs = state.pop()
+        lhs = state.pop()
+        op_name = ALL_BINOPS_TO_OPERATORS[op].__name__
+        res = state.make_temp(prefix=f"binop_{op_name}")
+        state.append(inst, op=op, lhs=lhs, rhs=rhs, res=res)
+        state.push(res)
+
     def _unaryop(self, state, inst):
         val = state.pop()
         res = state.make_temp()
@@ -1101,38 +1349,24 @@ class TraceRunner(object):
     op_BINARY_XOR = _binaryop
 
     def op_MAKE_FUNCTION(self, state, inst, MAKE_CLOSURE=False):
-        name = state.pop()
+        if PYVERSION == (3, 11):
+            # https://github.com/python/cpython/commit/2f180ce
+            # name set via co_qualname
+            name = None
+        elif PYVERSION < (3, 11):
+            name = state.pop()
+        else:
+            raise NotImplementedError(PYVERSION)
         code = state.pop()
         closure = annotations = kwdefaults = defaults = None
-        if PYVERSION < (3, 6):
-            num_posdefaults = inst.arg & 0xFF
-            num_kwdefaults = (inst.arg >> 8) & 0xFF
-            num_annotations = (inst.arg >> 16) & 0x7FFF
-            if MAKE_CLOSURE:
-                closure = state.pop()
-            if num_annotations > 0:
-                annotations = state.pop()
-            if num_kwdefaults > 0:
-                kwdefaults = []
-                for i in range(num_kwdefaults):
-                    v = state.pop()
-                    k = state.pop()
-                    kwdefaults.append((k, v))
-                kwdefaults = tuple(kwdefaults)
-            if num_posdefaults:
-                defaults = []
-                for i in range(num_posdefaults):
-                    defaults.append(state.pop())
-                defaults = tuple(defaults)
-        else:
-            if inst.arg & 0x8:
-                closure = state.pop()
-            if inst.arg & 0x4:
-                annotations = state.pop()
-            if inst.arg & 0x2:
-                kwdefaults = state.pop()
-            if inst.arg & 0x1:
-                defaults = state.pop()
+        if inst.arg & 0x8:
+            closure = state.pop()
+        if inst.arg & 0x4:
+            annotations = state.pop()
+        if inst.arg & 0x2:
+            kwdefaults = state.pop()
+        if inst.arg & 0x1:
+            defaults = state.pop()
         res = state.make_temp()
         state.append(
             inst,
@@ -1159,6 +1393,13 @@ class TraceRunner(object):
         state.append(inst, res=res)
         state.push(res)
 
+    def op_CHECK_EXC_MATCH(self, state, inst):
+        pred = state.make_temp("predicate")
+        tos = state.pop()
+        tos1 = state.get_tos()
+        state.append(inst, pred=pred, tos=tos, tos1=tos1)
+        state.push(pred)
+
     def op_JUMP_IF_NOT_EXC_MATCH(self, state, inst):
         # Tests whether the second value on the stack is an exception matching
         # TOS, and jumps if it is not. Pops two values from the stack.
@@ -1169,27 +1410,53 @@ class TraceRunner(object):
         state.fork(pc=inst.next)
         state.fork(pc=inst.get_jump_target())
 
-    def op_RERAISE(self, state, inst):
-        # This isn't handled, but the state is set up anyway
-        exc = state.pop()
-        state.append(inst, exc=exc)
-        state.terminate()
+    if PYVERSION == (3, 11):
+        def op_RERAISE(self, state, inst):
+            # This isn't handled, but the state is set up anyway
+            exc = state.pop()
+            if inst.arg != 0:
+                state.pop()     # lasti
+            state.append(inst, exc=exc)
+
+            if state.has_active_try():
+                self._adjust_except_stack(state)
+            else:
+                state.terminate()
+    elif PYVERSION < (3, 11):
+        def op_RERAISE(self, state, inst):
+            # This isn't handled, but the state is set up anyway
+            exc = state.pop()
+            state.append(inst, exc=exc)
+            state.terminate()
+    else:
+        raise NotImplementedError(PYVERSION)
 
     # NOTE: Please see notes in `interpreter.py` surrounding the implementation
     # of LOAD_METHOD and CALL_METHOD.
 
-    def op_LOAD_METHOD(self, state, inst):
-        self.op_LOAD_ATTR(state, inst)
+    if PYVERSION == (3, 11):
+        def op_LOAD_METHOD(self, state, inst):
+            item = state.pop()
+            extra = state.make_null()
+            state.push(extra)
+            res = state.make_temp()
+            state.append(inst, item=item, res=res)
+            state.push(res)
+    elif PYVERSION < (3, 11):
+        def op_LOAD_METHOD(self, state, inst):
+            self.op_LOAD_ATTR(state, inst)
+    else:
+        raise NotImplementedError(PYVERSION)
 
     def op_CALL_METHOD(self, state, inst):
         self.op_CALL_FUNCTION(state, inst)
 
 
 @total_ordering
-class State(object):
+class _State(object):
     """State of the trace
     """
-    def __init__(self, bytecode, pc, nstack, blockstack):
+    def __init__(self, bytecode, pc, nstack, blockstack, nullvals=()):
         """
         Parameters
         ----------
@@ -1217,7 +1484,10 @@ class State(object):
         self._outgoing_phis = UniqueDict()
         self._used_regs = set()
         for i in range(nstack):
-            phi = self.make_temp("phi")
+            if i in nullvals:
+                phi = self.make_temp("null$")
+            else:
+                phi = self.make_temp("phi")
             self._phis[phi] = i
             self.push(phi)
 
@@ -1343,6 +1613,11 @@ class State(object):
         """Pop the stack"""
         return self._stack.pop()
 
+    def swap(self, idx):
+        """Swap stack[idx] with the tos"""
+        s = self._stack
+        s[-1], s[-idx] = s[-idx], s[-1]
+
     def push_block(self, synblk):
         """Push a block to blockstack
         """
@@ -1394,6 +1669,14 @@ class State(object):
             if bs['kind'] == kind:
                 return bs
 
+    def get_top_block_either(self, *kinds):
+        """Find the first block that matches *kind*
+        """
+        kinds = {BlockKind(kind) for kind in kinds}
+        for bs in reversed(self._blockstack):
+            if bs['kind'] in kinds:
+                return bs
+
     def has_active_try(self):
         """Returns a boolean indicating if the top-block is a *try* block
         """
@@ -1424,6 +1707,20 @@ class State(object):
                 stack.append(self.make_temp())
         # Handle changes on the blockstack
         blockstack = list(self._blockstack)
+        if PYVERSION == (3, 11):
+            # pop expired block in destination pc
+            while blockstack:
+                top = blockstack[-1]
+                end = top.get('end_offset') or top['end']
+                if pc >= end:
+                    blockstack.pop()
+                else:
+                    break
+        elif PYVERSION < (3, 11):
+            pass # intentionally bypass
+        else:
+            raise NotImplementedError(PYVERSION)
+
         if extra_block:
             blockstack.append(extra_block)
         self._outedges.append(Edge(
@@ -1445,7 +1742,9 @@ class State(object):
         ret = []
         for edge in self._outedges:
             state = State(bytecode=self._bytecode, pc=edge.pc,
-                          nstack=len(edge.stack), blockstack=edge.blockstack)
+                          nstack=len(edge.stack), blockstack=edge.blockstack,
+                          nullvals=[i for i, v in enumerate(edge.stack)
+                                    if _is_null_temp_reg(v)])
             ret.append(state)
             # Map outgoing_phis
             for phi, i in state._phis.items():
@@ -1463,6 +1762,45 @@ class State(object):
 
         return {edge.pc: tuple(edge.stack[-edge.npush:])
                 for edge in self._outedges}
+
+
+class StatePy311(_State):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._kw_names = None
+
+    def pop_kw_names(self):
+        out = self._kw_names
+        self._kw_names = None
+        return out
+
+    def set_kw_names(self, val):
+        assert self._kw_names is None
+        self._kw_names = val
+
+    def is_in_exception(self):
+        bc = self._bytecode
+        return bc.find_exception_entry(self._pc) is not None
+
+    def get_exception(self):
+        bc = self._bytecode
+        return bc.find_exception_entry(self._pc)
+
+    def in_with(self):
+        for ent in self._blockstack_initial:
+            if ent["kind"] == BlockKind("WITH"):
+                return True
+
+    def make_null(self):
+        return self.make_temp(prefix="null$")
+
+
+if PYVERSION == (3, 11):
+    State = StatePy311
+elif PYVERSION < (3, 11):
+    State = _State
+else:
+    raise NotImplementedError(PYVERSION)
 
 
 Edge = namedtuple("Edge", ["pc", "stack", "blockstack", "npush"])

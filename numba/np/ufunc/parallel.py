@@ -210,7 +210,7 @@ def build_ufunc_wrapper(library, ctx, fname, signature, cres):
 
 class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
     def __init__(self, py_func, signature, identity=None, cache=False,
-                 targetoptions={}):
+                 targetoptions={}, writable_args=()):
         # Force nopython mode
         targetoptions.update(dict(nopython=True))
         super(
@@ -220,7 +220,8 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
             signature=signature,
             identity=identity,
             cache=cache,
-            targetoptions=targetoptions)
+            targetoptions=targetoptions,
+            writable_args=writable_args)
 
     def build(self, cres):
         """
@@ -360,10 +361,10 @@ def _check_tbb_version_compatible():
         version_func.argtypes = []
         version_func.restype = c_int
         tbb_iface_ver = version_func()
-        if tbb_iface_ver < 12010: # magic number from TBB
+        if tbb_iface_ver < 12060: # magic number from TBB
             msg = ("The TBB threading layer requires TBB "
-                   "version 2021 update 1 or later i.e., "
-                   "TBB_INTERFACE_VERSION >= 12010. Found "
+                   "version 2021 update 6 or later i.e., "
+                   "TBB_INTERFACE_VERSION >= 12060. Found "
                    "TBB_INTERFACE_VERSION = %s. The TBB "
                    "threading layer is disabled.") % tbb_iface_ver
             problem = errors.NumbaWarning(msg)
@@ -683,7 +684,7 @@ def _iget_num_threads(typingctx):
 def get_thread_id():
     """
     Returns a unique ID for each thread in the range 0 (inclusive)
-    to `numba.get_num_threads()` (exclusive).
+    to :func:`~.get_num_threads` (exclusive).
     """
     # Called from the interpreter directly, this should return 0
     # Called from a sequential JIT region, this should return 0

@@ -312,8 +312,10 @@ Compilation options
 .. envvar:: NUMBA_SLP_VECTORIZE
 
    If set to non-zero, enable LLVM superword-level parallelism vectorization.
+   Note that use of this feature has occasionally resulted in LLVM producing
+   miscompilations, hence it is off by default.
 
-   *Default value:* 1
+   *Default value:* 0
 
 .. envvar:: NUMBA_ENABLE_AVX
 
@@ -456,7 +458,7 @@ GPU support
    The default compute capability (a string of the type ``major.minor``) to
    target when compiling to PTX using ``cuda.compile_ptx``. The default is
    5.2, which is the lowest non-deprecated compute capability in the most
-   recent version of the CUDA toolkit supported (10.2 at present).
+   recent version of the CUDA toolkit supported (11.0 at present).
 
 .. envvar:: NUMBA_ENABLE_CUDASIM
 

@@ -4,19 +4,14 @@ import ctypes
 import enum
 
 import numpy as np
+from numpy.random.bit_generator import BitGenerator
 
 from numba.core import types, utils, errors
 from numba.np import numpy_support
-from numba.np.numpy_support import numpy_version
+
+
 # terminal color markup
 _termcolor = errors.termcolor()
-
-# Note that the BitGenerator class exists in _bit_generator.pxd in
-# NumPy 1.18 (has underscore) and then bit_generator.pxd in NumPy 1.19
-if numpy_version < (1, 19):
-    from numpy.random._bit_generator import BitGenerator
-else:
-    from numpy.random.bit_generator import BitGenerator
 
 
 class Purpose(enum.Enum):
@@ -52,6 +47,10 @@ def typeof_impl(val, c):
     if tp is not None:
         return tp
 
+    tp = getattr(val, "_numba_type_", None)
+    if tp is not None:
+        return tp
+
     # cffi is handled here as it does not expose a public base class
     # for exported functions or CompiledFFI instances.
     from numba.core.typing import cffi_utils
@@ -61,7 +60,7 @@ def typeof_impl(val, c):
         if cffi_utils.is_ffi_instance(val):
             return types.ffi
 
-    return getattr(val, "_numba_type_", None)
+    return None
 
 
 def _typeof_buffer(val, c):
@@ -240,6 +239,9 @@ def _typeof_dtype(val, c):
 
 @typeof_impl.register(np.ndarray)
 def _typeof_ndarray(val, c):
+    if isinstance(val, np.ma.MaskedArray):
+        msg = "Unsupported array type: numpy.ma.MaskedArray."
+        raise errors.NumbaTypeError(msg)
     try:
         dtype = numpy_support.from_dtype(val.dtype)
     except errors.NumbaNotImplementedError:

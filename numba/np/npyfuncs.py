@@ -10,6 +10,7 @@ import math
 import llvmlite.ir
 import numpy as np
 
+from numba.core.extending import overload
 from numba.core.imputils import impl_ret_untracked
 from numba.core import typing, types, errors, lowering, cgutils
 from numba.core.extending import register_jitable
@@ -363,30 +364,78 @@ def np_complex_div_impl(context, builder, sig, args):
 ########################################################################
 # NumPy logaddexp
 
+def _npy_logaddexp(x1, x2):
+    pass
+
+def _generate_logaddexp(fnoverload, const, log1pfn, expfn):
+    # Code generation for logaddexp and logaddexp2 is based on:
+    # https://github.com/numpy/numpy/blob/12c2b7dd62fc0c14b81c8892ed5f4f59cc94d09c/numpy/core/src/npymath/npy_math_internal.h.src#L467-L507
+
+    @overload(fnoverload, target='generic')
+    def ol_npy_logaddexp(x1, x2):
+        if x1 != x2:
+            return
+        shift = x1(const)
+        def impl(x1, x2):
+            x, y = x1, x2
+            if (x == y):
+                # Handles infinities of the same sign without warnings
+                return x + shift
+            else:
+                tmp = x - y
+                if (tmp > 0):
+                    return x + log1pfn(expfn(-tmp))
+                elif (tmp <= 0):
+                    return y + log1pfn(expfn(tmp))
+                else:
+                    # NaN
+                    return tmp
+        return impl
+
+def _npy_logaddexp(x1, x2):
+    pass
+
+
+_generate_logaddexp(_npy_logaddexp, _NPY_LOGE2, np.log1p, np.exp)
+
+
 def np_real_logaddexp_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
 
-    dispatch_table = {
-        types.float32: 'npy_logaddexpf',
-        types.float64: 'npy_logaddexp',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'logaddexp')
+    fnty = context.typing_context.resolve_value_type(_npy_logaddexp)
+    sig = fnty.get_call_type(context.typing_context, (*sig.args,), {})
+    impl = context.get_function(fnty, sig)
+    return impl(builder, args)
 
 ########################################################################
 # NumPy logaddexp2
+def _npy_logaddexp2(x1, x2):
+    pass
+
+def npy_log2_1p(x):
+    pass
+
+# The following npy_log2_1p function is a translation of:
+# https://github.com/numpy/numpy/blob/12c2b7dd62fc0c14b81c8892ed5f4f59cc94d09c/numpy/core/src/npymath/npy_math_internal.h.src#L457-L460
+
+@overload(npy_log2_1p, target='generic')
+def ol_npy_log2_1p(x):
+    LOG2E = x(_NPY_LOG2E)
+    def impl(x):
+        return LOG2E * np.log1p(x)
+    return impl
+
+
+_generate_logaddexp(_npy_logaddexp2, 1.0, npy_log2_1p, np.exp2)
+
 
 def np_real_logaddexp2_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
 
-    dispatch_table = {
-        types.float32: 'npy_logaddexp2f',
-        types.float64: 'npy_logaddexp2',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'logaddexp2')
+    fnty = context.typing_context.resolve_value_type(_npy_logaddexp2)
+    sig = fnty.get_call_type(context.typing_context, (*sig.args,), {})
+    impl = context.get_function(fnty, sig)
+    return impl(builder, args)
 
 
 ########################################################################
@@ -600,8 +649,8 @@ def np_real_exp2_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'npy_exp2f',
-        types.float64: 'npy_exp2',
+        types.float32: 'numba_exp2f',
+        types.float64: 'numba_exp2',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -639,8 +688,8 @@ def np_real_log2_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'npy_log2f',
-        types.float64: 'npy_log2',
+        types.float32: 'numba_log2f',
+        types.float64: 'numba_log2',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
@@ -1568,15 +1617,18 @@ def np_complex_isinf_impl(context, builder, sig, args):
 
 def np_real_signbit_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
-
-    dispatch_table = {
-        types.float32: 'numba_signbitf',
-        types.float64: 'numba_signbit',
+    # there's no signbit intrinsic in LLVM, so just bitcast as int, mask the
+    # signbit and cmp against 0.
+    masks = {
+        types.float16: context.get_constant(types.uint16, 0x8000),
+        types.float32: context.get_constant(types.uint32, 0x80000000),
+        types.float64: context.get_constant(types.uint64, 0x8000000000000000),
     }
-    inner_sig = typing.signature(types.intc, *sig.args)
-
-    int_res = _dispatch_func_by_name_type(context, builder, inner_sig, args,
-                                          dispatch_table, 'signbit')
+    arg_ty = sig.args[0]
+    arg_int_ty = getattr(types, f'uint{arg_ty.bitwidth}')
+    arg_ll_int_ty = context.get_value_type(arg_int_ty)
+    int_res = builder.and_(builder.bitcast(args[0], arg_ll_int_ty),
+                           masks[arg_ty])
     bool_res = builder.icmp_unsigned('!=', int_res, int_res.type(0))
     return bool_res
 
@@ -1590,23 +1642,40 @@ def np_real_nextafter_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
 
     dispatch_table = {
-        types.float32: 'npy_nextafterf',
-        types.float64: 'npy_nextafter',
+        types.float32: 'numba_nextafterf',
+        types.float64: 'numba_nextafter',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
                                        dispatch_table, 'nextafter')
 
 def np_real_spacing_impl(context, builder, sig, args):
+    # This is different to how NumPy does it, NumPy has a specialisation of
+    # nextafter called _next, which is used. See:
+    # https://github.com/numpy/numpy/blob/12c2b7dd62fc0c14b81c8892ed5f4f59cc94d09c/numpy/core/src/npymath/ieee754.c.src#L32-L38
+    # Numba elects to use `nextafter` for a similar behaviour to save
+    # translating this very involved function. Further, the NumPy comments note
+    # that there is a lot of redundancy present between the two.
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'npy_spacingf',
-        types.float64: 'npy_spacing',
+        types.float32: 'numba_nextafterf',
+        types.float64: 'numba_nextafter',
     }
 
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'spacing')
+    [ty] = sig.args
+    inner_sig = typing.signature(sig.return_type, ty, ty)
+    ll_ty = args[0].type
+    ll_inf = ll_ty(np.inf)
+    fnty = llvmlite.ir.FunctionType(ll_ty, [ll_ty, ll_ty])
+    fn = cgutils.insert_pure_function(builder.module, fnty,
+                                      name='llvm.copysign')
+    ll_sinf = builder.call(fn, [ll_inf, args[0]])
+    inner_args = args + [ll_sinf,]
+    nextafter = _dispatch_func_by_name_type(context, builder, inner_sig,
+                                            inner_args, dispatch_table,
+                                            'nextafter')
+    return builder.fsub(nextafter, args[0])
 
 
 def np_real_ldexp_impl(context, builder, sig, args):

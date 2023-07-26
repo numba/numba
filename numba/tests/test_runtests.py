@@ -4,6 +4,7 @@ import subprocess
 
 from numba import cuda
 import unittest
+import itertools
 
 try:
     import git  # noqa: F401 from gitpython package
@@ -64,6 +65,11 @@ class TestCase(unittest.TestCase):
         self.assertTrue(any('numba.tests.npyufunc.test_' in line
                             for line in lines),)
 
+    def _get_numba_tests_from_listing(self, listing):
+        """returns a filter on strings starting with 'numba.', useful for
+        selecting the 'numba' test names from a test listing."""
+        return filter(lambda x: x.startswith('numba.'), listing)
+
     def test_default(self):
         self.check_all([])
 
@@ -107,33 +113,77 @@ class TestCase(unittest.TestCase):
 
         tags = ['long_running', 'long_running, important']
 
+        total = get_count(['numba.tests'])
+
         for tag in tags:
-            total = get_count(['numba.tests'])
             included = get_count(['--tags', tag, 'numba.tests'])
             excluded = get_count(['--exclude-tags', tag, 'numba.tests'])
             self.assertEqual(total, included + excluded)
 
             # check syntax with `=` sign in
-            total = get_count(['numba.tests'])
             included = get_count(['--tags=%s' % tag, 'numba.tests'])
             excluded = get_count(['--exclude-tags=%s' % tag, 'numba.tests'])
             self.assertEqual(total, included + excluded)
 
-    def test_check_slice(self):
-        tmp = self.get_testsuite_listing(['-j','0,5,1'])
-        l = [x for x in tmp if x.startswith('numba.')]
-        self.assertEqual(len(l), 5)
+    def test_check_shard(self):
+        tmpAll = self.get_testsuite_listing([])
+        tmp1 = self.get_testsuite_listing(['-j', '0:2'])
+        tmp2 = self.get_testsuite_listing(['-j', '1:2'])
 
-    def test_check_slicing_equivalent(self):
-        def filter_test(xs):
-            return [x for x in xs if x.startswith('numba.')]
-        full = filter_test(self.get_testsuite_listing([]))
-        sliced = []
+        lAll = set(self._get_numba_tests_from_listing(tmpAll))
+        l1 = set(self._get_numba_tests_from_listing(tmp1))
+        l2 = set(self._get_numba_tests_from_listing(tmp2))
+
+        # The difference between two adjacent shards should be less than 5% of
+        # the total
+        self.assertLess(abs(len(l2) - len(l1)), len(lAll) / 20)
+        self.assertLess(len(l1), len(lAll))
+        self.assertLess(len(l2), len(lAll))
+
+    def test_check_sharding_equivalent(self):
+        # get some shards
+        sharded = list()
         for i in range(3):
-            subset = self.get_testsuite_listing(['-j', '{},None,3'.format(i)])
-            sliced.extend(filter_test(subset))
-        # The tests must be equivalent
-        self.assertEqual(sorted(full), sorted(sliced))
+            subset = self.get_testsuite_listing(['-j', '{}:3'.format(i)])
+            slist = [*self._get_numba_tests_from_listing(subset)]
+            sharded.append(slist)
+
+        # get the always running tests
+        tmp = self.get_testsuite_listing(['--tag', 'always_test'])
+        always_running = set(self._get_numba_tests_from_listing(tmp))
+
+        # make sure there is at least one test that always runs
+        self.assertGreaterEqual(len(always_running), 1)
+
+        # check that each shard contains no repeats
+        sharded_sets = [set(x) for x in sharded]
+        for i in range(len(sharded)):
+            self.assertEqual(len(sharded_sets[i]), len(sharded[i]))
+
+        # check that the always running tests are in every shard, and then
+        # remove them from the shards
+        for shard in sharded_sets:
+            for test in always_running:
+                self.assertIn(test, shard)
+                shard.remove(test)
+                self.assertNotIn(test, shard)
+
+        # check that there is no overlap between the shards
+        for a, b in itertools.combinations(sharded_sets, 2):
+            self.assertFalse(a & b)
+
+        # check that the sum of the shards and the always running tests is the
+        # same as the full listing
+
+        sum_of_parts = set()
+        for x in sharded_sets:
+            sum_of_parts.update(x)
+        sum_of_parts.update(always_running)
+
+        full_listing = set(self._get_numba_tests_from_listing(
+            self.get_testsuite_listing([])))
+
+        self.assertEqual(sum_of_parts, full_listing)
 
     @unittest.skipUnless(has_gitpython, "Requires gitpython")
     def test_gitdiff(self):

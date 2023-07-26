@@ -29,7 +29,14 @@ class TestInspect(CUDATestCase):
         self.assertIn("(float32, int32)", typeanno)
         file.close()
         # Function name in LLVM
-        self.assertIn("foo", foo.inspect_llvm(sig))
+        llvm = foo.inspect_llvm(sig)
+        self.assertIn("foo", llvm)
+
+        # Kernel in LLVM
+        self.assertIn('cuda.kernel.wrapper', llvm)
+
+        # Wrapped device function body in LLVM
+        self.assertIn("define linkonce_odr i32", llvm)
 
         asm = foo.inspect_asm(sig)
 
@@ -64,6 +71,14 @@ class TestInspect(CUDATestCase):
         self.assertIn("foo", llvmirs[intp, intp])
         self.assertIn("foo", llvmirs[float64, float64])
 
+        # Kernels in LLVM
+        self.assertIn('cuda.kernel.wrapper', llvmirs[intp, intp])
+        self.assertIn('cuda.kernel.wrapper', llvmirs[float64, float64])
+
+        # Wrapped device function bodies in LLVM
+        self.assertIn("define linkonce_odr i32", llvmirs[intp, intp])
+        self.assertIn("define linkonce_odr i32", llvmirs[float64, float64])
+
         asmdict = foo.inspect_asm()
 
         # Signature in assembly dict
@@ -83,6 +98,8 @@ class TestInspect(CUDATestCase):
                 seen_function = True
         self.assertTrue(seen_function)
 
+        self.assertRegex(sass, r'//## File ".*/test_inspect.py", line [0-9]')
+
         # Some instructions common to all supported architectures that should
         # appear in the output
         self.assertIn('S2R', sass)   # Special register to register
@@ -93,7 +110,7 @@ class TestInspect(CUDATestCase):
     def test_inspect_sass_eager(self):
         sig = (float32[::1], int32[::1])
 
-        @cuda.jit(sig)
+        @cuda.jit(sig, lineinfo=True)
         def add(x, y):
             i = cuda.grid(1)
             if i < len(x):
@@ -103,7 +120,7 @@ class TestInspect(CUDATestCase):
 
     @skip_without_nvdisasm('nvdisasm needed for inspect_sass()')
     def test_inspect_sass_lazy(self):
-        @cuda.jit
+        @cuda.jit(lineinfo=True)
         def add(x, y):
             i = cuda.grid(1)
             if i < len(x):
@@ -126,7 +143,22 @@ class TestInspect(CUDATestCase):
         with self.assertRaises(RuntimeError) as raises:
             f.inspect_sass()
 
-        self.assertIn('nvdisasm is required', str(raises.exception))
+        self.assertIn('nvdisasm has not been found', str(raises.exception))
+
+    @skip_without_nvdisasm('nvdisasm needed for inspect_sass_cfg()')
+    def test_inspect_sass_cfg(self):
+        sig = (float32[::1], int32[::1])
+
+        @cuda.jit(sig)
+        def add(x, y):
+            i = cuda.grid(1)
+            if i < len(x):
+                x[i] += y[i]
+
+        self.assertRegex(
+            add.inspect_sass_cfg(signature=sig),
+            r'digraph\s*\w\s*{(.|\n)*\n}'
+        )
 
 
 if __name__ == '__main__':

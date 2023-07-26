@@ -5,7 +5,6 @@ import pickle
 import multiprocessing
 import ctypes
 import warnings
-from distutils.version import LooseVersion
 import re
 
 import numpy as np
@@ -61,12 +60,7 @@ from .pdlike_usecase import Index, Series
 
 
 try:
-    import scipy
-
-    if LooseVersion(scipy.__version__) < "0.19":
-        sc = None
-    else:
-        import scipy.special.cython_special as sc
+    import scipy.special.cython_special as sc
 except ImportError:
     sc = None
 
@@ -1963,7 +1957,7 @@ class TestMisc(TestCase):
             is_jitted(guvectorize("void(float64[:])", "(m)")(foo))
         )
 
-    def test_overload_glue_arg_binding(self):
+    def test_overload_arg_binding(self):
         # See issue #7982, checks that calling a function with named args works
         # correctly irrespective of the order in which the names are supplied.
         @njit

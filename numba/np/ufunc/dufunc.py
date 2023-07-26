@@ -1,3 +1,5 @@
+import functools
+
 from numba import jit, typeof
 from numba.core import cgutils, types, serialize, sigutils
 from numba.core.extending import is_jitted
@@ -79,10 +81,12 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
     def __init__(self, py_func, identity=None, cache=False, targetoptions={}):
         if is_jitted(py_func):
             py_func = py_func.py_func
-        dispatcher = jit(_target='npyufunc',
-                         cache=cache,
-                         **targetoptions)(py_func)
+        with ufuncbuilder._suppress_deprecation_warning_nopython_not_supplied():
+            dispatcher = jit(_target='npyufunc',
+                             cache=cache,
+                             **targetoptions)(py_func)
         self._initialize(dispatcher, identity)
+        functools.update_wrapper(self, py_func)
 
     def _initialize(self, dispatcher, identity):
         identity = ufuncbuilder.parse_identity(identity)
@@ -169,6 +173,21 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
         """
         args, return_type = sigutils.normalize_signature(sig)
         return self._compile_for_argtys(args, return_type)
+
+    def __call__(self, *args, **kws):
+        """
+        Allow any argument that has overridden __array_ufunc__ (NEP-18)
+        to take control of DUFunc.__call__.
+        """
+        default = numpy_support.np.ndarray.__array_ufunc__
+
+        for arg in args + tuple(kws.values()):
+            if getattr(type(arg), "__array_ufunc__", default) is not default:
+                output = arg.__array_ufunc__(self, "__call__", *args, **kws)
+                if output is not NotImplemented:
+                    return output
+        else:
+            return super().__call__(*args, **kws)
 
     def _compile_for_args(self, *args, **kws):
         nin = self.ufunc.nin

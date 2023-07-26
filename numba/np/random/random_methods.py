@@ -12,6 +12,18 @@ from numba.np.random.generator_core import next_uint32, next_uint64
 
 
 @register_jitable
+def gen_mask(max):
+    mask = uint64(max)
+    mask |= mask >> 1
+    mask |= mask >> 2
+    mask |= mask >> 4
+    mask |= mask >> 8
+    mask |= mask >> 16
+    mask |= mask >> 32
+    return mask
+
+
+@register_jitable
 def buffered_bounded_bool(bitgen, off, rng, bcnt, buf):
     if (rng == 0):
         return off, bcnt, buf
@@ -66,7 +78,7 @@ def buffered_bounded_lemire_uint8(bitgen, rng, bcnt, buf):
     # zero.
     rng_excl = uint8(rng) + uint8(1)
 
-    assert(rng != 0xFF)
+    assert (rng != 0xFF)
 
     # Generate a scaled random number.
     n, bcnt, buf = buffered_uint8(bitgen, bcnt, buf)
@@ -102,7 +114,7 @@ def buffered_bounded_lemire_uint16(bitgen, rng, bcnt, buf):
     # zero.
     rng_excl = uint16(rng) + uint16(1)
 
-    assert(rng != 0xFFFF)
+    assert (rng != 0xFFFF)
 
     # Generate a scaled random number.
     n, bcnt, buf = buffered_uint16(bitgen, bcnt, buf)
@@ -131,7 +143,7 @@ def buffered_bounded_lemire_uint32(bitgen, rng):
     """
     rng_excl = uint32(rng) + uint32(1)
 
-    assert(rng != 0xFFFFFFFF)
+    assert (rng != 0xFFFFFFFF)
 
     # Generate a scaled random number.
     m = uint64(next_uint32(bitgen)) * uint64(rng_excl)
@@ -158,7 +170,7 @@ def bounded_lemire_uint64(bitgen, rng):
     """
     rng_excl = uint64(rng) + uint64(1)
 
-    assert(rng != 0xFFFFFFFFFFFFFFFF)
+    assert (rng != 0xFFFFFFFFFFFFFFFF)
 
     x = next_uint64(bitgen)
 
@@ -331,3 +343,23 @@ def _randint_arg_check(low, high, endpoint, lower_bound, upper_bound):
             raise ValueError("high is out of bounds")
         if low > high:  # -1 already subtracted, closed interval
             raise ValueError("low is greater than high in given interval")
+
+
+@register_jitable
+def random_interval(bitgen, max_val):
+    if (max_val == 0):
+        return 0
+
+    max_val = uint64(max_val)
+    mask = uint64(gen_mask(max_val))
+
+    if (max_val <= 0xffffffff):
+        value = uint64(next_uint32(bitgen)) & mask
+        while value > max_val:
+            value = uint64(next_uint32(bitgen)) & mask
+    else:
+        value = next_uint64(bitgen) & mask
+        while value > max_val:
+            value = next_uint64(bitgen) & mask
+
+    return uint64(value)

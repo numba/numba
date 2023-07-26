@@ -1,11 +1,10 @@
 Just-in-Time compilation
 ========================
 
+.. _jit-decorator:
 
 JIT functions
 -------------
-
-.. _jit-decorator:
 
 .. decorator:: numba.jit(signature=None, nopython=False, nogil=False, cache=False, forceobj=False, parallel=False, error_model='python', fastmath=False, locals={}, boundscheck=False)
 
@@ -346,6 +345,13 @@ Vectorized functions (ufuncs and DUFuncs)
    The compiled function can be cached to reduce future compilation time.
    It is enabled by setting *cache* to True. Only the "cpu" and "parallel"
    targets support caching.
+
+   The ufuncs created by this function respect `NEP-13 <https://numpy.org/neps/nep-0013-ufunc-overrides.html>`_,
+   NumPy's mechanism for overriding ufuncs. If any of the arguments of the
+   ufunc's ``__call__`` have a ``__array_ufunc__`` method, that method will
+   be called (in Python, not the compiled context), which may pre-process
+   and/or post-process the arguments and return value of the compiled ufunc
+   (or might not even call it).
 
 
 .. decorator:: numba.guvectorize(signatures, layout, *, identity=None, nopython=True, target='cpu', forceobj=False, cache=False, locals={})

@@ -2,13 +2,14 @@ import collections
 import functools
 import sys
 
-from numba.core import utils
 from numba.core.ir import Loc
 from numba.core.errors import UnsupportedError
 
 # List of bytecodes creating a new block in the control flow graph
 # (in addition to explicit jump labels).
-NEW_BLOCKERS = frozenset(['SETUP_LOOP', 'FOR_ITER', 'SETUP_WITH'])
+NEW_BLOCKERS = frozenset([
+    'SETUP_LOOP', 'FOR_ITER', 'SETUP_WITH', 'BEFORE_WITH'
+])
 
 
 class CFBlock(object):
@@ -194,47 +195,47 @@ class CFGraph(object):
         """
         return self._domtree
 
-    @utils.cached_property
+    @functools.cached_property
     def _exit_points(self):
         return self._find_exit_points()
 
-    @utils.cached_property
+    @functools.cached_property
     def _doms(self):
         return self._find_dominators()
 
-    @utils.cached_property
+    @functools.cached_property
     def _back_edges(self):
         return self._find_back_edges()
 
-    @utils.cached_property
+    @functools.cached_property
     def _topo_order(self):
         return self._find_topo_order()
 
-    @utils.cached_property
+    @functools.cached_property
     def _descs(self):
         return self._find_descendents()
 
-    @utils.cached_property
+    @functools.cached_property
     def _loops(self):
         return self._find_loops()
 
-    @utils.cached_property
+    @functools.cached_property
     def _in_loops(self):
         return self._find_in_loops()
 
-    @utils.cached_property
+    @functools.cached_property
     def _post_doms(self):
         return self._find_post_dominators()
 
-    @utils.cached_property
+    @functools.cached_property
     def _idom(self):
         return self._find_immediate_dominators()
 
-    @utils.cached_property
+    @functools.cached_property
     def _df(self):
         return self._find_dominance_frontier()
 
-    @utils.cached_property
+    @functools.cached_property
     def _domtree(self):
         return self._find_dominator_tree()
 
@@ -791,7 +792,7 @@ class ControlFlowAnalysis(object):
             elif inst.is_jump:
                 # this catches e.g. try... except
                 l = Loc(self.bytecode.func_id.filename, inst.lineno)
-                if inst.opname in {"SETUP_EXCEPT", "SETUP_FINALLY"}:
+                if inst.opname in {"SETUP_FINALLY"}:
                     msg = "'try' block not supported until python3.7 or later"
                 else:
                     msg = "Use of unsupported opcode (%s) found" % inst.opname
@@ -925,6 +926,11 @@ class ControlFlowAnalysis(object):
     op_JUMP_IF_FALSE = _op_ABSOLUTE_JUMP_IF
     op_JUMP_IF_TRUE = _op_ABSOLUTE_JUMP_IF
 
+    op_POP_JUMP_FORWARD_IF_FALSE = _op_ABSOLUTE_JUMP_IF
+    op_POP_JUMP_BACKWARD_IF_FALSE = _op_ABSOLUTE_JUMP_IF
+    op_POP_JUMP_FORWARD_IF_TRUE = _op_ABSOLUTE_JUMP_IF
+    op_POP_JUMP_BACKWARD_IF_TRUE = _op_ABSOLUTE_JUMP_IF
+
     def _op_ABSOLUTE_JUMP_OR_POP(self, inst):
         self.jump(inst.get_jump_target())
         self.jump(inst.next, pops=1)
@@ -940,6 +946,8 @@ class ControlFlowAnalysis(object):
     def op_JUMP_FORWARD(self, inst):
         self.jump(inst.get_jump_target())
         self._force_new_block = True
+
+    op_JUMP_BACKWARD = op_JUMP_FORWARD
 
     def op_RETURN_VALUE(self, inst):
         self._curblock.terminating = True

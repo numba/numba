@@ -5,8 +5,8 @@ name: rtd
 channels:
   - numba/label/dev
 dependencies:
-  - python=3.7
-  - llvmlite=0.40
+  - python=3.8
+  - llvmlite=0.41
   - numpy
   - numpydoc
   - setuptools

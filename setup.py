@@ -1,12 +1,12 @@
 import os
 import platform
+import subprocess
 import sys
-from distutils import sysconfig
-from distutils.command import build
-from distutils.command.build_ext import build_ext
-from distutils.spawn import spawn
+import sysconfig
 
-from setuptools import Extension, find_packages, setup
+from setuptools import Command, Extension, find_packages, setup
+from setuptools.command.build_ext import build_ext
+
 import versioneer
 
 _version_module = None
@@ -19,12 +19,12 @@ except ImportError:
         pass
 
 
-min_python_version = "3.7"
-max_python_version = "3.11"  # exclusive
+min_python_version = "3.8"
+max_python_version = "3.12"  # exclusive
 min_numpy_build_version = "1.11"
-min_numpy_run_version = "1.18"
-min_llvmlite_version = "0.40.0dev0"
-max_llvmlite_version = "0.41"
+min_numpy_run_version = "1.21"
+min_llvmlite_version = "0.41.0dev0"
+max_llvmlite_version = "0.42"
 
 if sys.platform.startswith('linux'):
     # Patch for #2555 to make wheels without libpython
@@ -50,25 +50,22 @@ def _guard_py_ver():
 _guard_py_ver()
 
 
-class build_doc(build.build):
+class build_doc(Command):
     description = "build documentation"
 
     def run(self):
-        spawn(['make', '-C', 'docs', 'html'])
+        subprocess.run(['make', '-C', 'docs', 'html'])
 
-
-versioneer.VCS = 'git'
-versioneer.versionfile_source = 'numba/_version.py'
-versioneer.versionfile_build = 'numba/_version.py'
-versioneer.tag_prefix = ''
-versioneer.parentdir_prefix = 'numba-'
 
 cmdclass = versioneer.get_cmdclass()
 cmdclass['build_doc'] = build_doc
 
+extra_link_args = []
 install_name_tool_fixer = []
 if sys.platform == 'darwin':
     install_name_tool_fixer += ['-headerpad_max_install_names']
+if platform.machine() == 'ppc64le':
+    extra_link_args += ['-pthread']
 
 build_ext = cmdclass.get('build_ext', build_ext)
 
@@ -134,14 +131,13 @@ def get_ext_modules():
     """
     Return a list of Extension instances for the setup() call.
     """
-    # Note we don't import Numpy at the toplevel, since setup.py
-    # should be able to run without Numpy for pip to discover the
-    # build dependencies
-    import numpy.distutils.misc_util as np_misc
-
-    # Inject required options for extensions compiled against the Numpy
-    # C API (include dirs, library dirs etc.)
-    np_compile_args = np_misc.get_info('npymath')
+    # Note we don't import NumPy at the toplevel, since setup.py
+    # should be able to run without NumPy for pip to discover the
+    # build dependencies. Need NumPy headers and libm linkage.
+    import numpy as np
+    np_compile_args = {'include_dirs': [np.get_include(),],}
+    if sys.platform != 'win32':
+        np_compile_args['libraries'] = ['m',]
 
     ext_devicearray = Extension(name='numba._devicearray',
                                 sources=['numba/_devicearray.cpp'],
@@ -158,12 +154,13 @@ def get_ext_modules():
 
     ext_dispatcher = Extension(name="numba._dispatcher",
                                sources=['numba/_dispatcher.cpp',
-                                        'numba/_typeof.c',
-                                        'numba/_hashtable.c',
+                                        'numba/_typeof.cpp',
+                                        'numba/_hashtable.cpp',
                                         'numba/core/typeconv/typeconv.cpp'],
                                depends=["numba/_pymodule.h",
                                         "numba/_typeof.h",
                                         "numba/_hashtable.h"],
+                               extra_compile_args=['-std=c++11'],
                                **np_compile_args)
 
     ext_helperlib = Extension(name="numba._helperlib",
@@ -172,11 +169,12 @@ def get_ext_modules():
                                        "numba/cext/dictobject.c",
                                        "numba/cext/listobject.c",
                                        ],
-                              extra_link_args=install_name_tool_fixer,
+                              # numba/_random.c needs pthreads
+                              extra_link_args=install_name_tool_fixer +
+                              extra_link_args,
                               depends=["numba/_pymodule.h",
                                        "numba/_helperlib.c",
                                        "numba/_lapack.c",
-                                       "numba/_npymath_exports.c",
                                        "numba/_random.c",
                                        "numba/mathnames.inc",
                                        ],
@@ -186,6 +184,7 @@ def get_ext_modules():
                              sources=["numba/core/typeconv/typeconv.cpp",
                                       "numba/core/typeconv/_typeconv.cpp"],
                              depends=["numba/_pymodule.h"],
+                             extra_compile_args=['-std=c++11'],
                              )
 
     ext_np_ufunc = Extension(name="numba.np.ufunc._internal",
@@ -235,9 +234,15 @@ def get_ext_modules():
     # Set various flags for use in TBB and openmp. On OSX, also find OpenMP!
     have_openmp = True
     if sys.platform.startswith('win'):
-        cpp11flags = []
-        ompcompileflags = ['-openmp']
-        omplinkflags = []
+        if 'MSC' in sys.version:
+            cpp11flags = []
+            ompcompileflags = ['-openmp']
+            omplinkflags = []
+        else:
+            # For non-MSVC toolchain e.g. gcc and clang with mingw
+            cpp11flags = ['-std=c++11']
+            ompcompileflags = ['-fopenmp']
+            omplinkflags = ['-fopenmp']
     elif sys.platform.startswith('darwin'):
         cpp11flags = ['-std=c++11']
         # This is a bit unusual but necessary...
@@ -278,6 +283,7 @@ def get_ext_modules():
                 depends=['numba/np/ufunc/workqueue.h'],
                 include_dirs=[os.path.join(tbb_root, 'include')],
                 extra_compile_args=cpp11flags,
+                extra_link_args=extra_link_args,
                 libraries=['tbb'],  # TODO: if --debug or -g, use 'tbb_debug'
                 library_dirs=[
                     # for Linux
@@ -319,7 +325,8 @@ def get_ext_modules():
         name='numba.np.ufunc.workqueue',
         sources=['numba/np/ufunc/workqueue.c',
                  'numba/np/ufunc/gufunc_scheduler.cpp'],
-        depends=['numba/np/ufunc/workqueue.h'])
+        depends=['numba/np/ufunc/workqueue.h'],
+        extra_link_args=extra_link_args)
     ext_np_ufunc_backends.append(ext_np_ufunc_workqueue_backend)
 
     ext_mviewbuf = Extension(name='numba.mviewbuf',
@@ -360,7 +367,6 @@ build_requires = ['numpy >={}'.format(min_numpy_build_version)]
 install_requires = [
     'llvmlite >={},<{}'.format(min_llvmlite_version, max_llvmlite_version),
     'numpy >={}'.format(min_numpy_run_version),
-    'setuptools',
     'importlib_metadata; python_version < "3.9"',
 ]
 
@@ -375,17 +381,17 @@ metadata = dict(
         "Operating System :: OS Independent",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
         "Topic :: Software Development :: Compilers",
     ],
     package_data={
         # HTML templates for type annotations
         "numba.core.annotations": ["*.html"],
         # Various test data
-        "numba.cuda.tests.cudadrv.data": ["*.ptx", "*.cu"],
+        "numba.cuda.tests.data": ["*.ptx", "*.cu"],
         "numba.cuda.tests.doc_examples.ffi": ["*.cu"],
         "numba.tests": ["pycc_distutils_usecase/*.py"],
         # Some C files are needed by pycc
@@ -396,8 +402,9 @@ metadata = dict(
         # numba gdb hook init command language file
         "numba.misc": ["cmdlang.gdb"],
         "numba.typed": ["py.typed"],
+        "numba.cuda" : ["cpp_function_wrappers.cu"]
     },
-    scripts=["numba/pycc/pycc", "bin/numba"],
+    scripts=["bin/numba"],
     url="https://numba.pydata.org",
     packages=packages,
     setup_requires=build_requires,
