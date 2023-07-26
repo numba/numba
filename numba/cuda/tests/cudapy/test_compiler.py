@@ -1,7 +1,6 @@
 from math import sqrt
 from numba import cuda, float32, int16, int32, uint32, void
 from numba.cuda import compile_ptx, compile_ptx_for_current_device
-from numba.cuda.cudadrv.nvvm import NVVM
 
 from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
 
@@ -77,9 +76,6 @@ class TestCompileToPTX(unittest.TestCase):
         self.assertIn('sqrt.approx.ftz.f32', ptx)
 
     def check_debug_info(self, ptx):
-        if not NVVM().is_nvvm70:
-            self.skipTest('debuginfo not generated for NVVM 3.4')
-
         # A debug_info section should exist in the PTX. Whitespace varies
         # between CUDA toolkit versions.
         self.assertRegex(ptx, '\\.section\\s+\\.debug_info')
@@ -116,9 +112,6 @@ class TestCompileToPTX(unittest.TestCase):
         self.assertRegex(ptx, '\\.file.*test_compiler.py"')
 
     def test_device_function_with_line_info(self):
-        if not NVVM().is_nvvm70:
-            self.skipTest('lineinfo not generated for NVVM 3.4')
-
         def f():
             pass
 
@@ -126,9 +119,6 @@ class TestCompileToPTX(unittest.TestCase):
         self.check_line_info(ptx)
 
     def test_kernel_with_line_info(self):
-        if not NVVM().is_nvvm70:
-            self.skipTest('lineinfo not generated for NVVM 3.4')
-
         def f():
             pass
 

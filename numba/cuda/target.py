@@ -5,7 +5,6 @@ from llvmlite import ir
 
 from numba.core import typing, types, debuginfo, itanium_mangler, cgutils
 from numba.core.dispatcher import Dispatcher
-from numba.core.errors import NumbaInvalidConfigWarning
 from numba.core.base import BaseContext
 from numba.core.callconv import MinimalCallConv
 from numba.core.typing import cmathdecl
@@ -14,8 +13,6 @@ from numba.core import datamodel
 from .cudadrv import nvvm
 from numba.cuda import codegen, nvvmutils, ufuncs
 from numba.cuda.models import cuda_data_manager
-
-from warnings import warn
 
 # -----------------------------------------------------------------------------
 # Typing
@@ -78,12 +75,7 @@ class CUDATargetContext(BaseContext):
 
     @property
     def DIBuilder(self):
-        if nvvm.NVVM().is_nvvm70:
-            return debuginfo.DIBuilder
-        else:
-            msg = "debuginfo is not generated for CUDA toolkits < 11.2"
-            warn(NumbaInvalidConfigWarning(msg))
-            return debuginfo.DummyDIBuilder
+        return debuginfo.DIBuilder
 
     @property
     def enable_boundscheck(self):
@@ -253,18 +245,9 @@ class CUDATargetContext(BaseContext):
                 # Use atomic cmpxchg to prevent rewriting the error status
                 # Only the first error is recorded
 
-                if nvvm.NVVM().is_nvvm70:
-                    xchg = builder.cmpxchg(gv_exc, old, status.code,
-                                           'monotonic', 'monotonic')
-                    changed = builder.extract_value(xchg, 1)
-                else:
-                    casfnty = ir.FunctionType(old.type, [gv_exc.type, old.type,
-                                                         old.type])
-
-                    cas_hack = "___numba_atomic_i32_cas_hack"
-                    casfn = ir.Function(wrapper_module, casfnty, name=cas_hack)
-                    xchg = builder.call(casfn, [gv_exc, old, status.code])
-                    changed = builder.icmp_unsigned('==', xchg, old)
+                xchg = builder.cmpxchg(gv_exc, old, status.code,
+                                       'monotonic', 'monotonic')
+                changed = builder.extract_value(xchg, 1)
 
                 # If the xchange is successful, save the thread ID.
                 sreg = nvvmutils.SRegBuilder(builder)
