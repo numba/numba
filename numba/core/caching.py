@@ -15,16 +15,42 @@ import sys
 import tempfile
 import uuid
 import warnings
+import typing as pt
 
 from numba.misc.appdirs import AppDirs
 
 import numba
 from numba.core.errors import NumbaWarning
 from numba.core.base import BaseContext
-from numba.core.codegen import CodeLibrary
+from numba.core.codegen import CodeLibrary, JITCodeLibrary
 from numba.core.compiler import CompileResult
-from numba.core import config, compiler
+from numba.core import config, compiler, types
 from numba.core.serialize import dumps
+if pt.TYPE_CHECKING:
+    from numba.core.typing import Signature
+else:
+    Signature = pt.Any
+
+
+# CodegenMagicTuple is different for CPU (3-tuple) and GPU (2-tuple)
+CodegenMagicTuple = pt.Tuple[str, ...]
+# IndexKey : sig, codegen.magictuple, hashed code, hashed cells
+# the sig argument sometimes is a Signature and sometimes a tuple of types
+SignatureLike = pt.Union[Signature, pt.Tuple[types.Type, ...], str]
+IndexKey = pt.Tuple[
+    SignatureLike, CodegenMagicTuple, pt.Tuple[str, str]
+]
+# FileStamp: tuple of file timestamp and file size
+FileStamp = pt.Tuple[float, int]
+# IndexData: Tuple of filename for cached code and Dict of file names to FileStamps
+IndexOverloadData = pt.Tuple[str, pt.Dict[str, FileStamp]]
+# Index data: what gets pickled and saved.
+# Tuple of Timestamp and size of main file + IndexOverloadData
+IndexData = pt.Tuple[pt.Tuple[float, int], pt.Dict[IndexKey, IndexOverloadData]]
+# This is the output of CompileResult._reduce
+ReducedCompileResult = pt.Tuple
+# CompileResult
+OverloadData = pt.Union[JITCodeLibrary, CompileResult]
 
 
 def _cache_log(msg, *args):
@@ -158,7 +184,7 @@ class _SourceFileBackedLocatorMixin(object):
     Python source file.
     """
 
-    def get_source_stamp(self):
+    def get_source_stamp(self) -> FileStamp:
         if getattr(sys, 'frozen', False):
             st = os.stat(sys.executable)
         else:
@@ -459,40 +485,62 @@ class IndexDataCacheFile(object):
     def flush(self):
         self._save_index({})
 
-    def save(self, key, data):
+    def save(self,
+             key: IndexKey,
+             data: ReducedCompileResult,
+             deps_filestamps: pt.Dict[str, FileStamp]
+             ):
         """
         Save a new cache entry with *key* and *data*.
         """
         overloads = self._load_index()
         try:
             # If key already exists, we will overwrite the file
-            data_name = overloads[key]
+            # but we will update the filestamps in the index
+            data_filename, old_deps_filestamps = overloads[key]
         except KeyError:
             # Find an available name for the data file
-            existing = set(overloads.values())
+            existing = set((name for name, filestamp in overloads.values()))
             for i in itertools.count(1):
-                data_name = self._data_name(i)
-                if data_name not in existing:
+                data_filename = self._data_name(i)
+                if data_filename not in existing:
                     break
-            overloads[key] = data_name
-            self._save_index(overloads)
-        self._save_data(data_name, data)
+        overloads[key] = data_filename, deps_filestamps
+        self._save_index(overloads)
+        self._save_data(data_filename, data)
 
-    def load(self, key):
+    def load(self, key: IndexKey):
         """
         Load a cache entry with *key*.
         """
         overloads = self._load_index()
-        data_name = overloads.get(key)
+        data_name, deps_filestamps = overloads.get(key, (None, None))
         if data_name is None:
             return
+        if config.DEBUG_CACHE:
+            files = list(deps_filestamps.keys())
+            _cache_log(f'[cache] dependencies of cache file "{data_name}": {files}')
+        if not are_filestamps_valid(deps_filestamps):
+            _cache_log("Some files have changed, cache has been invalidated")
+            return
         try:
-            return self._load_data(data_name)
+            cache_data = self._load_data(data_name)
         except OSError:
             # File could have been removed while the index still refers it.
             return
+        return cache_data
+    def load_deps(self,  key: IndexKey) -> pt.Dict[str, FileStamp]:
+        """
+        Load the cached dependencies' FileStamps for the given key
+        """
+        overloads = self._load_index()
+        data_name, deps_filestamps = overloads.get(key, (None, None))
+        if config.DEBUG_CACHE:
+            files = list(deps_filestamps.keys())
+            _cache_log(f'[cache] Loading dependencies of "{key}": {files}')
+        return deps_filestamps
 
-    def _load_index(self):
+    def _load_index(self) -> pt.Dict[IndexKey, IndexOverloadData]:
         """
         Load the cache index and return it as a dictionary (possibly
         empty if cache is empty or obsolete).
@@ -517,12 +565,13 @@ class IndexDataCacheFile(object):
         else:
             return overloads
 
-    def _save_index(self, overloads):
+    def _save_index(self, overloads: pt.Dict[IndexKey, IndexOverloadData]) -> None:
+        data: IndexData  # for python 3.7, otherwise put in next line
         data = self._source_stamp, overloads
-        data = self._dump(data)
+        data_bytes = self._dump(data)
         with self._open_for_write(self._index_path) as f:
             pickle.dump(self._version, f, protocol=-1)
-            f.write(data)
+            f.write(data_bytes)
         _cache_log("[cache] index saved to %r", self._index_path)
 
     def _load_data(self, name):
@@ -644,22 +693,28 @@ class Cache(_Cache):
             data = self._impl.rebuild(target_context, data)
         return data
 
-    def save_overload(self, sig, data):
+    def save_overload(self, sig: SignatureLike, data: OverloadData) -> None:
         """
         Save the data for the given signature in the cache.
+
+        sig: numba types of input arguments as one of SignatureLike instances
+        data: object containing compiled code to be cached
         """
         with self._guard_against_spurious_io_errors():
             self._save_overload(sig, data)
 
-    def _save_overload(self, sig, data):
+    def _save_overload(self, sig: SignatureLike, data: OverloadData) -> None:
         if not self._enabled:
             return
         if not self._impl.check_cachable(data):
             return
         self._impl.locator.ensure_cache_path()
+        # get timestamps of all dependency files
+        deps_filestamps = get_function_dependencies(data)
+        # get index key and reduce CompileResult
         key = self._index_key(sig, data.codegen)
         data = self._impl.reduce(data)
-        self._cache_file.save(key, data)
+        self._cache_file.save(key, data, deps_filestamps)
 
     @contextlib.contextmanager
     def _guard_against_spurious_io_errors(self):
@@ -675,7 +730,7 @@ class Cache(_Cache):
             # No such conditions under non-Windows OSes
             yield
 
-    def _index_key(self, sig, codegen):
+    def _index_key(self, sig: SignatureLike, codegen) -> IndexKey:
         """
         Compute index key for the given signature and codegen.
         It includes a description of the OS, target architecture and hashes of
@@ -694,6 +749,11 @@ class Cache(_Cache):
         hasher = lambda x: hashlib.sha256(x).hexdigest()
         return (sig, codegen.magic_tuple(), (hasher(codebytes),
                                              hasher(cvarbytes),))
+
+    def load_cached_deps(self, sig_args, target_context) -> pt.Dict[str, FileStamp]:
+        key = self._index_key(sig_args, target_context.codegen())
+        deps = self._cache_file.load_deps(key)
+        return deps
 
 
 class FunctionCache(Cache):
@@ -729,3 +789,145 @@ def make_library_cache(prefix):
 
     return LibraryCache
 
+
+# list of types for which the cache invalidation is extended to their
+# definitions
+dep_types = (types.Dispatcher, types.Function)
+
+
+def get_function_dependencies(overload: OverloadData
+                              ) -> pt.Dict[str, FileStamp]:
+    """ Returns functions on which the overload depends, and their file stamps
+
+    Not every function dependency is returned. The list of types returned
+    if found being called by the overload are in ``dep_types`` global.
+    """
+    deps = {}
+    if not isinstance(overload, CompileResult):
+        return {}
+    typemap = overload.type_annotation.typemap
+    calltypes = overload.type_annotation.calltypes
+    for call_op in calltypes:
+        name = call_op.list_vars()[0].name
+        if name not in typemap:
+            # for parfor generated callables which cannot be found in  typemap
+            continue
+        fc_ty = typemap[name]
+        sig = calltypes[call_op]
+        if not isinstance(fc_ty, dep_types):
+            continue
+        # get every file where the function is defined
+        py_files = get_impl_filenames(fc_ty)
+        for py_file in py_files:
+            deps[py_file] = get_source_stamp(py_file)
+        # retrieve all dependencies of the function in fc_ty
+        indirect_deps = get_deps_info(fc_ty, sig)
+        deps.update(indirect_deps)
+
+    if config.DEBUG_CACHE:
+        files = list(deps.keys())
+        func = overload.library.name
+        _cache_log(f'[cache] dependencies of "{func}": {files}')
+    return deps
+
+
+def get_deps_info(fc_ty: pt.Union[types.Dispatcher, types.Function], sig
+                      ) -> pt.Dict[str, FileStamp]:
+    """
+    Retrieve dependency information for the implementation of the function
+    represented in the given function type
+    :param fc_ty:
+    :return: dictionary of filenames to FileStamp
+    """
+    if isinstance(fc_ty, types.Dispatcher):
+        dispatcher = fc_ty.dispatcher
+        deps_stamps = dispatcher.cache_deps_info(sig)
+    elif isinstance(fc_ty, types.Function):
+        if hasattr(fc_ty.typing_key, "_dispatcher"):
+            # this case captures DUFuncs and GUFuncs
+            dispatcher = fc_ty.key[0]._dispatcher
+            deps_stamps = dispatcher.cache_deps_info(sig)
+        else:
+            # a type of Function with a dispatcher associated. Probably an
+            # overload
+            # If the template does not have `get_cache_deps_info` it might be
+            # a generated class for a global value in Registry.register_global
+            deps_stamps = [tmplt.get_cache_deps_info(tmplt, sig, get_function_dependencies)
+                           for tmplt in fc_ty.templates
+                           if hasattr(tmplt, 'get_cache_deps_info')]
+            deps_stamps = {k: v for d in deps_stamps for k, v in d.items()}
+    return deps_stamps
+
+
+def get_impl_filenames(fc_ty: pt.Union[types.Dispatcher, types.Function]
+                      ) -> pt.List[str]:
+    """
+    Return the filename where the implementation of the function
+    represented by the function type `fc_ty` is.
+    For dispatchers, this will be a single file, where the function is written.
+    For overloads, this will be one or more files, where *every* overload to
+    that function is written.
+
+    :param func: Dispatcher or FunctionType
+    :return: list of filenames
+    """
+    py_files = None
+    if isinstance(fc_ty, types.Dispatcher):
+        dispatcher = fc_ty.dispatcher
+        py_func = dispatcher.py_func
+        py_files = [py_func.__code__.co_filename]
+    elif isinstance(fc_ty, types.Function):
+        if hasattr(fc_ty.typing_key, "_dispatcher"):
+            # this case captures DUFuncs and GUFuncs
+            dispatcher = fc_ty.key[0]._dispatcher
+            py_func = dispatcher.py_func
+            py_files = [py_func.__code__.co_filename]
+        else:
+            # a type of Function with a dispatcher associated. Probably an
+            # overload
+            py_files = [tmplt.get_template_info(tmplt)["filename"]
+                        for tmplt in fc_ty.templates]
+
+            # the base path depends on what tmplt.get_template_info is doing
+            # in this case, the filenames returned by get_template_info are
+            # relative to numba.__file__
+            basepath = os.path.dirname(os.path.dirname(numba.__file__))
+
+            def make_abs(basepath, rel_path):
+                return os.path.realpath(os.path.join(basepath, rel_path))
+
+            py_files = [make_abs(basepath, f) for f in py_files]
+
+            # `get_template_info` can return invalid file paths such as
+            # "unknown" or "<unknown> (built from string?)` so non-paths are
+            # filtered out
+            py_files = [file for file in py_files if os.path.isfile(file)]
+    else:
+        raise TypeError
+    return py_files
+
+
+def are_filestamps_valid(filestamps: pt.Dict[str, FileStamp]) -> bool:
+    """
+    Checks whether the input FileStamps for certain files match freshly
+    calculated FileStamps for those files
+    """
+    for filepath, source_stamp in filestamps.items():
+        if get_source_stamp(filepath) != source_stamp:
+            return False
+    return True
+
+
+def get_source_stamp(filepath: str) -> FileStamp:
+    """
+    Calculates the current FileStamp of a given file
+    :param filepath: full filepath of a file
+    :return: FileStamp (combination of size and timestamp
+    """
+    if getattr(sys, 'frozen', False):
+        st = os.stat(sys.executable)
+    else:
+        st = os.stat(filepath)
+    # We use both timestamp and size as some filesystems only have second
+    # granularity.
+    return st.st_mtime, st.st_size

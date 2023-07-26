@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-
+import functools
 import inspect
 import warnings
 from contextlib import contextmanager
+import typing as pt
 
 from numba.core import config, targetconfig
 from numba.core.decorators import jit
@@ -17,7 +18,8 @@ from numba.np.numpy_support import as_dtype
 from numba.np.ufunc import _internal
 from numba.np.ufunc.sigparse import parse_signature
 from numba.np.ufunc.wrappers import build_ufunc_wrapper, build_gufunc_wrapper
-from numba.core.caching import FunctionCache, NullCache
+from numba.core.caching import FunctionCache, NullCache, FileStamp, \
+    get_function_dependencies
 from numba.core.compiler_lock import global_compiler_lock
 
 
@@ -163,6 +165,19 @@ class UFuncDispatcher(serialize.ReduceMixin):
                     self.cache.save_overload(sig, cres)
 
                     return cres
+
+    @functools.lru_cache()
+    def cache_deps_info(self, sig) -> pt.Dict[str, FileStamp]:
+        """ Returns the FileStamp of every dependency of this function
+        """
+        if isinstance(self.overloads[sig].type_annotation, str):
+            # we assume this is because the function was loaded from cache
+            deps = self.cache.load_cached_deps(
+                sig.args, self.targetdescr.target_context
+            )
+        else:
+            deps = get_function_dependencies(self.overloads[sig])
+        return deps
 
 
 dispatcher_registry[target_registry['npyufunc']] = UFuncDispatcher

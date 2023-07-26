@@ -8,6 +8,7 @@ import types as pytypes
 import uuid
 import weakref
 from contextlib import ExitStack
+import typing as pt
 
 from numba import _dispatcher
 from numba.core import (
@@ -18,7 +19,8 @@ from numba.core.typeconv.rules import default_type_manager
 from numba.core.typing.templates import fold_arguments
 from numba.core.typing.typeof import Purpose, typeof
 from numba.core.bytecode import get_code_object
-from numba.core.caching import NullCache, FunctionCache
+from numba.core.caching import NullCache, FunctionCache, \
+    get_function_dependencies, FileStamp
 from numba.core import entrypoints
 from numba.core.retarget import BaseRetarget
 import numba.core.event as ev
@@ -862,6 +864,22 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
     def enable_caching(self):
         self._cache = FunctionCache(self.py_func)
 
+    @functools.lru_cache()
+    def cache_deps_info(self, sig) -> pt.Dict[str, FileStamp]:
+        """Hash the code of its function, the closure variables and add them
+        to the respective hashes of all its function dependencies
+        """
+        sig_args = sig.args
+        if isinstance(self.overloads[sig_args].type_annotation, str):
+            # We assume this is because the function was loaded from cache
+            # When a function is cached, the type_annotation property is
+            # serialized as a string. Ref:
+            # /numba/core/compiler.py#L207
+            deps = self._cache.load_cached_deps(sig_args, self.targetctx)
+        else:
+            deps = get_function_dependencies(self.overloads[sig_args])
+        return deps
+
     def __get__(self, obj, objtype=None):
         '''Allow a JIT function to be bound as a method to an object'''
         if obj is None:  # Unbound method
@@ -1314,6 +1332,18 @@ class ObjModeLiftedWith(LiftedWith):
         args, _ = sigutils.normalize_signature(sig)
         sig = (types.ffi_forced_object,) * len(args)
         return super().compile(sig)
+
+    @functools.lru_cache()
+    def cache_deps_info(self, sig) -> pt.Dict[str, FileStamp]:
+        """ Returns the FileStamp of every dependency of this function
+        """
+        sig_args = sig.args
+        if isinstance(self.overloads[sig_args].type_annotation, str):
+            # we assume this is because the function was loaded from cache
+            deps = self._cache.load_cached_deps(sig_args, self.targetctx)
+        else:
+            deps = get_function_dependencies(self.overloads[sig_args])
+        return deps
 
 
 # Initialize typeof machinery

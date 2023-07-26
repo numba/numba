@@ -62,8 +62,12 @@ Caching Limitations
 
 This is a list of known limitation of the cache:
 
-- Cache invalidation fails to recognize changes in symbols defined in a
-  different file.
+- Cache invalidation recognize changes in symbols defined in a
+  different file, for ``jit``, ``njit``, ``overload``, ``vectorize`` and
+  ``generated_jit`` decorators.
+- Cache invalidation *does not* recognize changes in symbols defined in a
+  different file, for ``inline`` in the :func:`numba.njit` decorator, when working
+  with `parallel=True`, or for ``guvectorize`` decorator.
 - Global variables are treated as constants. The cache will remember the value
   of the global variable at compilation time. On cache load, the cached
   function will not rebind to the new value of the global variable.

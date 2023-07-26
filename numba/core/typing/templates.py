@@ -10,6 +10,7 @@ import os.path
 from collections import namedtuple
 from collections.abc import Sequence
 from types import MethodType, FunctionType
+import typing as pt
 
 import numba
 from numba.core import types, utils, targetconfig
@@ -19,6 +20,10 @@ from numba.core.errors import (
     InternalTargetMismatchError,
 )
 from numba.core.cpu_options import InlineOptions
+
+
+SignatureLike = pt.Union["Signature", pt.Tuple[types.Type, ...], str]
+
 
 # info store for inliner callback functions e.g. cost model
 _inline_info = namedtuple('inline_info',
@@ -386,6 +391,17 @@ class AbstractTemplate(FunctionTemplate):
             'docstring': impl.__doc__
         }
         return info
+
+    def get_cache_deps_info(
+            self, sig: SignatureLike, dependency_getter_fc: pt.Callable
+    ):
+        """ default implementation
+
+        Returning an empty dictionary means that the dependencies of this
+        function will not used to determine cache invalidation. This is only
+        valid if not applied to a user-defined function
+        """
+        return {}
 
 
 class CallableTemplate(FunctionTemplate):
@@ -875,6 +891,31 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             'docstring': impl.__doc__
         }
         return info
+
+    @functools.lru_cache()
+    def get_cache_deps_info(
+            self, sig: SignatureLike, dependency_getter_fc: pt.Callable
+    ):
+        """ return a dictionary with information about other functions this
+        function depends on
+
+        :param sig: signature
+        :param dependency_getter_fc a function able to look into an overload
+          and retrieve the inner dependencies. This will be always
+          `caching.get_function_dependencies` but we pass it as an argument
+          to avoid the import
+        :return: dictionary of filenames and file stamps
+        """
+        sig_args = sig.args
+        deps = {}
+        for (_, sig, _, _), (dispatcher, _) in self._impl_cache.items():
+            if sig != sig_args:
+                continue
+            if dispatcher is None:
+                continue
+            ovrl = dispatcher.overloads[sig_args]
+            deps.update(dependency_getter_fc(ovrl))
+        return deps
 
 
 def make_overload_template(func, overload_func, jit_options, strict,

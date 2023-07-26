@@ -192,15 +192,33 @@ a file-based cache.  This is done by passing ``cache=True``::
       function-by-function basis. The cached function is the the main jit
       function, and all secondary functions (those called by the main
       function) are incorporated in the cache of the main function.
-    - Cache invalidation fails to recognize changes in functions defined in a
-      different file. This means that when a main jit function calls
-      functions that were imported from a different module, a change in those
-      other modules will not be detected and the cache will not be updated.
-      This carries the risk that "old" function code might be used in the
-      calculations.
-    - Global variables are treated as constants. The cache will remember the value
-      of the global variable at compilation time. On cache load, the cached
-      function will not rebind to the new value of the global variable.
+    - As important as what the cache saves, is what the cache forgets, a
+      process called cache invalidation. Numba's cache invalidation detects
+      many, but not all, changes.
+    - Cache invalidation recognizes changes in the files where functions
+      are defined. That means that changes to the function code are detected,
+      as well as changes to module-level global variables defined in that file.
+    - When a main function defined in a file calls functions defined in a
+      different file, Numba will attempt to identify those secondary files and
+      track them for cache invalidation purposes. The process of identifying
+      those secondary files works in some cases but not in all cases.
+    - Tracking of secondary files works for ``jit`` and ``njit`` decorators.
+      It also works for user-defined ``overload``, ``vectorize`` and
+      ``generated_jit``.
+    - Tracking of secondary files does not work in these cases:
+       - for numba-inlined functions, ie when working with
+         ``inline`` in the :func:`numba.njit` decorator:
+       - when working with `parallel=True`
+       - for ``guvectorize`` decorator
+
+      In these cases, a change in any secondary file will not be detected and the
+      cache will not be updated. This carries the risk that "old" function code
+      might be used in the calculations.
+      This limitation does not apply if the secondary function is defined in the
+      same file as the main function. In this case, all changes will be detected.
+    - Global variables are treated as constants. The cache will remember the
+      value of the global variable at compilation time. On cache load, the
+      cached function will not rebind to the new value of the global variable.
 
 .. _parallel_jit_option:
 
