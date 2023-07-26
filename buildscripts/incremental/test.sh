@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# Because of https://github.com/conda/conda/issues/12928
+conda install conda=23.5.2 -y -q
+conda info --json
+
 source activate $CONDA_ENV
 
 # Make sure any error below is reported as such
