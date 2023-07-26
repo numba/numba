@@ -3195,6 +3195,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         def inputs():
             yield np.array([[1, 2, 3, 4], [1, 2, 3, 4]]), 2
             yield np.array([[1., 2., 3., 4.], [1., 2., 3., 4.]]), 2
+            yield np.arange(16.0).reshape(4, 4), 2
+            yield np.arange(16.0).reshape(4, 4), np.array([3, 6])
+            yield np.arange(16.0).reshape(4, 4), [3, 6]
+            yield np.arange(16.0).reshape(4, 4), (3, 6)
+            yield np.arange(8.0).reshape(2, 2, 2), 2
 
         pyfunc = vsplit
         cfunc = jit(nopython=True)(pyfunc)
@@ -3220,8 +3225,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             cfunc(np.array([[1, 2, 3, 4], [1, 2, 3, 4]]), "abc")
-        self.assertIn(('The argument "indices_or_sections" must be an '
-                       'integer or an array'),
+        self.assertIn(('The argument "indices_or_sections" '
+                       'must be an integer, an array, a list, or a tuple'),
                       str(raises.exception))
 
         with self.assertRaises(ValueError) as raises:
@@ -3239,6 +3244,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             #test_2D_array
             yield np.array([[1, 2, 3, 4], [1, 2, 3, 4]]), 2
             yield np.array([[1., 2., 3., 4.], [1., 2., 3., 4.]]), 2
+            yield np.arange(16.0).reshape(4, 4), 2
+            yield np.arange(16.0).reshape(4, 4), np.array([3, 6])
+            yield np.arange(16.0).reshape(4, 4), [3, 6]
+            yield np.arange(16.0).reshape(4, 4), (3, 6)
+            yield np.arange(8.0).reshape(2, 2, 2), 2
 
         pyfunc = hsplit
         cfunc = jit(nopython=True)(pyfunc)
@@ -3264,8 +3274,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             cfunc(np.array([[1, 2, 3, 4], [1, 2, 3, 4]]), "abc")
-        self.assertIn(('The argument "indices_or_sections" must be an '
-                       'integer or an array'),
+        self.assertIn(('The argument "indices_or_sections" '
+                       'must be an integer, an array, a list, or a tuple'),
                       str(raises.exception))
 
         with self.assertRaises(ValueError) as raises:
