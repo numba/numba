@@ -7,7 +7,6 @@ from numba.core import cgutils, types
 from numba.core.extending import (intrinsic, make_attribute_wrapper, models,
                                   overload, register_jitable,
                                   register_model)
-from numba.np.numpy_support import numpy_version
 from numba import float32
 
 
