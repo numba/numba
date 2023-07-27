@@ -504,8 +504,8 @@ class Lower(BaseLower):
             pass
 
     def lower_inst(self, inst):
-        line = inst.loc.line
-        before = self._get_llvm_module_blocks()
+        # line = inst.loc.line
+        # before = self._get_llvm_module_blocks()
         # Set debug location for all subsequent LL instructions
         self.debuginfo.mark_location(self.builder, self.loc.line)
         self.debug_print(str(inst))
@@ -644,9 +644,9 @@ class Lower(BaseLower):
         else:
             raise NotImplementedError(type(inst))
 
-        after = self._get_llvm_module_blocks()
-        diff = self._diff_llvm(before, after)
-        print(line, diff)
+        # after = self._get_llvm_module_blocks()
+        # diff = self._diff_llvm(before, after)
+        # print(line, diff)
         # try:
         #     self.metadata["llvm_lines"][line] = self._sum_llvm(
         #         self.metadata["llvm_lines"][line],
