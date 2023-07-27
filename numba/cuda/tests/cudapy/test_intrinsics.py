@@ -655,10 +655,6 @@ class TestCudaIntrinsic(CUDATestCase):
     @skip_unless_cc_53
     @skip_on_cudasim('NVVM not supported in the simulator')
     def test_hdiv_scalar(self):
-        if not NVVM().is_nvvm70:
-            self.skipTest('Skip due to incorrect float16 divide codegen '
-                          'in earlier versions of nvvm.')
-
         compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hdiv_scalar)
         ary = np.zeros(1, dtype=np.float16)
         arg1 = np.float16(3.1415926)
