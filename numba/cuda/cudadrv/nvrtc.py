@@ -39,8 +39,8 @@ class NvrtcProgram:
     the class own an nvrtcProgram; when an instance is deleted, the underlying
     nvrtcProgram is destroyed using the appropriate NVRTC API.
     """
-    def __init__(self, driver, handle):
-        self._driver = driver
+    def __init__(self, nvrtc, handle):
+        self._nvrtc = nvrtc
         self._handle = handle
 
     @property
@@ -49,7 +49,7 @@ class NvrtcProgram:
 
     def __del__(self):
         if self._handle:
-            self._driver.destroy_program(self)
+            self._nvrtc.destroy_program(self)
 
 
 class NVRTC:
@@ -105,14 +105,14 @@ class NVRTC:
                 from numba.cuda.cudadrv.libs import open_cudalib
                 cls.__INSTANCE = inst = object.__new__(cls)
                 try:
-                    inst.driver = open_cudalib('nvrtc')
+                    lib = open_cudalib('nvrtc')
                 except OSError as e:
                     cls.__INSTANCE = None
                     raise NvrtcSupportError("NVRTC cannot be loaded") from e
 
                 # Find & populate functions
                 for name, proto in inst._PROTOTYPES.items():
-                    func = getattr(inst.driver, name)
+                    func = getattr(lib, name)
                     func.restype = proto[0]
                     func.argtypes = proto[1:]
 
@@ -216,8 +216,8 @@ def compile(src, name, cc):
     :return: The compiled PTX and compilation log
     :rtype: tuple
     """
-    driver = NVRTC()
-    program = driver.create_program(src, name)
+    nvrtc = NVRTC()
+    program = nvrtc.create_program(src, name)
 
     # Compilation options:
     # - Compile for the current device's compute capability.
@@ -230,10 +230,10 @@ def compile(src, name, cc):
     options = [arch, include, '-rdc', 'true']
 
     # Compile the program
-    compile_error = driver.compile_program(program, options)
+    compile_error = nvrtc.compile_program(program, options)
 
     # Get log from compilation
-    log = driver.get_compile_log(program)
+    log = nvrtc.get_compile_log(program)
 
     # If the compile failed, provide the log in an exception
     if compile_error:
@@ -245,5 +245,5 @@ def compile(src, name, cc):
         msg = (f"NVRTC log messages whilst compiling {name}:\n\n{log}")
         warnings.warn(msg)
 
-    ptx = driver.get_ptx(program)
+    ptx = nvrtc.get_ptx(program)
     return ptx, log
