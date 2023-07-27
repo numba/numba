@@ -125,7 +125,8 @@ class NVRTC:
                             try:
                                 error_name = NvrtcResult(error).name
                             except ValueError:
-                                error_name = f'Unknown nvrtc_result {error}'
+                                error_name = ('Unknown nvrtc_result '
+                                              f'(error code: {error})')
                             msg = f'Failed to call {name}: {error_name}'
                             raise NvrtcError(msg)
 
