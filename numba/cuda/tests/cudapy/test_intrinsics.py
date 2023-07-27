@@ -6,7 +6,6 @@ from numba import cuda, int64
 from numba.cuda import compile_ptx
 from numba.core.errors import TypingError
 from numba.core.types import f2
-from numba.cuda.cudadrv.nvvm import NVVM
 from numba.cuda.testing import (unittest, CUDATestCase, skip_on_cudasim,
                                 skip_unless_cc_53)
 
