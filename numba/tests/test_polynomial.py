@@ -148,18 +148,32 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             cfunc("abc")
-        self.assertIn('The argument "seq" must be an array',
+        self.assertIn('The argument "seq" must be array-like',
                       str(raises.exception))
 
     def test_polyadd_basic(self):
         pyfunc = polyadd
         cfunc = njit(polyadd)
-        for i in range(5):
-            for j in range(5):
-                msg = f"At i={i}, j={j}"
-                p1 = np.array([0]*i + [1])
-                p2 = np.array([0]*j + [1])
-                self.assertPreciseEqual(pyfunc(p1,p2), cfunc(p1,p2), msg=msg)
+        def inputs():
+            #basic
+            for i in range(5):
+                for j in range(5):
+                    p1 = np.array([0]*i + [1])
+                    p2 = np.array([0]*j + [1])
+                    yield p1, p2
+            #test lists, tuples, scalars
+            yield [1, 2, 3], [1, 2, 3]
+            yield [1, 2, 3], (1, 2, 3)
+            yield (1, 2, 3), [1, 2, 3]
+            yield [1, 2, 3], 3
+            yield 3, (1, 2, 3)
+            #test different dtypes
+            yield np.array([1, 2, 3]), np.array([1.0, 2.0, 3.0])
+            yield np.array([1j, 2j, 3j]), np.array([1.0, 2.0, 3.0])
+            yield np.array([1, 2, 3]), np.array([1j, 2j, 3j])
+
+        for p1, p2 in inputs():
+            self.assertPreciseEqual(pyfunc(p1,p2), cfunc(p1,p2))
 
     def test_polyadd_exception(self):
         cfunc = njit(polyadd)
@@ -168,26 +182,38 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             cfunc("abc",np.array([1,2,3]))
-        self.assertIn('The argument "c1" must be an array',
+        self.assertIn('The argument "c1" must be array-like',
                       str(raises.exception))
         
         with self.assertRaises(TypingError) as raises:
             cfunc(np.array([1,2,3]),"abc")
-        self.assertIn('The argument "c2" must be an array',
+        self.assertIn('The argument "c2" must be array-like',
                       str(raises.exception))
 
     def test_polysub_basic(self):
         pyfunc = polysub
         cfunc = njit(polysub)
-        for i in range(5):
-            for j in range(5):
-                msg = f"At i={i}, j={j}"
-                p1 = np.array([0]*i + [1])
-                p2 = np.array([0]*j + [1])
-                self.assertPreciseEqual(pyfunc(p1,p2),
-                                        cfunc(p1,p2),
-                                        msg=msg,
-                                        ignore_sign_on_zero=True)
+        def inputs():
+            #basic
+            for i in range(5):
+                for j in range(5):
+                    p1 = np.array([0]*i + [1])
+                    p2 = np.array([0]*j + [1])
+                    yield p1, p2
+            #test lists, tuples, scalars
+            yield [1, 2, 3], [1, 2, 3]
+            yield [1, 2, 3], (1, 2, 3)
+            yield (1, 2, 3), [1, 2, 3]
+            yield [1, 2, 3], 3
+            yield 3, (1, 2, 3)
+            #test different dtypes
+            yield np.array([1, 2, 3]), np.array([1.0, 2.0, 3.0])
+            yield np.array([1j, 2j, 3j]), np.array([1.0, 2.0, 3.0])
+            yield np.array([1, 2, 3]), np.array([1j, 2j, 3j])
+
+        for p1, p2 in inputs():
+            self.assertPreciseEqual(pyfunc(p1,p2), cfunc(p1,p2),
+                                    ignore_sign_on_zero=True)
 
     def test_polysub_exception(self):
         cfunc = njit(polysub)
@@ -196,25 +222,37 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             cfunc("abc",np.array([1,2,3]))
-        self.assertIn('The argument "c1" must be an array',
+        self.assertIn('The argument "c1" must be array-like',
                       str(raises.exception))
         
         with self.assertRaises(TypingError) as raises:
             cfunc(np.array([1,2,3]),"abc")
-        self.assertIn('The argument "c2" must be an array',
+        self.assertIn('The argument "c2" must be array-like',
                       str(raises.exception))
 
     def test_polymul_basic(self):
         pyfunc = polymul
         cfunc = njit(polymul)
-        for i in range(5):
-            for j in range(5):
-                msg = f"At i={i}, j={j}"
-                p1 = np.array([0]*i + [1])
-                p2 = np.array([0]*j + [1])
-                self.assertPreciseEqual(pyfunc(p1,p2),
-                                        cfunc(p1,p2),
-                                        msg=msg)
+        def inputs():
+            #basic
+            for i in range(5):
+                for j in range(5):
+                    p1 = np.array([0]*i + [1])
+                    p2 = np.array([0]*j + [1])
+                    yield p1, p2
+            #test lists, tuples, scalars
+            yield [1, 2, 3], [1, 2, 3]
+            yield [1, 2, 3], (1, 2, 3)
+            yield (1, 2, 3), [1, 2, 3]
+            yield [1, 2, 3], 3
+            yield 3, (1, 2, 3)
+            #test different dtypes
+            yield np.array([1, 2, 3]), np.array([1.0, 2.0, 3.0])
+            yield np.array([1j, 2j, 3j]), np.array([1.0, 2.0, 3.0])
+            yield np.array([1, 2, 3]), np.array([1j, 2j, 3j])
+
+        for p1, p2 in inputs():
+            self.assertPreciseEqual(pyfunc(p1,p2), cfunc(p1,p2))
 
     def test_polymul_exception(self):
         cfunc = njit(polymul)
@@ -223,10 +261,10 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             cfunc("abc",np.array([1,2,3]))
-        self.assertIn('The argument "c1" must be an array',
+        self.assertIn('The argument "c1" must be array-like',
                       str(raises.exception))
         
         with self.assertRaises(TypingError) as raises:
             cfunc(np.array([1,2,3]),"abc")
-        self.assertIn('The argument "c2" must be an array',
+        self.assertIn('The argument "c2" must be array-like',
                       str(raises.exception))

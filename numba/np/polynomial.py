@@ -7,10 +7,10 @@ import numpy as np
 from numpy.polynomial import polynomial as poly
 from numpy.polynomial import polyutils as pu
 
-from numba import jit
+from numba import jit, typeof
 from numba.core import types, errors
 from numba.core.extending import overload, register_jitable
-from numba.np import numpy_support as np_support
+from numba.np.numpy_support import type_can_asarray, as_dtype, from_dtype
 
 @overload(np.roots)
 def roots_impl(p):
@@ -21,7 +21,7 @@ def roots_impl(p):
     if isinstance(ty, types.Integer):
         cast_t = np.float64
     else:
-        cast_t = np_support.as_dtype(ty)
+        cast_t = as_dtype(ty)
 
     def roots_impl(p):
         # impl based on numpy:
@@ -62,8 +62,8 @@ def roots_impl(p):
 
 @overload(pu.trimseq)
 def polyutils_trimseq(seq):
-    if not isinstance(seq, types.Array):
-        msg = 'The argument "seq" must be an array'
+    if not type_can_asarray(seq):
+        msg = 'The argument "seq" must be array-like'
         raise errors.TypingError(msg)
     
     def impl(seq):
@@ -80,24 +80,36 @@ def polyutils_trimseq(seq):
 
 @overload(poly.polyadd)
 def numpy_polyadd(c1, c2):
-    if not isinstance(c1, types.Array):
-        msg = 'The argument "c1" must be an array'
+    if not type_can_asarray(c1):
+        msg = 'The argument "c1" must be array-like'
         raise errors.TypingError(msg)
     
-    if not isinstance(c2, types.Array):
-        msg = 'The argument "c2" must be an array'
+    if not type_can_asarray(c2):
+        msg = 'The argument "c2" must be array-like'
         raise errors.TypingError(msg)
     
+    if isinstance(c1, types.Integer):
+        s1 = str(as_dtype(typeof(c1)))
+    else:
+        s1 = str(c1.dtype)
+
+    if isinstance(c2, types.Integer):
+        s2 = str(as_dtype(typeof(c2)))
+    else:
+        s2 = str(c2.dtype)
+
+    result_dtype = from_dtype(np.result_type(s1, s2, np.float64))
+
     def impl(c1, c2):
-        arr1 = np.atleast_1d(c1).astype(np.float64)
-        arr2 = np.atleast_1d(c2).astype(np.float64)
-        diff = len(c2) - len(c1)
+        arr1 = np.atleast_1d(np.asarray(c1)).astype(result_dtype)
+        arr2 = np.atleast_1d(np.asarray(c2)).astype(result_dtype)
+        diff = len(arr2) - len(arr1)
         if diff > 0:
-            zr = np.zeros(diff) #, a1.dtype)
-            arr1 = np.concatenate((c1, zr))
+            zr = np.zeros(diff) # .astype(result_dtype)
+            arr1 = np.concatenate((arr1, zr))
         if diff < 0:
-            zr = np.zeros(-diff) #, a2.dtype)
-            arr2 = np.concatenate((c2, zr))
+            zr = np.zeros(-diff) # .astype(result_dtype)
+            arr2 = np.concatenate((arr2, zr))
         val = arr1 + arr2
         return pu.trimseq(val)
     
@@ -106,24 +118,36 @@ def numpy_polyadd(c1, c2):
 
 @overload(poly.polysub)
 def numpy_polysub(c1, c2):
-    if not isinstance(c1, (types.Array, types.Integer)):
-        msg = 'The argument "c1" must be an array'
+    if not type_can_asarray(c1):
+        msg = 'The argument "c1" must be array-like'
         raise errors.TypingError(msg)
     
-    if not isinstance(c2, (types.Array, types.Integer)):
-        msg = 'The argument "c2" must be an array'
+    if not type_can_asarray(c2):
+        msg = 'The argument "c2" must be array-like'
         raise errors.TypingError(msg)
+    
+    if isinstance(c1, types.Integer):
+        s1 = str(as_dtype(typeof(c1)))
+    else:
+        s1 = str(c1.dtype)
+
+    if isinstance(c2, types.Integer):
+        s2 = str(as_dtype(typeof(c2)))
+    else:
+        s2 = str(c2.dtype)
+
+    result_dtype = from_dtype(np.result_type(s1, s2, np.float64))
     
     def impl(c1, c2):
-        arr1 = np.atleast_1d(c1).astype(np.float64)
-        arr2 = np.atleast_1d(c2).astype(np.float64)
-        diff = len(c2) - len(c1)
+        arr1 = np.atleast_1d(np.asarray(c1)).astype(result_dtype)
+        arr2 = np.atleast_1d(np.asarray(c2)).astype(result_dtype)
+        diff = len(arr2) - len(arr1)
         if diff > 0:
             zr = np.zeros(diff) #, a1.dtype)
-            arr1 = np.concatenate((c1, zr))
+            arr1 = np.concatenate((arr1, zr))
         if diff < 0:
             zr = np.zeros(-diff) #, a2.dtype)
-            arr2 = np.concatenate((c2, zr))
+            arr2 = np.concatenate((arr2, zr))
         val = arr1 - arr2
         return pu.trimseq(val)
     
@@ -132,17 +156,30 @@ def numpy_polysub(c1, c2):
 
 @overload(poly.polymul)
 def numpy_polymul(c1, c2):
-    if not isinstance(c1, types.Array):
-        msg = 'The argument "c1" must be an array'
+    if not type_can_asarray(c1):
+        msg = 'The argument "c1" must be array-like'
         raise errors.TypingError(msg)
     
-    if not isinstance(c2, types.Array):
-        msg = 'The argument "c2" must be an array'
+    if not type_can_asarray(c2):
+        msg = 'The argument "c2" must be array-like'
         raise errors.TypingError(msg)
     
-    # p is an array, x is a scalar
+    if isinstance(c1, types.Integer):
+        s1 = str(as_dtype(typeof(c1)))
+    else:
+        s1 = str(c1.dtype)
+
+    if isinstance(c2, types.Integer):
+        s2 = str(as_dtype(typeof(c2)))
+    else:
+        s2 = str(c2.dtype)
+
+    result_dtype = from_dtype(np.result_type(s1, s2, np.float64))
+
     def impl(c1, c2):
-        val = np.convolve(c1, c2).astype(np.float64)
+        arr1 = np.atleast_1d(np.asarray(c1))
+        arr2 = np.atleast_1d(np.asarray(c2))
+        val = np.convolve(arr1, arr2).astype(result_dtype)
         return pu.trimseq(val)
 
     return impl
