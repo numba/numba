@@ -65,6 +65,10 @@ def polyutils_trimseq(seq):
     if not type_can_asarray(seq):
         msg = 'The argument "seq" must be array-like'
         raise errors.TypingError(msg)
+
+    if np.ndim(seq) > 1:
+        msg = 'Coefficient array is not 1-d'
+        raise errors.NumbaValueError(msg)
     
     def impl(seq):
         if len(seq) == 0:
@@ -87,7 +91,11 @@ def numpy_polyadd(c1, c2):
     if not type_can_asarray(c2):
         msg = 'The argument "c2" must be array-like'
         raise errors.TypingError(msg)
-    
+
+    if np.ndim(c1) > 1 or np.ndim(c2) > 1:
+        msg = 'Coefficient array is not 1-d'
+        raise errors.NumbaValueError(msg)
+
     if isinstance(c1, types.Integer):
         s1 = str(as_dtype(typeof(c1)))
     else:
@@ -101,8 +109,10 @@ def numpy_polyadd(c1, c2):
     result_dtype = from_dtype(np.result_type(s1, s2, np.float64))
 
     def impl(c1, c2):
-        arr1 = np.atleast_1d(np.asarray(c1)).astype(result_dtype)
-        arr2 = np.atleast_1d(np.asarray(c2)).astype(result_dtype)
+        c1 = np.asarray(c1)
+        c2 = np.asarray(c2)
+        arr1 = np.atleast_1d(c1).astype(result_dtype)
+        arr2 = np.atleast_1d(c2).astype(result_dtype)
         diff = len(arr2) - len(arr1)
         if diff > 0:
             zr = np.zeros(diff) # .astype(result_dtype)
@@ -126,6 +136,10 @@ def numpy_polysub(c1, c2):
         msg = 'The argument "c2" must be array-like'
         raise errors.TypingError(msg)
     
+    if np.ndim(c1) > 1 or np.ndim(c2) > 1:
+        msg = 'Coefficient array is not 1-d'
+        raise errors.NumbaValueError(msg)
+    
     if isinstance(c1, types.Integer):
         s1 = str(as_dtype(typeof(c1)))
     else:
@@ -139,8 +153,10 @@ def numpy_polysub(c1, c2):
     result_dtype = from_dtype(np.result_type(s1, s2, np.float64))
     
     def impl(c1, c2):
-        arr1 = np.atleast_1d(np.asarray(c1)).astype(result_dtype)
-        arr2 = np.atleast_1d(np.asarray(c2)).astype(result_dtype)
+        c1 = np.asarray(c1)
+        c2 = np.asarray(c2)
+        arr1 = np.atleast_1d(c1).astype(result_dtype)
+        arr2 = np.atleast_1d(c2).astype(result_dtype)
         diff = len(arr2) - len(arr1)
         if diff > 0:
             zr = np.zeros(diff) #, a1.dtype)
@@ -163,7 +179,11 @@ def numpy_polymul(c1, c2):
     if not type_can_asarray(c2):
         msg = 'The argument "c2" must be array-like'
         raise errors.TypingError(msg)
-    
+
+    if np.ndim(c1) > 1 or np.ndim(c2) > 1:
+        msg = 'Coefficient array is not 1-d'
+        raise errors.NumbaValueError(msg)
+
     if isinstance(c1, types.Integer):
         s1 = str(as_dtype(typeof(c1)))
     else:
@@ -177,8 +197,10 @@ def numpy_polymul(c1, c2):
     result_dtype = from_dtype(np.result_type(s1, s2, np.float64))
 
     def impl(c1, c2):
-        arr1 = np.atleast_1d(np.asarray(c1))
-        arr2 = np.atleast_1d(np.asarray(c2))
+        c1 = np.asarray(c1)
+        c2 = np.asarray(c2)
+        arr1 = np.atleast_1d(c1)
+        arr2 = np.atleast_1d(c2)
         val = np.convolve(arr1, arr2).astype(result_dtype)
         return pu.trimseq(val)
 

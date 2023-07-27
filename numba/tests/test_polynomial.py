@@ -151,6 +151,11 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
         self.assertIn('The argument "seq" must be array-like',
                       str(raises.exception))
 
+        with self.assertRaises(TypingError) as e:
+            cfunc(np.arange(10).reshape(5, 2))
+        self.assertIn('Coefficient array is not 1-d',
+                      str(e.exception))
+
     def test_polyadd_basic(self):
         pyfunc = polyadd
         cfunc = njit(polyadd)
@@ -181,14 +186,24 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
         self.disable_leak_check()
 
         with self.assertRaises(TypingError) as raises:
-            cfunc("abc",np.array([1,2,3]))
+            cfunc("abc", np.array([1,2,3]))
         self.assertIn('The argument "c1" must be array-like',
                       str(raises.exception))
         
         with self.assertRaises(TypingError) as raises:
-            cfunc(np.array([1,2,3]),"abc")
+            cfunc(np.array([1,2,3]), "abc")
         self.assertIn('The argument "c2" must be array-like',
                       str(raises.exception))
+        
+        with self.assertRaises(TypingError) as e:
+            cfunc(np.arange(10).reshape(5, 2), np.array([1, 2, 3]))
+        self.assertIn('Coefficient array is not 1-d',
+                      str(e.exception))
+        
+        with self.assertRaises(TypingError) as e:
+            cfunc(np.array([1, 2, 3]), np.arange(10).reshape(5, 2))
+        self.assertIn('Coefficient array is not 1-d',
+                      str(e.exception))
 
     def test_polysub_basic(self):
         pyfunc = polysub
@@ -221,14 +236,24 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
         self.disable_leak_check()
 
         with self.assertRaises(TypingError) as raises:
-            cfunc("abc",np.array([1,2,3]))
+            cfunc("abc", np.array([1,2,3]))
         self.assertIn('The argument "c1" must be array-like',
                       str(raises.exception))
-        
+
         with self.assertRaises(TypingError) as raises:
-            cfunc(np.array([1,2,3]),"abc")
+            cfunc(np.array([1,2,3]), "abc")
         self.assertIn('The argument "c2" must be array-like',
                       str(raises.exception))
+
+        with self.assertRaises(TypingError) as e:
+            cfunc(np.arange(10).reshape(5, 2), np.array([1, 2, 3]))
+        self.assertIn('Coefficient array is not 1-d',
+                      str(e.exception))
+
+        with self.assertRaises(TypingError) as e:
+            cfunc(np.array([1, 2, 3]), np.arange(10).reshape(5, 2))
+        self.assertIn('Coefficient array is not 1-d',
+                      str(e.exception))
 
     def test_polymul_basic(self):
         pyfunc = polymul
@@ -260,11 +285,21 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
         self.disable_leak_check()
 
         with self.assertRaises(TypingError) as raises:
-            cfunc("abc",np.array([1,2,3]))
+            cfunc("abc", np.array([1,2,3]))
         self.assertIn('The argument "c1" must be array-like',
                       str(raises.exception))
-        
+
         with self.assertRaises(TypingError) as raises:
-            cfunc(np.array([1,2,3]),"abc")
+            cfunc(np.array([1,2,3]), "abc")
         self.assertIn('The argument "c2" must be array-like',
                       str(raises.exception))
+
+        with self.assertRaises(TypingError) as e:
+            cfunc(np.arange(10).reshape(5, 2), np.array([1, 2, 3]))
+        self.assertIn('Coefficient array is not 1-d',
+                      str(e.exception))
+
+        with self.assertRaises(TypingError) as e:
+            cfunc(np.array([1, 2, 3]), np.arange(10).reshape(5, 2))
+        self.assertIn('Coefficient array is not 1-d',
+                      str(e.exception))
