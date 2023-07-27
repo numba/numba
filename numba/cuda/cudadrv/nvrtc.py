@@ -146,12 +146,17 @@ class NVRTC:
         """
         Create an NVRTC program with managed lifetime.
         """
+        if isinstance(src, str):
+            src = src.encode()
+        if isinstance(name, str):
+            name = name.encode()
+
         handle = nvrtc_program()
+
         # The final three arguments are for passing the contents of headers -
         # this is not supported, so there are 0 headers and the header names
         # and contents are null.
-        self.nvrtcCreateProgram(byref(handle), src, name.encode(), 0,
-                                c_char_p(0), c_char_p(0))
+        self.nvrtcCreateProgram(byref(handle), src, name, 0, None, None)
         return NvrtcProgram(self, handle)
 
     def compile_program(self, program, options):
