@@ -31,7 +31,7 @@ def np_round_array(arr, decimals, out):
     np.round(arr, decimals, out)
 
 def np_round__array(arr, decimals, out):
-    np.round(arr, decimals, out)
+    np.round_(arr, decimals, out)
 
 def np_round_binary(val, decimals):
     return np.round(val, decimals)
