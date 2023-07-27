@@ -736,8 +736,9 @@ def triangular_impl_3(left, mode, right):
 @overload(np.random.triangular)
 def triangular_impl(left, mode, right, size=None):
     if is_nonelike(size):
-        return lambda left, mode, right, size: np.random.triangular(left, mode,
-                                                                    right)
+        return lambda left, mode, right, size=None: np.random.triangular(left,
+                                                                         mode,
+                                                                         right)
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                             isinstance(size.dtype,
                                                        types.Integer))):
