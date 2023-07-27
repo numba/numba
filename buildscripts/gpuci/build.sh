@@ -51,7 +51,7 @@ nvidia-smi
 gpuci_logger "Create testing env"
 . /opt/conda/etc/profile.d/conda.sh
 gpuci_mamba_retry create -n numba_ci -y \
-                  "python=${PYTHON_VER}" \
+                  "python=3.10" \
                   "cudatoolkit=${CUDA_TOOLKIT_VER}" \
                   "rapidsai::cubinlinker" \
                   "conda-forge::ptxcompiler" \
