@@ -35,11 +35,8 @@ fi;
 # Test with different NumPy versions with each toolkit (it's not worth testing
 # the Cartesian product of versions here, we just need to test with different
 # CUDA and NumPy versions).
-declare -A CTK_NUMPY_VMAP=( ["11.0"]="1.21" ["11.1"]="1.22" ["11.2"]="1.23" ["11.5"]="1.24" ["11.8"]="1.25")
+declare -A CTK_NUMPY_VMAP=( ["11.2"]="1.22" ["11.3"]="1.23" ["11.5"]="1.24" ["11.8"]="1.25")
 NUMPY_VER="${CTK_NUMPY_VMAP[$CUDA_TOOLKIT_VER]}"
-
-NUMPY_CHANNEL_PKG=numpy
-
 
 ################################################################################
 # SETUP - Check environment
@@ -59,7 +56,7 @@ gpuci_mamba_retry create -n numba_ci -y \
                   "rapidsai::cubinlinker" \
                   "conda-forge::ptxcompiler" \
                   "numba/label/dev::llvmlite" \
-                  "${NUMPY_CHANNEL_PKG}=${NUMPY_VER}" \
+                  "numpy=${NUMPY_VER}" \
                   "scipy" \
                   "cffi" \
                   "psutil" \
