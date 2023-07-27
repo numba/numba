@@ -82,10 +82,11 @@ def _validate_captured_errors_style(style_str):
 
 class _OptLevel(int):
     """This class holds the "optimisation level" set in `NUMBA_OPT`. As this env
-    var can be an int or a string, but is almost always interpreted as an int.
-    This class subclasses int so as to get the common behaviour but stores the
-    actual value as a `_raw_value` member to make it available for cases where
-    accounting for the specific string supplied by the user is necessary."""
+    var can be an int or a string, but is almost always interpreted as an int,
+    this class subclasses int so as to get the common behaviour but stores the
+    actual value as a `_raw_value` member. The value "max" is a special case
+    and the property `is_opt_max` can be queried to find if the optimisation
+    level (supplied value at construction time) is "max"."""
 
     def __new__(cls, *args, **kwargs):
         assert len(args) == 1
@@ -96,6 +97,12 @@ class _OptLevel(int):
         # raw value is max or int
         new._raw_value = value if value == 'max' else _int_value
         return new
+
+    @property
+    def is_opt_max(self):
+        """Returns True if the the optimisation level is "max" False
+        otherwise."""
+        return self._raw_value == "max"
 
     def __repr__(self):
         if isinstance(self._raw_value, str):

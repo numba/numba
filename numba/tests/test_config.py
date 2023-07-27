@@ -194,6 +194,15 @@ class TestNumbaOptLevel(TestCase):
                     'cost': 'cheap'}
         self.check(expected, 3, 3)
 
+    @TestCase.run_test_in_subprocess(envvars={'NUMBA_OPT': 'invalid'})
+    def test_opt_invalid(self):
+        # NUMBA_OPT='invalid' should just proceed as default case
+        expected = {'loop_vectorize': False,
+                    'slp_vectorize': False,
+                    'opt': 0,
+                    'cost': 'cheap'}
+        self.check(expected, 3, 3)
+
 
 if __name__ == '__main__':
     unittest.main()

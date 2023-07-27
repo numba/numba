@@ -1188,14 +1188,14 @@ class CPUCodegen(Codegen):
         self._target_data = engine.target_data
         self._data_layout = str(self._target_data)
 
-        if config.OPT._raw_value == 'max':
-            # If the OPT level is set to 'max' then run the cheap pass at O3
-            # with loop-vectorize enabled. This _may_ result in more optimised
-            # code, but it also may have the opposite effect. It may also
-            # increase compilation time, but also may have the opposite effect.
-            # This behaviour is present so that users can choose what's
-            # appropriate for their application if they wish to, but there's a
-            # reasonable default present.
+        if config.OPT.is_opt_max:
+            # If the OPT level is set to 'max' then the user is requesting that
+            # compilation time is traded for potential performance gain. This
+            # currently manifests as running the "cheap" pass at -O3
+            # optimisation level with loop-vectorization enabled. There's no
+            # guarantee that this will increase runtime performance, it may
+            # detriment it, this is here to give the user an easily accessible
+            # option to try.
             loopvect = True
             opt_level = 3
         else:
