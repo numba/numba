@@ -1,0 +1,5 @@
+Support for ``isinstance`` is now non-experimental.
+===================================================
+
+Support for the ``isinstance`` built-in function has moved from being considered
+an experimental feature to a fully supported feature.

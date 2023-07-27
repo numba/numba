@@ -1,0 +1,5 @@
+The ``numpy.allclose`` implementation now correctly handles default arguments.
+==============================================================================
+
+The implementation of ``numpy.allclose`` is corrected to use ``TypingError`` to
+report typing errors.

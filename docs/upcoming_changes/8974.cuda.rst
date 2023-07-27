@@ -1,0 +1,13 @@
+Bitwise operation ``ufunc`` support for the CUDA target.
+========================================================
+
+Support is added for some ``ufunc``s associated with bitwise operation on the
+CUDA target. Namely:
+
+* ``numpy.bitwise_and``
+* ``numpy.bitwise_or``
+* ``numpy.bitwise_not``
+* ``numpy.bitwise_xor``
+* ``numpy.invert``
+* ``numpy.left_shift``
+* ``numpy.right_shift``
