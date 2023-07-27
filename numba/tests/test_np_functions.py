@@ -3197,6 +3197,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # split and array_split have more comprehensive tests of splitting.
         # only do simple test on vsplit
         def inputs():
+            # Taken from https://github.com/numpy/numpy/blob/main/numpy/lib/...
+            # tests/test_shape_base.py
+            # test_2D_array
             yield np.array([[1, 2, 3, 4], [1, 2, 3, 4]]), 2
             yield np.array([[1., 2., 3., 4.], [1., 2., 3., 4.]]), 2
             yield np.arange(16.0).reshape(4, 4), 2
@@ -3229,8 +3232,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             cfunc(np.array([[1, 2, 3, 4], [1, 2, 3, 4]]), "abc")
-        self.assertIn(('The argument "indices_or_sections" '
-                       'must be an integer, an array, a list, or a tuple'),
+        self.assertIn(('The argument "indices_or_sections" must be int or '
+                       '1d-array'),
                       str(raises.exception))
 
         with self.assertRaises(ValueError) as raises:
@@ -3242,10 +3245,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # split and array_split have more comprehensive tests of splitting.
         # only do simple test on hsplit
         def inputs():
-            #test_1D_array
+            # Taken from https://github.com/numpy/numpy/blob/main/numpy/lib/...
+            # tests/test_shape_base.py
+            # test_1D_array
             yield np.array([1, 2, 3, 4]), 2
             yield np.array([1., 2., 3., 4.]), 2
-            #test_2D_array
+            # test_2D_array
             yield np.array([[1, 2, 3, 4], [1, 2, 3, 4]]), 2
             yield np.array([[1., 2., 3., 4.], [1., 2., 3., 4.]]), 2
             yield np.arange(16.0).reshape(4, 4), 2
@@ -3278,8 +3283,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             cfunc(np.array([[1, 2, 3, 4], [1, 2, 3, 4]]), "abc")
-        self.assertIn(('The argument "indices_or_sections" '
-                       'must be an integer, an array, a list, or a tuple'),
+        self.assertIn(('The argument "indices_or_sections" must be int or '
+                       '1d-array'),
                       str(raises.exception))
 
         with self.assertRaises(ValueError) as raises:
@@ -3291,7 +3296,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # split and array_split have more comprehensive tests of splitting.
         # only do simple test on dsplit
         def inputs():
-            #test_3D_array
+            # Taken from https://github.com/numpy/numpy/blob/main/numpy/lib/...
+            # tests/test_shape_base.py
+            # test_3D_array
             np.array([[[1, 2, 3, 4],
                        [1, 2, 3, 4]],
                       [[1, 2, 3, 4],
@@ -3326,8 +3333,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             cfunc(np.array([[1, 2, 3, 4], [1, 2, 3, 4]]), "abc")
-        self.assertIn(('The argument "indices_or_sections" '
-                       'must be an integer, an array, a list, or a tuple'),
+        self.assertIn(('The argument "indices_or_sections" must be int or '
+                       '1d-array'),
                       str(raises.exception))
 
         with self.assertRaises(ValueError) as raises:

@@ -6110,8 +6110,7 @@ def numpy_vsplit(ary, indices_or_sections):
 
     if not isinstance(indices_or_sections, (types.Integer, types.Array,
                                             types.List, types.UniTuple)):
-        msg = ('The argument "indices_or_sections" '
-               'must be an integer, an array, a list, or a tuple')
+        msg = ('The argument "indices_or_sections" must be int or 1d-array')
         raise errors.TypingError(msg)
 
     def impl(ary, indices_or_sections):
@@ -6131,8 +6130,7 @@ def numpy_hsplit(ary, indices_or_sections):
 
     if not isinstance(indices_or_sections, (types.Integer, types.Array,
                                             types.List, types.UniTuple)):
-        msg = ('The argument "indices_or_sections" '
-               'must be an integer, an array, a list, or a tuple')
+        msg = ('The argument "indices_or_sections" must be int or 1d-array')
         raise errors.TypingError(msg)
 
     def impl(ary, indices_or_sections):
@@ -6154,8 +6152,7 @@ def numpy_dsplit(ary, indices_or_sections):
 
     if not isinstance(indices_or_sections, (types.Integer, types.Array,
                                             types.List, types.UniTuple)):
-        msg = ('The argument "indices_or_sections" '
-               'must be an integer, an array, a list, or a tuple')
+        msg = ('The argument "indices_or_sections" must be int or 1d-array')
         raise errors.TypingError(msg)
 
     def impl(ary, indices_or_sections):
