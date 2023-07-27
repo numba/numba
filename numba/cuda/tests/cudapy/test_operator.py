@@ -145,7 +145,6 @@ class TestOperatorModule(CUDATestCase):
         self.operator_template(operator.floordiv)
 
     @skip_unless_cc_53
-    @skip_on_cudasim('NVVM not supported in the simulator')
     def test_fp16_binary(self):
         functions = (simple_fp16add, simple_fp16sub, simple_fp16mul,
                      simple_fp16_div_scalar)

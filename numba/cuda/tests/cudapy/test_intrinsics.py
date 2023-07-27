@@ -652,7 +652,6 @@ class TestCudaIntrinsic(CUDATestCase):
         self.assertIn('mul.f16', ptx)
 
     @skip_unless_cc_53
-    @skip_on_cudasim('NVVM not supported in the simulator')
     def test_hdiv_scalar(self):
         compiled = cuda.jit("void(f2[:], f2, f2)")(simple_hdiv_scalar)
         ary = np.zeros(1, dtype=np.float16)
