@@ -1,14 +1,19 @@
 import functools
 
+import numpy as np
+
 from numba import jit, typeof
 from numba.core import cgutils, types, serialize, sigutils
-from numba.core.extending import is_jitted
+from numba.core.extending import (is_jitted, overload_attribute,
+                                  overload_method, register_jitable)
 from numba.core.typing import npydecl
 from numba.core.typing.templates import AbstractTemplate, signature
+from numba.cpython.unsafe.tuple import tuple_setitem
 from numba.np.ufunc import _internal
 from numba.parfors import array_analysis
 from numba.np.ufunc import ufuncbuilder
 from numba.np import numpy_support
+from typing import Callable
 
 
 def make_dufunc_kernel(_dufunc):
@@ -159,6 +164,10 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
     def identity(self):
         return self.ufunc.identity
 
+    @property
+    def signature(self):
+        return self.ufunc.signature
+
     def disable_compile(self):
         """
         Disable the compilation of new signatures at call time.
@@ -231,6 +240,66 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
         self._lower_me.libs.append(cres.library)
         return cres
 
+    def _install_ufunc_attributes(self, template: AbstractTemplate) -> None:
+
+        def get_attr_fn(attr: str) -> Callable:
+
+            def impl(ufunc):
+                val = getattr(ufunc.key[0], attr)
+                return lambda ufunc: val
+            return impl
+
+        # ntypes/types needs "at" to be a BoundFunction rather than a Function
+        # But this fails as it cannot a weak reference to an ufunc due to NumPy
+        # not setting the "tp_weaklistoffset" field. See:
+        # https://github.com/numpy/numpy/blob/7fc72776b972bfbfdb909e4b15feb0308cf8adba/numpy/core/src/umath/ufunc_object.c#L6968-L6983  # noqa: E501
+
+        at = types.Function(template)
+        attributes = ('nin', 'nout', 'nargs', # 'ntypes', # 'types',
+                      'identity', 'signature')
+        for attr in attributes:
+            attr_fn = get_attr_fn(attr)
+            overload_attribute(at, attr)(attr_fn)
+
+    def _install_ufunc_methods(self, template: AbstractTemplate) -> None:
+        at = types.Function(template)
+
+        @overload_method(at, 'reduce')
+        def ol_reduce(ufunc, array, axis=0):
+            tup_init = (0,) * (array.ndim - 1)
+
+            @register_jitable
+            def compute_result_shape(shape, axis):
+                # Same as
+                # shape = array.shape[0 : axis] + array.shape[axis + 1:]
+                s = tup_init
+                i = 0
+                for j, e in enumerate(shape):
+                    if j == axis:
+                        continue
+                    s = tuple_setitem(s, i, e)
+                    i += 1
+                return s
+
+            def impl(ufunc, array, axis=0):
+                if axis is None:
+                    raise ValueError("'axis' must be specified")
+
+                if axis < 0 or axis >= array.ndim:
+                    raise ValueError("Invalid axis")
+
+                identity = self.identity
+
+                # create result array
+                shape = compute_result_shape(array.shape, axis)
+                r = np.full(shape, fill_value=identity, dtype=array.dtype)
+
+                for idx, val in np.ndenumerate(array):
+                    result_idx = compute_result_shape(idx, axis)
+                    r[result_idx] = ufunc(r[result_idx], val)
+                return r
+            return impl
+
     def _install_type(self, typingctx=None):
         """Constructs and installs a typing class for a DUFunc object in the
         input typing context.  If no typing context is given, then
@@ -244,6 +313,8 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                        (AbstractTemplate,),
                        dict(key=self, generic=self._type_me))
         typingctx.insert_user_function(self, _ty_cls)
+        self._install_ufunc_attributes(_ty_cls)
+        self._install_ufunc_methods(_ty_cls)
 
     def find_ewise_function(self, ewise_types):
         """

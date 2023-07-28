@@ -1,15 +1,20 @@
 import pickle
+import textwrap
 
 import numpy as np
 
 from numba import njit, vectorize
-from numba.tests.support import MemoryLeakMixin
+from numba.tests.support import MemoryLeakMixin, TestCase
 import unittest
 from numba.np.ufunc import dufunc
 
 
 def pyuadd(a0, a1):
     return a0 + a1
+
+
+def pymult(a0, a1):
+    return a0 * a1
 
 
 class TestDUFunc(MemoryLeakMixin, unittest.TestCase):
@@ -85,6 +90,61 @@ class TestDUFunc(MemoryLeakMixin, unittest.TestCase):
         duadd(1, 2)
         self.assertEqual(duadd.ntypes, 1)
         self.assertEqual(duadd.ntypes, len(duadd.types))
+        self.assertIsNone(duadd.signature)
+
+    def test_ufunc_props_jit(self):
+        duadd = self.nopython_dufunc(pyuadd)
+        duadd(1, 2)  # initialize types attribute
+
+        attributes = {'nin': duadd.nin,
+                      'nout': duadd.nout,
+                      'nargs': duadd.nargs,
+                      #'ntypes': duadd.ntypes,
+                      #'types': duadd.types,
+                      'identity': duadd.identity,
+                      'signature': duadd.signature}
+
+        def get_attr_fn(attr):
+            fn = f'''
+                def impl():
+                    return duadd.{attr}
+            '''
+            l = {}
+            exec(textwrap.dedent(fn), {'duadd': duadd}, l)
+            return l['impl']
+
+        for attr, val in attributes.items():
+            cfunc = njit(get_attr_fn(attr))
+            self.assertEqual(val, cfunc(), f'attribute: {attr}')
+
+        # We don't expose [n]types attributes as they are dynamic attributes
+        # and can change as the user calls the ufunc
+        # cfunc = njit(get_attr_fn('ntypes'))
+        # self.assertEqual(cfunc(), 1)
+        # duadd(1.1, 2.2)
+        # self.assertEqual(cfunc(), 2)
+
+
+class TestDUFuncMethods(TestCase):
+    def _check_reduce(self, ufunc):
+
+        @njit
+        def foo(a, axis):
+            return ufunc.reduce(a, axis=axis)
+
+        a = np.arange(40).reshape(5, 4, 2)
+        axis = 0
+        expected = foo.py_func(a, axis)
+        got = foo(a, axis)
+        self.assertPreciseEqual(expected, got)
+
+    def test_add_reduce(self):
+        duadd = vectorize('int64(int64, int64)', identity=0)(pyuadd)
+        self._check_reduce(duadd)
+
+    def test_mul_reduce(self):
+        dumul = vectorize('int64(int64, int64)', identity=1)(pymult)
+        self._check_reduce(dumul)
 
 
 class TestDUFuncPickling(MemoryLeakMixin, unittest.TestCase):

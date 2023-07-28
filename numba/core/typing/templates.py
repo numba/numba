@@ -1118,6 +1118,8 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
 
         if isinstance(typ, types.TypeRef):
             assert typ == self.key
+        elif isinstance(typ, types.Callable):
+            assert typ == self.key
         else:
             assert isinstance(typ, self.key)
 
