@@ -1,7 +1,7 @@
 import numpy as np
 import threading
 
-from numba import boolean, config, cuda, float32, float64, int32, int64, void
+from numba import boolean, config, cuda, float32, float64, int64, void
 from numba.core.errors import TypingError
 from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
 import math
@@ -17,10 +17,10 @@ def add_kernel(r, x, y):
 
 @skip_on_cudasim('Specialization not implemented in the simulator')
 class TestDispatcherSpecialization(CUDATestCase):
-    def _test_no_double_specialize(self, dispatcher, ty):
+    def _test_no_double_specialize(self, dispatcher, arg):
 
         with self.assertRaises(RuntimeError) as e:
-            dispatcher.specialize(ty)
+            dispatcher.specialize(arg)
 
         self.assertIn('Dispatcher already specialized', str(e.exception))
 
@@ -31,7 +31,8 @@ class TestDispatcherSpecialization(CUDATestCase):
         def f(x):
             pass
 
-        self._test_no_double_specialize(f, float32[::1])
+        arg = np.zeros(1, dtype=np.float32)
+        self._test_no_double_specialize(f, arg)
 
     def test_no_double_specialize_no_sig_same_types(self):
         # Attempting to specialize an already-specialized kernel is illegal,
@@ -40,8 +41,9 @@ class TestDispatcherSpecialization(CUDATestCase):
         def f(x):
             pass
 
-        f_specialized = f.specialize(float32[::1])
-        self._test_no_double_specialize(f_specialized, float32[::1])
+        arg = np.zeros(1, dtype=np.float32)
+        f_specialized = f.specialize(arg)
+        self._test_no_double_specialize(f_specialized, arg)
 
     def test_no_double_specialize_sig_diff_types(self):
         # Attempting to specialize a kernel jitted with a signature is illegal.
@@ -49,7 +51,8 @@ class TestDispatcherSpecialization(CUDATestCase):
         def f(x):
             pass
 
-        self._test_no_double_specialize(f, float32[::1])
+        arg = np.zeros(1, dtype=np.float32)
+        self._test_no_double_specialize(f, arg)
 
     def test_no_double_specialize_no_sig_diff_types(self):
         # Attempting to specialize an already-specialized kernel is illegal.
@@ -57,8 +60,10 @@ class TestDispatcherSpecialization(CUDATestCase):
         def f(x):
             pass
 
-        f_specialized = f.specialize(int32[::1])
-        self._test_no_double_specialize(f_specialized, float32[::1])
+        int_arg = np.zeros(1, dtype=np.int32)
+        float_arg = np.zeros(1, dtype=np.float32)
+        f_specialized = f.specialize(int_arg)
+        self._test_no_double_specialize(f_specialized, float_arg)
 
     def test_specialize_cache_same(self):
         # Ensure that the same dispatcher is returned for the same argument
@@ -70,14 +75,16 @@ class TestDispatcherSpecialization(CUDATestCase):
 
         self.assertEqual(len(f.specializations), 0)
 
-        f_float32 = f.specialize(float32[::1])
+        float_arg = np.zeros(1, dtype=np.float32)
+        f_float32 = f.specialize(float_arg)
         self.assertEqual(len(f.specializations), 1)
 
-        f_float32_2 = f.specialize(float32[::1])
+        f_float32_2 = f.specialize(float_arg)
         self.assertEqual(len(f.specializations), 1)
         self.assertIs(f_float32, f_float32_2)
 
-        f_int32 = f.specialize(int32[::1])
+        int_arg = np.zeros(1, dtype=np.int32)
+        f_int32 = f.specialize(int_arg)
         self.assertEqual(len(f.specializations), 2)
         self.assertIsNot(f_int32, f_float32)
 
@@ -92,17 +99,19 @@ class TestDispatcherSpecialization(CUDATestCase):
 
         self.assertEqual(len(f.specializations), 0)
 
-        # 'A' order specialization
-        f_f32a_f32a = f.specialize(float32[:], float32[:])
+        # 'F' order specialization
+        f_arg = np.zeros((2, 2), order='F')
+        f_f32a_f32a = f.specialize(f_arg, f_arg)
         self.assertEqual(len(f.specializations), 1)
 
         # 'C' order specialization
-        f_f32c_f32c = f.specialize(float32[::1], float32[::1])
+        c_arg = np.zeros((2, 2), order='C')
+        f_f32c_f32c = f.specialize(c_arg, c_arg)
         self.assertEqual(len(f.specializations), 2)
         self.assertIsNot(f_f32a_f32a, f_f32c_f32c)
 
         # Reuse 'C' order specialization
-        f_f32c_f32c_2 = f.specialize(float32[::1], float32[::1])
+        f_f32c_f32c_2 = f.specialize(c_arg, c_arg)
         self.assertEqual(len(f.specializations), 2)
         self.assertIs(f_f32c_f32c, f_f32c_f32c_2)
 
