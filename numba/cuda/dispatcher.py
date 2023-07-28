@@ -722,10 +722,11 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         targetoptions = self.targetoptions
         specialization = CUDADispatcher(self.py_func,
                                         targetoptions=targetoptions)
-        specialization.compile(argtypes)
+        kernel = specialization.compile(argtypes)
         specialization.disable_compile()
         specialization._specialized = True
         self.specializations[cc, argtypes] = specialization
+        self.add_overload(kernel, argtypes)
         return specialization
 
     @property
