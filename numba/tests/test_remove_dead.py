@@ -81,7 +81,7 @@ class TestRemoveDead(unittest.TestCase):
             in_cps, out_cps = copy_propagate(test_ir.blocks, typemap)
             apply_copy_propagate(test_ir.blocks, in_cps, get_name_var_table(test_ir.blocks), typemap, calltypes)
 
-            remove_dead(test_ir.blocks, test_ir.arg_names, test_ir)
+            remove_dead(test_ir.blocks, test_ir.arg_names, test_ir, Flags())
             self.assertFalse(findLhsAssign(test_ir, "x"))
 
     def test2(self):
@@ -98,7 +98,7 @@ class TestRemoveDead(unittest.TestCase):
             return False
 
         test_ir = compiler.run_frontend(call_np_random_seed)
-        remove_dead(test_ir.blocks, test_ir.arg_names, test_ir)
+        remove_dead(test_ir.blocks, test_ir.arg_names, test_ir, Flags())
         self.assertTrue(seed_call_exists(test_ir))
 
     def run_array_index_test(self, func):
@@ -261,7 +261,9 @@ class TestRemoveDead(unittest.TestCase):
                 remove_dead(state.func_ir.blocks,
                             state.func_ir.arg_names,
                             state.func_ir,
-                            state.typemap)
+                            state.flags,
+                            typemap=state.typemap,
+)
                 numba.parfors.parfor.get_parfor_params(state.func_ir.blocks,
                                                 parfor_pass.options.fusion,
                                                 parfor_pass.nested_fusion_info)

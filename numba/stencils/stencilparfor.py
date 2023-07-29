@@ -155,7 +155,7 @@ class StencilPass(object):
             print("stencil_blocks after copy_propagate")
             ir_utils.dump_blocks(stencil_blocks)
         ir_utils.remove_dead(stencil_blocks, self.func_ir.arg_names, stencil_ir,
-                             self.typemap)
+                             self.flags, typemap=self.typemap)
         if config.DEBUG_ARRAY_OPT >= 1:
             print("stencil_blocks after removing dead code")
             ir_utils.dump_blocks(stencil_blocks)
