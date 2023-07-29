@@ -1655,9 +1655,15 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
                                       builder.icmp_signed('!=', u, v))
 
         with builder.if_then(shape_error, likely=False):
-            msg = (f"cannot assign slice of shape {src_shapes} from input of"
-                   f" shape {index_shape}")
-            context.call_conv.return_user_exc(builder, ValueError, (msg,))
+            msg = ("cannot assign slice of shape", *(src_shapes),
+                   "from input of shape", *(index_shape))
+            
+            nb_types = (None, *(types.int32 for _ in src_shapes), None,
+                        *(types.int32 for _  in index_shape))
+            
+            context.call_conv.return_dynamic_user_exc(builder, ValueError, msg,
+                                                       nb_types)
+            # context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
         # Check for array overlap
         src_start, src_end = get_array_memory_extents(context, builder, srcty,
@@ -1689,9 +1695,10 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         shape_error = builder.icmp_signed('!=', index_shape[0], seq_len)
 
         with builder.if_then(shape_error, likely=False):
-            msg = (f"cannot assign slice of shape {seq_len}"
-                   f" from input of shape {index_shape[0]}")
-            context.call_conv.return_user_exc(builder, ValueError, (msg,))
+            msg = ("cannot assign slice of shape", seq_len,
+                   "from input of shape", index_shape[0])
+            nb_types = (None, types.int32, None, types.int32)
+            context.call_conv.return_dyncamic_user_exc(builder, ValueError, msg, nb_types)
 
         def src_getitem(source_indices):
             idx, = source_indices
