@@ -265,8 +265,17 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
         at = types.Function(template)
 
         @overload_method(at, 'reduce')
-        def ol_reduce(ufunc, array, axis=0):
+        def ol_reduce(ufunc, array, axis=0, dtype=None, initial=None):
+            if not isinstance(array, types.Array):
+                # XXX: Raise NumbaTypeError
+                return
+
             tup_init = (0,) * (array.ndim - 1)
+            nb_dtype = array.dtype if cgutils.is_nonelike(dtype) else dtype
+            identity = self.identity
+
+            id_none = cgutils.is_nonelike(identity)
+            init_none = cgutils.is_nonelike(initial)
 
             @register_jitable
             def compute_result_shape(shape, axis):
@@ -281,24 +290,66 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                     i += 1
                 return s
 
-            def impl(ufunc, array, axis=0):
+            def impl_1d(ufunc, array, axis=0, dtype=None, initial=None):
+                if init_none and id_none:
+                    r = array[0]
+                elif init_none:
+                    r = identity
+                else:
+                    r = initial
+
+                sz = array.shape[0]
+                for i in range(sz):
+                    r = ufunc(r, array[i])
+                return r
+
+            def impl_nd_int(ufunc, array, axis=0, dtype=None, initial=None):
                 if axis is None:
                     raise ValueError("'axis' must be specified")
 
                 if axis < 0 or axis >= array.ndim:
                     raise ValueError("Invalid axis")
 
-                identity = self.identity
+                if initial is None and identity is None:
+                    init = array.take(0)
+                elif initial is None:
+                    init = identity
+                else:
+                    init = initial
 
                 # create result array
                 shape = compute_result_shape(array.shape, axis)
-                r = np.full(shape, fill_value=identity, dtype=array.dtype)
+                r = np.full(shape, fill_value=init, dtype=nb_dtype)
 
                 for idx, val in np.ndenumerate(array):
                     result_idx = compute_result_shape(idx, axis)
                     r[result_idx] = ufunc(r[result_idx], val)
                 return r
-            return impl
+
+            def impl_nd_tuple(ufunc, array, axis=0, dtype=None, initial=None):
+                l = sorted(axis)
+                r = ufunc.reduce(array,
+                                 axis=l[0],
+                                 dtype=dtype,
+                                 initial=initial)
+                if len(axis) == 1:
+                    return r
+                elif len(axis) == 2:
+                    return ufunc.reduce(r, axis=l[1] - 1)
+                else:
+                    ax = l[1:]
+                    for i in range(len(ax)):
+                        ax = tuple_setitem(ax, i, ax[i] - 1)
+                    return ufunc.reduce(r, axis=ax)
+
+            if array.ndim == 1:
+                return impl_1d
+            else:
+                if isinstance(axis, types.UniTuple) and \
+                        isinstance(axis.dtype, types.Integer):
+                    return impl_nd_tuple
+                else:
+                    return impl_nd_int
 
     def _install_type(self, typingctx=None):
         """Constructs and installs a typing class for a DUFunc object in the

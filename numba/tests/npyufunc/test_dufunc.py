@@ -1,3 +1,4 @@
+import itertools
 import pickle
 import textwrap
 
@@ -15,6 +16,10 @@ def pyuadd(a0, a1):
 
 def pymult(a0, a1):
     return a0 * a1
+
+
+def pymin(a0, a1):
+    return a0 if a0 < a1 else a1
 
 
 class TestDUFunc(MemoryLeakMixin, unittest.TestCase):
@@ -126,25 +131,58 @@ class TestDUFunc(MemoryLeakMixin, unittest.TestCase):
 
 
 class TestDUFuncMethods(TestCase):
-    def _check_reduce(self, ufunc):
+    def _check_reduce(self, ufunc, dtype=None, initial=None):
+
+        @njit
+        def foo(a, axis, dtype, initial):
+            return ufunc.reduce(a,
+                                axis=axis,
+                                dtype=dtype,
+                                initial=initial)
+
+        inputs = [
+            np.arange(5),
+            np.arange(40).reshape(5, 4, 2),
+        ]
+        for array in inputs:
+            for axis in range(array.ndim):
+                expected = foo.py_func(array, axis, dtype, initial)
+                got = foo(array, axis, dtype, initial)
+                self.assertPreciseEqual(expected, got)
+
+    def _check_reduce_axis(self, ufunc):
 
         @njit
         def foo(a, axis):
             return ufunc.reduce(a, axis=axis)
 
-        a = np.arange(40).reshape(5, 4, 2)
-        axis = 0
-        expected = foo.py_func(a, axis)
-        got = foo(a, axis)
-        self.assertPreciseEqual(expected, got)
+        inputs = [
+            np.arange(40).reshape(5, 4, 2),
+        ]
+        for array in inputs:
+            for i in range(1, array.ndim + 1):
+                for axis in itertools.combinations(range(array.ndim), r=i):
+                    expected = foo.py_func(array, axis)
+                    got = foo(array, axis)
+                    self.assertPreciseEqual(expected, got)
+
 
     def test_add_reduce(self):
         duadd = vectorize('int64(int64, int64)', identity=0)(pyuadd)
         self._check_reduce(duadd)
+        self._check_reduce_axis(duadd)
 
     def test_mul_reduce(self):
         dumul = vectorize('int64(int64, int64)', identity=1)(pymult)
         self._check_reduce(dumul)
+
+    def test_reduce_dtype(self):
+        duadd = vectorize('float64(float64, int64)', identity=0)(pyuadd)
+        self._check_reduce(duadd, dtype=np.float64)
+
+    def test_min_reduce(self):
+        dumin = vectorize('int64(int64, int64)')(pymin)
+        self._check_reduce(dumin, initial=10)
 
 
 class TestDUFuncPickling(MemoryLeakMixin, unittest.TestCase):
