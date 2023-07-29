@@ -1663,7 +1663,6 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
             
             context.call_conv.return_dynamic_user_exc(builder, ValueError, msg,
                                                        nb_types)
-            # context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
         # Check for array overlap
         src_start, src_end = get_array_memory_extents(context, builder, srcty,
