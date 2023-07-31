@@ -3197,8 +3197,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # split and array_split have more comprehensive tests of splitting.
         # only do simple test on vsplit
         def inputs():
-            # Taken from https://github.com/numpy/numpy/blob/main/numpy/lib/...
-            # tests/test_shape_base.py
+            # Taken from https://github.com/numpy/numpy/blob/...
+            # 11a2ea96a7ac923c2283d487bffa7fce8924cbd7/numpy/lib/tests/...
+            # test_shape_base.py#L586-L5917
+
             # test_2D_array
             yield np.array([[1, 2, 3, 4], [1, 2, 3, 4]]), 2
             yield np.array([[1., 2., 3., 4.], [1., 2., 3., 4.]]), 2
@@ -3245,8 +3247,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # split and array_split have more comprehensive tests of splitting.
         # only do simple test on hsplit
         def inputs():
-            # Taken from https://github.com/numpy/numpy/blob/main/numpy/lib/...
-            # tests/test_shape_base.py
+            # Taken from https://github.com/numpy/numpy/blob/...
+            # 11a2ea96a7ac923c2283d487bffa7fce8924cbd7/numpy/lib/tests/...
+            # test_shape_base.py#L553-L564
+
             # test_1D_array
             yield np.array([1, 2, 3, 4]), 2
             yield np.array([1., 2., 3., 4.]), 2
@@ -3296,8 +3300,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # split and array_split have more comprehensive tests of splitting.
         # only do simple test on dsplit
         def inputs():
-            # Taken from https://github.com/numpy/numpy/blob/main/numpy/lib/...
-            # tests/test_shape_base.py
+            # Taken from https://github.com/numpy/numpy/blob/...
+            # 11a2ea96a7ac923c2283d487bffa7fce8924cbd7/numpy/lib/tests/...
+            # test_shape_base.py#L616-L624
+
             # test_3D_array
             np.array([[[1, 2, 3, 4],
                        [1, 2, 3, 4]],
