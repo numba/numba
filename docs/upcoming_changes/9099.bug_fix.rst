@@ -1,7 +1,7 @@
-Fix all ``@overload``s to use parameter names that match public APIs.
-=====================================================================
+Fix all ``@overload``\ s to use parameter names that match public APIs.
+=======================================================================
 
-Some of the Numba ``@overload``s for functions in NumPy and Python's built-ins
+Some of the Numba ``@overload``\ s for functions in NumPy and Python's built-ins
 were written using parameter names that did not match those used in API they
 were overloading. The result of this being that calling a function with such a
 mismatch using the parameter names as key-word arguments at the call site would
