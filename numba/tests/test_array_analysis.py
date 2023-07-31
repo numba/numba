@@ -98,7 +98,8 @@ class ArrayAnalysisPass(FunctionPass):
 
     def run_pass(self, state):
         state.array_analysis = ArrayAnalysis(state.typingctx, state.func_ir,
-                                             state.typemap, state.calltypes)
+                                             state.typemap, state.calltypes,
+                                             state.flags)
         state.array_analysis.run(state.func_ir.blocks)
         post_proc = postproc.PostProcessor(state.func_ir)
         post_proc.run()
