@@ -73,7 +73,7 @@ _Data = dict[str, ir.Var]
 class RVSDG2IR(RegionVisitor[_Data]):
     blocks: dict[int, ir.Block]
     func_id: bytecode.FunctionIdentity
-    scope: ir.Scope
+    local_scope: ir.Scope
     global_scope: ir.Scope
     vsmap: dict[ValueState, ir.Var]
     _current_block: ir.Block | None
@@ -86,7 +86,7 @@ class RVSDG2IR(RegionVisitor[_Data]):
         self.func_id = func_id
         self.loc = self.first_loc = ir.Loc.from_function_id(func_id)
         self.global_scope = ir.Scope(parent=None, loc=self.loc)
-        self.scope = ir.Scope(parent=self.global_scope, loc=self.loc)
+        self.local_scope = ir.Scope(parent=self.global_scope, loc=self.loc)
         self.blocks = {}
         self.vsmap = {}
         self._current_block = None
@@ -109,6 +109,9 @@ class RVSDG2IR(RegionVisitor[_Data]):
         suffix = str(self._get_label(label))
         return f"$phi.{varname}.{suffix}"
 
+    def _get_cp_name(self, cpname: str) -> str:
+        return f"$.cp.{cpname}"
+
     def _get_label(self, label: str) -> int:
         num = self._label_map.setdefault(label, len(self._label_map))
         return num
@@ -121,7 +124,7 @@ class RVSDG2IR(RegionVisitor[_Data]):
 
     def initialize(self) -> _Data:
         self._label_map[None] = 0
-        with self.set_block(0, ir.Block(scope=self.scope, loc=self.loc)):
+        with self.set_block(0, ir.Block(scope=self.local_scope, loc=self.loc)):
             data: _Data = {}
             for i, k in enumerate(self.func_id.arg_names):  # type: ignore
                 val = ir.Arg(index=i, name=k, loc=self.loc)
@@ -153,7 +156,7 @@ class RVSDG2IR(RegionVisitor[_Data]):
                 )
             with self.set_block(
                 self._get_label(block.name),
-                ir.Block(scope=self.scope, loc=self.loc),
+                ir.Block(scope=self.local_scope, loc=self.loc),
             ):
                 for op in ops:
                     if op.opname in _noop:
@@ -186,11 +189,11 @@ class RVSDG2IR(RegionVisitor[_Data]):
             # Emit body
             with self.set_block(
                 self._get_label(block.name),
-                ir.Block(scope=self.scope, loc=self.loc),
+                ir.Block(scope=self.local_scope, loc=self.loc),
             ):
                 for cp, v in block.variable_assignment.items():
                     const = ir.Const(v, loc=self.loc, use_literal_type=False)
-                    self.store(const, f"$.cp.{cp}", redefine=False)
+                    self.store(const, self._get_cp_name(cp), redefine=False)
             return data
         elif isinstance(block, DDGBranch):
             # Emit body
@@ -205,12 +208,12 @@ class RVSDG2IR(RegionVisitor[_Data]):
     def _emit_two_way_switch(self, block):
         with self.set_block(
             self._get_label(block.name),
-            ir.Block(scope=self.scope, loc=self.loc),
+            ir.Block(scope=self.local_scope, loc=self.loc),
         ):
             # Handle simple two-way branch
             assert set(block.branch_value_table.keys()) == {0, 1}
             cp = block.variable
-            cpvar = self.scope.get_exact(f"$.cp.{cp}")
+            cpvar = self.local_scope.get_exact(self._get_cp_name(cp))
             truebr = self._get_label(block.branch_value_table[1])
             falsebr = self._get_label(block.branch_value_table[0])
             br = ir.Branch(
@@ -267,11 +270,11 @@ class RVSDG2IR(RegionVisitor[_Data]):
         """
         # with self.set_block(
         #         self._get_label(block.name),
-        #         ir.Block(scope=self.scope, loc=self.loc)):
+        #         ir.Block(scope=self.local_scope, loc=self.loc)):
         #     # Handle simple two-way branch
         #     # assert set(block.branch_value_table.keys()) == {0, 1}
         #     cp = block.variable
-        #     cpvar = self.scope.get_exact(f"$.cp.{cp}")
+        #     cpvar = self.local_scope.get_exact(f"$.cp.{cp}")
 
         #     falsebr = self._get_label(block.branch_value_table[1])
         #     truebr = self._get_label(block.branch_value_table[0])
@@ -290,22 +293,23 @@ class RVSDG2IR(RegionVisitor[_Data]):
         bvt = block.branch_value_table
         # The control variable
         cp = block.variable
-        cpvar = self.scope.get_exact(f"$.cp.{cp}")
+        cpvar = self.local_scope.get_exact(self._get_cp_name(cp))
         labels = [(k, self._get_label(v)) for k, v in bvt.items()]
 
         blocks = []
-        for _ in labels[:-1]:
+        # For all but last labels
+        for _ in range(len(labels) - 1):
             blocks.append(
                 (
                     self._get_temp_label(),
-                    ir.Block(scope=self.scope, loc=self.loc),
+                    ir.Block(scope=self.local_scope, loc=self.loc),
                 )
             )
 
         # Jump into the first block
         with self.set_block(
             self._get_label(block.name),
-            ir.Block(scope=self.scope, loc=self.loc),
+            ir.Block(scope=self.local_scope, loc=self.loc),
         ):
             self.current_block.append(ir.Jump(blocks[-1][0], loc=self.loc))
 
@@ -412,7 +416,7 @@ class RVSDG2IR(RegionVisitor[_Data]):
                 )
         # Emit tail
         data_after_branches = {
-            k: self.scope.get_exact(self._get_phi_name(k, region.name))
+            k: self.local_scope.get_exact(self._get_phi_name(k, region.name))
             for k in names
         }
 
@@ -426,7 +430,7 @@ class RVSDG2IR(RegionVisitor[_Data]):
     def visit_linear(self, region: RegionBlock, data: _Data) -> _Data:
         with self.set_block(
             self._get_label(region.name),
-            ir.Block(scope=self.scope, loc=self.loc),
+            ir.Block(scope=self.local_scope, loc=self.loc),
         ):
             # Ensures there's a block for all regions
             pass
@@ -471,9 +475,9 @@ class RVSDG2IR(RegionVisitor[_Data]):
     def store(self, value, name, *, redefine=True, block=None) -> ir.Var:
         target: ir.Var
         if redefine:
-            target = self.scope.redefine(name, loc=self.loc)
+            target = self.local_scope.redefine(name, loc=self.loc)
         else:
-            target = self.scope.get_or_define(name, loc=self.loc)
+            target = self.local_scope.get_or_define(name, loc=self.loc)
         stmt = ir.Assign(value=value, target=target, loc=self.loc)
         self.append(stmt, block=block)
         return target
