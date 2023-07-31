@@ -172,6 +172,14 @@ def logspace3(start, stop, num=50):
     return np.logspace(start, stop, num=num)
 
 
+def geomspace2(start, stop):
+    return np.geomspace(start, stop)
+
+
+def geomspace3(start, stop, num=50):
+    return np.geomspace(start, stop, num=num)
+
+
 def rot90(a):
     return np.rot90(a)
 
@@ -3032,6 +3040,209 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc(0, 5, "abc")
         self.assertIn('The third argument "num" must be an integer',
                       str(raises.exception))
+
+    def test_geomspace2_basic(self):
+
+        def inputs():
+            #start, stop
+            yield -1, -60
+            yield 1.0, 60.0
+            yield -60.0, -1.0
+            yield 1, 1000
+            yield 1000, 1
+            yield 1, 256
+            yield -1000, -1
+            yield -1, np.complex64(2j)
+            yield np.complex64(2j), -1
+            yield -1.0, np.complex64(2j)
+            yield np.complex64(1j), np.complex64(1000j)
+            yield np.complex64(-1 + 0j), np.complex64(1 + 0j)
+            yield np.complex64(1), np.complex64(2)
+            yield np.complex64(2j), np.complex64(4j)
+            yield np.complex64(2), np.complex64(4j)
+            yield np.complex64(1 + 2j), np.complex64(3 + 4j)
+            yield np.complex64(1 - 2j), np.complex64(3 - 4j)
+            yield np.complex64(-1 + 2j), np.complex64(3 + 4j)
+
+        pyfunc = geomspace2
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for start, stop in inputs():
+            self.assertPreciseEqual(pyfunc(start, stop),
+                                    cfunc(start, stop),
+                                    abs_tol=1e-12)
+
+    def test_geomspace2_exception(self):
+        cfunc = jit(nopython=True)(geomspace2)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc", 5)
+        self.assertIn('The argument "start" must be a number',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(5, "abc")
+        self.assertIn('The argument "stop" must be a number',
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(0, 5)
+        self.assertIn('Geometric sequence cannot include zero',
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(5, 0)
+        self.assertIn('Geometric sequence cannot include zero',
+                      str(raises.exception))
+
+    def test_geomspace3_basic(self):
+
+        def inputs():
+            #start, stop, num
+            yield -1, -60, 50
+            yield 1.0, 60.0, 70
+            yield -60.0, -1.0, 80
+            yield 1, 1000, 4
+            yield 1, 1000, 3
+            yield 1000, 1, 4
+            yield 1, 256, 9
+            yield -1000, -1, 4
+            yield -1, np.complex64(2j), 10
+            yield np.complex64(2j), -1, 20
+            yield -1.0, np.complex64(2j), 30
+            yield np.complex64(1j), np.complex64(1000j), 4
+            yield np.complex64(-1 + 0j), np.complex64(1 + 0j), 5
+            yield np.complex64(1), np.complex64(2), 40
+            yield np.complex64(2j), np.complex64(4j), 50
+            yield np.complex64(2), np.complex64(4j), 60
+            yield np.complex64(1 + 2j), np.complex64(3 + 4j), 70
+            yield np.complex64(1 - 2j), np.complex64(3 - 4j), 80
+            yield np.complex64(-1 + 2j), np.complex64(3 + 4j), 90
+
+        pyfunc = geomspace3
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for start, stop, num in inputs():
+            self.assertPreciseEqual(pyfunc(start, stop, num),
+                                    cfunc(start, stop, num),
+                                    abs_tol=1e-14)
+
+    def test_geomspace3_exception(self):
+        cfunc = jit(nopython=True)(geomspace3)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc", 5, 10)
+        self.assertIn('The argument "start" must be a number',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(5, "abc", 10)
+        self.assertIn('The argument "stop" must be a number',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(5, 10, "abc")
+        self.assertIn('The argument "num" must be an integer',
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(0, 5, 5)
+        self.assertIn('Geometric sequence cannot include zero',
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(5, 0, 5)
+        self.assertIn('Geometric sequence cannot include zero',
+                      str(raises.exception))
+
+    def test_geomspace_numpy(self):
+        cfunc2 = jit(nopython=True)(geomspace2)
+        cfunc3 = jit(nopython=True)(geomspace3)
+        pfunc3 = geomspace3
+
+        # https://github.com/numpy/numpy/blob/ab2178b47c0ee834180c318db196976623710691/numpy/core/tests/test_function_base.py#L122C3-L142
+        # test_basic
+        y = cfunc2(1, 1e6)
+        self.assertEqual(len(y), 50)
+        y = cfunc3(1, 1e6, num=100)
+        self.assertEqual(y[-1], 10 ** 6)
+        y = cfunc3(1, 1e6, num=7)
+        self.assertPreciseEqual(y, pfunc3(1,1e6, num=7))
+
+        y = cfunc3(8, 2, num=3)
+        self.assertPreciseEqual(y, pfunc3(8, 2, num=3))
+        self.assertTrue([x == 0 for x in y.imag])
+
+        y = cfunc3(-1, -100, num=3)
+        self.assertPreciseEqual(y, pfunc3(-1, -100, num=3))
+        self.assertTrue([x == 0 for x in y.imag])
+
+        y = cfunc3(-100, -1, num=3)
+        self.assertPreciseEqual(y, pfunc3(-100, -1, num=3))
+        self.assertTrue([x == 0 for x in y.imag])
+
+        # test_boundaries_match_start_and_stop_exactly
+        start = 0.3
+        stop = 20.3
+
+        y = cfunc3(start, stop, num=1)
+        self.assertPreciseEqual(y[0], start)
+
+        y = cfunc3(start, stop, num=3)
+        self.assertPreciseEqual(y[0], start)
+        self.assertPreciseEqual(y[-1], stop)
+
+        # test_nan_interior
+        with np.errstate(invalid='ignore'):
+            y = cfunc3(-3, 3, num=4)
+
+        self.assertPreciseEqual(y[0], -3.0)
+        self.assertTrue(np.isnan(y[1:-1]).all())
+        self.assertPreciseEqual(y[3], 3.0)
+
+        # test_complex
+        # Purely imaginary
+        y = cfunc3(1j, 16j, num=5)
+        self.assertPreciseEqual(y, pfunc3(1j, 16j, num=5), abs_tol=1e-14)
+        self.assertTrue([x == 0 for x in y.real])
+
+        y = cfunc3(-4j, -324j, num=5)
+        self.assertPreciseEqual(y, pfunc3(-4j, -324j, num=5), abs_tol=1e-13)
+        self.assertTrue([x == 0 for x in y.real])
+
+        y = cfunc3(1 + 1j, 1000 + 1000j, num=4)
+        self.assertPreciseEqual(y,
+                                pfunc3(1 + 1j, 1000 + 1000j, num=4),
+                                abs_tol=1e-13)
+
+        y = cfunc3(-1 + 1j, -1000 + 1000j, num=4)
+        self.assertPreciseEqual(y,
+                                pfunc3(-1 + 1j, -1000 + 1000j, num=4),
+                                abs_tol=1e-13)
+
+        # Logarithmic spirals
+        y = cfunc3(-1 + 0j, 1 + 0j, num=3)
+        self.assertPreciseEqual(y, pfunc3(-1 + 0j, 1 + 0j, num=3))
+
+        y = cfunc3(0 + 3j, -3 + 0j, 3)
+        self.assertPreciseEqual(y, pfunc3(0 + 3j, -3 + 0j, 3), abs_tol=1e-15)
+        y = cfunc3(0 + 3j, 3 + 0j, 3)
+        self.assertPreciseEqual(y, pfunc3(0 + 3j, 3 + 0j, 3), abs_tol=1e-15)
+        y = cfunc3(-3 + 0j, 0 - 3j, 3)
+        self.assertPreciseEqual(y, pfunc3(-3 + 0j, 0 - 3j, 3), abs_tol=1e-15)
+        y = cfunc3(0 + 3j, -3 + 0j, 3)
+        self.assertPreciseEqual(y, pfunc3(0 + 3j, -3 + 0j, 3), abs_tol=1e-15)
+        y = cfunc3(-2 - 3j, 5 + 7j, 7)
+        self.assertPreciseEqual(y, pfunc3(-2 - 3j, 5 + 7j, 7), abs_tol=1e-14)
+
+        y = cfunc3(3j, -5, 2)
+        self.assertPreciseEqual(y, pfunc3(3j, -5, 2))
+        y = cfunc3(-5, 3j, 2)
+        self.assertPreciseEqual(y, pfunc3(-5, 3j, 2))
 
     def test_rot90_basic(self):
         pyfunc = rot90

@@ -1,7 +1,6 @@
 from numba import cuda, float32, int32
 from numba.core.errors import NumbaInvalidConfigWarning
 from numba.cuda.testing import CUDATestCase, skip_on_cudasim
-from numba.cuda.cudadrv.nvvm import NVVM
 from numba.tests.support import ignore_internal_warnings
 import re
 import unittest
@@ -80,9 +79,6 @@ class TestCudaLineInfo(CUDATestCase):
         self._check(foo, sig=(int32[:],), expect=False)
 
     def test_lineinfo_in_asm(self):
-        if not NVVM().is_nvvm70:
-            self.skipTest("lineinfo not generated for NVVM 3.4")
-
         @cuda.jit(lineinfo=True)
         def foo(x):
             x[0] = 1
@@ -119,9 +115,6 @@ class TestCudaLineInfo(CUDATestCase):
         self._check(caller, sig=sig, expect=False)
 
     def test_lineinfo_in_device_function(self):
-        if not NVVM().is_nvvm70:
-            self.skipTest("lineinfo not generated for NVVM 3.4")
-
         # First we define a device function / kernel pair and run the usual
         # checks on the generated LLVM and PTX.
 

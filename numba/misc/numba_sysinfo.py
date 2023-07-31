@@ -370,7 +370,7 @@ def get_sysinfo():
 
             output = StringIO()
             with redirect_stdout(output):
-                cudadrv.libs.test(sys.platform, print_paths=False)
+                cudadrv.libs.test()
             sys_info[_cu_lib_test] = output.getvalue()
             output.close()
 
