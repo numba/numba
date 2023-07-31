@@ -17,7 +17,7 @@ jobs:
         NUMPY: '1.22'
         CONDA_ENV: 'azure_ci'
         TEST_START_INDEX: 0
-      py311_np124:
+      py311_np125:
         PYTHON: '3.11'
         NUMPY: '1.25'
         CONDA_ENV: 'azure_ci'
