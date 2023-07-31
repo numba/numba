@@ -79,7 +79,7 @@ class RVSDG2IR(RegionVisitor[_Data]):
     _current_block: ir.Block | None
     last_block_label: int | None
     branch_predicate: ir.Var | None
-    _label_map: dict[Union[str, int, None], int]
+    _label_map: dict[str, int]
     _emit_debug_print = False
 
     def __init__(self, func_id):
@@ -113,18 +113,18 @@ class RVSDG2IR(RegionVisitor[_Data]):
         return f"$.cp.{cpname}"
 
     def _get_label(self, label: str) -> int:
-        num = self._label_map.setdefault(label, len(self._label_map))
+        num = self._label_map.setdefault(f"block.{label}", len(self._label_map))
         return num
 
     def _get_temp_label(self) -> int:
         num = len(self._label_map)
         assert num not in self._label_map
-        self._label_map[num] = num
+        self._label_map[f"annoy.{num}"] = num
         return num
 
     def initialize(self) -> _Data:
-        self._label_map[None] = 0
-        with self.set_block(0, ir.Block(scope=self.local_scope, loc=self.loc)):
+        label = self._get_temp_label()
+        with self.set_block(label, ir.Block(scope=self.local_scope, loc=self.loc)):
             data: _Data = {}
             for i, k in enumerate(self.func_id.arg_names):  # type: ignore
                 val = ir.Arg(index=i, name=k, loc=self.loc)
