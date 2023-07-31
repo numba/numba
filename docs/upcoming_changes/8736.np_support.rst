@@ -1,5 +1,0 @@
-Support is added for ``numpy.lib.stride_tricks.sliding_window_view``.
-=====================================================================
-
-Support is added for ``numpy.lib.stride_tricks.sliding_window_view`` with
-arguments ``window_size`` and ``axis``.
