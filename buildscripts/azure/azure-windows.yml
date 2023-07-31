@@ -15,7 +15,7 @@ jobs:
         TEST_START_INDEX: 18
       py311_np124:
         PYTHON: '3.11'
-        NUMPY: '1.24'
+        NUMPY: '1.25'
         CONDA_ENV: 'testenv'
         TEST_START_INDEX: 19
 
