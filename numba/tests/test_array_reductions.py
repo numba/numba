@@ -75,11 +75,17 @@ def array_min(arr):
 def array_min_global(arr):
     return np.min(arr)
 
+def array_amin(arr):
+    return np.amin(arr)
+
 def array_max(arr):
     return arr.max()
 
 def array_max_global(arr):
     return np.max(arr)
+
+def array_amax(arr):
+    return np.amax(arr)
 
 def array_argmin(arr):
     return arr.argmin()
@@ -1105,6 +1111,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                            array_all, array_all_global,
                            array_any, array_any_global,
                            array_min, array_min_global,
+                           array_amax, array_amin,
                            array_max, array_max_global,
                            array_nanmax, array_nanmin,
                            array_nansum,

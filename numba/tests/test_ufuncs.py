@@ -256,6 +256,56 @@ class BasicUFuncTest(BaseUFuncTest):
                     else:
                         raise
 
+    def signed_unsigned_cmp_test(self, comparison_ufunc):
+        self.basic_ufunc_test(comparison_ufunc)
+
+        if numpy_support.numpy_version < (1, 25):
+            return
+
+        # Test additional implementations that specifically handle signed /
+        # unsigned comparisons added in NumPy 1.25:
+        # https://github.com/numpy/numpy/pull/23713
+        additional_inputs = (
+            (np.int64(-1), np.uint64(0)),
+            (np.int64(-1), np.uint64(1)),
+            (np.int64(0), np.uint64(0)),
+            (np.int64(0), np.uint64(1)),
+            (np.int64(1), np.uint64(0)),
+            (np.int64(1), np.uint64(1)),
+
+            (np.uint64(0), np.int64(-1)),
+            (np.uint64(0), np.int64(0)),
+            (np.uint64(0), np.int64(1)),
+            (np.uint64(1), np.int64(-1)),
+            (np.uint64(1), np.int64(0)),
+            (np.uint64(1), np.int64(1)),
+
+            (np.array([-1, -1, 0, 0, 1, 1], dtype=np.int64),
+             np.array([0, 1, 0, 1, 0, 1], dtype=np.uint64)),
+
+            (np.array([0, 1, 0, 1, 0, 1], dtype=np.uint64),
+             np.array([-1, -1, 0, 0, 1, 1], dtype=np.int64))
+        )
+
+        pyfunc = self._make_ufunc_usecase(comparison_ufunc)
+
+        for a, b in additional_inputs:
+            input_types = (typeof(a), typeof(b))
+            output_type = types.Array(types.bool_, 1, 'C')
+            argtys = input_types + (output_type,)
+            cfunc = self._compile(pyfunc, argtys)
+
+            if isinstance(a, np.ndarray):
+                result = np.zeros(a.shape, dtype=np.bool_)
+            else:
+                result = np.zeros(1, dtype=np.bool_)
+
+            expected = np.zeros_like(result)
+
+            pyfunc(a, b, expected)
+            cfunc(a, b, result)
+            np.testing.assert_equal(expected, result)
+
 
 class TestUFuncs(BasicUFuncTest, TestCase):
     def basic_int_ufunc_test(self, name=None):
@@ -505,22 +555,22 @@ class TestUFuncs(BasicUFuncTest, TestCase):
     ############################################################################
     # Comparison functions
     def test_greater_ufunc(self):
-        self.basic_ufunc_test(np.greater)
+        self.signed_unsigned_cmp_test(np.greater)
 
     def test_greater_equal_ufunc(self):
-        self.basic_ufunc_test(np.greater_equal)
+        self.signed_unsigned_cmp_test(np.greater_equal)
 
     def test_less_ufunc(self):
-        self.basic_ufunc_test(np.less)
+        self.signed_unsigned_cmp_test(np.less)
 
     def test_less_equal_ufunc(self):
-        self.basic_ufunc_test(np.less_equal)
+        self.signed_unsigned_cmp_test(np.less_equal)
 
     def test_not_equal_ufunc(self):
-        self.basic_ufunc_test(np.not_equal)
+        self.signed_unsigned_cmp_test(np.not_equal)
 
     def test_equal_ufunc(self):
-        self.basic_ufunc_test(np.equal)
+        self.signed_unsigned_cmp_test(np.equal)
 
     def test_logical_and_ufunc(self):
         self.basic_ufunc_test(np.logical_and)
