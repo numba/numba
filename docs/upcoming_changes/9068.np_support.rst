@@ -1,0 +1,5 @@
+
+Added support for np.geomspace() function.
+=============================================
+
+This PR improves on `#4074 <https://github.com/numba/numba/issues/4074>` by adding support for np.geomspace(). The current implementation only supports scalar *start* and *stop* parameters.

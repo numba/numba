@@ -485,6 +485,7 @@ The following top-level functions are supported:
 * :func:`numpy.frombuffer` (only the 2 first arguments)
 * :func:`numpy.full` (only the 3 first arguments)
 * :func:`numpy.full_like` (only the 3 first arguments)
+* :func:`numpy.geomspace` (only the 3 first arguments)
 * :func:`numpy.hamming`
 * :func:`numpy.hanning`
 * :func:`numpy.histogram` (only the 3 first arguments)
@@ -519,6 +520,7 @@ The following top-level functions are supported:
 * :func:`numpy.roots`
 * :func:`numpy.rot90` (only the 2 first arguments)
 * :func:`numpy.round_`
+* :func:`numpy.row_stack`
 * :func:`numpy.searchsorted` (only the 3 first arguments)
 * :func:`numpy.select` (only using homogeneous lists or tuples for the first
   two arguments, condlist and choicelist). Additionally, these two arguments

@@ -1,0 +1,5 @@
+Fix CUDA atomics tests with toolkit 12.2
+========================================
+
+CUDA 12.2 generates slightly different PTX for some atomics, so the relevant
+tests are updated to look for the correct instructions when 12.2 is used.

@@ -8,6 +8,7 @@ import warnings
 import re
 
 import numpy as np
+from llvmlite import ir
 
 from numba import njit, jit, vectorize, guvectorize, objmode
 from numba.core import types, errors, typing, compiler, cgutils
@@ -2062,6 +2063,51 @@ class TestOverloadPreferLiteral(TestCase):
             )
 
         a, b, c = check_non_lit(MyDummy(), 3)
+        self.assertEqual(a, 100)
+        self.assertEqual(b, 200)
+        self.assertEqual(c, 300)
+
+
+class TestIntrinsicPreferLiteral(TestCase):
+    def test_intrinsic(self):
+        def intrin(context, x):
+            # This intrinsic will return 0xcafe if `x` is a literal `1`.
+            sig = signature(types.intp, x)
+            if isinstance(x, types.IntegerLiteral):
+                # With prefer_literal=False, this branch will not be reached
+                if x.literal_value == 1:
+                    def codegen(context, builder, signature, args):
+                        atype = signature.args[0]
+                        llrtype = context.get_value_type(atype)
+                        return ir.Constant(llrtype, 0xcafe)
+                    return sig, codegen
+                else:
+                    raise errors.TypingError('literal value')
+            else:
+                def codegen(context, builder, signature, args):
+                    atype = signature.return_type
+                    llrtype = context.get_value_type(atype)
+                    int_100 = ir.Constant(llrtype, 100)
+                    return builder.mul(args[0], int_100)
+                return sig, codegen
+
+        prefer_lit = intrinsic(prefer_literal=True)(intrin)
+        non_lit = intrinsic(prefer_literal=False)(intrin)
+
+        @njit
+        def check_prefer_lit(x):
+            return prefer_lit(1), prefer_lit(2), prefer_lit(x)
+
+        a, b, c = check_prefer_lit(3)
+        self.assertEqual(a, 0xcafe)
+        self.assertEqual(b, 200)
+        self.assertEqual(c, 300)
+
+        @njit
+        def check_non_lit(x):
+            return non_lit(1), non_lit(2), non_lit(x)
+
+        a, b, c = check_non_lit(3)
         self.assertEqual(a, 100)
         self.assertEqual(b, 200)
         self.assertEqual(c, 300)
