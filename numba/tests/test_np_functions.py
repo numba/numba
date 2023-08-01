@@ -3217,32 +3217,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(pyfunc(a, ind_or_sec),
                                     cfunc(a, ind_or_sec))
 
-    def test_vsplit_exception(self):
-        cfunc = jit(nopython=True)(vsplit)
-
-        self.disable_leak_check()
-
-        with self.assertRaises(TypingError) as raises:
-            cfunc(1, 2)
-        self.assertIn('The argument "ary" must be an array',
-                      str(raises.exception))
-
-        with self.assertRaises(TypingError) as raises:
-            cfunc("abc", 2)
-        self.assertIn('The argument "ary" must be an array',
-                      str(raises.exception))
-
-        with self.assertRaises(TypingError) as raises:
-            cfunc(np.array([[1, 2, 3, 4], [1, 2, 3, 4]]), "abc")
-        self.assertIn(('The argument "indices_or_sections" must be int or '
-                       '1d-array'),
-                      str(raises.exception))
-
-        with self.assertRaises(ValueError) as raises:
-            cfunc(np.array(1), 2)
-        self.assertIn('vsplit only works on arrays of 2 or more dimensions',
-                      str(raises.exception))
-
     def test_hsplit_basic(self):
         # split and array_split have more comprehensive tests of splitting.
         # only do simple test on hsplit
@@ -3270,32 +3244,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(pyfunc(a, ind_or_sec),
                                     cfunc(a, ind_or_sec))
 
-    def test_hsplit_exception(self):
-        cfunc = jit(nopython=True)(hsplit)
-
-        self.disable_leak_check()
-
-        with self.assertRaises(TypingError) as raises:
-            cfunc(1, 2)
-        self.assertIn('The argument "ary" must be an array',
-                      str(raises.exception))
-
-        with self.assertRaises(TypingError) as raises:
-            cfunc("abc", 2)
-        self.assertIn('The argument "ary" must be an array',
-                      str(raises.exception))
-
-        with self.assertRaises(TypingError) as raises:
-            cfunc(np.array([[1, 2, 3, 4], [1, 2, 3, 4]]), "abc")
-        self.assertIn(('The argument "indices_or_sections" must be int or '
-                       '1d-array'),
-                      str(raises.exception))
-
-        with self.assertRaises(ValueError) as raises:
-            cfunc(np.array(1), 2)
-        self.assertIn('hsplit only works on arrays of 1 or more dimensions',
-                      str(raises.exception))
-
     def test_dsplit_basic(self):
         # split and array_split have more comprehensive tests of splitting.
         # only do simple test on dsplit
@@ -3322,38 +3270,31 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(pyfunc(a, ind_or_sec),
                                     cfunc(a, ind_or_sec))
 
-    def test_dsplit_exception(self):
-        cfunc = jit(nopython=True)(dsplit)
-
-        self.disable_leak_check()
-
-        with self.assertRaises(TypingError) as raises:
-            cfunc(1, 2)
-        self.assertIn('The argument "ary" must be an array',
-                      str(raises.exception))
-
-        with self.assertRaises(TypingError) as raises:
-            cfunc("abc", 2)
-        self.assertIn('The argument "ary" must be an array',
-                      str(raises.exception))
-
-        with self.assertRaises(TypingError) as raises:
-            cfunc(np.array([[1, 2, 3, 4], [1, 2, 3, 4]]), "abc")
-        self.assertIn(('The argument "indices_or_sections" must be int or '
-                       '1d-array'),
-                      str(raises.exception))
-
-        with self.assertRaises(ValueError) as raises:
-            cfunc(np.array(1), 2)
-        self.assertIn('dsplit only works on arrays of 3 or more '
-                      'dimensions',
-                      str(raises.exception))
-
-        with self.assertRaises(ValueError) as raises:
-            cfunc(np.array([1, 2]), 2)
-        self.assertIn('dsplit only works on arrays of 3 or more '
-                      'dimensions',
-                      str(raises.exception))
+    def test_vhdsplit_exception(self):
+        # Single test method for vsplit, hsplit and dsplit exceptions
+        for (f, mindim, name) in [(vsplit, 2, "vsplit"),
+                                  (hsplit, 1, "hsplit"),
+                                  (dsplit, 3, "dsplit")]:
+            cfunc = jit(nopython=True)(f)
+            self.disable_leak_check()
+            with self.assertRaises(TypingError) as raises:
+                cfunc(1, 2)
+            self.assertIn('The argument "ary" must be an array',
+                          str(raises.exception))
+            with self.assertRaises(TypingError) as raises:
+                cfunc("abc", 2)
+            self.assertIn('The argument "ary" must be an array',
+                          str(raises.exception))
+            with self.assertRaises(TypingError) as raises:
+                cfunc(np.array([[1, 2, 3, 4], [1, 2, 3, 4]]), "abc")
+            self.assertIn(('The argument "indices_or_sections" must be int or '
+                           '1d-array'),
+                          str(raises.exception))
+            with self.assertRaises(ValueError) as raises:
+                cfunc(np.array(1), 2)
+            self.assertIn(name + ' only works on arrays of ' + str(mindim) +
+                          ' or more dimensions',
+                          str(raises.exception))
 
     def test_roll_basic(self):
         pyfunc = roll
