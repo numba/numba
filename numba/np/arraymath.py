@@ -489,6 +489,7 @@ def return_false(a):
 
 
 @overload(np.min)
+@overload(np.amin)
 @overload_method(types.Array, "min")
 def npy_min(a):
     if not isinstance(a, types.Array):
@@ -538,6 +539,7 @@ def npy_min(a):
 
 
 @overload(np.max)
+@overload(np.amax)
 @overload_method(types.Array, "max")
 def npy_max(a):
     if not isinstance(a, types.Array):
@@ -3138,6 +3140,7 @@ def round_ndigits(x, ndigits):
 
 @overload(np.around)
 @overload(np.round)
+@overload(np.round_)
 def impl_np_round(a, decimals=0, out=None):
     if not type_can_asarray(a):
         raise TypingError('The argument "a" must be array-like')
