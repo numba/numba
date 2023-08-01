@@ -747,55 +747,56 @@ class RVSDG2IR(RegionVisitor[_Data]):
         )
         self.branch_predicate = self.store(res, "$for_iter")
 
-    def op_JUMP_IF_FALSE_OR_POP(self, op: Op, bc: dis.Instruction):
-        [_env, pred] = op.inputs
-        [_env] = op.outputs
+    def _jump_if_not(self, pred):
+        """Emit code for jump if predicate is false."""
         not_fn = ir.Const(operator.not_, loc=self.loc)
         res = ir.Expr.call(
             self.store(not_fn, "$not"), (self.vsmap[pred],), (), loc=self.loc
         )
         self.branch_predicate = self.store(res, "$jump_if")
+
+    def _jump_if(self, pred):
+        """Emit code for jump if predicate is true."""
+        self.branch_predicate = self.store(self.vsmap[pred], "$jump_if")
+
+    def op_JUMP_IF_FALSE_OR_POP(self, op: Op, bc: dis.Instruction):
+        [_env, pred] = op.inputs
+        [_env] = op.outputs
+        self._jump_if_not(pred)
 
     def op_JUMP_IF_TRUE_OR_POP(self, op: Op, bc: dis.Instruction):
         [_env, pred] = op.inputs
         [_env] = op.outputs
-        self.branch_predicate = self.store(self.vsmap[pred], "$jump_if")
+        self._jump_if(pred)
 
     def op_POP_JUMP_FORWARD_IF_FALSE(self, op: Op, bc: dis.Instruction):
         [_env, pred] = op.inputs
         [_env] = op.outputs
-        not_fn = ir.Const(operator.not_, loc=self.loc)
-        res = ir.Expr.call(
-            self.store(not_fn, "$not"), (self.vsmap[pred],), (), loc=self.loc
-        )
-        self.branch_predicate = self.store(res, "$jump_if")
+        self._jump_if_not(pred)
 
     def op_POP_JUMP_FORWARD_IF_TRUE(self, op: Op, bc: dis.Instruction):
         [_env, pred] = op.inputs
         [_env] = op.outputs
-        self.branch_predicate = self.store(self.vsmap[pred], "$jump_if")
+        self._jump_if(pred)
 
-    def op_POP_JUMP_FORWARD_IF_NONE(self, op: Op, bc: dis.Instruction):
-        [_env, pred] = op.inputs
-        [_env] = op.outputs
-        op = BINOPS_TO_OPERATORS["is"]  # type: ignore
+    def _test_none_and_jump(self, pred, bc: dis.Instruction, invert: bool):
+        test = "is not" if invert else "is"
+        op = BINOPS_TO_OPERATORS[test]  # type: ignore
         none = self.store(
             value=ir.Const(None, loc=self.loc), name=f"$constNone{bc.offset}"
         )
         isnone = ir.Expr.binop(op, lhs=self.vsmap[pred], rhs=none, loc=self.loc)
         self.branch_predicate = self.store(isnone, "$jump_if")
 
+    def op_POP_JUMP_FORWARD_IF_NONE(self, op: Op, bc: dis.Instruction):
+        [_env, pred] = op.inputs
+        [_env] = op.outputs
+        self._test_none_and_jump(pred, bc, invert=False)
+
     def op_POP_JUMP_FORWARD_IF_NOT_NONE(self, op: Op, bc: dis.Instruction):
         [_env, pred] = op.inputs
         [_env] = op.outputs
-        op = BINOPS_TO_OPERATORS["is not"]  # type: ignore
-        none = self.store(
-            value=ir.Const(None, loc=self.loc), name=f"$constNone{bc.offset}"
-        )
-        isnotnone = ir.Expr.binop(
-            op, lhs=self.vsmap[pred], rhs=none, loc=self.loc
-        )
-        self.branch_predicate = self.store(isnotnone, "$jump_if")
+        self._test_none_and_jump(pred, bc, invert=True)
 
     op_POP_JUMP_BACKWARD_IF_TRUE = op_POP_JUMP_FORWARD_IF_TRUE
 
