@@ -656,9 +656,8 @@ class RVSDG2IR(RegionVisitor[_Data]):
         [_env, out] = op.outputs
 
         if "=" in operator:
-            operator = operator[:-1]
-            immuop = BINOPS_TO_OPERATORS[operator]
-            op = INPLACE_BINOPS_TO_OPERATORS[operator + "="]
+            immuop = BINOPS_TO_OPERATORS[operator[:-1]]
+            op = INPLACE_BINOPS_TO_OPERATORS[operator]
             expr = ir.Expr.inplace_binop(
                 op,
                 immuop,
