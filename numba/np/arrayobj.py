@@ -4562,6 +4562,31 @@ def impl_np_diag(v, k=0):
         return diag_impl
 
 
+@overload(np.diagflat)
+def numpy_diagflat(v, k=0):
+    if not isinstance(v, types.Array):
+        msg = 'The argument "v" must be an array'
+        raise errors.TypingError(msg)
+
+    if not isinstance(k, (int, types.Integer)):
+        msg = 'The argument "k" must be an integer'
+        raise errors.TypingError(msg)
+
+    def impl(v, k=0):
+        s = len(v)
+        abs_k = abs(k)
+        v = v.ravel()
+        n = s + abs_k
+        res = np.zeros((n, n), v.dtype)
+        i = np.max(np.array([0, -k]))
+        j = np.max(np.array([0, k]))
+        for t in range(s):
+            res[i + t, j + t] = v[t]
+        return res
+
+    return impl
+
+
 @overload(np.take)
 @overload_method(types.Array, 'take')
 def numpy_take(a, indices):
