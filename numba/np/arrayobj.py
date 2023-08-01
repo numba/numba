@@ -4564,8 +4564,8 @@ def impl_np_diag(v, k=0):
 
 @overload(np.diagflat)
 def numpy_diagflat(v, k=0):
-    if not isinstance(v, types.Array):
-        msg = 'The argument "v" must be an array'
+    if not type_can_asarray(v):
+        msg = 'The argument "v" must be array-like'
         raise errors.TypingError(msg)
 
     if not isinstance(k, (int, types.Integer)):
@@ -4573,9 +4573,10 @@ def numpy_diagflat(v, k=0):
         raise errors.TypingError(msg)
 
     def impl(v, k=0):
+        v = np.asarray(v)
+        v = v.ravel()
         s = len(v)
         abs_k = abs(k)
-        v = v.ravel()
         n = s + abs_k
         res = np.zeros((n, n), v.dtype)
         i = np.max(np.array([0, -k]))
