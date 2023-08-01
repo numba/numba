@@ -12,7 +12,7 @@ part of your code can subsequently run at native machine code speed!
 
 Out of the box Numba works with the following:
 
-* OS: Windows (32 and 64 bit), OSX, Linux (64 bit). Unofficial support on
+* OS: Windows (64 bit), OSX, Linux (64 bit). Unofficial support on
   \*BSD.
 * Architecture: x86, x86_64, ppc64le, armv8l (aarch64), M1/Arm64.
 * GPUs: Nvidia CUDA.
