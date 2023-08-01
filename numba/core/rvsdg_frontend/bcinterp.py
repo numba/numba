@@ -9,7 +9,7 @@ import dis
 from contextlib import contextmanager
 import builtins
 import operator
-from typing import Iterator, Union
+from typing import Iterator
 from functools import reduce
 
 from numba.core import (
@@ -124,7 +124,8 @@ class RVSDG2IR(RegionVisitor[_Data]):
 
     def initialize(self) -> _Data:
         label = self._get_temp_label()
-        with self.set_block(label, ir.Block(scope=self.local_scope, loc=self.loc)):
+        with self.set_block(label, ir.Block(scope=self.local_scope,
+                                            loc=self.loc)):
             data: _Data = {}
             for i, k in enumerate(self.func_id.arg_names):  # type: ignore
                 val = ir.Arg(index=i, name=k, loc=self.loc)
