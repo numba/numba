@@ -5566,7 +5566,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.array([[1,2],[3,4]]), -2
             yield np.arange(8).reshape((2,2,2)), 2
             yield [1, 2], 1
-            yield []
 
         for v, k in inputs():
             self.assertPreciseEqual(pyfunc1(v), cfunc1(v))
