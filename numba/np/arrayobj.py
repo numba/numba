@@ -1655,14 +1655,23 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
                                       builder.icmp_signed('!=', u, v))
 
         with builder.if_then(shape_error, likely=False):
-            msg = ("cannot assign slice of shape", *(src_shapes),
-                   "from input of shape", *(index_shape))
-            
-            nb_types = (None, *(types.int32 for _ in src_shapes), None,
-                        *(types.int32 for _  in index_shape))
-            
-            context.call_conv.return_dynamic_user_exc(builder, ValueError, msg,
-                                                       nb_types)
+            def raise_impl(src_shapes, index_shape):
+                return ("cannot assign slice of shape " +
+                        f"({', '.join([str(x) for x in src_shapes])}) from " +
+                        "input of shape " +
+                        f"({', '.join([str(x) for x in index_shape])})")
+
+            sig = types.unicode_type(
+                types.UniTuple(types.int64, len(src_shapes)),
+                types.UniTuple(types.int64, len(index_shape)))
+            tup = (context.make_tuple(builder, sig.args[0], src_shapes),
+                   context.make_tuple(builder, sig.args[1], index_shape))
+
+            res = context.compile_internal(builder, raise_impl, sig, tup)
+            msg = impl_ret_new_ref(context, builder, sig, res)
+            context.call_conv.return_dynamic_user_exc(builder, ValueError,
+                                                      (msg,),
+                                                      (types.unicode_type,))
 
         # Check for array overlap
         src_start, src_end = get_array_memory_extents(context, builder, srcty,
@@ -1694,10 +1703,17 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         shape_error = builder.icmp_signed('!=', index_shape[0], seq_len)
 
         with builder.if_then(shape_error, likely=False):
-            msg = ("cannot assign slice of shape", seq_len,
-                   "from input of shape", index_shape[0])
-            nb_types = (None, types.int32, None, types.int32)
-            context.call_conv.return_dyncamic_user_exc(builder, ValueError, msg, nb_types)
+            def raise_impl(seq_len, input_shape):
+                return (f"cannot assign slice of shape ({seq_len}, )" +
+                        f"from input of shape ({input_shape}, )")
+
+            tup = (seq_len, index_shape[0])
+            sig = types.unicode_type(types.int64, types.int64)
+            res = context.compile_internal(builder, raise_impl, sig, tup)
+            msg = impl_ret_new_ref(context, builder, sig, res)
+            context.call_conv.return_dynamic_user_exc(builder, ValueError,
+                                                      (msg,),
+                                                      (types.unicode_type))
 
         def src_getitem(source_indices):
             idx, = source_indices
