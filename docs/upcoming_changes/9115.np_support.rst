@@ -1,0 +1,4 @@
+
+Add np.diag_indices() and np.diag_indices_from()
+================================================
+Support for np.diag_indices() and np.diag_indices_from() is added.

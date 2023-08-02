@@ -467,6 +467,8 @@ The following top-level functions are supported:
 
 * :func:`numpy.delete` (only the 2 first arguments)
 * :func:`numpy.diag`
+* :func:`numpy.diag_indices` (returns a NumPy array instead of a tuple)
+* :func:`numpy.diag_indices_from` (returns a NumPy array instead of a tuple)
 * :func:`numpy.digitize`
 * :func:`numpy.dstack`
 * :func:`numpy.dtype` (only the first argument)
