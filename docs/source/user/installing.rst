@@ -12,7 +12,7 @@ Our supported platforms are:
 
 * Linux x86_64
 * Linux ppcle64 (POWER8, POWER9)
-* Windows 7 and later (32-bit and 64-bit)
+* Windows 10 and later (64-bit)
 * OS X 10.9 and later (64-bit and unofficial support on M1/Arm64)
 * \*BSD (unofficial support only)
 * NVIDIA GPUs of compute capability 5.0 and later

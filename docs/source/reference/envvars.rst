@@ -316,7 +316,7 @@ Compilation options
 
    If set to non-zero, enable LLVM loop vectorization.
 
-   *Default value:* 1 (except on 32-bit Windows)
+   *Default value:* 1
 
 .. envvar:: NUMBA_SLP_VECTORIZE
 
