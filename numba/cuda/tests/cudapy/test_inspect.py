@@ -2,7 +2,6 @@ import numpy as np
 
 from io import StringIO
 from numba import cuda, float32, float64, int32, intp
-from numba.cuda.cudadrv.nvvm import NVVM
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.cuda.testing import (skip_on_cudasim, skip_with_nvdisasm,
                                 skip_without_nvdisasm)
@@ -92,8 +91,6 @@ class TestInspect(CUDATestCase):
         self.assertIn("foo", asmdict[float64, float64])
 
     def _test_inspect_sass(self, kernel, name, sass):
-        if not NVVM().is_nvvm70:
-            self.skipTest("lineinfo not generated for NVVM 3.4")
         # Ensure function appears in output
         seen_function = False
         for line in sass.split():
@@ -146,7 +143,22 @@ class TestInspect(CUDATestCase):
         with self.assertRaises(RuntimeError) as raises:
             f.inspect_sass()
 
-        self.assertIn('nvdisasm is required', str(raises.exception))
+        self.assertIn('nvdisasm has not been found', str(raises.exception))
+
+    @skip_without_nvdisasm('nvdisasm needed for inspect_sass_cfg()')
+    def test_inspect_sass_cfg(self):
+        sig = (float32[::1], int32[::1])
+
+        @cuda.jit(sig)
+        def add(x, y):
+            i = cuda.grid(1)
+            if i < len(x):
+                x[i] += y[i]
+
+        self.assertRegex(
+            add.inspect_sass_cfg(signature=sig),
+            r'digraph\s*\w\s*{(.|\n)*\n}'
+        )
 
 
 if __name__ == '__main__':

@@ -489,6 +489,7 @@ def return_false(a):
 
 
 @overload(np.min)
+@overload(np.amin)
 @overload_method(types.Array, "min")
 def npy_min(a):
     if not isinstance(a, types.Array):
@@ -538,6 +539,7 @@ def npy_min(a):
 
 
 @overload(np.max)
+@overload(np.amax)
 @overload_method(types.Array, "max")
 def npy_max(a):
     if not isinstance(a, types.Array):
@@ -3138,6 +3140,7 @@ def round_ndigits(x, ndigits):
 
 @overload(np.around)
 @overload(np.round)
+@overload(np.round_)
 def impl_np_round(a, decimals=0, out=None):
     if not type_can_asarray(a):
         raise TypingError('The argument "a" must be array-like')
@@ -4019,7 +4022,6 @@ def _gen_np_machar():
     if numpy_version >= (1, 24):
         return
 
-    np122plus = numpy_version >= (1, 22)
     w = None
     with warnings.catch_warnings(record=True) as w:
         msg = r'`np.MachAr` is deprecated \(NumPy 1.22\)'
@@ -4033,7 +4035,7 @@ def _gen_np_machar():
         f = np_MachAr()
         _mach_ar_data = tuple([getattr(f, x) for x in _mach_ar_supported])
 
-        if np122plus and w:
+        if w:
             wmsg = w[0]
             warnings.warn_explicit(wmsg.message.args[0],
                                    NumbaDeprecationWarning,

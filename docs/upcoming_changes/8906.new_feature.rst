@@ -1,0 +1,17 @@
+``numba.experimental.jitclass`` gains support for reflected "dunder" methods.
+=============================================================================
+
+``numba.experimental.jitclass`` now has support for the following methods:
+
+* ``__radd__``
+* ``__rand_``
+* ``__rfloordiv__``
+* ``__rlshift__``
+* ``__ror_``
+* ``__rmod_``
+* ``__rmul_``
+* ``__rpow_``
+* ``__rrshift_``
+* ``__rsub_``
+* ``__rtruediv_``
+* ``__rxor_``

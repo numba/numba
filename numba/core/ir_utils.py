@@ -4,6 +4,7 @@
 #
 
 import numpy
+import math
 
 import types as pytypes
 import collections
@@ -743,7 +744,11 @@ def has_no_side_effect(rhs, lives, call_table):
             call_list == [array_analysis.wrap_index] or
             call_list == [prange] or
             call_list == ['prange', numba] or
-            call_list == [parfor.internal_prange]):
+            call_list == ['pndindex', numba] or
+            call_list == [parfor.internal_prange] or
+            call_list == ['ceil', math] or
+            call_list == [max] or
+            call_list == [int]):
             return True
         elif (isinstance(call_list[0], _Intrinsic) and
               (call_list[0]._name == 'empty_inferred' or
@@ -783,7 +788,10 @@ def is_pure(rhs, lives, call_table):
             call_list = call_table[func_name]
             if (call_list == [slice] or
                 call_list == ['log', numpy] or
-                call_list == ['empty', numpy]):
+                call_list == ['empty', numpy] or
+                call_list == ['ceil', math] or
+                call_list == [max] or
+                call_list == [int]):
                 return True
             for f in is_pure_extensions:
                 if f(rhs, lives, call_list):
@@ -1857,11 +1865,14 @@ def gen_np_call(func_as_str, func, lhs, args, typingctx, typemap, calltypes):
     np_assign = ir.Assign(np_call, lhs, loc)
     return [g_np_assign, attr_assign, np_assign]
 
+def dump_block(label, block):
+    print(label, ":")
+    for stmt in block.body:
+        print("    ", stmt)
+
 def dump_blocks(blocks):
     for label, block in blocks.items():
-        print(label, ":")
-        for stmt in block.body:
-            print("    ", stmt)
+        dump_block(label, block)
 
 def is_operator_or_getitem(expr):
     """true if expr is unary or binary operator or getitem"""
