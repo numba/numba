@@ -4523,6 +4523,45 @@ def numpy_eye(N, M=None, k=0, dtype=float):
     return impl
 
 
+@overload(np.diag_indices)
+def np_diag_indices(n, ndim=2):
+    if not isinstance(n, types.Integer):
+        msg = 'The argument "n" must be an integer'
+        raise errors.TypingError(msg)
+
+    if not isinstance(ndim, (int, types.Integer)):
+        msg = 'The argument "ndim" must be an integer'
+        raise errors.TypingError(msg)
+
+    def impl(n, ndim=2):
+        res = np.arange(n * ndim)
+        for i in range(n * ndim):
+            res[i] = res[i] % n
+        return res.reshape((ndim, n))
+
+    return impl
+
+
+@overload(np.diag_indices_from)
+def np_diag_indices_from(arr):
+    if not type_can_asarray(arr):
+        msg = 'The argument "arr" must be array-like'
+        raise errors.TypingError(msg)
+
+    def impl(arr):
+        if not arr.ndim >= 2:
+            raise ValueError("input array must be at least 2-d")
+        # For more than d=2, the strided formula is only valid for arrays with
+        # all dimensions equal, so we check first.
+        s = np.asarray(arr.shape)
+        if not np.all(np.diff(s) == 0):
+            raise ValueError("All dimensions of input must be of equal length")
+
+        return np.diag_indices(arr.shape[0], arr.ndim)
+
+    return impl
+
+
 @overload(np.diag)
 def impl_np_diag(v, k=0):
     if not type_can_asarray(v):

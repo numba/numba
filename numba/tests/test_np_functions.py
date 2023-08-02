@@ -432,6 +432,18 @@ def nan_to_num(X, copy=True, nan=0.0):
     return np.nan_to_num(X, copy=copy, nan=nan)
 
 
+def diag_indices1(n):
+    return np.diag_indices(n)
+
+
+def diag_indices2(n, ndim):
+    return np.diag_indices(n, ndim)
+
+
+def diag_indices_from(arr):
+    return np.diag_indices_from(arr)
+
+
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
     Tests for various Numpy functions.
@@ -5545,6 +5557,84 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertTypingError() as raises:
             cfunc("invalid_input")
         self.assertIn("The first argument must be a scalar or an array-like",
+                      str(raises.exception))
+
+    def test_diag_indices_basic(self):
+        pyfunc1 = diag_indices1
+        cfunc1 = njit(pyfunc1)
+        pyfunc2 = diag_indices2
+        cfunc2 = njit(pyfunc2)
+
+        def inputs():
+            yield 4, 2
+            yield 2, 3
+
+        for n, ndim in inputs():
+            self.assertPreciseEqual(np.asarray(pyfunc1(n)), cfunc1(n))
+            self.assertPreciseEqual(np.asarray(pyfunc2(n, ndim)),
+                                    cfunc2(n, ndim))
+
+    def test_diag_indices1_exception(self):
+        pyfunc = diag_indices1
+        cfunc = njit(pyfunc)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc")
+        self.assertIn('The argument "n" must be an integer',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(3.0)
+        self.assertIn('The argument "n" must be an integer',
+                      str(raises.exception))
+
+    def test_diag_indices2_exception(self):
+        pyfunc = diag_indices2
+        cfunc = njit(pyfunc)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc", 2)
+        self.assertIn('The argument "n" must be an integer',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(4, "abc")
+        self.assertIn('The argument "ndim" must be an integer',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(4, 3.0)
+        self.assertIn('The argument "ndim" must be an integer',
+                      str(raises.exception))
+
+    def test_diag_indices_from_basic(self):
+        pyfunc = diag_indices_from
+        cfunc = njit(pyfunc)
+
+        def inputs():
+            yield np.arange(16).reshape((4, 4))
+
+        for arr in inputs():
+            self.assertPreciseEqual(np.asarray(pyfunc(arr)), cfunc(arr))
+
+    def test_diag_indices_from_exception(self):
+        pyfunc = diag_indices_from
+        cfunc = njit(pyfunc)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc")
+        self.assertIn('The argument "arr" must be array-like',
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.ones(7))
+        self.assertIn('input array must be at least 2-d',
                       str(raises.exception))
 
 
