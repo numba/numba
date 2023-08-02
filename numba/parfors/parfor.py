@@ -369,16 +369,25 @@ def std_parallel_impl(return_type, arg):
         return in_arr.var() ** 0.5
     return std_1
 
-def arange_parallel_impl(return_type, *args):
-    dtype = as_dtype(return_type.dtype)
+def arange_parallel_impl(return_type, *args, dtype=None):
+    inferred_dtype = as_dtype(return_type.dtype)
 
     def arange_1(stop):
+        return np.arange(0, stop, 1, inferred_dtype)
+
+    def arange_1_dtype(stop, dtype):
         return np.arange(0, stop, 1, dtype)
 
     def arange_2(start, stop):
+        return np.arange(start, stop, 1, inferred_dtype)
+
+    def arange_2_dtype(start, stop, dtype):
         return np.arange(start, stop, 1, dtype)
 
     def arange_3(start, stop, step):
+        return np.arange(start, stop, step, inferred_dtype)
+
+    def arange_3_dtype(start, stop, step, dtype):
         return np.arange(start, stop, step, dtype)
 
     if any(isinstance(a, types.Complex) for a in args):
@@ -404,11 +413,11 @@ def arange_parallel_impl(return_type, *args):
             return arr
 
     if len(args) == 1:
-        return arange_1
+        return arange_1 if dtype is None else arange_1_dtype
     elif len(args) == 2:
-        return arange_2
+        return arange_2  if dtype is None else arange_2_dtype
     elif len(args) == 3:
-        return arange_3
+        return arange_3  if dtype is None else arange_3_dtype
     elif len(args) == 4:
         return arange_4
     else:
@@ -1486,11 +1495,15 @@ class PreParforPass(object):
 
                             require(repl_func is not None)
                             typs = tuple(self.typemap[x.name] for x in expr.args)
+                            kws_typs = {k: self.typemap[x.name] for k, x in expr.kws}
                             try:
-                                new_func =  repl_func(lhs_typ, *typs)
+                                new_func =  repl_func(lhs_typ, *typs, **kws_typs)
                             except:
                                 new_func = None
                             require(new_func is not None)
+                            # bind arguments to the new_func
+                            typs = utils.pysignature(new_func).bind(*typs, **kws_typs).args
+
                             g = copy.copy(self.func_ir.func_id.func.__globals__)
                             g['numba'] = numba
                             g['np'] = numpy
