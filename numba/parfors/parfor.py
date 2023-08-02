@@ -598,6 +598,9 @@ class Parfor(ir.Expr, ir.Stmt):
         return "id=" + str(self.id) + repr(self.loop_nests) + \
             repr(self.loop_body) + repr(self.index_var)
 
+    def get_loop_nest_vars(self):
+        return [x.index_variable for x in self.loop_nests]
+
     def list_vars(self):
         """list variables used (read/written) in this parfor by
         traversing the body and combining block uses.
@@ -3563,6 +3566,74 @@ def _find_parfors(body):
             yield i, inst
 
 
+def _is_indirect_index(func_ir, index, nest_indices):
+    index_def = guard(get_definition, func_ir, index.name)
+    if isinstance(index_def, ir.Expr) and index_def.op == 'build_tuple':
+        if [x.name for x in index_def.items] == [x.name for x in nest_indices]:
+            return True
+
+    return False
+
+
+def get_array_indexed_with_parfor_index_internal(loop_body,
+                                                 index,
+                                                 ret_indexed,
+                                                 ret_not_indexed,
+                                                 nest_indices,
+                                                 func_ir):
+    for blk in loop_body:
+        for stmt in blk.body:
+            if isinstance(stmt, (ir.StaticSetItem, ir.SetItem)):
+                setarray_index = get_index_var(stmt)
+                if (isinstance(setarray_index, ir.Var) and
+                    (setarray_index.name == index or
+                     _is_indirect_index(
+                         func_ir,
+                         setarray_index,
+                         nest_indices))):
+                    ret_indexed.add(stmt.target.name)
+                else:
+                    ret_not_indexed.add(stmt.target.name)
+            elif (isinstance(stmt, ir.Assign) and
+                  isinstance(stmt.value, ir.Expr) and
+                  stmt.value.op in ['getitem', 'static_getitem']):
+                getarray_index = stmt.value.index
+                getarray_name = stmt.value.value.name
+                if (isinstance(getarray_index, ir.Var) and
+                    (getarray_index.name == index or
+                     _is_indirect_index(
+                         func_ir,
+                         getarray_index,
+                         nest_indices))):
+                    ret_indexed.add(getarray_name)
+                else:
+                    ret_not_indexed.add(getarray_name)
+            elif isinstance(stmt, Parfor):
+                get_array_indexed_with_parfor_index_internal(
+                    stmt.loop_body.values(),
+                    index,
+                    ret_indexed,
+                    ret_not_indexed,
+                    nest_indices,
+                    func_ir)
+
+
+def get_array_indexed_with_parfor_index(loop_body,
+                                        index,
+                                        nest_indices,
+                                        func_ir):
+    ret_indexed = set()
+    ret_not_indexed = set()
+    get_array_indexed_with_parfor_index_internal(
+        loop_body,
+        index,
+        ret_indexed,
+        ret_not_indexed,
+        nest_indices,
+        func_ir)
+    return ret_indexed, ret_not_indexed
+
+
 def get_parfor_outputs(parfor, parfor_params):
     """get arrays that are written to inside the parfor and need to be passed
     as parameters to gufunc.
@@ -4136,6 +4207,7 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata, func_ir, typemap):
     p1_body_defs = set()
     for defs in p1_body_usedefs.defmap.values():
         p1_body_defs |= defs
+    p1_body_defs |= get_parfor_writes(parfor1)
     # Add reduction variables from parfor1 to the set of body defs
     # so that if parfor2 reads the reduction variable it won't fuse.
     p1_body_defs |= set(parfor1.redvars)
@@ -4145,13 +4217,25 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata, func_ir, typemap):
     for uses in p2_usedefs.usemap.values():
         p2_uses |= uses
 
-    if not p1_body_defs.isdisjoint(p2_uses):
-        dprint("try_fuse: parfor2 depends on parfor1 body")
-        msg = ("- fusion failed: parallel loop %s has a dependency on the "
-                "body of parallel loop %s. ")
-        report = FusionReport(parfor1.id, parfor2.id,
-                                msg % (parfor1.id, parfor2.id))
-        return None, report
+    overlap = p1_body_defs.intersection(p2_uses)
+    # overlap are those variable defined in first parfor and used in the second
+    if len(overlap) != 0:
+        # Get all the arrays
+        _, p2arraynotindexed = get_array_indexed_with_parfor_index(
+            parfor2.loop_body.values(),
+            parfor2.index_var.name,
+            parfor2.get_loop_nest_vars(),
+            func_ir)
+
+        unsafe_var = (not isinstance(typemap[x], types.ArrayCompatible) or x in p2arraynotindexed for x in overlap)
+
+        if any(unsafe_var):
+            dprint("try_fuse: parfor2 depends on parfor1 body")
+            msg = ("- fusion failed: parallel loop %s has a dependency on the "
+                    "body of parallel loop %s. ")
+            report = FusionReport(parfor1.id, parfor2.id,
+                                    msg % (parfor1.id, parfor2.id))
+            return None, report
 
     return fuse_parfors_inner(parfor1, parfor2)
 
