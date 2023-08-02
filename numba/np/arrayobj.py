@@ -4544,13 +4544,13 @@ def np_diag_indices(n, ndim=2):
 
 @overload(np.diag_indices_from)
 def np_diag_indices_from(arr):
-    if not type_can_asarray(arr):
-        msg = 'The argument "arr" must be array-like'
+    if not isinstance(arr, types.Array):
+        msg = 'The argument "arr" must be an array'
         raise errors.TypingError(msg)
 
     def impl(arr):
         if not arr.ndim >= 2:
-            raise ValueError("input array must be at least 2-d")
+            raise ValueError("Input array must be at least 2-d")
         # For more than d=2, the strided formula is only valid for arrays with
         # all dimensions equal, so we check first.
         s = np.asarray(arr.shape)

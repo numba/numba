@@ -5566,6 +5566,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc2 = njit(pyfunc2)
 
         def inputs():
+            # Based on https://github.com/numpy/numpy/blob/...
+            # 09ee7daa9113ecb503552913d76185d0ad3f0f31/numpy/lib/tests/...
+            # test_index_tricks.py#L483-L508
             yield 4, 2
             yield 2, 3
 
@@ -5616,6 +5619,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = njit(pyfunc)
 
         def inputs():
+            # Taken from https://github.com/numpy/numpy/blob/...
+            # 09ee7daa9113ecb503552913d76185d0ad3f0f31/numpy/lib/tests/...
+            # test_index_tricks.py#L513-L517
             yield np.arange(16).reshape((4, 4))
 
         for arr in inputs():
@@ -5629,12 +5635,25 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             cfunc("abc")
-        self.assertIn('The argument "arr" must be array-like',
+        self.assertIn('The argument "arr" must be an array',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc")
+        self.assertIn('The argument "arr" must be an array',
+                      str(raises.exception))
+
+        # Based on tests from https://github.com/numpy/numpy/blob/...
+        # 09ee7daa9113ecb503552913d76185d0ad3f0f31/numpy/lib/tests/...
+        # test_index_tricks.py#L519-L527
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.ones(7))
+        self.assertIn('Input array must be at least 2-d',
                       str(raises.exception))
 
         with self.assertRaises(ValueError) as raises:
-            cfunc(np.ones(7))
-        self.assertIn('input array must be at least 2-d',
+            cfunc(np.zeros((3, 3, 2, 3)))
+        self.assertIn('All dimensions of input must be of equal length',
                       str(raises.exception))
 
 
