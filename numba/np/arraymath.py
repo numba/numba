@@ -4727,7 +4727,7 @@ def cross2d_impl(a, b):
 @overload(np.trim_zeros)
 def np_trim_zeros(a, trim='fb'):
     if not isinstance(a, types.Array):
-        raise NumbaTypeError('The first argument must be a NumPy array')
+        raise NumbaTypeError('The first argument must be an array-like')
 
     if hasattr(a, 'ndim') and a.ndim > 1:
         raise NumbaTypeError('array must be 1D')
