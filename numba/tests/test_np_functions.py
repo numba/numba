@@ -5002,7 +5002,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc(arr, trim)
             self.assertPreciseEqual(expected, got)
 
-    def test_trim_zeros_NumPy(self):
+    def test_trim_zeros_numpy(self):
         # https://github.com/numpy/numpy/blob/9d8d46ad615a7e13256b930146ac369f651016c0/numpy/lib/tests/test_function_base.py#L1251-L1313
         a = np.array([0, 0, 1, 0, 2, 3, 4, 0])
         b = a.astype(float)
