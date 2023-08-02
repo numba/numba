@@ -1,0 +1,6 @@
+Add debuginfo support to nvdisasm output.
+=========================================
+
+Support is added for debuginfo (source line and inlining information) in
+functions that make calls through ``nvdisasm``. For example the CUDA dispatcher
+``.inspect_sass`` method output is now augmented with this information.
