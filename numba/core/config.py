@@ -80,6 +80,49 @@ def _validate_captured_errors_style(style_str):
         return rendered_style
 
 
+class _OptLevel(int):
+    """This class holds the "optimisation level" set in `NUMBA_OPT`. As this env
+    var can be an int or a string, but is almost always interpreted as an int,
+    this class subclasses int so as to get the common behaviour but stores the
+    actual value as a `_raw_value` member. The value "max" is a special case
+    and the property `is_opt_max` can be queried to find if the optimisation
+    level (supplied value at construction time) is "max"."""
+
+    def __new__(cls, *args, **kwargs):
+        assert len(args) == 1
+        (value,) = args
+        _int_value = 3 if value == 'max' else int(value)
+        # the int ctor is always called with an appropriate integer value
+        new = super().__new__(cls, _int_value, **kwargs)
+        # raw value is max or int
+        new._raw_value = value if value == 'max' else _int_value
+        return new
+
+    @property
+    def is_opt_max(self):
+        """Returns True if the the optimisation level is "max" False
+        otherwise."""
+        return self._raw_value == "max"
+
+    def __repr__(self):
+        if isinstance(self._raw_value, str):
+            arg = f"'{self._raw_value}'"
+        else:
+            arg = self._raw_value
+        return f"_OptLevel({arg})"
+
+
+def _process_opt_level(opt_level):
+
+    if opt_level not in ('0', '1', '2', '3', 'max'):
+        msg = ("Environment variable `NUMBA_OPT` is set to an unsupported "
+               f"value '{opt_level}', supported values are 0, 1, 2, 3, and "
+               "'max'")
+        raise ValueError(msg)
+    else:
+        return _OptLevel(opt_level)
+
+
 class _EnvReloader(object):
 
     def __init__(self):
@@ -150,9 +193,11 @@ class _EnvReloader(object):
                 return default() if callable(default) else default
             try:
                 return ctor(value)
-            except Exception:
-                warnings.warn("environ %s defined but failed to parse '%s'" %
-                              (name, value), RuntimeWarning)
+            except Exception as e:
+                warnings.warn(f"Environment variable '{name}' is defined but "
+                              f"its associated value '{value}' could not be "
+                              f"parsed.\nThe parse failed with exception: {e}.",
+                              RuntimeWarning)
                 return default
 
         def optional_str(x):
@@ -259,7 +304,7 @@ class _EnvReloader(object):
                                 ("" if str(CPU_NAME).lower() == 'generic'
                                  else None))
         # Optimization level
-        OPT = _readenv("NUMBA_OPT", int, 3)
+        OPT = _readenv("NUMBA_OPT", _process_opt_level, _OptLevel(3))
 
         # Force dump of Python bytecode
         DUMP_BYTECODE = _readenv("NUMBA_DUMP_BYTECODE", int, DEBUG_FRONTEND)
