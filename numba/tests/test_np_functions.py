@@ -5621,8 +5621,7 @@ def foo():
             cfunc = jit(nopython=True)(iinfo)
             cfunc(np.float64(7))
 
-    @unittest.skipUnless((1, 22) <= numpy_version < (1, 24),
-                         "Needs NumPy >= 1.22, < 1.24")
+    @unittest.skipUnless(numpy_version < (1, 24), "Needs NumPy < 1.24")
     @TestCase.run_test_in_subprocess
     def test_np_MachAr_deprecation_np122(self):
         # Tests that Numba is replaying the NumPy 1.22 deprecation warning
