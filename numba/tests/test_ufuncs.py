@@ -1339,15 +1339,6 @@ class TestUfuncIssues(TestCase):
         b = np.arange(10, dtype='f8')
         self.assertPreciseEqual(foo(a, b), (a + b) + (a + b))
 
-    @unittest.skipIf(numpy_support.numpy_version >= (1, 22),
-                     "Complex floor division support removed in NumPy 1.22")
-    def test_issue_713(self):
-        def foo(x,y):
-            return np.floor_divide(x,y)
-
-        cfunc = njit((types.complex128, types.complex128))(foo)
-        self.assertEqual(foo(1j, 1j), cfunc(1j, 1j))
-
     def test_issue_2006(self):
         """
         <float32 ** int> should return float32, not float64.

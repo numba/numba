@@ -4022,7 +4022,6 @@ def _gen_np_machar():
     if numpy_version >= (1, 24):
         return
 
-    np122plus = numpy_version >= (1, 22)
     w = None
     with warnings.catch_warnings(record=True) as w:
         msg = r'`np.MachAr` is deprecated \(NumPy 1.22\)'
@@ -4036,7 +4035,7 @@ def _gen_np_machar():
         f = np_MachAr()
         _mach_ar_data = tuple([getattr(f, x) for x in _mach_ar_supported])
 
-        if np122plus and w:
+        if w:
             wmsg = w[0]
             warnings.warn_explicit(wmsg.message.args[0],
                                    NumbaDeprecationWarning,
