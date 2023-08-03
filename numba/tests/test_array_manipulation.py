@@ -180,6 +180,9 @@ def numpy_flatnonzero(a):
 def numpy_argwhere(a):
     return np.argwhere(a)
 
+def numpy_resize(a, new_shape):
+    return np.resize(a, new_shape)
+
 
 class TestArrayManipulation(MemoryLeakMixin, TestCase):
     """
@@ -395,6 +398,56 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             jit(nopython=True)(numpy_transpose_array)((np.array([0, 1]),))
         self.assertIn("np.transpose does not accept tuples",
                         str(e.exception))
+
+    def test_numpy_resize_basic(self):
+        pyfunc = numpy_resize
+        cfunc = njit(pyfunc)
+        def inputs():
+            # Taken from https://github.com/numpy/numpy/blob/f0b2fca91a1f5f50ff696895072f6fe9e69c1466/numpy/core/tests/test_numeric.py#L24-L64
+            yield np.array([[1, 2], [3, 4]]), (2, 4)
+            yield np.array([[1, 2], [3, 4]]), (4, 2)
+            yield np.array([[1, 2], [3, 4]]), (4, 3)
+            yield np.array([[1, 2], [3, 4]]), (0,)
+            yield np.array([[1, 2], [3, 4]]), (0, 2)
+            yield np.array([[1, 2], [3, 4]]), (2, 0)
+            yield np.zeros(0, dtype = float), (2, 1)
+            # other
+            yield np.array([[1, 2], [3, 4]]), (4,)
+            yield np.array([[1, 2], [3, 4]]), 4
+            yield np.zeros((1, 3), dtype = int), (2, 1)
+            yield np.array([], dtype = float), (4, 2)
+            yield [0, 1, 2, 3], (2, 3)
+            yield 4, (2, 3)
+
+        for a, new_shape in inputs():
+            self.assertPreciseEqual(pyfunc(a, new_shape), cfunc(a, new_shape))
+
+    def test_numpy_resize_exception(self):
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        cfunc = njit(numpy_resize)
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc", (2, 3))
+        self.assertIn(('The argument "a" must be array-like'),
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.array([[0,1],[2,3]]), "abc")
+        self.assertIn(('The argument "new_shape" must be an integer or '
+                       'a tuple of integers'),
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.array([[0,1],[2,3]]), (-2, 3))
+        self.assertIn(('All elements of `new_shape` must be non-negative'),
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.array([[0,1],[2,3]]), -4)
+        self.assertIn(('All elements of `new_shape` must be non-negative'),
+                      str(raises.exception))
 
     def test_expand_dims(self):
         pyfunc = expand_dims
