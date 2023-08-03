@@ -515,6 +515,7 @@ The following top-level functions are supported:
 * :func:`numpy.ravel` (no order argument; 'C' order only)
 * :func:`numpy.repeat` (no axis argument)
 * :func:`numpy.reshape` (no order argument; 'C' order only)
+* :func:`numpy.resize`
 * :func:`numpy.roll` (only the 2 first arguments; second argument ``shift``
   must be an integer)
 * :func:`numpy.roots`
