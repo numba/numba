@@ -4579,8 +4579,8 @@ def numpy_diagflat(v, k=0):
         abs_k = abs(k)
         n = s + abs_k
         res = np.zeros((n, n), v.dtype)
-        i = np.max(np.array([0, -k]))
-        j = np.max(np.array([0, k]))
+        i = np.maximum(0, -k)
+        j = np.maximum(0, k)
         for t in range(s):
             res[i + t, j + t] = v[t]
         return res
