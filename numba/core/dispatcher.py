@@ -975,10 +975,18 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
     def get_compile_result(self, sig):
         """Compile (if needed) and return the compilation result with the
         given signature.
+
+        Returns ``CompileResult``.
+        Raises ``NumbaError`` if the signature is incompatible.
         """
         atypes = tuple(sig.args)
         if atypes not in self.overloads:
-            self.compile(atypes)
+            if self._can_compile:
+                # Compiling may raise any NumbaError
+                self.compile(atypes)
+            else:
+                msg = f"{sig} not available and compilation disabled"
+                raise errors.TypingError(msg)
         return self.overloads[atypes]
 
     def recompile(self):

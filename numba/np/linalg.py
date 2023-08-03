@@ -2225,7 +2225,7 @@ def _oneD_norm_2_impl(a):
     return impl
 
 
-def _get_norm_impl(a, ord_flag):
+def _get_norm_impl(x, ord_flag):
     # This function is quite involved as norm supports a large
     # range of values to select different norm types via kwarg `ord`.
     # The implementation below branches on dimension of the input
@@ -2240,25 +2240,25 @@ def _get_norm_impl(a, ord_flag):
     # The return type is always a float, numba differs from numpy in
     # that it returns an input precision specific value whereas numpy
     # always returns np.float64.
-    nb_ret_type = getattr(a.dtype, "underlying_float", a.dtype)
+    nb_ret_type = getattr(x.dtype, "underlying_float", x.dtype)
     np_ret_type = np_support.as_dtype(nb_ret_type)
 
-    np_dtype = np_support.as_dtype(a.dtype)
+    np_dtype = np_support.as_dtype(x.dtype)
 
-    xxnrm2 = _BLAS().numba_xxnrm2(a.dtype)
+    xxnrm2 = _BLAS().numba_xxnrm2(x.dtype)
 
-    kind = ord(get_blas_kind(a.dtype, "norm"))
+    kind = ord(get_blas_kind(x.dtype, "norm"))
 
-    if a.ndim == 1:
+    if x.ndim == 1:
         # 1D cases
 
         # handle "ord" being "None", must be done separately
         if ord_flag in (None, types.none):
-            def oneD_impl(a, ord=None):
-                return _oneD_norm_2(a)
+            def oneD_impl(x, ord=None):
+                return _oneD_norm_2(x)
         else:
-            def oneD_impl(a, ord=None):
-                n = len(a)
+            def oneD_impl(x, ord=None):
+                n = len(x)
 
                 # Shortcut to handle zero length arrays
                 # this differs slightly to numpy in that
@@ -2274,136 +2274,136 @@ def _get_norm_impl(a, ord_flag):
                 # we have to handle "None" specially this condition
                 # is separated
                 if ord == 2:
-                    return _oneD_norm_2(a)
+                    return _oneD_norm_2(x)
                 elif ord == np.inf:
-                    # max(abs(a))
-                    ret = abs(a[0])
+                    # max(abs(x))
+                    ret = abs(x[0])
                     for k in range(1, n):
-                        val = abs(a[k])
+                        val = abs(x[k])
                         if val > ret:
                             ret = val
                     return ret
 
                 elif ord == -np.inf:
-                    # min(abs(a))
-                    ret = abs(a[0])
+                    # min(abs(x))
+                    ret = abs(x[0])
                     for k in range(1, n):
-                        val = abs(a[k])
+                        val = abs(x[k])
                         if val < ret:
                             ret = val
                     return ret
 
                 elif ord == 0:
-                    # sum(a != 0)
+                    # sum(x != 0)
                     ret = 0.0
                     for k in range(n):
-                        if a[k] != 0.:
+                        if x[k] != 0.:
                             ret += 1.
                     return ret
 
                 elif ord == 1:
-                    # sum(abs(a))
+                    # sum(abs(x))
                     ret = 0.0
                     for k in range(n):
-                        ret += abs(a[k])
+                        ret += abs(x[k])
                     return ret
 
                 else:
-                    # sum(abs(a)**ord)**(1./ord)
+                    # sum(abs(x)**ord)**(1./ord)
                     ret = 0.0
                     for k in range(n):
-                        ret += abs(a[k])**ord
+                        ret += abs(x[k])**ord
                     return ret**(1. / ord)
         return oneD_impl
 
-    elif a.ndim == 2:
+    elif x.ndim == 2:
         # 2D cases
 
         # handle "ord" being "None"
         if ord_flag in (None, types.none):
-            # Force `a` to be C-order, so that we can take a contiguous
+            # Force `x` to be C-order, so that we can take a contiguous
             # 1D view.
-            if a.layout == 'C':
+            if x.layout == 'C':
                 @register_jitable
-                def array_prepare(a):
-                    return a
-            elif a.layout == 'F':
+                def array_prepare(x):
+                    return x
+            elif x.layout == 'F':
                 @register_jitable
-                def array_prepare(a):
-                    # Legal since L2(a) == L2(a.T)
-                    return a.T
+                def array_prepare(x):
+                    # Legal since L2(x) == L2(x.T)
+                    return x.T
             else:
                 @register_jitable
-                def array_prepare(a):
-                    return a.copy()
+                def array_prepare(x):
+                    return x.copy()
 
-            # Compute the Frobenius norm, this is the L2,2 induced norm of `A`
-            # which is the L2-norm of A.ravel() and so can be computed via BLAS
-            def twoD_impl(a, ord=None):
-                n = a.size
+            # Compute the Frobenius norm, this is the L2,2 induced norm of `x`
+            # which is the L2-norm of x.ravel() and so can be computed via BLAS
+            def twoD_impl(x, ord=None):
+                n = x.size
                 if n == 0:
                     # reshape() currently doesn't support zero-sized arrays
                     return 0.0
-                a_c = array_prepare(a)
-                return _oneD_norm_2(a_c.reshape(n))
+                x_c = array_prepare(x)
+                return _oneD_norm_2(x_c.reshape(n))
         else:
             # max value for this dtype
             max_val = np.finfo(np_ret_type.type).max
 
-            def twoD_impl(a, ord=None):
-                n = a.shape[-1]
-                m = a.shape[-2]
+            def twoD_impl(x, ord=None):
+                n = x.shape[-1]
+                m = x.shape[-2]
 
                 # Shortcut to handle zero size arrays
                 # this differs slightly to numpy in that
                 # numpy raises errors for some ord values
                 # and in other cases returns zero.
-                if a.size == 0:
+                if x.size == 0:
                     return 0.0
 
                 if ord == np.inf:
                     # max of sum of abs across rows
-                    # max(sum(abs(a)), axis=1)
+                    # max(sum(abs(x)), axis=1)
                     global_max = 0.
                     for ii in range(m):
                         tmp = 0.
                         for jj in range(n):
-                            tmp += abs(a[ii, jj])
+                            tmp += abs(x[ii, jj])
                         if tmp > global_max:
                             global_max = tmp
                     return global_max
 
                 elif ord == -np.inf:
                     # min of sum of abs across rows
-                    # min(sum(abs(a)), axis=1)
+                    # min(sum(abs(x)), axis=1)
                     global_min = max_val
                     for ii in range(m):
                         tmp = 0.
                         for jj in range(n):
-                            tmp += abs(a[ii, jj])
+                            tmp += abs(x[ii, jj])
                         if tmp < global_min:
                             global_min = tmp
                     return global_min
                 elif ord == 1:
                     # max of sum of abs across cols
-                    # max(sum(abs(a)), axis=0)
+                    # max(sum(abs(x)), axis=0)
                     global_max = 0.
                     for ii in range(n):
                         tmp = 0.
                         for jj in range(m):
-                            tmp += abs(a[jj, ii])
+                            tmp += abs(x[jj, ii])
                         if tmp > global_max:
                             global_max = tmp
                     return global_max
 
                 elif ord == -1:
                     # min of sum of abs across cols
-                    # min(sum(abs(a)), axis=0)
+                    # min(sum(abs(x)), axis=0)
                     global_min = max_val
                     for ii in range(n):
                         tmp = 0.
                         for jj in range(m):
-                            tmp += abs(a[jj, ii])
+                            tmp += abs(x[jj, ii])
                         if tmp < global_min:
                             global_min = tmp
                     return global_min
@@ -2412,10 +2412,10 @@ def _get_norm_impl(a, ord_flag):
                 # by definition.
                 elif ord == 2:
                     # max SV
-                    return _compute_singular_values(a)[0]
+                    return _compute_singular_values(x)[0]
                 elif ord == -2:
                     # min SV
-                    return _compute_singular_values(a)[-1]
+                    return _compute_singular_values(x)[-1]
                 else:
                     # replicate numpy error
                     raise ValueError("Invalid norm order for matrices.")
@@ -2425,32 +2425,32 @@ def _get_norm_impl(a, ord_flag):
 
 
 @overload(np.linalg.norm)
-def norm_impl(a, ord=None):
+def norm_impl(x, ord=None):
     ensure_lapack()
 
-    _check_linalg_1_or_2d_matrix(a, "norm")
+    _check_linalg_1_or_2d_matrix(x, "norm")
 
-    return _get_norm_impl(a, ord)
+    return _get_norm_impl(x, ord)
 
 
 @overload(np.linalg.cond)
-def cond_impl(a, p=None):
+def cond_impl(x, p=None):
     ensure_lapack()
 
-    _check_linalg_matrix(a, "cond")
+    _check_linalg_matrix(x, "cond")
 
-    def impl(a, p=None):
+    def impl(x, p=None):
         # This is extracted for performance, numpy does approximately:
-        # `condition = norm(a) * norm(inv(a))`
+        # `condition = norm(x) * norm(inv(x))`
         # in the cases of `p == 2` or `p ==-2` singular values are used
-        # for computing norms. This costs numpy an svd of `a` then an
-        # inversion of `a` and another svd of `a`.
+        # for computing norms. This costs numpy an svd of `x` then an
+        # inversion of `x` and another svd of `x`.
         # Below is a different approach, which also gives a more
         # accurate answer as there is no inversion involved.
         # Recall that the singular values of an inverted matrix are the
         # reciprocal of singular values of the original matrix.
-        # Therefore calling `svd(a)` once yields all the information
-        # needed about both `a` and `inv(a)` without the cost or
+        # Therefore calling `svd(x)` once yields all the information
+        # needed about both `x` and `inv(x)` without the cost or
         # potential loss of accuracy incurred through inversion.
         # For the case of `p == 2`, the result is just the ratio of
         # `largest singular value/smallest singular value`, and for the
@@ -2459,15 +2459,15 @@ def cond_impl(a, p=None):
         # As a result of this, numba accepts non-square matrices as
         # input when p==+/-2 as well as when p==None.
         if p == 2 or p == -2 or p is None:
-            s = _compute_singular_values(a)
+            s = _compute_singular_values(x)
             if p == 2 or p is None:
                 r = np.divide(s[0], s[-1])
             else:
                 r = np.divide(s[-1], s[0])
         else:  # cases np.inf, -np.inf, 1, -1
-            norm_a = np.linalg.norm(a, p)
-            norm_inv_a = np.linalg.norm(np.linalg.inv(a), p)
-            r = norm_a * norm_inv_a
+            norm_x = np.linalg.norm(x, p)
+            norm_inv_x = np.linalg.norm(np.linalg.inv(x), p)
+            r = norm_x * norm_inv_x
         # NumPy uses a NaN mask, if the input has a NaN, it will return NaN,
         # Numba calls ban NaN through the use of _check_finite_matrix but this
         # catches cases where NaN occurs through floating point use
@@ -2493,7 +2493,7 @@ def _get_rank_from_singular_values(sv, t):
 
 
 @overload(np.linalg.matrix_rank)
-def matrix_rank_impl(a, tol=None):
+def matrix_rank_impl(A, tol=None):
     """
     Computes rank for matrices and vectors.
     The only issue that may arise is that because numpy uses double
@@ -2504,33 +2504,33 @@ def matrix_rank_impl(a, tol=None):
     """
     ensure_lapack()
 
-    _check_linalg_1_or_2d_matrix(a, "matrix_rank")
+    _check_linalg_1_or_2d_matrix(A, "matrix_rank")
 
-    def _2d_matrix_rank_impl(a, tol):
+    def _2d_matrix_rank_impl(A, tol):
 
         # handle the tol==None case separately for type inference to work
         if tol in (None, types.none):
-            nb_type = getattr(a.dtype, "underlying_float", a.dtype)
+            nb_type = getattr(A.dtype, "underlying_float", A.dtype)
             np_type = np_support.as_dtype(nb_type)
             eps_val = np.finfo(np_type).eps
 
-            def _2d_tol_none_impl(a, tol=None):
-                s = _compute_singular_values(a)
+            def _2d_tol_none_impl(A, tol=None):
+                s = _compute_singular_values(A)
                 # replicate numpy default tolerance calculation
-                r = a.shape[0]
-                c = a.shape[1]
+                r = A.shape[0]
+                c = A.shape[1]
                 l = max(r, c)
                 t = s[0] * l * eps_val
                 return _get_rank_from_singular_values(s, t)
             return _2d_tol_none_impl
         else:
-            def _2d_tol_not_none_impl(a, tol=None):
-                s = _compute_singular_values(a)
+            def _2d_tol_not_none_impl(A, tol=None):
+                s = _compute_singular_values(A)
                 return _get_rank_from_singular_values(s, tol)
             return _2d_tol_not_none_impl
 
-    def _get_matrix_rank_impl(a, tol):
-        ndim = a.ndim
+    def _get_matrix_rank_impl(A, tol):
+        ndim = A.ndim
         if ndim == 1:
             # NOTE: Technically, the numpy implementation could be argued as
             # incorrect for the case of a vector (1D matrix). If a tolerance
@@ -2544,18 +2544,18 @@ def matrix_rank_impl(a, tol=None):
             # lead to a reported rank of 0 whereas a tol of 1e-15 should lead
             # to a reported rank of 1, numpy reports 1 regardless.
             # The code below replicates the numpy behaviour.
-            def _1d_matrix_rank_impl(a, tol=None):
-                for k in range(len(a)):
-                    if a[k] != 0.:
+            def _1d_matrix_rank_impl(A, tol=None):
+                for k in range(len(A)):
+                    if A[k] != 0.:
                         return 1
                 return 0
             return _1d_matrix_rank_impl
         elif ndim == 2:
-            return _2d_matrix_rank_impl(a, tol)
+            return _2d_matrix_rank_impl(A, tol)
         else:
             assert 0  # unreachable
 
-    return _get_matrix_rank_impl(a, tol)
+    return _get_matrix_rank_impl(A, tol)
 
 
 @overload(np.linalg.matrix_power)
