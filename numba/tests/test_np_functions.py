@@ -5073,14 +5073,14 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             cfunc(3)
         self.assertIn(
-            'The first argument must be an array-like',
+            'The first argument must be an array',
             str(raises.exception)
         )
 
         with self.assertRaises(TypingError) as raises:
             cfunc({0, 1, 2})
         self.assertIn(
-            'The first argument must be an array-like',
+            'The first argument must be an array',
             str(raises.exception)
         )
 
