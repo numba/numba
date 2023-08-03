@@ -3193,41 +3193,16 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertIn("np.split: Argument axis out of bounds",
                       str(raises.exception))
 
-    def test_vsplit_basic(self):
+    def test_vhdsplit_basic(self):
         # split and array_split have more comprehensive tests of splitting.
-        # only do simple test on vsplit
-        def inputs():
-            # Taken from https://github.com/numpy/numpy/blob/...
-            # 11a2ea96a7ac923c2283d487bffa7fce8924cbd7/numpy/lib/tests/...
-            # test_shape_base.py#L586-L5917
-
-            # test_2D_array
-            yield np.array([[1, 2, 3, 4], [1, 2, 3, 4]]), 2
-            yield np.array([[1., 2., 3., 4.], [1., 2., 3., 4.]]), 2
-            yield np.arange(16.0).reshape(4, 4), 2
-            yield np.arange(16.0).reshape(4, 4), np.array([3, 6])
-            yield np.arange(16.0).reshape(4, 4), [3, 6]
-            yield np.arange(16.0).reshape(4, 4), (3, 6)
-            yield np.arange(8.0).reshape(2, 2, 2), 2
-
-        pyfunc = vsplit
-        cfunc = jit(nopython=True)(pyfunc)
-
-        for a, ind_or_sec in inputs():
-            self.assertPreciseEqual(pyfunc(a, ind_or_sec),
-                                    cfunc(a, ind_or_sec))
-
-    def test_hsplit_basic(self):
-        # split and array_split have more comprehensive tests of splitting.
-        # only do simple test on hsplit
-        def inputs():
-            # Taken from https://github.com/numpy/numpy/blob/...
-            # 11a2ea96a7ac923c2283d487bffa7fce8924cbd7/numpy/lib/tests/...
-            # test_shape_base.py#L553-L564
-
+        # only do simple tests on vsplit, hsplit and dsplit
+        # Based on tests from https://github.com/numpy/numpy/blob/f0befec40376fc46fdaceac2c49c7349ad671bde/numpy/lib/tests/test_shape_base.py#L538-L624
+        def inputs1D():
             # test_1D_array
             yield np.array([1, 2, 3, 4]), 2
             yield np.array([1., 2., 3., 4.]), 2
+
+        def inputs2D():
             # test_2D_array
             yield np.array([[1, 2, 3, 4], [1, 2, 3, 4]]), 2
             yield np.array([[1., 2., 3., 4.], [1., 2., 3., 4.]]), 2
@@ -3237,21 +3212,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.arange(16.0).reshape(4, 4), (3, 6)
             yield np.arange(8.0).reshape(2, 2, 2), 2
 
-        pyfunc = hsplit
-        cfunc = jit(nopython=True)(pyfunc)
-
-        for a, ind_or_sec in inputs():
-            self.assertPreciseEqual(pyfunc(a, ind_or_sec),
-                                    cfunc(a, ind_or_sec))
-
-    def test_dsplit_basic(self):
-        # split and array_split have more comprehensive tests of splitting.
-        # only do simple test on dsplit
-        def inputs():
-            # Taken from https://github.com/numpy/numpy/blob/...
-            # 11a2ea96a7ac923c2283d487bffa7fce8924cbd7/numpy/lib/tests/...
-            # test_shape_base.py#L616-L624
-
+        def inputs3D():
             # test_3D_array
             np.array([[[1, 2, 3, 4],
                        [1, 2, 3, 4]],
@@ -3263,12 +3224,16 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.arange(16.0).reshape(2, 2, 4), (3, 6)
             yield np.arange(8.0).reshape(2, 2, 2), 2
 
-        pyfunc = hsplit
-        cfunc = jit(nopython=True)(pyfunc)
-
-        for a, ind_or_sec in inputs():
-            self.assertPreciseEqual(pyfunc(a, ind_or_sec),
-                                    cfunc(a, ind_or_sec))
+        inputs = [inputs1D(), inputs2D(), inputs3D()]
+        for (f, mindim, name) in [(vsplit, 2, "vsplit"),
+                                  (hsplit, 1, "hsplit"),
+                                  (dsplit, 3, "dsplit")]:
+            pyfunc = f
+            cfunc = njit(pyfunc)
+            for i in range(mindim, 4):
+                for a, ind_or_sec in inputs[i - 1]:
+                    self.assertPreciseEqual(pyfunc(a, ind_or_sec),
+                                            cfunc(a, ind_or_sec))
 
     def test_vhdsplit_exception(self):
         # Single test method for vsplit, hsplit and dsplit exceptions
