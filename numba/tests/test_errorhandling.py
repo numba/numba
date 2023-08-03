@@ -4,6 +4,7 @@ Unspecified error handling tests
 
 import numpy as np
 import os
+import warnings
 
 from numba import jit, njit, typed, int64, types
 from numba.core import errors
@@ -20,7 +21,8 @@ from numba.core.compiler_machinery import PassManager
 from numba.core.types.functions import _err_reasons as error_reasons
 
 from numba.tests.support import (skip_parfors_unsupported, override_config,
-                                 SerialMixin, skip_unless_scipy)
+                                 SerialMixin, skip_unless_scipy,
+                                 TestCase)
 import unittest
 
 # used in TestMiscErrorHandling::test_handling_of_write_to_*_global
@@ -444,7 +446,7 @@ class TestDeveloperSpecificErrorMessages(SerialMixin, unittest.TestCase):
         self.assertIn("too many positional arguments", excstr)
 
 
-class TestCapturedErrorHandling(SerialMixin, unittest.TestCase):
+class TestCapturedErrorHandling(SerialMixin, TestCase):
     """Checks that the way errors are captured changes depending on the env
     var "NUMBA_CAPTURED_ERRORS".
     """
@@ -471,6 +473,51 @@ class TestCapturedErrorHandling(SerialMixin, unittest.TestCase):
                         bar(x)
                 expected = "object has no attribute 'some_invalid_attr'"
                 self.assertIn(expected, str(raises.exception))
+
+    @TestCase.run_test_in_subprocess(
+        envvars={"NUMBA_CAPTURED_ERRORS": "old_style"},
+    )
+    def test_old_style_deprecation(self):
+        # Verify that old_style error raise the correct deprecation warning
+        warnings.simplefilter("always", errors.NumbaPendingDeprecationWarning)
+
+        def bar(x):
+            pass
+
+        @overload(bar)
+        def ol_bar(x):
+            raise AttributeError("Invalid attribute")
+
+        with self.assertWarns(errors.NumbaPendingDeprecationWarning) as warns:
+            with self.assertRaises(errors.TypingError):
+                @njit('void(int64)')
+                def foo(x):
+                    bar(x)
+
+            self.assertIn("The 'old_style' error capturing is deprecated",
+                          str(warns.warnings[0].message))
+
+    @TestCase.run_test_in_subprocess(
+        envvars={"NUMBA_CAPTURED_ERRORS": "new_style"},
+    )
+    def test_new_style_no_warnings(self):
+        # Verify that new_style error raise no warnings
+        warnings.simplefilter("always", errors.NumbaPendingDeprecationWarning)
+
+        def bar(x):
+            pass
+
+        @overload(bar)
+        def ol_bar(x):
+            raise AttributeError("Invalid attribute")
+
+        with warnings.catch_warnings(record=True) as warns:
+            with self.assertRaises(AttributeError):
+                @njit('void(int64)')
+                def foo(x):
+                    bar(x)
+
+            self.assertEqual(len(warns), 0)
 
 
 if __name__ == '__main__':
