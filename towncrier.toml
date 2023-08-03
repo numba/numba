@@ -3,6 +3,11 @@ package = "numba"
 
 directory = "docs/upcoming_changes"
 filename = "docs/source/release/{version}-notes.rst"
+single_file = false
+template = "docs/upcoming_changes/template.rst"
+underlines = "~-"
+all_bullets = false
+issue_format = "`PR-#{issue} <https://github.com/numpy/numpy/pull/{issue}>`__"
 
 [[tool.towncrier.type]]
     directory = "highlight"
