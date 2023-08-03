@@ -518,12 +518,12 @@ new exception handling. This will become the default in the future.
 Recommendations
 ---------------
 
-- Projects that depends on Numba should set 
+- Projects that depend on Numba should set 
   ``NUMBA_CAPTURED_ERRORS='new_style'`` for testing to find all places where 
   non-``NumbaError`` exceptions are raised during compilation.
-- Replace any code that raises non-``NumbaError`` to indicate compilation error.
-  For instance, instead of raising ``TypeError``, raise 
-  ``numba.core.errors.NumbaTypeError``.
+- Modify any code that raises a non-``NumbaError`` to indicate a compilation
+  error to raise a subclass of ``NumbaError`` instead. For example, instead of
+  raising a ``TypeError``, raise a ``numba.core.errors.NumbaTypeError``.
 
 
 Schedule
