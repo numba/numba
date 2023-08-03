@@ -159,10 +159,10 @@ def numpy_polysub(c1, c2):
         arr2 = np.atleast_1d(c2).astype(result_dtype)
         diff = len(arr2) - len(arr1)
         if diff > 0:
-            zr = np.zeros(diff) #, a1.dtype)
+            zr = np.zeros(diff)
             arr1 = np.concatenate((arr1, zr))
         if diff < 0:
-            zr = np.zeros(-diff) #, a2.dtype)
+            zr = np.zeros(-diff)
             arr2 = np.concatenate((arr2, zr))
         val = arr1 - arr2
         return pu.trimseq(val)
