@@ -63,6 +63,8 @@ requirements:
     - scipy >=1.0
     # CUDA Python 11.6 or later
     - cuda-python >=11.6
+    # numba-rvsdg
+    - numba-rvsdg ==0.0.2      # [py==311]
 
 test:
   requires:
