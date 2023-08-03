@@ -4532,12 +4532,21 @@ def np_diag_indices(n, ndim=2):
     if not isinstance(ndim, (int, types.Integer)):
         msg = 'The argument "ndim" must be an integer'
         raise errors.TypingError(msg)
+    
+    # tup_init is used only to get the correct tuple type
+    tup_init = (np.arange(1),) * 2
+
+    from numba.cpython.unsafe.tuple import tuple_setitem
 
     def impl(n, ndim=2):
         res = np.arange(n * ndim)
         for i in range(n * ndim):
             res[i] = res[i] % n
-        return res.reshape((ndim, n))
+        x = res.reshape((ndim, n))
+        tup = tup_init
+        for i in range(ndim):
+            tup = tuple_setitem(tup, i, np.copy(x[i]))
+        return tup
 
     return impl
 
