@@ -129,7 +129,7 @@ def test():
                 print(f'\t\t{location}')
 
     # Checks for dynamic libraries
-    libs = 'nvvm cudart'.split()
+    libs = 'nvvm nvrtc cudart'.split()
     for lib in libs:
         path = get_cudalib(lib)
         print('Finding {} from {}'.format(lib, _get_source_variable(lib)))
