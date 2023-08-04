@@ -139,8 +139,7 @@ Exception handling
 The ``raise`` statement is only supported in the following forms:
 
 * ``raise SomeException``
-* ``raise SomeException(<arguments>)``: in :term:`nopython mode`, constructor
-  arguments must be :term:`compile-time constants <compile-time constant>`
+* ``raise SomeException(<arguments>)``
 
 It is currently unsupported to re-raise an exception created in compiled code.
 
@@ -724,10 +723,10 @@ Typed Dict
   ``dict()`` was not supported in versions prior to 0.44.  Currently, calling
   ``dict()`` translates to calling ``numba.typed.Dict()``.
 
-Numba only supports the use of ``dict()`` without any arguments.  Such use is
-semantically equivalent to ``{}`` and ``numba.typed.Dict()``.  It will create
-an instance of ``numba.typed.Dict`` where the key-value types will be later
-inferred by usage.
+Numba supports the use of ``dict()``.  Such use is semantically equivalent to
+``{}`` and ``numba.typed.Dict()``. It will create an instance of
+``numba.typed.Dict`` where the key-value types will be later inferred by usage.
+Numba also supports, explicitly, the ``dict(iterable)`` constructor.
 
 Numba does not fully support the Python ``dict`` because it is an untyped
 container that can have any Python types as members. To generate efficient
@@ -918,10 +917,6 @@ Built-in functions
 
 The following built-in functions are supported:
 
-.. warning::
-  Support for ``isinstance`` is an experimental feature. This feature is
-  automatically enabled by simply using ``isinstance`` in JIT compiled code.
-
 * :func:`abs`
 * :class:`bool`
 * :func:`chr`
@@ -933,10 +928,11 @@ The following built-in functions are supported:
 * :func:`getattr`: the attribute must be a string literal and the return type
   cannot be a function type (e.g. ``getattr(numpy, 'cos')`` is not supported as
   it returns a function type).
+* :func:`hasattr`
 * :func:`hash` (see :ref:`pysupported-hashing` below)
 * :class:`int`: only the one-argument form
 * :func:`iter`: only the one-argument form
-* :func:`isinstance` (experimental support only)
+* :func:`isinstance`
 * :func:`len`
 * :func:`min`
 * :func:`map`
@@ -947,9 +943,11 @@ The following built-in functions are supported:
 * :class:`range`: The only permitted use of range is as a callable function
   (cannot pass range as an argument to a jitted function or return a range from
   a jitted function).
+* :func:`repr`
 * :func:`round`
 * :func:`sorted`: the ``key`` argument is not supported
 * :func:`sum`
+* :func:`str`
 * :func:`type`: only the one-argument form, and only on some types
   (e.g. numbers and named tuples)
 * :func:`zip`

@@ -1,5 +1,8 @@
 import numpy as np
-from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
+from numba.cuda.testing import (skip_unless_cc_53,
+                                unittest,
+                                CUDATestCase,
+                                skip_on_cudasim)
 from numba.np import numpy_support
 from numba import cuda, float32, float64, int32, vectorize, void, int64
 import math
@@ -195,6 +198,11 @@ def math_radians(A, B):
     B[i] = math.radians(A[i])
 
 
+def math_trunc(A, B):
+    i = cuda.grid(1)
+    B[i] = math.trunc(A[i])
+
+
 def math_pow_binop(A, B, C):
     i = cuda.grid(1)
     C[i] = A[i] ** B[i]
@@ -206,6 +214,9 @@ def math_mod_binop(A, B, C):
 
 
 class TestCudaMath(CUDATestCase):
+    def unary_template_float16(self, func, npfunc, start=0, stop=1):
+        self.unary_template(func, npfunc, np.float16, np.float16, start, stop)
+
     def unary_template_float32(self, func, npfunc, start=0, stop=1):
         self.unary_template(func, npfunc, np.float32, np.float32, start, stop)
 
@@ -233,8 +244,10 @@ class TestCudaMath(CUDATestCase):
         # the tightest under which the tests will pass.
         if npdtype == np.float64:
             rtol = 1e-13
-        else:
+        elif npdtype == np.float32:
             rtol = 1e-6
+        else:
+            rtol = 1e-3
         np.testing.assert_allclose(npfunc(A), B, rtol=rtol)
 
     def unary_bool_special_values(self, func, npfunc, npdtype, npmtype):
@@ -298,7 +311,6 @@ class TestCudaMath(CUDATestCase):
         arytype = numpy_support.from_dtype(npdtype)[::1]
         restype = numpy_support.from_dtype(nprestype)[::1]
         cfunc = cuda.jit((arytype, arytype, restype))(func)
-        cfunc.bind()
         cfunc[1, nelem](A, A, B)
         np.testing.assert_allclose(npfunc(A, A), B)
 
@@ -368,6 +380,24 @@ class TestCudaMath(CUDATestCase):
         self.unary_template_float64(math_cos, np.cos)
         self.unary_template_int64(math_cos, np.cos)
         self.unary_template_uint64(math_cos, np.cos)
+
+    @skip_unless_cc_53
+    def test_math_fp16(self):
+        self.unary_template_float16(math_sin, np.sin)
+        self.unary_template_float16(math_cos, np.cos)
+        self.unary_template_float16(math_exp, np.exp)
+        self.unary_template_float16(math_log, np.log, start=1)
+        self.unary_template_float16(math_log2, np.log2, start=1)
+        self.unary_template_float16(math_log10, np.log10, start=1)
+        self.unary_template_float16(math_fabs, np.fabs, start=-1)
+        self.unary_template_float16(math_sqrt, np.sqrt)
+        self.unary_template_float16(math_ceil, np.ceil)
+        self.unary_template_float16(math_floor, np.floor)
+
+    @skip_on_cudasim("numpy does not support trunc for float16")
+    @skip_unless_cc_53
+    def test_math_fp16_trunc(self):
+        self.unary_template_float16(math_trunc, np.trunc)
 
     #---------------------------------------------------------------------------
     # test_math_sin
@@ -580,7 +610,6 @@ class TestCudaMath(CUDATestCase):
         C = np.empty_like(A)
         arytype = numpy_support.from_dtype(npdtype)[::1]
         cfunc = cuda.jit((arytype, int32[::1], arytype))(math_pow)
-        cfunc.bind()
         cfunc[1, nelem](A, B, C)
 
         # NumPy casting rules result in a float64 output always, which doesn't
@@ -621,6 +650,24 @@ class TestCudaMath(CUDATestCase):
         self.unary_template_float64(math_floor, np.floor)
         self.unary_template_int64(math_floor, np.floor)
         self.unary_template_uint64(math_floor, np.floor)
+
+    #---------------------------------------------------------------------------
+    # test_math_trunc
+    #
+    # Note that math.trunc() is only supported on NumPy float64s, and not
+    # other float types or int types. See NumPy Issue #13375:
+    #
+    # - https://github.com/numpy/numpy/issues/13375 - "Add methods from the
+    #   builtin float types to the numpy floating point types"
+
+    def test_math_trunc(self):
+        self.unary_template_float64(math_trunc, np.trunc)
+
+    @skip_on_cudasim('trunc only supported on NumPy float64')
+    def test_math_trunc_non_float64(self):
+        self.unary_template_float32(math_trunc, np.trunc)
+        self.unary_template_int64(math_trunc, np.trunc)
+        self.unary_template_uint64(math_trunc, np.trunc)
 
     #---------------------------------------------------------------------------
     # test_math_copysign

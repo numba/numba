@@ -24,12 +24,19 @@ else
   export NUMBA_CUDA_USE_NVIDIA_BINDING=0;
 fi;
 
+# Test with Minor Version Compatibility on CUDA 11.8
+if [ $CUDA_TOOLKIT_VER == "11.8" ]
+then
+  export NUMBA_CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY=1;
+else
+  export NUMBA_CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY=0;
+fi;
+
 # Test with different NumPy versions with each toolkit (it's not worth testing
 # the Cartesian product of versions here, we just need to test with different
 # CUDA and NumPy versions).
-declare -A CTK_NUMPY_VMAP=( ["11.0"]="1.19" ["11.1"]="1.21" ["11.2"]="1.22" ["11.5"]="1.23")
+declare -A CTK_NUMPY_VMAP=( ["11.2"]="1.22" ["11.3"]="1.23" ["11.5"]="1.24" ["11.8"]="1.25")
 NUMPY_VER="${CTK_NUMPY_VMAP[$CUDA_TOOLKIT_VER]}"
-
 
 ################################################################################
 # SETUP - Check environment
@@ -44,8 +51,10 @@ nvidia-smi
 gpuci_logger "Create testing env"
 . /opt/conda/etc/profile.d/conda.sh
 gpuci_mamba_retry create -n numba_ci -y \
-                  "python=${PYTHON_VER}" \
+                  "python=3.10" \
                   "cudatoolkit=${CUDA_TOOLKIT_VER}" \
+                  "rapidsai::cubinlinker" \
+                  "conda-forge::ptxcompiler" \
                   "numba/label/dev::llvmlite" \
                   "numpy=${NUMPY_VER}" \
                   "scipy" \

@@ -95,6 +95,11 @@ the functionality of the selected device:
       Delete the context for the device. This will destroy all memory
       allocations, events, and streams created within the context.
 
+   .. attribute:: supports_float16
+
+      Return ``True`` if the device supports float16 operations, ``False``
+      otherwise.
+
 
 Compilation
 -----------

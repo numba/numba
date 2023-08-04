@@ -8,7 +8,6 @@ from numba.core.callwrapper import PyCallWrapper
 from numba.core.base import BaseContext
 from numba.core import (utils, types, config, cgutils, callconv, codegen,
                         externals, fastmathpass, intrinsics)
-from numba.core.utils import cached_property
 from numba.core.options import TargetOptions, include_default_options
 from numba.core.runtime import rtsys
 from numba.core.compiler_lock import global_compiler_lock
@@ -58,17 +57,14 @@ class CPUContext(BaseContext):
         # Map external C functions.
         externals.c_math_functions.install(self)
 
-        # Initialize NRT runtime
+    def load_additional_registries(self):
+        # Only initialize the NRT once something is about to be compiled. The
+        # "initialized" state doesn't need to be threadsafe, there's a lock
+        # around the internal compilation and the rtsys.initialize call can be
+        # made multiple times, worse case init just gets called a bit more often
+        # than optimal.
         rtsys.initialize(self)
 
-        # Add lower_extension attribute
-        self.lower_extensions = {}
-        from numba.parfors.parfor_lowering import _lower_parfor_parallel
-        from numba.parfors.parfor import Parfor
-        # Specify how to lower Parfor nodes using the lower_extensions
-        self.lower_extensions[Parfor] = _lower_parfor_parallel
-
-    def load_additional_registries(self):
         # Add implementations that work via import
         from numba.cpython import (builtins, charseq, enumimpl, # noqa F401
                                    hashing, heapq, iterators, # noqa F401
@@ -102,6 +98,9 @@ class CPUContext(BaseContext):
         # load 3rd party extensions
         numba.core.entrypoints.init_all()
 
+        # fix for #8940
+        from numba.np.unsafe import ndarray # noqa F401
+
     @property
     def target_data(self):
         return self._internal_codegen.target_data
@@ -114,7 +113,7 @@ class CPUContext(BaseContext):
     def codegen(self):
         return self._internal_codegen
 
-    @cached_property
+    @property
     def call_conv(self):
         return callconv.CPUCallConv(self)
 
@@ -127,13 +126,15 @@ class CPUContext(BaseContext):
             builder, envptr, _dynfunc._impl_info['offsetof_env_body'])
         return EnvBody(self, builder, ref=body_ptr, cast_ref=True)
 
-    def get_env_manager(self, builder):
+    def get_env_manager(self, builder, return_pyobject=False):
         envgv = self.declare_env_global(builder.module,
                                         self.get_env_name(self.fndesc))
         envarg = builder.load(envgv)
         pyapi = self.get_python_api(builder)
         pyapi.emit_environment_sentry(
-            envarg, debug_msg=self.fndesc.env_name,
+            envarg,
+            return_pyobject=return_pyobject,
+            debug_msg=self.fndesc.env_name,
         )
         env_body = self.get_env_body(builder, envarg)
         return pyapi.get_env_manager(self.environment, env_body, envarg)

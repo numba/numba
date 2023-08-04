@@ -198,6 +198,17 @@ def simple_usecase_kernel(r, x):
 simple_usecase_caller = CUDAUseCase(simple_usecase_kernel)
 
 
+# Usecase with cooperative groups
+
+@cuda.jit(cache=True)
+def cg_usecase_kernel(r, x):
+    grid = cuda.cg.this_grid()
+    grid.sync()
+
+
+cg_usecase = CUDAUseCase(cg_usecase_kernel)
+
+
 class _TestModule(CUDATestCase):
     """
     Tests for functionality of this module's functions.

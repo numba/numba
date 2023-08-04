@@ -223,12 +223,26 @@ class TestGetitem(MemoryLeakMixin, TestCase):
                   ):
             self.assertEqual(foo((t(0))), 0)
 
+    def test_list_getitem_different_sized_uint_index(self):
+        # Checks that the index type cast and ext/trunc to the
+        # type of the length is correct, both wraparound and
+        # direct index is tested via -1/0.
+
+        for ty in types.unsigned_domain:
+            @njit
+            def foo():
+                l = listobject.new_list(int32)
+                l.append(7)
+                return l[ty(0)]
+
+            self.assertEqual(foo(), 7)
+
     def test_list_getitem_different_sized_int_index(self):
         # Checks that the index type cast and ext/trunc to the
         # type of the length is correct, both wraparound and
         # direct index is tested via -1/0.
 
-        for ty in types.integer_domain:
+        for ty in types.signed_domain:
             @njit
             def foo():
                 l = listobject.new_list(int32)

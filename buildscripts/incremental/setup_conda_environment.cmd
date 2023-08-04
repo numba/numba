@@ -25,7 +25,7 @@ conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip scipy j
 
 call activate %CONDA_ENV%
 @rem Install latest llvmlite build
-%CONDA_INSTALL% -c numba/label/dev llvmlite=0.40
+%CONDA_INSTALL% -c numba/label/dev llvmlite=0.41
 @rem Install required backports for older Pythons
 if %PYTHON% LSS 3.9 (%CONDA_INSTALL% importlib_metadata)
 @rem Install dependencies for building the documentation
@@ -33,7 +33,7 @@ if "%BUILD_DOC%" == "yes" (%CONDA_INSTALL% sphinx sphinx_rtd_theme pygments)
 @rem Install dependencies for code coverage (codecov.io)
 if "%RUN_COVERAGE%" == "yes" (%PIP_INSTALL% codecov)
 @rem Install TBB
-%CONDA_INSTALL% -c numba tbb=2021 "tbb-devel>=2021,<2021.6"
+%CONDA_INSTALL% "tbb>=2021.6" "tbb-devel>=2021.6"
 if %errorlevel% neq 0 exit /b %errorlevel%
 
 echo "DEBUG ENV:"

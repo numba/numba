@@ -1,7 +1,11 @@
 import operator
 from numba.core import types
 from numba.core.typing.npydecl import (parse_dtype, parse_shape,
-                                       register_number_classes)
+                                       register_number_classes,
+                                       register_numpy_ufunc,
+                                       trigonometric_functions,
+                                       comparison_functions,
+                                       bit_twiddling_functions)
 from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          AbstractTemplate, CallableTemplate,
                                          signature, Registry)
@@ -515,6 +519,24 @@ class Cuda_atomic_compare_and_swap(AbstractTemplate):
 
 
 @register
+class Cuda_atomic_cas(AbstractTemplate):
+    key = cuda.atomic.cas
+
+    def generic(self, args, kws):
+        assert not kws
+        ary, idx, old, val = args
+        dty = ary.dtype
+
+        if dty not in integer_numba_types:
+            return
+
+        if ary.ndim == 1:
+            return signature(dty, ary, types.intp, dty, dty)
+        elif ary.ndim > 1:
+            return signature(dty, ary, idx, dty, dty)
+
+
+@register
 class Cuda_nanosleep(ConcreteTemplate):
     key = cuda.nanosleep
 
@@ -601,6 +623,9 @@ class CudaAtomicTemplate(AttributeTemplate):
 
     def resolve_compare_and_swap(self, mod):
         return types.Function(Cuda_atomic_compare_and_swap)
+
+    def resolve_cas(self, mod):
+        return types.Function(Cuda_atomic_cas)
 
 
 @register_attr
@@ -791,3 +816,15 @@ class CudaModuleTemplate(AttributeTemplate):
 
 
 register_global(cuda, types.Module(cuda))
+
+
+# NumPy
+
+for func in trigonometric_functions:
+    register_numpy_ufunc(func, register_global)
+
+for func in comparison_functions:
+    register_numpy_ufunc(func, register_global)
+
+for func in bit_twiddling_functions:
+    register_numpy_ufunc(func, register_global)

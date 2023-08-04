@@ -1,13 +1,10 @@
 from llvmlite import ir
-from warnings import warn
 
 from numba.core import config, serialize
 from numba.core.codegen import Codegen, CodeLibrary
-from numba.core.errors import NumbaInvalidConfigWarning
 from .cudadrv import devices, driver, nvvm, runtime
+from numba.cuda.cudadrv.libs import get_cudalib
 
-import ctypes
-import numpy as np
 import os
 import subprocess
 import tempfile
@@ -16,7 +13,7 @@ import tempfile
 CUDA_TRIPLE = 'nvptx64-nvidia-cuda'
 
 
-def disassemble_cubin(cubin):
+def run_nvdisasm(cubin, flags):
     # nvdisasm only accepts input from a file, so we need to write out to a
     # temp file and clean up afterwards.
     fd = None
@@ -27,14 +24,13 @@ def disassemble_cubin(cubin):
             f.write(cubin)
 
         try:
-            cp = subprocess.run(['nvdisasm', fname], check=True,
+            cp = subprocess.run(['nvdisasm', *flags, fname], check=True,
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE)
         except FileNotFoundError as e:
-            msg = ("nvdisasm is required for SASS inspection, and has not "
-                   "been found.\n\nYou may need to install the CUDA "
-                   "toolkit and ensure that it is available on your "
-                   "PATH.\n")
+            msg = ("nvdisasm has not been found. You may need "
+                   "to install the CUDA toolkit and ensure that "
+                   "it is available on your PATH.\n")
             raise RuntimeError(msg) from e
         return cp.stdout.decode('utf-8')
     finally:
@@ -42,6 +38,18 @@ def disassemble_cubin(cubin):
             os.close(fd)
         if fname is not None:
             os.unlink(fname)
+
+
+def disassemble_cubin(cubin):
+    # Request lineinfo in disassembly
+    flags = ['-gi']
+    return run_nvdisasm(cubin, flags)
+
+
+def disassemble_cubin_for_cfg(cubin):
+    # Request control flow graph in disassembly
+    flags = ['-cfg']
+    return run_nvdisasm(cubin, flags)
 
 
 class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
@@ -78,6 +86,8 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         # Files to link with the generated PTX. These are linked using the
         # Driver API at link time.
         self._linking_files = set()
+        # Should we link libcudadevrt?
+        self.needs_cudadevrt = False
 
         # Cache the LLVM IR string
         self._llvm_strs = None
@@ -103,7 +113,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         return self._llvm_strs
 
     def get_llvm_str(self):
-        return self.llvm_strs[0]
+        return "\n\n".join(self.llvm_strs)
 
     def get_asm_str(self, cc=None):
         return self._join_ptxes(self._get_ptxes(cc=cc))
@@ -121,30 +131,10 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         arch = nvvm.get_arch_option(*cc)
         options = self._nvvm_options.copy()
         options['arch'] = arch
-        if not nvvm.NVVM().is_nvvm70:
-            # Avoid enabling debug for NVVM 3.4 as it has various issues. We
-            # need to warn the user that we're doing this if any of the
-            # functions that they're compiling have `debug=True` set, which we
-            # can determine by checking the NVVM options.
-            for lib in self.linking_libraries:
-                if lib._nvvm_options.get('debug'):
-                    msg = ("debuginfo is not generated for CUDA versions "
-                           f"< 11.2 (debug=True on function: {lib.name})")
-                    warn(NumbaInvalidConfigWarning(msg))
-            options['debug'] = False
 
         irs = self.llvm_strs
 
-        if options.get('debug', False):
-            # If we're compiling with debug, we need to compile modules with
-            # NVVM one at a time, because it does not support multiple modules
-            # with debug enabled:
-            # https://docs.nvidia.com/cuda/nvvm-ir-spec/index.html#source-level-debugging-support
-            ptxes = [nvvm.llvm_to_ptx(ir, **options) for ir in irs]
-        else:
-            # Otherwise, we compile all modules with NVVM at once because this
-            # results in better optimization than separate compilation.
-            ptxes = [nvvm.llvm_to_ptx(irs, **options)]
+        ptxes = [nvvm.llvm_to_ptx(irs, **options)]
 
         # Sometimes the result from NVVM contains trailing whitespace and
         # nulls, which we strip so that the assembly dump looks a little
@@ -180,12 +170,10 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
             linker.add_ptx(ptx.encode())
         for path in self._linking_files:
             linker.add_file_guess_ext(path)
+        if self.needs_cudadevrt:
+            linker.add_file_guess_ext(get_cudalib('cudadevrt', static=True))
 
-        cubin_buf, size = linker.complete()
-
-        # We take a copy of the cubin because it's owned by the linker
-        cubin_ptr = ctypes.cast(cubin_buf, ctypes.POINTER(ctypes.c_char))
-        cubin = bytes(np.ctypeslib.as_array(cubin_ptr, shape=(size,)))
+        cubin = linker.complete()
         self._cubin_cache[cc] = cubin
         self._linkerinfo_cache[cc] = linker.info_log
 
@@ -223,6 +211,9 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
 
     def get_sass(self, cc=None):
         return disassemble_cubin(self.get_cubin(cc=cc))
+
+    def get_sass_cfg(self, cc=None):
+        return disassemble_cubin_for_cfg(self.get_cubin(cc=cc))
 
     def add_ir_module(self, mod):
         self._raise_if_finalized()
@@ -283,18 +274,11 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         #
         # See also discussion on PR #890:
         # https://github.com/numba/numba/pull/890
-        #
-        # We don't adjust the linkage of functions when compiling for debug -
-        # because the device functions are in separate modules, we need them to
-        # be externally visible.
         for library in self._linking_libraries:
             for mod in library.modules:
                 for fn in mod.functions:
                     if not fn.is_declaration:
-                        if self._nvvm_options.get('debug', False):
-                            fn.linkage = 'weak_odr'
-                        else:
-                            fn.linkage = 'linkonce_odr'
+                        fn.linkage = 'linkonce_odr'
 
         self._finalized = True
 
@@ -318,12 +302,14 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
             cubin_cache=self._cubin_cache,
             linkerinfo_cache=self._linkerinfo_cache,
             max_registers=self._max_registers,
-            nvvm_options=self._nvvm_options
+            nvvm_options=self._nvvm_options,
+            needs_cudadevrt=self.needs_cudadevrt
         )
 
     @classmethod
     def _rebuild(cls, codegen, name, entry_name, llvm_strs, ptx_cache,
-                 cubin_cache, linkerinfo_cache, max_registers, nvvm_options):
+                 cubin_cache, linkerinfo_cache, max_registers, nvvm_options,
+                 needs_cudadevrt):
         """
         Rebuild an instance.
         """
@@ -336,6 +322,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
 
         instance._max_registers = max_registers
         instance._nvvm_options = nvvm_options
+        instance.needs_cudadevrt = needs_cudadevrt
 
         instance._finalized = True
 

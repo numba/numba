@@ -1,3 +1,4 @@
+import numpy as np
 from numba import njit
 from numba.core.errors import TypingError
 import unittest
@@ -37,20 +38,77 @@ class TestCompiledDict(TestCase):
         d = foo()
         self.assertEqual(d, {1: 2})
 
+    def test_use_dict_iterable_args(self):
+        # Test dict(iterable)
+        @njit
+        def dict_iterable_1(a, b):
+            d = dict(zip(a, b))
+            return d
+
+        @njit
+        def dict_iterable_2():
+            # from python docs
+            return dict([('sape', 4139), ('guido', 4127), ('jack', 4098)])
+
+        inps = (
+            ([1, 2, 3], [4, 5, 6]),
+            (np.arange(4), np.arange(4)),
+            ([1, 2, 3], 'abc'),
+            ([1, 2, 3, 4], 'abc'),
+        )
+        for a, b in inps:
+            d = dict_iterable_1(a, b)
+            self.assertEqual(d, dict(zip(a, b)))
+
+        self.assertEqual(dict_iterable_2(), dict_iterable_2.py_func())
+
+    def test_ctor_iterable_tuple(self):
+        @njit
+        def ctor():
+            return dict(((1, 2), (1, 2)))
+
+        expected = dict({1: 2})
+        got = ctor()
+        self.assertEquals(expected, got)
+
     def test_unsupported_dict_usage(self):
         # Test dict(dict())
         from numba.core.typing.dictdecl import _message_dict_support
 
         @njit
-        def foo():
+        def ctor1():
             d = dict()
             d[1] = 2
             return dict(d)
 
-        with self.assertRaises(TypingError) as raises:
-            foo()
+        @njit
+        def ctor2():
+            return dict(((1, 2), (3, 'a')))
 
-        self.assertIn(_message_dict_support, str(raises.exception))
+        @njit
+        def ctor3():
+            return dict((('a', 'b', 'c'), ('d', 'e', 'f')))
+
+        @njit
+        def ctor4():
+            return dict((({}, 1), ({}, 2)))
+
+        _non_iter_args = "Non-iterable args used in dict(iterable)"
+        _dict_upd_item_len = "dictionary update sequence element has length 3;"
+        _unhashable_type = "Unhashable type"
+
+        inputs = [
+            (ctor1, TypingError, _message_dict_support),
+            (ctor2, TypingError, _non_iter_args),
+            (ctor3, TypingError, _dict_upd_item_len),
+            (ctor4, TypingError, _unhashable_type),
+        ]
+
+        for func, exc, msg in inputs:
+            with self.assertRaises(exc) as raises:
+                func()
+
+            self.assertIn(msg, str(raises.exception))
 
     def test_use_curlybraces(self):
         # Test {} with empty args
@@ -62,7 +120,6 @@ class TestCompiledDict(TestCase):
 
         d = foo()
         self.assertEqual(d, {1: 2})
-
 
     def test_use_curlybraces_with_init1(self):
         # Test {} with 1 item

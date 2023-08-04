@@ -12,23 +12,24 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
 
 
 def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
-        opt=True, cache=False, **kws):
+        opt=True, lineinfo=False, cache=False, **kws):
     """
-    JIT compile a python function conforming to the CUDA Python specification.
-    If a signature is supplied, then a function is returned that takes a
-    function to compile.
+    JIT compile a Python function for CUDA GPUs.
 
-    :param func_or_sig: A function to JIT compile, or a signature of a function
-       to compile. If a function is supplied, then a
-       :class:`numba.cuda.compiler.AutoJitCUDAKernel` is returned. If a
-       signature is supplied, then a function is returned. The returned
-       function accepts another function, which it will compile and then return
-       a :class:`numba.cuda.compiler.AutoJitCUDAKernel`.
+    :param func_or_sig: A function to JIT compile, or *signatures* of a
+       function to compile. If a function is supplied, then a
+       :class:`Dispatcher <numba.cuda.dispatcher.CUDADispatcher>` is returned.
+       Otherwise, ``func_or_sig`` may be a signature or a list of signatures,
+       and a function is returned. The returned function accepts another
+       function, which it will compile and then return a :class:`Dispatcher
+       <numba.cuda.dispatcher.CUDADispatcher>`. See :ref:`jit-decorator` for
+       more information about passing signatures.
 
        .. note:: A kernel cannot have any return value.
     :param device: Indicates whether this is a device function.
     :type device: bool
-    :param link: A list of files containing PTX source to link with the function
+    :param link: A list of files containing PTX or CUDA C/C++ source to link
+       with the function
     :type link: list
     :param debug: If True, check for exceptions thrown when executing the
        kernel. Since this degrades performance, this should only be used for
@@ -79,23 +80,34 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                " - set debug=False or opt=False.")
         warn(NumbaInvalidConfigWarning(msg))
 
+    if debug and lineinfo:
+        msg = ("debug and lineinfo are mutually exclusive. Use debug to get "
+               "full debug info (this disables some optimizations), or "
+               "lineinfo for line info only with code generation unaffected.")
+        warn(NumbaInvalidConfigWarning(msg))
+
     if device and kws.get('link'):
         raise ValueError("link keyword invalid for device function")
 
     if sigutils.is_signature(func_or_sig):
+        signatures = [func_or_sig]
+        specialized = True
+    elif isinstance(func_or_sig, list):
+        signatures = func_or_sig
+        specialized = False
+    else:
+        signatures = None
+
+    if signatures is not None:
         if config.ENABLE_CUDASIM:
             def jitwrapper(func):
                 return FakeCUDAKernel(func, device=device, fastmath=fastmath)
             return jitwrapper
 
-        argtypes, restype = sigutils.normalize_signature(func_or_sig)
-
-        if restype and not device and restype != types.void:
-            raise TypeError("CUDA kernel must have void return type.")
-
         def _jit(func):
             targetoptions = kws.copy()
             targetoptions['debug'] = debug
+            targetoptions['lineinfo'] = lineinfo
             targetoptions['link'] = link
             targetoptions['opt'] = opt
             targetoptions['fastmath'] = fastmath
@@ -107,14 +119,20 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
             if cache:
                 disp.enable_caching()
 
-            if device:
-                from numba.core import typeinfer
-                with typeinfer.register_dispatcher(disp):
-                    disp.compile_device(argtypes)
-            else:
-                disp.compile(argtypes)
+            for sig in signatures:
+                argtypes, restype = sigutils.normalize_signature(sig)
 
-            disp._specialized = True
+                if restype and not device and restype != types.void:
+                    raise TypeError("CUDA kernel must have void return type.")
+
+                if device:
+                    from numba.core import typeinfer
+                    with typeinfer.register_dispatcher(disp):
+                        disp.compile_device(argtypes, restype)
+                else:
+                    disp.compile(argtypes)
+
+            disp._specialized = specialized
             disp.disable_compile()
 
             return disp
@@ -129,7 +147,7 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
             else:
                 def autojitwrapper(func):
                     return jit(func, device=device, debug=debug, opt=opt,
-                               link=link, cache=cache, **kws)
+                               lineinfo=lineinfo, link=link, cache=cache, **kws)
 
             return autojitwrapper
         # func_or_sig is a function
@@ -140,6 +158,7 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
             else:
                 targetoptions = kws.copy()
                 targetoptions['debug'] = debug
+                targetoptions['lineinfo'] = lineinfo
                 targetoptions['opt'] = opt
                 targetoptions['link'] = link
                 targetoptions['fastmath'] = fastmath

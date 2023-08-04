@@ -607,8 +607,9 @@ class DeviceNDArray(DeviceNDArrayBase):
 
     def ravel(self, order='C', stream=0):
         '''
-        Flatten the array without changing its contents, similar to
-        :meth:`numpy.ndarray.ravel`.
+        Flattens a contiguous array without changing its contents, similar to
+        :meth:`numpy.ndarray.ravel`. If the array is not contiguous, raises an
+        exception.
         '''
         stream = self._default_stream(stream)
         cls = type(self)

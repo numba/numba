@@ -4,6 +4,7 @@
 #
 
 import numpy
+import math
 
 import types as pytypes
 import collections
@@ -91,6 +92,20 @@ def mk_alloc(typingctx, typemap, calltypes, lhs, size_var, dtype, scope, loc,
             out.append(tuple_assign)
             size_var = tuple_var
             size_typ = types.containers.UniTuple(types.intp, ndims)
+    if hasattr(lhs_typ, "__allocate__"):
+        return lhs_typ.__allocate__(
+            typingctx,
+            typemap,
+            calltypes,
+            lhs,
+            size_var,
+            dtype,
+            scope,
+            loc,
+            lhs_typ,
+            size_typ,
+            out,
+        )
     # g_np_var = Global(numpy)
     g_np_var = ir.Var(scope, mk_unique_var("$np_g_var"), loc)
     if typemap:
@@ -729,7 +744,11 @@ def has_no_side_effect(rhs, lives, call_table):
             call_list == [array_analysis.wrap_index] or
             call_list == [prange] or
             call_list == ['prange', numba] or
-            call_list == [parfor.internal_prange]):
+            call_list == ['pndindex', numba] or
+            call_list == [parfor.internal_prange] or
+            call_list == ['ceil', math] or
+            call_list == [max] or
+            call_list == [int]):
             return True
         elif (isinstance(call_list[0], _Intrinsic) and
               (call_list[0]._name == 'empty_inferred' or
@@ -769,7 +788,10 @@ def is_pure(rhs, lives, call_table):
             call_list = call_table[func_name]
             if (call_list == [slice] or
                 call_list == ['log', numpy] or
-                call_list == ['empty', numpy]):
+                call_list == ['empty', numpy] or
+                call_list == ['ceil', math] or
+                call_list == [max] or
+                call_list == [int]):
                 return True
             for f in is_pure_extensions:
                 if f(rhs, lives, call_list):
@@ -1717,6 +1739,8 @@ def _create_function_from_code_obj(fcode, func_env, func_arg, func_clo, glbls):
     * func_clo - string for the closure args
     * glbls - the function globals
     """
+    # in py3.11, func_arg contains '.'
+    func_arg = func_arg.replace('.', '_')
     sanitized_co_name = fcode.co_name.replace('<', '_').replace('>', '_')
     func_text = (f"def closure():\n{func_env}\n"
                  f"\tdef {sanitized_co_name}({func_arg}):\n"
@@ -1841,11 +1865,14 @@ def gen_np_call(func_as_str, func, lhs, args, typingctx, typemap, calltypes):
     np_assign = ir.Assign(np_call, lhs, loc)
     return [g_np_assign, attr_assign, np_assign]
 
+def dump_block(label, block):
+    print(label, ":")
+    for stmt in block.body:
+        print("    ", stmt)
+
 def dump_blocks(blocks):
     for label, block in blocks.items():
-        print(label, ":")
-        for stmt in block.body:
-            print("    ", stmt)
+        dump_block(label, block)
 
 def is_operator_or_getitem(expr):
     """true if expr is unary or binary operator or getitem"""
@@ -2245,7 +2272,7 @@ def convert_code_obj_to_function(code_obj, caller_ir):
             freevars.append(freevar_def.value)
         else:
             msg = ("Cannot capture the non-constant value associated with "
-                   "variable '%s' in a function that will escape." % x)
+                   "variable '%s' in a function that may escape." % x)
             raise TypingError(msg, loc=code_obj.loc)
 
     func_env = "\n".join(["\tc_%d = %s" % (i, x) for i, x in enumerate(freevars)])
