@@ -403,7 +403,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         pyfunc = numpy_resize
         cfunc = njit(pyfunc)
         def inputs():
-            # Taken from https://github.com/numpy/numpy/blob/f0b2fca91a1f5f50ff696895072f6fe9e69c1466/numpy/core/tests/test_numeric.py#L24-L64
+            # Taken from https://github.com/numpy/numpy/blob/f0b2fca91a1f5f50ff696895072f6fe9e69c1466/numpy/core/tests/test_numeric.py#L24-L64  noqa: E501
             yield np.array([[1, 2], [3, 4]]), (2, 4)
             yield np.array([[1, 2], [3, 4]]), (4, 2)
             yield np.array([[1, 2], [3, 4]]), (4, 3)
