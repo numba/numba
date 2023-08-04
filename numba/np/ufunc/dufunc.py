@@ -278,17 +278,25 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
             init_none = cgutils.is_nonelike(initial)
 
             @register_jitable
-            def compute_result_shape(shape, axis):
+            def compute_result_shape(shape, pos):
                 # Same as
-                # shape = array.shape[0 : axis] + array.shape[axis + 1:]
+                # shape = array.shape[0 : pos] + array.shape[pos + 1:]
                 s = tup_init
                 i = 0
                 for j, e in enumerate(shape):
-                    if j == axis:
+                    if j == pos:
                         continue
                     s = tuple_setitem(s, i, e)
                     i += 1
                 return s
+
+            @register_jitable
+            def find_min(tup):
+                idx, e = 0, tup[0]
+                for i in range(len(tup)):
+                    if tup[i] < e:
+                        idx, e = i, tup[i]
+                return idx, e
 
             def impl_1d(ufunc, array, axis=0, dtype=None, initial=None):
                 if init_none and id_none:
@@ -303,7 +311,42 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                     r = ufunc(r, array[i])
                 return r
 
-            def impl_nd_int(ufunc, array, axis=0, dtype=None, initial=None):
+            @register_jitable
+            def compute_new_flat_idx(idx, axis, shape):
+                val = idx
+                m = 1
+                r2 = 0
+                # this loop slowdown ufunc.reduce
+                # Q: how to compute this in a faster way?
+                # Could the result of a previous call be used to compute
+                # the next one?
+                for j in range(len(shape) - 1, -1, -1):
+                    tmp = val // shape[j]
+                    if j != axis:
+                        r2 += (val % shape[j]) * m
+                        m = m * shape[j]
+                    val = tmp
+
+                # for j in range(len(shape)-1, axis, -1):
+                #     tmp = val // shape[j]
+                #     r2 += (val % shape[j]) * m
+                #     m = m * shape[j]
+                #     val = tmp
+
+                # val = val // shape[axis]
+
+                # for j in range(axis-1, -1, -1):
+                #     tmp = val // shape[j]
+                #     r2 += (val % shape[j]) * m
+                #     m = m * shape[j]
+                #     val = tmp
+                return r2
+
+            def impl_nd_axis_int(ufunc,
+                                 array,
+                                 axis=0,
+                                 dtype=None,
+                                 initial=None):
                 if axis is None:
                     raise ValueError("'axis' must be specified")
 
@@ -321,35 +364,59 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 shape = compute_result_shape(array.shape, axis)
                 r = np.full(shape, fill_value=init, dtype=nb_dtype)
 
+                # There are two implementations available for ufunc.reduce
+                # Next 6 lines implement it by flattening the arrays and
+                # computing its index with "compute_new_flat_idx"
+
+                # array_flat = array.flat
+                # r_flat = r.flat
+                # array_sz = len(array_flat)
+                # for i in range(array_sz):
+                #     new_idx = compute_new_flat_idx(i, axis, array.shape)
+                #     r_flat[new_idx] = ufunc(r_flat[new_idx], array_flat[i])
+
+                # The other approach is to just remove the axis index from the
+                # indexing tuple returned by np.ndenumerate. For instance,
+                # consider the resulting tuple is "(X, Y, Z)" and axis=1,
+                # "compute_result_shape" will return a new tuple without the
+                # element in the middle (Y) => (X, Z)
+                # Surprisingly, this seems to be faster than the previous
+                # approach, but still slow compared to NumPy
                 for idx, val in np.ndenumerate(array):
                     result_idx = compute_result_shape(idx, axis)
                     r[result_idx] = ufunc(r[result_idx], val)
                 return r
 
-            def impl_nd_tuple(ufunc, array, axis=0, dtype=None, initial=None):
-                l = sorted(axis)
+            def impl_nd_axis_tuple(ufunc,
+                                   array,
+                                   axis=0,
+                                   dtype=None,
+                                   initial=None):
+                min_idx, min_elem = find_min(axis)
                 r = ufunc.reduce(array,
-                                 axis=l[0],
+                                 axis=min_elem,
                                  dtype=dtype,
                                  initial=initial)
                 if len(axis) == 1:
                     return r
                 elif len(axis) == 2:
-                    return ufunc.reduce(r, axis=l[1] - 1)
+                    return ufunc.reduce(r, axis=axis[(min_idx + 1) % 2] - 1)
                 else:
-                    ax = l[1:]
+                    ax = axis_tup
                     for i in range(len(ax)):
-                        ax = tuple_setitem(ax, i, ax[i] - 1)
+                        if i != min_idx:
+                            ax = tuple_setitem(ax, i, axis[i])
                     return ufunc.reduce(r, axis=ax)
 
             if array.ndim == 1:
                 return impl_1d
             else:
-                if isinstance(axis, types.UniTuple) and \
-                        isinstance(axis.dtype, types.Integer):
-                    return impl_nd_tuple
-                else:
-                    return impl_nd_int
+                if (isinstance(axis, types.UniTuple) and
+                        isinstance(axis.dtype, types.Integer)):
+                    axis_tup = (0,) * (len(axis) - 1)
+                    return impl_nd_axis_tuple
+                elif isinstance(axis, types.Integer):
+                    return impl_nd_axis_int
 
     def _install_type(self, typingctx=None):
         """Constructs and installs a typing class for a DUFunc object in the

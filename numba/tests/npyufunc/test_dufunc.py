@@ -166,7 +166,6 @@ class TestDUFuncMethods(TestCase):
                     got = foo(array, axis)
                     self.assertPreciseEqual(expected, got)
 
-
     def test_add_reduce(self):
         duadd = vectorize('int64(int64, int64)', identity=0)(pyuadd)
         self._check_reduce(duadd)
