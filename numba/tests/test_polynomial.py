@@ -160,7 +160,7 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
         # test suite containing tests for polyadd, polysub, polymul, polydiv
         cfunc = njit(pyfunc)
         def inputs():
-            # basic, taken from https://github.com/numpy/numpy/blob/48a8277855849be094a5979c48d9f5f1778ee4de/numpy/polynomial/tests/test_polynomial.py#L58-L123
+            # basic, taken from https://github.com/numpy/numpy/blob/48a8277855849be094a5979c48d9f5f1778ee4de/numpy/polynomial/tests/test_polynomial.py#L58-L123 # noqa: E501
             for i in range(5):
                 for j in range(5):
                     p1 = np.array([0]*i + [1])
