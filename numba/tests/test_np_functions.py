@@ -3196,7 +3196,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_vhdsplit_basic(self):
         # split and array_split have more comprehensive tests of splitting.
         # only do simple tests on vsplit, hsplit and dsplit
-        # Based on tests from https://github.com/numpy/numpy/blob/f0befec40376fc46fdaceac2c49c7349ad671bde/numpy/lib/tests/test_shape_base.py#L538-L624
+        # Based on tests from https://github.com/numpy/numpy/blob/f0befec40376fc46fdaceac2c49c7349ad671bde/numpy/lib/tests/test_shape_base.py#L538-L624 # noqa: E501
         def inputs1D():
             # test_1D_array
             yield np.array([1, 2, 3, 4]), 2
