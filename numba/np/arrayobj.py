@@ -1713,7 +1713,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
             msg = impl_ret_new_ref(context, builder, sig, res)
             context.call_conv.return_dynamic_user_exc(builder, ValueError,
                                                       (msg,),
-                                                      (types.unicode_type))
+                                                      (types.unicode_type,))
 
         def src_getitem(source_indices):
             idx, = source_indices
