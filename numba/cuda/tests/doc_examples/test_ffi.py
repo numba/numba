@@ -2,11 +2,9 @@
 # "magictoken" is used for markers as beginning and ending of example text.
 
 import unittest
-from numba.cuda.testing import (CUDATestCase, skip_on_cudasim,
-                                skip_unless_cuda_python)
+from numba.cuda.testing import (CUDATestCase, skip_on_cudasim)
 
 
-@skip_unless_cuda_python('NVIDIA Binding needed for NVRTC')
 @skip_on_cudasim("cudasim doesn't support cuda import at non-top-level")
 class TestFFI(CUDATestCase):
     def test_ex_linking_cu(self):

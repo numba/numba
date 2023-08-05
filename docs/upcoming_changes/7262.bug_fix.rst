@@ -1,0 +1,5 @@
+Handling of different sized unsigned integer indexes are fixed in ``numba.typed.List``.
+=======================================================================================
+
+An issue with the order of truncation/extension and casting of unsigned integer
+indexes in ``numba.typed.List`` has been fixed.
