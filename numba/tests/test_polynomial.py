@@ -137,9 +137,13 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
     def test_trimseq_basic(self):
         pyfunc = trimseq
         cfunc = njit(trimseq)
-        for i in range(5):
-            coefs = np.array([1] + [0]*i)
+        def inputs():
+            for i in range(5):
+                yield np.array([1] + [0]*i)
+
+        for coefs in inputs():
             self.assertPreciseEqual(pyfunc(coefs), cfunc(coefs))
+        
 
     def test_trimseq_exception(self):
         cfunc = njit(trimseq)
@@ -178,6 +182,7 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
             yield np.array([1, 2, 3]), np.array([1j, 2j, 3j])
             yield (1, 2, 3), 3.0
             yield (1, 2, 3), 3j
+            yield (1, 1e-3, 3), (1, 2, 3)
 
         for p1, p2 in inputs():
             self.assertPreciseEqual(pyfunc(p1,p2), cfunc(p1,p2),

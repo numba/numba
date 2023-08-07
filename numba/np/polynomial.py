@@ -98,11 +98,17 @@ def numpy_polyadd(c1, c2):
 
     if isinstance(c1, types.Number):
         s1 = str(as_dtype(c1))
+    elif isinstance(c1, types.Tuple):
+        t = [as_dtype(ty) for ty in c1.types]
+        s1 = str(np.result_type(*t))
     else:
         s1 = str(c1.dtype)
 
     if isinstance(c2, types.Number):
         s2 = str(as_dtype(c2))
+    elif isinstance(c2, types.Tuple):
+        t = [as_dtype(ty) for ty in c2.types]
+        s2 = str(np.result_type(*t))
     else:
         s2 = str(c2.dtype)
 
@@ -142,11 +148,17 @@ def numpy_polysub(c1, c2):
 
     if isinstance(c1, types.Number):
         s1 = str(as_dtype(c1))
+    elif isinstance(c1, types.Tuple):
+        t = [as_dtype(ty) for ty in c1.types]
+        s1 = str(np.result_type(*t))
     else:
         s1 = str(c1.dtype)
 
     if isinstance(c2, types.Number):
         s2 = str(as_dtype(c2))
+    elif isinstance(c2, types.Tuple):
+        t = [as_dtype(ty) for ty in c2.types]
+        s2 = str(np.result_type(*t))
     else:
         s2 = str(c2.dtype)
 
@@ -186,11 +198,17 @@ def numpy_polymul(c1, c2):
 
     if isinstance(c1, types.Number):
         s1 = str(as_dtype(c1))
+    elif isinstance(c1, types.Tuple):
+        t = [as_dtype(ty) for ty in c1.types]
+        s1 = str(np.result_type(*t))
     else:
         s1 = str(c1.dtype)
 
     if isinstance(c2, types.Number):
         s2 = str(as_dtype(c2))
+    elif isinstance(c2, types.Tuple):
+        t = [as_dtype(ty) for ty in c2.types]
+        s2 = str(np.result_type(*t))
     else:
         s2 = str(c2.dtype)
 
