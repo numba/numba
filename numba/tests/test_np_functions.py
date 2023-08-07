@@ -400,6 +400,10 @@ def np_cross(a, b):
     return np.cross(a, b)
 
 
+def np_trim_zeros(a, trim='fb'):
+    return np.trim_zeros(a, trim)
+
+
 def nb_cross2d(a, b):
     return cross2d(a, b)
 
@@ -5173,6 +5177,128 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             )
         self.assertIn(
             'Inputs must be array-like.',
+            str(raises.exception)
+        )
+
+    def test_trim_zeros(self):
+
+        def arrays():
+            yield np.array([])
+            yield np.zeros(5)
+            yield np.zeros(1)
+            yield np.array([1, 2, 3])
+            yield np.array([0, 1, 2, 3])
+            yield np.array([0., 1., 2., np.nan, 0.])
+            yield np.array(['0', 'Hello', 'world'])
+
+        def explicit_trim():
+            yield np.array([0, 1, 2, 0, 0]), 'FB'
+            yield np.array([0, 1, 2]), 'B'
+            yield np.array([np.nan, 0., 1.2, 2.3, 0.]), 'b'
+            yield np.array([0, 0, 1, 2, 5]), 'f'
+            yield np.array([0, 1, 2, 0]), 'abf'
+            yield np.array([0, 4, 0]), 'd'
+            yield np.array(['\0', '1', '2']), 'f'
+
+        pyfunc = np_trim_zeros
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for arr in arrays():
+            expected = pyfunc(arr)
+            got = cfunc(arr)
+            self.assertPreciseEqual(expected, got)
+
+        for arr, trim in explicit_trim():
+            expected = pyfunc(arr, trim)
+            got = cfunc(arr, trim)
+            self.assertPreciseEqual(expected, got)
+
+    def test_trim_zeros_numpy(self):
+        # https://github.com/numpy/numpy/blob/9d8d46ad615a7e13256b930146ac369f651016c0/numpy/lib/tests/test_function_base.py#L1251-L1313
+        a = np.array([0, 0, 1, 0, 2, 3, 4, 0])
+        b = a.astype(float)
+        c = a.astype(complex)
+        # d = a.astype(object)
+        values = [a, b, c]
+
+        # test_basic
+        slc = np.s_[2:-1]
+        for arr in values:
+            res = np_trim_zeros(arr)
+            self.assertPreciseEqual(res, arr[slc])
+
+        # test_leading_skip
+        slc = np.s_[:-1]
+        for arr in values:
+            res = np_trim_zeros(arr, trim='b')
+            self.assertPreciseEqual(res, arr[slc])
+
+        # test_trailing_skip
+        slc = np.s_[2:]
+        for arr in values:
+            res = np_trim_zeros(arr, trim='F')
+            self.assertPreciseEqual(res, arr[slc])
+
+        # test_all_zero
+        for _arr in values:
+            arr = np.zeros_like(_arr, dtype=_arr.dtype)
+
+            res1 = np_trim_zeros(arr, trim='B')
+            assert len(res1) == 0
+
+            res2 = np_trim_zeros(arr, trim='f')
+            assert len(res2) == 0
+
+        # test_size_zero
+        arr = np.zeros(0)
+        res = np_trim_zeros(arr)
+        self.assertPreciseEqual(arr, res)
+
+        # test_overflow
+        for arr in [np.array([0, 2**62, 0]), np.array([0, 2**63, 0]),
+                    np.array([0, 2**64, 0])]:
+            slc = np.s_[1:2]
+            res = np_trim_zeros(arr)
+            self.assertPreciseEqual(res, arr[slc])
+
+        # test_no_trim
+        arr = np.array([None, 1, None])
+        res = np_trim_zeros(arr)
+        self.assertPreciseEqual(arr, res)
+
+        # test_list_to_list
+        res = np_trim_zeros(a.tolist())
+        assert isinstance(res, list)
+
+    def test_trim_zeros_exceptions(self):
+        self.disable_leak_check()
+        cfunc = jit(nopython=True)(np_trim_zeros)
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.array([[1, 2, 3], [4, 5, 6]]))
+        self.assertIn(
+            'array must be 1D',
+            str(raises.exception)
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(3)
+        self.assertIn(
+            'The first argument must be an array',
+            str(raises.exception)
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc({0, 1, 2})
+        self.assertIn(
+            'The first argument must be an array',
+            str(raises.exception)
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.array([0, 1, 2]), 1)
+        self.assertIn(
+            'The second argument must be a string',
             str(raises.exception)
         )
 

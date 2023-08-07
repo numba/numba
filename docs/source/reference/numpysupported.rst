@@ -540,6 +540,7 @@ The following top-level functions are supported:
 * :func:`numpy.tril` (second argument ``k`` must be an integer)
 * :func:`numpy.tril_indices` (all arguments must be integer)
 * :func:`numpy.tril_indices_from` (second argument ``k`` must be an integer)
+* :func:`numpy.trim_zeros` (for NumPy array arguments only)
 * :func:`numpy.triu` (second argument ``k`` must be an integer)
 * :func:`numpy.triu_indices` (all arguments must be integer)
 * :func:`numpy.triu_indices_from` (second argument ``k`` must be an integer)

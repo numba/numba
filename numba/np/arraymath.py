@@ -4737,3 +4737,36 @@ def cross2d_impl(a, b):
         return _cross2d_operation(a_, b_)
 
     return impl
+
+
+@overload(np.trim_zeros)
+def np_trim_zeros(filt, trim='fb'):
+    if not isinstance(filt, types.Array):
+        raise NumbaTypeError('The first argument must be an array')
+
+    if filt.ndim > 1:
+        raise NumbaTypeError('array must be 1D')
+
+    if not isinstance(trim, (str, types.UnicodeType)):
+        raise NumbaTypeError('The second argument must be a string')
+
+    def impl(filt, trim='fb'):
+        a_ = np.asarray(filt)
+        first = 0
+        trim = trim.lower()
+        if 'f' in trim:
+            for i in a_:
+                if i != 0:
+                    break
+                else:
+                    first = first + 1
+        last = len(filt)
+        if 'b' in trim:
+            for i in a_[::-1]:
+                if i != 0:
+                    break
+                else:
+                    last = last - 1
+        return a_[first:last]
+
+    return impl
