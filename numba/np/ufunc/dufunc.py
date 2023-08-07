@@ -240,7 +240,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
         self._lower_me.libs.append(cres.library)
         return cres
 
-    def _install_ufunc_attributes(self, template: AbstractTemplate) -> None:
+    def _install_ufunc_attributes(self, template) -> None:
 
         def get_attr_fn(attr: str) -> Callable:
 
@@ -261,7 +261,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
             attr_fn = get_attr_fn(attr)
             overload_attribute(at, attr)(attr_fn)
 
-    def _install_ufunc_methods(self, template: AbstractTemplate) -> None:
+    def _install_ufunc_methods(self, template) -> None:
         at = types.Function(template)
 
         @overload_method(at, 'reduce')
