@@ -159,6 +159,11 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
             cfunc(np.arange(10).reshape(5, 2))
         self.assertIn('Coefficient array is not 1-d',
                       str(e.exception))
+        
+        with self.assertRaises(TypingError) as e:
+            cfunc((1, 2, 3, 0))
+        self.assertIn('Unsupported type UniTuple(int64, 4) for argument "seq"',
+                      str(e.exception))
 
     def _test_polyarithm_basic(self, pyfunc, ignore_sign_on_zero = False):
         # test suite containing tests for polyadd, polysub, polymul, polydiv

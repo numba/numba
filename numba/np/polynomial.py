@@ -65,6 +65,10 @@ def polyutils_trimseq(seq):
     if not type_can_asarray(seq):
         msg = 'The argument "seq" must be array-like'
         raise errors.TypingError(msg)
+    
+    if isinstance(seq, types.BaseTuple):
+        msg = 'Unsupported type %r for argument "seq"'
+        raise errors.TypingError(msg % (seq))
 
     if np.ndim(seq) > 1:
         msg = 'Coefficient array is not 1-d'
