@@ -87,7 +87,7 @@ def polyutils_trimseq(seq):
 
 def _poly_result_dtype(tup):
     # A helper function that takes a tuple of inputs and returns their result
-    # dtype. Used for poly functions
+    # dtype. Used for poly functions.
     res_dtype = np.float64
     for item in tup:
         if isinstance(item, types.Number):
@@ -114,23 +114,6 @@ def numpy_polyadd(c1, c2):
         msg = 'Coefficient array is not 1-d'
         raise errors.NumbaValueError(msg)
 
-    # if isinstance(c1, types.Number):
-    #     s1 = str(as_dtype(c1))
-    # elif isinstance(c1, types.Tuple):
-    #     t = [as_dtype(ty) for ty in c1.types]
-    #     s1 = str(np.result_type(*t))
-    # else:
-    #     s1 = str(c1.dtype)
-
-    # if isinstance(c2, types.Number):
-    #     s2 = str(as_dtype(c2))
-    # elif isinstance(c2, types.Tuple):
-    #     t = [as_dtype(ty) for ty in c2.types]
-    #     s2 = str(np.result_type(*t))
-    # else:
-    #     s2 = str(c2.dtype)
-
-    # result_dtype = from_dtype(np.result_type(s1, s2, np.float64))
     result_dtype = _poly_result_dtype((c1, c2))
 
     def impl(c1, c2):
@@ -165,23 +148,6 @@ def numpy_polysub(c1, c2):
         msg = 'Coefficient array is not 1-d'
         raise errors.NumbaValueError(msg)
 
-    # if isinstance(c1, types.Number):
-    #     s1 = str(as_dtype(c1))
-    # elif isinstance(c1, types.Tuple):
-    #     t = [as_dtype(ty) for ty in c1.types]
-    #     s1 = str(np.result_type(*t))
-    # else:
-    #     s1 = str(c1.dtype)
-
-    # if isinstance(c2, types.Number):
-    #     s2 = str(as_dtype(c2))
-    # elif isinstance(c2, types.Tuple):
-    #     t = [as_dtype(ty) for ty in c2.types]
-    #     s2 = str(np.result_type(*t))
-    # else:
-    #     s2 = str(c2.dtype)
-
-    # result_dtype = from_dtype(np.result_type(s1, s2, np.float64))
     result_dtype = _poly_result_dtype((c1, c2))
 
     def impl(c1, c2):
@@ -216,23 +182,6 @@ def numpy_polymul(c1, c2):
         msg = 'Coefficient array is not 1-d'
         raise errors.NumbaValueError(msg)
 
-    # if isinstance(c1, types.Number):
-    #     s1 = str(as_dtype(c1))
-    # elif isinstance(c1, types.Tuple):
-    #     t = [as_dtype(ty) for ty in c1.types]
-    #     s1 = str(np.result_type(*t))
-    # else:
-    #     s1 = str(c1.dtype)
-
-    # if isinstance(c2, types.Number):
-    #     s2 = str(as_dtype(c2))
-    # elif isinstance(c2, types.Tuple):
-    #     t = [as_dtype(ty) for ty in c2.types]
-    #     s2 = str(np.result_type(*t))
-    # else:
-    #     s2 = str(c2.dtype)
-
-    # result_dtype = from_dtype(np.result_type(s1, s2, np.float64))
     result_dtype = _poly_result_dtype((c1, c2))
 
     def impl(c1, c2):
