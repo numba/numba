@@ -320,25 +320,23 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 # Q: how to compute this in a faster way?
                 # Could the result of a previous call be used to compute
                 # the next one?
-                for j in range(len(shape) - 1, -1, -1):
-                    tmp = val // shape[j]
+
+                j = len(shape) - 1
+                while j >= 0:
+                    shape_j = shape[j]
+                    (div, mod) = np.divmod(val, shape_j)
+                    tmp = div
                     if j != axis:
-                        r2 += (val % shape[j]) * m
-                        m = m * shape[j]
+                        r2 += mod * m
+                        m *= shape_j
                     val = tmp
+                    j -= 1
 
-                # for j in range(len(shape)-1, axis, -1):
+                # for j in range(len(shape) - 1, -1, -1):
                 #     tmp = val // shape[j]
-                #     r2 += (val % shape[j]) * m
-                #     m = m * shape[j]
-                #     val = tmp
-
-                # val = val // shape[axis]
-
-                # for j in range(axis-1, -1, -1):
-                #     tmp = val // shape[j]
-                #     r2 += (val % shape[j]) * m
-                #     m = m * shape[j]
+                #     if j != axis:
+                #         r2 += (val % shape[j]) * m
+                #         m = m * shape[j]
                 #     val = tmp
                 return r2
 
