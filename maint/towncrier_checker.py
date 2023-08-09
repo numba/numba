@@ -14,6 +14,16 @@ Options:
   --repo=<repo>      Which repository to look at on GitHub
   --token=<token>    The GitHub token to talk to the API
 
+Package requirements:
+
+- pygithub
+- docopt
+- gitpython
+
+Can be installed with:
+
+    pip install pygithub docopt gitpython
+
 """
 
 import re
