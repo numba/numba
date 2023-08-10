@@ -4562,6 +4562,33 @@ def impl_np_diag(v, k=0):
         return diag_impl
 
 
+@overload(np.indices)
+def numpy_indices(dimensions):
+    if not isinstance(dimensions, types.Sequence):
+        msg = 'The argument "dimensions" must be a sequence of integers'
+        raise errors.TypingError(msg)
+
+    if not isinstance(dimensions.dtype, types.Integer):
+        msg = 'The argument "dimensions" must be a sequence of integers'
+        raise errors.TypingError(msg)
+
+    N = len(dimensions)
+    shape = (1,) * N
+
+    def impl(dimensions):
+        res = np.empty((N,) + dimensions, dtype=np.int64)
+        i = 0
+        for dim in dimensions:
+            idx = np.arange(dim, dtype=np.int64).reshape(
+                tuple_setitem(shape, i, dim)
+            )
+            res[i] = idx
+            i += 1
+        return res
+
+    return impl
+
+
 @overload(np.take)
 @overload_method(types.Array, 'take')
 def numpy_take(a, indices):

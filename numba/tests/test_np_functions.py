@@ -432,6 +432,10 @@ def nan_to_num(X, copy=True, nan=0.0):
     return np.nan_to_num(X, copy=copy, nan=nan)
 
 
+def np_indices(dimensions):
+    return np.indices(dimensions)
+
+
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
     Tests for various Numpy functions.
@@ -1867,6 +1871,41 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self._triangular_indices_from_tests_arr_k(triu_indices_from_arr_k)
         self._triangular_indices_from_exceptions(triu_indices_from_arr, False)
         self._triangular_indices_from_exceptions(triu_indices_from_arr_k, True)
+
+    def test_indices_basic(self):
+        pyfunc = np_indices
+        cfunc = njit(np_indices)
+
+        def inputs():
+            # Taken from https://github.com/numpy/numpy/blob/db4f43983cb938f12c311e1f5b7165e270c393b4/numpy/core/tests/test_numeric.py#L3383-L3407 # noqa: E501
+            yield (4,3)
+            yield (4,)
+            yield (0,)
+            yield (2, 2, 3, 5)
+
+        for dims in inputs():
+            self.assertPreciseEqual(pyfunc(dims), cfunc(dims))
+
+    def test_indices_exception(self):
+        cfunc = njit(np_indices)
+
+        self.disable_leak_check()
+
+        errmsg = 'The argument "dimensions" must be a sequence of integers'
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc")
+        self.assertIn(errmsg,
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc((2.0, 3.0))
+        self.assertIn(errmsg,
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc((2, 3.0))
+        self.assertIn(errmsg,
+                      str(raises.exception))
 
     def partition_sanity_check(self, pyfunc, cfunc, a, kth):
         # as NumPy uses a different algorithm, we do not expect to
