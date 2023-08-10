@@ -262,6 +262,9 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
             overload_attribute(at, attr)(attr_fn)
 
     def _install_ufunc_methods(self, template) -> None:
+        self._install_ufunc_reduce(template)
+
+    def _install_ufunc_reduce(self, template) -> None:
         at = types.Function(template)
 
         @overload_method(at, 'reduce')
