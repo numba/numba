@@ -7,7 +7,6 @@ import os
 
 from numba import jit, njit, typed, int64, types
 from numba.core import errors
-import numba.core.typing.cffi_utils as cffi_support
 from numba.experimental import structref
 from numba.extending import (overload, intrinsic, overload_method,
                              overload_attribute)
@@ -20,7 +19,8 @@ from numba.core.compiler_machinery import PassManager
 from numba.core.types.functions import _err_reasons as error_reasons
 
 from numba.tests.support import (skip_parfors_unsupported, override_config,
-                                 SerialMixin, skip_unless_scipy)
+                                 SerialMixin, skip_unless_cffi,
+                                 skip_unless_scipy)
 import unittest
 
 # used in TestMiscErrorHandling::test_handling_of_write_to_*_global
@@ -393,7 +393,7 @@ class TestErrorMessages(unittest.TestCase):
         excstr = str(raises.exception)
         self.assertIn("Type Restricted Function in function 'unknown'", excstr)
 
-    @unittest.skipUnless(cffi_support.SUPPORTED, "CFFI not supported")
+    @skip_unless_cffi
     def test_cffi_function_pointer_template_source(self):
         from numba.tests import cffi_usecases as mod
         mod.init()
