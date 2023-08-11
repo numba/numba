@@ -4564,12 +4564,12 @@ def impl_np_diag(v, k=0):
 
 @overload(np.indices)
 def numpy_indices(dimensions):
-    if not isinstance(dimensions, types.Sequence):
-        msg = 'The argument "dimensions" must be a sequence of integers'
+    if not isinstance(dimensions, types.UniTuple):
+        msg = 'The argument "dimensions" must be a tuple of integers'
         raise errors.TypingError(msg)
 
     if not isinstance(dimensions.dtype, types.Integer):
-        msg = 'The argument "dimensions" must be a sequence of integers'
+        msg = 'The argument "dimensions" must be a tuple of integers'
         raise errors.TypingError(msg)
 
     N = len(dimensions)

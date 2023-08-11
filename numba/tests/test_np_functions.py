@@ -1878,7 +1878,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         def inputs():
             # Taken from https://github.com/numpy/numpy/blob/db4f43983cb938f12c311e1f5b7165e270c393b4/numpy/core/tests/test_numeric.py#L3383-L3407 # noqa: E501
-            yield (4,3)
+            yield (4, 3)
             yield (4,)
             yield (0,)
             yield (2, 2, 3, 5)
@@ -1891,7 +1891,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         self.disable_leak_check()
 
-        errmsg = 'The argument "dimensions" must be a sequence of integers'
+        errmsg = 'The argument "dimensions" must be a tuple of integers'
         with self.assertRaises(TypingError) as raises:
             cfunc("abc")
         self.assertIn(errmsg,
