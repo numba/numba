@@ -6,6 +6,7 @@ import numpy as np
 
 from numba import njit, vectorize
 from numba.tests.support import MemoryLeakMixin, TestCase
+from numba.core.errors import TypingError
 import unittest
 from numba.np.ufunc import dufunc
 
@@ -156,15 +157,23 @@ class TestDUFuncMethods(TestCase):
         def foo(a, axis):
             return ufunc.reduce(a, axis=axis)
 
+        exc_msg = (f"reduction operation '{ufunc.__name__}' is not "
+                   "reorderable, so at most one axis may be specified")
         inputs = [
             np.arange(40).reshape(5, 4, 2),
         ]
         for array in inputs:
             for i in range(1, array.ndim + 1):
                 for axis in itertools.combinations(range(array.ndim), r=i):
-                    expected = foo.py_func(array, axis)
-                    got = foo(array, axis)
-                    self.assertPreciseEqual(expected, got)
+                    try:
+                        expected = foo.py_func(array, axis)
+                    except ValueError as e:
+                        self.assertEqual(e.args[0], exc_msg)
+                        with self.assertRaisesRegex(TypingError, exc_msg):
+                            got = foo(array, axis)
+                    else:
+                        got = foo(array, axis)
+                        self.assertPreciseEqual(expected, got)
 
     def test_add_reduce(self):
         duadd = vectorize('int64(int64, int64)', identity=0)(pyuadd)
@@ -182,6 +191,18 @@ class TestDUFuncMethods(TestCase):
     def test_min_reduce(self):
         dumin = vectorize('int64(int64, int64)')(pymin)
         self._check_reduce(dumin, initial=10)
+        self._check_reduce_axis(dumin)
+
+    def test_invalid_input(self):
+        duadd = vectorize('float64(float64, int64)', identity=0)(pyuadd)
+
+        @njit
+        def foo(a):
+            return duadd.reduce(a)
+
+        exc_msg = 'The first argument "array" must be array-like'
+        with self.assertRaisesRegex(TypingError, exc_msg):
+            foo('a')
 
 
 class TestDUFuncPickling(MemoryLeakMixin, unittest.TestCase):

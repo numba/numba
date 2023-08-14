@@ -3,7 +3,7 @@ import functools
 import numpy as np
 
 from numba import jit, typeof
-from numba.core import cgutils, types, serialize, sigutils
+from numba.core import cgutils, types, serialize, sigutils, errors
 from numba.core.extending import (is_jitted, overload_attribute,
                                   overload_method, register_jitable)
 from numba.core.typing import npydecl
@@ -270,10 +270,22 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
         @overload_method(at, 'reduce')
         def ol_reduce(ufunc, array, axis=0, dtype=None, initial=None):
             if not isinstance(array, types.Array):
-                # XXX: Raise NumbaTypeError
-                return
+                msg = 'The first argument "array" must be array-like'
+                raise errors.NumbaTypeError(msg)
+
+            axis_int = isinstance(axis, types.Integer)
+            axis_int_tuple = isinstance(axis, types.UniTuple) and \
+                isinstance(axis.dtype, types.Integer)
+            axis_tuple_size = len(axis) if axis_int_tuple else 0
+
+            if self.ufunc.identity is None and not (
+                    axis_int or (axis_int_tuple and axis_tuple_size == 1)):
+                msg = (f"reduction operation '{self.ufunc.__name__}' is not "
+                       "reorderable, so at most one axis may be specified")
+                raise errors.NumbaTypeError(msg)
 
             tup_init = (0,) * (array.ndim - 1)
+            tup_init2 = (0,) * (array.ndim)
             nb_dtype = array.dtype if cgutils.is_nonelike(dtype) else dtype
             identity = self.identity
 
@@ -281,7 +293,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
             init_none = cgutils.is_nonelike(initial)
 
             @register_jitable
-            def compute_result_shape(shape, pos):
+            def tuple_slice(shape, pos):
                 # Same as
                 # shape = array.shape[0 : pos] + array.shape[pos + 1:]
                 s = tup_init
@@ -291,6 +303,22 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                         continue
                     s = tuple_setitem(s, i, e)
                     i += 1
+                return s
+
+            @register_jitable
+            def tuple_slice_append(shape, pos, val):
+                # Same as
+                # shape = array.shape[0 : pos] + val + array.shape[pos + 1:]
+                s = tup_init2
+                i, j, sz = 0, 0, len(s)
+                while j < sz:
+                    if j == pos:
+                        s = tuple_setitem(s, j, val)
+                    else:
+                        e = shape[i]
+                        s = tuple_setitem(s, j, e)
+                        i += 1
+                    j += 1
                 return s
 
             @register_jitable
@@ -326,6 +354,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
 
                 j = len(shape) - 1
                 while j >= 0:
+                    # Quite similar to np.unravel_index
                     shape_j = shape[j]
                     (div, mod) = np.divmod(val, shape_j)
                     tmp = div
@@ -334,13 +363,6 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                         m *= shape_j
                     val = tmp
                     j -= 1
-
-                # for j in range(len(shape) - 1, -1, -1):
-                #     tmp = val // shape[j]
-                #     if j != axis:
-                #         r2 += (val % shape[j]) * m
-                #         m = m * shape[j]
-                #     val = tmp
                 return r2
 
             def impl_nd_axis_int(ufunc,
@@ -354,16 +376,22 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 if axis < 0 or axis >= array.ndim:
                     raise ValueError("Invalid axis")
 
-                if initial is None and identity is None:
-                    init = array.take(0)
-                elif initial is None:
-                    init = identity
-                else:
-                    init = initial
-
                 # create result array
-                shape = compute_result_shape(array.shape, axis)
-                r = np.full(shape, fill_value=init, dtype=nb_dtype)
+                shape = tuple_slice(array.shape, axis)
+
+                if initial is None and identity is None:
+                    r = np.empty(shape, dtype=nb_dtype)
+                    for idx, _ in np.ndenumerate(r):
+                        # shape[0:axis] + 0 + shape[axis:]
+                        result_idx = tuple_slice_append(idx, axis, 0)
+                        r[idx] = array[result_idx]
+                elif initial is None and identity is not None:
+                    # Even though checking if identity is not None is redundant
+                    # it is required for Numba to compile this block without
+                    # the identity=None clause
+                    r = np.full(shape, fill_value=identity, dtype=nb_dtype)
+                else:
+                    r = np.full(shape, fill_value=initial, dtype=nb_dtype)
 
                 # There are two implementations available for ufunc.reduce
                 # Next 6 lines implement it by flattening the arrays and
@@ -384,7 +412,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 # Surprisingly, this seems to be faster than the previous
                 # approach, but still slow compared to NumPy
                 for idx, val in np.ndenumerate(array):
-                    result_idx = compute_result_shape(idx, axis)
+                    result_idx = tuple_slice(idx, axis)
                     r[result_idx] = ufunc(r[result_idx], val)
                 return r
 
@@ -412,11 +440,14 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
             if array.ndim == 1:
                 return impl_1d
             else:
-                if (isinstance(axis, types.UniTuple) and
-                        isinstance(axis.dtype, types.Integer)):
+                if axis_int_tuple:
+                    # axis is tuple of integers
                     axis_tup = (0,) * (len(axis) - 1)
                     return impl_nd_axis_tuple
-                elif isinstance(axis, types.Integer):
+                elif axis == 0 or isinstance(axis, (types.Integer,
+                                                    types.Omitted,
+                                                    types.IntegerLiteral)):
+                    # axis is default value (0) or an integer
                     return impl_nd_axis_int
 
     def _install_type(self, typingctx=None):
