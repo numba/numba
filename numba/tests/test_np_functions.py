@@ -436,6 +436,14 @@ def nan_to_num(X, copy=True, nan=0.0):
     return np.nan_to_num(X, copy=copy, nan=nan)
 
 
+def diagflat1(v):
+    return np.diagflat(v)
+
+
+def diagflat2(v, k=0):
+    return np.diagflat(v, k)
+
+
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
     Tests for various Numpy functions.
@@ -5671,6 +5679,55 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertTypingError() as raises:
             cfunc("invalid_input")
         self.assertIn("The first argument must be a scalar or an array-like",
+                      str(raises.exception))
+
+    def test_diagflat_basic(self):
+        pyfunc1 = diagflat1
+        cfunc1 = njit(pyfunc1)
+        pyfunc2 = diagflat2
+        cfunc2 = njit(pyfunc2)
+
+        def inputs():
+            yield np.array([1,2]), 1
+            yield np.array([[1,2],[3,4]]), -2
+            yield np.arange(8).reshape((2,2,2)), 2
+            yield [1, 2], 1
+            yield np.array([]), 1
+
+        for v, k in inputs():
+            self.assertPreciseEqual(pyfunc1(v), cfunc1(v))
+            self.assertPreciseEqual(pyfunc2(v, k), cfunc2(v, k))
+
+    def test_diagflat1_exception(self):
+        pyfunc = diagflat1
+        cfunc = njit(pyfunc)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc")
+        self.assertIn('The argument "v" must be array-like',
+                      str(raises.exception))
+
+    def test_diagflat2_exception(self):
+        pyfunc = diagflat2
+        cfunc = njit(pyfunc)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc", 2)
+        self.assertIn('The argument "v" must be array-like',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc([1, 2], "abc")
+        self.assertIn('The argument "k" must be an integer',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc([1, 2], 3.0)
+        self.assertIn('The argument "k" must be an integer',
                       str(raises.exception))
 
 

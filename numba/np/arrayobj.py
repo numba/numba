@@ -4609,6 +4609,32 @@ def impl_np_diag(v, k=0):
         return diag_impl
 
 
+@overload(np.diagflat)
+def numpy_diagflat(v, k=0):
+    if not type_can_asarray(v):
+        msg = 'The argument "v" must be array-like'
+        raise errors.TypingError(msg)
+
+    if not isinstance(k, (int, types.Integer)):
+        msg = 'The argument "k" must be an integer'
+        raise errors.TypingError(msg)
+
+    def impl(v, k=0):
+        v = np.asarray(v)
+        v = v.ravel()
+        s = len(v)
+        abs_k = abs(k)
+        n = s + abs_k
+        res = np.zeros((n, n), v.dtype)
+        i = np.maximum(0, -k)
+        j = np.maximum(0, k)
+        for t in range(s):
+            res[i + t, j + t] = v[t]
+        return res
+
+    return impl
+
+
 @overload(np.take)
 @overload_method(types.Array, 'take')
 def numpy_take(a, indices):

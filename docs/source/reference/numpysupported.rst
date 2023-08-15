@@ -467,6 +467,7 @@ The following top-level functions are supported:
 
 * :func:`numpy.delete` (only the 2 first arguments)
 * :func:`numpy.diag`
+* :func:`numpy.diagflat`
 * :func:`numpy.digitize`
 * :func:`numpy.dstack`
 * :func:`numpy.dtype` (only the first argument)
