@@ -422,6 +422,15 @@ The following reduction functions are supported:
 * :func:`numpy.quantile` (only the 2 first arguments, complex dtypes
   unsupported)
 
+Polynomials
+-----------
+
+The following polynomial functions are supported:
+* :func:`numpy.polynomial.polynomial.polyadd()`
+* :func:`numpy.polynomial.polynomial.polymul()`
+* :func:`numpy.polynomial.polynomial.polysub()`
+* :func:`numpy.polynomial.polyutils.trimseq()`
+
 Other functions
 ---------------
 
