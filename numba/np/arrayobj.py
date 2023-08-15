@@ -2149,6 +2149,53 @@ def np_reshape(a, newshape):
     return np_reshape_impl
 
 
+@overload(np.resize)
+def numpy_resize(a, new_shape):
+
+    if not type_can_asarray(a):
+        msg = 'The argument "a" must be array-like'
+        raise errors.TypingError(msg)
+
+    if not ((isinstance(new_shape, types.UniTuple)
+             and
+             isinstance(new_shape.dtype, types.Integer))
+            or
+            isinstance(new_shape, types.Integer)):
+        msg = ('The argument "new_shape" must be an integer or '
+               'a tuple of integers')
+        raise errors.TypingError(msg)
+
+    def impl(a, new_shape):
+        a = np.asarray(a)
+        a = np.ravel(a)
+
+        if isinstance(new_shape, tuple):
+            new_size = 1
+            for dim_length in np.asarray(new_shape):
+                new_size *= dim_length
+                if dim_length < 0:
+                    msg = 'All elements of `new_shape` must be non-negative'
+                    raise ValueError(msg)
+        else:
+            if new_shape < 0:
+                msg2 = 'All elements of `new_shape` must be non-negative'
+                raise ValueError(msg2)
+            new_size = new_shape
+
+        if a.size == 0:
+            return np.zeros(new_shape).astype(a.dtype)
+
+        repeats = -(-new_size // a.size)  # ceil division
+        res = a
+        for i in range(repeats - 1):
+            res = np.concatenate((res, a))
+        res = res[:new_size]
+
+        return np.reshape(res, new_shape)
+
+    return impl
+
+
 @overload(np.append)
 def np_append(arr, values, axis=None):
 
