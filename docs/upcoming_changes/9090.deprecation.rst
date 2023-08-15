@@ -1,0 +1,7 @@
+Deprecation of old-style ``NUMBA_CAPTURED_ERRORS``
+==================================================
+
+Added deprecation schedule of ``NUMBA_CAPTURED_ERRORS=old_style``.
+``NUMBA_CAPTURED_ERRORS=new_style`` will become the default in future releases.
+Details are documented at
+https://numba.readthedocs.io/en/stable/reference/deprecation.html#deprecation-of-old-style-numba-captured-errors

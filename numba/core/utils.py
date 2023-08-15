@@ -192,18 +192,35 @@ weakref.finalize(lambda: None, lambda: None)
 atexit.register(_at_shutdown)
 
 
+def _warn_old_style():
+    from numba.core import errors  # to prevent circular import
+
+    warnings.warn(
+        "The 'old_style' error capturing is deprecated "
+        "and will be replaced by `new_style` in a future release.",
+        errors.NumbaPendingDeprecationWarning,
+        stacklevel=3
+    )
+
+
 def use_new_style_errors():
     """Returns True if new style errors are to be used, false otherwise"""
     # This uses `config` so as to make sure it gets the current value from the
     # module as e.g. some tests mutate the config with `override_config`.
-    return config.CAPTURED_ERRORS == 'new_style'
+    res = config.CAPTURED_ERRORS == 'new_style'
+    if not res:
+        _warn_old_style()
+    return res
 
 
 def use_old_style_errors():
     """Returns True if old style errors are to be used, false otherwise"""
     # This uses `config` so as to make sure it gets the current value from the
     # module as e.g. some tests mutate the config with `override_config`.
-    return config.CAPTURED_ERRORS == 'old_style'
+    res = config.CAPTURED_ERRORS == 'old_style'
+    if res:
+        _warn_old_style()
+    return res
 
 
 class ThreadLocalStack:

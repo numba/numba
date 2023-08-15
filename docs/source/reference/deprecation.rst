@@ -490,3 +490,54 @@ Schedule
 - In Numba 0.57: Support for CUDA toolkit 10.2 was removed.
 - In Numba 0.58: Support CUDA toolkits 11.0 and 11.1 was removed.
 - In a future release: Support for CC < 5.0 will be removed.
+
+Deprecation of old-style ``NUMBA_CAPTURED_ERRORS``
+==================================================
+
+The use of ``NUMBA_CAPTURED_ERRORS=old_style`` environment variable is being 
+deprecated in Numba.
+
+Reason for deprecation
+----------------------
+
+Previously, this variable allowed controlling how Numba handles exceptions 
+during compilation that do not inherit from ``numba.core.errors.NumbaError``. 
+The default "old_style" behavior was to capture and wrap these errors, often 
+obscuring the original exception.
+
+The new "new_style" option treats non-``NumbaError`` exceptions as hard errors, 
+propagating them without capturing. This differentiates compilation errors from 
+unintended exceptions during compilation.
+
+The old style will eventually be removed in favor of the new behavior. Users 
+should migrate to setting ``NUMBA_CAPTURED_ERRORS='new_style'`` to opt-in to the 
+new exception handling. This will become the default in the future.
+
+Impact
+------
+
+The impact of this deprecation will only affect those who are extending Numba
+functionality. 
+
+Recommendations
+---------------
+
+- Projects that extends Numba should set 
+  ``NUMBA_CAPTURED_ERRORS='new_style'`` for testing to find all places where 
+  non-``NumbaError`` exceptions are raised during compilation.
+- Modify any code that raises a non-``NumbaError`` to indicate a compilation
+  error to raise a subclass of ``NumbaError`` instead. For example, instead of
+  raising a ``TypeError``, raise a ``numba.core.errors.NumbaTypeError``.
+
+
+Schedule
+--------
+
+- In Numba 0.58: ``NUMBA_CAPTURED_ERRORS=old_style`` is deprecated. Warnings 
+  will be raised when `old_style` error capturing is used.
+- In Numba 0.59: explicitly setting ``NUMBA_CAPTURED_ERRORS=old_style`` will 
+  raise deprecation warnings.
+- In Numba 0.60: ``NUMBA_CAPTURED_ERRORS=new_style`` becomes the default.
+- In Numba 0.61: support for ``NUMBA_CAPTURED_ERRORS=old_style`` will be 
+  removed.
+
