@@ -196,6 +196,18 @@ def split(a, indices, axis=0):
     return np.split(a, indices, axis=axis)
 
 
+def vsplit(a, ind_or_sec):
+    return np.vsplit(a, ind_or_sec)
+
+
+def hsplit(a, ind_or_sec):
+    return np.hsplit(a, ind_or_sec)
+
+
+def dsplit(a, ind_or_sec):
+    return np.dsplit(a, ind_or_sec)
+
+
 def correlate(a, v, mode="valid"):
     return np.correlate(a, v, mode=mode)
 
@@ -3403,6 +3415,74 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             njit(split)(np.ones(5), [3], axis=-3)
         self.assertIn("np.split: Argument axis out of bounds",
                       str(raises.exception))
+
+    def test_vhdsplit_basic(self):
+        # split and array_split have more comprehensive tests of splitting.
+        # only do simple tests on vsplit, hsplit and dsplit
+        # Based on tests from https://github.com/numpy/numpy/blob/f0befec40376fc46fdaceac2c49c7349ad671bde/numpy/lib/tests/test_shape_base.py#L538-L624 # noqa: E501
+        def inputs1D():
+            # test_1D_array
+            yield np.array([1, 2, 3, 4]), 2
+            yield np.array([1., 2., 3., 4.]), 2
+
+        def inputs2D():
+            # test_2D_array
+            yield np.array([[1, 2, 3, 4], [1, 2, 3, 4]]), 2
+            yield np.array([[1., 2., 3., 4.], [1., 2., 3., 4.]]), 2
+            yield np.arange(16.0).reshape(4, 4), 2
+            yield np.arange(16.0).reshape(4, 4), np.array([3, 6])
+            yield np.arange(16.0).reshape(4, 4), [3, 6]
+            yield np.arange(16.0).reshape(4, 4), (3, 6)
+            yield np.arange(8.0).reshape(2, 2, 2), 2
+
+        def inputs3D():
+            # test_3D_array
+            np.array([[[1, 2, 3, 4],
+                       [1, 2, 3, 4]],
+                      [[1, 2, 3, 4],
+                       [1, 2, 3, 4]]]), 2
+            yield np.arange(16.0).reshape(2, 2, 4), 2
+            yield np.arange(16.0).reshape(2, 2, 4), np.array([3, 6])
+            yield np.arange(16.0).reshape(2, 2, 4), [3, 6]
+            yield np.arange(16.0).reshape(2, 2, 4), (3, 6)
+            yield np.arange(8.0).reshape(2, 2, 2), 2
+
+        inputs = [inputs1D(), inputs2D(), inputs3D()]
+        for (f, mindim, name) in [(vsplit, 2, "vsplit"),
+                                  (hsplit, 1, "hsplit"),
+                                  (dsplit, 3, "dsplit")]:
+            pyfunc = f
+            cfunc = njit(pyfunc)
+            for i in range(mindim, 4):
+                for a, ind_or_sec in inputs[i - 1]:
+                    self.assertPreciseEqual(pyfunc(a, ind_or_sec),
+                                            cfunc(a, ind_or_sec))
+
+    def test_vhdsplit_exception(self):
+        # Single test method for vsplit, hsplit and dsplit exceptions
+        for (f, mindim, name) in [(vsplit, 2, "vsplit"),
+                                  (hsplit, 1, "hsplit"),
+                                  (dsplit, 3, "dsplit")]:
+            cfunc = jit(nopython=True)(f)
+            self.disable_leak_check()
+            with self.assertRaises(TypingError) as raises:
+                cfunc(1, 2)
+            self.assertIn('The argument "ary" must be an array',
+                          str(raises.exception))
+            with self.assertRaises(TypingError) as raises:
+                cfunc("abc", 2)
+            self.assertIn('The argument "ary" must be an array',
+                          str(raises.exception))
+            with self.assertRaises(TypingError) as raises:
+                cfunc(np.array([[1, 2, 3, 4], [1, 2, 3, 4]]), "abc")
+            self.assertIn(('The argument "indices_or_sections" must be int or '
+                           '1d-array'),
+                          str(raises.exception))
+            with self.assertRaises(ValueError) as raises:
+                cfunc(np.array(1), 2)
+            self.assertIn(name + ' only works on arrays of ' + str(mindim) +
+                          ' or more dimensions',
+                          str(raises.exception))
 
     def test_roll_basic(self):
         pyfunc = roll
