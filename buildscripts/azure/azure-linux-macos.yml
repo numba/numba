@@ -38,8 +38,9 @@ jobs:
     - script: |
         set -e
         export PATH=$HOME/miniconda3/bin:$PATH
-        conda install -y mypy
-        mypy
+        # using conda-forge because main only have version < 1.0
+        conda create -n mypy311 -y -c conda-forge python=3.11 mypy 
+        conda run -n mypy311 mypy
       displayName: 'Mypy'
       condition: eq(variables['RUN_MYPY'], 'yes')
 

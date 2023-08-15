@@ -203,6 +203,9 @@ class _EnvReloader(object):
         def optional_str(x):
             return str(x) if x is not None else None
 
+        # RVSDG frontend selection
+        USE_RVSDG_FRONTEND = _readenv("NUMBA_USE_RVSDG_FRONTEND", int, 0)
+
         # developer mode produces full tracebacks, disables help instructions
         DEVELOPER_MODE = _readenv("NUMBA_DEVELOPER_MODE", int, 0)
 
