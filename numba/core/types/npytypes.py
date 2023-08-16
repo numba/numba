@@ -635,3 +635,8 @@ class NumPyRandomGeneratorType(Type):
     def __init__(self, *args, **kwargs):
         super(NumPyRandomGeneratorType, self).__init__(*args, **kwargs)
         self.name = 'NumPyRandomGeneratorType'
+
+
+class PolynomialType(Type):
+    def __init__(self, *args, **kwargs):
+        super(PolynomialType, self).__init__(name='PolynomialType')
