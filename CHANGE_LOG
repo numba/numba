@@ -166,47 +166,49 @@ interpreter.
 (`PR-#8995 <https://github.com/numba/numba/pull/8995>`__)
 
 
-Added support for np.geomspace() function.
-"""""""""""""""""""""""""""""""""""""""""""""
+Added support for ``np.geomspace`` function.
+""""""""""""""""""""""""""""""""""""""""""""
 
-This PR improves on `#4074 <https://github.com/numba/numba/issues/4074>` by adding support for np.geomspace(). The current implementation only supports scalar *start* and *stop* parameters.
+This PR improves on `#4074 <https://github.com/numba/numba/issues/4074>`__ by
+adding support for ``np.geomspace``. The current implementation only supports
+scalar ``start`` and ``stop`` parameters.
 
 (`PR-#9068 <https://github.com/numba/numba/pull/9068>`__)
 
-Added support for np.vsplit(), np.hsplit(), np.dsplit().
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+Added support for ``np.vsplit``, ``np.hsplit``, ``np.dsplit``.
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
-This PR improves on `#4074 <https://github.com/numba/numba/issues/4074>` by adding support for ``np.vsplit()``, ``np.hsplit()``, ``and np.dsplit()``.
+This PR improves on `#4074 <https://github.com/numba/numba/issues/4074>` by adding support for ``np.vsplit``, ``np.hsplit``, ``and np.dsplit``.
 
 (`PR-#9082 <https://github.com/numba/numba/pull/9082>`__)
 
-Added support for np.row_stack() function.
-""""""""""""""""""""""""""""""""""""""""""
+Added support for ``np.row_stack`` function.
+""""""""""""""""""""""""""""""""""""""""""""
 
-Support is added for ``numpy.row_stack()``.
+Support is added for ``numpy.row_stack``.
 
 (`PR-#9085 <https://github.com/numba/numba/pull/9085>`__)
 
-Added support for functions np.polynomial.polyutils.trimseq(), as well as functions polyadd(), polysub(), polymul() from np.polynomial.polynomial.
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+Added support for functions ``np.polynomial.polyutils.trimseq``, as well as functions ``polyadd``, ``polysub``, ``polymul`` from ``np.polynomial.polynomial``.
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
-Support is added for ``np.polynomial.polyutils.trimseq()``, ``np.polynomial.polynomial.polyadd()``, ``np.polynomial.polynomial.polysub()``, ``np.polynomial.polynomial.polymul()``.
+Support is added for ``np.polynomial.polyutils.trimseq``, ``np.polynomial.polynomial.polyadd``, ``np.polynomial.polynomial.polysub``, ``np.polynomial.polynomial.polymul``.
 
 (`PR-#9087 <https://github.com/numba/numba/pull/9087>`__)
 
 
 
-Added support for np.diagflat() function.
-"""""""""""""""""""""""""""""""""""""""""
+Added support for ``np.diagflat`` function.
+"""""""""""""""""""""""""""""""""""""""""""
 
-Support is added for ``numpy.diagflat()``.
+Support is added for ``numpy.diagflat``.
 
 (`PR-#9113 <https://github.com/numba/numba/pull/9113>`__)
 
-Added support for np.resize() function.
-"""""""""""""""""""""""""""""""""""""""
+Added support for ``np.resize`` function.
+"""""""""""""""""""""""""""""""""""""""""
 
-Support is added for ``numpy.resize()``.
+Support is added for ``numpy.resize``.
 
 (`PR-#9118 <https://github.com/numba/numba/pull/9118>`__)
 
@@ -241,12 +243,12 @@ Support is added for the latest set of CUDA driver codes.
 Add NumPy comparison ufunc in CUDA
 """"""""""""""""""""""""""""""""""
 this PR adds support for comparison ufuncs for the CUDA target
-(eg. numpy.greater, numpy.greater_equal, numpy.less_equal, etc.).
+(eg. ``numpy.greater``, ``numpy.greater_equal``, ``numpy.less_equal``, etc.).
 
 (`PR-#9007 <https://github.com/numba/numba/pull/9007>`__)
 
-Report absolute path of libcuda.so on Linux
-"""""""""""""""""""""""""""""""""""""""""""
+Report absolute path of ``libcuda.so`` on Linux
+"""""""""""""""""""""""""""""""""""""""""""""""
 
 ``numba -s`` now reports the absolute path to ``libcuda.so`` on Linux, to aid
 troubleshooting driver issues, particularly on WSL2 where a Linux driver can
@@ -254,8 +256,8 @@ incorrectly be installed in the environment.
 
 (`PR-#9034 <https://github.com/numba/numba/pull/9034>`__)
 
-Add debuginfo support to nvdisasm output.
-"""""""""""""""""""""""""""""""""""""""""
+Add debuginfo support to ``nvdisasm`` output.
+"""""""""""""""""""""""""""""""""""""""""""""
 
 Support is added for debuginfo (source line and inlining information) in
 functions that make calls through ``nvdisasm``. For example the CUDA dispatcher
@@ -338,10 +340,10 @@ https://github.com/numba/numba/issues/9071 for details.
 
 (`PR-#9072 <https://github.com/numba/numba/pull/9072>`__)
 
-Support `dtype` keyword argument in `numpy.arange` with `parallel=True`
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+Support ``dtype`` keyword argument in ``numpy.arange`` with ``parallel=True``
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
-Fixes parfors transformation to support the use of `dtype` keyword argument in
+Fixes parfors transformation to support the use of ``dtype`` keyword argument in
 ``numpy.arange(..., dtype=dtype)``.
 
 (`PR-#9095 <https://github.com/numba/numba/pull/9095>`__)
