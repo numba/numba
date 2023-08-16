@@ -376,7 +376,9 @@ The minimum ``llvmlite`` version is now 0.41.0.
 
 The minimum required version of ``llvmlite`` is now version 0.41.0.
 
-(`PR-#8916 <https://github.com/numba/numba/pull/8916>`__)Version 0.57.1 (21 June, 2023)
+(`PR-#8916 <https://github.com/numba/numba/pull/8916>`__)
+
+Version 0.57.1 (21 June, 2023)
 ------------------------------
 
 Pull-Requests:
