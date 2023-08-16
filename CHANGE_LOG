@@ -7,19 +7,6 @@ notes, so please find a summary of all noteworthy items below.
 Highlights
 ~~~~~~~~~~
 
-Removal of Windows 32-bit Support
-"""""""""""""""""""""""""""""""""
-
-This release onwards, Numba has discontinued support for Windows 32-bit
-operating systems.
-
-(`PR-#9083 <https://github.com/numba/numba/pull/9083>`__)
-
-
-New Features
-~~~~~~~~~~~~
-
-
 Added towncrier
 """""""""""""""
 
@@ -30,6 +17,55 @@ release notes in smaller PRs with minimal impact by addition of a
 ``skip_release_notes`` label to the PR.
 
 (`PR-#8792 <https://github.com/numba/numba/pull/8792>`__)
+
+The minimum supported NumPy version is 1.22.
+""""""""""""""""""""""""""""""""""""""""""""
+
+Following NEP-0029, the minimum supported NumPy version is now 1.22.
+
+(`PR-#9093 <https://github.com/numba/numba/pull/9093>`__)
+
+Add support for NumPy 1.25
+""""""""""""""""""""""""""
+
+Extend Numba to support new and changed features released in NumPy 1.25.
+
+(`PR-#9011 <https://github.com/numba/numba/pull/9011>`__)
+
+Remove NVVM 3.4 and CTK 11.0 / 11.1 support
+"""""""""""""""""""""""""""""""""""""""""""
+
+Support for CUDA toolkits < 11.2 is removed.
+
+(`PR-#9040 <https://github.com/numba/numba/pull/9040>`__)
+
+Removal of Windows 32-bit Support
+"""""""""""""""""""""""""""""""""
+
+This release onwards, Numba has discontinued support for Windows 32-bit
+operating systems.
+
+(`PR-#9083 <https://github.com/numba/numba/pull/9083>`__)
+
+The minimum ``llvmlite`` version is now 0.41.0.
+"""""""""""""""""""""""""""""""""""""""""""""""
+
+The minimum required version of ``llvmlite`` is now version 0.41.0.
+
+(`PR-#8916 <https://github.com/numba/numba/pull/8916>`__)
+
+Added RVSDG-frontend
+""""""""""""""""""""
+
+This PR is a preliminary work on adding a RVSDG-frontend for processing
+bytecode. RVSDG (Regionalized Value-State Dependence Graph) allows us to
+have a dataflow-centric view instead of a traditional SSA-CFG view. This
+allows us to simplify the compiler in the future.
+
+(`PR-#9012 <https://github.com/numba/numba/pull/9012>`__)
+
+New Features
+~~~~~~~~~~~~
 
 ``numba.experimental.jitclass`` gains support for ``__*matmul__`` methods.
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -61,17 +97,6 @@ release notes in smaller PRs with minimal impact by addition of a
 * ``__rxor_``
 
 (`PR-#8906 <https://github.com/numba/numba/pull/8906>`__)
-
-
-Added RVSDG-frontend
-""""""""""""""""""""
-
-This PR is a preliminary work on adding a RVSDG-frontend for processing
-bytecode. RVSDG (Regionalized Value-State Dependence Graph) allows us to
-have a dataflow-centric view instead of a traditional SSA-CFG view. This
-allows us to simplify the compiler in the future.
-
-(`PR-#9012 <https://github.com/numba/numba/pull/9012>`__)
 
 
 Add np.trim_zeros
@@ -141,14 +166,6 @@ interpreter.
 (`PR-#8995 <https://github.com/numba/numba/pull/8995>`__)
 
 
-Add support for NumPy 1.25
-""""""""""""""""""""""""""
-
-Extend Numba to support new and changed features released in NumPy 1.25.
-
-(`PR-#9011 <https://github.com/numba/numba/pull/9011>`__)
-
-
 Added support for np.geomspace() function.
 """""""""""""""""""""""""""""""""""""""""""""
 
@@ -178,12 +195,6 @@ Support is added for ``np.polynomial.polyutils.trimseq()``, ``np.polynomial.poly
 (`PR-#9087 <https://github.com/numba/numba/pull/9087>`__)
 
 
-The minimum supported NumPy version is 1.22.
-""""""""""""""""""""""""""""""""""""""""""""
-
-Following NEP-0029, the minimum supported NumPy version is now 1.22.
-
-(`PR-#9093 <https://github.com/numba/numba/pull/9093>`__)
 
 Added support for np.diagflat() function.
 """""""""""""""""""""""""""""""""""""""""
@@ -251,13 +262,6 @@ functions that make calls through ``nvdisasm``. For example the CUDA dispatcher
 ``.inspect_sass`` method output is now augmented with this information.
 
 (`PR-#9035 <https://github.com/numba/numba/pull/9035>`__)
-
-Remove NVVM 3.4 and CTK 11.0 / 11.1 support
-"""""""""""""""""""""""""""""""""""""""""""
-
-Support for CUDA toolkits < 11.2 is removed.
-
-(`PR-#9040 <https://github.com/numba/numba/pull/9040>`__)
 
 
 Add CUDA SASS CFG Support
@@ -418,6 +422,7 @@ From the ``numpy.random`` module:
 Changes
 ~~~~~~~
 
+
 Support for ``@numba.extending.intrinsic(prefer_literal=True)``
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
@@ -427,13 +432,6 @@ when available. This has the same behavior as in the ``prefer_literal``
 option in the ``numba.extending.overload`` decorator.
 
 (`PR-#6647 <https://github.com/numba/numba/pull/6647>`__)
-
-The minimum ``llvmlite`` version is now 0.41.0.
-"""""""""""""""""""""""""""""""""""""""""""""""
-
-The minimum required version of ``llvmlite`` is now version 0.41.0.
-
-(`PR-#8916 <https://github.com/numba/numba/pull/8916>`__)
 
 
 Deprecations
