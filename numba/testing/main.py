@@ -437,7 +437,7 @@ def _choose_gitdiff_tests(tests, *, use_common_ancestor=False):
         print(f"Git diff by common ancestor")
         target = 'origin/release0.58...HEAD'
     else:
-        target = 'origin/release058..HEAD'
+        target = 'origin/release0.58..HEAD'
     gdiff_paths = repo.git.diff(target, path, name_only=True).split()
     # normalise the paths as they are unix style from repo.git.diff
     gdiff_paths = [os.path.normpath(x) for x in gdiff_paths]
