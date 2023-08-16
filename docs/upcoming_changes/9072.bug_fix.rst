@@ -1,0 +1,8 @@
+Fix support for overloading dispatcher with non-compatible first-class functions
+================================================================================
+
+Fixes an error caused by not handling compilation error during casting of 
+``Dispatcher`` objects into first-class functions. With the fix, users can now
+overload a dispatcher with non-compatible first-class functions. Refer to
+https://github.com/numba/numba/issues/9071 for details.
+

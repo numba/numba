@@ -422,6 +422,15 @@ The following reduction functions are supported:
 * :func:`numpy.quantile` (only the 2 first arguments, complex dtypes
   unsupported)
 
+Polynomials
+-----------
+
+The following polynomial functions are supported:
+* :func:`numpy.polynomial.polynomial.polyadd()`
+* :func:`numpy.polynomial.polynomial.polymul()`
+* :func:`numpy.polynomial.polynomial.polysub()`
+* :func:`numpy.polynomial.polyutils.trimseq()`
+
 Other functions
 ---------------
 
@@ -467,7 +476,9 @@ The following top-level functions are supported:
 
 * :func:`numpy.delete` (only the 2 first arguments)
 * :func:`numpy.diag`
+* :func:`numpy.diagflat`
 * :func:`numpy.digitize`
+* :func:`numpy.dsplit`
 * :func:`numpy.dstack`
 * :func:`numpy.dtype` (only the first argument)
 * :func:`numpy.ediff1d`
@@ -489,6 +500,7 @@ The following top-level functions are supported:
 * :func:`numpy.hamming`
 * :func:`numpy.hanning`
 * :func:`numpy.histogram` (only the 3 first arguments)
+* :func:`numpy.hsplit`
 * :func:`numpy.hstack`
 * :func:`numpy.identity`
 * :func:`numpy.indices` (only the first argument)
@@ -516,6 +528,7 @@ The following top-level functions are supported:
 * :func:`numpy.ravel` (no order argument; 'C' order only)
 * :func:`numpy.repeat` (no axis argument)
 * :func:`numpy.reshape` (no order argument; 'C' order only)
+* :func:`numpy.resize`
 * :func:`numpy.roll` (only the 2 first arguments; second argument ``shift``
   must be an integer)
 * :func:`numpy.roots`
@@ -541,12 +554,14 @@ The following top-level functions are supported:
 * :func:`numpy.tril` (second argument ``k`` must be an integer)
 * :func:`numpy.tril_indices` (all arguments must be integer)
 * :func:`numpy.tril_indices_from` (second argument ``k`` must be an integer)
+* :func:`numpy.trim_zeros` (for NumPy array arguments only)
 * :func:`numpy.triu` (second argument ``k`` must be an integer)
 * :func:`numpy.triu_indices` (all arguments must be integer)
 * :func:`numpy.triu_indices_from` (second argument ``k`` must be an integer)
 * :func:`numpy.union1d` (For unicode arrays, only supports arrays of the same dtype)
 * :func:`numpy.unique` (only the first argument)
 * :func:`numpy.vander`
+* :func:`numpy.vsplit`
 * :func:`numpy.vstack`
 * :func:`numpy.where`
 * :func:`numpy.zeros` (only the 2 first arguments)
@@ -977,15 +992,13 @@ Floating functions
  copysign            Yes          Yes
  nextafter           Yes          Yes
  modf                Yes          No
- ldexp               Yes (*)      Yes
+ ldexp               Yes          Yes
  frexp               Yes          No
  floor               Yes          Yes
  ceil                Yes          Yes
  trunc               Yes          Yes
  spacing             Yes          Yes
 ==============  =============  ===============
-
-(\*) not supported on windows 32 bit
 
 
 Datetime functions

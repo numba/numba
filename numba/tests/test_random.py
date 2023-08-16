@@ -8,13 +8,14 @@ import subprocess
 import sys
 import threading
 import itertools
+from textwrap import dedent
 
 import numpy as np
 
 import unittest
 
 import numba
-from numba import jit, _helperlib
+from numba import jit, _helperlib, njit
 from numba.core import types
 from numba.core.compiler import compile_isolated
 from numba.tests.support import TestCase, compile_function, tag
@@ -1832,6 +1833,89 @@ class TestProcesses(ConcurrencyBaseTest):
 
     def test_np_implicit_initialization(self):
         self.check_implicit_initialization(np_extract_randomness)
+
+
+class TestNumPyRandomAPI(TestCase):
+
+    def test_call_by_name(self):
+        # Checks that the NumPy impls in Numba can be used via call-by-name
+        # args, see issue numba#9053.
+        #
+        # Checking call-by-name has to be done somewhat manually as the NumPy
+        # numpy.random.* functions do not have signatures, see numpy#8734.
+
+        # Herein, it doesn't matter what the values are, the names and types
+        # just have to make sense.
+        data = {"np.random.beta": {'a': 1., 'b': 2., 'size': 3},
+                "np.random.binomial": {'n': 1, 'p': 0.3, 'size': 3},
+                "np.random.chisquare": {'df': 2., 'size': 3},
+                "np.random.choice": {'a': 2, 'size': 3},
+                "np.random.dirichlet": {'alpha': (2,), 'size': 3},
+                "np.random.exponential": {'scale': 1., 'size': 3},
+                "np.random.f": {'dfnum': 1., 'dfden': 2., 'size': 3},
+                "np.random.gamma": {'shape': 2, 'scale': 2.0, 'size': 3},
+                "np.random.geometric": {'p': 1., 'size': 3},
+                "np.random.gumbel": {'loc': 0., 'scale': 1., 'size': 3},
+                "np.random.hypergeometric": {'ngood': 1, 'nbad': 1,
+                                             'nsample': 1, 'size': 3},
+                "np.random.laplace": {'loc': 0., 'scale': 1., 'size': 3},
+                "np.random.logistic": {'loc': 0., 'scale': 1., 'size': 3},
+                "np.random.lognormal": {'mean': 0., 'sigma': 1., 'size': 3},
+                "np.random.logseries": {'p': 0.5, 'size': 3},
+                "np.random.multinomial": {'n': 1, 'pvals': (1,), 'size': 3},
+                "np.random.negative_binomial": {'n': 1, 'p': 0.5},
+                "np.random.noncentral_chisquare": {'df': 1., 'nonc': 1.,
+                                                   'size': 3},
+                "np.random.normal": {'loc': 0., 'scale': 1., 'size': 3},
+                "np.random.pareto": {'a': 2., 'size': 3},
+                # NOTE: The NumPy impl of permutation "takes no keyword
+                # arguments".
+                # "np.random.permutation": {'x': (1, 2, 3)},
+                "np.random.poisson": {'lam': 1., 'size': 3},
+                "np.random.power": {'a': 2., 'size': 3},
+                # NOTE: The NumPy impl of rand essentially takes *args so kwargs
+                # are unsupported.
+                # "np.random.rand": {'d0': 1, 'd1': 2, ...}}
+                "np.random.randint": {'low': 1, 'high': 2, 'size': 3},
+                # NOTE: The NumPy impl of randn essentially takes *args so
+                # kwargs are unsupported.
+                # "np.random.randn":  {'d0': 1, 'd1': 2, ...}}
+                "np.random.random": {'size': 3},
+                "np.random.random_sample": {'size': 3},
+                "np.random.ranf": {'size': 3},
+                "np.random.rayleigh": {'scale': 1., 'size': 3},
+                "np.random.sample": {'size': 3},
+                "np.random.seed": {'seed': 4},
+                # NOTE: The NumPy impl of shuffle "takes no keyword arguments".
+                # "np.random.shuffle"
+                "np.random.standard_cauchy": {'size': 3},
+                "np.random.standard_exponential": {'size': 3},
+                "np.random.standard_gamma": {'shape': 2., 'size': 3},
+                "np.random.standard_normal": {'size': 3},
+                "np.random.standard_t": {'df': 2., 'size': 3},
+                "np.random.triangular": {'left': 1., 'mode': 2., 'right': 3.,
+                                         'size': 3},
+                "np.random.uniform": {'low': 1., 'high': 2., 'size': 3},
+                "np.random.vonmises": {'mu': 1., 'kappa': 2., 'size': 3},
+                "np.random.wald": {'mean': 1., 'scale': 2., 'size': 3},
+                "np.random.weibull": {'a': 1., 'size': 3},
+                "np.random.zipf": {'a': 2., 'size': 3},}
+
+        for fn, args in data.items():
+            argstr = ', '.join([f'{k}={v}' for k, v in args.items()])
+            template = dedent(f"""
+                def foo():
+                    return {fn}({argstr})
+                """)
+            l = {}
+            exec(template, {'np': np}, l)
+            # The answer doesn't matter, these are tested in the tests above,
+            # the purpose of this test is to ensure that the code compiles with
+            # the args presented via name, i.e. the overloads are defined
+            # correctly with respect to the public API of the function.
+            func = l['foo']
+            func()
+            njit(func).compile(())
 
 
 if __name__ == "__main__":

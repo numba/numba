@@ -1,0 +1,4 @@
+Added support for np.resize() function.
+==========================================
+
+Support is added for ``numpy.resize()``.
