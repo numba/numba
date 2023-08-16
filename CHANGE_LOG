@@ -99,14 +99,6 @@ New Features
 (`PR-#8906 <https://github.com/numba/numba/pull/8906>`__)
 
 
-Add np.trim_zeros
-"""""""""""""""""
-
-Support for ``np.trim_zeros()`` is added.
-
-(`PR-#9074 <https://github.com/numba/numba/pull/9074>`__)
-
-
 Add support for value ``max`` to ``NUMBA_OPT``.
 """""""""""""""""""""""""""""""""""""""""""""""
 
@@ -196,8 +188,6 @@ Support is added for ``np.polynomial.polyutils.trimseq``, ``np.polynomial.polyno
 
 (`PR-#9087 <https://github.com/numba/numba/pull/9087>`__)
 
-
-
 Added support for ``np.diagflat`` function.
 """""""""""""""""""""""""""""""""""""""""""
 
@@ -211,6 +201,13 @@ Added support for ``np.resize`` function.
 Support is added for ``numpy.resize``.
 
 (`PR-#9118 <https://github.com/numba/numba/pull/9118>`__)
+
+Add np.trim_zeros
+"""""""""""""""""
+
+Support for ``np.trim_zeros()`` is added.
+
+(`PR-#9074 <https://github.com/numba/numba/pull/9074>`__)
 
 
 CUDA API Changes
