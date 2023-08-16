@@ -210,8 +210,8 @@ Support for ``np.trim_zeros()`` is added.
 (`PR-#9074 <https://github.com/numba/numba/pull/9074>`__)
 
 
-CUDA API Changes
-~~~~~~~~~~~~~~~~
+CUDA Changes
+~~~~~~~~~~~~
 
 Bitwise operation ``ufunc`` support for the CUDA target.
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""
