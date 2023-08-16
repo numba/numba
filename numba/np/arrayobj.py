@@ -4632,6 +4632,10 @@ def numpy_indices(dimensions):
             res[i] = idx
             i += 1
 
+        return res
+
+    return impl
+
 
 @overload(np.diagflat)
 def numpy_diagflat(v, k=0):
