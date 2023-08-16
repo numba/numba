@@ -1,5 +1,5 @@
 Fix support for overloading dispatcher with non-compatible first-class functions
-================================================================================
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 Fixes an error caused by not handling compilation error during casting of 
 ``Dispatcher`` objects into first-class functions. With the fix, users can now

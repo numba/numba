@@ -1,5 +1,5 @@
 Prevent invalid fusion
-======================
+""""""""""""""""""""""
 
 This PR fixes an issue in which an array first read in a parfor and later
 written in the same parfor would only be classified as used in the parfor.

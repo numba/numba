@@ -1,5 +1,5 @@
 Updates to ``numba.core.pythonapi``.
-====================================
+""""""""""""""""""""""""""""""""""""
 
 Support for Python C-API functions ``PyBytes_AsString`` and
 ``PyBytes_AsStringAndSize`` is added to ``numba.core.pythonapi.PythonAPI`` as

@@ -1,5 +1,5 @@
 All modes are supported in ``numpy.correlate`` and ``numpy.convolve``.
-======================================================================
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 All values for the ``mode`` argument to ``numpy.correlate`` and
 ``numpy.convolve`` are now supported.
