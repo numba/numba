@@ -64,7 +64,7 @@ release notes in smaller PRs with minimal impact by addition of a
 
 
 Added RVSDG-frontend
-====================
+""""""""""""""""""""
 
 This PR is a preliminary work on adding a RVSDG-frontend for processing
 bytecode. RVSDG (Regionalized Value-State Dependence Graph) allows us to
@@ -75,7 +75,7 @@ allows us to simplify the compiler in the future.
 
 
 Add np.trim_zeros
-=================
+"""""""""""""""""
 
 Support for ``np.trim_zeros()`` is added.
 
@@ -157,7 +157,7 @@ This PR improves on `#4074 <https://github.com/numba/numba/issues/4074>` by addi
 (`PR-#9068 <https://github.com/numba/numba/pull/9068>`__)
 
 Added support for np.vsplit(), np.hsplit(), np.dsplit().
-========================================================
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 This PR improves on `#4074 <https://github.com/numba/numba/issues/4074>` by adding support for ``np.vsplit()``, ``np.hsplit()``, ``and np.dsplit()``.
 
@@ -171,7 +171,7 @@ Support is added for ``numpy.row_stack()``.
 (`PR-#9085 <https://github.com/numba/numba/pull/9085>`__)
 
 Added support for functions np.polynomial.polyutils.trimseq(), as well as functions polyadd(), polysub(), polymul() from np.polynomial.polynomial.
-==================================================================================================================================================
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 Support is added for ``np.polynomial.polyutils.trimseq()``, ``np.polynomial.polynomial.polyadd()``, ``np.polynomial.polynomial.polysub()``, ``np.polynomial.polynomial.polymul()``.
 
@@ -186,14 +186,14 @@ Following NEP-0029, the minimum supported NumPy version is now 1.22.
 (`PR-#9093 <https://github.com/numba/numba/pull/9093>`__)
 
 Added support for np.diagflat() function.
-=========================================
+"""""""""""""""""""""""""""""""""""""""""
 
 Support is added for ``numpy.diagflat()``.
 
 (`PR-#9113 <https://github.com/numba/numba/pull/9113>`__)
 
 Added support for np.resize() function.
-==========================================
+"""""""""""""""""""""""""""""""""""""""
 
 Support is added for ``numpy.resize()``.
 
@@ -270,7 +270,7 @@ flag to the nvdisasm command line tool.
 (`PR-#9051 <https://github.com/numba/numba/pull/9051>`__)
 
 Support NVRTC using the ctypes binding
-======================================
+""""""""""""""""""""""""""""""""""""""
 
 NVRTC can now be used when the ctypes binding is in use, enabling float16, and
 linking CUDA C / C++ sources without needing the NVIDIA CUDA Python bindings.
@@ -440,7 +440,7 @@ Deprecations
 ~~~~~~~~~~~~
 
 Deprecation of old-style ``NUMBA_CAPTURED_ERRORS``
-==================================================
+""""""""""""""""""""""""""""""""""""""""""""""""""
 
 Added deprecation schedule of ``NUMBA_CAPTURED_ERRORS=old_style``.
 ``NUMBA_CAPTURED_ERRORS=new_style`` will become the default in future releases.
