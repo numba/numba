@@ -1,5 +1,5 @@
 Fix all ``@overload``\ s to use parameter names that match public APIs.
-=======================================================================
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 Some of the Numba ``@overload``\ s for functions in NumPy and Python's built-ins
 were written using parameter names that did not match those used in API they

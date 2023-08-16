@@ -1,6 +1,6 @@
 
 Added towncrier
-===============
+"""""""""""""""
 
 This PR adds towncrier as a GitHub workflow for checking release notes. 
 From this PR onwards every PR made in Numba will require a appropriate

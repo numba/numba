@@ -1,5 +1,5 @@
 ``numba.experimental.jitclass`` gains support for reflected "dunder" methods.
-=============================================================================
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 ``numba.experimental.jitclass`` now has support for the following methods:
 

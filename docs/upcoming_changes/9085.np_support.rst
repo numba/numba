@@ -1,4 +1,4 @@
 Added support for np.row_stack() function.
-==========================================
+""""""""""""""""""""""""""""""""""""""""""
 
 Support is added for ``numpy.row_stack()``.

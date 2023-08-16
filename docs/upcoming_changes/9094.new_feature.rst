@@ -1,6 +1,6 @@
 
 Add support for value ``max`` to ``NUMBA_OPT``.
-===============================================
+"""""""""""""""""""""""""""""""""""""""""""""""
 
 The optimisation level that Numba applies when compiling can be set through the
 environment variable ``NUMBA_OPT``. This has historically been a value between
