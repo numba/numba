@@ -27,6 +27,26 @@ def polymul(c1,c2):
 def trimseq(seq):
     return pu.trimseq(seq)
 
+def polyasseries1(a):
+    res = pu.as_series(a)
+    return res
+
+def polyasseries2(a, trim):
+    res = pu.as_series(a, trim)
+    return res
+
+def polydiv(c1, c2):
+    res = poly.polydiv(c1, c2)
+    return res
+
+def polyval(x, c):
+    res = poly.polyval(x, c)
+    return res
+
+def polyint(c, m=1, lbnd=0, scl=1):
+    res = poly.polyint(c=c, m=m, lbnd=lbnd, scl=scl)
+    return res
+
 
 class TestPolynomialBase(EnableNRTStatsMixin, TestCase):
     """
@@ -143,7 +163,6 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
 
         for coefs in inputs():
             self.assertPreciseEqual(pyfunc(coefs), cfunc(coefs))
-        
 
     def test_trimseq_exception(self):
         cfunc = njit(trimseq)
@@ -164,6 +183,91 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
             cfunc((1, 2, 3, 0))
         self.assertIn('Unsupported type UniTuple(int64, 4) for argument "seq"',
                       str(e.exception))
+
+    def test_pu_as_series_basic(self):
+        pyfunc1 = polyasseries1
+        cfunc1 = njit(polyasseries1)
+        pyfunc2 = polyasseries2
+        cfunc2 = njit(polyasseries2)
+        def inputs():
+            yield np.arange(4)
+            yield np.arange(6).reshape((2,3))
+            yield (1, np.arange(3), np.arange(2, dtype=np.float32))
+            yield ([1, 2, 3, 4, 0], [1, 2, 3])
+            yield ((0, 0, 1e-3, 0, 1e-5, 0, 0), (1, 2, 3, 4, 5, 6, 7))
+            yield ((0, 0, 1e-3, 0, 1e-5, 0, 0), (1j, 2, 3j, 4j, 5, 6j, 7))
+            yield (2, [1.1, 0.])
+            yield ([1, 2, 3, 0], )
+            yield ((1, 2, 3, 0), )
+            yield (np.array([1, 2, 3, 0]), )
+        
+        for input in inputs():
+            self.assertPreciseEqual(pyfunc1(input), cfunc1(input))
+            self.assertPreciseEqual(pyfunc2(input, False), cfunc2(input, False))
+            self.assertPreciseEqual(pyfunc2(input, True), cfunc2(input, True))
+
+    def test_pu_as_series_basic(self):
+        pyfunc1 = polyasseries1
+        cfunc1 = njit(polyasseries1)
+        pyfunc2 = polyasseries2
+        cfunc2 = njit(polyasseries2)
+        def inputs():
+            yield np.arange(4)
+            yield np.arange(6).reshape((2,3))
+            yield (1, np.arange(3), np.arange(2, dtype=np.float32))
+            yield ([1,2,3,4,0], [1,2,3])
+            yield ((0, 0, 1e-3, 0, 1e-5, 0, 0), (1, 2, 3, 4, 5, 6, 7))
+            yield ((0, 0, 1e-3, 0, 1e-5, 0, 0), (1j, 2, 3j, 4j, 5, 6j, 7))
+            yield (2, [1.1, 0.])
+            yield ([1, 2, 3, 0], )
+            yield ((1, 2, 3, 0), )
+            yield (np.array([1, 2, 3, 0]), )
+        
+        for input in inputs():
+            self.assertPreciseEqual(pyfunc1(input), cfunc1(input))
+            self.assertPreciseEqual(pyfunc2(input, False), cfunc2(input, False))
+            self.assertPreciseEqual(pyfunc2(input, True), cfunc2(input, True))
+
+    def test_pu_as_series_exception(self):
+        cfunc1 = njit(polyasseries1)
+        cfunc2 = njit(polyasseries2)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc1("abc")
+        self.assertIn('The argument "alist" must be array-like',
+                      str(raises.exception))
+        
+        with self.assertRaises(TypingError) as raises:
+            cfunc2("abc", True)
+        self.assertIn('The argument "alist" must be array-like',
+                      str(raises.exception))
+        
+        with self.assertRaises(TypingError) as raises:
+            cfunc2(np.arange(4), "abc")
+        self.assertIn('The argument "trim" must be boolean',
+                      str(raises.exception))
+        
+        with self.assertRaises(TypingError) as raises:
+            cfunc1(([1, 2, 3], np.arange(16).reshape(4,4)))
+        self.assertIn('Coefficient array is not 1-d',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc1(np.arange(8).reshape((2, 2, 2)))
+        self.assertIn('Coefficient array is not 1-d',
+                      str(raises.exception))
+        
+        with self.assertRaises(ValueError) as raises:
+            cfunc1(np.array([[]], dtype = np.float64))
+        self.assertIn('Coefficient array is empty',
+                      str(raises.exception))
+        
+        with self.assertRaises(ValueError) as raises:
+            cfunc1(([1, 2, 3], np.array([], dtype=np.float64), np.array([1,2,1])))
+        self.assertIn('Coefficient array is empty',
+                      str(raises.exception))
 
     def _test_polyarithm_basic(self, pyfunc, ignore_sign_on_zero = False):
         # test suite containing tests for polyadd, polysub, polymul, polydiv
@@ -236,3 +340,148 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
 
     def test_polymul_exception(self):
         self._test_polyarithm_exception(polymul)
+
+    def test_poly_polydiv_basic(self):
+        pyfunc = polydiv
+        cfunc = njit(polydiv)
+        self._test_polyarithm_basic(polydiv)
+
+        def inputs():
+            # Based on https://github.com/numpy/numpy/blob/160c16f055d4d2fce072004e286d8075b31955cd/numpy/polynomial/tests/test_polynomial.py#L99-L114 # noqa: E501
+            # check scalar division
+            yield [2], [2]
+            yield [2, 2], [2]
+            # check rest.
+            for i in range(5):
+                for j in range(5):
+                    ci = [0]*i + [1, 2]
+                    cj = [0]*j + [1, 2]
+                    tgt = poly.polyadd(ci, cj)
+                    yield tgt, ci
+            yield np.array([1,0,0,0,0,0,-1]), np.array([1,0,0,-1])
+
+        for c1, c2 in inputs():
+            self.assertPreciseEqual(pyfunc(c1, c2), cfunc(c1, c2))
+
+    def test_poly_polydiv_exception(self):
+        self._test_polyarithm_exception(polydiv)
+        cfunc = njit(polydiv)
+        # Based on https://github.com/numpy/numpy/blob/160c16f055d4d2fce072004e286d8075b31955cd/numpy/polynomial/tests/test_polynomial.py#L97 # noqa: E501
+        # check zero division
+        with self.assertRaises(ZeroDivisionError) as _:
+            cfunc([1], [0])
+
+    def test_poly_polyval_basic(self):
+        pyfunc = polyval
+        cfunc = njit(polyval)
+        def inputs():
+            # Based on https://github.com/numpy/numpy/blob/160c16f055d4d2fce072004e286d8075b31955cd/numpy/polynomial/tests/test_polynomial.py#L137-L157 # noqa: E501
+            # check empty input
+            yield np.array([], dtype=np.float64), [1]
+            yield 1, [1,2,3]
+            yield np.arange(4).reshape(2,2), [1,2,3]
+            # check normal input
+            for i in range(5):
+                yield np.linspace(-1, 1), [0] * i + [1]
+            yield np.linspace(-1, 1), [0, -1, 0, 1]
+            # check that shape is preserved
+            for i in range(3):
+                dims = [2] * i
+                x = np.zeros(dims)
+                yield x, [1]
+                yield x, [1, 0]
+                yield x, [1, 0, 0]
+            # Check that behaviour corresponds to tensor = False
+            yield np.array([1, 2]), np.arange(4).reshape(2,2)
+            yield [1, 2], np.arange(4).reshape(2,2)
+
+        for x, c in inputs():
+            self.assertPreciseEqual(pyfunc(x, c), cfunc(x, c))
+    
+    def test_poly_polyval_exception(self):
+        cfunc = njit(polyval)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(3, "abc")
+        self.assertIn('The argument "c" must be array-like',
+                      str(raises.exception))
+        
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc", 3)
+        self.assertIn('The argument "x" must be array-like',
+                      str(raises.exception))
+        
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc", "def")
+        self.assertIn('The argument "x" must be array-like',
+                      str(raises.exception))
+
+    def test_poly_polyint_basic(self):
+        pyfunc = polyint
+        cfunc = njit(polyint)
+        # basic
+        self.assertPreciseEqual(pyfunc([1,2,3]), cfunc([1,2,3]))
+        # Based on https://github.com/numpy/numpy/blob/160c16f055d4d2fce072004e286d8075b31955cd/numpy/polynomial/tests/test_polynomial.py#L314-L381 # noqa: E501
+        # test integration of zero polynomial
+        for i in range(2, 5):
+            self.assertPreciseEqual(pyfunc([0], m=i), cfunc([0], m=i))
+
+        # check single integration with integration constant
+        for i in range(5):
+            pol = [0]*i + [1]
+            self.assertPreciseEqual(pyfunc(pol, m=1), pyfunc(pol, m=1))
+
+        # check single integration with integration constant and lbnd
+        for i in range(5):
+            pol = [0]*i + [1]
+            self.assertPreciseEqual(pyfunc(pol, m=1, lbnd=-1), cfunc(pol, m=1, lbnd=-1))
+
+        # check single integration with integration constant and scaling
+        for i in range(5):
+            pol = [0]*i + [1]
+            self.assertPreciseEqual(pyfunc(pol, m=1, scl=2), cfunc(pol, m=1, scl=2))
+
+        # check multiple integrations with default k
+        for i in range(5):
+            for j in range(2, 5):
+                pol = [0]*i + [1]
+                self.assertPreciseEqual(pyfunc(pol, m=j), cfunc(pol, m=j))
+
+        # check multiple integrations with lbnd
+        for i in range(5):
+            for j in range(2, 5):
+                pol = [0]*i + [1]
+                self.assertPreciseEqual(pyfunc(pol, m=j, lbnd=-1), cfunc(pol, m=j, lbnd=-1))
+
+        # check multiple integrations with scaling
+        for i in range(5):
+            for j in range(2, 5):
+                pol = [0]*i + [1]
+                self.assertPreciseEqual(pyfunc(pol, m=j, scl=2), cfunc(pol, m=j, scl=2))
+
+    def test_poly_polyint_exception(self):
+        cfunc = njit(polyint)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc")
+        self.assertIn('The argument "c" must be array-like',
+                      str(raises.exception))
+        
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.array([1,2,3]), "abc")
+        self.assertIn('The argument "m" must be an integer',
+                      str(raises.exception))
+        
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.array([1,2,3]), 2, "abc")
+        self.assertIn('The argument "lbnd" must be a scalar',
+                      str(raises.exception))
+        
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.array([1,2,3]), 2, 2, "abc")
+        self.assertIn('The argument "scl" must be a scalar',
+                      str(raises.exception))
