@@ -88,7 +88,7 @@ exclude =
     numba/np/npyfuncs.py
     numba/cpython/iterators.py
     numba/core/codegen.py
-    numba/np/polynomial.py
+    numba/np/polynomial/polynomial_methods.py
     numba/misc/mergesort.py
     numba/core/base.py
     numba/np/npdatetime.py

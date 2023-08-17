@@ -425,7 +425,7 @@ typing and implementation to be specified together.
 - :ghfile:`numba/np/npyfuncs.py` - Kernels used in generating some
   NumPy ufuncs
 - :ghfile:`numba/np/npyimpl.py` - Implementations of most NumPy ufuncs
-- :ghfile:`numba/np/polynomial.py` - ``numpy.roots`` function
+- :ghfile:`numba/np/polynomial/polynomial_methods.py` - Implementations of NumPy ``Polynomial`` functions
 - :ghfile:`numba/np/ufunc_db.py` - Big table mapping types to ufunc
   implementations
 

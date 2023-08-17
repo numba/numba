@@ -1,22 +1,20 @@
 from numba.extending import (models, register_model, as_numba_type,
-                             type_callable, overload_method, lower_builtin,
-                             unbox, NativeValue, make_attribute_wrapper, box)
+                             type_callable, unbox, NativeValue,
+                             make_attribute_wrapper, box, lower_builtin)
 from numba.core import types, cgutils
 from numpy.polynomial.polynomial import Polynomial
 from contextlib import ExitStack
-from numba.extending import typeof_impl
-from numba import types
+
 
 @register_model(types.PolynomialType)
 class PolynomialModel(models.StructModel):
     def __init__(self, dmm, fe_type):
         members = [
             ('coef', types.Array(types.double, 1, 'C')),
-            #('coef', types.int64),
-            #('domain', types.Array),
-            #('window', types.Array)
+            # ('domain', types.Array(types.double, 1, 'C')),
+            # ('window', types.Array(types.double, 1, 'C'))
             # Introduced in NumPy 1.24, maybe leave it out for now
-            #('symbol', types.string)
+            # ('symbol', types.string)
         ]
         super(PolynomialModel, self).__init__(dmm, fe_type, members)
 
@@ -35,29 +33,25 @@ def type_polynomial(context):
 
 
 make_attribute_wrapper(types.PolynomialType, 'coef', 'coef')
-make_attribute_wrapper(types.PolynomialType, 'domain', 'domain')
-make_attribute_wrapper(types.PolynomialType, 'window', 'window')
+# make_attribute_wrapper(types.PolynomialType, 'domain', 'domain')
+# make_attribute_wrapper(types.PolynomialType, 'window', 'window')
 # Introduced in NumPy 1.24, maybe leave it out for now
-#make_attribute_wrapper(types.PolynomialType, 'symbol', 'symbol')
+# make_attribute_wrapper(types.PolynomialType, 'symbol', 'symbol')
+
 
 @lower_builtin(Polynomial, types.Array)
-def impl_polynomial(context, builder, sig, args):
-    cgutils.printf(builder, "here\n")
+def impl_polynomial1(context, builder, sig, args):
+    import numpy as np
+
+    def impl(coef):
+        return np.asarray(coef, dtype=np.double)
+
     typ = sig.return_type
-    coef = args[0]
     polynomial = cgutils.create_struct_proxy(typ)(context, builder)
-    ##context.pyapi.incref(coef)
-    #breakpoint()
-    #cgutils.printf(builder, "%s", coef.type)
-    breakpoint()
-    #polynomial.coef = coef.value
-    # stack = cgutils.alloca_once(builder, coef.type)
-    # builder.store(coef, stack)
-    # l = builder.load(stack)
-    # builder.store(l, polynomial._get_ptr_by_name('coef'))
-    # context.nrp
-    context.nrt.incref(builder, coef.type, coef)
-    # polynomial.coef = polynomial.coef.type(123)
+    sig2 = sig.args[0].copy(dtype=types.double)(sig.args[0])
+    coef_cast = context.compile_internal(builder, impl, sig2, args)
+    polynomial.coef = coef_cast
+
     return polynomial._getvalue()
 
 
@@ -110,13 +104,8 @@ def box_polynomial(typ, val, c):
         # has to occur regardless of whether it is successful. If it
         # fails `res` is set to NULL and a Python exception is set.
         res = c.pyapi.call_function_objargs(class_obj, (coef_obj, ))
-        c.pyapi.print_object(res)
-        #c.pyapi.decref(coef_obj)
-        #c.pyapi.decref(class_obj)
+        c.pyapi.decref(coef_obj)
+        c.pyapi.decref(class_obj)
         c.builder.store(res, ret_ptr)
 
     return c.builder.load(ret_ptr)
-
-
-# Overloads
-
