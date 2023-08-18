@@ -428,7 +428,7 @@ Polynomials
 The following polynomial functions are supported:
 * :func:`numpy.polynomial.polynomial.polyadd()`
 * :func:`numpy.polynomial.polynomial.polydiv()`
-* :func:`numpy.polynomial.polynomial.polyint()` (only the arguments c, m, lbnd, scl)
+* :func:`numpy.polynomial.polynomial.polyint()` (only the 2 first arguments)
 * :func:`numpy.polynomial.polynomial.polymul()`
 * :func:`numpy.polynomial.polynomial.polysub()`
 * :func:`numpy.polynomial.polynomial.polyval()` (only the 2 first arguments)

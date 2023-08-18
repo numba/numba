@@ -319,22 +319,14 @@ def poly_polyval(x, c):
     return impl
 
 @overload(poly.polyint)
-def poly_polyint(c, m=1, lbnd=0, scl=1):
-    # No support for k and axis
+def poly_polyint(c, m=1):
+
     if not type_can_asarray(c):
         msg = 'The argument "c" must be array-like'
         raise errors.TypingError(msg)
 
     if not isinstance(m, (int, types.Integer)):
         msg = 'The argument "m" must be an integer'
-        raise errors.TypingError(msg)
-
-    if not isinstance(scl, (int, types.Number)):
-        msg = 'The argument "scl" must be a scalar'
-        raise errors.TypingError(msg)
-
-    if not isinstance(lbnd, (int, types.Number)):
-        msg = 'The argument "lbnd" must be a scalar'
         raise errors.TypingError(msg)
 
     res_dtype = np.float64
@@ -350,19 +342,17 @@ def poly_polyint(c, m=1, lbnd=0, scl=1):
     res_dtype = np.result_type(res_dtype, s1)
     is1D = (np.ndim(c) == 1) or isinstance(c, types.List)
 
-    def impl(c, m=1, lbnd=0, scl=1):
+    def impl(c, m=1):
         c = np.asarray(c).astype(res_dtype)
         cdt = c.dtype
         for i in range(m):
             n = len(c)
-            c *= scl
 
             tmp = np.empty((n + 1,) + c.shape[1:], dtype=cdt)
             tmp[0] = c[0]*0
             tmp[1] = c[0]
             for j in range(1, n):
                 tmp[j + 1] = c[j]/(j + 1)
-            tmp[0] -= poly.polyval(lbnd, tmp)
             c = tmp
         if is1D:
             return pu.trimseq(c)

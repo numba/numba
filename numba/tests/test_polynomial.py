@@ -43,8 +43,8 @@ def polyval(x, c):
     res = poly.polyval(x, c)
     return res
 
-def polyint(c, m=1, lbnd=0, scl=1):
-    res = poly.polyint(c=c, m=m, lbnd=lbnd, scl=scl)
+def polyint(c, m=1):
+    res = poly.polyint(c, m)
     return res
 
 
@@ -433,33 +433,11 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
             pol = [0]*i + [1]
             self.assertPreciseEqual(pyfunc(pol, m=1), pyfunc(pol, m=1))
 
-        # check single integration with integration constant and lbnd
-        for i in range(5):
-            pol = [0]*i + [1]
-            self.assertPreciseEqual(pyfunc(pol, m=1, lbnd=-1), cfunc(pol, m=1, lbnd=-1))
-
-        # check single integration with integration constant and scaling
-        for i in range(5):
-            pol = [0]*i + [1]
-            self.assertPreciseEqual(pyfunc(pol, m=1, scl=2), cfunc(pol, m=1, scl=2))
-
         # check multiple integrations with default k
         for i in range(5):
             for j in range(2, 5):
                 pol = [0]*i + [1]
                 self.assertPreciseEqual(pyfunc(pol, m=j), cfunc(pol, m=j))
-
-        # check multiple integrations with lbnd
-        for i in range(5):
-            for j in range(2, 5):
-                pol = [0]*i + [1]
-                self.assertPreciseEqual(pyfunc(pol, m=j, lbnd=-1), cfunc(pol, m=j, lbnd=-1))
-
-        # check multiple integrations with scaling
-        for i in range(5):
-            for j in range(2, 5):
-                pol = [0]*i + [1]
-                self.assertPreciseEqual(pyfunc(pol, m=j, scl=2), cfunc(pol, m=j, scl=2))
 
         # test multidimensional arrays
         c2 = np.array([[0,1], [0,2]])
@@ -480,14 +458,4 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             cfunc(np.array([1,2,3]), "abc")
         self.assertIn('The argument "m" must be an integer',
-                      str(raises.exception))
-        
-        with self.assertRaises(TypingError) as raises:
-            cfunc(np.array([1,2,3]), 2, "abc")
-        self.assertIn('The argument "lbnd" must be a scalar',
-                      str(raises.exception))
-        
-        with self.assertRaises(TypingError) as raises:
-            cfunc(np.array([1,2,3]), 2, 2, "abc")
-        self.assertIn('The argument "scl" must be a scalar',
                       str(raises.exception))
