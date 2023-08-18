@@ -461,6 +461,12 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
                 pol = [0]*i + [1]
                 self.assertPreciseEqual(pyfunc(pol, m=j, scl=2), cfunc(pol, m=j, scl=2))
 
+        # test multidimensional arrays
+        c2 = np.array([[0,1], [0,2]])
+        self.assertPreciseEqual(pyfunc(c2), cfunc(c2))
+        c3 = np.arange(8).reshape((2,2,2))
+        self.assertPreciseEqual(pyfunc(c3), cfunc(c3))
+
     def test_poly_polyint_exception(self):
         cfunc = njit(polyint)
 

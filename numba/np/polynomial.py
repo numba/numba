@@ -348,7 +348,7 @@ def poly_polyint(c, m=1, lbnd=0, scl=1):
         s1 = str(c.dtype)
 
     res_dtype = np.result_type(res_dtype, s1)
-
+    is1D = (np.ndim(c) == 1) or isinstance(c, types.List)
 
     def impl(c, m=1, lbnd=0, scl=1):
         c = np.asarray(c).astype(res_dtype)
@@ -364,7 +364,10 @@ def poly_polyint(c, m=1, lbnd=0, scl=1):
                 tmp[j + 1] = c[j]/(j + 1)
             tmp[0] -= poly.polyval(lbnd, tmp)
             c = tmp
-        return pu.trimseq(c)
+        if is1D:
+            return pu.trimseq(c)
+        else:
+            return c
 
 
     return impl
