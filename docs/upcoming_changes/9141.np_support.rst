@@ -1,0 +1,3 @@
+Added support for functions ``np.polynomial.polyutils.as_series()``, as well as functions ``polydiv()``, ``polyint()``, ``polyval()`` from ``np.polynomial.polynomial``.
+========================================================================================================================================================================
+Support is added for ``np.polynomial.polyutils.as_series()``, ``np.polynomial.polynomial.polydiv``, ``np.polynomial.polynomial.polyint``(only arguments c, m, lbnd, scl, are uspported), ``np.polynomial.polynomial.polyval``.

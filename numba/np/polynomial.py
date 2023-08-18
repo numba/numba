@@ -320,7 +320,7 @@ def poly_polyval(x, c):
 
 @overload(poly.polyint)
 def poly_polyint(c, m=1, lbnd=0, scl=1):
-    # Currently supports only 1-dimensional c, no support for k and axis
+    # No support for k and axis
     if not type_can_asarray(c):
         msg = 'The argument "c" must be array-like'
         raise errors.TypingError(msg)
@@ -392,7 +392,6 @@ def numpy_polydiv(c1, c2):
         if arr2[-1] == 0:
             raise ZeroDivisionError()
 
-        # note: this is more efficient than `pu._div(polymul, c1, c2)`
         l1 = len(arr1)
         l2 = len(arr2)
         if l1 < l2:
