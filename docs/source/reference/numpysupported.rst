@@ -431,7 +431,7 @@ The following polynomial functions are supported:
 * :func:`numpy.polynomial.polynomial.polyint()` (only the arguments c, m, lbnd, scl)
 * :func:`numpy.polynomial.polynomial.polymul()`
 * :func:`numpy.polynomial.polynomial.polysub()`
-* :func:`numpy.polynomial.polynomial.polyval()`
+* :func:`numpy.polynomial.polynomial.polyval()` (only the 2 first arguments)
 * :func:`numpy.polynomial.polyutils.as_series()`
 * :func:`numpy.polynomial.polyutils.trimseq()`
 
