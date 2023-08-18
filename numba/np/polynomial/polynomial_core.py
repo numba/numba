@@ -2,6 +2,8 @@ from numba.extending import (models, register_model, as_numba_type,
                              type_callable, unbox, NativeValue,
                              make_attribute_wrapper, box, lower_builtin)
 from numba.core import types, cgutils
+from numba.core.typing import infer_global
+from numba.core.typing.templates import AbstractTemplate
 from numpy.polynomial.polynomial import Polynomial
 from contextlib import ExitStack
 
@@ -24,13 +26,20 @@ polynomial_type = types.PolynomialType()
 as_numba_type.register(Polynomial, polynomial_type)
 
 
-@type_callable(Polynomial)
-def type_polynomial(context):
-    def typer(coef):
-        if isinstance(coef, types.Array):
-            return polynomial_type
-    return typer
+# @type_callable(Polynomial)
+# def type_polynomial(context):
+#     def typer(coef):
+#         if isinstance(coef, types.Array):
+#             return polynomial_type
+#     return typer
 
+@infer_global(types.PolynomialType)
+class Poly(AbstractTemplate):
+
+    def generic(self, args, kws):
+        breakpoint()
+        print(args)
+        print(kws)
 
 make_attribute_wrapper(types.PolynomialType, 'coef', 'coef')
 # make_attribute_wrapper(types.PolynomialType, 'domain', 'domain')
