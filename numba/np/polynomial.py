@@ -100,17 +100,7 @@ def polyutils_as_series(alist, trim=True):
 
     tuple_input = isinstance(alist, types.BaseTuple)
     if tuple_input:
-        for a in alist:
-            if isinstance(a, types.Number):
-                s1 = str(as_dtype(a))
-            elif isinstance(a, types.Tuple):
-
-                t = [as_dtype(ty) for ty in a.types]
-                s1 = str(np.result_type(*t))
-            else:
-                s1 = str(a.dtype)
-
-            res_dtype = np.result_type(res_dtype, s1)
+        res_dtype = _poly_result_dtype(alist)
         l = len(alist)
 
         if np.any(np.array([np.ndim(a) > 1 for a in alist])):
@@ -175,17 +165,8 @@ def numpy_polyadd(c1, c2):
         msg = 'The argument "c2" must be array-like'
         raise errors.TypingError(msg)
 
-    if np.ndim(c1) > 1 or np.ndim(c2) > 1:
-        msg = 'Coefficient array is not 1-d'
-        raise errors.NumbaValueError(msg)
-
-    result_dtype = _poly_result_dtype((c1, c2))
-
     def impl(c1, c2):
-        c1 = np.asarray(c1)
-        c2 = np.asarray(c2)
-        arr1 = np.atleast_1d(c1).astype(result_dtype)
-        arr2 = np.atleast_1d(c2).astype(result_dtype)
+        arr1, arr2 = pu.as_series((c1, c2))
         diff = len(arr2) - len(arr1)
         if diff > 0:
             zr = np.zeros(diff)
@@ -209,17 +190,8 @@ def numpy_polysub(c1, c2):
         msg = 'The argument "c2" must be array-like'
         raise errors.TypingError(msg)
 
-    if np.ndim(c1) > 1 or np.ndim(c2) > 1:
-        msg = 'Coefficient array is not 1-d'
-        raise errors.NumbaValueError(msg)
-
-    result_dtype = _poly_result_dtype((c1, c2))
-
     def impl(c1, c2):
-        c1 = np.asarray(c1)
-        c2 = np.asarray(c2)
-        arr1 = np.atleast_1d(c1).astype(result_dtype)
-        arr2 = np.atleast_1d(c2).astype(result_dtype)
+        arr1, arr2 = pu.as_series((c1, c2))
         diff = len(arr2) - len(arr1)
         if diff > 0:
             zr = np.zeros(diff)
@@ -243,18 +215,9 @@ def numpy_polymul(c1, c2):
         msg = 'The argument "c2" must be array-like'
         raise errors.TypingError(msg)
 
-    if np.ndim(c1) > 1 or np.ndim(c2) > 1:
-        msg = 'Coefficient array is not 1-d'
-        raise errors.NumbaValueError(msg)
-
-    result_dtype = _poly_result_dtype((c1, c2))
-
     def impl(c1, c2):
-        c1 = np.asarray(c1)
-        c2 = np.asarray(c2)
-        arr1 = np.atleast_1d(c1)
-        arr2 = np.atleast_1d(c2)
-        val = np.convolve(arr1, arr2).astype(result_dtype)
+        arr1, arr2 = pu.as_series((c1, c2))
+        val = np.convolve(arr1, arr2)
         return pu.trimseq(val)
 
     return impl
@@ -270,28 +233,7 @@ def poly_polyval(x, c):
         msg = 'The argument "c" must be array-like'
         raise errors.TypingError(msg)
 
-    res_dtype = np.float64
-
-    if isinstance(c, types.Number):
-        s1 = str(as_dtype(c))
-    elif isinstance(c, types.Tuple):
-
-        t = [as_dtype(ty) for ty in c.types]
-        s1 = str(np.result_type(*t))
-    else:
-        s1 = str(c.dtype)
-
-    if isinstance(x, types.Number):
-        s2 = str(as_dtype(x))
-
-    elif isinstance(x, types.Tuple):
-
-        t = [as_dtype(ty) for ty in x.types]
-        s2 = str(np.result_type(*t))
-    else:
-        s2 = str(x.dtype)
-
-    res_dtype = np.result_type(res_dtype, s1, s2)
+    res_dtype = _poly_result_dtype((c, x))
 
     # Simulate new_shape = (1,) * np.ndim(x) in the general case
     # If x is a number, new_shape is not used
@@ -304,10 +246,10 @@ def poly_polyval(x, c):
 
     def impl(x, c):
         arr = np.asarray(c).astype(res_dtype)
+        inputs = np.asarray(x).astype(res_dtype)
         if x_nd_array:
             arr = arr.reshape(arr.shape + new_shape)
-        inputs = np.asarray(x).astype(res_dtype)
-        # # arr, inputs = pu.as_series((c, x))
+
         l = len(arr)
         y = arr[l - 1] + inputs*0
 
@@ -329,17 +271,7 @@ def poly_polyint(c, m=1):
         msg = 'The argument "m" must be an integer'
         raise errors.TypingError(msg)
 
-    res_dtype = np.float64
-    if isinstance(c, types.Number):
-        s1 = str(as_dtype(c))
-    elif isinstance(c, types.Tuple):
-
-        t = [as_dtype(ty) for ty in c.types]
-        s1 = str(np.result_type(*t))
-    else:
-        s1 = str(c.dtype)
-
-    res_dtype = np.result_type(res_dtype, s1)
+    res_dtype = _poly_result_dtype((c,))
     is1D = (np.ndim(c) == 1) or isinstance(c, types.List)
 
     def impl(c, m=1):
@@ -371,13 +303,8 @@ def numpy_polydiv(c1, c2):
     if not type_can_asarray(c2):
         msg = 'The argument "c2" must be array-like'
         raise errors.TypingError(msg)
-
-    if np.ndim(c1) > 1 or np.ndim(c2) > 1:
-        msg = 'Coefficient array is not 1-d'
-        raise errors.NumbaValueError(msg)
     
     def impl(c1, c2):
-        # c1, c2 are trimmed copies
         arr1, arr2 = pu.as_series((c1, c2))
         if arr2[-1] == 0:
             raise ZeroDivisionError()
