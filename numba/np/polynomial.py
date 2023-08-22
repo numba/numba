@@ -7,10 +7,11 @@ import numpy as np
 from numpy.polynomial import polynomial as poly
 from numpy.polynomial import polyutils as pu
 
-from numba import typeof, literal_unroll
+from numba import literal_unroll
 from numba.core import types, errors
 from numba.core.extending import overload
 from numba.np.numpy_support import type_can_asarray, as_dtype, from_dtype
+
 
 @overload(np.roots)
 def roots_impl(p):
@@ -65,7 +66,7 @@ def polyutils_trimseq(seq):
     if not type_can_asarray(seq):
         msg = 'The argument "seq" must be array-like'
         raise errors.TypingError(msg)
-    
+
     if isinstance(seq, types.BaseTuple):
         msg = 'Unsupported type %r for argument "seq"'
         raise errors.TypingError(msg % (seq))
@@ -81,7 +82,7 @@ def polyutils_trimseq(seq):
             for i in range(len(seq) - 1, -1, -1):
                 if seq[i] != 0:
                     break
-            return seq[:i+1]
+            return seq[:i + 1]
 
     return impl
 
@@ -101,27 +102,22 @@ def polyutils_as_series(alist, trim=True):
     tuple_input = isinstance(alist, types.BaseTuple)
     if tuple_input:
         res_dtype = _poly_result_dtype(alist)
-        l = len(alist)
 
         if np.any(np.array([np.ndim(a) > 1 for a in alist])):
-                raise errors.NumbaValueError("Coefficient array is not 1-d")
+            raise errors.NumbaValueError("Coefficient array is not 1-d")
 
     else:
         if np.ndim(alist) <= 2:
-            res_dtype = np.result_type(res_dtype, str(alist.dtype))
+            res_dtype = np.result_type(res_dtype, as_dtype(alist.dtype))
         else:
             # If total dimension has ndim > 2, then coeff arrays are not 1D
             raise errors.NumbaValueError("Coefficient array is not 1-d")
 
-
-    def impl(alist, trim = True):
+    def impl(alist, trim=True):
         if tuple_input:
-            arrays = [np.arange(5).astype(res_dtype) for i in range(l)]
-            i = 0
+            arrays = []
             for item in literal_unroll(alist):
-
-                arrays[i] = np.atleast_1d(np.asarray(item)).astype(res_dtype)
-                i += 1
+                arrays.append(np.atleast_1d(np.asarray(item)).astype(res_dtype))
 
         else:
             alist_arr = np.asarray(alist)
@@ -136,7 +132,7 @@ def polyutils_as_series(alist, trim=True):
 
         ret = arrays
         return ret
-    
+
     return impl
 
 
@@ -154,6 +150,7 @@ def _poly_result_dtype(tup):
             s1 = str(item.dtype)
         res_dtype = (np.result_type(res_dtype, s1))
     return from_dtype(res_dtype)
+
 
 @overload(poly.polyadd)
 def numpy_polyadd(c1, c2):
@@ -251,7 +248,7 @@ def poly_polyval(x, c):
             arr = arr.reshape(arr.shape + new_shape)
 
         l = len(arr)
-        y = arr[l - 1] + inputs*0
+        y = arr[l - 1] + inputs * 0
 
         for i in range(l - 1, 0, -1):
             y = arr[i - 1] + y * inputs
@@ -259,6 +256,7 @@ def poly_polyval(x, c):
         return y
 
     return impl
+
 
 @overload(poly.polyint)
 def poly_polyint(c, m=1):
@@ -281,18 +279,18 @@ def poly_polyint(c, m=1):
             n = len(c)
 
             tmp = np.empty((n + 1,) + c.shape[1:], dtype=cdt)
-            tmp[0] = c[0]*0
+            tmp[0] = c[0] * 0
             tmp[1] = c[0]
             for j in range(1, n):
-                tmp[j + 1] = c[j]/(j + 1)
+                tmp[j + 1] = c[j] / (j + 1)
             c = tmp
         if is1D:
             return pu.trimseq(c)
         else:
             return c
 
-
     return impl
+
 
 @overload(poly.polydiv)
 def numpy_polydiv(c1, c2):
@@ -303,7 +301,7 @@ def numpy_polydiv(c1, c2):
     if not type_can_asarray(c2):
         msg = 'The argument "c2" must be array-like'
         raise errors.TypingError(msg)
-    
+
     def impl(c1, c2):
         arr1, arr2 = pu.as_series((c1, c2))
         if arr2[-1] == 0:
@@ -312,19 +310,19 @@ def numpy_polydiv(c1, c2):
         l1 = len(arr1)
         l2 = len(arr2)
         if l1 < l2:
-            return arr1[:1]*0, arr1
+            return arr1[:1] * 0, arr1
         elif l2 == 1:
-            return arr1/arr2[-1], arr1[:1]*0
+            return arr1 / arr2[-1], arr1[:1] * 0
         else:
             dlen = l1 - l2
             scl = arr2[-1]
-            arr2 = arr2[:-1]/scl
+            arr2 = arr2[:-1] / scl
             i = dlen
             j = l1 - 1
             while i >= 0:
-                arr1[i:j] -= arr2*arr1[j]
+                arr1[i:j] -= arr2 * arr1[j]
                 i -= 1
                 j -= 1
-            return arr1[j+1:]/scl, pu.trimseq(arr1[:j+1])
+            return arr1[j + 1:] / scl, pu.trimseq(arr1[:j + 1])
 
     return impl
