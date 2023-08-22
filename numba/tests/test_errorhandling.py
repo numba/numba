@@ -493,8 +493,11 @@ class TestCapturedErrorHandling(SerialMixin, TestCase):
                 def foo(x):
                     bar(x)
 
-            self.assertIn("The 'old_style' error capturing is deprecated",
-                          str(warns.warnings[0].message))
+            self.assertIn(
+                "Code using Numba extension API maybe depending on 'old_style' "
+                "error-capturing",
+                str(warns.warnings[0].message),
+            )
 
     @TestCase.run_test_in_subprocess(
         envvars={"NUMBA_CAPTURED_ERRORS": "old_style"},

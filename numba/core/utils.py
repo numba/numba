@@ -192,17 +192,21 @@ weakref.finalize(lambda: None, lambda: None)
 atexit.register(_at_shutdown)
 
 
+_old_style_deprecation_msg = (
+"Code using Numba extension API maybe depending on 'old_style' error-capturing,"
+" which is deprecated and will be replaced by 'new_style' in a future release."
+" See details at https://numba.readthedocs.io/en/latest/reference/deprecation.html#deprecation-of-old-style-numba-captured-errors" # noqa: E501
+)
+
+
 def _warn_old_style():
     from numba.core import errors  # to prevent circular import
 
     exccls, _, _ = sys.exc_info()
     # Warn only if the active exception is not a NumbaError
     if exccls is not None and not issubclass(exccls, errors.NumbaError):
-        warnings.warn(
-            "The 'old_style' error capturing is deprecated "
-            "and will be replaced by `new_style` in a future release.",
-            errors.NumbaPendingDeprecationWarning,
-        )
+        warnings.warn(_old_style_deprecation_msg,
+                      errors.NumbaPendingDeprecationWarning)
 
 
 def use_new_style_errors():
