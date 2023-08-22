@@ -2,7 +2,6 @@
 Add CUDA SASS CFG Support
 """""""""""""""""""""""""
 
-This PR adds support for getting the SASS CFG in dot language format. 
+This PR adds support for getting the SASS CFG in dot language format.
 It adds an ``inspect_sass_cfg()`` method to CUDADispatcher and the ``-cfg``
 flag to the nvdisasm command line tool.
- 
