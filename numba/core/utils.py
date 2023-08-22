@@ -193,9 +193,10 @@ atexit.register(_at_shutdown)
 
 
 _old_style_deprecation_msg = (
-"Code using Numba extension API maybe depending on 'old_style' error-capturing,"
-" which is deprecated and will be replaced by 'new_style' in a future release."
-" See details at https://numba.readthedocs.io/en/latest/reference/deprecation.html#deprecation-of-old-style-numba-captured-errors" # noqa: E501
+    "Code using Numba extension API maybe depending on 'old_style' "
+    "error-capturing, which is deprecated and will be replaced by 'new_style' "
+    "in a future release. See details at "
+    "https://numba.readthedocs.io/en/latest/reference/deprecation.html#deprecation-of-old-style-numba-captured-errors" # noqa: E501
 )
 
 
