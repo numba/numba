@@ -195,12 +195,14 @@ atexit.register(_at_shutdown)
 def _warn_old_style():
     from numba.core import errors  # to prevent circular import
 
-    warnings.warn(
-        "The 'old_style' error capturing is deprecated "
-        "and will be replaced by `new_style` in a future release.",
-        errors.NumbaPendingDeprecationWarning,
-        stacklevel=3
-    )
+    exccls, _, _ = sys.exc_info()
+    # Warn only if the active exception is not a NumbaError
+    if exccls is not None and not issubclass(exccls, errors.NumbaError):
+        warnings.warn(
+            "The 'old_style' error capturing is deprecated "
+            "and will be replaced by `new_style` in a future release.",
+            errors.NumbaPendingDeprecationWarning,
+        )
 
 
 def use_new_style_errors():

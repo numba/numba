@@ -497,6 +497,29 @@ class TestCapturedErrorHandling(SerialMixin, TestCase):
                           str(warns.warnings[0].message))
 
     @TestCase.run_test_in_subprocess(
+        envvars={"NUMBA_CAPTURED_ERRORS": "old_style"},
+    )
+    def test_old_style_no_deprecation(self):
+        # Verify that old_style error with NumbaError does not raise warnings
+        warnings.simplefilter("always", errors.NumbaPendingDeprecationWarning)
+
+        def bar(x):
+            pass
+
+        @overload(bar)
+        def ol_bar(x):
+            raise errors.TypingError("Invalid attribute")
+
+        with warnings.catch_warnings(record=True) as warns:
+            with self.assertRaises(errors.TypingError):
+                @njit('void(int64)')
+                def foo(x):
+                    bar(x)
+
+            self.assertEqual(len(warns), 0,
+                             msg="There should not be any warnings")
+
+    @TestCase.run_test_in_subprocess(
         envvars={"NUMBA_CAPTURED_ERRORS": "new_style"},
     )
     def test_new_style_no_warnings(self):
@@ -515,8 +538,9 @@ class TestCapturedErrorHandling(SerialMixin, TestCase):
                 @njit('void(int64)')
                 def foo(x):
                     bar(x)
-
-            self.assertEqual(len(warns), 0)
+            # There should not be any warnings
+            self.assertEqual(len(warns), 0,
+                             msg="There should not be any warnings")
 
 
 if __name__ == '__main__':
