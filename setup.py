@@ -20,7 +20,7 @@ except ImportError:
 
 
 min_python_version = "3.8"
-max_python_version = "3.12"  # exclusive
+max_python_version = "3.13"  # exclusive
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.21"
 min_llvmlite_version = "0.42.0dev0"
