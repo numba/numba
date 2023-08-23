@@ -1,0 +1,4 @@
+Added support for np.unwrap() function.
+==========================================
+
+Support is added for ``numpy.unwrap()``.
