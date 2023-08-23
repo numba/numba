@@ -4452,6 +4452,68 @@ def np_asarray_chkfinite(a, dtype=None):
 
     return impl
 
+
+@overload(np.unwrap)
+def numpy_unwrap(p, discont=None, period=6.283185307179586):
+    if not type_can_asarray(p):
+        msg = 'The argument "p" must be array-like'
+        raise TypingError(msg)
+
+    if not isinstance(discont, (types.Integer, types.Float, types.NoneType)):
+        msg = 'The argument "discont" must be a scalar'
+        raise TypingError(msg)
+
+    if not isinstance(period, (float, types.Number)):
+        msg = 'The argument "period" must be a scalar'
+        raise TypingError(msg)
+
+    axis = -1
+    slice1 = [slice(None, None)]   # full slices
+    slice1[axis] = slice(1, None)
+    slice1 = tuple(slice1)
+    dtype = np.result_type(as_dtype(p.dtype), as_dtype(period))
+    integer_input = np.issubdtype(dtype, np.integer)
+
+    def impl(p, discont=None, period=6.283185307179586):
+        # Flatten to a 2D array, keeping axis -1
+        p_init = np.asarray(p).astype(dtype)
+        init_shape = p_init.shape
+        last_axis = init_shape[-1]
+        p_new = p_init.reshape((p_init.size // last_axis, last_axis))
+        # Manipulate discont and period
+        if discont is None:
+            discont = period / 2
+        if integer_input:
+            interval_high, rem = divmod(period, 2)
+            boundary_ambiguous = rem == 0
+        else:
+            interval_high = period / 2
+            boundary_ambiguous = True
+        interval_low = -interval_high
+
+        # Work on each row separately
+        for i in range(p_init.size // last_axis):
+            row = p_new[i]
+            dd = np.diff(row)
+            ddmod = np.mod(dd - interval_low, period) + interval_low
+            if boundary_ambiguous:
+                ddmod = np.where((ddmod == interval_low) & (dd > 0),
+                                 interval_high, ddmod)
+            ph_correct = ddmod - dd
+
+            ph_correct = np.where(np.array([abs(x) for x in dd]) < discont, 0,
+                                  ph_correct)
+            ph_ravel = np.where(np.array([abs(x) for x in dd]) < discont, 0,
+                                ph_correct)
+            ph_correct = np.reshape(ph_ravel, ph_correct.shape)
+            up = np.copy(row)
+            up[slice1] = row[slice1] + ph_correct.cumsum()
+            p_new[i] = up
+
+        return p_new.reshape(init_shape)
+
+    return impl
+
 #----------------------------------------------------------------------------
 # Windowing functions
 #   - translated from the numpy implementations found in:
