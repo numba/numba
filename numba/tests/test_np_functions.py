@@ -5552,6 +5552,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_unwrap_basic(self):
         pyfunc = unwrap
         cfunc = njit(unwrap)
+        # Based on tests from https://github.com/numpy/numpy/blob/3032e84ff34f20def2ef4ebf9f8695947af3fd24/numpy/lib/tests/test_function_base.py#L1979-L2003 # noqa: E501
+        # Additional tests are included to ensure proper support for
+        # higher dimensional arrays
 
         # p only
         def inputs1():
