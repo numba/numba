@@ -73,11 +73,10 @@ class CPUContext(BaseContext):
                                    unicode,) # noqa F401
         from numba.core import optional # noqa F401
         from numba.misc import gdb_hook, literal # noqa F401
-        from numba.np import linalg, arraymath, arrayobj # noqa F401
+        from numba.np import linalg, arraymath, arrayobj, polynomial # noqa F401
         from numba.np.random import (generator_core, # noqa F401
                                      generator_methods,) # noqa F401
-        from numba.np.polynomial import (polynomial_core, # noqa F401
-                                         polynomial_methods) # noqa F401
+        from numba.np.polynomial import polynomial_core # noqa F401
         from numba.typed import typeddict, dictimpl # noqa F401
         from numba.typed import typedlist, listobject # noqa F401
         from numba.experimental import jitclass, function_type # noqa F401

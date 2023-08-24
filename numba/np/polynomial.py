@@ -7,10 +7,10 @@ import numpy as np
 from numpy.polynomial import polynomial as poly
 from numpy.polynomial import polyutils as pu
 
-from numba import typeof
 from numba.core import types, errors
 from numba.core.extending import overload
 from numba.np.numpy_support import type_can_asarray, as_dtype, from_dtype
+
 
 @overload(np.roots)
 def roots_impl(p):
@@ -65,7 +65,7 @@ def polyutils_trimseq(seq):
     if not type_can_asarray(seq):
         msg = 'The argument "seq" must be array-like'
         raise errors.TypingError(msg)
-    
+
     if isinstance(seq, types.BaseTuple):
         msg = 'Unsupported type %r for argument "seq"'
         raise errors.TypingError(msg % (seq))
@@ -81,73 +81,10 @@ def polyutils_trimseq(seq):
             for i in range(len(seq) - 1, -1, -1):
                 if seq[i] != 0:
                     break
-            return seq[:i+1]
+            return seq[:i + 1]
 
     return impl
 
-@overload(pu.as_series)
-def polyutils_as_series(alist, trim=True):
-    # TODO: Something went very wrong when I tried to use that within polyval.
-    # Extend testing suite?
-    if not type_can_asarray(alist):
-        msg = 'The argument "alist" must be array-like'
-        raise errors.TypingError(msg)
-    
-    if not isinstance(trim, (bool, types.Boolean)):
-        msg = 'The argument "trim" must be boolean'
-        raise errors.TypingError(msg)
-
-    res_dtype = np.float64
-            
-    tuple_input = isinstance(alist, types.BaseTuple)
-    if tuple_input:
-        for a in alist:
-            if isinstance(a, types.Number):
-                s1 = str(as_dtype(a))
-            elif isinstance(a, types.Tuple):
-
-                t = [as_dtype(ty) for ty in a.types]
-                s1 = str(np.result_type(*t))
-            else:
-                s1 = str(a.dtype)
-
-            res_dtype = np.result_type(res_dtype, s1)
-        l = len(alist)
-
-        if np.any(np.array([np.ndim(a) > 1 for a in alist])):
-                raise errors.NumbaValueError("Coefficient array is not 1-d")
-    
-    else:
-        if np.ndim(alist) <= 2:
-            res_dtype = np.result_type(res_dtype, str(alist.dtype))
-        else:
-            # If total dimension has ndim > 2, then coeff arrays are not 1D
-            raise errors.NumbaValueError("Coefficient array is not 1-d")
-    
-
-    def impl(alist, trim = True):
-        if tuple_input:
-            arrays = [np.arange(5).astype(res_dtype) for i in range(l)]
-            i = 0
-            for item in literal_unroll(alist):
-
-                arrays[i] = np.atleast_1d(np.asarray(item)).astype(res_dtype)
-                i += 1
-        
-        else:
-            alist_arr = np.asarray(alist)
-            arrays = [np.atleast_1d(np.asarray(a)).astype(res_dtype) for a in alist_arr]
-
-        if min([a.size for a in arrays]) == 0:
-            raise ValueError("Coefficient array is empty")
-
-        if trim:
-            arrays = [pu.trimseq(a) for a in arrays]
-
-        ret = arrays
-        return ret
-    
-    return impl
 
 def _poly_result_dtype(tup):
     # A helper function that takes a tuple of inputs and returns their result
@@ -163,6 +100,7 @@ def _poly_result_dtype(tup):
             s1 = str(item.dtype)
         res_dtype = (np.result_type(res_dtype, s1))
     return from_dtype(res_dtype)
+
 
 @overload(poly.polyadd)
 def numpy_polyadd(c1, c2):
@@ -257,32 +195,3 @@ def numpy_polymul(c1, c2):
         return pu.trimseq(val)
 
     return impl
-
-class Polynomial(object):
-
-    # Virtual properties
-    domain = np.array([-1, 1])
-    window = np.array([-1, 1])
-    # basis_name = None
-
-    def __init__(self, coef, domain = None, window = None):
-        (coef, ) = pu.as_series((coef, ), trim=False)
-        self.coef = coef
-
-        if domain is not None:
-            (domain,) = pu.as_series((domain, ), trim=False)
-            if len(domain) != 2:
-                raise ValueError("Domain has wrong number of elements.")
-            self.domain = domain
-
-        if window is not None:
-            (window, ) = pu.as_series((window, ), trim=False)
-            if len(window) != 2:
-                raise ValueError("Window has wrong number of elements.")
-            self.window = window
-    
-    def __len__(self):
-        return len(self.coef)
-    
-    def degree(self):
-        return len(self) - 1

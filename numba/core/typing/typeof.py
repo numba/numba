@@ -288,4 +288,7 @@ def typeof_random_generator(val, c):
 
 @typeof_impl.register(np.polynomial.polynomial.Polynomial)
 def typeof_numpy_polynomial(val, c):
-    return types.PolynomialType(val)
+    coef = typeof(val.coef)
+    domain = typeof(val.domain)
+    window = typeof(val.window)
+    return types.PolynomialType(coef, domain, window)
