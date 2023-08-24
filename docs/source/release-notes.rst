@@ -3,10 +3,12 @@ Release Notes
 ======================
 
 Towncrier generated notes:
+--------------------------
 
-.. include:: release/0.58.0rc1-notes.rst
-
+.. toctree::
+   release/0.58.0rc1-notes.rst
 
 Non-Towncrier generated notes:
+------------------------------
 
-.. include:: ../../CHANGE_LOG
+:doc:`release/CHANGE_LOG.rst`

@@ -2,6 +2,8 @@
 Version 0.58.0rc1 (Release Date)
 --------------------------------
 
+.. contents:: Table of Contents
+   :depth: 2
 
 Highlights
 ~~~~~~~~~~
