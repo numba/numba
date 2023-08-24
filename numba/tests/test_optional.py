@@ -259,6 +259,20 @@ class TestOptional(TestCase):
         # incref being made on the returned None.
         work()
 
+    def test_optional_to_int(self):
+        @njit
+        def foo(key):
+            d = {1:1}
+            value = d.get(key)
+            if value is None:
+                return None
+            else:
+                # allow using types.int64 as int for optional type
+                return types.int64(value)
+
+        for key in [1, 2]:
+            self.assertEqual(foo.py_func(key), foo(key))
+
 
 if __name__ == '__main__':
     unittest.main()

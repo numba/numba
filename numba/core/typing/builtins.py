@@ -825,7 +825,10 @@ class NumberClassAttribute(AttributeTemplate):
                 sig = fnty.get_call_type(self.context, (val, types.DType(ty)),
                                          {})
                 return sig.return_type
-            elif isinstance(val, (types.Number, types.Boolean, types.IntEnumMember)):
+            elif isinstance(val, (types.Number,
+                                  types.Boolean,
+                                  types.IntEnumMember,
+                                  types.Optional)):
                  # Scalar constructor, e.g. np.int32(42)
                  return ty
             elif isinstance(val, (types.NPDatetime, types.NPTimedelta)):
