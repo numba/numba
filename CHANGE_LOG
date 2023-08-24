@@ -4,8 +4,8 @@ Version 0.58.0rc1 (17 August 2023)
 This is a major Numba release. Numba now uses towncrier to create the release
 notes, so please find a summary of all noteworthy items below.
 
-.. toctree::
-   :maxdepth: 2
+.. contents:: Table of Contents
+   :depth: 3
 
 Highlights
 ~~~~~~~~~~
