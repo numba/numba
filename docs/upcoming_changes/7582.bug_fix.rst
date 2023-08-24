@@ -1,9 +1,0 @@
-Prevent invalid fusion
-""""""""""""""""""""""
-
-This PR fixes an issue in which an array first read in a parfor and later
-written in the same parfor would only be classified as used in the parfor.
-When a subsequent parfor also used the same array then fusion of the
-parfors was happening which should have been forbidden given that that the
-first parfor was also writing to the array.  This PR treats such arrays
-in a parfor as being both used and defined so that fusion will be prevented.
