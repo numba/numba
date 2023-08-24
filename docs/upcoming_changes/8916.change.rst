@@ -1,4 +1,0 @@
-The minimum ``llvmlite`` version is now 0.41.0.
-"""""""""""""""""""""""""""""""""""""""""""""""
-
-The minimum required version of ``llvmlite`` is now version 0.41.0.
