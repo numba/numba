@@ -205,7 +205,9 @@ def _warn_old_style():
 
     exccls, _, tb = sys.exc_info()
     # Warn only if the active exception is not a NumbaError
-    if exccls is not None and not issubclass(exccls, errors.NumbaError):
+    # and not a NumbaWarning which is raised if -Werror is set.
+    numba_errs = (errors.NumbaError, errors.NumbaWarning)
+    if exccls is not None and not issubclass(exccls, numba_errs):
         tb_last = traceback.format_tb(tb)[-1]
         msg = f"{_old_style_deprecation_msg}\nException origin:\n{tb_last}"
         warnings.warn(msg,
