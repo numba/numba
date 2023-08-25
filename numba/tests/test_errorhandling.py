@@ -463,15 +463,21 @@ class TestCapturedErrorHandling(SerialMixin, TestCase):
                 pass
             return impl
 
-        for style, err_class in (('new_style', AttributeError),
-                                 ('old_style', errors.TypingError)):
-            with override_config('CAPTURED_ERRORS', style):
-                with self.assertRaises(err_class) as raises:
-                    @njit('void(int64)')
-                    def foo(x):
-                        bar(x)
-                expected = "object has no attribute 'some_invalid_attr'"
-                self.assertIn(expected, str(raises.exception))
+        with warnings.catch_warnings():
+            # Suppress error going into stdout
+            warnings.simplefilter("ignore",
+                                  errors.NumbaPendingDeprecationWarning)
+            # Check both new_style and old_style
+            for style, err_class in (('new_style', AttributeError),
+                                     ('old_style', errors.TypingError)):
+                with override_config('CAPTURED_ERRORS', style):
+                    with self.assertRaises(err_class) as raises:
+
+                        @njit('void(int64)')
+                        def foo(x):
+                            bar(x)
+                    expected = "object has no attribute 'some_invalid_attr'"
+                    self.assertIn(expected, str(raises.exception))
 
     @TestCase.run_test_in_subprocess(
         envvars={"NUMBA_CAPTURED_ERRORS": "old_style"},
