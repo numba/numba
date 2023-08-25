@@ -203,10 +203,12 @@ _old_style_deprecation_msg = (
 def _warn_old_style():
     from numba.core import errors  # to prevent circular import
 
-    exccls, _, _ = sys.exc_info()
+    exccls, _, tb = sys.exc_info()
     # Warn only if the active exception is not a NumbaError
     if exccls is not None and not issubclass(exccls, errors.NumbaError):
-        warnings.warn(_old_style_deprecation_msg,
+        tb_last = traceback.format_tb(tb)[-1]
+        msg = f"{_old_style_deprecation_msg}\nException origin:\n{tb_last}"
+        warnings.warn(msg,
                       errors.NumbaPendingDeprecationWarning)
 
 
