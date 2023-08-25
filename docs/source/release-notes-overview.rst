@@ -7,8 +7,9 @@ Towncrier generated notes:
 
 .. toctree::
    :maxdepth: 1
+   :glob:
 
-   release/0.58.0rc1-notes.rst
+   release/*.rst
 
 Non-Towncrier generated notes:
 ------------------------------
