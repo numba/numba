@@ -9,7 +9,7 @@ Towncrier generated notes:
    :maxdepth: 1
    :glob:
 
-   release/*.rst
+   release/*
 
 Non-Towncrier generated notes:
 ------------------------------
