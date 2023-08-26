@@ -5,7 +5,8 @@ import numpy as np
 from numba import jit, typeof
 from numba.core import cgutils, types, serialize, sigutils, errors
 from numba.core.extending import (is_jitted, overload_attribute,
-                                  overload_method, register_jitable)
+                                  overload_method, register_jitable,
+                                  intrinsic)
 from numba.core.typing import npydecl
 from numba.core.typing.templates import AbstractTemplate, signature
 from numba.cpython.unsafe.tuple import tuple_setitem
@@ -14,6 +15,7 @@ from numba.parfors import array_analysis
 from numba.np.ufunc import ufuncbuilder
 from numba.np import numpy_support
 from typing import Callable
+from llvmlite import ir
 
 
 def make_dufunc_kernel(_dufunc):
@@ -284,32 +286,58 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                        "reorderable, so at most one axis may be specified")
                 raise errors.NumbaTypeError(msg)
 
-            tup_init = (0,) * (array.ndim - 1)
-            tup_init2 = (0,) * (array.ndim)
+            tup_init = (0,) * (array.ndim)
             nb_dtype = array.dtype if cgutils.is_nonelike(dtype) else dtype
             identity = self.identity
 
             id_none = cgutils.is_nonelike(identity)
             init_none = cgutils.is_nonelike(initial)
 
-            @register_jitable
-            def tuple_slice(shape, pos):
-                # Same as
-                # shape = array.shape[0 : pos] + array.shape[pos + 1:]
-                s = tup_init
-                i = 0
-                for j, e in enumerate(shape):
-                    if j == pos:
-                        continue
-                    s = tuple_setitem(s, i, e)
-                    i += 1
-                return s
+            @intrinsic
+            def tuple_slice(typingctx, shape, pos):
+                ret = types.UniTuple(shape.dtype, len(shape) - 1)
+                sig = ret(shape, pos)
+
+                def codegen(context, builder, sig, args):
+                    # Code above is equivalent to calling "tuple_setitem" inside
+                    # a for loop, but faster. We avoid allocating a new tuple
+                    # onto the stack as "tuple_setitem" does.
+                    shape, pos = args
+                    dtype = shape.type.element
+                    count = shape.type.count
+                    T = cgutils.alloca_once(builder,
+                                            ir.ArrayType(dtype, count - 1))
+                    shape = cgutils.alloca_once_value(builder, shape)
+
+                    zero = pos.type(0)
+                    one = pos.type(1)
+
+                    # the next two for loops fill the tuple "stack"
+                    # from [0, pos)
+                    with cgutils.for_range(builder, pos) as loop:
+                        inptr = builder.gep(shape, [zero, loop.index])
+                        val = builder.load(inptr)
+                        offptr = builder.gep(T, [zero, loop.index])
+                        builder.store(val, offptr)
+
+                    # ... and from [pos + 1, count)
+                    start = builder.add(pos, one)
+                    stop = pos.type(count)
+                    with cgutils.for_range_slice(builder, start, stop, one) as (i, _):  # noqa: E501
+                        j = builder.sub(i, i.type(1))
+                        inptr = builder.gep(shape, [zero, i])
+                        val = builder.load(inptr)
+                        offptr = builder.gep(T, [zero, j])
+                        builder.store(val, offptr)
+                    return builder.load(T)
+
+                return sig, codegen
 
             @register_jitable
             def tuple_slice_append(shape, pos, val):
                 # Same as
                 # shape = array.shape[0 : pos] + val + array.shape[pos + 1:]
-                s = tup_init2
+                s = tup_init
                 i, j, sz = 0, 0, len(s)
                 while j < sz:
                     if j == pos:
@@ -347,8 +375,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 val = idx
                 m = 1
                 r2 = 0
-                # this loop slowdown ufunc.reduce
-                # Q: how to compute this in a faster way?
+                # This loop slowdown ufunc.reduce
                 # Could the result of a previous call be used to compute
                 # the next one?
 
