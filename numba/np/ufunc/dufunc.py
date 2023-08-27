@@ -294,20 +294,20 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
             init_none = cgutils.is_nonelike(initial)
 
             @intrinsic
-            def tuple_slice(typingctx, shape, pos):
-                ret = types.UniTuple(shape.dtype, len(shape) - 1)
-                sig = ret(shape, pos)
+            def tuple_slice(typingctx, tup, pos):
+                ret = types.UniTuple(tup.dtype, len(tup) - 1)
+                sig = ret(tup, pos)
 
                 def codegen(context, builder, sig, args):
                     # Code above is equivalent to calling "tuple_setitem" inside
                     # a for loop, but faster. We avoid allocating a new tuple
                     # onto the stack as "tuple_setitem" does.
-                    shape, pos = args
-                    dtype = shape.type.element
-                    count = shape.type.count
+                    tup, pos = args
+                    dtype = tup.type.element
+                    count = tup.type.count
                     T = cgutils.alloca_once(builder,
                                             ir.ArrayType(dtype, count - 1))
-                    shape = cgutils.alloca_once_value(builder, shape)
+                    tup = cgutils.alloca_once_value(builder, tup)
 
                     zero = pos.type(0)
                     one = pos.type(1)
@@ -315,7 +315,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                     # the next two for loops fill the tuple "stack"
                     # from [0, pos)
                     with cgutils.for_range(builder, pos) as loop:
-                        inptr = builder.gep(shape, [zero, loop.index])
+                        inptr = builder.gep(tup, [zero, loop.index])
                         val = builder.load(inptr)
                         offptr = builder.gep(T, [zero, loop.index])
                         builder.store(val, offptr)
@@ -325,7 +325,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                     stop = pos.type(count)
                     with cgutils.for_range_slice(builder, start, stop, one) as (i, _):  # noqa: E501
                         j = builder.sub(i, i.type(1))
-                        inptr = builder.gep(shape, [zero, i])
+                        inptr = builder.gep(tup, [zero, i])
                         val = builder.load(inptr)
                         offptr = builder.gep(T, [zero, j])
                         builder.store(val, offptr)
@@ -334,16 +334,16 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 return sig, codegen
 
             @register_jitable
-            def tuple_slice_append(shape, pos, val):
+            def tuple_slice_append(tup, pos, val):
                 # Same as
-                # shape = array.shape[0 : pos] + val + array.shape[pos + 1:]
+                # tup = tup[0 : pos] + val + tup[pos + 1:]
                 s = tup_init
                 i, j, sz = 0, 0, len(s)
                 while j < sz:
                     if j == pos:
                         s = tuple_setitem(s, j, val)
                     else:
-                        e = shape[i]
+                        e = tup[i]
                         s = tuple_setitem(s, j, e)
                         i += 1
                     j += 1
