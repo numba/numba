@@ -5,6 +5,7 @@ from numba.core import types, cgutils
 from numpy.polynomial.polynomial import Polynomial
 from contextlib import ExitStack
 import numpy as np
+from llvmlite import ir
 
 
 @register_model(types.PolynomialType)
@@ -27,12 +28,20 @@ as_numba_type.register(Polynomial, types.PolynomialType(np.array([0,1])))
 
 @type_callable(Polynomial)
 def type_polynomial(context):
-    def typer(coef, domain=np.array([-1,1]), window=np.array([-1,1])):
-        if (isinstance(coef, types.Array) and
-                isinstance(domain, types.Array) and
-                isinstance(window, types.Array)):
-            return types.PolynomialType(coef, domain, window)
+    def typer(coef, domain=None, window=None):
+        default_domain = types.Array(types.int64, 1, 'C')
+        default_window = types.Array(types.int64, 1, 'C')
+        default_coef = types.Array(types.double, 1, 'C')
 
+        if isinstance(coef, types.Array) and \
+                all([a is None for a in (domain, window)]):
+            if coef.ndim == 1:
+                return types.PolynomialType(default_coef,
+                                            default_domain,
+                                            default_window)
+        elif all([isinstance(a, types.Array) for a in (coef, domain, window)]):
+            if all([a.ndim == 1 for a in (coef, domain, window)]):
+                return types.PolynomialType(default_coef, domain, window)
     return typer
 
 
@@ -55,10 +64,12 @@ def impl_polynomial1(context, builder, sig, args):
 
     typ = sig.return_type
     polynomial = cgutils.create_struct_proxy(typ)(context, builder)
-    sig2 = sig.args[0].copy(dtype=types.double)(sig.args[0])
-    coef_cast = context.compile_internal(builder, to_double, sig2, args)
-    domain_cast = context.compile_internal(builder, const_impl, sig2, ())
-    window_cast = context.compile_internal(builder, const_impl, sig2, ())
+    sig_coef = sig.args[0].copy(dtype=types.double)(sig.args[0])
+    coef_cast = context.compile_internal(builder, to_double, sig_coef, args)
+    sig_domain = sig.args[0].copy(dtype=types.int64)()
+    sig_window = sig.args[0].copy(dtype=types.int64)()
+    domain_cast = context.compile_internal(builder, const_impl, sig_domain, ())
+    window_cast = context.compile_internal(builder, const_impl, sig_window, ())
     polynomial.coef = coef_cast
     polynomial.domain = domain_cast
     polynomial.window = window_cast
@@ -81,13 +92,26 @@ def impl_polynomial3(context, builder, sig, args):
                                          to_double, coef_sig,
                                          (args[0],))
 
-    domain_cast = args[1]
+    domain_cast = context.make_helper(builder, sig.args[1], value=args[1])
+    window_cast = context.make_helper(builder, sig.args[2], value=args[2])
 
-    window_cast = args[2]
+    i64 = ir.IntType(64)
+    two = i64(2)
+
+    s1 = builder.extract_value(domain_cast.shape, 0)
+    s2 = builder.extract_value(window_cast.shape, 0)
+    pred = builder.and_(
+        builder.icmp_signed('!=', s1, two),
+        builder.icmp_signed('!=', s2, two))
+
+    with cgutils.if_unlikely(builder, pred):
+        context.call_conv.return_user_exc(
+            builder, ValueError,
+            ("Domain and Window must be of length 2.",))
 
     polynomial.coef = coef_cast
-    polynomial.domain = domain_cast
-    polynomial.window = window_cast
+    polynomial.domain = domain_cast._getvalue()
+    polynomial.window = window_cast._getvalue()
 
     return polynomial._getvalue()
 
@@ -127,7 +151,6 @@ def unbox_polynomial(typ, obj, c):
         polynomial.coef = coef_native.value
         polynomial.domain = domain_native.value
         polynomial.window = window_native.value
-        # breakpoint()
 
     return NativeValue(polynomial._getvalue(),
                        is_error=c.builder.load(is_error_ptr))
@@ -148,11 +171,11 @@ def box_polynomial(typ, val, c):
         with cgutils.early_exit_if_null(c.builder, stack, coef_obj):
             c.builder.store(fail_obj, ret_ptr)
 
-        domain_obj = c.box(types.Array(types.double, 1, 'C'), polynomial.domain)
+        domain_obj = c.box(typ.domain, polynomial.domain)
         with cgutils.early_exit_if_null(c.builder, stack, domain_obj):
             c.builder.store(fail_obj, ret_ptr)
 
-        window_obj = c.box(types.Array(types.double, 1, 'C'), polynomial.window)
+        window_obj = c.box(typ.window, polynomial.window)
         with cgutils.early_exit_if_null(c.builder, stack, window_obj):
             c.builder.store(fail_obj, ret_ptr)
 
@@ -163,9 +186,6 @@ def box_polynomial(typ, val, c):
             c.pyapi.decref(window_obj)
             c.builder.store(fail_obj, ret_ptr)
 
-        # NOTE: The result of this call is not checked as the clean up
-        # has to occur regardless of whether it is successful. If it
-        # fails `res` is set to NULL and a Python exception is set.
         res = c.pyapi.call_function_objargs(class_obj,
                                             (coef_obj, domain_obj, window_obj))
         c.pyapi.decref(coef_obj)
