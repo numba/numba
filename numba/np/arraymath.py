@@ -3817,6 +3817,9 @@ def np_digitize(x, bins, right=False):
                     raise ValueError(error_msg)
             return False
 
+    # NOTE: the algorithm is slightly different from searchsorted's,
+    # as the edge cases (bin boundaries, NaN) give different results.
+
     @register_jitable
     def digitize_scalar(x, bins, right):
         # bins are monotonically-increasing
