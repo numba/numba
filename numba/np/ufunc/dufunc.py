@@ -287,51 +287,25 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 raise errors.NumbaTypeError(msg)
 
             tup_init = (0,) * (array.ndim)
+            tup_init_m1 = (0,) * (array.ndim - 1)
             nb_dtype = array.dtype if cgutils.is_nonelike(dtype) else dtype
             identity = self.identity
 
             id_none = cgutils.is_nonelike(identity)
             init_none = cgutils.is_nonelike(initial)
 
-            @intrinsic
-            def tuple_slice(typingctx, tup, pos):
-                ret = types.UniTuple(tup.dtype, len(tup) - 1)
-                sig = ret(tup, pos)
-
-                def codegen(context, builder, sig, args):
-                    # Code above is equivalent to calling "tuple_setitem" inside
-                    # a for loop, but faster. We avoid allocating a new tuple
-                    # onto the stack as "tuple_setitem" does.
-                    tup, pos = args
-                    dtype = tup.type.element
-                    count = tup.type.count
-                    T = cgutils.alloca_once(builder,
-                                            ir.ArrayType(dtype, count - 1))
-                    tup = cgutils.alloca_once_value(builder, tup)
-
-                    zero = pos.type(0)
-                    one = pos.type(1)
-
-                    # the next two for loops fill the tuple "stack"
-                    # from [0, pos)
-                    with cgutils.for_range(builder, pos) as loop:
-                        inptr = builder.gep(tup, [zero, loop.index])
-                        val = builder.load(inptr)
-                        offptr = builder.gep(T, [zero, loop.index])
-                        builder.store(val, offptr)
-
-                    # ... and from [pos + 1, count)
-                    start = builder.add(pos, one)
-                    stop = pos.type(count)
-                    with cgutils.for_range_slice(builder, start, stop, one) as (i, _):  # noqa: E501
-                        j = builder.sub(i, i.type(1))
-                        inptr = builder.gep(tup, [zero, i])
-                        val = builder.load(inptr)
-                        offptr = builder.gep(T, [zero, j])
-                        builder.store(val, offptr)
-                    return builder.load(T)
-
-                return sig, codegen
+            @register_jitable
+            def tuple_slice(tup, pos):
+                # Same as
+                # tup = tup[0 : pos] + tup[pos + 1:]
+                s = tup_init_m1
+                i = 0
+                for j, e in enumerate(tup):
+                    if j == pos:
+                        continue
+                    s = tuple_setitem(s, i, e)
+                    i += 1
+                return s
 
             @register_jitable
             def tuple_slice_append(tup, pos, val):
@@ -348,6 +322,72 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                         i += 1
                     j += 1
                 return s
+
+            @intrinsic
+            def compute_flat_idx__(typingctx, strides, itemsize, idx, axis):
+                sig = types.intp(strides, itemsize, idx, axis)
+                len_idx = len(idx)
+
+                def gen_block(builder, block_pos, block_name, bb_end, args):
+                    strides, _, idx, _ = args
+                    bb = builder.append_basic_block(name=block_name)
+
+                    with builder.goto_block(bb):
+                        zero = ir.IntType(64)(0)
+                        flat_idx = zero
+
+                        if block_pos == 0:
+                            for i in range(1, len_idx):
+                                stride = builder.extract_value(strides, i - 1)
+                                idx_i = builder.extract_value(idx, i)
+                                m = builder.mul(stride, idx_i)
+                                flat_idx = builder.add(flat_idx, m)
+                        elif 0 < block_pos < len_idx - 1:
+                            for i in range(0, block_pos):
+                                stride = builder.extract_value(strides, i)
+                                idx_i = builder.extract_value(idx, i)
+                                m = builder.mul(stride, idx_i)
+                                flat_idx = builder.add(flat_idx, m)
+
+                            for i in range(block_pos + 1, len_idx):
+                                stride = builder.extract_value(strides, i - 1)
+                                idx_i = builder.extract_value(idx, i)
+                                m = builder.mul(stride, idx_i)
+                                flat_idx = builder.add(flat_idx, m)
+                        else:
+                            for i in range(0, len_idx - 1):
+                                stride = builder.extract_value(strides, i)
+                                idx_i = builder.extract_value(idx, i)
+                                m = builder.mul(stride, idx_i)
+                                flat_idx = builder.add(flat_idx, m)
+
+                        builder.branch(bb_end)
+
+                    return bb, flat_idx
+
+                def codegen(context, builder, sig, args):
+                    strides, itemsize, idx, axis = args
+
+                    bb = builder.basic_block
+                    switch_end = builder.append_basic_block(name='axis_end')
+                    l = []
+                    for i in range(len_idx):
+                        block, flat_idx = gen_block(builder, i, f"axis_{i}",
+                                                    switch_end, args)
+                        l.append((block, flat_idx))
+
+                    with builder.goto_block(bb):
+                        switch = builder.switch(axis, l[-1][0])
+                        for i in range(len_idx):
+                            switch.add_case(i, l[i][0])
+
+                    builder.position_at_end(switch_end)
+                    phi = builder.phi(l[0][1].type)
+                    for block, value in l:
+                        phi.add_incoming(value, block)
+                    return builder.sdiv(phi, itemsize)
+
+                return sig, codegen
 
             @register_jitable
             def compute_flat_idx(strides, itemsize, idx, axis):
@@ -405,28 +445,6 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                     r = ufunc(r, array[i])
                 return r
 
-            @register_jitable
-            def compute_new_flat_idx(idx, axis, shape):
-                val = idx
-                m = 1
-                r2 = 0
-                # This loop slowdown ufunc.reduce
-                # Could the result of a previous call be used to compute
-                # the next one?
-
-                j = len(shape) - 1
-                while j >= 0:
-                    # Quite similar to np.unravel_index
-                    shape_j = shape[j]
-                    (div, mod) = np.divmod(val, shape_j)
-                    tmp = div
-                    if j != axis:
-                        r2 += mod * m
-                        m *= shape_j
-                    val = tmp
-                    j -= 1
-                return r2
-
             def impl_nd_axis_int(ufunc,
                                  array,
                                  axis=0,
@@ -455,24 +473,12 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 else:
                     r = np.full(shape, fill_value=initial, dtype=nb_dtype)
 
-                # There are two implementations available for ufunc.reduce
-                # Next 6 lines implement it by flattening the arrays and
-                # computing its index with "compute_new_flat_idx"
-
-                # array_flat = array.flat
-                # r_flat = r.flat
-                # array_sz = len(array_flat)
-                # for i in range(array_sz):
-                #     new_idx = compute_new_flat_idx(i, axis, array.shape)
-                #     r_flat[new_idx] = ufunc(r_flat[new_idx], array_flat[i])
-
-                # The other approach is to just remove the axis index from the
-                # indexing tuple returned by np.ndenumerate. For instance,
-                # consider the resulting tuple is "(X, Y, Z)" and axis=1,
-                # "compute_result_shape" will return a new tuple without the
-                # element in the middle (Y) => (X, Z)
-                # Surprisingly, this seems to be faster than the previous
-                # approach, but still slow compared to NumPy
+                # One approach to implement reduce is to remove the axis index
+                # from the indexing tuple returned by "np.ndenumerate". For
+                # instance, if idx = (X, Y, Z) and axis=1, the result index
+                # is (X, Y).
+                # Another way is to compute the result index using strides,
+                # which is faster than manipulating tuples.
                 for idx, val in np.ndenumerate(array):
                     flat_pos = compute_flat_idx(r.strides, r.itemsize, idx,
                                                 axis)
