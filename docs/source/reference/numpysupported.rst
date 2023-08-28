@@ -426,7 +426,7 @@ Polynomials
 -----------
 
 The following polynomial classes are supported:
-* :class:`numpy.polynomial.polynomial.Polynomial` (only the first argument)
+* :class:`numpy.polynomial.polynomial.Polynomial` (only the first three arguments)
 
 The following polynomial functions are supported:
 * :func:`numpy.polynomial.polynomial.polyadd()`
