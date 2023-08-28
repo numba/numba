@@ -275,7 +275,6 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 msg = 'The first argument "array" must be array-like'
                 raise errors.NumbaTypeError(msg)
 
-            array_dtype = array.dtype
             axis_int = isinstance(axis, types.Integer)
             axis_int_tuple = isinstance(axis, types.UniTuple) and \
                 isinstance(axis.dtype, types.Integer)
