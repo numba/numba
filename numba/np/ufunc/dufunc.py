@@ -408,6 +408,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                     arr, pos, val = args
                     arr = context.make_helper(builder, sig.args[0], arr)
                     ptr = builder.gep(arr.data, [pos])
+                    val = context.cast(builder, val, val.type, ptr.type.pointee)
                     builder.store(val, ptr)
 
                 return sig, codegen
@@ -466,9 +467,8 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                         result_idx = tuple_slice_append(idx, axis, 0)
                         r[idx] = array[result_idx]
                 elif initial is None and identity is not None:
-                    # Even though checking if identity is not None is redundant
-                    # it is required for Numba to compile this block without
-                    # the identity=None clause
+                    # Checkig if identity is not none is redundant but required
+                    # compile this block
                     r = np.full(shape, fill_value=identity, dtype=nb_dtype)
                 else:
                     r = np.full(shape, fill_value=initial, dtype=nb_dtype)
