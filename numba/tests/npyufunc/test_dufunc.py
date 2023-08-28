@@ -151,7 +151,7 @@ class TestDUFuncMethods(TestCase):
                 got = foo(array, axis, dtype, initial)
                 self.assertPreciseEqual(expected, got)
 
-    def _check_reduce_axis(self, ufunc):
+    def _check_reduce_axis(self, ufunc, dtype):
 
         @njit
         def foo(a, axis):
@@ -160,7 +160,8 @@ class TestDUFuncMethods(TestCase):
         exc_msg = (f"reduction operation '{ufunc.__name__}' is not "
                    "reorderable, so at most one axis may be specified")
         inputs = [
-            np.arange(40).reshape(5, 4, 2),
+            np.arange(40, dtype=dtype).reshape(5, 4, 2),
+            np.arange(10, dtype=dtype),
         ]
         for array in inputs:
             for i in range(1, array.ndim + 1):
@@ -178,7 +179,7 @@ class TestDUFuncMethods(TestCase):
     def test_add_reduce(self):
         duadd = vectorize('int64(int64, int64)', identity=0)(pyuadd)
         self._check_reduce(duadd)
-        self._check_reduce_axis(duadd)
+        self._check_reduce_axis(duadd, dtype=np.int64)
 
     def test_mul_reduce(self):
         dumul = vectorize('int64(int64, int64)', identity=1)(pymult)
@@ -191,7 +192,7 @@ class TestDUFuncMethods(TestCase):
     def test_min_reduce(self):
         dumin = vectorize('int64(int64, int64)')(pymin)
         self._check_reduce(dumin, initial=10)
-        self._check_reduce_axis(dumin)
+        self._check_reduce_axis(dumin, dtype=np.int64)
 
     def test_invalid_input(self):
         duadd = vectorize('float64(float64, int64)', identity=0)(pyuadd)

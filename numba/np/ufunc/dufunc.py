@@ -275,6 +275,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 msg = 'The first argument "array" must be array-like'
                 raise errors.NumbaTypeError(msg)
 
+            array_dtype = array.dtype
             axis_int = isinstance(axis, types.Integer)
             axis_int_tuple = isinstance(axis, types.UniTuple) and \
                 isinstance(axis.dtype, types.Integer)
@@ -400,31 +401,6 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 flat_idx //= itemsize
                 return flat_idx
 
-            @intrinsic
-            def store_value(typingctx, arr, pos, val):
-                sig = types.none(arr, pos, val)
-
-                def codegen(context, builder, sig, args):
-                    arr, pos, val = args
-                    arr = context.make_helper(builder, sig.args[0], arr)
-                    ptr = builder.gep(arr.data, [pos])
-                    val = context.cast(builder, val, val.type, ptr.type.pointee)
-                    builder.store(val, ptr)
-
-                return sig, codegen
-
-            @intrinsic
-            def load_value(typingctx, arr, pos):
-                sig = arr.dtype(arr, pos)
-
-                def codegen(context, builder, sig, args):
-                    arr, pos = args
-                    arr = context.make_helper(builder, sig.args[0], arr)
-                    ptr = builder.gep(arr.data, [pos])
-                    return builder.load(ptr)
-
-                return sig, codegen
-
             @register_jitable
             def find_min(tup):
                 idx, e = 0, tup[0]
@@ -479,12 +455,12 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 # is (X, Y).
                 # Another way is to compute the result index using strides,
                 # which is faster than manipulating tuples.
+                view = r.ravel()
                 for idx, val in np.ndenumerate(array):
                     flat_pos = compute_flat_idx(r.strides, r.itemsize, idx,
                                                 axis)
-                    lhs, rhs = load_value(r, flat_pos), val
-                    result = ufunc(lhs, rhs)
-                    store_value(r, flat_pos, result)
+                    lhs, rhs = view[flat_pos], val
+                    view[flat_pos] = ufunc(lhs, rhs)
                 return r
 
             def impl_nd_axis_tuple(ufunc,
