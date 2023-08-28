@@ -3781,23 +3781,41 @@ def searchsorted(a, v, side='left'):
 def np_digitize(x, bins, right=False):
     @register_jitable
     def are_bins_increasing(bins):
-        n = len(bins)
-        is_increasing = True
-        is_decreasing = True
-        if n > 1:
-            prev = bins[0]
-            for i in range(1, n):
-                cur = bins[i]
-                is_increasing = is_increasing and not prev > cur
-                is_decreasing = is_decreasing and not prev < cur
-                if not is_increasing and not is_decreasing:
-                    raise ValueError("bins must be monotonically increasing "
-                                     "or decreasing")
-                prev = cur
-        return is_increasing
 
-    # NOTE: the algorithm is slightly different from searchsorted's,
-    # as the edge cases (bin boundaries, NaN) give different results.
+        # all bin edges hold the same value
+        if len(bins) == 0:
+            return True
+
+        # Skip repeated values at the beginning of the array
+        last_value = bins[0]
+        i = 1
+        while i < len(bins) and bins[i] == last_value:
+            i += 1
+
+        # all bin edges hold the same value
+        if i == len(bins):
+            return True
+
+        error_msg = "bins must be monotonically increasing or decreasing"
+        next_value = bins[i]
+
+        if last_value < next_value:
+            # Possibly monotonic increasing
+            for i in range(i + 1, len(bins)):
+                last_value = next_value
+                next_value = bins[i]
+                if last_value > next_value:
+                    raise ValueError(error_msg)
+            return True
+
+        else:
+            # last > next, possibly monotonic decreasing
+            for i in range(i + 1, len(bins)):
+                last_value = next_value
+                next_value = bins[i]
+                if last_value < next_value:
+                    raise ValueError(error_msg)
+            return False
 
     @register_jitable
     def digitize_scalar(x, bins, right):

@@ -1366,6 +1366,98 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # Sequence input
         check(list(values), bins1)
 
+        # per https://github.com/numba/numba/issues/8768
+        check(np.array([np.nan, 1]), np.array([1.5, np.nan]))
+
+    def test_digitize_nan_handling(self):
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        pyfunc = digitize
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check_error(*args):
+            for fn in pyfunc, cfunc:
+                with self.assertRaises(ValueError) as raises:
+                    fn(*args)
+
+                msg = 'bins must be monotonically increasing or decreasing'
+                self.assertIn(msg, str(raises.exception))
+
+        x = np.array([np.nan, 1]),
+        bins = np.array([np.nan, 1.5, 2.3, np.nan])
+        check_error(x, bins)
+
+        x = [-1, 0, 1, 2]
+        bins = [0, 0, 1, 0]
+        check_error(x, bins)
+
+        bins = [1, 1, 0, 1]
+        check_error(x, bins)
+
+    def test_digitize_supplemental(self):
+        # inspired by the tests in
+        # https://github.com/numpy/numpy/blob/a277f62/numpy/lib/tests/test_function_base.py
+
+        pyfunc = digitize
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(*args):
+            expected = pyfunc(*args)
+            got = cfunc(*args)
+            self.assertPreciseEqual(expected, got)
+
+        # forward
+        x = np.arange(-6, 5)
+        bins = np.arange(-5, 5)
+        check(x, bins)
+
+        # reverse
+        x = np.arange(5, -6, -1)
+        bins = np.arange(5, -5, -1)
+        check(x, bins)
+
+        # random
+        rng = np.random.RandomState(0)
+        x = rng.rand(10)
+        bins = np.linspace(x.min(), x.max(), 10)
+        check(x, bins)
+
+        # right_basic
+        x = [1, 5, 4, 10, 8, 11, 0]
+        bins = [1, 5, 10]
+        check(x, bins)
+
+        # right_open
+        x = np.arange(-6, 5)
+        bins = np.arange(-6, 4)
+        check(x, bins, True)
+
+        # right_open_reverse
+        x = np.arange(5, -6, -1)
+        bins = np.arange(4, -6, -1)
+        check(x, bins, True)
+
+        # right_open_random
+        x = rng.rand(10)
+        bins = np.linspace(x.min(), x.max(), 10)
+        check(x, bins, True)
+
+        # monotonic
+        x = [-1, 0, 1, 2]
+        bins = [0, 0, 1]
+        check(x, bins)
+
+        bins = [1, 1, 0]
+        check(x, bins)
+
+        bins = [1, 1, 1, 1]
+        check(x, bins)
+
+        # large_integers_increasing
+        x = 2 ** 54  # loses precision in a float
+        check([x], [x - 1, x + 1])
+
     def test_histogram(self):
         pyfunc = histogram
         cfunc = jit(nopython=True)(pyfunc)
