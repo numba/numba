@@ -1369,7 +1369,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # per https://github.com/numba/numba/issues/8768
         check(np.array([np.nan, 1]), np.array([1.5, np.nan]))
 
-    def test_digitize_nan_handling(self):
+    def test_digitize_non_monotonic_bins(self):
         # Exceptions leak references
         self.disable_leak_check()
 
