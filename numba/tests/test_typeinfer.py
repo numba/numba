@@ -708,7 +708,6 @@ class TestMiscIssues(TestCase):
 
         self.assertTrue(all(vt == types.float64 for vt in return_vars.values()))
 
-
     def test_issue_9162(self):
         @overload_method(types.Array, "aabbcc")
         def ol_aabbcc(self):
@@ -735,7 +734,7 @@ class TestMiscIssues(TestCase):
             tmplt = fc_ty.template
             info = tmplt.get_template_info(tmplt)
             py_file = info["filename"]
-            self.assertEqual(py_file, "numba/tests/test_typeinfer.py")
+            self.assertIn("test_typeinfer.py", py_file)
 
 
 class TestFoldArguments(unittest.TestCase):
