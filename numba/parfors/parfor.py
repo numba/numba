@@ -805,7 +805,7 @@ class ParforDiagnostics(object):
             val = a.get(x)
             if val is not None:
                 a[x] = val
-            elif val is []:
+            elif val == []:
                 not_roots.add(x) # debug only
             else:
                 a[x] = []
