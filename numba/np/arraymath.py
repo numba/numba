@@ -4454,7 +4454,11 @@ def np_asarray_chkfinite(a, dtype=None):
 
 
 @overload(np.unwrap)
-def numpy_unwrap(p, discont=None, period=6.283185307179586):
+def numpy_unwrap(p, discont=None, axis=-1, period=6.283185307179586):
+    if not isinstance(axis, (int, types.Integer)):
+        msg = 'The argument "axis" must be an integer'
+        raise TypingError(msg)
+
     if not type_can_asarray(p):
         msg = 'The argument "p" must be array-like'
         raise TypingError(msg)
@@ -4474,7 +4478,10 @@ def numpy_unwrap(p, discont=None, period=6.283185307179586):
     dtype = np.result_type(as_dtype(p.dtype), as_dtype(period))
     integer_input = np.issubdtype(dtype, np.integer)
 
-    def impl(p, discont=None, period=6.283185307179586):
+    def impl(p, discont=None, axis=-1, period=6.283185307179586):
+        if axis != -1:
+            msg = 'Value for argument "axis" is not supported'
+            raise NumbaNotImplementedError(msg)
         # Flatten to a 2D array, keeping axis -1
         p_init = np.asarray(p).astype(dtype)
         init_shape = p_init.shape

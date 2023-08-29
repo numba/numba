@@ -15,7 +15,8 @@ from numba import jit, njit, typeof
 from numba.core import types
 from numba.typed import List, Dict
 from numba.np.numpy_support import numpy_version
-from numba.core.errors import TypingError, NumbaDeprecationWarning
+from numba.core.errors import (TypingError, NumbaDeprecationWarning,
+                               NumbaNotImplementedError)
 from numba.core.config import IS_32BITS
 from numba.core.utils import pysignature
 from numba.np.extensions import cross2d
@@ -436,8 +437,8 @@ def np_asarray_chkfinite(a, dtype=None):
     return np.asarray_chkfinite(a, dtype)
 
 
-def unwrap(p, discont=None, period=6.283185307179586):
-    return np.unwrap(p, discont=discont, period=period)
+def unwrap(p, discont=None, axis=-1, period=6.283185307179586):
+    return np.unwrap(p, discont, axis, period=period)
 
 
 def array_contains(a, key):
@@ -5580,6 +5581,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.array([2, 3, 4, 5, 2, 3, 4, 5]), 4
             yield wrap_uneven, 250
 
+        # check that you can set axis=-1 without errors
+        self.assertPreciseEqual(pyfunc(wrap_uneven, axis=-1, period=250),
+                                cfunc(wrap_uneven, axis=-1, period=250))
+
         for p, period in inputs13():
             self.assertPreciseEqual(pyfunc(p, period=period),
                                     cfunc(p, period=period))
@@ -5594,6 +5599,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def test_unwrap_exception(self):
         cfunc = njit(unwrap)
+        self.disable_leak_check()
 
         with self.assertRaises(TypingError) as e:
             cfunc('abc')
@@ -5606,8 +5612,18 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                       str(e.exception))
 
         with self.assertRaises(TypingError) as e:
-            cfunc(np.array([1, 2]), 3, 'abc')
+            cfunc(np.array([1, 2]), 3, period='abc')
         self.assertIn('The argument "period" must be a scalar',
+                      str(e.exception))
+
+        with self.assertRaises(TypingError) as e:
+            cfunc(np.array([1, 2]), 3, axis='abc')
+        self.assertIn('The argument "axis" must be an integer',
+                      str(e.exception))
+
+        with self.assertRaises(NumbaNotImplementedError) as e:
+            cfunc(np.array([1, 2]), 3, axis=2)
+        self.assertIn('Value for argument "axis" is not supported',
                       str(e.exception))
 
     def test_swapaxes_basic(self):
