@@ -426,6 +426,7 @@ typing and implementation to be specified together.
   NumPy ufuncs
 - :ghfile:`numba/np/npyimpl.py` - Implementations of most NumPy ufuncs
 - :ghfile:`numba/np/polynomial.py` - Implementations of NumPy ``Polynomial`` functions
+- :ghfile:`numba/np/polynomial_class/polynomial_core.py` - Implementations of NumPy ``Polynomial`` class
 - :ghfile:`numba/np/ufunc_db.py` - Big table mapping types to ufunc
   implementations
 
