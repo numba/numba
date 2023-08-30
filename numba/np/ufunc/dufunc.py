@@ -417,6 +417,8 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                     r = initial
 
                 sz = array.shape[0]
+                # XXX: if we have an identity, then this loop starts at 0
+                # if not, it should start at 1
                 for i in range(sz):
                     r = ufunc(r, array[i])
                 return r
@@ -442,7 +444,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                         result_idx = tuple_slice_append(idx, axis, 0)
                         r[idx] = array[result_idx]
                 elif initial is None and identity is not None:
-                    # Checkig if identity is not none is redundant but required
+                    # Checking if identity is not none is redundant but required
                     # compile this block
                     r = np.full(shape, fill_value=identity, dtype=nb_dtype)
                 else:
