@@ -1,5 +1,0 @@
-Support NVRTC using the ctypes binding
-======================================
-
-NVRTC can now be used when the ctypes binding is in use, enabling float16, and
-linking CUDA C / C++ sources without needing the NVIDIA CUDA Python bindings.
