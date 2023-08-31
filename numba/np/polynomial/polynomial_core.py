@@ -1,6 +1,6 @@
-from numba.extending import (models, register_model, as_numba_type,
-                             type_callable, unbox, NativeValue,
-                             make_attribute_wrapper, box, lower_builtin)
+from numba.extending import (models, register_model, type_callable,
+                             unbox, NativeValue, make_attribute_wrapper, box,
+                             lower_builtin)
 from numba.core import types, cgutils
 from numpy.polynomial.polynomial import Polynomial
 from contextlib import ExitStack
@@ -21,9 +21,7 @@ class PolynomialModel(models.StructModel):
         super(PolynomialModel, self).__init__(dmm, fe_type, members)
 
 
-# polynomial_type = types.PolynomialType()
-
-as_numba_type.register(Polynomial, types.PolynomialType(np.array([0,1])))
+# as_numba_type.register(Polynomial, types.PolynomialType(np.array([0,1])))
 
 
 @type_callable(Polynomial)
@@ -41,7 +39,9 @@ def type_polynomial(context):
                                             default_window)
         elif all([isinstance(a, types.Array) for a in (coef, domain, window)]):
             if all([a.ndim == 1 for a in (coef, domain, window)]):
-                return types.PolynomialType(default_coef, domain, window)
+                return types.PolynomialType(default_coef,
+                                            default_coef,
+                                            default_coef)
     return typer
 
 
@@ -54,13 +54,12 @@ make_attribute_wrapper(types.PolynomialType, 'window', 'window')
 
 @lower_builtin(Polynomial, types.Array)
 def impl_polynomial1(context, builder, sig, args):
-    import numpy as np
 
     def to_double(coef):
         return np.asarray(coef, dtype=np.double)
 
     def const_impl():
-        return np.asarray([-1,1])
+        return np.asarray([-1, 1])
 
     typ = sig.return_type
     polynomial = cgutils.create_struct_proxy(typ)(context, builder)
@@ -79,7 +78,6 @@ def impl_polynomial1(context, builder, sig, args):
 
 @lower_builtin(Polynomial, types.Array, types.Array, types.Array)
 def impl_polynomial3(context, builder, sig, args):
-    import numpy as np
 
     def to_double(coef):
         return np.asarray(coef, dtype=np.double)
@@ -88,19 +86,31 @@ def impl_polynomial3(context, builder, sig, args):
     polynomial = cgutils.create_struct_proxy(typ)(context, builder)
 
     coef_sig = sig.args[0].copy(dtype=types.double)(sig.args[0])
+    domain_sig = sig.args[1].copy(dtype=types.double)(sig.args[1])
+    window_sig = sig.args[2].copy(dtype=types.double)(sig.args[2])
     coef_cast = context.compile_internal(builder,
                                          to_double, coef_sig,
                                          (args[0],))
+    domain_cast = context.compile_internal(builder,
+                                           to_double, domain_sig,
+                                           (args[1],))
+    window_cast = context.compile_internal(builder,
+                                           to_double, window_sig,
+                                           (args[2],))
 
-    domain_cast = context.make_helper(builder, sig.args[1], value=args[1])
-    window_cast = context.make_helper(builder, sig.args[2], value=args[2])
+    domain_helper = context.make_helper(builder,
+                                        domain_sig.return_type,
+                                        value=domain_cast)
+    window_helper = context.make_helper(builder,
+                                        window_sig.return_type,
+                                        value=window_cast)
 
     i64 = ir.IntType(64)
     two = i64(2)
 
-    s1 = builder.extract_value(domain_cast.shape, 0)
-    s2 = builder.extract_value(window_cast.shape, 0)
-    pred = builder.and_(
+    s1 = builder.extract_value(domain_helper.shape, 0)
+    s2 = builder.extract_value(window_helper.shape, 0)
+    pred = builder.or_(
         builder.icmp_signed('!=', s1, two),
         builder.icmp_signed('!=', s2, two))
 
@@ -110,8 +120,8 @@ def impl_polynomial3(context, builder, sig, args):
             ("Domain and Window must be of length 2.",))
 
     polynomial.coef = coef_cast
-    polynomial.domain = domain_cast._getvalue()
-    polynomial.window = window_cast._getvalue()
+    polynomial.domain = domain_helper._getvalue()
+    polynomial.window = window_helper._getvalue()
 
     return polynomial._getvalue()
 
