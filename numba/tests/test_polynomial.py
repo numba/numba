@@ -134,6 +134,10 @@ class TestPoly1D(TestPolynomialBase):
 
 class TestPolynomial(MemoryLeakMixin, TestCase):
 
+    #
+    # tests for Polyutils functions
+    #
+
     def test_trimseq_basic(self):
         pyfunc = trimseq
         cfunc = njit(trimseq)
@@ -164,6 +168,10 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
             cfunc((1, 2, 3, 0))
         self.assertIn('Unsupported type UniTuple(int64, 4) for argument "seq"',
                       str(e.exception))
+
+    #
+    # tests for Polynomial Arithmetic functions
+    #
 
     def _test_polyarithm_basic(self, pyfunc, ignore_sign_on_zero = False):
         # test suite containing tests for polyadd, polysub, polymul, polydiv
@@ -236,3 +244,34 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
 
     def test_polymul_exception(self):
         self._test_polyarithm_exception(polymul)
+
+    #
+    # tests for Polynomial class
+    #
+
+    def test_Polynomial_constructor(self):
+        def pyfunc3(c, dom, win):
+            p = poly.Polynomial(c, dom, win)
+            return p
+        cfunc3 = njit(pyfunc3)
+        def pyfunc1(c):
+            p = poly.Polynomial(c)
+            return p
+        cfunc1 = njit(pyfunc1)
+        list1 = (np.array([0, 1]), np.array([0., 1.]))
+        list2 = (np.array([0, 1]), np.array([0., 1.]))
+        list3 = (np.array([0, 1]), np.array([0., 1.]))
+        for c in list1:
+            for dom in list2:
+                for win in list3:
+                    p1 = pyfunc3(c, dom, win)
+                    p2 = cfunc3(c, dom, win)
+                    q1 = pyfunc1(c)
+                    q2 = cfunc1(c)
+                    self.assertPreciseEqual(p1, p2)
+                    self.assertPreciseEqual(p1.coef, p2.coef)
+                    self.assertPreciseEqual(p1.domain, p2.domain)
+                    self.assertPreciseEqual(p1.window, p2.window)
+                    self.assertPreciseEqual(q1.coef, q2.coef)
+                    self.assertPreciseEqual(q1.domain, q2.domain)
+                    self.assertPreciseEqual(q1.window, q2.window)

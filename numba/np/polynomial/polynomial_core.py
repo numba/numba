@@ -6,6 +6,7 @@ from numpy.polynomial.polynomial import Polynomial
 from contextlib import ExitStack
 import numpy as np
 from llvmlite import ir
+from numba.np import numpy_support
 
 
 @register_model(types.PolynomialType)
@@ -19,9 +20,6 @@ class PolynomialModel(models.StructModel):
             # ('symbol', types.string)
         ]
         super(PolynomialModel, self).__init__(dmm, fe_type, members)
-
-
-# as_numba_type.register(Polynomial, types.PolynomialType(np.array([0,1])))
 
 
 @type_callable(Polynomial)
@@ -196,12 +194,25 @@ def box_polynomial(typ, val, c):
             c.pyapi.decref(window_obj)
             c.builder.store(fail_obj, ret_ptr)
 
-        res = c.pyapi.call_function_objargs(class_obj,
-                                            (coef_obj, domain_obj, window_obj))
+        t = numpy_support.as_dtype(typ.domain.dtype).num
+        t1 = c.pyapi.long(t)
+        i64 = ir.IntType(64)
+        seven = i64(7)
+
+        pred = c.builder.icmp_signed("==", t1, seven)
+        with c.builder.if_else(pred) as (then, otherwise):
+            with then:
+                res1 = c.pyapi.call_function_objargs(class_obj, (coef_obj,))
+                c.builder.store(res1, ret_ptr)
+            with otherwise:
+                res3 = c.pyapi.call_function_objargs(class_obj, (coef_obj,
+                                                                 domain_obj,
+                                                                 window_obj))
+                c.builder.store(res3, ret_ptr)
+
         c.pyapi.decref(coef_obj)
         c.pyapi.decref(domain_obj)
         c.pyapi.decref(window_obj)
         c.pyapi.decref(class_obj)
-        c.builder.store(res, ret_ptr)
 
     return c.builder.load(ret_ptr)
