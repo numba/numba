@@ -194,12 +194,12 @@ def box_polynomial(typ, val, c):
             c.pyapi.decref(window_obj)
             c.builder.store(fail_obj, ret_ptr)
 
-        t = numpy_support.as_dtype(typ.domain.dtype).num
-        t1 = c.pyapi.long(t)
-        i64 = ir.IntType(64)
-        seven = i64(7)
+        domain_dtype = numpy_support.as_dtype(typ.domain.dtype)
+        domain_dtype_num = c.pyapi.long(domain_dtype.num)
+        intp_dtype = numpy_support.as_dtype(types.intp)
+        intp_dtype_num = c.pyapi.long(intp_dtype.num)
 
-        pred = c.builder.icmp_signed("==", t1, seven)
+        pred = c.builder.icmp_signed("==", domain_dtype_num, intp_dtype_num)
         with c.builder.if_else(pred) as (then, otherwise):
             with then:
                 res1 = c.pyapi.call_function_objargs(class_obj, (coef_obj,))
