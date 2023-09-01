@@ -324,7 +324,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 return s
 
             @intrinsic
-            def compute_flat_idx__(typingctx, strides, itemsize, idx, axis):
+            def compute_flat_idx(typingctx, strides, itemsize, idx, axis):
                 sig = types.intp(strides, itemsize, idx, axis)
                 len_idx = len(idx)
 
@@ -390,17 +390,6 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 return sig, codegen
 
             @register_jitable
-            def compute_flat_idx(strides, itemsize, idx, axis):
-                flat_idx, i, j, len_idx = 0, 0, 0, len(idx)
-                while i < len_idx:
-                    if i != axis:
-                        flat_idx += strides[j] * idx[i]
-                        j += 1
-                    i += 1
-                flat_idx //= itemsize
-                return flat_idx
-
-            @register_jitable
             def find_min(tup):
                 idx, e = 0, tup[0]
                 for i in range(len(tup)):
@@ -409,7 +398,9 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 return idx, e
 
             def impl_1d(ufunc, array, axis=0, dtype=None, initial=None):
+                start = 0
                 if init_none and id_none:
+                    start = 1
                     r = array[0]
                 elif init_none:
                     r = identity
@@ -417,9 +408,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                     r = initial
 
                 sz = array.shape[0]
-                # XXX: if we have an identity, then this loop starts at 0
-                # if not, it should start at 1
-                for i in range(sz):
+                for i in range(start, sz):
                     r = ufunc(r, array[i])
                 return r
 
@@ -457,11 +446,24 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 # Another way is to compute the result index using strides,
                 # which is faster than manipulating tuples.
                 view = r.ravel()
-                for idx, val in np.ndenumerate(array):
-                    flat_pos = compute_flat_idx(r.strides, r.itemsize, idx,
-                                                axis)
-                    lhs, rhs = view[flat_pos], val
-                    view[flat_pos] = ufunc(lhs, rhs)
+                if initial is None and identity is None:
+                    for idx, val in np.ndenumerate(array):
+                        if idx[axis] == 0:
+                            continue
+                        else:
+                            flat_pos = compute_flat_idx(r.strides, r.itemsize,
+                                                        idx, axis)
+                            lhs, rhs = view[flat_pos], val
+                            view[flat_pos] = ufunc(lhs, rhs)
+                else:
+                    for idx, val in np.ndenumerate(array):
+                        if initial is None and identity is None and \
+                                idx[axis] == 0:
+                            continue
+                        flat_pos = compute_flat_idx(r.strides, r.itemsize,
+                                                    idx, axis)
+                        lhs, rhs = view[flat_pos], val
+                        view[flat_pos] = ufunc(lhs, rhs)
                 return r
 
             def impl_nd_axis_tuple(ufunc,
