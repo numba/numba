@@ -3779,12 +3779,13 @@ def searchsorted(a, v, side='left'):
 
 @overload(np.digitize)
 def np_digitize(x, bins, right=False):
+
     @register_jitable
-    def are_bins_increasing(bins):
+    def _monotonicity(bins):
 
         # all bin edges hold the same value
         if len(bins) == 0:
-            return True
+            return 1
 
         # Skip repeated values at the beginning of the array
         last_value = bins[0]
@@ -3794,9 +3795,8 @@ def np_digitize(x, bins, right=False):
 
         # all bin edges hold the same value
         if i == len(bins):
-            return True
+            return 1
 
-        error_msg = "bins must be monotonically increasing or decreasing"
         next_value = bins[i]
 
         if last_value < next_value:
@@ -3805,8 +3805,8 @@ def np_digitize(x, bins, right=False):
                 last_value = next_value
                 next_value = bins[i]
                 if last_value > next_value:
-                    raise ValueError(error_msg)
-            return True
+                    return 0
+            return 1
 
         else:
             # last > next, possibly monotonic decreasing
@@ -3814,117 +3814,31 @@ def np_digitize(x, bins, right=False):
                 last_value = next_value
                 next_value = bins[i]
                 if last_value < next_value:
-                    raise ValueError(error_msg)
-            return False
+                    return 0
+            return -1
 
-    # NOTE: the algorithm is slightly different from searchsorted's,
-    # as the edge cases (bin boundaries, NaN) give different results.
+    def digitize_impl(x, bins, right=False):
 
-    @register_jitable
-    def digitize_scalar(x, bins, right):
-        # bins are monotonically-increasing
-        n = len(bins)
-        lo = 0
-        hi = n
+        mono = _monotonicity(bins)
 
+        if mono == 0:
+            raise ValueError("bins must be monotonically increasing or decreasing")
+
+        # this is backwards because the arguments below are swapped
         if right:
-            if np.isnan(x):
-                # Find the first nan (i.e. the last from the end of bins,
-                # since there shouldn't be many of them in practice)
-                for i in range(n, 0, -1):
-                    if not np.isnan(bins[i - 1]):
-                        return i
-                return 0
-            while hi > lo:
-                mid = (lo + hi) >> 1
-                if bins[mid] < x:
-                    # mid is too low => narrow to upper bins
-                    lo = mid + 1
-                else:
-                    # mid is too high, or is a NaN => narrow to lower bins
-                    hi = mid
+            if mono == -1:
+                # reverse the bins, and invert the results
+                return len(bins) - np.searchsorted(bins[::-1], x, side='left')
+            else:
+                return np.searchsorted(bins, x, side='left')
         else:
-            if np.isnan(x):
-                # NaNs end up in the last bin
-                return n
-            while hi > lo:
-                mid = (lo + hi) >> 1
-                if bins[mid] <= x:
-                    # mid is too low => narrow to upper bins
-                    lo = mid + 1
-                else:
-                    # mid is too high, or is a NaN => narrow to lower bins
-                    hi = mid
+            if mono == -1:
+                # reverse the bins, and invert the results
+                return len(bins) - np.searchsorted(bins[::-1], x, side='right')
+            else:
+                return np.searchsorted(bins, x, side='right')
 
-        return lo
-
-    @register_jitable
-    def digitize_scalar_decreasing(x, bins, right):
-        # bins are monotonically-decreasing
-        n = len(bins)
-        lo = 0
-        hi = n
-
-        if right:
-            if np.isnan(x):
-                # Find the last nan
-                for i in range(0, n):
-                    if not np.isnan(bins[i]):
-                        return i
-                return n
-            while hi > lo:
-                mid = (lo + hi) >> 1
-                if bins[mid] < x:
-                    # mid is too high => narrow to lower bins
-                    hi = mid
-                else:
-                    # mid is too low, or is a NaN => narrow to upper bins
-                    lo = mid + 1
-        else:
-            if np.isnan(x):
-                # NaNs end up in the first bin
-                return 0
-            while hi > lo:
-                mid = (lo + hi) >> 1
-                if bins[mid] <= x:
-                    # mid is too high => narrow to lower bins
-                    hi = mid
-                else:
-                    # mid is too low, or is a NaN => narrow to upper bins
-                    lo = mid + 1
-
-        return lo
-
-    if isinstance(x, types.Array):
-        # N-d array and output
-
-        def digitize_impl(x, bins, right=False):
-            is_increasing = are_bins_increasing(bins)
-            out = np.empty(x.shape, np.intp)
-            for view, outview in np.nditer((x, out)):
-                if is_increasing:
-                    index = digitize_scalar(view.item(), bins, right)
-                else:
-                    index = digitize_scalar_decreasing(view.item(), bins, right)
-                outview.itemset(index)
-            return out
-
-        return digitize_impl
-
-    elif isinstance(x, types.Sequence):
-        # 1-d sequence and output
-
-        def digitize_impl(x, bins, right=False):
-            is_increasing = are_bins_increasing(bins)
-            out = np.empty(len(x), np.intp)
-            for i in range(len(x)):
-                if is_increasing:
-                    out[i] = digitize_scalar(x[i], bins, right)
-                else:
-                    out[i] = digitize_scalar_decreasing(x[i], bins, right)
-            return out
-
-        return digitize_impl
+    return digitize_impl
 
 
 _range = range
