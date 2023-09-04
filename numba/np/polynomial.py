@@ -9,7 +9,7 @@ from numpy.polynomial import polyutils as pu
 
 from numba import literal_unroll
 from numba.core import types, errors
-from numba.core.extending import overload
+from numba.core.extending import overload, SentryLiteralArgs
 from numba.np.numpy_support import type_can_asarray, as_dtype, from_dtype
 
 
@@ -221,7 +221,7 @@ def numpy_polymul(c1, c2):
 
 
 @overload(poly.polyval)
-def poly_polyval(x, c):
+def poly_polyval(x, c, tensor=True):
     if not type_can_asarray(x):
         msg = 'The argument "x" must be array-like'
         raise errors.TypingError(msg)
@@ -229,6 +229,14 @@ def poly_polyval(x, c):
     if not type_can_asarray(c):
         msg = 'The argument "c" must be array-like'
         raise errors.TypingError(msg)
+
+    if not isinstance(tensor, (bool, types.Literal, types.Boolean)):
+        msg = 'The argument "tensor" must be boolean'
+        raise errors.TypingError(msg)
+
+    if not isinstance(tensor, (bool, types.Literal)):
+        SentryLiteralArgs(['tensor']).for_function(poly_polyval).bind(x, c,
+                                                                      tensor)
 
     res_dtype = _poly_result_dtype((c, x))
 
@@ -241,10 +249,15 @@ def poly_polyval(x, c):
         # If x is a np.array, then take its dimension
         new_shape = (1,) * np.ndim(x)
 
-    def impl(x, c):
+    if isinstance(tensor, bool):
+        tensor_arg = tensor
+    else:
+        tensor_arg = tensor.literal_value
+
+    def impl(x, c, tensor=True):
         arr = np.asarray(c).astype(res_dtype)
         inputs = np.asarray(x).astype(res_dtype)
-        if x_nd_array:
+        if x_nd_array and tensor_arg:
             arr = arr.reshape(arr.shape + new_shape)
 
         l = len(arr)
