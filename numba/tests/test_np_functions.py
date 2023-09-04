@@ -15,7 +15,7 @@ from numba import jit, njit, typeof
 from numba.core import types
 from numba.typed import List, Dict
 from numba.np.numpy_support import numpy_version
-from numba.core.errors import TypingError, NumbaDeprecationWarning, NumbaValueError
+from numba.core.errors import TypingError, NumbaDeprecationWarning
 from numba.core.config import IS_32BITS
 from numba.core.utils import pysignature
 from numba.np.extensions import cross2d
@@ -1456,6 +1456,22 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # large_integers_increasing
         x = 2 ** 54  # loses precision in a float
         check([x], [x - 1, x + 1])
+
+    def test_digitize_reject_complex_types(self):
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        pyfunc = digitize
+        cfunc = jit(nopython=True)(pyfunc)
+
+        x = np.array([1 + 1j])
+        y = np.array([1., 3., 4.5, 8.])
+        msg = 'x may not be complex'
+
+        for func in pyfunc, cfunc:
+            with self.assertTypingError() as raises:
+                func(x, y)
+                self.assertIn(msg, str(raises.exception))
 
     def test_histogram(self):
         pyfunc = histogram

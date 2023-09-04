@@ -3784,6 +3784,9 @@ def searchsorted(a, v, side='left'):
 @overload(np.digitize)
 def np_digitize(x, bins, right=False):
 
+    if isinstance(x, types.Array) and x.dtype in types.complex_domain:
+        raise TypingError('x may not be complex')
+
     @register_jitable
     def _monotonicity(bins):
 
