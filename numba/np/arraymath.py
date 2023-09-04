@@ -3674,7 +3674,7 @@ def np_bincount(a, weights=None, minlength=0):
     return bincount_impl
 
 
-def _searchsorted(func, side_is_left):
+def _searchsorted(func, side_is_right):
     def searchsorted_inner(a, v, v_last, lo, hi, n):
         """Perform inner loop of searchsorted (i.e. a binary search).
 
@@ -3699,8 +3699,8 @@ def _searchsorted(func, side_is_left):
         .. [1] https://github.com/numpy/numpy/blob/809e8d26b03f549fd0b812a17b8a166bcd966889/numpy/core/src/npysort/binsearch.cpp#L173
         """  # noqa: E501
         if np.isnan(v):
-            if side_is_left:
-                for i in range(n, 0, -1):
+            if side_is_right:
+                for i in range(n - 1, 0, -1):
                     if np.isnan(a[i]):
                         return i + 1
                 return n
