@@ -3674,7 +3674,7 @@ def np_bincount(a, weights=None, minlength=0):
     return bincount_impl
 
 
-def _searchsorted(func):
+def _searchsorted(func, side_is_left):
     def searchsorted_inner(a, v, v_last, lo, hi, n):
         """Perform inner loop of searchsorted (i.e. a binary search).
 
@@ -3699,12 +3699,16 @@ def _searchsorted(func):
         .. [1] https://github.com/numpy/numpy/blob/809e8d26b03f549fd0b812a17b8a166bcd966889/numpy/core/src/npysort/binsearch.cpp#L173
         """  # noqa: E501
         if np.isnan(v):
-            # Find the first nan (i.e. the last from the end of a,
-            # since there shouldn't be many of them in practice)
-            for i in range(n, 0, -1):
-                if not np.isnan(a[i - 1]):
-                    return i
-            return 0
+            if side_is_left:
+                for i in range(n, 0, -1):
+                    if np.isnan(a[i]):
+                        return i + 1
+                return n
+            else:
+                for i in range(n, 0, -1):
+                    if not np.isnan(a[i - 1]):
+                        return i
+                return 0
 
         if v_last < v:
             hi = n
@@ -3726,8 +3730,8 @@ def _searchsorted(func):
 
 _lt = less_than
 _le = register_jitable(lambda x, y: x <= y)
-_searchsorted_left = register_jitable(_searchsorted(_lt))
-_searchsorted_right = register_jitable(_searchsorted(_le))
+_searchsorted_left = register_jitable(_searchsorted(_lt, False))
+_searchsorted_right = register_jitable(_searchsorted(_le, True))
 
 
 @overload(np.searchsorted)

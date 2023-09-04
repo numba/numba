@@ -1334,11 +1334,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         def check(*args):
             expected = pyfunc(*args)
             got = cfunc(*args)
-
-            try:
-                self.assertPreciseEqual(expected, got)
-            except:
-                print(args)
+            self.assertPreciseEqual(expected, got)
 
         values = np.float64((0, 0.99, 1, 4.4, 4.5, 7, 8, 9, 9.5,
                              float('inf'), float('-inf'), float('nan')))
