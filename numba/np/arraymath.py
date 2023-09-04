@@ -3829,7 +3829,9 @@ def np_digitize(x, bins, right=False):
         mono = _monotonicity(bins)
 
         if mono == 0:
-            raise ValueError("bins must be monotonically increasing or decreasing")
+            raise ValueError(
+                "bins must be monotonically increasing or decreasing"
+            )
 
         # this is backwards because the arguments below are swapped
         if right:
