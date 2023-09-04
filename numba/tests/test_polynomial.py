@@ -9,7 +9,6 @@ from numba import jit, njit
 from numba.tests.support import (TestCase, needs_lapack,
                                  EnableNRTStatsMixin, MemoryLeakMixin)
 from numba.core.errors import TypingError
-#import unittest
 
 
 def roots_fn(p):
