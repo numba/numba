@@ -137,33 +137,21 @@ def unbox_polynomial(typ, obj, c):
     is_error_ptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
     polynomial = cgutils.create_struct_proxy(typ)(c.context, c.builder)
     with ExitStack() as stack:
-        coef_obj = c.pyapi.object_getattr_string(obj, "coef")
-        with cgutils.early_exit_if_null(c.builder, stack, coef_obj):
-            c.builder.store(cgutils.true_bit, is_error_ptr)
-        coef_native = c.unbox(typ.coef, coef_obj)
-        c.pyapi.decref(coef_obj)
-        with cgutils.early_exit_if(c.builder, stack, coef_native.is_error):
-            c.builder.store(cgutils.true_bit, is_error_ptr)
+        natives = []
+        for name in ("coef", "domain", "window"):
+            attr = c.pyapi.object_getattr_string(obj, name)
+            with cgutils.early_exit_if_null(c.builder, stack, attr):
+                c.builder.store(cgutils.true_bit, is_error_ptr)
+            t = getattr(typ, name)
+            native = c.unbox(t, attr)
+            c.pyapi.decref(attr)
+            with cgutils.early_exit_if(c.builder, stack, native.is_error):
+                c.builder.store(cgutils.true_bit, is_error_ptr)
+            natives.append(native)
 
-        domain_obj = c.pyapi.object_getattr_string(obj, "domain")
-        with cgutils.early_exit_if_null(c.builder, stack, domain_obj):
-            c.builder.store(cgutils.true_bit, is_error_ptr)
-        domain_native = c.unbox(typ.domain, domain_obj)
-        c.pyapi.decref(domain_obj)
-        with cgutils.early_exit_if(c.builder, stack, domain_native.is_error):
-            c.builder.store(cgutils.true_bit, is_error_ptr)
-
-        window_obj = c.pyapi.object_getattr_string(obj, "window")
-        with cgutils.early_exit_if_null(c.builder, stack, window_obj):
-            c.builder.store(cgutils.true_bit, is_error_ptr)
-        window_native = c.unbox(typ.window, window_obj)
-        c.pyapi.decref(window_obj)
-        with cgutils.early_exit_if(c.builder, stack, window_native.is_error):
-            c.builder.store(cgutils.true_bit, is_error_ptr)
-
-        polynomial.coef = coef_native.value
-        polynomial.domain = domain_native.value
-        polynomial.window = window_native.value
+        polynomial.coef = natives[0]
+        polynomial.domain = natives[1]
+        polynomial.window = natives[2]
 
     return NativeValue(polynomial._getvalue(),
                        is_error=c.builder.load(is_error_ptr))
