@@ -1327,6 +1327,25 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         )
         check(a, v)
 
+    def test_searchsorted_right_supplemental(self):
+        pyfunc_right = searchsorted_right
+        cfunc_right = jit(nopython=True)(pyfunc_right)
+
+        def check(a, v):
+            expected = pyfunc_right(a, v)
+            got = cfunc_right(a, v)
+            self.assertPreciseEqual(expected, got)
+
+        x_values = list(range(-5, 100)) + [np.nan] * 3 + [np.inf] * 3 + [-np.inf] * -3
+
+        for _ in range(500):
+            sample_size = self.rnd.choice([3, 5, 10, 25])
+            a = self.rnd.choice(x_values, sample_size)
+            v = a[:-1].copy()
+
+            self.rnd.shuffle(v)
+            check(np.sort(a), v)
+
     def test_digitize(self):
         pyfunc = digitize
         cfunc = jit(nopython=True)(pyfunc)
@@ -1417,8 +1436,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         check(x, bins)
 
         # random
-        rng = np.random.RandomState(0)
-        x = rng.rand(10)
+        x = self.rnd.rand(10)
         bins = np.linspace(x.min(), x.max(), 10)
         check(x, bins)
 
@@ -1438,7 +1456,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         check(x, bins, True)
 
         # right_open_random
-        x = rng.rand(10)
+        x = self.rnd.rand(10)
         bins = np.linspace(x.min(), x.max(), 10)
         check(x, bins, True)
 
