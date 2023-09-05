@@ -53,8 +53,8 @@ make_attribute_wrapper(types.PolynomialType, 'window', 'window')
 @lower_builtin(Polynomial, types.Array)
 def impl_polynomial1(context, builder, sig, args):
 
-    def to_double(coef):
-        return np.asarray(coef, dtype=np.double)
+    def to_double(arr):
+        return np.asarray(arr, dtype=np.double)
 
     def const_impl():
         return np.asarray([-1, 1])
@@ -63,8 +63,8 @@ def impl_polynomial1(context, builder, sig, args):
     polynomial = cgutils.create_struct_proxy(typ)(context, builder)
     sig_coef = sig.args[0].copy(dtype=types.double)(sig.args[0])
     coef_cast = context.compile_internal(builder, to_double, sig_coef, args)
-    sig_domain = sig.args[0].copy(dtype=types.int64)()
-    sig_window = sig.args[0].copy(dtype=types.int64)()
+    sig_domain = sig.args[0].copy(dtype=types.intp)()
+    sig_window = sig.args[0].copy(dtype=types.intp)()
     domain_cast = context.compile_internal(builder, const_impl, sig_domain, ())
     window_cast = context.compile_internal(builder, const_impl, sig_window, ())
     polynomial.coef = coef_cast
@@ -175,7 +175,7 @@ def box_polynomial(typ, val, c):
     with ExitStack() as stack:
         polynomial = cgutils.create_struct_proxy(typ)(c.context, c.builder,
                                                       value=val)
-        coef_obj = c.box(types.Array(types.double, 1, 'C'), polynomial.coef)
+        coef_obj = c.box(typ.coef, polynomial.coef)
         with cgutils.early_exit_if_null(c.builder, stack, coef_obj):
             c.builder.store(fail_obj, ret_ptr)
 
