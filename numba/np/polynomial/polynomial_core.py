@@ -6,7 +6,6 @@ from numpy.polynomial.polynomial import Polynomial
 from contextlib import ExitStack
 import numpy as np
 from llvmlite import ir
-from numba.np import numpy_support
 
 
 @register_model(types.PolynomialType)
@@ -34,12 +33,14 @@ def type_polynomial(context):
             if coef.ndim == 1:
                 return types.PolynomialType(default_coef,
                                             default_domain,
-                                            default_window)
+                                            default_window,
+                                            1)
         elif all([isinstance(a, types.Array) for a in (coef, domain, window)]):
             if all([a.ndim == 1 for a in (coef, domain, window)]):
                 return types.PolynomialType(default_coef,
                                             default_coef,
-                                            default_coef)
+                                            default_coef,
+                                            3)
     return typer
 
 
@@ -194,21 +195,14 @@ def box_polynomial(typ, val, c):
             c.pyapi.decref(window_obj)
             c.builder.store(fail_obj, ret_ptr)
 
-        domain_dtype = numpy_support.as_dtype(typ.domain.dtype)
-        domain_dtype_num = c.pyapi.long(domain_dtype.num)
-        intp_dtype = numpy_support.as_dtype(types.intp)
-        intp_dtype_num = c.pyapi.long(intp_dtype.num)
-
-        pred = c.builder.icmp_signed("==", domain_dtype_num, intp_dtype_num)
-        with c.builder.if_else(pred) as (then, otherwise):
-            with then:
-                res1 = c.pyapi.call_function_objargs(class_obj, (coef_obj,))
-                c.builder.store(res1, ret_ptr)
-            with otherwise:
-                res3 = c.pyapi.call_function_objargs(class_obj, (coef_obj,
-                                                                 domain_obj,
-                                                                 window_obj))
-                c.builder.store(res3, ret_ptr)
+        if typ.n_args == 1:
+            res1 = c.pyapi.call_function_objargs(class_obj, (coef_obj,))
+            c.builder.store(res1, ret_ptr)
+        else:
+            res3 = c.pyapi.call_function_objargs(class_obj, (coef_obj,
+                                                             domain_obj,
+                                                             window_obj))
+            c.builder.store(res3, ret_ptr)
 
         c.pyapi.decref(coef_obj)
         c.pyapi.decref(domain_obj)

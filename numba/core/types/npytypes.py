@@ -638,8 +638,9 @@ class NumPyRandomGeneratorType(Type):
 
 
 class PolynomialType(Type):
-    def __init__(self, coef, domain=None, window=None):
-        super(PolynomialType, self).__init__(name=f'PolynomialType({coef}, {domain}, {domain})')
+    def __init__(self, coef, domain=None, window=None, n_args=1):
+        super(PolynomialType, self).__init__(name=f'PolynomialType({coef}, {domain}, {domain}, {n_args})')
         self.coef = coef
         self.domain = domain
         self.window = window
+        self.n_args = n_args
