@@ -109,14 +109,18 @@ def impl_polynomial3(context, builder, sig, args):
 
     s1 = builder.extract_value(domain_helper.shape, 0)
     s2 = builder.extract_value(window_helper.shape, 0)
-    pred = builder.or_(
-        builder.icmp_signed('!=', s1, two),
-        builder.icmp_signed('!=', s2, two))
+    pred1 = builder.icmp_signed('!=', s1, two)
+    pred2 = builder.icmp_signed('!=', s2, two)
 
-    with cgutils.if_unlikely(builder, pred):
+    with cgutils.if_unlikely(builder, pred1):
         context.call_conv.return_user_exc(
             builder, ValueError,
-            ("Domain and Window must be of length 2.",))
+            ("Domain has wrong number of elements.",))
+
+    with cgutils.if_unlikely(builder, pred2):
+        context.call_conv.return_user_exc(
+            builder, ValueError,
+            ("Window has wrong number of elements.",))
 
     polynomial.coef = coef_cast
     polynomial.domain = domain_helper._getvalue()
