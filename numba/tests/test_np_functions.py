@@ -1336,7 +1336,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc_right(a, v)
             self.assertPreciseEqual(expected, got)
 
-        x_values = list(range(-5, 100)) + [np.nan] * 3 + [np.inf] * 3 + [-np.inf] * -3
+        x_values = list(range(-5, 100))
+        x_values += [np.nan] * 3 + [np.inf] * 3 + [-np.inf] * 3
 
         for _ in range(500):
             sample_size = self.rnd.choice([3, 5, 10, 25])
