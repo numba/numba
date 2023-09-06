@@ -3827,10 +3827,15 @@ def get_reduce_nodes(reduction_node, nodes, func_ir):
     reduce_nodes = None
     defs = {}
 
-    def lookup(var, varonly=True):
+    def lookup(var, varonly=True, start=None):
         val = defs.get(var.name, None)
         if isinstance(val, ir.Var):
-            return lookup(val)
+            if start is None:
+                start = val
+            elif start == var:
+                # cycle detected
+                return None
+            return lookup(val, start=start)
         else:
             return var if (varonly or val is None) else val
     name = reduction_node.name
