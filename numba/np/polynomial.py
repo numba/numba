@@ -101,7 +101,7 @@ def polyutils_as_series(alist, trim=True):
 
     tuple_input = isinstance(alist, types.BaseTuple)
     if tuple_input:
-        res_dtype = _poly_result_dtype(alist)
+        res_dtype = _poly_result_dtype(*alist)
 
         if np.any(np.array([np.ndim(a) > 1 for a in alist])):
             raise errors.NumbaValueError("Coefficient array is not 1-d")
@@ -136,16 +136,28 @@ def polyutils_as_series(alist, trim=True):
     return impl
 
 
-def _poly_result_dtype(tup):
+def _get_list_dtype(l):
+    # A helper function that takes a list (possibly nested) and returns its
+    # dtype.
+    dt = l.dtype
+    if isinstance(dt, types.Number):
+        return as_dtype(dt)
+    else:
+        return _get_list_dtype(dt)
+
+
+def _poly_result_dtype(*args):
     # A helper function that takes a tuple of inputs and returns their result
     # dtype. Used for poly functions.
     res_dtype = np.float64
-    for item in tup:
+    for item in args:
         if isinstance(item, types.Number):
             s1 = str(as_dtype(item))
         elif isinstance(item, types.Tuple):
             t = [as_dtype(ty) for ty in item.types]
             s1 = str(np.result_type(*t))
+        elif isinstance(item, types.List):
+            s1 = _get_list_dtype(item)
         else:
             s1 = str(item.dtype)
         res_dtype = (np.result_type(res_dtype, s1))
@@ -238,7 +250,7 @@ def poly_polyval(x, c, tensor=True):
         SentryLiteralArgs(['tensor']).for_function(poly_polyval).bind(x, c,
                                                                       tensor)
 
-    res_dtype = _poly_result_dtype((c, x))
+    res_dtype = _poly_result_dtype(c, x)
 
     # Simulate new_shape = (1,) * np.ndim(x) in the general case
     # If x is a number, new_shape is not used
@@ -281,9 +293,9 @@ def poly_polyint(c, m=1):
     if not isinstance(m, (int, types.Integer)):
         msg = 'The argument "m" must be an integer'
         raise errors.TypingError(msg)
-
-    res_dtype = _poly_result_dtype((c,))
-    is1D = (np.ndim(c) == 1) or isinstance(c, types.List)
+    res_dtype = _poly_result_dtype(c)
+    is1D = ((np.ndim(c) == 1) or
+            (isinstance(c, types.List) and isinstance(c.dtype, types.Number)))
 
     def impl(c, m=1):
         c = np.asarray(c).astype(res_dtype)
