@@ -100,11 +100,15 @@ def polyutils_as_series(alist, trim=True):
     res_dtype = np.float64
 
     tuple_input = isinstance(alist, types.BaseTuple)
+    list_input = isinstance(alist, types.List)
     if tuple_input:
         res_dtype = _poly_result_dtype(*alist)
 
         if np.any(np.array([np.ndim(a) > 1 for a in alist])):
             raise errors.NumbaValueError("Coefficient array is not 1-d")
+
+    elif list_input:
+        res_dtype = np.result_type(_get_list_dtype(alist), np.float64)
 
     else:
         if np.ndim(alist) <= 2:
@@ -118,6 +122,10 @@ def polyutils_as_series(alist, trim=True):
             arrays = []
             for item in literal_unroll(alist):
                 arrays.append(np.atleast_1d(np.asarray(item)).astype(res_dtype))
+
+        elif list_input:
+            arrays = [np.atleast_1d(np.asarray(a)).astype(res_dtype)
+                      for a in alist]
 
         else:
             alist_arr = np.asarray(alist)

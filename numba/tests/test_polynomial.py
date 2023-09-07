@@ -216,6 +216,8 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
             yield ([1, 2, 3, 0], )
             yield ((1, 2, 3, 0), )
             yield (np.array([1, 2, 3, 0]), )
+            yield [np.array([1, 2, 3, 0]), np.array([1, 2, 3, 0])]
+            yield [np.array([1,2,3]), ]
 
         for input in inputs():
             self.assertPreciseEqual(pyfunc1(input), cfunc1(input))
@@ -250,6 +252,11 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             cfunc1(np.arange(8).reshape((2, 2, 2)))
+        self.assertIn('Coefficient array is not 1-d',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc1([np.array([[1,2,3],[1,2,3]]), ])
         self.assertIn('Coefficient array is not 1-d',
                       str(raises.exception))
 
