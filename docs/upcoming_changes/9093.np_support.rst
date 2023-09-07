@@ -1,6 +1,0 @@
-
-The minimum supported NumPy version is 1.22.
-""""""""""""""""""""""""""""""""""""""""""""
-
-Following NEP-0029, the minimum supported NumPy version is now 1.22.
-

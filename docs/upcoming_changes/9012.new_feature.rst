@@ -1,8 +1,0 @@
-
-Added RVSDG-frontend
-====================
-
-This PR is a preliminary work on adding a RVSDG-frontend for processing 
-bytecode. RVSDG (Regionalized Value-State Dependence Graph) allows us to
-have a dataflow-centric view instead of a traditional SSA-CFG view. This
-allows us to simplify the compiler in the future.
