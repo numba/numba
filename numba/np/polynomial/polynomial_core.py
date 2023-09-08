@@ -25,21 +25,28 @@ class PolynomialModel(models.StructModel):
 def type_polynomial(context):
     def typer(coef, domain=None, window=None):
         default_domain = types.Array(types.int64, 1, 'C')
+        double_domain = types.Array(types.double, 1, 'C')
         default_window = types.Array(types.int64, 1, 'C')
-        default_coef = types.Array(types.double, 1, 'C')
+        double_window = types.Array(types.double, 1, 'C')
+        double_coef = types.Array(types.double, 1, 'C')
 
         if isinstance(coef, types.Array) and \
                 all([a is None for a in (domain, window)]):
             if coef.ndim == 1:
-                return types.PolynomialType(default_coef,
+                # If Polynomial(coef) is called, coef is cast to double dtype,
+                # and domain and window are set to equal [-1, 1], i.e. have
+                # integer dtype
+                return types.PolynomialType(double_coef,
                                             default_domain,
                                             default_window,
                                             1)
         elif all([isinstance(a, types.Array) for a in (coef, domain, window)]):
             if all([a.ndim == 1 for a in (coef, domain, window)]):
-                return types.PolynomialType(default_coef,
-                                            default_coef,
-                                            default_coef,
+                # If Polynomial(coef, domain, window) is called, then coef,
+                # domain and window are cast to double dtype
+                return types.PolynomialType(double_coef,
+                                            double_domain,
+                                            double_window,
                                             3)
     return typer
 

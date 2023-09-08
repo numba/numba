@@ -643,4 +643,7 @@ class PolynomialType(Type):
         self.coef = coef
         self.domain = domain
         self.window = window
+        # We use n_args to keep track of the number of arguments in the
+        # constructor, since the types of domain and window arguments depend on
+        # that and we need that information when boxing
         self.n_args = n_args
