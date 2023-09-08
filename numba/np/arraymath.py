@@ -4463,7 +4463,8 @@ def numpy_unwrap(p, discont=None, axis=-1, period=6.283185307179586):
         msg = 'The argument "p" must be array-like'
         raise TypingError(msg)
 
-    if not isinstance(discont, (types.Integer, types.Float, types.NoneType)):
+    if (not isinstance(discont, (types.Integer, types.Float, types.NoneType))
+            and (discont is not None)):
         msg = 'The argument "discont" must be a scalar'
         raise TypingError(msg)
 
@@ -4471,17 +4472,18 @@ def numpy_unwrap(p, discont=None, axis=-1, period=6.283185307179586):
         msg = 'The argument "period" must be a scalar'
         raise TypingError(msg)
 
-    axis = -1
-    slice1 = [slice(None, None)]   # full slices
-    slice1[axis] = slice(1, None)
-    slice1 = tuple(slice1)
-    dtype = np.result_type(as_dtype(p.dtype), as_dtype(period))
+    slice1 = (slice(1, None, None),)
+    if isinstance(period, types.Number):
+        dtype = np.result_type(as_dtype(p.dtype), as_dtype(period))
+    else:
+        dtype = np.result_type(as_dtype(p.dtype), np.float64)
+
     integer_input = np.issubdtype(dtype, np.integer)
 
     def impl(p, discont=None, axis=-1, period=6.283185307179586):
         if axis != -1:
             msg = 'Value for argument "axis" is not supported'
-            raise NumbaNotImplementedError(msg)
+            raise ValueError(msg)
         # Flatten to a 2D array, keeping axis -1
         p_init = np.asarray(p).astype(dtype)
         init_shape = p_init.shape

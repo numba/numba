@@ -15,8 +15,7 @@ from numba import jit, njit, typeof
 from numba.core import types
 from numba.typed import List, Dict
 from numba.np.numpy_support import numpy_version
-from numba.core.errors import (TypingError, NumbaDeprecationWarning,
-                               NumbaNotImplementedError)
+from numba.core.errors import TypingError, NumbaDeprecationWarning
 from numba.core.config import IS_32BITS
 from numba.core.utils import pysignature
 from numba.np.extensions import cross2d
@@ -439,6 +438,18 @@ def np_asarray_chkfinite(a, dtype=None):
 
 def unwrap(p, discont=None, axis=-1, period=6.283185307179586):
     return np.unwrap(p, discont, axis, period=period)
+
+
+def unwrap1(p):
+    return np.unwrap(p)
+
+
+def unwrap13(p, period):
+    return np.unwrap(p, period=period)
+
+
+def unwrap123(p, period, discont):
+    return np.unwrap(p, period=period, discont=discont)
 
 
 def array_contains(a, key):
@@ -5552,7 +5563,16 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def test_unwrap_basic(self):
         pyfunc = unwrap
-        cfunc = njit(unwrap)
+        cfunc = njit(pyfunc)
+
+        pyfunc1 = unwrap1
+        cfunc1 = njit(pyfunc1)
+
+        pyfunc13 = unwrap13
+        cfunc13 = njit(pyfunc13)
+
+        pyfunc123 = unwrap123
+        cfunc123 = njit(pyfunc123)
         # Based on tests from https://github.com/numpy/numpy/blob/3032e84ff34f20def2ef4ebf9f8695947af3fd24/numpy/lib/tests/test_function_base.py#L1979-L2003 # noqa: E501
         # Additional tests are included to ensure proper support for
         # higher dimensional arrays
@@ -5568,7 +5588,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.arange(240, step=10).reshape((2,3,4))
 
         for p in inputs1():
-            self.assertPreciseEqual(pyfunc(p), cfunc(p))
+            self.assertPreciseEqual(pyfunc1(p), cfunc1(p))
 
         uneven_seq = np.array([0, 75, 150, 225, 300, 430])
         wrap_uneven = np.mod(uneven_seq, 250)
@@ -5586,16 +5606,18 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                                 cfunc(wrap_uneven, axis=-1, period=250))
 
         for p, period in inputs13():
-            self.assertPreciseEqual(pyfunc(p, period=period),
-                                    cfunc(p, period=period))
+            self.assertPreciseEqual(pyfunc13(p, period=period),
+                                    cfunc13(p, period=period))
 
         # p, period and discont
         def inputs123():
             yield wrap_uneven, 250, 140
 
         for p, period, discont in inputs123():
-            self.assertPreciseEqual(pyfunc(p, period=period, discont=discont),
-                                    cfunc(p, period=period, discont=discont))
+            self.assertPreciseEqual(pyfunc123(p, period=period,
+                                              discont=discont),
+                                    cfunc123(p, period=period,
+                                             discont=discont))
 
     def test_unwrap_exception(self):
         cfunc = njit(unwrap)
@@ -5621,7 +5643,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertIn('The argument "axis" must be an integer',
                       str(e.exception))
 
-        with self.assertRaises(NumbaNotImplementedError) as e:
+        with self.assertRaises(ValueError) as e:
             cfunc(np.array([1, 2]), 3, axis=2)
         self.assertIn('Value for argument "axis" is not supported',
                       str(e.exception))
