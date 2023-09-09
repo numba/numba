@@ -1327,6 +1327,68 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         )
         check(a, v)
 
+        a = np.array([9])
+        v = np.array([9])
+        check(a, v)
+
+        a = np.array([np.nan])
+        v = np.array([np.nan])
+        check(a, v)
+
+    def test_searchsorted_supplemental(self):
+        pyfunc = searchsorted
+        cfunc = jit(nopython=True)(pyfunc)
+
+        pyfunc_left = searchsorted_left
+        cfunc_left = jit(nopython=True)(pyfunc_left)
+
+        pyfunc_right = searchsorted_right
+        cfunc_right = jit(nopython=True)(pyfunc_right)
+
+        def check(a, v):
+            expected = pyfunc(a, v)
+            got = cfunc(a, v)
+            self.assertPreciseEqual(expected, got)
+
+            expected = pyfunc_left(a, v)
+            got = cfunc_left(a, v)
+            self.assertPreciseEqual(expected, got)
+
+            expected = pyfunc_right(a, v)
+            got = cfunc_right(a, v)
+            self.assertPreciseEqual(expected, got)
+
+        x_pool = list(range(-5, 100))
+        x_pool += [np.nan] * 3 + [np.inf] * 3 + [-np.inf] * 3
+
+        for _ in range(1000):
+            sample_size = self.rnd.choice([5, 10, 25])
+            a = self.rnd.choice(x_pool, sample_size)
+            v = a[:-1]
+            check(a, v)
+
+            v[3] = np.nan
+            check(a, v)
+
+            v[2:4] = np.nan
+            check(a, v)
+
+            v[:4] = np.nan
+            check(a, v)
+
+            v[:4] = -200
+            v[-3:] = np.nan
+            check(a, v)
+
+            v = v[::-1]
+            check(a, v)
+
+            v = np.full_like(v, fill_value=np.nan)
+            check(a, v)
+
+            v = np.full_like(v, fill_value=np.inf)
+            check(a, v)
+
     def test_digitize(self):
         pyfunc = digitize
         cfunc = jit(nopython=True)(pyfunc)
