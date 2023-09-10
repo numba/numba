@@ -3749,7 +3749,8 @@ def searchsorted(a, v, side='left'):
     if side_val == 'left':
         _impl = _searchsorted_left
     elif side_val == 'right':
-        # change in behaviour introduced by https://github.com/numpy/numpy/pull/21867
+        # change in behaviour introduced by
+        # https://github.com/numpy/numpy/pull/21867
         if numpy_version >= (1, 23):
             _impl = _searchsorted_right_np123_on
         else:
