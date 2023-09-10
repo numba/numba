@@ -3688,7 +3688,7 @@ def custom_le(a, b):
     return a <= b
 
 
-def _searchsorted(func):
+def _searchsorted(func_1, func_2):
     def impl(a, v):
         min_idx = 0
         max_idx = len(a)
@@ -3703,7 +3703,7 @@ def _searchsorted(func):
         for i in range(v.size):
             key_val = v.flat[i]
 
-            if func(last_key_val, key_val):
+            if func_1(last_key_val, key_val):
                 max_idx = len(a)
             else:
                 min_idx = 0
@@ -3719,7 +3719,7 @@ def _searchsorted(func):
 
                 mid_val = a[mid_idx]
 
-                if func(mid_val, key_val):
+                if func_2(mid_val, key_val):
                     min_idx = mid_idx + 1
                 else:
                     max_idx = mid_idx
@@ -3731,8 +3731,9 @@ def _searchsorted(func):
     return impl
 
 
-_searchsorted_left = register_jitable(_searchsorted(custom_lt))
-_searchsorted_right = register_jitable(_searchsorted(custom_le))
+_searchsorted_left = register_jitable(_searchsorted(custom_lt, custom_lt))
+_searchsorted_right_pre_np123 = register_jitable(_searchsorted(custom_lt, custom_le))
+_searchsorted_right_np123_on = register_jitable(_searchsorted(custom_le, custom_le))
 
 
 @overload(np.searchsorted)
@@ -3742,7 +3743,11 @@ def searchsorted(a, v, side='left'):
     if side_val == 'left':
         _impl = _searchsorted_left
     elif side_val == 'right':
-        _impl = _searchsorted_right
+        # change in behaviour introduced by https://github.com/numpy/numpy/pull/21867
+        if numpy_version >= (1, 23):
+            _impl = _searchsorted_right_np123_on
+        else:
+            _impl = _searchsorted_right_pre_np123
     else:
         raise NumbaValueError(f"Invalid value given for 'side': {side_val}")
 

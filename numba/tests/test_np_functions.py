@@ -1365,27 +1365,28 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             sample_size = self.rnd.choice([5, 10, 25])
             a = self.rnd.choice(x_pool, sample_size)
             v = a[:-1]
+            self.rnd.shuffle(v)
+            v[2] += 0.1  # a non-bin edge
             check(a, v)
 
-            v[3] = np.nan
-            check(a, v)
-
+            # contiguous run of nans
             v[2:4] = np.nan
             check(a, v)
 
+            # contiguous run of nans at start
             v[:4] = np.nan
             check(a, v)
 
+            # contiguous run of nans at end
             v[:4] = -200
             v[-3:] = np.nan
             check(a, v)
 
-            v = v[::-1]
-            check(a, v)
-
+            # all nan
             v = np.full_like(v, fill_value=np.nan)
             check(a, v)
 
+            # all inf
             v = np.full_like(v, fill_value=np.inf)
             check(a, v)
 

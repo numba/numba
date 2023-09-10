@@ -1,0 +1,5 @@
+The ``numpy.searchsorted`` behaviour aligned with numpy
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+The implementation of ``numpy.searchsorted`` is updated to behave precisely
+like numpy for a wider set of uses cases.
