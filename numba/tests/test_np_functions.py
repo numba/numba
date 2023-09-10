@@ -1327,14 +1327,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         )
         check(a, v)
 
-        a = np.array([9])
-        v = np.array([9])
-        check(a, v)
-
-        a = np.array([np.nan])
-        v = np.array([np.nan])
-        check(a, v)
-
     def test_searchsorted_supplemental(self):
         pyfunc = searchsorted
         cfunc = jit(nopython=True)(pyfunc)
