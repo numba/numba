@@ -3731,9 +3731,15 @@ def _searchsorted(func_1, func_2):
     return impl
 
 
-_searchsorted_left = register_jitable(_searchsorted(custom_lt, custom_lt))
-_searchsorted_right_pre_np123 = register_jitable(_searchsorted(custom_lt, custom_le))
-_searchsorted_right_np123_on = register_jitable(_searchsorted(custom_le, custom_le))
+_searchsorted_left = register_jitable(
+    _searchsorted(custom_lt, custom_lt)
+)
+_searchsorted_right_pre_np123 = register_jitable(
+    _searchsorted(custom_lt, custom_le)
+)
+_searchsorted_right_np123_on = register_jitable(
+    _searchsorted(custom_le, custom_le)
+)
 
 
 @overload(np.searchsorted)
