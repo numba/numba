@@ -149,7 +149,7 @@ and methods in compiled code:
 - ``ufunc.nargs``
 - ``ufunc.identity``
 - ``ufunc.signature``
-- ``ufunc.reduce()`` (only the first 5 arguments)
+- ``ufunc.reduce()`` (only the first 5 arguments - experimental feature)
 
 .. _guvectorize:
 

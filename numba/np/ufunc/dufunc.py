@@ -1,4 +1,5 @@
 import functools
+import warnings
 
 import numpy as np
 
@@ -271,6 +272,10 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
 
         @overload_method(at, 'reduce')
         def ol_reduce(ufunc, array, axis=0, dtype=None, initial=None):
+
+            warnings.warn("ufunc.reduce feature is experimental",
+                          category=errors.NumbaExperimentalFeatureWarning)
+
             if not isinstance(array, types.Array):
                 msg = 'The first argument "array" must be array-like'
                 raise errors.NumbaTypeError(msg)
