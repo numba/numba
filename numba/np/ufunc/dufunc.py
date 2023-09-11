@@ -278,10 +278,13 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
             axis_int = isinstance(axis, types.Integer)
             axis_int_tuple = isinstance(axis, types.UniTuple) and \
                 isinstance(axis.dtype, types.Integer)
+            axis_empty_tuple = isinstance(axis, types.Tuple) and len(axis) == 0
+            axis_none = cgutils.is_nonelike(axis)
             axis_tuple_size = len(axis) if axis_int_tuple else 0
 
             if self.ufunc.identity is None and not (
-                    axis_int or (axis_int_tuple and axis_tuple_size == 1)):
+                    (axis_int_tuple and axis_tuple_size == 1) or
+                    axis_empty_tuple or axis_int or axis_none):
                 msg = (f"reduction operation '{self.ufunc.__name__}' is not "
                        "reorderable, so at most one axis may be specified")
                 raise errors.NumbaTypeError(msg)
@@ -487,18 +490,42 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                             ax = tuple_setitem(ax, i, axis[i])
                     return ufunc.reduce(r, axis=ax)
 
-            if array.ndim == 1:
+            def impl_axis_empty_tuple(ufunc,
+                                      array,
+                                      axis=0,
+                                      dtype=None,
+                                      initial=None):
+                return array
+
+            def impl_axis_none(ufunc,
+                               array,
+                               axis=0,
+                               dtype=None,
+                               initial=None):
+                return ufunc.reduce(array, axis_tup, dtype, initial)
+
+            if array.ndim == 1 and not axis_empty_tuple:
                 return impl_1d
-            else:
-                if axis_int_tuple:
-                    # axis is tuple of integers
-                    axis_tup = (0,) * (len(axis) - 1)
-                    return impl_nd_axis_tuple
-                elif axis == 0 or isinstance(axis, (types.Integer,
-                                                    types.Omitted,
-                                                    types.IntegerLiteral)):
-                    # axis is default value (0) or an integer
-                    return impl_nd_axis_int
+            elif axis_empty_tuple:
+                # ufunc(array, axis=())
+                return impl_axis_empty_tuple
+            elif axis_none:
+                # ufunc(array, axis=None)
+                axis_tup = tuple(range(array.ndim))
+                return impl_axis_none
+            elif axis_int_tuple:
+                # axis is tuple of integers
+                # ufunc(array, axis=(1, 2, ...))
+                axis_tup = (0,) * (len(axis) - 1)
+                return impl_nd_axis_tuple
+            elif axis == 0 or isinstance(axis, (types.Integer,
+                                                types.Omitted,
+                                                types.IntegerLiteral)):
+                # axis is default value (0) or an integer
+                # ufunc(array, axis=0)
+                return impl_nd_axis_int
+            # elif array.ndim == 1:
+            #     return impl_1d
 
     def _install_type(self, typingctx=None):
         """Constructs and installs a typing class for a DUFunc object in the

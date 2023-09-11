@@ -15,8 +15,16 @@ def pyuadd(a0, a1):
     return a0 + a1
 
 
+def pysub(a0, a1):
+    return a0 - a1
+
+
 def pymult(a0, a1):
     return a0 * a1
+
+
+def pydiv(a0, a1):
+    return a0 // a1
 
 
 def pymin(a0, a1):
@@ -121,7 +129,8 @@ class TestDUFunc(MemoryLeakMixin, unittest.TestCase):
 
         for attr, val in attributes.items():
             cfunc = njit(get_attr_fn(attr))
-            self.assertEqual(val, cfunc(), f'attribute: {attr}')
+            self.assertEqual(val, cfunc(),
+                             f'Attribute differs from original: {attr}')
 
         # We don't expose [n]types attributes as they are dynamic attributes
         # and can change as the user calls the ufunc
@@ -158,6 +167,17 @@ class TestDUFuncMethods(TestCase):
         def foo(a, axis):
             return ufunc.reduce(a, axis=axis, initial=initial)
 
+        def _check(*args):
+            try:
+                expected = foo.py_func(array, axis)
+            except ValueError as e:
+                self.assertEqual(e.args[0], exc_msg)
+                with self.assertRaisesRegex(TypingError, exc_msg):
+                    got = foo(array, axis)
+            else:
+                got = foo(array, axis)
+                self.assertPreciseEqual(expected, got)
+
         exc_msg = (f"reduction operation '{ufunc.__name__}' is not "
                    "reorderable, so at most one axis may be specified")
         inputs = [
@@ -167,15 +187,11 @@ class TestDUFuncMethods(TestCase):
         for array in inputs:
             for i in range(1, array.ndim + 1):
                 for axis in itertools.combinations(range(array.ndim), r=i):
-                    try:
-                        expected = foo.py_func(array, axis)
-                    except ValueError as e:
-                        self.assertEqual(e.args[0], exc_msg)
-                        with self.assertRaisesRegex(TypingError, exc_msg):
-                            got = foo(array, axis)
-                    else:
-                        got = foo(array, axis)
-                        self.assertPreciseEqual(expected, got)
+                    _check(array, axis)
+
+            # corner cases: Reduce over axis=() and axis=None
+            for axis in ((), None):
+                _check(array, axis)
 
     def test_add_reduce(self):
         duadd = vectorize('int64(int64, int64)', identity=0)(pyuadd)
@@ -185,6 +201,14 @@ class TestDUFuncMethods(TestCase):
     def test_mul_reduce(self):
         dumul = vectorize('int64(int64, int64)', identity=1)(pymult)
         self._check_reduce(dumul)
+
+    def test_non_associative_reduce(self):
+        dusub = vectorize('int64(int64, int64)')(pysub)
+        dudiv = vectorize('int64(int64, int64)')(pydiv)
+        self._check_reduce(dusub)
+        self._check_reduce_axis(dusub, dtype=np.int64)
+        self._check_reduce(dudiv)
+        self._check_reduce_axis(dudiv, dtype=np.int64)
 
     def test_reduce_dtype(self):
         duadd = vectorize('float64(float64, int64)', identity=0)(pyuadd)
