@@ -2,6 +2,8 @@ from numba.extending import (models, register_model, type_callable,
                              unbox, NativeValue, make_attribute_wrapper, box,
                              lower_builtin)
 from numba.core import types, cgutils
+import warnings
+from numba.core.errors import NumbaExperimentalFeatureWarning
 from numpy.polynomial.polynomial import Polynomial
 from contextlib import ExitStack
 import numpy as np
@@ -30,6 +32,9 @@ def type_polynomial(context):
         double_window = types.Array(types.double, 1, 'C')
         double_coef = types.Array(types.double, 1, 'C')
 
+        warnings.warn("Polynomial class is experimental",
+                      category=NumbaExperimentalFeatureWarning)
+
         if isinstance(coef, types.Array) and \
                 all([a is None for a in (domain, window)]):
             if coef.ndim == 1:
@@ -40,14 +45,21 @@ def type_polynomial(context):
                                             default_domain,
                                             default_window,
                                             1)
+            else:
+                msg = 'Coefficient array is not 1-d'
+                raise ValueError(msg)
         elif all([isinstance(a, types.Array) for a in (coef, domain, window)]):
-            if all([a.ndim == 1 for a in (coef, domain, window)]):
-                # If Polynomial(coef, domain, window) is called, then coef,
-                # domain and window are cast to double dtype
-                return types.PolynomialType(double_coef,
-                                            double_domain,
-                                            double_window,
-                                            3)
+            if coef.ndim == 1:
+                if all([a.ndim == 1 for a in (domain, window)]):
+                    # If Polynomial(coef, domain, window) is called, then coef,
+                    # domain and window are cast to double dtype
+                    return types.PolynomialType(double_coef,
+                                                double_domain,
+                                                double_window,
+                                                3)
+            else:
+                msg = 'Coefficient array is not 1-d'
+                raise ValueError(msg)
     return typer
 
 
