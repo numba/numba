@@ -40,8 +40,8 @@ jobs:
 
     - script: |
         call activate %CONDA_ENV%
-        python -m numba.tests.test_runtests
-      displayName: 'Verify runtests'
+        python -m numba.misc.POST
+      displayName: 'Power-On-Self-Test to make sure testing will likely work'
 
     - script: |
         call activate %CONDA_ENV%
