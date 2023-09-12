@@ -9,7 +9,7 @@ from numpy.polynomial import polyutils as pu
 
 from numba import literal_unroll
 from numba.core import types, errors
-from numba.core.extending import overload, SentryLiteralArgs
+from numba.core.extending import overload
 from numba.np.numpy_support import type_can_asarray, as_dtype, from_dtype
 
 
@@ -240,7 +240,7 @@ def numpy_polymul(c1, c2):
     return impl
 
 
-@overload(poly.polyval)
+@overload(poly.polyval, prefer_literal=True)
 def poly_polyval(x, c, tensor=True):
     if not type_can_asarray(x):
         msg = 'The argument "x" must be array-like'
@@ -250,13 +250,9 @@ def poly_polyval(x, c, tensor=True):
         msg = 'The argument "c" must be array-like'
         raise errors.TypingError(msg)
 
-    if not isinstance(tensor, (bool, types.Literal, types.Boolean)):
+    if not isinstance(tensor, (bool, types.BooleanLiteral)):
         msg = 'The argument "tensor" must be boolean'
         raise errors.TypingError(msg)
-
-    if not isinstance(tensor, (bool, types.Literal)):
-        SentryLiteralArgs(['tensor']).for_function(poly_polyval).bind(x, c,
-                                                                      tensor)
 
     res_dtype = _poly_result_dtype(c, x)
 

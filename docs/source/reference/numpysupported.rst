@@ -431,7 +431,7 @@ The following polynomial functions are supported:
 * :func:`numpy.polynomial.polynomial.polyint()` (only the 2 first arguments)
 * :func:`numpy.polynomial.polynomial.polymul()`
 * :func:`numpy.polynomial.polynomial.polysub()`
-* :func:`numpy.polynomial.polynomial.polyval()` (only the 2 first arguments)
+* :func:`numpy.polynomial.polynomial.polyval()` (the argument ``tensor`` must be a boolean constant)
 * :func:`numpy.polynomial.polyutils.as_series()`
 * :func:`numpy.polynomial.polyutils.trimseq()`
 

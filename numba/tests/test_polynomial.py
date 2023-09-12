@@ -51,8 +51,13 @@ def polyval2(x, c):
     return res
 
 
-def polyval3(x, c, tensor):
-    res = poly.polyval(x, c, tensor)
+def polyval3T(x, c):
+    res = poly.polyval(x, c, True)
+    return res
+
+
+def polyval3F(x, c):
+    res = poly.polyval(x, c, False)
     return res
 
 
@@ -377,8 +382,10 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
     def test_poly_polyval_basic(self):
         pyfunc2 = polyval2
         cfunc2 = njit(polyval2)
-        pyfunc3 = polyval3
-        cfunc3 = njit(polyval3)
+        pyfunc3T = polyval3T
+        cfunc3T = njit(polyval3T)
+        pyfunc3F = polyval3F
+        cfunc3F = njit(polyval3F)
 
         def inputs():
             # Based on https://github.com/numpy/numpy/blob/160c16f055d4d2fce072004e286d8075b31955cd/numpy/polynomial/tests/test_polynomial.py#L137-L157 # noqa: E501
@@ -404,12 +411,13 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
         for x, c in inputs():
             self.assertPreciseEqual(pyfunc2(x, c), cfunc2(x, c))
             # test tensor argument
-            self.assertPreciseEqual(pyfunc3(x, c, True), cfunc3(x, c, True))
-            self.assertPreciseEqual(pyfunc3(x, c, False), cfunc3(x, c, False))
+            self.assertPreciseEqual(pyfunc3T(x, c), cfunc3T(x, c))
+            self.assertPreciseEqual(pyfunc3F(x, c), cfunc3F(x, c))
 
     def test_poly_polyval_exception(self):
         cfunc2 = njit(polyval2)
-        cfunc3 = njit(polyval3)
+        cfunc3T = njit(polyval3T)
+        cfunc3F = njit(polyval3F)
 
         self.disable_leak_check()
 
@@ -429,22 +437,26 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
                       str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
-            cfunc3(3, "abc", True)
+            cfunc3T(3, "abc")
         self.assertIn('The argument "c" must be array-like',
                       str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
-            cfunc3("abc", 3, True)
+            cfunc3T("abc", 3)
         self.assertIn('The argument "x" must be array-like',
                       str(raises.exception))
 
+        @njit
+        def polyval3(x, c, tensor):
+            res = poly.polyval(x, c, tensor)
+            return res
         with self.assertRaises(TypingError) as raises:
-            cfunc3(3, 3, "abc")
+            polyval3(3, 3, "abc")
         self.assertIn('The argument "tensor" must be boolean',
                       str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
-            cfunc3("abc", "def", True)
+            cfunc3F("abc", "def")
         self.assertIn('The argument "x" must be array-like',
                       str(raises.exception))
 
