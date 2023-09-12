@@ -4609,6 +4609,34 @@ def impl_np_diag(v, k=0):
         return diag_impl
 
 
+@overload(np.indices)
+def numpy_indices(dimensions):
+    if not isinstance(dimensions, types.UniTuple):
+        msg = 'The argument "dimensions" must be a tuple of integers'
+        raise errors.TypingError(msg)
+
+    if not isinstance(dimensions.dtype, types.Integer):
+        msg = 'The argument "dimensions" must be a tuple of integers'
+        raise errors.TypingError(msg)
+
+    N = len(dimensions)
+    shape = (1,) * N
+
+    def impl(dimensions):
+        res = np.empty((N,) + dimensions, dtype=np.int64)
+        i = 0
+        for dim in dimensions:
+            idx = np.arange(dim, dtype=np.int64).reshape(
+                tuple_setitem(shape, i, dim)
+            )
+            res[i] = idx
+            i += 1
+
+        return res
+
+    return impl
+
+
 @overload(np.diagflat)
 def numpy_diagflat(v, k=0):
     if not type_can_asarray(v):
@@ -4630,6 +4658,7 @@ def numpy_diagflat(v, k=0):
         j = np.maximum(0, k)
         for t in range(s):
             res[i + t, j + t] = v[t]
+
         return res
 
     return impl
