@@ -4464,7 +4464,7 @@ def numpy_unwrap(p, discont=None, axis=-1, period=6.283185307179586):
         raise TypingError(msg)
 
     if (not isinstance(discont, (types.Integer, types.Float, types.NoneType))
-            and (discont is not None)):
+            and not cgutils.is_nonelike(discont)):
         msg = 'The argument "discont" must be a scalar'
         raise TypingError(msg)
 
