@@ -819,13 +819,13 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
         body = """if 1:
             X = np.arange(1000000.)
             Y = np.arange(1000000.)
-            q = multiprocessing.Queue()
+            ctx = multiprocessing.get_context('fork')
+            q = ctx.Queue()
 
             # Start OpenMP runtime on parent via parallel function
             Z = busy_func(X, Y, q)
 
             # fork() underneath with no exec, will abort
-            ctx = multiprocessing.get_context('fork')
             proc = ctx.Process(target = busy_func, args=(X, Y, q))
             proc.start()
             proc.join()
@@ -851,12 +851,12 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
         body = """if 1:
             X = np.arange(1000000.)
             Y = np.arange(1000000.)
-            q = multiprocessing.Queue()
+            ctx = multiprocessing.get_context('spawn')
+            q = ctx.Queue()
 
             # Start OpenMP runtime and run on parent via parallel function
             Z = busy_func(X, Y, q)
             procs = []
-            ctx = multiprocessing.get_context('spawn')
             for x in range(20): # start a lot to try and get overlap
                 ## fork() + exec() to run some OpenMP on children
                 proc = ctx.Process(target = busy_func, args=(X, Y, q))
@@ -937,11 +937,11 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
         body = """if 1:
             X = np.arange(1000000.)
             Y = np.arange(1000000.)
-            q = multiprocessing.Queue()
+            ctx = multiprocessing.get_context('fork')
+            q = ctx.Queue()
 
             # this is ok
             procs = []
-            ctx = multiprocessing.get_context('fork')
             for x in range(10):
                 # fork() underneath with but no OpenMP in parent, this is ok
                 proc = ctx.Process(target = busy_func, args=(X, Y, q))
