@@ -4463,7 +4463,7 @@ def numpy_unwrap(p, discont=None, axis=-1, period=6.283185307179586):
         msg = 'The argument "p" must be array-like'
         raise TypingError(msg)
 
-    if (not isinstance(discont, (types.Integer, types.Float, types.NoneType))
+    if (not isinstance(discont, (types.Integer, types.Float))
             and not cgutils.is_nonelike(discont)):
         msg = 'The argument "discont" must be a scalar'
         raise TypingError(msg)
