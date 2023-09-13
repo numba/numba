@@ -8,7 +8,7 @@ from numpy.polynomial import polyutils as pu
 from numba import jit, njit
 from numba.tests.support import (TestCase, needs_lapack,
                                  EnableNRTStatsMixin, MemoryLeakMixin)
-from numba.core.errors import TypingError, RequireLiteralValue
+from numba.core.errors import TypingError
 
 
 def roots_fn(p):
@@ -450,7 +450,7 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
         def polyval3(x, c, tensor):
             res = poly.polyval(x, c, tensor)
             return res
-        with self.assertRaises(RequireLiteralValue) as raises:
+        with self.assertRaises(TypingError) as raises:
             polyval3(3, 3, "abc")
         self.assertIn('The argument "tensor" must be boolean',
                       str(raises.exception))
