@@ -102,13 +102,14 @@ def polyutils_as_series(alist, trim=True):
     tuple_input = isinstance(alist, types.BaseTuple)
     list_input = isinstance(alist, types.List)
     if tuple_input:
-        res_dtype = _poly_result_dtype(*alist)
-
         if np.any(np.array([np.ndim(a) > 1 for a in alist])):
             raise errors.NumbaValueError("Coefficient array is not 1-d")
 
+        res_dtype = _poly_result_dtype(*alist)
+
     elif list_input:
-        res_dtype = np.result_type(_get_list_dtype(alist), np.float64)
+        dt = as_dtype(_get_list_type(alist))
+        res_dtype = np.result_type(dt, np.float64)
 
     else:
         if np.ndim(alist) <= 2:
@@ -144,31 +145,41 @@ def polyutils_as_series(alist, trim=True):
     return impl
 
 
-def _get_list_dtype(l):
+def _get_list_type(l):
     # A helper function that takes a list (possibly nested) and returns its
-    # dtype.
+    # dtype. Returns a Numba type.
     dt = l.dtype
-    if isinstance(dt, types.Number):
-        return as_dtype(dt)
+    if (not isinstance(dt, types.Number)) and type_can_asarray(dt):
+        return _get_list_type(dt)
     else:
-        return _get_list_dtype(dt)
+        return dt
 
 
 def _poly_result_dtype(*args):
     # A helper function that takes a tuple of inputs and returns their result
-    # dtype. Used for poly functions.
+    # dtype. Used for poly functions. Returns a NumPy dtype.
     res_dtype = np.float64
     for item in args:
-        if isinstance(item, types.Number):
-            s1 = str(as_dtype(item))
-        elif isinstance(item, types.Tuple):
-            t = [as_dtype(ty) for ty in item.types]
-            s1 = str(np.result_type(*t))
+        if isinstance(item, types.BaseTuple):
+            s1 = item.types
         elif isinstance(item, types.List):
-            s1 = _get_list_dtype(item)
+            s1 = [_get_list_type(item)]
+        elif isinstance(item, types.Number):
+            s1 = [item]
+        elif isinstance(item, types.Array):
+            s1 = [item.dtype]
         else:
-            s1 = str(item.dtype)
-        res_dtype = (np.result_type(res_dtype, s1))
+            msg = 'Input dtype must be scalar'
+            raise errors.TypingError(msg)
+
+        try:
+            l = [as_dtype(t) for t in s1]
+            l.append(res_dtype)
+            res_dtype = (np.result_type(*l))
+        except errors.NumbaNotImplementedError:
+            msg = 'Input dtype must be scalar.'
+            raise errors.TypingError(msg)
+
     return from_dtype(res_dtype)
 
 
@@ -252,7 +263,7 @@ def poly_polyval(x, c, tensor=True):
 
     if not isinstance(tensor, (bool, types.BooleanLiteral)):
         msg = 'The argument "tensor" must be boolean'
-        raise errors.TypingError(msg)
+        raise errors.RequireLiteralValue(msg)
 
     res_dtype = _poly_result_dtype(c, x)
 
@@ -297,9 +308,16 @@ def poly_polyint(c, m=1):
     if not isinstance(m, (int, types.Integer)):
         msg = 'The argument "m" must be an integer'
         raise errors.TypingError(msg)
-    res_dtype = _poly_result_dtype(c)
+
+    res_dtype = as_dtype(_poly_result_dtype(c))
+
+    if not np.issubdtype(res_dtype, np.number):
+        msg = f'Input dtype must be scalar. Found {res_dtype} instead'
+        raise errors.TypingError(msg)
+
     is1D = ((np.ndim(c) == 1) or
-            (isinstance(c, types.List) and isinstance(c.dtype, types.Number)))
+            (isinstance(c, (types.List, types.BaseTuple))
+             and isinstance(c.dtype, types.Number)))
 
     def impl(c, m=1):
         c = np.asarray(c).astype(res_dtype)
