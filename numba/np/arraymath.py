@@ -3689,14 +3689,17 @@ def custom_le(a, b):
 
 
 def _searchsorted(func_1, func_2):
+    # a facsimile of:
+    # https://github.com/numpy/numpy/blob/4f84d719657eb455a35fcdf9e75b83eb1f97024a/numpy/core/src/npysort/binsearch.cpp#L61  # noqa: E501
+
     def impl(a, v):
         min_idx = 0
         max_idx = len(a)
 
-        if v.size == 0:
-            return
-
         out = np.empty(v.size, np.intp)
+
+        if v.size == 0:
+            return out
 
         last_key_val = v.flat[0]
 
@@ -3715,6 +3718,7 @@ def _searchsorted(func_1, func_2):
             last_key_val = key_val
 
             while min_idx < max_idx:
+                # to avoid overflow
                 mid_idx = min_idx + ((max_idx - min_idx) >> 1)
 
                 mid_val = a[mid_idx]

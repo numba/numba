@@ -1350,37 +1350,33 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc_right(a, v)
             self.assertPreciseEqual(expected, got)
 
-        x_pool = list(range(-5, 100))
-        x_pool += [np.nan] * 3 + [np.inf] * 3 + [-np.inf] * 3
+        element_pool = list(range(-5, 50))
+        element_pool += [np.nan] * 5 + [np.inf] * 3 + [-np.inf] * 3
 
-        for _ in range(1000):
+        for i in range(1000):
             sample_size = self.rnd.choice([5, 10, 25])
-            a = self.rnd.choice(x_pool, sample_size)
-            v = a[:-1]
-            self.rnd.shuffle(v)
-            v[2] += 0.1  # a non-bin edge
-            check(a, v)
 
-            # contiguous run of nans
-            v[2:4] = np.nan
-            check(a, v)
+            # `a` an `v` not sorted and may have repeating values
+            a = self.rnd.choice(element_pool, sample_size)
+            v = self.rnd.choice(element_pool, sample_size + (i % 3 - 1))
 
-            # contiguous run of nans at start
-            v[:4] = np.nan
+            # output should match numpy regardless of whether `a` is sorted
             check(a, v)
+            check(np.sort(a), v)
 
-            # contiguous run of nans at end
-            v[:4] = -200
-            v[-3:] = np.nan
-            check(a, v)
+        # corner case: `a` and / or `v` full of the same value
+        x = np.ones(5)
+        check(x, x)
+        for fill_value in np.nan, -np.inf, np.inf:
+            y = np.full(len(x), fill_value=fill_value)
+            check(x, y)
+            check(y, x)
+            check(y, y)
 
-            # all nan
-            v = np.full_like(v, fill_value=np.nan)
-            check(a, v)
-
-            # all inf
-            v = np.full_like(v, fill_value=np.inf)
-            check(a, v)
+        # corner case: `v` is zero size
+        a = np.arange(1)
+        v = np.arange(0)
+        check(a, v)
 
     def test_digitize(self):
         pyfunc = digitize
