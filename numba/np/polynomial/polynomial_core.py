@@ -3,7 +3,7 @@ from numba.extending import (models, register_model, type_callable,
                              lower_builtin)
 from numba.core import types, cgutils
 import warnings
-from numba.core.errors import NumbaExperimentalFeatureWarning
+from numba.core.errors import NumbaExperimentalFeatureWarning, NumbaValueError
 from numpy.polynomial.polynomial import Polynomial
 from contextlib import ExitStack
 import numpy as np
@@ -47,7 +47,7 @@ def type_polynomial(context):
                                             1)
             else:
                 msg = 'Coefficient array is not 1-d'
-                raise ValueError(msg)
+                raise NumbaValueError(msg)
         elif all([isinstance(a, types.Array) for a in (coef, domain, window)]):
             if coef.ndim == 1:
                 if all([a.ndim == 1 for a in (domain, window)]):
@@ -59,7 +59,7 @@ def type_polynomial(context):
                                                 3)
             else:
                 msg = 'Coefficient array is not 1-d'
-                raise ValueError(msg)
+                raise NumbaValueError(msg)
     return typer
 
 

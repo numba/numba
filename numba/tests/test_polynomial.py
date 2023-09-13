@@ -8,7 +8,7 @@ from numpy.polynomial import polyutils as pu
 from numba import jit, njit
 from numba.tests.support import (TestCase, tag, needs_lapack,
                                  EnableNRTStatsMixin, MemoryLeakMixin)
-from numba.core.errors import TypingError
+from numba.core.errors import TypingError, NumbaValueError
 import unittest
 
 
@@ -298,7 +298,7 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
         self.assertIn("Window has wrong number of elements.",
                       str(raises.exception))
 
-        with self.assertRaises(ValueError) as raises:
+        with self.assertRaises(TypingError) as raises:
             cfunc3(input2D, input2, input2)
         self.assertIn("Coefficient array is not 1-d",
                       str(raises.exception))
