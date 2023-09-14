@@ -1364,18 +1364,33 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             check(a, v)
             check(np.sort(a), v)
 
-        # corner case: `a` and / or `v` full of the same value
-        x = np.ones(5)
-        check(x, x)
-        for fill_value in np.nan, -np.inf, np.inf:
-            y = np.full(len(x), fill_value=fill_value)
-            check(x, y)
-            check(y, x)
-            check(y, y)
+        ones = np.ones(5)
+        nans = np.full(len(ones), fill_value=np.nan)
+        check(ones, ones)
+
+        # corner case: `a` and / or `v` full of nans
+        check(ones, nans)
+        check(nans, ones)
+        check(nans, nans)
 
         # corner case: `v` is zero size
         a = np.arange(1)
         v = np.arange(0)
+        check(a, v)
+
+        # corner case: `a` and `v` booleans
+        a = np.array([False, False, True, True])
+        v = np.array([False, True])
+        check(a, v)
+
+        # corner case: `a` and `v` are not numeric
+        a = np.array(['a', 'aa', 'b', 'c', 'd01', 'd03', 'da', 'e', 'f'])
+        v = np.array(['d', 'e', 'd02'])
+        check(a, v)
+
+        # corner case: `v` is a scalar boolean
+        a = [1, 2, 3]
+        v = True
         check(a, v)
 
     def test_digitize(self):

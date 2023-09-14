@@ -3688,6 +3688,11 @@ def custom_le(a, b):
     return a <= b
 
 
+@register_jitable
+def less_than_or_equal(a, b):
+    return a <= b
+
+
 def _searchsorted(func_1, func_2):
     # a facsimile of:
     # https://github.com/numpy/numpy/blob/4f84d719657eb455a35fcdf9e75b83eb1f97024a/numpy/core/src/npysort/binsearch.cpp#L61  # noqa: E501
@@ -3732,6 +3737,7 @@ def _searchsorted(func_1, func_2):
     return impl
 
 
+# inexact dtypes
 _searchsorted_left = register_jitable(
     _searchsorted(custom_lt, custom_lt)
 )
@@ -3742,22 +3748,60 @@ _searchsorted_right_np123_on = register_jitable(
     _searchsorted(custom_le, custom_le)
 )
 
+# exact dtypes
+_searchsorted_left_exact = register_jitable(
+    _searchsorted(less_than, less_than)
+)
+_searchsorted_right_pre_np123_exact = register_jitable(
+    _searchsorted(less_than, less_than_or_equal)
+)
+_searchsorted_right_np123_on_exact = register_jitable(
+    _searchsorted(less_than_or_equal, less_than_or_equal)
+)
+
 
 @overload(np.searchsorted)
 def searchsorted(a, v, side='left'):
     side_val = getattr(side, 'literal_value', side)
 
+    if side_val not in ['left', 'right']:
+        raise NumbaValueError(f"Invalid value given for 'side': {side_val}")
+
+    a_dt = as_dtype(a.dtype)
+
+    if isinstance(v, (types.Number, types.Boolean)):
+        v_dt = as_dtype(v)
+    else:
+        v_dt = as_dtype(v.dtype)
+
+    dt = np.promote_types(a_dt, v_dt)
+    exact = False
+
+    if np.issubdtype(dt, np.integer):
+        exact = True
+
+    if 'unichr' in a.dtype.name and 'unichr' in v.dtype.name:
+        exact = True
+
     if side_val == 'left':
-        _impl = _searchsorted_left
+        if exact:
+            _impl = _searchsorted_left_exact
+        else:
+            _impl = _searchsorted_left
+
     elif side_val == 'right':
         # change in behaviour introduced by
         # https://github.com/numpy/numpy/pull/21867
         if numpy_version >= (1, 23):
-            _impl = _searchsorted_right_np123_on
+            if exact:
+                _impl = _searchsorted_right_np123_on_exact
+            else:
+                _impl = _searchsorted_right_np123_on
         else:
-            _impl = _searchsorted_right_pre_np123
-    else:
-        raise NumbaValueError(f"Invalid value given for 'side': {side_val}")
+            if exact:
+                _impl = _searchsorted_right_pre_np123_exact
+            else:
+                _impl = _searchsorted_right_pre_np123
 
     if isinstance(v, types.Array):
         def impl(a, v, side='left'):
