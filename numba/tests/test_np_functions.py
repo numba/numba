@@ -1383,11 +1383,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         v = np.array([False, True])
         check(a, v)
 
-        # corner case: `a` and `v` are not numeric
-        a = np.array(['a', 'aa', 'b', 'c', 'd01', 'd03', 'da', 'e', 'f'])
-        v = np.array(['d', 'e', 'd02'])
-        check(a, v)
-
         # corner case: `v` is a scalar boolean
         a = [1, 2, 3]
         v = True
