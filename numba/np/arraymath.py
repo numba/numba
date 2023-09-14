@@ -3698,9 +3698,6 @@ def _searchsorted(func_1, func_2):
 
         out = np.empty(v.size, np.intp)
 
-        if v.size == 0:
-            return out
-
         last_key_val = v.flat[0]
 
         for i in range(v.size):
