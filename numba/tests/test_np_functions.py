@@ -1356,7 +1356,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for i in range(1000):
             sample_size = self.rnd.choice([5, 10, 25])
 
-            # `a` an `v` not sorted and may have repeating values
+            # `a` and `v` not sorted; either may have repeating values
             a = self.rnd.choice(element_pool, sample_size)
             v = self.rnd.choice(element_pool, sample_size + (i % 3 - 1))
 
@@ -1368,22 +1368,22 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         nans = np.full(len(ones), fill_value=np.nan)
         check(ones, ones)
 
-        # corner case: `a` and / or `v` full of nans
+        # `a` and / or `v` full of nans
         check(ones, nans)
         check(nans, ones)
         check(nans, nans)
 
-        # corner case: `v` is zero size
+        # `v` is zero size
         a = np.arange(1)
         v = np.arange(0)
         check(a, v)
 
-        # corner case: `a` and `v` booleans
+        # `a` and `v` booleans
         a = np.array([False, False, True, True])
         v = np.array([False, True])
         check(a, v)
 
-        # corner case: `v` is a scalar boolean
+        # `v` is a (scalar) boolean
         a = [1, 2, 3]
         v = True
         check(a, v)
