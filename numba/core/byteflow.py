@@ -135,7 +135,7 @@ class Flow(object):
             self.block_infos[state.pc_initial] = si = adapt_state_infos(state)
             _logger.debug("block_infos %s:\n%s", state, si)
 
-    if PYVERSION == (3, 11):
+    if PYVERSION in ((3, 11), (3, 12)):
         def _run_handle_exception(self, runner, state):
             if not state.in_with() and (
                     state.has_active_try() and
@@ -163,7 +163,7 @@ class Flow(object):
                         eh_block['push_lasti'] = eh.lasti
                         state.fork(pc=state._pc, extra_block=eh_block)
                         return True
-    elif PYVERSION < (3, 11):
+    elif PYVERSION in ((3, 8), (3, 9), (3, 10)):
         def _run_handle_exception(self, runner, state):
             if (state.has_active_try() and
                     state.get_inst().opname not in _NO_RAISE_OPS):
