@@ -317,17 +317,20 @@ class TraceRunner(object):
         return Loc(self.debug_filename, lineno)
 
     def dispatch(self, state):
-        if PYVERSION > (3, 11):
+        if PYVERSION in ((3, 11), (3, 12)):
+            if state._blockstack:
+                state: State
+                while state._blockstack:
+                    topblk = state._blockstack[-1]
+                    blk_end = topblk['end']
+                    if blk_end is not None and blk_end <= state.pc_initial:
+                        state._blockstack.pop()
+                    else:
+                        break
+        elif PYVERSION in ((3, 8), (3, 9), (3, 10)):
+            pass
+        else:
             raise NotImplementedError(PYVERSION)
-        elif PYVERSION == (3, 11) and state._blockstack:
-            state: State
-            while state._blockstack:
-                topblk = state._blockstack[-1]
-                blk_end = topblk['end']
-                if blk_end is not None and blk_end <= state.pc_initial:
-                    state._blockstack.pop()
-                else:
-                    break
         inst = state.get_inst()
         if inst.opname != "CACHE":
             _logger.debug("dispatch pc=%s, inst=%s", state._pc, inst)
