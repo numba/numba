@@ -27,7 +27,9 @@
  *
  */
 
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 11)
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 12)
+/* empty */
+#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 11)
 #ifndef Py_BUILD_CORE
     #define Py_BUILD_CORE 1
 #endif
@@ -118,7 +120,7 @@ else { \
     } \
 } \
 
-#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 10)
+#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 10 || PY_MINOR_VERSION == 11)
 
 /*
  * Code originally from:
@@ -649,7 +651,13 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
     fn = (PyCFunctionWithKeywords) PyCFunction_GET_FUNCTION(cfunc);
     tstate = PyThreadState_GET();
 
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 11)
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 12)
+    /* FIXME: as per the changes from PEP 669 we don't support profiling
+     * (yet?). Just skip frame injection entirely. JIT compiled functions will
+     * NOT show up in cProfile profiler.
+     */
+    if (0)
+#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 11)
     /*
      * On Python 3.11, _PyEval_EvalFrameDefault stops using PyTraceInfo since 
      * it's now baked into ThreadState.
@@ -715,7 +723,9 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
         }
         /* Populate the 'fast locals' in `frame` */
         PyFrame_LocalsToFast(frame, 0);
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 11)
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 12)
+        /* empty */
+#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 11)
         C_TRACE(result, fn(PyCFunction_GET_SELF(cfunc), args, kws), frame);
 #else
         tstate->frame = frame;
