@@ -425,7 +425,7 @@ class TraceRunner(object):
     def op_POP_TOP(self, state, inst):
         state.pop()
 
-    if PYVERSION == (3, 11):
+    if PYVERSION in ((3, 11), (3, 12)):
         def op_LOAD_GLOBAL(self, state, inst):
             res = state.make_temp()
             idx = inst.arg >> 1
@@ -434,7 +434,7 @@ class TraceRunner(object):
             if inst.arg & 1:
                 state.push(state.make_null())
             state.push(res)
-    elif PYVERSION < (3, 11):
+    elif PYVERSION in ((3, 8), (3, 9), (3, 10)):
         def op_LOAD_GLOBAL(self, state, inst):
             res = state.make_temp()
             state.append(inst, res=res)

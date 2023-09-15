@@ -329,10 +329,12 @@ class _ByteCode(object):
 
 
 def _fix_LOAD_GLOBAL_arg(arg):
-    if PYVERSION >= (3, 11):
-        assert PYVERSION == (3, 11) # reminder to check newer versions
+    if PYVERSION in ((3, 11), (3, 12)):
         return arg >> 1
-    return arg
+    elif PYVERSION in ((3, 8), (3, 9), (3, 10)):
+        return arg
+    else:
+        raise NotImplementedError(PYVERSION)
 
 
 class ByteCodePy311(_ByteCode):

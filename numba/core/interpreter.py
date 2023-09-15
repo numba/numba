@@ -2201,13 +2201,13 @@ class Interpreter(object):
             const = ir.Const(value, loc=self.loc)
         self.store(const, res)
 
-    if PYVERSION == (3, 11):
+    if PYVERSION in ((3, 11), (3, 12)):
         def op_LOAD_GLOBAL(self, inst, idx, res):
             name = self.code_names[idx]
             value = self.get_global_value(name)
             gl = ir.Global(name, value, loc=self.loc)
             self.store(gl, res)
-    elif PYVERSION < (3, 11):
+    elif PYVERSION in ((3, 8), (3, 9), (3, 10)):
         def op_LOAD_GLOBAL(self, inst, res):
             name = self.code_names[inst.arg]
             value = self.get_global_value(name)
