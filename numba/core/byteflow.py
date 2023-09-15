@@ -798,7 +798,7 @@ class TraceRunner(object):
         state.append(inst, value=val, res=res)
         state.push(res)
 
-    if PYVERSION == (3, 11):
+    if PYVERSION in ((3, 11), (3, 12)):
         def op_RAISE_VARARGS(self, state, inst):
             if inst.arg == 0:
                 exc = None
@@ -820,7 +820,7 @@ class TraceRunner(object):
             else:
                 state.terminate()
 
-    elif PYVERSION < (3, 11):
+    elif PYVERSION in ((3, 8), (3, 9), (3, 10)):
         def op_RAISE_VARARGS(self, state, inst):
             in_exc_block = any([
                 state.get_top_block("EXCEPT") is not None,
@@ -840,7 +840,7 @@ class TraceRunner(object):
             state.append(inst, exc=exc)
             state.terminate()
     else:
-        raise NotImplementedError
+        raise NotImplementedError(PYVERSION)
 
     def op_BEGIN_FINALLY(self, state, inst):
         temps = []
