@@ -1795,7 +1795,7 @@ class StatePy311(_State):
         return self.make_temp(prefix="null$")
 
 
-if PYVERSION == (3, 11):
+if PYVERSION >= (3, 11):
     State = StatePy311
 elif PYVERSION < (3, 11):
     State = _State
