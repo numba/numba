@@ -572,5 +572,47 @@ class TestFingerprint(TestCase):
         s = compute_fingerprint(t)
 
 
+class TestTypeOfMemCpy(TestCase):
+
+    def test_memcpy_typeof_buffer(self):
+        # https://github.com/numba/numba/issues/9097
+        from numba import njit
+        from numba.core.extending import overload
+
+        def foo():
+            pass
+
+        @overload(foo, nopython=True,)
+        def ol_foo(grid, C, points, out, k, diff, extrap_mode):
+            if C.ndim == 2:
+                def impl(grid, C, points, out, k, diff, extrap_mode):
+                    return np.zeros(points.shape[0])
+            else:
+                def impl(grid, C, points, out, k, diff, extrap_mode):
+                    return np.zeros((points.shape[0], C.shape[2]))
+
+            return impl
+
+        @njit
+        def bar(*args):
+            return foo(*args, 1, 2, 3)
+
+        grid = (np.linspace(0, 10, 11), np.linspace(0, 10, 11))
+        z1 = np.random.randn(11,11)
+        z1z2 = np.random.randn(11,11,2)
+        LINEAR = ((None,), (None,) * 2)  # a constant used for dispatching only
+
+        npoints = 300
+        eval_points = np.column_stack([np.linspace(0, 10, npoints)] * 2)
+
+        for _ in range(1000):
+            z1_eval = bar( grid,  z1,  eval_points, LINEAR )
+            # assert(z1_eval.shape == (npoints,))
+            self.assertPreciseEqual(z1_eval.shape, (npoints,))
+            z1z2_eval = bar( grid,  z1z2, eval_points,  LINEAR)
+            # assert(z1z2_eval.shape == (npoints, 2))
+            self.assertPreciseEqual(z1z2_eval.shape, (npoints, 2))
+
+
 if __name__ == '__main__':
     unittest.main()
