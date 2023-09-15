@@ -973,11 +973,11 @@ class TraceRunner(object):
             'FINALLY', state, next=inst.next, end=inst.get_jump_target(),
         )
 
-    if PYVERSION == (3, 11):
+    if PYVERSION in ((3, 11), (3, 12)):
         def op_POP_EXCEPT(self, state, inst):
             state.pop()
 
-    elif PYVERSION < (3, 11):
+    elif PYVERSION in ((3, 8), (3, 9), (3, 10)):
         def op_POP_EXCEPT(self, state, inst):
             blk = state.pop_block()
             if blk['kind'] not in {BlockKind('EXCEPT'), BlockKind('FINALLY')}:
