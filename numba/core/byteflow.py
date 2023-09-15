@@ -973,7 +973,7 @@ class TraceRunner(object):
             'FINALLY', state, next=inst.next, end=inst.get_jump_target(),
         )
 
-    if PYVERSION == (3, 11):
+    if PYVERSION >= (3, 11):
         def op_POP_EXCEPT(self, state, inst):
             state.pop()
 
