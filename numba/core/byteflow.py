@@ -1410,7 +1410,7 @@ class TraceRunner(object):
         state.fork(pc=inst.next)
         state.fork(pc=inst.get_jump_target())
 
-    if PYVERSION == (3, 11):
+    if PYVERSION in ((3, 11), (3, 12)):
         def op_RERAISE(self, state, inst):
             # This isn't handled, but the state is set up anyway
             exc = state.pop()
@@ -1422,7 +1422,8 @@ class TraceRunner(object):
                 self._adjust_except_stack(state)
             else:
                 state.terminate()
-    elif PYVERSION < (3, 11):
+
+    elif PYVERSION in ((3, 8), (3, 9), (3, 10)):
         def op_RERAISE(self, state, inst):
             # This isn't handled, but the state is set up anyway
             exc = state.pop()
