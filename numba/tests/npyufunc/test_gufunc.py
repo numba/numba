@@ -2,7 +2,6 @@ import unittest
 import pickle
 
 import numpy as np
-import numpy.core.umath_tests as ut
 
 from numba import void, float32, int64, jit, guvectorize
 from numba.np.ufunc import GUVectorize
@@ -33,7 +32,7 @@ class TestGUFunc(TestCase):
         B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(matrix_ct, 4, 5)
 
         C = gufunc(A, B)
-        Gold = ut.matrix_multiply(A, B)
+        Gold = np.matmul(A, B)
 
         np.testing.assert_allclose(C, Gold, rtol=1e-5, atol=1e-8)
 
@@ -108,7 +107,7 @@ class TestDynamicGUFunc(TestCase):
     def test_dynamic_matmul(self):
 
         def check_matmul_gufunc(gufunc, A, B, C):
-            Gold = ut.matrix_multiply(A, B)
+            Gold = np.matmul(A, B)
             gufunc(A, B, C)
             np.testing.assert_allclose(C, Gold, rtol=1e-5, atol=1e-8)
 
@@ -489,7 +488,7 @@ class TestGUVectorizeJit(TestCase):
         y = np.int32(100)
         res = np.zeros_like(x)
         jit_add(x, y, res)
-        self.assertPreciseEqual(res, x+y)
+        self.assertPreciseEqual(res, x + y)
 
     def test_add_static(self):
         @guvectorize('int64[:], int64, int64[:]', '(n),()->(n)',
@@ -534,7 +533,7 @@ class TestGUVectorizeJit(TestCase):
         C = np.arange(matrix_ct * 2 * 5, dtype=np.float32).reshape(matrix_ct, 2, 5)
 
         jit_func(A, B, C)
-        Gold = ut.matrix_multiply(A, B)
+        Gold = np.matmul(A, B)
 
         np.testing.assert_allclose(C, Gold, rtol=1e-5, atol=1e-8)
 
