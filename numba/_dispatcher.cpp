@@ -43,20 +43,21 @@ call_trace(Py_tracefunc func, PyObject *obj,
            PyThreadState *tstate, PyFrameObject *frame,
            int what, PyObject *arg)
 {
-    int result;
-    if (tstate->tracing) {
-        return 0;
-    }
-    if (frame == NULL) {
-        return -1;
-    }
-    int old_what = tstate->tracing_what;
-    tstate->tracing_what = what;
-    PyThreadState_EnterTracing(tstate);
-    result = func(obj, frame, what, NULL);
-    PyThreadState_LeaveTracing(tstate);
-    tstate->tracing_what = old_what;
-    return result;
+    //int result;
+    //if (tstate->tracing) {
+    //    return 0;
+    //}
+    //if (frame == NULL) {
+    //    return -1;
+    //}
+    //int old_what = tstate->tracing_what;
+    //tstate->tracing_what = what;
+    //PyThreadState_EnterTracing(tstate);
+    //result = func(obj, frame, what, NULL);
+    //PyThreadState_LeaveTracing(tstate);
+    //tstate->tracing_what = old_what;
+    //return result;
+    return 0;
 }
 
 /*
@@ -655,7 +656,8 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
      * it's now baked into ThreadState.
      * https://github.com/python/cpython/pull/26623
      */
-    if (tstate->cframe->use_tracing && tstate->c_profilefunc)
+    //if (tstate->cframe->use_tracing && tstate->c_profilefunc)
+    if (tstate->c_profilefunc)
 #elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 10)
     /*
      * On Python 3.10+ trace_info comes from somewhere up in PyFrameEval et al,
