@@ -489,6 +489,7 @@ def return_false(a):
 
 
 @overload(np.min)
+@overload(np.amin)
 @overload_method(types.Array, "min")
 def npy_min(a):
     if not isinstance(a, types.Array):
@@ -538,6 +539,7 @@ def npy_min(a):
 
 
 @overload(np.max)
+@overload(np.amax)
 @overload_method(types.Array, "max")
 def npy_max(a):
     if not isinstance(a, types.Array):
@@ -652,20 +654,20 @@ def array_argmin_impl_generic(arry):
 
 @overload(np.argmin)
 @overload_method(types.Array, "argmin")
-def array_argmin(arr, axis=None):
-    if isinstance(arr.dtype, (types.NPDatetime, types.NPTimedelta)):
+def array_argmin(a, axis=None):
+    if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
         flatten_impl = array_argmin_impl_datetime
-    elif isinstance(arr.dtype, types.Float):
+    elif isinstance(a.dtype, types.Float):
         flatten_impl = array_argmin_impl_float
     else:
         flatten_impl = array_argmin_impl_generic
 
     if is_nonelike(axis):
-        def array_argmin_impl(arr, axis=None):
-            return flatten_impl(arr)
+        def array_argmin_impl(a, axis=None):
+            return flatten_impl(a)
     else:
         array_argmin_impl = build_argmax_or_argmin_with_axis_impl(
-            arr, axis, flatten_impl
+            a, axis, flatten_impl
         )
     return array_argmin_impl
 
@@ -732,7 +734,7 @@ def array_argmax_impl_generic(arry):
     return max_idx
 
 
-def build_argmax_or_argmin_with_axis_impl(arr, axis, flatten_impl):
+def build_argmax_or_argmin_with_axis_impl(a, axis, flatten_impl):
     """
     Given a function that implements the logic for handling a flattened
     array, return the implementation function.
@@ -740,31 +742,31 @@ def build_argmax_or_argmin_with_axis_impl(arr, axis, flatten_impl):
     check_is_integer(axis, "axis")
     retty = types.intp
 
-    tuple_buffer = tuple(range(arr.ndim))
+    tuple_buffer = tuple(range(a.ndim))
 
-    def impl(arr, axis=None):
+    def impl(a, axis=None):
         if axis < 0:
-            axis = arr.ndim + axis
+            axis = a.ndim + axis
 
-        if axis < 0 or axis >= arr.ndim:
+        if axis < 0 or axis >= a.ndim:
             raise ValueError("axis is out of bounds")
 
         # Short circuit 1-dimensional arrays:
-        if arr.ndim == 1:
-            return flatten_impl(arr)
+        if a.ndim == 1:
+            return flatten_impl(a)
 
         # Make chosen axis the last axis:
         tmp = tuple_buffer
-        for i in range(axis, arr.ndim - 1):
+        for i in range(axis, a.ndim - 1):
             tmp = tuple_setitem(tmp, i, i + 1)
-        transpose_index = tuple_setitem(tmp, arr.ndim - 1, axis)
-        transposed_arr = arr.transpose(transpose_index)
+        transpose_index = tuple_setitem(tmp, a.ndim - 1, axis)
+        transposed_arr = a.transpose(transpose_index)
 
         # Flatten along that axis; since we've transposed, we can just get
         # batches off the overall flattened array.
         m = transposed_arr.shape[-1]
         raveled = transposed_arr.ravel()
-        assert raveled.size == arr.size
+        assert raveled.size == a.size
         assert transposed_arr.size % m == 0
         out = np.empty(transposed_arr.size // m, retty)
         for i in range(out.size):
@@ -778,20 +780,20 @@ def build_argmax_or_argmin_with_axis_impl(arr, axis, flatten_impl):
 
 @overload(np.argmax)
 @overload_method(types.Array, "argmax")
-def array_argmax(arr, axis=None):
-    if isinstance(arr.dtype, (types.NPDatetime, types.NPTimedelta)):
+def array_argmax(a, axis=None):
+    if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
         flatten_impl = array_argmax_impl_datetime
-    elif isinstance(arr.dtype, types.Float):
+    elif isinstance(a.dtype, types.Float):
         flatten_impl = array_argmax_impl_float
     else:
         flatten_impl = array_argmax_impl_generic
 
     if is_nonelike(axis):
-        def array_argmax_impl(arr, axis=None):
-            return flatten_impl(arr)
+        def array_argmax_impl(a, axis=None):
+            return flatten_impl(a)
     else:
         array_argmax_impl = build_argmax_or_argmin_with_axis_impl(
-            arr, axis, flatten_impl
+            a, axis, flatten_impl
         )
     return array_argmax_impl
 
@@ -915,16 +917,16 @@ def np_any(a):
 
 
 @overload(np.average)
-def np_average(arr, axis=None, weights=None):
+def np_average(a, axis=None, weights=None):
 
     if weights is None or isinstance(weights, types.NoneType):
-        def np_average_impl(arr, axis=None, weights=None):
-            arr = np.asarray(arr)
+        def np_average_impl(a, axis=None, weights=None):
+            arr = np.asarray(a)
             return np.mean(arr)
     else:
         if axis is None or isinstance(axis, types.NoneType):
-            def np_average_impl(arr, axis=None, weights=None):
-                arr = np.asarray(arr)
+            def np_average_impl(a, axis=None, weights=None):
+                arr = np.asarray(a)
                 weights = np.asarray(weights)
 
                 if arr.shape != weights.shape:
@@ -945,7 +947,7 @@ def np_average(arr, axis=None, weights=None):
                 avg = np.sum(np.multiply(arr, weights)) / scl
                 return avg
         else:
-            def np_average_impl(arr, axis=None, weights=None):
+            def np_average_impl(a, axis=None, weights=None):
                 raise TypeError("Numba does not support average with axis.")
 
     return np_average_impl
@@ -1011,10 +1013,10 @@ def isrealobj(x):
 
 
 @overload(np.isscalar)
-def np_isscalar(num):
-    res = type_is_scalar(num)
+def np_isscalar(element):
+    res = type_is_scalar(element)
 
-    def impl(num):
+    def impl(element):
         return res
     return impl
 
@@ -3138,6 +3140,7 @@ def round_ndigits(x, ndigits):
 
 @overload(np.around)
 @overload(np.round)
+@overload(np.round_)
 def impl_np_round(a, decimals=0, out=None):
     if not type_can_asarray(a):
         raise TypingError('The argument "a" must be array-like')
@@ -3419,17 +3422,17 @@ def ov_np_where_x_y(condition, x, y):
 
 
 @overload(np.real)
-def np_real(a):
-    def np_real_impl(a):
-        return a.real
+def np_real(val):
+    def np_real_impl(val):
+        return val.real
 
     return np_real_impl
 
 
 @overload(np.imag)
-def np_imag(a):
-    def np_imag_impl(a):
-        return a.imag
+def np_imag(val):
+    def np_imag_impl(val):
+        return val.imag
 
     return np_imag_impl
 
@@ -3452,18 +3455,18 @@ def np_contains(arr, key):
 
 
 @overload(np.count_nonzero)
-def np_count_nonzero(arr, axis=None):
-    if not type_can_asarray(arr):
+def np_count_nonzero(a, axis=None):
+    if not type_can_asarray(a):
         raise TypingError("The argument to np.count_nonzero must be array-like")
 
     if is_nonelike(axis):
-        def impl(arr, axis=None):
-            arr2 = np.ravel(arr)
+        def impl(a, axis=None):
+            arr2 = np.ravel(a)
             return np.sum(arr2 != 0)
         return impl
     else:
-        def impl(arr, axis=None):
-            arr2 = arr.astype(np.bool_)
+        def impl(a, axis=None):
+            arr2 = a.astype(np.bool_)
             return np.sum(arr2, axis=axis)
         return impl
 
@@ -3559,20 +3562,20 @@ def np_diff_impl(a, n=1):
 
 
 @overload(np.array_equal)
-def np_array_equal(a, b):
+def np_array_equal(a1, a2):
 
-    if not (type_can_asarray(a) and type_can_asarray(b)):
+    if not (type_can_asarray(a1) and type_can_asarray(a2)):
         raise TypingError('Both arguments to "array_equals" must be array-like')
 
     accepted = (types.Boolean, types.Number)
-    if isinstance(a, accepted) and isinstance(b, accepted):
+    if isinstance(a1, accepted) and isinstance(a2, accepted):
         # special case
-        def impl(a, b):
-            return a == b
+        def impl(a1, a2):
+            return a1 == a2
     else:
-        def impl(a, b):
-            a = np.asarray(a)
-            b = np.asarray(b)
+        def impl(a1, a2):
+            a = np.asarray(a1)
+            b = np.asarray(a2)
             if a.shape == b.shape:
                 return np.all(a == b)
             return False
@@ -4019,7 +4022,6 @@ def _gen_np_machar():
     if numpy_version >= (1, 24):
         return
 
-    np122plus = numpy_version >= (1, 22)
     w = None
     with warnings.catch_warnings(record=True) as w:
         msg = r'`np.MachAr` is deprecated \(NumPy 1.22\)'
@@ -4033,7 +4035,7 @@ def _gen_np_machar():
         f = np_MachAr()
         _mach_ar_data = tuple([getattr(f, x) for x in _mach_ar_supported])
 
-        if np122plus and w:
+        if w:
             wmsg = w[0]
             warnings.warn_explicit(wmsg.message.args[0],
                                    NumbaDeprecationWarning,
@@ -4048,25 +4050,38 @@ def _gen_np_machar():
 _gen_np_machar()
 
 
-def generate_xinfo(np_func, container, attr):
-    @overload(np_func)
-    def xinfo_impl(arg):
-        nbty = getattr(arg, 'dtype', arg)
-        np_dtype = as_dtype(nbty)
-        try:
-            f = np_func(np_dtype)
-        except ValueError: # This exception instance comes from NumPy
-            # The np function might not support the dtype
-            return None
-        data = tuple([getattr(f, x) for x in attr])
+def generate_xinfo_body(arg, np_func, container, attr):
+    nbty = getattr(arg, 'dtype', arg)
+    np_dtype = as_dtype(nbty)
+    try:
+        f = np_func(np_dtype)
+    except ValueError: # This exception instance comes from NumPy
+        # The np function might not support the dtype
+        return None
+    data = tuple([getattr(f, x) for x in attr])
 
-        def impl(arg):
-            return container(*data)
-        return impl
+    @register_jitable
+    def impl(arg):
+        return container(*data)
+    return impl
 
 
-generate_xinfo(np.finfo, finfo, _finfo_supported)
-generate_xinfo(np.iinfo, iinfo, _iinfo_supported)
+@overload(np.finfo)
+def ol_np_finfo(dtype):
+    fn = generate_xinfo_body(dtype, np.finfo, finfo, _finfo_supported)
+
+    def impl(dtype):
+        return fn(dtype)
+    return impl
+
+
+@overload(np.iinfo)
+def ol_np_iinfo(int_type):
+    fn = generate_xinfo_body(int_type, np.iinfo, iinfo, _iinfo_supported)
+
+    def impl(int_type):
+        return fn(int_type)
+    return impl
 
 
 def _get_inner_prod(dta, dtb):
@@ -4398,16 +4413,16 @@ def np_select(condlist, choicelist, default=0):
 
 
 @overload(np.union1d)
-def np_union1d(arr1, arr2):
-    if not type_can_asarray(arr1) or not type_can_asarray(arr2):
+def np_union1d(ar1, ar2):
+    if not type_can_asarray(ar1) or not type_can_asarray(ar2):
         raise TypingError("The arguments to np.union1d must be array-like")
-    if (('unichr' in arr1.dtype.name or 'unichr' in arr2.dtype.name) and
-       arr1.dtype.name != arr2.dtype.name):
+    if (('unichr' in ar1.dtype.name or 'unichr' in ar2.dtype.name) and
+       ar1.dtype.name != ar2.dtype.name):
         raise TypingError("For Unicode arrays, arrays must have same dtype")
 
-    def union_impl(arr1, arr2):
-        a = np.ravel(np.asarray(arr1))
-        b = np.ravel(np.asarray(arr2))
+    def union_impl(ar1, ar2):
+        a = np.ravel(np.asarray(ar1))
+        b = np.ravel(np.asarray(ar2))
         return np.unique(np.concatenate((a, b)))
 
     return union_impl
@@ -4720,5 +4735,38 @@ def cross2d_impl(a, b):
                 "(dimension must be 2 for both inputs)"
             ))
         return _cross2d_operation(a_, b_)
+
+    return impl
+
+
+@overload(np.trim_zeros)
+def np_trim_zeros(filt, trim='fb'):
+    if not isinstance(filt, types.Array):
+        raise NumbaTypeError('The first argument must be an array')
+
+    if filt.ndim > 1:
+        raise NumbaTypeError('array must be 1D')
+
+    if not isinstance(trim, (str, types.UnicodeType)):
+        raise NumbaTypeError('The second argument must be a string')
+
+    def impl(filt, trim='fb'):
+        a_ = np.asarray(filt)
+        first = 0
+        trim = trim.lower()
+        if 'f' in trim:
+            for i in a_:
+                if i != 0:
+                    break
+                else:
+                    first = first + 1
+        last = len(filt)
+        if 'b' in trim:
+            for i in a_[::-1]:
+                if i != 0:
+                    break
+                else:
+                    last = last - 1
+        return a_[first:last]
 
     return impl

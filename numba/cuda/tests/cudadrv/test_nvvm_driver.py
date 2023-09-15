@@ -13,12 +13,8 @@ is64bit = sizeof(c_size_t) == sizeof(c_uint64)
 @skip_on_cudasim('NVVM Driver unsupported in the simulator')
 class TestNvvmDriver(unittest.TestCase):
     def get_nvvmir(self):
-        if NVVM().is_nvvm70:
-            versions = NVVM().get_ir_version()
-            metadata = metadata_nvvm70 % versions
-        else:
-            metadata = metadata_nvvm34
-
+        versions = NVVM().get_ir_version()
+        metadata = metadata_nvvm70 % versions
         data_layout = NVVM().data_layout
 
         return nvvmir_generic.format(data_layout=data_layout, metadata=metadata)

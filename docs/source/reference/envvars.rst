@@ -299,7 +299,16 @@ Compilation options
 
 .. envvar:: NUMBA_OPT
 
-   The optimization level; this option is passed straight to LLVM.
+   The optimization level; typically this option is passed straight to LLVM. It
+   may take one of the values ``0``, ``1``, ``2`` or ``3`` which correspond
+   approximately to the ``-O{value}`` flag found in many command line
+   compilation tools. The value ``max`` is also supported, this is Numba
+   specific, it has the effect of running with the optimization level set at
+   ``3`` both before and after a pass which in which reference count operation
+   pruning takes place. In some cases this may increase performance, in other
+   cases it may impede performance, the same can be said for compilation time.
+   This option is present to give users the opportunity to choose a value
+   suitable for their application.
 
    *Default value:* 3
 
@@ -307,7 +316,7 @@ Compilation options
 
    If set to non-zero, enable LLVM loop vectorization.
 
-   *Default value:* 1 (except on 32-bit Windows)
+   *Default value:* 1
 
 .. envvar:: NUMBA_SLP_VECTORIZE
 
@@ -405,6 +414,14 @@ Compilation options
 
     *Default value:* "all"
 
+.. envvar:: NUMBA_USE_RVSDG_FRONTEND
+
+   Turns on the experimental RVSDG frontend. It depends on the ``numba-rvsdg`` 
+   package and only supports Python 3.11 partially. 
+   This option will be removed when the RVSDG frontend fully replaces the 
+   old frontend.
+
+   *Default value:* 0 (Off)
 
 .. _numba-envvars-caching:
 

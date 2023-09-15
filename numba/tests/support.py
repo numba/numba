@@ -32,6 +32,7 @@ import numpy as np
 
 from numba import testing, types
 from numba.core import errors, typing, utils, config, cpu
+from numba.core.typing import cffi_utils
 from numba.core.compiler import (compile_extra, compile_isolated, Flags,
                                  DEFAULT_FLAGS, CompilerBase,
                                  DefaultPassBuilder)
@@ -108,6 +109,8 @@ def expected_failure_py311(fn):
 
 _msg = "SciPy needed for test"
 skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
+
+skip_unless_cffi = unittest.skipUnless(cffi_utils.SUPPORTED, 'requires cffi')
 
 _lnx_reason = 'linux only test'
 linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)

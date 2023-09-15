@@ -10,14 +10,13 @@ import typing as py_typing
 import numpy as np
 
 import unittest
-import numba.core.typing.cffi_utils as cffi_support
 from numba.core import types
 from numba.core.errors import NumbaValueError, NumbaTypeError
 from numba.misc.special import typeof
 from numba.core.dispatcher import OmittedArg
 from numba._dispatcher import compute_fingerprint
 
-from numba.tests.support import TestCase, tag
+from numba.tests.support import TestCase, skip_unless_cffi, tag
 from numba.tests.test_numpy_support import ValueTypingTestBase
 from numba.tests.ctypes_usecases import *
 from numba.tests.enum_usecases import *
@@ -282,7 +281,7 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         self.assertNotEqual(ty_cos.get_pointer(c_cos),
                             ty_sin.get_pointer(c_sin))
 
-    @unittest.skipUnless(cffi_support.SUPPORTED, "CFFI not supported")
+    @skip_unless_cffi
     def test_cffi(self):
         from numba.tests import cffi_usecases as mod
         mod.init()

@@ -578,7 +578,11 @@ class Dispatcher(WeakType, Callable, Dummy):
 
     def can_convert_to(self, typingctx, other):
         if isinstance(other, types.FunctionType):
-            if self.dispatcher.get_compile_result(other.signature):
+            try:
+                self.dispatcher.get_compile_result(other.signature)
+            except errors.NumbaError:
+                return None
+            else:
                 return Conversion.safe
 
 

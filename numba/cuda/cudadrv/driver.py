@@ -35,12 +35,12 @@ from numba.core import utils, serialize, config
 from .error import CudaSupportError, CudaDriverError
 from .drvapi import API_PROTOTYPES
 from .drvapi import cu_occupancy_b2d_size, cu_stream_callback_pyobj, cu_uuid
-from numba.cuda.cudadrv import enums, drvapi, _extras
+from numba.cuda.cudadrv import enums, drvapi, nvrtc, _extras
 
 USE_NV_BINDING = config.CUDA_USE_NVIDIA_BINDING
 
 if USE_NV_BINDING:
-    from cuda import cuda as binding, nvrtc
+    from cuda import cuda as binding
     # There is no definition of the default stream in the Nvidia bindings (nor
     # is there at the C/C++ level), so we define it here so we don't need to
     # use a magic number 0 in places where we want the default stream.
@@ -85,10 +85,6 @@ class DeadMemoryError(RuntimeError):
 
 
 class LinkerError(RuntimeError):
-    pass
-
-
-class NvrtcError(RuntimeError):
     pass
 
 
@@ -2624,10 +2620,23 @@ class Linker(metaclass=ABCMeta):
     def add_ptx(self, ptx, name):
         """Add PTX source in a string to the link"""
 
-    @abstractmethod
     def add_cu(self, cu, name):
         """Add CUDA source in a string to the link. The name of the source
         file should be specified in `name`."""
+        with driver.get_active_context() as ac:
+            dev = driver.get_device(ac.devnum)
+            cc = dev.compute_capability
+
+        ptx, log = nvrtc.compile(cu, name, cc)
+
+        if config.DUMP_ASSEMBLY:
+            print(("ASSEMBLY %s" % name).center(80, '-'))
+            print(ptx)
+            print('=' * 80)
+
+        # Link the program's PTX using the normal linker mechanism
+        ptx_name = os.path.splitext(name)[0] + ".ptx"
+        self.add_ptx(ptx.encode(), ptx_name)
 
     @abstractmethod
     def add_file(self, path, kind):
@@ -2742,18 +2751,6 @@ class MVCLinker(Linker):
         except CubinLinkerError as e:
             raise LinkerError from e
 
-    def add_cu(self, cu, name):
-        program = NvrtcProgram(cu, name)
-
-        if config.DUMP_ASSEMBLY:
-            print(("ASSEMBLY %s" % name).center(80, '-'))
-            print(program.ptx.decode())
-            print('=' * 80)
-
-        # Link the program's PTX using the normal linker mechanism
-        ptx_name = os.path.splitext(name)[0] + ".ptx"
-        self.add_ptx(program.ptx.rstrip(b'\x00'), ptx_name)
-
     def complete(self):
         try:
             from cubinlinker import CubinLinkerError
@@ -2842,10 +2839,6 @@ class CtypesLinker(Linker):
                 msg = "%s\n%s" % (e, self.error_log)
             raise LinkerError(msg)
 
-    def add_cu(self, path, name):
-        raise NotImplementedError("Linking CUDA source files is not supported "
-                                  "with the ctypes binding. ")
-
     def complete(self):
         cubin_buf = c_void_p(0)
         size = c_size_t(0)
@@ -2862,89 +2855,6 @@ class CtypesLinker(Linker):
         # We return a copy of the cubin because it's owned by the linker
         cubin_ptr = ctypes.cast(cubin_buf, ctypes.POINTER(ctypes.c_char))
         return bytes(np.ctypeslib.as_array(cubin_ptr, shape=(size,)))
-
-
-class NvrtcProgram:
-    """NvrtcProgram is for the managing the lifetime of nvrtcProgram objects.
-
-    If an error occurs during an NVRTC call, an exception is raised. When an
-    instance of this class is deleted, it attempts to delete the underlying
-    nvrtcProgram."""
-
-    def __init__(self, src, name):
-        # Create an nvrtcProgram
-        err, program = nvrtc.nvrtcCreateProgram(src, name.encode(), 0, [], [])
-        self.check(err)
-        self._program = program
-
-        with driver.get_active_context() as ac:
-            dev = driver.get_device(ac.devnum)
-            major, minor = dev.compute_capability
-
-        # Compilation options:
-        # - Compile for the current device's compute capability.
-        # - The CUDA include path is added.
-        # - Relocatable Device Code (rdc) is needed to prevent device functions
-        #   being optimized away.
-        arch = f'--gpu-architecture=compute_{major}{minor}'.encode()
-        include = f'-I{config.CUDA_INCLUDE_PATH}'.encode()
-        opts = [arch, include, b'-rdc', b'true']
-
-        # Compile the program
-        err, = nvrtc.nvrtcCompileProgram(self._program, len(opts), opts)
-
-        # First check whether the call failed due to a "normal" compiler error
-        compile_error = (err == nvrtc.nvrtcResult.NVRTC_ERROR_COMPILATION)
-        if not compile_error:
-            # Check for any other error
-            self.check(err)
-
-        # Get log from compilation
-        err, log_size = nvrtc.nvrtcGetProgramLogSize(self._program)
-        self.check(err)
-        log = b' ' * log_size
-        err, = nvrtc.nvrtcGetProgramLog(self._program, log)
-        self.check(err)
-
-        # If the compile failed, provide the log in an exception
-        if compile_error:
-            msg = (f'NVRTC Compilation failure whilst compiling {name}:\n\n'
-                   f'{log.decode()}')
-            raise NvrtcError(msg)
-
-        # Otherwise, if there's any content in the log, present it as a warning
-        if log_size > 1:
-            msg = (f"NVRTC log messages whilst compiling {name}:\n\n"
-                   f"{log.decode()}")
-            warnings.warn(msg)
-
-        # Get and cache the PTX
-        err, ptx_len = nvrtc.nvrtcGetPTXSize(self._program)
-        self.check(err)
-        ptx = b' ' * ptx_len
-        err, = nvrtc.nvrtcGetPTX(self._program, ptx)
-        self.check(err)
-
-        self._ptx = ptx
-
-    def __del__(self):
-        if self._program:
-            err, = nvrtc.nvrtcDestroyProgram(self._program)
-            self.check(err)
-
-    @property
-    def ptx(self):
-        return self._ptx
-
-    def check(self, err):
-        if isinstance(err, binding.CUresult):
-            if err != binding.CUresult.CUDA_SUCCESS:
-                raise RuntimeError('CUDA Error calling NVRTC: {}'.format(err))
-        elif isinstance(err, nvrtc.nvrtcResult):
-            if err != nvrtc.nvrtcResult.NVRTC_SUCCESS:
-                raise RuntimeError('NVRTC Error: {}'.format(err))
-        else:
-            raise RuntimeError('Unknown error type: {}'.format(err))
 
 
 class CudaPythonLinker(Linker):
@@ -3008,18 +2918,6 @@ class CudaPythonLinker(Linker):
                                  namebuf, 0, [], [])
         except CudaAPIError as e:
             raise LinkerError("%s\n%s" % (e, self.error_log))
-
-    def add_cu(self, cu, name):
-        program = NvrtcProgram(cu, name)
-
-        if config.DUMP_ASSEMBLY:
-            print(("ASSEMBLY %s" % name).center(80, '-'))
-            print(program.ptx.decode())
-            print('=' * 80)
-
-        # Link the program's PTX using the normal linker mechanism
-        ptx_name = os.path.splitext(name)[0] + ".ptx"
-        self.add_ptx(program.ptx, ptx_name)
 
     def add_file(self, path, kind):
         pathbuf = path.encode("utf8")
