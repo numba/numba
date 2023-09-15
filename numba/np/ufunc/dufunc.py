@@ -4,16 +4,15 @@ from numba import jit, typeof
 from numba.core import cgutils, types, serialize, sigutils
 from numba.core.extending import is_jitted
 from numba.core.typing import npydecl
-from numba.core.typing.templates import AbstractTemplate, signature
+from numba.core.typing.templates import signature
 from numba.np.ufunc import _internal
+from numba.np.ufunc.ufunc_base import UfuncBase, UfuncLowererBase
 from numba.parfors import array_analysis
 from numba.np.ufunc import ufuncbuilder
-from numba.np import numpy_support
+from numba.np import numpy_support, npyimpl
 
 
 def make_dufunc_kernel(_dufunc):
-    from numba.np import npyimpl
-
     class DUFuncKernel(npyimpl._Kernel):
         """
         npyimpl._Kernel subclass responsible for lowering a DUFunc kernel
@@ -23,7 +22,7 @@ def make_dufunc_kernel(_dufunc):
         dufunc = _dufunc
 
         def __init__(self, context, builder, outer_sig):
-            super(DUFuncKernel, self).__init__(context, builder, outer_sig)
+            super().__init__(context, builder, outer_sig)
             self.inner_sig, self.cres = self.dufunc.find_ewise_function(
                 outer_sig.args)
 
@@ -54,21 +53,16 @@ def make_dufunc_kernel(_dufunc):
     return DUFuncKernel
 
 
-class DUFuncLowerer(object):
+class DUFuncLowerer(UfuncLowererBase):
     '''Callable class responsible for lowering calls to a specific DUFunc.
     '''
     def __init__(self, dufunc):
-        self.kernel = make_dufunc_kernel(dufunc)
-        self.libs = []
-
-    def __call__(self, context, builder, sig, args):
-        from numba.np import npyimpl
-        return npyimpl.numpy_ufunc_kernel(context, builder, sig, args,
-                                          self.kernel.dufunc.ufunc,
-                                          self.kernel)
+        super().__init__(dufunc,
+                         make_dufunc_kernel,
+                         npyimpl.numpy_ufunc_kernel)
 
 
-class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
+class DUFunc(serialize.ReduceMixin, _internal._DUFunc, UfuncBase):
     """
     Dynamic universal function (DUFunc) intended to act like a normal
     Numpy ufunc, but capable of call-time (just-in-time) compilation
@@ -93,11 +87,11 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
         super(DUFunc, self).__init__(dispatcher, identity=identity)
         # Loop over a copy of the keys instead of the keys themselves,
         # since we're changing the dictionary while looping.
-        self._install_type()
-        self._lower_me = DUFuncLowerer(self)
-        self._install_cg()
         self.__name__ = dispatcher.py_func.__name__
         self.__doc__ = dispatcher.py_func.__doc__
+        self._lower_me = DUFuncLowerer(self)
+        self._install_cg()
+        self._install_type()
 
     def _reduce_states(self):
         """
@@ -134,30 +128,6 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
     @property
     def targetoptions(self):
         return self._dispatcher.targetoptions
-
-    @property
-    def nin(self):
-        return self.ufunc.nin
-
-    @property
-    def nout(self):
-        return self.ufunc.nout
-
-    @property
-    def nargs(self):
-        return self.ufunc.nargs
-
-    @property
-    def ntypes(self):
-        return self.ufunc.ntypes
-
-    @property
-    def types(self):
-        return self.ufunc.types
-
-    @property
-    def identity(self):
-        return self.ufunc.identity
 
     def disable_compile(self):
         """
@@ -231,39 +201,8 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
         self._lower_me.libs.append(cres.library)
         return cres
 
-    def _install_type(self, typingctx=None):
-        """Constructs and installs a typing class for a DUFunc object in the
-        input typing context.  If no typing context is given, then
-        _install_type() installs into the typing context of the
-        dispatcher object (should be same default context used by
-        jit() and njit()).
-        """
-        if typingctx is None:
-            typingctx = self._dispatcher.targetdescr.typing_context
-        _ty_cls = type('DUFuncTyping_' + self.ufunc.__name__,
-                       (AbstractTemplate,),
-                       dict(key=self, generic=self._type_me))
-        typingctx.insert_user_function(self, _ty_cls)
-
-    def find_ewise_function(self, ewise_types):
-        """
-        Given a tuple of element-wise argument types, find a matching
-        signature in the dispatcher.
-
-        Return a 2-tuple containing the matching signature, and
-        compilation result.  Will return two None's if no matching
-        signature was found.
-        """
-        if self._frozen:
-            # If we cannot compile, coerce to the best matching loop
-            loop = numpy_support.ufunc_find_matching_loop(self, ewise_types)
-            if loop is None:
-                return None, None
-            ewise_types = tuple(loop.inputs + loop.outputs)[:len(ewise_types)]
-        for sig, cres in self._dispatcher.overloads.items():
-            if sig.args == ewise_types:
-                return sig, cres
-        return None, None
+    def match_signature(self, ewise_types, sig):
+        return sig.args == ewise_types
 
     def _type_me(self, argtys, kwtys):
         """
@@ -304,24 +243,6 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
             raise NotImplementedError("typing gufuncs (nout > 1)")
         outtys.extend(argtys)
         return signature(*outtys)
-
-    def _install_cg(self, targetctx=None):
-        """
-        Install an implementation function for a DUFunc object in the
-        given target context.  If no target context is given, then
-        _install_cg() installs into the target context of the
-        dispatcher object (should be same default context used by
-        jit() and njit()).
-        """
-        if targetctx is None:
-            targetctx = self._dispatcher.targetdescr.target_context
-        _any = types.Any
-        _arr = types.Array
-        # Either all outputs are explicit or none of them are
-        sig0 = (_any,) * self.ufunc.nin + (_arr,) * self.ufunc.nout
-        sig1 = (_any,) * self.ufunc.nin
-        targetctx.insert_func_defn(
-            [(self._lower_me, self, sig) for sig in (sig0, sig1)])
 
 
 array_analysis.MAP_TYPES.append(DUFunc)
