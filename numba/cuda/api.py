@@ -88,9 +88,9 @@ def is_cuda_array(obj):
 def is_float16_supported():
     """Whether 16-bit floats are supported.
 
-    Returns True if float16 is supported, False otherwise.
+    float16 is always supported in current versions of Numba - returns True.
     """
-    return bool(config.CUDA_USE_NVIDIA_BINDING)
+    return True
 
 
 @require_context

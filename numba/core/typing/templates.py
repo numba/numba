@@ -9,7 +9,7 @@ import inspect
 import os.path
 from collections import namedtuple
 from collections.abc import Sequence
-from types import MethodType, FunctionType
+from types import MethodType, FunctionType, MappingProxyType
 
 import numba
 from numba.core import types, utils, targetconfig
@@ -999,15 +999,18 @@ class _IntrinsicTemplate(_TemplateTargetHelperMixin, AbstractTemplate):
         return info
 
 
-def make_intrinsic_template(handle, defn, name, kwargs):
+def make_intrinsic_template(handle, defn, name, *, prefer_literal=False,
+                            kwargs=None):
     """
     Make a template class for a intrinsic handle *handle* defined by the
     function *defn*.  The *name* is used for naming the new template class.
     """
+    kwargs = MappingProxyType({} if kwargs is None else kwargs)
     base = _IntrinsicTemplate
     name = "_IntrinsicTemplate_%s" % (name)
     dct = dict(key=handle, _definition_func=staticmethod(defn),
-               _impl_cache={}, _overload_cache={}, metadata=kwargs)
+               _impl_cache={}, _overload_cache={},
+               prefer_literal=prefer_literal, metadata=kwargs)
     return type(base)(name, (base,), dct)
 
 

@@ -23,8 +23,8 @@ min_python_version = "3.8"
 max_python_version = "3.12"  # exclusive
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.21"
-min_llvmlite_version = "0.41.0dev0"
-max_llvmlite_version = "0.42"
+min_llvmlite_version = "0.42.0dev0"
+max_llvmlite_version = "0.43"
 
 if sys.platform.startswith('linux'):
     # Patch for #2555 to make wheels without libpython
@@ -402,7 +402,8 @@ metadata = dict(
         # numba gdb hook init command language file
         "numba.misc": ["cmdlang.gdb"],
         "numba.typed": ["py.typed"],
-        "numba.cuda" : ["cpp_function_wrappers.cu"]
+        "numba.cuda" : ["cpp_function_wrappers.cu", "cuda_fp16.h",
+                        "cuda_fp16.hpp"]
     },
     scripts=["bin/numba"],
     url="https://numba.pydata.org",

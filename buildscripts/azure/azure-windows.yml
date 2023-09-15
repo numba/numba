@@ -8,14 +8,14 @@ jobs:
     vmImage: ${{ parameters.vmImage }}
   strategy:
     matrix:
-      py38_np121:
+      py38_np122:
         PYTHON: '3.8'
-        NUMPY: '1.21'
+        NUMPY: '1.22.3'
         CONDA_ENV: 'testenv'
         TEST_START_INDEX: 18
-      py311_np124:
+      py311_np125:
         PYTHON: '3.11'
-        NUMPY: '1.24'
+        NUMPY: '1.25'
         CONDA_ENV: 'testenv'
         TEST_START_INDEX: 19
 
@@ -40,8 +40,8 @@ jobs:
 
     - script: |
         call activate %CONDA_ENV%
-        python -m numba.tests.test_runtests
-      displayName: 'Verify runtests'
+        python -m numba.misc.POST
+      displayName: 'Power-On-Self-Test to make sure testing will likely work'
 
     - script: |
         call activate %CONDA_ENV%

@@ -172,6 +172,14 @@ def logspace3(start, stop, num=50):
     return np.logspace(start, stop, num=num)
 
 
+def geomspace2(start, stop):
+    return np.geomspace(start, stop)
+
+
+def geomspace3(start, stop, num=50):
+    return np.geomspace(start, stop, num=num)
+
+
 def rot90(a):
     return np.rot90(a)
 
@@ -186,6 +194,18 @@ def array_split(a, indices, axis=0):
 
 def split(a, indices, axis=0):
     return np.split(a, indices, axis=axis)
+
+
+def vsplit(a, ind_or_sec):
+    return np.vsplit(a, ind_or_sec)
+
+
+def hsplit(a, ind_or_sec):
+    return np.hsplit(a, ind_or_sec)
+
+
+def dsplit(a, ind_or_sec):
+    return np.dsplit(a, ind_or_sec)
 
 
 def correlate(a, v, mode="valid"):
@@ -392,6 +412,10 @@ def np_cross(a, b):
     return np.cross(a, b)
 
 
+def np_trim_zeros(a, trim='fb'):
+    return np.trim_zeros(a, trim)
+
+
 def nb_cross2d(a, b):
     return cross2d(a, b)
 
@@ -422,6 +446,18 @@ def swapaxes(a, a1, a2):
 
 def nan_to_num(X, copy=True, nan=0.0):
     return np.nan_to_num(X, copy=copy, nan=nan)
+
+
+def np_indices(dimensions):
+    return np.indices(dimensions)
+
+
+def diagflat1(v):
+    return np.diagflat(v)
+
+
+def diagflat2(v, k=0):
+    return np.diagflat(v, k)
 
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
@@ -1860,6 +1896,41 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self._triangular_indices_from_exceptions(triu_indices_from_arr, False)
         self._triangular_indices_from_exceptions(triu_indices_from_arr_k, True)
 
+    def test_indices_basic(self):
+        pyfunc = np_indices
+        cfunc = njit(np_indices)
+
+        def inputs():
+            # Taken from https://github.com/numpy/numpy/blob/db4f43983cb938f12c311e1f5b7165e270c393b4/numpy/core/tests/test_numeric.py#L3383-L3407 # noqa: E501
+            yield (4, 3)
+            yield (4,)
+            yield (0,)
+            yield (2, 2, 3, 5)
+
+        for dims in inputs():
+            self.assertPreciseEqual(pyfunc(dims), cfunc(dims))
+
+    def test_indices_exception(self):
+        cfunc = njit(np_indices)
+
+        self.disable_leak_check()
+
+        errmsg = 'The argument "dimensions" must be a tuple of integers'
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc")
+        self.assertIn(errmsg,
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc((2.0, 3.0))
+        self.assertIn(errmsg,
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc((2, 3.0))
+        self.assertIn(errmsg,
+                      str(raises.exception))
+
     def partition_sanity_check(self, pyfunc, cfunc, a, kth):
         # as NumPy uses a different algorithm, we do not expect to
         # match outputs exactly...
@@ -3033,6 +3104,209 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertIn('The third argument "num" must be an integer',
                       str(raises.exception))
 
+    def test_geomspace2_basic(self):
+
+        def inputs():
+            #start, stop
+            yield -1, -60
+            yield 1.0, 60.0
+            yield -60.0, -1.0
+            yield 1, 1000
+            yield 1000, 1
+            yield 1, 256
+            yield -1000, -1
+            yield -1, np.complex64(2j)
+            yield np.complex64(2j), -1
+            yield -1.0, np.complex64(2j)
+            yield np.complex64(1j), np.complex64(1000j)
+            yield np.complex64(-1 + 0j), np.complex64(1 + 0j)
+            yield np.complex64(1), np.complex64(2)
+            yield np.complex64(2j), np.complex64(4j)
+            yield np.complex64(2), np.complex64(4j)
+            yield np.complex64(1 + 2j), np.complex64(3 + 4j)
+            yield np.complex64(1 - 2j), np.complex64(3 - 4j)
+            yield np.complex64(-1 + 2j), np.complex64(3 + 4j)
+
+        pyfunc = geomspace2
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for start, stop in inputs():
+            self.assertPreciseEqual(pyfunc(start, stop),
+                                    cfunc(start, stop),
+                                    abs_tol=1e-12)
+
+    def test_geomspace2_exception(self):
+        cfunc = jit(nopython=True)(geomspace2)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc", 5)
+        self.assertIn('The argument "start" must be a number',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(5, "abc")
+        self.assertIn('The argument "stop" must be a number',
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(0, 5)
+        self.assertIn('Geometric sequence cannot include zero',
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(5, 0)
+        self.assertIn('Geometric sequence cannot include zero',
+                      str(raises.exception))
+
+    def test_geomspace3_basic(self):
+
+        def inputs():
+            #start, stop, num
+            yield -1, -60, 50
+            yield 1.0, 60.0, 70
+            yield -60.0, -1.0, 80
+            yield 1, 1000, 4
+            yield 1, 1000, 3
+            yield 1000, 1, 4
+            yield 1, 256, 9
+            yield -1000, -1, 4
+            yield -1, np.complex64(2j), 10
+            yield np.complex64(2j), -1, 20
+            yield -1.0, np.complex64(2j), 30
+            yield np.complex64(1j), np.complex64(1000j), 4
+            yield np.complex64(-1 + 0j), np.complex64(1 + 0j), 5
+            yield np.complex64(1), np.complex64(2), 40
+            yield np.complex64(2j), np.complex64(4j), 50
+            yield np.complex64(2), np.complex64(4j), 60
+            yield np.complex64(1 + 2j), np.complex64(3 + 4j), 70
+            yield np.complex64(1 - 2j), np.complex64(3 - 4j), 80
+            yield np.complex64(-1 + 2j), np.complex64(3 + 4j), 90
+
+        pyfunc = geomspace3
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for start, stop, num in inputs():
+            self.assertPreciseEqual(pyfunc(start, stop, num),
+                                    cfunc(start, stop, num),
+                                    abs_tol=1e-14)
+
+    def test_geomspace3_exception(self):
+        cfunc = jit(nopython=True)(geomspace3)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc", 5, 10)
+        self.assertIn('The argument "start" must be a number',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(5, "abc", 10)
+        self.assertIn('The argument "stop" must be a number',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(5, 10, "abc")
+        self.assertIn('The argument "num" must be an integer',
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(0, 5, 5)
+        self.assertIn('Geometric sequence cannot include zero',
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(5, 0, 5)
+        self.assertIn('Geometric sequence cannot include zero',
+                      str(raises.exception))
+
+    def test_geomspace_numpy(self):
+        cfunc2 = jit(nopython=True)(geomspace2)
+        cfunc3 = jit(nopython=True)(geomspace3)
+        pfunc3 = geomspace3
+
+        # https://github.com/numpy/numpy/blob/ab2178b47c0ee834180c318db196976623710691/numpy/core/tests/test_function_base.py#L122C3-L142
+        # test_basic
+        y = cfunc2(1, 1e6)
+        self.assertEqual(len(y), 50)
+        y = cfunc3(1, 1e6, num=100)
+        self.assertEqual(y[-1], 10 ** 6)
+        y = cfunc3(1, 1e6, num=7)
+        self.assertPreciseEqual(y, pfunc3(1,1e6, num=7))
+
+        y = cfunc3(8, 2, num=3)
+        self.assertPreciseEqual(y, pfunc3(8, 2, num=3))
+        self.assertTrue([x == 0 for x in y.imag])
+
+        y = cfunc3(-1, -100, num=3)
+        self.assertPreciseEqual(y, pfunc3(-1, -100, num=3))
+        self.assertTrue([x == 0 for x in y.imag])
+
+        y = cfunc3(-100, -1, num=3)
+        self.assertPreciseEqual(y, pfunc3(-100, -1, num=3))
+        self.assertTrue([x == 0 for x in y.imag])
+
+        # test_boundaries_match_start_and_stop_exactly
+        start = 0.3
+        stop = 20.3
+
+        y = cfunc3(start, stop, num=1)
+        self.assertPreciseEqual(y[0], start)
+
+        y = cfunc3(start, stop, num=3)
+        self.assertPreciseEqual(y[0], start)
+        self.assertPreciseEqual(y[-1], stop)
+
+        # test_nan_interior
+        with np.errstate(invalid='ignore'):
+            y = cfunc3(-3, 3, num=4)
+
+        self.assertPreciseEqual(y[0], -3.0)
+        self.assertTrue(np.isnan(y[1:-1]).all())
+        self.assertPreciseEqual(y[3], 3.0)
+
+        # test_complex
+        # Purely imaginary
+        y = cfunc3(1j, 16j, num=5)
+        self.assertPreciseEqual(y, pfunc3(1j, 16j, num=5), abs_tol=1e-14)
+        self.assertTrue([x == 0 for x in y.real])
+
+        y = cfunc3(-4j, -324j, num=5)
+        self.assertPreciseEqual(y, pfunc3(-4j, -324j, num=5), abs_tol=1e-13)
+        self.assertTrue([x == 0 for x in y.real])
+
+        y = cfunc3(1 + 1j, 1000 + 1000j, num=4)
+        self.assertPreciseEqual(y,
+                                pfunc3(1 + 1j, 1000 + 1000j, num=4),
+                                abs_tol=1e-13)
+
+        y = cfunc3(-1 + 1j, -1000 + 1000j, num=4)
+        self.assertPreciseEqual(y,
+                                pfunc3(-1 + 1j, -1000 + 1000j, num=4),
+                                abs_tol=1e-13)
+
+        # Logarithmic spirals
+        y = cfunc3(-1 + 0j, 1 + 0j, num=3)
+        self.assertPreciseEqual(y, pfunc3(-1 + 0j, 1 + 0j, num=3))
+
+        y = cfunc3(0 + 3j, -3 + 0j, 3)
+        self.assertPreciseEqual(y, pfunc3(0 + 3j, -3 + 0j, 3), abs_tol=1e-15)
+        y = cfunc3(0 + 3j, 3 + 0j, 3)
+        self.assertPreciseEqual(y, pfunc3(0 + 3j, 3 + 0j, 3), abs_tol=1e-15)
+        y = cfunc3(-3 + 0j, 0 - 3j, 3)
+        self.assertPreciseEqual(y, pfunc3(-3 + 0j, 0 - 3j, 3), abs_tol=1e-15)
+        y = cfunc3(0 + 3j, -3 + 0j, 3)
+        self.assertPreciseEqual(y, pfunc3(0 + 3j, -3 + 0j, 3), abs_tol=1e-15)
+        y = cfunc3(-2 - 3j, 5 + 7j, 7)
+        self.assertPreciseEqual(y, pfunc3(-2 - 3j, 5 + 7j, 7), abs_tol=1e-14)
+
+        y = cfunc3(3j, -5, 2)
+        self.assertPreciseEqual(y, pfunc3(3j, -5, 2))
+        y = cfunc3(-5, 3j, 2)
+        self.assertPreciseEqual(y, pfunc3(-5, 3j, 2))
+
     def test_rot90_basic(self):
         pyfunc = rot90
         cfunc = jit(nopython=True)(pyfunc)
@@ -3072,7 +3346,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             cfunc("abc")
 
-        self.assertIn('The first argument "arr" must be an array',
+        self.assertIn('The first argument "m" must be an array',
                       str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
@@ -3180,6 +3454,74 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             njit(split)(np.ones(5), [3], axis=-3)
         self.assertIn("np.split: Argument axis out of bounds",
                       str(raises.exception))
+
+    def test_vhdsplit_basic(self):
+        # split and array_split have more comprehensive tests of splitting.
+        # only do simple tests on vsplit, hsplit and dsplit
+        # Based on tests from https://github.com/numpy/numpy/blob/f0befec40376fc46fdaceac2c49c7349ad671bde/numpy/lib/tests/test_shape_base.py#L538-L624 # noqa: E501
+        def inputs1D():
+            # test_1D_array
+            yield np.array([1, 2, 3, 4]), 2
+            yield np.array([1., 2., 3., 4.]), 2
+
+        def inputs2D():
+            # test_2D_array
+            yield np.array([[1, 2, 3, 4], [1, 2, 3, 4]]), 2
+            yield np.array([[1., 2., 3., 4.], [1., 2., 3., 4.]]), 2
+            yield np.arange(16.0).reshape(4, 4), 2
+            yield np.arange(16.0).reshape(4, 4), np.array([3, 6])
+            yield np.arange(16.0).reshape(4, 4), [3, 6]
+            yield np.arange(16.0).reshape(4, 4), (3, 6)
+            yield np.arange(8.0).reshape(2, 2, 2), 2
+
+        def inputs3D():
+            # test_3D_array
+            np.array([[[1, 2, 3, 4],
+                       [1, 2, 3, 4]],
+                      [[1, 2, 3, 4],
+                       [1, 2, 3, 4]]]), 2
+            yield np.arange(16.0).reshape(2, 2, 4), 2
+            yield np.arange(16.0).reshape(2, 2, 4), np.array([3, 6])
+            yield np.arange(16.0).reshape(2, 2, 4), [3, 6]
+            yield np.arange(16.0).reshape(2, 2, 4), (3, 6)
+            yield np.arange(8.0).reshape(2, 2, 2), 2
+
+        inputs = [inputs1D(), inputs2D(), inputs3D()]
+        for (f, mindim, name) in [(vsplit, 2, "vsplit"),
+                                  (hsplit, 1, "hsplit"),
+                                  (dsplit, 3, "dsplit")]:
+            pyfunc = f
+            cfunc = njit(pyfunc)
+            for i in range(mindim, 4):
+                for a, ind_or_sec in inputs[i - 1]:
+                    self.assertPreciseEqual(pyfunc(a, ind_or_sec),
+                                            cfunc(a, ind_or_sec))
+
+    def test_vhdsplit_exception(self):
+        # Single test method for vsplit, hsplit and dsplit exceptions
+        for (f, mindim, name) in [(vsplit, 2, "vsplit"),
+                                  (hsplit, 1, "hsplit"),
+                                  (dsplit, 3, "dsplit")]:
+            cfunc = jit(nopython=True)(f)
+            self.disable_leak_check()
+            with self.assertRaises(TypingError) as raises:
+                cfunc(1, 2)
+            self.assertIn('The argument "ary" must be an array',
+                          str(raises.exception))
+            with self.assertRaises(TypingError) as raises:
+                cfunc("abc", 2)
+            self.assertIn('The argument "ary" must be an array',
+                          str(raises.exception))
+            with self.assertRaises(TypingError) as raises:
+                cfunc(np.array([[1, 2, 3, 4], [1, 2, 3, 4]]), "abc")
+            self.assertIn(('The argument "indices_or_sections" must be int or '
+                           '1d-array'),
+                          str(raises.exception))
+            with self.assertRaises(ValueError) as raises:
+                cfunc(np.array(1), 2)
+            self.assertIn(name + ' only works on arrays of ' + str(mindim) +
+                          ' or more dimensions',
+                          str(raises.exception))
 
     def test_roll_basic(self):
         pyfunc = roll
@@ -4965,6 +5307,128 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             str(raises.exception)
         )
 
+    def test_trim_zeros(self):
+
+        def arrays():
+            yield np.array([])
+            yield np.zeros(5)
+            yield np.zeros(1)
+            yield np.array([1, 2, 3])
+            yield np.array([0, 1, 2, 3])
+            yield np.array([0., 1., 2., np.nan, 0.])
+            yield np.array(['0', 'Hello', 'world'])
+
+        def explicit_trim():
+            yield np.array([0, 1, 2, 0, 0]), 'FB'
+            yield np.array([0, 1, 2]), 'B'
+            yield np.array([np.nan, 0., 1.2, 2.3, 0.]), 'b'
+            yield np.array([0, 0, 1, 2, 5]), 'f'
+            yield np.array([0, 1, 2, 0]), 'abf'
+            yield np.array([0, 4, 0]), 'd'
+            yield np.array(['\0', '1', '2']), 'f'
+
+        pyfunc = np_trim_zeros
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for arr in arrays():
+            expected = pyfunc(arr)
+            got = cfunc(arr)
+            self.assertPreciseEqual(expected, got)
+
+        for arr, trim in explicit_trim():
+            expected = pyfunc(arr, trim)
+            got = cfunc(arr, trim)
+            self.assertPreciseEqual(expected, got)
+
+    def test_trim_zeros_numpy(self):
+        # https://github.com/numpy/numpy/blob/9d8d46ad615a7e13256b930146ac369f651016c0/numpy/lib/tests/test_function_base.py#L1251-L1313
+        a = np.array([0, 0, 1, 0, 2, 3, 4, 0])
+        b = a.astype(float)
+        c = a.astype(complex)
+        # d = a.astype(object)
+        values = [a, b, c]
+
+        # test_basic
+        slc = np.s_[2:-1]
+        for arr in values:
+            res = np_trim_zeros(arr)
+            self.assertPreciseEqual(res, arr[slc])
+
+        # test_leading_skip
+        slc = np.s_[:-1]
+        for arr in values:
+            res = np_trim_zeros(arr, trim='b')
+            self.assertPreciseEqual(res, arr[slc])
+
+        # test_trailing_skip
+        slc = np.s_[2:]
+        for arr in values:
+            res = np_trim_zeros(arr, trim='F')
+            self.assertPreciseEqual(res, arr[slc])
+
+        # test_all_zero
+        for _arr in values:
+            arr = np.zeros_like(_arr, dtype=_arr.dtype)
+
+            res1 = np_trim_zeros(arr, trim='B')
+            assert len(res1) == 0
+
+            res2 = np_trim_zeros(arr, trim='f')
+            assert len(res2) == 0
+
+        # test_size_zero
+        arr = np.zeros(0)
+        res = np_trim_zeros(arr)
+        self.assertPreciseEqual(arr, res)
+
+        # test_overflow
+        for arr in [np.array([0, 2**62, 0]), np.array([0, 2**63, 0]),
+                    np.array([0, 2**64, 0])]:
+            slc = np.s_[1:2]
+            res = np_trim_zeros(arr)
+            self.assertPreciseEqual(res, arr[slc])
+
+        # test_no_trim
+        arr = np.array([None, 1, None])
+        res = np_trim_zeros(arr)
+        self.assertPreciseEqual(arr, res)
+
+        # test_list_to_list
+        res = np_trim_zeros(a.tolist())
+        assert isinstance(res, list)
+
+    def test_trim_zeros_exceptions(self):
+        self.disable_leak_check()
+        cfunc = jit(nopython=True)(np_trim_zeros)
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.array([[1, 2, 3], [4, 5, 6]]))
+        self.assertIn(
+            'array must be 1D',
+            str(raises.exception)
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(3)
+        self.assertIn(
+            'The first argument must be an array',
+            str(raises.exception)
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc({0, 1, 2})
+        self.assertIn(
+            'The first argument must be an array',
+            str(raises.exception)
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.array([0, 1, 2]), 1)
+        self.assertIn(
+            'The second argument must be a string',
+            str(raises.exception)
+        )
+
     def test_union1d(self):
         pyfunc = np_union1d
         cfunc = jit(nopython=True)(pyfunc)
@@ -5146,7 +5610,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             cfunc('abc', 0, 0)
 
-        self.assertIn('The first argument "arr" must be an array',
+        self.assertIn('The first argument "a" must be an array',
                       str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
@@ -5336,6 +5800,55 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertIn("The first argument must be a scalar or an array-like",
                       str(raises.exception))
 
+    def test_diagflat_basic(self):
+        pyfunc1 = diagflat1
+        cfunc1 = njit(pyfunc1)
+        pyfunc2 = diagflat2
+        cfunc2 = njit(pyfunc2)
+
+        def inputs():
+            yield np.array([1,2]), 1
+            yield np.array([[1,2],[3,4]]), -2
+            yield np.arange(8).reshape((2,2,2)), 2
+            yield [1, 2], 1
+            yield np.array([]), 1
+
+        for v, k in inputs():
+            self.assertPreciseEqual(pyfunc1(v), cfunc1(v))
+            self.assertPreciseEqual(pyfunc2(v, k), cfunc2(v, k))
+
+    def test_diagflat1_exception(self):
+        pyfunc = diagflat1
+        cfunc = njit(pyfunc)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc")
+        self.assertIn('The argument "v" must be array-like',
+                      str(raises.exception))
+
+    def test_diagflat2_exception(self):
+        pyfunc = diagflat2
+        cfunc = njit(pyfunc)
+
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc", 2)
+        self.assertIn('The argument "v" must be array-like',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc([1, 2], "abc")
+        self.assertIn('The argument "k" must be an integer',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc([1, 2], 3.0)
+        self.assertIn('The argument "k" must be an integer',
+                      str(raises.exception))
+
 
 class TestNPMachineParameters(TestCase):
     # tests np.finfo, np.iinfo, np.MachAr
@@ -5410,8 +5923,7 @@ def foo():
             cfunc = jit(nopython=True)(iinfo)
             cfunc(np.float64(7))
 
-    @unittest.skipUnless((1, 22) <= numpy_version < (1, 24),
-                         "Needs NumPy >= 1.22, < 1.24")
+    @unittest.skipUnless(numpy_version < (1, 24), "Needs NumPy < 1.24")
     @TestCase.run_test_in_subprocess
     def test_np_MachAr_deprecation_np122(self):
         # Tests that Numba is replaying the NumPy 1.22 deprecation warning
