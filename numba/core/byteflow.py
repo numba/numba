@@ -798,7 +798,7 @@ class TraceRunner(object):
         state.append(inst, value=val, res=res)
         state.push(res)
 
-    if PYVERSION == (3, 11):
+    if PYVERSION >= (3, 11):
         def op_RAISE_VARARGS(self, state, inst):
             if inst.arg == 0:
                 exc = None
