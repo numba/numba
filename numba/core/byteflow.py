@@ -425,7 +425,7 @@ class TraceRunner(object):
     def op_POP_TOP(self, state, inst):
         state.pop()
 
-    if PYVERSION == (3, 11):
+    if PYVERSION >= (3, 11):
         def op_LOAD_GLOBAL(self, state, inst):
             res = state.make_temp()
             idx = inst.arg >> 1
