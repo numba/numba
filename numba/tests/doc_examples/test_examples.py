@@ -380,7 +380,7 @@ class DocsExamplesTest(TestCase):
             x = np.arange(5, dtype='i4')
             res = np.zeros_like(x)
             jit_fn(x, res)
-            # At this point, result == [0, 1, 2, 3, 4].
+            # At this point, res == np.array([0, 1, 2, 3, 4], 'i4').
             # magictoken.gufunc_jit_call.end
             self.assertPreciseEqual(x, res)
 
