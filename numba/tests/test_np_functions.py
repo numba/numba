@@ -1403,7 +1403,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 msg = 'bins must be monotonically increasing or decreasing'
                 self.assertIn(msg, str(raises.exception))
 
-        x = np.array([np.nan, 1]),
+        x = np.array([np.nan, 1])
         bins = np.array([np.nan, 1.5, 2.3, np.nan])
         check_error(x, bins)
 
