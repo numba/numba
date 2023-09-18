@@ -493,10 +493,10 @@ def numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
     return impl_ret_new_ref(context, builder, sig.return_type, out)
 
 
-def numpy_gufunc_kernel(context, builder, sig, args, gufunc, kernel_class):
+def numpy_gufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
     arguments = []
-    expected_ndims = kernel_class.gufunc.expected_ndims()
-    is_input = [True] * gufunc.nin + [False] * gufunc.nout
+    expected_ndims = kernel_class.dufunc.expected_ndims()
+    is_input = [True] * ufunc.nin + [False] * ufunc.nout
     for arg, ty, exp_ndim, is_inp in zip(args, sig.args, expected_ndims, is_input):  # noqa: E501
         if isinstance(ty, types.ArrayCompatible):
             # Create an array helper that iteration returns a subarray
@@ -516,8 +516,7 @@ def numpy_gufunc_kernel(context, builder, sig, args, gufunc, kernel_class):
         else:
             scalar_helper = _ScalarHelper(context, builder, arg, ty)
             arguments.append(scalar_helper)
-    ewise_types = [a.base_type for a in arguments]
-    kernel = kernel_class(context, builder, sig, ewise_types)
+    kernel = kernel_class(context, builder, sig)
 
     layouts = [arg.layout for arg in arguments
                if isinstance(arg, _ArrayGUHelper)]
@@ -533,7 +532,7 @@ def numpy_gufunc_kernel(context, builder, sig, args, gufunc, kernel_class):
     else:
         order = 'C'
 
-    outputs = arguments[gufunc.nin:]
+    outputs = arguments[ufunc.nin:]
     intpty = context.get_value_type(types.intp)
     indices = [inp.create_iter_indices() for inp in arguments]
     loopshape_ndim = outputs[0].ndim - outputs[0].inner_arr_ty.ndim

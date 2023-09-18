@@ -6,16 +6,15 @@ from numba.core.typing.templates import AbstractTemplate
 class UfuncLowererBase:
     '''Callable class responsible for lowering calls to a specific gufunc.
     '''
-    def __init__(self, ufunc, make_kernel_fn, make_lower_fn):
+    def __init__(self, ufunc, make_kernel_fn, make_ufunc_kernel_fn):
         self.ufunc = ufunc
-        self.make_lower_fn = make_lower_fn
+        self.make_ufunc_kernel_fn = make_ufunc_kernel_fn
         self.kernel = make_kernel_fn(ufunc)
         self.libs = []
 
     def __call__(self, context, builder, sig, args):
-        return self.make_lower_fn(context, builder, sig, args,
-                                  self.ufunc,
-                                  self.kernel)
+        return self.make_ufunc_kernel_fn(context, builder, sig, args,
+                                         self.ufunc, self.kernel)
 
 
 class UfuncBase:
