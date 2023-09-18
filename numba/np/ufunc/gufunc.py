@@ -1,6 +1,5 @@
 from numba import typeof
 from numba.core import types
-# from numba.np import npyimpl
 from numba.np.ufunc.ufuncbuilder import GUFuncBuilder
 from numba.np.ufunc.sigparse import parse_signature
 from numba.np.ufunc.ufunc_base import UfuncBase, UfuncLowererBase
@@ -51,6 +50,7 @@ class GUFuncLowerer(UfuncLowererBase):
     '''Callable class responsible for lowering calls to a specific gufunc.
     '''
     def __init__(self, gufunc):
+        from numba.np import npyimpl
         super().__init__(gufunc,
                          make_gufunc_kernel,
                          npyimpl.numpy_gufunc_kernel)

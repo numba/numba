@@ -36,6 +36,7 @@ class DUFuncLowerer(UfuncLowererBase):
     '''Callable class responsible for lowering calls to a specific DUFunc.
     '''
     def __init__(self, dufunc):
+        from numba.np import npyimpl
         super().__init__(dufunc,
                          make_dufunc_kernel,
                          npyimpl.numpy_ufunc_kernel)
