@@ -1,7 +1,7 @@
 import functools
 
 from numba import jit, typeof
-from numba.core import cgutils, types, serialize, sigutils
+from numba.core import types, serialize, sigutils
 from numba.core.extending import is_jitted
 from numba.core.typing import npydecl
 from numba.core.typing.templates import signature
@@ -25,29 +25,6 @@ def make_dufunc_kernel(_dufunc):
             super().__init__(context, builder, outer_sig)
             self.inner_sig, self.cres = self.dufunc.find_ewise_function(
                 outer_sig.args)
-
-        def generate(self, *args):
-            isig = self.inner_sig
-            osig = self.outer_sig
-            cast_args = [self.cast(val, inty, outty)
-                         for val, inty, outty in
-                         zip(args, osig.args, isig.args)]
-            if self.cres.objectmode:
-                func_type = self.context.call_conv.get_function_type(
-                    types.pyobject, [types.pyobject] * len(isig.args))
-            else:
-                func_type = self.context.call_conv.get_function_type(
-                    isig.return_type, isig.args)
-            module = self.builder.block.function.module
-            entry_point = cgutils.get_or_insert_function(
-                module, func_type,
-                self.cres.fndesc.llvm_func_name)
-            entry_point.attributes.add("alwaysinline")
-
-            _, res = self.context.call_conv.call_function(
-                self.builder, entry_point, isig.return_type, isig.args,
-                cast_args)
-            return self.cast(res, isig.return_type, osig.return_type)
 
     DUFuncKernel.__name__ += _dufunc.ufunc.__name__
     return DUFuncKernel
@@ -128,14 +105,6 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc, UfuncBase):
     @property
     def targetoptions(self):
         return self._dispatcher.targetoptions
-
-    def disable_compile(self):
-        """
-        Disable the compilation of new signatures at call time.
-        """
-        # If disabling compilation then there must be at least one signature
-        assert len(self._dispatcher.overloads) > 0
-        self._frozen = True
 
     def add(self, sig):
         """

@@ -578,6 +578,29 @@ class _Kernel(object):
 
         return self.context.cast(self.builder, val, fromty, toty)
 
+    def generate(self, *args):
+        isig = self.inner_sig
+        osig = self.outer_sig
+        cast_args = [self.cast(val, inty, outty)
+                     for val, inty, outty in
+                     zip(args, osig.args, isig.args)]
+        if self.cres.objectmode:
+            func_type = self.context.call_conv.get_function_type(
+                types.pyobject, [types.pyobject] * len(isig.args))
+        else:
+            func_type = self.context.call_conv.get_function_type(
+                isig.return_type, isig.args)
+        module = self.builder.block.function.module
+        entry_point = cgutils.get_or_insert_function(
+            module, func_type,
+            self.cres.fndesc.llvm_func_name)
+        entry_point.attributes.add("alwaysinline")
+
+        _, res = self.context.call_conv.call_function(
+            self.builder, entry_point, isig.return_type, isig.args,
+            cast_args)
+        return self.cast(res, isig.return_type, osig.return_type)
+
 
 def _ufunc_db_function(ufunc):
     """Use the ufunc loop type information to select the code generation

@@ -68,6 +68,14 @@ class UfuncBase:
     def reduceat(self):
         return self.ufunc.reduceat
 
+    def disable_compile(self):
+        """
+        Disable the compilation of new signatures at call time.
+        """
+        # If disabling compilation then there must be at least one signature
+        assert len(self._dispatcher.overloads) > 0
+        self._frozen = True
+
     def _install_type(self, typingctx=None):
         """Constructs and installs a typing class for a gufunc object in the
         input typing context.  If no typing context is given, then

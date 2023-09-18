@@ -5,7 +5,7 @@ from numba.np.ufunc.ufuncbuilder import GUFuncBuilder
 from numba.np.ufunc.sigparse import parse_signature
 from numba.np.ufunc.ufunc_base import UfuncBase, UfuncLowererBase
 from numba.np.numpy_support import ufunc_find_matching_loop
-from numba.core import serialize, cgutils, errors
+from numba.core import serialize, errors
 from numba.core.typing import npydecl
 from numba.core.typing.templates import signature
 import functools
@@ -35,29 +35,12 @@ def make_gufunc_kernel(_gufunc):
             return super().cast(val, fromty, toty)
 
         def generate(self, *args):
-            isig = self.inner_sig
-            osig = self.outer_sig
-            cast_args = [self.cast(val, inty, outty)
-                         for val, inty, outty in
-                         zip(args, osig.args, isig.args)]
             if self.cres.objectmode:
                 msg = ('Calling a guvectorize function in object mode is not '
                        'supported yet.')
                 raise errors.NumbaRuntimeError(msg)
-            else:
-                func_type = self.context.call_conv.get_function_type(
-                    isig.return_type, isig.args)
             self.context.add_linking_libs((self.cres.library,))
-            module = self.builder.block.function.module
-            entry_point = cgutils.get_or_insert_function(
-                module, func_type,
-                self.cres.fndesc.llvm_func_name)
-            entry_point.attributes.add("alwaysinline")
-
-            _, res = self.context.call_conv.call_function(
-                self.builder, entry_point, isig.return_type, isig.args,
-                cast_args)
-            return res  # no cast needed here as sig.return_type is always None
+            return super().generate(*args)
 
     GUFuncKernel.__name__ += _gufunc.__name__
     return GUFuncKernel
@@ -142,14 +125,6 @@ class GUFunc(serialize.ReduceMixin, UfuncBase):
         self.ufunc = self.gufunc_builder.build_ufunc()
         return self
 
-    def disable_compile(self):
-        """
-        Disable the compilation of new signatures at call time.
-        """
-        # If disabling compilation then there must be at least one signature
-        assert len(self.gufunc_builder._sigs) > 0
-        self._frozen = True
-
     def expected_ndims(self):
         parsed_sig = parse_signature(self.gufunc_builder.signature)
         return tuple(map(len, parsed_sig[0])) + tuple(map(len, parsed_sig[1]))
@@ -182,12 +157,12 @@ class GUFunc(serialize.ReduceMixin, UfuncBase):
 
         return signature(types.none, *argtys)
 
-    def _compile_for_argtys(self, argtys):
+    def _compile_for_argtys(self, argtys, return_type=None):
         # Compile a new guvectorize function! Use the gufunc signature
         # i.e. (n,m),(m)->(n)
         # plus ewise_types to build a numba function type
         fnty = self._get_signature(*argtys)
-        self.add(fnty)
+        self.gufunc_builder.add(fnty)
 
     def match_signature(self, ewise_types, sig):
         dtypes = self._get_ewise_dtypes(sig.args)
