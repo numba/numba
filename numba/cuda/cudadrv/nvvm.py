@@ -161,13 +161,6 @@ class NVVM(object):
         self._supported_ccs = get_supported_ccs()
 
     @property
-    def is_nvvm70(self):
-        # NVVM70 uses NVVM IR version 1.6. See the documentation for
-        # nvvmAddModuleToProgram in
-        # https://docs.nvidia.com/cuda/libnvvm-api/group__compilation.html
-        return (self._majorIR, self._minorIR) >= (1, 6)
-
-    @property
     def data_layout(self):
         if (self._majorIR, self._minorIR) < (1, 8):
             return _datalayout_original
@@ -352,8 +345,6 @@ COMPUTE_CAPABILITIES = (
 
 # Maps CTK version -> (min supported cc, max supported cc) inclusive
 CTK_SUPPORTED = {
-    (11, 0): ((3, 5), (8, 0)),
-    (11, 1): ((3, 5), (8, 6)),
     (11, 2): ((3, 5), (8, 6)),
     (11, 3): ((3, 5), (8, 6)),
     (11, 4): ((3, 5), (8, 7)),
@@ -363,6 +354,7 @@ CTK_SUPPORTED = {
     (11, 8): ((3, 5), (9, 0)),
     (12, 0): ((5, 0), (9, 0)),
     (12, 1): ((5, 0), (9, 0)),
+    (12, 2): ((5, 0), (9, 0)),
 }
 
 
@@ -471,21 +463,9 @@ class LibDevice(object):
         return self.bc
 
 
-ir_numba_cas_hack = """
-define internal {T} @___numba_atomic_{T}_cas_hack({T}* %ptr, {T} %cmp, {T} %val) alwaysinline {{
-    %out = cmpxchg volatile {T}* %ptr, {T} %cmp, {T} %val monotonic
-    ret {T} %out
-}}
-""" # noqa: E501
-
-cas_nvvm70 = """
+cas_nvvm = """
     %cas_success = cmpxchg volatile {Ti}* %iptr, {Ti} %old, {Ti} %new monotonic monotonic
     %cas = extractvalue {{ {Ti}, i1 }} %cas_success, 0
-""" # noqa: E501
-
-
-cas_nvvm34 = """
-    %cas = cmpxchg volatile {Ti}* %iptr, {Ti} %old, {Ti} %new monotonic
 """ # noqa: E501
 
 
@@ -585,10 +565,7 @@ done:
 
 
 def ir_cas(Ti):
-    if NVVM().is_nvvm70:
-        return cas_nvvm70.format(Ti=Ti)
-    else:
-        return cas_nvvm34.format(Ti=Ti)
+    return cas_nvvm.format(Ti=Ti)
 
 
 def ir_numba_atomic_binary(T, Ti, OP, FUNC):
@@ -609,19 +586,6 @@ def ir_numba_atomic_inc(T, Tu):
 
 def ir_numba_atomic_dec(T, Tu):
     return ir_numba_atomic_dec_template.format(T=T, Tu=Tu, CAS=ir_cas(T))
-
-
-def _replace_datalayout(llvmir):
-    """
-    Find the line containing the datalayout and replace it
-    """
-    lines = llvmir.splitlines()
-    for i, ln in enumerate(lines):
-        if ln.startswith("target datalayout"):
-            tmp = 'target datalayout = "{0}"'
-            lines[i] = tmp.format(NVVM().data_layout)
-            break
-    return '\n'.join(lines)
 
 
 def llvm_replace(llvmir):
@@ -663,26 +627,10 @@ def llvm_replace(llvmir):
         ('immarg', '')
     ]
 
-    if not NVVM().is_nvvm70:
-        # Replace with our cmpxchg implementation because LLVM 3.5 has a new
-        # semantic for cmpxchg.
-        replacements += [
-            ('declare i32 @"___numba_atomic_i32_cas_hack"(i32* %".1", i32 %".2", i32 %".3")',  # noqa: E501
-             ir_numba_cas_hack.format(T='i32')),
-            ('declare i64 @"___numba_atomic_i64_cas_hack"(i64* %".1", i64 %".2", i64 %".3")',  # noqa: E501
-             ir_numba_cas_hack.format(T='i64'))
-        ]
-        # Newer LLVMs generate a shorthand for datalayout that NVVM34 does not
-        # know
-        llvmir = _replace_datalayout(llvmir)
-
     for decl, fn in replacements:
         llvmir = llvmir.replace(decl, fn)
 
-    if NVVM().is_nvvm70:
-        llvmir = llvm100_to_70_ir(llvmir)
-    else:
-        llvmir = llvm100_to_34_ir(llvmir)
+    llvmir = llvm140_to_70_ir(llvmir)
 
     return llvmir
 
@@ -710,44 +658,12 @@ def llvm_to_ptx(llvmir, **opts):
     return cu.compile(**opts)
 
 
-re_metadata_def = re.compile(r"\!\d+\s*=")
-re_metadata_correct_usage = re.compile(r"metadata\s*\![{'\"0-9]")
-re_metadata_ref = re.compile(r"\!\d+")
-
-debuginfo_pattern = r"\!{i32 \d, \!\"Debug Info Version\", i32 \d}"
-re_metadata_debuginfo = re.compile(debuginfo_pattern.replace(' ', r'\s+'))
-
 re_attributes_def = re.compile(r"^attributes #\d+ = \{ ([\w\s]+)\ }")
-supported_attributes = {'alwaysinline', 'cold', 'inlinehint', 'minsize',
-                        'noduplicate', 'noinline', 'noreturn', 'nounwind',
-                        'optnone', 'optisze', 'readnone', 'readonly'}
-
-re_getelementptr = re.compile(r"\bgetelementptr\s(?:inbounds )?\(?")
-
-re_load = re.compile(r"=\s*\bload\s(?:\bvolatile\s)?")
-
-re_call = re.compile(r"(call\s[^@]+\))(\s@)")
-re_range = re.compile(r"\s*!range\s+!\d+")
-
-re_type_tok = re.compile(r"[,{}()[\]]")
-
-re_annotations = re.compile(r"\bnonnull\b")
-
-re_unsupported_keywords = re.compile(r"\b(local_unnamed_addr|writeonly)\b")
-
-re_parenthesized_list = re.compile(r"\((.*)\)")
-
-re_spflags = re.compile(r"spFlags: (.*),")
-
-spflagmap = {
-    'DISPFlagDefinition': 'isDefinition',
-    'DISPFlagOptimized': 'isOptimized',
-}
 
 
-def llvm100_to_70_ir(ir):
+def llvm140_to_70_ir(ir):
     """
-    Convert LLVM 10.0 IR for LLVM 7.0.
+    Convert LLVM 14.0 IR for LLVM 7.0.
     """
     buf = []
     for line in ir.splitlines():
@@ -761,140 +677,6 @@ def llvm100_to_70_ir(ir):
         buf.append(line)
 
     return '\n'.join(buf)
-
-
-def llvm100_to_34_ir(ir):
-    """
-    Convert LLVM 10.0 IR for LLVM 3.4.
-    """
-    def parse_out_leading_type(s):
-        par_level = 0
-        pos = 0
-        # Parse out the first <ty> (which may be an aggregate type)
-        while True:
-            m = re_type_tok.search(s, pos)
-            if m is None:
-                # End of line
-                raise RuntimeError("failed parsing leading type: %s" % (s,))
-                break
-            pos = m.end()
-            tok = m.group(0)
-            if tok == ',':
-                if par_level == 0:
-                    # End of operand
-                    break
-            elif tok in '{[(':
-                par_level += 1
-            elif tok in ')]}':
-                par_level -= 1
-        return s[pos:].lstrip()
-
-    buf = []
-    for line in ir.splitlines():
-
-        # Fix llvm.dbg.cu
-        if line.startswith('!numba.llvm.dbg.cu'):
-            line = line.replace('!numba.llvm.dbg.cu', '!llvm.dbg.cu')
-
-        # We insert a dummy inlineasm to put debuginfo
-        if (line.lstrip().startswith('tail call void asm sideeffect "// dbg')
-                and '!numba.dbg' in line):
-            # Fix the metadata
-            line = line.replace('!numba.dbg', '!dbg')
-        if re_metadata_def.match(line):
-            # Rewrite metadata since LLVM 3.7 dropped the "metadata" type prefix
-            if None is re_metadata_correct_usage.search(line):
-                # Reintroduce the "metadata" prefix
-                line = line.replace('!{', 'metadata !{')
-                line = line.replace('!"', 'metadata !"')
-
-                assigpos = line.find('=')
-                lhs, rhs = line[:assigpos + 1], line[assigpos + 1:]
-
-                # Fix metadata reference
-                def fix_metadata_ref(m):
-                    return 'metadata ' + m.group(0)
-                line = ' '.join((lhs,
-                                 re_metadata_ref.sub(fix_metadata_ref, rhs)))
-        if line.startswith('source_filename ='):
-            continue    # skip line
-        if re_unsupported_keywords.search(line) is not None:
-            line = re_unsupported_keywords.sub(lambda m: '', line)
-
-        if line.startswith('attributes #'):
-            # Remove function attributes unsupported pre-3.8
-            m = re_attributes_def.match(line)
-            attrs = m.group(1).split()
-            attrs = ' '.join(a for a in attrs if a in supported_attributes)
-            line = line.replace(m.group(1), attrs)
-        if 'getelementptr ' in line:
-            # Rewrite "getelementptr ty, ty* ptr, ..."
-            # to "getelementptr ty *ptr, ..."
-            m = re_getelementptr.search(line)
-            if m is None:
-                raise RuntimeError("failed parsing getelementptr: %s" % (line,))
-            pos = m.end()
-            line = line[:pos] + parse_out_leading_type(line[pos:])
-        if 'load ' in line:
-            # Rewrite "load ty, ty* ptr"
-            # to "load ty *ptr"
-            m = re_load.search(line)
-            if m:
-                pos = m.end()
-                line = line[:pos] + parse_out_leading_type(line[pos:])
-        if 'call ' in line:
-            # Rewrite "call ty (...) @foo"
-            # to "call ty (...)* @foo"
-            line = re_call.sub(r"\1*\2", line)
-
-            # no !range metadata on calls
-            line = re_range.sub('', line).rstrip(',')
-
-            if '@llvm.memset' in line:
-                line = re_parenthesized_list.sub(
-                    _replace_llvm_memset_usage,
-                    line,
-                )
-        if 'declare' in line:
-            if '@llvm.memset' in line:
-                line = re_parenthesized_list.sub(
-                    _replace_llvm_memset_declaration,
-                    line,
-                )
-
-        # Remove unknown annotations
-        line = re_annotations.sub('', line)
-
-        buf.append(line)
-
-    return '\n'.join(buf)
-
-
-def _replace_llvm_memset_usage(m):
-    """Replace `llvm.memset` usage for llvm7+.
-
-    Used as functor for `re.sub.
-    """
-    params = list(m.group(1).split(','))
-    align_attr = re.search(r'align (\d+)', params[0])
-    if not align_attr:
-        raise ValueError("No alignment attribute found on memset dest")
-    else:
-        align = align_attr.group(1)
-    params.insert(-1, 'i32 {}'.format(align))
-    out = ', '.join(params)
-    return '({})'.format(out)
-
-
-def _replace_llvm_memset_declaration(m):
-    """Replace `llvm.memset` declaration for llvm7+.
-
-    Used as functor for `re.sub.
-    """
-    params = list(m.group(1).split(','))
-    params.insert(-1, 'i32')
-    out = ', '.join(params)
-    return '({})'.format(out)
 
 
 def set_cuda_kernel(lfunc):

@@ -18,7 +18,7 @@ jobs:
           python-version: 3.9
       - name: Install towncrier
         run: |
-          python3 -m pip install towncrier
+          python3 -m pip install towncrier==23.6 "importlib_resources<6"
       - name: Run towncrier
         run: |
           git fetch --no-tags origin +refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}

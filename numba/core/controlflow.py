@@ -713,7 +713,7 @@ class CFGraph(object):
 
     def __eq__(self, other):
         if not isinstance(other, CFGraph):
-            raise NotImplementedError
+            return NotImplemented
 
         for x in ['_nodes', '_edge_data', '_entry_point', '_preds', '_succs']:
             this = getattr(self, x, None)

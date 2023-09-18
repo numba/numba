@@ -196,6 +196,50 @@ class TestUFuncs(BasicUFuncTest, TestCase):
     def test_radians_ufunc(self):
         self.basic_ufunc_test(np.radians, kinds='f')
 
+    ############################################################################
+    # Comparison functions
+    def test_greater_ufunc(self):
+        self.signed_unsigned_cmp_test(np.greater)
+
+    def test_greater_equal_ufunc(self):
+        self.signed_unsigned_cmp_test(np.greater_equal)
+
+    def test_less_ufunc(self):
+        self.signed_unsigned_cmp_test(np.less)
+
+    def test_less_equal_ufunc(self):
+        self.signed_unsigned_cmp_test(np.less_equal)
+
+    def test_not_equal_ufunc(self):
+        self.signed_unsigned_cmp_test(np.not_equal)
+
+    def test_equal_ufunc(self):
+        self.signed_unsigned_cmp_test(np.equal)
+
+    def test_logical_and_ufunc(self):
+        self.basic_ufunc_test(np.logical_and)
+
+    def test_logical_or_ufunc(self):
+        self.basic_ufunc_test(np.logical_or)
+
+    def test_logical_xor_ufunc(self):
+        self.basic_ufunc_test(np.logical_xor)
+
+    def test_logical_not_ufunc(self):
+        self.basic_ufunc_test(np.logical_not)
+
+    def test_maximum_ufunc(self):
+        self.basic_ufunc_test(np.maximum)
+
+    def test_minimum_ufunc(self):
+        self.basic_ufunc_test(np.minimum)
+
+    def test_fmax_ufunc(self):
+        self.basic_ufunc_test(np.fmax)
+
+    def test_fmin_ufunc(self):
+        self.basic_ufunc_test(np.fmin)
+
     def test_bitwise_and_ufunc(self):
         self.basic_int_ufunc_test(np.bitwise_and)
 

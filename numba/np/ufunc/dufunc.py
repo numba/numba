@@ -113,6 +113,21 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc, UfuncBase):
         args, return_type = sigutils.normalize_signature(sig)
         return self._compile_for_argtys(args, return_type)
 
+    def __call__(self, *args, **kws):
+        """
+        Allow any argument that has overridden __array_ufunc__ (NEP-18)
+        to take control of DUFunc.__call__.
+        """
+        default = numpy_support.np.ndarray.__array_ufunc__
+
+        for arg in args + tuple(kws.values()):
+            if getattr(type(arg), "__array_ufunc__", default) is not default:
+                output = arg.__array_ufunc__(self, "__call__", *args, **kws)
+                if output is not NotImplemented:
+                    return output
+        else:
+            return super().__call__(*args, **kws)
+
     def _compile_for_args(self, *args, **kws):
         nin = self.ufunc.nin
         if kws:

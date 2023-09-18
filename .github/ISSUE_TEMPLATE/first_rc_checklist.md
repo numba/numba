@@ -36,7 +36,7 @@ labels: task
 * [ ] Initialize and verify ReadTheDocs build.
 * [ ] Post announcement to discourse group and ping the release testers group
   using `@RC_Testers`.
-* [ ] Post link to Twitter.
+* [ ] Post link to X and to Mastodon and...
 
 ### Post Release:
 

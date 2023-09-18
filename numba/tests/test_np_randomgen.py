@@ -1180,6 +1180,43 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         # Exceptions leak references
         self.disable_leak_check()
 
+    def test_binomial(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:\
+            x.binomial(n=1, p=0.1, size=size)
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None,
+                                            adjusted_ulp_prec)
+
+        dist_func = lambda x, n, p, size:\
+            x.binomial(n=n, p=p, size=size)
+        self._check_invalid_types(dist_func, ['n', 'p', 'size'],
+                                  [1, 0.75, (1,)], ['x', 'x', ('x',)])
+
+    def test_binomial_cases(self):
+        cases = [
+            (1, 0.1), # p <= 0.5 && n * p <= 30
+            (50, 0.9), # p > 0.5 && n * p <= 30
+            (100, 0.4), # p <= 0.5 && n * p > 30
+            (100, 0.9) # p > 0.5 && n * p > 30
+        ]
+        size = None
+
+        for n, p in cases:
+            with self.subTest(n=n, p=p):
+                dist_func = lambda x, size, dtype:\
+                    x.binomial(n, p, size=size)
+                self.check_numpy_parity(dist_func, None,
+                                        None, size, None, 0)
+
 
 class TestGeneratorCaching(TestCase, SerialMixin):
     def test_randomgen_caching(self):
