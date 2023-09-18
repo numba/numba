@@ -9,10 +9,12 @@ from numba.np.ufunc import _internal
 from numba.np.ufunc.ufunc_base import UfuncBase, UfuncLowererBase
 from numba.parfors import array_analysis
 from numba.np.ufunc import ufuncbuilder
-from numba.np import numpy_support, npyimpl
+from numba.np import numpy_support
 
 
 def make_dufunc_kernel(_dufunc):
+    from numba.np import npyimpl
+
     class DUFuncKernel(npyimpl._Kernel):
         """
         npyimpl._Kernel subclass responsible for lowering a DUFunc kernel

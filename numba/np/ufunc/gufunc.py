@@ -1,6 +1,6 @@
 from numba import typeof
 from numba.core import types
-from numba.np import npyimpl
+# from numba.np import npyimpl
 from numba.np.ufunc.ufuncbuilder import GUFuncBuilder
 from numba.np.ufunc.sigparse import parse_signature
 from numba.np.ufunc.ufunc_base import UfuncBase, UfuncLowererBase
@@ -12,6 +12,8 @@ import functools
 
 
 def make_gufunc_kernel(_dufunc):
+    from numba.np import npyimpl
+
     class GUFuncKernel(npyimpl._Kernel):
         """
         npyimpl._Kernel subclass responsible for lowering a gufunc kernel
