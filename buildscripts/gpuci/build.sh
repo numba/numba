@@ -56,7 +56,7 @@ gpuci_mamba_retry create -n numba_ci -y \
                   "rapidsai::cubinlinker" \
                   "conda-forge::ptxcompiler" \
                   "numba/label/dev::llvmlite" \
-                  "numpy=${NUMPY_VER}" \
+                  "conda-forge::numpy=${NUMPY_VER}" \
                   "scipy" \
                   "cffi" \
                   "psutil" \
