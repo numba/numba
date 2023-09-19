@@ -1,5 +1,5 @@
-Version 0.58.0rc2 (11 September 2023)
--------------------------------------
+Version 0.58.0 (20 September 2023)
+----------------------------------
 
 .. contents:: Table of Contents
    :depth: 2
