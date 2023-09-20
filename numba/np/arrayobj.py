@@ -16,7 +16,8 @@ from numba import pndindex, literal_unroll
 from numba.core import types, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, from_dtype, carray, farray,
                                     is_contiguous, is_fortran,
-                                    check_is_integer, type_is_scalar)
+                                    check_is_integer, type_is_scalar,
+                                    lt_complex)
 from numba.np.numpy_support import type_can_asarray, is_nonelike, numpy_version
 from numba.core.imputils import (lower_builtin, lower_getattr,
                                  lower_getattr_generic,
@@ -6322,23 +6323,29 @@ def lt_floats(a, b):
     return a < b or (np.isnan(b) and not np.isnan(a))
 
 
-def get_sort_func(kind, is_float, is_argsort=False):
+def get_sort_func(kind, lt_kind, is_argsort=False):
     """
     Get a sort implementation of the given kind.
     """
-    key = kind, is_float, is_argsort
+    key = kind, lt_kind, is_argsort
+
+    lt_map = {
+        'float': lt_floats,
+        'complex': lt_complex
+    }
+
     try:
         return _sorts[key]
     except KeyError:
         if kind == 'quicksort':
             sort = quicksort.make_jit_quicksort(
-                lt=lt_floats if is_float else None,
+                lt=lt_map.get(lt_kind),
                 is_argsort=is_argsort,
                 is_np_array=True)
             func = sort.run_quicksort
         elif kind == 'mergesort':
             sort = mergesort.make_jit_mergesort(
-                lt=lt_floats if is_float else None,
+                lt=lt_map.get(lt_kind),
                 is_argsort=is_argsort)
             func = sort.run_mergesort
         _sorts[key] = func
@@ -6348,8 +6355,16 @@ def get_sort_func(kind, is_float, is_argsort=False):
 @lower_builtin("array.sort", types.Array)
 def array_sort(context, builder, sig, args):
     arytype = sig.args[0]
+
+    if isinstance(arytype.dtype, types.Float):
+        lt_kind = 'float'
+    elif isinstance(arytype.dtype, types.Complex):
+        lt_kind = 'complex'
+    else:
+        lt_kind = None
+
     sort_func = get_sort_func(kind='quicksort',
-                              is_float=isinstance(arytype.dtype, types.Float))
+                              lt_kind=lt_kind)
 
     def array_sort_impl(arr):
         # Note we clobber the return value
@@ -6375,8 +6390,16 @@ def impl_np_sort(a):
 @lower_builtin(np.argsort, types.Array, types.StringLiteral)
 def array_argsort(context, builder, sig, args):
     arytype, kind = sig.args
+
+    if isinstance(arytype.dtype, types.Float):
+        lt_kind = 'float'
+    elif isinstance(arytype.dtype, types.Complex):
+        lt_kind = 'complex'
+    else:
+        lt_kind = None
+
     sort_func = get_sort_func(kind=kind.literal_value,
-                              is_float=isinstance(arytype.dtype, types.Float),
+                              lt_kind=lt_kind,
                               is_argsort=True)
 
     def array_argsort_impl(arr):

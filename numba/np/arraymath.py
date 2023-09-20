@@ -15,7 +15,7 @@ from numba.core import types, cgutils
 from numba.core.extending import overload, overload_method, register_jitable
 from numba.np.numpy_support import (as_dtype, type_can_asarray, type_is_scalar,
                                     numpy_version, is_nonelike,
-                                    check_is_integer)
+                                    check_is_integer, lt_complex)
 from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
                                  impl_ret_new_ref, impl_ret_untracked)
 from numba.np.arrayobj import (make_array, load_item, store_item,
@@ -3675,6 +3675,11 @@ def np_bincount(a, weights=None, minlength=0):
 
 
 @register_jitable
+def less_than_or_equal(a, b):
+    return a <= b
+
+
+@register_jitable
 def custom_lt(a, b):
     if np.isnan(b):
         return not np.isnan(a)
@@ -3688,38 +3693,7 @@ def custom_le(a, b):
     return a <= b
 
 
-@register_jitable
-def custom_complex_lt(a, b):
-    if np.isnan(a.real):
-        if np.isnan(b.real):
-            if np.isnan(a.imag):
-                return False
-            else:
-                if np.isnan(b.imag):
-                    return True
-                else:
-                    return a.imag < b.imag
-        else:
-            return False
-
-    else:
-        if np.isnan(b.real):
-            return True
-        else:
-            if np.isnan(a.imag):
-                if np.isnan(b.imag):
-                    return a.real < b.real
-                else:
-                    return False
-            else:
-                if np.isnan(b.imag):
-                    return True
-                else:
-                    if a.real < b.real:
-                        return True
-                    elif a.real == b.real:
-                        return a.imag < b.imag
-                    return False
+custom_complex_lt = register_jitable(lt_complex)
 
 
 @register_jitable
@@ -3754,11 +3728,6 @@ def custom_complex_le(a, b):
                     elif a.real == b.real:
                         return a.imag <= b.imag
                     return False
-
-
-@register_jitable
-def less_than_or_equal(a, b):
-    return a <= b
 
 
 def _searchsorted(func_1, func_2):

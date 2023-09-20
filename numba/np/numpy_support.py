@@ -729,3 +729,36 @@ def check_is_integer(v, name):
     """Raises TypingError if the value is not an integer."""
     if not isinstance(v, (int, types.Integer)):
         raise TypingError('{} must be an integer'.format(name))
+
+
+def lt_complex(a, b):
+    if np.isnan(a.real):
+        if np.isnan(b.real):
+            if np.isnan(a.imag):
+                return False
+            else:
+                if np.isnan(b.imag):
+                    return True
+                else:
+                    return a.imag < b.imag
+        else:
+            return False
+
+    else:
+        if np.isnan(b.real):
+            return True
+        else:
+            if np.isnan(a.imag):
+                if np.isnan(b.imag):
+                    return a.real < b.real
+                else:
+                    return False
+            else:
+                if np.isnan(b.imag):
+                    return True
+                else:
+                    if a.real < b.real:
+                        return True
+                    elif a.real == b.real:
+                        return a.imag < b.imag
+                    return False
