@@ -1388,6 +1388,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         v = True
         check(a, v)
 
+        # `a` and `v` arrays of strings
+        a = np.array(['1', '2', '3'])
+        v = np.array(['2', '4'])
+        check(a, v)
+
     def test_searchsorted_complex(self):
         pyfunc = searchsorted
         cfunc = jit(nopython=True)(pyfunc)
