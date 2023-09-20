@@ -3688,6 +3688,79 @@ def custom_le(a, b):
     return a <= b
 
 
+@register_jitable
+def custom_complex_lt(a, b):
+    if np.isnan(a.real):
+        if np.isnan(b.real):
+            if np.isnan(a.imag):
+                return False
+            else:
+                if np.isnan(b.imag):
+                    return True
+                else:
+                    return a.imag < b.imag
+        else:
+            return False
+
+    else:
+        if np.isnan(b.real):
+            return True
+        else:
+            if np.isnan(a.imag):
+                if np.isnan(b.imag):
+                    return a.real < b.real
+                else:
+                    return False
+            else:
+                if np.isnan(b.imag):
+                    return True
+                else:
+                    if a.real < b.real:
+                        return True
+                    elif a.real == b.real:
+                        return a.imag < b.imag
+                    return False
+
+
+@register_jitable
+def custom_complex_le(a, b):
+    if np.isnan(a.real):
+        if np.isnan(b.real):
+            if np.isnan(a.imag):
+                return np.isnan(b.imag)
+            else:
+                if np.isnan(b.imag):
+                    return True
+                else:
+                    return a.imag <= b.imag
+        else:
+            return False
+
+    else:
+        if np.isnan(b.real):
+            return True
+        else:
+            if np.isnan(a.imag):
+                if np.isnan(b.imag):
+                    return a.real <= b.real
+                else:
+                    return False
+            else:
+                if np.isnan(b.imag):
+                    return True
+                else:
+                    if a.real < b.real:
+                        return True
+                    elif a.real == b.real:
+                        return a.imag <= b.imag
+                    return False
+
+
+@register_jitable
+def less_than_or_equal(a, b):
+    return a <= b
+
+
 def _searchsorted(func_1, func_2):
     # a facsimile of:
     # https://github.com/numpy/numpy/blob/4f84d719657eb455a35fcdf9e75b83eb1f97024a/numpy/core/src/npysort/binsearch.cpp#L61  # noqa: E501
@@ -3732,32 +3805,66 @@ def _searchsorted(func_1, func_2):
     return impl
 
 
-_searchsorted_left = register_jitable(
-    _searchsorted(custom_lt, custom_lt)
-)
-_searchsorted_right_pre_np123 = register_jitable(
-    _searchsorted(custom_lt, custom_le)
-)
-_searchsorted_right_np123_on = register_jitable(
-    _searchsorted(custom_le, custom_le)
-)
+def choose_searchsorted_implementation(np_dtype, side):
+
+    if np.issubdtype(np_dtype, np.integer):
+        if side == 'left':
+            _impl = _searchsorted(less_than, less_than)
+        elif side == 'right':
+            _impl = _searchsorted(less_than_or_equal, less_than_or_equal)
+
+    elif np.issubdtype(np_dtype, np.bool_):
+        if side == 'left':
+            _impl = _searchsorted(less_than, less_than)
+        elif side == 'right':
+            _impl = _searchsorted(less_than_or_equal, less_than_or_equal)
+
+    elif np.issubdtype(np_dtype, np.floating):
+        if side == 'left':
+            _impl = _searchsorted(custom_lt, custom_lt)
+        elif side == 'right':
+            if numpy_version >= (1, 23):
+                _impl = _searchsorted(custom_le, custom_le)
+            else:
+                _impl = _searchsorted(custom_lt, custom_le)
+
+    elif np.issubdtype(np_dtype, np.complexfloating):
+        if side == 'left':
+            _impl = _searchsorted(custom_complex_lt, custom_complex_lt)
+        elif side == 'right':
+            if numpy_version >= (1, 23):
+                _impl = _searchsorted(custom_complex_le, custom_complex_le)
+            else:
+                _impl = _searchsorted(custom_complex_lt, custom_complex_le)
+
+    elif np.issubdtype(np_dtype, np.character):
+        if side == 'left':
+            _impl = _searchsorted(less_than, less_than)
+        elif side == 'right':
+            _impl = _searchsorted(less_than_or_equal, less_than_or_equal)
+
+    else:
+        raise ValueError(f'No implementation for numpy dtype: {np_dtype}')
+
+    return register_jitable(_impl)
 
 
 @overload(np.searchsorted)
 def searchsorted(a, v, side='left'):
     side_val = getattr(side, 'literal_value', side)
 
-    if side_val == 'left':
-        _impl = _searchsorted_left
-    elif side_val == 'right':
-        # change in behaviour introduced by
-        # https://github.com/numpy/numpy/pull/21867
-        if numpy_version >= (1, 23):
-            _impl = _searchsorted_right_np123_on
-        else:
-            _impl = _searchsorted_right_pre_np123
-    else:
+    if side_val not in ['left', 'right']:
+        # could change this so that side doesn't need to be
+        # a compile-time constant
         raise NumbaValueError(f"Invalid value given for 'side': {side_val}")
+
+    if isinstance(v, (types.Array, types.Sequence)):
+        v_dt = as_dtype(v.dtype)
+    else:
+        v_dt = as_dtype(v)
+
+    np_dt = np.promote_types(as_dtype(a.dtype), v_dt)
+    _impl = choose_searchsorted_implementation(np_dt, side_val)
 
     if isinstance(v, types.Array):
         def impl(a, v, side='left'):
@@ -3765,7 +3872,7 @@ def searchsorted(a, v, side='left'):
     elif isinstance(v, types.Sequence):
         def impl(a, v, side='left'):
             return _impl(a, np.array(v))
-    else:  # presumably scalar
+    else:  # presumably `v` is scalar
         def impl(a, v, side='left'):
             return _impl(a, np.array([v]))[0]
 

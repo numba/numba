@@ -1388,6 +1388,46 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         v = True
         check(a, v)
 
+    def test_searchsorted_complex(self):
+        pyfunc = searchsorted
+        cfunc = jit(nopython=True)(pyfunc)
+
+        pyfunc_left = searchsorted_left
+        cfunc_left = jit(nopython=True)(pyfunc_left)
+
+        pyfunc_right = searchsorted_right
+        cfunc_right = jit(nopython=True)(pyfunc_right)
+
+        def check(a, v):
+            expected = pyfunc(a, v)
+            got = cfunc(a, v)
+            self.assertPreciseEqual(expected, got)
+
+            expected = pyfunc_left(a, v)
+            got = cfunc_left(a, v)
+            self.assertPreciseEqual(expected, got)
+
+            expected = pyfunc_right(a, v)
+            got = cfunc_right(a, v)
+            self.assertPreciseEqual(expected, got)
+
+        pool = [0, 1, np.nan]
+        element_pool = [complex(*c) for c in itertools.product(pool, pool)]
+
+        for i in range(100):
+            sample_size = self.rnd.choice([3, 5, len(element_pool)])
+
+            # `a` and `v` not sorted; either may have repeating values
+            a = self.rnd.choice(element_pool, sample_size)
+            v = self.rnd.choice(element_pool, sample_size + (i % 3 - 1))
+
+            # output should match numpy regardless of whether `a` is sorted
+            check(a, v)
+            check(np.sort(a), v)
+
+        # check type promotion (a complex; v not so much)
+        check(a=np.array(element_pool), v=np.arange(2))
+
     def test_digitize(self):
         pyfunc = digitize
         cfunc = jit(nopython=True)(pyfunc)
@@ -1419,7 +1459,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         # 3-ary digitize()
         for bins in all_bins:
-            bins.sort()
             for right in (True, False):
                 check(values, bins, right)
                 check(values, bins[::-1], right)
