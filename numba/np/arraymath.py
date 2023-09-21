@@ -3813,7 +3813,9 @@ def choose_searchsorted_implementation(np_dtype, side):
             _impl = _searchsorted(less_than_or_equal, less_than_or_equal)
 
     else:
-        raise ValueError(f'No implementation for numpy dtype: {np_dtype}')
+        raise ValueError(
+            f'No searchsorted implementation for numpy dtype: {np_dtype}'
+        )
 
     return register_jitable(_impl)
 

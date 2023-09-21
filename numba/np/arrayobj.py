@@ -6315,6 +6315,13 @@ def numpy_dsplit(ary, indices_or_sections):
 _sorts = {}
 
 
+def default_lt(a, b):
+    """
+    Trivial comparison function between two keys.
+    """
+    return a < b
+
+
 def lt_floats(a, b):
     # Adapted from NumPy commit 717c7acf which introduced the behavior of
     # putting NaNs at the end.
@@ -6323,48 +6330,45 @@ def lt_floats(a, b):
     return a < b or (np.isnan(b) and not np.isnan(a))
 
 
-def get_sort_func(kind, lt_kind, is_argsort=False):
+def get_sort_func(kind, lt_impl, is_argsort=False):
     """
     Get a sort implementation of the given kind.
     """
-    key = kind, lt_kind, is_argsort
-
-    lt_map = {
-        'float': lt_floats,
-        'complex': lt_complex
-    }
+    key = kind, lt_impl.__name__, is_argsort
 
     try:
         return _sorts[key]
     except KeyError:
         if kind == 'quicksort':
             sort = quicksort.make_jit_quicksort(
-                lt=lt_map.get(lt_kind),
+                lt=lt_impl,
                 is_argsort=is_argsort,
                 is_np_array=True)
             func = sort.run_quicksort
         elif kind == 'mergesort':
             sort = mergesort.make_jit_mergesort(
-                lt=lt_map.get(lt_kind),
+                lt=lt_impl,
                 is_argsort=is_argsort)
             func = sort.run_mergesort
         _sorts[key] = func
         return func
 
 
+def lt_implementation(dtype):
+    if isinstance(dtype, types.Float):
+        return lt_floats
+    elif isinstance(dtype, types.Complex):
+        return lt_complex
+    else:
+        return default_lt
+
+
 @lower_builtin("array.sort", types.Array)
 def array_sort(context, builder, sig, args):
     arytype = sig.args[0]
 
-    if isinstance(arytype.dtype, types.Float):
-        lt_kind = 'float'
-    elif isinstance(arytype.dtype, types.Complex):
-        lt_kind = 'complex'
-    else:
-        lt_kind = None
-
     sort_func = get_sort_func(kind='quicksort',
-                              lt_kind=lt_kind)
+                              lt_impl=lt_implementation(arytype.dtype))
 
     def array_sort_impl(arr):
         # Note we clobber the return value
@@ -6391,15 +6395,8 @@ def impl_np_sort(a):
 def array_argsort(context, builder, sig, args):
     arytype, kind = sig.args
 
-    if isinstance(arytype.dtype, types.Float):
-        lt_kind = 'float'
-    elif isinstance(arytype.dtype, types.Complex):
-        lt_kind = 'complex'
-    else:
-        lt_kind = None
-
     sort_func = get_sort_func(kind=kind.literal_value,
-                              lt_kind=lt_kind,
+                              lt_impl=lt_implementation(arytype.dtype),
                               is_argsort=True)
 
     def array_argsort_impl(arr):
