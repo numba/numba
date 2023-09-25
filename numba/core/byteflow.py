@@ -1707,7 +1707,7 @@ class _State(object):
                 stack.append(self.make_temp())
         # Handle changes on the blockstack
         blockstack = list(self._blockstack)
-        if PYVERSION == (3, 11):
+        if PYVERSION >= (3, 11):
             # pop expired block in destination pc
             while blockstack:
                 top = blockstack[-1]
