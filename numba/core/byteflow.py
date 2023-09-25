@@ -1715,7 +1715,7 @@ class _State(object):
                 stack.append(self.make_temp())
         # Handle changes on the blockstack
         blockstack = list(self._blockstack)
-        if PYVERSION == (3, 11):
+        if PYVERSION in ((3, 11), (3, 12)):
             # pop expired block in destination pc
             while blockstack:
                 top = blockstack[-1]
@@ -1724,7 +1724,7 @@ class _State(object):
                     blockstack.pop()
                 else:
                     break
-        elif PYVERSION < (3, 11):
+        elif PYVERSION in ((3, 8), (3, 9), (3, 10)):
             pass # intentionally bypass
         else:
             raise NotImplementedError(PYVERSION)
