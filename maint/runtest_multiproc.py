@@ -25,6 +25,10 @@ Example:
     To run 30% of tests chosen randomly from `numba.tests`.
     Use `--` to separate listing arguments from command arguments.
 
+Requires:
+
+    `numba` package to be import-able either by installing `numba` or running
+    this script from the the source root.
 """
 import re
 import sys
@@ -47,7 +51,8 @@ def run_tests(test_args):
     PATH_PASSED.mkdir(parents=True, exist_ok=True)
 
     listing = subp.check_output(
-        "python runtests.py --list".split() + [*test_args], encoding="utf8"
+        "python -m numba.runtests --list".split() + [*test_args],
+        encoding="utf8",
     )
     tests = []
     for line in listing.splitlines():
@@ -65,7 +70,7 @@ def run_tests(test_args):
     def runner(testgroup):
         cmdargs = " ".join(groups[testgroup])
         # Using -m=1 so tests are cancelled if they run too long due to timeout.
-        cmd = f"python runtests.py -m=1 -vb {cmdargs}"
+        cmd = f"python -m numba.runtests -m=1 -vb {cmdargs}"
         print("RUNNING", testgroup)
         try:
             output = subp.check_output(
@@ -77,7 +82,7 @@ def run_tests(test_args):
         else:
             path = PATH_PASSED
 
-        with open(path / "{testgroup}.log", "wb") as fout:
+        with open(path / f"{testgroup}.log", "wb") as fout:
             fout.write(output)
 
         return testgroup
