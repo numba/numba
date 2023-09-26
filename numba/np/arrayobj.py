@@ -17,7 +17,7 @@ from numba.core import types, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, from_dtype, carray, farray,
                                     is_contiguous, is_fortran,
                                     check_is_integer, type_is_scalar,
-                                    lt_complex)
+                                    lt_complex, lt_floats)
 from numba.np.numpy_support import type_can_asarray, is_nonelike, numpy_version
 from numba.core.imputils import (lower_builtin, lower_getattr,
                                  lower_getattr_generic,
@@ -6320,14 +6320,6 @@ def default_lt(a, b):
     Trivial comparison function between two keys.
     """
     return a < b
-
-
-def lt_floats(a, b):
-    # Adapted from NumPy commit 717c7acf which introduced the behavior of
-    # putting NaNs at the end.
-    # The code is later moved to numpy/core/src/npysort/npysort_common.h
-    # This info is gathered as of NumPy commit d8c09c50
-    return a < b or (np.isnan(b) and not np.isnan(a))
 
 
 def get_sort_func(kind, lt_impl, is_argsort=False):

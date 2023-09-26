@@ -15,7 +15,7 @@ from numba.core import types, cgutils
 from numba.core.extending import overload, overload_method, register_jitable
 from numba.np.numpy_support import (as_dtype, type_can_asarray, type_is_scalar,
                                     numpy_version, is_nonelike,
-                                    check_is_integer, lt_complex)
+                                    check_is_integer, lt_complex, lt_floats)
 from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
                                  impl_ret_new_ref, impl_ret_untracked)
 from numba.np.arrayobj import (make_array, load_item, store_item,
@@ -3679,25 +3679,21 @@ def less_than_or_equal(a, b):
     return a <= b
 
 
-@register_jitable
-def custom_lt(a, b):
-    if np.isnan(b):
-        return not np.isnan(a)
-    return a < b
+less_than_float = register_jitable(lt_floats)
 
 
 @register_jitable
-def custom_le(a, b):
+def less_than_or_equal_float(a, b):
     if np.isnan(b):
         return True
     return a <= b
 
 
-custom_complex_lt = register_jitable(lt_complex)
+less_than_complex = register_jitable(lt_complex)
 
 
 @register_jitable
-def custom_complex_le(a, b):
+def less_than_or_equal_complex(a, b):
     if np.isnan(a.real):
         if np.isnan(b.real):
             if np.isnan(a.imag):
@@ -3774,47 +3770,48 @@ def _searchsorted(func_1, func_2):
     return impl
 
 
-def choose_searchsorted_implementation(np_dtype, side):
+VALID_SEARCHSORTED_SIDES = frozenset({'left', 'right'})
 
-    if np.issubdtype(np_dtype, np.integer):
-        if side == 'left':
-            _impl = _searchsorted(less_than, less_than)
-        elif side == 'right':
-            _impl = _searchsorted(less_than_or_equal, less_than_or_equal)
 
-    elif np.issubdtype(np_dtype, np.bool_):
-        if side == 'left':
-            _impl = _searchsorted(less_than, less_than)
-        elif side == 'right':
-            _impl = _searchsorted(less_than_or_equal, less_than_or_equal)
+def bind_operators(side, lt, le, use_version_gate=False):
+    if side == 'left':
+        _impl = _searchsorted(lt, lt)
+    else:
+        if use_version_gate and numpy_version < (1, 23):
+            # change in behaviour for floats and complex
+            # introduced by:
+            # https://github.com/numpy/numpy/pull/21867
+            _impl = _searchsorted(lt, le)
+        else:
+            _impl = _searchsorted(le, le)
 
-    elif np.issubdtype(np_dtype, np.floating):
-        if side == 'left':
-            _impl = _searchsorted(custom_lt, custom_lt)
-        elif side == 'right':
-            if numpy_version >= (1, 23):
-                _impl = _searchsorted(custom_le, custom_le)
-            else:
-                _impl = _searchsorted(custom_lt, custom_le)
+    return _impl
+
+
+def make_searchsorted_implementation(np_dtype, side):
+    assert side in VALID_SEARCHSORTED_SIDES
+
+    if np.issubdtype(np_dtype, np.floating):
+        _impl = bind_operators(
+            side,
+            less_than_float,
+            less_than_or_equal_float,
+            use_version_gate=True
+        )
 
     elif np.issubdtype(np_dtype, np.complexfloating):
-        if side == 'left':
-            _impl = _searchsorted(custom_complex_lt, custom_complex_lt)
-        elif side == 'right':
-            if numpy_version >= (1, 23):
-                _impl = _searchsorted(custom_complex_le, custom_complex_le)
-            else:
-                _impl = _searchsorted(custom_complex_lt, custom_complex_le)
-
-    elif np.issubdtype(np_dtype, np.character):
-        if side == 'left':
-            _impl = _searchsorted(less_than, less_than)
-        elif side == 'right':
-            _impl = _searchsorted(less_than_or_equal, less_than_or_equal)
+        _impl = bind_operators(
+            side,
+            less_than_complex,
+            less_than_or_equal_complex,
+            use_version_gate=True
+        )
 
     else:
-        raise ValueError(
-            f'No searchsorted implementation for numpy dtype: {np_dtype}'
+        _impl = bind_operators(
+            side,
+            less_than,
+            less_than_or_equal
         )
 
     return register_jitable(_impl)
@@ -3824,7 +3821,7 @@ def choose_searchsorted_implementation(np_dtype, side):
 def searchsorted(a, v, side='left'):
     side_val = getattr(side, 'literal_value', side)
 
-    if side_val not in ['left', 'right']:
+    if side_val not in VALID_SEARCHSORTED_SIDES:
         # could change this so that side doesn't need to be
         # a compile-time constant
         raise NumbaValueError(f"Invalid value given for 'side': {side_val}")
@@ -3835,7 +3832,7 @@ def searchsorted(a, v, side='left'):
         v_dt = as_dtype(v)
 
     np_dt = np.promote_types(as_dtype(a.dtype), v_dt)
-    _impl = choose_searchsorted_implementation(np_dt, side_val)
+    _impl = make_searchsorted_implementation(np_dt, side_val)
 
     if isinstance(v, types.Array):
         def impl(a, v, side='left'):
