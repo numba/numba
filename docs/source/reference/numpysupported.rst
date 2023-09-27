@@ -425,6 +425,9 @@ The following reduction functions are supported:
 Polynomials
 -----------
 
+The following polynomial classes are supported:
+* :class:`numpy.polynomial.polynomial.Polynomial` (only the first three arguments)
+
 The following polynomial functions are supported:
 * :func:`numpy.polynomial.polynomial.polyadd()`
 * :func:`numpy.polynomial.polynomial.polymul()`
