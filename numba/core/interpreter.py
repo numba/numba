@@ -2846,7 +2846,12 @@ class Interpreter(object):
         raise NotImplementedError(PYVERSION)
 
     def op_COMPARE_OP(self, inst, lhs, rhs, res):
-        op = dis.cmp_op[inst.arg]
+        if PYVERSION in ((3, 12), ):
+            op = dis.cmp_op[inst.arg >> 4]
+        elif PYVERSION in ((3, 8), (3, 9), (3, 10), (3, 11)):
+            op = dis.cmp_op[inst.arg]
+        else:
+            raise NotImplementedError(PYVERSION)
         if op == 'in' or op == 'not in':
             lhs, rhs = rhs, lhs
 
