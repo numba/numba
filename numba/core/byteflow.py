@@ -1068,7 +1068,7 @@ class TraceRunner(object):
         vararg = state.pop()
         func = state.pop()
 
-        if PYVERSION == (3, 11):
+        if PYVERSION >= (3, 11):
             if _is_null_temp_reg(state.peek(1)):
                 state.pop() # pop NULL, it's not used
 
