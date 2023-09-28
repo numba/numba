@@ -7,10 +7,10 @@ import numpy as np
 from numpy.polynomial import polynomial as poly
 from numpy.polynomial import polyutils as pu
 
-from numba import typeof
 from numba.core import types, errors
 from numba.core.extending import overload
 from numba.np.numpy_support import type_can_asarray, as_dtype, from_dtype
+
 
 @overload(np.roots)
 def roots_impl(p):
@@ -65,7 +65,7 @@ def polyutils_trimseq(seq):
     if not type_can_asarray(seq):
         msg = 'The argument "seq" must be array-like'
         raise errors.TypingError(msg)
-    
+
     if isinstance(seq, types.BaseTuple):
         msg = 'Unsupported type %r for argument "seq"'
         raise errors.TypingError(msg % (seq))
@@ -81,9 +81,10 @@ def polyutils_trimseq(seq):
             for i in range(len(seq) - 1, -1, -1):
                 if seq[i] != 0:
                     break
-            return seq[:i+1]
+            return seq[:i + 1]
 
     return impl
+
 
 def _poly_result_dtype(tup):
     # A helper function that takes a tuple of inputs and returns their result
@@ -99,6 +100,7 @@ def _poly_result_dtype(tup):
             s1 = str(item.dtype)
         res_dtype = (np.result_type(res_dtype, s1))
     return from_dtype(res_dtype)
+
 
 @overload(poly.polyadd)
 def numpy_polyadd(c1, c2):

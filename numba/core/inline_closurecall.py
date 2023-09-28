@@ -373,10 +373,6 @@ class InlineWorker(object):
             kernel_copy.blocks = {}
             for block_label, block in the_ir.blocks.items():
                 new_block = copy.deepcopy(the_ir.blocks[block_label])
-                new_block.body = []
-                for stmt in the_ir.blocks[block_label].body:
-                    scopy = copy.deepcopy(stmt)
-                    new_block.body.append(scopy)
                 kernel_copy.blocks[block_label] = new_block
             return kernel_copy
 
