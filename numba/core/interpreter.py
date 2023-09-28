@@ -2928,6 +2928,12 @@ class Interpreter(object):
     def op_POP_JUMP_FORWARD_IF_NOT_NONE(self, inst, pred):
         self._jump_if_none(inst, pred, False)
 
+    def op_POP_JUMP_IF_NONE(self, inst, pred):
+        self._jump_if_none(inst, pred, True)
+
+    def op_POP_JUMP_IF_NOT_NONE(self, inst, pred):
+        self._jump_if_none(inst, pred, False)
+
     def op_POP_JUMP_BACKWARD_IF_NONE(self, inst, pred):
         self._jump_if_none(inst, pred, True)
 
