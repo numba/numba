@@ -1940,6 +1940,25 @@ class Interpreter(object):
                                      (), loc=self.loc)
         self.store(value=sliceinst, name=res)
 
+    if PYVERSION in ((3, 12), ):
+        def op_BINARY_SLICE(self, inst, start, end, container, res, slicevar,
+                            temp_res):
+            start = self.get(start)
+            end = self.get(end)
+            slicegv = ir.Global("slice", slice, loc=self.loc)
+            self.store(value=slicegv, name=slicevar)
+            sliceinst = ir.Expr.call(self.get(slicevar), (start, end), (),
+                                     loc=self.loc)
+            self.store(value=sliceinst, name=temp_res)
+            index = self.get(temp_res)
+            target = self.get(container)
+            expr = ir.Expr.getitem(target, index=index, loc=self.loc)
+            self.store(expr, res)
+    elif PYVERSION in ((3, 8), (3, 9), (3, 10), (3, 11)):
+        pass
+    else:
+        raise NotImplementedError(PYVERSION)
+
     def op_SLICE_0(self, inst, base, res, slicevar, indexvar, nonevar):
         base = self.get(base)
 
