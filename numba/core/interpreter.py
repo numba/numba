@@ -2219,7 +2219,7 @@ class Interpreter(object):
     def op_COPY_FREE_VARS(self, inst):
         pass
 
-    if PYVERSION == (3, 11):
+    if PYVERSION >= (3, 11):
         def op_LOAD_DEREF(self, inst, res):
             name = self.func_id.func.__code__._varname_from_oparg(inst.arg)
             if name in self.code_cellvars:
