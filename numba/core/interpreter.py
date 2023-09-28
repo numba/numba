@@ -3031,8 +3031,7 @@ class Interpreter(object):
         self.op_MAKE_FUNCTION(inst, name, code, closure, annotations,
                               kwdefaults, defaults, res)
 
-    if PYVERSION == (3, 11):
-
+    if PYVERSION in ((3, 11), (3, 12)):
         def op_LOAD_CLOSURE(self, inst, res):
             name = self.func_id.func.__code__._varname_from_oparg(inst.arg)
             if name in self.code_cellvars:
@@ -3049,7 +3048,7 @@ class Interpreter(object):
                 assert 0, "unreachable"
             self.store(gl, res)
 
-    elif PYVERSION < (3, 11):
+    elif PYVERSION in ((3, 8), (3, 9), (3, 10)):
         def op_LOAD_CLOSURE(self, inst, res):
             n_cellvars = len(self.code_cellvars)
             if inst.arg < n_cellvars:
