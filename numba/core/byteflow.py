@@ -463,6 +463,13 @@ class TraceRunner(object):
 
     def op_LOAD_ATTR(self, state, inst):
         item = state.pop()
+        if PYVERSION in ((3, 12), ):
+            if inst.arg & 1:
+                state.push(state.make_null())
+        elif PYVERSION in ((3, 8), (3, 9), (3, 10), (3, 11)):
+            pass
+        else:
+            raise NotImplementedError(PYVERSION)
         res = state.make_temp()
         state.append(inst, item=item, res=res)
         state.push(res)

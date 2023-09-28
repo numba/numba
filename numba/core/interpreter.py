@@ -2179,7 +2179,12 @@ class Interpreter(object):
 
     def op_LOAD_ATTR(self, inst, item, res):
         item = self.get(item)
-        attr = self.code_names[inst.arg]
+        if PYVERSION in ((3, 12), ):
+            attr = self.code_names[inst.arg >> 1]
+        elif PYVERSION in ((3, 8), (3, 9), (3, 10), (3, 11)):
+            attr = self.code_names[inst.arg]
+        else:
+            raise NotImplementedError(PYVERSION)
         getattr = ir.Expr.getattr(item, attr, loc=self.loc)
         self.store(getattr, res)
 
