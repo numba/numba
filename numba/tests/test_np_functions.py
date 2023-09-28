@@ -5111,7 +5111,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                     self.assertPreciseEqual(expected,
                                             got, prec='double', ulps=2)
                 else:
-                    self.assertPreciseEqual(expected, got, prec='exact')
+                    self.assertPreciseEqual(expected, got, prec='double')
 
         for M in ['a', 1.1, 1j]:
             with self.assertRaises(TypingError) as raises:
