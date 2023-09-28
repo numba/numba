@@ -2175,7 +2175,10 @@ class Interpreter(object):
 
     def op_LOAD_ATTR(self, inst, item, res):
         item = self.get(item)
-        attr = self.code_names[inst.arg]
+        if PYVERSION == (3, 12):
+            attr = self.code_names[inst.arg>>1]
+        else:
+            attr = self.code_names[inst.arg]
         getattr = ir.Expr.getattr(item, attr, loc=self.loc)
         self.store(getattr, res)
 
