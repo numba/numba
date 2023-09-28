@@ -889,6 +889,10 @@ class TraceRunner(object):
         blk = state.pop_block()
         state.reset_stack(blk['entry_stack'])
 
+    def op_END_FOR(self, state, inst):
+        _ = state.pop()
+        _ = state.pop()
+
     def op_POP_FINALLY(self, state, inst):
         # we don't emulate the exact stack behavior
         if inst.arg != 0:
@@ -1306,7 +1310,13 @@ class TraceRunner(object):
                      pred=pred)
         state.push(indval)
         end = inst.get_jump_target()
-        state.fork(pc=end, npop=2)
+        if PYVERSION == (3, 12):
+            # Changed in version 3.12: Up until 3.11 the iterator was
+            # popped when it was exhausted. Now this is handled using END_FOR
+            # op code.
+            state.fork(pc=end)
+        else:
+            state.fork(pc=end, npop=2)
         state.fork(pc=inst.next)
 
     def op_GEN_START(self, state, inst):
