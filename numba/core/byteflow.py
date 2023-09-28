@@ -1353,11 +1353,11 @@ class TraceRunner(object):
     op_BINARY_XOR = _binaryop
 
     def op_MAKE_FUNCTION(self, state, inst, MAKE_CLOSURE=False):
-        if PYVERSION == (3, 11):
+        if PYVERSION in ((3, 11), (3, 12)):
             # https://github.com/python/cpython/commit/2f180ce
             # name set via co_qualname
             name = None
-        elif PYVERSION < (3, 11):
+        elif PYVERSION in ((3, 8), (3, 9), (3, 10)):
             name = state.pop()
         else:
             raise NotImplementedError(PYVERSION)
