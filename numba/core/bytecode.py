@@ -2,6 +2,7 @@ from collections import namedtuple, OrderedDict
 import dis
 import inspect
 import itertools
+import opcode
 from types import CodeType, ModuleType
 
 from numba.core import errors, utils, serialize
@@ -154,6 +155,7 @@ def _unpack_opargs(code):
             for j in range(ARG_LEN):
                 arg |= code[i + j] << (8 * j)
             i += ARG_LEN
+            i += opcode._inline_cache_entries[op] * 2
             if op == EXTENDED_ARG:
                 # This is a deviation from what dis does...
                 # In python 3.11 it seems like EXTENDED_ARGs appear more often
@@ -168,6 +170,7 @@ def _unpack_opargs(code):
         else:
             arg = None
             i += NO_ARG_LEN
+            i += opcode._inline_cache_entries[op] * 2
 
         extended_arg = 0
         yield (offset, op, arg, i)
