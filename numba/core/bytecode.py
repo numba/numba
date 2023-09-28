@@ -322,7 +322,7 @@ class _ByteCode(object):
 
 def _fix_LOAD_GLOBAL_arg(arg):
     if PYVERSION >= (3, 11):
-        assert PYVERSION == (3, 11) # reminder to check newer versions
+        assert PYVERSION >= (3, 11) # reminder to check newer versions
         return arg >> 1
     return arg
 
