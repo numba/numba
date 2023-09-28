@@ -368,7 +368,7 @@ class ByteCodePy311(_ByteCode):
             return ent
 
 
-if PYVERSION == (3, 11):
+if PYVERSION >= (3, 11):
     ByteCode = ByteCodePy311
 elif PYVERSION < (3, 11):
     ByteCode = _ByteCode
