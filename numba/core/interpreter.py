@@ -1392,12 +1392,12 @@ class Interpreter(object):
         # post process the IR to rewrite opcodes/byte sequences that are too
         # involved to risk handling as part of direct interpretation
         peepholes = []
-        if PYVERSION == (3, 11):
+        if PYVERSION >= (3, 11):
             peepholes.append(peep_hole_split_at_pop_block)
-        if PYVERSION in [(3, 9), (3, 10), (3, 11)]:
+        if PYVERSION in [(3, 9), (3, 10), (3, 11), (3, 12)]:
             peepholes.append(peep_hole_list_to_tuple)
         peepholes.append(peep_hole_delete_with_exit)
-        if PYVERSION in [(3, 10), (3, 11)]:
+        if PYVERSION in [(3, 10), (3, 11), (3, 12)]:
             # peep_hole_call_function_ex_to_call_function_kw
             # depends on peep_hole_list_to_tuple converting
             # any large number of arguments from a list to a
