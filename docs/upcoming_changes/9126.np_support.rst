@@ -1,0 +1,4 @@
+Added support for np.indices() function.
+========================================
+
+Support is added for ``numpy.indices()``.

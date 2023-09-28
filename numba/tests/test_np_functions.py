@@ -436,6 +436,22 @@ def np_asarray_chkfinite(a, dtype=None):
     return np.asarray_chkfinite(a, dtype)
 
 
+def unwrap(p, discont=None, axis=-1, period=6.283185307179586):
+    return np.unwrap(p, discont, axis, period=period)
+
+
+def unwrap1(p):
+    return np.unwrap(p)
+
+
+def unwrap13(p, period):
+    return np.unwrap(p, period=period)
+
+
+def unwrap123(p, period, discont):
+    return np.unwrap(p, period=period, discont=discont)
+
+
 def array_contains(a, key):
     return key in a
 
@@ -446,6 +462,10 @@ def swapaxes(a, a1, a2):
 
 def nan_to_num(X, copy=True, nan=0.0):
     return np.nan_to_num(X, copy=copy, nan=nan)
+
+
+def np_indices(dimensions):
+    return np.indices(dimensions)
 
 
 def diagflat1(v):
@@ -1891,6 +1911,41 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self._triangular_indices_from_tests_arr_k(triu_indices_from_arr_k)
         self._triangular_indices_from_exceptions(triu_indices_from_arr, False)
         self._triangular_indices_from_exceptions(triu_indices_from_arr_k, True)
+
+    def test_indices_basic(self):
+        pyfunc = np_indices
+        cfunc = njit(np_indices)
+
+        def inputs():
+            # Taken from https://github.com/numpy/numpy/blob/db4f43983cb938f12c311e1f5b7165e270c393b4/numpy/core/tests/test_numeric.py#L3383-L3407 # noqa: E501
+            yield (4, 3)
+            yield (4,)
+            yield (0,)
+            yield (2, 2, 3, 5)
+
+        for dims in inputs():
+            self.assertPreciseEqual(pyfunc(dims), cfunc(dims))
+
+    def test_indices_exception(self):
+        cfunc = njit(np_indices)
+
+        self.disable_leak_check()
+
+        errmsg = 'The argument "dimensions" must be a tuple of integers'
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc")
+        self.assertIn(errmsg,
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc((2.0, 3.0))
+        self.assertIn(errmsg,
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc((2, 3.0))
+        self.assertIn(errmsg,
+                      str(raises.exception))
 
     def partition_sanity_check(self, pyfunc, cfunc, a, kth):
         # as NumPy uses a different algorithm, we do not expect to
@@ -5544,6 +5599,93 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as e:
             cfunc(np.array([1, 2, 3, 4]), 'float32')
         self.assertIn("dtype must be a valid Numpy dtype", str(e.exception))
+
+    def test_unwrap_basic(self):
+        pyfunc = unwrap
+        cfunc = njit(pyfunc)
+
+        pyfunc1 = unwrap1
+        cfunc1 = njit(pyfunc1)
+
+        pyfunc13 = unwrap13
+        cfunc13 = njit(pyfunc13)
+
+        pyfunc123 = unwrap123
+        cfunc123 = njit(pyfunc123)
+        # Based on tests from https://github.com/numpy/numpy/blob/3032e84ff34f20def2ef4ebf9f8695947af3fd24/numpy/lib/tests/test_function_base.py#L1979-L2003 # noqa: E501
+        # Additional tests are included to ensure proper support for
+        # higher dimensional arrays
+
+        # p only
+        def inputs1():
+            yield np.array([1, 1 + 2 * np.pi])
+            phase = np.linspace(0, np.pi, num=5)
+            phase[3:] += np.pi
+            yield phase
+            yield np.arange(16).reshape((4,4))
+            yield np.arange(160, step=10).reshape((4,4))
+            yield np.arange(240, step=10).reshape((2,3,4))
+
+        for p in inputs1():
+            self.assertPreciseEqual(pyfunc1(p), cfunc1(p))
+
+        uneven_seq = np.array([0, 75, 150, 225, 300, 430])
+        wrap_uneven = np.mod(uneven_seq, 250)
+
+        # p and period only
+        def inputs13():
+            yield np.array([1, 1 + 256]), 255
+            yield np.array([0, 75, 150, 225, 300]), 255
+            yield np.array([0, 1, 2, -1, 0]), 4
+            yield np.array([2, 3, 4, 5, 2, 3, 4, 5]), 4
+            yield wrap_uneven, 250
+
+        # check that you can set axis=-1 without errors
+        self.assertPreciseEqual(pyfunc(wrap_uneven, axis=-1, period=250),
+                                cfunc(wrap_uneven, axis=-1, period=250))
+
+        for p, period in inputs13():
+            self.assertPreciseEqual(pyfunc13(p, period=period),
+                                    cfunc13(p, period=period))
+
+        # p, period and discont
+        def inputs123():
+            yield wrap_uneven, 250, 140
+
+        for p, period, discont in inputs123():
+            self.assertPreciseEqual(pyfunc123(p, period=period,
+                                              discont=discont),
+                                    cfunc123(p, period=period,
+                                             discont=discont))
+
+    def test_unwrap_exception(self):
+        cfunc = njit(unwrap)
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as e:
+            cfunc('abc')
+        self.assertIn('The argument "p" must be array-like',
+                      str(e.exception))
+
+        with self.assertRaises(TypingError) as e:
+            cfunc(np.array([1, 2]), 'abc')
+        self.assertIn('The argument "discont" must be a scalar',
+                      str(e.exception))
+
+        with self.assertRaises(TypingError) as e:
+            cfunc(np.array([1, 2]), 3, period='abc')
+        self.assertIn('The argument "period" must be a scalar',
+                      str(e.exception))
+
+        with self.assertRaises(TypingError) as e:
+            cfunc(np.array([1, 2]), 3, axis='abc')
+        self.assertIn('The argument "axis" must be an integer',
+                      str(e.exception))
+
+        with self.assertRaises(ValueError) as e:
+            cfunc(np.array([1, 2]), 3, axis=2)
+        self.assertIn('Value for argument "axis" is not supported',
+                      str(e.exception))
 
     def test_swapaxes_basic(self):
         pyfunc = swapaxes

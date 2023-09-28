@@ -173,6 +173,10 @@ class TestPoly1D(TestPolynomialBase):
 
 class TestPolynomial(MemoryLeakMixin, TestCase):
 
+    #
+    # tests for Polyutils functions
+    #
+
     def test_trimseq_basic(self):
         pyfunc = trimseq
         cfunc = njit(trimseq)
@@ -510,4 +514,64 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             cfunc(('a', 'b', 'c'), 1)
         self.assertIn('Input dtype must be scalar.',
+                      str(raises.exception))
+
+    #
+    # tests for Polynomial class
+    #
+
+    def test_Polynomial_constructor(self):
+
+        def pyfunc3(c, dom, win):
+            p = poly.Polynomial(c, dom, win)
+            return p
+        cfunc3 = njit(pyfunc3)
+
+        def pyfunc1(c):
+            p = poly.Polynomial(c)
+            return p
+        cfunc1 = njit(pyfunc1)
+        list1 = (np.array([0, 1]), np.array([0., 1.]))
+        list2 = (np.array([0, 1]), np.array([0., 1.]))
+        list3 = (np.array([0, 1]), np.array([0., 1.]))
+        for c in list1:
+            for dom in list2:
+                for win in list3:
+                    p1 = pyfunc3(c, dom, win)
+                    p2 = cfunc3(c, dom, win)
+                    q1 = pyfunc1(c)
+                    q2 = cfunc1(c)
+                    self.assertPreciseEqual(p1, p2)
+                    self.assertPreciseEqual(p1.coef, p2.coef)
+                    self.assertPreciseEqual(p1.domain, p2.domain)
+                    self.assertPreciseEqual(p1.window, p2.window)
+                    self.assertPreciseEqual(q1.coef, q2.coef)
+                    self.assertPreciseEqual(q1.domain, q2.domain)
+                    self.assertPreciseEqual(q1.window, q2.window)
+
+    def test_Polynomial_exeption(self):
+        def pyfunc3(c, dom, win):
+            p = poly.Polynomial(c, dom, win)
+            return p
+        cfunc3 = njit(pyfunc3)
+
+        self.disable_leak_check()
+
+        input2 = np.array([1, 2])
+        input3 = np.array([1, 2, 3])
+        input2D = np.arange(4).reshape((2, 2))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc3(input2, input3, input2)
+        self.assertIn("Domain has wrong number of elements.",
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc3(input2, input2, input3)
+        self.assertIn("Window has wrong number of elements.",
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc3(input2D, input2, input2)
+        self.assertIn("Coefficient array is not 1-d",
                       str(raises.exception))

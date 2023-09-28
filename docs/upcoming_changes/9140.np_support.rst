@@ -1,0 +1,4 @@
+Added support for `np.polynomial.polynomial.Polynomial` class.
+==============================================================
+
+Support is added for the `Polynomial` class from the package `np.polynomial.polynomial`.

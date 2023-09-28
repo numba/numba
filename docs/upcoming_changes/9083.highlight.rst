@@ -1,5 +1,0 @@
-Removal of Windows 32-bit Support
-"""""""""""""""""""""""""""""""""
-
-This release onwards, Numba has discontinued support for Windows 32-bit
-operating systems.
