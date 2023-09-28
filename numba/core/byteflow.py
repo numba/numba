@@ -782,6 +782,14 @@ class TraceRunner(object):
     op_POP_JUMP_IF_TRUE = _op_POP_JUMP_IF
     op_POP_JUMP_IF_FALSE = _op_POP_JUMP_IF
 
+    if PYVERSION in ((3, 12), ):
+        op_POP_JUMP_IF_NONE = _op_POP_JUMP_IF
+        op_POP_JUMP_IF_NOT_NONE = _op_POP_JUMP_IF
+    elif PYVERSION in ((3, 8), (3, 9), (3, 10), (3, 11)):
+        pass
+    else:
+        raise NotImplementedError(PYVERSION)
+
     def _op_JUMP_IF_OR_POP(self, state, inst):
         pred = state.get_tos()
         state.append(inst, pred=pred)
