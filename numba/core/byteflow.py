@@ -480,6 +480,23 @@ class TraceRunner(object):
         state.append(inst, res=res)
         state.push(res)
 
+    if PYVERSION in ((3, 12), ):
+        op_LOAD_FAST_CHECK = op_LOAD_FAST
+
+        def op_LOAD_FAST_AND_CLEAR(self, state, inst):
+            try:
+                name = state.get_varname(inst)
+                res = state.make_temp(name)
+            except IndexError:
+                res = state.make_null()
+            finally:
+                state.append(inst, res=res)
+                state.push(res)
+    elif PYVERSION in ((3, 8), (3, 9), (3, 10), (3, 11)):
+        pass
+    else:
+        raise NotImplementedError(PYVERSION)
+
     def op_DELETE_FAST(self, state, inst):
         state.append(inst)
 
