@@ -2814,6 +2814,14 @@ class Interpreter(object):
         ret = ir.Return(self.get(castval), loc=self.loc)
         self.current_block.append(ret)
 
+    def op_RETURN_CONST(self, inst, retval, castval):
+        value = self.code_consts[inst.arg]
+        const = ir.Const(value, loc=self.loc)
+        self.store(const, retval)
+        self.store(ir.Expr.cast(self.get(retval), loc=self.loc), castval)
+        ret = ir.Return(self.get(castval), loc=self.loc)
+        self.current_block.append(ret)
+
     def op_COMPARE_OP(self, inst, lhs, rhs, res):
         op = dis.cmp_op[inst.arg]
         if op == 'in' or op == 'not in':

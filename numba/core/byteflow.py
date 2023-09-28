@@ -822,6 +822,11 @@ class TraceRunner(object):
         state.append(inst, retval=state.pop(), castval=state.make_temp())
         state.terminate()
 
+    def op_RETURN_CONST(self, state, inst):
+        res = state.make_temp("const")
+        state.append(inst, retval=res, castval=state.make_temp())
+        state.terminate()
+
     def op_YIELD_VALUE(self, state, inst):
         val = state.pop()
         res = state.make_temp()
