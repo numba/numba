@@ -2176,6 +2176,17 @@ class Interpreter(object):
         srcname = self.code_locals[inst.arg]
         self.store(value=self.get(srcname), name=res)
 
+    op_LOAD_FAST_CHECK = op_LOAD_FAST
+
+    def op_LOAD_FAST_AND_CLEAR(self, inst, res):
+        const_none = ir.Const(None, loc=self.loc)
+        try:
+            srcname = self.code_locals[inst.arg]
+            self.store(value=self.get(srcname), name=res)
+        except NotDefinedError:
+            self.store(const_none, name=res)
+        self.store(const_none, name=srcname)
+
     def op_STORE_FAST(self, inst, value):
         dstname = self.code_locals[inst.arg]
         value = self.get(value)
