@@ -1068,9 +1068,13 @@ class TraceRunner(object):
         vararg = state.pop()
         func = state.pop()
 
-        if PYVERSION == (3, 11):
+        if PYVERSION in ((3, 11), (3, 12)):
             if _is_null_temp_reg(state.peek(1)):
                 state.pop() # pop NULL, it's not used
+        elif PYVERSION in ((3, 8), (3, 9), (3, 10)):
+            pass
+        else:
+            raise NotImplementedError(PYVERSION)
 
         res = state.make_temp()
         state.append(inst, func=func, vararg=vararg, varkwarg=varkwarg, res=res)
