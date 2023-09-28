@@ -846,6 +846,16 @@ class TraceRunner(object):
         state.append(inst, retval=state.pop(), castval=state.make_temp())
         state.terminate()
 
+    if PYVERSION in ((3, 12), ):
+        def op_RETURN_CONST(self, state, inst):
+            res = state.make_temp("const")
+            state.append(inst, retval=res, castval=state.make_temp())
+            state.terminate()
+    elif PYVERSION in ((3, 8), (3, 9), (3, 10), (3, 11)):
+        pass
+    else:
+        raise NotImplementedError(PYVERSION)
+
     def op_YIELD_VALUE(self, state, inst):
         val = state.pop()
         res = state.make_temp()
