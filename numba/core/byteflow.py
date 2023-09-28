@@ -749,6 +749,24 @@ class TraceRunner(object):
     else:
         raise NotImplementedError(PYVERSION)
 
+    if PYVERSION in ((3, 12), ):
+        def op_STORE_SLICE(self, state, inst):
+            end = state.pop()
+            start = state.pop()
+            container = state.pop()
+            value = state.pop()
+
+            slicevar = state.make_temp()
+            res = state.make_temp()
+            state.append(
+                inst, start=start, end=end, container=container, value=value,
+                res=res, slicevar=slicevar,
+            )
+    elif PYVERSION in ((3, 8), (3, 9), (3, 10), (3, 11)):
+        pass
+    else:
+        raise NotImplementedError(PYVERSION)
+
     def _op_POP_JUMP_IF(self, state, inst):
         pred = state.pop()
         state.append(inst, pred=pred)
