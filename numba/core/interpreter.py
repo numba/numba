@@ -3026,7 +3026,7 @@ class Interpreter(object):
         self.op_MAKE_FUNCTION(inst, name, code, closure, annotations,
                               kwdefaults, defaults, res)
 
-    if PYVERSION == (3, 11):
+    if PYVERSION >= (3, 11):
 
         def op_LOAD_CLOSURE(self, inst, res):
             name = self.func_id.func.__code__._varname_from_oparg(inst.arg)
