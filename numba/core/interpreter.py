@@ -1532,7 +1532,7 @@ class Interpreter(object):
         self.dfainfo = self.dfa.infos[self.current_block_offset]
         self.assigner = Assigner()
         # Check out-of-scope syntactic-block
-        if PYVERSION == (3, 11):
+        if PYVERSION >= (3, 11):
             # This is recreating pre-3.11 code structure
             while self.syntax_blocks:
                 if offset >= self.syntax_blocks[-1].exit:
@@ -1703,7 +1703,7 @@ class Interpreter(object):
                 val = self.get(varname)
             except ir.NotDefinedError:
                 # Hack to make sure exception variables are defined
-                assert PYVERSION == (3, 11), "unexpected missing definition"
+                assert PYVERSION >= (3, 11), "unexpected missing definition"
                 val = ir.Const(value=None, loc=self.loc)
             stmt = ir.Assign(value=val, target=target,
                              loc=self.loc)
@@ -1762,14 +1762,14 @@ class Interpreter(object):
         if self._DEBUG_PRINT:
             print(inst)
         assert self.current_block is not None
-        if PYVERSION == (3, 11):
+        if PYVERSION >= (3, 11):
             if self.syntax_blocks:
                 top = self.syntax_blocks[-1]
                 if isinstance(top, ir.With) :
                     if inst.offset >= top.exit:
                         self.current_block.append(ir.PopBlock(loc=self.loc))
                         self.syntax_blocks.pop()
-        elif PYVERSION > (3, 11):
+        elif PYVERSION > (3, 12):
             raise NotImplementedError(PYVERSION)
 
         fname = "op_%s" % inst.opname.replace('+', '_')
