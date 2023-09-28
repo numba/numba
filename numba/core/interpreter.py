@@ -2248,15 +2248,16 @@ class Interpreter(object):
     else:
         raise NotImplementedError(PYVERSION)
 
-    if PYVERSION == (3, 11):
+    if PYVERSION in ((3, 11), (3, 12)):
         def op_MAKE_CELL(self, inst):
             pass  # ignored bytecode
 
+    if PYVERSION in ((3, 11), (3, 12)):
         def op_STORE_DEREF(self, inst, value):
             name = self.func_id.func.__code__._varname_from_oparg(inst.arg)
             value = self.get(value)
             self.store(value=value, name=name)
-    elif PYVERSION < (3, 11):
+    elif PYVERSION in ((3, 8), (3, 9), (3, 10)):
         def op_STORE_DEREF(self, inst, value):
             n_cellvars = len(self.code_cellvars)
             if inst.arg < n_cellvars:
