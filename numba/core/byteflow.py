@@ -736,6 +736,19 @@ class TraceRunner(object):
         )
         state.push(res)
 
+    def op_STORE_SLICE(self, state, inst):
+        end = state.pop()
+        start = state.pop()
+        container = state.pop()
+        value = state.pop()
+
+        slicevar = state.make_temp()
+        res = state.make_temp()
+        state.append(
+            inst, start=start, end=end, container=container, value=value,
+            res=res, slicevar=slicevar,
+        )
+
     def _op_POP_JUMP_IF(self, state, inst):
         pred = state.pop()
         state.append(inst, pred=pred)

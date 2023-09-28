@@ -1949,6 +1949,23 @@ class Interpreter(object):
         expr = ir.Expr.getitem(target, index=index, loc=self.loc)
         self.store(expr, res)
 
+    def op_STORE_SLICE(self, inst, start, end, container, value, res, slicevar):
+        start = self.get(start)
+        end  = self.get(end)
+        slicegv = ir.Global("slice", slice, loc=self.loc)
+        self.store(value=slicegv, name=slicevar)
+        sliceinst = ir.Expr.call(self.get(slicevar), (start, end), (),
+                                     loc=self.loc)
+        self.store(value=sliceinst, name=res)
+        index = self.get(res)
+        target = self.get(container)
+        value = self.get(value)
+
+        stmt = ir.SetItem(target=target, index=index, value=value,
+                          loc=self.loc)
+        self.current_block.append(stmt)
+
+
     def op_SLICE_0(self, inst, base, res, slicevar, indexvar, nonevar):
         base = self.get(base)
 
