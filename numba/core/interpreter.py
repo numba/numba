@@ -2244,7 +2244,7 @@ class Interpreter(object):
     else:
         raise NotImplementedError(PYVERSION)
 
-    if PYVERSION == (3, 11):
+    if PYVERSION >= (3, 11):
         def op_MAKE_CELL(self, inst):
             pass  # ignored bytecode
 
