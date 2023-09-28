@@ -1377,7 +1377,7 @@ class Interpreter(object):
         # Interpret loop
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
-        if PYVERSION == (3, 11):
+        if PYVERSION >= (3, 11):
             # Insert end of try markers
             self._end_try_blocks()
         elif PYVERSION > (3, 11):
@@ -1430,7 +1430,7 @@ class Interpreter(object):
 
         See also: _insert_try_block_end
         """
-        assert PYVERSION == (3, 11)
+        assert PYVERSION >= (3, 11)
         graph = self.cfa.graph
         for offset, block in self.blocks.items():
             # Get current blockstack
