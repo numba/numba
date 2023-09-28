@@ -2,10 +2,20 @@ from collections import namedtuple, OrderedDict
 import dis
 import inspect
 import itertools
+
 from types import CodeType, ModuleType
 
 from numba.core import errors, utils, serialize
 from numba.core.utils import PYVERSION
+
+
+if PYVERSION in ((3, 12), ):
+    from opcode import _inline_cache_entries
+elif PYVERSION in ((3, 8), (3, 9), (3, 10), (3, 11)):
+    pass
+else:
+    raise NotImplementedError(PYVERSION)
+
 
 opcode_info = namedtuple('opcode_info', ['argsize'])
 
@@ -162,6 +172,16 @@ def _unpack_opargs(code):
             for j in range(ARG_LEN):
                 arg |= code[i + j] << (8 * j)
             i += ARG_LEN
+            if PYVERSION in ((3, 12), ):
+                # Python 3.12 introduced cache slots. We need to account for
+                # cache slots when we determine the offset of the next opcode.
+                # The number of cache slots is specific to each opcode and can
+                # be looked up in the _inline_cache_entries dictionary.
+                i += _inline_cache_entries[op] * 2
+            elif PYVERSION in ((3, 8), (3, 9), (3, 10), (3, 11)):
+                pass
+            else:
+                raise NotImplementedError(PYVERSION)
             if op == EXTENDED_ARG:
                 # This is a deviation from what dis does...
                 # In python 3.11 it seems like EXTENDED_ARGs appear more often
@@ -176,6 +196,16 @@ def _unpack_opargs(code):
         else:
             arg = None
             i += NO_ARG_LEN
+            if PYVERSION in ((3, 12), ):
+                # Python 3.12 introduced cache slots. We need to account for
+                # cache slots when we determine the offset of the next opcode.
+                # The number of cache slots is specific to each opcode and can
+                # be looked up in the _inline_cache_entries dictionary.
+                i += _inline_cache_entries[op] * 2
+            elif PYVERSION in ((3, 8), (3, 9), (3, 10), (3, 11)):
+                pass
+            else:
+                raise NotImplementedError(PYVERSION)
 
         extended_arg = 0
         yield (offset, op, arg, i)
