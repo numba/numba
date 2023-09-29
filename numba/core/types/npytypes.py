@@ -647,3 +647,15 @@ class PolynomialType(Type):
         # constructor, since the types of domain and window arguments depend on
         # that and we need that information when boxing
         self.n_args = n_args
+
+
+class ChebyshevType(Type):
+    def __init__(self, coef, domain=None, window=None, n_args=1):
+        super(ChebyshevType, self).__init__(name=f'ChebyshevType({coef}, {domain}, {domain}, {n_args})')
+        self.coef = coef
+        self.domain = domain
+        self.window = window
+        # We use n_args to keep track of the number of arguments in the
+        # constructor, since the types of domain and window arguments depend on
+        # that and we need that information when boxing
+        self.n_args = n_args

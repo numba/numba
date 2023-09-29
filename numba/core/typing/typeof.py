@@ -292,3 +292,11 @@ def typeof_numpy_polynomial(val, c):
     domain = typeof(val.domain)
     window = typeof(val.window)
     return types.PolynomialType(coef, domain, window)
+
+
+@typeof_impl.register(np.polynomial.chebyshev.Chebyshev)
+def typeof_numpy_chebyshev(val, c):
+    coef = typeof(val.coef)
+    domain = typeof(val.domain)
+    window = typeof(val.window)
+    return types.ChebyshevType(coef, domain, window)
