@@ -25,6 +25,17 @@ class TestNvvmDriver(unittest.TestCase):
         self.assertTrue('simple' in ptx)
         self.assertTrue('ave' in ptx)
 
+    def test_nvvm_compile_nullary_option(self):
+        # Tests compilation with an option that doesn't take an argument
+        # ("-gen-lto") - all other NVVM options are of the form
+        # "-<name>=<value>"
+        nvvmir = self.get_nvvmir()
+        ltoir = nvvm.llvm_to_ptx(nvvmir, opt=3, gen_lto=None, arch="compute_52")
+
+        # Verify we correctly passed the option by checking if we got LTOIR
+        # from NVVM (by looking for the expected magic number for LTOIR)
+        self.assertEqual(ltoir[:4], b'\xed\x43\x4e\x7f')
+
     def test_nvvm_from_llvm(self):
         m = ir.Module("test_nvvm_from_llvm")
         m.triple = 'nvptx64-nvidia-cuda'
