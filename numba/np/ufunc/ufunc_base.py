@@ -1,6 +1,5 @@
 from numba.np import numpy_support
 from numba.core import types
-from numba.core.typing.templates import AbstractTemplate
 
 
 class UfuncLowererBase:
