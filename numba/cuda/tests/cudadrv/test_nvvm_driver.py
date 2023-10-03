@@ -1,7 +1,7 @@
 import warnings
 
 from llvmlite import ir
-from numba.cuda.cudadrv import nvvm
+from numba.cuda.cudadrv import nvvm, runtime
 from ctypes import c_size_t, c_uint64, sizeof
 from numba.cuda.testing import unittest
 from numba.cuda.cudadrv.nvvm import LibDevice, NvvmError, NVVM
@@ -29,6 +29,11 @@ class TestNvvmDriver(unittest.TestCase):
         # Tests compilation with an option that doesn't take an argument
         # ("-gen-lto") - all other NVVM options are of the form
         # "-<name>=<value>"
+
+        # -gen-lto is not available prior to CUDA 11.5
+        if runtime.get_version() < (11, 5):
+            self.skipTest("-gen-lto unavailable in this toolkit version")
+
         nvvmir = self.get_nvvmir()
         ltoir = nvvm.llvm_to_ptx(nvvmir, opt=3, gen_lto=None, arch="compute_52")
 
