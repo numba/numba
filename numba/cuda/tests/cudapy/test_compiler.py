@@ -1,8 +1,14 @@
 from math import sqrt
-from numba import cuda, float32, int16, int32, uint32, void
+from numba import cuda, float32, int16, int32, int64, uint32, void
 from numba.cuda import compile_ptx, compile_ptx_for_current_device
 
 from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
+
+
+# A test function at the module scope to ensure we get the name right for the C
+# ABI whether a function is at module or local scope.
+def f_module(x, y):
+    return x + y
 
 
 @skip_on_cudasim('Compilation unsupported in the simulator')
@@ -131,6 +137,50 @@ class TestCompileToPTX(unittest.TestCase):
 
         with self.assertRaisesRegex(TypeError, 'must have void return type'):
             compile_ptx(f, (uint32[::1], uint32[::1]))
+
+    def test_c_abi_disallowed_for_kernel(self):
+        def f(x, y):
+            return x + y
+
+        with self.assertRaisesRegex(NotImplementedError,
+                                    "The C ABI is not supported for kernels"):
+            compile_ptx(f, (int32, int32), abi="c")
+
+    def test_unsupported_abi(self):
+        def f(x, y):
+            return x + y
+
+        with self.assertRaisesRegex(NotImplementedError,
+                                    "Unsupported ABI: fastcall"):
+            compile_ptx(f, (int32, int32), abi="fastcall")
+
+    def test_c_abi_device_function(self):
+        def f(x, y):
+            return x + y
+
+        ptx, resty = compile_ptx(f, int32(int32, int32), device=True, abi="c")
+        # There should be no more than two parameters
+        self.assertNotIn(ptx, "param_2")
+
+        # The function name should match the Python function name (not the
+        # qualname, which includes additional info), and its return value
+        # should be 32 bits
+        self.assertRegex(ptx, r"\.visible\s+\.func\s+\(\.param\s+\.b32\s+"
+                              r"func_retval0\)\s+f\(")
+
+        # If we compile for 64-bit integers, the return type should be 64 bits
+        # wide
+        ptx, resty = compile_ptx(f, int64(int64, int64), device=True, abi="c")
+        self.assertRegex(ptx, r"\.visible\s+\.func\s+\(\.param\s+\.b64")
+
+    def test_c_abi_device_function_module_scope(self):
+        ptx, resty = compile_ptx(f_module, int32(int32, int32), device=True,
+                                 abi="c")
+
+        # The function name should match the Python function name, and its
+        # return value should be 32 bits
+        self.assertRegex(ptx, r"\.visible\s+\.func\s+\(\.param\s+\.b32\s+"
+                              r"func_retval0\)\s+f_module\(")
 
 
 @skip_on_cudasim('Compilation unsupported in the simulator')
