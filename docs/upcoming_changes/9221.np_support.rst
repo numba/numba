@@ -1,0 +1,4 @@
+Added support for `np.polynomial.chebyshev.Chebyshev` class.
+==============================================================
+
+Support is added for the `Chebyshev` class from the package `np.polynomial.chebyshev`.
