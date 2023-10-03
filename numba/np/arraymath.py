@@ -15,7 +15,7 @@ from numba.core import types, cgutils
 from numba.core.extending import overload, overload_method, register_jitable
 from numba.np.numpy_support import (as_dtype, type_can_asarray, type_is_scalar,
                                     numpy_version, is_nonelike,
-                                    check_is_integer, lt_inexact)
+                                    check_is_integer, lt_floats, lt_complex)
 from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
                                  impl_ret_new_ref, impl_ret_untracked)
 from numba.np.arrayobj import (make_array, load_item, store_item,
@@ -3674,11 +3674,12 @@ def np_bincount(a, weights=None, minlength=0):
     return bincount_impl
 
 
-less_than_inexact = register_jitable(lt_inexact)
+less_than_float = register_jitable(lt_floats)
+less_than_complex = register_jitable(lt_complex)
 
 
 @register_jitable
-def less_than_or_equal_inexact(a, b):
+def less_than_or_equal_complex(a, b):
     if np.isnan(a.real):
         if np.isnan(b.real):
             if np.isnan(a.imag):
@@ -3713,16 +3714,23 @@ def less_than_or_equal_inexact(a, b):
 
 @register_jitable
 def _less_than_or_equal(a, b):
-    if isinstance(a, (float, complex)) or isinstance(b, (float, complex)):
-        return less_than_or_equal_inexact(a, b)
+    if isinstance(a, complex) or isinstance(b, complex):
+        return less_than_or_equal_complex(a, b)
+
+    elif isinstance(b, float):
+        if np.isnan(b):
+            return True
 
     return a <= b
 
 
 @register_jitable
 def _less_than(a, b):
-    if isinstance(a, (float, complex)) or isinstance(b, (float, complex)):
-        return less_than_inexact(a, b)
+    if isinstance(a, complex) or isinstance(b, complex):
+        return less_than_complex(a, b)
+
+    elif isinstance(b, float):
+        return less_than_float(a, b)
 
     return a < b
 
