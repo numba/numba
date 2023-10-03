@@ -41,6 +41,13 @@ class TestNvvmDriver(unittest.TestCase):
         # from NVVM (by looking for the expected magic number for LTOIR)
         self.assertEqual(ltoir[:4], b'\xed\x43\x4e\x7f')
 
+    def test_nvvm_bad_option(self):
+        # Ensure that unsupported / non-existent options are reported as such
+        # to the user / caller
+        msg = "-made-up-option=2 is an unsupported option"
+        with self.assertRaisesRegex(NvvmError, msg):
+            nvvm.llvm_to_ptx("", made_up_option=2)
+
     def test_nvvm_from_llvm(self):
         m = ir.Module("test_nvvm_from_llvm")
         m.triple = 'nvptx64-nvidia-cuda'
