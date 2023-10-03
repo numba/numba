@@ -240,6 +240,7 @@ class CompilationUnit(object):
           match NVVM's option name format.
         - Options that take a value will be emitted in the form
           "-<name>=<value>".
+        - Booleans passed as option values will be converted to integers.
         - Options which take no value (such as `-gen-lto`) should have a value
           of `None` passed in and will be emitted in the form "-<name>".
 
