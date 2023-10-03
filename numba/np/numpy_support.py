@@ -731,15 +731,11 @@ def check_is_integer(v, name):
         raise TypingError('{} must be an integer'.format(name))
 
 
-def lt_floats(a, b):
+def lt_inexact(a, b):
     # Adapted from NumPy commit 717c7acf which introduced the behavior of
     # putting NaNs at the end.
     # The code is later moved to numpy/core/src/npysort/npysort_common.h
     # This info is gathered as of NumPy commit d8c09c50
-    return a < b or (np.isnan(b) and not np.isnan(a))
-
-
-def lt_complex(a, b):
     if np.isnan(a.real):
         if np.isnan(b.real):
             if np.isnan(a.imag):

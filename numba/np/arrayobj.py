@@ -17,7 +17,7 @@ from numba.core import types, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, from_dtype, carray, farray,
                                     is_contiguous, is_fortran,
                                     check_is_integer, type_is_scalar,
-                                    lt_complex, lt_floats)
+                                    lt_inexact)
 from numba.np.numpy_support import type_can_asarray, is_nonelike, numpy_version
 from numba.core.imputils import (lower_builtin, lower_getattr,
                                  lower_getattr_generic,
@@ -6347,10 +6347,8 @@ def get_sort_func(kind, lt_impl, is_argsort=False):
 
 
 def lt_implementation(dtype):
-    if isinstance(dtype, types.Float):
-        return lt_floats
-    elif isinstance(dtype, types.Complex):
-        return lt_complex
+    if isinstance(dtype, (types.Float, types.Complex)):
+        return lt_inexact
     else:
         return default_lt
 
