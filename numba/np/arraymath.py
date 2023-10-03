@@ -3674,21 +3674,7 @@ def np_bincount(a, weights=None, minlength=0):
     return bincount_impl
 
 
-@register_jitable
-def less_than_or_equal(a, b):
-    return a <= b
-
-
 less_than_float = register_jitable(lt_floats)
-
-
-@register_jitable
-def less_than_or_equal_float(a, b):
-    if np.isnan(b):
-        return True
-    return a <= b
-
-
 less_than_complex = register_jitable(lt_complex)
 
 
@@ -3724,6 +3710,29 @@ def less_than_or_equal_complex(a, b):
                     elif a.real == b.real:
                         return a.imag <= b.imag
                     return False
+
+
+@register_jitable
+def less_than_or_equal(a, b):
+    if isinstance(a, complex) or isinstance(b, complex):
+        return less_than_or_equal_complex(a, b)
+
+    if isinstance(b, float):
+        if np.isnan(b):
+            return True
+
+    return a <= b
+
+
+@register_jitable
+def less_than_generic(a, b):
+    if isinstance(a, complex) or isinstance(b, complex):
+        return less_than_complex(a, b)
+
+    if isinstance(b, float):
+        return lt_floats(a, b)
+
+    return a < b
 
 
 def _searchsorted(func_1, func_2):
@@ -3773,46 +3782,22 @@ def _searchsorted(func_1, func_2):
 VALID_SEARCHSORTED_SIDES = frozenset({'left', 'right'})
 
 
-def bind_operators(side, lt, le, use_version_gate=False):
+def make_searchsorted_implementation(np_dtype, side):
+    assert side in VALID_SEARCHSORTED_SIDES
+
+    lt = less_than_generic
+    le = less_than_or_equal
+
     if side == 'left':
         _impl = _searchsorted(lt, lt)
     else:
-        if use_version_gate and numpy_version < (1, 23):
-            # change in behaviour for floats and complex
+        if np.issubdtype(np_dtype, np.inexact) and numpy_version < (1, 23):
+            # change in behaviour for inexact types
             # introduced by:
             # https://github.com/numpy/numpy/pull/21867
             _impl = _searchsorted(lt, le)
         else:
             _impl = _searchsorted(le, le)
-
-    return _impl
-
-
-def make_searchsorted_implementation(np_dtype, side):
-    assert side in VALID_SEARCHSORTED_SIDES
-
-    if np.issubdtype(np_dtype, np.floating):
-        _impl = bind_operators(
-            side,
-            less_than_float,
-            less_than_or_equal_float,
-            use_version_gate=True
-        )
-
-    elif np.issubdtype(np_dtype, np.complexfloating):
-        _impl = bind_operators(
-            side,
-            less_than_complex,
-            less_than_or_equal_complex,
-            use_version_gate=True
-        )
-
-    else:
-        _impl = bind_operators(
-            side,
-            less_than,
-            less_than_or_equal
-        )
 
     return register_jitable(_impl)
 
