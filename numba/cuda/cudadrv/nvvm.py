@@ -236,7 +236,7 @@ class CompilationUnit(object):
         Compilation options are accepted as keyword arguments, with the
         following considerations:
 
-        - Underscores (`_`_ in option names are converted to dashes (`-`), to
+        - Underscores (`_`) in option names are converted to dashes (`-`), to
           match NVVM's option name format.
         - Options that take a value will be emitted in the form
           "-<name>=<value>".
