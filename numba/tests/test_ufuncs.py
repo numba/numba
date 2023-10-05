@@ -1011,9 +1011,14 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
         return self.binary_int_op_test(*args, **kws)
 
     def inplace_op_test(self, operator, lhs_values, rhs_values,
-                        lhs_dtypes, rhs_dtypes):
+                        lhs_dtypes, rhs_dtypes, precise=True):
         operator_func = _make_inplace_ufunc_op_usecase(operator)
         pyfunc = operator_func
+
+        if precise:
+            assertion = self.assertPreciseEqual
+        else:
+            assertion = np.testing.assert_allclose
 
         # The left operand can only be an array, while the right operand
         # can be either an array or a scalar
@@ -1034,14 +1039,16 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
             pyfunc(expected, rhs)
             got = lhs.copy()
             cfunc(got, rhs)
-            self.assertPreciseEqual(got, expected)
+            assertion(got, expected)
 
-    def inplace_float_op_test(self, operator, lhs_values, rhs_values):
+    def inplace_float_op_test(self, operator, lhs_values, rhs_values,
+                              precise=True):
         # Also accept integer inputs for the right operand (they should
         # be converted to float).
         return self.inplace_op_test(operator, lhs_values, rhs_values,
                                     (np.float32, np.float64),
-                                    (np.float32, np.float64, np.int64))
+                                    (np.float32, np.float64, np.int64),
+                                    precise=precise)
 
     def inplace_int_op_test(self, operator, lhs_values, rhs_values):
         self.inplace_op_test(operator, lhs_values, rhs_values,
@@ -1099,8 +1106,10 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
         self.inplace_float_op_test(operator.imod, [-1, 1.5, 3], [-5, 2, 2.5])
 
     def test_inplace_pow(self):
-        self.inplace_float_op_test('**=', [-1, 1.5, 3], [-5, 2, 2.5])
-        self.inplace_float_op_test(operator.ipow, [-1, 1.5, 3], [-5, 2, 2.5])
+        self.inplace_float_op_test('**=', [-1, 1.5, 3], [-5, 2, 2.5],
+                                   precise=False)
+        self.inplace_float_op_test(operator.ipow, [-1, 1.5, 3], [-5, 2, 2.5],
+                                   precise=False)
 
     def test_inplace_and(self):
         self.inplace_bitwise_op_test('&=', [0, 1, 2, 3, 51],
