@@ -34,7 +34,7 @@ conda list
 # NOTE: gitpython is needed for CI testing to do the test slicing
 # NOTE: pyyaml is used to ensure that the Azure CI config is valid
 
-conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON conda-forge::numpy=$NUMPY pip gitpython pyyaml
+conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml
 
 # Activate first
 set +v
