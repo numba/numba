@@ -1535,7 +1535,7 @@ def logseries_impl(p, size):
 
 @overload(np.random.negative_binomial)
 def negative_binomial_impl(n, p):
-    if isinstance(n, types.Integer) and isinstance(
+    if isinstance(n, (types.Float, types.Integer)) and isinstance(
             p,(types.Float, types.Integer)):
         def _impl(n, p):
             if n <= 0:
