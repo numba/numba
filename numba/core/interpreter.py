@@ -3225,3 +3225,20 @@ class Interpreter(object):
 
     def op_CALL_METHOD(self, *args, **kws):
         self.op_CALL_FUNCTION(*args, **kws)
+
+    def op_CALL_INTRINSIC_1(self, inst, intrinsic, **kwargs):
+        if intrinsic == "INTRINSIC_STOPITERATION_ERROR":
+            stmt = ir.StaticRaise(INTRINSIC_STOPITERATION_ERROR, (), self.loc)
+            self.current_block.append(stmt)
+            return
+        elif intrinsic == "UNARY_POSITIVE":
+            self.op_UNARY_POSITIVE(inst, **kwargs)
+            return
+        elif intrinsic == "INTRINSIC_LIST_TO_TUPLE":
+            self.op_LIST_TO_TUPLE(inst, **kwargs)
+            return
+        raise NotImplementedError(intrinsic)
+
+
+class INTRINSIC_STOPITERATION_ERROR(AssertionError):
+    pass
