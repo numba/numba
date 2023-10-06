@@ -1182,6 +1182,35 @@ class TraceRunner(object):
         for val in duped:
             state.push(val)
 
+    if PYVERSION in ((3, 12), ):
+        def op_CALL_INTRINSIC_1(self, state, inst):
+            # See https://github.com/python/cpython/blob/v3.12.0rc2/Include/
+            # internal/pycore_intrinsics.h#L3-L17C36
+            if inst.arg == 3:  # INTRINSIC_STOPITERATION_ERROR
+                state.append(inst, intrinsic="INTRINSIC_STOPITERATION_ERROR")
+                state.terminate()
+                return
+            if inst.arg == 5:  # UNARY_POSITIVE
+                val = state.pop()
+                res = state.make_temp()
+                state.append(inst, intrinsic="UNARY_POSITIVE",
+                             value=val, res=res)
+                state.push(res)
+                #self.op_UNARY_POSITIVE(state, inst)
+                return
+            elif inst.arg == 6:  # INTRINSIC_LIST_TO_TUPLE
+                tos = state.pop()
+                res = state.make_temp()
+                state.append(inst, intrinsic="INTRINSIC_LIST_TO_TUPLE",
+                             const_list=tos, res=res)
+                state.push(res)
+                return
+            raise NotImplementedError(f"op_CALL_INTRINSIC_1({inst.arg})")
+    elif PYVERSION in ((3, 8), (3, 9), (3, 10), (3, 11)):
+        pass
+    else:
+        raise NotImplementedError(PYVERSION)
+
     def op_DUP_TOPX(self, state, inst):
         count = inst.arg
         assert 1 <= count <= 5, "Invalid DUP_TOPX count"
