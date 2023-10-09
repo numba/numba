@@ -1,4 +1,5 @@
 import decimal
+from enum import IntEnum, auto
 import itertools
 
 import numpy as np
@@ -148,6 +149,11 @@ def slicing_1d_usecase_add(a, b, start, stop):
 def slicing_2d_usecase_set(a, b, start, stop, step, start2, stop2, step2):
     a[start:stop:step,start2:stop2:step2] = b
     return a
+
+
+class EnumIndex(IntEnum):
+    INDEX0 = 0
+    INDEX1 = auto()
 
 
 class TestGetItem(TestCase):
@@ -500,6 +506,10 @@ class TestGetItem(TestCase):
         self.assertEqual(pyfunc(a, 9), cfunc(a, 9))
         self.assertEqual(pyfunc(a, -1), cfunc(a, -1))
 
+        # use IntEnumMember as index
+        self.assertEqual(pyfunc(a, 0), cfunc(a, EnumIndex.INDEX0))
+        self.assertEqual(pyfunc(a, 1), cfunc(a, EnumIndex.INDEX1))
+
         # Any layout
         arraytype = types.Array(types.int32, 1, 'A')
         argtys = (arraytype, types.int32)
@@ -511,6 +521,10 @@ class TestGetItem(TestCase):
         self.assertEqual(pyfunc(a, 0), cfunc(a, 0))
         self.assertEqual(pyfunc(a, 2), cfunc(a, 2))
         self.assertEqual(pyfunc(a, -1), cfunc(a, -1))
+
+        # use IntEnumMember as index
+        self.assertEqual(pyfunc(a, 0), cfunc(a, EnumIndex.INDEX0))
+        self.assertEqual(pyfunc(a, 1), cfunc(a, EnumIndex.INDEX1))
 
         # Using a 0-d array as integer index
         arraytype = types.Array(types.int32, 1, 'C')

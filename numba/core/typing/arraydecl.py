@@ -62,9 +62,13 @@ def get_array_index_type(ary, idx):
         # In advanced indexing, any index broadcastable to an
         # array is considered an advanced index. Hence all the
         # branches below are considered as advanced indices.
-        elif isinstance(ty, types.Integer):
+        elif isinstance(ty, (types.Integer, types.IntEnumMember)):
             # Normalize integer index
-            ty = types.intp if ty.signed else types.uintp
+            # if ty is an instance of IntEnumMember, we can treat it as Integer
+            if isinstance(ty, types.IntEnumMember):
+                ty = types.intp
+            else:
+                ty = types.intp if ty.signed else types.uintp
             # Integer indexing removes the given dimension
             ndim -= 1
             # If we're within a subspace/contiguous group of
