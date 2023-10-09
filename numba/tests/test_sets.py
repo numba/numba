@@ -716,7 +716,7 @@ class TestUnboxing(BaseTest):
         with self.assertRaises(TypeError) as raises:
             yield
         if msg is not None:
-            self.assertRegexpMatches(str(raises.exception), msg)
+            self.assertRegex(str(raises.exception), msg)
 
     def check_unary(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
