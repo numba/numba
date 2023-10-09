@@ -1654,7 +1654,7 @@ class TestMore(TestCase):
 
         self.assertIn("getiter", str(raises.exception))
         re = r".*Tuple\(int[0-9][0-9], float64\).*"
-        self.assertRegexpMatches(str(raises.exception), re)
+        self.assertRegex(str(raises.exception), re)
 
     def test_unroll_tuple_of_dict(self):
 

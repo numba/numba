@@ -668,7 +668,7 @@ class TestTryExceptRefct(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             udt()
-        self.assertRegexpMatches(
+        self.assertRegex(
             str(raises.exception),
             r"Cannot refine type|cannot safely cast unicode_type to int(32|64)"
         )
