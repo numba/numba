@@ -5,7 +5,7 @@ Installation
 Compatibility
 -------------
 
-For software compatability, please see the section on :ref:`version support
+For software compatibility, please see the section on :ref:`version support
 information<numba_support_info>` for details.
 
 Our supported platforms are:

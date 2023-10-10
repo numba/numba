@@ -1,6 +1,6 @@
 .. _minor-version-compatibility:
 
-CUDA Minor Version Compatiblity
+CUDA Minor Version Compatibility
 ===============================
 
 CUDA `Minor Version Compatibility
