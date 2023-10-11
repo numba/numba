@@ -473,7 +473,7 @@ class TestRaising(TestCase):
             for arg in args:
                 with self.assertRaises(ValueError) as e:
                     fn(arg)
-                self.assertEquals((arg,), e.exception.args)
+                self.assertEqual((arg,), e.exception.args)
 
 
 if __name__ == '__main__':
