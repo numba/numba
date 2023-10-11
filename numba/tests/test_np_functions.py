@@ -695,7 +695,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc = jit(nopython=True)(pyfunc)
             expected = pyfunc(x)
             got = cfunc(x)
-            self.assertEquals(expected, got)
+            self.assertEqual(expected, got)
 
     def test_angle_exceptions(self):
         pyfunc = angle1
@@ -4005,11 +4005,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         a = np.asarray([1.0, np.nan])
         b = np.asarray([1.0, np.nan])
         self.assertFalse(cfunc(a, b))
-        self.assertEquals(pyfunc(a, b, equal_nan=True),
+        self.assertEqual(pyfunc(a, b, equal_nan=True),
                           cfunc(a, b, equal_nan=True))
 
         b = np.asarray([np.nan, 1.0])
-        self.assertEquals(pyfunc(a, b), cfunc(a, b))
+        self.assertEqual(pyfunc(a, b), cfunc(a, b))
 
         noise_levels = [1.0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 0.0]
         zero_array = np.zeros((25, 4))
@@ -4066,7 +4066,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         ]
 
         for (x, y) in numpy_data:
-            self.assertEquals(pyfunc(x, y), cfunc(x, y))
+            self.assertEqual(pyfunc(x, y), cfunc(x, y))
 
     def test_ip_not_allclose_numpy(self):
         # https://github.com/numpy/numpy/blob/4adc87dff15a247e417d50f10cc4def8e1c17a03/numpy/core/tests/test_numeric.py#L2422-L2441    # noqa: E501
@@ -4093,7 +4093,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         ]
 
         for (x, y) in numpy_data:
-            self.assertEquals(pyfunc(x, y), cfunc(x, y))
+            self.assertEqual(pyfunc(x, y), cfunc(x, y))
 
     def test_return_class_is_ndarray_numpy(self):
         # https://github.com/numpy/numpy/blob/4adc87dff15a247e417d50f10cc4def8e1c17a03/numpy/core/tests/test_numeric.py#L2460-L2468    # noqa: E501
@@ -4115,7 +4115,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         x = np.array([1.0, np.nan])
 
-        self.assertEquals(pyfunc(x, x, equal_nan=True),
+        self.assertEqual(pyfunc(x, x, equal_nan=True),
                           cfunc(x, x, equal_nan=True))
 
     def test_no_parameter_modification_numpy(self):
@@ -4140,7 +4140,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         min_int = np.iinfo(np.int_).min
         a = np.array([min_int], dtype=np.int_)
 
-        self.assertEquals(pyfunc(a, a), cfunc(a, a))
+        self.assertEqual(pyfunc(a, a), cfunc(a, a))
 
     def test_allclose_exception(self):
         self.disable_leak_check()
@@ -5959,8 +5959,8 @@ class TestRegistryImports(TestCase):
         """)
         result, error = run_in_subprocess(code)
         # Assert that the bytestring "OK" was printed to stdout
-        self.assertEquals(b"OK", result.strip())
-        self.assertEquals(b"", error.strip())
+        self.assertEqual(b"OK", result.strip())
+        self.assertEqual(b"", error.strip())
 
 
 if __name__ == '__main__':
