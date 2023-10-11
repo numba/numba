@@ -448,6 +448,8 @@ class TestFunctionInlining(MemoryLeakMixin, InliningBase):
             bc = 33
         elif utils.PYVERSION in ((3, 10), (3, 11)):
             bc = 35
+        elif utils.PYVERSION in ((3, 12), ):
+            bc = 39
         else:
             raise ValueError(f"Unsupported Python version: {utils.PYVERSION}")
 
