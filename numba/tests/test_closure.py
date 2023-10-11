@@ -473,6 +473,24 @@ class TestInlinedClosure(TestCase):
             regex = r'closure__locals__bar_v[0-9]+.x'
             self.assertRegex(name, regex)
 
+    def test_issue9222(self):
+        # Ensures that float default arguments are handled correctly in
+        # closures.
+
+        @njit
+        def foo():
+            def bar(x, y=1.1):
+                return x + y
+            return bar
+
+        @njit
+        def consume():
+            return foo()(4)
+
+        # In Issue #9222, the result was completely wrong - 15 instead of 5.1 -
+        # so allclose should be sufficient for comparison here.
+        np.testing.assert_allclose(consume(), 4 + 1.1)
+
 
 class TestObjmodeFallback(TestCase):
     # These are all based on tests from real life issues where, predominantly,
