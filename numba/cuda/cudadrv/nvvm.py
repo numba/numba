@@ -231,72 +231,46 @@ class CompilationUnit(object):
         self.driver.check_error(err, 'Failed to add module')
 
     def compile(self, **options):
-        """Perform Compilation
+        """Perform Compilation.
 
-        The valid compiler options are
+        Compilation options are accepted as keyword arguments, with the
+        following considerations:
 
-         *   - -opt=
-         *     - 0 (disable optimizations)
-         *     - 3 (default, enable optimizations)
-         *   - -arch=
-         *     - compute_XX where XX is in (35, 37, 50, 52, 53, 60, 61, 62, 70,
-         *                                  72, 75, 80, 86, 89, 90).
-         *       The default is compute_52.
-         *   - -ftz=
-         *     - 0 (default, preserve denormal values, when performing
-         *          single-precision floating-point operations)
-         *     - 1 (flush denormal values to zero, when performing
-         *          single-precision floating-point operations)
-         *   - -prec-sqrt=
-         *     - 0 (use a faster approximation for single-precision
-         *          floating-point square root)
-         *     - 1 (default, use IEEE round-to-nearest mode for
-         *          single-precision floating-point square root)
-         *   - -prec-div=
-         *     - 0 (use a faster approximation for single-precision
-         *          floating-point division and reciprocals)
-         *     - 1 (default, use IEEE round-to-nearest mode for
-         *          single-precision floating-point division and reciprocals)
-         *   - -fma=
-         *     - 0 (disable FMA contraction)
-         *     - 1 (default, enable FMA contraction)
-         *
-         """
+        - Underscores (`_`) in option names are converted to dashes (`-`), to
+          match NVVM's option name format.
+        - Options that take a value will be emitted in the form
+          "-<name>=<value>".
+        - Booleans passed as option values will be converted to integers.
+        - Options which take no value (such as `-gen-lto`) should have a value
+          of `None` passed in and will be emitted in the form "-<name>".
 
-        # stringify options
-        opts = []
+        For documentation on NVVM compilation options, see the CUDA Toolkit
+        Documentation:
 
-        if 'opt' in options:
-            opts.append('-opt=%d' % options.pop('opt'))
+        https://docs.nvidia.com/cuda/libnvvm-api/index.html#_CPPv418nvvmCompileProgram11nvvmProgramiPPKc
+        """
 
-        if options.get('arch'):
-            opts.append('-arch=%s' % options.pop('arch'))
+        def stringify_option(k, v):
+            k = k.replace('_', '-')
 
-        other_options = (
-            'ftz',
-            'prec_sqrt',
-            'prec_div',
-            'fma',
-        )
+            if v is None:
+                return f'-{k}'
 
-        for k in other_options:
-            if k in options:
-                v = int(bool(options.pop(k)))
-                opts.append('-%s=%d' % (k.replace('_', '-'), v))
+            if isinstance(v, bool):
+                v = int(v)
 
-        # If there are any option left
-        if options:
-            optstr = ', '.join(map(repr, options.keys()))
-            raise NvvmError("unsupported option {0}".format(optstr))
+            return f'-{k}={v}'
 
-        c_opts = (c_char_p * len(opts))(*[c_char_p(x.encode('utf8'))
-                                          for x in opts])
+        options = [stringify_option(k, v) for k, v in options.items()]
+
+        c_opts = (c_char_p * len(options))(*[c_char_p(x.encode('utf8'))
+                                             for x in options])
         # verify
-        err = self.driver.nvvmVerifyProgram(self._handle, len(opts), c_opts)
+        err = self.driver.nvvmVerifyProgram(self._handle, len(options), c_opts)
         self._try_error(err, 'Failed to verify\n')
 
         # compile
-        err = self.driver.nvvmCompileProgram(self._handle, len(opts), c_opts)
+        err = self.driver.nvvmCompileProgram(self._handle, len(options), c_opts)
         self._try_error(err, 'Failed to compile\n')
 
         # get result

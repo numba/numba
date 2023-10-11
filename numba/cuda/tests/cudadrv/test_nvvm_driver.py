@@ -1,7 +1,7 @@
 import warnings
 
 from llvmlite import ir
-from numba.cuda.cudadrv import nvvm
+from numba.cuda.cudadrv import nvvm, runtime
 from ctypes import c_size_t, c_uint64, sizeof
 from numba.cuda.testing import unittest
 from numba.cuda.cudadrv.nvvm import LibDevice, NvvmError, NVVM
@@ -24,6 +24,29 @@ class TestNvvmDriver(unittest.TestCase):
         ptx = nvvm.llvm_to_ptx(nvvmir).decode('utf8')
         self.assertTrue('simple' in ptx)
         self.assertTrue('ave' in ptx)
+
+    def test_nvvm_compile_nullary_option(self):
+        # Tests compilation with an option that doesn't take an argument
+        # ("-gen-lto") - all other NVVM options are of the form
+        # "-<name>=<value>"
+
+        # -gen-lto is not available prior to CUDA 11.5
+        if runtime.get_version() < (11, 5):
+            self.skipTest("-gen-lto unavailable in this toolkit version")
+
+        nvvmir = self.get_nvvmir()
+        ltoir = nvvm.llvm_to_ptx(nvvmir, opt=3, gen_lto=None, arch="compute_52")
+
+        # Verify we correctly passed the option by checking if we got LTOIR
+        # from NVVM (by looking for the expected magic number for LTOIR)
+        self.assertEqual(ltoir[:4], b'\xed\x43\x4e\x7f')
+
+    def test_nvvm_bad_option(self):
+        # Ensure that unsupported / non-existent options are reported as such
+        # to the user / caller
+        msg = "-made-up-option=2 is an unsupported option"
+        with self.assertRaisesRegex(NvvmError, msg):
+            nvvm.llvm_to_ptx("", made_up_option=2)
 
     def test_nvvm_from_llvm(self):
         m = ir.Module("test_nvvm_from_llvm")
