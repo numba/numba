@@ -140,7 +140,291 @@ class TestDUFunc(MemoryLeakMixin, unittest.TestCase):
         # self.assertEqual(cfunc(), 2)
 
 
-class TestDUFuncMethods(TestCase):
+class TestDUFuncAt(TestCase):
+    def _compare_output(self, fn, a, *args):
+        expected = a.copy()
+        got = a.copy()
+        fn.py_func(expected, *args)
+        fn(got, *args)
+        self.assertPreciseEqual(expected, got)
+
+    def _generate_jit(self, ufunc):
+        if ufunc.nin == 2:
+            vec = vectorize('int64(int64, int64)')(lambda a, b: ufunc(a, b))
+        else:
+            vec = vectorize('int64(int64)')(lambda a: ufunc(a))
+
+        @njit
+        def fn(*args):
+            return vec.at(*args)
+        return fn
+
+    def test_numpy_ufunc_at_basic(self):
+        # tests taken from: https://github.com/numpy/numpy/blob/27d8c43eb958b4ecee59b4d66908750759a9afc2/numpy/core/tests/test_ufunc.py#L1974-L2003
+        # NumPy also test this function with a Rational array dtype. We skip
+        # this test as Numba doesn't support Rational
+        a = np.arange(10, dtype=int)
+
+        add_jit = self._generate_jit(np.add)
+        negative_jit = self._generate_jit(np.negative)
+
+        negative_vec = vectorize()(lambda a: np.negative(a))
+        @njit
+        def negative_jit_2(a, indices, b):
+            return negative_vec.at(a, indices, b)
+
+        # basic testing
+        self._compare_output(add_jit, a, [2, 5, 2], 1)
+
+        # missing second operand
+        err_msg = 'second operand needed for ufunc'
+        with self.assertRaisesRegex(TypeError, err_msg):
+            add_jit(a.copy(), [2, 5, 3], None)
+
+        self._compare_output(negative_jit, a.copy(), [2, 5, 3])
+
+        b = np.array([100, 100, 100])
+        self._compare_output(add_jit, a.copy(), [2, 5, 2], b)
+
+        # extraneous second operand
+        err_msg = 'second operand provided when ufunc is unary'
+        with self.assertRaisesRegex(TypeError, err_msg):
+            negative_jit_2(a.copy(), [2, 5, 3], [1, 2, 3])
+
+        # second operand cannot be converted to an array
+        # err_msg = 
+        # with self.assertRaisesRegex(TypeError, err_msg):
+        #     foo(a.copy(), [2, 5, 3], [[1, 2], 1])
+        # with pytest.raises(ValueError):
+        #     np.add.at(a, [2, 5, 3], [[1, 2], 1])
+
+    def _test_ufunc_at_inner_loop(self, typecode, ufunc):
+        pass
+
+    @unittest.expectedFailure
+    def test_ufunc_at_ellipsis(self):
+        # Make sure the indexed loop check does not choke on iters
+        # with subspaces
+        arr = np.zeros(5, dtype=int)
+        add_jit = self._generate_jit(np.add)
+        self._compare_output(add_jit, arr, slice(None), np.ones(5, dtype=int))
+
+    # def test_ufunc_at_negative(self):
+    #     arr = np.ones(5, dtype=np.int32)
+    #     indx = np.arange(5)
+    #     umt.indexed_negative.at(arr, indx)
+    #     # If it is [-1, -1, -1, -100, 0] then the regular strided loop was used
+    #     assert np.all(arr == [-1, -1, -1, -200, -1])
+
+    def test_ufunc_at_large(self):
+        # NumPy issue gh-23457
+        indices = np.zeros(8195, dtype=np.int16)
+        b = np.zeros(8195, dtype=float)
+        b[0] = 10
+        b[1] = 5
+        b[8192:] = 100
+        a = np.zeros(1, dtype=float)
+        add_jit = self._generate_jit(np.add)
+        add_jit(a, indices, b)
+        assert a[0] == b.sum()
+
+    # def test_cast_index_fastpath(self):
+    #     arr = np.zeros(10)
+    #     values = np.ones(100000)
+    #     # index must be cast, which may be buffered in chunks:
+    #     index = np.zeros(len(values), dtype=np.uint8)
+    #     np.add.at(arr, index, values)
+    #     assert arr[0] == len(values)
+
+    # @pytest.mark.parametrize("value", [
+    #     np.ones(1), np.ones(()), np.float64(1.), 1.])
+    # def test_ufunc_at_scalar_value_fastpath(self, value):
+    #     arr = np.zeros(1000)
+    #     # index must be cast, which may be buffered in chunks:
+    #     index = np.repeat(np.arange(1000), 2)
+    #     np.add.at(arr, index, value)
+    #     assert_array_equal(arr, np.full_like(arr, 2 * value))
+
+    # def test_ufunc_at_multiD(self):
+    #     a = np.arange(9).reshape(3, 3)
+    #     b = np.array([[100, 100, 100], [200, 200, 200], [300, 300, 300]])
+    #     np.add.at(a, (slice(None), [1, 2, 1]), b)
+    #     assert_equal(a, [[0, 201, 102], [3, 404, 205], [6, 607, 308]])
+
+    #     a = np.arange(27).reshape(3, 3, 3)
+    #     b = np.array([100, 200, 300])
+    #     np.add.at(a, (slice(None), slice(None), [1, 2, 1]), b)
+    #     assert_equal(a,
+    #         [[[0, 401, 202],
+    #           [3, 404, 205],
+    #           [6, 407, 208]],
+
+    #          [[9, 410, 211],
+    #           [12, 413, 214],
+    #           [15, 416, 217]],
+
+    #          [[18, 419, 220],
+    #           [21, 422, 223],
+    #           [24, 425, 226]]])
+
+    #     a = np.arange(9).reshape(3, 3)
+    #     b = np.array([[100, 100, 100], [200, 200, 200], [300, 300, 300]])
+    #     np.add.at(a, ([1, 2, 1], slice(None)), b)
+    #     assert_equal(a, [[0, 1, 2], [403, 404, 405], [206, 207, 208]])
+
+    #     a = np.arange(27).reshape(3, 3, 3)
+    #     b = np.array([100, 200, 300])
+    #     np.add.at(a, (slice(None), [1, 2, 1], slice(None)), b)
+    #     assert_equal(a,
+    #         [[[0,  1,  2],
+    #           [203, 404, 605],
+    #           [106, 207, 308]],
+
+    #          [[9,  10, 11],
+    #           [212, 413, 614],
+    #           [115, 216, 317]],
+
+    #          [[18, 19, 20],
+    #           [221, 422, 623],
+    #           [124, 225, 326]]])
+
+    #     a = np.arange(9).reshape(3, 3)
+    #     b = np.array([100, 200, 300])
+    #     np.add.at(a, (0, [1, 2, 1]), b)
+    #     assert_equal(a, [[0, 401, 202], [3, 4, 5], [6, 7, 8]])
+
+    #     a = np.arange(27).reshape(3, 3, 3)
+    #     b = np.array([100, 200, 300])
+    #     np.add.at(a, ([1, 2, 1], 0, slice(None)), b)
+    #     assert_equal(a,
+    #         [[[0,  1,  2],
+    #           [3,  4,  5],
+    #           [6,  7,  8]],
+
+    #          [[209, 410, 611],
+    #           [12,  13, 14],
+    #           [15,  16, 17]],
+
+    #          [[118, 219, 320],
+    #           [21,  22, 23],
+    #           [24,  25, 26]]])
+
+    #     a = np.arange(27).reshape(3, 3, 3)
+    #     b = np.array([100, 200, 300])
+    #     np.add.at(a, (slice(None), slice(None), slice(None)), b)
+    #     assert_equal(a,
+    #         [[[100, 201, 302],
+    #           [103, 204, 305],
+    #           [106, 207, 308]],
+
+    #          [[109, 210, 311],
+    #           [112, 213, 314],
+    #           [115, 216, 317]],
+
+    #          [[118, 219, 320],
+    #           [121, 222, 323],
+    #           [124, 225, 326]]])
+
+    def test_ufunc_at_0D(self):
+        a = np.array(0)
+        add_jit = self._generate_jit(np.add)
+        add_jit(a, (), 1)
+        self.assertPreciseEqual(a, np.array(1))
+
+        # assert_raises(IndexError, np.add.at, a, 0, 1)
+        # assert_raises(IndexError, np.add.at, a, [], 1)
+
+    def test_ufunc_at_dtypes(self):
+        # Test mixed dtypes
+        a = np.arange(10)
+        power_jit = self._generate_jit(np.power)
+        power_jit(a, [1, 2, 3, 2], 3.5)
+        self.assertPreciseEqual(a, np.array([0, 1, 4414, 46, 4, 5, 6, 7, 8, 9]))
+
+    def test_ufunc_at_boolean(self):
+        # Test boolean indexing and boolean ufuncs
+        a = np.arange(10)
+        index = a % 2 == 0
+        equal_jit = self._generate_jit(np.equal)
+        equal_jit(a, index, [0, 2, 4, 6, 8])
+        self.assertPreciseEqual(a, [1, 1, 1, 3, 1, 5, 1, 7, 1, 9])
+
+    #     # Test unary operator
+    #     a = np.arange(10, dtype='u4')
+    #     np.invert.at(a, [2, 5, 2])
+    #     assert_equal(a, [0, 1, 2, 3, 4, 5 ^ 0xffffffff, 6, 7, 8, 9])
+
+    # def test_ufunc_at_advanced(self):
+    #     # Test empty subspace
+    #     orig = np.arange(4)
+    #     a = orig[:, None][:, 0:0]
+    #     np.add.at(a, [0, 1], 3)
+    #     assert_array_equal(orig, np.arange(4))
+
+    #     # Test with swapped byte order
+    #     index = np.array([1, 2, 1], np.dtype('i').newbyteorder())
+    #     values = np.array([1, 2, 3, 4], np.dtype('f').newbyteorder())
+    #     np.add.at(values, index, 3)
+    #     assert_array_equal(values, [1, 8, 6, 4])
+
+    #     # Test exception thrown
+    #     values = np.array(['a', 1], dtype=object)
+    #     assert_raises(TypeError, np.add.at, values, [0, 1], 1)
+    #     assert_array_equal(values, np.array(['a', 1], dtype=object))
+
+    #     # Test multiple output ufuncs raise error, gh-5665
+    #     assert_raises(ValueError, np.modf.at, np.arange(10), [1])
+
+    #     # Test maximum
+    #     a = np.array([1, 2, 3])
+    #     np.maximum.at(a, [0], 0)
+    #     assert_equal(a, np.array([1, 2, 3]))
+
+    # @pytest.mark.parametrize("dtype",
+    #         np.typecodes['AllInteger'] + np.typecodes['Float'])
+    # @pytest.mark.parametrize("ufunc",
+    #         [np.add, np.subtract, np.divide, np.minimum, np.maximum])
+    # def test_at_negative_indexes(self, dtype, ufunc):
+    #     a = np.arange(0, 10).astype(dtype)
+    #     indxs = np.array([-1, 1, -1, 2]).astype(np.intp)
+    #     vals = np.array([1, 5, 2, 10], dtype=a.dtype)
+
+    #     expected = a.copy()
+    #     for i, v in zip(indxs, vals):
+    #         expected[i] = ufunc(expected[i], v)
+
+    #     ufunc.at(a, indxs, vals)
+    #     assert_array_equal(a, expected)
+    #     assert np.all(indxs == [-1, 1, -1, 2])
+
+    # def test_at_not_none_signature(self):
+    #     # Test ufuncs with non-trivial signature raise a TypeError
+    #     a = np.ones((2, 2, 2))
+    #     b = np.ones((1, 2, 2))
+    #     assert_raises(TypeError, np.matmul.at, a, [0], b)
+
+    #     a = np.array([[[1, 2], [3, 4]]])
+    #     assert_raises(TypeError, np.linalg._umath_linalg.det.at, a, [0])
+
+    # def test_at_no_loop_for_op(self):
+    #     # str dtype does not have a ufunc loop for np.add
+    #     arr = np.ones(10, dtype=str)
+    #     with pytest.raises(np.core._exceptions._UFuncNoLoopError):
+    #         np.add.at(arr, [0, 1], [0, 1])
+
+    # def test_at_output_casting(self):
+    #     arr = np.array([-1])
+    #     np.equal.at(arr, [0], [0])
+    #     assert arr[0] == 0
+
+    # def test_at_broadcast_failure(self):
+    #     arr = np.arange(5)
+    #     with pytest.raises(ValueError):
+    #         np.add.at(arr, [0, 1], [1, 2, 3])
+
+
+
+class TestDUFuncReduce(TestCase):
     def _check_reduce(self, ufunc, dtype=None, initial=None):
 
         @njit

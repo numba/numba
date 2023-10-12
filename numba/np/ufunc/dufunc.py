@@ -281,6 +281,82 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
 
     def _install_ufunc_methods(self, template) -> None:
         self._install_ufunc_reduce(template)
+        self._install_ufunc_at(template)
+
+    def _install_ufunc_at(self, template) -> None:
+        at = types.Function(template)
+
+        @overload_method(at, 'at')
+        def ol_at(ufunc, a, indices, b=None):
+            warnings.warn("ufunc.at feature is experimental",
+                          category=errors.NumbaExperimentalFeatureWarning)
+
+            if not isinstance(a, types.Array):
+                msg = 'The first argument "a" must be array-like'
+                raise errors.NumbaTypeError(msg)
+
+            indices_int_tuple = isinstance(indices, types.UniTuple) and \
+                isinstance(indices.dtype, types.Integer)
+            indices_int_arr = isinstance(indices, types.Array) and \
+                isinstance(indices.dtype, types.Integer)
+            indices_scalar = not (indices_int_arr or indices_int_arr)
+            indices_empty = isinstance(indices, types.Tuple) and \
+                len(indices) == 0
+            b_array = isinstance(b, (types.Array, types.Sequence, types.List, types.Tuple))
+            b_scalar = not b_array
+
+            nin = self.ufunc.nin
+
+            # missing second argument?
+            if nin == 2 and cgutils.is_nonelike(b):
+                raise TypeError('second operand needed for ufunc')
+
+            # extra second argument
+            if nin == 1 and not cgutils.is_nonelike(b):
+                raise TypeError('second operand provided when ufunc is unary')
+
+            # if not indices_int_tuple:
+            #     msg = '"indices" must be a tuple of integers'
+            #     raise errors.NumbaTypeError(msg)
+
+            self._frozen = False
+            if cgutils.is_nonelike(b):
+                self.add((a.dtype,))
+            elif b_scalar:
+                self.add((a.dtype, b))
+            else:
+                self.add((a.dtype, b.dtype))
+            self._frozen = True
+
+            def impl_b_none(ufunc, a, indices, b=None):
+                for idx in indices:
+                    a[idx] = ufunc(a[idx])
+                return a
+
+            def impl_b_scalar(ufunc, a, indices, b=None):
+                for idx in indices:
+                    a[idx] = ufunc(a[idx], b)
+                return a
+
+            def impl_b_array(ufunc, a, indices, b=None):
+                j = 0
+                for idx in indices:
+                    a[idx] = ufunc(a[idx], b[j])
+                    j += 1
+                return a
+
+            def impl_indices_empty_b_scalar(ufunc, a, indices, b=None):
+                a[()] = ufunc(a[()], b)
+                return a
+
+            if cgutils.is_nonelike(b):
+                return impl_b_none
+            elif indices_empty and b_scalar:
+                return impl_indices_empty_b_scalar
+            elif b_array:
+                return impl_b_array
+            else:
+                return impl_b_scalar
 
     def _install_ufunc_reduce(self, template) -> None:
         at = types.Function(template)

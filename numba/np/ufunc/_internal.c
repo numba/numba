@@ -696,9 +696,10 @@ dufunc_setfrozen(PyDUFuncObject * self, PyObject * value, void * closure)
     if (PyObject_IsTrue(value)) {
         self->frozen = 1;
     } else {
-        PyErr_SetString(PyExc_ValueError,
-                        "cannot clear the _DUFunc.frozen flag");
-        result = -1;
+        self->frozen = 0;
+        // PyErr_SetString(PyExc_ValueError,
+        //                 "cannot clear the _DUFunc.frozen flag");
+        // result = -1;
     }
     return result;
 }
