@@ -8,6 +8,7 @@ Towncrier generated notes:
 .. toctree::
    :maxdepth: 1
    :glob:
+   :reversed:
 
    release/*
 
