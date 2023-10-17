@@ -113,8 +113,7 @@ class _FunctionCompiler(object):
 
         def stararg_handler(index, param, values):
             return types.StarArgTuple(values)
-        # For now, we take argument values from the @jit function, even
-        # in the case of generated jit.
+        # For now, we take argument values from the @jit function
         args = fold_arguments(self.pysig, args, kws,
                               normal_handler,
                               default_handler,
@@ -797,15 +796,11 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
     class attribute.
     """
     _fold_args = True
-    _impl_kinds = {
-        'direct': _FunctionCompiler,
-        'generated': _GeneratedFunctionCompiler,
-    }
 
     __numba__ = 'py_func'
 
     def __init__(self, py_func, locals={}, targetoptions={},
-                 impl_kind='direct', pipeline_class=compiler.Compiler):
+                 pipeline_class=compiler.Compiler):
         """
         Parameters
         ----------
@@ -815,8 +810,6 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
             the types deduced by the type inference engine.
         targetoptions: dict, optional
             Target-specific config options.
-        impl_kind: str
-            Select the compiler mode for `@jit` and `@generated_jit`
         pipeline_class: type numba.compiler.CompilerBase
             The compiler pipeline type.
         """
@@ -835,8 +828,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         self.targetoptions = targetoptions
         self.locals = locals
         self._cache = NullCache()
-        compiler_class = self._impl_kinds[impl_kind]
-        self._impl_kind = impl_kind
+        compiler_class = _FunctionCompiler
         self._compiler = compiler_class(py_func, self.targetdescr,
                                         targetoptions, locals, pipeline_class)
         self._cache_hits = collections.Counter()
@@ -887,13 +879,12 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
             py_func=self.py_func,
             locals=self.locals,
             targetoptions=self.targetoptions,
-            impl_kind=self._impl_kind,
             can_compile=self._can_compile,
             sigs=sigs,
         )
 
     @classmethod
-    def _rebuild(cls, uuid, py_func, locals, targetoptions, impl_kind,
+    def _rebuild(cls, uuid, py_func, locals, targetoptions,
                  can_compile, sigs):
         """
         Rebuild an Dispatcher instance after it was __reduce__'d.
@@ -904,7 +895,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
             return cls._memo[uuid]
         except KeyError:
             pass
-        self = cls(py_func, locals, targetoptions, impl_kind)
+        self = cls(py_func, locals, targetoptions)
         # Make sure this deserialization will be merged with subsequent ones
         self._set_uuid(uuid)
         for sig in sigs:

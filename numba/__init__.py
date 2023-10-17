@@ -84,7 +84,7 @@ import numba.core.types as types
 from numba.core.types import *
 
 # Re-export decorators
-from numba.core.decorators import (cfunc, generated_jit, jit, njit, stencil,
+from numba.core.decorators import (cfunc, jit, njit, stencil,
                                    jit_module)
 
 # Re-export vectorize decorators and the thread layer querying function
