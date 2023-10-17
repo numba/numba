@@ -411,21 +411,29 @@ class CallableTemplate(FunctionTemplate):
             # problems
             raise TypingError(str(e)) from e
 
-        sig = typer(*args, **kws)
-
-        # Unpack optional type if no matching signature
-        if sig is None:
-            if any(isinstance(x, types.Optional) for x in args):
-                def unpack_opt(x):
-                    if isinstance(x, types.Optional):
-                        return x.type
-                    else:
-                        return x
-
-                args = list(map(unpack_opt, args))
-                sig = typer(*args, **kws)
+        try:
+            sig = typer(*args, **kws)
+        except TypingError as e:
+            exc = e
+            sig = None
+        else:
+            exc = None
+        finally:
+            # Unpack optional type if no matching signature
             if sig is None:
-                return
+                if any(isinstance(x, types.Optional) for x in args):
+                    def unpack_opt(x):
+                        if isinstance(x, types.Optional):
+                            return x.type
+                        else:
+                            return x
+
+                    args = list(map(unpack_opt, args))
+                    sig = typer(*args, **kws)
+                if sig is None:
+                    if exc is not None:
+                        raise exc
+                    return
 
         # Get the pysig
         try:
