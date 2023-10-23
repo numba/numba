@@ -368,22 +368,22 @@ def _fix_LOAD_GLOBAL_arg(arg):
 
 
 class ByteCodePy311(_ByteCode):
+
     def __init__(self, func_id):
         super().__init__(func_id)
-
-        def fixup_eh(ent):
-            from dis import _ExceptionTableEntry
-            # Patch up the exception table offset
-            # because we add a NOP in _patched_opargs
-            out = _ExceptionTableEntry(
-                start=ent.start + _FIXED_OFFSET, end=ent.end + _FIXED_OFFSET,
-                target=ent.target + _FIXED_OFFSET,
-                depth=ent.depth, lasti=ent.lasti,
-            )
-            return out
-
         entries = dis.Bytecode(func_id.code).exception_entries
-        self.exception_entries = tuple(map(fixup_eh, entries))
+        self.exception_entries = tuple(map(self.fixup_eh, entries))
+
+    @staticmethod
+    def fixup_eh(ent):
+        # Patch up the exception table offset
+        # because we add a NOP in _patched_opargs
+        out = dis._ExceptionTableEntry(
+            start=ent.start + _FIXED_OFFSET, end=ent.end + _FIXED_OFFSET,
+            target=ent.target + _FIXED_OFFSET,
+            depth=ent.depth, lasti=ent.lasti,
+        )
+        return out
 
     def find_exception_entry(self, offset):
         """
@@ -398,8 +398,85 @@ class ByteCodePy311(_ByteCode):
             return ent
 
 
-if PYVERSION >= (3, 11):
+class ByteCodePy312(ByteCodePy311):
+
+    def __init__(self, func_id):
+        super().__init__(func_id)
+
+        # initialize lazy property
+        self._ordered_offsets = None
+
+        # Fixup offsets for all exception entries.
+        entries = [self.fixup_eh(e) for e in
+                   dis.Bytecode(func_id.code).exception_entries
+                   ]
+
+        # Prune any exception entries that we won't consider.
+        entries = [e for e in entries
+                   if not self.has_build_list_swap_pattern(e)]
+        self.exception_entries = tuple(entries)
+
+    @property
+    def ordered_offsets(self):
+        if not self._ordered_offsets:
+            # Get an ordered list of offsets.
+            self._ordered_offsets = [o for o in self.table]
+        return self._ordered_offsets
+
+    def has_build_list_swap_pattern(self, exception_entry):
+        """ Find the following bytecode pattern:
+
+            BUILD_{LIST, MAP, SET}
+            SWAP(2)
+            FOR_ITER
+            ...
+            END_FOR
+            SWAP(2)
+
+            This pattern indicates that a list/dict/set comprehension has
+            been inlined. In this case we can skip the exception block
+            entirely.
+        """
+
+        # Check start of pattern, three instructions.
+        # Work out the index of the exception entry.
+        start_index = self.ordered_offsets.index(exception_entry.start)
+        # If there is a BUILD_{LIST, MAP, SET} instruction at this
+        # location.
+        first_inst = self.table[self.ordered_offsets[start_index]]
+        if first_inst.opname not in (
+                "BUILD_LIST", "BUILD_MAP", "BUILD_SET"):
+            return False
+        # Check if the BUILD_{LIST, MAP, SET} instruction is followed
+        # by a SWAP(2).
+        next_inst = self.table[self.ordered_offsets[start_index + 1]]
+        if not next_inst.opname == "SWAP" and next_inst.arg == 2:
+            return False
+        next_inst = self.table[self.ordered_offsets[start_index + 2]]
+        # Check if the SWAP is followed by a FOR_ITER
+        if not next_inst.opname == "FOR_ITER":
+            return False
+
+        # Check end of pattern, two instructions.
+        # Check for the corresponding END_FOR, exception table end is
+        # non-inclusive, so subtract one.
+        end_index = self.ordered_offsets.index(exception_entry.end)
+        last_instruction = self.table[self.ordered_offsets[end_index - 1]]
+        if not last_instruction.opname == "END_FOR":
+            return False
+        # END_FOR must be followed by SWAP(2)
+        next_inst = self.table[self.ordered_offsets[end_index]]
+        if not next_inst.opname == "SWAP" and next_inst.arg == 2:
+            return False
+
+        # All above conditions hold, pattern was found.
+        return True
+
+
+if PYVERSION == (3, 11):
     ByteCode = ByteCodePy311
+elif PYVERSION == (3, 12):
+    ByteCode = ByteCodePy312
 elif PYVERSION < (3, 11):
     ByteCode = _ByteCode
 else:
