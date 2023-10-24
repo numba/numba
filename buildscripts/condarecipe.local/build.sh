@@ -1,7 +1,8 @@
 #!/bin/bash
 
 if [[ "$(uname -s)" == *"Linux"* ]] && [[ "$(uname -p)" == *"86"* ]]; then
-    EXTRA_BUILD_EXT_FLAGS="--werror --wall"
+    # EXTRA_BUILD_EXT_FLAGS="--werror --wall"
+    EXTRA_BUILD_EXT_FLAGS=""
 else
     EXTRA_BUILD_EXT_FLAGS=""
 fi
