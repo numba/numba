@@ -414,6 +414,17 @@ class ByteCodePy312(ByteCodePy311):
         # Prune any exception entries that we won't consider.
         entries = [e for e in entries
                    if not self.has_build_list_swap_pattern(e)]
+
+        # If this is a generator, we need to skip any exception table entries
+        # that point to the exception handler with the highest offset.
+        if func_id.is_generator:
+            # Get the exception handler with the highest offset.
+            max_exception_target = max([e.target for e in entries])
+            # Remove any exception table entries that point to that exception
+            # handler.
+            entries = [e for e in entries if e.target != max_exception_target]
+            #breakpoint()
+
         self.exception_entries = tuple(entries)
 
     @property
