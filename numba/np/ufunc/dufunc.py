@@ -300,6 +300,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
             indices_int_arr = isinstance(indices, types.Array) and \
                 isinstance(indices.dtype, types.Integer)
             indices_scalar = not (indices_int_arr or indices_int_arr)
+            indices_slice = isinstance(indices, types.SliceType)
             indices_empty = isinstance(indices, types.Tuple) and \
                 len(indices) == 0
             b_array = isinstance(b, (types.Array, types.Sequence, types.List, types.Tuple))
@@ -314,6 +315,9 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
             # extra second argument
             if nin == 1 and not cgutils.is_nonelike(b):
                 raise TypeError('second operand provided when ufunc is unary')
+
+            if indices_slice:
+                raise TypeError('slice is not supported for "indices"')
 
             # if not indices_int_tuple:
             #     msg = '"indices" must be a tuple of integers'
@@ -339,11 +343,21 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 return a
 
             def impl_b_array(ufunc, a, indices, b=None):
+                indices = np.asarray(indices)
+                b = np.asarray(b)
+
+                shape = np.broadcast_shapes(indices.shape, b.shape)
+                indices = np.broadcast_to(indices, shape)
+                b = np.broadcast_to(b, shape)
+
                 j = 0
                 for idx in indices:
                     a[idx] = ufunc(a[idx], b[j])
                     j += 1
                 return a
+
+            def impl_indices_scalar(ufunc, a, indices, b=None):
+                return ufunc.at(a, np.asarray(indices), b)
 
             def impl_indices_empty_b_scalar(ufunc, a, indices, b=None):
                 a[()] = ufunc(a[()], b)
@@ -351,6 +365,8 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
 
             if cgutils.is_nonelike(b):
                 return impl_b_none
+            elif indices_scalar:
+                return impl_indices_scalar
             elif indices_empty and b_scalar:
                 return impl_indices_empty_b_scalar
             elif b_array:
