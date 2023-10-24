@@ -373,6 +373,11 @@ class ByteCodePy312(ByteCodePy311):
         # initialize lazy property
         self._ordered_offsets = None
 
+        # If this is a generator, we skip the exception entries entirely.
+        if func_id.is_generator:
+            self.exception_entries = tuple([])
+            return
+
         # Fixup offsets for all exception entries.
         entries = [self.fixup_eh(e) for e in
                    dis.Bytecode(func_id.code).exception_entries
