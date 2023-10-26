@@ -141,18 +141,23 @@ class TestDUFunc(MemoryLeakMixin, unittest.TestCase):
 
 
 class TestDUFuncAt(TestCase):
-    def _compare_output(self, fn, a, *args):
+    def _compare_output(self, fn, ufunc, a, *args):
         expected = a.copy()
         got = a.copy()
-        fn.py_func(expected, *args)
+        ufunc.at(expected, *args)
         fn(got, *args)
         self.assertPreciseEqual(expected, got)
 
     def _generate_jit(self, ufunc):
         if ufunc.nin == 2:
-            vec = vectorize('int64(int64, int64)')(lambda a, b: ufunc(a, b))
+            vec = vectorize()(lambda a, b: ufunc(a, b))
         else:
-            vec = vectorize('int64(int64)')(lambda a: ufunc(a))
+            vec = vectorize()(lambda a: ufunc(a))
+
+        # if ufunc.nin == 2:
+        #     vec = vectorize('int64(int64, int64)')(lambda a, b: ufunc(a, b))
+        # else:
+        #     vec = vectorize('int64(int64)')(lambda a: ufunc(a))
 
         @njit
         def fn(*args):
@@ -175,17 +180,17 @@ class TestDUFuncAt(TestCase):
             return negative_vec.at(a, indices, b)
 
         # basic testing
-        self._compare_output(add_at, a, [2, 5, 2], 1)
+        self._compare_output(add_at, np.add, a, [2, 5, 2], 1)
 
         # missing second operand
         err_msg = 'second operand needed for ufunc'
         with self.assertRaisesRegex(TypeError, err_msg):
             add_at(a.copy(), [2, 5, 3], None)
 
-        self._compare_output(negative_at, a.copy(), [2, 5, 3])
+        self._compare_output(negative_at, np.negative, a.copy(), [2, 5, 3])
 
         b = np.array([100, 100, 100])
-        self._compare_output(add_at, a.copy(), [2, 5, 2], b)
+        self._compare_output(add_at, np.add, a.copy(), [2, 5, 2], b)
 
         # extraneous second operand
         err_msg = 'second operand provided when ufunc is unary'
@@ -204,7 +209,8 @@ class TestDUFuncAt(TestCase):
         # with subspaces
         arr = np.zeros(5, dtype=int)
         add_at = self._generate_jit(np.add)
-        self._compare_output(add_at, arr, slice(None), np.ones(5, dtype=int))
+        self._compare_output(add_at, np.add, arr, slice(None),
+                             np.ones(5, dtype=int))
 
     def test_ufunc_at_negative(self):
         arr = np.ones(5, dtype=np.int32)

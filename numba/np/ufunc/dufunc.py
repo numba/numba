@@ -318,14 +318,12 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
             if nin == 1 and not cgutils.is_nonelike(b):
                 raise TypeError('second operand provided when ufunc is unary')
 
-            self._frozen = False
             if cgutils.is_nonelike(b):
                 self.add((a.dtype,))
             elif b_scalar:
                 self.add((a.dtype, b))
             else:
                 self.add((a.dtype, b.dtype))
-            self._frozen = True
 
             def impl_b_none(ufunc, a, indices, b=None):
                 for idx in indices:
