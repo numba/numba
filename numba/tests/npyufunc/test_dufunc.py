@@ -160,7 +160,7 @@ class TestDUFuncAt(TestCase):
         return fn
 
     def test_numpy_ufunc_at_basic(self):
-        # tests taken from: https://github.com/numpy/numpy/blob/27d8c43eb958b4ecee59b4d66908750759a9afc2/numpy/core/tests/test_ufunc.py#L1974-L2003
+        # tests taken from: https://github.com/numpy/numpy/blob/27d8c43eb958b4ecee59b4d66908750759a9afc2/numpy/core/tests/test_ufunc.py#L1974-L2003  # noqa: E501
         # NumPy also test this function with a Rational array dtype. We skip
         # this test as Numba doesn't support Rational
         a = np.arange(10, dtype=int)
@@ -196,10 +196,9 @@ class TestDUFuncAt(TestCase):
             # with self.assertRaisesRegex(TypeError, err_msg):
             add_at(a.copy(), [2, 5, 3], [[1, 2], 1])
 
-    def _test_ufunc_at_inner_loop(self, typecode, ufunc):
-        pass
+    # def test_ufunc_at_inner_loop(self, typecode, ufunc):
+    #     pass
 
-    @unittest.expectedFailure
     def test_ufunc_at_ellipsis(self):
         # Make sure the indexed loop check does not choke on iters
         # with subspaces
@@ -207,13 +206,12 @@ class TestDUFuncAt(TestCase):
         add_at = self._generate_jit(np.add)
         self._compare_output(add_at, arr, slice(None), np.ones(5, dtype=int))
 
-    # def test_ufunc_at_negative(self):
-    #     arr = np.ones(5, dtype=np.int32)
-    #     indx = np.arange(5)
-    #     at = self._generate_jit(umt.indexed_negative)
-    #     at(arr, indx)
-    #     # If it is [-1, -1, -1, -100, 0] then the regular strided loop was used
-    #     assert np.all(arr == [-1, -1, -1, -200, -1])
+    def test_ufunc_at_negative(self):
+        arr = np.ones(5, dtype=np.int32)
+        indx = np.arange(5)
+        at = self._generate_jit(np.negative)
+        at(arr, indx)
+        assert np.all(arr == [-1, -1, -1, -1, -1])
 
     def test_ufunc_at_large(self):
         # NumPy issue gh-23457
@@ -227,70 +225,71 @@ class TestDUFuncAt(TestCase):
         add_at(a, indices, b)
         assert a[0] == b.sum()
 
-    # def test_cast_index_fastpath(self):
-    #     arr = np.zeros(10)
-    #     values = np.ones(100000)
-    #     # index must be cast, which may be buffered in chunks:
-    #     index = np.zeros(len(values), dtype=np.uint8)
-    #     np.add.at(arr, index, values)
-    #     assert arr[0] == len(values)
+    def test_cast_index_fastpath(self):
+        arr = np.zeros(10)
+        values = np.ones(100000)
+        add_at = self._generate_jit(np.add)
+        # index must be cast, which may be buffered in chunks:
+        index = np.zeros(len(values), dtype=np.uint8)
+        add_at(arr, index, values)
+        assert arr[0] == len(values)
 
-    # @pytest.mark.parametrize("value", [
-    #     np.ones(1), np.ones(()), np.float64(1.), 1.])
-    # def test_ufunc_at_scalar_value_fastpath(self, value):
-    #     arr = np.zeros(1000)
-    #     # index must be cast, which may be buffered in chunks:
-    #     index = np.repeat(np.arange(1000), 2)
-    #     np.add.at(arr, index, value)
-    #     assert_array_equal(arr, np.full_like(arr, 2 * value))
+    def test_ufunc_at_scalar_value_fastpath(self):
+        values = (np.ones(1), np.ones(()), np.float64(1.), 1.)
+        for value in values:
+            arr = np.zeros(1000)
+            # index must be cast, which may be buffered in chunks:
+            index = np.repeat(np.arange(1000), 2)
+            add_at = self._generate_jit(np.add)
+            add_at(arr, index, value)
+            np.testing.assert_array_equal(arr, np.full_like(arr, 2 * value))
 
     @unittest.expectedFailure
     def test_ufunc_at_multiD(self):
         a = np.arange(9).reshape(3, 3)
         b = np.array([[100, 100, 100], [200, 200, 200], [300, 300, 300]])
-        # np.add.at(a, (slice(None), [1, 2, 1]), b)
         add_at = self._generate_jit(np.add)
         add_at(a, (slice(None), [1, 2, 1]), b)
         self.assertPreciseEqual(a, np.array(
             [[0, 201, 102], [3, 404, 205], [6, 607, 308]]))
-        # assert_equal(a, [[0, 201, 102], [3, 404, 205], [6, 607, 308]])
 
         a = np.arange(27).reshape(3, 3, 3)
         b = np.array([100, 200, 300])
         add_at(a, (slice(None), slice(None), [1, 2, 1]), b)
         self.assertPreciseEqual(a,
-            [[[0, 401, 202],
-              [3, 404, 205],
-              [6, 407, 208]],
+                                [[[0, 401, 202],
+                                  [3, 404, 205],
+                                  [6, 407, 208]],
 
-             [[9, 410, 211],
-              [12, 413, 214],
-              [15, 416, 217]],
+                                 [[9, 410, 211],
+                                  [12, 413, 214],
+                                  [15, 416, 217]],
 
-             [[18, 419, 220],
-              [21, 422, 223],
-              [24, 425, 226]]])
+                                 [[18, 419, 220],
+                                  [21, 422, 223],
+                                  [24, 425, 226]]])
 
         a = np.arange(9).reshape(3, 3)
         b = np.array([[100, 100, 100], [200, 200, 200], [300, 300, 300]])
         add_at(a, ([1, 2, 1], slice(None)), b)
-        self.assertPreciseEqual(a, [[0, 1, 2], [403, 404, 405], [206, 207, 208]])
+        self.assertPreciseEqual(a,
+                                [[0, 1, 2], [403, 404, 405], [206, 207, 208]])
 
         a = np.arange(27).reshape(3, 3, 3)
         b = np.array([100, 200, 300])
         add_at(a, (slice(None), [1, 2, 1], slice(None)), b)
         self.assertPreciseEqual(a,
-            [[[0,  1,  2],
-              [203, 404, 605],
-              [106, 207, 308]],
+                                [[[0,  1,  2],
+                                  [203, 404, 605],
+                                  [106, 207, 308]],
 
-             [[9,  10, 11],
-              [212, 413, 614],
-              [115, 216, 317]],
+                                 [[9,  10, 11],
+                                  [212, 413, 614],
+                                  [115, 216, 317]],
 
-             [[18, 19, 20],
-              [221, 422, 623],
-              [124, 225, 326]]])
+                                 [[18, 19, 20],
+                                  [221, 422, 623],
+                                  [124, 225, 326]]])
 
         a = np.arange(9).reshape(3, 3)
         b = np.array([100, 200, 300])
@@ -301,47 +300,51 @@ class TestDUFuncAt(TestCase):
         b = np.array([100, 200, 300])
         add_at(a, ([1, 2, 1], 0, slice(None)), b)
         self.assertPreciseEqual(a,
-            [[[0,  1,  2],
-              [3,  4,  5],
-              [6,  7,  8]],
+                                [[[0,  1,  2],
+                                  [3,  4,  5],
+                                  [6,  7,  8]],
 
-             [[209, 410, 611],
-              [12,  13, 14],
-              [15,  16, 17]],
+                                 [[209, 410, 611],
+                                  [12,  13, 14],
+                                  [15,  16, 17]],
 
-             [[118, 219, 320],
-              [21,  22, 23],
-              [24,  25, 26]]])
+                                 [[118, 219, 320],
+                                  [21,  22, 23],
+                                  [24,  25, 26]]])
 
         a = np.arange(27).reshape(3, 3, 3)
         b = np.array([100, 200, 300])
         add_at(a, (slice(None), slice(None), slice(None)), b)
         self.assertPreciseEqual(a,
-            [[[100, 201, 302],
-              [103, 204, 305],
-              [106, 207, 308]],
+                                [[[100, 201, 302],
+                                  [103, 204, 305],
+                                  [106, 207, 308]],
 
-             [[109, 210, 311],
-              [112, 213, 314],
-              [115, 216, 317]],
+                                 [[109, 210, 311],
+                                  [112, 213, 314],
+                                  [115, 216, 317]],
 
-             [[118, 219, 320],
-              [121, 222, 323],
-              [124, 225, 326]]])
+                                 [[118, 219, 320],
+                                  [121, 222, 323],
+                                  [124, 225, 326]]])
 
     def test_ufunc_at_0D(self):
         a = np.array(0)
         add_at = self._generate_jit(np.add)
-        # add_at(a, (), 1)
-        # self.assertPreciseEqual(a, np.array(1))
+        add_at(a, (), 1)
+        self.assertPreciseEqual(a, np.array(1))
 
-        with self.assertRaises(IndexError):
+        with self.assertRaises(TypingError):
             add_at(a, 0, 1)
+
+        b = np.arange(3)
+        add_at(b, 0, 1)
+        self.assertPreciseEqual(b, np.array([1, 1, 2]))
 
         # NumPy checks for IndexError but we can't call a jit function with an
         # empty list as Numba raises "can't compute fingerprint of empty list"
-        # with self.assertRaises(ValueError):
-        #     add_at(a, [], 1)
+        with self.assertRaises(ValueError):
+            add_at(a, [], 1)
 
     def test_ufunc_at_dtypes(self):
         # Test mixed dtypes
@@ -394,11 +397,11 @@ class TestDUFuncAt(TestCase):
             add_at(values, [0, 1], 1)
         self.assertPreciseEqual(values, np.array(['a', 1], dtype=object))
 
-    @unittest.expectedFailure
     def test_ufunc_at_advanced_4(self):
         # Test multiple output ufuncs raise error, NumPy gh-5665
         modf_at = self._generate_jit(np.modf)
-        with self.assertRaises(ValueError):
+        # NumPy raises ValueError as modf returns multiple outputs
+        with self.assertRaises(TypeError):
             modf_at(np.arange(10), [1])
 
     def test_ufunc_at_advanced_5(self):
@@ -442,14 +445,16 @@ class TestDUFuncAt(TestCase):
         with self.assertRaisesRegex(TypingError, err_msg):
             matmul_at(a, [0], b)
 
-    #     a = np.array([[[1, 2], [3, 4]]])
-    #     assert_raises(TypeError, np.linalg._umath_linalg.det.at, a, [0])
+        # a = np.array([[[1, 2], [3, 4]]])
+        # assert_raises(TypeError, np.linalg._umath_linalg.det.at, a, [0])
 
-    # def test_at_no_loop_for_op(self):
-    #     # str dtype does not have a ufunc loop for np.add
-    #     arr = np.ones(10, dtype=str)
-    #     with pytest.raises(np.core._exceptions._UFuncNoLoopError):
-    #         np.add.at(arr, [0, 1], [0, 1])
+    def test_at_no_loop_for_op(self):
+        # str dtype does not have a ufunc loop for np.add
+        arr = np.ones(10, dtype=str)
+        add_at = self._generate_jit(np.add)
+        # NumPy raises `np.core._exceptions._UFuncNoLoopError`
+        with self.assertRaises(TypeError):
+            add_at(arr, [0, 1], [0, 1])
 
     def test_at_output_casting(self):
         arr = np.array([-1])
@@ -457,7 +462,6 @@ class TestDUFuncAt(TestCase):
         equal_at(arr, [0], [0])
         assert arr[0] == 0
 
-    # @unittest.expectedFailure
     def test_at_broadcast_failure(self):
         arr = np.arange(5)
         add_at = self._generate_jit(np.add)
@@ -466,7 +470,6 @@ class TestDUFuncAt(TestCase):
         msg = 'shape mismatch: objects cannot be broadcast to a single shape'
         with self.assertRaisesRegex(ValueError, msg):
             add_at(arr, [0, 1], [1, 2, 3])
-
 
 
 class TestDUFuncReduce(TestCase):

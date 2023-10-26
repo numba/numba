@@ -295,16 +295,18 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 msg = 'The first argument "a" must be array-like'
                 raise errors.NumbaTypeError(msg)
 
-            indices_int_tuple = isinstance(indices, types.UniTuple) and \
-                isinstance(indices.dtype, types.Integer)
-            indices_int_arr = isinstance(indices, types.Array) and \
-                isinstance(indices.dtype, types.Integer)
-            indices_scalar = not (indices_int_arr or indices_int_arr)
+            indices_int_arr = isinstance(indices, (types.Array, types.List)) \
+                and isinstance(indices.dtype, types.Integer)
+            indices_tuple = isinstance(indices, types.Tuple)
             indices_slice = isinstance(indices, types.SliceType)
-            indices_empty = isinstance(indices, types.Tuple) and \
+            indices_scalar = not (indices_int_arr or indices_int_arr or
+                                  indices_slice or indices_tuple)
+            indices_empty_tuple = isinstance(indices, types.Tuple) and \
                 len(indices) == 0
-            b_array = isinstance(b, (types.Array, types.Sequence, types.List, types.Tuple))
+            b_array = isinstance(b, (types.Array, types.Sequence, types.List,
+                                     types.Tuple))
             b_scalar = not b_array
+            b_none = cgutils.is_nonelike(b)
 
             nin = self.ufunc.nin
 
@@ -315,13 +317,6 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
             # extra second argument
             if nin == 1 and not cgutils.is_nonelike(b):
                 raise TypeError('second operand provided when ufunc is unary')
-
-            if indices_slice:
-                raise TypeError('slice is not supported for "indices"')
-
-            # if not indices_int_tuple:
-            #     msg = '"indices" must be a tuple of integers'
-            #     raise errors.NumbaTypeError(msg)
 
             self._frozen = False
             if cgutils.is_nonelike(b):
@@ -337,12 +332,14 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                     a[idx] = ufunc(a[idx])
                 return a
 
-            def impl_b_scalar(ufunc, a, indices, b=None):
-                for idx in indices:
-                    a[idx] = ufunc(a[idx], b)
+            def impl_scalar_scalar(ufunc, a, indices, b=None):
+                if b_none:
+                    a[indices] = ufunc(a[indices])
+                else:
+                    a[indices] = ufunc(a[indices], b)
                 return a
 
-            def impl_b_array(ufunc, a, indices, b=None):
+            def impl_generic(ufunc, a, indices, b=None):
                 indices = np.asarray(indices)
                 b = np.asarray(b)
 
@@ -356,23 +353,27 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                     j += 1
                 return a
 
-            def impl_indices_scalar(ufunc, a, indices, b=None):
-                return ufunc.at(a, np.asarray(indices), b)
-
             def impl_indices_empty_b_scalar(ufunc, a, indices, b=None):
                 a[()] = ufunc(a[()], b)
                 return a
 
+            def impl_indices_slice(ufunc, a, indices, b=None):
+                if b_none:
+                    a[indices] = ufunc(a[indices])
+                else:
+                    a[indices] = ufunc(a[indices], b)
+                return a
+
             if cgutils.is_nonelike(b):
                 return impl_b_none
-            elif indices_scalar:
-                return impl_indices_scalar
-            elif indices_empty and b_scalar:
+            elif indices_slice:
+                return impl_indices_slice
+            elif indices_empty_tuple and b_scalar:
                 return impl_indices_empty_b_scalar
-            elif b_array:
-                return impl_b_array
+            elif indices_scalar and b_scalar:
+                return impl_scalar_scalar
             else:
-                return impl_b_scalar
+                return impl_generic
 
     def _install_ufunc_reduce(self, template) -> None:
         at = types.Function(template)
