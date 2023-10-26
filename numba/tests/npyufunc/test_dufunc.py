@@ -6,9 +6,10 @@ import numpy as np
 
 from numba import njit, vectorize
 from numba.tests.support import MemoryLeakMixin, TestCase
-from numba.core.errors import TypingError
+from numba.core.errors import TypingError, NumbaNotImplementedError
 import unittest
 from numba.np.ufunc import dufunc
+from numba.np.numpy_support import from_dtype
 
 
 def pyuadd(a0, a1):
@@ -423,7 +424,12 @@ class TestDUFuncAt(TestCase):
 
         for dtype in dtypes:
 
-            if dtype in ('e',):  # float16
+            if dtype in ('e',):  # skip float16 as we don't have an impl. for it
+                continue
+
+            try:
+                from_dtype(np.dtype(dtype))
+            except NumbaNotImplementedError:
                 continue
 
             for ufunc in ufuncs:
