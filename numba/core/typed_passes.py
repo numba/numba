@@ -23,7 +23,8 @@ from numba.core.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
                                  dead_code_elimination, simplify_CFG,
                                  get_definition,
                                  build_definitions, compute_cfg_from_blocks,
-                                 is_operator_or_getitem)
+                                 is_operator_or_getitem,
+                                 replace_vars)
 from numba.core import postproc
 from llvmlite import binding as llvm
 
@@ -881,6 +882,8 @@ class PreLowerStripPhis(FunctionPass):
     def run_pass(self, state):
         state.func_ir = self._strip_phi_nodes(state.func_ir)
         state.func_ir._definitions = build_definitions(state.func_ir.blocks)
+        self._simplify_conditionally_defined_variable(state.func_ir)
+
         # Rerun postprocessor to update metadata
         post_proc = postproc.PostProcessor(state.func_ir)
         post_proc.run(emit_dels=False)
@@ -956,3 +959,53 @@ class PreLowerStripPhis(FunctionPass):
 
         func_ir.blocks = newblocks
         return func_ir
+
+    def _simplify_conditionally_defined_variable(self, func_ir):
+        """
+        Rewrite assignments like:
+
+            ver1 = null()
+            ...
+            ver1 = ver
+            ...
+            uses(ver1)
+
+        into:
+            # delete all assignments to ver1
+            uses(ver)
+
+        """
+        any_block = next(iter(func_ir.blocks.values()))
+        scope = any_block.scope
+        defs = func_ir._definitions
+
+        # Find and simplify conditionally defined variables
+        suspects = set()
+        for varname, deflist in defs.items():
+            if len(deflist) == 2:
+                if any(map(lambda x: ir.UNDEFINED, deflist)):
+                    unver = scope.get_exact(
+                        scope.get_exact(varname).unversioned_name
+                    )
+                    if unver in deflist:
+                        if len(unver.versioned_names) == 1:
+                            suspects.add(unver)
+
+        delete_set = set()
+        replace_map = {}
+        for var in suspects:
+            # rewrite Var uses to the unversioned name
+            for versioned in var.versioned_names:
+                ver_var = scope.get_exact(versioned)
+                # delete assignment to the versioned name
+                delete_set.add(ver_var)
+                # replace references to versioned name with the unversioned
+                replace_map[versioned] = var
+
+        # remove assignments to the versioned names
+        for label, blk in func_ir.blocks.items():
+            for assign in blk.find_insts(ir.Assign):
+                if assign.target in delete_set:
+                    blk.remove(assign)
+        # do variable replacement
+        replace_vars(func_ir.blocks, replace_map)
