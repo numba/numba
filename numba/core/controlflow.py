@@ -4,6 +4,7 @@ import sys
 
 from numba.core.ir import Loc
 from numba.core.errors import UnsupportedError
+from numba.core.utils import PYVERSION
 
 # List of bytecodes creating a new block in the control flow graph
 # (in addition to explicit jump labels).
@@ -952,6 +953,15 @@ class ControlFlowAnalysis(object):
     def op_RETURN_VALUE(self, inst):
         self._curblock.terminating = True
         self._force_new_block = True
+
+    if PYVERSION in ((3, 12), ):
+        def op_RETURN_CONST(self, inst):
+            self._curblock.terminating = True
+            self._force_new_block = True
+    elif PYVERSION in ((3, 8), (3, 9), (3, 10), (3, 11)):
+        pass
+    else:
+        raise NotImplementedError(PYVERSION)
 
     def op_RAISE_VARARGS(self, inst):
         self._curblock.terminating = True
