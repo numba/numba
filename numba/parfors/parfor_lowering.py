@@ -52,6 +52,15 @@ class ParforLower(lowering.Lower):
         else:
             super().lower_inst(inst)
 
+    @property
+    def _disable_sroa_like_opt(self):
+        """
+        Force disable this because Parfor usedefs is incompatible---it only
+        considers use-defs in blocks that must be executing.
+        See https://github.com/numba/numba/commit/017e2ff9db87fc34149b49dd5367ecbf0bb45268
+        """
+        return True
+
 
 def _lower_parfor_parallel(lowerer, parfor):
     if parfor.lowerer is None:

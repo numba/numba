@@ -2311,6 +2311,16 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, 3.7, 4.3)
         self.assertEqual(countParfors(test_impl, (types.float64, types.float64)), 1)
 
+    def test_issue9256_lower_sroa_conflict(self):
+        @njit(parallel=True)
+        def def_in_loop(x):
+            c = 0
+            for i in prange(x):
+                c = i
+            return c
+
+        self.assertEqual(def_in_loop(10), def_in_loop.py_func(10))
+
 
 @skip_parfors_unsupported
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
