@@ -2315,6 +2315,7 @@ class TestParfors(TestParforsBase):
         @njit(parallel=True)
         def def_in_loop(x):
             c = 0
+            set_num_threads(1)
             for i in prange(x):
                 c = i
             return c
