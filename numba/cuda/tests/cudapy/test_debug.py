@@ -48,11 +48,13 @@ class TestDebugOutput(CUDATestCase):
                 self.assertRaises(AssertionError, check_meth, out)
 
     def _check_dump_bytecode(self, out):
-        if PYVERSION == (3, 11):
+        if PYVERSION in ((3, 11), (3, 12)):
             # binop with arg=0 is binary add, see CPython dis.py and opcode.py
             self.assertIn('BINARY_OP(arg=0', out)
-        else:
+        elif PYVERSION in ((3, 8), (3, 9), (3, 10)):
             self.assertIn('BINARY_ADD', out)
+        else:
+            raise NotImplementedError(PYVERSION)
 
     def _check_dump_cfg(self, out):
         self.assertIn('CFG dominators', out)
