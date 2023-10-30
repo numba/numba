@@ -155,11 +155,6 @@ class TestDUFuncAt(TestCase):
         else:
             vec = vectorize()(lambda a: ufunc(a))
 
-        # if ufunc.nin == 2:
-        #     vec = vectorize('int64(int64, int64)')(lambda a, b: ufunc(a, b))
-        # else:
-        #     vec = vectorize('int64(int64)')(lambda a: ufunc(a))
-
         @njit
         def fn(*args):
             return vec.at(*args)
