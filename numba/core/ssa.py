@@ -257,7 +257,7 @@ class _BaseHandler:
 class _GatherDefsHandler(_BaseHandler):
     """Find all defs and uses of variable in each block
 
-    ``states["label"] is a int; label of the current block
+    ``states["label"]`` is a int; label of the current block
     ``states["defs"]`` is a Mapping[str, List[Tuple[ir.Assign, int]]]
     ``states["uses"]`` is a Mapping[Set[int]]
     """

@@ -883,6 +883,7 @@ class PreLowerStripPhis(FunctionPass):
         state.func_ir = self._strip_phi_nodes(state.func_ir)
         state.func_ir._definitions = build_definitions(state.func_ir.blocks)
         self._simplify_conditionally_defined_variable(state.func_ir)
+        state.func_ir._definitions = build_definitions(state.func_ir.blocks)
 
         # Rerun postprocessor to update metadata
         post_proc = postproc.PostProcessor(state.func_ir)
@@ -1003,7 +1004,7 @@ class PreLowerStripPhis(FunctionPass):
                 replace_map[versioned] = var
 
         # remove assignments to the versioned names
-        for label, blk in func_ir.blocks.items():
+        for _label, blk in func_ir.blocks.items():
             for assign in blk.find_insts(ir.Assign):
                 if assign.target in delete_set:
                     blk.remove(assign)
