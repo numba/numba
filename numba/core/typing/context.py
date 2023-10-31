@@ -48,6 +48,8 @@ class CallStack(Sequence):
     def __init__(self):
         self._stack = []
         self._lock = threading.RLock()
+        # fail_cache only last for the current compilation session
+        self._fail_cache = {}
 
     def __getitem__(self, index):
         """
@@ -61,6 +63,8 @@ class CallStack(Sequence):
 
     @contextlib.contextmanager
     def register(self, target, typeinfer, func_id, args):
+        # If stack is empty, then fail_cache must be empty
+        assert self._stack or not self._fail_cache
         # guard compiling the same function with the same signature
         if self.match(func_id.func, args):
             msg = "compiler re-entrant to the same function signature"
@@ -71,6 +75,9 @@ class CallStack(Sequence):
             yield
         finally:
             self._stack.pop()
+            if not self._stack:
+                # if empty? clear fail_cache
+                self._fail_cache.clear()
             self._lock.release()
 
     def finditer(self, py_func):
@@ -99,6 +106,56 @@ class CallStack(Sequence):
         for frame in self.finditer(py_func):
             if frame.args == args:
                 return frame
+
+    def attempt_resolve_func(self, func, args, kws) -> "_ResolveCache":
+        if not self._stack:
+            # if callstack is empty, bypass fail_cache
+            return _ResolveCache()
+
+        def normalize_dict(obj):
+            if isinstance(obj, dict):
+                return tuple(kws.items())
+            return kws
+
+        def hashable(obj):
+            try:
+                hash(obj)
+            except TypeError:
+                return False
+            else:
+                return True
+
+        key = func, args, normalize_dict(kws)
+        if not hashable(key):
+            return _ResolveCache()
+        return self._fail_cache.setdefault(key, _ResolveCache())
+
+
+class _ResolveCache(object):
+    """
+    A cache for function resolution result.
+    Currently only replay failed attempts.
+    """
+    def __init__(self):
+        self._status = "pending"
+        self._exc = None
+
+    def mark_error(self, exc):
+        self._status = "error"
+        self._exc = exc
+
+    def mark_failed(self):
+        self._status = "failed"
+
+    def replay_failure(self) -> None:
+        if self._status == "error":
+            raise self._exc
+        else:
+            assert self._status == "failed"
+            return None
+
+    def has_failed_previously(self) -> bool:
+        return self._status in {"failed", "error"}
 
 
 class CallFrame(object):
@@ -191,6 +248,10 @@ class BaseContext(object):
         Resolve function type *func* for argument types *args* and *kws*.
         A signature is returned.
         """
+        cache = self.callstack.attempt_resolve_func(func, args, kws)
+        if cache.has_failed_previously():
+            return cache.replay_failure()
+
         # Prefer user definition first
         try:
             res = self._resolve_user_function_type(func, args, kws)
@@ -210,7 +271,11 @@ class BaseContext(object):
 
         # Re-raise last_exception if no function type has been found
         if res is None and last_exception is not None:
+            cache.mark_error(last_exception)
             raise last_exception
+
+        if res is None:
+            cache.mark_failed()
 
         return res
 
