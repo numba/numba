@@ -983,14 +983,16 @@ class PreLowerStripPhis(FunctionPass):
         # Find and simplify conditionally defined variables
         suspects = set()
         for varname, deflist in defs.items():
-            if len(deflist) == 2:
-                if any(map(lambda x: ir.UNDEFINED, deflist)):
-                    unver = scope.get_exact(
-                        scope.get_exact(varname).unversioned_name
-                    )
-                    if unver in deflist:
-                        if len(unver.versioned_names) == 1:
-                            suspects.add(unver)
+            unique_defs = deflist
+            # Only consider variables with only two definitions and one of them
+            # is UNDEFINED and the other is the unversioned variable.
+            if len(unique_defs) == 2 and unique_defs:
+                unver = scope.get_exact(
+                    scope.get_exact(varname).unversioned_name
+                )
+                if unver in deflist:
+                    if len(unver.versioned_names) == 1:
+                        suspects.add(unver)
 
         delete_set = set()
         replace_map = {}
