@@ -882,8 +882,9 @@ class PreLowerStripPhis(FunctionPass):
     def run_pass(self, state):
         state.func_ir = self._strip_phi_nodes(state.func_ir)
         state.func_ir._definitions = build_definitions(state.func_ir.blocks)
-        self._simplify_conditionally_defined_variable(state.func_ir)
-        state.func_ir._definitions = build_definitions(state.func_ir.blocks)
+        if "flags" in state and state.flags.auto_parallel.enabled:
+            self._simplify_conditionally_defined_variable(state.func_ir)
+            state.func_ir._definitions = build_definitions(state.func_ir.blocks)
 
         # Rerun postprocessor to update metadata
         post_proc = postproc.PostProcessor(state.func_ir)
@@ -975,6 +976,7 @@ class PreLowerStripPhis(FunctionPass):
             # delete all assignments to ver1
             uses(ver)
 
+        This is only needed for parfors.
         """
         any_block = next(iter(func_ir.blocks.values()))
         scope = any_block.scope
