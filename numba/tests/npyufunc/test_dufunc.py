@@ -200,6 +200,12 @@ class TestDUFuncAt(TestCase):
         typecodes = np.typecodes['Complex']
         ufuncs = (np.add, np.subtract, np.multiply)
         for typecode in typecodes:
+
+            try:
+                from_dtype(np.dtype(typecode))
+            except NumbaNotImplementedError:
+                continue
+
             for ufunc in ufuncs:
                 a = np.ones(10, dtype=typecode)
                 indx = np.concatenate([np.ones(6, dtype=np.intp),
