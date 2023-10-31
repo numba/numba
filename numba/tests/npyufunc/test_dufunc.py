@@ -194,11 +194,27 @@ class TestDUFuncAt(TestCase):
             negative_jit_2(a.copy(), [2, 5, 3], [1, 2, 3])
 
         with self.assertRaises(TypeError):
-            # with self.assertRaisesRegex(TypeError, err_msg):
             add_at(a.copy(), [2, 5, 3], [[1, 2], 1])
 
-    # def test_ufunc_at_inner_loop(self, typecode, ufunc):
-    #     pass
+    def test_ufunc_at_inner_loop(self):
+        typecodes = np.typecodes['Complex']
+        ufuncs = (np.add, np.subtract, np.multiply)
+        for typecode in typecodes:
+            for ufunc in ufuncs:
+                a = np.ones(10, dtype=typecode)
+                indx = np.concatenate([np.ones(6, dtype=np.intp),
+                                       np.full(18, 4, dtype=np.intp)])
+                value = a.dtype.type(1j)
+                ufunc_at = self._generate_jit(ufunc)
+                ufunc_at(a, indx, value)
+                expected = np.ones_like(a)
+                if ufunc is np.multiply:
+                    expected[1] = expected[4] = -1
+                else:
+                    expected[1] += 6 * (value if ufunc is np.add else -value)
+                    expected[4] += 18 * (value if ufunc is np.add else -value)
+
+        self.assertPreciseEqual(a, expected)
 
     def test_ufunc_at_ellipsis(self):
         # Make sure the indexed loop check does not choke on iters
