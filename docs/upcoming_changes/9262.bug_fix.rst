@@ -1,0 +1,5 @@
+Fix pickle ``RecursionError`` when serializing exception
+========================================================
+
+Fix a bug when serializing the constant part of a dynamic exception that would
+trigger a ``RecursionError`` in Pickle.
