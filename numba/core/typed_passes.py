@@ -999,7 +999,7 @@ class PreLowerStripPhis(FunctionPass):
             if not var.versioned_names:
                 return False
             for verioned in var.versioned_names:
-                vs = defs[verioned]
+                vs = defs.get(verioned, ())
                 if not all(map(partial(unver_or_undef, k), vs)):
                     return False
             return True
