@@ -2322,6 +2322,33 @@ class TestParfors(TestParforsBase):
 
         self.assertEqual(def_in_loop(10), def_in_loop.py_func(10))
 
+    def test_issue9256_lower_sroa_conflict_variant1(self):
+        def def_in_loop(x):
+            c = x
+            set_num_threads(1)
+            for _i in prange(x):
+                if c: # forces 3 SSA versions
+                    d = x + 4
+            return c, d > 0
+
+        expected = def_in_loop(4)
+        self.assertEqual(expected, njit(parallel=False)(def_in_loop)(4))
+        self.assertEqual(expected, njit(parallel=True)(def_in_loop)(4))
+
+    def test_issue9256_lower_sroa_conflict_variant2(self):
+        def def_in_loop(x):
+            c = x
+            set_num_threads(1)
+            for _i in prange(x):
+                if c:
+                    for _j in range(x): # forces 4 SSA versions
+                        d = x + 4
+            return c, d > 0
+
+        expected = def_in_loop(4)
+        self.assertEqual(expected, njit(parallel=False)(def_in_loop)(4))
+        self.assertEqual(expected, njit(parallel=True)(def_in_loop)(4))
+
 
 @skip_parfors_unsupported
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):

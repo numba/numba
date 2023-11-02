@@ -1,6 +1,7 @@
 import abc
 from contextlib import contextmanager
 from collections import defaultdict, namedtuple
+from functools import partial
 from copy import copy
 import warnings
 
@@ -982,21 +983,35 @@ class PreLowerStripPhis(FunctionPass):
         scope = any_block.scope
         defs = func_ir._definitions
 
-        # Find and simplify conditionally defined variables
+        def unver_or_undef(unver, defn):
+            # Is the definition undefined or pointing to the unversioned name?
+            if isinstance(defn, ir.Var):
+                if defn.unversioned_name == unver:
+                    return True
+            elif isinstance(defn, ir.Expr):
+                if defn.op == "null":
+                    return True
+            return False
+
+        def legalize_all_versioned_names(var):
+            # Is all versioned names undefined or defined to the same
+            # variable chain?
+            if not var.versioned_names:
+                return False
+            for verioned in var.versioned_names:
+                vs = defs[verioned]
+                if not all(map(partial(unver_or_undef, k), vs)):
+                    return False
+            return True
+
+        # Find unversioned variables that met the conditions
         suspects = set()
-        for varname, deflist in defs.items():
-            unique_defs = set(deflist)
-            atleast_one_undef = any(map(lambda x: x == ir.UNDEFINED,
-                                        unique_defs))
-            # Only consider variables with only two definitions and one of them
-            # is UNDEFINED and the other is the unversioned variable.
-            if len(unique_defs) == 2 and atleast_one_undef:
-                unver = scope.get_exact(
-                    scope.get_exact(varname).unversioned_name
-                )
-                if unver in deflist:
-                    if len(unver.versioned_names) == 1:
-                        suspects.add(unver)
+        for k in defs:
+            var = scope.get_exact(k)
+            # is the unversioned?
+            if var.unversioned_name == k:
+                if legalize_all_versioned_names(var):
+                    suspects.add(var)
 
         delete_set = set()
         replace_map = {}
