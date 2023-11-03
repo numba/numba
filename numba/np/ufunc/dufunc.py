@@ -12,6 +12,7 @@ from numba.core.typing import npydecl
 from numba.core.typing.templates import AbstractTemplate, signature
 from numba.cpython.unsafe.tuple import tuple_setitem
 from numba.np.ufunc import _internal
+from numba.np.arrayobj import generate_getitem_setitem_with_axis
 from numba.parfors import array_analysis
 from numba.np.ufunc import ufuncbuilder
 from numba.np import numpy_support
@@ -281,6 +282,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
 
     def _install_ufunc_methods(self, template) -> None:
         self._install_ufunc_reduce(template)
+        self._install_ufunc_reduceat(template)
 
     def _install_ufunc_reduce(self, template) -> None:
         at = types.Function(template)
@@ -295,7 +297,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 msg = 'The first argument "array" must be array-like'
                 raise errors.NumbaTypeError(msg)
 
-            axis_int = isinstance(axis, types.Integer)
+            axis_int = isinstance(axis, types.Integer) or isinstance(axis, int)
             axis_int_tuple = isinstance(axis, types.UniTuple) and \
                 isinstance(axis.dtype, types.Integer)
             axis_empty_tuple = isinstance(axis, types.Tuple) and len(axis) == 0
@@ -544,8 +546,119 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 # axis is default value (0) or an integer
                 # ufunc(array, axis=0)
                 return impl_nd_axis_int
-            # elif array.ndim == 1:
-            #     return impl_1d
+
+    def _install_ufunc_reduceat(self, template) -> None:
+        at = types.Function(template)
+
+        @overload_method(at, 'reduceat')
+        def ol_reduceat(ufunc, array, indices, axis=0, dtype=None, out=None):
+
+            warnings.warn("ufunc.reduceat feature is experimental",
+                          category=errors.NumbaExperimentalFeatureWarning)
+
+            if self.ufunc.nin != 2:
+                msg = 'reduceat only supported for binary functions'
+                raise errors.NumbaTypeError(msg)
+
+            if not numpy_support.type_can_asarray(array):
+                msg = 'The first argument "array" must be array-like'
+                raise errors.NumbaTypeError(msg)
+
+            if not numpy_support.type_can_asarray(indices):
+                msg = 'The second argument "indices" must be array-like'
+                raise errors.NumbaTypeError(msg)
+
+            if not isinstance(axis, (types.Integer, types.Omitted,
+                                     types.IntegerLiteral, int)):
+                msg = '"axis" must be an integer'
+                raise errors.NumbaTypeError(msg)
+
+            out_none = cgutils.is_nonelike(out)
+            if not out_none and not isinstance(out, types.Array):
+                raise errors.NumbaTypeError('output must be an array')
+
+            array_arr = isinstance(array, types.Array)
+            array_ndim = array.ndim if array_arr else 0
+            tup_m1 = (0,) * (array_ndim - 1)
+            indices_arr = isinstance(indices, types.Array)
+            dt = array.dtype if cgutils.is_nonelike(dtype) else dtype
+
+            need_cast = not (array_arr and indices_arr)
+
+            if indices_arr and indices.ndim != 1:
+                msg = ('Expect "indices" array to have at most 1 dimension. '
+                       f'Got {indices.ndim}')
+                raise errors.NumbaValueError(msg)
+
+            if need_cast:
+                def impl_cast(ufunc, array, indices, axis=0, dtype=None, out=None):  # noqa: E501
+                    return ufunc.reduceat(np.asarray(array),
+                                          np.asarray(indices),
+                                          axis,
+                                          dtype=dtype,
+                                          out=out)
+                return impl_cast
+
+            @register_jitable
+            def tuple_slice(tup, pos):
+                s = tup_m1  # TODO: replace this by a literally call
+                i, j = 0, 0
+                while i < len(tup):
+                    if i != pos:
+                        s = tuple_setitem(s, j, tup[i])
+                        j += 1
+                    i += 1
+                return s
+
+            setitem = generate_getitem_setitem_with_axis(array.ndim, 'setitem')
+
+            def impl(ufunc, array, indices, axis=0, dtype=None, out=None):
+                sz = indices.shape[0]
+                shape = tuple_setitem(array.shape, axis, sz)
+
+                if not out_none and out.shape != shape:
+                    # TODO: improve error message
+                    msg = ('operands could not be broadcast together with '
+                           'remmaped shapes')
+                    raise ValueError(msg)
+
+                if out_none:
+                    out = np.zeros(shape, dtype=dt)
+
+                j = 0
+                for i in range(sz - 1):
+                    if indices[i] < indices[i + 1]:
+                        idx = np.arange(indices[i], indices[i + 1])
+                        if array.ndim > 1:
+                            arr_slice = np.take(array, idx, axis)
+                        else:
+                            arr_slice = array[idx]
+                        arr_reduce = ufunc.reduce(arr_slice, axis=axis)
+                        setitem(out, j, axis, arr_reduce)
+                    elif indices[i] >= indices[i + 1]:
+                        idx = np.asarray([indices[i]])
+                        arr_slice = np.take(array, idx, axis)
+                        if array.ndim > 1:
+                            _slice = tuple_slice(array.shape, axis)
+                            arr_slice = arr_slice.reshape(_slice)
+                        setitem(out, j, axis, arr_slice)
+                    elif indices[i] >= sz or indices[i] < 0:
+                        # TODO: Improve error message
+                        raise ValueError('error!')
+                    j += 1
+
+                # last index
+                idx = np.arange(indices[i + 1], array.shape[axis])
+                if array.ndim > 1:
+                    arr_slice = np.take(array, idx, axis)
+                else:
+                    arr_slice = array[idx]
+                arr_reduce = ufunc.reduce(arr_slice, axis)
+                setitem(out, j, axis, arr_reduce)
+
+                return out
+
+            return impl
 
     def _install_type(self, typingctx=None):
         """Constructs and installs a typing class for a DUFunc object in the
