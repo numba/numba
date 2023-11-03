@@ -58,6 +58,34 @@ class TestNvvmDriver(unittest.TestCase):
         self.assertTrue('mycudakernel' in ptx)
         self.assertTrue('.address_size 64' in ptx)
 
+    def test_used_list(self):
+        # Construct a module
+        m = ir.Module("test_used_list")
+        m.triple = 'nvptx64-nvidia-cuda'
+        m.data_layout = NVVM().data_layout
+        nvvm.add_ir_version(m)
+
+        # Add a function and mark it as a kernel
+        fty = ir.FunctionType(ir.VoidType(), [ir.IntType(32)])
+        kernel = ir.Function(m, fty, name='mycudakernel')
+        bldr = ir.IRBuilder(kernel.append_basic_block('entry'))
+        bldr.ret_void()
+        nvvm.set_cuda_kernel(kernel)
+
+        # Verify that the used list was correctly constructed
+        used_lines = [line for line in str(m).splitlines()
+                      if 'llvm.used' in line]
+        msg = 'Expected exactly one @"llvm.used" array'
+        self.assertEqual(len(used_lines), 1, msg)
+
+        used_line = used_lines[0]
+        # Kernel should be referenced in the used list
+        self.assertIn("mycudakernel", used_line)
+        # Check linkage of the used list
+        self.assertIn("appending global", used_line)
+        # Ensure used list is in the metadata section
+        self.assertIn('section "llvm.metadata"', used_line)
+
     def test_nvvm_ir_verify_fail(self):
         m = ir.Module("test_bad_ir")
         m.triple = "unknown-unknown-unknown"
@@ -162,6 +190,8 @@ declare i32 @llvm.nvvm.read.ptx.sreg.tid.x() nounwind readnone
 
 !nvvm.annotations = !{{!2}}
 !2 = !{{void (i32*)* @simple, !"kernel", i32 1}}
+
+@"llvm.used" = appending global [1 x i8*] [i8* bitcast (void (i32*)* @simple to i8*)], section "llvm.metadata"
 '''  # noqa: E501
 
 
