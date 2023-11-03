@@ -751,3 +751,21 @@ def get_hashable_key(value):
         return id(value)
     else:
         return value
+
+
+def dump_llvm(fndesc, module):
+    print(("LLVM DUMP %s" % fndesc).center(80, '-'))
+    if config.HIGHLIGHT_DUMPS:
+        try:
+            from pygments import highlight
+            from pygments.lexers import LlvmLexer as lexer
+            from pygments.formatters import Terminal256Formatter
+            from numba.misc.dump_style import by_colorscheme
+            print(highlight(module.__repr__(), lexer(),
+                            Terminal256Formatter( style=by_colorscheme())))
+        except ImportError:
+            msg = "Please install pygments to see highlighted dumps"
+            raise ValueError(msg)
+    else:
+        print(module)
+    print('=' * 80)

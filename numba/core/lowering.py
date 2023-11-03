@@ -195,22 +195,7 @@ class BaseLower(object):
                 self.genlower.lower_finalize_func(self)
 
         if config.DUMP_LLVM:
-            print(("LLVM DUMP %s" % self.fndesc).center(80, '-'))
-            if config.HIGHLIGHT_DUMPS:
-                try:
-                    from pygments import highlight
-                    from pygments.lexers import LlvmLexer as lexer
-                    from pygments.formatters import Terminal256Formatter
-                    from numba.misc.dump_style import by_colorscheme
-                    print(highlight(self.module.__repr__(), lexer(),
-                                    Terminal256Formatter(
-                                        style=by_colorscheme())))
-                except ImportError:
-                    msg = "Please install pygments to see highlighted dumps"
-                    raise ValueError(msg)
-            else:
-                print(self.module)
-            print('=' * 80)
+            utils.dump_llvm(self.fndesc, self.module)
 
         # Special optimization to remove NRT on functions that do not need it.
         if self.context.enable_nrt and self.generator_info is None:
