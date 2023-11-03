@@ -394,7 +394,6 @@ class CUDACABICallConv(BaseCallConv):
     def return_status_propagate(self, builder, status):
         msg = "Return status is unsupported in the CUDA C/C++ ABI"
         raise NotImplementedError(msg)
-        pass
 
     def get_function_type(self, restype, argtypes):
         """

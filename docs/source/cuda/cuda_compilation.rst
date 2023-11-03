@@ -66,7 +66,7 @@ compiled for the Numba ABI using, for example:
 
 .. code:: python
 
-    ptx, resty = ptx, resty = cuda.compile_ptx(add, int32(int32, int32), device=True)
+    ptx, resty = cuda.compile_ptx(add, int32(int32, int32), device=True)
 
 results in PTX where the function prototype is:
 
