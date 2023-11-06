@@ -528,7 +528,8 @@ class TestReportedSSAIssues(SSABaseTest):
                 return False
 
         class SSACheckPipeline(CompilerBase):
-            """Inject SSACheck pass into the default pipeline following the SSA pass
+            """Inject SSACheck pass into the default pipeline following the SSA
+            pass
             """
 
             def define_pipelines(self):
