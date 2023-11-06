@@ -977,7 +977,9 @@ class PreLowerStripPhis(FunctionPass):
             # delete all assignments to ver1
             uses(ver)
 
-        This is only needed for parfors.
+        This is only needed for parfors because the SSA pass will create extra
+        variable assignments that the parfor code does not expect.
+        This pass helps avoid problems by reverting the effect of SSA.
         """
         any_block = next(iter(func_ir.blocks.values()))
         scope = any_block.scope
