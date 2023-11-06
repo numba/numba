@@ -118,11 +118,15 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
     def get_asm_str(self, cc=None):
         return self._join_ptxes(self._get_ptxes(cc=cc))
 
+    def _ensure_cc(self, cc):
+        if cc:
+            return cc
+
+        device = devices.get_context().device
+        return device.compute_capability
+
     def _get_ptxes(self, cc=None):
-        if not cc:
-            ctx = devices.get_context()
-            device = ctx.device
-            cc = device.compute_capability
+        cc = self._ensure_cc(cc)
 
         ptxes = self._ptx_cache.get(cc, None)
         if ptxes:
@@ -154,10 +158,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         return "\n\n".join(ptxes)
 
     def get_cubin(self, cc=None):
-        if cc is None:
-            ctx = devices.get_context()
-            device = ctx.device
-            cc = device.compute_capability
+        cc = self._ensure_cc(cc)
 
         cubin = self._cubin_cache.get(cc, None)
         if cubin:
