@@ -1007,7 +1007,11 @@ class PreLowerStripPhis(FunctionPass):
         # Find unversioned variables that met the conditions
         suspects = set()
         for k in defs:
-            var = scope.get_exact(k)
+            try:
+                # This may fail?
+                var = scope.get_exact(k)
+            except errors.NotDefinedError:
+                continue
             # is the unversioned?
             if var.unversioned_name == k:
                 if legalize_all_versioned_names(var):
