@@ -93,6 +93,8 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         self._llvm_strs = None
         # Maps CC -> PTX string
         self._ptx_cache = {}
+        # Maps CC -> LTO-IR
+        self._ltoir_cache = {}
         # Maps CC -> cubin
         self._cubin_cache = {}
         # Maps CC -> linker info output for cubin
@@ -153,6 +155,24 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         self._ptx_cache[cc] = ptx
 
         return ptx
+
+    def get_ltoir(self, cc=None):
+        cc = self._ensure_cc(cc)
+
+        ltoir = self._ltoir_cache.get(cc, None)
+        if ltoir:
+            return ltoir
+
+        arch = nvvm.get_arch_option(*cc)
+        options = self._nvvm_options.copy()
+        options['arch'] = arch
+        options['gen-lto'] = None
+
+        irs = self.llvm_strs
+        ltoir = nvvm.compile_ir(irs, **options)
+        self._ltoir_cache[cc] = ltoir
+
+        return ltoir
 
     def get_cubin(self, cc=None):
         cc = self._ensure_cc(cc)
