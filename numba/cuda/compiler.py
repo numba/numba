@@ -259,7 +259,12 @@ def compile_ptx(pyfunc, sig, debug=False, lineinfo=False, device=False,
 
     :param pyfunc: The Python function to compile.
     :param sig: The signature representing the function's input and output
-                types.
+                types. If this is a tuple of argument types without a return
+                type, the inferred return type is returned by this function. If
+                a signature including a return type is passed, the compiled code
+                will include a cast from the inferred return type to the
+                specified return type, and this function will return the
+                specified return type.
     :param debug: Whether to include debug info in the generated PTX.
     :type debug: bool
     :param lineinfo: Whether to include a line mapping from the generated PTX
