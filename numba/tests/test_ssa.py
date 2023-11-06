@@ -518,7 +518,7 @@ class TestReportedSSAIssues(SSABaseTest):
             Check SSA on variable `d`
             """
 
-            _name = "preserve_ir"
+            _name = "SSA_Check"
 
             def __init__(self):
                 AnalysisPass.__init__(self)
@@ -528,12 +528,12 @@ class TestReportedSSAIssues(SSABaseTest):
                 return False
 
         class SSACheckPipeline(CompilerBase):
-            """Inject SSACheck pass into the default pipeline by SSA pass
+            """Inject SSACheck pass into the default pipeline following the SSA pass
             """
 
             def define_pipelines(self):
                 pipeline = DefaultPassBuilder.define_nopython_pipeline(
-                    self.state, "ir_preserving_custom_pipe")
+                    self.state, "ssa_check_custom_pipeline")
 
                 pipeline._finalized = False
                 pipeline.add_pass_after(SSACheck, ReconstructSSA)
