@@ -130,7 +130,7 @@ The following example demonstrates a product reduction on a two-dimensional arra
           Numba's ``prange`` when ``parallel=False``. However, for
           ``parallel=True``, if the range is identifiable as strictly positive,
           the type of the induction variable  will be ``uint64``. The impact of
-          a ``uint64`` induction variable is often most noticable when
+          a ``uint64`` induction variable is often most noticeable when
           undertaking operations involving it and a signed integer. Under
           Numba's type coercion rules, such a case will commonly result in the
           operation producing a floating point result type.

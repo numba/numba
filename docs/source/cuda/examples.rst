@@ -346,7 +346,7 @@ Monte Carlo Integration
 =======================
 
 This example shows how to use Numba to approximate the value of a definite integral by rapidly generating 
-random numbers on the GPU. A detailed description of the mathematical mechanics of Monte Carlo integeration 
+random numbers on the GPU. A detailed description of the mathematical mechanics of Monte Carlo integration
 is out of the scope of the example, but it can briefly be described as an averaging process where the area 
 under the curve is approximated by taking the average of many rectangles formed by its function values.
 
