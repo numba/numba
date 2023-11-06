@@ -253,9 +253,11 @@ def cabi_wrap_function(context, lib, fndesc, wrapper_function_name,
 
 
 @global_compiler_lock
-def compile_ptx(pyfunc, sig, debug=False, lineinfo=False, device=False,
-                fastmath=False, cc=None, opt=True, abi="numba", abi_info=None):
-    """Compile a Python function to PTX for a given set of argument types.
+def compile(pyfunc, sig, debug=False, lineinfo=False, device=True,
+            fastmath=False, cc=None, opt=True, abi="c", abi_info=None,
+            output='ptx'):
+    """Compile a Python function to PTX or LTO-IR for a given set of argument
+    types.
 
     :param pyfunc: The Python function to compile.
     :param sig: The signature representing the function's input and output
@@ -265,16 +267,15 @@ def compile_ptx(pyfunc, sig, debug=False, lineinfo=False, device=False,
                 will include a cast from the inferred return type to the
                 specified return type, and this function will return the
                 specified return type.
-    :param debug: Whether to include debug info in the generated PTX.
+    :param debug: Whether to include debug info in the compiled code.
     :type debug: bool
-    :param lineinfo: Whether to include a line mapping from the generated PTX
+    :param lineinfo: Whether to include a line mapping from the compiled code
                      to the source code. Usually this is used with optimized
                      code (since debug mode would automatically include this),
-                     so we want debug info in the LLVM but only the line
-                     mapping in the final PTX.
+                     so we want debug info in the LLVM IR but only the line
+                     mapping in the final output.
     :type lineinfo: bool
-    :param device: Whether to compile a device function. Defaults to ``False``,
-                   to compile global kernel functions.
+    :param device: Whether to compile a device function.
     :type device: bool
     :param fastmath: Whether to enable fast math flags (ftz=1, prec_sqrt=0,
                      prec_div=, and fma=1)
@@ -292,7 +293,9 @@ def compile_ptx(pyfunc, sig, debug=False, lineinfo=False, device=False,
                      one option, ``"abi_name"``, for providing the wrapper
                      function's name. The ``"numba"`` ABI has no options.
     :type abi_info: dict
-    :return: (ptx, resty): The PTX code and inferred return type
+    :param output: Type of output to generate, either ``"ptx"`` or ``"ltoir"``.
+    :type output: str
+    :return: (code, resty): The compiled code and inferred return type
     :rtype: tuple
     """
     if abi not in ("numba", "c"):
@@ -301,18 +304,25 @@ def compile_ptx(pyfunc, sig, debug=False, lineinfo=False, device=False,
     if abi == 'c' and not device:
         raise NotImplementedError('The C ABI is not supported for kernels')
 
+    if output not in ("ptx", "ltoir"):
+        raise NotImplementedError(f'Unsupported output type: {output}')
+
     if debug and opt:
         msg = ("debug=True with opt=True (the default) "
                "is not supported by CUDA. This may result in a crash"
                " - set debug=False or opt=False.")
         warn(NumbaInvalidConfigWarning(msg))
 
+    lto = (output == 'ltoir')
     abi_info = abi_info or dict()
 
     nvvm_options = {
         'fastmath': fastmath,
         'opt': 3 if opt else 0
     }
+
+    if lto:
+        nvvm_options['gen-lto'] = None
 
     args, return_type = sigutils.normalize_signature(sig)
 
@@ -342,20 +352,45 @@ def compile_ptx(pyfunc, sig, debug=False, lineinfo=False, device=False,
                                               lineinfo, nvvm_options, filename,
                                               linenum)
 
-    ptx = lib.get_asm_str(cc=cc)
-    return ptx, resty
+    if lto:
+        code = lib.get_ltoir(cc=cc)
+    else:
+        code = lib.get_asm_str(cc=cc)
+    return code, resty
+
+
+def compile_for_current_device(pyfunc, sig, debug=False, lineinfo=False,
+                               device=True, fastmath=False, opt=True,
+                               abi="c", abi_info=None):
+    """Compile a Python function to PTX or LTO-IR for a given signature for the
+    current device's compute capabilility. This calls :func:`compile` with an
+    appropriate ``cc`` value for the current device."""
+    cc = get_current_device().compute_capability
+    return compile_ptx(pyfunc, sig, debug=debug, lineinfo=lineinfo,
+                       device=device, fastmath=fastmath, cc=cc, opt=opt,
+                       abi=abi, abi_info=abi_info)
+
+
+def compile_ptx(pyfunc, sig, debug=False, lineinfo=False, device=False,
+                fastmath=False, cc=None, opt=True, abi="numba", abi_info=None):
+    """Compile a Python function to PTX for a given signature. See
+    :func:`compile`. The defaults for this function are to compile a kernel
+    with the Numba ABI, rather than :func:`compile`'s default of compiling a
+    device function with the C ABI."""
+    return compile(pyfunc, sig, debug=debug, lineinfo=lineinfo, device=device,
+                   fastmath=fastmath, cc=cc, opt=opt, abi=abi,
+                   abi_info=abi_info)
 
 
 def compile_ptx_for_current_device(pyfunc, sig, debug=False, lineinfo=False,
                                    device=False, fastmath=False, opt=True,
                                    abi="numba", abi_info=None):
-    """Compile a Python function to PTX for a given set of argument types for
-    the current device's compute capabilility. This calls :func:`compile_ptx`
-    with an appropriate ``cc`` value for the current device."""
-    cc = get_current_device().compute_capability
-    return compile_ptx(pyfunc, sig, debug=debug, lineinfo=lineinfo,
-                       device=device, fastmath=fastmath, cc=cc, opt=opt,
-                       abi=abi, abi_info=abi_info)
+    """Compile a Python function to PTX for a given signature for the current
+    device's compute capabilility. See :func:`compile_ptx`."""
+    return compile_for_current_device(pyfunc, sig, debug=debug,
+                                      lineinfo=lineinfo, device=device,
+                                      fastmath=fastmath, opt=opt, abi=abi,
+                                      abi_info=abi_info)
 
 
 def declare_device_function(name, restype, argtypes):
