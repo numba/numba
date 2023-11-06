@@ -138,7 +138,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
 
         irs = self.llvm_strs
 
-        ptxes = [nvvm.llvm_to_ptx(irs, **options)]
+        ptxes = [nvvm.compile_ir(irs, **options)]
 
         # Sometimes the result from NVVM contains trailing whitespace and
         # nulls, which we strip so that the assembly dump looks a little
