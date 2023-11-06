@@ -63,22 +63,32 @@ class CallStack(Sequence):
 
     @contextlib.contextmanager
     def register(self, target, typeinfer, func_id, args):
-        # If stack is empty, then fail_cache must be empty
-        assert self._stack or not self._fail_cache
-        # guard compiling the same function with the same signature
-        if self.match(func_id.func, args):
-            msg = "compiler re-entrant to the same function signature"
-            raise errors.NumbaRuntimeError(msg)
-        self._lock.acquire()
-        self._stack.append(CallFrame(target, typeinfer, func_id, args))
-        try:
+        with contextlib.ExitStack() as undo:
+            # guard compiling the same function with the same signature
+            if self.match(func_id.func, args):
+                msg = "compiler re-entrant to the same function signature"
+                raise errors.NumbaRuntimeError(msg)
+
+            # Acquire lock
+            undo.enter_context(self._lock)
+
+            # Clear fail_cache at the start and end of a compilation session
+            def clear_fail_cache(*exc):
+                # Clear cache if stack is empty?
+                if not self._stack:
+                    self._fail_cache.clear()
+
+            clear_fail_cache()
+            undo.push(clear_fail_cache)
+
+            # Setup callframe
+            self._stack.append(CallFrame(target, typeinfer, func_id, args))
+
+            @undo.push
+            def undo_stack(*exc):
+                self._stack.pop()
+
             yield
-        finally:
-            self._stack.pop()
-            if not self._stack:
-                # if empty? clear fail_cache
-                self._fail_cache.clear()
-            self._lock.release()
 
     def finditer(self, py_func):
         """
