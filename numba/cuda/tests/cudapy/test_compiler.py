@@ -182,6 +182,16 @@ class TestCompileToPTX(unittest.TestCase):
         self.assertRegex(ptx, r"\.visible\s+\.func\s+\(\.param\s+\.b32\s+"
                               r"func_retval0\)\s+f_module\(")
 
+    def test_c_abi_with_abi_name(self):
+        abi_info = {'abi_name': '_Z4funcii'}
+        ptx, resty = compile_ptx(f_module, int32(int32, int32), device=True,
+                                 abi="c", abi_info=abi_info)
+
+        # The function name should match the one given in the ABI info, and its
+        # return value should be 32 bits
+        self.assertRegex(ptx, r"\.visible\s+\.func\s+\(\.param\s+\.b32\s+"
+                              r"func_retval0\)\s+_Z4funcii\(")
+
 
 @skip_on_cudasim('Compilation unsupported in the simulator')
 class TestCompileToPTXForCurrentDevice(CUDATestCase):

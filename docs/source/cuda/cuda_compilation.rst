@@ -43,14 +43,18 @@ ABI device functions requires three issues to be addressed:
 A simple way to address all these issues is to compile device functions with the
 C ABI instead. This results in the following:
 
-- The name of the compiled device function in PTX will match the name of the
-  function in Python, so it is easy to determine. This is the function's
-  ``__name__``, rather than ``__qualname__``, because ``__qualname__`` encodes
-  additional scoping information that would make the function name hard to
-  predict, and in a lot of cases, an illegal identifier in C.
+- The name of the compiled device function in PTX can be controlled. By default
+  it will match the name of the function in Python, so it is easy to determine.
+  This is the function's ``__name__``, rather than ``__qualname__``, because
+  ``__qualname__`` encodes additional scoping information that would make the
+  function name hard to predict, and in a lot of cases, an illegal identifier
+  in C.
 - The returned value of the Python code is placed in the return value of the
   compiled function.
 - Status codes are ignored / unreported, so they do not need to be handled.
+
+If the name of the compiled function needs to be specified, it can be controlled
+by passing the name in the ``abi_info`` dict, under the key ``'abi_name'``.
 
 C and Numba ABI examples
 ------------------------
@@ -105,3 +109,23 @@ placed in the return value:
 
    add.s32 	%r3, %r2, %r1;
    st.param.b32 	[func_retval0+0], %r3;
+
+To distinguish one variant of the compiled ``add()`` function from another, the
+following example specifies its ABI name in the ``abi_info`` dict:
+
+.. code:: python
+
+   ptx, resty = cuda.compile_ptx(add, float32(float32, float32), device=True,
+                                 abi="c", abi_info={"abi_name": "add_f32"})
+
+Resulting in the PTX prototype:
+
+.. code:: text
+
+   .visible .func  (.param .b32 func_retval0) add_f32(
+       .param .b32 add_f32_param_0,
+       .param .b32 add_f32_param_1
+   )
+
+which will not clash with definitions by other names (e.g. the variant for
+``int32`` above).

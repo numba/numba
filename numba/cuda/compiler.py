@@ -254,7 +254,7 @@ def cabi_wrap_function(context, lib, fndesc, wrapper_function_name,
 
 @global_compiler_lock
 def compile_ptx(pyfunc, sig, debug=False, lineinfo=False, device=False,
-                fastmath=False, cc=None, opt=True, abi="numba"):
+                fastmath=False, cc=None, opt=True, abi="numba", abi_info=None):
     """Compile a Python function to PTX for a given set of argument types.
 
     :param pyfunc: The Python function to compile.
@@ -283,6 +283,10 @@ def compile_ptx(pyfunc, sig, debug=False, lineinfo=False, device=False,
                 ``"c"``. Note that the Numba ABI is not considered stable.
                 The C ABI is only supported for device functions at present.
     :type abi: str
+    :param abi_info: A dict of ABI-specific options. The ``"c"`` ABI supports
+                     one option, ``"abi_name"``, for providing the wrapper
+                     function's name. The ``"numba"`` ABI has no options.
+    :type abi_info: dict
     :return: (ptx, resty): The PTX code and inferred return type
     :rtype: tuple
     """
@@ -297,6 +301,8 @@ def compile_ptx(pyfunc, sig, debug=False, lineinfo=False, device=False,
                "is not supported by CUDA. This may result in a crash"
                " - set debug=False or opt=False.")
         warn(NumbaInvalidConfigWarning(msg))
+
+    abi_info = abi_info or dict()
 
     nvvm_options = {
         'fastmath': fastmath,
@@ -319,7 +325,8 @@ def compile_ptx(pyfunc, sig, debug=False, lineinfo=False, device=False,
     if device:
         lib = cres.library
         if abi == "c":
-            lib = cabi_wrap_function(tgt, lib, cres.fndesc, pyfunc.__name__,
+            wrapper_name = abi_info.get('abi_name', pyfunc.__name__)
+            lib = cabi_wrap_function(tgt, lib, cres.fndesc, wrapper_name,
                                      nvvm_options)
     else:
         code = pyfunc.__code__
@@ -336,14 +343,14 @@ def compile_ptx(pyfunc, sig, debug=False, lineinfo=False, device=False,
 
 def compile_ptx_for_current_device(pyfunc, sig, debug=False, lineinfo=False,
                                    device=False, fastmath=False, opt=True,
-                                   abi="numba"):
+                                   abi="numba", abi_info=None):
     """Compile a Python function to PTX for a given set of argument types for
     the current device's compute capabilility. This calls :func:`compile_ptx`
     with an appropriate ``cc`` value for the current device."""
     cc = get_current_device().compute_capability
     return compile_ptx(pyfunc, sig, debug=debug, lineinfo=lineinfo,
                        device=device, fastmath=fastmath, cc=cc, opt=opt,
-                       abi=abi)
+                       abi=abi, abi_info=None)
 
 
 def declare_device_function(name, restype, argtypes):
