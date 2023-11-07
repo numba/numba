@@ -120,7 +120,10 @@ class CallStack(Sequence):
             if frame.args == args:
                 return frame
 
-    def attempt_resolve_func(self, func, args, kws) -> "_ResolveCache":
+    def lookup_resolve_cache(self, func, args, kws) -> "_ResolveCache":
+        """Lookup resolution cache for the given function type and argument
+        types.
+        """
         if not self._stack or config.DISABLE_TYPEINFER_FAIL_CACHE:
             # if callstack is empty, bypass fail_cache
             return _ResolveCache()
@@ -268,7 +271,7 @@ class BaseContext(object):
         Resolve function type *func* for argument types *args* and *kws*.
         A signature is returned.
         """
-        cache = self.callstack.attempt_resolve_func(func, args, kws)
+        cache = self.callstack.lookup_resolve_cache(func, args, kws)
         if cache.has_failed_previously():
             return cache.replay_failure()
 
