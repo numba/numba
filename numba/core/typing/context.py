@@ -1,5 +1,6 @@
 from collections import defaultdict
 from collections.abc import Sequence
+import typing as _tp
 import types as pytypes
 import weakref
 import threading
@@ -146,20 +147,26 @@ class CallStack(Sequence):
 class _ResolveCache(object):
     """
     A cache for function resolution result.
-    Currently only replay failed attempts.
+    Currently only remember failed attempts.
     """
+    _status: str
+    _exc: _tp.Optional[BaseException]
+
     def __init__(self):
-        self._status = "pending"
+        self._status = "unmarked"
         self._exc = None
 
-    def mark_error(self, exc):
+    def mark_error(self, exc) -> None:
+        """Mark the function resolution as failed with an exception."""
         self._status = "error"
         self._exc = exc
 
-    def mark_failed(self):
+    def mark_failed(self) -> None:
+        """Mark the function resolution as failed."""
         self._status = "failed"
 
     def replay_failure(self) -> None:
+        """Replay the failure if it has been marked as failed or error."""
         if self._status == "error":
             raise self._exc
         else:
@@ -167,6 +174,7 @@ class _ResolveCache(object):
             return None
 
     def has_failed_previously(self) -> bool:
+        """Return True if the function resolution has failed previously."""
         return self._status in {"failed", "error"}
 
 
