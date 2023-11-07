@@ -440,6 +440,7 @@ class TestCudaIntrinsic(CUDATestCase):
         compiled[nctaid, ntid](ary)
         self.assertEqual(ary[0], nctaid * ntid)
 
+    @skip_on_cudasim('Requires too many threads')
     def test_issue_9229(self):
         # Ensure that grid and grid size are correct - #9229 showed that they
         # overflowed an int32.
