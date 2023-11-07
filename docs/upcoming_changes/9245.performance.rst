@@ -1,0 +1,5 @@
+Improvement to IR copying speed
+===============================
+
+Improvements were made to the deepcopying of ``FunctionIR``. 
+In one case, the ``InlineInlineables`` pass is 3x faster.

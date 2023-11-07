@@ -1128,6 +1128,11 @@ class Var(EqualityCheckMixin, AbstractRHS):
         """
         return self.versioned_names | {self.unversioned_name,}
 
+    def __deepcopy__(self, memo):
+        out = Var(copy.deepcopy(self.scope, memo), self.name, self.loc)
+        memo[id(self)] = out
+        return out
+
 
 class Scope(EqualityCheckMixin):
     """
