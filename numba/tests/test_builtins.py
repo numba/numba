@@ -309,6 +309,17 @@ def invalid_isinstance_usecase_phi_nopropagate(x):
         return False
 
 
+def invalid_isinstance_usecase_phi_nopropagate2(a):
+    # Numba issue #9125
+    x = 0
+    if isinstance(a, int):
+        a = (a, a)
+
+    for i in range(len(a)):
+        x += i
+    return x
+
+
 def invalid_isinstance_optional_usecase(x):
     if x > 4:
         z = 10
@@ -1245,6 +1256,11 @@ class TestIsinstanceBuiltin(TestCase):
         pyfunc = isinstance_dict
         cfunc = jit(nopython=True)(pyfunc)
         self.assertEqual(pyfunc(), cfunc())
+
+    def test_isinstance_issue9125(self):
+        pyfunc = invalid_isinstance_usecase_phi_nopropagate2
+        cfunc = jit(nopython=True)(pyfunc)
+        self.assertEqual(pyfunc(3), cfunc(3))
 
     def test_isinstance_numba_types(self):
         # This makes use of type aliasing between python scalars and NumPy
