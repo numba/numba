@@ -7,7 +7,7 @@ import contextlib
 import operator
 
 import numba
-from numba.core import types, errors
+from numba.core import types, errors, config
 from numba.core.typeconv import Conversion, rules
 from numba.core.typing import templates
 from numba.core.utils import order_by_target_specificity
@@ -74,6 +74,8 @@ class CallStack(Sequence):
 
             # Clear fail_cache at the start and end of a compilation session
             def clear_fail_cache(*exc):
+                if config.DISABLE_TYPEINFER_FAIL_CACHE:
+                    return   # bypass
                 # Clear cache if stack is empty?
                 if not self._stack:
                     self._fail_cache.clear()
@@ -118,7 +120,7 @@ class CallStack(Sequence):
                 return frame
 
     def attempt_resolve_func(self, func, args, kws) -> "_ResolveCache":
-        if not self._stack:
+        if not self._stack or config.DISABLE_TYPEINFER_FAIL_CACHE:
             # if callstack is empty, bypass fail_cache
             return _ResolveCache()
 
