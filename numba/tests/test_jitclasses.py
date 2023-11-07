@@ -1880,6 +1880,7 @@ def f(x, y):
                 self.arr = array
 
         n = 3
+        np.random.seed(1)
         vec = np.random.random(size=(n,))
         mat = np.random.random(size=(n, n))
 
@@ -1894,54 +1895,33 @@ def f(x, y):
         jit_matrix_at = jitclass(ArrayAt, spec={"arr": float64[:,::1]})(mat)
 
         # __matmul__
-        self.assertEqual(
-            vector_at @ vector_noat,
-            jit_vector_at @ jit_vector_noat
-        )
-        self.assertTupleEqual(
-            tuple(vector_at @ matrix_noat),
-            tuple(jit_vector_at @ jit_matrix_noat)
-        )
-        self.assertTupleEqual(
-            tuple(matrix_at @ vector_noat),
-            tuple(jit_matrix_at @ jit_vector_noat)
-        )
-        self.assertTupleEqual(
-            tuple((matrix_at @ matrix_noat).ravel()),
-            tuple((jit_matrix_at @ jit_matrix_noat).ravel())
-        )
+        np.testing.assert_allclose(vector_at @ vector_noat,
+                                   jit_vector_at @ jit_vector_noat)
+        np.testing.assert_allclose(vector_at @ matrix_noat,
+                                   jit_vector_at @ jit_matrix_noat)
+        np.testing.assert_allclose(matrix_at @ vector_noat,
+                                   jit_matrix_at @ jit_vector_noat)
+        np.testing.assert_allclose(matrix_at @ matrix_noat,
+                                   jit_matrix_at @ jit_matrix_noat)
 
         # __rmatmul__
-        self.assertEqual(
-            vector_noat @ vector_at,
-            jit_vector_noat @ jit_vector_at
-        )
-        self.assertTupleEqual(
-            tuple(vector_noat @ matrix_at),
-            tuple(jit_vector_noat @ jit_matrix_at)
-        )
-        self.assertTupleEqual(
-            tuple(matrix_noat @ vector_at),
-            tuple(jit_matrix_noat @ jit_vector_at)
-        )
-        self.assertTupleEqual(
-            tuple((matrix_noat @ matrix_at).ravel()),
-            tuple((jit_matrix_noat @ jit_matrix_at).ravel())
-        )
+        np.testing.assert_allclose(vector_noat @ vector_at,
+                                   jit_vector_noat @ jit_vector_at)
+        np.testing.assert_allclose(vector_noat @ matrix_at,
+                                   jit_vector_noat @ jit_matrix_at)
+        np.testing.assert_allclose(matrix_noat @ vector_at,
+                                   jit_matrix_noat @ jit_vector_at)
+        np.testing.assert_allclose(matrix_noat @ matrix_at,
+                                   jit_matrix_noat @ jit_matrix_at)
 
         # __imatmul__
         vector_at @= matrix_noat
         matrix_at @= matrix_noat
         jit_vector_at @= jit_matrix_noat
         jit_matrix_at @= jit_matrix_noat
-        self.assertTupleEqual(
-            tuple(vector_at.arr.ravel()),
-            tuple(jit_vector_at.arr.ravel())
-        )
-        self.assertTupleEqual(
-            tuple(matrix_at.arr.ravel()),
-            tuple(jit_matrix_at.arr.ravel())
-        )
+
+        np.testing.assert_allclose(vector_at.arr, jit_vector_at.arr)
+        np.testing.assert_allclose(matrix_at.arr, jit_matrix_at.arr)
 
     def test_arithmetic_logical_reflection(self):
         class OperatorsDefined:

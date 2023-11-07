@@ -15,7 +15,7 @@ from numba.core import types, cgutils
 from numba.core.extending import overload, overload_method, register_jitable
 from numba.np.numpy_support import (as_dtype, type_can_asarray, type_is_scalar,
                                     numpy_version, is_nonelike,
-                                    check_is_integer)
+                                    check_is_integer, lt_floats, lt_complex)
 from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
                                  impl_ret_new_ref, impl_ret_untracked)
 from numba.np.arrayobj import (make_array, load_item, store_item,
@@ -3674,107 +3674,162 @@ def np_bincount(a, weights=None, minlength=0):
     return bincount_impl
 
 
-def _searchsorted(func):
-    def searchsorted_inner(a, v, v_last, lo, hi, n):
-        """Perform inner loop of searchsorted (i.e. a binary search).
-
-        This is loosely based on the NumPy implementation in [1]_.
-
-        Parameters
-        ----------
-        a: 1-D array_like
-            The input array.
-        v: array_like
-            The current value to insert into `a`.
-        v_last: array_like
-            The previous value inserted into `a`.
-        lo: int
-            The initial/previous "low" value of the binary search.
-        hi: int
-            The initial/previous "high" value of the binary search.
-        n: int
-            The length of `a`.
+less_than_float = register_jitable(lt_floats)
+less_than_complex = register_jitable(lt_complex)
 
 
-        .. [1] https://github.com/numpy/numpy/blob/809e8d26b03f549fd0b812a17b8a166bcd966889/numpy/core/src/npysort/binsearch.cpp#L173
-        """  # noqa: E501
-        if np.isnan(v):
-            # Find the first nan (i.e. the last from the end of a,
-            # since there shouldn't be many of them in practice)
-            for i in range(n, 0, -1):
-                if not np.isnan(a[i - 1]):
-                    return i
-            return 0
-
-        if v_last < v:
-            hi = n
-        else:
-            lo = 0
-            hi = hi + 1 if hi < n else n
-
-        while hi > lo:
-            mid = (lo + hi) >> 1
-            if func(a[mid], (v)):
-                # mid is too low => go up
-                lo = mid + 1
+@register_jitable
+def less_than_or_equal_complex(a, b):
+    if np.isnan(a.real):
+        if np.isnan(b.real):
+            if np.isnan(a.imag):
+                return np.isnan(b.imag)
             else:
-                # mid is too high, or is a NaN => go down
-                hi = mid
-        return lo
-    return searchsorted_inner
+                if np.isnan(b.imag):
+                    return True
+                else:
+                    return a.imag <= b.imag
+        else:
+            return False
+
+    else:
+        if np.isnan(b.real):
+            return True
+        else:
+            if np.isnan(a.imag):
+                if np.isnan(b.imag):
+                    return a.real <= b.real
+                else:
+                    return False
+            else:
+                if np.isnan(b.imag):
+                    return True
+                else:
+                    if a.real < b.real:
+                        return True
+                    elif a.real == b.real:
+                        return a.imag <= b.imag
+                    return False
 
 
-_lt = less_than
-_le = register_jitable(lambda x, y: x <= y)
-_searchsorted_left = register_jitable(_searchsorted(_lt))
-_searchsorted_right = register_jitable(_searchsorted(_le))
+@register_jitable
+def _less_than_or_equal(a, b):
+    if isinstance(a, complex) or isinstance(b, complex):
+        return less_than_or_equal_complex(a, b)
+
+    elif isinstance(b, float):
+        if np.isnan(b):
+            return True
+
+    return a <= b
+
+
+@register_jitable
+def _less_than(a, b):
+    if isinstance(a, complex) or isinstance(b, complex):
+        return less_than_complex(a, b)
+
+    elif isinstance(b, float):
+        return less_than_float(a, b)
+
+    return a < b
+
+
+def _searchsorted(func_1, func_2):
+    # a facsimile of:
+    # https://github.com/numpy/numpy/blob/4f84d719657eb455a35fcdf9e75b83eb1f97024a/numpy/core/src/npysort/binsearch.cpp#L61  # noqa: E501
+
+    def impl(a, v):
+        min_idx = 0
+        max_idx = len(a)
+
+        out = np.empty(v.size, np.intp)
+
+        last_key_val = v.flat[0]
+
+        for i in range(v.size):
+            key_val = v.flat[i]
+
+            if func_1(last_key_val, key_val):
+                max_idx = len(a)
+            else:
+                min_idx = 0
+                if max_idx < len(a):
+                    max_idx += 1
+                else:
+                    max_idx = len(a)
+
+            last_key_val = key_val
+
+            while min_idx < max_idx:
+                # to avoid overflow
+                mid_idx = min_idx + ((max_idx - min_idx) >> 1)
+
+                mid_val = a[mid_idx]
+
+                if func_2(mid_val, key_val):
+                    min_idx = mid_idx + 1
+                else:
+                    max_idx = mid_idx
+
+            out[i] = min_idx
+
+        return out.reshape(v.shape)
+
+    return impl
+
+
+VALID_SEARCHSORTED_SIDES = frozenset({'left', 'right'})
+
+
+def make_searchsorted_implementation(np_dtype, side):
+    assert side in VALID_SEARCHSORTED_SIDES
+
+    lt = _less_than
+    le = _less_than_or_equal
+
+    if side == 'left':
+        _impl = _searchsorted(lt, lt)
+    else:
+        if np.issubdtype(np_dtype, np.inexact) and numpy_version < (1, 23):
+            # change in behaviour for inexact types
+            # introduced by:
+            # https://github.com/numpy/numpy/pull/21867
+            _impl = _searchsorted(lt, le)
+        else:
+            _impl = _searchsorted(le, le)
+
+    return register_jitable(_impl)
 
 
 @overload(np.searchsorted)
 def searchsorted(a, v, side='left'):
     side_val = getattr(side, 'literal_value', side)
-    if side_val == 'left':
-        loop_impl = _searchsorted_left
-    elif side_val == 'right':
-        loop_impl = _searchsorted_right
-    else:
+
+    if side_val not in VALID_SEARCHSORTED_SIDES:
+        # could change this so that side doesn't need to be
+        # a compile-time constant
         raise NumbaValueError(f"Invalid value given for 'side': {side_val}")
 
-    if isinstance(v, types.Array):
-        # N-d array and output
-        def searchsorted_impl(a, v, side='left'):
-            n = len(a)
-            lo = 0
-            hi = n
-            out = np.empty(v.shape, np.intp)
-            v_last = v.flat[0]
-            for view, outview in np.nditer((v, out)):
-                lo = loop_impl(a, view.item(), v_last, lo, hi, n)
-                v_last = view.item()
-                outview.itemset(lo)
-            return out
-
-    elif isinstance(v, types.Sequence):
-        # 1-d sequence and output
-        def searchsorted_impl(a, v, side='left'):
-            n = len(a)
-            lo = 0
-            hi = n
-            out = np.empty(len(v), np.intp)
-            v_last = v[0]
-            for i in range(len(v)):
-                lo = loop_impl(a, v[i], v_last, lo, hi, n)
-                out[i] = lo
-                v_last = v[i]
-            return out
+    if isinstance(v, (types.Array, types.Sequence)):
+        v_dt = as_dtype(v.dtype)
     else:
-        # Scalar value and output
-        # Note: NaNs come last in Numpy-sorted arrays
-        def searchsorted_impl(a, v, side='left'):
-            n = len(a)
-            return loop_impl(a, v, v, 0, n, n)
+        v_dt = as_dtype(v)
 
-    return searchsorted_impl
+    np_dt = np.promote_types(as_dtype(a.dtype), v_dt)
+    _impl = make_searchsorted_implementation(np_dt, side_val)
+
+    if isinstance(v, types.Array):
+        def impl(a, v, side='left'):
+            return _impl(a, v)
+    elif isinstance(v, types.Sequence):
+        def impl(a, v, side='left'):
+            return _impl(a, np.array(v))
+    else:  # presumably `v` is scalar
+        def impl(a, v, side='left'):
+            return _impl(a, np.array([v]))[0]
+
+    return impl
 
 
 @overload(np.digitize)

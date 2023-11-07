@@ -1,0 +1,4 @@
+Support NumPy 1.26
+==================
+
+Support for NumPy 1.26 is added.

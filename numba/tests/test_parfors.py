@@ -3183,6 +3183,45 @@ class TestParforsMisc(TestParforsBase):
             return buf
         self.check(test_impl)
 
+    def test_issue_9182_recursion_error(self):
+        from numba.types import ListType, Tuple, intp
+
+        @numba.njit
+        def _sink(x):
+            pass
+
+
+        @numba.njit(cache=False, parallel=True)
+        def _ground_node_rule(
+            clauses,
+            nodes,
+        ):
+            for piter in prange(len(nodes)):
+                for clause in clauses:
+                    clause_type = clause[0]
+                    clause_variables = clause[2]
+                    if clause_type == 0:
+                        clause_var_1 = clause_variables[0]
+                    elif len(clause_variables) == 2:
+                        clause_var_1, clause_var_2 = (
+                            clause_variables[0],
+                            clause_variables[1],
+                        )
+
+                    elif len(clause_variables) == 4:
+                        pass
+
+                    if clause_type == 1:
+                        _sink(clause_var_1)
+                        _sink(clause_var_2)
+
+        _ground_node_rule.compile(
+            (
+                ListType(Tuple([intp, intp, ListType(intp)])),
+                ListType(intp),
+            )
+        )
+
 
 @skip_parfors_unsupported
 class TestParforsDiagnostics(TestParforsBase):
