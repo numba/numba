@@ -2,7 +2,7 @@ from math import sqrt
 from numba import cuda, float32, int16, int32, int64, uint32, void
 from numba.cuda import (compile, compile_for_current_device, compile_ptx,
                         compile_ptx_for_current_device)
-
+from numba.cuda.cudadrv import runtime
 from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
 
 
@@ -202,6 +202,9 @@ class TestCompile(unittest.TestCase):
                               r"func_retval0\)\s+f_module\(")
 
     def test_compile_to_ltoir(self):
+        if runtime.get_version() < (11, 5):
+            self.skipTest("-gen-lto unavailable in this toolkit version")
+
         ltoir, resty = compile(f_module, int32(int32, int32), device=True,
                                output="ltoir")
 
