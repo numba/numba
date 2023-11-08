@@ -15,7 +15,7 @@ from numba.core import types, cgutils
 from numba.core.extending import overload, overload_method, register_jitable
 from numba.np.numpy_support import (as_dtype, type_can_asarray, type_is_scalar,
                                     numpy_version, is_nonelike,
-                                    check_is_integer)
+                                    check_is_integer, lt_floats, lt_complex)
 from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
                                  impl_ret_new_ref, impl_ret_untracked)
 from numba.np.arrayobj import (make_array, load_item, store_item,
@@ -3674,18 +3674,65 @@ def np_bincount(a, weights=None, minlength=0):
     return bincount_impl
 
 
-@register_jitable
-def custom_lt(a, b):
-    if np.isnan(b):
-        return not np.isnan(a)
-    return a < b
+less_than_float = register_jitable(lt_floats)
+less_than_complex = register_jitable(lt_complex)
 
 
 @register_jitable
-def custom_le(a, b):
-    if np.isnan(b):
-        return True
+def less_than_or_equal_complex(a, b):
+    if np.isnan(a.real):
+        if np.isnan(b.real):
+            if np.isnan(a.imag):
+                return np.isnan(b.imag)
+            else:
+                if np.isnan(b.imag):
+                    return True
+                else:
+                    return a.imag <= b.imag
+        else:
+            return False
+
+    else:
+        if np.isnan(b.real):
+            return True
+        else:
+            if np.isnan(a.imag):
+                if np.isnan(b.imag):
+                    return a.real <= b.real
+                else:
+                    return False
+            else:
+                if np.isnan(b.imag):
+                    return True
+                else:
+                    if a.real < b.real:
+                        return True
+                    elif a.real == b.real:
+                        return a.imag <= b.imag
+                    return False
+
+
+@register_jitable
+def _less_than_or_equal(a, b):
+    if isinstance(a, complex) or isinstance(b, complex):
+        return less_than_or_equal_complex(a, b)
+
+    elif isinstance(b, float):
+        if np.isnan(b):
+            return True
+
     return a <= b
+
+
+@register_jitable
+def _less_than(a, b):
+    if isinstance(a, complex) or isinstance(b, complex):
+        return less_than_complex(a, b)
+
+    elif isinstance(b, float):
+        return less_than_float(a, b)
+
+    return a < b
 
 
 def _searchsorted(func_1, func_2):
@@ -3732,40 +3779,64 @@ def _searchsorted(func_1, func_2):
     return impl
 
 
-_searchsorted_left = register_jitable(
-    _searchsorted(custom_lt, custom_lt)
-)
-_searchsorted_right_pre_np123 = register_jitable(
-    _searchsorted(custom_lt, custom_le)
-)
-_searchsorted_right_np123_on = register_jitable(
-    _searchsorted(custom_le, custom_le)
-)
+VALID_SEARCHSORTED_SIDES = frozenset({'left', 'right'})
+
+
+def make_searchsorted_implementation(np_dtype, side):
+    assert side in VALID_SEARCHSORTED_SIDES
+
+    lt = _less_than
+    le = _less_than_or_equal
+
+    if side == 'left':
+        _impl = _searchsorted(lt, lt)
+    else:
+        if np.issubdtype(np_dtype, np.inexact) and numpy_version < (1, 23):
+            # change in behaviour for inexact types
+            # introduced by:
+            # https://github.com/numpy/numpy/pull/21867
+            _impl = _searchsorted(lt, le)
+        else:
+            _impl = _searchsorted(le, le)
+
+    return register_jitable(_impl)
 
 
 @overload(np.searchsorted)
 def searchsorted(a, v, side='left'):
     side_val = getattr(side, 'literal_value', side)
 
-    if side_val == 'left':
-        _impl = _searchsorted_left
-    elif side_val == 'right':
-        # change in behaviour introduced by
-        # https://github.com/numpy/numpy/pull/21867
-        if numpy_version >= (1, 23):
-            _impl = _searchsorted_right_np123_on
-        else:
-            _impl = _searchsorted_right_pre_np123
-    else:
+    if side_val not in VALID_SEARCHSORTED_SIDES:
+        # could change this so that side doesn't need to be
+        # a compile-time constant
         raise NumbaValueError(f"Invalid value given for 'side': {side_val}")
 
+    if isinstance(v, (types.Array, types.Sequence)):
+        v_dt = as_dtype(v.dtype)
+    else:
+        v_dt = as_dtype(v)
+
+    np_dt = np.promote_types(as_dtype(a.dtype), v_dt)
+    _impl = make_searchsorted_implementation(np_dt, side_val)
+
     if isinstance(v, types.Array):
-        def impl(a, v, side='left'):
-            return _impl(a, v)
+        # N-d array and output
+        def searchsorted_impl(a, v, side='left'):
+            n = len(a)
+            lo = 0
+            hi = n
+            out = np.empty(v.shape, np.intp)
+            v_last = v.flat[0]
+            for view, outview in np.nditer((v, out)):
+                lo = loop_impl(a, view.item(), v_last, lo, hi, n)
+                v_last = view.item()
+                outview.itemset(lo)
+            return out
+
     elif isinstance(v, types.Sequence):
         def impl(a, v, side='left'):
             return _impl(a, np.array(v))
-    else:  # presumably scalar
+    else:  # presumably `v` is scalar
         def impl(a, v, side='left'):
             return _impl(a, np.array([v]))[0]
 
@@ -4384,6 +4455,77 @@ def np_asarray_chkfinite(a, dtype=None):
             if not np.isfinite(i):
                 raise ValueError("array must not contain infs or NaNs")
         return a
+
+    return impl
+
+
+@overload(np.unwrap)
+def numpy_unwrap(p, discont=None, axis=-1, period=6.283185307179586):
+    if not isinstance(axis, (int, types.Integer)):
+        msg = 'The argument "axis" must be an integer'
+        raise TypingError(msg)
+
+    if not type_can_asarray(p):
+        msg = 'The argument "p" must be array-like'
+        raise TypingError(msg)
+
+    if (not isinstance(discont, (types.Integer, types.Float))
+            and not cgutils.is_nonelike(discont)):
+        msg = 'The argument "discont" must be a scalar'
+        raise TypingError(msg)
+
+    if not isinstance(period, (float, types.Number)):
+        msg = 'The argument "period" must be a scalar'
+        raise TypingError(msg)
+
+    slice1 = (slice(1, None, None),)
+    if isinstance(period, types.Number):
+        dtype = np.result_type(as_dtype(p.dtype), as_dtype(period))
+    else:
+        dtype = np.result_type(as_dtype(p.dtype), np.float64)
+
+    integer_input = np.issubdtype(dtype, np.integer)
+
+    def impl(p, discont=None, axis=-1, period=6.283185307179586):
+        if axis != -1:
+            msg = 'Value for argument "axis" is not supported'
+            raise ValueError(msg)
+        # Flatten to a 2D array, keeping axis -1
+        p_init = np.asarray(p).astype(dtype)
+        init_shape = p_init.shape
+        last_axis = init_shape[-1]
+        p_new = p_init.reshape((p_init.size // last_axis, last_axis))
+        # Manipulate discont and period
+        if discont is None:
+            discont = period / 2
+        if integer_input:
+            interval_high, rem = divmod(period, 2)
+            boundary_ambiguous = rem == 0
+        else:
+            interval_high = period / 2
+            boundary_ambiguous = True
+        interval_low = -interval_high
+
+        # Work on each row separately
+        for i in range(p_init.size // last_axis):
+            row = p_new[i]
+            dd = np.diff(row)
+            ddmod = np.mod(dd - interval_low, period) + interval_low
+            if boundary_ambiguous:
+                ddmod = np.where((ddmod == interval_low) & (dd > 0),
+                                 interval_high, ddmod)
+            ph_correct = ddmod - dd
+
+            ph_correct = np.where(np.array([abs(x) for x in dd]) < discont, 0,
+                                  ph_correct)
+            ph_ravel = np.where(np.array([abs(x) for x in dd]) < discont, 0,
+                                ph_correct)
+            ph_correct = np.reshape(ph_ravel, ph_correct.shape)
+            up = np.copy(row)
+            up[slice1] = row[slice1] + ph_correct.cumsum()
+            p_new[i] = up
+
+        return p_new.reshape(init_shape)
 
     return impl
 

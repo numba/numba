@@ -1,5 +1,0 @@
-
-Add support for NumPy 1.25
-""""""""""""""""""""""""""
-
-Extend Numba to support new and changed features released in NumPy 1.25.

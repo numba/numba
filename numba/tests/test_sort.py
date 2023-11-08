@@ -889,6 +889,16 @@ class TestNumpySort(TestCase):
         for orig in self.float_arrays():
             self.check_sort_inplace(pyfunc, cfunc, orig)
 
+    def test_array_sort_complex(self):
+        pyfunc = sort_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for real in self.float_arrays():
+            imag = real[::]
+            np.random.shuffle(imag)
+            orig = np.array([complex(*x) for x in zip(real, imag)])
+            self.check_sort_inplace(pyfunc, cfunc, orig)
+
     def test_np_sort_int(self):
         pyfunc = np_sort_usecase
         cfunc = jit(nopython=True)(pyfunc)
@@ -903,6 +913,18 @@ class TestNumpySort(TestCase):
         for size in (5, 20, 50, 500):
             orig = np.random.random(size=size) * 100
             orig[np.random.random(size=size) < 0.1] = float('nan')
+            self.check_sort_copy(pyfunc, cfunc, orig)
+
+    def test_np_sort_complex(self):
+        pyfunc = np_sort_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for size in (5, 20, 50, 500):
+            real = np.random.random(size=size) * 100
+            imag = np.random.random(size=size) * 100
+            real[np.random.random(size=size) < 0.1] = float('nan')
+            imag[np.random.random(size=size) < 0.1] = float('nan')
+            orig = np.array([complex(*x) for x in zip(real, imag)])
             self.check_sort_copy(pyfunc, cfunc, orig)
 
     def test_argsort_int(self):
@@ -935,10 +957,37 @@ class TestNumpySort(TestCase):
         check(argsort_usecase)
         check(np_argsort_usecase)
 
-    def test_argsort_float(self):
+    def test_argsort_float_supplemental(self):
         def check(pyfunc, is_stable):
             cfunc = jit(nopython=True)(pyfunc)
             for orig in self.float_arrays():
+                self.check_argsort(pyfunc, cfunc, orig,
+                                   dict(is_stable=is_stable))
+
+        check(argsort_kind_usecase, is_stable=True)
+        check(np_argsort_kind_usecase, is_stable=True)
+        check(argsort_kind_usecase, is_stable=False)
+        check(np_argsort_kind_usecase, is_stable=False)
+
+    def test_argsort_complex(self):
+        def check(pyfunc):
+            cfunc = jit(nopython=True)(pyfunc)
+            for real in self.float_arrays():
+                imag = real[::]
+                np.random.shuffle(imag)
+                orig = np.array([complex(*x) for x in zip(real, imag)])
+                self.check_argsort(pyfunc, cfunc, orig)
+
+        check(argsort_usecase)
+        check(np_argsort_usecase)
+
+    def test_argsort_complex_supplemental(self):
+        def check(pyfunc, is_stable):
+            cfunc = jit(nopython=True)(pyfunc)
+            for real in self.float_arrays():
+                imag = real[::]
+                np.random.shuffle(imag)
+                orig = np.array([complex(*x) for x in zip(real, imag)])
                 self.check_argsort(pyfunc, cfunc, orig,
                                    dict(is_stable=is_stable))
 

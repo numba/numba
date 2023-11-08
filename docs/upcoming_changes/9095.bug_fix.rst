@@ -1,5 +1,0 @@
-Support `dtype` keyword argument in `numpy.arange` with `parallel=True`
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-
-Fixes parfors transformation to support the use of `dtype` keyword argument in 
-``numpy.arange(..., dtype=dtype)``.

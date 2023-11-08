@@ -1574,6 +1574,15 @@ class PropagateLiterals(FunctionPass):
                                    'due to a branch.')
                             raise errors.NumbaTypeError(msg, loc=assign.loc)
 
+                # Only propagate a PHI node if all arguments are the same
+                # constant
+                if isinstance(value, ir.Expr) and value.op == 'phi':
+                    # typemap will return None in case `inc.name` not in typemap
+                    v = [typemap.get(inc.name) for inc in value.incoming_values]
+                    # stop if the elements in `v` do not hold the same value
+                    if v[0] is not None and any([v[0] != vi for vi in v]):
+                        continue
+
                 lit = typemap.get(target.name, None)
                 if lit and isinstance(lit, types.Literal):
                     # replace assign instruction by ir.Const(lit) iff

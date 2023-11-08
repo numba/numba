@@ -68,9 +68,12 @@ def type_inference_stage(typingctx, targetctx, interp, args, return_type,
     if len(args) != interp.arg_count:
         raise TypeError("Mismatch number of argument types")
     warnings = errors.WarningsFixer(errors.NumbaWarning)
+
     infer = typeinfer.TypeInferer(typingctx, interp, warnings)
-    with typingctx.callstack.register(targetctx.target, infer, interp.func_id,
-                                      args):
+    callstack_ctx = typingctx.callstack.register(targetctx.target, infer,
+                                                 interp.func_id, args)
+    # Setup two contexts: 1) callstack setup/teardown 2) flush warnings
+    with callstack_ctx, warnings:
         # Seed argument types
         for index, (name, ty) in enumerate(zip(interp.arg_names, args)):
             infer.seed_argument(name, index, ty)
@@ -87,9 +90,6 @@ def type_inference_stage(typingctx, targetctx, interp, args, return_type,
         # return errors in case of partial typing
         errs = infer.propagate(raise_errors=raise_errors)
         typemap, restype, calltypes = infer.unify(raise_errors=raise_errors)
-
-    # Output all Numba warnings
-    warnings.flush()
 
     return _TypingResults(typemap, restype, calltypes, errs)
 

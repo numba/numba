@@ -1,4 +1,0 @@
-Added support for np.diagflat() function.
-=========================================
-
-Support is added for ``numpy.diagflat()``.

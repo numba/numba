@@ -1,5 +1,0 @@
-
-Add np.trim_zeros
-=================
-
-Support for ``np.trim_zeros()`` is added.

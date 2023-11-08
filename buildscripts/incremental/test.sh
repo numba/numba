@@ -121,12 +121,10 @@ fi
 
 if [[ "$TEST_RVSDG" == "yes" ]]; then
     echo "Running RVSDG tests..."
-    # Now run tests based on the changes identified via git
     NUMBA_USE_RVSDG_FRONTEND=1 NUMBA_CAPTURED_ERRORS=new_style NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -m $TEST_NPROCS -- numba.tests.test_usecases
 else
-
-    # First check that the test discovery works
-    python -m numba.tests.test_runtests
+    # First run Numba's Power-On-Self-Test to make sure testing will likely work
+    python -m numba.misc.POST
 
     # Now run tests based on the changes identified via git
     NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -g -m $TEST_NPROCS -- numba.tests

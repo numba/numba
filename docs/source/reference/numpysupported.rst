@@ -425,10 +425,17 @@ The following reduction functions are supported:
 Polynomials
 -----------
 
+The following polynomial classes are supported:
+* :class:`numpy.polynomial.polynomial.Polynomial` (only the first three arguments)
+
 The following polynomial functions are supported:
 * :func:`numpy.polynomial.polynomial.polyadd()`
+* :func:`numpy.polynomial.polynomial.polydiv()`
+* :func:`numpy.polynomial.polynomial.polyint()` (only the 2 first arguments)
 * :func:`numpy.polynomial.polynomial.polymul()`
 * :func:`numpy.polynomial.polynomial.polysub()`
+* :func:`numpy.polynomial.polynomial.polyval()` (the argument ``tensor`` must be a boolean constant)
+* :func:`numpy.polynomial.polyutils.as_series()`
 * :func:`numpy.polynomial.polyutils.trimseq()`
 
 Other functions
@@ -503,6 +510,7 @@ The following top-level functions are supported:
 * :func:`numpy.hsplit`
 * :func:`numpy.hstack`
 * :func:`numpy.identity`
+* :func:`numpy.indices` (only the first argument)
 * :func:`numpy.isclose`
 * :func:`numpy.kaiser`
 * :func:`numpy.iscomplex`
@@ -559,6 +567,7 @@ The following top-level functions are supported:
 * :func:`numpy.triu_indices_from` (second argument ``k`` must be an integer)
 * :func:`numpy.union1d` (For unicode arrays, only supports arrays of the same dtype)
 * :func:`numpy.unique` (only the first argument)
+* :func:`numpy.unwrap` (third argument ``axis`` must equal -1)
 * :func:`numpy.vander`
 * :func:`numpy.vsplit`
 * :func:`numpy.vstack`

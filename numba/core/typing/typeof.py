@@ -284,3 +284,11 @@ def typeof_numpy_random_bitgen(val, c):
 @typeof_impl.register(np.random.Generator)
 def typeof_random_generator(val, c):
     return types.NumPyRandomGeneratorType(val)
+
+
+@typeof_impl.register(np.polynomial.polynomial.Polynomial)
+def typeof_numpy_polynomial(val, c):
+    coef = typeof(val.coef)
+    domain = typeof(val.domain)
+    window = typeof(val.window)
+    return types.PolynomialType(coef, domain, window)
