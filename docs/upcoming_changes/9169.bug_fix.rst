@@ -1,5 +1,6 @@
-The ``numpy.digitize`` implementation now raises if any bin edge is ``np.nan``
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+The ``numpy.digitize`` implementation behaviour aligned with numpy
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
-The implementation of ``numpy.digitize`` is updated to raise if one of the
-supplied bin edges is ``np.nan``, per numpy.
+The implementation of ``numpy.digitize`` is updated to behave per
+numpy in a wider set of cases, including where the supplied bins
+are not in fact monotonic.
