@@ -350,7 +350,7 @@ def compile_ptx_for_current_device(pyfunc, sig, debug=False, lineinfo=False,
     cc = get_current_device().compute_capability
     return compile_ptx(pyfunc, sig, debug=debug, lineinfo=lineinfo,
                        device=device, fastmath=fastmath, cc=cc, opt=opt,
-                       abi=abi, abi_info=None)
+                       abi=abi, abi_info=abi_info)
 
 
 def declare_device_function(name, restype, argtypes):
