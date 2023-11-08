@@ -1582,7 +1582,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x = 2 ** 54  # loses precision in a float
         check([x], [x - 1, x + 1])
 
-    def test_digitize_riase_if_x_complex(self):
+    def test_digitize_raise_if_x_complex(self):
         # Exceptions leak references
         self.disable_leak_check()
 
