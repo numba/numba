@@ -3820,19 +3820,8 @@ def searchsorted(a, v, side='left'):
     _impl = make_searchsorted_implementation(np_dt, side_val)
 
     if isinstance(v, types.Array):
-        # N-d array and output
-        def searchsorted_impl(a, v, side='left'):
-            n = len(a)
-            lo = 0
-            hi = n
-            out = np.empty(v.shape, np.intp)
-            v_last = v.flat[0]
-            for view, outview in np.nditer((v, out)):
-                lo = loop_impl(a, view.item(), v_last, lo, hi, n)
-                v_last = view.item()
-                outview.itemset(lo)
-            return out
-
+        def impl(a, v, side='left'):
+            return _impl(a, v)
     elif isinstance(v, types.Sequence):
         def impl(a, v, side='left'):
             return _impl(a, np.array(v))
