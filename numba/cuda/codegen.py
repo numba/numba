@@ -116,7 +116,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         return "\n\n".join(self.llvm_strs)
 
     def get_asm_str(self, cc=None):
-        return self._join_ptxes(self._get_ptxes(cc=cc))
+        return self._get_ptx(cc=cc)
 
     def _ensure_cc(self, cc):
         if cc:
@@ -125,7 +125,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         device = devices.get_context().device
         return device.compute_capability
 
-    def _get_ptxes(self, cc=None):
+    def _get_ptx(self, cc=None):
         cc = self._ensure_cc(cc)
 
         ptxes = self._ptx_cache.get(cc, None)
@@ -138,24 +138,21 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
 
         irs = self.llvm_strs
 
-        ptxes = [nvvm.compile_ir(irs, **options)]
+        ptx = nvvm.compile_ir(irs, **options)
 
         # Sometimes the result from NVVM contains trailing whitespace and
         # nulls, which we strip so that the assembly dump looks a little
         # tidier.
-        ptxes = [x.decode().strip('\x00').strip() for x in ptxes]
+        ptx = ptx.decode().strip('\x00').strip()
 
         if config.DUMP_ASSEMBLY:
             print(("ASSEMBLY %s" % self._name).center(80, '-'))
-            print(self._join_ptxes(ptxes))
+            print(ptx)
             print('=' * 80)
 
-        self._ptx_cache[cc] = ptxes
+        self._ptx_cache[cc] = ptx
 
-        return ptxes
-
-    def _join_ptxes(self, ptxes):
-        return "\n\n".join(ptxes)
+        return ptx
 
     def get_cubin(self, cc=None):
         cc = self._ensure_cc(cc)
@@ -166,9 +163,8 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
 
         linker = driver.Linker.new(max_registers=self._max_registers, cc=cc)
 
-        ptxes = self._get_ptxes(cc=cc)
-        for ptx in ptxes:
-            linker.add_ptx(ptx.encode())
+        ptx = self._get_ptx(cc=cc)
+        linker.add_ptx(ptx.encode())
         for path in self._linking_files:
             linker.add_file_guess_ext(path)
         if self.needs_cudadevrt:
