@@ -1,4 +1,4 @@
-The ``numpy.digitize`` implementation behaviour aligned with numpy
+``numpy.digitize`` implementation behaviour aligned with numpy
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 The implementation of ``numpy.digitize`` is updated to behave per

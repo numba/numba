@@ -3838,14 +3838,6 @@ def np_digitize(x, bins, right=False):
     if isinstance(x, types.Array) and x.dtype in types.complex_domain:
         raise TypingError('x may not be complex')
 
-    # this exchange exists because the inputs end up
-    # being passed into `searchsorted` the other way
-    # around
-    if right:
-        side = 'left'
-    else:
-        side = 'right'
-
     @register_jitable
     def _monotonicity(bins):
 
@@ -3891,10 +3883,20 @@ def np_digitize(x, bins, right=False):
             raise ValueError(
                 "bins must be monotonically increasing or decreasing"
             )
-        elif mono == -1:
-            return len(bins) - np.searchsorted(bins[::-1], x, side=side)
+
+        # this is backwards because the arguments below are swapped
+        if right:
+            if mono == -1:
+                # reverse the bins, and invert the results
+                return len(bins) - np.searchsorted(bins[::-1], x, side='left')
+            else:
+                return np.searchsorted(bins, x, side='left')
         else:
-            return np.searchsorted(bins, x, side=side)
+            if mono == -1:
+                # reverse the bins, and invert the results
+                return len(bins) - np.searchsorted(bins[::-1], x, side='right')
+            else:
+                return np.searchsorted(bins, x, side='right')
 
     return digitize_impl
 
