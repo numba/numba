@@ -1369,6 +1369,21 @@ class Interpreter(object):
         # Temp states during interpretation
         self.current_block = None
         self.current_block_offset = None
+        last_active_offset = 0
+        for _, inst_blocks in self.cfa.blocks.items():
+            if inst_blocks.body:
+                last_active_offset = max(last_active_offset,
+                                         max(inst_blocks.body))
+        self.last_active_offset = last_active_offset
+
+        if PYVERSION in ((3, 12), ):
+            self.active_exception_entries = tuple(
+                [entry for entry in self.bytecode.exception_entries
+                 if entry.start < self.last_active_offset])
+        elif PYVERSION in ((3, 8), (3, 9), (3, 10), (3, 11)):
+            pass
+        else:
+            raise NotImplementedError(PYVERSION)
         self.syntax_blocks = []
         self.dfainfo = None
 
@@ -2345,6 +2360,13 @@ class Interpreter(object):
         assert self.blocks[inst.offset] is self.current_block
         # Handle with
         exitpt = inst.next + inst.arg
+
+        # Python 3.12 hack for handling nested with blocks
+        if PYVERSION >= (3, 12):
+            if exitpt > self.last_active_offset:
+                # Use exception entries to figure out end of syntax block
+                exitpt = max([ex.end for ex in self.active_exception_entries
+                             if ex.target == exitpt])
         wth = ir.With(inst.offset, exit=exitpt)
         self.syntax_blocks.append(wth)
         ctxmgr = self.get(contextmanager)
@@ -2358,6 +2380,16 @@ class Interpreter(object):
 
     def op_BEFORE_WITH(self, inst, contextmanager, exitfn, end):
         assert self.blocks[inst.offset] is self.current_block
+        if PYVERSION in ((3, 12), ):
+            # Python 3.12 hack for handling nested with blocks
+            if end > self.last_active_offset:
+                # Use exception entries to figure out end of syntax block
+                end = max([ex.end for ex in self.active_exception_entries
+                           if ex.target == end])
+        elif PYVERSION in ((3, 8), (3, 9), (3, 10), (3, 11)):
+            pass
+        else:
+            raise NotImplementedError(PYVERSION)
         # Handle with
         wth = ir.With(inst.offset, exit=end)
         self.syntax_blocks.append(wth)
