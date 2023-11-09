@@ -1494,6 +1494,11 @@ class Interpreter(object):
     def _iter_inst(self):
         for blkct, block in enumerate(self.cfa.iterliveblocks()):
             firstinst = self.bytecode[block.offset]
+            # If its an END_FOR instruction, the start location of block
+            # is set to start of the FOR loop, so take the location of
+            # next instruction
+            if firstinst.opname == 'END_FOR':
+                firstinst = self.bytecode[firstinst.next]
             self.loc = self.loc.with_lineno(firstinst.lineno)
             self._start_new_block(block.offset)
             if blkct == 0:
