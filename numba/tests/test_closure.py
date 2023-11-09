@@ -514,6 +514,7 @@ class TestObjmodeFallback(TestCase):
         for d in self.decorators:
             d(numbaFailure)(x, y)
 
+    @unittest.skip("Test to be removed along with objmode fallback support")
     def test_issue3239(self):
 
         def fit(X, y):
@@ -541,6 +542,7 @@ class TestObjmodeFallback(TestCase):
                       np.arange(10).reshape(1, 10))
             np.testing.assert_equal(res, exp)
 
+    @unittest.skip("Test to be removed along with objmode fallback support")
     def test_issue3289(self):
         b = [(5, 124), (52, 5)]
 

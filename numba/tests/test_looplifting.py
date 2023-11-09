@@ -553,6 +553,7 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
         # Ensure that is really a new overload for the lifted loop
         self.assertEqual(len(lifted.signatures), 2)
 
+    @unittest.skip("Test to be removed along with objmode fallback support")
     def test_lift_listcomp_block0(self):
 
         def foo(X):
@@ -576,7 +577,8 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
 
         f = jit(forceobj=True)(foo)
         f(1)
-        self.assertEqual(len(f.overloads[f.signatures[0]].lifted), 1)
+        # Post 3.12 the second loop is also being lifted
+        self.assertEqual(len(f.overloads[f.signatures[0]].lifted), 2)
 
     def test_lift_objectmode_issue_4223(self):
         from numba import jit
