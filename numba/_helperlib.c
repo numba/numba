@@ -873,8 +873,13 @@ static void traceback_add(const char *funcname, const char *filename, int lineno
     Py_DECREF(frame);
     return;
 
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 12) /* 3.12 */
+error:
+    _PyErr_ChainExceptions1(exc);
+#elif (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION <= 11) /* 3.11 and below */
 error:
     _PyErr_ChainExceptions(exc, val, tb);
+#endif
 }
 
 
