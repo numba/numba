@@ -458,7 +458,7 @@ class TestCudaIntrinsic(CUDATestCase):
         grid_error = np.zeros(1, dtype=np.uint64)
         gridsize_error = np.zeros(1, dtype=np.uint64)
 
-        # A lerge enough grid for thread IDs to overflow an int32
+        # A large enough grid for thread IDs to overflow an int32
         f[22121216, 256](grid_error, gridsize_error)
 
         self.assertEqual(grid_error[0], 0)
