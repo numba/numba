@@ -346,7 +346,7 @@ Monte Carlo Integration
 =======================
 
 This example shows how to use Numba to approximate the value of a definite integral by rapidly generating 
-random numbers on the GPU. A detailed description of the mathematical mechanics of Monte Carlo integeration 
+random numbers on the GPU. A detailed description of the mathematical mechanics of Monte Carlo integration
 is out of the scope of the example, but it can briefly be described as an averaging process where the area 
 under the curve is approximated by taking the average of many rectangles formed by its function values.
 
@@ -525,3 +525,22 @@ and the corresponding output:
   [1311. 1311. 1311. 1311. 1311. 1311. 1311.]
   [1840. 1840. 1840. 1840. 1840. 1840. 1840.]
   [2369. 2369. 2369. 2369. 2369. 2369. 2369.]]
+
+
+.. _cuda_ufunc_call_example:
+
+Calling a NumPy UFunc
+=====================
+
+UFuncs supported in the CUDA target (see :ref:`cuda_numpy_support`) can be
+called inside kernels, but the output array must be passed in as a positional
+argument. The following example demonstrates a call to :func:`np.sin` inside a
+kernel following this pattern:
+
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_ufunc.py
+   :language: python
+   :caption: from ``test_ex_cuda_ufunc_call`` in ``numba/cuda/tests/doc_examples/test_ufunc.py``
+   :start-after: ex_cuda_ufunc.begin
+   :end-before: ex_cuda_ufunc.end
+   :dedent: 8
+   :linenos:

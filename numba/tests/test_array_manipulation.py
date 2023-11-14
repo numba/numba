@@ -147,8 +147,9 @@ def as_strided2(a):
     return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
 
 
-def add_axis2(a):
-    return a[np.newaxis, :]
+@njit
+def sliding_window_view(x, window_shape, axis=None):
+    return np.lib.stride_tricks.sliding_window_view(x, window_shape, axis=axis)
 
 
 def bad_index(arr, arr2d):
@@ -178,6 +179,9 @@ def numpy_flatnonzero(a):
 
 def numpy_argwhere(a):
     return np.argwhere(a)
+
+def numpy_resize(a, new_shape):
+    return np.resize(a, new_shape)
 
 
 class TestArrayManipulation(MemoryLeakMixin, TestCase):
@@ -395,6 +399,56 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         self.assertIn("np.transpose does not accept tuples",
                         str(e.exception))
 
+    def test_numpy_resize_basic(self):
+        pyfunc = numpy_resize
+        cfunc = njit(pyfunc)
+        def inputs():
+            # Taken from https://github.com/numpy/numpy/blob/f0b2fca91a1f5f50ff696895072f6fe9e69c1466/numpy/core/tests/test_numeric.py#L24-L64  noqa: E501
+            yield np.array([[1, 2], [3, 4]]), (2, 4)
+            yield np.array([[1, 2], [3, 4]]), (4, 2)
+            yield np.array([[1, 2], [3, 4]]), (4, 3)
+            yield np.array([[1, 2], [3, 4]]), (0,)
+            yield np.array([[1, 2], [3, 4]]), (0, 2)
+            yield np.array([[1, 2], [3, 4]]), (2, 0)
+            yield np.zeros(0, dtype = float), (2, 1)
+            # other
+            yield np.array([[1, 2], [3, 4]]), (4,)
+            yield np.array([[1, 2], [3, 4]]), 4
+            yield np.zeros((1, 3), dtype = int), (2, 1)
+            yield np.array([], dtype = float), (4, 2)
+            yield [0, 1, 2, 3], (2, 3)
+            yield 4, (2, 3)
+
+        for a, new_shape in inputs():
+            self.assertPreciseEqual(pyfunc(a, new_shape), cfunc(a, new_shape))
+
+    def test_numpy_resize_exception(self):
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        cfunc = njit(numpy_resize)
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc", (2, 3))
+        self.assertIn(('The argument "a" must be array-like'),
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.array([[0,1],[2,3]]), "abc")
+        self.assertIn(('The argument "new_shape" must be an integer or '
+                       'a tuple of integers'),
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.array([[0,1],[2,3]]), (-2, 3))
+        self.assertIn(('All elements of `new_shape` must be non-negative'),
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.array([[0,1],[2,3]]), -4)
+        self.assertIn(('All elements of `new_shape` must be non-negative'),
+                      str(raises.exception))
+
     def test_expand_dims(self):
         pyfunc = expand_dims
 
@@ -520,6 +574,110 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         self.check_as_strided(as_strided1)
         self.check_as_strided(as_strided2)
 
+    def test_sliding_window_view(self):
+        def check(arr, window_shape, axis):
+            # Our version is always writeable (NumPy default is False).
+            expected = np.lib.stride_tricks.sliding_window_view(
+                arr, window_shape, axis, writeable=True
+            )
+            got = sliding_window_view(arr, window_shape, axis)
+            self.assertPreciseEqual(got, expected)
+
+        # 1d array, different ways of specifying the axis.
+        arr1 = np.arange(24)
+        for axis in [None, 0, -1, (0,)]:
+            with self.subTest(f"1d array, axis={axis}"):
+                check(arr1, 5, axis)
+
+        # 2d array, 1d window.
+        arr2 = np.arange(200).reshape(10, 20)
+        for axis in [0, -1]:
+            with self.subTest(f"2d array, axis={axis}"):
+                check(arr2, 5, axis)
+
+        # 2d array, 2d window.
+        for axis in [None, (0, 1), (1, 0), (1, -2)]:
+            with self.subTest(f"2d array, axis={axis}"):
+                check(arr2, (5, 8), axis)
+
+        # 4d array, 2d window.
+        arr4 = np.arange(200).reshape(4, 5, 5, 2)
+        for axis in [(1, 2), (-2, -3)]:
+            with self.subTest(f"4d array, axis={axis}"):
+                check(arr4, (3, 2), axis)
+
+        # Repeated axis.
+        with self.subTest("2d array, repeated axes"):
+            check(arr2, (5, 3, 3), (0, 1, 0))
+
+    def test_sliding_window_view_errors(self):
+        def _raises(msg, *args):
+            with self.assertRaises(ValueError) as raises:
+                sliding_window_view(*args)
+            self.assertIn(msg, str(raises.exception))
+
+        def _typing_error(msg, *args):
+            with self.assertRaises(errors.TypingError) as raises:
+                sliding_window_view(*args)
+            self.assertIn(msg, str(raises.exception))
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        arr1 = np.arange(24)
+        arr2 = np.arange(200).reshape(10, 20)
+
+        # Window shape cannot be larger than dimension or negative.
+        with self.subTest("1d window shape too large"):
+            _raises("window_shape cannot be larger", arr1, 25, None)
+        with self.subTest("2d window shape too large"):
+            _raises("window_shape cannot be larger", arr2, (4, 21), None)
+        with self.subTest("1d window negative size"):
+            _raises("`window_shape` cannot contain negative", arr1, -1, None)
+        with self.subTest("2d window with a negative size"):
+            _raises("`window_shape` cannot contain negative", arr2, (4, -3), None)
+
+        # window_shape and axis parameters must be compatible.
+        with self.subTest("1d array, 2d window shape"):
+            _raises("matching length window_shape and axis", arr1, (10, 2), None)
+        with self.subTest("2d window shape, only one axis given"):
+            _raises("matching length window_shape and axis", arr2, (10, 2), 1)
+        with self.subTest("1d window shape, 2 axes given"):
+            _raises("matching length window_shape and axis", arr1, 5, (0, 0))
+
+        # Axis values out of bounds.
+        with self.subTest("1d array, second axis"):
+            _raises("Argument axis out of bounds", arr1, 4, 1)
+        with self.subTest("1d array, axis -2"):
+            _raises("Argument axis out of bounds", arr1, 4, -2)
+        with self.subTest("2d array, fourth axis"):
+            _raises("Argument axis out of bounds", arr2, (4, 4), (0, 3))
+        with self.subTest("2d array, axis -3"):
+            _raises("Argument axis out of bounds", arr2, (4, 4), (0, -3))
+
+        # Useful messages for unsupported types.
+        with self.subTest("window_shape=None"):
+            _typing_error(
+                "window_shape must be an integer or tuple of integer", arr1, None
+            )
+        with self.subTest("window_shape=float"):
+            _typing_error(
+                "window_shape must be an integer or tuple of integer", arr1, 3.1
+            )
+        with self.subTest("window_shape=tuple(float)"):
+            _typing_error(
+                "window_shape must be an integer or tuple of integer", arr1, (3.1,)
+            )
+        with self.subTest("axis=float"):
+            _typing_error(
+                "axis must be None, an integer or tuple of integer", arr1, 4, 3.1
+            )
+        with self.subTest("axis=tuple(float)"):
+            _typing_error(
+                "axis must be None, an integer or tuple of integer", arr1, 4, (3.1,)
+            )
+
+
     def test_flatten_array(self, flags=enable_pyobj_flags, layout='C'):
         a = np.arange(9).reshape(3, 3)
         if layout == 'F':
@@ -633,17 +791,46 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
         self.assertIn("squeeze", str(raises.exception))
 
-    def test_add_axis2(self, flags=enable_pyobj_flags):
-        a = np.arange(9).reshape(3, 3)
+    def test_add_axis(self):
+        @njit
+        def np_new_axis_getitem(a, idx):
+            return a[idx]
 
-        pyfunc = add_axis2
-        arraytype1 = typeof(a)
-        cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
-        cfunc = cr.entry_point
+        @njit
+        def np_new_axis_setitem(a, idx, item):
+            a[idx] = item
+            return a
 
-        expected = pyfunc(a)
-        got = cfunc(a)
-        np.testing.assert_equal(expected, got)
+        a = np.arange(4 * 5 * 6 * 7).reshape((4, 5, 6, 7))
+        idx_cases = [
+            (slice(None), np.newaxis),
+            (np.newaxis, slice(None)),
+            (slice(1), np.newaxis, 1),
+            (np.newaxis, 2, slice(None)),
+            (slice(1), Ellipsis, np.newaxis, 1),
+            (1, np.newaxis, Ellipsis),
+            (np.newaxis, slice(1), np.newaxis, 1),
+            (1, Ellipsis, None, np.newaxis),
+            (np.newaxis, slice(1), Ellipsis, np.newaxis, 1),
+            (1, np.newaxis, np.newaxis, Ellipsis),
+            (np.newaxis, 1, np.newaxis, Ellipsis),
+            (slice(3), 1, np.newaxis, None),
+            (np.newaxis, 1, Ellipsis, None),
+        ]
+        pyfunc_getitem = np_new_axis_getitem.py_func
+        cfunc_getitem = np_new_axis_getitem
+
+        for idx in idx_cases:
+            expected = pyfunc_getitem(a, idx)
+            got = cfunc_getitem(a, idx)
+            np.testing.assert_equal(expected, got)
+
+            a_empty = np.zeros_like(a)
+            item = a[idx]
+
+            expected = pyfunc_setitem(a_empty.copy(), idx, item)
+            got = cfunc_setitem(a_empty.copy(), idx, item)
+            np.testing.assert_equal(expected, got)
 
     def test_add_axis2_npm(self):
         with self.assertTypingError() as raises:
@@ -935,7 +1122,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         got = foo(arr)
         self.assertPreciseEqual(expected, got)
 
-    @unittest.skipIf(numpy_version < (1, 20), "requires NumPy 1.20 or newer")
     def test_broadcast_shapes(self):
         pyfunc = numpy_broadcast_shapes
         cfunc = jit(nopython=True)(pyfunc)
@@ -978,7 +1164,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             self.assertIsInstance(got, tuple)
             self.assertPreciseEqual(expected, got)
 
-    @unittest.skipIf(numpy_version < (1, 20), "requires NumPy 1.20 or newer")
     def test_broadcast_shapes_raises(self):
         pyfunc = numpy_broadcast_shapes
         cfunc = jit(nopython=True)(pyfunc)
@@ -1002,7 +1187,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             self.assertIn("shape mismatch: objects cannot be broadcast to a single shape",
                           str(raises.exception))
 
-    @unittest.skipIf(numpy_version < (1, 20), "requires NumPy 1.20 or newer")
     def test_broadcast_shapes_negative_dimension(self):
         pyfunc = numpy_broadcast_shapes
         cfunc = jit(nopython=True)(pyfunc)
@@ -1013,7 +1197,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
         self.assertIn("negative dimensions are not allowed", str(raises.exception))
 
-    @unittest.skipIf(numpy_version < (1, 20), "requires NumPy 1.20 or newer")
     def test_broadcast_shapes_invalid_type(self):
         pyfunc = numpy_broadcast_shapes
         cfunc = jit(nopython=True)(pyfunc)
@@ -1315,6 +1498,72 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
                 self.assertIn("shape mismatch: objects cannot be broadcast to a single shape",
                               str(raises.exception))
 
+    def test_readonly_after_flatten(self):
+        # Reproduces Issue #8370
+        def unfold_flatten(x, y):
+            r, c = x.shape
+            a = np.broadcast_to(x, (y, r, c))
+            b = np.swapaxes(a, 0, 1)
+            cc = b.flatten()
+            d = np.reshape(cc, (-1, c))
+            d[y - 1:, :] = d[: 1 - y]
+            return d
+
+        pyfunc = unfold_flatten
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # If issue #8370 is not fixed: This will fail.
+        res_nb = cfunc(np.array([[1, 1, 1], [2, 2, 2], [3, 3, 3]]), 2)
+        res_py = pyfunc(np.array([[1, 1, 1], [2, 2, 2], [3, 3, 3]]), 2)
+
+        np.testing.assert_array_equal(res_py, res_nb)
+
+    def test_readonly_after_ravel(self):
+        # Reproduces another suggested problem in Issue #8370
+        def unfold_ravel(x, y):
+            r, c = x.shape
+            a = np.broadcast_to(x, (y, r, c))
+            b = np.swapaxes(a, 0, 1)
+            cc = b.ravel()
+            d = np.reshape(cc, (-1, c))
+            d[y - 1:, :] = d[: 1 - y]
+            return d
+
+        pyfunc = unfold_ravel
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # If issue #8370 is not fixed: This will fail.
+        res_nb = cfunc(np.array([[1, 1, 1], [2, 2, 2], [3, 3, 3]]), 2)
+        res_py = pyfunc(np.array([[1, 1, 1], [2, 2, 2], [3, 3, 3]]), 2)
+
+        np.testing.assert_array_equal(res_py, res_nb)
+
+    def test_mutability_after_ravel(self):
+        # Reproduces another suggested problem in Issue #8370
+        # Namely that ravel should only return a writable array
+        # if a copy took place... otherwise leave it as it is.
+        self.disable_leak_check()
+        a_c = np.arange(9).reshape((3, 3)).copy()
+        a_f = a_c.copy(order='F')
+        a_c.flags.writeable = False
+        a_f.flags.writeable = False
+
+        def try_ravel_w_copy(a):
+            result = a.ravel()
+            return result
+
+        pyfunc = try_ravel_w_copy
+        cfunc = jit(nopython=True)(pyfunc)
+
+        ret_c = cfunc(a_c)
+        ret_f = cfunc(a_f)
+
+        msg = 'No copy was performed, so the ' \
+              'resulting array must not be writeable'
+        self.assertTrue(not ret_c.flags.writeable, msg)
+
+        msg = 'A copy was performed, yet the resulting array is not modifiable'
+        self.assertTrue(ret_f.flags.writeable, msg)
 
 
 if __name__ == '__main__':

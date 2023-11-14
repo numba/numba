@@ -1,11 +1,10 @@
 import numba
 import numpy as np
 import sys
-import platform
 import itertools
+import gc
 
 from numba import types
-from numba.core.config import IS_32BITS
 from numba.tests.support import TestCase, MemoryLeakMixin
 from numba.np.random.generator_methods import _get_proper_func
 from numba.np.random.generator_core import next_uint32, next_uint64, next_double
@@ -14,12 +13,12 @@ from numba.core.errors import TypingError
 from numba.tests.support import run_in_new_process_caching, SerialMixin
 
 
-# The following logic is to mitigate:
+# TODO: Following testing tolerance adjustments should be reduced
+# once NumPy Generator's fmadd issue described below is resolved:
 # https://github.com/numba/numba/pull/8038#issuecomment-1165571368
-if IS_32BITS or platform.machine() in ['ppc64le', 'aarch64']:
-    adjusted_ulp_prec = 2048
-else:
-    adjusted_ulp_prec = 5
+# The progress is being tracked as one of the tasks in:
+# https://github.com/numba/numba/issues/8519
+adjusted_ulp_prec = 2048
 
 
 class TestHelperFuncs(TestCase):
@@ -233,9 +232,11 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         do_box = numba.njit(lambda x:x)
 
         y = do_box(rng_instance)
+        gc.collect()
         ref_1 = sys.getrefcount(rng_instance)
         del y
         no_box(rng_instance)
+        gc.collect()
         ref_2 = sys.getrefcount(rng_instance)
 
         self.assertEqual(ref_1, ref_2 + 1)
@@ -1059,6 +1060,162 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         rng = lambda: np.random.default_rng(1)
 
         self.assertPreciseEqual(dist_func(rng(), a), nb_func(rng(), b))
+
+    def test_noncentral_chisquare(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:\
+            x.noncentral_chisquare(3.0, 20.0, size=size)
+        for _size, _bitgen in itertools.product(test_sizes, bitgen_types):
+            with self.subTest(_size=_size, _bitgen=_bitgen):
+                self.check_numpy_parity(dist_func, _bitgen,
+                                        None, _size, None)
+
+        dist_func = lambda x, df, nonc, size:\
+            x.noncentral_chisquare(df=df, nonc=nonc, size=size)
+        valid_args = [3.0, 5.0, (1,)]
+        self._check_invalid_types(dist_func, ['df', 'nonc', 'size'],
+                                  valid_args, ['x', 'x', ('x',)])
+
+        # Test argument bounds
+        rng = np.random.default_rng()
+        valid_args = [rng] + valid_args
+        nb_dist_func = numba.njit(dist_func)
+        with self.assertRaises(ValueError) as raises:
+            curr_args = valid_args.copy()
+            # Change df to an invalid value
+            curr_args[1] = 0
+            nb_dist_func(*curr_args)
+        self.assertIn('df <= 0', str(raises.exception))
+        with self.assertRaises(ValueError) as raises:
+            curr_args = valid_args.copy()
+            # Change nonc to an invalid value
+            curr_args[2] = -1
+            nb_dist_func(*curr_args)
+        self.assertIn('nonc < 0', str(raises.exception))
+        # Exceptions leak references
+        self.disable_leak_check()
+
+    def test_noncentral_f(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:\
+            x.noncentral_f(3.0, 20.0, 3.0, size=size)
+        for _size, _bitgen in itertools.product(test_sizes, bitgen_types):
+            with self.subTest(_size=_size, _bitgen=_bitgen):
+                self.check_numpy_parity(dist_func, _bitgen,
+                                        None, _size, None,
+                                        adjusted_ulp_prec)
+
+        dist_func = lambda x, dfnum, dfden, nonc, size:\
+            x.noncentral_f(dfnum=dfnum, dfden=dfden, nonc=nonc, size=size)
+        valid_args = [3.0, 5.0, 3.0, (1,)]
+        self._check_invalid_types(dist_func, ['dfnum', 'dfden', 'nonc', 'size'],
+                                  valid_args, ['x', 'x', 'x', ('x',)])
+
+        # Test argument bounds
+        rng = np.random.default_rng()
+        valid_args = [rng] + valid_args
+        nb_dist_func = numba.njit(dist_func)
+        with self.assertRaises(ValueError) as raises:
+            curr_args = valid_args.copy()
+            # Change dfnum to an invalid value
+            curr_args[1] = 0
+            nb_dist_func(*curr_args)
+        self.assertIn('dfnum <= 0', str(raises.exception))
+        with self.assertRaises(ValueError) as raises:
+            curr_args = valid_args.copy()
+            # Change dfden to an invalid value
+            curr_args[2] = 0
+            nb_dist_func(*curr_args)
+        self.assertIn('dfden <= 0', str(raises.exception))
+        with self.assertRaises(ValueError) as raises:
+            curr_args = valid_args.copy()
+            # Change nonc to an invalid value
+            curr_args[3] = -1
+            nb_dist_func(*curr_args)
+        self.assertIn('nonc < 0', str(raises.exception))
+        # Exceptions leak references
+        self.disable_leak_check()
+
+    def test_logseries(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:\
+            x.logseries(0.3, size=size)
+        for _size, _bitgen in itertools.product(test_sizes, bitgen_types):
+            with self.subTest(_size=_size, _bitgen=_bitgen):
+                self.check_numpy_parity(dist_func, _bitgen,
+                                        None, _size, None)
+
+        dist_func = lambda x, p, size:\
+            x.logseries(p=p, size=size)
+        valid_args = [0.3, (1,)]
+        self._check_invalid_types(dist_func, ['p', 'size'],
+                                  valid_args, ['x', ('x',)])
+
+        # Test argument bounds
+        rng = np.random.default_rng(1)
+        valid_args = [rng] + valid_args
+        nb_dist_func = numba.njit(dist_func)
+        for _p in [-0.1, 1, np.nan]:
+            with self.assertRaises(ValueError) as raises:
+                curr_args = valid_args.copy()
+                # Change p to an invalid negative, positive and nan value
+                curr_args[1] = _p
+                nb_dist_func(*curr_args)
+            self.assertIn('p < 0, p >= 1 or p is NaN', str(raises.exception))
+        # Exceptions leak references
+        self.disable_leak_check()
+
+    def test_binomial(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:\
+            x.binomial(n=1, p=0.1, size=size)
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None,
+                                            adjusted_ulp_prec)
+
+        dist_func = lambda x, n, p, size:\
+            x.binomial(n=n, p=p, size=size)
+        self._check_invalid_types(dist_func, ['n', 'p', 'size'],
+                                  [1, 0.75, (1,)], ['x', 'x', ('x',)])
+
+    def test_binomial_cases(self):
+        cases = [
+            (1, 0.1), # p <= 0.5 && n * p <= 30
+            (50, 0.9), # p > 0.5 && n * p <= 30
+            (100, 0.4), # p <= 0.5 && n * p > 30
+            (100, 0.9) # p > 0.5 && n * p > 30
+        ]
+        size = None
+
+        for n, p in cases:
+            with self.subTest(n=n, p=p):
+                dist_func = lambda x, size, dtype:\
+                    x.binomial(n, p, size=size)
+                self.check_numpy_parity(dist_func, None,
+                                        None, size, None, 0)
 
 
 class TestGeneratorCaching(TestCase, SerialMixin):

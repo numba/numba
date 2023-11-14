@@ -54,8 +54,8 @@ class BaseGeneratorLower(object):
         self.context = lower.context
         self.fndesc = lower.fndesc
         self.library = lower.library
-        self.call_conv = lower.call_conv
         self.func_ir = lower.func_ir
+        self.lower = lower
 
         self.geninfo = lower.generator_info
         self.gentype = self.get_generator_type()
@@ -65,6 +65,10 @@ class BaseGeneratorLower(object):
         self.arg_packer = self.context.get_data_packer(self.fndesc.argtypes)
 
         self.resume_blocks = {}
+
+    @property
+    def call_conv(self):
+        return self.lower.call_conv
 
     def get_args_ptr(self, builder, genptr):
         return cgutils.gep_inbounds(builder, genptr, 0, 1)

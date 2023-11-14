@@ -9,6 +9,10 @@ import itertools
 from numba.np.numpy_support import from_dtype
 
 
+def simple_fp16_div_scalar(ary, a, b):
+    ary[0] = a / b
+
+
 def simple_fp16add(ary, a, b):
     ary[0] = a + b
 
@@ -23,6 +27,10 @@ def simple_fp16_isub(ary, a):
 
 def simple_fp16_imul(ary, a):
     ary[0] *= a
+
+
+def simple_fp16_idiv(ary, a):
+    ary[0] /= a
 
 
 def simple_fp16sub(ary, a, b):
@@ -138,8 +146,9 @@ class TestOperatorModule(CUDATestCase):
 
     @skip_unless_cc_53
     def test_fp16_binary(self):
-        functions = (simple_fp16add, simple_fp16sub, simple_fp16mul)
-        ops = (operator.add, operator.sub, operator.mul)
+        functions = (simple_fp16add, simple_fp16sub, simple_fp16mul,
+                     simple_fp16_div_scalar)
+        ops = (operator.add, operator.sub, operator.mul, operator.truediv)
 
         for fn, op in zip(functions, ops):
             with self.subTest(op=op):
@@ -165,8 +174,9 @@ class TestOperatorModule(CUDATestCase):
 
     @skip_unless_cc_53
     def test_mixed_fp16_binary_arithmetic(self):
-        functions = (simple_fp16add, simple_fp16sub, simple_fp16mul)
-        ops = (operator.add, operator.sub, operator.mul)
+        functions = (simple_fp16add, simple_fp16sub, simple_fp16mul,
+                     simple_fp16_div_scalar)
+        ops = (operator.add, operator.sub, operator.mul, operator.truediv)
         types = (np.int8, np.int16, np.int32, np.int64,
                  np.float32, np.float64)
         for (fn, op), ty in itertools.product(zip(functions, ops), types):
@@ -195,8 +205,9 @@ class TestOperatorModule(CUDATestCase):
 
     @skip_unless_cc_53
     def test_fp16_inplace_binary(self):
-        functions = (simple_fp16_iadd, simple_fp16_isub, simple_fp16_imul)
-        ops = (operator.iadd, operator.isub, operator.imul)
+        functions = (simple_fp16_iadd, simple_fp16_isub, simple_fp16_imul,
+                     simple_fp16_idiv)
+        ops = (operator.iadd, operator.isub, operator.imul, operator.itruediv)
 
         for fn, op in zip(functions, ops):
             with self.subTest(op=op):

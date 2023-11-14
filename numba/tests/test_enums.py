@@ -8,8 +8,9 @@ import unittest
 from numba import jit, vectorize, int8, int16, int32
 
 from numba.tests.support import TestCase
-from .enum_usecases import Color, Shape, Shake, Planet, RequestError, \
-                           IntEnumWithNegatives
+from numba.tests.enum_usecases import (Color, Shape, Shake,
+                                       Planet, RequestError,
+                                       IntEnumWithNegatives)
 
 
 def compare_usecase(a, b):

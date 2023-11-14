@@ -4,19 +4,14 @@ import ctypes
 import enum
 
 import numpy as np
+from numpy.random.bit_generator import BitGenerator
 
 from numba.core import types, utils, errors
 from numba.np import numpy_support
-from numba.np.numpy_support import numpy_version
+
+
 # terminal color markup
 _termcolor = errors.termcolor()
-
-# Note that the BitGenerator class exists in _bit_generator.pxd in
-# NumPy 1.18 (has underscore) and then bit_generator.pxd in NumPy 1.19
-if numpy_version < (1, 19):
-    from numpy.random._bit_generator import BitGenerator
-else:
-    from numpy.random.bit_generator import BitGenerator
 
 
 class Purpose(enum.Enum):
@@ -244,6 +239,9 @@ def _typeof_dtype(val, c):
 
 @typeof_impl.register(np.ndarray)
 def _typeof_ndarray(val, c):
+    if isinstance(val, np.ma.MaskedArray):
+        msg = "Unsupported array type: numpy.ma.MaskedArray."
+        raise errors.NumbaTypeError(msg)
     try:
         dtype = numpy_support.from_dtype(val.dtype)
     except errors.NumbaNotImplementedError:
@@ -286,3 +284,11 @@ def typeof_numpy_random_bitgen(val, c):
 @typeof_impl.register(np.random.Generator)
 def typeof_random_generator(val, c):
     return types.NumPyRandomGeneratorType(val)
+
+
+@typeof_impl.register(np.polynomial.polynomial.Polynomial)
+def typeof_numpy_polynomial(val, c):
+    coef = typeof(val.coef)
+    domain = typeof(val.domain)
+    window = typeof(val.window)
+    return types.PolynomialType(coef, domain, window)

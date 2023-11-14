@@ -222,7 +222,7 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.log10`
 * :func:`math.log1p`
 * :func:`math.sqrt`
-* :func:`math.remainder`: Python 3.7+
+* :func:`math.remainder`
 * :func:`math.pow`
 * :func:`math.ceil`
 * :func:`math.floor`
@@ -274,6 +274,7 @@ The following functions from the :mod:`operator` module are supported:
 * :func:`operator.truediv`
 * :func:`operator.xor`
 
+.. _cuda_numpy_support:
 
 NumPy support
 =============
@@ -286,11 +287,64 @@ code such that each thread is dealing with a single element at a time.
 Supported NumPy features:
 
 * accessing `ndarray` attributes `.shape`, `.strides`, `.ndim`, `.size`, etc..
-* scalar ufuncs that have equivalents in the `math` module; i.e. ``np.sin(x[0])``, where x is a 1D array.
 * indexing and slicing works.
+* A subset of ufuncs are supported, but the output array must be passed in as a
+  positional argument (see :ref:`cuda_ufunc_call_example`). Note that ufuncs
+  execute sequentially in each thread - there is no automatic parallelisation
+  of ufuncs across threads over the elements of an input array.
+
+  The following ufuncs are supported:
+
+  * :func:`numpy.sin`
+  * :func:`numpy.cos`
+  * :func:`numpy.tan`
+  * :func:`numpy.arcsin`
+  * :func:`numpy.arccos`
+  * :func:`numpy.arctan`
+  * :func:`numpy.arctan2`
+  * :func:`numpy.hypot`
+  * :func:`numpy.sinh`
+  * :func:`numpy.cosh`
+  * :func:`numpy.tanh`
+  * :func:`numpy.arcsinh`
+  * :func:`numpy.arccosh`
+  * :func:`numpy.arctanh`
+  * :func:`numpy.deg2rad`
+  * :func:`numpy.radians`
+  * :func:`numpy.rad2deg`
+  * :func:`numpy.degrees`
+  * :func:`numpy.greater`
+  * :func:`numpy.greater_equal`
+  * :func:`numpy.less`
+  * :func:`numpy.less_equal`
+  * :func:`numpy.not_equal`
+  * :func:`numpy.equal`
+  * :func:`numpy.logical_and`
+  * :func:`numpy.logical_or`
+  * :func:`numpy.logical_xor`
+  * :func:`numpy.logical_not`
+  * :func:`numpy.maximum`
+  * :func:`numpy.minimum`
+  * :func:`numpy.fmax`
+  * :func:`numpy.fmin`
+  * :func:`numpy.bitwise_and`
+  * :func:`numpy.bitwise_or`
+  * :func:`numpy.bitwise_xor`
+  * :func:`numpy.invert`
+  * :func:`numpy.bitwise_not`
+  * :func:`numpy.left_shift`
+  * :func:`numpy.right_shift`
 
 Unsupported NumPy features:
 
 * array creation APIs.
 * array methods.
 * functions that returns a new array.
+
+
+CFFI support
+============
+
+The ``from_buffer()`` method of ``cffi.FFI`` objects is supported. This is
+useful for obtaining a pointer that can be passed to external C / C++ / PTX
+functions (see the :ref:`CUDA FFI documentation <cuda_ffi>`).

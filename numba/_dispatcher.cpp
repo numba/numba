@@ -7,6 +7,7 @@
 
 #include "_typeof.h"
 #include "frameobject.h"
+#include "traceback.h"
 #include "core/typeconv/typeconv.hpp"
 #include "_devicearray.h"
 
@@ -26,12 +27,98 @@
  *
  */
 
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 11)
+#ifndef Py_BUILD_CORE
+    #define Py_BUILD_CORE 1
+#endif
+#include "internal/pycore_frame.h"
+#include "internal/pycore_pyerrors.h"
+
 /*
- * NOTE: There is a version split for tracing code. Python 3.10 introduced a
- * trace_info structure to help make tracing more robust. See:
- * https://github.com/python/cpython/pull/24726
+ * Code originally from:
+ * https://github.com/python/cpython/blob/deaf509e8fc6e0363bd6f26d52ad42f976ec42f2/Python/ceval.c#L6804
  */
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 10)
+static int
+call_trace(Py_tracefunc func, PyObject *obj,
+           PyThreadState *tstate, PyFrameObject *frame,
+           int what, PyObject *arg)
+{
+    int result;
+    if (tstate->tracing) {
+        return 0;
+    }
+    if (frame == NULL) {
+        return -1;
+    }
+    int old_what = tstate->tracing_what;
+    tstate->tracing_what = what;
+    PyThreadState_EnterTracing(tstate);
+    result = func(obj, frame, what, NULL);
+    PyThreadState_LeaveTracing(tstate);
+    tstate->tracing_what = old_what;
+    return result;
+}
+
+/*
+ * Code originally from:
+ * https://github.com/python/cpython/blob/d5650a1738fe34f6e1db4af5f4c4edb7cae90a36/Python/ceval.c#L4220-L4240
+ */
+static int
+call_trace_protected(Py_tracefunc func, PyObject *obj,
+                     PyThreadState *tstate, PyFrameObject *frame,
+                     int what, PyObject *arg)
+{
+    PyObject *type, *value, *traceback;
+    int err;
+    _PyErr_Fetch(tstate, &type, &value, &traceback);
+    err = call_trace(func, obj, tstate, frame, what, arg);
+    if (err == 0)
+    {
+        _PyErr_Restore(tstate, type, value, traceback);
+        return 0;
+    }
+    else {
+        Py_XDECREF(type);
+        Py_XDECREF(value);
+        Py_XDECREF(traceback);
+        return -1;
+    }
+}
+
+/*
+ * Code originally from:
+ * https://github.com/python/cpython/blob/deaf509e8fc6e0363bd6f26d52ad42f976ec42f2/Python/ceval.c#L7245
+ * NOTE: The state test https://github.com/python/cpython/blob/d5650a1738fe34f6e1db4af5f4c4edb7cae90a36/Python/ceval.c#L4521
+ * has been removed, it's dealt with in call_cfunc.
+ */
+#define C_TRACE(x, call, frame) \
+if (call_trace(tstate->c_profilefunc, tstate->c_profileobj, \
+    tstate, frame, \
+    PyTrace_CALL, cfunc)) { \
+    x = NULL; \
+} \
+else { \
+    x = call; \
+    if (tstate->c_profilefunc != NULL) { \
+        if (x == NULL) { \
+            call_trace_protected(tstate->c_profilefunc, \
+                tstate->c_profileobj, \
+                tstate, frame, \
+                PyTrace_RETURN, cfunc); \
+            /* XXX should pass (type, value, tb) */ \
+        } else { \
+            if (call_trace(tstate->c_profilefunc, \
+                tstate->c_profileobj, \
+                tstate, frame, \
+                PyTrace_RETURN, cfunc)) { \
+                Py_DECREF(x); \
+                x = NULL; \
+            } \
+        } \
+    } \
+} \
+
+#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 10)
 
 /*
  * Code originally from:
@@ -186,7 +273,7 @@ else                                                            \
     }                                                           \
 }
 
-#else
+#else  // Python <3.10
 
 /*
  * Code originally from:
@@ -562,7 +649,14 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
     fn = (PyCFunctionWithKeywords) PyCFunction_GET_FUNCTION(cfunc);
     tstate = PyThreadState_GET();
 
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 10)
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 11)
+    /*
+     * On Python 3.11, _PyEval_EvalFrameDefault stops using PyTraceInfo since 
+     * it's now baked into ThreadState.
+     * https://github.com/python/cpython/pull/26623
+     */
+    if (tstate->cframe->use_tracing && tstate->c_profilefunc)
+#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 10)
     /*
      * On Python 3.10+ trace_info comes from somewhere up in PyFrameEval et al,
      * Numba doesn't have access to that so creates an equivalent struct and
@@ -621,12 +715,15 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
         }
         /* Populate the 'fast locals' in `frame` */
         PyFrame_LocalsToFast(frame, 0);
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 11)
+        C_TRACE(result, fn(PyCFunction_GET_SELF(cfunc), args, kws), frame);
+#else
         tstate->frame = frame;
         C_TRACE(result, fn(PyCFunction_GET_SELF(cfunc), args, kws));
         /* write changes back to locals? */
         PyFrame_FastToLocals(frame);
         tstate->frame = frame->f_back;
-
+#endif
     error:
         Py_XDECREF(frame);
         Py_XDECREF(globals);
@@ -1112,10 +1209,10 @@ static PyTypeObject DispatcherType = {
     sizeof(Dispatcher),                          /* tp_basicsize */
     0,                                           /* tp_itemsize */
     (destructor)Dispatcher_dealloc,              /* tp_dealloc */
-    0,                                           /* tp_print */
+    0,                                           /* tp_vectorcall_offset */
     0,                                           /* tp_getattr */
     0,                                           /* tp_setattr */
-    0,                                           /* tp_compare */
+    0,                                           /* tp_as_async */
     0,                                           /* tp_repr */
     0,                                           /* tp_as_number */
     0,                                           /* tp_as_sequence */
@@ -1155,15 +1252,31 @@ static PyTypeObject DispatcherType = {
     0,                                           /* tp_del */
     0,                                           /* tp_version_tag */
     0,                                           /* tp_finalize */
-#if PY_MAJOR_VERSION == 3
-/* Python 3.8 has two slots, 3.9 has one. */
-#if PY_MINOR_VERSION > 7
+/* The docs suggest Python 3.8 has no tp_vectorcall
+ * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Doc/c-api/typeobj.rst?plain=1#L146
+ * but the header has it:
+ * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Include/cpython/object.h#L257
+ */
     0,                                           /* tp_vectorcall */
-#if PY_MINOR_VERSION == 8
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 8)
+/* This is Python 3.8 only.
+ * See: https://github.com/python/cpython/blob/3.8/Include/cpython/object.h
+ * there's a tp_print preserved for backwards compatibility. xref:
+ * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Include/cpython/object.h#L260
+ */
     0,                                           /* tp_print */
 #endif
+
+/* WARNING: Do not remove this, only modify it! It is a version guard to
+ * act as a reminder to update this struct on Python version update! */
+#if (PY_MAJOR_VERSION == 3)
+#if ! ((PY_MINOR_VERSION == 8) || (PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11))
+#error "Python minor version is not supported."
 #endif
+#else
+#error "Python major version is not supported."
 #endif
+/* END WARNING*/
 };
 
 

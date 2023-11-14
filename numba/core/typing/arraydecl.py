@@ -12,6 +12,7 @@ from numba.core.typing import collections
 from numba.core.errors import (TypingError, RequireLiteralValue, NumbaTypeError,
                                NumbaNotImplementedError, NumbaAssertionError,
                                NumbaKeyError, NumbaIndexError)
+from numba.core.cgutils import is_nonelike
 
 
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
@@ -33,10 +34,14 @@ def get_array_index_type(ary, idx):
     right_indices = []
     ellipsis_met = False
     advanced = False
+    num_newaxis = 0
 
     if not isinstance(idx, types.BaseTuple):
         idx = [idx]
 
+    # Here, a subspace is considered as a contiguous group of advanced indices.
+    # num_subspaces keeps track of the number of such
+    # contiguous groups.
     in_subspace = False
     num_subspaces = 0
     array_indices = []
@@ -45,18 +50,29 @@ def get_array_index_type(ary, idx):
     for ty in idx:
         if ty is types.ellipsis:
             if ellipsis_met:
-                raise NumbaTypeError("Only one ellipsis allowed in array indices "
-                                     "(got %s)" % (idx,))
+                raise NumbaTypeError(
+                    "Only one ellipsis allowed in array indices "
+                    "(got %s)" % (idx,))
             ellipsis_met = True
             in_subspace = False
         elif isinstance(ty, types.SliceType):
+            # If we encounter a non-advanced index while in a
+            # subspace then that subspace ends.
             in_subspace = False
+        # In advanced indexing, any index broadcastable to an
+        # array is considered an advanced index. Hence all the
+        # branches below are considered as advanced indices.
         elif isinstance(ty, types.Integer):
             # Normalize integer index
             ty = types.intp if ty.signed else types.uintp
             # Integer indexing removes the given dimension
             ndim -= 1
+            # If we're within a subspace/contiguous group of
+            # advanced indices then no action is necessary
+            # since we've already counted that subspace once.
             if not in_subspace:
+                # If we're not within a subspace and we encounter
+                # this branch then we have a new subspace/group.
                 num_subspaces += 1
                 in_subspace = True
         elif (isinstance(ty, types.Array) and ty.ndim == 0
@@ -74,6 +90,9 @@ def get_array_index_type(ary, idx):
             if not in_subspace:
                 num_subspaces += 1
                 in_subspace = True
+        elif (is_nonelike(ty)):
+            ndim += 1
+            num_newaxis += 1
         else:
             raise NumbaTypeError("Unsupported array index type %s in %s"
                                  % (ty, idx))
@@ -92,7 +111,7 @@ def get_array_index_type(ary, idx):
         assert right_indices[0] is types.ellipsis
         del right_indices[0]
 
-    n_indices = len(all_indices) - ellipsis_met
+    n_indices = len(all_indices) - ellipsis_met - num_newaxis
     if n_indices > ary.ndim:
         raise NumbaTypeError("cannot index %s with %d indices: %s"
                              % (ary, n_indices, idx))
@@ -256,6 +275,9 @@ class ArrayAttribute(AttributeTemplate):
 
     def resolve_dtype(self, ary):
         return types.DType(ary.dtype)
+
+    def resolve_nbytes(self, ary):
+        return types.intp
 
     def resolve_itemsize(self, ary):
         return types.intp
@@ -483,14 +505,22 @@ class ArrayAttribute(AttributeTemplate):
         # Only support no argument version (default order='C')
         assert not kws
         assert not args
-        return signature(ary.copy(ndim=1, layout='C'))
+        copy_will_be_made = ary.layout != 'C'
+        readonly = not (copy_will_be_made or ary.mutable)
+        return signature(ary.copy(ndim=1, layout='C', readonly=readonly))
 
     @bound_function("array.flatten")
     def resolve_flatten(self, ary, args, kws):
         # Only support no argument version (default order='C')
         assert not kws
         assert not args
-        return signature(ary.copy(ndim=1, layout='C'))
+        # To ensure that Numba behaves exactly like NumPy,
+        # we also clear the read-only flag when doing a "flatten"
+        # Why? Two reasons:
+        # Because flatten always returns a copy. (see NumPy docs for "flatten")
+        # And because a copy always returns a writeable array.
+        # ref: https://numpy.org/doc/stable/reference/generated/numpy.copy.html
+        return signature(ary.copy(ndim=1, layout='C', readonly=False))
 
     def generic_resolve(self, ary, attr):
         # Resolution of other attributes, for record arrays
@@ -808,26 +838,9 @@ def install_array_method(name, generic, prefer_literal=True):
 
     setattr(ArrayAttribute, "resolve_" + name, array_attribute_attachment)
 
-# Functions that return the same type as the array
-for fname in ["min", "max"]:
-    install_array_method(fname, generic_homog)
 
 # Functions that return a machine-width type, to avoid overflows
-install_array_method("prod", generic_expand)
 install_array_method("sum", sum_expand, prefer_literal=True)
-
-# Functions that return a machine-width type, to avoid overflows
-for fname in ["cumsum", "cumprod"]:
-    install_array_method(fname, generic_expand_cumulative)
-
-# Functions that require integer arrays get promoted to float64 return
-for fName in ["mean"]:
-    install_array_method(fName, generic_hetero_real)
-
-# var and std by definition return in real space and int arrays
-# get promoted to float64 return
-for fName in ["var", "std"]:
-    install_array_method(fName, generic_hetero_always_real)
 
 
 @infer_global(operator.eq)

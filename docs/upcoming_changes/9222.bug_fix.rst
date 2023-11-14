@@ -1,0 +1,5 @@
+Fixed handling of float default arguments in inline closures
+============================================================
+
+Float default arguments in inline closures would produce incorrect results since
+updates for Python 3.11 - these are now handled correctly again.

@@ -8,7 +8,6 @@ import operator
 
 from numba.core.extending import overload
 from numba.core.types import ClassInstanceType
-from numba.core.utils import PYVERSION
 
 
 def _get_args(n_args):
@@ -28,8 +27,10 @@ def class_instance_overload(target):
                 return
             return func(*args, **kwargs)
 
-        params = list(inspect.signature(wrapped).parameters)
-        assert params == _get_args(len(params))
+        if target is not complex:
+            # complex ctor needs special treatment as it uses kwargs
+            params = list(inspect.signature(wrapped).parameters)
+            assert params == _get_args(len(params))
         return overload(target)(wrapped)
 
     return decorator
@@ -81,6 +82,18 @@ def func({','.join(arg_names)}):
         return extract_template(template, "func")
 
 
+def try_call_complex_method(cls_type, method):
+    """ __complex__ needs special treatment as the argument names are kwargs
+    and therefore specific in name and default value.
+    """
+    if method in cls_type.jit_methods:
+        template = f"""
+def func(real=0, imag=0):
+    return real.{method}()
+"""
+        return extract_template(template, "func")
+
+
 def take_first(*options):
     """
     Take the first non-None option.
@@ -107,10 +120,10 @@ def class_bool(x):
 
 
 @class_instance_overload(complex)
-def class_complex(x):
+def class_complex(real=0, imag=0):
     return take_first(
-        try_call_method(x, "__complex__"),
-        lambda x: complex(float(x))
+        try_call_complex_method(real, "__complex__"),
+        lambda real=0, imag=0: complex(float(real))
     )
 
 
@@ -126,8 +139,7 @@ def class_float(x):
     options = [try_call_method(x, "__float__")]
 
     if (
-        PYVERSION >= (3, 8)
-        and "__index__" in x.jit_methods
+        "__index__" in x.jit_methods
     ):
         options.append(lambda x: float(x.__index__()))
 
@@ -138,8 +150,7 @@ def class_float(x):
 def class_int(x):
     options = [try_call_method(x, "__int__")]
 
-    if PYVERSION >= (3, 8):
-        options.append(try_call_method(x, "__index__"))
+    options.append(try_call_method(x, "__index__"))
 
     return take_first(*options)
 

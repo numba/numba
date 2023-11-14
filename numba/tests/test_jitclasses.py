@@ -14,11 +14,11 @@ from numba.core import errors, types
 from numba.core.dispatcher import Dispatcher
 from numba.core.errors import LoweringError, TypingError
 from numba.core.runtime.nrt import MemInfo
-from numba.core.utils import PYVERSION
 from numba.experimental import jitclass
 from numba.experimental.jitclass import _box
 from numba.experimental.jitclass.base import JitClassType
 from numba.tests.support import MemoryLeakMixin, TestCase, skip_if_typeguard
+from numba.tests.support import skip_unless_scipy
 
 
 class TestClass1(object):
@@ -1154,6 +1154,28 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(pyfunc(Bar(123)), cfunc(Bar(123)))
         self.assertEqual(pyfunc(0), cfunc(0))
 
+    def test_jitclass_unsupported_dunder(self):
+        with self.assertRaises(TypeError) as e:
+            @jitclass
+            class Foo(object):
+                def __init__(self):
+                    return
+
+                def __enter__(self):
+                    return None
+            Foo()
+        self.assertIn("Method '__enter__' is not supported.", str(e.exception))
+
+    def test_modulename(self):
+        @jitclass
+        class TestModname(object):
+            def __init__(self):
+                self.x = 12
+
+        thisModule = __name__
+        classModule = TestModname.__module__
+        self.assertEqual(thisModule, classModule)
+
 
 class TestJitClassOverloads(MemoryLeakMixin, TestCase):
 
@@ -1454,32 +1476,12 @@ class TestJitClassOverloads(MemoryLeakMixin, TestCase):
 
         obj = IndexClass()
 
-        if PYVERSION >= (3, 8):
-            self.assertSame(py_c(obj), complex(1))
-            self.assertSame(jit_c(obj), complex(1))
-            self.assertSame(py_f(obj), 1.)
-            self.assertSame(jit_f(obj), 1.)
-            self.assertSame(py_i(obj), 1)
-            self.assertSame(jit_i(obj), 1)
-        else:
-            with self.assertRaises(TypeError) as e:
-                py_c(obj)
-            self.assertIn("complex", str(e.exception))
-            with self.assertRaises(TypingError) as e:
-                jit_c(obj)
-            self.assertIn("complex", str(e.exception))
-            with self.assertRaises(TypeError) as e:
-                py_f(obj)
-            self.assertIn("float", str(e.exception))
-            with self.assertRaises(TypingError) as e:
-                jit_f(obj)
-            self.assertIn("float", str(e.exception))
-            with self.assertRaises(TypeError) as e:
-                py_i(obj)
-            self.assertIn("int", str(e.exception))
-            with self.assertRaises(TypingError) as e:
-                jit_i(obj)
-            self.assertIn("int", str(e.exception))
+        self.assertSame(py_c(obj), complex(1))
+        self.assertSame(jit_c(obj), complex(1))
+        self.assertSame(py_f(obj), 1.)
+        self.assertSame(jit_f(obj), 1.)
+        self.assertSame(py_i(obj), 1)
+        self.assertSame(jit_i(obj), 1)
 
         @jitclass([])
         class FloatIntIndexClass:
@@ -1856,6 +1858,146 @@ def f(x, y):
 
         self.assertEqual(py_ops_not_defined > py_ops_defined,
                          jit_ops_not_defined > jit_ops_defined)
+
+    @skip_unless_scipy
+    def test_matmul_operator(self):
+        class ArrayAt:
+            def __init__(self, array):
+                self.arr = array
+
+            def __matmul__(self, other):
+                return self.arr @ other.arr
+
+            def __rmatmul__(self, other):
+                return other.arr @ self.arr
+
+            def __imatmul__(self, other):
+                self.arr = self.arr @ other.arr
+                return self
+
+        class ArrayNoAt:
+            def __init__(self, array):
+                self.arr = array
+
+        n = 3
+        np.random.seed(1)
+        vec = np.random.random(size=(n,))
+        mat = np.random.random(size=(n, n))
+
+        vector_noat = ArrayNoAt(vec)
+        vector_at = ArrayAt(vec)
+        jit_vector_noat = jitclass(ArrayNoAt, spec={"arr": float64[::1]})(vec)
+        jit_vector_at = jitclass(ArrayAt, spec={"arr": float64[::1]})(vec)
+
+        matrix_noat = ArrayNoAt(mat)
+        matrix_at = ArrayAt(mat)
+        jit_matrix_noat = jitclass(ArrayNoAt, spec={"arr": float64[:,::1]})(mat)
+        jit_matrix_at = jitclass(ArrayAt, spec={"arr": float64[:,::1]})(mat)
+
+        # __matmul__
+        np.testing.assert_allclose(vector_at @ vector_noat,
+                                   jit_vector_at @ jit_vector_noat)
+        np.testing.assert_allclose(vector_at @ matrix_noat,
+                                   jit_vector_at @ jit_matrix_noat)
+        np.testing.assert_allclose(matrix_at @ vector_noat,
+                                   jit_matrix_at @ jit_vector_noat)
+        np.testing.assert_allclose(matrix_at @ matrix_noat,
+                                   jit_matrix_at @ jit_matrix_noat)
+
+        # __rmatmul__
+        np.testing.assert_allclose(vector_noat @ vector_at,
+                                   jit_vector_noat @ jit_vector_at)
+        np.testing.assert_allclose(vector_noat @ matrix_at,
+                                   jit_vector_noat @ jit_matrix_at)
+        np.testing.assert_allclose(matrix_noat @ vector_at,
+                                   jit_matrix_noat @ jit_vector_at)
+        np.testing.assert_allclose(matrix_noat @ matrix_at,
+                                   jit_matrix_noat @ jit_matrix_at)
+
+        # __imatmul__
+        vector_at @= matrix_noat
+        matrix_at @= matrix_noat
+        jit_vector_at @= jit_matrix_noat
+        jit_matrix_at @= jit_matrix_noat
+
+        np.testing.assert_allclose(vector_at.arr, jit_vector_at.arr)
+        np.testing.assert_allclose(matrix_at.arr, jit_matrix_at.arr)
+
+    def test_arithmetic_logical_reflection(self):
+        class OperatorsDefined:
+            def __init__(self, x):
+                self.x = x
+
+            def __radd__(self, other):
+                return other.x + self.x
+
+            def __rsub__(self, other):
+                return other.x - self.x
+
+            def __rmul__(self, other):
+                return other.x * self.x
+
+            def __rtruediv__(self, other):
+                return other.x / self.x
+
+            def __rfloordiv__(self, other):
+                return other.x // self.x
+
+            def __rmod__(self, other):
+                return other.x % self.x
+
+            def __rpow__(self, other):
+                return other.x ** self.x
+
+            def __rlshift__(self, other):
+                return other.x << self.x
+
+            def __rrshift__(self, other):
+                return other.x >> self.x
+
+            def __rand__(self, other):
+                return other.x & self.x
+
+            def __rxor__(self, other):
+                return other.x ^ self.x
+
+            def __ror__(self, other):
+                return other.x | self.x
+
+        class NoOperatorsDefined:
+            def __init__(self, x):
+                self.x = x
+
+        float_op = ["+", "-", "*", "**", "/", "//", "%"]
+        int_op = [*float_op, "<<", ">>" , "&", "^", "|"]
+
+        for test_type, test_op, test_value in [
+            (int32, int_op, (2, 4)),
+            (float64, float_op, (2., 4.)),
+            (float64[::1], float_op,
+                (np.array([1., 2., 4.]), np.array([20., -24., 1.])))
+        ]:
+            spec = {"x": test_type}
+            JitOperatorsDefined = jitclass(OperatorsDefined, spec)
+            JitNoOperatorsDefined = jitclass(NoOperatorsDefined, spec)
+
+            py_ops_defined = OperatorsDefined(test_value[0])  # noqa: F841
+            py_ops_not_defined = NoOperatorsDefined(test_value[1])  # noqa: F841
+
+            jit_ops_defined = JitOperatorsDefined(test_value[0])  # noqa: F841
+            jit_ops_not_defined = JitNoOperatorsDefined(test_value[1])  # noqa: F841 E501
+
+            for op in test_op:
+                if not ("array" in str(test_type)):
+                    self.assertEqual(
+                        eval(f"py_ops_not_defined {op} py_ops_defined"),
+                        eval(f"jit_ops_not_defined {op} jit_ops_defined")
+                    )
+                else:
+                    self.assertTupleEqual(
+                        tuple(eval(f"py_ops_not_defined {op} py_ops_defined")),
+                        tuple(eval(f"jit_ops_not_defined {op} jit_ops_defined"))
+                    )
 
     def test_implicit_hash_compiles(self):
         # Ensure that classes with __hash__ implicitly defined as None due to

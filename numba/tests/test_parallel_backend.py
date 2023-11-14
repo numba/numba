@@ -18,8 +18,7 @@ import numpy as np
 
 from numba import jit, vectorize, guvectorize, set_num_threads
 from numba.tests.support import (temp_directory, override_config, TestCase, tag,
-                                 skip_parfors_unsupported, linux_only,
-                                 needs_external_compilers)
+                                 skip_parfors_unsupported, linux_only)
 
 import queue as t_queue
 from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
@@ -687,8 +686,9 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
             self.assertIn("failed with code", e_msg)
             # raised a SIGABRT, but the value is platform specific so just check
             # the error message
-            self.assertIn("Terminating: Nested parallel kernel launch detected",
-                          e_msg)
+            expected = ("Numba workqueue threading layer is terminating: "
+                        "Concurrent access has been detected.")
+            self.assertIn(expected, e_msg)
 
     @unittest.skipUnless(_HAVE_OS_FORK, "Test needs fork(2)")
     def test_workqueue_handles_fork_from_non_main_thread(self):
@@ -819,13 +819,13 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
         body = """if 1:
             X = np.arange(1000000.)
             Y = np.arange(1000000.)
-            q = multiprocessing.Queue()
+            ctx = multiprocessing.get_context('fork')
+            q = ctx.Queue()
 
             # Start OpenMP runtime on parent via parallel function
             Z = busy_func(X, Y, q)
 
             # fork() underneath with no exec, will abort
-            ctx = multiprocessing.get_context('fork')
             proc = ctx.Process(target = busy_func, args=(X, Y, q))
             proc.start()
             proc.join()
@@ -851,12 +851,12 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
         body = """if 1:
             X = np.arange(1000000.)
             Y = np.arange(1000000.)
-            q = multiprocessing.Queue()
+            ctx = multiprocessing.get_context('spawn')
+            q = ctx.Queue()
 
             # Start OpenMP runtime and run on parent via parallel function
             Z = busy_func(X, Y, q)
             procs = []
-            ctx = multiprocessing.get_context('spawn')
             for x in range(20): # start a lot to try and get overlap
                 ## fork() + exec() to run some OpenMP on children
                 proc = ctx.Process(target = busy_func, args=(X, Y, q))
@@ -937,11 +937,11 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
         body = """if 1:
             X = np.arange(1000000.)
             Y = np.arange(1000000.)
-            q = multiprocessing.Queue()
+            ctx = multiprocessing.get_context('fork')
+            q = ctx.Queue()
 
             # this is ok
             procs = []
-            ctx = multiprocessing.get_context('fork')
             for x in range(10):
                 # fork() underneath with but no OpenMP in parent, this is ok
                 proc = ctx.Process(target = busy_func, args=(X, Y, q))
@@ -1063,9 +1063,11 @@ class TestTBBSpecificIssues(ThreadLayerTestHelper):
             print("OUT:", out)
             print("ERR:", err)
 
-    @needs_external_compilers
     @linux_only # fork required.
     def test_lifetime_of_task_scheduler_handle(self):
+
+        self.skip_if_no_external_compiler() # external compiler needed
+
         # See PR #7280 for context.
         BROKEN_COMPILERS = 'SKIP: COMPILATION FAILED'
         runme = """if 1:
@@ -1073,11 +1075,11 @@ class TestTBBSpecificIssues(ThreadLayerTestHelper):
             import sys
             import multiprocessing as mp
             from tempfile import TemporaryDirectory, NamedTemporaryFile
-            from numba.pycc.platform import Toolchain, _external_compiler_ok
+            from numba.pycc.platform import Toolchain, external_compiler_works
             from numba import njit, prange, threading_layer
             import faulthandler
             faulthandler.enable()
-            if not _external_compiler_ok:
+            if not external_compiler_works():
                 raise AssertionError('External compilers are not found.')
             with TemporaryDirectory() as tmpdir:
                 with NamedTemporaryFile(dir=tmpdir) as tmpfile:

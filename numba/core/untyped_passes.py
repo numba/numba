@@ -6,7 +6,7 @@ import warnings
 from numba.core.compiler_machinery import (FunctionPass, AnalysisPass,
                                            SSACompliantMixin, register_pass)
 from numba.core import (errors, types, ir, bytecode, postproc, rewrites, config,
-                        transforms)
+                        transforms, consts)
 from numba.misc.special import literal_unroll
 from numba.core.analysis import (dead_branch_prune, rewrite_semantic_constants,
                                  find_literally_calls, compute_cfg_from_blocks,
@@ -84,6 +84,26 @@ class TranslateByteCode(FunctionPass):
         bc = state['bc']
         interp = interpreter.Interpreter(func_id)
         func_ir = interp.interpret(bc)
+        state["func_ir"] = func_ir
+        return True
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class RVSDGFrontend(FunctionPass):
+    _name = "rvsdg_frontend"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        from numba.core.rvsdg_frontend import bcinterp
+        from numba.core.bytecode import FunctionIdentity
+
+        func_id: FunctionIdentity = state['func_id']
+        # Bytecode object is unused here
+        # bc = state['bc']
+
+        func_ir = bcinterp.run_frontend(func_id.func)
         state["func_ir"] = func_ir
         return True
 
@@ -906,8 +926,16 @@ class MixedContainerUnroller(FunctionPass):
             new_var_dict = {}
             for name, var in var_table.items():
                 scope = switch_ir.blocks[lbl].scope
-                new_var_dict[name] = scope.define(
-                    f"v{branch_ty}_{name}", var.loc).name
+                try:
+                    scope.get_exact(name)
+                except errors.NotDefinedError:
+                    # In case the scope doesn't have the variable, we need to
+                    # define it prior creating new copies of it! This is
+                    # because the scope of the function and the scope of the
+                    # loop are different and the variable needs to be redefined
+                    # within the scope of the loop.
+                    scope.define(name, var.loc)
+                new_var_dict[name] = scope.redefine(name, var.loc).name
             replace_var_names(loop_blocks, new_var_dict)
 
             # clobber the sentinel body and then stuff in the rest
@@ -1285,7 +1313,7 @@ class MixedContainerUnroller(FunctionPass):
         # 3. No multiple mix-tuple use
 
         # keep running the transform loop until it reports no more changes
-        while(True):
+        while (True):
             stat = self.apply_transform(state)
             mutated |= stat
             if not stat:
@@ -1480,6 +1508,8 @@ class PropagateLiterals(FunctionPass):
         typemap = state.typemap
         flags = state.flags
 
+        accepted_functions = ('isinstance', 'hasattr')
+
         if not hasattr(func_ir, '_definitions') \
                 and not flags.enable_ssa:
             func_ir._definitions = build_definitions(func_ir.blocks)
@@ -1529,7 +1559,9 @@ class PropagateLiterals(FunctionPass):
                     fn = guard(get_definition, func_ir, value.func.name)
                     if fn is None:
                         continue
-                    if not (isinstance(fn, ir.Global) and fn.name == 'isinstance'):  # noqa: E501
+
+                    if not (isinstance(fn, ir.Global) and fn.name in
+                            accepted_functions):
                         continue
 
                     for arg in value.args:
@@ -1537,10 +1569,19 @@ class PropagateLiterals(FunctionPass):
                         iv = func_ir._definitions[arg.name]
                         assert len(iv) == 1  # SSA!
                         if isinstance(iv[0], ir.Expr) and iv[0].op == 'phi':
-                            msg = ('isinstance() cannot determine the '
+                            msg = (f'{fn.name}() cannot determine the '
                                    f'type of variable "{arg.unversioned_name}" '
                                    'due to a branch.')
                             raise errors.NumbaTypeError(msg, loc=assign.loc)
+
+                # Only propagate a PHI node if all arguments are the same
+                # constant
+                if isinstance(value, ir.Expr) and value.op == 'phi':
+                    # typemap will return None in case `inc.name` not in typemap
+                    v = [typemap.get(inc.name) for inc in value.incoming_values]
+                    # stop if the elements in `v` do not hold the same value
+                    if v[0] is not None and any([v[0] != vi for vi in v]):
+                        continue
 
                 lit = typemap.get(target.name, None)
                 if lit and isinstance(lit, types.Literal):
@@ -1577,12 +1618,14 @@ class LiteralPropagationSubPipelinePass(FunctionPass):
     def run_pass(self, state):
         # Determine whether to even attempt this pass... if there's no
         # `isinstance` as a global or as a freevar then just skip.
+
         found = False
         func_ir = state.func_ir
         for blk in func_ir.blocks.values():
             for asgn in blk.find_insts(ir.Assign):
                 if isinstance(asgn.value, (ir.Global, ir.FreeVar)):
-                    if asgn.value.value is isinstance:
+                    value = asgn.value.value
+                    if value is isinstance or value is hasattr:
                         found = True
                         break
             if found:
@@ -1720,3 +1763,43 @@ class ReconstructSSA(FunctionPass):
                 typ = locals_dict[parent]
                 for derived in redefs:
                     locals_dict[derived] = typ
+
+
+@register_pass(mutates_CFG=False, analysis_only=False)
+class RewriteDynamicRaises(FunctionPass):
+    """Replace existing raise statements by dynamic raises in Numba IR.
+    """
+    _name = "Rewrite dynamic raises"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        func_ir = state.func_ir
+        changed = False
+
+        for block in func_ir.blocks.values():
+            for raise_ in block.find_insts((ir.Raise, ir.TryRaise)):
+                call_inst = guard(get_definition, func_ir, raise_.exception)
+                if call_inst is None:
+                    continue
+                exc_type = func_ir.infer_constant(call_inst.func.name)
+                exc_args = []
+                for exc_arg in call_inst.args:
+                    try:
+                        const = func_ir.infer_constant(exc_arg)
+                        exc_args.append(const)
+                    except consts.ConstantInferenceError:
+                        exc_args.append(exc_arg)
+                loc = raise_.loc
+
+                cls = {
+                    ir.TryRaise: ir.DynamicTryRaise,
+                    ir.Raise: ir.DynamicRaise,
+                }[type(raise_)]
+
+                dyn_raise = cls(exc_type, tuple(exc_args), loc)
+                block.insert_after(dyn_raise, raise_)
+                block.remove(raise_)
+                changed = True
+        return changed

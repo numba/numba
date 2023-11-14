@@ -6,12 +6,12 @@ import warnings
 
 from numba import cuda
 from numba.core.errors import NumbaWarning
-from numba.cuda.codegen import CUDACodeLibrary
-from numba.cuda.testing import CUDATestCase, skip_on_cudasim
+from numba.cuda.testing import (CUDATestCase, skip_on_cudasim,
+                                skip_unless_cc_60, skip_if_cudadevrt_missing,
+                                skip_if_mvc_enabled, test_data_dir)
 from numba.tests.support import SerialMixin
 from numba.tests.test_caching import (DispatcherCacheUsecasesTest,
                                       skip_bad_access)
-from pathlib import Path
 
 
 @skip_on_cudasim('Simulator does not implement caching')
@@ -154,6 +154,22 @@ class CUDACachingTest(SerialMixin, DispatcherCacheUsecasesTest):
         f = mod.renamed_function2
         self.assertPreciseEqual(f(2), 8)
 
+    @skip_unless_cc_60
+    @skip_if_cudadevrt_missing
+    @skip_if_mvc_enabled('CG not supported with MVC')
+    def test_cache_cg(self):
+        # Functions using cooperative groups should be cacheable. See Issue
+        # #8888: https://github.com/numba/numba/issues/8888
+        self.check_pycache(0)
+        mod = self.import_module()
+        self.check_pycache(0)
+
+        mod.cg_usecase(0)
+        self.check_pycache(2)  # 1 index, 1 data
+
+        # Check the code runs ok from another process
+        self.run_in_separate_process()
+
     def _test_pycache_fallback(self):
         """
         With a disabled __pycache__, test there is a working fallback
@@ -205,8 +221,7 @@ class CUDACachingTest(SerialMixin, DispatcherCacheUsecasesTest):
         self._test_pycache_fallback()
 
     def test_cannot_cache_linking_libraries(self):
-        link = os.path.join(Path(__file__).parent.parent,
-                            'cudadrv', 'data', 'jitlink.ptx')
+        link = str(test_data_dir / 'jitlink.ptx')
         msg = 'Cannot pickle CUDACodeLibrary with linking files'
         with self.assertRaisesRegex(RuntimeError, msg):
             @cuda.jit('void()', cache=True, link=[link])
@@ -484,6 +499,10 @@ class TestCUDACodeLibrary(CUDATestCase):
     # explicitly check
 
     def test_cannot_serialize_unfinalized(self):
+        # The CUDA codegen failes to import under the simulator, so we cannot
+        # import it at the top level
+        from numba.cuda.codegen import CUDACodeLibrary
+
         # Usually a CodeLibrary requires a real CodeGen, but since we don't
         # interact with it, anything will do
         codegen = object()

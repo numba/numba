@@ -3,7 +3,7 @@ import enum
 import numpy as np
 
 from .abstract import Dummy, Hashable, Literal, Number, Type
-from functools import total_ordering
+from functools import total_ordering, cached_property
 from numba.core import utils
 from numba.core.typeconv import Conversion
 from numba.np import npdatetime_helpers
@@ -205,7 +205,7 @@ class EnumClass(Dummy):
     def key(self):
         return self.instance_class, self.dtype
 
-    @utils.cached_property
+    @cached_property
     def member_type(self):
         """
         The type of this class' members.
@@ -219,7 +219,7 @@ class IntEnumClass(EnumClass):
     """
     basename = "IntEnum class"
 
-    @utils.cached_property
+    @cached_property
     def member_type(self):
         """
         The type of this class' members.

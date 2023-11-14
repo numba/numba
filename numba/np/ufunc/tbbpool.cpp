@@ -12,6 +12,7 @@ Implement parallel vectorize workqueue on top of Intel TBB.
 #undef _XOPEN_SOURCE
 #endif
 
+#include <tbb/version.h>
 #include <tbb/tbb.h>
 #include <string.h>
 #include <stdio.h>
@@ -20,15 +21,9 @@ Implement parallel vectorize workqueue on top of Intel TBB.
 
 #include "gufunc_scheduler.h"
 
-/* TBB 2019 U5 is the minimum required version as this is needed:
- * https://github.com/intel/tbb/blob/18070344d755ece04d169e6cc40775cae9288cee/CHANGES#L133-L134
- * and therefore
- * https://github.com/intel/tbb/blob/18070344d755ece04d169e6cc40775cae9288cee/CHANGES#L128-L129
- * from here:
- * https://github.com/intel/tbb/blob/2019_U5/include/tbb/tbb_stddef.h#L29
- */
-#if (TBB_INTERFACE_VERSION >= 12060) || (TBB_INTERFACE_VERSION < 12010)
-#error "TBB version is incompatible, 2021.1 through to 2021.5 required, i.e. 12010 <= TBB_INTERFACE_VERSION < 12060"
+/* TBB 2021.6 is the minimum version */
+#if (TBB_INTERFACE_VERSION < 12060)
+#error "TBB version is incompatible, 2021.6 or greater required, i.e. TBB_INTERFACE_VERSION >= 12060"
 #endif
 
 #define _DEBUG 0
@@ -235,7 +230,7 @@ static void prepare_fork(void)
         {
             if (!tbb::finalize(tsh, std::nothrow))
             {
-                tbb::task_scheduler_handle::release(tsh);
+                tsh.release();
                 puts("Unable to join threads to shut down before fork(). "
                      "This can break multithreading in child processes.\n");
             }
@@ -260,7 +255,7 @@ static void reset_after_fork(void)
 
     if(need_reinit_after_fork)
     {
-        tsh = tbb::task_scheduler_handle::get();
+        tsh = tbb::attach();
         set_main_thread();
         tsh_was_initialized = true;
         need_reinit_after_fork = false;
@@ -298,7 +293,7 @@ static void launch_threads(int count)
     if(count < 1)
         count = tbb::task_arena::automatic;
 
-    tsh = tbb::task_scheduler_handle::get();
+    tsh = tbb::attach();
     tsh_was_initialized = true;
 
     tg = new tbb::task_group;

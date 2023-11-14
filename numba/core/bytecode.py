@@ -90,6 +90,17 @@ class ByteCodeInst(object):
         # https://bugs.python.org/issue27129
         # https://github.com/python/cpython/pull/25069
         assert self.is_jump
+        if PYVERSION == (3, 11):
+            if self.opcode in (dis.opmap[k]
+                               for k in ("JUMP_BACKWARD",
+                                         "POP_JUMP_BACKWARD_IF_TRUE",
+                                         "POP_JUMP_BACKWARD_IF_FALSE",
+                                         "POP_JUMP_BACKWARD_IF_NONE",
+                                         "POP_JUMP_BACKWARD_IF_NOT_NONE",)):
+                return self.offset - (self.arg - 1) * 2
+        elif PYVERSION > (3, 11):
+            raise NotImplementedError(PYVERSION)
+
         if PYVERSION >= (3, 10):
             if self.opcode in JREL_OPS:
                 return self.next + self.arg * 2
@@ -144,7 +155,15 @@ def _unpack_opargs(code):
                 arg |= code[i + j] << (8 * j)
             i += ARG_LEN
             if op == EXTENDED_ARG:
+                # This is a deviation from what dis does...
+                # In python 3.11 it seems like EXTENDED_ARGs appear more often
+                # and are also used as jump targets. So as to not have to do
+                # "book keeping" for where EXTENDED_ARGs have been "skipped"
+                # they are replaced with NOPs so as to provide a legal jump
+                # target and also ensure that the bytecode offsets are correct.
+                yield (offset, OPCODE_NOP, arg, i)
                 extended_arg = arg << 8 * ARG_LEN
+                offset = i
                 continue
         else:
             arg = None
@@ -196,12 +215,13 @@ class ByteCodeIter(object):
         return buf
 
 
-class ByteCode(object):
+class _ByteCode(object):
     """
     The decoded bytecode of a function, and related information.
     """
     __slots__ = ('func_id', 'co_names', 'co_varnames', 'co_consts',
-                 'co_cellvars', 'co_freevars', 'table', 'labels')
+                 'co_cellvars', 'co_freevars', 'exception_entries',
+                 'table', 'labels')
 
     def __init__(self, func_id):
         code = func_id.code
@@ -219,6 +239,7 @@ class ByteCode(object):
         self.co_consts = code.co_consts
         self.co_cellvars = code.co_cellvars
         self.co_freevars = code.co_freevars
+
         self.table = table
         self.labels = sorted(labels)
 
@@ -233,7 +254,7 @@ class ByteCode(object):
                 table[adj_offset].lineno = lineno
         # Assign unfilled lineno
         # Start with first bytecode's lineno
-        known = table[_FIXED_OFFSET].lineno
+        known = code.co_firstlineno
         for inst in table.values():
             if inst.lineno >= 0:
                 known = inst.lineno
@@ -258,7 +279,8 @@ class ByteCode(object):
                 return ' '
 
         return '\n'.join('%s %10s\t%s' % ((label_marker(i),) + i)
-                         for i in self.table.items())
+                         for i in self.table.items()
+                         if i[1].opname != "CACHE")
 
     @classmethod
     def _compute_used_globals(cls, func, table, co_consts, co_names):
@@ -274,7 +296,7 @@ class ByteCode(object):
         # Look for LOAD_GLOBALs in the bytecode
         for inst in table.values():
             if inst.opname == 'LOAD_GLOBAL':
-                name = co_names[inst.arg]
+                name = co_names[_fix_LOAD_GLOBAL_arg(inst.arg)]
                 if name not in d:
                     try:
                         value = globs[name]
@@ -296,6 +318,52 @@ class ByteCode(object):
         """
         return self._compute_used_globals(self.func_id.func, self.table,
                                           self.co_consts, self.co_names)
+
+
+def _fix_LOAD_GLOBAL_arg(arg):
+    if PYVERSION >= (3, 11):
+        assert PYVERSION == (3, 11) # reminder to check newer versions
+        return arg >> 1
+    return arg
+
+
+class ByteCodePy311(_ByteCode):
+    def __init__(self, func_id):
+        super().__init__(func_id)
+
+        def fixup_eh(ent):
+            from dis import _ExceptionTableEntry
+            # Patch up the exception table offset
+            # because we add a NOP in _patched_opargs
+            out = _ExceptionTableEntry(
+                start=ent.start + _FIXED_OFFSET, end=ent.end + _FIXED_OFFSET,
+                target=ent.target + _FIXED_OFFSET,
+                depth=ent.depth, lasti=ent.lasti,
+            )
+            return out
+
+        entries = dis.Bytecode(func_id.code).exception_entries
+        self.exception_entries = tuple(map(fixup_eh, entries))
+
+    def find_exception_entry(self, offset):
+        """
+        Returns the exception entry for the given instruction offset
+        """
+        candidates = []
+        for ent in self.exception_entries:
+            if ent.start <= offset <= ent.end:
+                candidates.append((ent.depth, ent))
+        if candidates:
+            ent = max(candidates)[1]
+            return ent
+
+
+if PYVERSION == (3, 11):
+    ByteCode = ByteCodePy311
+elif PYVERSION < (3, 11):
+    ByteCode = _ByteCode
+else:
+    raise NotImplementedError(PYVERSION)
 
 
 class FunctionIdentity(serialize.ReduceMixin):

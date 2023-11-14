@@ -234,7 +234,7 @@ class _CFG(object):
         nrt_meminfo = re.compile("@NRT_MemInfo")
         ll_intrin_calls = re.compile(r".*call.*@llvm\..*")
         ll_function_call = re.compile(r".*call.*@.*")
-        ll_raise = re.compile(r"ret i32.*\!ret_is_raise.*")
+        ll_raise = re.compile(r"store .*\!numba_exception_output.*")
         ll_return = re.compile("ret i32 [^1],?.*")
 
         # wrapper function for line wrapping LLVM lines
@@ -1187,10 +1187,30 @@ class CPUCodegen(Codegen):
         self._engine = JitEngine(engine)
         self._target_data = engine.target_data
         self._data_layout = str(self._target_data)
-        self._mpm_cheap = self._module_pass_manager(loop_vectorize=False,
+
+        if config.OPT.is_opt_max:
+            # If the OPT level is set to 'max' then the user is requesting that
+            # compilation time is traded for potential performance gain. This
+            # currently manifests as running the "cheap" pass at -O3
+            # optimisation level with loop-vectorization enabled. There's no
+            # guarantee that this will increase runtime performance, it may
+            # detriment it, this is here to give the user an easily accessible
+            # option to try.
+            loopvect = True
+            opt_level = 3
+        else:
+            # The default behaviour is to do an opt=0 pass to try and inline as
+            # much as possible with the cheapest cost of doing so. This is so
+            # that the ref-op pruner pass that runs after the cheap pass will
+            # have the largest possible scope for working on pruning references.
+            loopvect = False
+            opt_level = 0
+
+        self._mpm_cheap = self._module_pass_manager(loop_vectorize=loopvect,
                                                     slp_vectorize=False,
-                                                    opt=0,
+                                                    opt=opt_level,
                                                     cost="cheap")
+
         self._mpm_full = self._module_pass_manager()
 
         self._engine.set_object_cache(self._library_class._object_compiled_hook,
@@ -1215,14 +1235,21 @@ class CPUCodegen(Codegen):
             # This knocks loops into rotated form early to reduce the likelihood
             # of vectorization failing due to unknown PHI nodes.
             pm.add_loop_rotate_pass()
-            # LLVM 11 added LFTR to the IV Simplification pass, this interacted
-            # badly with the existing use of the InstructionCombiner here and
-            # ended up with PHI nodes that prevented vectorization from
-            # working. The desired vectorization effects can be achieved
-            # with this in LLVM 11 (and also < 11) but at a potentially
-            # slightly higher cost:
-            pm.add_licm_pass()
-            pm.add_cfg_simplification_pass()
+            if ll.llvm_version_info[0] < 12:
+                # LLVM 11 added LFTR to the IV Simplification pass,
+                # this interacted badly with the existing use of the
+                # InstructionCombiner here and ended up with PHI nodes that
+                # prevented vectorization from working. The desired
+                # vectorization effects can be achieved with this in LLVM 11
+                # (and also < 11) but at a potentially slightly higher cost:
+                pm.add_licm_pass()
+                pm.add_cfg_simplification_pass()
+            else:
+                # These passes are required to get SVML to vectorize tests
+                # properly on LLVM 14
+                pm.add_instruction_combining_pass()
+                pm.add_jump_threading_pass()
+
         if config.LLVM_REFPRUNE_PASS:
             pm.add_refprune_pass(_parse_refprune_flags())
         return pm

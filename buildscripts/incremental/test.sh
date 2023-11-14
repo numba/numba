@@ -5,6 +5,16 @@ source activate $CONDA_ENV
 # Make sure any error below is reported as such
 set -v -e
 
+# If the build is a "Vanilla" variant, then remove the setuptools package. It
+# was installed at build time for setup.py to use, but is an _optional_ runtime
+# dependency of Numba and therefore shouldn't be present in "Vanilla" testing.
+# This package is "force" removed so that its removal doesn't uninstall
+# things that might depend on it (the dependencies are present but are not of
+# interest to Numba as those code paths are not used by Numba).
+if [ "${VANILLA_INSTALL}" == "yes" ]; then
+    conda remove --force -y setuptools
+fi
+
 # Ensure the README is correctly formatted
 if [ "$BUILD_DOC" == "yes" ]; then rstcheck README.rst; fi
 # Ensure that the documentation builds without warnings
@@ -12,10 +22,17 @@ pushd docs
 if [ "$BUILD_DOC" == "yes" ]; then make SPHINXOPTS=-W clean html; fi
 popd
 # Run system and gdb info tools
-pushd bin
-numba -s
-numba -g
-popd
+if [ "${VANILLA_INSTALL}" == "yes" ]; then
+    # Vanilla install has no access to pkg_resources as setuptools is removed,
+    # so run these via their modules.
+    python -m numba -s
+    python -m numba -g
+else
+    pushd bin
+    numba -s
+    numba -g
+    popd
+fi
 
 # switch off color messages
 export NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING=1
@@ -102,27 +119,32 @@ if [[ $(uname) == "Darwin" ]]; then
     export SDKROOT=`pwd`/MacOSX10.10.sdk
 fi
 
-# First check that the test discovery works
-python -m numba.tests.test_runtests
-
-# Now run tests based on the changes identified via git
-NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -g -m $TEST_NPROCS -- numba.tests
-
-# List the tests found
-echo "INFO: All discovered tests:"
-python -m numba.runtests -l
-
-# Now run the Numba test suite with slicing
-# Note that coverage is run from the checkout dir to match the "source"
-# directive in .coveragerc
-echo "INFO: Running slice of discovered tests: ($TEST_START_INDEX,None,$TEST_COUNT)"
-if [ "$RUN_COVERAGE" == "yes" ]; then
-    export PYTHONPATH=.
-    coverage erase
-    $SEGVCATCH coverage run runtests.py -b -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
-elif [ "$RUN_TYPEGUARD" == "yes" ]; then
-    echo "INFO: Running with typeguard"
-    NUMBA_USE_TYPEGUARD=1 NUMBA_ENABLE_CUDASIM=1 PYTHONWARNINGS="ignore:::typeguard" $SEGVCATCH python runtests.py -b -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
+if [[ "$TEST_RVSDG" == "yes" ]]; then
+    echo "Running RVSDG tests..."
+    NUMBA_USE_RVSDG_FRONTEND=1 NUMBA_CAPTURED_ERRORS=new_style NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -m $TEST_NPROCS -- numba.tests.test_usecases
 else
-    NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
+    # First run Numba's Power-On-Self-Test to make sure testing will likely work
+    python -m numba.misc.POST
+
+    # Now run tests based on the changes identified via git
+    NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -g -m $TEST_NPROCS -- numba.tests
+
+    # List the tests found
+    echo "INFO: All discovered tests:"
+    python -m numba.runtests -l
+
+    # Now run the Numba test suite with sharding
+    # Note that coverage is run from the checkout dir to match the "source"
+    # directive in .coveragerc
+    echo "INFO: Running shard of discovered tests: ($TEST_START_INDEX:$TEST_COUNT)"
+    if [ "$RUN_COVERAGE" == "yes" ]; then
+        export PYTHONPATH=.
+        coverage erase
+        $SEGVCATCH coverage run runtests.py -b -j "$TEST_START_INDEX:$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
+    elif [ "$RUN_TYPEGUARD" == "yes" ]; then
+        echo "INFO: Running with typeguard"
+        NUMBA_USE_TYPEGUARD=1 NUMBA_ENABLE_CUDASIM=1 PYTHONWARNINGS="ignore:::typeguard" $SEGVCATCH python runtests.py -b -j "$TEST_START_INDEX:$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
+    else
+        NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -j "$TEST_START_INDEX:$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
+    fi
 fi

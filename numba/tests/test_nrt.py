@@ -20,12 +20,11 @@ from numba.core.typing import signature
 from numba.core.imputils import impl_ret_untracked
 from llvmlite import ir
 import llvmlite.binding as llvm
-import numba.core.typing.cffi_utils as cffi_support
 from numba.core.unsafe.nrt import NRT_get_api
 
 from numba.tests.support import (EnableNRTStatsMixin, TestCase, temp_directory,
                                  import_dynamic, skip_if_32bit,
-                                 run_in_subprocess)
+                                 skip_unless_cffi, run_in_subprocess)
 from numba.core.registry import cpu_target
 import unittest
 
@@ -83,7 +82,8 @@ class TestNrtMemInfo(unittest.TestCase):
         # Reset the Dummy class
         Dummy.alive = 0
         # initialize the NRT (in case the tests are run in isolation)
-        cpu_target.target_context
+        rtsys.initialize(cpu_target.target_context)
+        super(TestNrtMemInfo, self).setUp()
 
     def test_meminfo_refct_1(self):
         d = Dummy()
@@ -400,6 +400,30 @@ class TestNRTIssue(TestCase):
 
         self.assertEqual(expect, got)
 
+    @TestCase.run_test_in_subprocess
+    def test_no_nrt_on_njit_decoration(self):
+        # Checks that the NRT is not initialized/compiled as a result of
+        # decorating a function with `@njit`.
+        from numba import njit
+
+        # check the NRT is not initialized.
+        self.assertFalse(rtsys._init)
+
+        # decorate
+        @njit
+        def foo():
+            return 123
+
+        # check the NRT is still not initialized
+        self.assertFalse(rtsys._init)
+
+        # execute
+        self.assertEqual(foo(), foo.py_func())
+
+        # check the NRT is still now initialized as execution has definitely
+        # occurred.
+        self.assertTrue(rtsys._init)
+
 
 class TestRefCtPruning(unittest.TestCase):
 
@@ -574,7 +598,7 @@ br i1 %.294, label %B42, label %B160
         self.assertEqual(foo(10), 22) # expect (10 + 1) * 2 = 22
 
 
-@unittest.skipUnless(cffi_support.SUPPORTED, "cffi required")
+@skip_unless_cffi
 class TestNrtExternalCFFI(EnableNRTStatsMixin, TestCase):
     """Testing the use of externally compiled C code that use NRT
     """
@@ -712,11 +736,14 @@ class TestNrtStatistics(TestCase):
         from numba import njit
         import numpy as np
         from numba.core.runtime import rtsys, _nrt_python
+        from numba.core.registry import cpu_target
 
         @njit
         def foo():
             return np.arange(10)[0]
 
+        # initialize the NRT before use
+        rtsys.initialize(cpu_target.target_context)
         assert _nrt_python.memsys_stats_enabled()
         orig_stats = rtsys.get_allocation_stats()
         foo()

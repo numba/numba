@@ -4,10 +4,10 @@ Unspecified error handling tests
 
 import numpy as np
 import os
+import warnings
 
 from numba import jit, njit, typed, int64, types
 from numba.core import errors
-import numba.core.typing.cffi_utils as cffi_support
 from numba.experimental import structref
 from numba.extending import (overload, intrinsic, overload_method,
                              overload_attribute)
@@ -20,7 +20,8 @@ from numba.core.compiler_machinery import PassManager
 from numba.core.types.functions import _err_reasons as error_reasons
 
 from numba.tests.support import (skip_parfors_unsupported, override_config,
-                                 SerialMixin, skip_unless_scipy)
+                                 SerialMixin, skip_unless_cffi,
+                                 skip_unless_scipy, TestCase)
 import unittest
 
 # used in TestMiscErrorHandling::test_handling_of_write_to_*_global
@@ -184,25 +185,6 @@ class TestMiscErrorHandling(unittest.TestCase):
         self.assertIn(expected, str(raises.exception))
 
 
-class TestConstantInferenceErrorHandling(unittest.TestCase):
-
-    def test_basic_error(self):
-        # issue 3717
-        @njit
-        def problem(a,b):
-            if a == b:
-                raise Exception("Equal numbers: %i %i", a, b)
-            return a * b
-
-        with self.assertRaises(errors.ConstantInferenceError) as raises:
-            problem(1,2)
-
-        msg1 = "Constant inference not possible for: arg(0, name=a)"
-        msg2 = 'raise Exception("Equal numbers: %i %i", a, b)'
-        self.assertIn(msg1, str(raises.exception))
-        self.assertIn(msg2, str(raises.exception))
-
-
 class TestErrorMessages(unittest.TestCase):
 
     def test_specific_error(self):
@@ -278,7 +260,7 @@ class TestErrorMessages(unittest.TestCase):
 
         self.assertIn("Overload of function 'add'", excstr)
         # there'll be numerous matched templates that don't work but as they
-        # are mostly "overload_glue"s they'll just appear as "No match".
+        # are mostly "overload"s they'll just appear as "No match".
         self.assertIn("No match.", excstr)
 
     def test_abstract_template_source(self):
@@ -412,7 +394,7 @@ class TestErrorMessages(unittest.TestCase):
         excstr = str(raises.exception)
         self.assertIn("Type Restricted Function in function 'unknown'", excstr)
 
-    @unittest.skipUnless(cffi_support.SUPPORTED, "CFFI not supported")
+    @skip_unless_cffi
     def test_cffi_function_pointer_template_source(self):
         from numba.tests import cffi_usecases as mod
         mod.init()
@@ -453,17 +435,17 @@ class TestDeveloperSpecificErrorMessages(SerialMixin, unittest.TestCase):
     def test_bound_function_error_string(self):
         # See PR #5952
         def foo(x):
-            x.max(-1) # axis not supported
+            x.max(-1)
 
         with override_config('DEVELOPER_MODE', 1):
             with self.assertRaises(errors.TypingError) as raises:
                 njit("void(int64[:,:])")(foo)
 
         excstr = str(raises.exception)
-        self.assertIn("args not supported", excstr)
+        self.assertIn("too many positional arguments", excstr)
 
 
-class TestCapturedErrorHandling(SerialMixin, unittest.TestCase):
+class TestCapturedErrorHandling(SerialMixin, TestCase):
     """Checks that the way errors are captured changes depending on the env
     var "NUMBA_CAPTURED_ERRORS".
     """
@@ -481,15 +463,93 @@ class TestCapturedErrorHandling(SerialMixin, unittest.TestCase):
                 pass
             return impl
 
-        for style, err_class in (('new_style', AttributeError),
-                                 ('old_style', errors.TypingError)):
-            with override_config('CAPTURED_ERRORS', style):
-                with self.assertRaises(err_class) as raises:
-                    @njit('void(int64)')
-                    def foo(x):
-                        bar(x)
-                expected = "object has no attribute 'some_invalid_attr'"
-                self.assertIn(expected, str(raises.exception))
+        with warnings.catch_warnings():
+            # Suppress error going into stdout
+            warnings.simplefilter("ignore",
+                                  errors.NumbaPendingDeprecationWarning)
+            # Check both new_style and old_style
+            for style, err_class in (('new_style', AttributeError),
+                                     ('old_style', errors.TypingError)):
+                with override_config('CAPTURED_ERRORS', style):
+                    with self.assertRaises(err_class) as raises:
+
+                        @njit('void(int64)')
+                        def foo(x):
+                            bar(x)
+                    expected = "object has no attribute 'some_invalid_attr'"
+                    self.assertIn(expected, str(raises.exception))
+
+    @TestCase.run_test_in_subprocess(
+        envvars={"NUMBA_CAPTURED_ERRORS": "old_style"},
+    )
+    def test_old_style_deprecation(self):
+        # Verify that old_style error raise the correct deprecation warning
+        warnings.simplefilter("always", errors.NumbaPendingDeprecationWarning)
+
+        def bar(x):
+            pass
+
+        @overload(bar)
+        def ol_bar(x):
+            raise AttributeError("Invalid attribute")
+
+        with self.assertWarns(errors.NumbaPendingDeprecationWarning) as warns:
+            with self.assertRaises(errors.TypingError):
+                @njit('void(int64)')
+                def foo(x):
+                    bar(x)
+
+            self.assertIn(
+                "Code using Numba extension API maybe depending on 'old_style' "
+                "error-capturing",
+                str(warns.warnings[0].message),
+            )
+
+    @TestCase.run_test_in_subprocess(
+        envvars={"NUMBA_CAPTURED_ERRORS": "old_style"},
+    )
+    def test_old_style_no_deprecation(self):
+        # Verify that old_style error with NumbaError does not raise warnings
+        warnings.simplefilter("always", errors.NumbaPendingDeprecationWarning)
+
+        def bar(x):
+            pass
+
+        @overload(bar)
+        def ol_bar(x):
+            raise errors.TypingError("Invalid attribute")
+
+        with warnings.catch_warnings(record=True) as warns:
+            with self.assertRaises(errors.TypingError):
+                @njit('void(int64)')
+                def foo(x):
+                    bar(x)
+
+            self.assertEqual(len(warns), 0,
+                             msg="There should not be any warnings")
+
+    @TestCase.run_test_in_subprocess(
+        envvars={"NUMBA_CAPTURED_ERRORS": "new_style"},
+    )
+    def test_new_style_no_warnings(self):
+        # Verify that new_style error raise no warnings
+        warnings.simplefilter("always", errors.NumbaPendingDeprecationWarning)
+
+        def bar(x):
+            pass
+
+        @overload(bar)
+        def ol_bar(x):
+            raise AttributeError("Invalid attribute")
+
+        with warnings.catch_warnings(record=True) as warns:
+            with self.assertRaises(AttributeError):
+                @njit('void(int64)')
+                def foo(x):
+                    bar(x)
+            # There should not be any warnings
+            self.assertEqual(len(warns), 0,
+                             msg="There should not be any warnings")
 
 
 if __name__ == '__main__':

@@ -1,6 +1,5 @@
 import functools
 import itertools
-import re
 import sys
 import warnings
 import threading
@@ -9,14 +8,12 @@ import operator
 import numpy as np
 
 import unittest
-from numba import typeof, njit, guvectorize
-from numba.core import types, typing, utils
-from numba.core.compiler import compile_isolated, Flags, DEFAULT_FLAGS
+from numba import guvectorize, njit, typeof, vectorize
+from numba.core import types
 from numba.np.numpy_support import from_dtype
-from numba import jit, vectorize
-from numba.core.errors import LoweringError, TypingError, NumbaTypeError
-from numba.tests.support import TestCase, CompilationCache, MemoryLeakMixin, tag
-from numba.core.typing.npydecl import supported_ufuncs, all_ufuncs
+from numba.core.errors import LoweringError, TypingError
+from numba.tests.support import TestCase, MemoryLeakMixin
+from numba.core.typing.npydecl import supported_ufuncs
 from numba.np import numpy_support
 from numba.core.registry import cpu_target
 from numba.core.base import BaseContext
@@ -24,20 +21,6 @@ from numba.np import ufunc_db
 
 is32bits = tuple.__itemsize__ == 4
 iswindows = sys.platform.startswith('win32')
-
-# NOTE: to test the implementation of Numpy ufuncs, we disable rewriting
-# of array expressions.
-
-enable_pyobj_flags = Flags()
-enable_pyobj_flags.enable_pyobject = True
-enable_pyobj_flags.no_rewrites = True
-
-no_pyobj_flags = Flags()
-no_pyobj_flags.no_rewrites = True
-
-enable_nrt_flags = Flags()
-enable_nrt_flags.nrt = True
-enable_nrt_flags.no_rewrites = True
 
 
 def _unimplemented(func):
@@ -51,6 +34,7 @@ def _unimplemented(func):
             raise unittest._ExpectedFailure(sys.exc_info())
         raise unittest._UnexpectedSuccess
 
+
 def _make_ufunc_usecase(ufunc):
     ldict = {}
     arg_str = ','.join(['a{0}'.format(i) for i in range(ufunc.nargs)])
@@ -60,12 +44,14 @@ def _make_ufunc_usecase(ufunc):
     fn.__name__ = '{0}_usecase'.format(ufunc.__name__)
     return fn
 
+
 def _make_unary_ufunc_op_usecase(ufunc_op):
     ldict = {}
     exec("def fn(x):\n    return {0}(x)".format(ufunc_op), globals(), ldict)
     fn = ldict["fn"]
     fn.__name__ = "usecase_{0}".format(hash(ufunc_op))
     return fn
+
 
 def _make_binary_ufunc_op_usecase(ufunc_op):
     ldict = {}
@@ -98,7 +84,6 @@ def _as_dtype_value(tyargs, args):
     return [np.dtype(str(ty)).type(val) for ty, val in zip(tyargs, args)]
 
 
-
 class BaseUFuncTest(MemoryLeakMixin):
 
     def setUp(self):
@@ -127,44 +112,56 @@ class BaseUFuncTest(MemoryLeakMixin):
             (np.array([0,1], dtype='u8'), types.Array(types.uint64, 1, 'C')),
             (np.array([-1,0,1], dtype='i4'), types.Array(types.int32, 1, 'C')),
             (np.array([-1,0,1], dtype='i8'), types.Array(types.int64, 1, 'C')),
-            (np.array([-0.5, 0.0, 0.5], dtype='f4'), types.Array(types.float32, 1, 'C')),
-            (np.array([-0.5, 0.0, 0.5], dtype='f8'), types.Array(types.float64, 1, 'C')),
+            (np.array([-0.5, 0.0, 0.5], dtype='f4'),
+             types.Array(types.float32, 1, 'C')),
+            (np.array([-0.5, 0.0, 0.5], dtype='f8'),
+             types.Array(types.float64, 1, 'C')),
 
             (np.array([0,1], dtype=np.int8), types.Array(types.int8, 1, 'C')),
             (np.array([0,1], dtype=np.int16), types.Array(types.int16, 1, 'C')),
             (np.array([0,1], dtype=np.uint8), types.Array(types.uint8, 1, 'C')),
-            (np.array([0,1], dtype=np.uint16), types.Array(types.uint16, 1, 'C')),
-            ]
-        self.cache = CompilationCache()
+            (np.array([0,1], dtype=np.uint16),
+             types.Array(types.uint16, 1, 'C')),
+        ]
+
+    @functools.lru_cache(maxsize=None)
+    def _compile(self, pyfunc, args, nrt=False):
+        # NOTE: to test the implementation of Numpy ufuncs, we disable
+        # rewriting of array expressions.
+        return njit(args, _nrt=nrt, no_rewrites=True)(pyfunc)
 
     def _determine_output_type(self, input_type, int_output_type=None,
                                float_output_type=None):
         ty = input_type
         if isinstance(ty, types.Array):
+            ndim = ty.ndim
             ty = ty.dtype
+        else:
+            ndim = 1
 
         if ty in types.signed_domain:
             if int_output_type:
-                output_type = types.Array(int_output_type, 1, 'C')
+                output_type = types.Array(int_output_type, ndim, 'C')
             else:
-                output_type = types.Array(ty, 1, 'C')
+                output_type = types.Array(ty, ndim, 'C')
         elif ty in types.unsigned_domain:
             if int_output_type:
-                output_type = types.Array(int_output_type, 1, 'C')
+                output_type = types.Array(int_output_type, ndim, 'C')
             else:
-                output_type = types.Array(ty, 1, 'C')
+                output_type = types.Array(ty, ndim, 'C')
         else:
             if float_output_type:
-                output_type = types.Array(float_output_type, 1, 'C')
+                output_type = types.Array(float_output_type, ndim, 'C')
             else:
-                output_type = types.Array(ty, 1, 'C')
+                output_type = types.Array(ty, ndim, 'C')
         return output_type
 
 
-class TestUFuncs(BaseUFuncTest, TestCase):
+class BasicUFuncTest(BaseUFuncTest):
+    def _make_ufunc_usecase(self, ufunc):
+        return _make_ufunc_usecase(ufunc)
 
-    def basic_ufunc_test(self, ufunc, flags=no_pyobj_flags,
-                         skip_inputs=[], additional_inputs=[],
+    def basic_ufunc_test(self, ufunc, skip_inputs=[], additional_inputs=[],
                          int_output_type=None, float_output_type=None,
                          kinds='ifc', positive_only=False):
 
@@ -172,7 +169,7 @@ class TestUFuncs(BaseUFuncTest, TestCase):
         # the simplefilter() call below.
         self.reset_module_warnings(__name__)
 
-        pyfunc = _make_ufunc_usecase(ufunc)
+        pyfunc = self._make_ufunc_usecase(ufunc)
 
         inputs = list(self.inputs) + additional_inputs
 
@@ -200,19 +197,17 @@ class TestUFuncs(BaseUFuncTest, TestCase):
 
             input_types = (input_type,) * ufunc.nin
             output_types = (output_type,) * ufunc.nout
-            cr = self.cache.compile(pyfunc, input_types + output_types,
-                                    flags=flags)
-            cfunc = cr.entry_point
+            argtys = input_types + output_types
+            cfunc = self._compile(pyfunc, argtys)
 
             if isinstance(args[0], np.ndarray):
                 results = [
-                    np.zeros(args[0].size,
+                    np.zeros(args[0].shape,
                              dtype=out_ty.dtype.name)
                     for out_ty in output_types
                 ]
                 expected = [
-                    np.zeros(args[0].size,
-                                    dtype=out_ty.dtype.name)
+                    np.zeros(args[0].shape, dtype=out_ty.dtype.name)
                     for out_ty in output_types
                 ]
             else:
@@ -234,7 +229,7 @@ class TestUFuncs(BaseUFuncTest, TestCase):
                 for thiswarn in warnlist:
 
                     if (issubclass(thiswarn.category, RuntimeWarning)
-                        and str(thiswarn.message).startswith(warnmsg)):
+                            and str(thiswarn.message).startswith(warnmsg)):
                         invalid_flag = True
 
             cfunc(*args, *results)
@@ -261,31 +256,87 @@ class TestUFuncs(BaseUFuncTest, TestCase):
                     else:
                         raise
 
-    def basic_int_ufunc_test(self, name=None, flags=no_pyobj_flags):
-        self.basic_ufunc_test(name, flags=flags,
-            skip_inputs=[types.float32, types.float64,
-                types.Array(types.float32, 1, 'C'),
-                types.Array(types.float64, 1, 'C')])
+    def signed_unsigned_cmp_test(self, comparison_ufunc):
+        self.basic_ufunc_test(comparison_ufunc)
+
+        if numpy_support.numpy_version < (1, 25):
+            return
+
+        # Test additional implementations that specifically handle signed /
+        # unsigned comparisons added in NumPy 1.25:
+        # https://github.com/numpy/numpy/pull/23713
+        additional_inputs = (
+            (np.int64(-1), np.uint64(0)),
+            (np.int64(-1), np.uint64(1)),
+            (np.int64(0), np.uint64(0)),
+            (np.int64(0), np.uint64(1)),
+            (np.int64(1), np.uint64(0)),
+            (np.int64(1), np.uint64(1)),
+
+            (np.uint64(0), np.int64(-1)),
+            (np.uint64(0), np.int64(0)),
+            (np.uint64(0), np.int64(1)),
+            (np.uint64(1), np.int64(-1)),
+            (np.uint64(1), np.int64(0)),
+            (np.uint64(1), np.int64(1)),
+
+            (np.array([-1, -1, 0, 0, 1, 1], dtype=np.int64),
+             np.array([0, 1, 0, 1, 0, 1], dtype=np.uint64)),
+
+            (np.array([0, 1, 0, 1, 0, 1], dtype=np.uint64),
+             np.array([-1, -1, 0, 0, 1, 1], dtype=np.int64))
+        )
+
+        pyfunc = self._make_ufunc_usecase(comparison_ufunc)
+
+        for a, b in additional_inputs:
+            input_types = (typeof(a), typeof(b))
+            output_type = types.Array(types.bool_, 1, 'C')
+            argtys = input_types + (output_type,)
+            cfunc = self._compile(pyfunc, argtys)
+
+            if isinstance(a, np.ndarray):
+                result = np.zeros(a.shape, dtype=np.bool_)
+            else:
+                result = np.zeros(1, dtype=np.bool_)
+
+            expected = np.zeros_like(result)
+
+            pyfunc(a, b, expected)
+            cfunc(a, b, result)
+            np.testing.assert_equal(expected, result)
+
+
+class TestUFuncs(BasicUFuncTest, TestCase):
+    def basic_int_ufunc_test(self, name=None):
+        skip_inputs = [
+            types.float32,
+            types.float64,
+            types.Array(types.float32, 1, 'C'),
+            types.Array(types.float64, 1, 'C'),
+        ]
+        self.basic_ufunc_test(name, skip_inputs=skip_inputs)
 
     ############################################################################
     # Math operations
 
-    def test_add_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.add, flags=flags)
+    def test_add_ufunc(self):
+        self.basic_ufunc_test(np.add)
 
-    def test_subtract_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.subtract, flags=flags)
+    def test_subtract_ufunc(self):
+        self.basic_ufunc_test(np.subtract)
 
-    def test_multiply_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.multiply, flags=flags)
+    def test_multiply_ufunc(self):
+        self.basic_ufunc_test(np.multiply)
 
-    def test_divide_ufunc(self, flags=no_pyobj_flags):
+    def test_divide_ufunc(self):
         # Bear in mind that in python3 divide IS true_divide
         # so the out type for int types will be a double
         int_out_type = None
         int_out_type = types.float64
 
-        self.basic_ufunc_test(np.divide, flags=flags, int_output_type=int_out_type)
+        self.basic_ufunc_test(np.divide,
+                              int_output_type=int_out_type)
 
     def test_logaddexp_ufunc(self):
         self.basic_ufunc_test(np.logaddexp, kinds='f')
@@ -293,102 +344,104 @@ class TestUFuncs(BaseUFuncTest, TestCase):
     def test_logaddexp2_ufunc(self):
         self.basic_ufunc_test(np.logaddexp2, kinds='f')
 
-    def test_true_divide_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.true_divide, flags=flags, int_output_type=types.float64)
+    def test_true_divide_ufunc(self):
+        self.basic_ufunc_test(np.true_divide,
+                              int_output_type=types.float64)
 
     def test_floor_divide_ufunc(self):
         self.basic_ufunc_test(np.floor_divide)
 
-    def test_negative_ufunc(self, flags=no_pyobj_flags):
+    def test_negative_ufunc(self):
         # NumPy ufunc has bug with uint32 as input and int64 as output,
         # so skip uint32 input.
+        skip_inputs = [types.Array(types.uint32, 1, 'C'), types.uint32]
         self.basic_ufunc_test(np.negative, int_output_type=types.int64,
-                              skip_inputs=[types.Array(types.uint32, 1, 'C'), types.uint32],
-                              flags=flags)
+                              skip_inputs=skip_inputs)
 
-    def test_positive_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.positive, flags=flags)
+    def test_positive_ufunc(self):
+        self.basic_ufunc_test(np.positive)
 
-    def test_power_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.power, flags=flags,
-                               positive_only=True)
+    def test_power_ufunc(self):
+        self.basic_ufunc_test(np.power, positive_only=True)
 
-    def test_float_power_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.float_power, flags=flags, kinds="fc")
+    def test_float_power_ufunc(self):
+        self.basic_ufunc_test(np.float_power, kinds="fc")
 
-    def test_gcd_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.gcd, flags=flags, kinds="iu")
+    def test_gcd_ufunc(self):
+        self.basic_ufunc_test(np.gcd, kinds="iu")
 
-    def test_lcm_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.lcm, flags=flags, kinds="iu")
+    def test_lcm_ufunc(self):
+        self.basic_ufunc_test(np.lcm, kinds="iu")
 
-    def test_remainder_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.remainder, flags=flags)
+    def test_remainder_ufunc(self):
+        self.basic_ufunc_test(np.remainder)
 
-    def test_mod_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.mod, flags=flags, kinds='ifcu',
-            additional_inputs = [
-                ((np.uint64(np.iinfo(np.uint64).max), np.uint64(16)), types.uint64)
-            ])
+    def test_mod_ufunc(self):
+        additional_inputs = [
+            ((np.uint64(np.iinfo(np.uint64).max), np.uint64(16)), types.uint64)
+        ]
+        self.basic_ufunc_test(np.mod, kinds='ifcu',
+                              additional_inputs=additional_inputs)
 
-    def test_fmod_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.fmod, flags=flags)
+    def test_fmod_ufunc(self):
+        self.basic_ufunc_test(np.fmod)
 
-    def test_abs_ufunc(self, flags=no_pyobj_flags, ufunc=np.abs):
-        self.basic_ufunc_test(ufunc, flags=flags,
-            additional_inputs = [
-                (np.uint32(np.iinfo(np.uint32).max), types.uint32),
-                (np.uint64(np.iinfo(np.uint64).max), types.uint64),
-                (np.float32(np.finfo(np.float32).min), types.float32),
-                (np.float64(np.finfo(np.float64).min), types.float64)
-                ])
+    def test_abs_ufunc(self, ufunc=np.abs):
+        additional_inputs = [
+            (np.uint32(np.iinfo(np.uint32).max), types.uint32),
+            (np.uint64(np.iinfo(np.uint64).max), types.uint64),
+            (np.float32(np.finfo(np.float32).min), types.float32),
+            (np.float64(np.finfo(np.float64).min), types.float64),
+        ]
+        self.basic_ufunc_test(ufunc,
+                              additional_inputs=additional_inputs)
 
-    def test_absolute_ufunc(self, flags=no_pyobj_flags):
-        self.test_abs_ufunc(flags=flags, ufunc=np.absolute)
+    def test_absolute_ufunc(self):
+        self.test_abs_ufunc(ufunc=np.absolute)
 
-    def test_fabs_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.fabs, flags=flags, kinds='f')
+    def test_fabs_ufunc(self):
+        self.basic_ufunc_test(np.fabs, kinds='f')
 
-    def test_rint_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.rint, flags=flags, kinds='cf')
+    def test_rint_ufunc(self):
+        self.basic_ufunc_test(np.rint, kinds='cf')
 
-    def test_sign_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.sign, flags=flags)
+    def test_sign_ufunc(self):
+        self.basic_ufunc_test(np.sign)
 
-    def test_conj_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.conj, flags=flags)
+    def test_conj_ufunc(self):
+        self.basic_ufunc_test(np.conj)
 
-    def test_exp_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.exp, flags=flags, kinds='cf')
+    def test_exp_ufunc(self):
+        self.basic_ufunc_test(np.exp, kinds='cf')
 
-    def test_exp2_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.exp2, flags=flags, kinds='cf')
+    def test_exp2_ufunc(self):
+        self.basic_ufunc_test(np.exp2, kinds='cf')
 
-    def test_log_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.log, flags=flags, kinds='cf')
+    def test_log_ufunc(self):
+        self.basic_ufunc_test(np.log, kinds='cf')
 
-    def test_log2_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.log2, flags=flags, kinds='cf')
+    def test_log2_ufunc(self):
+        self.basic_ufunc_test(np.log2, kinds='cf')
 
-    def test_log10_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.log10, flags=flags, kinds='cf')
+    def test_log10_ufunc(self):
+        self.basic_ufunc_test(np.log10, kinds='cf')
 
-    def test_expm1_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.expm1, flags=flags, kinds='cf')
+    def test_expm1_ufunc(self):
+        self.basic_ufunc_test(np.expm1, kinds='cf')
 
-    def test_log1p_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.log1p, flags=flags, kinds='cf')
+    def test_log1p_ufunc(self):
+        self.basic_ufunc_test(np.log1p, kinds='cf')
 
-    def test_sqrt_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.sqrt, flags=flags, kinds='cf')
+    def test_sqrt_ufunc(self):
+        self.basic_ufunc_test(np.sqrt, kinds='cf')
 
-    def test_square_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.square, flags=flags)
+    def test_square_ufunc(self):
+        self.basic_ufunc_test(np.square)
 
-    def test_cbrt_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.cbrt, flags=flags, kinds='f')
+    def test_cbrt_ufunc(self):
+        self.basic_ufunc_test(np.cbrt, kinds='f')
 
-    def test_reciprocal_ufunc(self, flags=no_pyobj_flags):
+    def test_reciprocal_ufunc(self):
         # reciprocal for integers doesn't make much sense and is problematic
         # in the case of division by zero, as an inf will overflow float to
         # int conversions, which is undefined behavior.
@@ -396,55 +449,54 @@ class TestUFuncs(BaseUFuncTest, TestCase):
                    types.Array(types.int32, 1, 'C'), types.int32,
                    types.Array(types.uint64, 1, 'C'), types.uint64,
                    types.Array(types.int64, 1, 'C'), types.int64]
-        self.basic_ufunc_test(np.reciprocal, skip_inputs=to_skip, flags=flags)
+        self.basic_ufunc_test(np.reciprocal, skip_inputs=to_skip)
 
-    def test_conjugate_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.conjugate, flags=flags)
-
+    def test_conjugate_ufunc(self):
+        self.basic_ufunc_test(np.conjugate)
 
     ############################################################################
     # Trigonometric Functions
 
-    def test_sin_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.sin, flags=flags, kinds='cf')
+    def test_sin_ufunc(self):
+        self.basic_ufunc_test(np.sin, kinds='cf')
 
-    def test_cos_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.cos, flags=flags, kinds='cf')
+    def test_cos_ufunc(self):
+        self.basic_ufunc_test(np.cos, kinds='cf')
 
-    def test_tan_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.tan, flags=flags, kinds='cf')
+    def test_tan_ufunc(self):
+        self.basic_ufunc_test(np.tan, kinds='cf')
 
-    def test_arcsin_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.arcsin, flags=flags, kinds='cf')
+    def test_arcsin_ufunc(self):
+        self.basic_ufunc_test(np.arcsin, kinds='cf')
 
-    def test_arccos_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.arccos, flags=flags, kinds='cf')
+    def test_arccos_ufunc(self):
+        self.basic_ufunc_test(np.arccos, kinds='cf')
 
-    def test_arctan_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.arctan, flags=flags, kinds='cf')
+    def test_arctan_ufunc(self):
+        self.basic_ufunc_test(np.arctan, kinds='cf')
 
-    def test_arctan2_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.arctan2, flags=flags, kinds='cf')
+    def test_arctan2_ufunc(self):
+        self.basic_ufunc_test(np.arctan2, kinds='cf')
 
-    def test_hypot_ufunc(self, flags=no_pyobj_flags):
+    def test_hypot_ufunc(self):
         self.basic_ufunc_test(np.hypot, kinds='f')
 
-    def test_sinh_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.sinh, flags=flags, kinds='cf')
+    def test_sinh_ufunc(self):
+        self.basic_ufunc_test(np.sinh, kinds='cf')
 
-    def test_cosh_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.cosh, flags=flags, kinds='cf')
+    def test_cosh_ufunc(self):
+        self.basic_ufunc_test(np.cosh, kinds='cf')
 
-    def test_tanh_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.tanh, flags=flags, kinds='cf')
+    def test_tanh_ufunc(self):
+        self.basic_ufunc_test(np.tanh, kinds='cf')
 
-    def test_arcsinh_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.arcsinh, flags=flags, kinds='cf')
+    def test_arcsinh_ufunc(self):
+        self.basic_ufunc_test(np.arcsinh, kinds='cf')
 
-    def test_arccosh_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.arccosh, flags=flags, kinds='cf')
+    def test_arccosh_ufunc(self):
+        self.basic_ufunc_test(np.arccosh, kinds='cf')
 
-    def test_arctanh_ufunc(self, flags=no_pyobj_flags):
+    def test_arctanh_ufunc(self):
         # arctanh is only valid is only finite in the range ]-1, 1[
         # This means that for any of the integer types it will produce
         # conversion from infinity/-infinity to integer. That's undefined
@@ -458,38 +510,37 @@ class TestUFuncs(BaseUFuncTest, TestCase):
                    types.Array(types.uint64, 1, 'C'), types.uint64,
                    types.Array(types.int64, 1, 'C'), types.int64]
 
-        self.basic_ufunc_test(np.arctanh, skip_inputs=to_skip, flags=flags,
-                              kinds='cf')
+        self.basic_ufunc_test(np.arctanh, skip_inputs=to_skip, kinds='cf')
 
-    def test_deg2rad_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.deg2rad, flags=flags, kinds='f')
+    def test_deg2rad_ufunc(self):
+        self.basic_ufunc_test(np.deg2rad, kinds='f')
 
-    def test_rad2deg_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.rad2deg, flags=flags, kinds='f')
+    def test_rad2deg_ufunc(self):
+        self.basic_ufunc_test(np.rad2deg, kinds='f')
 
-    def test_degrees_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.degrees, flags=flags, kinds='f')
+    def test_degrees_ufunc(self):
+        self.basic_ufunc_test(np.degrees, kinds='f')
 
-    def test_radians_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.radians, flags=flags, kinds='f')
+    def test_radians_ufunc(self):
+        self.basic_ufunc_test(np.radians, kinds='f')
 
     ############################################################################
     # Bit-twiddling Functions
 
-    def test_bitwise_and_ufunc(self, flags=no_pyobj_flags):
-        self.basic_int_ufunc_test(np.bitwise_and, flags=flags)
+    def test_bitwise_and_ufunc(self):
+        self.basic_int_ufunc_test(np.bitwise_and)
 
-    def test_bitwise_or_ufunc(self, flags=no_pyobj_flags):
-        self.basic_int_ufunc_test(np.bitwise_or, flags=flags)
+    def test_bitwise_or_ufunc(self):
+        self.basic_int_ufunc_test(np.bitwise_or)
 
-    def test_bitwise_xor_ufunc(self, flags=no_pyobj_flags):
-        self.basic_int_ufunc_test(np.bitwise_xor, flags=flags)
+    def test_bitwise_xor_ufunc(self):
+        self.basic_int_ufunc_test(np.bitwise_xor)
 
-    def test_invert_ufunc(self, flags=no_pyobj_flags):
-        self.basic_int_ufunc_test(np.invert, flags=flags)
+    def test_invert_ufunc(self):
+        self.basic_int_ufunc_test(np.invert)
 
-    def test_bitwise_not_ufunc(self, flags=no_pyobj_flags):
-        self.basic_int_ufunc_test(np.bitwise_not, flags=flags)
+    def test_bitwise_not_ufunc(self):
+        self.basic_int_ufunc_test(np.bitwise_not)
 
     # Note: there is no entry for left_shift and right_shift as this harness
     #       is not valid for them. This is so because left_shift and right
@@ -503,48 +554,47 @@ class TestUFuncs(BaseUFuncTest, TestCase):
 
     ############################################################################
     # Comparison functions
-    def test_greater_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.greater, flags=flags)
+    def test_greater_ufunc(self):
+        self.signed_unsigned_cmp_test(np.greater)
 
-    def test_greater_equal_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.greater_equal, flags=flags)
+    def test_greater_equal_ufunc(self):
+        self.signed_unsigned_cmp_test(np.greater_equal)
 
-    def test_less_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.less, flags=flags)
+    def test_less_ufunc(self):
+        self.signed_unsigned_cmp_test(np.less)
 
-    def test_less_equal_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.less_equal, flags=flags)
+    def test_less_equal_ufunc(self):
+        self.signed_unsigned_cmp_test(np.less_equal)
 
-    def test_not_equal_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.not_equal, flags=flags)
+    def test_not_equal_ufunc(self):
+        self.signed_unsigned_cmp_test(np.not_equal)
 
-    def test_equal_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.equal, flags=flags)
+    def test_equal_ufunc(self):
+        self.signed_unsigned_cmp_test(np.equal)
 
-    def test_logical_and_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.logical_and, flags=flags)
+    def test_logical_and_ufunc(self):
+        self.basic_ufunc_test(np.logical_and)
 
-    def test_logical_or_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.logical_or, flags=flags)
+    def test_logical_or_ufunc(self):
+        self.basic_ufunc_test(np.logical_or)
 
-    def test_logical_xor_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.logical_xor, flags=flags)
+    def test_logical_xor_ufunc(self):
+        self.basic_ufunc_test(np.logical_xor)
 
-    def test_logical_not_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.logical_not, flags=flags)
+    def test_logical_not_ufunc(self):
+        self.basic_ufunc_test(np.logical_not)
 
-    def test_maximum_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.maximum, flags=flags)
+    def test_maximum_ufunc(self):
+        self.basic_ufunc_test(np.maximum)
 
-    def test_minimum_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.minimum, flags=flags)
+    def test_minimum_ufunc(self):
+        self.basic_ufunc_test(np.minimum)
 
-    def test_fmax_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.fmax, flags=flags)
+    def test_fmax_ufunc(self):
+        self.basic_ufunc_test(np.fmax)
 
-    def test_fmin_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.fmin, flags=flags)
-
+    def test_fmin_ufunc(self):
+        self.basic_ufunc_test(np.fmin)
 
     ############################################################################
     # Floating functions
@@ -553,63 +603,68 @@ class TestUFuncs(BaseUFuncTest, TestCase):
         return [
             (np.array([True, False], dtype=np.bool_),
              types.Array(types.bool_, 1, 'C')),
-            ]
+        ]
 
-    def test_isfinite_ufunc(self, flags=no_pyobj_flags):
+    def test_isfinite_ufunc(self):
         self.basic_ufunc_test(
-            np.isfinite, flags=flags, kinds='ifcb',
+            np.isfinite, kinds='ifcb',
             additional_inputs=self.bool_additional_inputs(),
         )
 
-    def test_isinf_ufunc(self, flags=no_pyobj_flags):
+    def test_isinf_ufunc(self):
         self.basic_ufunc_test(
-            np.isinf, flags=flags, kinds='ifcb',
+            np.isinf, kinds='ifcb',
             additional_inputs=self.bool_additional_inputs(),
         )
 
-    def test_isnan_ufunc(self, flags=no_pyobj_flags):
+    def test_isnan_ufunc(self):
         self.basic_ufunc_test(
-            np.isnan, flags=flags, kinds='ifcb',
+            np.isnan, kinds='ifcb',
             additional_inputs=self.bool_additional_inputs(),
         )
 
-    def test_signbit_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.signbit, flags=flags)
+    def test_signbit_ufunc(self):
+        self.basic_ufunc_test(np.signbit)
 
-    def test_copysign_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.copysign, flags=flags, kinds='f')
+    def test_copysign_ufunc(self):
+        self.basic_ufunc_test(np.copysign, kinds='f')
 
-    def test_nextafter_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.nextafter, flags=flags, kinds='f')
+    def test_nextafter_ufunc(self):
+        self.basic_ufunc_test(np.nextafter, kinds='f')
 
     @_unimplemented
-    def test_modf_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.modf, flags=flags, kinds='f')
+    def test_modf_ufunc(self):
+        self.basic_ufunc_test(np.modf, kinds='f')
 
     # Note: there is no entry for ldexp as this harness isn't valid for this
     #       ufunc. this is so because ldexp requires heterogeneous inputs.
     #       However, this ufunc is tested by the TestLoopTypes test classes.
 
     @_unimplemented
-    def test_frexp_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.frexp, flags=flags, kinds='f')
+    def test_frexp_ufunc(self):
+        self.basic_ufunc_test(np.frexp, kinds='f')
 
-    def test_floor_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.floor, flags=flags, kinds='f')
+    def test_floor_ufunc(self):
+        self.basic_ufunc_test(np.floor, kinds='f')
 
-    def test_ceil_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.ceil, flags=flags, kinds='f')
+    def test_ceil_ufunc(self):
+        self.basic_ufunc_test(np.ceil, kinds='f')
 
-    def test_trunc_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.trunc, flags=flags, kinds='f')
+    def test_trunc_ufunc(self):
+        self.basic_ufunc_test(np.trunc, kinds='f')
 
-    def test_spacing_ufunc(self, flags=no_pyobj_flags):
-        self.basic_ufunc_test(np.spacing, flags=flags, kinds='f')
+    def test_spacing_ufunc(self):
+        # additional input to check inf behaviour as Numba uses a different alg
+        # to NumPy
+        additional = [(np.array([np.inf, -np.inf], dtype=np.float64),
+                       types.Array(types.float64, 1, 'C')),]
+        self.basic_ufunc_test(np.spacing, kinds='f',
+                              additional_inputs=additional)
 
     ############################################################################
     # Other tests
 
-    def binary_ufunc_mixed_types_test(self, ufunc, flags=no_pyobj_flags):
+    def binary_ufunc_mixed_types_test(self, ufunc):
         ufunc_name = ufunc.__name__
         ufunc = _make_ufunc_usecase(ufunc)
         inputs1 = [
@@ -619,7 +674,8 @@ class TestUFuncs(BaseUFuncTest, TestCase):
 
             (np.array([0, 1], dtype='u8'), types.Array(types.uint64, 1, 'C')),
             (np.array([-1, 1], dtype='i8'), types.Array(types.int64, 1, 'C')),
-            (np.array([-0.5, 0.5], dtype='f8'), types.Array(types.float64, 1, 'C'))]
+            (np.array([-0.5, 0.5], dtype='f8'),
+             types.Array(types.float64, 1, 'C'))]
 
         inputs2 = inputs1
 
@@ -628,7 +684,8 @@ class TestUFuncs(BaseUFuncTest, TestCase):
 
         pyfunc = ufunc
 
-        for input1, input2, output_type in itertools.product(inputs1, inputs2, output_types):
+        for vals in itertools.product(inputs1, inputs2, output_types):
+            input1, input2, output_type = vals
 
             input1_operand = input1[0]
             input1_type = input1[1]
@@ -637,16 +694,21 @@ class TestUFuncs(BaseUFuncTest, TestCase):
             input2_type = input2[1]
 
             # Skip division by unsigned int because of NumPy bugs
-            if ufunc_name == 'divide' and (input2_type == types.Array(types.uint32, 1, 'C') or
+            if ufunc_name == 'divide' and (
+                    input2_type == types.Array(types.uint32, 1, 'C') or
                     input2_type == types.Array(types.uint64, 1, 'C')):
                 continue
 
             # Skip some subtraction tests because of NumPy bugs
-            if ufunc_name == 'subtract' and input1_type == types.Array(types.uint32, 1, 'C') and \
-                    input2_type == types.uint32 and types.Array(types.int64, 1, 'C'):
+            if (ufunc_name == 'subtract'
+                    and input1_type == types.Array(types.uint32, 1, 'C')
+                    and input2_type == types.uint32
+                    and types.Array(types.int64, 1, 'C')):
                 continue
-            if ufunc_name == 'subtract' and input1_type == types.Array(types.uint32, 1, 'C') and \
-                    input2_type == types.uint64 and types.Array(types.int64, 1, 'C'):
+            if (ufunc_name == 'subtract'
+                    and input1_type == types.Array(types.uint32, 1, 'C')
+                    and input2_type == types.uint64
+                    and types.Array(types.int64, 1, 'C')):
                 continue
 
             if ((isinstance(input1_type, types.Array) or
@@ -654,10 +716,8 @@ class TestUFuncs(BaseUFuncTest, TestCase):
                     not isinstance(output_type, types.Array)):
                 continue
 
-            cr = self.cache.compile(pyfunc,
-                                    (input1_type, input2_type, output_type),
-                                    flags=flags)
-            cfunc = cr.entry_point
+            args = (input1_type, input2_type, output_type)
+            cfunc = self._compile(pyfunc, args)
 
             if isinstance(input1_operand, np.ndarray):
                 result = np.zeros(input1_operand.size,
@@ -688,34 +748,34 @@ class TestUFuncs(BaseUFuncTest, TestCase):
         pyfunc = _make_ufunc_usecase(np.negative)
 
         input_operands = [
-            np.arange(3, dtype='i8'),
-            np.arange(3, dtype='i8').reshape(3,1),
-            np.arange(3, dtype='i8').reshape(1,3),
-            np.arange(3, dtype='i8').reshape(3,1),
-            np.arange(3, dtype='i8').reshape(1,3),
-            np.arange(3*3, dtype='i8').reshape(3,3)]
+            np.arange(3, dtype='u8'),
+            np.arange(3, dtype='u8').reshape(3,1),
+            np.arange(3, dtype='u8').reshape(1,3),
+            np.arange(3, dtype='u8').reshape(3,1),
+            np.arange(3, dtype='u8').reshape(1,3),
+            np.arange(3 * 3, dtype='u8').reshape(3,3)]
 
         output_operands = [
-            np.zeros(3*3, dtype='i8').reshape(3,3),
-            np.zeros(3*3, dtype='i8').reshape(3,3),
-            np.zeros(3*3, dtype='i8').reshape(3,3),
-            np.zeros(3*3*3, dtype='i8').reshape(3,3,3),
-            np.zeros(3*3*3, dtype='i8').reshape(3,3,3),
-            np.zeros(3*3*3, dtype='i8').reshape(3,3,3)]
+            np.zeros(3 * 3, dtype='i8').reshape(3,3),
+            np.zeros(3 * 3, dtype='i8').reshape(3,3),
+            np.zeros(3 * 3, dtype='i8').reshape(3,3),
+            np.zeros(3 * 3 * 3, dtype='i8').reshape(3,3,3),
+            np.zeros(3 * 3 * 3, dtype='i8').reshape(3,3,3),
+            np.zeros(3 * 3 * 3, dtype='i8').reshape(3,3,3)]
 
         for x, result in zip(input_operands, output_operands):
 
             input_type = types.Array(types.uint64, x.ndim, 'C')
             output_type = types.Array(types.int64, result.ndim, 'C')
+            args = (input_type, output_type)
 
-            cr = self.cache.compile(pyfunc, (input_type, output_type),
-                                    flags=no_pyobj_flags)
-            cfunc = cr.entry_point
+            cfunc = self._compile(pyfunc, args)
 
             expected = np.zeros(result.shape, dtype=result.dtype)
             np.negative(x, expected)
 
             cfunc(x, result)
+
             self.assertPreciseEqual(result, expected)
 
         # Test binary ufunc
@@ -723,14 +783,14 @@ class TestUFuncs(BaseUFuncTest, TestCase):
 
         input1_operands = [
             np.arange(3, dtype='u8'),
-            np.arange(3*3, dtype='u8').reshape(3,3),
-            np.arange(3*3*3, dtype='u8').reshape(3,3,3),
+            np.arange(3 * 3, dtype='u8').reshape(3,3),
+            np.arange(3 * 3 * 3, dtype='u8').reshape(3,3,3),
             np.arange(3, dtype='u8').reshape(3,1),
             np.arange(3, dtype='u8').reshape(1,3),
             np.arange(3, dtype='u8').reshape(3,1,1),
-            np.arange(3*3, dtype='u8').reshape(3,3,1),
-            np.arange(3*3, dtype='u8').reshape(3,1,3),
-            np.arange(3*3, dtype='u8').reshape(1,3,3)]
+            np.arange(3 * 3, dtype='u8').reshape(3,3,1),
+            np.arange(3 * 3, dtype='u8').reshape(3,1,3),
+            np.arange(3 * 3, dtype='u8').reshape(1,3,3)]
 
         input2_operands = input1_operands
 
@@ -739,10 +799,9 @@ class TestUFuncs(BaseUFuncTest, TestCase):
             input1_type = types.Array(types.uint64, x.ndim, 'C')
             input2_type = types.Array(types.uint64, y.ndim, 'C')
             output_type = types.Array(types.uint64, max(x.ndim, y.ndim), 'C')
+            args = (input1_type, input2_type, output_type)
 
-            cr = self.cache.compile(pyfunc, (input1_type, input2_type, output_type),
-                                    flags=no_pyobj_flags)
-            cfunc = cr.entry_point
+            cfunc = self._compile(pyfunc, args)
 
             expected = np.add(x, y)
             result = np.zeros(expected.shape, dtype='u8')
@@ -751,12 +810,16 @@ class TestUFuncs(BaseUFuncTest, TestCase):
             self.assertPreciseEqual(result, expected)
 
     def test_implicit_output_npm(self):
-        with self.assertRaises(NumbaTypeError):
-            def myadd(a0, a1):
-                return np.add(a0, a1)
-            arr_ty = types.Array(types.uint64, 1, 'C')
-            cr = compile_isolated(myadd, (arr_ty, arr_ty),
-                                  flags=no_pyobj_flags)
+        # Test for Issue #1078 (https://github.com/numba/numba/issues/1078) -
+        # ensures that the output of a ufunc is an array.
+        arr_ty = types.Array(types.uint64, 1, 'C')
+        sig = (arr_ty, arr_ty)
+
+        @njit((arr_ty, arr_ty))
+        def myadd(a0, a1):
+            return np.add(a0, a1)
+
+        self.assertEqual(myadd.overloads[sig].signature.return_type, arr_ty)
 
     def test_broadcast_implicit_output_npm_nrt(self):
         def pyfunc(a0, a1):
@@ -764,14 +827,14 @@ class TestUFuncs(BaseUFuncTest, TestCase):
 
         input1_operands = [
             np.arange(3, dtype='u8'),
-            np.arange(3*3, dtype='u8').reshape(3,3),
-            np.arange(3*3*3, dtype='u8').reshape(3,3,3),
+            np.arange(3 * 3, dtype='u8').reshape(3,3),
+            np.arange(3 * 3 * 3, dtype='u8').reshape(3,3,3),
             np.arange(3, dtype='u8').reshape(3,1),
             np.arange(3, dtype='u8').reshape(1,3),
             np.arange(3, dtype='u8').reshape(3,1,1),
-            np.arange(3*3, dtype='u8').reshape(3,3,1),
-            np.arange(3*3, dtype='u8').reshape(3,1,3),
-            np.arange(3*3, dtype='u8').reshape(1,3,3)]
+            np.arange(3 * 3, dtype='u8').reshape(3,3,1),
+            np.arange(3 * 3, dtype='u8').reshape(3,1,3),
+            np.arange(3 * 3, dtype='u8').reshape(1,3,3)]
 
         input2_operands = input1_operands
 
@@ -779,10 +842,9 @@ class TestUFuncs(BaseUFuncTest, TestCase):
 
             input1_type = types.Array(types.uint64, x.ndim, 'C')
             input2_type = types.Array(types.uint64, y.ndim, 'C')
+            args = (input1_type, input2_type)
 
-            cr = self.cache.compile(pyfunc, (input1_type, input2_type),
-                                    flags=enable_nrt_flags)
-            cfunc = cr.entry_point
+            cfunc = self._compile(pyfunc, args, nrt=True)
 
             expected = np.add(x, y)
             result = cfunc(x, y)
@@ -814,10 +876,10 @@ class TestUFuncs(BaseUFuncTest, TestCase):
         testcases += [(Z, Z)]
 
         for arg0, arg1 in testcases:
-            cr = self.cache.compile(pyfunc, (typeof(arg0), typeof(arg1)),
-                                    flags=enable_nrt_flags)
+            args = (typeof(arg0), typeof(arg1))
+            cfunc = self._compile(pyfunc, args, nrt=True)
             expected = pyfunc(arg0, arg1)
-            result = cr.entry_point(arg0, arg1)
+            result = cfunc(arg0, arg1)
 
             self.assertEqual(expected.flags.c_contiguous,
                              result.flags.c_contiguous)
@@ -846,10 +908,10 @@ class TestUFuncs(BaseUFuncTest, TestCase):
         assert not Z.flags.f_contiguous
 
         for arg0 in [X, Y, Z]:
-            cr = self.cache.compile(pyfunc, (typeof(arg0),),
-                                    flags=enable_nrt_flags)
+            args = (typeof(arg0),)
+            cfunc = self._compile(pyfunc, args, nrt=True)
             expected = pyfunc(arg0)
-            result = cr.entry_point(arg0)
+            result = cfunc(arg0)
 
             self.assertEqual(expected.flags.c_contiguous,
                              result.flags.c_contiguous)
@@ -858,14 +920,13 @@ class TestUFuncs(BaseUFuncTest, TestCase):
             np.testing.assert_array_equal(expected, result)
 
 
-
 class TestArrayOperators(BaseUFuncTest, TestCase):
 
     def _check_results(self, expected, got):
         self.assertEqual(expected.dtype.kind, got.dtype.kind)
         np.testing.assert_array_almost_equal(expected, got)
 
-    def unary_op_test(self, operator, flags=enable_nrt_flags,
+    def unary_op_test(self, operator, nrt=True,
                       skip_inputs=[], additional_inputs=[],
                       int_output_type=None, float_output_type=None):
         operator_func = _make_unary_ufunc_op_usecase(operator)
@@ -876,17 +937,15 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
             input_operand, input_type = input_tuple
 
             if ((input_type in skip_inputs) or
-                (not isinstance(input_type, types.Array))):
+                    (not isinstance(input_type, types.Array))):
                 continue
 
-            cr = self.cache.compile(pyfunc, (input_type,),
-                                    flags=flags)
-            cfunc = cr.entry_point
+            cfunc = self._compile(pyfunc, (input_type,), nrt=nrt)
             expected = pyfunc(input_operand)
             got = cfunc(input_operand)
             self._check_results(expected, got)
 
-    def binary_op_test(self, operator, flags=enable_nrt_flags,
+    def binary_op_test(self, operator, nrt=True,
                        skip_inputs=[], additional_inputs=[],
                        int_output_type=None, float_output_type=None,
                        positive_rhs=False):
@@ -922,9 +981,8 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
                 if positive_rhs and input_operand1 < zero:
                     continue
 
-            cr = self.cache.compile(pyfunc, (input_type0, input_type1),
-                                    flags=flags)
-            cfunc = cr.entry_point
+            args = (input_type0, input_type1)
+            cfunc = self._compile(pyfunc, args, nrt=nrt)
             expected = pyfunc(input_operand0, input_operand1)
             got = cfunc(input_operand0, input_operand1)
             self._check_results(expected, got)
@@ -936,7 +994,7 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
             (True, types.boolean),
             (False, types.boolean),
             (np.array([True, False]), types.Array(types.boolean, 1, 'C')),
-            ]
+        ]
 
     def binary_int_op_test(self, *args, **kws):
         skip_inputs = kws.setdefault('skip_inputs', [])
@@ -944,7 +1002,7 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
             types.float32, types.float64,
             types.Array(types.float32, 1, 'C'),
             types.Array(types.float64, 1, 'C'),
-            ]
+        ]
         return self.binary_op_test(*args, **kws)
 
     def binary_bitwise_op_test(self, *args, **kws):
@@ -953,9 +1011,14 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
         return self.binary_int_op_test(*args, **kws)
 
     def inplace_op_test(self, operator, lhs_values, rhs_values,
-                        lhs_dtypes, rhs_dtypes):
+                        lhs_dtypes, rhs_dtypes, precise=True):
         operator_func = _make_inplace_ufunc_op_usecase(operator)
         pyfunc = operator_func
+
+        if precise:
+            assertion = self.assertPreciseEqual
+        else:
+            assertion = np.testing.assert_allclose
 
         # The left operand can only be an array, while the right operand
         # can be either an array or a scalar
@@ -970,21 +1033,22 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
         for lhs, rhs in itertools.product(lhs_inputs, rhs_inputs):
             lhs_type = typeof(lhs)
             rhs_type = typeof(rhs)
-            cr = self.cache.compile(pyfunc, (lhs_type, rhs_type),
-                                    flags=no_pyobj_flags)
-            cfunc = cr.entry_point
+            args = (lhs_type, rhs_type)
+            cfunc = self._compile(pyfunc, args)
             expected = lhs.copy()
             pyfunc(expected, rhs)
             got = lhs.copy()
             cfunc(got, rhs)
-            self.assertPreciseEqual(got, expected)
+            assertion(got, expected)
 
-    def inplace_float_op_test(self, operator, lhs_values, rhs_values):
+    def inplace_float_op_test(self, operator, lhs_values, rhs_values,
+                              precise=True):
         # Also accept integer inputs for the right operand (they should
         # be converted to float).
         return self.inplace_op_test(operator, lhs_values, rhs_values,
                                     (np.float32, np.float64),
-                                    (np.float32, np.float64, np.int64))
+                                    (np.float32, np.float64, np.int64),
+                                    precise=precise)
 
     def inplace_int_op_test(self, operator, lhs_values, rhs_values):
         self.inplace_op_test(operator, lhs_values, rhs_values,
@@ -1029,41 +1093,53 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
 
     def test_inplace_floordiv(self):
         self.inplace_float_op_test('//=', [-1, 1.5, 3], [-5, 1.25, 2.5])
-        self.inplace_float_op_test(operator.ifloordiv, [-1, 1.5, 3], [-5, 1.25, 2.5])
+        self.inplace_float_op_test(operator.ifloordiv, [-1, 1.5, 3],
+                                   [-5, 1.25, 2.5])
 
     def test_inplace_div(self):
         self.inplace_float_op_test('/=', [-1, 1.5, 3], [-5, 0, 2.5])
-        self.inplace_float_op_test(operator.itruediv, [-1, 1.5, 3], [-5, 1.25, 2.5])
+        self.inplace_float_op_test(operator.itruediv, [-1, 1.5, 3],
+                                   [-5, 1.25, 2.5])
 
     def test_inplace_remainder(self):
         self.inplace_float_op_test('%=', [-1, 1.5, 3], [-5, 2, 2.5])
         self.inplace_float_op_test(operator.imod, [-1, 1.5, 3], [-5, 2, 2.5])
 
     def test_inplace_pow(self):
-        self.inplace_float_op_test('**=', [-1, 1.5, 3], [-5, 2, 2.5])
-        self.inplace_float_op_test(operator.ipow, [-1, 1.5, 3], [-5, 2, 2.5])
+        self.inplace_float_op_test('**=', [-1, 1.5, 3], [-5, 2, 2.5],
+                                   precise=False)
+        self.inplace_float_op_test(operator.ipow, [-1, 1.5, 3], [-5, 2, 2.5],
+                                   precise=False)
 
     def test_inplace_and(self):
-        self.inplace_bitwise_op_test('&=', [0, 1, 2, 3, 51], [0, 13, 16, 42, 255])
-        self.inplace_bitwise_op_test(operator.iand, [0, 1, 2, 3, 51], [0, 13, 16, 42, 255])
+        self.inplace_bitwise_op_test('&=', [0, 1, 2, 3, 51],
+                                     [0, 13, 16, 42, 255])
+        self.inplace_bitwise_op_test(operator.iand, [0, 1, 2, 3, 51],
+                                     [0, 13, 16, 42, 255])
 
     def test_inplace_or(self):
-        self.inplace_bitwise_op_test('|=', [0, 1, 2, 3, 51], [0, 13, 16, 42, 255])
-        self.inplace_bitwise_op_test(operator.ior, [0, 1, 2, 3, 51], [0, 13, 16, 42, 255])
+        self.inplace_bitwise_op_test('|=', [0, 1, 2, 3, 51],
+                                     [0, 13, 16, 42, 255])
+        self.inplace_bitwise_op_test(operator.ior, [0, 1, 2, 3, 51],
+                                     [0, 13, 16, 42, 255])
 
     def test_inplace_xor(self):
-        self.inplace_bitwise_op_test('^=', [0, 1, 2, 3, 51], [0, 13, 16, 42, 255])
-        self.inplace_bitwise_op_test(operator.ixor, [0, 1, 2, 3, 51], [0, 13, 16, 42, 255])
+        self.inplace_bitwise_op_test('^=', [0, 1, 2, 3, 51],
+                                     [0, 13, 16, 42, 255])
+        self.inplace_bitwise_op_test(operator.ixor, [0, 1, 2, 3, 51],
+                                     [0, 13, 16, 42, 255])
 
     def test_inplace_lshift(self):
         self.inplace_int_op_test('<<=', [0, 5, -10, -51], [0, 1, 4, 14])
-        self.inplace_int_op_test(operator.ilshift, [0, 5, -10, -51], [0, 1, 4, 14])
+        self.inplace_int_op_test(operator.ilshift, [0, 5, -10, -51],
+                                 [0, 1, 4, 14])
 
     def test_inplace_rshift(self):
         self.inplace_int_op_test('>>=', [0, 5, -10, -51], [0, 1, 4, 14])
-        self.inplace_int_op_test(operator.irshift, [0, 5, -10, -51], [0, 1, 4, 14])
+        self.inplace_int_op_test(operator.irshift, [0, 5, -10, -51],
+                                 [0, 1, 4, 14])
 
-    def test_unary_positive_array_op(self):
+    def test_unary_positive_array_op_2(self):
         '''
         Verify that the unary positive operator copies values, and doesn't
         just alias to the input array (mirrors normal Numpy/Python
@@ -1123,9 +1199,11 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
             (np.array([3,4], dtype='u8'), types.Array(types.uint64, 1, 'C')),
             (np.array([-1,1,5], dtype='i4'), types.Array(types.int32, 1, 'C')),
             (np.array([-1,1,6], dtype='i8'), types.Array(types.int64, 1, 'C')),
-            (np.array([-0.5, 1.5], dtype='f4'), types.Array(types.float32, 1, 'C')),
-            (np.array([-2.5, 3.5], dtype='f8'), types.Array(types.float64, 1, 'C')),
-            ]
+            (np.array([-0.5, 1.5], dtype='f4'),
+             types.Array(types.float32, 1, 'C')),
+            (np.array([-2.5, 3.5], dtype='f8'),
+             types.Array(types.float64, 1, 'C')),
+        ]
         self.binary_op_test('//')
 
     def test_remainder_array_op(self):
@@ -1174,16 +1252,11 @@ class TestScalarUFuncs(TestCase):
     - the machinery to support this case is the same for all the functions of a
       given arity.
     - the result of the inner function itself is already tested in TestUFuncs
-
-    This class tests regular uses. A subclass tests the no python backend.
     """
-
-    _compile_flags = enable_pyobj_flags
 
     def run_ufunc(self, pyfunc, arg_types, arg_values):
         for tyargs, args in zip(arg_types, arg_values):
-            cr = compile_isolated(pyfunc, tyargs, flags=self._compile_flags)
-            cfunc = cr.entry_point
+            cfunc = njit(tyargs)(pyfunc)
             got = cfunc(*args)
             expected = pyfunc(*_as_dtype_value(tyargs, args))
 
@@ -1194,17 +1267,22 @@ class TestScalarUFuncs(TestCase):
             # to uint64 nor vice-versa, falling back to using the float version.
             # Modify in those cases the expected value (the numpy version does
             # not use typed integers as inputs so its result is an integer)
-            special = set([(types.int32, types.uint64), (types.uint64, types.int32),
-                           (types.int64, types.uint64), (types.uint64, types.int64)])
+            special = set([
+                (types.int32, types.uint64),
+                (types.uint64, types.int32),
+                (types.int64, types.uint64),
+                (types.uint64, types.int64)
+            ])
             if tyargs in special:
                 expected = float(expected)
             else:
                 # The numba version of scalar ufuncs return an actual value that
-                # gets converted to a Python type, instead of using NumPy scalars.
-                # although in python 2 NumPy scalars are considered and instance of
-                # the appropriate python type, in python 3 that is no longer the case.
-                # This is why the expected result is casted to the appropriate Python
-                # type (which is actually the expected behavior of the ufunc translation)
+                # gets converted to a Python type, instead of using NumPy
+                # scalars.  although in python 2 NumPy scalars are considered
+                # and instance of the appropriate python type, in python 3 that
+                # is no longer the case.  This is why the expected result is
+                # casted to the appropriate Python type (which is actually the
+                # expected behavior of the ufunc translation)
                 if np.issubdtype(expected.dtype, np.inexact):
                     expected = float(expected)
                 elif np.issubdtype(expected.dtype, np.integer):
@@ -1212,20 +1290,20 @@ class TestScalarUFuncs(TestCase):
                 elif np.issubdtype(expected.dtype, np.bool_):
                     expected = bool(expected)
 
-            alltypes = cr.signature.args + (cr.signature.return_type,)
+            alltypes = tyargs + (cfunc.overloads[tyargs].signature.return_type,)
 
-            # select the appropriate precision for comparison: note that an argument
-            # typed at a lower precision can introduce precision problems. For this
-            # reason the argument types must be taken into account.
-            if any([t==types.float32 for t in alltypes]):
-                prec='single'
-            elif any([t==types.float64 for t in alltypes]):
-                prec='double'
+            # select the appropriate precision for comparison: note that an
+            # argument typed at a lower precision can introduce precision
+            # problems. For this reason the argument types must be taken into
+            # account.
+            if any([t == types.float32 for t in alltypes]):
+                prec = 'single'
+            elif any([t == types.float64 for t in alltypes]):
+                prec = 'double'
             else:
-                prec='exact'
+                prec = 'exact'
 
             self.assertPreciseEqual(got, expected, msg=msg, prec=prec)
-
 
     def test_scalar_unary_ufunc(self):
         def _func(x):
@@ -1237,7 +1315,6 @@ class TestScalarUFuncs(TestCase):
                (types.float32,), (types.float64,)]
         self.run_ufunc(_func, tys, vals)
 
-
     def test_scalar_binary_uniform_ufunc(self):
         def _func(x,y):
             return np.add(x,y)
@@ -1247,8 +1324,7 @@ class TestScalarUFuncs(TestCase):
                types.int64, types.uint64, types.float32, types.float64]
         self.run_ufunc(_func, zip(tys, tys), zip(vals, vals))
 
-
-    def test_scalar_binary_mixed_ufunc(self, flags=enable_pyobj_flags):
+    def test_scalar_binary_mixed_ufunc(self):
         def _func(x,y):
             return np.add(x,y)
 
@@ -1258,11 +1334,6 @@ class TestScalarUFuncs(TestCase):
                types.float32, types.float64]
         self.run_ufunc(_func, itertools.product(tys, tys),
                        itertools.product(vals, vals))
-
-
-class TestScalarUFuncsNoPython(TestScalarUFuncs):
-    """Same tests as TestScalarUFuncs, but forcing no python mode"""
-    _compile_flags = no_pyobj_flags
 
 
 class TestUfuncIssues(TestCase):
@@ -1277,15 +1348,6 @@ class TestUfuncIssues(TestCase):
         b = np.arange(10, dtype='f8')
         self.assertPreciseEqual(foo(a, b), (a + b) + (a + b))
 
-    @unittest.skipIf(numpy_support.numpy_version >= (1, 22),
-                     "Complex floor division support removed in NumPy 1.22")
-    def test_issue_713(self):
-        def foo(x,y):
-            return np.floor_divide(x,y)
-
-        cr = compile_isolated(foo, [types.complex128, types.complex128])
-        self.assertEqual(foo(1j, 1j), cr.entry_point(1j, 1j))
-
     def test_issue_2006(self):
         """
         <float32 ** int> should return float32, not float64.
@@ -1293,7 +1355,7 @@ class TestUfuncIssues(TestCase):
         def foo(x, y):
             return np.power(x, y)
         pyfunc = foo
-        cfunc = jit(nopython=True)(pyfunc)
+        cfunc = njit(pyfunc)
 
         def check(x, y):
             got = cfunc(x, y)
@@ -1303,7 +1365,7 @@ class TestUfuncIssues(TestCase):
             #  the *values* of the arguments -- see PyArray_CanCastArrayTo).
             self.assertEqual(got.dtype, x.dtype)
 
-        xs = [np.float32([1, 2, 3]), np.complex64([1j, 2, 3-3j])]
+        xs = [np.float32([1, 2, 3]), np.complex64([1j, 2, 3 - 3j])]
         for x in xs:
             check(x, 3)
             check(x, np.uint64(3))
@@ -1318,7 +1380,6 @@ class _LoopTypesTester(TestCase):
     ufuncs in a different compilation context. The variables supported are:
 
     _funcs: the ufuncs to test
-    _compile_flags: compilation flags to use (to force nopython mode)
     _skip_types: letter types that force skipping the loop when testing
                  if present in the NumPy ufunc signature.
     _supported_types: only test loops where all the types in the loop
@@ -1341,6 +1402,7 @@ class _LoopTypesTester(TestCase):
              ('log10', 'D'): 5,
              ('tanh', 'F'): 2,
              ('cbrt', 'd'): 2,
+             ('logaddexp2', 'd'): 2,
              }
 
     def _arg_for_type(self, a_letter_type, index=0):
@@ -1371,7 +1433,6 @@ class _LoopTypesTester(TestCase):
                             dtype=a_letter_type)
         elif a_letter_type in 'FD':
             # complex
-            # Note `-1j` is different on 2.x and 3.x, hence the explicit spelling
             if sys.platform != 'win32':
                 # Other platforms have better handling of negative zeros,
                 # test them
@@ -1392,7 +1453,7 @@ class _LoopTypesTester(TestCase):
         # object fallback
         supported_types = getattr(self, '_supported_types', [])
         if (supported_types and
-            any(l not in supported_types for l in letter_types)):
+                any(l not in supported_types for l in letter_types)):
             return
         skip_types = getattr(self, '_skip_types', [])
         if any(l in skip_types for l in letter_types):
@@ -1407,9 +1468,20 @@ class _LoopTypesTester(TestCase):
         self._check_ufunc_with_dtypes(fn, ufunc, letter_types)
 
     def _check_ufunc_with_dtypes(self, fn, ufunc, dtypes):
-        arg_dty = [np.dtype(t) for t in dtypes]
-        arg_nbty = [types.Array(from_dtype(t), 1, 'C') for t in arg_dty]
-        cr = compile_isolated(fn, arg_nbty, flags=self._compile_flags)
+        # Arrays created with datetime and timedelta types (e.g. with np.array)
+        # will have units, so in order to ensure that the dtypes of arguments
+        # match the dtypes in the signature, we add units to unitless datetime
+        # and timedelta types. This corresponds with the addition of units in
+        # _arg_for_type() above.
+        dtypes_with_units = []
+        for t in dtypes:
+            if t in ('m', 'M'):
+                t = t + '8[D]'
+            dtypes_with_units.append(t)
+
+        arg_dty = [np.dtype(t) for t in dtypes_with_units]
+        arg_nbty = tuple([types.Array(from_dtype(t), 1, 'C') for t in arg_dty])
+        cfunc = njit(arg_nbty)(fn)
 
         # Ensure a good mix of input values
         c_args = [self._arg_for_type(t, index=index).repeat(2)
@@ -1418,7 +1490,7 @@ class _LoopTypesTester(TestCase):
             self.random.shuffle(arr)
         py_args = [a.copy() for a in c_args]
 
-        cr.entry_point(*c_args)
+        cfunc(*c_args)
         fn(*py_args)
 
         # Check each array (including inputs, to ensure they weren't
@@ -1458,8 +1530,7 @@ class _LoopTypesTester(TestCase):
             cls._check_ufunc_loops(ufunc)
 
 
-class TestLoopTypesIntNoPython(_LoopTypesTester):
-    _compile_flags = no_pyobj_flags
+class TestLoopTypesInt(_LoopTypesTester):
     _ufuncs = supported_ufuncs[:]
     # reciprocal and power need a special test due to issue #757
     _ufuncs.remove(np.power)
@@ -1472,20 +1543,20 @@ class TestLoopTypesIntNoPython(_LoopTypesTester):
     _required_types = '?bBhHiIlLqQ'
     _skip_types = 'fdFDmMO' + _LoopTypesTester._skip_types
 
-TestLoopTypesIntNoPython.autogenerate()
+
+TestLoopTypesInt.autogenerate()
 
 
-class TestLoopTypesSubtractAndNegativeNoPython(_LoopTypesTester):
-    _compile_flags = no_pyobj_flags
+class TestLoopTypesSubtractAndNegative(_LoopTypesTester):
     _ufuncs = [np.subtract, np.negative]
     _required_types = '?bBhHiIlLqQfdFD'
     _skip_types = 'mMO' + _LoopTypesTester._skip_types + '?'
 
-TestLoopTypesSubtractAndNegativeNoPython.autogenerate()
+
+TestLoopTypesSubtractAndNegative.autogenerate()
 
 
-class TestLoopTypesReciprocalNoPython(_LoopTypesTester):
-    _compile_flags = no_pyobj_flags
+class TestLoopTypesReciprocal(_LoopTypesTester):
     _ufuncs = [np.reciprocal] # issue #757
     _required_types = 'bBhHiIlLqQfdFD'
     _skip_types = 'mMO' + _LoopTypesTester._skip_types
@@ -1500,11 +1571,11 @@ class TestLoopTypesReciprocalNoPython(_LoopTypesTester):
             res[res == 0] = 42
         return res
 
-TestLoopTypesReciprocalNoPython.autogenerate()
+
+TestLoopTypesReciprocal.autogenerate()
 
 
-class TestLoopTypesPowerNoPython(_LoopTypesTester):
-    _compile_flags = no_pyobj_flags
+class TestLoopTypesPower(_LoopTypesTester):
     _ufuncs = [np.power] # issue #757
     _required_types = 'bBhHiIlLqQfdFD'
     _skip_types = 'mMO' + _LoopTypesTester._skip_types
@@ -1519,11 +1590,11 @@ class TestLoopTypesPowerNoPython(_LoopTypesTester):
             res[res < 0] = 3
         return res
 
-TestLoopTypesPowerNoPython.autogenerate()
+
+TestLoopTypesPower.autogenerate()
 
 
-class TestLoopTypesIntLeftShiftNoPython(_LoopTypesTester):
-    _compile_flags = no_pyobj_flags
+class TestLoopTypesIntLeftShift(_LoopTypesTester):
     _ufuncs = [np.left_shift]
     _required_types = 'bBhHiIlLqQ'
     _skip_types = 'fdFDmMO' + _LoopTypesTester._skip_types
@@ -1539,14 +1610,14 @@ class TestLoopTypesIntLeftShiftNoPython(_LoopTypesTester):
         # that 0 <= shift_amount < bitcount(shifted_integer)
         if index == 1:
             bit_count = res.dtype.itemsize * 8
-            res = np.clip(res, 0, bit_count-1)
+            res = np.clip(res, 0, bit_count - 1)
         return res
 
-TestLoopTypesIntLeftShiftNoPython.autogenerate()
+
+TestLoopTypesIntLeftShift.autogenerate()
 
 
-class TestLoopTypesIntRightShiftNoPython(_LoopTypesTester):
-    _compile_flags = no_pyobj_flags
+class TestLoopTypesIntRightShift(_LoopTypesTester):
     _ufuncs = [np.right_shift]
     _required_types = 'bBhHiIlLqQ'
     _skip_types = 'fdFDmMO' + _LoopTypesTester._skip_types
@@ -1562,7 +1633,7 @@ class TestLoopTypesIntRightShiftNoPython(_LoopTypesTester):
         # that 0 <= shift_amount < bitcount(shifted_integer)
         if index == 1:
             bit_count = res.dtype.itemsize * 8
-            res = np.clip(res, 0, bit_count-1)
+            res = np.clip(res, 0, bit_count - 1)
 
         # Right shift has "implementation defined behavior" when the number
         # shifted is negative (in C). In numba, right shift for signed integers
@@ -1576,11 +1647,11 @@ class TestLoopTypesIntRightShiftNoPython(_LoopTypesTester):
             res = np.abs(res)
         return res
 
-TestLoopTypesIntRightShiftNoPython.autogenerate()
+
+TestLoopTypesIntRightShift.autogenerate()
 
 
-class TestLoopTypesFloorDivideNoPython(_LoopTypesTester):
-    _compile_flags = no_pyobj_flags
+class TestLoopTypesFloorDivide(_LoopTypesTester):
     _ufuncs = [np.floor_divide, np.remainder, np.divmod]
     _required_types = 'bBhHiIlLqQfdFD'
     _skip_types = 'mMO' + _LoopTypesTester._skip_types
@@ -1595,11 +1666,11 @@ class TestLoopTypesFloorDivideNoPython(_LoopTypesTester):
             c_arg[pred] = py_arg[pred]
         return py_arg, c_arg
 
-TestLoopTypesFloorDivideNoPython.autogenerate()
+
+TestLoopTypesFloorDivide.autogenerate()
 
 
-class TestLoopTypesFloatNoPython(_LoopTypesTester):
-    _compile_flags = no_pyobj_flags
+class TestLoopTypesFloat(_LoopTypesTester):
     _ufuncs = supported_ufuncs[:]
     if iswindows:
         _ufuncs.remove(np.signbit) # TODO: fix issue #758
@@ -1610,11 +1681,11 @@ class TestLoopTypesFloatNoPython(_LoopTypesTester):
     _required_types = 'fd'
     _skip_types = 'FDmMO' + _LoopTypesTester._skip_types
 
-TestLoopTypesFloatNoPython.autogenerate()
+
+TestLoopTypesFloat.autogenerate()
 
 
-class TestLoopTypesComplexNoPython(_LoopTypesTester):
-    _compile_flags = no_pyobj_flags
+class TestLoopTypesComplex(_LoopTypesTester):
     _ufuncs = supported_ufuncs[:]
 
     # Test complex types
@@ -1622,11 +1693,11 @@ class TestLoopTypesComplexNoPython(_LoopTypesTester):
     _required_types = 'FD'
     _skip_types = 'mMO' + _LoopTypesTester._skip_types
 
-TestLoopTypesComplexNoPython.autogenerate()
+
+TestLoopTypesComplex.autogenerate()
 
 
-class TestLoopTypesDatetimeNoPython(_LoopTypesTester):
-    _compile_flags = no_pyobj_flags
+class TestLoopTypesDatetime(_LoopTypesTester):
     _ufuncs = supported_ufuncs[:]
 
     _ufuncs.remove(np.divmod)  # not implemented yet
@@ -1655,7 +1726,8 @@ class TestLoopTypesDatetimeNoPython(_LoopTypesTester):
         self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8[s]', 'm8[ms]'])
         # Cannot upscale result (Numpy would accept this)
         with self.assertRaises(LoweringError):
-            self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8[s]', 'm8[m]'])
+            self._check_ufunc_with_dtypes(fn, ufunc,
+                                          ['m8[m]', 'm8[s]', 'm8[m]'])
 
     def test_subtract(self):
         ufunc = np.subtract
@@ -1668,7 +1740,8 @@ class TestLoopTypesDatetimeNoPython(_LoopTypesTester):
         self._check_ufunc_with_dtypes(fn, ufunc, ['M8[m]', 'M8[s]', 'm8[ms]'])
         # Cannot upscale result (Numpy would accept this)
         with self.assertRaises(LoweringError):
-            self._check_ufunc_with_dtypes(fn, ufunc, ['M8[m]', 'M8[s]', 'm8[m]'])
+            self._check_ufunc_with_dtypes(fn, ufunc,
+                                          ['M8[m]', 'M8[s]', 'm8[m]'])
 
     def test_multiply(self):
         ufunc = np.multiply
@@ -1717,21 +1790,19 @@ class TestLoopTypesDatetimeNoPython(_LoopTypesTester):
                       np.greater, np.greater_equal]:
             self._check_comparison(ufunc)
 
-TestLoopTypesDatetimeNoPython.autogenerate()
+
+TestLoopTypesDatetime.autogenerate()
 
 
-class TestUFuncBadArgsNoPython(TestCase):
-    _compile_flags = no_pyobj_flags
-
+class TestUFuncBadArgs(TestCase):
     def test_missing_args(self):
         def func(x):
             """error: np.add requires two args"""
             result = np.add(x)
             return result
 
-        self.assertRaises(TypingError, compile_isolated, func, [types.float64],
-                          return_type=types.float64, flags=self._compile_flags)
-
+        with self.assertRaises(TypingError):
+            njit([types.float64(types.float64)])(func)
 
     def test_too_many_args(self):
         def func(x, out, out2):
@@ -1740,16 +1811,20 @@ class TestUFuncBadArgsNoPython(TestCase):
             return result
 
         array_type = types.Array(types.float64, 1, 'C')
-        self.assertRaises(TypingError, compile_isolated, func, [array_type] *3,
-                          return_type=array_type, flags=self._compile_flags)
+        sig = array_type(array_type, array_type, array_type)
+
+        with self.assertRaises(TypingError):
+            njit(sig)(func)
 
     def test_no_scalar_result_by_reference(self):
         def func(x):
             """error: scalar as a return value is not supported"""
             y = 0
             np.add(x, x, y)
-        self.assertRaises(TypingError, compile_isolated, func, [types.float64],
-                          return_type=types.float64, flags=self._compile_flags)
+
+        with self.assertRaises(TypingError):
+            njit([types.float64(types.float64)])(func)
+
 
 class TestUFuncCompilationThreadSafety(TestCase):
 
@@ -1766,8 +1841,8 @@ class TestUFuncCompilationThreadSafety(TestCase):
 
         def wrapper():
             try:
-                a = np.ones((10,), dtype = np.float64)
-                expected = np.ones((10,), dtype = np.float64) + 1.
+                a = np.ones((10,), dtype=np.float64)
+                expected = np.ones((10,), dtype=np.float64) + 1.
                 np.testing.assert_array_equal(foo(a), expected)
             except Exception as e:
                 errors.append(e)
@@ -1810,7 +1885,7 @@ class TestUfuncOnContext(TestCase):
 
 class TestUfuncWriteInput(TestCase):
     def test_write_input_arg(self):
-        @guvectorize(["void(float64[:], uint8[:])"], "(n)->(n)", nopython=True)
+        @guvectorize(["void(float64[:], uint8[:])"], "(n)->(n)")
         def func(x, out):
 
             for i in range(x.size):

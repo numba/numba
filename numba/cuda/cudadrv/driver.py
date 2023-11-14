@@ -20,6 +20,7 @@ import warnings
 import logging
 import threading
 import asyncio
+import pathlib
 from itertools import product
 from abc import ABCMeta, abstractmethod
 from ctypes import (c_int, byref, c_size_t, c_char, c_char_p, addressof,
@@ -34,13 +35,12 @@ from numba.core import utils, serialize, config
 from .error import CudaSupportError, CudaDriverError
 from .drvapi import API_PROTOTYPES
 from .drvapi import cu_occupancy_b2d_size, cu_stream_callback_pyobj, cu_uuid
-from numba.cuda.cudadrv import enums, drvapi, _extras
-
+from numba.cuda.cudadrv import enums, drvapi, nvrtc, _extras
 
 USE_NV_BINDING = config.CUDA_USE_NVIDIA_BINDING
 
 if USE_NV_BINDING:
-    from cuda import cuda as binding, nvrtc
+    from cuda import cuda as binding
     # There is no definition of the default stream in the Nvidia bindings (nor
     # is there at the C/C++ level), so we define it here so we don't need to
     # use a magic number 0 in places where we want the default stream.
@@ -88,10 +88,6 @@ class LinkerError(RuntimeError):
     pass
 
 
-class NvrtcError(RuntimeError):
-    pass
-
-
 class CudaAPIError(CudaDriverError):
     def __init__(self, code, msg):
         self.code = code
@@ -102,7 +98,7 @@ class CudaAPIError(CudaDriverError):
         return "[%s] %s" % (self.code, self.msg)
 
 
-def find_driver():
+def locate_driver_and_loader():
 
     envpath = config.CUDA_DRIVER
 
@@ -142,6 +138,11 @@ def find_driver():
         candidates = dlnames + [os.path.join(x, y)
                                 for x, y in product(dldir, dlnames)]
 
+    return dlloader, candidates
+
+
+def load_driver(dlloader, candidates):
+
     # Load the driver; Collect driver error information
     path_not_exist = []
     driver_load_error = []
@@ -154,7 +155,7 @@ def find_driver():
             path_not_exist.append(not os.path.isfile(path))
             driver_load_error.append(e)
         else:
-            return dll
+            return dll, path
 
     # Problem loading driver
     if all(path_not_exist):
@@ -162,6 +163,12 @@ def find_driver():
     else:
         errmsg = '\n'.join(str(e) for e in driver_load_error)
         _raise_driver_error(errmsg)
+
+
+def find_driver():
+    dlloader, candidates = locate_driver_and_loader()
+    dll, path = load_driver(dlloader, candidates)
+    return dll
 
 
 DRIVER_NOT_FOUND_MSG = """
@@ -683,6 +690,10 @@ class Device(object):
         finally:
             # reset at the driver level
             driver.cuDevicePrimaryCtxReset(self.id)
+
+    @property
+    def supports_float16(self):
+        return self.compute_capability >= (5, 3)
 
 
 def met_requirement_for_device(device):
@@ -2238,7 +2249,7 @@ class Stream(object):
         yield self
         self.synchronize()
 
-    def add_callback(self, callback, arg):
+    def add_callback(self, callback, arg=None):
         """
         Add a callback to a compute stream.
         The user provided function is called from a driver thread once all
@@ -2256,7 +2267,7 @@ class Stream(object):
         eventual deprecation and may be replaced in a future CUDA release.
 
         :param callback: Callback function with arguments (stream, status, arg).
-        :param arg: User data to be passed to the callback function.
+        :param arg: Optional user data to be passed to the callback function.
         """
         data = (self, callback, arg)
         _py_incref(data)
@@ -2584,7 +2595,9 @@ class Linker(metaclass=ABCMeta):
 
     @classmethod
     def new(cls, max_registers=0, lineinfo=False, cc=None):
-        if USE_NV_BINDING:
+        if config.CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY:
+            return MVCLinker(max_registers, lineinfo, cc)
+        elif USE_NV_BINDING:
             return CudaPythonLinker(max_registers, lineinfo, cc)
         else:
             return CtypesLinker(max_registers, lineinfo, cc)
@@ -2607,10 +2620,23 @@ class Linker(metaclass=ABCMeta):
     def add_ptx(self, ptx, name):
         """Add PTX source in a string to the link"""
 
-    @abstractmethod
     def add_cu(self, cu, name):
         """Add CUDA source in a string to the link. The name of the source
         file should be specified in `name`."""
+        with driver.get_active_context() as ac:
+            dev = driver.get_device(ac.devnum)
+            cc = dev.compute_capability
+
+        ptx, log = nvrtc.compile(cu, name, cc)
+
+        if config.DUMP_ASSEMBLY:
+            print(("ASSEMBLY %s" % name).center(80, '-'))
+            print(ptx)
+            print('=' * 80)
+
+        # Link the program's PTX using the normal linker mechanism
+        ptx_name = os.path.splitext(name)[0] + ".ptx"
+        self.add_ptx(ptx.encode(), ptx_name)
 
     @abstractmethod
     def add_file(self, path, kind):
@@ -2642,6 +2668,99 @@ class Linker(metaclass=ABCMeta):
         cubin is a pointer to a internal buffer of cubin owned by the linker;
         thus, it should be loaded before the linker is destroyed.
         """
+
+
+_MVC_ERROR_MESSAGE = (
+    "Minor version compatibility requires ptxcompiler and cubinlinker packages "
+    "to be available"
+)
+
+
+class MVCLinker(Linker):
+    """
+    Linker supporting Minor Version Compatibility, backed by the cubinlinker
+    package.
+    """
+    def __init__(self, max_registers=None, lineinfo=False, cc=None):
+        try:
+            from cubinlinker import CubinLinker
+        except ImportError as err:
+            raise ImportError(_MVC_ERROR_MESSAGE) from err
+
+        if cc is None:
+            raise RuntimeError("MVCLinker requires Compute Capability to be "
+                               "specified, but cc is None")
+
+        arch = f"sm_{cc[0] * 10 + cc[1]}"
+        ptx_compile_opts = ['--gpu-name', arch, '-c']
+        if max_registers:
+            arg = f"--maxrregcount={max_registers}"
+            ptx_compile_opts.append(arg)
+        if lineinfo:
+            ptx_compile_opts.append('--generate-line-info')
+        self.ptx_compile_options = tuple(ptx_compile_opts)
+
+        self._linker = CubinLinker(f"--arch={arch}")
+
+    @property
+    def info_log(self):
+        return self._linker.info_log
+
+    @property
+    def error_log(self):
+        return self._linker.error_log
+
+    def add_ptx(self, ptx, name='<cudapy-ptx>'):
+        try:
+            from ptxcompiler import compile_ptx
+            from cubinlinker import CubinLinkerError
+        except ImportError as err:
+            raise ImportError(_MVC_ERROR_MESSAGE) from err
+        compile_result = compile_ptx(ptx.decode(), self.ptx_compile_options)
+        try:
+            self._linker.add_cubin(compile_result.compiled_program, name)
+        except CubinLinkerError as e:
+            raise LinkerError from e
+
+    def add_file(self, path, kind):
+        try:
+            from cubinlinker import CubinLinkerError
+        except ImportError as err:
+            raise ImportError(_MVC_ERROR_MESSAGE) from err
+
+        try:
+            with open(path, 'rb') as f:
+                data = f.read()
+        except FileNotFoundError:
+            raise LinkerError(f'{path} not found')
+
+        name = pathlib.Path(path).name
+        if kind == FILE_EXTENSION_MAP['cubin']:
+            fn = self._linker.add_cubin
+        elif kind == FILE_EXTENSION_MAP['fatbin']:
+            fn = self._linker.add_fatbin
+        elif kind == FILE_EXTENSION_MAP['a']:
+            raise LinkerError(f"Don't know how to link {kind}")
+        elif kind == FILE_EXTENSION_MAP['ptx']:
+            return self.add_ptx(data, name)
+        else:
+            raise LinkerError(f"Don't know how to link {kind}")
+
+        try:
+            fn(data, name)
+        except CubinLinkerError as e:
+            raise LinkerError from e
+
+    def complete(self):
+        try:
+            from cubinlinker import CubinLinkerError
+        except ImportError as err:
+            raise ImportError(_MVC_ERROR_MESSAGE) from err
+
+        try:
+            return self._linker.complete()
+        except CubinLinkerError as e:
+            raise LinkerError from e
 
 
 class CtypesLinker(Linker):
@@ -2720,106 +2839,22 @@ class CtypesLinker(Linker):
                 msg = "%s\n%s" % (e, self.error_log)
             raise LinkerError(msg)
 
-    def add_cu(self, path, name):
-        raise NotImplementedError("Linking CUDA source files is not supported "
-                                  "with the ctypes binding. ")
-
     def complete(self):
-        cubin = c_void_p(0)
+        cubin_buf = c_void_p(0)
         size = c_size_t(0)
 
         try:
-            driver.cuLinkComplete(self.handle, byref(cubin), byref(size))
+            driver.cuLinkComplete(self.handle, byref(cubin_buf), byref(size))
         except CudaAPIError as e:
             raise LinkerError("%s\n%s" % (e, self.error_log))
 
         size = size.value
         assert size > 0, 'linker returned a zero sized cubin'
         del self._keep_alive[:]
-        return cubin, size
 
-
-class NvrtcProgram:
-    """NvrtcProgram is for the managing the lifetime of nvrtcProgram objects.
-
-    If an error occurs during an NVRTC call, an exception is raised. When an
-    instance of this class is deleted, it attempts to delete the underlying
-    nvrtcProgram."""
-
-    def __init__(self, src, name):
-        # Create an nvrtcProgram
-        err, program = nvrtc.nvrtcCreateProgram(src, name.encode(), 0, [], [])
-        self.check(err)
-        self._program = program
-
-        with driver.get_active_context() as ac:
-            dev = driver.get_device(ac.devnum)
-            major, minor = dev.compute_capability
-
-        # Compilation options:
-        # - Compile for the current device's compute capability.
-        # - The CUDA include path is added.
-        # - Relocatable Device Code (rdc) is needed to prevent device functions
-        #   being optimized away.
-        arch = f'--gpu-architecture=compute_{major}{minor}'.encode()
-        include = f'-I{config.CUDA_INCLUDE_PATH}'.encode()
-        opts = [arch, include, b'-rdc', b'true']
-
-        # Compile the program
-        err, = nvrtc.nvrtcCompileProgram(self._program, len(opts), opts)
-
-        # First check whether the call failed due to a "normal" compiler error
-        compile_error = (err == nvrtc.nvrtcResult.NVRTC_ERROR_COMPILATION)
-        if not compile_error:
-            # Check for any other error
-            self.check(err)
-
-        # Get log from compilation
-        err, log_size = nvrtc.nvrtcGetProgramLogSize(self._program)
-        self.check(err)
-        log = b' ' * log_size
-        err, = nvrtc.nvrtcGetProgramLog(self._program, log)
-        self.check(err)
-
-        # If the compile failed, provide the log in an exception
-        if compile_error:
-            msg = (f'NVRTC Compilation failure whilst compiling {name}:\n\n'
-                   f'{log.decode()}')
-            raise NvrtcError(msg)
-
-        # Otherwise, if there's any content in the log, present it as a warning
-        if log_size > 1:
-            msg = (f"NVRTC log messages whilst compiling {name}:\n\n"
-                   f"{log.decode()}")
-            warnings.warn(msg)
-
-        # Get and cache the PTX
-        err, ptx_len = nvrtc.nvrtcGetPTXSize(self._program)
-        self.check(err)
-        ptx = b' ' * ptx_len
-        err, = nvrtc.nvrtcGetPTX(self._program, ptx)
-        self.check(err)
-
-        self._ptx = ptx
-
-    def __del__(self):
-        if self._program:
-            err, = nvrtc.nvrtcDestroyProgram(self._program)
-            self.check(err)
-
-    @property
-    def ptx(self):
-        return self._ptx
-
-    def check(self, err):
-        if isinstance(err, binding.CUresult):
-            if err != binding.CUresult.CUDA_SUCCESS:
-                raise RuntimeError('CUDA Error calling NVRTC: {}'.format(err))
-        elif isinstance(err, nvrtc.nvrtcResult):
-            if err != nvrtc.nvrtcResult.NVRTC_SUCCESS:
-                raise RuntimeError('NVRTC Error: {}'.format(err))
-        else:
-            raise RuntimeError('Unknown error type: {}'.format(err))
+        # We return a copy of the cubin because it's owned by the linker
+        cubin_ptr = ctypes.cast(cubin_buf, ctypes.POINTER(ctypes.c_char))
+        return bytes(np.ctypeslib.as_array(cubin_ptr, shape=(size,)))
 
 
 class CudaPythonLinker(Linker):
@@ -2884,18 +2919,6 @@ class CudaPythonLinker(Linker):
         except CudaAPIError as e:
             raise LinkerError("%s\n%s" % (e, self.error_log))
 
-    def add_cu(self, cu, name):
-        program = NvrtcProgram(cu, name)
-
-        if config.DUMP_ASSEMBLY:
-            print(("ASSEMBLY %s" % name).center(80, '-'))
-            print(program.ptx.decode())
-            print('=' * 80)
-
-        # Link the program's PTX using the normal linker mechanism
-        ptx_name = os.path.splitext(name)[0] + ".ptx"
-        self.add_ptx(program.ptx, ptx_name)
-
     def add_file(self, path, kind):
         pathbuf = path.encode("utf8")
         self._keep_alive.append(pathbuf)
@@ -2911,13 +2934,15 @@ class CudaPythonLinker(Linker):
 
     def complete(self):
         try:
-            cubin, size = driver.cuLinkComplete(self.handle)
+            cubin_buf, size = driver.cuLinkComplete(self.handle)
         except CudaAPIError as e:
             raise LinkerError("%s\n%s" % (e, self.error_log))
 
         assert size > 0, 'linker returned a zero sized cubin'
         del self._keep_alive[:]
-        return cubin, size
+        # We return a copy of the cubin because it's owned by the linker
+        cubin_ptr = ctypes.cast(cubin_buf, ctypes.POINTER(ctypes.c_char))
+        return bytes(np.ctypeslib.as_array(cubin_ptr, shape=(size,)))
 
 
 # -----------------------------------------------------------------------------

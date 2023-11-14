@@ -373,10 +373,6 @@ class InlineWorker(object):
             kernel_copy.blocks = {}
             for block_label, block in the_ir.blocks.items():
                 new_block = copy.deepcopy(the_ir.blocks[block_label])
-                new_block.body = []
-                for stmt in the_ir.blocks[block_label].body:
-                    scopy = copy.deepcopy(stmt)
-                    new_block.body.append(scopy)
                 kernel_copy.blocks[block_label] = new_block
             return kernel_copy
 
@@ -414,7 +410,7 @@ class InlineWorker(object):
         callee_scopes = _get_all_scopes(callee_blocks)
         self.debug_print("callee_scopes = ", callee_scopes)
         #    one function should only have one local scope
-        assert(len(callee_scopes) == 1)
+        assert (len(callee_scopes) == 1)
         callee_scope = callee_scopes[0]
         var_dict = {}
         for var in tuple(callee_scope.localvars._con.values()):
@@ -538,8 +534,8 @@ class InlineWorker(object):
         return state.func_ir
 
     def update_type_and_call_maps(self, callee_ir, arg_typs):
-        """ Updates the type and call maps based on calling callee_ir with arguments
-        from arg_typs"""
+        """ Updates the type and call maps based on calling callee_ir with
+        arguments from arg_typs"""
         from numba.core.ssa import reconstruct_ssa
         from numba.core.typed_passes import PreLowerStripPhis
 
@@ -575,7 +571,8 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
                         targetctx=None, arg_typs=None, typemap=None,
                         calltypes=None, work_list=None, callee_validator=None,
                         replace_freevars=True):
-    """Inline the body of `callee` at its callsite (`i`-th instruction of `block`)
+    """Inline the body of `callee` at its callsite (`i`-th instruction of
+    `block`)
 
     `func_ir` is the func_ir object of the caller function and `glbls` is its
     global variable environment (func_ir.func_id.func.__globals__).
@@ -631,7 +628,7 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     callee_scopes = _get_all_scopes(callee_blocks)
     debug_print("callee_scopes = ", callee_scopes)
     #    one function should only have one local scope
-    assert(len(callee_scopes) == 1)
+    assert (len(callee_scopes) == 1)
     callee_scope = callee_scopes[0]
     var_dict = {}
     for var in callee_scope.localvars._con.values():
@@ -661,10 +658,10 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
             cellget.argtypes = (ctypes.py_object,)
             items = tuple(cellget(x) for x in closure)
         else:
-            assert(isinstance(closure, ir.Expr)
-                   and closure.op == 'build_tuple')
+            assert (isinstance(closure, ir.Expr)
+                    and closure.op == 'build_tuple')
             items = closure.items
-        assert(len(callee_code.co_freevars) == len(items))
+        assert (len(callee_code.co_freevars) == len(items))
         _replace_freevars(callee_blocks, items)
         debug_print("After closure rename")
         _debug_dump(callee_ir)
@@ -786,8 +783,8 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
             elif (isinstance(callee_defaults, ir.Var)
                     or isinstance(callee_defaults, str)):
                 default_tuple = func_ir.get_definition(callee_defaults)
-                assert(isinstance(default_tuple, ir.Expr))
-                assert(default_tuple.op == "build_tuple")
+                assert (isinstance(default_tuple, ir.Expr))
+                assert (default_tuple.op == "build_tuple")
                 const_vals = [func_ir.get_definition(x) for
                               x in default_tuple.items]
                 args = args + const_vals
@@ -829,7 +826,7 @@ def _replace_args_with(blocks, args):
         for stmt in assigns:
             if isinstance(stmt.value, ir.Arg):
                 idx = stmt.value.index
-                assert(idx < len(args))
+                assert (idx < len(args))
                 stmt.value = args[idx]
 
 
@@ -842,7 +839,7 @@ def _replace_freevars(blocks, args):
         for stmt in assigns:
             if isinstance(stmt.value, ir.FreeVar):
                 idx = stmt.value.index
-                assert(idx < len(args))
+                assert (idx < len(args))
                 if isinstance(args[idx], ir.Var):
                     stmt.value = args[idx]
                 else:
@@ -858,7 +855,7 @@ def _replace_returns(blocks, target, return_label):
         for i in range(len(block.body)):
             stmt = block.body[i]
             if isinstance(stmt, ir.Return):
-                assert(i + 1 == len(block.body))
+                assert (i + 1 == len(block.body))
                 block.body[i] = ir.Assign(stmt.value, target, stmt.loc)
                 block.body.append(ir.Jump(return_label, stmt.loc))
                 # remove cast of the returned value
@@ -931,8 +928,8 @@ def _find_arraycall(func_ir, block):
 
 
 def _find_iter_range(func_ir, range_iter_var, swapped):
-    """Find the iterator's actual range if it is either range(n), or range(m, n),
-    otherwise return raise GuardException.
+    """Find the iterator's actual range if it is either range(n), or
+    range(m, n), otherwise return raise GuardException.
     """
     debug_print = _make_debug_print("find_iter_range")
     range_iter_def = get_definition(func_ir, range_iter_var)
@@ -1194,7 +1191,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
             # when range doesn't start from 0, index_var becomes loop index
             # (iter_first_var) minus an offset (range_def[0])
             terminator = loop_header.terminator
-            assert(isinstance(terminator, ir.Branch))
+            assert (isinstance(terminator, ir.Branch))
             # find the block in the loop body that header jumps to
             block_id = terminator.truebr
             blk = func_ir.blocks[block_id]
@@ -1256,8 +1253,8 @@ def _find_unsafe_empty_inferred(func_ir, expr):
 
 
 def _fix_nested_array(func_ir):
-    """Look for assignment like: a[..] = b, where both a and b are numpy arrays, and
-    try to eliminate array b by expanding a with an extra dimension.
+    """Look for assignment like: a[..] = b, where both a and b are numpy arrays,
+    and try to eliminate array b by expanding a with an extra dimension.
     """
     blocks = func_ir.blocks
     cfg = compute_cfg_from_blocks(blocks)

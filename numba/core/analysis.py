@@ -309,7 +309,7 @@ def dead_branch_prune(func_ir, called_args):
             if isinstance(branch_or_jump, ir.Branch):
                 branch = branch_or_jump
                 pred = guard(get_definition, func_ir, branch.cond.name)
-                if pred is not None and pred.op == "call":
+                if pred is not None and getattr(pred, "op", None) == "call":
                     function = guard(get_definition, func_ir, pred.func)
                     if (function is not None and
                         isinstance(function, ir.Global) and
@@ -447,7 +447,7 @@ def dead_branch_prune(func_ir, called_args):
             if len(const_conds) == 2:
                 # prune the branch, switch the branch for an unconditional jump
                 prune_stat, taken = prune(branch, condition, blk, *const_conds)
-                if(prune_stat):
+                if (prune_stat):
                     # add the condition to the list of nullified conditions
                     nullified_conditions.append(nullified(condition, taken,
                                                           True))
@@ -464,7 +464,7 @@ def dead_branch_prune(func_ir, called_args):
 
             if not isinstance(resolved_const, Unknown):
                 prune_stat, taken = prune_by_predicate(branch, condition, blk)
-                if(prune_stat):
+                if (prune_stat):
                     # add the condition to the list of nullified conditions
                     nullified_conditions.append(nullified(condition, taken,
                                                           False))

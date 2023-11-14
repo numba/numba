@@ -1,0 +1,4 @@
+Add support for ufunc attributes and reduce
+===========================================
+
+Support for ``ufunc.reduce`` and most ufunc attributes is added.

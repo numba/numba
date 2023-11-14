@@ -78,13 +78,6 @@ def var_swapping(a, b, c, d, e):
     a, b, c, d = b, c, d, a
     return a + b + c + d +e
 
-def unsupported_op_code():
-    # needs unsupported "SETUP_EXCEPT" opcode
-    try:
-        pass
-    except:
-        pass
-
 class TestDataFlow(TestCase):
 
     def setUp(self):

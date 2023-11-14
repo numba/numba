@@ -75,11 +75,17 @@ def array_min(arr):
 def array_min_global(arr):
     return np.min(arr)
 
+def array_amin(arr):
+    return np.amin(arr)
+
 def array_max(arr):
     return arr.max()
 
 def array_max_global(arr):
     return np.max(arr)
+
+def array_amax(arr):
+    return np.amax(arr)
 
 def array_argmin(arr):
     return arr.argmin()
@@ -458,17 +464,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         q = np.array(1)
         _check(a, q)
 
-        if numpy_version < (1, 20):
-            # NumPy 1.20+ rewrites the interpolation part of percentile/quantile
-            # to use np.subtract which doesn't support bools.
-            a = True
-            q = False
-            _check(a, q)
-
-            a = np.array([False, True, True])
-            q = a
-            _check(a, q)
-
         a = 5
         q = q_upper_bound / 2
         _check(a, q)
@@ -686,11 +681,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         np.random.shuffle(arr)
         self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
         # Test with a NaT
-        if numpy_version != (1, 21) and 'median' not in pyfunc.__name__:
-            # There's problems with NaT handling in "median" on at least NumPy
-            # 1.21.{3, 4}. See https://github.com/numpy/numpy/issues/20376
-            arr[arr.size // 2] = 'NaT'
-            self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
         if 'median' not in pyfunc.__name__:
             # Test with (val, NaT)^N (and with the random NaT from above)
             # use a loop, there's some weird thing/bug with arr[1::2] = 'NaT'
@@ -1000,6 +990,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         assert_raises(arr1d, -2)
         assert_raises(arr2d, -3)
         assert_raises(arr2d, 2)
+        # Exceptions leak references
+        self.disable_leak_check()
 
     def test_argmax_axis_must_be_integer(self):
         arr = np.arange(6)
@@ -1073,6 +1065,9 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         assert_raises(arr2d, -3)
         assert_raises(arr2d, 2)
 
+        # Exceptions leak references
+        self.disable_leak_check()
+
     def test_argmin_axis_must_be_integer(self):
         arr = np.arange(6)
 
@@ -1116,6 +1111,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                            array_all, array_all_global,
                            array_any, array_any_global,
                            array_min, array_min_global,
+                           array_amax, array_amin,
                            array_max, array_max_global,
                            array_nanmax, array_nanmin,
                            array_nansum,
