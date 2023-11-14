@@ -268,19 +268,18 @@ class TestDUFuncAt(TestCase):
             add_at(arr, index, value)
             np.testing.assert_array_equal(arr, np.full_like(arr, 2 * value))
 
-    @unittest.expectedFailure
     def test_ufunc_at_multiD(self):
         a = np.arange(9).reshape(3, 3)
         b = np.array([[100, 100, 100], [200, 200, 200], [300, 300, 300]])
         add_at = self._generate_jit(np.add)
-        add_at(a, (slice(None), [1, 2, 1]), b)
+        add_at(a, (slice(None), np.asarray([1, 2, 1])), b)
         self.assertPreciseEqual(a, np.array(
             [[0, 201, 102], [3, 404, 205], [6, 607, 308]]))
 
         a = np.arange(27).reshape(3, 3, 3)
         b = np.array([100, 200, 300])
-        add_at(a, (slice(None), slice(None), [1, 2, 1]), b)
-        self.assertPreciseEqual(a,
+        add_at(a, (slice(None), slice(None), np.asarray([1, 2, 1])), b)
+        self.assertPreciseEqual(a, np.array(
                                 [[[0, 401, 202],
                                   [3, 404, 205],
                                   [6, 407, 208]],
@@ -291,18 +290,18 @@ class TestDUFuncAt(TestCase):
 
                                  [[18, 419, 220],
                                   [21, 422, 223],
-                                  [24, 425, 226]]])
+                                  [24, 425, 226]]]))
 
         a = np.arange(9).reshape(3, 3)
         b = np.array([[100, 100, 100], [200, 200, 200], [300, 300, 300]])
-        add_at(a, ([1, 2, 1], slice(None)), b)
-        self.assertPreciseEqual(a,
-                                [[0, 1, 2], [403, 404, 405], [206, 207, 208]])
+        add_at(a, (np.asarray([1, 2, 1]), slice(None)), b)
+        self.assertPreciseEqual(a, np.asarray(
+            [[0, 1, 2], [403, 404, 405], [206, 207, 208]]))
 
         a = np.arange(27).reshape(3, 3, 3)
         b = np.array([100, 200, 300])
-        add_at(a, (slice(None), [1, 2, 1], slice(None)), b)
-        self.assertPreciseEqual(a,
+        add_at(a, (slice(None), np.asarray([1, 2, 1]), slice(None)), b)
+        self.assertPreciseEqual(a, np.asarray(
                                 [[[0,  1,  2],
                                   [203, 404, 605],
                                   [106, 207, 308]],
@@ -313,17 +312,18 @@ class TestDUFuncAt(TestCase):
 
                                  [[18, 19, 20],
                                   [221, 422, 623],
-                                  [124, 225, 326]]])
+                                  [124, 225, 326]]]))
 
         a = np.arange(9).reshape(3, 3)
         b = np.array([100, 200, 300])
-        add_at(a, (0, [1, 2, 1]), b)
-        self.assertPreciseEqual(a, [[0, 401, 202], [3, 4, 5], [6, 7, 8]])
+        add_at(a, (0, np.asarray([1, 2, 1])), b)
+        self.assertPreciseEqual(a, np.asarray(
+            [[0, 401, 202], [3, 4, 5], [6, 7, 8]]))
 
         a = np.arange(27).reshape(3, 3, 3)
         b = np.array([100, 200, 300])
-        add_at(a, ([1, 2, 1], 0, slice(None)), b)
-        self.assertPreciseEqual(a,
+        add_at(a, (np.asarray([1, 2, 1]), 0, slice(None)), b)
+        self.assertPreciseEqual(a, np.asarray(
                                 [[[0,  1,  2],
                                   [3,  4,  5],
                                   [6,  7,  8]],
@@ -334,12 +334,15 @@ class TestDUFuncAt(TestCase):
 
                                  [[118, 219, 320],
                                   [21,  22, 23],
-                                  [24,  25, 26]]])
+                                  [24,  25, 26]]]))
 
+    @unittest.expectedFailure
+    def test_ufunc_at_multiD_unituple(self):
         a = np.arange(27).reshape(3, 3, 3)
         b = np.array([100, 200, 300])
+        add_at = self._generate_jit(np.add)
         add_at(a, (slice(None), slice(None), slice(None)), b)
-        self.assertPreciseEqual(a,
+        self.assertPreciseEqual(a, np.asarray(
                                 [[[100, 201, 302],
                                   [103, 204, 305],
                                   [106, 207, 308]],
@@ -350,7 +353,7 @@ class TestDUFuncAt(TestCase):
 
                                  [[118, 219, 320],
                                   [121, 222, 323],
-                                  [124, 225, 326]]])
+                                  [124, 225, 326]]]))
 
     def test_ufunc_at_0D(self):
         a = np.array(0)

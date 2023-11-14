@@ -1,4 +1,5 @@
 import functools
+import operator
 import warnings
 
 import numpy as np
@@ -15,8 +16,119 @@ from numba.np.ufunc import _internal
 from numba.parfors import array_analysis
 from numba.np.ufunc import ufuncbuilder
 from numba.np import numpy_support
+from numba.np.arrayobj import (load_item, store_item, normalize_indices,
+                               FancyIndexer, make_array)
 from typing import Callable
 from llvmlite import ir
+
+
+class UfuncAtIterator:
+
+    def __init__(self, ufunc, a, a_ty, indices, indices_ty, b=None, b_ty=None):
+        self.ufunc = ufunc
+        self.a = a
+        self.a_ty = a_ty
+        self.indices = indices
+        self.indices_ty = indices_ty
+        self.b = b
+        self.b_ty = b_ty
+        self.debug = False
+
+    def run(self, context, builder):
+        self._prepare(context, builder)
+        loop_indices, _ = self.indexer.begin_loops()
+        self._call_ufunc(context, builder, loop_indices)
+        self.indexer.end_loops()
+
+    def need_advanced_indexing(self):
+        return isinstance(self.indices_ty, types.Tuple)
+
+    def _prepare(self, context, builder):
+        a, indices = self.a, self.indices
+        a_ty, indices_ty = self.a_ty, self.indices_ty
+
+        zero = context.get_value_type(types.intp)(0)
+
+        if self.b is not None:
+            self.b_indice = cgutils.alloca_once_value(builder, zero)
+
+        if self.need_advanced_indexing():
+            indices = cgutils.unpack_tuple(builder, indices,
+                                           count=len(indices_ty))
+            index_types = indices_ty.types
+            index_types, indices = normalize_indices(context, builder,
+                                                     index_types, indices)
+        else:
+            indices = (indices,)
+            index_types = (indices_ty,)
+            index_types, indices = normalize_indices(context, builder,
+                                                     index_types, indices)
+
+        self.indexer = FancyIndexer(context, builder, a_ty, a,
+                                    index_types, indices)
+        self.indexer.prepare()
+        self.cres = self._compile_ufunc(context, builder)
+
+    def _load_val(self, context, builder, loop_indices, array, array_ty):
+        shapes = cgutils.unpack_tuple(builder, array.shape)
+        strides = cgutils.unpack_tuple(builder, array.strides)
+        data = array.data
+
+        ptr = cgutils.get_item_pointer2(context, builder, data, shapes, strides,
+                                        array_ty.layout, loop_indices)
+        val = load_item(context, builder, array_ty, ptr)
+        return ptr, val
+
+    def _load_flat(self, context, builder, indices, array, array_ty):
+        idx = builder.load(indices)
+        sig = array_ty.dtype(array_ty, types.intp)
+        impl = context.get_function(operator.getitem, sig)
+        val = impl(builder, (array, idx))
+
+        if self.debug:
+            cgutils.printf(builder, "idx: %d - %d\n", idx, val)
+
+        # increment indices
+        one = context.get_value_type(types.intp)(1)
+        idx = builder.add(idx, one)
+        builder.store(idx, indices)
+
+        return None, val
+
+    def _store_val(self, context, builder, array, array_ty, ptr, val):
+        fromty = self.cres.signature.return_type
+        toty = array_ty.dtype
+        val = context.cast(builder, val, fromty, toty)
+        store_item(context, builder, array_ty, val, ptr)
+
+    def _compile_ufunc(self, context, builder):
+        ufunc = self.ufunc.key[0]
+
+        if self.b is None:
+            sig = (self.a_ty.dtype,)
+        else:
+            sig = (self.a_ty.dtype, self.b_ty.dtype)
+
+        cres = ufunc.add(sig)
+        context.add_linking_libs((cres.library,))
+        return cres
+
+    def _call_ufunc(self, context, builder, loop_indices):
+        cres = self.cres
+        a, a_ty = self.a, self.a_ty
+
+        ptr, val = self._load_val(context, builder, loop_indices, a, a_ty)
+
+        if self.b is None:
+            args = (val,)
+        else:
+            b, b_ty, b_idx = self.b, self.b_ty, self.b_indice
+            _, val_b = self._load_flat(context, builder, b_idx, b, b_ty)
+            args = (val, val_b)
+
+        res = context.call_internal(builder, cres.fndesc, cres.signature,
+                                    args)
+        self._store_val(context, builder, a, a_ty, ptr, res)
 
 
 def make_dufunc_kernel(_dufunc):
@@ -295,17 +407,17 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 msg = 'The first argument "a" must be array-like'
                 raise errors.NumbaTypeError(msg)
 
-            indices_arr = isinstance(indices, (types.Array, types.List))
-            indices_bool_arr = indices_arr and \
-                isinstance(indices.dtype, types.Boolean)
+            indices_arr = isinstance(indices, types.Array)
+            indices_list = isinstance(indices, types.List)
             indices_tuple = isinstance(indices, types.Tuple)
             indices_slice = isinstance(indices, types.SliceType)
             indices_scalar = not (indices_arr or indices_slice or indices_tuple)
             indices_empty_tuple = indices_tuple and len(indices) == 0
             b_array = isinstance(b, (types.Array, types.Sequence, types.List,
                                      types.Tuple))
-            b_scalar = not b_array
             b_none = cgutils.is_nonelike(b)
+            b_scalar = not (b_array or b_none)
+            need_cast = any([indices_list])
 
             nin = self.ufunc.nin
 
@@ -324,55 +436,56 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
             else:
                 self.add((a.dtype, b.dtype))
 
-            def impl_b_none(ufunc, a, indices, b=None):
-                for idx in indices:
-                    a[idx] = ufunc(a[idx])
-                return a
+            def apply_ufunc_codegen(context, builder, sig, args):
+                if len(args) == 4:
+                    _, aty, idxty, bty = sig.args
+                    _, a, indices, b = args
+                else:
+                    _, aty, idxty, bty = sig.args + (None,)
+                    _, a, indices, b = args + (None,)
+
+                a = make_array(aty)(context, builder, a)
+                at_iter = UfuncAtIterator(ufunc, a, aty, indices, idxty, b, bty)
+                at_iter.run(context, builder)
+
+            @intrinsic
+            def apply_a_b_ufunc(typingctx, ufunc, a, indices, b):
+                sig = types.none(ufunc, a, indices, b)
+                return sig, apply_ufunc_codegen
+
+            @intrinsic
+            def apply_a_ufunc(typingctx, ufunc, a, indices):
+                sig = types.none(ufunc, a, indices)
+                return sig, apply_ufunc_codegen
+
+            def impl_cast(ufunc, a, indices, b=None):
+                if b_none:
+                    return ufunc.at(a, np.asarray(indices))
+                else:
+                    return ufunc.at(a,
+                                    np.asarray(indices),
+                                    np.asarray(b))
+
+            def impl_generic(ufunc, a, indices, b=None):
+                if b_none:
+                    apply_a_ufunc(ufunc, a, indices,)
+                else:
+                    b_ = np.asarray(b)
+                    a_ = a[indices]
+                    b_ = np.broadcast_to(b_, a_.shape)
+                    apply_a_b_ufunc(ufunc, a, indices, b_.flat)
+
+            def impl_indices_empty_b_scalar(ufunc, a, indices, b=None):
+                a[()] = ufunc(a[()], b)
 
             def impl_scalar_scalar(ufunc, a, indices, b=None):
                 if b_none:
                     a[indices] = ufunc(a[indices])
                 else:
                     a[indices] = ufunc(a[indices], b)
-                return a
 
-            def impl_generic(ufunc, a, indices, b=None):
-                indices = np.asarray(indices)
-                b = np.asarray(b)
-
-                shape = np.broadcast_shapes(indices.shape, b.shape)
-                indices = np.broadcast_to(indices, shape)
-                b = np.broadcast_to(b, shape)
-
-                j = 0
-                for idx in indices:
-                    a[idx] = ufunc(a[idx], b[j])
-                    j += 1
-                return a
-
-            def impl_indices_bool_arr(ufunc, a, indices, b=None):
-                a_ = a[indices]
-                idx = np.indices(a_.shape)
-                a[indices] = ufunc.at(a_, idx, b)
-                return a
-
-            def impl_indices_empty_b_scalar(ufunc, a, indices, b=None):
-                a[()] = ufunc(a[()], b)
-                return a
-
-            def impl_indices_slice(ufunc, a, indices, b=None):
-                if b_none:
-                    a[indices] = ufunc(a[indices])
-                else:
-                    a[indices] = ufunc(a[indices], b)
-                return a
-
-            if cgutils.is_nonelike(b):
-                return impl_b_none
-            elif indices_slice:
-                return impl_indices_slice
-            elif indices_bool_arr:
-                return impl_indices_bool_arr
+            if need_cast:
+                return impl_cast
             elif indices_empty_tuple and b_scalar:
                 return impl_indices_empty_b_scalar
             elif indices_scalar and b_scalar:
