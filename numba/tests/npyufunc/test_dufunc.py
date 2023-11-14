@@ -377,7 +377,6 @@ class TestDUFuncAt(TestCase):
         power_at(a, [1, 2, 3, 2], 3.5)
         self.assertPreciseEqual(a, np.array([0, 1, 4414, 46, 4, 5, 6, 7, 8, 9]))
 
-    @unittest.expectedFailure
     def test_ufunc_at_boolean(self):
         # Test boolean indexing and boolean ufuncs
         a = np.arange(10)
@@ -385,7 +384,7 @@ class TestDUFuncAt(TestCase):
         equal_at = self._generate_jit(np.equal)
         # boolean indexing not supported
         equal_at(a, index, [0, 2, 4, 6, 8])
-        self.assertPreciseEqual(a, [1, 1, 1, 3, 1, 5, 1, 7, 1, 9])
+        self.assertPreciseEqual(a, np.array([1, 1, 1, 3, 1, 5, 1, 7, 1, 9]))
 
     def test_ufunc_at_boolean2(self):
         # Test unary operator
