@@ -16,8 +16,6 @@ from numba.np.ufunc import _internal
 from numba.parfors import array_analysis
 from numba.np.ufunc import ufuncbuilder
 from numba.np import numpy_support
-from numba.np.arrayobj import (load_item, store_item, normalize_indices,
-                               FancyIndexer, make_array)
 from typing import Callable
 from llvmlite import ir
 
@@ -43,6 +41,8 @@ class UfuncAtIterator:
         return isinstance(self.indices_ty, types.BaseTuple)
 
     def _prepare(self, context, builder):
+        from numba.np.arrayobj import normalize_indices, FancyIndexer
+
         a, indices = self.a, self.indices
         a_ty, indices_ty = self.a_ty, self.indices_ty
 
@@ -69,6 +69,7 @@ class UfuncAtIterator:
         self.cres = self._compile_ufunc(context, builder)
 
     def _load_val(self, context, builder, loop_indices, array, array_ty):
+        from numba.np.arrayobj import load_item
         shapes = cgutils.unpack_tuple(builder, array.shape)
         strides = cgutils.unpack_tuple(builder, array.strides)
         data = array.data
@@ -92,6 +93,7 @@ class UfuncAtIterator:
         return None, val
 
     def _store_val(self, context, builder, array, array_ty, ptr, val):
+        from numba.np.arrayobj import store_item
         fromty = self.cres.signature.return_type
         toty = array_ty.dtype
         val = context.cast(builder, val, fromty, toty)
@@ -433,6 +435,8 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 self.add((a.dtype, b.dtype))
 
             def apply_ufunc_codegen(context, builder, sig, args):
+                from numba.np.arrayobj import make_array
+
                 if len(args) == 4:
                     _, aty, idxty, bty = sig.args
                     _, a, indices, b = args
