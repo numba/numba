@@ -32,7 +32,6 @@ class UfuncAtIterator:
         self.indices_ty = indices_ty
         self.b = b
         self.b_ty = b_ty
-        self.debug = False
 
     def run(self, context, builder):
         self._prepare(context, builder)
@@ -41,7 +40,7 @@ class UfuncAtIterator:
         self.indexer.end_loops()
 
     def need_advanced_indexing(self):
-        return isinstance(self.indices_ty, types.Tuple)
+        return isinstance(self.indices_ty, types.BaseTuple)
 
     def _prepare(self, context, builder):
         a, indices = self.a, self.indices
@@ -84,9 +83,6 @@ class UfuncAtIterator:
         sig = array_ty.dtype(array_ty, types.intp)
         impl = context.get_function(operator.getitem, sig)
         val = impl(builder, (array, idx))
-
-        if self.debug:
-            cgutils.printf(builder, "idx: %d - %d\n", idx, val)
 
         # increment indices
         one = context.get_value_type(types.intp)(1)

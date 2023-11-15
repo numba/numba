@@ -336,8 +336,6 @@ class TestDUFuncAt(TestCase):
                                   [21,  22, 23],
                                   [24,  25, 26]]]))
 
-    @unittest.expectedFailure
-    def test_ufunc_at_multiD_unituple(self):
         a = np.arange(27).reshape(3, 3, 3)
         b = np.array([100, 200, 300])
         add_at = self._generate_jit(np.add)
@@ -437,7 +435,7 @@ class TestDUFuncAt(TestCase):
         maximum_at(a, [0], 0)
         self.assertPreciseEqual(a, np.array([1, 2, 3]))
 
-    def test_at_negative_indexes(self):
+    def test_ufunc_at_negative_indexes(self):
         dtypes = np.typecodes['AllInteger'] + np.typecodes['Float']
         ufuncs = (np.add, np.subtract, np.divide, np.minimum, np.maximum)
 
@@ -466,7 +464,7 @@ class TestDUFuncAt(TestCase):
                 assert np.all(indxs == [-1, 1, -1, 2])
 
     @unittest.expectedFailure
-    def test_at_not_none_signature(self):
+    def test_ufunc_at_not_none_signature(self):
         # Test ufuncs with non-trivial signature raise a TypeError
         a = np.ones((2, 2, 2))
         b = np.ones((1, 2, 2))
@@ -479,7 +477,7 @@ class TestDUFuncAt(TestCase):
         # a = np.array([[[1, 2], [3, 4]]])
         # assert_raises(TypeError, np.linalg._umath_linalg.det.at, a, [0])
 
-    def test_at_no_loop_for_op(self):
+    def test_ufunc_at_no_loop_for_op(self):
         # str dtype does not have a ufunc loop for np.add
         arr = np.ones(10, dtype=str)
         add_at = self._generate_jit(np.add)
@@ -487,18 +485,18 @@ class TestDUFuncAt(TestCase):
         with self.assertRaises(TypeError):
             add_at(arr, [0, 1], [0, 1])
 
-    def test_at_output_casting(self):
+    def test_ufunc_at_output_casting(self):
         arr = np.array([-1])
         equal_at = self._generate_jit(np.equal)
         equal_at(arr, [0], [0])
         assert arr[0] == 0
 
-    def test_at_broadcast_failure(self):
+    def test_ufunc_at_broadcast_failure(self):
         arr = np.arange(5)
         add_at = self._generate_jit(np.add)
 
         # NumPy raises ValueError('array is not broadcastable to correct shape')
-        msg = 'shape mismatch: objects cannot be broadcast to a single shape'
+        msg = 'operands could not be broadcast together with remapped shapes'
         with self.assertRaisesRegex(ValueError, msg):
             add_at(arr, [0, 1], [1, 2, 3])
 
