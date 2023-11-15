@@ -21,7 +21,8 @@ from numba.core.extending import overload
 from numba.tests.support import (MemoryLeak, TestCase, captured_stdout,
                                  skip_unless_scipy, linux_only,
                                  strace_supported, strace,
-                                 expected_failure_py311)
+                                 expected_failure_py311,
+                                 expected_failure_py312)
 from numba.core.utils import PYVERSION
 from numba.experimental import jitclass
 import unittest
@@ -289,6 +290,7 @@ class TestLiftCall(BaseTestWithLifting):
     @unittest.skipIf(PYVERSION <= (3, 8),
                      "unsupported on py3.8 and before")
     @expected_failure_py311
+    @expected_failure_py312
     def test_liftcall5(self):
         self.check_extracted_with(liftcall5, expect_count=1,
                                   expected_stdout="0\n1\n2\n3\n4\n5\nA\n")
@@ -735,6 +737,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         self.assert_equal_return_and_stdout(foo, fn, x)
 
     @expected_failure_py311
+    @expected_failure_py312
     def test_case19_recursion(self):
         def foo(x):
             with objmode_context():
