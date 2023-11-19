@@ -978,9 +978,26 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
         self.assertEqual(foo(k), foo.py_func(k))
 
     def test_22(self):
+        # NOTE: This test "worked" as a side effect of a bug that was discovered
+        # during work that added support for Python 3.12. In the literal_unroll
+        # transform, there was an accidental overwrite of a dictionary key that
+        # could occur if nested unrolls happened to have the conditions:
+        #
+        # 1. outer unroll induction varible not used in the induced loop.
+        # 2. the `max_label` from numba.core.ir_utils was in a specific state
+        #    such that a collision occurred.
+        # 3. the bug existed in the algorithm that checked for getitem access.
+        #
+        # This exceedingly rare usecase is now considered illegal as a result,
+        # by banning this behaviour the analysis is considerably more simple.
+        # Further there is no loss of functionality as the outer loop can be
+        # trivially replaced (in the following) by using a `range(len())` based
+        # iteration over `a` as there's no need for the loop in `a` to be
+        # versioned!
+
         @njit
         def foo(z):
-            a = (12, 12.7, 3j, 4, z, 2 * z)
+            a = (12, 12.7, 3j, 4, z, 2 * z, 'a')
             b = (23, 23.9, 6j, 8)
 
             def bar():
@@ -998,7 +1015,12 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
 
         f = 9
         k = f
-        self.assertEqual(foo(k), foo.py_func(k))
+
+        with self.assertRaises(errors.UnsupportedError) as raises:
+            foo(k)
+
+        self.assertIn("Nesting of literal_unroll is unsupported",
+                      str(raises.exception))
 
     def test_23(self):
         # unroll from closure that ends up banned as it leads to nesting
