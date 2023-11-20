@@ -54,7 +54,7 @@ def _grid_group_sync(typingctx, group):
     return sig, codegen
 
 
-@overload_method(GridGroupClass, 'sync')
+@overload_method(GridGroupClass, 'sync', target='cuda')
 def _ol_grid_group_sync(group):
     if isinstance(group, GridGroupClass):
         def impl(group):
