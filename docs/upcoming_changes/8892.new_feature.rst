@@ -1,8 +1,0 @@
-``numba.experimental.jitclass`` gains support for ``__*matmul__`` methods.
-==========================================================================
-
-``numba.experimental.jitclass`` now has support for the following methods:
-
-* ``__matmul__``
-* ``__imatmul__``
-* ``__rmatmul__``

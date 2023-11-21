@@ -63,7 +63,7 @@ elif  [[ $(uname) == Darwin ]]; then
 fi
 
 # Install latest correct build
-$CONDA_INSTALL -c numba/label/dev llvmlite=0.41
+$CONDA_INSTALL -c numba/label/dev llvmlite=0.42
 
 # Install importlib-metadata for Python < 3.9
 if [ $PYTHON \< "3.9" ]; then $CONDA_INSTALL importlib_metadata; fi
@@ -79,6 +79,8 @@ if [ "$TEST_SVML" == "yes" ]; then $CONDA_INSTALL -c numba icc_rt; fi
 if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL "tbb>=2021.6" "tbb-devel>=2021.6"; fi
 # Install typeguard
 if [ "$RUN_TYPEGUARD" == "yes" ]; then $CONDA_INSTALL "conda-forge::typeguard==3.0.1"; fi
+# Install RVSDG
+if [ "$TEST_RVSDG" == "yes" ]; then $PIP_INSTALL numba-rvsdg; fi
 
 # environment dump for debug
 # echo "DEBUG ENV:"

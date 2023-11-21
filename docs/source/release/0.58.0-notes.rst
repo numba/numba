@@ -1,0 +1,553 @@
+Version 0.58.0 (20 September 2023)
+----------------------------------
+
+.. contents:: Table of Contents
+   :depth: 2
+
+This is a major Numba release. Numba now uses towncrier to create the release
+notes, so please find a summary of all noteworthy items below.
+
+Highlights
+~~~~~~~~~~
+
+Added towncrier
+"""""""""""""""
+
+This PR adds towncrier as a GitHub workflow for checking release notes.
+From this PR onwards every PR made in Numba will require a appropriate
+release note associated with it. The reviewer may decide to skip adding
+release notes in smaller PRs with minimal impact by addition of a
+``skip_release_notes`` label to the PR.
+
+(`PR-#8792 <https://github.com/numba/numba/pull/8792>`__)
+
+The minimum supported NumPy version is 1.22.
+""""""""""""""""""""""""""""""""""""""""""""
+
+Following NEP-0029, the minimum supported NumPy version is now 1.22.
+
+(`PR-#9093 <https://github.com/numba/numba/pull/9093>`__)
+
+Add support for NumPy 1.25
+""""""""""""""""""""""""""
+
+Extend Numba to support new and changed features released in NumPy 1.25.
+
+(`PR-#9011 <https://github.com/numba/numba/pull/9011>`__)
+
+Remove NVVM 3.4 and CTK 11.0 / 11.1 support
+"""""""""""""""""""""""""""""""""""""""""""
+
+Support for CUDA toolkits < 11.2 is removed.
+
+(`PR-#9040 <https://github.com/numba/numba/pull/9040>`__)
+
+Removal of Windows 32-bit Support
+"""""""""""""""""""""""""""""""""
+
+This release onwards, Numba has discontinued support for Windows 32-bit
+operating systems.
+
+(`PR-#9083 <https://github.com/numba/numba/pull/9083>`__)
+
+The minimum llvmlite version is now 0.41.0.
+"""""""""""""""""""""""""""""""""""""""""""
+
+The minimum required version of llvmlite is now version 0.41.0.
+
+(`PR-#8916 <https://github.com/numba/numba/pull/8916>`__)
+
+Added RVSDG-frontend
+""""""""""""""""""""
+
+This PR is a preliminary work on adding a RVSDG-frontend for processing
+bytecode. RVSDG (Regionalized Value-State Dependence Graph) allows us to
+have a dataflow-centric view instead of a traditional SSA-CFG view. This
+allows us to simplify the compiler in the future.
+
+(`PR-#9012 <https://github.com/numba/numba/pull/9012>`__)
+
+New Features
+~~~~~~~~~~~~
+
+``numba.experimental.jitclass`` gains support for ``__*matmul__`` methods.
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+``numba.experimental.jitclass`` now has support for the following methods:
+
+* ``__matmul__``
+* ``__imatmul__``
+* ``__rmatmul__``
+
+(`PR-#8892 <https://github.com/numba/numba/pull/8892>`__)
+
+``numba.experimental.jitclass`` gains support for reflected "dunder" methods.
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+``numba.experimental.jitclass`` now has support for the following methods:
+
+* ``__radd__``
+* ``__rand_``
+* ``__rfloordiv__``
+* ``__rlshift__``
+* ``__ror_``
+* ``__rmod_``
+* ``__rmul_``
+* ``__rpow_``
+* ``__rrshift_``
+* ``__rsub_``
+* ``__rtruediv_``
+* ``__rxor_``
+
+(`PR-#8906 <https://github.com/numba/numba/pull/8906>`__)
+
+
+Add support for value ``max`` to ``NUMBA_OPT``.
+"""""""""""""""""""""""""""""""""""""""""""""""
+
+The optimisation level that Numba applies when compiling can be set through the
+environment variable ``NUMBA_OPT``. This has historically been a value between
+0 and 3 (inclusive). Support for the value ``max`` has now been added, this is a
+Numba-specific optimisation level which indicates that the user would like Numba
+to try running the most optimisation possible, potentially trading a longer
+compilation time for better run-time performance. In practice, use of the ``max``
+level of optimisation may or may not benefit the run-time or compile-time
+performance of user code, but it has been added to present an easy to access
+option for users to try if they so wish.
+
+(`PR-#9094 <https://github.com/numba/numba/pull/9094>`__)
+
+
+Improvements
+~~~~~~~~~~~~
+
+Updates to ``numba.core.pythonapi``.
+""""""""""""""""""""""""""""""""""""
+
+Support for Python C-API functions ``PyBytes_AsString`` and
+``PyBytes_AsStringAndSize`` is added to ``numba.core.pythonapi.PythonAPI`` as
+``bytes_as_string`` and ``bytes_as_string_and_size`` methods respectively.
+
+(`PR-#8462 <https://github.com/numba/numba/pull/8462>`__)
+
+Support for ``isinstance`` is now non-experimental.
+"""""""""""""""""""""""""""""""""""""""""""""""""""
+
+Support for the ``isinstance`` built-in function has moved from being considered
+an experimental feature to a fully supported feature.
+
+(`PR-#8911 <https://github.com/numba/numba/pull/8911>`__)
+
+
+NumPy Support
+~~~~~~~~~~~~~
+
+All modes are supported in ``numpy.correlate`` and ``numpy.convolve``.
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+All values for the ``mode`` argument to ``numpy.correlate`` and
+``numpy.convolve`` are now supported.
+
+(`PR-#7543 <https://github.com/numba/numba/pull/7543>`__)
+
+``@vectorize`` accommodates arguments implementing ``__array_ufunc__``.
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+Universal functions (``ufunc``\ s) created with ``numba.vectorize`` will now
+respect arguments implementing ``__array_ufunc__`` (NEP-13) to allow pre- and
+post-processing of arguments and return values when the ufunc is called from the
+interpreter.
+
+(`PR-#8995 <https://github.com/numba/numba/pull/8995>`__)
+
+
+Added support for ``np.geomspace`` function.
+""""""""""""""""""""""""""""""""""""""""""""
+
+This PR improves on `#4074 <https://github.com/numba/numba/issues/4074>`__ by
+adding support for ``np.geomspace``. The current implementation only supports
+scalar ``start`` and ``stop`` parameters.
+
+(`PR-#9068 <https://github.com/numba/numba/pull/9068>`__)
+
+Added support for ``np.vsplit``, ``np.hsplit``, ``np.dsplit``.
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+This PR improves on `#4074 <https://github.com/numba/numba/issues/4074>`__ by adding support for ``np.vsplit``, ``np.hsplit``, ``and np.dsplit``.
+
+(`PR-#9082 <https://github.com/numba/numba/pull/9082>`__)
+
+Added support for ``np.row_stack`` function.
+""""""""""""""""""""""""""""""""""""""""""""
+
+Support is added for ``numpy.row_stack``.
+
+(`PR-#9085 <https://github.com/numba/numba/pull/9085>`__)
+
+Added support for functions ``np.polynomial.polyutils.trimseq``, as well as functions ``polyadd``, ``polysub``, ``polymul`` from ``np.polynomial.polynomial``.
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+Support is added for ``np.polynomial.polyutils.trimseq``, ``np.polynomial.polynomial.polyadd``, ``np.polynomial.polynomial.polysub``, ``np.polynomial.polynomial.polymul``.
+
+(`PR-#9087 <https://github.com/numba/numba/pull/9087>`__)
+
+Added support for ``np.diagflat`` function.
+"""""""""""""""""""""""""""""""""""""""""""
+
+Support is added for ``numpy.diagflat``.
+
+(`PR-#9113 <https://github.com/numba/numba/pull/9113>`__)
+
+Added support for ``np.resize`` function.
+"""""""""""""""""""""""""""""""""""""""""
+
+Support is added for ``numpy.resize``.
+
+(`PR-#9118 <https://github.com/numba/numba/pull/9118>`__)
+
+Add np.trim_zeros
+"""""""""""""""""
+
+Support for ``np.trim_zeros()`` is added.
+
+(`PR-#9074 <https://github.com/numba/numba/pull/9074>`__)
+
+
+CUDA Changes
+~~~~~~~~~~~~
+
+Bitwise operation ``ufunc`` support for the CUDA target.
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+Support is added for some ``ufunc``\ s associated with bitwise operation on the
+CUDA target. Namely:
+
+* ``numpy.bitwise_and``
+* ``numpy.bitwise_or``
+* ``numpy.bitwise_not``
+* ``numpy.bitwise_xor``
+* ``numpy.invert``
+* ``numpy.left_shift``
+* ``numpy.right_shift``
+
+(`PR-#8974 <https://github.com/numba/numba/pull/8974>`__)
+
+Add support for the latest CUDA driver codes.
+"""""""""""""""""""""""""""""""""""""""""""""
+
+Support is added for the latest set of CUDA driver codes.
+
+(`PR-#8988 <https://github.com/numba/numba/pull/8988>`__)
+
+
+Add NumPy comparison ufunc in CUDA
+""""""""""""""""""""""""""""""""""
+this PR adds support for comparison ufuncs for the CUDA target
+(eg. ``numpy.greater``, ``numpy.greater_equal``, ``numpy.less_equal``, etc.).
+
+(`PR-#9007 <https://github.com/numba/numba/pull/9007>`__)
+
+Report absolute path of ``libcuda.so`` on Linux
+"""""""""""""""""""""""""""""""""""""""""""""""
+
+``numba -s`` now reports the absolute path to ``libcuda.so`` on Linux, to aid
+troubleshooting driver issues, particularly on WSL2 where a Linux driver can
+incorrectly be installed in the environment.
+
+(`PR-#9034 <https://github.com/numba/numba/pull/9034>`__)
+
+Add debuginfo support to ``nvdisasm`` output.
+"""""""""""""""""""""""""""""""""""""""""""""
+
+Support is added for debuginfo (source line and inlining information) in
+functions that make calls through ``nvdisasm``. For example the CUDA dispatcher
+``.inspect_sass`` method output is now augmented with this information.
+
+(`PR-#9035 <https://github.com/numba/numba/pull/9035>`__)
+
+
+Add CUDA SASS CFG Support
+"""""""""""""""""""""""""
+
+This PR adds support for getting the SASS CFG in dot language format.
+It adds an ``inspect_sass_cfg()`` method to CUDADispatcher and the ``-cfg``
+flag to the nvdisasm command line tool.
+
+(`PR-#9051 <https://github.com/numba/numba/pull/9051>`__)
+
+Support NVRTC using the ctypes binding
+""""""""""""""""""""""""""""""""""""""
+
+NVRTC can now be used when the ctypes binding is in use, enabling float16, and
+linking CUDA C / C++ sources without needing the NVIDIA CUDA Python bindings.
+
+(`PR-#9086 <https://github.com/numba/numba/pull/9086>`__)
+
+Fix CUDA atomics tests with toolkit 12.2
+""""""""""""""""""""""""""""""""""""""""
+
+CUDA 12.2 generates slightly different PTX for some atomics, so the relevant
+tests are updated to look for the correct instructions when 12.2 is used.
+
+(`PR-#9088 <https://github.com/numba/numba/pull/9088>`__)
+
+
+Bug Fixes
+~~~~~~~~~
+
+Handling of different sized unsigned integer indexes are fixed in ``numba.typed.List``.
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+An issue with the order of truncation/extension and casting of unsigned integer
+indexes in ``numba.typed.List`` has been fixed.
+
+(`PR-#7262 <https://github.com/numba/numba/pull/7262>`__)
+
+Prevent invalid fusion
+""""""""""""""""""""""
+
+This PR fixes an issue in which an array first read in a parfor and later
+written in the same parfor would only be classified as used in the parfor.
+When a subsequent parfor also used the same array then fusion of the
+parfors was happening which should have been forbidden given that that the
+first parfor was also writing to the array.  This PR treats such arrays
+in a parfor as being both used and defined so that fusion will be prevented.
+
+(`PR-#7582 <https://github.com/numba/numba/pull/7582>`__)
+
+The ``numpy.allclose`` implementation now correctly handles default arguments.
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+The implementation of ``numpy.allclose`` is corrected to use ``TypingError`` to
+report typing errors.
+
+(`PR-#8885 <https://github.com/numba/numba/pull/8885>`__)
+
+Add type validation to ``numpy.isclose``.
+"""""""""""""""""""""""""""""""""""""""""
+
+Type validation is added to the implementation of ``numpy.isclose``.
+
+(`PR-#8944 <https://github.com/numba/numba/pull/8944>`__)
+
+Fix support for overloading dispatcher with non-compatible first-class functions
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+Fixes an error caused by not handling compilation error during casting of
+``Dispatcher`` objects into first-class functions. With the fix, users can now
+overload a dispatcher with non-compatible first-class functions. Refer to
+https://github.com/numba/numba/issues/9071 for details.
+
+(`PR-#9072 <https://github.com/numba/numba/pull/9072>`__)
+
+Support ``dtype`` keyword argument in ``numpy.arange`` with ``parallel=True``
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+Fixes parfors transformation to support the use of ``dtype`` keyword argument in
+``numpy.arange(..., dtype=dtype)``.
+
+(`PR-#9095 <https://github.com/numba/numba/pull/9095>`__)
+
+Fix all ``@overload``\ s to use parameter names that match public APIs.
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+Some of the Numba ``@overload``\ s for functions in NumPy and Python's built-ins
+were written using parameter names that did not match those used in API they
+were overloading. The result of this being that calling a function with such a
+mismatch using the parameter names as key-word arguments at the call site would
+result in a compilation error. This has now been universally fixed throughout
+the code base and a unit test is running with a best-effort attempt to prevent
+reintroduction of similar mistakes in the future. Fixed functions include:
+
+From Python built-ins:
+
+* ``complex``
+
+From the Python ``random`` module:
+
+* ``random.seed``
+* ``random.gauss``
+* ``random.normalvariate``
+* ``random.randrange``
+* ``random.randint``
+* ``random.uniform``
+* ``random.shuffle``
+
+From the ``numpy`` module:
+
+* ``numpy.argmin``
+* ``numpy.argmax``
+* ``numpy.array_equal``
+* ``numpy.average``
+* ``numpy.count_nonzero``
+* ``numpy.flip``
+* ``numpy.fliplr``
+* ``numpy.flipud``
+* ``numpy.iinfo``
+* ``numpy.isscalar``
+* ``numpy.imag``
+* ``numpy.real``
+* ``numpy.reshape``
+* ``numpy.rot90``
+* ``numpy.swapaxes``
+* ``numpy.union1d``
+* ``numpy.unique``
+
+From the ``numpy.linalg`` module:
+
+* ``numpy.linalg.norm``
+* ``numpy.linalg.cond``
+* ``numpy.linalg.matrix_rank``
+
+From the ``numpy.random`` module:
+
+* ``numpy.random.beta``
+* ``numpy.random.chisquare``
+* ``numpy.random.f``
+* ``numpy.random.gamma``
+* ``numpy.random.hypergeometric``
+* ``numpy.random.lognormal``
+* ``numpy.random.pareto``
+* ``numpy.random.randint``
+* ``numpy.random.random_sample``
+* ``numpy.random.ranf``
+* ``numpy.random.rayleigh``
+* ``numpy.random.sample``
+* ``numpy.random.shuffle``
+* ``numpy.random.standard_gamma``
+* ``numpy.random.triangular``
+* ``numpy.random.weibull``
+
+(`PR-#9099 <https://github.com/numba/numba/pull/9099>`__)
+
+
+Changes
+~~~~~~~
+
+
+Support for ``@numba.extending.intrinsic(prefer_literal=True)``
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+In the high level extension API, the ``prefer_literal`` option is added to the
+``numba.extending.intrinsic`` decorator to prioritize the use of literal types
+when available. This has the same behavior as in the ``prefer_literal``
+option in the ``numba.extending.overload`` decorator.
+
+(`PR-#6647 <https://github.com/numba/numba/pull/6647>`__)
+
+
+Deprecations
+~~~~~~~~~~~~
+
+Deprecation of old-style ``NUMBA_CAPTURED_ERRORS``
+""""""""""""""""""""""""""""""""""""""""""""""""""
+
+Added deprecation schedule of ``NUMBA_CAPTURED_ERRORS=old_style``.
+``NUMBA_CAPTURED_ERRORS=new_style`` will become the default in future releases.
+Details are documented at
+https://numba.readthedocs.io/en/stable/reference/deprecation.html#deprecation-of-old-style-numba-captured-errors
+
+(`PR-#9090 <https://github.com/numba/numba/pull/9090>`__)
+
+Pull-Requests
+~~~~~~~~~~~~~
+
+* PR `#6647 <https://github.com/numba/numba/pull/6647>`_: Support prefer_literal option for intrinsic decorator (`ashutoshvarma <https://github.com/ashutoshvarma>`_ `sklam <https://github.com/sklam>`_)
+* PR `#7262 <https://github.com/numba/numba/pull/7262>`_: fix order of handling and casting (`esc <https://github.com/esc>`_)
+* PR `#7543 <https://github.com/numba/numba/pull/7543>`_: Support for all modes in np.correlate and np.convolve (`jeertmans <https://github.com/jeertmans>`_)
+* PR `#7582 <https://github.com/numba/numba/pull/7582>`_: Use get_parfor_writes to detect illegal array access that prevents fusion. (`DrTodd13 <https://github.com/DrTodd13>`_)
+* PR `#8371 <https://github.com/numba/numba/pull/8371>`_: Added binomial distribution (`esc <https://github.com/esc>`_ `kc611 <https://github.com/kc611>`_)
+* PR `#8462 <https://github.com/numba/numba/pull/8462>`_: Add PyBytes_AsString and PyBytes_AsStringAndSize (`ianna <https://github.com/ianna>`_)
+* PR `#8633 <https://github.com/numba/numba/pull/8633>`_: DOC: Convert vectorize and guvectorize examples to doctests (`Matt711 <https://github.com/Matt711>`_)
+* PR `#8730 <https://github.com/numba/numba/pull/8730>`_: Update dev-docs (`sgbaird <https://github.com/sgbaird>`_ `esc <https://github.com/esc>`_)
+* PR `#8792 <https://github.com/numba/numba/pull/8792>`_: Added towncrier as a github workflow (`kc611 <https://github.com/kc611>`_)
+* PR `#8854 <https://github.com/numba/numba/pull/8854>`_: Updated mk_alloc to support Numba-Dpex compute follows data. (`mingjie-intel <https://github.com/mingjie-intel>`_)
+* PR `#8861 <https://github.com/numba/numba/pull/8861>`_: CUDA: Don't add device kwarg for jit registry (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#8871 <https://github.com/numba/numba/pull/8871>`_: Don't return the function in CallConv.decorate_function() (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#8885 <https://github.com/numba/numba/pull/8885>`_: Fix np.allclose not handling default args (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
+* PR `#8892 <https://github.com/numba/numba/pull/8892>`_: Add support for __*matmul__ methods in jitclass (`louisamand <https://github.com/louisamand>`_)
+* PR `#8895 <https://github.com/numba/numba/pull/8895>`_: CUDA: Enable caching functions that use CG (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#8906 <https://github.com/numba/numba/pull/8906>`_: Add support for reflected dunder methods in jitclass (`louisamand <https://github.com/louisamand>`_)
+* PR `#8911 <https://github.com/numba/numba/pull/8911>`_: Remove isinstance experimental feature warning (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
+* PR `#8916 <https://github.com/numba/numba/pull/8916>`_: Bump llvmlite requirement to 0.41.0dev0 (`sklam <https://github.com/sklam>`_)
+* PR `#8925 <https://github.com/numba/numba/pull/8925>`_: Update release checklist template (`sklam <https://github.com/sklam>`_)
+* PR `#8937 <https://github.com/numba/numba/pull/8937>`_: Remove old Website development documentation (`esc <https://github.com/esc>`_ `gmarkall <https://github.com/gmarkall>`_)
+* PR `#8944 <https://github.com/numba/numba/pull/8944>`_: Add exceptions to np.isclose (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
+* PR `#8974 <https://github.com/numba/numba/pull/8974>`_: CUDA: Add binary ufunc support (`Matt711 <https://github.com/Matt711>`_)
+* PR `#8976 <https://github.com/numba/numba/pull/8976>`_: Fix index URL for ptxcompiler/cubinlinker packages. (`bdice <https://github.com/bdice>`_)
+* PR `#8978 <https://github.com/numba/numba/pull/8978>`_: Import MVC packages when using MVCLinker. (`bdice <https://github.com/bdice>`_)
+* PR `#8983 <https://github.com/numba/numba/pull/8983>`_: Fix typo in deprecation.rst (`dsgibbons <https://github.com/dsgibbons>`_)
+* PR `#8988 <https://github.com/numba/numba/pull/8988>`_: support for latest CUDA driver codes #8363 (`s1Sharp <https://github.com/s1Sharp>`_)
+* PR `#8995 <https://github.com/numba/numba/pull/8995>`_: Allow libraries that implement __array_ufunc__ to override DUFunc.__c… (`jpivarski <https://github.com/jpivarski>`_)
+* PR `#9007 <https://github.com/numba/numba/pull/9007>`_: CUDA: Add comparison ufunc support (`Matt711 <https://github.com/Matt711>`_)
+* PR `#9012 <https://github.com/numba/numba/pull/9012>`_: RVSDG-frontend (`sklam <https://github.com/sklam>`_)
+* PR `#9021 <https://github.com/numba/numba/pull/9021>`_: update the release checklist following 0.57.1rc1 (`esc <https://github.com/esc>`_)
+* PR `#9022 <https://github.com/numba/numba/pull/9022>`_: fix: update the C++ ABI repo reference (`emmanuel-ferdman <https://github.com/emmanuel-ferdman>`_)
+* PR `#9028 <https://github.com/numba/numba/pull/9028>`_: Replace use of imp module removed in 3.12 (`hauntsaninja <https://github.com/hauntsaninja>`_)
+* PR `#9034 <https://github.com/numba/numba/pull/9034>`_: CUDA libs test: Report the absolute path of the loaded libcuda.so on Linux, + other improvements (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9035 <https://github.com/numba/numba/pull/9035>`_: CUDA: Allow for debuginfo in nvdisasm output (`Matt711 <https://github.com/Matt711>`_)
+* PR `#9037 <https://github.com/numba/numba/pull/9037>`_: Recognize additional functions as being pure or not having side effects. (`DrTodd13 <https://github.com/DrTodd13>`_)
+* PR `#9039 <https://github.com/numba/numba/pull/9039>`_: Correct git clone link in installation instructions. (`ellifteria <https://github.com/ellifteria>`_)
+* PR `#9040 <https://github.com/numba/numba/pull/9040>`_: Remove NVVM 3.4 and CTK 11.0 / 11.1 support (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9046 <https://github.com/numba/numba/pull/9046>`_: copy the change log changes for 0.57.1 to main (`esc <https://github.com/esc>`_)
+* PR `#9050 <https://github.com/numba/numba/pull/9050>`_: Update CODEOWNERS (`sklam <https://github.com/sklam>`_)
+* PR `#9051 <https://github.com/numba/numba/pull/9051>`_: Add CUDA CFG support (`Matt711 <https://github.com/Matt711>`_)
+* PR `#9056 <https://github.com/numba/numba/pull/9056>`_: adding weekly meeting notes script (`esc <https://github.com/esc>`_)
+* PR `#9068 <https://github.com/numba/numba/pull/9068>`_: Adding np.geomspace (`KrisMinchev <https://github.com/KrisMinchev>`_)
+* PR `#9069 <https://github.com/numba/numba/pull/9069>`_: Fix towncrier error due to importlib_resources upgrade (`sklam <https://github.com/sklam>`_)
+* PR `#9072 <https://github.com/numba/numba/pull/9072>`_: Fix support for overloading dispatcher with non-compatible first-class functions (`gmarkall <https://github.com/gmarkall>`_ `sklam <https://github.com/sklam>`_)
+* PR `#9074 <https://github.com/numba/numba/pull/9074>`_: Add np.trim_zeros (`sungraek <https://github.com/sungraek>`_ `guilhermeleobas <https://github.com/guilhermeleobas>`_)
+* PR `#9082 <https://github.com/numba/numba/pull/9082>`_: Add np.vsplit, np.hsplit, and np.dsplit (`KrisMinchev <https://github.com/KrisMinchev>`_)
+* PR `#9083 <https://github.com/numba/numba/pull/9083>`_: Removed windows 32 references from code and documentation (`kc611 <https://github.com/kc611>`_)
+* PR `#9085 <https://github.com/numba/numba/pull/9085>`_: Add tests for np.row_stack (`KrisMinchev <https://github.com/KrisMinchev>`_)
+* PR `#9086 <https://github.com/numba/numba/pull/9086>`_: Support NVRTC using ctypes binding (`testhound <https://github.com/testhound>`_ `gmarkall <https://github.com/gmarkall>`_)
+* PR `#9087 <https://github.com/numba/numba/pull/9087>`_: Add trimseq from np.polynomial.polyutils and polyadd, polysub, polymul from np.polynomial.polynomial (`KrisMinchev <https://github.com/KrisMinchev>`_)
+* PR `#9088 <https://github.com/numba/numba/pull/9088>`_: Fix: Issue 9063 - CUDA atomics tests failing with CUDA 12.2 (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9090 <https://github.com/numba/numba/pull/9090>`_: Add deprecation notice for old_style error capturing. (`esc <https://github.com/esc>`_ `sklam <https://github.com/sklam>`_)
+* PR `#9094 <https://github.com/numba/numba/pull/9094>`_: Add support for a 'max' level to NUMBA_OPT environment variable. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#9095 <https://github.com/numba/numba/pull/9095>`_: Support dtype keyword in arange_parallel_impl (`DrTodd13 <https://github.com/DrTodd13>`_ `sklam <https://github.com/sklam>`_)
+* PR `#9105 <https://github.com/numba/numba/pull/9105>`_: NumPy 1.25 support (PR #9011) continued (`gmarkall <https://github.com/gmarkall>`_ `apmasell <https://github.com/apmasell>`_)
+* PR `#9111 <https://github.com/numba/numba/pull/9111>`_: Fixes ReST syntax error in PR#9099 (`stuartarchibald <https://github.com/stuartarchibald>`_ `gmarkall <https://github.com/gmarkall>`_ `sklam <https://github.com/sklam>`_ `apmasell <https://github.com/apmasell>`_)
+* PR `#9112 <https://github.com/numba/numba/pull/9112>`_: Fixups for PR#9100 (`stuartarchibald <https://github.com/stuartarchibald>`_ `sklam <https://github.com/sklam>`_)
+* PR `#9113 <https://github.com/numba/numba/pull/9113>`_: Add support for np.diagflat (`KrisMinchev <https://github.com/KrisMinchev>`_)
+* PR `#9114 <https://github.com/numba/numba/pull/9114>`_: update np min to 122 (`stuartarchibald <https://github.com/stuartarchibald>`_ `esc <https://github.com/esc>`_)
+* PR `#9117 <https://github.com/numba/numba/pull/9117>`_: Fixed towncrier template rendering (`kc611 <https://github.com/kc611>`_)
+* PR `#9118 <https://github.com/numba/numba/pull/9118>`_: Add support for np.resize() (`KrisMinchev <https://github.com/KrisMinchev>`_)
+* PR `#9120 <https://github.com/numba/numba/pull/9120>`_: Update conda-recipe for numba-rvsdg (`sklam <https://github.com/sklam>`_)
+* PR `#9127 <https://github.com/numba/numba/pull/9127>`_: Fix accidental cffi test deps, refactor cffi skipping (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9128 <https://github.com/numba/numba/pull/9128>`_: Merge rvsdg_frontend branch to main (`esc <https://github.com/esc>`_ `sklam <https://github.com/sklam>`_)
+* PR `#9152 <https://github.com/numba/numba/pull/9152>`_: Fix old_style error capturing deprecation warnings (`sklam <https://github.com/sklam>`_)
+* PR `#9159 <https://github.com/numba/numba/pull/9159>`_: Fix uncaught exception in find_file() (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9173 <https://github.com/numba/numba/pull/9173>`_: Towncrier fixups (Continue #9158 and retarget to main branch) (`sklam <https://github.com/sklam>`_)
+* PR `#9181 <https://github.com/numba/numba/pull/9181>`_: Remove extra decrefs in RNG (`sklam <https://github.com/sklam>`_)
+* PR `#9190 <https://github.com/numba/numba/pull/9190>`_: Fix issue with incompatible multiprocessing context in test. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+
+Authors
+~~~~~~~
+
+* `apmasell <https://github.com/apmasell>`_
+* `ashutoshvarma <https://github.com/ashutoshvarma>`_
+* `bdice <https://github.com/bdice>`_
+* `DrTodd13 <https://github.com/DrTodd13>`_
+* `dsgibbons <https://github.com/dsgibbons>`_
+* `ellifteria <https://github.com/ellifteria>`_
+* `emmanuel-ferdman <https://github.com/emmanuel-ferdman>`_
+* `esc <https://github.com/esc>`_
+* `gmarkall <https://github.com/gmarkall>`_
+* `guilhermeleobas <https://github.com/guilhermeleobas>`_
+* `hauntsaninja <https://github.com/hauntsaninja>`_
+* `ianna <https://github.com/ianna>`_
+* `jeertmans <https://github.com/jeertmans>`_
+* `jpivarski <https://github.com/jpivarski>`_
+* `jtilly <https://github.com/jtilly>`_
+* `kc611 <https://github.com/kc611>`_
+* `KrisMinchev <https://github.com/KrisMinchev>`_
+* `louisamand <https://github.com/louisamand>`_
+* `Matt711 <https://github.com/Matt711>`_
+* `mingjie-intel <https://github.com/mingjie-intel>`_
+* `s1Sharp <https://github.com/s1Sharp>`_
+* `sgbaird <https://github.com/sgbaird>`_
+* `sklam <https://github.com/sklam>`_
+* `stuartarchibald <https://github.com/stuartarchibald>`_
+* `sungraek <https://github.com/sungraek>`_
+* `testhound <https://github.com/testhound>`_

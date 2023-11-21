@@ -1,4 +1,0 @@
-Add type validation to ``numpy.isclose``.
-=========================================
-
-Type validation is added to the implementation of ``numpy.isclose``.

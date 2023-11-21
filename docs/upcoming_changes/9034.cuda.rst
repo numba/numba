@@ -1,6 +1,0 @@
-Report absolute path of libcuda.so on Linux
-===========================================
-
-``numba -s`` now reports the absolute path to ``libcuda.so`` on Linux, to aid
-troubleshooting driver issues, particularly on WSL2 where a Linux driver can
-incorrectly be installed in the environment.

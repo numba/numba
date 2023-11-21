@@ -16,7 +16,8 @@ from numba import pndindex, literal_unroll
 from numba.core import types, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, from_dtype, carray, farray,
                                     is_contiguous, is_fortran,
-                                    check_is_integer, type_is_scalar)
+                                    check_is_integer, type_is_scalar,
+                                    lt_complex, lt_floats)
 from numba.np.numpy_support import type_can_asarray, is_nonelike, numpy_version
 from numba.core.imputils import (lower_builtin, lower_getattr,
                                  lower_getattr_generic,
@@ -2171,6 +2172,53 @@ def np_reshape(a, newshape):
     def np_reshape_impl(a, newshape):
         return a.reshape(newshape)
     return np_reshape_impl
+
+
+@overload(np.resize)
+def numpy_resize(a, new_shape):
+
+    if not type_can_asarray(a):
+        msg = 'The argument "a" must be array-like'
+        raise errors.TypingError(msg)
+
+    if not ((isinstance(new_shape, types.UniTuple)
+             and
+             isinstance(new_shape.dtype, types.Integer))
+            or
+            isinstance(new_shape, types.Integer)):
+        msg = ('The argument "new_shape" must be an integer or '
+               'a tuple of integers')
+        raise errors.TypingError(msg)
+
+    def impl(a, new_shape):
+        a = np.asarray(a)
+        a = np.ravel(a)
+
+        if isinstance(new_shape, tuple):
+            new_size = 1
+            for dim_length in np.asarray(new_shape):
+                new_size *= dim_length
+                if dim_length < 0:
+                    msg = 'All elements of `new_shape` must be non-negative'
+                    raise ValueError(msg)
+        else:
+            if new_shape < 0:
+                msg2 = 'All elements of `new_shape` must be non-negative'
+                raise ValueError(msg2)
+            new_size = new_shape
+
+        if a.size == 0:
+            return np.zeros(new_shape).astype(a.dtype)
+
+        repeats = -(-new_size // a.size)  # ceil division
+        res = a
+        for i in range(repeats - 1):
+            res = np.concatenate((res, a))
+        res = res[:new_size]
+
+        return np.reshape(res, new_shape)
+
+    return impl
 
 
 @overload(np.append)
@@ -4586,6 +4634,61 @@ def impl_np_diag(v, k=0):
         return diag_impl
 
 
+@overload(np.indices)
+def numpy_indices(dimensions):
+    if not isinstance(dimensions, types.UniTuple):
+        msg = 'The argument "dimensions" must be a tuple of integers'
+        raise errors.TypingError(msg)
+
+    if not isinstance(dimensions.dtype, types.Integer):
+        msg = 'The argument "dimensions" must be a tuple of integers'
+        raise errors.TypingError(msg)
+
+    N = len(dimensions)
+    shape = (1,) * N
+
+    def impl(dimensions):
+        res = np.empty((N,) + dimensions, dtype=np.int64)
+        i = 0
+        for dim in dimensions:
+            idx = np.arange(dim, dtype=np.int64).reshape(
+                tuple_setitem(shape, i, dim)
+            )
+            res[i] = idx
+            i += 1
+
+        return res
+
+    return impl
+
+
+@overload(np.diagflat)
+def numpy_diagflat(v, k=0):
+    if not type_can_asarray(v):
+        msg = 'The argument "v" must be array-like'
+        raise errors.TypingError(msg)
+
+    if not isinstance(k, (int, types.Integer)):
+        msg = 'The argument "k" must be an integer'
+        raise errors.TypingError(msg)
+
+    def impl(v, k=0):
+        v = np.asarray(v)
+        v = v.ravel()
+        s = len(v)
+        abs_k = abs(k)
+        n = s + abs_k
+        res = np.zeros((n, n), v.dtype)
+        i = np.maximum(0, -k)
+        j = np.maximum(0, k)
+        for t in range(s):
+            res[i + t, j + t] = v[t]
+
+        return res
+
+    return impl
+
+
 @overload(np.take)
 @overload_method(types.Array, 'take')
 def numpy_take(a, indices):
@@ -6197,48 +6300,120 @@ def np_split(ary, indices_or_sections, axis=0):
         return np_array_split(ary, indices_or_sections, axis=axis)
 
 
+@overload(np.vsplit)
+def numpy_vsplit(ary, indices_or_sections):
+    if not isinstance(ary, types.Array):
+        msg = 'The argument "ary" must be an array'
+        raise errors.TypingError(msg)
+
+    if not isinstance(indices_or_sections, (types.Integer, types.Array,
+                                            types.List, types.UniTuple)):
+        msg = ('The argument "indices_or_sections" must be int or 1d-array')
+        raise errors.TypingError(msg)
+
+    def impl(ary, indices_or_sections):
+        if ary.ndim < 2:
+            raise ValueError(('vsplit only works on '
+                              'arrays of 2 or more dimensions'))
+        return np.split(ary, indices_or_sections, axis=0)
+
+    return impl
+
+
+@overload(np.hsplit)
+def numpy_hsplit(ary, indices_or_sections):
+    if not isinstance(ary, types.Array):
+        msg = 'The argument "ary" must be an array'
+        raise errors.TypingError(msg)
+
+    if not isinstance(indices_or_sections, (types.Integer, types.Array,
+                                            types.List, types.UniTuple)):
+        msg = ('The argument "indices_or_sections" must be int or 1d-array')
+        raise errors.TypingError(msg)
+
+    def impl(ary, indices_or_sections):
+        if ary.ndim == 0:
+            raise ValueError(('hsplit only works on '
+                              'arrays of 1 or more dimensions'))
+        if ary.ndim > 1:
+            return np.split(ary, indices_or_sections, axis=1)
+        return np.split(ary, indices_or_sections, axis=0)
+
+    return impl
+
+
+@overload(np.dsplit)
+def numpy_dsplit(ary, indices_or_sections):
+    if not isinstance(ary, types.Array):
+        msg = 'The argument "ary" must be an array'
+        raise errors.TypingError(msg)
+
+    if not isinstance(indices_or_sections, (types.Integer, types.Array,
+                                            types.List, types.UniTuple)):
+        msg = ('The argument "indices_or_sections" must be int or 1d-array')
+        raise errors.TypingError(msg)
+
+    def impl(ary, indices_or_sections):
+        if ary.ndim < 3:
+            raise ValueError('dsplit only works on arrays of 3 or more '
+                             'dimensions')
+        return np.split(ary, indices_or_sections, axis=2)
+
+    return impl
+
+
 # -----------------------------------------------------------------------------
 # Sorting
 
 _sorts = {}
 
 
-def lt_floats(a, b):
-    # Adapted from NumPy commit 717c7acf which introduced the behavior of
-    # putting NaNs at the end.
-    # The code is later moved to numpy/core/src/npysort/npysort_common.h
-    # This info is gathered as of NumPy commit d8c09c50
-    return a < b or (np.isnan(b) and not np.isnan(a))
+def default_lt(a, b):
+    """
+    Trivial comparison function between two keys.
+    """
+    return a < b
 
 
-def get_sort_func(kind, is_float, is_argsort=False):
+def get_sort_func(kind, lt_impl, is_argsort=False):
     """
     Get a sort implementation of the given kind.
     """
-    key = kind, is_float, is_argsort
+    key = kind, lt_impl.__name__, is_argsort
+
     try:
         return _sorts[key]
     except KeyError:
         if kind == 'quicksort':
             sort = quicksort.make_jit_quicksort(
-                lt=lt_floats if is_float else None,
+                lt=lt_impl,
                 is_argsort=is_argsort,
                 is_np_array=True)
             func = sort.run_quicksort
         elif kind == 'mergesort':
             sort = mergesort.make_jit_mergesort(
-                lt=lt_floats if is_float else None,
+                lt=lt_impl,
                 is_argsort=is_argsort)
             func = sort.run_mergesort
         _sorts[key] = func
         return func
 
 
+def lt_implementation(dtype):
+    if isinstance(dtype, types.Float):
+        return lt_floats
+    elif isinstance(dtype, types.Complex):
+        return lt_complex
+    else:
+        return default_lt
+
+
 @lower_builtin("array.sort", types.Array)
 def array_sort(context, builder, sig, args):
     arytype = sig.args[0]
+
     sort_func = get_sort_func(kind='quicksort',
-                              is_float=isinstance(arytype.dtype, types.Float))
+                              lt_impl=lt_implementation(arytype.dtype))
 
     def array_sort_impl(arr):
         # Note we clobber the return value
@@ -6264,8 +6439,9 @@ def impl_np_sort(a):
 @lower_builtin(np.argsort, types.Array, types.StringLiteral)
 def array_argsort(context, builder, sig, args):
     arytype, kind = sig.args
+
     sort_func = get_sort_func(kind=kind.literal_value,
-                              is_float=isinstance(arytype.dtype, types.Float),
+                              lt_impl=lt_implementation(arytype.dtype),
                               is_argsort=True)
 
     def array_argsort_impl(arr):

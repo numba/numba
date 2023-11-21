@@ -1,7 +1,0 @@
-``@vectorize`` accommodates arguments implementing ``__array_ufunc__``.
-=======================================================================
-
-Universal functions (``ufunc``\ s) created with ``numba.vectorize`` will now
-respect arguments implementing ``__array_ufunc__`` (NEP-13) to allow pre- and
-post-processing of arguments and return values when the ufunc is called from the
-interpreter.

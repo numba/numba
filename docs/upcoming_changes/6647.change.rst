@@ -1,7 +1,0 @@
-Support for ``@numba.extending.intrinsic(prefer_literal=True)``
-===============================================================
-
-In the high level extension API, the ``prefer_literal`` option is added to the
-``numba.extending.intrinsic`` decorator to prioritize the use of literal types
-when available. This has the same behavior as in the ``prefer_literal``
-option in the ``numba.extending.overload`` decorator.

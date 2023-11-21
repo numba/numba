@@ -5,7 +5,7 @@ from numba import jit
 import numba.core.typing.cffi_utils as cffi_support
 from numba.core import types, errors
 from numba.core.compiler import compile_isolated, Flags
-from numba.tests.support import TestCase, tag
+from numba.tests.support import TestCase, skip_unless_cffi, tag
 
 import numba.tests.cffi_usecases as mod
 import unittest
@@ -17,8 +17,7 @@ enable_pyobj_flags.enable_pyobject = True
 no_pyobj_flags = Flags()
 
 
-@unittest.skipUnless(cffi_support.SUPPORTED,
-                     "CFFI not supported -- please install the cffi module")
+@skip_unless_cffi
 class TestCFFI(TestCase):
 
     # Need to run the tests serially because of race conditions in

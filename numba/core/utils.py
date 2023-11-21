@@ -12,10 +12,10 @@ import weakref
 import warnings
 import threading
 import contextlib
+import typing as _tp
 
 from types import ModuleType
 from importlib import import_module
-from collections.abc import Mapping, Sequence
 import numpy as np
 
 from inspect import signature as pysignature # noqa: F401
@@ -26,6 +26,12 @@ from numba.core.config import (PYVERSION, MACHINE_BITS, # noqa: F401
                                DEVELOPER_MODE) # noqa: F401
 from numba.core import config
 from numba.core import types
+
+if PYVERSION <= (3, 8):
+    # This is needed for Python-3.8 and before due to the lack of PEP-585.
+    from typing import MutableSet, MutableMapping, Mapping, Sequence
+else:
+    from collections.abc import Mapping, Sequence, MutableSet, MutableMapping
 
 
 def erase_traceback(exc_value):
@@ -186,18 +192,46 @@ weakref.finalize(lambda: None, lambda: None)
 atexit.register(_at_shutdown)
 
 
+_old_style_deprecation_msg = (
+    "Code using Numba extension API maybe depending on 'old_style' "
+    "error-capturing, which is deprecated and will be replaced by 'new_style' "
+    "in a future release. See details at "
+    "https://numba.readthedocs.io/en/latest/reference/deprecation.html#deprecation-of-old-style-numba-captured-errors" # noqa: E501
+)
+
+
+def _warn_old_style():
+    from numba.core import errors  # to prevent circular import
+
+    exccls, _, tb = sys.exc_info()
+    # Warn only if the active exception is not a NumbaError
+    # and not a NumbaWarning which is raised if -Werror is set.
+    numba_errs = (errors.NumbaError, errors.NumbaWarning)
+    if exccls is not None and not issubclass(exccls, numba_errs):
+        tb_last = traceback.format_tb(tb)[-1]
+        msg = f"{_old_style_deprecation_msg}\nException origin:\n{tb_last}"
+        warnings.warn(msg,
+                      errors.NumbaPendingDeprecationWarning)
+
+
 def use_new_style_errors():
     """Returns True if new style errors are to be used, false otherwise"""
     # This uses `config` so as to make sure it gets the current value from the
     # module as e.g. some tests mutate the config with `override_config`.
-    return config.CAPTURED_ERRORS == 'new_style'
+    res = config.CAPTURED_ERRORS == 'new_style'
+    if not res:
+        _warn_old_style()
+    return res
 
 
 def use_old_style_errors():
     """Returns True if old style errors are to be used, false otherwise"""
     # This uses `config` so as to make sure it gets the current value from the
     # module as e.g. some tests mutate the config with `override_config`.
-    return config.CAPTURED_ERRORS == 'old_style'
+    res = config.CAPTURED_ERRORS == 'old_style'
+    if res:
+        _warn_old_style()
+    return res
 
 
 class ThreadLocalStack:
@@ -352,7 +386,40 @@ def order_by_target_specificity(target, templates, fnkey=''):
     return order
 
 
-class SortedMap(Mapping):
+T = _tp.TypeVar('T')
+
+
+class MutableSortedSet(MutableSet[T], _tp.Generic[T]):
+    """Mutable Sorted Set
+    """
+
+    def __init__(self, values: _tp.Iterable[T] = ()):
+        self._values = set(values)
+
+    def __len__(self):
+        return len(self._values)
+
+    def __iter__(self):
+        return iter(k for k in sorted(self._values))
+
+    def __contains__(self, x: T) -> bool:
+        return self._values.__contains__(x)
+
+    def add(self, x: T):
+        return self._values.add(x)
+
+    def discard(self, value: T):
+        self._values.discard(value)
+
+    def update(self, values):
+        self._values.update(values)
+
+
+Tk = _tp.TypeVar('Tk')
+Tv = _tp.TypeVar('Tv')
+
+
+class SortedMap(Mapping[Tk, Tv], _tp.Generic[Tk, Tv]):
     """Immutable
     """
 
@@ -372,6 +439,28 @@ class SortedMap(Mapping):
 
     def __iter__(self):
         return iter(k for k, v in self._values)
+
+
+class MutableSortedMap(MutableMapping[Tk, Tv], _tp.Generic[Tk, Tv]):
+    def __init__(self, dct=None):
+        if dct is None:
+            dct = {}
+        self._dct: dict[Tk, Tv] = dct
+
+    def __getitem__(self, k: Tk) -> Tv:
+        return self._dct[k]
+
+    def __setitem__(self, k: Tk, v: Tv):
+        self._dct[k] = v
+
+    def __delitem__(self, k: Tk):
+        del self._dct[k]
+
+    def __len__(self) -> int:
+        return len(self._dct)
+
+    def __iter__(self) -> int:
+        return iter(k for k in sorted(self._dct))
 
 
 class UniqueDict(dict):

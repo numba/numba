@@ -89,6 +89,26 @@ class TranslateByteCode(FunctionPass):
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)
+class RVSDGFrontend(FunctionPass):
+    _name = "rvsdg_frontend"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        from numba.core.rvsdg_frontend import bcinterp
+        from numba.core.bytecode import FunctionIdentity
+
+        func_id: FunctionIdentity = state['func_id']
+        # Bytecode object is unused here
+        # bc = state['bc']
+
+        func_ir = bcinterp.run_frontend(func_id.func)
+        state["func_ir"] = func_ir
+        return True
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
 class FixupArgs(FunctionPass):
     _name = "fixup_args"
 
@@ -1553,6 +1573,15 @@ class PropagateLiterals(FunctionPass):
                                    f'type of variable "{arg.unversioned_name}" '
                                    'due to a branch.')
                             raise errors.NumbaTypeError(msg, loc=assign.loc)
+
+                # Only propagate a PHI node if all arguments are the same
+                # constant
+                if isinstance(value, ir.Expr) and value.op == 'phi':
+                    # typemap will return None in case `inc.name` not in typemap
+                    v = [typemap.get(inc.name) for inc in value.incoming_values]
+                    # stop if the elements in `v` do not hold the same value
+                    if v[0] is not None and any([v[0] != vi for vi in v]):
+                        continue
 
                 lit = typemap.get(target.name, None)
                 if lit and isinstance(lit, types.Literal):
