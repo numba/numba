@@ -4667,50 +4667,63 @@ def numpy_diagflat(v, k=0):
 
 @overload(np.take)
 @overload_method(types.Array, 'take')
-def numpy_take(a, indices):
+def numpy_take(a, indices, axis=None):
 
-    if isinstance(a, types.Array) and isinstance(indices, types.Integer):
-        def take_impl(a, indices):
-            if indices > (a.size - 1) or indices < -a.size:
-                raise IndexError("Index out of bounds")
-            return a.ravel()[indices]
-        return take_impl
-
-    if all(isinstance(arg, types.Array) for arg in [a, indices]):
-        F_order = indices.layout == 'F'
-
-        def take_impl(a, indices):
-            ret = np.empty(indices.size, dtype=a.dtype)
-            if F_order:
-                walker = indices.copy()  # get C order
-            else:
-                walker = indices
-            it = np.nditer(walker)
-            i = 0
-            flat = a.ravel()
-            for x in it:
-                if x > (a.size - 1) or x < -a.size:
+    if cgutils.is_nonelike(axis):
+        if isinstance(a, types.Array) and isinstance(indices, types.Integer):
+            def take_impl(a, indices, axis=None):
+                if indices > (a.size - 1) or indices < -a.size:
                     raise IndexError("Index out of bounds")
-                ret[i] = flat[x]
-                i = i + 1
-            return ret.reshape(indices.shape)
-        return take_impl
+                return a.ravel()[indices]
+            return take_impl
 
-    if isinstance(a, types.Array) and \
-            isinstance(indices, (types.List, types.BaseTuple)):
-        def take_impl(a, indices):
-            convert = np.array(indices)
-            ret = np.empty(convert.size, dtype=a.dtype)
-            it = np.nditer(convert)
-            i = 0
-            flat = a.ravel()
-            for x in it:
-                if x > (a.size - 1) or x < -a.size:
-                    raise IndexError("Index out of bounds")
-                ret[i] = flat[x]
-                i = i + 1
-            return ret.reshape(convert.shape)
-        return take_impl
+        if isinstance(a, types.Array) and isinstance(indices, types.Array):
+            F_order = indices.layout == 'F'
+
+            def take_impl(a, indices, axis=None):
+                ret = np.empty(indices.size, dtype=a.dtype)
+                if F_order:
+                    walker = indices.copy()  # get C order
+                else:
+                    walker = indices
+                it = np.nditer(walker)
+                i = 0
+                flat = a.ravel()
+                for x in it:
+                    if x > (a.size - 1) or x < -a.size:
+                        raise IndexError("Index out of bounds")
+                    ret[i] = flat[x]
+                    i = i + 1
+                return ret.reshape(indices.shape)
+            return take_impl
+
+        if isinstance(a, types.Array) and \
+                isinstance(indices, (types.List, types.BaseTuple)):
+            def take_impl(a, indices, axis=None):
+                convert = np.array(indices)
+                return np.take(a, convert)
+            return take_impl
+    else:
+        if isinstance(a, types.Array) and \
+                isinstance(indices, (types.Array, types.List, types.BaseTuple)):
+            def take_impl(a, indices, axis=None):
+                if axis < 0:
+                    axis += a.ndim
+
+                if axis < 0 or axis >= a.ndim:
+                    msg = (f"axis {axis} is out of bounds for array "
+                           f"of dimension {a.ndim}")
+                    raise ValueError(msg)
+
+                shape = tuple_setitem(a.shape, axis, len(indices))
+                out = np.empty(shape, dtype=a.dtype)
+                for ii in range(len(indices)):
+                    for index in np.ndindex(a.shape):
+                        if index[axis] == indices[ii]:
+                            other_index = tuple_setitem(index, axis, ii)
+                            out[other_index] = a[index]
+                return out
+            return take_impl
 
 
 def _arange_dtype(*args):

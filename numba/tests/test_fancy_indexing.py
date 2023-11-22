@@ -243,17 +243,33 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError):
             cfunc(A, [1.7])
 
-        # check unsupported arg raises
-        with self.assertRaises(TypingError):
-            take_kws = jit(nopython=True)(np_take_kws)
-            take_kws(A, 1, 1)
-
-        # check kwarg unsupported raises
-        with self.assertRaises(TypingError):
-            take_kws = jit(nopython=True)(np_take_kws)
-            take_kws(A, 1, axis=1)
-
         #exceptions leak refs
+        self.disable_leak_check()
+
+    def test_np_take_axis(self):
+        pyfunc = np_take_kws
+        cfunc = jit(nopython=True)(pyfunc)
+
+        arr = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+        indices = (
+            np.array([0, 2, 1]),
+            np.array([1, 2, 1, 2, 1]),
+            np.array([0]),
+            (0,),
+            (0, 1),
+        )
+
+        for ind in indices:
+            for axis in (0, 1, -1):
+                expected = np.take(arr, ind, axis=axis)
+                got = cfunc(arr, ind, axis=axis)
+                self.assertPreciseEqual(expected, got)
+
+        msg = 'axis 2 is out of bounds for array of dimension 2'
+        indices = np.array([0, 1, 2])
+        with self.assertRaisesRegex(ValueError, msg):
+            cfunc(arr, indices, axis=2)
+
         self.disable_leak_check()
 
     def test_newaxis(self):
