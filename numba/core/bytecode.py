@@ -11,6 +11,8 @@ from numba.core.utils import PYVERSION
 
 if PYVERSION in ((3, 12), ):
     from opcode import _inline_cache_entries
+    # Instruction/opcode length in bytes
+    INSTR_LEN
 elif PYVERSION in ((3, 8), (3, 9), (3, 10), (3, 11)):
     pass
 else:
@@ -179,7 +181,7 @@ def _unpack_opargs(code):
                 # cache slots when we determine the offset of the next opcode.
                 # The number of cache slots is specific to each opcode and can
                 # be looked up in the _inline_cache_entries dictionary.
-                i += _inline_cache_entries[op] * 2
+                i += _inline_cache_entries[op] * INSTR_LEN
             elif PYVERSION in ((3, 8), (3, 9), (3, 10), (3, 11)):
                 pass
             else:
@@ -203,7 +205,7 @@ def _unpack_opargs(code):
                 # cache slots when we determine the offset of the next opcode.
                 # The number of cache slots is specific to each opcode and can
                 # be looked up in the _inline_cache_entries dictionary.
-                i += _inline_cache_entries[op] * 2
+                i += _inline_cache_entries[op] * INSTR_LEN
             elif PYVERSION in ((3, 8), (3, 9), (3, 10), (3, 11)):
                 pass
             else:
