@@ -652,7 +652,7 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
     tstate = PyThreadState_GET();
 
 #if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 12)
-    /* FIXME: as per the changes from PEP 669 we don't support profiling
+    /* FIXME: as per the changes from PEP 669 Numba does not support profiling
      * (yet?). Just skip frame injection entirely. JIT compiled functions will
      * NOT show up in cProfile profiler.
      */
