@@ -12,7 +12,7 @@ from numba.core.utils import PYVERSION
 if PYVERSION in ((3, 12), ):
     from opcode import _inline_cache_entries
     # Instruction/opcode length in bytes
-    INSTR_LEN
+    INSTR_LEN = 2
 elif PYVERSION in ((3, 8), (3, 9), (3, 10), (3, 11)):
     pass
 else:
