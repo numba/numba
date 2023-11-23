@@ -148,6 +148,11 @@ static PyTypeObject EnvironmentType = {
  * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Include/cpython/object.h#L260
  */
     0,                                       /* tp_print */
+#elif (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 12)
+/* This was introduced first in 3.12
+ * https://github.com/python/cpython/issues/91051
+ */
+    0,                                           /* tp_watched */
 #endif
 
 /* WARNING: Do not remove this, only modify it! It is a version guard to
@@ -274,6 +279,11 @@ static PyTypeObject ClosureType = {
  * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Include/cpython/object.h#L260
  */
     0,                                       /* tp_print */
+#elif (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 12)
+/* This was introduced first in 3.12
+ * https://github.com/python/cpython/issues/91051
+ */
+    0,                                           /* tp_watched */
 #endif
 
 /* WARNING: Do not remove this, only modify it! It is a version guard to
@@ -501,6 +511,11 @@ static PyTypeObject GeneratorType = {
  * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Include/cpython/object.h#L260
  */
     0,                                        /* tp_print */
+#elif (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 12)
+/* This was introduced first in 3.12
+ * https://github.com/python/cpython/issues/91051
+ */
+    0,                                           /* tp_watched */
 #endif
 
 /* WARNING: Do not remove this, only modify it! It is a version guard to
