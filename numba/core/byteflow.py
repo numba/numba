@@ -1196,7 +1196,6 @@ class TraceRunner(object):
                 state.append(inst, intrinsic="UNARY_POSITIVE",
                              value=val, res=res)
                 state.push(res)
-                #self.op_UNARY_POSITIVE(state, inst)
                 return
             elif inst.arg == 6:  # INTRINSIC_LIST_TO_TUPLE
                 tos = state.pop()
