@@ -937,8 +937,8 @@ class TraceRunner(object):
 
     if PYVERSION in ((3, 12), ):
         def op_END_FOR(self, state, inst):
-            _ = state.pop()
-            _ = state.pop()
+            state.pop()
+            state.pop()
     elif PYVERSION in ((3, 8), (3, 9), (3, 10), (3, 11)):
         pass
     else:
