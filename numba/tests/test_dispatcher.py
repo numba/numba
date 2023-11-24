@@ -298,10 +298,11 @@ class TestDispatcher(BaseTest):
             foo(1)
             foo(np.ones(1))  # no matching definition
 
-        with self.assertRaises(TypeError) as raises:
+        with self.assertRaises(errors.TypingError) as raises:
             bar()
-        m = "No matching definition for argument type(s) array(float64, 1d, C)"
-        self.assertEqual(str(raises.exception), m)
+
+        m = r".*Invalid use of.*with parameters \(array\(float64, 1d, C\)\).*"
+        self.assertRegex(str(raises.exception), m)
 
     def test_fingerprint_failure(self):
         """
@@ -309,7 +310,6 @@ class TestDispatcher(BaseTest):
         function.  On the other hand, with nopython=True, a ValueError should
         be raised to report the failure with fingerprint.
         """
-        @jit
         def foo(x):
             return x
 
@@ -318,21 +318,22 @@ class TestDispatcher(BaseTest):
         with self.assertRaises(ValueError) as raises:
             _dispatcher.compute_fingerprint([])
         self.assertIn(errmsg, str(raises.exception))
-        # It should work in fallback
-        self.assertEqual(foo([]), [])
+        # It should work in objmode
+        objmode_foo = jit(forceobj=True)(foo)
+        self.assertEqual(objmode_foo([]), [])
         # But, not in nopython=True
-        strict_foo = jit(nopython=True)(foo.py_func)
+        strict_foo = jit(nopython=True)(foo)
         with self.assertRaises(ValueError) as raises:
             strict_foo([])
         self.assertIn(errmsg, str(raises.exception))
 
         # Test in loop lifting context
-        @jit
+        @jit(forceobj=True)
         def bar():
             object()  # force looplifting
             x = []
             for i in range(10):
-                x = foo(x)
+                x = objmode_foo(x)
             return x
 
         self.assertEqual(bar(), [])

@@ -16,8 +16,6 @@ from numba.tests.support import (TestCase, tag, ignore_internal_warnings,
 from numba.core.extending import overload_method, box
 
 
-enable_pyobj_flags = {} # This allows deprecated "objmode fallback"
-
 forceobj_flags = {'nopython': False, 'forceobj': True}
 
 no_pyobj_flags = {'nopython': True, '_nrt': False}
@@ -340,7 +338,7 @@ class TestBuiltins(TestCase):
         expected = pyfunc()
         self.assertPreciseEqual(cfunc(), expected)
 
-    def test_abs(self, flags=enable_pyobj_flags):
+    def test_abs(self, flags=forceobj_flags):
         pyfunc = abs_usecase
 
         cfunc = jit((types.int32,), **flags)(pyfunc)
@@ -370,7 +368,7 @@ class TestBuiltins(TestCase):
     def test_abs_npm(self):
         self.test_abs(flags=no_pyobj_flags)
 
-    def test_all(self, flags=enable_pyobj_flags):
+    def test_all(self, flags=forceobj_flags):
         pyfunc = all_usecase
 
         cfunc = jit((types.int32,types.int32), **flags)(pyfunc)
@@ -383,7 +381,7 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.test_all(flags=no_pyobj_flags)
 
-    def test_any(self, flags=enable_pyobj_flags):
+    def test_any(self, flags=forceobj_flags):
         pyfunc = any_usecase
 
         cfunc = jit((types.int32,types.int32), **flags)(pyfunc)
@@ -396,7 +394,7 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.test_any(flags=no_pyobj_flags)
 
-    def test_bool(self, flags=enable_pyobj_flags):
+    def test_bool(self, flags=forceobj_flags):
         pyfunc = bool_usecase
 
         cfunc = jit((types.int32,), **flags)(pyfunc)
@@ -412,7 +410,7 @@ class TestBuiltins(TestCase):
     def test_bool_npm(self):
         self.test_bool(flags=no_pyobj_flags)
 
-    def test_bool_nonnumber(self, flags=enable_pyobj_flags):
+    def test_bool_nonnumber(self, flags=forceobj_flags):
         pyfunc = bool_usecase
 
         cfunc = jit((types.string,), **flags)(pyfunc)
@@ -427,7 +425,7 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.test_bool_nonnumber(flags=no_pyobj_flags)
 
-    def test_complex(self, flags=enable_pyobj_flags):
+    def test_complex(self, flags=forceobj_flags):
         pyfunc = complex_usecase
 
         cfunc = jit((types.int32, types.int32), **flags)(pyfunc)
@@ -440,7 +438,7 @@ class TestBuiltins(TestCase):
     def test_complex_npm(self):
         self.test_complex(flags=no_pyobj_flags)
 
-    def test_divmod_ints(self, flags=enable_pyobj_flags):
+    def test_divmod_ints(self, flags=forceobj_flags):
         pyfunc = divmod_usecase
 
         cfunc = jit((types.int64, types.int64), **flags)(pyfunc)
@@ -468,7 +466,7 @@ class TestBuiltins(TestCase):
     def test_divmod_ints_npm(self):
         self.test_divmod_ints(flags=no_pyobj_flags)
 
-    def test_divmod_floats(self, flags=enable_pyobj_flags):
+    def test_divmod_floats(self, flags=forceobj_flags):
         pyfunc = divmod_usecase
 
         cfunc = jit((types.float64, types.float64), **flags)(pyfunc)
@@ -488,13 +486,13 @@ class TestBuiltins(TestCase):
     def test_divmod_floats_npm(self):
         self.test_divmod_floats(flags=no_pyobj_flags)
 
-    def test_enumerate(self, flags=enable_pyobj_flags):
+    def test_enumerate(self, flags=forceobj_flags):
         self.run_nullary_func(enumerate_usecase, flags)
 
     def test_enumerate_npm(self):
         self.test_enumerate(flags=no_pyobj_flags)
 
-    def test_enumerate_start(self, flags=enable_pyobj_flags):
+    def test_enumerate_start(self, flags=forceobj_flags):
         self.run_nullary_func(enumerate_start_usecase, flags)
 
     def test_enumerate_start_npm(self):
@@ -503,7 +501,7 @@ class TestBuiltins(TestCase):
     def test_enumerate_start_invalid_start_type(self):
         pyfunc = enumerate_invalid_start_usecase
 
-        cfunc = jit((), **enable_pyobj_flags)(pyfunc)
+        cfunc = jit((), **forceobj_flags)(pyfunc)
 
         with self.assertRaises(TypeError) as raises:
             cfunc()
@@ -518,7 +516,7 @@ class TestBuiltins(TestCase):
         msg = "Only integers supported as start value in enumerate"
         self.assertIn(msg, str(raises.exception))
 
-    def test_filter(self, flags=enable_pyobj_flags):
+    def test_filter(self, flags=forceobj_flags):
         pyfunc = filter_usecase
         argtys = (types.Dummy('list'), types.Dummy('function_ptr'))
         cfunc = jit(argtys, **flags)(pyfunc)
@@ -532,7 +530,7 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.test_filter(flags=no_pyobj_flags)
 
-    def test_float(self, flags=enable_pyobj_flags):
+    def test_float(self, flags=forceobj_flags):
         pyfunc = float_usecase
 
         cfunc = jit((types.int32,), **flags)(pyfunc)
@@ -551,7 +549,7 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.test_float(flags=no_pyobj_flags)
 
-    def test_format(self, flags=enable_pyobj_flags):
+    def test_format(self, flags=forceobj_flags):
         pyfunc = format_usecase
 
         cfunc = jit((types.string, types.int32,), **flags)(pyfunc)
@@ -573,7 +571,7 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.test_format(flags=no_pyobj_flags)
 
-    def test_globals(self, flags=enable_pyobj_flags):
+    def test_globals(self, flags=forceobj_flags):
         pyfunc = globals_usecase
         cfunc = jit((), **flags)(pyfunc)
         g = cfunc()
@@ -595,7 +593,7 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.test_globals_jit(nopython=True)
 
-    def test_hex(self, flags=enable_pyobj_flags):
+    def test_hex(self, flags=forceobj_flags):
         pyfunc = hex_usecase
 
         cfunc = jit((types.int32,), **flags)(pyfunc)
@@ -646,7 +644,7 @@ class TestBuiltins(TestCase):
                 if typ.signed:
                     self.assertPreciseEqual(cfunc(typ(-v)), pyfunc(typ(-v)))
 
-    def test_int(self, flags=enable_pyobj_flags):
+    def test_int(self, flags=forceobj_flags):
         pyfunc = int_usecase
 
         cfunc = jit((types.string, types.int32,), **flags)(pyfunc)
@@ -660,7 +658,7 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.test_int(flags=no_pyobj_flags)
 
-    def test_iter_next(self, flags=enable_pyobj_flags):
+    def test_iter_next(self, flags=forceobj_flags):
         pyfunc = iter_next_usecase
         cfunc = jit((types.UniTuple(types.int32, 3),), **flags)(pyfunc)
         self.assertPreciseEqual(cfunc((1, 42, 5)), (1, 42))
@@ -672,7 +670,7 @@ class TestBuiltins(TestCase):
     def test_iter_next_npm(self):
         self.test_iter_next(flags=no_pyobj_flags)
 
-    def test_locals(self, flags=enable_pyobj_flags):
+    def test_locals(self, flags=forceobj_flags):
         pyfunc = locals_usecase
         with self.assertRaises(errors.ForbiddenConstruct):
             jit((types.int64,), **flags)(pyfunc)
@@ -684,7 +682,7 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.test_locals(flags=no_pyobj_flags)
 
-    def test_map(self, flags=enable_pyobj_flags):
+    def test_map(self, flags=forceobj_flags):
         pyfunc = map_usecase
         argtys = (types.Dummy('list'), types.Dummy('function_ptr'))
         cfunc = jit(argtys, **flags)(pyfunc)
@@ -710,13 +708,13 @@ class TestBuiltins(TestCase):
         for x, y in itertools.product(x_operands, y_operands):
             self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
-    def test_max_1(self, flags=enable_pyobj_flags):
+    def test_max_1(self, flags=forceobj_flags):
         """
         max(*args)
         """
         self.check_minmax_1(max_usecase1, flags)
 
-    def test_min_1(self, flags=enable_pyobj_flags):
+    def test_min_1(self, flags=forceobj_flags):
         """
         min(*args)
         """
@@ -736,13 +734,13 @@ class TestBuiltins(TestCase):
         for x, y in itertools.product(x_operands, y_operands):
             self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
-    def test_max_2(self, flags=enable_pyobj_flags):
+    def test_max_2(self, flags=forceobj_flags):
         """
         max(list)
         """
         self.check_minmax_2(max_usecase2, flags)
 
-    def test_min_2(self, flags=enable_pyobj_flags):
+    def test_min_2(self, flags=forceobj_flags):
         """
         min(list)
         """
@@ -767,13 +765,13 @@ class TestBuiltins(TestCase):
         check(types.UniTuple(types.float64, 3))
         check(types.Tuple((types.float32, types.float64, types.float32)))
 
-    def test_max_3(self, flags=enable_pyobj_flags):
+    def test_max_3(self, flags=forceobj_flags):
         """
         max(tuple)
         """
         self.check_minmax_3(max_usecase3, flags)
 
-    def test_min_3(self, flags=enable_pyobj_flags):
+    def test_min_3(self, flags=forceobj_flags):
         """
         min(tuple)
         """
@@ -785,7 +783,7 @@ class TestBuiltins(TestCase):
     def test_min_npm_3(self):
         self.test_min_3(flags=no_pyobj_flags)
 
-    def check_min_max_invalid_types(self, pyfunc, flags=enable_pyobj_flags):
+    def check_min_max_invalid_types(self, pyfunc, flags=forceobj_flags):
         cfunc = jit((types.int32, types.Dummy('list'),), **flags)(pyfunc)
         cfunc(1, [1])
 
@@ -812,17 +810,17 @@ class TestBuiltins(TestCase):
         for x, y in itertools.product(operands, operands):
             self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
-    def test_max_bool1(self, flags=enable_pyobj_flags):
+    def test_max_bool1(self, flags=forceobj_flags):
         # tests max(<booleans>)
         self.check_minmax_bool1(max_usecase1, flags)
 
-    def test_min_bool1(self, flags=enable_pyobj_flags):
+    def test_min_bool1(self, flags=forceobj_flags):
         # tests min(<booleans>)
         self.check_minmax_bool1(min_usecase1, flags)
 
     # Test that max(1) and min(1) fail
 
-    def check_min_max_unary_non_iterable(self, pyfunc, flags=enable_pyobj_flags):
+    def check_min_max_unary_non_iterable(self, pyfunc, flags=forceobj_flags):
         cfunc = jit((types.int32,), **flags)(pyfunc)
         cfunc(1)
 
@@ -857,7 +855,7 @@ class TestBuiltins(TestCase):
         self.check_min_max_empty_tuple(min_usecase4, "min")
 
 
-    def test_oct(self, flags=enable_pyobj_flags):
+    def test_oct(self, flags=forceobj_flags):
         pyfunc = oct_usecase
 
         cfunc = jit((types.int32,), **flags)(pyfunc)
@@ -868,7 +866,7 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.test_oct(flags=no_pyobj_flags)
 
-    def test_reduce(self, flags=enable_pyobj_flags):
+    def test_reduce(self, flags=forceobj_flags):
         pyfunc = reduce_usecase
         argtys = (types.Dummy('function_ptr'), types.Dummy('list'))
         cfunc = jit(argtys, **flags)(pyfunc)
@@ -888,7 +886,7 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.test_reduce(flags=no_pyobj_flags)
 
-    def test_round1(self, flags=enable_pyobj_flags):
+    def test_round1(self, flags=forceobj_flags):
         pyfunc = round_usecase1
 
         for tp in (types.float64, types.float32):
@@ -901,7 +899,7 @@ class TestBuiltins(TestCase):
     def test_round1_npm(self):
         self.test_round1(flags=no_pyobj_flags)
 
-    def test_round2(self, flags=enable_pyobj_flags):
+    def test_round2(self, flags=forceobj_flags):
         pyfunc = round_usecase2
 
         for tp in (types.float64, types.float32):
@@ -919,7 +917,7 @@ class TestBuiltins(TestCase):
     def test_round2_npm(self):
         self.test_round2(flags=no_pyobj_flags)
 
-    def test_sum_objmode(self, flags=enable_pyobj_flags):
+    def test_sum_objmode(self, flags=forceobj_flags):
         pyfunc = sum_usecase
 
         cfunc = jit((types.Dummy('list'),), **flags)(pyfunc)

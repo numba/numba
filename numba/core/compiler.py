@@ -525,15 +525,12 @@ class Compiler(CompilerBase):
     """
 
     def define_pipelines(self):
-        # this maintains the objmode fallback behaviour
-        pms = []
-        if not self.state.flags.force_pyobject:
-            pms.append(DefaultPassBuilder.define_nopython_pipeline(self.state))
-        if self.state.status.can_fallback or self.state.flags.force_pyobject:
-            pms.append(
-                DefaultPassBuilder.define_objectmode_pipeline(self.state)
-            )
-        return pms
+        if self.state.flags.force_pyobject:
+            # either object mode
+            return [DefaultPassBuilder.define_objectmode_pipeline(self.state),]
+        else:
+            # or nopython mode
+            return [DefaultPassBuilder.define_nopython_pipeline(self.state),]
 
 
 class DefaultPassBuilder(object):

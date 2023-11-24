@@ -1,6 +1,4 @@
-import warnings
-from numba.core import (errors, types, typing, funcdesc, config, pylowering,
-                        transforms)
+from numba.core import (types, typing, funcdesc, config, pylowering, transforms)
 from numba.core.compiler_machinery import (FunctionPass, LoweringPass,
                                            register_pass)
 from collections import defaultdict
@@ -137,33 +135,4 @@ class ObjectModeBackEnd(LoweringPass):
             reload_init=state.reload_init,
         )
 
-        # Warn, deprecated behaviour, code compiled in objmode without
-        # force_pyobject indicates fallback from nopython mode
-        if not state.flags.force_pyobject:
-            # first warn about object mode and yes/no to lifted loops
-            if len(state.lifted) > 0:
-                warn_msg = ('Function "%s" was compiled in object mode without'
-                            ' forceobj=True, but has lifted loops.' %
-                            (state.func_id.func_name,))
-            else:
-                warn_msg = ('Function "%s" was compiled in object mode without'
-                            ' forceobj=True.' % (state.func_id.func_name,))
-            warnings.warn(errors.NumbaWarning(warn_msg,
-                                              state.func_ir.loc))
-
-            url = ("https://numba.readthedocs.io/en/stable/reference/"
-                   "deprecation.html#deprecation-of-object-mode-fall-"
-                   "back-behaviour-when-using-jit")
-            msg = ("\nFall-back from the nopython compilation path to the "
-                   "object mode compilation path has been detected. This is "
-                   "deprecated behaviour that will be removed in Numba 0.59.0."
-                   "\n\nFor more information visit %s" % url)
-            warnings.warn(errors.NumbaDeprecationWarning(msg,
-                                                         state.func_ir.loc))
-            if state.flags.release_gil:
-                warn_msg = ("Code running in object mode won't allow parallel"
-                            " execution despite nogil=True.")
-                warnings.warn_explicit(warn_msg, errors.NumbaWarning,
-                                       state.func_id.filename,
-                                       state.func_id.firstlineno)
         return True
