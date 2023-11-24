@@ -452,26 +452,14 @@ class ByteCodePy312(ByteCodePy311):
             been inlined. In this case we can skip the exception blocks
             entirely along with the dead exceptions that it points to.
             A pair of exception that sandwiches these exception will
-            also be clubbed into a single exception.
+            also be merged into a single exception.
         """
 
-        stack = []
+        def pop_and_merge_exceptions(entries: list, entry_to_remove: _ExceptionTableEntry):
+            lower_entry_idx = entries.index(entry_to_remove) - 1
+            upper_entry_idx = entries.index(entry_to_remove) + 1
 
-        def pop_and_club_exceptions(entries: list, end_entry):
-            start_entry = stack.pop()
-            start_offset = start_entry.start
-            target_offset = start_entry.target
-            end_offset = end_entry.end
-
-            to_be_removed_entries = [
-                e for e in entries if (e.start >= start_offset and
-                                       e.end <= end_offset and
-                                       e.target == target_offset)
-            ]
-
-            lower_entry_idx = entries.index(to_be_removed_entries[0]) - 1
-            upper_entry_idx = entries.index(to_be_removed_entries[-1]) + 1
-
+            # Merge the upper and lower exceptions if possible.
             if lower_entry_idx >= 0 and upper_entry_idx < len(entries):
                 lower_entry = entries[lower_entry_idx]
                 upper_entry = entries[upper_entry_idx]
@@ -484,25 +472,25 @@ class ByteCodePy312(ByteCodePy311):
                         upper_entry.lasti)
                     entries.remove(upper_entry)
 
-            dead_entries = [
-                e for e in entries if e.start == target_offset
-            ]
-
-            entries = [e for e in entries if e not in to_be_removed_entries]
-            entries = [e for e in entries if e not in dead_entries]
+            # Remove the exception entry.
+            entries.remove(entry_to_remove)
+            # Remove dead exceptions, if any, that the entry above may point to.
+            entries = [e for e in entries if not e.start == entry_to_remove.target]
             return entries
 
-        for offset, inst in self.table.items():
-            # Check start of pattern, three instructions.
-            # Work out the index of the insteruction.
-            index = self.ordered_offsets.index(offset)
-            # If there is a BUILD_{LIST, MAP, SET} instruction at this
-            # location.
-            curr_inst = self.table[self.ordered_offsets[index]]
-            if curr_inst.opname in ("BUILD_LIST", "BUILD_MAP", "BUILD_SET"):
-                # Check if there are actually two more instructions beyond
-                # this instruction in the table.
-                if len(self.ordered_offsets) <= index + 2:
+        work_remaining = True
+        while work_remaining:
+            # Temporarily set work_remaining to False, if we find a pattern
+            # then work is not complete, hence we set it again to True.
+            work_remaining = False
+            for entry in entries.copy():
+                # Check start of pattern, three instructions.
+                # Work out the index of the instruction.
+                index = self.ordered_offsets.index(entry.start)
+                # If there is a BUILD_{LIST, MAP, SET} instruction at this
+                # location.
+                curr_inst = self.table[self.ordered_offsets[index]]
+                if not curr_inst.opname in ("BUILD_LIST", "BUILD_MAP", "BUILD_SET"):
                     continue
                 # Check if the BUILD_{LIST, MAP, SET} instruction is followed
                 # by a SWAP(2).
@@ -514,41 +502,24 @@ class ByteCodePy312(ByteCodePy311):
                 if not next_inst.opname == "FOR_ITER":
                     continue
 
-                # This pattern should be a start of an exception block
-                entry = [e for e in entries if e.start == offset]
-                if not entry:
+                # Check end of pattern, two instructions.
+                # Check for the corresponding END_FOR, exception table end is
+                # non-inclusive, so subtract one.
+                index = self.ordered_offsets.index(entry.end)
+                curr_inst = self.table[self.ordered_offsets[index - 1]]
+                if not curr_inst.opname == "END_FOR":
                     continue
-                entry = entry[0]
-
-                # Append the exception entry to the stack
-                stack.append(entry)
-
-            # Check end of pattern, two instructions.
-            # The end can be in another entry of exception table but the
-            # target of exception will remain same. so we check for that.
-            # Check for the corresponding END_FOR, exception table end is
-            # non-inclusive, so subtract one.
-            if stack and curr_inst.opname == "END_FOR":
                 # END_FOR must be followed by SWAP(2)
-                next_inst = self.table[self.ordered_offsets[index + 1]]
+                next_inst = self.table[self.ordered_offsets[index]]
                 if not next_inst.opname == "SWAP" and next_inst.arg == 2:
                     continue
-
-                # This pattern should be a end of an exception block and
-                # must have same target as the top of the stack
-                # exception
-                entry = [e for e in entries
-                         if e.end == next_inst.offset
-                         and e.target == stack[-1].target]
-                if not entry:
-                    continue
-                entry = entry[0]
-                # All above conditions hold, pattern was found.
-                # Now using the stack, remove all the exceptions
-                # that are between the starting entry and the end
-                # entry with he given target
-                entries = pop_and_club_exceptions(entries, end_entry=entry)
-
+                # If all conditions are met that means this exception entry
+                # is for a list/dict/set comprehension and can be removed.
+                # Also if there exist exception entries above and below this
+                # entry pointing to the same target. those can be merged into
+                # a single bigger exception block.
+                entries = pop_and_merge_exceptions(entries, entry)
+                work_remaining = True
         return entries
 
 
