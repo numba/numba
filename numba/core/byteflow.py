@@ -24,6 +24,18 @@ _NO_RAISE_OPS = frozenset({
     'PRECALL',
 })
 
+if PYVERSION in ((3, 12), ):
+    from enum import Enum
+    # Operands for CALL_INTRINSIC_1
+    class CALL_INTRINSIC_1_Operand(Enum):
+        INTRINSIC_STOPITERATION_ERROR = 3
+        UNARY_POSITIVE = 5
+        INTRINSIC_LIST_TO_TUPLE = 6
+    ci1op = CALL_INTRINSIC_1_Operand
+elif PYVERSION in ((3, 8), (3, 9), (3, 10), (3, 11)):
+    pass
+else:
+    raise NotImplementedError(PYVERSION)
 
 @total_ordering
 class BlockKind(object):
@@ -1186,25 +1198,31 @@ class TraceRunner(object):
         def op_CALL_INTRINSIC_1(self, state, inst):
             # See https://github.com/python/cpython/blob/v3.12.0rc2/Include/
             # internal/pycore_intrinsics.h#L3-L17C36
-            if inst.arg == 3:  # INTRINSIC_STOPITERATION_ERROR
-                state.append(inst, intrinsic="INTRINSIC_STOPITERATION_ERROR")
+            try:
+                operand = CALL_INTRINSIC_1_Operand(inst.arg)
+            except TypeError:
+                raise NotImplementedError(f"op_CALL_INTRINSIC_1({inst.arg})")
+            if operand == ci1op.INTRINSIC_STOPITERATION_ERROR:
+                state.append(inst, operand=operand)
                 state.terminate()
                 return
-            if inst.arg == 5:  # UNARY_POSITIVE
+            elif operand == ci1op.UNARY_POSITIVE:
                 val = state.pop()
                 res = state.make_temp()
-                state.append(inst, intrinsic="UNARY_POSITIVE",
+                state.append(inst, operand=operand,
                              value=val, res=res)
                 state.push(res)
                 return
-            elif inst.arg == 6:  # INTRINSIC_LIST_TO_TUPLE
+            elif operand == ci1op.INTRINSIC_LIST_TO_TUPLE:
                 tos = state.pop()
                 res = state.make_temp()
-                state.append(inst, intrinsic="INTRINSIC_LIST_TO_TUPLE",
+                state.append(inst, operand=operand,
                              const_list=tos, res=res)
                 state.push(res)
                 return
-            raise NotImplementedError(f"op_CALL_INTRINSIC_1({inst.arg})")
+            else:
+                raise NotImplementedError(operand)
+
     elif PYVERSION in ((3, 8), (3, 9), (3, 10), (3, 11)):
         pass
     else:

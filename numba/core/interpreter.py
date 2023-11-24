@@ -15,6 +15,15 @@ from numba.core.unsafe import eh
 from numba.cpython.unsafe.tuple import unpack_single_tuple
 
 
+if PYVERSION in ((3, 12), ):
+    # Operands for CALL_INTRINSIC_1
+    from numba.core.byteflow import CALL_INTRINSIC_1_Operand as ci1op
+elif PYVERSION in ((3, 8), (3, 9), (3, 10), (3, 11)):
+    pass
+else:
+    raise NotImplementedError(PYVERSION)
+
+
 class _UNKNOWN_VALUE(object):
     """Represents an unknown value, this is for ease of debugging purposes only.
     """
@@ -3298,19 +3307,20 @@ class Interpreter(object):
         self.op_CALL_FUNCTION(*args, **kws)
 
     if PYVERSION in ((3, 12), ):
-        def op_CALL_INTRINSIC_1(self, inst, intrinsic, **kwargs):
-            if intrinsic == "INTRINSIC_STOPITERATION_ERROR":
+        def op_CALL_INTRINSIC_1(self, inst, operand, **kwargs):
+            if operand == ci1op.INTRINSIC_STOPITERATION_ERROR:
                 stmt = ir.StaticRaise(INTRINSIC_STOPITERATION_ERROR, (),
                                       self.loc)
                 self.current_block.append(stmt)
                 return
-            elif intrinsic == "UNARY_POSITIVE":
+            elif operand == ci1op.UNARY_POSITIVE:
                 self.op_UNARY_POSITIVE(inst, **kwargs)
                 return
-            elif intrinsic == "INTRINSIC_LIST_TO_TUPLE":
+            elif operand == ci1op.INTRINSIC_LIST_TO_TUPLE:
                 self.op_LIST_TO_TUPLE(inst, **kwargs)
                 return
-            raise NotImplementedError(intrinsic)
+            else:
+                raise NotImplementedError(operand)
     elif PYVERSION in ((3, 8), (3, 9), (3, 10), (3, 11)):
         pass
     else:
