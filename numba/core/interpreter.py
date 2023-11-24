@@ -1734,7 +1734,8 @@ class Interpreter(object):
                 val = self.get(varname)
             except ir.NotDefinedError:
                 # Hack to make sure exception variables are defined
-                assert PYVERSION >= (3, 11), "unexpected missing definition"
+                assert PYVERSION in ((3, 11), (3, 12)), \
+                       "unexpected missing definition"
                 val = ir.Const(value=None, loc=self.loc)
             stmt = ir.Assign(value=val, target=target,
                              loc=self.loc)
