@@ -26,6 +26,7 @@ _NO_RAISE_OPS = frozenset({
 
 if PYVERSION in ((3, 12), ):
     from enum import Enum
+
     # Operands for CALL_INTRINSIC_1
     class CALL_INTRINSIC_1_Operand(Enum):
         INTRINSIC_STOPITERATION_ERROR = 3
@@ -36,6 +37,7 @@ elif PYVERSION in ((3, 8), (3, 9), (3, 10), (3, 11)):
     pass
 else:
     raise NotImplementedError(PYVERSION)
+
 
 @total_ordering
 class BlockKind(object):
