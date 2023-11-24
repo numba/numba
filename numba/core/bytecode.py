@@ -385,7 +385,7 @@ class ByteCodePy311(_ByteCode):
         out = dis._ExceptionTableEntry(
             start=ent.start + _FIXED_OFFSET, end=ent.end + _FIXED_OFFSET,
             target=ent.target + _FIXED_OFFSET,
-            depth=ent.depth, lasti=ent.lasti + _FIXED_OFFSET,
+            depth=ent.depth, lasti=ent.lasti,
         )
         return out
 
