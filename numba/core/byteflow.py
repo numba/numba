@@ -1565,7 +1565,10 @@ class TraceRunner(object):
     # NOTE: Please see notes in `interpreter.py` surrounding the implementation
     # of LOAD_METHOD and CALL_METHOD.
 
-    if PYVERSION in ((3, 11), (3, 12)):
+    if PYVERSION in ((3, 12), ):
+        # LOAD_METHOD has become a pseudo-instruction in 3.12
+        pass
+    elif PYVERSION in ((3, 11), ):
         def op_LOAD_METHOD(self, state, inst):
             item = state.pop()
             extra = state.make_null()
