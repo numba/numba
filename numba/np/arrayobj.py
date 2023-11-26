@@ -1150,6 +1150,7 @@ def fancy_getitem_array(context, builder, sig, args):
                                      aryty, ary, (idxty,), (idx,))
         return impl_ret_borrowed(context, builder, sig.return_type, res)
     else:
+        breakpoint()
         # Advanced indexing
         return fancy_getitem(context, builder, sig, args,
                              aryty, ary, (idxty,), (idx,))
@@ -4717,8 +4718,8 @@ def numpy_take(a, indices, axis=None):
 
                 shape = tuple_setitem(a.shape, axis, len(indices))
                 out = np.empty(shape, dtype=a.dtype)
-                for ii in range(len(indices)):
-                    for index in np.ndindex(a.shape):
+                for index in np.ndindex(a.shape):
+                    for ii in range(len(indices)):
                         if index[axis] == indices[ii]:
                             other_index = tuple_setitem(index, axis, ii)
                             out[other_index] = a[index]
