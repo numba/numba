@@ -4799,7 +4799,6 @@ def numpy_take(a, indices, axis=None):
                            f"of dimension {a.ndim}")
                     raise ValueError(msg)
 
-                # return _take_inner(a, indices[0], axis)
                 shape = tuple_setitem(a.shape, axis, len(indices))
                 out = np.empty(shape, dtype=a.dtype)
                 for i in range(len(indices)):
