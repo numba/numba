@@ -1150,7 +1150,6 @@ def fancy_getitem_array(context, builder, sig, args):
                                      aryty, ary, (idxty,), (idx,))
         return impl_ret_borrowed(context, builder, sig.return_type, res)
     else:
-        breakpoint()
         # Advanced indexing
         return fancy_getitem(context, builder, sig, args,
                              aryty, ary, (idxty,), (idx,))
@@ -4666,6 +4665,90 @@ def numpy_diagflat(v, k=0):
     return impl
 
 
+@intrinsic
+def _take_inner(typingctx, a, indice, axis, iter_num, out):
+    """Generate a switch table for all possible values of axis: [0, ndim)
+
+    The LLVM generated code behaves as demonstrated below:
+
+        switch(axis):
+          case 0:
+            idx = (indice, ...)
+          case 1:
+            idx = (:, indice, ...)
+          ...
+          case ndim-1:
+            idx = (..., indice)
+        out[idx] = array[idx]
+
+    """
+    ndim = a.ndim
+    sig = types.none(a, indice, axis, iter_num, out)
+
+    def gen_tuple(context, builder, indice, i):
+        intp = types.intp
+        st = types.slice2_type
+        s = slicing.make_slice_from_constant(context, builder,
+                                             st, slice(None))
+
+        t = ((st,) * (i)) + (intp,) + ((st,) * (ndim - i - 1))
+        tuple_ty = types.Tuple(t)
+
+        tv = ((s,) * (i)) + (indice,) + ((s,) * (ndim - i - 1))
+        tuple_val = context.make_tuple(builder, tuple_ty, tv)
+        return tuple_ty, tuple_val
+
+    def gen_block(context, builder, array, indice, iter_num, out, i, bb_end):
+        block = builder.append_basic_block(f'axis_{i}')
+        with builder.goto_block(block):
+            array_ty = sig.args[0]
+            out_ty = sig.args[-1]
+            items_ty = array_ty.copy(ndim=ndim - 1)
+
+            # items = array[tuple_vals]
+            tuple_ty, tuple_vals = gen_tuple(context, builder, indice, i)
+            sig_ = signature(items_ty, array_ty, tuple_ty)
+            fn = context.get_function(operator.getitem, sig_)
+            items = fn(builder, (array, tuple_vals))
+
+            # tuple_vals[axis] = iter_num
+            tuple_vals = builder.insert_value(tuple_vals, iter_num, i)
+
+            # out[tuple_vals] = items
+            sig_ = signature(types.none, out_ty, tuple_ty, items_ty)
+            fn = context.get_function(operator.setitem, sig_)
+            fn(builder, (out, tuple_vals, items))
+            builder.branch(bb_end)
+        return block
+
+    def codegen(context, builder, sig, args):
+        [arr, indice, axis, iter_num, out] = args
+
+        entry = builder.basic_block
+        switch_end = builder.append_basic_block(name="axis_end")
+
+        blocks = []
+        for i in range(ndim):
+            blk = gen_block(context,
+                            builder,
+                            arr,
+                            indice,
+                            iter_num,
+                            out,
+                            i,
+                            switch_end)
+            blocks.append(blk)
+
+        # build switch table
+        with builder.goto_block(entry):
+            switch = builder.switch(axis, blocks[0])
+            for i in range(ndim):
+                switch.add_case(i, blocks[i])
+        builder.position_at_end(switch_end)
+
+    return sig, codegen
+
+
 @overload(np.take)
 @overload_method(types.Array, 'take')
 def numpy_take(a, indices, axis=None):
@@ -4716,13 +4799,18 @@ def numpy_take(a, indices, axis=None):
                            f"of dimension {a.ndim}")
                     raise ValueError(msg)
 
+                # return _take_inner(a, indices[0], axis)
                 shape = tuple_setitem(a.shape, axis, len(indices))
                 out = np.empty(shape, dtype=a.dtype)
-                for index in np.ndindex(a.shape):
-                    for ii in range(len(indices)):
-                        if index[axis] == indices[ii]:
-                            other_index = tuple_setitem(index, axis, ii)
-                            out[other_index] = a[index]
+                for i in range(len(indices)):
+                    _take_inner(a, indices[i], axis, i, out)
+                    # out[:, i, ...] = y
+                    # out[i] = y.reshape(shape)
+                # for index in np.ndindex(a.shape):
+                #     for ii in range(len(indices)):
+                #         if index[axis] == indices[ii]:
+                #             other_index = tuple_setitem(index, axis, ii)
+                #             out[other_index] = a[index]
                 return out
             return take_impl
 
