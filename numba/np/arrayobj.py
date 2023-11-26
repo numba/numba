@@ -4804,13 +4804,6 @@ def numpy_take(a, indices, axis=None):
                 out = np.empty(shape, dtype=a.dtype)
                 for i in range(len(indices)):
                     _take_inner(a, indices[i], axis, i, out)
-                    # out[:, i, ...] = y
-                    # out[i] = y.reshape(shape)
-                # for index in np.ndindex(a.shape):
-                #     for ii in range(len(indices)):
-                #         if index[axis] == indices[ii]:
-                #             other_index = tuple_setitem(index, axis, ii)
-                #             out[other_index] = a[index]
                 return out
             return take_impl
 
