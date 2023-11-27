@@ -218,8 +218,15 @@ def charseq_to_bytes(context, builder, fromty, toty, val):
     cgutils.memcpy(builder, bstr.data, ptr, bstr.nitems)
     return bstr
 
+
 @lower_cast(types.CharSeq, types.CharSeq)
-def charseq_to_charseq(context, builder: ir.IRBuilder, fromty: types.CharSeq, toty: types.CharSeq, val: ir.values.values.Value):
+def charseq_to_charseq(
+    context,
+    builder: ir.IRBuilder,
+    fromty: types.CharSeq,
+    toty: types.CharSeq,
+    val: ir.values.values.Value
+):
     char_t = ir.IntType(8)
     count_t = ir.IntType(32)
 
@@ -245,7 +252,6 @@ def charseq_to_charseq(context, builder: ir.IRBuilder, fromty: types.CharSeq, to
         builder.store(in_val, builder.gep(dst, [loop.index]))
 
     return builder.load(dst_ptr)
-
 
 
 @lower_cast(types.UnicodeType, types.Bytes)
