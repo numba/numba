@@ -1,0 +1,40 @@
+
+Version 0.58.1 (17 October 2023)
+--------------------------------
+
+This is a maintenance release that adds support for NumPy 1.26 and fixes a bug.
+
+NumPy Support
+~~~~~~~~~~~~~
+
+Support NumPy 1.26
+==================
+
+Support for NumPy 1.26 is added.
+
+(`PR-#9227 <https://github.com/numba/numba/pull/9227>`__)
+
+
+Bug Fixes
+~~~~~~~~~
+
+Fixed handling of float default arguments in inline closures
+============================================================
+
+Float default arguments in inline closures would produce incorrect results since
+updates for Python 3.11 - these are now handled correctly again.
+
+(`PR-#9222 <https://github.com/numba/numba/pull/9222>`__)
+
+Pull-Requests
+~~~~~~~~~~~~~
+
+* PR `#9220 <https://github.com/numba/numba/pull/9220>`_: Support passing arbitrary flags to NVVM (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9227 <https://github.com/numba/numba/pull/9227>`_: Support NumPy 1.26 (PR aimed at review / merge) (`Tialo <https://github.com/Tialo>`_ `gmarkall <https://github.com/gmarkall>`_)
+* PR `#9228 <https://github.com/numba/numba/pull/9228>`_: Fix #9222 - Don't replace `.` with `_` in func arg names in inline closures (`gmarkall <https://github.com/gmarkall>`_)
+
+Authors
+~~~~~~~
+
+* `gmarkall <https://github.com/gmarkall>`_
+* `Tialo <https://github.com/Tialo>`_
