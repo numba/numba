@@ -18,7 +18,7 @@ def this_grid() -> GridGroup:
     return GridGroup()
 
 
-@intrinsic
+@intrinsic(target='cuda')
 def _this_grid(typingctx):
     sig = signature(grid_group)
 
@@ -40,7 +40,7 @@ def _ol_this_grid():
     return impl
 
 
-@intrinsic
+@intrinsic(target='cuda')
 def _grid_group_sync(typingctx, group):
     sig = signature(types.int32, group)
 
