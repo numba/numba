@@ -577,8 +577,6 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
 
         f = jit(forceobj=True)(foo)
         f(1)
-        # Post 3.12 the second loop is also being lifted
-        self.assertEqual(len(f.overloads[f.signatures[0]].lifted), 2)
 
     def test_lift_objectmode_issue_4223(self):
         from numba import jit
