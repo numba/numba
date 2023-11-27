@@ -2372,19 +2372,6 @@ class Interpreter(object):
         # Handle with
         exitpt = inst.next + inst.arg
 
-        # Python 3.12 hack for handling nested with blocks
-        if PYVERSION >= (3, 12):
-            if exitpt > self.last_active_offset:
-                # Use exception entries to figure out end of syntax block
-                exitpt = max([ex.end for ex in self.active_exception_entries
-                             if ex.target == exitpt])
-        wth = ir.With(inst.offset, exit=exitpt)
-        self.syntax_blocks.append(wth)
-        ctxmgr = self.get(contextmanager)
-        self.current_block.append(ir.EnterWith(contextmanager=ctxmgr,
-                                               begin=inst.offset,
-                                               end=exitpt, loc=self.loc,))
-
         # Store exit fn
         exit_fn_obj = ir.Const(None, loc=self.loc)
         self.store(value=exit_fn_obj, name=exitfn)
