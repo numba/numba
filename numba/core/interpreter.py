@@ -1520,7 +1520,8 @@ class Interpreter(object):
             firstinst = self.bytecode[block.offset]
             # If its an END_FOR instruction, the start location of block
             # is set to start of the FOR loop, so take the location of
-            # next instruction
+            # next instruction. This only affects the source location 
+            # marking and has no impact to semantic.
             if firstinst.opname == 'END_FOR':
                 firstinst = self.bytecode[firstinst.next]
             self.loc = self.loc.with_lineno(firstinst.lineno)
