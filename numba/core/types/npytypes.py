@@ -31,6 +31,11 @@ class CharSeq(Type):
         if isinstance(other, Bytes):
             return Conversion.safe
 
+    def can_convert_to(self, typingctx, other):
+        if isinstance(other, CharSeq):
+            if other.count < self.count:
+                return Conversion.unsafe
+            return Conversion.safe
 
 class UnicodeCharSeq(Type):
     """
