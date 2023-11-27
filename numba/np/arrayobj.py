@@ -4666,6 +4666,42 @@ def numpy_diagflat(v, k=0):
     return impl
 
 
+def generate_getitem_setitem_with_axis(ndim, kind):
+    assert kind in ('getitem', 'setitem')
+
+    if kind == 'getitem':
+        fn = '''
+            @register_jitable
+            def _getitem(a, idx, axis):
+                if axis == 0:
+                    return a[idx, ...]
+        '''
+        for i in range(1, ndim):
+            lst = (':',) * i
+            fn += f'''
+                elif axis == {i}:
+                    return a[{", ".join(lst)}, idx, ...]
+            '''
+    else:
+        fn = '''
+            @register_jitable
+            def _setitem(a, idx, axis, vals):
+                if axis == 0:
+                    a[idx, ...] = vals
+        '''
+
+        for i in range(1, ndim):
+            lst = (':',) * i
+            fn += f'''
+                elif axis == {i}:
+                    a[{", ".join(lst)}, idx, ...] = vals
+            '''
+
+    fn = textwrap.dedent(fn)
+    exec(fn, globals())
+    return globals()[f'_{kind}']
+
+
 @overload(np.take)
 @overload_method(types.Array, 'take')
 def numpy_take(a, indices, axis=None):
@@ -4710,39 +4746,8 @@ def numpy_take(a, indices, axis=None):
 
             ndim = a.ndim
 
-            _getitem = '''
-                @register_jitable
-                def _getitem(a, idx, axis):
-                    if axis == 0:
-                        return a[idx, ...]
-            '''
-            for i in range(1, ndim):
-                lst = (':',) * i
-                _getitem += f'''
-                    elif axis == {i}:
-                        return a[{", ".join(lst)}, idx, ...]
-                '''
-
-            _setitem = '''
-                @register_jitable
-                def _setitem(a, idx, axis, vals):
-                    if axis == 0:
-                        a[idx, ...] = vals
-            '''
-
-            for i in range(1, ndim):
-                lst = (':',) * i
-                _setitem += f'''
-                    elif axis == {i}:
-                        a[{", ".join(lst)}, idx, ...] = vals
-                '''
-
-            for fn in (_getitem, _setitem):
-                fn = textwrap.dedent(fn)
-                exec(fn, globals())
-
-            _getitem = globals()['_getitem']
-            _setitem = globals()['_setitem']
+            _getitem = generate_getitem_setitem_with_axis(ndim, 'getitem')
+            _setitem = generate_getitem_setitem_with_axis(ndim, 'setitem')
 
             def take_impl(a, indices, axis=None):
                 if axis < 0:
