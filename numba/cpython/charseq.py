@@ -218,6 +218,35 @@ def charseq_to_bytes(context, builder, fromty, toty, val):
     cgutils.memcpy(builder, bstr.data, ptr, bstr.nitems)
     return bstr
 
+@lower_cast(types.CharSeq, types.CharSeq)
+def charseq_to_charseq(context, builder: ir.IRBuilder, fromty: types.CharSeq, toty: types.CharSeq, val: ir.values.values.Value):
+    char_t = ir.IntType(8)
+    count_t = ir.IntType(32)
+
+    src_ptr = cgutils.alloca_once_value(builder, value=val)
+    src = builder.bitcast(src_ptr, char_t.as_pointer())
+
+    lty = context.get_value_type(toty)
+    dst_ptr = cgutils.alloca_once(builder, lty)
+    dst = builder.bitcast(dst_ptr, char_t.as_pointer())
+
+    src_length = ir.Constant(count_t, fromty.count)
+    dst_length = ir.Constant(count_t, toty.count)
+    is_shorter_value = builder.icmp_unsigned('<', src_length, dst_length)
+    count = builder.select(is_shorter_value, src_length, dst_length)
+    with builder.if_then(is_shorter_value):
+        cgutils.memset(builder,
+                       dst,
+                       ir.Constant(src_length.type,
+                                   toty.count), 0)
+    with cgutils.for_range(builder, count) as loop:
+        in_ptr = builder.gep(src, [loop.index])
+        in_val = builder.zext(builder.load(in_ptr), char_t)
+        builder.store(in_val, builder.gep(dst, [loop.index]))
+
+    return builder.load(dst_ptr)
+
+
 
 @lower_cast(types.UnicodeType, types.Bytes)
 def unicode_to_bytes_cast(context, builder, fromty, toty, val):
