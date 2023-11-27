@@ -944,13 +944,16 @@ class PythonAPI(object):
         return self.builder.call(fn, args)
 
     def call(self, callee, args=None, kws=None):
-        if args is None:
-            args = self.get_null_object()
+        if args_was_none := args is None:
+            args = self.tuple_new(0)
         if kws is None:
             kws = self.get_null_object()
         fnty = ir.FunctionType(self.pyobj, [self.pyobj] * 3)
         fn = self._get_function(fnty, name="PyObject_Call")
-        return self.builder.call(fn, (callee, args, kws))
+        result = self.builder.call(fn, (callee, args, kws))
+        if args_was_none:
+            self.decref(args)
+        return result
 
     def object_type(self, obj):
         """Emit a call to ``PyObject_Type(obj)`` to get the type of ``obj``.
