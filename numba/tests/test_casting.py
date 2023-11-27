@@ -135,6 +135,23 @@ class TestCasting(unittest.TestCase):
         self.assertEqual(foo(2), 2)
         self.assertIsNone(foo(None))
 
+    def test_charseq_to_charseq(self):
+        src_typ = types.Array(types.CharSeq(4), 1, "A")
+        dst_typ = types.Array(types.CharSeq(5), 1, "A")
+        sig = types.int32(src_typ, dst_typ)
+
+        @njit(sig)
+        def assign_charseq_array(src, dst):
+            for i in range(len(src)):
+                dst[i] = src[i]
+            return 0
+
+        x = np.array(["1234", "5678"], dtype="S4")
+        y = np.empty(2, dtype="S5")
+        assign_charseq_array(x, y)
+
+        self.assertEqual(y[0], b"1234")
+
 
 if __name__ == '__main__':
     unittest.main()
