@@ -427,7 +427,6 @@ class ByteCodePy312(ByteCodePy311):
             # Remove any exception table entries that point to that exception
             # handler.
             entries = [e for e in entries if e.target != max_exception_target]
-            #breakpoint()
 
         self.exception_entries = tuple(entries)
 
