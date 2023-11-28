@@ -1273,3 +1273,15 @@ def print_azure_matrix():
     for npver, pys in sorted(py2np_map.items()):
         for pyver, count in pys.items():
             print(f" {npver} |  {pyver:<4}  |   {count}")
+
+    # print the "reverse" map
+    rev_map = defaultdict(lambda: defaultdict(int))
+    for npver, pys in sorted(py2np_map.items()):
+        for pyver, count in pys.items():
+            rev_map[pyver][npver] = count
+    print("\nPython | NumPy | Count")
+    print("-----------------------")
+    sorter = lambda x: int(x[0].split('.')[1])
+    for pyver, nps in sorted(rev_map.items(), key=sorter):
+        for npver, count in nps.items():
+            print(f" {pyver:<4} |  {npver}  |   {count}")
