@@ -2372,6 +2372,13 @@ class Interpreter(object):
         # Handle with
         exitpt = inst.next + inst.arg
 
+        wth = ir.With(inst.offset, exit=exitpt)
+        self.syntax_blocks.append(wth)
+        ctxmgr = self.get(contextmanager)
+        self.current_block.append(ir.EnterWith(contextmanager=ctxmgr,
+                                               begin=inst.offset,
+                                               end=exitpt, loc=self.loc,))
+
         # Store exit fn
         exit_fn_obj = ir.Const(None, loc=self.loc)
         self.store(value=exit_fn_obj, name=exitfn)
