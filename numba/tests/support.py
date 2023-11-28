@@ -1240,7 +1240,7 @@ def print_azure_matrix():
     base_path = os.path.dirname(os.path.abspath(__file__))
     azure_pipe = os.path.join(base_path, '..', '..', 'azure-pipelines.yml')
     if not os.path.isfile(azure_pipe):
-        self.skipTest("'azure-pipelines.yml' is not available")
+        raise RuntimeError("'azure-pipelines.yml' is not available")
     with open(os.path.abspath(azure_pipe), 'rt') as f:
         data = f.read()
     pipe_yml = yaml.load(data, Loader=Loader)
@@ -1257,7 +1257,7 @@ def print_azure_matrix():
     winpath = ['..', '..', 'buildscripts', 'azure', 'azure-windows.yml']
     azure_windows = os.path.join(base_path, *winpath)
     if not os.path.isfile(azure_windows):
-        self.skipTest("'azure-windows.yml' is not available")
+        raise RuntimeError("'azure-windows.yml' is not available")
     with open(os.path.abspath(azure_windows), 'rt') as f:
         data = f.read()
     windows_yml = yaml.load(data, Loader=Loader)
