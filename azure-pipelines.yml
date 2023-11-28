@@ -18,7 +18,7 @@ jobs:
         CONDA_ENV: 'azure_ci'
         TEST_THREADING: 'tbb'
         TEST_START_INDEX: 0
-      py12_np126:
+      py312_np126:
         PYTHON: '3.12'
         NUMPY: '1.26'
         CONDA_ENV: 'azure_ci'
