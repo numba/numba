@@ -1,0 +1,4 @@
+Adds support for axis kwarg in np.take
+======================================
+
+Support for axis is added to ``np.take``.
