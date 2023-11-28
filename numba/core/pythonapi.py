@@ -12,11 +12,13 @@ from numba import _helperlib
 from numba.core import (
     types, utils, config, lowering, cgutils, imputils, serialize,
 )
+from numba.core.utils import PYVERSION
 
 PY_UNICODE_1BYTE_KIND = _helperlib.py_unicode_1byte_kind
 PY_UNICODE_2BYTE_KIND = _helperlib.py_unicode_2byte_kind
 PY_UNICODE_4BYTE_KIND = _helperlib.py_unicode_4byte_kind
-PY_UNICODE_WCHAR_KIND = _helperlib.py_unicode_wchar_kind
+if PYVERSION in ((3, 8), (3, 9), (3, 10), (3, 11)):
+    PY_UNICODE_WCHAR_KIND = _helperlib.py_unicode_wchar_kind
 
 
 class _Registry(object):
@@ -195,7 +197,6 @@ class PythonAPI(object):
         self.py_unicode_1byte_kind = _helperlib.py_unicode_1byte_kind
         self.py_unicode_2byte_kind = _helperlib.py_unicode_2byte_kind
         self.py_unicode_4byte_kind = _helperlib.py_unicode_4byte_kind
-        self.py_unicode_wchar_kind = _helperlib.py_unicode_wchar_kind
 
     def get_env_manager(self, env, env_body, env_ptr):
         return EnvironmentManager(self, env, env_body, env_ptr)

@@ -751,3 +751,13 @@ def get_hashable_key(value):
         return id(value)
     else:
         return value
+
+
+class threadsafe_cached_property(functools.cached_property):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._lock = threading.RLock()
+
+    def __get__(self, *args, **kwargs):
+        with self._lock:
+            return super().__get__(*args, **kwargs)

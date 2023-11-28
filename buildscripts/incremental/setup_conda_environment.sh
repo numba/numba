@@ -49,12 +49,23 @@ if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # dependencies, but exercised in the test suite
     # pexpect is used to run the gdb tests.
     # ipykernel is used for testing ipython behaviours.
-    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel scipy pygments pexpect
+    if [ $PYTHON \< "3.12" ]; then
+        $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel scipy pygments pexpect
+    else
+        # At the time of writing `ipykernel` was not available for Python 3.12
+        $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython scipy pygments pexpect
+    fi
 fi
 
 # Install the compiler toolchain and gdb (if available)
 if [[ $(uname) == Linux ]]; then
-    $CONDA_INSTALL gcc_linux-64 gxx_linux-64 gdb gdb-pretty-printer
+    if [ $PYTHON \< "3.12" ]; then
+        $CONDA_INSTALL gcc_linux-64 gxx_linux-64 gdb gdb-pretty-printer
+    else
+        # At the time of writing gdb and gdb-pretty-printer were not available
+        # for 3.12.
+        $CONDA_INSTALL gcc_linux-64 gxx_linux-64
+    fi
 elif  [[ $(uname) == Darwin ]]; then
     $CONDA_INSTALL clang_osx-64 clangxx_osx-64
     # Install llvm-openmp on OSX for headers during build and runtime during

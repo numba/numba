@@ -444,12 +444,14 @@ class TestFunctionInlining(MemoryLeakMixin, InliningBase):
             return bar(z + 2)
 
         # block count changes with Python version due to bytecode differences.
-        if utils.PYVERSION in ((3, 8), (3, 9)):
-            bc = 33
+        if utils.PYVERSION in ((3, 12), ):
+            bc = 39
         elif utils.PYVERSION in ((3, 10), (3, 11)):
             bc = 35
+        elif utils.PYVERSION in ((3, 8), (3, 9)):
+            bc = 33
         else:
-            raise ValueError(f"Unsupported Python version: {utils.PYVERSION}")
+            raise NotImplementedError(utils.PYVERSION)
 
         self.check(impl, inline_expect={'foo': True, 'boz': True,
                                         'fortran': True}, block_count=bc)

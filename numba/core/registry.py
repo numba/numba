@@ -1,5 +1,6 @@
 import contextlib
-from functools import cached_property
+#from functools import cached_property
+from numba.core.utils import threadsafe_cached_property as cached_property
 
 from numba.core.descriptors import TargetDescriptor
 from numba.core import utils, typing, dispatcher, cpu

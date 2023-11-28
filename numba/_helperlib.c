@@ -855,7 +855,8 @@ static void traceback_add(const char *funcname, const char *filename, int lineno
     if (!frame)
         goto error;
 
-#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 11) /* 3.11 */
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 12) /* 3.12 */
+#elif (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 11) /* 3.11 */
 
     /* unsafe cast to our copy of _frame to access the f_lineno field */
     typedef struct _frame py_frame;
@@ -872,8 +873,15 @@ static void traceback_add(const char *funcname, const char *filename, int lineno
     Py_DECREF(frame);
     return;
 
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 12) /* 3.12 */
+error:
+    _PyErr_ChainExceptions1(exc);
+#elif (PY_MAJOR_VERSION == 3) && ((PY_MINOR_VERSION == 8) || (PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11)) /* 3.11 and below */
 error:
     _PyErr_ChainExceptions(exc, val, tb);
+#else
+#error "Python major version is not supported."
+#endif
 }
 
 
