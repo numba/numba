@@ -987,7 +987,7 @@ class TestBuiltins(TestCase):
         self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
     def test_sum(self):
-        # In Python 3.8 "start" can be specified as a kwarg, so test that too
+        # In Python 3.8+ "start" can be specified as a kwarg, so test that too
         sum_default = njit(sum_usecase)
         sum_kwarg = njit(sum_kwarg_usecase)
 

@@ -602,13 +602,6 @@ def find_setupwiths(func_ir):
         target_block = blocks[p]
         if ir_utils.is_return(func_ir.blocks[
                 target_block.terminator.get_targets()[0]].terminator):
-            if PYVERSION == (3, 8):
-                # 3.8 needs to bail here, if this is the case, because the
-                # later code can't handle it.
-                raise errors.CompilerError(
-                    "unsupported control flow: due to return statements "
-                    "inside with block"
-                )
             _rewrite_return(func_ir, p)
 
     # now we need to rewrite the tuple such that we have SETUP_WITH matching the
