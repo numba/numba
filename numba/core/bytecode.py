@@ -454,7 +454,8 @@ class ByteCodePy312(ByteCodePy311):
             also be merged into a single exception.
         """
 
-        def pop_and_merge_exceptions(entries: list, entry_to_remove: _ExceptionTableEntry):
+        def pop_and_merge_exceptions(entries: list,
+                                     entry_to_remove: _ExceptionTableEntry):
             lower_entry_idx = entries.index(entry_to_remove) - 1
             upper_entry_idx = entries.index(entry_to_remove) + 1
 
@@ -474,7 +475,8 @@ class ByteCodePy312(ByteCodePy311):
             # Remove the exception entry.
             entries.remove(entry_to_remove)
             # Remove dead exceptions, if any, that the entry above may point to.
-            entries = [e for e in entries if not e.start == entry_to_remove.target]
+            entries = [e for e in entries
+                       if not e.start == entry_to_remove.target]
             return entries
 
         work_remaining = True
@@ -489,7 +491,9 @@ class ByteCodePy312(ByteCodePy311):
                 # If there is a BUILD_{LIST, MAP, SET} instruction at this
                 # location.
                 curr_inst = self.table[self.ordered_offsets[index]]
-                if not curr_inst.opname in ("BUILD_LIST", "BUILD_MAP", "BUILD_SET"):
+                if curr_inst.opname not in ("BUILD_LIST",
+                                            "BUILD_MAP",
+                                            "BUILD_SET"):
                     continue
                 # Check if the BUILD_{LIST, MAP, SET} instruction is followed
                 # by a SWAP(2).
