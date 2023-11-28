@@ -76,9 +76,6 @@ fi
 # Install latest correct build
 $CONDA_INSTALL -c numba/label/dev llvmlite=0.42
 
-# Install importlib-metadata for Python < 3.9
-if [ $PYTHON \< "3.9" ]; then $CONDA_INSTALL importlib_metadata; fi
-
 # Install dependencies for building the documentation
 if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx docutils sphinx_rtd_theme pygments numpydoc; fi
 if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL rstcheck; fi
