@@ -258,7 +258,9 @@ class _GatherDefsHandler(_BaseHandler):
     """Find all defs and uses of variable in each block
 
     ``states["label"]`` is a int; label of the current block
-    ``states["defs"]`` is a Mapping[str, List[Tuple[ir.Assign, int]]]
+    ``states["defs"]`` is a Mapping[str, List[Tuple[ir.Assign, int]]]:
+        - a mapping of the name of the assignee variable to the assignment
+          IR node and the block label.
     ``states["uses"]`` is a Mapping[Set[int]]
     """
     def on_assign(self, states, assign):
