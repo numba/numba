@@ -276,6 +276,7 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
                 indices=(
                     0,
                     (0,),
+                    np.asarray([0])
                 ),
                 axis=(0,)
             )
