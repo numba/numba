@@ -4742,10 +4742,24 @@ def numpy_take(a, indices, axis=None):
             return take_impl
     else:
         if isinstance(a, types.Array) and isinstance(indices, types.Integer):
+            t = (0,) * (a.ndim - 1)
+
+            @register_jitable
+            def _squeeze(r):
+                # np.squeeze is too hard to implement in Numba
+                tup = tuple(t)
+                j = 0
+                for s in r.shape:
+                    if s != 1:
+                        tup = tuple_setitem(tup, j, s)
+                        j += 1
+                return r.reshape(tup)
+
             def take_impl(a, indices, axis=None):
                 r = np.take(a, (indices,), axis=axis)
-                # TODO: missing np.squeeze impl
-                return np.squeeze(r)
+                if a.ndim == 1:
+                    return r[0]
+                return _squeeze(r)
             return take_impl
 
         if isinstance(a, types.Array) and \
