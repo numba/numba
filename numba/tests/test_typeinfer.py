@@ -31,6 +31,11 @@ f64 = types.float64
 c64 = types.complex64
 c128 = types.complex128
 
+skip_unless_load_fast_and_clear = unittest.skipUnless(
+    "LOAD_FAST_AND_CLEAR" in dis.opmap,
+    "Requires LOAD_FAST_AND_CLEAR opcode",
+)
+
 
 class TestArgRetCasting(unittest.TestCase):
     def test_arg_ret_casting(self):
@@ -708,8 +713,7 @@ class TestMiscIssues(TestCase):
 
         self.assertTrue(all(vt == types.float64 for vt in return_vars.values()))
 
-    @unittest.skipUnless("LOAD_FAST_AND_CLEAR" in dis.opmap,
-                         "Requires LOAD_FAST_AND_CLEAR opcode")
+    @skip_unless_load_fast_and_clear
     def test_load_fast_and_clear(self):
         @njit
         def foo(a):
@@ -726,6 +730,52 @@ class TestMiscIssues(TestCase):
             foo.py_func(False)
         # Compiled version returns 10 as x is zero initialized.
         self.assertEqual(foo(False), 10)
+
+    @skip_unless_load_fast_and_clear
+    def test_load_fast_and_clear_variant_2(self):
+        @njit
+        def foo():
+            # The use of a literal False triggers different bytecode generation
+            # necessary for this test. See test_load_fast_and_clear_variant_4.
+            if False:
+                x = 1
+            [x for x in (1,)]
+            # This return uses undefined variable
+            return x
+
+        with self.assertRaises(errors.TypingError) as raises:
+            foo()
+        self.assertIn("return value is undefined", str(raises.exception))
+
+    @skip_unless_load_fast_and_clear
+    def test_load_fast_and_clear_variant_3(self):
+        @njit
+        def foo():
+            # The use of a literal False triggers different bytecode generation
+            # necessary for this test. See test_load_fast_and_clear_variant_4.
+            if False:
+                x = 1
+            [x for x in (1,)]
+            # This print uses undefined variable
+            print(1, 2, 3, x)
+
+        with self.assertRaises(errors.TypingError) as raises:
+            foo()
+        self.assertIn("undefined variable used in call argument #4", str(raises.exception))
+
+    @skip_unless_load_fast_and_clear
+    def test_load_fast_and_clear_variant_4(self):
+        @njit
+        def foo(a):
+            # This test variant is to show that non-literal boolean value here
+            # produces a different behavior.
+            if a:
+                x = a
+            [x for x in (1,)]
+            return x
+        self.assertEqual(foo(123), 123)
+        self.assertEqual(foo(0), 0)
+
 
 
 class TestFoldArguments(unittest.TestCase):

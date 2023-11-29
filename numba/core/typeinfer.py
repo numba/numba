@@ -1252,6 +1252,17 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
             retty = self.get_generator_type(typdict, retty,
                                             raise_errors=raise_errors)
 
+        def check_undef_var_in_calls():
+            # Check for undefined variables in the call arguments.
+            for callnode, calltype in self.calltypes.items():
+                if calltype is not None:
+                    for i, v in enumerate(calltype.args, start=1):
+                        if v is types._undef_var:
+                            m = f"undefined variable used in call argument #{i}"
+                            raise TypingError(m, loc=callnode.loc)
+
+        check_undef_var_in_calls()
+
         self.debug.unify_finished(typdict, retty, fntys)
 
         return typdict, retty, fntys
@@ -1378,7 +1389,11 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
         rettypes = set()
         for var in self._get_return_vars():
             rettypes.add(typemap[var.name])
-        return self._unify_return_types(rettypes)
+        retty = self._unify_return_types(rettypes)
+        # Check return value is not undefined
+        if retty is types._undef_var:
+            raise TypingError("return value is undefined")
+        return retty
 
     def get_state_token(self):
         """The algorithm is monotonic.  It can only grow or "refine" the
