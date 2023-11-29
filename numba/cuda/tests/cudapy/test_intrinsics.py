@@ -440,6 +440,31 @@ class TestCudaIntrinsic(CUDATestCase):
         compiled[nctaid, ntid](ary)
         self.assertEqual(ary[0], nctaid * ntid)
 
+    @skip_on_cudasim('Requires too many threads')
+    def test_issue_9229(self):
+        # Ensure that grid and grid size are correct - #9229 showed that they
+        # overflowed an int32.
+        @cuda.jit
+        def f(grid_error, gridsize_error):
+            i1 = cuda.grid(1)
+            i2 = cuda.blockIdx.x * cuda.blockDim.x + cuda.threadIdx.x
+            gs1 = cuda.gridsize(1)
+            gs2 = cuda.blockDim.x * cuda.gridDim.x
+            if i1 != i2:
+                grid_error[0] = 1
+            if gs1 != gs2:
+                gridsize_error[0] = 1
+
+        grid_error = np.zeros(1, dtype=np.uint64)
+        gridsize_error = np.zeros(1, dtype=np.uint64)
+
+        # A large enough grid for thread IDs to overflow an int32
+        # (22121216 * 256 = 5663031296, which is greater than 2 ** 32)
+        f[22121216, 256](grid_error, gridsize_error)
+
+        self.assertEqual(grid_error[0], 0)
+        self.assertEqual(gridsize_error[0], 0)
+
     @skip_on_cudasim('Tests PTX emission')
     def test_selp(self):
         sig = (int64[:], int64, int64[:])
