@@ -1003,3 +1003,11 @@ def ol_str_generic(object=''):
             return repr(object)
     return impl
 
+
+@lower_cast(types.UndefVar, types.Any)
+def cast_undef_var_to_any(context, builder, fromty, toty, val):
+    """UndefVar cast to anything.
+
+    This should only used be used in phi nodes.
+    """
+    return context.get_constant_null(toty)

@@ -563,6 +563,15 @@ class Expr(Inst):
         return cls(op=op, loc=loc)
 
     @classmethod
+    def undef(cls, loc):
+        """
+        A node for undefined value specifically from LOAD_FAST_AND_CLEAR opcode.
+        """
+        assert isinstance(loc, Loc)
+        op = 'undef'
+        return cls(op=op, loc=loc)
+
+    @classmethod
     def dummy(cls, op, info, loc):
         """
         A node for a dummy value.

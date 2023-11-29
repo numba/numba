@@ -1,11 +1,12 @@
 import os, sys, subprocess
+import dis
 import itertools
 
 import numpy as np
 
 import numba
 from numba.core.compiler import compile_isolated
-from numba import jit
+from numba import jit, njit
 from numba.core import errors, ir, types, typing, typeinfer, utils
 from numba.core.typeconv import Conversion
 
@@ -706,6 +707,25 @@ class TestMiscIssues(TestCase):
                     return_vars[varname] = typemap[varname]
 
         self.assertTrue(all(vt == types.float64 for vt in return_vars.values()))
+
+    @unittest.skipUnless("LOAD_FAST_AND_CLEAR" in dis.opmap,
+                         "Requires LOAD_FAST_AND_CLEAR opcode")
+    def test_load_fast_and_clear(self):
+        @njit
+        def foo(a):
+            [x for x in (0,)]
+            if a:
+                # can't be a constant due to constant propagation issues.
+                x = 3 + a
+            x += 10
+            return x
+
+        self.assertEqual(foo(True), foo.py_func(True))
+        # Interpreted version should raise an exception
+        with self.assertRaises(UnboundLocalError):
+            foo.py_func(False)
+        # Compiled version returns 10 as x is zero initialized.
+        self.assertEqual(foo(False), 10)
 
 
 class TestFoldArguments(unittest.TestCase):

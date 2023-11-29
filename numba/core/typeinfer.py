@@ -53,6 +53,11 @@ class TypeVar(object):
 
     def add_type(self, tp, loc):
         assert isinstance(tp, types.Type), type(tp)
+        # Special case for _undef_var.
+        # If the typevar is a _undef_var, use the incoming type directly.
+        if self.type is types._undef_var:
+            self.type = tp
+            return self.type
 
         if self.locked:
             if tp != self.type:
@@ -1728,6 +1733,9 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
         elif expr.op == 'make_function':
             self.lock_type(target.name, types.MakeFunctionLiteral(expr),
                            loc=inst.loc, literal_value=expr)
+
+        elif expr.op == 'undef':
+            self.add_type(target.name, types._undef_var, loc=inst.loc)
 
         else:
             msg = "Unsupported op-code encountered: %s" % expr

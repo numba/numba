@@ -310,6 +310,7 @@ class EnumModel(ProxyModel):
 @register_default(types.Object)
 @register_default(types.Module)
 @register_default(types.Phantom)
+@register_default(types.UndefVar)
 @register_default(types.ContextManager)
 @register_default(types.Dispatcher)
 @register_default(types.ObjModeDispatcher)

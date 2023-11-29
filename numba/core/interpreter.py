@@ -2226,13 +2226,15 @@ class Interpreter(object):
         op_LOAD_FAST_CHECK = op_LOAD_FAST
 
         def op_LOAD_FAST_AND_CLEAR(self, inst, res):
-            const_none = ir.Const(None, loc=self.loc)
             try:
+                # try the regular LOAD_FAST logic
                 srcname = self.code_locals[inst.arg]
                 self.store(value=self.get(srcname), name=res)
             except NotDefinedError:
-                self.store(const_none, name=res)
-            self.store(const_none, name=srcname)
+                # If the variable is not in the scope, set it to `undef`
+                undef = ir.Expr.undef(loc=self.loc)
+                self.store(undef, name=res)
+
     elif PYVERSION in ((3, 8), (3, 9), (3, 10), (3, 11)):
         pass
     else:
