@@ -54,7 +54,7 @@ class TypeVar(object):
     def add_type(self, tp, loc):
         assert isinstance(tp, types.Type), type(tp)
         # Special case for _undef_var.
-        # If the typevar is a _undef_var, use the incoming type directly.
+        # If the typevar is the _undef_var, use the incoming type directly.
         if self.type is types._undef_var:
             self.type = tp
             return self.type

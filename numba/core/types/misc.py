@@ -44,7 +44,6 @@ class UndefVar(Dummy):
         return Conversion.promote
 
 
-
 class RawPointer(Opaque):
     """
     A raw pointer without any specific meaning.

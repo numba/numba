@@ -29,7 +29,7 @@ npy_rng = NumPyRandomGeneratorType('rng')
 npy_bitgen = NumPyRandomBitGeneratorType('bitgen')
 
 # _undef_var is used to represent undefined variables in the type system.
-_undef_var = UndefVar('_undef_var') #
+_undef_var = UndefVar('_undef_var')
 
 code_type = Opaque('code')
 pyfunc_type = Opaque('pyfunc')

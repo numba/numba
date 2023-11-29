@@ -719,7 +719,8 @@ class TestMiscIssues(TestCase):
         def foo(a):
             [x for x in (0,)]
             if a:
-                # can't be a constant due to constant propagation issues.
+                # the test code cannot use a constant here due to constant
+                # propagation issues.
                 x = 3 + a
             x += 10
             return x

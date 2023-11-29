@@ -1414,7 +1414,7 @@ class Lower(BaseLower):
             return self.context.get_constant_null(resty)
 
         elif expr.op == 'undef':
-            # Numba do not raise UnboundLocalError for undefined variables.
+            # Numba does not raise an UnboundLocalError for undefined variables.
             # The variable is set to zero.
             return self.context.get_constant_null(resty)
 
