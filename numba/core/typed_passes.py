@@ -996,12 +996,12 @@ class PreLowerStripPhis(FunctionPass):
             return False
 
         def legalize_all_versioned_names(var):
-            # Is all versioned names undefined or defined to the same
+            # Are all versioned names undefined or defined to the same
             # variable chain?
             if not var.versioned_names:
                 return False
-            for verioned in var.versioned_names:
-                vs = defs.get(verioned, ())
+            for versioned in var.versioned_names:
+                vs = defs.get(versioned, ())
                 if not all(map(partial(unver_or_undef, k), vs)):
                     return False
             return True
@@ -1014,7 +1014,7 @@ class PreLowerStripPhis(FunctionPass):
                 var = scope.get_exact(k)
             except errors.NotDefinedError:
                 continue
-            # is the unversioned?
+            # is the var name unversioned?
             if var.unversioned_name == k:
                 if legalize_all_versioned_names(var):
                     suspects.add(var)
