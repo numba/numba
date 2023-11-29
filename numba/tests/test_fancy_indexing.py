@@ -1,3 +1,4 @@
+import collections
 import itertools
 
 import numpy as np
@@ -250,21 +251,47 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         pyfunc = np_take_kws
         cfunc = jit(nopython=True)(pyfunc)
 
-        arr = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
-        indices = (
-            np.array([0, 2, 1]),
-            np.array([1, 2, 1, 2, 1]),
-            np.array([0]),
-            (0,),
-            (0, 1),
+        nt = collections.namedtuple('inputs', ['arrays', 'indices', 'axis'])
+
+        triples = (
+            nt(
+                arrays=(
+                    np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]]),
+                ),
+                indices=(
+                    np.array([0, 2, 1]),
+                    np.array([1, 2, 1, 2, 1]),
+                    np.array([0]),
+                    1,
+                    (0,),
+                    (0, 1),
+                ),
+                axis=(0, 1, -1),
+            ),
+            nt(
+                arrays=(
+                    np.arange(5),
+                ),
+                indices=(
+                    0,
+                    (0,),
+                ),
+                axis=(0,)
+            )
         )
 
-        for ind in indices:
-            for axis in (0, 1, -1):
-                expected = np.take(arr, ind, axis=axis)
-                got = cfunc(arr, ind, axis=axis)
-                self.assertPreciseEqual(expected, got)
+        for arrays, indices, axis in triples:
+            for array in arrays:
+                for indice in indices:
+                    for ax in axis:
+                        expected = np.take(array, indice, axis=ax)
+                        got = cfunc(array, indice, axis=ax)
+                        self.assertPreciseEqual(expected, got)
 
+
+    def test_np_take_axis_exception(self):
+        cfunc = jit(nopython=True)(np_take_kws)
+        arr = np.arange(9).reshape(3, 3)
         msg = 'axis 2 is out of bounds for array of dimension 2'
         indices = np.array([0, 1, 2])
         with self.assertRaisesRegex(ValueError, msg):

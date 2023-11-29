@@ -4741,6 +4741,13 @@ def numpy_take(a, indices, axis=None):
                 return np.take(a, convert)
             return take_impl
     else:
+        if isinstance(a, types.Array) and isinstance(indices, types.Integer):
+            def take_impl(a, indices, axis=None):
+                r = np.take(a, (indices,), axis=axis)
+                # TODO: missing np.squeeze impl
+                return np.squeeze(r)
+            return take_impl
+
         if isinstance(a, types.Array) and \
                 isinstance(indices, (types.Array, types.List, types.BaseTuple)):
 
