@@ -2362,11 +2362,6 @@ class Interpreter(object):
     else:
         raise NotImplementedError(PYVERSION)
 
-    def op_SETUP_LOOP(self, inst):
-        assert self.blocks[inst.offset] is self.current_block
-        loop = ir.Loop(inst.offset, exit=(inst.next + inst.arg))
-        self.syntax_blocks.append(loop)
-
     def op_SETUP_WITH(self, inst, contextmanager, exitfn=None):
         assert self.blocks[inst.offset] is self.current_block
         # Handle with

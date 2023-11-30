@@ -979,15 +979,6 @@ class TraceRunner(object):
         # we don't emulate the exact stack behavior
         state.append(inst)
 
-    def op_SETUP_LOOP(self, state, inst):
-        # NOTE: bytecode removed since py3.8
-        state.push_block(
-            state.make_block(
-                kind='LOOP',
-                end=inst.get_jump_target(),
-            )
-        )
-
     def op_BEFORE_WITH(self, state, inst):
         # Almost the same as py3.10 SETUP_WITH just lacking the finally block.
         cm = state.pop()    # the context-manager
