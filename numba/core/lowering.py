@@ -1447,6 +1447,11 @@ class Lower(BaseLower):
         if not self._disable_sroa_like_opt:
             assert name not in self._blk_local_varmap
             assert name not in self._singly_assigned_vars
+        if name not in self.varmap:
+            # Allocate undefined variable as needed.
+            # NOTE: Py3.12 use of LOAD_FAST_AND_CLEAR will allow variable be
+            # referenced before it is defined.
+            self._alloca_var(name, self.typeof(name))
         return self.varmap[name]
 
     def loadvar(self, name):
