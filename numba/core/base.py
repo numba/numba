@@ -74,6 +74,18 @@ class OverloadSelector(object):
             same = list(takewhile(lambda x: genericity[x] == firstscore,
                                   ordered))
             if len(same) > 1:
+                # Resolve ambiguous cases in the pattern of:
+                #   (cast any -> T)
+                #   (cast U -> any)
+                # and chooses the single case that is (cast any -> T)
+                to_anys = [(ta, tb) for (ta, tb) in same if types.Any == tb]
+                from_anys = [(ta, tb) for (ta, tb) in same if types.Any == ta]
+                n_from_anys = len(from_anys)
+                n_to_anys = len(to_anys)
+                if n_from_anys + n_to_anys == len(same):
+                    if n_from_anys == 1 and n_to_anys >= 1:
+                        return from_anys[0]
+                # Report ambiguous
                 msg = ["{n} ambiguous signatures".format(n=len(same))]
                 for sig in same:
                     msg += ["{0} => {1}".format(sig, candidates[sig])]
