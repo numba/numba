@@ -23,17 +23,21 @@ something like this::
 
     >>> import dis
     >>> dis.dis(add)
-    2           0 LOAD_FAST                0 (a)
-                3 LOAD_FAST                1 (b)
-                6 BINARY_ADD
-                7 RETURN_VALUE
+  1           0 RESUME                   0
+
+  2           2 LOAD_FAST                0 (a)
+              4 LOAD_FAST                1 (b)
+              6 BINARY_OP                0 (+)
+             10 RETURN_VALUE
 
 
 CPython uses a stack-based interpreter (much like an HP calculator), so the
-code first pushes two local variables onto the stack.  The ``BINARY_ADD``
-opcode pops the top two arguments off the stack and makes a Python C API
-function call that is equivalent to calling ``a.__add__(b)``.  The result is
-then pushed onto the top of the interpreter stack.  Finally, the
+code first pushes two local variables onto the stack.  The ``BINARY_OP`` opcode
+pops the top two arguments off the stack and makes a Python C API function call
+for a binary -- that is involving two values -- operation. In this case the
+argument is `0` which is the code for addition (`+`) as can be seen in the dump
+above. Thus, this operation is equivalent to calling ``a.__add__(b)``. The
+result is then pushed onto the top of the interpreter stack.  Finally, the
 ``RETURN_VALUE`` opcode returns value on the top of the stack as the result of
 the function call.
 
@@ -127,17 +131,28 @@ If you set the environment variable ``NUMBA_DUMP_CFG`` to 1, Numba will dump
 the results of the control flow graph analysis to the screen.  Our ``add()``
 example is pretty boring, since there is only one statement block::
 
+    $ NUMBA_DUMP_CFG=1 python
+    >>> from numba import njit
+    >>> @njit
+    ... def add(a, b):
+    ...     return a + b
+    ...
+    >>> add(1, 2)
     CFG adjacency lists:
     {0: []}
     CFG dominators:
-    {0: set([0])}
+    {0: {0}}
     CFG post-dominators:
-    {0: set([0])}
+    {0: {0}}
     CFG back edges: []
     CFG loops:
     {}
     CFG node-to-loops:
     {0: []}
+    CFG backbone:
+    {0}
+    3
+
 
 A function with more complex flow control will have a more interesting
 control flow graph.  This function::
@@ -152,60 +167,63 @@ control flow graph.  This function::
 
 compiles to this bytecode::
 
-      9           0 LOAD_CONST               1 (0)
-                  3 STORE_FAST               1 (acc)
+    1           0 RESUME                   0
 
-     10           6 SETUP_LOOP              46 (to 55)
-                  9 LOAD_GLOBAL              0 (range)
-                 12 LOAD_FAST                0 (n)
-                 15 CALL_FUNCTION            1
-                 18 GET_ITER
-            >>   19 FOR_ITER                32 (to 54)
-                 22 STORE_FAST               2 (i)
+    2           2 LOAD_CONST               1 (0)
+                4 STORE_FAST               1 (acc)
 
-     11          25 LOAD_FAST                1 (acc)
-                 28 LOAD_CONST               2 (1)
-                 31 INPLACE_ADD
-                 32 STORE_FAST               1 (acc)
+    3           6 LOAD_GLOBAL              1 (NULL + range)
+               18 LOAD_FAST                0 (n)
+               20 PRECALL                  1
+               24 CALL                     1
+               34 GET_ITER
+          >>   36 FOR_ITER                15 (to 68)
+               38 STORE_FAST               2 (i)
 
-     12          35 LOAD_FAST                0 (n)
-                 38 LOAD_CONST               3 (10)
-                 41 COMPARE_OP               2 (==)
-                 44 POP_JUMP_IF_FALSE       19
+    4          40 LOAD_FAST                1 (acc)
+               42 LOAD_CONST               2 (1)
+               44 BINARY_OP               13 (+=)
+               48 STORE_FAST               1 (acc)
 
-     13          47 BREAK_LOOP
-                 48 JUMP_ABSOLUTE           19
-                 51 JUMP_ABSOLUTE           19
-            >>   54 POP_BLOCK
+    5          50 LOAD_FAST                0 (n)
+               52 LOAD_CONST               3 (10)
+               54 COMPARE_OP               2 (==)
+               60 POP_JUMP_FORWARD_IF_FALSE     2 (to 66)
 
-     14     >>   55 LOAD_FAST                1 (acc)
-                 58 RETURN_VALUE
+    6          62 POP_TOP
+               64 JUMP_FORWARD             1 (to 68)
+
+    5     >>   66 JUMP_BACKWARD           16 (to 36)
+
+    7     >>   68 LOAD_FAST                1 (acc)
+                 70 RETURN_VALUE
 
 The corresponding CFG for this bytecode is::
 
+
     CFG adjacency lists:
-    {0: [6], 6: [19], 19: [54, 22], 22: [19, 47], 47: [55], 54: [55], 55: []}
+    {0: [38], 38: [40, 70], 40: [64, 68], 64: [70], 68: [38], 70: []}
     CFG dominators:
-    {0: set([0]),
-     6: set([0, 6]),
-     19: set([0, 6, 19]),
-     22: set([0, 6, 19, 22]),
-     47: set([0, 6, 19, 22, 47]),
-     54: set([0, 6, 19, 54]),
-     55: set([0, 6, 19, 55])}
+    {0: {0},
+     38: {0, 38},
+     40: {40, 0, 38},
+     64: {64, 0, 40, 38},
+     68: {40, 0, 68, 38},
+     70: {0, 38, 70}}
     CFG post-dominators:
-    {0: set([0, 6, 19, 55]),
-     6: set([6, 19, 55]),
-     19: set([19, 55]),
-     22: set([22, 55]),
-     47: set([47, 55]),
-     54: set([54, 55]),
-     55: set([55])}
-    CFG back edges: [(22, 19)]
+    {0: {0, 38, 70},
+     38: {70, 38},
+     40: {40, 70},
+     64: {64, 70},
+     68: {38, 68, 70},
+     70: {70}}
+    CFG back edges: [(68, 38)]
     CFG loops:
-    {19: Loop(entries=set([6]), exits=set([54, 47]), header=19, body=set([19, 22]))}
+    {38: Loop(entries={0}, exits={64, 70}, header=38, body={40, 68, 38})}
     CFG node-to-loops:
-    {0: [], 6: [], 19: [19], 22: [19], 47: [], 54: [], 55: []}
+    {0: [], 38: [38], 40: [38], 64: [], 68: [38], 70: []}
+    CFG backbone:
+    {0, 38, 70}
 
 The numbers in the CFG refer to the bytecode offsets shown just to the left
 of the opcode names above.
@@ -226,22 +244,15 @@ to a string for debugging.  If you set the environment variable
 ``NUMBA_DUMP_IR`` equal to 1, the Numba IR will be dumped to the screen.  For
 the ``add()`` function described above, the Numba IR looks like::
 
-   label 0:
-       a = arg(0, name=a)                       ['a']
-       b = arg(1, name=b)                       ['b']
-       $0.3 = a + b                             ['$0.3', 'a', 'b']
-       del b                                    []
-       del a                                    []
-       $0.4 = cast(value=$0.3)                  ['$0.3', '$0.4']
-       del $0.3                                 []
-       return $0.4                              ['$0.4']
+    label 0:
+        a = arg(0, name=a)                       ['a']
+        b = arg(1, name=b)                       ['b']
+        $binop_add8.2 = a + b                    ['$binop_add8.2', 'a', 'b']
+        $12return_value.3 = cast(value=$binop_add8.2) ['$12return_value.3', '$binop_add8.2']
+        return $12return_value.3                 ['$12return_value.3']
 
-The ``del`` instructions are produced by :ref:`live variable analysis`.
-Those instructions ensure references are not leaked.
-In :term:`nopython mode`, some objects are tracked by the Numba runtime and
-some are not.  For tracked objects, a dereference operation is emitted;
-otherwise, the instruction is an no-op.
-In :term:`object mode` each variable contains an owned reference to a PyObject.
+As you can see, this maps quite closely to the semanics of the original Python
+bytecode.
 
 
 .. _`rewrite-untyped-ir`:
@@ -262,22 +273,36 @@ following function with Numba::
 If you set the :envvar:`NUMBA_DUMP_IR` environment variable to ``1``,
 you'll see the IR being rewritten before the type inference phase::
 
-   REWRITING:
-       del $0.3                                 []
-       $12.1 = global(ValueError: <class 'ValueError'>) ['$12.1']
-       $const12.2 = const(str, x cannot be zero) ['$const12.2']
-       $12.3 = call $12.1($const12.2)           ['$12.1', '$12.3', '$const12.2']
-       del $const12.2                           []
-       del $12.1                                []
-       raise $12.3                              ['$12.3']
-   ____________________________________________________________
-       del $0.3                                 []
-       $12.1 = global(ValueError: <class 'ValueError'>) ['$12.1']
-       $const12.2 = const(str, x cannot be zero) ['$const12.2']
-       $12.3 = call $12.1($const12.2)           ['$12.1', '$12.3', '$const12.2']
-       del $const12.2                           []
-       del $12.1                                []
-       raise <class 'ValueError'>('x cannot be zero') []
+    -----------------------------------IR DUMP: f-----------------------------------
+    label 0:
+        x = arg(0, name=x)                       ['x']
+        $const6.1 = const(int, 0)                ['$const6.1']
+        $8compare_op.2 = x == $const6.1          ['$8compare_op.2', '$const6.1', 'x']
+        bool14 = global(bool: <class 'bool'>)    ['bool14']
+        $14pred = call bool14($8compare_op.2, func=bool14, args=(Var($8compare_op.2, <ipython-input-4-5d573587df20>:2),), kws=(), vararg=None, varkwarg=None, target=None) ['$14pred', '$8compare_op.2', 'bool14']
+        branch $14pred, 16, 46                   ['$14pred']
+    label 16:
+        $16load_global.0 = global(ValueError: <class 'ValueError'>) ['$16load_global.0']
+        $const28.2 = const(str, x cannot be zero) ['$const28.2']
+        $34call.3 = call $16load_global.0($const28.2, func=$16load_global.0, args=[Var($const28.2, <ipython-input-4-5d573587df20>:3)], kws=(), vararg=None, varkwarg=None, target=None) ['$16load_global.0', '$34call.3', '$const28.2']
+        raise $34call.3                          ['$34call.3']
+    label 46:
+        $const46.0 = const(NoneType, None)       ['$const46.0']
+        $48return_value.1 = cast(value=$const46.0) ['$48return_value.1', '$const46.0']
+        return $48return_value.1                 ['$48return_value.1']
+
+    ______________________________________________________________________
+    REWRITING (RewriteConstRaises):
+        $16load_global.0 = global(ValueError: <class 'ValueError'>) ['$16load_global.0']
+        $const28.2 = const(str, x cannot be zero) ['$const28.2']
+        $34call.3 = call $16load_global.0($const28.2, func=$16load_global.0, args=[Var($const28.2, <ipython-input-4-5d573587df20>:3)], kws=(), vararg=None, varkwarg=None, target=None) ['$16load_global.0', '$34call.3', '$const28.2']
+        raise $34call.3                          ['$34call.3']
+    ____________________________________________________________
+        $16load_global.0 = global(ValueError: <class 'ValueError'>) ['$16load_global.0']
+        $const28.2 = const(str, x cannot be zero) ['$const28.2']
+        $34call.3 = call $16load_global.0($const28.2, func=$16load_global.0, args=[Var($const28.2, <ipython-input-4-5d573587df20>:3)], kws=(), vararg=None, varkwarg=None, target=None) ['$16load_global.0', '$34call.3', '$const28.2']
+        <static> raise <class 'ValueError'>('x cannot be zero') []
+    ______________________________________________________________________
 
 
 .. _arch_type_inference:
@@ -296,30 +321,44 @@ assign a type to every intermediate variable in the Numba IR.  The result of
 this pass can be seen by setting the :envvar:`NUMBA_DUMP_ANNOTATION`
 environment variable to 1:
 
+
 .. code-block:: python
 
-   -----------------------------------ANNOTATION-----------------------------------
-   # File: archex.py
-   # --- LINE 4 ---
+    from numba import njit
 
-   @jit(nopython=True)
+    @njit
+    def add(a, b):
+        return a + b
 
-   # --- LINE 5 ---
+    add(1, 2)
 
-   def add(a, b):
 
-       # --- LINE 6 ---
-       # label 0
-       #   a = arg(0, name=a)  :: int64
-       #   b = arg(1, name=b)  :: int64
-       #   $0.3 = a + b  :: int64
-       #   del b
-       #   del a
-       #   $0.4 = cast(value=$0.3)  :: int64
-       #   del $0.3
-       #   return $0.4
+.. code-block:: python
 
-       return a + b
+    $ NUMBA_DUMP_ANNOTATION=1 python archex.py
+    -----------------------------------ANNOTATION-----------------------------------
+    # File: archex.py
+    # --- LINE 3 ---
+    # label 0
+    #   a = arg(0, name=a)  :: int64
+    #   b = arg(1, name=b)  :: int64
+
+    @njit
+
+    # --- LINE 4 ---
+
+    def add(a, b):
+
+        # --- LINE 5 ---
+        #   $binop_add8.2 = a + b  :: int64
+        #   del b
+        #   del a
+        #   $12return_value.3 = cast(value=$binop_add8.2)  :: int64
+        #   del $binop_add8.2
+        #   return $12return_value.3
+
+        return a + b
+
 
 
 If type inference fails to find a consistent type assignment for all the
@@ -658,30 +697,15 @@ variable to 1.  For the "cpu" context, our ``add()`` example would look like:
 
 .. code-block:: llvm
 
-   define i32 @"__main__.add$1.int64.int64"(i64* %"retptr",
-                                            {i8*, i32}** %"excinfo",
-                                            i8* %"env",
-                                            i64 %"arg.a", i64 %"arg.b")
-   {
-      entry:
-        %"a" = alloca i64
-        %"b" = alloca i64
-        %"$0.3" = alloca i64
-        %"$0.4" = alloca i64
-        br label %"B0"
-      B0:
-        store i64 %"arg.a", i64* %"a"
-        store i64 %"arg.b", i64* %"b"
-        %".8" = load i64* %"a"
-        %".9" = load i64* %"b"
-        %".10" = add i64 %".8", %".9"
-        store i64 %".10", i64* %"$0.3"
-        %".12" = load i64* %"$0.3"
-        store i64 %".12", i64* %"$0.4"
-        %".14" = load i64* %"$0.4"
-        store i64 %".14", i64* %"retptr"
-        ret i32 0
-   }
+    define i32 @"_ZN8__main__3addB2v1B38c8tJTIcFKzyF2ILShI4CrgQElQb6HczSBAA_3dExx"(i64* noalias nocapture %"retptr", {i8*, i32, i8*, i8*, i32}** noalias nocapture %"excinfo", i64 %"arg.a", i64 %"arg.b")
+    {
+    entry:
+      br label %"B0"
+    B0:
+      %".6" = add nsw i64 %"arg.a", %"arg.b"
+      store i64 %".6", i64* %"retptr"
+      ret i32 0
+    }
 
 The post-optimization LLVM IR can be output by setting
 :envvar:`NUMBA_DUMP_OPTIMIZED` to 1.  The optimizer shortens the code
@@ -689,16 +713,12 @@ generated above quite significantly:
 
 .. code-block:: llvm
 
-   define i32 @"__main__.add$1.int64.int64"(i64* nocapture %retptr,
-                                            { i8*, i32 }** nocapture readnone %excinfo,
-                                            i8* nocapture readnone %env,
-                                            i64 %arg.a, i64 %arg.b)
-   {
-      entry:
-        %.10 = add i64 %arg.b, %arg.a
-        store i64 %.10, i64* %retptr, align 8
-        ret i32 0
-   }
+    define i32 @_ZN8__main__3addB2v1B38c8tJTIcFKzyF2ILShI4CrgQElQb6HczSBAA_3dExx(i64* noalias nocapture writeonly %retptr, { i8*, i32, i8*, i8*, i32 }** noalias nocapture readnone %excinfo, i64 %arg.a, i64 %arg.b) local_unnamed_addr #0 {
+    entry:
+      %.6 = add nsw i64 %arg.b, %arg.a
+      store i64 %.6, i64* %retptr, align 8
+      ret i32 0
+    }
 
 If created during :ref:`parallel-accelerator`, parfor operations are
 lowered in the following manner.  First, instructions in the parfor's init
