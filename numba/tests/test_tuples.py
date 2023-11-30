@@ -667,7 +667,7 @@ class TestTupleBuild(TestCase):
         with self.assertRaises(errors.TypingError) as raises:
             check([4, 5])
 
-        # Python 3.9 has a peephole rewrite due to large changes in tuple
+        # Python 3.9+ has a peephole rewrite due to large changes in tuple
         # unpacking. It results in a tuple + list situation from the above
         # so the error message reflects that. Catching this specific and
         # seemingly rare sequence in the peephole rewrite is prohibitively
