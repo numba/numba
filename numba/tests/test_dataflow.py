@@ -169,7 +169,6 @@ class TestDataFlow(TestCase):
         self.test_var_swapping(no_pyobj_flags)
 
     def test_for_break(self, flags=force_pyobj_flags):
-        # BREAK_LOOP must unwind the current inner syntax block.
         pyfunc = for_break
         cr = compile_isolated(pyfunc, (types.intp, types.intp), flags=flags)
         cfunc = cr.entry_point

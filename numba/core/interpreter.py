@@ -2942,14 +2942,6 @@ class Interpreter(object):
             out = ir.Expr.unary('not', value=tmp, loc=self.loc)
             self.store(out, res)
 
-    def op_BREAK_LOOP(self, inst, end=None):
-        if end is None:
-            loop = self.syntax_blocks[-1]
-            assert isinstance(loop, ir.Loop)
-            end = loop.exit
-        jmp = ir.Jump(target=end, loc=self.loc)
-        self.current_block.append(jmp)
-
     def _op_JUMP_IF(self, inst, pred, iftrue):
         brs = {
             True: inst.get_jump_target(),
