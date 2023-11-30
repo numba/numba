@@ -12,7 +12,6 @@ from numba.core.typing import npydecl
 from numba.core.typing.templates import AbstractTemplate, signature
 from numba.cpython.unsafe.tuple import tuple_setitem
 from numba.np.ufunc import _internal
-from numba.np.arrayobj import generate_getitem_setitem_with_axis
 from numba.parfors import array_analysis
 from numba.np.ufunc import ufuncbuilder
 from numba.np import numpy_support
@@ -610,6 +609,9 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                     i += 1
                 return s
 
+            # importing it here as an import at the top scope brings unwanted
+            # stuff. See numba/tests/test_import.py::test_no_impl_import
+            from numba.np.arrayobj import generate_getitem_setitem_with_axis
             setitem = generate_getitem_setitem_with_axis(array.ndim, 'setitem')
 
             def impl(ufunc, array, indices, axis=0, dtype=None, out=None):
