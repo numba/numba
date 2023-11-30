@@ -286,9 +286,6 @@ class TestLiftCall(BaseTestWithLifting):
         msg = ("compiler re-entrant to the same function signature")
         self.assertIn(msg, str(raises.exception))
 
-    # 3.8 and earlier fails to interpret the bytecode for this example
-    @unittest.skipIf(PYVERSION <= (3, 8),
-                     "unsupported on py3.8 and before")
     @expected_failure_py311
     @expected_failure_py312
     def test_liftcall5(self):
@@ -675,16 +672,8 @@ class TestLiftObj(MemoryLeak, TestCase):
                 x += 1
                 return x
 
-        if PYVERSION <= (3,8):
-            # 3.8 and below don't support return inside with
-            with self.assertRaises(errors.CompilerError) as raises:
-                cfoo = njit(foo)
-                cfoo(np.array([1, 2, 3]))
-            msg = "unsupported control flow: due to return statements inside with block"
-            self.assertIn(msg, str(raises.exception))
-        else:
-            result = foo(np.array([1, 2, 3]))
-            np.testing.assert_array_equal(np.array([2, 3, 4]), result)
+        result = foo(np.array([1, 2, 3]))
+        np.testing.assert_array_equal(np.array([2, 3, 4]), result)
 
     # No easy way to handle this yet.
     @unittest.expectedFailure

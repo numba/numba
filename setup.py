@@ -19,7 +19,7 @@ except ImportError:
         pass
 
 
-min_python_version = "3.8"
+min_python_version = "3.9"
 max_python_version = "3.13"  # exclusive
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.22"
@@ -367,7 +367,6 @@ build_requires = ['numpy >={}'.format(min_numpy_build_version)]
 install_requires = [
     'llvmlite >={},<{}'.format(min_llvmlite_version, max_llvmlite_version),
     'numpy >={}'.format(min_numpy_run_version),
-    'importlib_metadata; python_version < "3.9"',
 ]
 
 metadata = dict(
@@ -381,10 +380,10 @@ metadata = dict(
         "Operating System :: OS Independent",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
         "Topic :: Software Development :: Compilers",
     ],
     package_data={
