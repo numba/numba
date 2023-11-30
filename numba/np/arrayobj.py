@@ -4151,6 +4151,13 @@ def iternext_numpy_nditer2(context, builder, sig, args, result):
     nditer.iternext_specific(context, builder, result)
 
 
+@lower_builtin(operator.eq, types.DType, types.DType)
+def dtype_eq_impl(context, builder, sig, args):
+    arg1, arg2 = sig.args
+    res = ir.Constant(ir.IntType(1), int(arg1 == arg2))
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
 # ------------------------------------------------------------------------------
 # Numpy array constructors
 

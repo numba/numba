@@ -19,6 +19,10 @@ def use_dtype(a, b):
     return a.view(b.dtype)
 
 
+def dtype_eq_int64(a):
+    return a.dtype == np.dtype('int64')
+
+
 def array_itemsize(a):
     return a.itemsize
 
@@ -167,6 +171,12 @@ class TestArrayAttr(MemoryLeakMixin, TestCase):
         cfunc = self.get_cfunc(pyfunc, (typeof(self.a), typeof(b)))
         expected = pyfunc(self.a, b)
         self.assertPreciseEqual(cfunc(self.a, b), expected)
+
+    def test_dtype_equal(self):
+        # Test checking if a dtype is equal to another dtype
+        pyfunc = dtype_eq_int64
+        self.check_unary(pyfunc, np.empty(1, dtype=np.int16))
+        self.check_unary(pyfunc, np.empty(1, dtype=np.int64))
 
     def test_flags_contiguous(self):
         self.check_unary_with_arrays(array_flags_contiguous)

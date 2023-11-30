@@ -23,7 +23,7 @@ labels: task
   * [ ] Build farm CUDA testing has passed
   * [ ] Build farm wheel testing has passed
 * [ ] Annotated tag X.Y.Z on release branch (no `v` prefix).
-  `git tag -am "Version X.Y.Z" X.Y.Z
+  `git tag -am "Version X.Y.Z" X.Y.Z`
 * [ ] Build and upload conda packages on buildfarm (check `upload`).
 * [ ] Build wheels and sdist on the buildfarm (check "upload").
 * [ ] Verify packages uploaded to Anaconda Cloud and move to
