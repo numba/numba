@@ -24,6 +24,7 @@ from collections import defaultdict, OrderedDict, namedtuple
 from contextlib import contextmanager
 import operator
 from dataclasses import make_dataclass
+import warnings
 
 from llvmlite import ir as lir
 from numba.core.imputils import impl_ret_untracked
@@ -2375,7 +2376,27 @@ class ConvertLoopPass:
         # We go over all loops, smaller loops first (inner first)
         for loop, s in sorted(sized_loops, key=lambda tup: tup[1]):
             if len(loop.entries) != 1 or len(loop.exits) != 1:
+                if not config.DISABLE_PERFORMANCE_WARNINGS:
+                    for entry in loop.entries:
+                        for inst in blocks[entry].body:
+                            # if prange or pndindex call
+                            if (
+                                isinstance(inst, ir.Assign)
+                                and isinstance(inst.value, ir.Expr)
+                                and inst.value.op == "call"
+                                and self._is_parallel_loop(
+                                    inst.value.func.name, call_table)
+                            ):
+                                msg = "\nprange or pndindex loop " \
+                                      "will not be executed in " \
+                                      "parallel due to there being more than one " \
+                                      "entry to or exit from the loop (e.g., an " \
+                                      "assertion)."
+                                warnings.warn(
+                                    errors.NumbaPerformanceWarning(
+                                        msg, inst.loc))
                 continue
+
             entry = list(loop.entries)[0]
             for inst in blocks[entry].body:
                 # if prange or pndindex call

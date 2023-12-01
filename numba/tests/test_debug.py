@@ -46,6 +46,13 @@ def supported_parfor(n):
         a[i] = a[i] + np.sin(i)
     return a
 
+def unsupported_prange(n):
+    a = np.ones(n)
+    for i in prange(n):
+        a[i] = a[i] + np.sin(i)
+        assert i + 13 < 100000
+    return a
+
 force_parallel_flags = Flags()
 force_parallel_flags.auto_parallel = ParallelOptions(True)
 force_parallel_flags.nrt = True
@@ -243,6 +250,17 @@ class TestParforsDebug(TestCase):
                 break
         self.assertTrue(warning_found, "Warning message should be found.")
 
+    def check_parfors_unsupported_prange_warning(self, warn_list):
+        msg = ("prange or pndindex loop will not be executed in parallel "
+               "due to there being more than one entry to or exit from the "
+               "loop (e.g., an assertion).")
+        warning_found = False
+        for w in warn_list:
+            if msg in str(w.message):
+                warning_found = True
+                break
+        self.assertTrue(warning_found, "Warning message should be found.")
+
     @needs_blas
     @skip_parfors_unsupported
     def test_warns(self):
@@ -256,6 +274,18 @@ class TestParforsDebug(TestCase):
             cres = compile_isolated(unsupported_parfor, (arr_ty, arr_ty),
                                     flags=force_parallel_flags)
         self.check_parfors_warning(w)
+
+    @needs_blas
+    @skip_parfors_unsupported
+    def test_unsupported_prange_warns(self):
+        """
+        Test that prange with multiple exits issues a warning
+        """
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always", NumbaPerformanceWarning)
+            cres = compile_isolated(unsupported_prange, (types.int64,),
+                                    flags=force_parallel_flags)
+        self.check_parfors_unsupported_prange_warning(w)
 
     @skip_parfors_unsupported
     def test_array_debug_opt_stats(self):
