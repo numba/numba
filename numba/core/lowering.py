@@ -1413,6 +1413,11 @@ class Lower(BaseLower):
         elif expr.op == 'null':
             return self.context.get_constant_null(resty)
 
+        elif expr.op == 'undef':
+            # Numba does not raise an UnboundLocalError for undefined variables.
+            # The variable is set to zero.
+            return self.context.get_constant_null(resty)
+
         elif expr.op in self.context.special_ops:
             res = self.context.special_ops[expr.op](self, expr)
             return res
@@ -1442,6 +1447,11 @@ class Lower(BaseLower):
         if not self._disable_sroa_like_opt:
             assert name not in self._blk_local_varmap
             assert name not in self._singly_assigned_vars
+        if name not in self.varmap:
+            # Allocate undefined variable as needed.
+            # NOTE: Py3.12 use of LOAD_FAST_AND_CLEAR will allow variable be
+            # referenced before it is defined.
+            self._alloca_var(name, self.typeof(name))
         return self.varmap[name]
 
     def loadvar(self, name):

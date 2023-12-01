@@ -1002,4 +1002,3 @@ def ol_str_generic(object=''):
         else:
             return repr(object)
     return impl
-
