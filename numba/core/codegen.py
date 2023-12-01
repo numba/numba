@@ -1225,6 +1225,7 @@ class CPUCodegen(Codegen):
 
     def _module_pass_manager(self, **kwargs):
         pm = ll.create_module_pass_manager()
+        pm.add_target_library_info(ll.get_process_triple())
         self._tm.add_analysis_passes(pm)
         cost = kwargs.pop("cost", None)
         with self._pass_manager_builder(**kwargs) as pmb:
@@ -1256,6 +1257,7 @@ class CPUCodegen(Codegen):
 
     def _function_pass_manager(self, llvm_module, **kwargs):
         pm = ll.create_function_pass_manager(llvm_module)
+        pm.add_target_library_info(llvm_module.triple)
         self._tm.add_analysis_passes(pm)
         with self._pass_manager_builder(**kwargs) as pmb:
             pmb.populate(pm)
