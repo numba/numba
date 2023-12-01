@@ -171,7 +171,7 @@ class TestSVMLGeneration(TestCase):
     # env mutating, must not run in parallel
     _numba_parallel_test_ = False
     # RE for a generic symbol reference and for each particular SVML function
-    asm_filter = re.compile('|'.join(['\$[a-z_]\w+,']+list(svml_funcs)))
+    asm_filter = re.compile('|'.join([r'\$[a-z_]\w+,']+list(svml_funcs)))
 
     @classmethod
     def mp_runner(cls, testname, outqueue):
