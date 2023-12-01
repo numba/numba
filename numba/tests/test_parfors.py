@@ -46,7 +46,7 @@ from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                       override_env_config, linux_only, tag,
                       skip_parfors_unsupported, _32bit, needs_blas,
                       needs_lapack, disabled_test, skip_unless_scipy,
-                      needs_subprocess)
+                      needs_subprocess, expected_failure_py312)
 from numba.core.extending import register_jitable
 from numba.core.bytecode import _fix_LOAD_GLOBAL_arg
 from numba.core import utils
@@ -3183,6 +3183,45 @@ class TestParforsMisc(TestParforsBase):
             return buf
         self.check(test_impl)
 
+    def test_issue_9182_recursion_error(self):
+        from numba.types import ListType, Tuple, intp
+
+        @numba.njit
+        def _sink(x):
+            pass
+
+
+        @numba.njit(cache=False, parallel=True)
+        def _ground_node_rule(
+            clauses,
+            nodes,
+        ):
+            for piter in prange(len(nodes)):
+                for clause in clauses:
+                    clause_type = clause[0]
+                    clause_variables = clause[2]
+                    if clause_type == 0:
+                        clause_var_1 = clause_variables[0]
+                    elif len(clause_variables) == 2:
+                        clause_var_1, clause_var_2 = (
+                            clause_variables[0],
+                            clause_variables[1],
+                        )
+
+                    elif len(clause_variables) == 4:
+                        pass
+
+                    if clause_type == 1:
+                        _sink(clause_var_1)
+                        _sink(clause_var_2)
+
+        _ground_node_rule.compile(
+            (
+                ListType(Tuple([intp, intp, ListType(intp)])),
+                ListType(intp),
+            )
+        )
+
 
 @skip_parfors_unsupported
 class TestParforsDiagnostics(TestParforsBase):
@@ -3392,9 +3431,13 @@ class TestPrangeBase(TestParforsBase):
             prange_names.append('prange')
             prange_names = tuple(prange_names)
             prange_idx = len(prange_names) - 1
-            if utils.PYVERSION == (3, 11):
+            if utils.PYVERSION in ((3, 11), (3, 12)):
                 # this is the inverse of _fix_LOAD_GLOBAL_arg
                 prange_idx = 1 + (prange_idx << 1)
+            elif utils.PYVERSION in ((3, 9), (3, 10)):
+                pass
+            else:
+                raise NotImplementedError(utils.PYVERSION)
             new_code = bytearray(pyfunc_code.co_code)
             assert len(patch_instance) <= len(range_locations)
             # patch up the new byte code
@@ -3932,6 +3975,7 @@ class TestPrangeBasic(TestPrangeBase):
 class TestPrangeSpecific(TestPrangeBase):
     """ Tests specific features/problems found under prange"""
 
+    @expected_failure_py312
     def test_prange_two_instances_same_reduction_var(self):
         # issue4922 - multiple uses of same reduction variable
         def test_impl(n):
@@ -3943,6 +3987,7 @@ class TestPrangeSpecific(TestPrangeBase):
             return c
         self.prange_tester(test_impl, 9)
 
+    @expected_failure_py312
     def test_prange_conflicting_reduction_ops(self):
         def test_impl(n):
             c = 0

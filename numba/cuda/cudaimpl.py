@@ -14,7 +14,7 @@ from numba.np.npyimpl import register_ufuncs
 from .cudadrv import nvvm
 from numba import cuda
 from numba.cuda import nvvmutils, stubs, errors
-from numba.cuda.types import dim3, grid_group, CUDADispatcher
+from numba.cuda.types import dim3, CUDADispatcher
 
 registry = Registry()
 lower = registry.lower
@@ -67,24 +67,6 @@ def dim3_y(context, builder, sig, args):
 @lower_attr(dim3, 'z')
 def dim3_z(context, builder, sig, args):
     return builder.extract_value(args, 2)
-
-
-@lower(cuda.cg.this_grid)
-def cg_this_grid(context, builder, sig, args):
-    one = context.get_constant(types.int32, 1)
-    lmod = builder.module
-    return builder.call(
-        nvvmutils.declare_cudaCGGetIntrinsicHandle(lmod),
-        (one,))
-
-
-@lower('GridGroup.sync', grid_group)
-def ptx_sync_group(context, builder, sig, args):
-    flags = context.get_constant(types.int32, 0)
-    lmod = builder.module
-    return builder.call(
-        nvvmutils.declare_cudaCGSynchronize(lmod),
-        (*args, flags))
 
 
 # -----------------------------------------------------------------------------

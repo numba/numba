@@ -198,8 +198,8 @@ class IntervalExampleTest(unittest.TestCase):
         def check_equal_intervals(x, y):
             self.assertIsInstance(x, Interval)
             self.assertIsInstance(y, Interval)
-            self.assertEquals(x.lo, y.lo)
-            self.assertEquals(x.hi, y.hi)
+            self.assertEqual(x.lo, y.lo)
+            self.assertEqual(x.hi, y.hi)
 
         a = Interval(2, 3)
         b = Interval(4, 5)

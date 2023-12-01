@@ -1,0 +1,5 @@
+Make grid() and gridsize() use 64-bit integers
+==============================================
+
+`cuda.grid()` and `cuda.gridsize()` now use 64-bit integers, so they no longer
+overflow when the grid contains more than ``2 ** 31`` threads.

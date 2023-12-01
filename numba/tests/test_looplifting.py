@@ -553,6 +553,7 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
         # Ensure that is really a new overload for the lifted loop
         self.assertEqual(len(lifted.signatures), 2)
 
+    @unittest.skip("Test to be removed along with objmode fallback support")
     def test_lift_listcomp_block0(self):
 
         def foo(X):

@@ -71,10 +71,12 @@ class DebugTestBase(TestCase):
                 self.assert_fails(check_meth, out)
 
     def _check_dump_bytecode(self, out):
-        if utils.PYVERSION >= (3, 11):
+        if utils.PYVERSION in ((3, 11), (3, 12)):
             self.assertIn('BINARY_OP', out)
-        else:
+        elif utils.PYVERSION in ((3, 9), (3, 10)):
             self.assertIn('BINARY_ADD', out)
+        else:
+            raise NotImplementedError(utils.PYVERSION)
 
     def _check_dump_cfg(self, out):
         self.assertIn('CFG dominators', out)

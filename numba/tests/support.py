@@ -107,6 +107,12 @@ def expected_failure_py311(fn):
     else:
         return fn
 
+def expected_failure_py312(fn):
+    if utils.PYVERSION == (3, 12):
+        return unittest.expectedFailure(fn)
+    else:
+        return fn
+
 _msg = "SciPy needed for test"
 skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
 
@@ -1234,7 +1240,7 @@ def print_azure_matrix():
     base_path = os.path.dirname(os.path.abspath(__file__))
     azure_pipe = os.path.join(base_path, '..', '..', 'azure-pipelines.yml')
     if not os.path.isfile(azure_pipe):
-        self.skipTest("'azure-pipelines.yml' is not available")
+        raise RuntimeError("'azure-pipelines.yml' is not available")
     with open(os.path.abspath(azure_pipe), 'rt') as f:
         data = f.read()
     pipe_yml = yaml.load(data, Loader=Loader)
@@ -1251,7 +1257,7 @@ def print_azure_matrix():
     winpath = ['..', '..', 'buildscripts', 'azure', 'azure-windows.yml']
     azure_windows = os.path.join(base_path, *winpath)
     if not os.path.isfile(azure_windows):
-        self.skipTest("'azure-windows.yml' is not available")
+        raise RuntimeError("'azure-windows.yml' is not available")
     with open(os.path.abspath(azure_windows), 'rt') as f:
         data = f.read()
     windows_yml = yaml.load(data, Loader=Loader)
@@ -1267,3 +1273,15 @@ def print_azure_matrix():
     for npver, pys in sorted(py2np_map.items()):
         for pyver, count in pys.items():
             print(f" {npver} |  {pyver:<4}  |   {count}")
+
+    # print the "reverse" map
+    rev_map = defaultdict(lambda: defaultdict(int))
+    for npver, pys in sorted(py2np_map.items()):
+        for pyver, count in pys.items():
+            rev_map[pyver][npver] = count
+    print("\nPython | NumPy | Count")
+    print("-----------------------")
+    sorter = lambda x: int(x[0].split('.')[1])
+    for pyver, nps in sorted(rev_map.items(), key=sorter):
+        for npver, count in nps.items():
+            print(f" {pyver:<4} |  {npver}  |   {count}")

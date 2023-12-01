@@ -27,11 +27,7 @@ from numba.core.config import (PYVERSION, MACHINE_BITS, # noqa: F401
 from numba.core import config
 from numba.core import types
 
-if PYVERSION <= (3, 8):
-    # This is needed for Python-3.8 and before due to the lack of PEP-585.
-    from typing import MutableSet, MutableMapping, Mapping, Sequence
-else:
-    from collections.abc import Mapping, Sequence, MutableSet, MutableMapping
+from collections.abc import Mapping, Sequence, MutableSet, MutableMapping
 
 
 def erase_traceback(exc_value):
@@ -751,6 +747,16 @@ def get_hashable_key(value):
         return id(value)
     else:
         return value
+
+
+class threadsafe_cached_property(functools.cached_property):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._lock = threading.RLock()
+
+    def __get__(self, *args, **kwargs):
+        with self._lock:
+            return super().__get__(*args, **kwargs)
 
 
 def dump_llvm(fndesc, module):
