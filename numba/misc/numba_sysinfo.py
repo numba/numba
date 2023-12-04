@@ -466,6 +466,7 @@ def get_sysinfo():
         _check_tbb_version_compatible()
         sys_info[_tbb_thread] = True
     except ImportError as e:
+        _error_log.append(f"TBB error: {e}")
         # might be a missing symbol due to e.g. tbb libraries missing
         sys_info[_tbb_thread] = False
         sys_info[_tbb_error] = parse_error(e, 'tbbpool')
