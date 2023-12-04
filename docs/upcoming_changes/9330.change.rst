@@ -1,0 +1,16 @@
+Refactor and remove legacy APIs/testing internals.
+""""""""""""""""""""""""""""""""""""""""""""""""""
+
+A number of internally used functions have been removed to aid with general
+maintenance by reducing the number of ways in which it is possible to invoke
+compilation, specifically:
+
+* ``numba.core.compiler.compile_isolated`` is removed.
+* ``numba.tests.support.TestCase::run_nullary_func`` is removed.
+* ``numba.tests.support.CompilationCache`` is removed.
+* "nested context" as a concept is removed from
+  ``numba.core.registry.CPUTarget`` along with the implementation details.
+
+Further, a bug was discovered, during the refactoring, in the typing of record
+arrays. It materialised that two record types that only differed in their
+mutability could alias, this has now been fixed.
