@@ -1,5 +1,6 @@
 """ Test cases for inlining IR from another module """
-from numba import njit
+from numba import jit, njit
+from numba.core import types
 from numba.core.extending import overload
 
 _GLOBAL1 = 100
@@ -43,3 +44,26 @@ def bop_factory(a):
         return impl
 
     return bop
+
+
+@jit((types.int32,), nopython=True)
+def inner(a):
+    return a + 1
+
+
+@jit((types.int32,), nopython=True)
+def more(a):
+    return inner(inner(a))
+
+
+def outer_simple(a):
+    return inner(a) * 2
+
+
+def outer_multiple(a):
+    return inner(a) * more(a)
+
+
+@njit
+def __dummy__():
+    return
