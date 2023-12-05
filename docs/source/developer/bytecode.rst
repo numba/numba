@@ -50,10 +50,10 @@ used in comprehensions. The common pattern is:
     10 to 26 -> 36 [2]
 
 
-Numba handles the ``LOAD_FAST_AND_CLEAR`` bytecode differently than CPython 
+Numba handles the ``LOAD_FAST_AND_CLEAR`` bytecode differently to CPython 
 because it relies on static instead of dynamic semantics. 
 
-In CPython, comprehensions can shadow variables from the enclosing function 
+In Python, comprehensions can shadow variables from the enclosing function 
 scope. To handle this, ``LOAD_FAST_AND_CLEAR`` snapshots the value of a 
 potentially shadowed variable and clears it from the scope. This gives the 
 illusion that comprehensions execute in a new scope, even though they are fully 
@@ -73,8 +73,8 @@ undefined values.
 
 Numba does not raise ``UnboundLocalError`` if an undefined value is used.
 
-Special case 1: ``LOAD_FAST_AND_CLEAR`` may load undefined variable
--------------------------------------------------------------------
+Special case 1: ``LOAD_FAST_AND_CLEAR`` may load an undefined variable
+----------------------------------------------------------------------
 
 .. code-block:: python
 
@@ -91,7 +91,7 @@ then ``x`` is defined and execution proceeds as described in the common case.
 However, if ``a`` is ``False``, then ``x`` is undefined. 
 In this case, the Python interpreter would raise an ``UnboundLocalError`` at 
 the ``return x`` line. Numba cannot determine whether ``x`` was previously 
-defined, so it assumes ``x`` is defined to avoid the error. 
+defined, therefore it assumes ``x`` is defined to avoid the error. 
 This deviates from Python's official semantics, since Numba will use a 
 zero-initialized ``x`` even if it was not defined earlier.
 
@@ -178,7 +178,7 @@ like the Python interpreter does.
     NameError: name 'x' is not defined
 
 
-.. _UndefVar: https://github.com/numba/numba/blob/db5f0a45fcccb359cba248c4767cd1caf16c4a85/numba/core/types/misc.py#L36C12-L36C12
+.. _UndefVar: https://github.com/numba/numba/blob/db5f0a45fcccb359cba248c4767cd1caf16c4a85/numba/core/types/misc.py#L36-L44
 
 .. _\_UNDEFINED: https://github.com/numba/numba/blob/db5f0a45fcccb359cba248c4767cd1caf16c4a85/numba/core/pylowering.py#L32
 
