@@ -2,22 +2,17 @@ import warnings
 
 from llvmlite import ir
 from numba.cuda.cudadrv import nvvm, runtime
-from ctypes import c_size_t, c_uint64, sizeof
 from numba.cuda.testing import unittest
 from numba.cuda.cudadrv.nvvm import LibDevice, NvvmError, NVVM
 from numba.cuda.testing import skip_on_cudasim
-
-is64bit = sizeof(c_size_t) == sizeof(c_uint64)
 
 
 @skip_on_cudasim('NVVM Driver unsupported in the simulator')
 class TestNvvmDriver(unittest.TestCase):
     def get_nvvmir(self):
         versions = NVVM().get_ir_version()
-        metadata = metadata_nvvm70 % versions
         data_layout = NVVM().data_layout
-
-        return nvvmir_generic.format(data_layout=data_layout, metadata=metadata)
+        return nvvmir_generic.format(data_layout=data_layout, v=versions)
 
     def test_nvvm_compile_simple(self):
         nvvmir = self.get_nvvmir()
@@ -61,10 +56,35 @@ class TestNvvmDriver(unittest.TestCase):
         m.data_layout = NVVM().data_layout
         ptx = nvvm.llvm_to_ptx(str(m)).decode('utf8')
         self.assertTrue('mycudakernel' in ptx)
-        if is64bit:
-            self.assertTrue('.address_size 64' in ptx)
-        else:
-            self.assertTrue('.address_size 32' in ptx)
+        self.assertTrue('.address_size 64' in ptx)
+
+    def test_used_list(self):
+        # Construct a module
+        m = ir.Module("test_used_list")
+        m.triple = 'nvptx64-nvidia-cuda'
+        m.data_layout = NVVM().data_layout
+        nvvm.add_ir_version(m)
+
+        # Add a function and mark it as a kernel
+        fty = ir.FunctionType(ir.VoidType(), [ir.IntType(32)])
+        kernel = ir.Function(m, fty, name='mycudakernel')
+        bldr = ir.IRBuilder(kernel.append_basic_block('entry'))
+        bldr.ret_void()
+        nvvm.set_cuda_kernel(kernel)
+
+        # Verify that the used list was correctly constructed
+        used_lines = [line for line in str(m).splitlines()
+                      if 'llvm.used' in line]
+        msg = 'Expected exactly one @"llvm.used" array'
+        self.assertEqual(len(used_lines), 1, msg)
+
+        used_line = used_lines[0]
+        # Kernel should be referenced in the used list
+        self.assertIn("mycudakernel", used_line)
+        # Check linkage of the used list
+        self.assertIn("appending global", used_line)
+        # Ensure used list is in the metadata section
+        self.assertIn('section "llvm.metadata"', used_line)
 
     def test_nvvm_ir_verify_fail(self):
         m = ir.Module("test_bad_ir")
@@ -109,20 +129,6 @@ class TestNvvmDriver(unittest.TestCase):
 
         self.assertEqual(len(w), 1)
         self.assertIn('overriding noinline attribute', str(w[0]))
-
-    @unittest.skipIf(True, "No new CC unknown to NVVM yet")
-    def test_nvvm_future_support(self):
-        """Test unsupported CC to help track the feature support
-        """
-        # List known CC but unsupported by NVVM
-        future_archs = [
-            # (5, 2),  # for example
-        ]
-        for arch in future_archs:
-            pat = r"-arch=compute_{0}{1}".format(*arch)
-            with self.assertRaises(NvvmError) as raises:
-                self._test_nvvm_support(arch=arch)
-            self.assertIn(pat, raises.msg)
 
 
 @skip_on_cudasim('NVVM Driver unsupported in the simulator')
@@ -179,23 +185,14 @@ declare i32 @llvm.nvvm.read.ptx.sreg.ntid.x() nounwind readnone
 
 declare i32 @llvm.nvvm.read.ptx.sreg.tid.x() nounwind readnone
 
-{metadata}
+!nvvmir.version = !{{!1}}
+!1 = !{{i32 {v[0]}, i32 {v[1]}, i32 {v[2]}, i32 {v[3]}}}
+
+!nvvm.annotations = !{{!2}}
+!2 = !{{void (i32*)* @simple, !"kernel", i32 1}}
+
+@"llvm.used" = appending global [1 x i8*] [i8* bitcast (void (i32*)* @simple to i8*)], section "llvm.metadata"
 '''  # noqa: E501
-
-
-metadata_nvvm70 = '''
-!nvvmir.version = !{!1}
-!1 = !{i32 %s, i32 %s, i32 %s, i32 %s}
-
-!nvvm.annotations = !{!2}
-!2 = !{void (i32*)* @simple, !"kernel", i32 1}
-'''  # noqa: E501
-
-
-metadata_nvvm34 = '''
-!nvvm.annotations = !{!1}
-!1 = metadata !{void (i32*)* @simple, metadata !"kernel", i32 1}
-'''
 
 
 if __name__ == '__main__':

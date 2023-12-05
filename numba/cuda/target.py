@@ -3,7 +3,8 @@ from functools import cached_property
 import llvmlite.binding as ll
 from llvmlite import ir
 
-from numba.core import typing, types, debuginfo, itanium_mangler, cgutils
+from numba.core import (cgutils, config, debuginfo, itanium_mangler, types,
+                        typing, utils)
 from numba.core.dispatcher import Dispatcher
 from numba.core.base import BaseContext
 from numba.core.callconv import MinimalCallConv
@@ -267,8 +268,11 @@ class CUDATargetContext(BaseContext):
         if debug or lineinfo:
             debuginfo.finalize()
         library.finalize()
-        wrapfn = library.get_function(wrapfn.name)
-        return wrapfn
+
+        if config.DUMP_LLVM:
+            utils.dump_llvm(fndesc, wrapper_module)
+
+        return library.get_function(wrapfn.name)
 
     def make_constant_array(self, builder, aryty, arr):
         """
