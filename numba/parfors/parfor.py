@@ -3874,6 +3874,43 @@ def get_reduce_nodes(reduction_node, nodes, func_ir):
                 # e.g. $2 = a + $1; a = $2
                 # reductions that are functions calls like max() don't have an
                 # extra assignment afterwards
+
+                # This code was created when Numba had an IR generation strategy
+                # where a binop for a reduction would be followed by an
+                # assignment as follows:
+                #$c.4.15 = inplace_binop(fn=<iadd>, ...>, lhs=c.3, rhs=$const20)
+                #c.4 = $c.4.15
+
+                # With Python 3.12 changes, Numba may separate that assignment
+                # to a new basic block.  The code below looks and sees if an
+                # assignment to the reduction var follows the reduction operator
+                # and if not it searches the rest of the reduction nodes to find
+                # correct assignment that should follow the reduction operator
+                # and then reorders the reduction nodes so that assignment
+                # follows the reduction operator.
+                if (i+1 < len(nodes) and
+                    ((not isinstance(nodes[i+1], ir.Assign)) or
+                     nodes[i+1].target.unversioned_name != unversioned_name)):
+                    foundj = None
+                    # Iterate through the rest of the reduction nodes.
+                    for j, jstmt in enumerate(nodes[i+1:]):
+                        # If this stmt is an assignment where the right-hand
+                        # side of the assignment is the output of the reduction
+                        # operator.
+                        if isinstance(jstmt, ir.Assign) and jstmt.value == lhs:
+                            # Remember the index of this node.  Because of
+                            # nodes[i+1] above, we have to add i + 1 to j below
+                            # to get the index in the original nodes list.
+                            foundj = i + j + 1
+                            break
+                    if foundj is not None:
+                        # If we found the correct assignment then move it to
+                        # after the reduction operator.
+                        nodes = (nodes[:i+1] +   # nodes up to operator
+                                 nodes[foundj:foundj+1] + # assignment node
+                                 nodes[i+1:foundj] + # between op and assign
+                                 nodes[foundj+1:]) # after assignment node
+
                 if (not (i+1 < len(nodes) and isinstance(nodes[i+1], ir.Assign)
                         and nodes[i+1].target.unversioned_name == unversioned_name)
                         and lhs.unversioned_name != unversioned_name):
