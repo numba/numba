@@ -154,6 +154,7 @@ def slicing_2d_usecase_set(a, b, start, stop, step, start2, stop2, step2):
 class EnumIndex(IntEnum):
     INDEX0 = 0
     INDEX1 = auto()
+    INDEX_NEG1 = -1
 
 
 class TestGetItem(TestCase):
@@ -509,6 +510,7 @@ class TestGetItem(TestCase):
         # use IntEnumMember as index
         self.assertEqual(pyfunc(a, 0), cfunc(a, EnumIndex.INDEX0))
         self.assertEqual(pyfunc(a, 1), cfunc(a, EnumIndex.INDEX1))
+        self.assertEqual(pyfunc(a, -1), cfunc(a, EnumIndex.INDEX_NEG1))
 
         # Any layout
         arraytype = types.Array(types.int32, 1, 'A')
@@ -525,6 +527,7 @@ class TestGetItem(TestCase):
         # use IntEnumMember as index
         self.assertEqual(pyfunc(a, 0), cfunc(a, EnumIndex.INDEX0))
         self.assertEqual(pyfunc(a, 1), cfunc(a, EnumIndex.INDEX1))
+        self.assertEqual(pyfunc(a, -1), cfunc(a, EnumIndex.INDEX_NEG1))
 
         # Using a 0-d array as integer index
         arraytype = types.Array(types.int32, 1, 'C')
