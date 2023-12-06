@@ -3906,10 +3906,10 @@ def get_reduce_nodes(reduction_node, nodes, func_ir):
                     if foundj is not None:
                         # If we found the correct assignment then move it to
                         # after the reduction operator.
-                        nodes = (nodes[:i+1] +   # nodes up to operator
-                                 nodes[foundj:foundj+1] + # assignment node
-                                 nodes[i+1:foundj] + # between op and assign
-                                 nodes[foundj+1:]) # after assignment node
+                        nodes = (nodes[:i + 1] +   # nodes up to operator
+                                 nodes[foundj:foundj + 1] + # assignment node
+                                 nodes[i + 1:foundj] + # between op and assign
+                                 nodes[foundj + 1:]) # after assignment node
 
                 if (not (i+1 < len(nodes) and isinstance(nodes[i+1], ir.Assign)
                         and nodes[i+1].target.unversioned_name == unversioned_name)
