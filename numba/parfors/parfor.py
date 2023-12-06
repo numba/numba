@@ -3890,7 +3890,7 @@ def get_reduce_nodes(reduction_node, nodes, func_ir):
                 # follows the reduction operator.
                 if (i + 1 < len(nodes) and
                     ((not isinstance(nodes[i + 1], ir.Assign)) or
-                     nodes[i+1].target.unversioned_name != unversioned_name)):
+                     nodes[i + 1].target.unversioned_name != unversioned_name)):
                     foundj = None
                     # Iterate through the rest of the reduction nodes.
                     for j, jstmt in enumerate(nodes[i+1:]):
