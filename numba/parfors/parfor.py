@@ -3885,7 +3885,7 @@ def get_reduce_nodes(reduction_node, nodes, func_ir):
                 # to a new basic block.  The code below looks and sees if an
                 # assignment to the reduction var follows the reduction operator
                 # and if not it searches the rest of the reduction nodes to find
-                # correct assignment that should follow the reduction operator
+                # the assignment that should follow the reduction operator
                 # and then reorders the reduction nodes so that assignment
                 # follows the reduction operator.
                 if (i+1 < len(nodes) and
