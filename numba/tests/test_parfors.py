@@ -4119,12 +4119,18 @@ class TestPrangeSpecific(TestPrangeBase):
         # check there is something like:
         #  %.329 = fmul fast double %.325, 5.000000e-01
         #  %.337 = fadd fast double %A.07, %.329
+        found = False
         for name, kernel in ir.items():
-            splitted = kernel.splitlines()
-            for i, x in enumerate(splitted):
-                if reciprocal_inst.match(x):
-                    break
-            self.assertTrue(fadd_inst.match(splitted[i + 1]))
+            # make sure to look at the kernel corresponding to the cres/pfunc
+            if name in cres.library.get_llvm_str():
+                splitted = kernel.splitlines()
+                for i, x in enumerate(splitted):
+                    if reciprocal_inst.match(x):
+                        self.assertTrue(fadd_inst.match(splitted[i + 1]))
+                        found = True
+                        break
+
+        self.assertTrue(found, "fast instruction pattern was not found.")
 
     def test_parfor_alias1(self):
         def test_impl(n):
