@@ -548,7 +548,7 @@ class TestLiftObj(MemoryLeak, TestCase):
             njit(foo)(123)
         # Check that an error occurred in with-lifting in objmode
         pat = ("During: resolving callee type: "
-               "type\(ObjModeLiftedWith\(<.*>\)\)")
+               r"type\(ObjModeLiftedWith\(<.*>\)\)")
         self.assertRegex(str(raises.exception), pat)
 
     def test_case07_mystery_key_error(self):
@@ -822,7 +822,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         with self.assertRaisesRegex(
             errors.CompilerError,
             ("Error handling objmode argument 'val'. "
-             "Global 'gv_type2' is not defined\.")
+             r"Global 'gv_type2' is not defined.")
         ):
             global_var()
 
