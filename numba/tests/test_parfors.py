@@ -3166,7 +3166,7 @@ class TestParforsMisc(TestParforsBase):
         self.assertPreciseEqual(f(r), f.py_func(r))
 
     def test_issue6774(self):
-        @njit(parallel=True)
+
         def test_impl():
             n = 5
             na_mask = np.ones((n,))
