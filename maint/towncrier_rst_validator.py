@@ -25,7 +25,7 @@ types_of_changes = ["highlight",
 
 def list_rst_filename() -> str:
     output = check_output(
-        ["git", "diff", "--name-only", "main"],
+        ["git", "diff", "--name-only", "origin/main"],
         encoding="utf-8",
         stderr=STDOUT,
     )
