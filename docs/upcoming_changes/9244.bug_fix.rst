@@ -1,4 +1,4 @@
-Fixed ``RecursionError`` in ``prange`` 
+Fixed ``RecursionError`` in ``prange``
 ======================================
 
 A problem with certain loop patterns using ``prange`` leading to 
