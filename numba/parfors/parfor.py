@@ -3888,7 +3888,7 @@ def get_reduce_nodes(reduction_node, nodes, func_ir):
                 # the assignment that should follow the reduction operator
                 # and then reorders the reduction nodes so that assignment
                 # follows the reduction operator.
-                if (i+1 < len(nodes) and
+                if (i + 1 < len(nodes) and
                     ((not isinstance(nodes[i+1], ir.Assign)) or
                      nodes[i+1].target.unversioned_name != unversioned_name)):
                     foundj = None
