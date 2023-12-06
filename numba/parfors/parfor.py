@@ -3893,7 +3893,7 @@ def get_reduce_nodes(reduction_node, nodes, func_ir):
                      nodes[i + 1].target.unversioned_name != unversioned_name)):
                     foundj = None
                     # Iterate through the rest of the reduction nodes.
-                    for j, jstmt in enumerate(nodes[i+1:]):
+                    for j, jstmt in enumerate(nodes[i + 1:]):
                         # If this stmt is an assignment where the right-hand
                         # side of the assignment is the output of the reduction
                         # operator.
