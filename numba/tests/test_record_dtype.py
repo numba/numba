@@ -1044,11 +1044,11 @@ class TestRecordDtypeWithCharSeq(TestCase):
 
         # compile
         rectype = numpy_support.from_dtype(recordwithcharseq)
-        sig = (rectype[::1], types.intp, types.Bytes(types.uint8, 1, 'C'))
-        cfunc = njit(sig)(pyfunc)
+        sig = (rectype[::1], types.intp, rectype.typeof('n'))
+        cfunc = njit(sig)(pyfunc).overloads[sig].entry_point
 
         for i in range(self.refsample1d.size):
-            chars = bytes("{0}".format(hex(i + 10)), 'UTF-8')
+            chars = "{0}".format(hex(i + 10))
             pyfunc(self.refsample1d, i, chars)
             cfunc(self.nbsample1d, i, chars)
             np.testing.assert_equal(self.refsample1d, self.nbsample1d)
@@ -1059,15 +1059,15 @@ class TestRecordDtypeWithCharSeq(TestCase):
         pyfunc = set_charseq
         # compile
         rectype = numpy_support.from_dtype(recordwithcharseq)
-        sig = (rectype[::1], types.intp, types.Bytes(types.uint8, 1, 'C'))
-        cfunc = njit(sig)(pyfunc)
+        sig = (rectype[::1], types.intp, rectype.typeof('n'))
+        cfunc = njit(sig)(pyfunc).overloads[sig].entry_point
 
         cs_near_overflow = "abcde"
 
         self.assertEqual(len(cs_near_overflow),
                          recordwithcharseq['n'].itemsize)
 
-        cfunc(self.nbsample1d, 0, bytes(cs_near_overflow, 'UTF-8'))
+        cfunc(self.nbsample1d, 0, cs_near_overflow)
         self.assertEqual(self.nbsample1d[0]['n'].decode('ascii'),
                          cs_near_overflow)
         # Check that we didn't overwrite
@@ -1079,13 +1079,13 @@ class TestRecordDtypeWithCharSeq(TestCase):
         pyfunc = set_charseq
         # compile
         rectype = numpy_support.from_dtype(recordwithcharseq)
-        sig = (rectype[::1], types.intp, types.Bytes(types.uint8, 1, 'C'))
-        cfunc = njit(sig)(pyfunc)
+        sig = (rectype[::1], types.intp, rectype.typeof('n'))
+        cfunc = njit(sig)(pyfunc).overloads[sig].entry_point
 
         cs_overflowed = "abcdef"
 
         pyfunc(self.refsample1d, 1, cs_overflowed)
-        cfunc(self.nbsample1d, 1, bytes(cs_overflowed, 'UTF-8'))
+        cfunc(self.nbsample1d, 1, cs_overflowed)
         np.testing.assert_equal(self.refsample1d, self.nbsample1d)
         self.assertEqual(self.refsample1d[1].n,
                          cs_overflowed[:-1].encode("ascii"))
