@@ -33,7 +33,7 @@ def list_rst_filename() -> str:
     all_files = output.strip().splitlines()
     rst_file = [file for file in all_files if 
                 file.startswith(rst_dir + "/" + str(args.pull_request_id) + ".")]
-    assert len(rst_file) == 1, "There must be a relevant .rst file added in the PR." + \
+    assert len(rst_file) == 1, "There must be a relevant .rst file added in the PR. " + \
         "Filename must start with the respective Pull Request ID" + \
         " (eg 1234. for PR #1234) followed by a . character"
     return rst_file[0]
