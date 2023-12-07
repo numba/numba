@@ -1,0 +1,4 @@
+Added support for np.setdiff1d(), np.setxor1d(), and np.in1d() functions, as well as argument assume_unique in np.intersect1d().
+==========================================
+
+Support is added for: ``numpy.setdiff1d()``; ``np.setxor1d()``; ``np.in1d()`` with ``kind="sort"`` for the final argument; and the argument ``assume_unique`` in ``np.intersect1d()``.
