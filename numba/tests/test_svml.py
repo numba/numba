@@ -361,7 +361,6 @@ class TestSVML(TestCase):
     def test_scalar_context_result(self):
         # checks result for test_scalar_context_asm
         self.check(math_sin_scalar, 7., what="result")
-        self.check(math_sin_scalar, 7., what="result")
 
     @TestCase.run_test_in_subprocess(envvars=_skylake_axv512_envvars)
     def test_svml_asm(self):
