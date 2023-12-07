@@ -44,8 +44,12 @@ def array_equal(a, b):
     return np.array_equal(a, b)
 
 
-def intersect1d(a, b):
+def intersect1d_2(a, b):
     return np.intersect1d(a, b)
+
+
+def intersect1d_3(a, b, assume_unique=False):
+    return np.intersect1d(a, b, assume_unique)
 
 
 def append(arr, values, axis):
@@ -475,9 +479,37 @@ def diagflat1(v):
 def diagflat2(v, k=0):
     return np.diagflat(v, k)
 
-    
-def np_setxor1d(a, b, assume_unique=False):
+
+def np_setxor1d_2(a, b):
+    return np.setxor1d(a, b)
+
+
+def np_setxor1d_3(a, b, assume_unique=False):
     return np.setxor1d(a, b, assume_unique)
+
+
+def np_setdiff1d_2(a, b):
+    return np.setdiff1d(a, b)
+
+
+def np_setdiff1d_3(a, b, assume_unique=False):
+    return np.setdiff1d(a, b, assume_unique)
+
+
+def np_in1d_2(a, b):
+    return np.in1d(a, b)
+
+
+def np_in1d_3a(a, b, assume_unique=False):
+    return np.in1d(a, b, assume_unique)
+
+
+def np_in1d_3b(a, b, invert=False):
+    return np.in1d(a, b, invert)
+
+
+def np_in1d_4(a, b, assume_unique=False, invert=False):
+    return np.in1d(a, b, assume_unique, invert)
 
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
@@ -765,7 +797,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             str(raises.exception)
         )
 
-    def test_intersect1d(self):
+    def test_intersect1d_2(self):
 
         def arrays():
             yield [], []  # two empty arrays
@@ -778,7 +810,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield [1, 2], [2, 1]
             yield [1, 2, 3], [1, 2, 3]
 
-        pyfunc = intersect1d
+        pyfunc = intersect1d_2
         cfunc = jit(nopython=True)(pyfunc)
 
         for a, b in arrays():
@@ -787,6 +819,33 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             expected = pyfunc(a, b)
             got = cfunc(a, b)
             self.assertPreciseEqual(expected, got)
+
+    def test_intersect1d_3(self):
+
+        def arrays():
+            yield [], []  # two empty arrays
+            yield [1], []  # empty right
+            yield [], [1]  # empty left
+            yield [1], [2]  # singletons no intersection
+            yield [1], [1]  # singletons one intersection
+            yield [1, 2], [1]
+            yield [1, 2, 2], [2, 2]
+            yield [1, 2], [2, 1]
+            yield [1, 2, 3], [1, 2, 3]
+
+        pyfunc = intersect1d_3
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for a, b in arrays():
+            a = np.array(a)
+            b = np.array(b)
+            expected = pyfunc(a, b)
+            got = cfunc(a, b)
+            self.assertPreciseEqual(expected, got)
+            if len(np.unique(a)) == len(a) and len(np.unique(b)) == len(b):
+                expected = pyfunc(a, b, assume_unique=True)
+                got = cfunc(a, b, assume_unique=True)
+                self.assertPreciseEqual(expected, got)
 
     def test_count_nonzero(self):
 
@@ -6168,32 +6227,237 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc([1, 2], 3.0)
         self.assertIn('The argument "k" must be an integer',
                       str(raises.exception))
-                      
-    def test_setxor1d(self):
-        np_pyfunc = np_setxor1d
+
+    def test_setxor1d_2(self):
+        np_pyfunc = np_setxor1d_2
+        np_nbfunc = njit(np_pyfunc)
+
+        def check(ar1, ar2):
+            ar1 = np.array(ar1)
+            ar2 = np.array(ar2)
+            expected = np_pyfunc(ar1, ar2)
+            got = np_nbfunc(ar1, ar2)
+            self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
+
+        def arrays():
+            yield [], []  # two empty arrays
+            yield [1], []  # empty right
+            yield [], [1]  # empty left
+            yield [1], [2]  # singletons - xor == union
+            yield [1], [1]  # singletons - xor == nothing
+            yield [1, 2], [1]
+            yield [1, 2, 2], [2, 2]
+            yield [1, 2, 2], [2, 2, 3]
+            yield [1, 2], [2, 1]
+            yield [1, 2, 3], [1, 2, 3]
+            yield [2, 3, 4, 0], [1, 3]
+
+        for a, b in arrays():
+            check(a, b)
+
+    def test_setxor1d_3(self):
+        np_pyfunc = np_setxor1d_3
         np_nbfunc = njit(np_pyfunc)
 
         def check(ar1, ar2, assume_unique=False):
+            ar1 = np.array(ar1)
+            ar2 = np.array(ar2)
             expected = np_pyfunc(ar1, ar2, assume_unique)
             got = np_nbfunc(ar1, ar2, assume_unique)
-            self.assertPreciseEqual(expected, got)
+            self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
 
-        a = np.array([1, 2, 3, 2, 4])
-        b = np.array([2, 3, 5, 7, 5])
-        check(a, b)
-        check(a, b, True)
+        def arrays():
+            yield [], []  # two empty arrays
+            yield [1], []  # empty right
+            yield [], [1]  # empty left
+            yield [1], [2]  # singletons - xor == union
+            yield [1], [1]  # singletons - xor == nothing
+            yield [1, 2], [1]
+            yield [1, 2, 2], [2, 2]
+            yield [1, 2, 2], [2, 2, 3]
+            yield [1, 2], [2, 1]
+            yield [1, 2, 3], [1, 2, 3]
+            yield [2, 3, 4, 0], [1, 3]
 
-        a = np.array([])
-        b = np.array([])
-        check(a, b)
+        for a, b in arrays():
+            check(a, b)
+            if len(np.unique(a)) == len(a) and len(np.unique(b)) == len(b):
+                check(a, b, True)
 
-        a = np.arange(10).reshape((5, 2))
-        b = np.arange(3)
-        with self.assertRaises(TypingError) as raises:
-            np_nbfunc(a, b, True)
-        self.assertIn(
-            "Only 1D arrays input arrays are supported",
-            str(raises.exception))
+    def test_setdiff1d_2(self):
+        np_pyfunc = np_setdiff1d_2
+        np_nbfunc = njit(np_pyfunc)
+
+        def check(ar1, ar2):
+            ar1 = np.array(ar1)
+            ar2 = np.array(ar2)
+            expected = np_pyfunc(ar1, ar2)
+            got = np_nbfunc(ar1, ar2)
+            self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
+
+        def arrays():
+            yield [], []  # two empty arrays
+            yield [1], []  # empty right
+            yield [], [1]  # empty left
+            yield [1], [2]  # singletons - diff == [1]
+            yield [1], [1]  # singletons - diff == nothing
+            yield [1, 2], [1]
+            yield [1, 2, 2], [2, 2]
+            yield [1, 2, 2], [2, 2, 3]
+            yield [1, 2], [2, 1]
+            yield [1, 2, 3], [1, 2, 3]
+            yield [2, 3, 4, 0], [1, 3]
+
+        for a, b in arrays():
+            check(a, b)
+
+    def test_setdiff1d_3(self):
+        np_pyfunc = np_setdiff1d_3
+        np_nbfunc = njit(np_pyfunc)
+
+        def check(ar1, ar2, assume_unique=False):
+            ar1 = np.array(ar1)
+            ar2 = np.array(ar2)
+            expected = np_pyfunc(ar1, ar2, assume_unique)
+            got = np_nbfunc(ar1, ar2, assume_unique)
+            self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
+
+        def arrays():
+            yield [], []  # two empty arrays
+            yield [1], []  # empty right
+            yield [], [1]  # empty left
+            yield [1], [2]  # singletons - diff == [1]
+            yield [1], [1]  # singletons - diff == nothing
+            yield [1, 2], [1]
+            yield [1, 2, 2], [2, 2]
+            yield [1, 2, 2], [2, 2, 3]
+            yield [1, 2], [2, 1]
+            yield [1, 2, 3], [1, 2, 3]
+            yield [2, 3, 4, 0], [1, 3]
+
+        for a, b in arrays():
+            check(a, b)
+            if len(np.unique(a)) == len(a) and len(np.unique(b)) == len(b):
+                check(a, b, True)
+
+    def test_in1d_2(self):
+        np_pyfunc = np_in1d_2
+        np_nbfunc = njit(np_pyfunc)
+
+        def check(ar1, ar2):
+            ar1 = np.array(ar1)
+            ar2 = np.array(ar2)
+            expected = np_pyfunc(ar1, ar2)
+            got = np_nbfunc(ar1, ar2)
+            self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
+
+        def arrays():
+            yield [], []  # two empty arrays
+            yield [1], []  # empty right
+            yield [], [1]  # empty left
+            yield [1], [2]  # singletons - False
+            yield [1], [1]  # singletons - True
+            yield [1, 2], [1]
+            yield [1, 2, 2], [2, 2]
+            yield [1, 2, 2], [2, 2, 3]
+            yield [1, 2], [2, 1]
+            yield [1, 2, 3], [1, 2, 3]
+            yield [2, 3, 4, 0], [3, 1]
+            yield [2, 3], [1, 2, 5, 6, 7, 8, 9]
+
+        for a, b in arrays():
+            check(a, b)
+
+    def test_in1d_3a(self):
+        np_pyfunc = np_in1d_3a
+        np_nbfunc = njit(np_pyfunc)
+
+        def check(ar1, ar2, assume_unique=False):
+            ar1 = np.array(ar1)
+            ar2 = np.array(ar2)
+            expected = np_pyfunc(ar1, ar2, assume_unique)
+            got = np_nbfunc(ar1, ar2, assume_unique)
+            self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
+
+        def arrays():
+            yield [], []  # two empty arrays
+            yield [1], []  # empty right
+            yield [], [1]  # empty left
+            yield [1], [2]  # singletons - False
+            yield [1], [1]  # singletons - True
+            yield [1, 2], [1]
+            yield [1, 2, 2], [2, 2]
+            yield [1, 2, 2], [2, 2, 3]
+            yield [1, 2], [2, 1]
+            yield [1, 2, 3], [1, 2, 3]
+            yield [2, 3, 4, 0], [3, 1]
+            yield [2, 3], [1, 2, 5, 6, 7, 8, 9]
+
+        for a, b in arrays():
+            check(a, b)
+            if len(np.unique(a)) == len(a) and len(np.unique(b)) == len(b):
+                check(a, b, assume_unique=True)
+
+    def test_in1d_3b(self):
+        np_pyfunc = np_in1d_3b
+        np_nbfunc = njit(np_pyfunc)
+
+        def check(ar1, ar2, invert=False):
+            ar1 = np.array(ar1)
+            ar2 = np.array(ar2)
+            expected = np_pyfunc(ar1, ar2, invert)
+            got = np_nbfunc(ar1, ar2, invert)
+            self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
+
+        def arrays():
+            yield [], []  # two empty arrays
+            yield [1], []  # empty right
+            yield [], [1]  # empty left
+            yield [1], [2]  # singletons - False
+            yield [1], [1]  # singletons - True
+            yield [1, 2], [1]
+            yield [1, 2, 2], [2, 2]
+            yield [1, 2, 2], [2, 2, 3]
+            yield [1, 2], [2, 1]
+            yield [1, 2, 3], [1, 2, 3]
+            yield [2, 3, 4, 0], [3, 1]
+            yield [2, 3], [1, 2, 5, 6, 7, 8, 9]
+
+        for a, b in arrays():
+            check(a, b, invert=False)
+            check(a, b, invert=True)
+
+    def test_in1d_4(self):
+        np_pyfunc = np_in1d_4
+        np_nbfunc = njit(np_pyfunc)
+
+        def check(ar1, ar2, assume_unique=False, invert=False):
+            ar1 = np.array(ar1)
+            ar2 = np.array(ar2)
+            expected = np_pyfunc(ar1, ar2, assume_unique, invert)
+            got = np_nbfunc(ar1, ar2, assume_unique, invert)
+            self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
+
+        def arrays():
+            yield [], []  # two empty arrays
+            yield [1], []  # empty right
+            yield [], [1]  # empty left
+            yield [1], [2]  # singletons - False
+            yield [1], [1]  # singletons - True
+            yield [1, 2], [1]
+            yield [1, 2, 2], [2, 2]
+            yield [1, 2, 2], [2, 2, 3]
+            yield [1, 2], [2, 1]
+            yield [1, 2, 3], [1, 2, 3]
+            yield [2, 3, 4, 0], [3, 1]
+            yield [2, 3], [1, 2, 5, 6, 7, 8, 9]
+
+        for a, b in arrays():
+            check(a, b, invert=False)
+            check(a, b, invert=True)
+            if len(np.unique(a)) == len(a) and len(np.unique(b)) == len(b):
+                check(a, b, assume_unique=True, invert=False)
+                check(a, b, assume_unique=True, invert=True)
 
 
 class TestNPMachineParameters(TestCase):
