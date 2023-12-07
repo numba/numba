@@ -1,4 +1,3 @@
-
 Support multiple outputs in a ``@guvectorize`` function
 =======================================================
 

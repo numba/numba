@@ -157,9 +157,10 @@ class GUFunc(serialize.ReduceMixin):
             else:
                 l.append(types.Array(ewise_types[idx], ndim, 'A'))
 
+        offset = len(parsed_sig[0])
         # add return type to signature
         for idx, sig_dim in enumerate(parsed_sig[1]):
-            retty = ewise_types[idx]
+            retty = ewise_types[idx + offset]
             ret_ndim = len(sig_dim) or 1  # small hack to return scalars
             l.append(types.Array(retty, ret_ndim, 'A'))
 
