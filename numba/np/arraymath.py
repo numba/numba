@@ -4841,9 +4841,8 @@ def np_trim_zeros(filt, trim='fb'):
                     last = last - 1
         return a_[first:last]
 
+    return impl
 
-# ----------------------------------------------------------------------------
-# Set routines
 
 @overload(np.setxor1d)
 def jit_np_setxor1d(ar1, ar2, assume_unique=False):
