@@ -19,12 +19,15 @@ class TestAutoConstants(unittest.TestCase):
         self.assertTrue(math.isnan(f.py_func()))
 
     def test_sys_constant(self):
+
+        @njit
         def f():
             return sys.hexversion
 
         self.assertEqual(f(), f.py_func())
 
     def test_module_string_constant(self):
+
         @njit
         def f():
             return uc._GLOBAL_STR
