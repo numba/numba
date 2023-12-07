@@ -765,7 +765,14 @@ class TestOperators(TestCase):
         with self.assertRaises(TypeError) as raises:
             cres(4j, 2j)
 
-        msg = "unsupported operand type(s) for %"
+        # error message depends on Python version.
+        if utils.PYVERSION in ((3, 9),):
+            msg = "can't mod complex numbers"
+        elif utils.PYVERSION in ((3, 10), (3, 11), (3, 12)):
+            msg = "unsupported operand type(s) for %"
+        else:
+            raise NotImplementedError(utils.PYVERSION)
+
         self.assertIn(msg, str(raises.exception))
 
     def test_mod_complex_npm(self):
