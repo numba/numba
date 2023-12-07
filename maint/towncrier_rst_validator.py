@@ -2,11 +2,15 @@ from subprocess import STDOUT, check_output
 import argparse
 import os
 
+manual_mode = False
 parser=argparse.ArgumentParser()
 
 parser.add_argument("--pull_request_id", required=True, type=int)
+parser.add_argument("--manual", action="store_true", default=False)
 
 args=parser.parse_args()
+pr_id = args.pull_request_id
+manual_mode = args.manual
 
 rst_dir = "docs/upcoming_changes"
 types_of_changes = ["highlight",
@@ -24,22 +28,29 @@ types_of_changes = ["highlight",
                     "bug_fix"]
 
 def list_rst_filename() -> str:
-    output = check_output(
-        ["git", "diff", "--name-only", "origin/main"],
-        encoding="utf-8",
-        stderr=STDOUT,
-    )
-
-    all_files = output.strip().splitlines()
-    rst_file = [file for file in all_files if 
-                file.startswith(rst_dir + "/" + str(args.pull_request_id) + ".")]
-    assert len(rst_file) == 1, "There must be a relevant .rst file added in the PR. " + \
-        "Filename must start with the respective Pull Request ID" + \
-        " (eg 1234. for PR #1234) followed by a . character"
+    if manual_mode:
+        all_files = os.listdir(rst_dir)
+        rst_file = [rst_dir + "/" +file for file in all_files if 
+                    file.startswith(str(pr_id) + ".")]
+    else:
+        output = check_output(
+            ["git", "diff", "--name-only", "origin/main"],
+            encoding="utf-8",
+            stderr=STDOUT,
+        )
+        all_files = output.strip().splitlines()
+        rst_file = [file for file in all_files if 
+                    file.startswith(rst_dir + "/" + str(args.pull_request_id) + ".")]
+    assert len(rst_file) == 1, f"No valid .rst file found in {rst_dir} for the given" + \
+        f" Pull Request ID: {pr_id}. Valid .rst file should " + \
+        " have name starting with the respective Pull Request ID. " + \
+        "(see numba/docs/upcoming_changes/README for more details)"
     return rst_file[0]
 
 file = list_rst_filename()
-print(f"Checking {file}")
+print(f"Found required file: {file}\n")
+print(f"Checking naming convention.")
+
 # Must be an .rst file
 assert file.endswith(".rst"), "File must be a .rst file"
 # Must start file name with the PR number, followed by a ".",
@@ -63,11 +74,13 @@ assert filename.split(".")[1] in types_of_changes, \
     " highlight, np_support, deprecation, expired, compatibility" + \
     ", cuda, new_feature, improvement, performance, change, doc" + \
     ", infrastructure, bug_fix"
-print(f"Passed: Filename is valid")
+print(f"Passed: Filename is valid\n")
 
+print(f"Checking file contents:\n")
 # Check rst contents
 with open(file, "r") as f:
     contents = f.read().splitlines()
+    print("\n".join(contents))
     # First line must be the title followed by the underline
     assert len(contents) >= 4, "File must have at least four lines"
     title = contents[0]
@@ -81,8 +94,9 @@ with open(file, "r") as f:
     assert len(blank_line) == 0, "Third line must be blank"
     description = contents[3]
     assert len(description) > 0, "Description must not be empty"
-    print(f"Passed: File contents are valid")
+    print(f"\nPassed: File contents are valid\n")
 
+print(f"Validating RST")
 output = check_output(["rstcheck", file], stderr=STDOUT, encoding="utf-8")
 assert "Success! No issues detected." in output, \
     "File is not a valid .rst file. Please check for errors using rstcheck"
