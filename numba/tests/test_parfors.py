@@ -5,6 +5,7 @@
 
 
 import math
+import os
 import re
 import dis
 import numbers
@@ -341,7 +342,17 @@ class TestParforsBase(TestCase):
     def _get_gufunc_modules(self, cres, magicstr, checkstr=None):
         """ gets the gufunc LLVM Modules"""
         _modules = [x for x in cres.library._codegen._engine._ee._modules]
-        return self._filter_mod(_modules, magicstr, checkstr=checkstr)
+        # make sure to only use modules that are actually used by cres and
+        # aren't just in the EE by virtue of shared compilation context.
+        potential_matches = self._filter_mod(_modules, magicstr,
+                                             checkstr=checkstr)
+
+        lib_asm = cres.library.get_asm_str()
+        ret = []
+        for mod in potential_matches:
+            if mod.name in lib_asm:
+                ret.append(mod)
+        return ret
 
     def _get_gufunc_info(self, cres, fn):
         """ helper for gufunc IR/asm generation"""
@@ -2328,7 +2339,6 @@ class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
 
     def test_reduction(self):
         # issue4299
-        @njit(parallel=True)
         def test_impl(arr):
             return arr.sum()
 
@@ -2336,7 +2346,7 @@ class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
         self.check(test_impl, arr)
 
     def test_multiple_reduction_vars(self):
-        @njit(parallel=True)
+
         def test_impl(arr):
             a = 0.
             b = 1.
