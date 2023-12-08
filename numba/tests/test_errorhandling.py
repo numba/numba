@@ -476,10 +476,16 @@ class TestCapturedErrorHandling(SerialMixin, TestCase):
         code = f"""if 1:
             {runcode}\n
             """
+        # On windows, missing the base environment variable can cause
+        # Fatal Python error: _Py_HashRandomization_Init: failed to get random
+        #                     numbers to initialize Python
+        proc_env = os.environ.copy()
+        proc_env.update(env)
         popen = subprocess.Popen([sys.executable, "-Wall", "-c", code],
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE,
-                                 env=env)
+                                 env=proc_env)
+
         out, err = popen.communicate()
         if popen.returncode != 0:
             raise AssertionError("process failed with code %s: stderr follows"
