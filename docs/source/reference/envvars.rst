@@ -423,9 +423,9 @@ Compilation options
    large code model.
 
    This environment variable can be used to override the default setting and
-   force it to be enabled or disabled. This should not normally be required, but
-   it is provided as an option for debugging and potential workaround
-   situations.
+   force it to be enabled (``1``) or disabled (``0``). This should not normally
+   be required, but it is provided as an option for debugging and potential
+   workaround situations.
 
    *Default value:* None (Use the default for the system)
 
