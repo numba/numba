@@ -20,25 +20,21 @@ def assignments2(a):
 
 # Use cases for issue #503
 
-@njit((types.intp, types.intp))
 def var_propagate1(a, b):
     c = (a if a > b else b) + 5
     return c
 
 
-@njit((types.intp, types.intp))
 def var_propagate2(a, b):
     c = 5 + (a if a > b else b + 12) / 2.0
     return c
 
 
-@njit((types.intp, types.intp))
 def var_propagate3(a, b):
     c = 5 + (a > b and a or b)
     return c
 
 
-@njit((types.intp, types.intp))
 def var_propagate4(a, b):
     c = 5 + (a - 1 and b + 1) or (a + 1 and b - 1)
     return c
@@ -99,31 +95,35 @@ class TestDataFlow(TestCase):
         self.assertPreciseEqual(func(*args), func.py_func(*args))
 
     def test_var_propagate1(self):
-        self.run_propagate_func(var_propagate1, (2, 3))
-        self.run_propagate_func(var_propagate1, (3, 2))
+        cfunc = njit((types.intp, types.intp))(var_propagate1)
+        self.run_propagate_func(cfunc, (2, 3))
+        self.run_propagate_func(cfunc, (3, 2))
 
     def test_var_propagate2(self):
-        self.run_propagate_func(var_propagate2, (2, 3))
-        self.run_propagate_func(var_propagate2, (3, 2))
+        cfunc = njit((types.intp, types.intp))(var_propagate2)
+        self.run_propagate_func(cfunc, (2, 3))
+        self.run_propagate_func(cfunc, (3, 2))
 
     def test_var_propagate3(self):
-        self.run_propagate_func(var_propagate3, (2, 3))
-        self.run_propagate_func(var_propagate3, (3, 2))
-        self.run_propagate_func(var_propagate3, (2, 0))
-        self.run_propagate_func(var_propagate3, (-1, 0))
-        self.run_propagate_func(var_propagate3, (0, 2))
-        self.run_propagate_func(var_propagate3, (0, -1))
+        cfunc = njit((types.intp, types.intp))(var_propagate3)
+        self.run_propagate_func(cfunc, (2, 3))
+        self.run_propagate_func(cfunc, (3, 2))
+        self.run_propagate_func(cfunc, (2, 0))
+        self.run_propagate_func(cfunc, (-1, 0))
+        self.run_propagate_func(cfunc, (0, 2))
+        self.run_propagate_func(cfunc, (0, -1))
 
     def test_var_propagate4(self):
-        self.run_propagate_func(var_propagate4, (1, 1))
-        self.run_propagate_func(var_propagate4, (1, 0))
-        self.run_propagate_func(var_propagate4, (1, -1))
-        self.run_propagate_func(var_propagate4, (0, 1))
-        self.run_propagate_func(var_propagate4, (0, 0))
-        self.run_propagate_func(var_propagate4, (0, -1))
-        self.run_propagate_func(var_propagate4, (-1, 1))
-        self.run_propagate_func(var_propagate4, (-1, 0))
-        self.run_propagate_func(var_propagate4, (-1, -1))
+        cfunc = njit((types.intp, types.intp))(var_propagate4)
+        self.run_propagate_func(cfunc, (1, 1))
+        self.run_propagate_func(cfunc, (1, 0))
+        self.run_propagate_func(cfunc, (1, -1))
+        self.run_propagate_func(cfunc, (0, 1))
+        self.run_propagate_func(cfunc, (0, 0))
+        self.run_propagate_func(cfunc, (0, -1))
+        self.run_propagate_func(cfunc, (-1, 1))
+        self.run_propagate_func(cfunc, (-1, 0))
+        self.run_propagate_func(cfunc, (-1, -1))
 
     def test_chained_compare(self, flags=force_pyobj_jit_opt):
         pyfunc = chained_compare
