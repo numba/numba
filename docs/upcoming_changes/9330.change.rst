@@ -15,8 +15,9 @@ Maintainers of target extensions (those using the
 API in ``numba.core.target_extension`` to extend Numba support to
 custom/synthetic hardware) should note that the same can be deleted from
 target extension implementations of ``numba.core.descriptor.TargetDescriptor``
-if it present. i.e. the ``nested_context`` method and associated implementation
-details can just be removed from the custom target's ``TargetDescriptor``.
+if it is present. i.e. the ``nested_context`` method and associated
+implementation details can just be removed from the custom target's
+``TargetDescriptor``.
 
 Further, a bug was discovered, during the refactoring, in the typing of record
 arrays. It materialised that two record types that only differed in their
