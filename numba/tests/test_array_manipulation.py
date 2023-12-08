@@ -307,9 +307,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
                           array_transpose_axes,
                           array_transpose_axes_copy]
 
-        def run(pyfunc, arr, axes):
-            return pyfunc(arr, axes)
-
         @from_generic(pyfuncs_to_use)
         def check(pyfunc, arr, axes):
             expected = pyfunc.py_func(arr, axes)
