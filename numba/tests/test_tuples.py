@@ -200,9 +200,12 @@ class TestTuplePassing(TestCase):
         # Issue #1638: tuple size should be checked when unboxing
         tuple_type = types.UniTuple(types.int32, 2)
         cfunc = njit((tuple_type,))(tuple_first)
-        with self.assertRaises(TypeError) as raises:
-            cfunc((4, 5, 6))
-        self.assertIn("No matching definition", str(raises.exception),)
+        entry_point = cfunc.overloads[cfunc.signatures[0]].entry_point
+        with self.assertRaises(ValueError) as raises:
+            entry_point((4, 5, 6))
+        self.assertEqual(str(raises.exception),
+                         ("size mismatch for tuple, "
+                          "expected 2 element(s) but got 3"))
 
 
 class TestOperations(TestCase):
