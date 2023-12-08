@@ -1,0 +1,11 @@
+Fix issue with parfor reductions and Python 3.12.
+=================================================
+
+The parfor reduction code has certain expectations on the order of statements
+that it discovers, these are based on the code that previous versions of Numba
+generated.  With Python 3.12, one assignment that used to follow the
+reduction operator statement, such as a binop, is now moved to its own basic
+block.  This change reorders the set of discovered reduction nodes so that
+this assignment is right after the reduction operator as it was in previous
+Numba versions.  This only affects internal parfor reduction code and
+doesn't actually change the Numba IR.
