@@ -283,7 +283,7 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
             cres = cfunc.overloads[(arrty,)]
             got = cres.entry_point(arr)
             expected = cfunc.py_func(arr)
-            np.testing.assert_allclose(expected, got)
+            self.assertPreciseEqual(expected, got)
 
         arr = np.zeros(0, dtype=np.int32)
         arr = arr.reshape(0, 2)
