@@ -112,3 +112,10 @@ def _get_dyn_func(**jit_args):
 
 dyn_func = _get_dyn_func(nopython=True)
 dyn_func_objmode = _get_dyn_func(forceobj=True)
+
+
+__all__ = ['add_nopython', 'add_nopython_fail', 'add_with_sig',
+           'add_without_sig', 'closure', 'closure_calling_other_closure',
+           'closure_calling_other_function', 'closure_with_globals',
+           'dyn_func', 'dyn_func_objmode', 'generated_add',
+           'get_global_objmode', 'get_renamed_module', 'other_function',]

@@ -16,6 +16,14 @@ from numba.cloudpickle import dumps, loads
 
 class TestDispatcherPickling(TestCase):
 
+    def setUp(self):
+        super().setUp()
+        # delay import of these so as to not trigger e.g. deprecation warnings
+        # present on Numba decorator APIs on import.
+        import numba.tests.serialize_usecases as ucs
+        g = globals()
+        g.update({x: getattr(ucs, x) for x in ucs.__all__})
+
     def run_with_protocols(self, meth, *args, **kwargs):
         for proto in range(pickle.HIGHEST_PROTOCOL + 1):
             meth(proto, *args, **kwargs)

@@ -206,6 +206,16 @@ class TestCase(unittest.TestCase):
         with self.assertRaises(subprocess.CalledProcessError):
             self.get_testsuite_listing(['-g=ancest'], subp_kwargs=subp_kwargs)
 
+    def test_no_warnings_on_listing(self):
+        # Checks that the equivalent of ./runtests -l does not produce warnings
+        code = 'from numba.testing._runtests import _main; _main(["-l"])'
+        # See: https://github.com/numba/numba/issues/6831
+        # ignore bug in setuptools/packaging causing a deprecation warning
+        flags = ["-Werror", "-Wignore::DeprecationWarning:packaging.version:",
+                 "-Wignore::DeprecationWarning:numpy.distutils.misc_util:"]
+        cmd = [sys.executable, *flags, '-c', code]
+        subprocess.check_output(cmd)
+
     @unittest.skipUnless(has_pyyaml, "Requires pyyaml")
     def test_azure_config(self):
         from yaml import Loader
