@@ -160,9 +160,6 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         cfunc = njit((arrty,))(func)
         self.assertPreciseEqual(cfunc(arr), func(arr))
 
-    def check_array_flat_sum(self, arr, arrty):
-        self.check_array_unary(arr, arrty, array_flat_sum)
-
     def check_array_ndenumerate_sum(self, arr, arrty):
         self.check_array_unary(arr, arrty, array_ndenumerate_sum)
 
