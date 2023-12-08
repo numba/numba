@@ -515,6 +515,7 @@ The following top-level functions are supported:
 * :func:`numpy.kaiser`
 * :func:`numpy.iscomplex`
 * :func:`numpy.iscomplexobj`
+* :func:`numpy.isin` (only ``kind="sort"`` is supported)
 * :func:`numpy.isneginf`
 * :func:`numpy.isposinf`
 * :func:`numpy.isreal`
@@ -522,6 +523,7 @@ The following top-level functions are supported:
 * :func:`numpy.isscalar`
 * :func:`numpy.interp` (only the 3 first arguments)
 * :func:`numpy.intersect1d` (only 3 first arguments: ``ar1``, ``ar2``, and ``assume_unique``)
+* :func:`numpy.in1d` (only ``kind="sort"`` is supported)
 * :func:`numpy.linspace` (only the 3-argument form)
 * :func:`numpy.logspace` (only the 3 first arguments)
 * :func:`numpy.nan_to_num` (only the 3 first arguments)
@@ -548,7 +550,6 @@ The following top-level functions are supported:
   can only contain arrays (unlike NumPy that also accepts tuples).
 * :func:`numpy.setxor1d`
 * :func:`numpy.setdiff1d`
-* :func:`numpy.in1d` (only ``kind="sort"`` is supported)
 * :func:`numpy.shape`
 * :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments, quicksort accepts

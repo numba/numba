@@ -4851,6 +4851,8 @@ def jit_np_setxor1d(ar1, ar2, assume_unique=False):
     if not (isinstance(assume_unique, (types.Boolean, bool))):
         raise TypingError('setxor1d: Argument assume_unique must be boolean')
 
+    # https://github.com/numpy/numpy/blob/
+    # 03b62604eead0f7d279a5a4c094743eb29647368/numpy/lib/arraysetops.py#L477
     def np_setxor1d_impl(ar1, ar2, assume_unique=False):
         a = np.asarray(ar1)
         b = np.asarray(ar2)
@@ -4862,7 +4864,7 @@ def jit_np_setxor1d(ar1, ar2, assume_unique=False):
             a = a.ravel()
             b = b.ravel()
 
-        # Implementation very similar to np_intersects1d_impl:
+        # Implementation very similar to np_intersect1d_impl:
         # We want union minus the intersect
         aux = np.concatenate((a, b))
         aux.sort()
@@ -4883,6 +4885,8 @@ def jit_np_setdiff1d(ar1, ar2, assume_unique=False):
     if not (isinstance(assume_unique, (types.Boolean, bool))):
         raise TypingError('setdiff1d: Argument assume_unique must be boolean')
 
+    # https://github.com/numpy/numpy/blob/
+    # 03b62604eead0f7d279a5a4c094743eb29647368/numpy/lib/arraysetops.py#L940
     def np_setdiff1d_impl(ar1, ar2, assume_unique=False):
         ar1 = np.asarray(ar1)
         ar2 = np.asarray(ar2)
@@ -4908,20 +4912,37 @@ def jit_np_in1d(ar1, ar2, assume_unique=False, invert=False, kind="sort"):
     if not (isinstance(kind, (types.UnicodeType, str))):
         raise TypingError('in1d: Argument "kind" must be string')
 
+    # https://github.com/numpy/numpy/blob/
+    # 03b62604eead0f7d279a5a4c094743eb29647368/numpy/lib/arraysetops.py#L525
     def np_in1d_impl(ar1, ar2, assume_unique=False, invert=False, kind="sort"):
         if kind != "sort":
             raise ValueError('Only kind="sort" is supported')
 
+        # Ravel both arrays, behavior for the first array could be different
         ar1 = np.asarray(ar1).ravel()
-        ar2 = np.asarray(ar2)
+        ar2 = np.asarray(ar2).ravel()
 
-        if assume_unique:
-            # Ravel both arrays, behavior for the first array could be different
-            ar1 = ar1.ravel()
-            ar2 = ar2.ravel()
-        else:
-            # Otherwise use sorting
+        # This code is run when
+        # a) the first condition is true, making the code significantly faster
+        # b) the second condition is true (i.e. `ar1` or `ar2` may contain
+        #    arbitrary objects), since then sorting is not guaranteed to work
+        if len(ar2) < 10 * len(ar1) ** 0.145:
+            if invert:
+                mask = np.ones(len(ar1), dtype=np.bool_)
+                for a in ar2:
+                    mask &= (ar1 != a)
+            else:
+                mask = np.zeros(len(ar1), dtype=np.bool_)
+                for a in ar2:
+                    mask |= (ar1 == a)
+            return mask
+
+        # Otherwise use sorting
+        if not assume_unique:
             # Equivalent to ar1, inv_idx = np.unique(ar1, return_inverse=True)
+            # https://github.com/numpy/numpy/blob/
+            # 03b62604eead0f7d279a5a4c094743eb29647368/
+            # numpy/lib/arraysetops.py#L358C8-L358C8
             order1 = np.argsort(ar1)
             aux = ar1[order1]
             mask = np.empty(aux.shape, dtype=np.bool_)
@@ -4955,3 +4976,28 @@ def jit_np_in1d(ar1, ar2, assume_unique=False, invert=False, kind="sort"):
             return ret[inv_idx]
 
     return np_in1d_impl
+
+
+@overload(np.isin)
+def jit_np_isin(element, test_elements, assume_unique=False, invert=False,
+                kind="sort"):
+    if not (type_can_asarray(element) or type_can_asarray(test_elements)):
+        raise TypingError('in1d: first two args must be array-like')
+    if not (isinstance(assume_unique, (types.Boolean, bool))):
+        raise TypingError('in1d: Argument "assume_unique" must be boolean')
+    if not (isinstance(invert, (types.Boolean, bool))):
+        raise TypingError('in1d: Argument "invert" must be boolean')
+    if not (isinstance(kind, (types.UnicodeType, str))):
+        raise TypingError('in1d: Argument "kind" must be string')
+
+    # https://github.com/numpy/numpy/blob/
+    # 03b62604eead0f7d279a5a4c094743eb29647368/numpy/lib/arraysetops.py#L889
+    def np_isin_impl(element, test_elements, assume_unique=False, invert=False,
+                     kind="sort"):
+        if kind != "sort":
+            raise ValueError('Only kind="sort" is supported')
+        element = np.asarray(element)
+        return np.in1d(element, test_elements, assume_unique=assume_unique,
+                       invert=invert).reshape(element.shape)
+
+    return np_isin_impl

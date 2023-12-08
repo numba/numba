@@ -512,6 +512,22 @@ def np_in1d_4(a, b, assume_unique=False, invert=False):
     return np.in1d(a, b, assume_unique, invert)
 
 
+def np_isin_2(a, b):
+    return np.isin(a, b)
+
+
+def np_isin_3a(a, b, assume_unique=False):
+    return np.isin(a, b, assume_unique)
+
+
+def np_isin_3b(a, b, invert=False):
+    return np.isin(a, b, invert)
+
+
+def np_isin_4(a, b, assume_unique=False, invert=False):
+    return np.isin(a, b, assume_unique, invert)
+
+
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
     Tests for various Numpy functions.
@@ -6363,7 +6379,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield [1, 2], [2, 1]
             yield [1, 2, 3], [1, 2, 3]
             yield [2, 3, 4, 0], [3, 1]
-            yield [2, 3], [1, 2, 5, 6, 7, 8, 9]
+            yield [2, 3], np.arange(20)  # Test the "sorting" method.
+            yield [2, 3], np.tile(np.arange(5), 4)
 
         for a, b in arrays():
             check(a, b)
@@ -6391,7 +6408,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield [1, 2], [2, 1]
             yield [1, 2, 3], [1, 2, 3]
             yield [2, 3, 4, 0], [3, 1]
-            yield [2, 3], [1, 2, 5, 6, 7, 8, 9]
+            yield [2, 3], np.arange(20)  # Test the "sorting" method.
+            yield [2, 3], np.tile(np.arange(5), 4)
 
         for a, b in arrays():
             check(a, b)
@@ -6421,7 +6439,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield [1, 2], [2, 1]
             yield [1, 2, 3], [1, 2, 3]
             yield [2, 3, 4, 0], [3, 1]
-            yield [2, 3], [1, 2, 5, 6, 7, 8, 9]
+            yield [2, 3], np.arange(20)  # Test the "sorting" method.
+            yield [2, 3], np.tile(np.arange(5), 4)
 
         for a, b in arrays():
             check(a, b, invert=False)
@@ -6450,7 +6469,139 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield [1, 2], [2, 1]
             yield [1, 2, 3], [1, 2, 3]
             yield [2, 3, 4, 0], [3, 1]
-            yield [2, 3], [1, 2, 5, 6, 7, 8, 9]
+            yield [2, 3], np.arange(20)  # Test the "sorting" method.
+            yield [2, 3], np.tile(np.arange(5), 4)
+
+        for a, b in arrays():
+            check(a, b, invert=False)
+            check(a, b, invert=True)
+            if len(np.unique(a)) == len(a) and len(np.unique(b)) == len(b):
+                check(a, b, assume_unique=True, invert=False)
+                check(a, b, assume_unique=True, invert=True)
+
+    def test_isin_2(self):
+        np_pyfunc = np_isin_2
+        np_nbfunc = njit(np_pyfunc)
+
+        def check(ar1, ar2):
+            ar1 = np.atleast_2d(np.array(ar1, dtype=np.int64))
+            ar2 = np.array(ar2, dtype=np.int64)
+            expected = np_pyfunc(ar1, ar2)
+            got = np_nbfunc(ar1, ar2)
+            self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
+
+        def arrays():
+            yield [], []  # two empty arrays
+            yield [[]], [] # two-dim array - shape (1, 0)
+            yield np.zeros((0, 0), dtype=np.int64), []
+            yield np.zeros((0, 1), dtype=np.int64), []
+            yield [1], []  # empty right
+            yield [], [1]  # empty left
+            yield [1], [2]  # singletons - False
+            yield [1], [1]  # singletons - True
+            yield [1, 2], [1]
+            yield [1, 2, 2], [2, 2]
+            yield [1, 2, 2], [2, 2, 3]
+            yield [1, 2], [2, 1]
+            yield [2, 3], np.arange(20)  # Test the "sorting" method.
+            yield [2, 3], np.tile(np.arange(5), 4)
+            yield np.arange(30).reshape(2, 3, 5), [5, 7, 10, 15] # 3d
+
+        for a, b in arrays():
+            check(a, b)
+
+    def test_isin_3a(self):
+        np_pyfunc = np_isin_3a
+        np_nbfunc = njit(np_pyfunc)
+
+        def check(ar1, ar2, assume_unique=False):
+            ar1 = np.atleast_2d(np.array(ar1, dtype=np.int64))
+            ar2 = np.array(ar2, dtype=np.int64)
+            expected = np_pyfunc(ar1, ar2, assume_unique)
+            got = np_nbfunc(ar1, ar2, assume_unique)
+            self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
+
+        def arrays():
+            yield [], []  # two empty arrays
+            yield [[]], []  # two-dim array - shape (1, 0)
+            yield np.zeros((0, 0), dtype=np.int64), []
+            yield np.zeros((0, 1), dtype=np.int64), []
+            yield [1], []  # empty right
+            yield [], [1]  # empty left
+            yield [1], [2]  # singletons - False
+            yield [1], [1]  # singletons - True
+            yield [1, 2], [1]
+            yield [1, 2, 2], [2, 2]
+            yield [1, 2, 2], [2, 2, 3]
+            yield [1, 2], [2, 1]
+            yield [2, 3], np.arange(20)  # Test the "sorting" method.
+            yield [2, 3], np.tile(np.arange(5), 4)
+            yield np.arange(30).reshape(2, 3, 5), [5, 7, 10, 15]  # 3d
+
+        for a, b in arrays():
+            check(a, b)
+            if len(np.unique(a)) == len(a) and len(np.unique(b)) == len(b):
+                check(a, b, assume_unique=True)
+
+    def test_isin_3b(self):
+        np_pyfunc = np_isin_3b
+        np_nbfunc = njit(np_pyfunc)
+
+        def check(ar1, ar2, invert=False):
+            ar1 = np.atleast_2d(np.array(ar1, dtype=np.int64))
+            ar2 = np.array(ar2, dtype=np.int64)
+            expected = np_pyfunc(ar1, ar2, invert)
+            got = np_nbfunc(ar1, ar2, invert)
+            self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
+
+        def arrays():
+            yield [], []  # two empty arrays
+            yield [[]], []  # two-dim array - shape (1, 0)
+            yield np.zeros((0, 0), dtype=np.int64), []
+            yield np.zeros((0, 1), dtype=np.int64), []
+            yield [1], []  # empty right
+            yield [], [1]  # empty left
+            yield [1], [2]  # singletons - False
+            yield [1], [1]  # singletons - True
+            yield [1, 2], [1]
+            yield [1, 2, 2], [2, 2]
+            yield [1, 2, 2], [2, 2, 3]
+            yield [1, 2], [2, 1]
+            yield [2, 3], np.arange(20)  # Test the "sorting" method.
+            yield [2, 3], np.tile(np.arange(5), 4)
+            yield np.arange(30).reshape(2, 3, 5), [5, 7, 10, 15]  # 3d
+
+        for a, b in arrays():
+            check(a, b, invert=False)
+            check(a, b, invert=True)
+
+    def test_isin_4(self):
+        np_pyfunc = np_isin_4
+        np_nbfunc = njit(np_pyfunc)
+
+        def check(ar1, ar2, assume_unique=False, invert=False):
+            ar1 = np.atleast_2d(np.array(ar1, dtype=np.int64))
+            ar2 = np.array(ar2, dtype=np.int64)
+            expected = np_pyfunc(ar1, ar2, assume_unique, invert)
+            got = np_nbfunc(ar1, ar2, assume_unique, invert)
+            self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
+
+        def arrays():
+            yield [], []  # two empty arrays
+            yield [[]], []  # two-dim array - shape (1, 0)
+            yield np.zeros((0, 0), dtype=np.int64), []
+            yield np.zeros((0, 1), dtype=np.int64), []
+            yield [1], []  # empty right
+            yield [], [1]  # empty left
+            yield [1], [2]  # singletons - False
+            yield [1], [1]  # singletons - True
+            yield [1, 2], [1]
+            yield [1, 2, 2], [2, 2]
+            yield [1, 2, 2], [2, 2, 3]
+            yield [1, 2], [2, 1]
+            yield [2, 3], np.arange(20)  # Test the "sorting" method.
+            yield [2, 3], np.tile(np.arange(5), 4)
+            yield np.arange(30).reshape(2, 3, 5), [5, 7, 10, 15]  # 3d
 
         for a, b in arrays():
             check(a, b, invert=False)
