@@ -1178,7 +1178,8 @@ class CPUCodegen(Codegen):
         self._tm_features = self._customize_tm_features()
         self._customize_tm_options(tm_options)
         tm = target.create_target_machine(**tm_options)
-        engine = ll.create_mcjit_compiler(llvm_module, tm)
+        use_lmm = config.USE_LLVMLITE_MEMORY_MANAGER
+        engine = ll.create_mcjit_compiler(llvm_module, tm, use_lmm=use_lmm)
 
         if config.ENABLE_PROFILING:
             engine.enable_jit_events()

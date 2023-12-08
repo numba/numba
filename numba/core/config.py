@@ -557,6 +557,11 @@ class _EnvReloader(object):
             "all" if LLVM_REFPRUNE_PASS else "",
         )
 
+        # llvmlite memory manager
+        USE_LLVMLITE_MEMORY_MANAGER = _readenv(
+            "NUMBA_USE_LLVMLITE_MEMORY_MANAGER", int, None
+        )
+
         # Timing support.
 
         # LLVM_PASS_TIMINGS enables LLVM recording of pass timings.
