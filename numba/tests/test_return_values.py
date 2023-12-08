@@ -35,7 +35,7 @@ class TestReturnValues(unittest.TestCase):
             result = cfunc()
             self.assertEqual(result, abs)
         else:
-            cfunc()
+            self.fail("Unexpected successful compilation.")
 
     def test_nopython_func_npm(self):
         with self.assertRaises(NumbaTypeError):
@@ -49,7 +49,7 @@ class TestReturnValues(unittest.TestCase):
             result = cfunc()
             self.assertEqual(result, open)
         else:
-            cfunc()
+            self.fail("Unexpected successful compilation.")
 
     def test_pyobj_func_npm(self):
         with self.assertRaises(TypingError):
@@ -63,7 +63,7 @@ class TestReturnValues(unittest.TestCase):
             result = cfunc()
             self.assertEqual(result, math.floor)
         else:
-            cfunc()
+            self.fail("Unexpected successful compilation.")
 
     def test_module_func_npm(self):
         with self.assertRaises(NumbaTypeError):
