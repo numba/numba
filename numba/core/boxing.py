@@ -1230,11 +1230,9 @@ def unbox_numpy_random_bitgenerator(typ, obj, c):
 
             # Want to do ctypes.cast(CFunctionType, ctypes.c_void_p), create an
             # args tuple for that.
-            extra_refs.append(ct_voidptr_ty)
             args = c.pyapi.tuple_pack([interface_next_fn, ct_voidptr_ty])
             with cgutils.early_exit_if_null(c.builder, stack, args):
                 handle_failure()
-            extra_refs.append(ct_voidptr_ty)
 
             # Call ctypes.cast()
             interface_next_fn_casted = c.pyapi.call(ct_cast, args)

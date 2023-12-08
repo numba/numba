@@ -88,7 +88,7 @@ def from_dtype(dtype):
     Return a Numba Type instance corresponding to the given Numpy *dtype*.
     NotImplementedError is raised on unsupported Numpy dtypes.
     """
-    if type(dtype) == type and issubclass(dtype, np.generic):
+    if type(dtype) is type and issubclass(dtype, np.generic):
         dtype = np.dtype(dtype)
     elif getattr(dtype, "fields", None) is not None:
         return from_struct_dtype(dtype)
@@ -729,3 +729,44 @@ def check_is_integer(v, name):
     """Raises TypingError if the value is not an integer."""
     if not isinstance(v, (int, types.Integer)):
         raise TypingError('{} must be an integer'.format(name))
+
+
+def lt_floats(a, b):
+    # Adapted from NumPy commit 717c7acf which introduced the behavior of
+    # putting NaNs at the end.
+    # The code is later moved to numpy/core/src/npysort/npysort_common.h
+    # This info is gathered as of NumPy commit d8c09c50
+    return a < b or (np.isnan(b) and not np.isnan(a))
+
+
+def lt_complex(a, b):
+    if np.isnan(a.real):
+        if np.isnan(b.real):
+            if np.isnan(a.imag):
+                return False
+            else:
+                if np.isnan(b.imag):
+                    return True
+                else:
+                    return a.imag < b.imag
+        else:
+            return False
+
+    else:
+        if np.isnan(b.real):
+            return True
+        else:
+            if np.isnan(a.imag):
+                if np.isnan(b.imag):
+                    return a.real < b.real
+                else:
+                    return False
+            else:
+                if np.isnan(b.imag):
+                    return True
+                else:
+                    if a.real < b.real:
+                        return True
+                    elif a.real == b.real:
+                        return a.imag < b.imag
+                    return False

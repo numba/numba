@@ -29,4 +29,5 @@ Developer Manual
    debugging.rst
    event_api.rst
    target_extension.rst
+   bytecode.rst
    mission.rst

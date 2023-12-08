@@ -46,7 +46,7 @@ from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                       override_env_config, linux_only, tag,
                       skip_parfors_unsupported, _32bit, needs_blas,
                       needs_lapack, disabled_test, skip_unless_scipy,
-                      needs_subprocess)
+                      needs_subprocess, expected_failure_py312)
 from numba.core.extending import register_jitable
 from numba.core.bytecode import _fix_LOAD_GLOBAL_arg
 from numba.core import utils
@@ -2301,6 +2301,33 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, 15)
         self.assertEqual(countParfors(test_impl, (types.int64, )), 2)
 
+    def test_issue9029(self):
+        # issue9029: too many parfors executed in one function
+        # overflowed the stack.
+        def test_impl(i1, i2):
+            N = 30
+            S = 3
+            a = np.empty((N,N))
+            # The stack should overflow if there are 30*30*2 (# of parfors)
+            # iterations.
+            for y in range(N):
+                for x in range(N):
+                    values = np.ones(S)
+                    v = values[0]
+
+                    p2 = np.empty(S)
+                    for i in prange(i1, i2):
+                        p2[i] = 1
+                    j = p2[0]
+
+                    a[y,x] = v + j
+            return a
+
+        # We pass in 0 and 3 so that the function can't analyze the loop
+        # bounds on the prange to generate a signed loop whereas the
+        # np.ones will be an unsigned loop.
+        self.check(test_impl, 0, 3)
+
     def test_fusion_no_side_effects(self):
         def test_impl(a, b):
             X = np.ones(100)
@@ -2310,6 +2337,44 @@ class TestParfors(TestParforsBase):
             return X + Y + c
         self.check(test_impl, 3.7, 4.3)
         self.assertEqual(countParfors(test_impl, (types.float64, types.float64)), 1)
+
+    def test_issue9256_lower_sroa_conflict(self):
+        @njit(parallel=True)
+        def def_in_loop(x):
+            c = 0
+            set_num_threads(1)
+            for i in prange(x):
+                c = i
+            return c
+
+        self.assertEqual(def_in_loop(10), def_in_loop.py_func(10))
+
+    def test_issue9256_lower_sroa_conflict_variant1(self):
+        def def_in_loop(x):
+            c = x
+            set_num_threads(1)
+            for _i in prange(x):
+                if c: # forces 3 SSA versions
+                    d = x + 4
+            return c, d > 0
+
+        expected = def_in_loop(4)
+        self.assertEqual(expected, njit(parallel=False)(def_in_loop)(4))
+        self.assertEqual(expected, njit(parallel=True)(def_in_loop)(4))
+
+    def test_issue9256_lower_sroa_conflict_variant2(self):
+        def def_in_loop(x):
+            c = x
+            set_num_threads(1)
+            for _i in prange(x):
+                if c:
+                    for _j in range(x): # forces 4 SSA versions
+                        d = x + 4
+            return c, d > 0
+
+        expected = def_in_loop(4)
+        self.assertEqual(expected, njit(parallel=False)(def_in_loop)(4))
+        self.assertEqual(expected, njit(parallel=True)(def_in_loop)(4))
 
 
 @skip_parfors_unsupported
@@ -3183,6 +3248,45 @@ class TestParforsMisc(TestParforsBase):
             return buf
         self.check(test_impl)
 
+    def test_issue_9182_recursion_error(self):
+        from numba.types import ListType, Tuple, intp
+
+        @numba.njit
+        def _sink(x):
+            pass
+
+
+        @numba.njit(cache=False, parallel=True)
+        def _ground_node_rule(
+            clauses,
+            nodes,
+        ):
+            for piter in prange(len(nodes)):
+                for clause in clauses:
+                    clause_type = clause[0]
+                    clause_variables = clause[2]
+                    if clause_type == 0:
+                        clause_var_1 = clause_variables[0]
+                    elif len(clause_variables) == 2:
+                        clause_var_1, clause_var_2 = (
+                            clause_variables[0],
+                            clause_variables[1],
+                        )
+
+                    elif len(clause_variables) == 4:
+                        pass
+
+                    if clause_type == 1:
+                        _sink(clause_var_1)
+                        _sink(clause_var_2)
+
+        _ground_node_rule.compile(
+            (
+                ListType(Tuple([intp, intp, ListType(intp)])),
+                ListType(intp),
+            )
+        )
+
 
 @skip_parfors_unsupported
 class TestParforsDiagnostics(TestParforsBase):
@@ -3392,9 +3496,13 @@ class TestPrangeBase(TestParforsBase):
             prange_names.append('prange')
             prange_names = tuple(prange_names)
             prange_idx = len(prange_names) - 1
-            if utils.PYVERSION == (3, 11):
+            if utils.PYVERSION in ((3, 11), (3, 12)):
                 # this is the inverse of _fix_LOAD_GLOBAL_arg
                 prange_idx = 1 + (prange_idx << 1)
+            elif utils.PYVERSION in ((3, 9), (3, 10)):
+                pass
+            else:
+                raise NotImplementedError(utils.PYVERSION)
             new_code = bytearray(pyfunc_code.co_code)
             assert len(patch_instance) <= len(range_locations)
             # patch up the new byte code
@@ -3932,6 +4040,7 @@ class TestPrangeBasic(TestPrangeBase):
 class TestPrangeSpecific(TestPrangeBase):
     """ Tests specific features/problems found under prange"""
 
+    @expected_failure_py312
     def test_prange_two_instances_same_reduction_var(self):
         # issue4922 - multiple uses of same reduction variable
         def test_impl(n):
@@ -3943,6 +4052,7 @@ class TestPrangeSpecific(TestPrangeBase):
             return c
         self.prange_tester(test_impl, 9)
 
+    @expected_failure_py312
     def test_prange_conflicting_reduction_ops(self):
         def test_impl(n):
             c = 0
@@ -4059,9 +4169,9 @@ class TestPrangeSpecific(TestPrangeBase):
         cres = self.compile_parallel_fastmath(pfunc, ())
         ir = self._get_gufunc_ir(cres)
         _id = '%[A-Z_0-9]?(.[0-9]+)+[.]?[i]?'
-        recipr_str = '\s+%s = fmul fast double %s, 5.000000e-01'
+        recipr_str = r'\s+%s = fmul fast double %s, 5.000000e-01'
         reciprocal_inst = re.compile(recipr_str % (_id, _id))
-        fadd_inst = re.compile('\s+%s = fadd fast double %s, %s'
+        fadd_inst = re.compile(r'\s+%s = fadd fast double %s, %s'
                                % (_id, _id, _id))
         # check there is something like:
         #  %.329 = fmul fast double %.325, 5.000000e-01
@@ -4510,7 +4620,7 @@ class TestParforsVectorizer(TestPrangeBase):
             asm = self._get_gufunc_asm(cres)
 
             if assertions:
-                schedty = re.compile('call\s+\w+\*\s+@do_scheduling_(\w+)\(')
+                schedty = re.compile(r'call\s+\w+\*\s+@do_scheduling_(\w+)\(')
                 matches = schedty.findall(cres.library.get_llvm_str())
                 self.assertGreaterEqual(len(matches), 1) # at least 1 parfor call
                 self.assertEqual(matches[0], schedule_type)

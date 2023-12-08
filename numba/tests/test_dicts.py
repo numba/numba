@@ -69,7 +69,7 @@ class TestCompiledDict(TestCase):
 
         expected = dict({1: 2})
         got = ctor()
-        self.assertEquals(expected, got)
+        self.assertEqual(expected, got)
 
     def test_unsupported_dict_usage(self):
         # Test dict(dict())

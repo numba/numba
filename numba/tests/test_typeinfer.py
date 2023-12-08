@@ -1,11 +1,12 @@
 import os, sys, subprocess
+import dis
 import itertools
 
 import numpy as np
 
 import numba
 from numba.core.compiler import compile_isolated
-from numba import jit
+from numba import jit, njit
 from numba.core import errors, ir, types, typing, typeinfer, utils
 from numba.core.typeconv import Conversion
 from numba.extending import overload_method
@@ -30,6 +31,11 @@ f32 = types.float32
 f64 = types.float64
 c64 = types.complex64
 c128 = types.complex128
+
+skip_unless_load_fast_and_clear = unittest.skipUnless(
+    "LOAD_FAST_AND_CLEAR" in dis.opmap,
+    "Requires LOAD_FAST_AND_CLEAR opcode",
+)
 
 
 class TestArgRetCasting(unittest.TestCase):
@@ -735,6 +741,70 @@ class TestMiscIssues(TestCase):
             info = tmplt.get_template_info(tmplt)
             py_file = info["filename"]
             self.assertIn("test_typeinfer.py", py_file)
+
+    @skip_unless_load_fast_and_clear
+    def test_load_fast_and_clear(self):
+        @njit
+        def foo(a):
+            [x for x in (0,)]
+            if a:
+                # the test code cannot use a constant here due to constant
+                # propagation issues.
+                x = 3 + a
+            x += 10
+            return x
+
+        self.assertEqual(foo(True), foo.py_func(True))
+        # Interpreted version should raise an exception
+        with self.assertRaises(UnboundLocalError):
+            foo.py_func(False)
+        # Compiled version returns 10 as x is zero initialized.
+        self.assertEqual(foo(False), 10)
+
+    @skip_unless_load_fast_and_clear
+    def test_load_fast_and_clear_variant_2(self):
+        @njit
+        def foo():
+            # The use of a literal False triggers different bytecode generation
+            # necessary for this test. See test_load_fast_and_clear_variant_4.
+            if False:
+                x = 1
+            [x for x in (1,)]
+            # This return uses undefined variable
+            return x
+
+        with self.assertRaises(errors.TypingError) as raises:
+            foo()
+        self.assertIn("return value is undefined", str(raises.exception))
+
+    @skip_unless_load_fast_and_clear
+    def test_load_fast_and_clear_variant_3(self):
+        @njit
+        def foo():
+            # The use of a literal False triggers different bytecode generation
+            # necessary for this test. See test_load_fast_and_clear_variant_4.
+            if False:
+                x = 1
+            [x for x in (1,)]
+            # This print uses undefined variable
+            print(1, 2, 3, x)
+
+        with self.assertRaises(errors.TypingError) as raises:
+            foo()
+        self.assertIn("undefined variable used in call argument #4", str(raises.exception))
+
+    @skip_unless_load_fast_and_clear
+    def test_load_fast_and_clear_variant_4(self):
+        @njit
+        def foo(a):
+            # This test variant is to show that non-literal boolean value here
+            # produces a different behavior.
+            if a:
+                x = a
+            [x for x in (1,)]
+            return x
+        self.assertEqual(foo(123), 123)
+        self.assertEqual(foo(0), 0)
 
 
 class TestFoldArguments(unittest.TestCase):

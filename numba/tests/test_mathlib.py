@@ -515,7 +515,7 @@ class TestMathLib(TestCase):
 
             with warnings.catch_warnings():
                 warnings.simplefilter("error", RuntimeWarning)
-                self.assertRaisesRegexp(RuntimeWarning,
+                self.assertRaisesRegex(RuntimeWarning,
                                         'overflow encountered in .*scalar',
                                         naive_hypot, val, val)
 

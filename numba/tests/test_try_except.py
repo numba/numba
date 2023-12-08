@@ -12,7 +12,8 @@ from numba.core.errors import (
 )
 from numba.tests.support import (
     TestCase, unittest, captured_stdout, MemoryLeakMixin,
-    skip_parfors_unsupported, skip_unless_scipy, expected_failure_py311
+    skip_parfors_unsupported, skip_unless_scipy, expected_failure_py311,
+    expected_failure_py312
 )
 
 
@@ -668,7 +669,7 @@ class TestTryExceptRefct(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             udt()
-        self.assertRegexpMatches(
+        self.assertRegex(
             str(raises.exception),
             r"Cannot refine type|cannot safely cast unicode_type to int(32|64)"
         )
@@ -690,6 +691,7 @@ class TestTryExceptOtherControlFlow(TestCase):
         self.assertEqual(list(udt(10, 10)), list(range(10)))
 
     @expected_failure_py311
+    @expected_failure_py312
     def test_objmode(self):
         @njit
         def udt():
@@ -709,6 +711,7 @@ class TestTryExceptOtherControlFlow(TestCase):
         )
 
     @expected_failure_py311
+    @expected_failure_py312
     def test_objmode_output_type(self):
         def bar(x):
             return np.asarray(list(reversed(x.tolist())))

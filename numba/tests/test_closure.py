@@ -473,6 +473,24 @@ class TestInlinedClosure(TestCase):
             regex = r'closure__locals__bar_v[0-9]+.x'
             self.assertRegex(name, regex)
 
+    def test_issue9222(self):
+        # Ensures that float default arguments are handled correctly in
+        # closures.
+
+        @njit
+        def foo():
+            def bar(x, y=1.1):
+                return x + y
+            return bar
+
+        @njit
+        def consume():
+            return foo()(4)
+
+        # In Issue #9222, the result was completely wrong - 15 instead of 5.1 -
+        # so allclose should be sufficient for comparison here.
+        np.testing.assert_allclose(consume(), 4 + 1.1)
+
 
 class TestObjmodeFallback(TestCase):
     # These are all based on tests from real life issues where, predominantly,
@@ -496,6 +514,7 @@ class TestObjmodeFallback(TestCase):
         for d in self.decorators:
             d(numbaFailure)(x, y)
 
+    @unittest.skip("Test to be removed along with objmode fallback support")
     def test_issue3239(self):
 
         def fit(X, y):
@@ -523,6 +542,7 @@ class TestObjmodeFallback(TestCase):
                       np.arange(10).reshape(1, 10))
             np.testing.assert_equal(res, exp)
 
+    @unittest.skip("Test to be removed along with objmode fallback support")
     def test_issue3289(self):
         b = [(5, 124), (52, 5)]
 

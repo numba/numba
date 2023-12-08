@@ -111,7 +111,7 @@ reduction, accumulation or broadcasting.  Using the example above:
    `Standard features of ufuncs <http://docs.scipy.org/doc/numpy/reference/ufuncs.html#ufunc>`_ (NumPy documentation).
 
 .. note::
-   Only the broadcasting features of ufuncs are supported in compiled code.
+   Only the broadcasting and reduce features of ufuncs are supported in compiled code.
 
 The :func:`~numba.vectorize` decorator supports multiple ufunc targets:
 
@@ -140,6 +140,16 @@ The "cuda" target works well for big data sizes (approx. greater than 1MB) and
 high compute intensity algorithms.  Transferring memory to and from the GPU adds
 significant overhead.
 
+
+Starting in Numba 0.59, the ``cpu`` target supports the following attributes
+and methods in compiled code:
+
+- ``ufunc.nin``
+- ``ufunc.nout``
+- ``ufunc.nargs``
+- ``ufunc.identity``
+- ``ufunc.signature``
+- ``ufunc.reduce()`` (only the first 5 arguments - experimental feature)
 
 .. _guvectorize:
 

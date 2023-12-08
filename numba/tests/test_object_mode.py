@@ -123,6 +123,14 @@ class TestObjectMode(TestCase):
         self.assertEqual(got, tuple(arg))
         self.assertEqual(got, expect)
 
+    def test_expr_undef(self):
+        @jit(forceobj=True)
+        def foo():
+            # In Py3.12, this will emit a Expr.undef.
+            return [x for x in (1, 2)]
+
+        self.assertEqual(foo(), foo.py_func())
+
 
 class TestObjectModeInvalidRewrite(TestCase):
     """

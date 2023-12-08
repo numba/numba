@@ -1,4 +1,0 @@
-Added support for functions np.polynomial.polyutils.trimseq(), as well as functions polyadd(), polysub(), polymul() from np.polynomial.polynomial.
-==================================================================================================================================================
-
-Support is added for ``np.polynomial.polyutils.trimseq()``, ``np.polynomial.polynomial.polyadd()``, ``np.polynomial.polynomial.polysub()``, ``np.polynomial.polynomial.polymul()``.

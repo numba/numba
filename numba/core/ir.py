@@ -563,6 +563,15 @@ class Expr(Inst):
         return cls(op=op, loc=loc)
 
     @classmethod
+    def undef(cls, loc):
+        """
+        A node for undefined value specifically from LOAD_FAST_AND_CLEAR opcode.
+        """
+        assert isinstance(loc, Loc)
+        op = 'undef'
+        return cls(op=op, loc=loc)
+
+    @classmethod
     def dummy(cls, op, info, loc):
         """
         A node for a dummy value.
@@ -1127,6 +1136,11 @@ class Var(EqualityCheckMixin, AbstractRHS):
         """All known versioned and unversioned names for this variable
         """
         return self.versioned_names | {self.unversioned_name,}
+
+    def __deepcopy__(self, memo):
+        out = Var(copy.deepcopy(self.scope, memo), self.name, self.loc)
+        memo[id(self)] = out
+        return out
 
 
 class Scope(EqualityCheckMixin):

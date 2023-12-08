@@ -44,7 +44,7 @@ class TestJITMethod(unittest.TestCase):
                 return self.x0
 
         something = Something(3)
-        self.assertEquals(Something.method(something), 3)
+        self.assertEqual(Something.method(something), 3)
 
 
 class TestDisabledJIT(unittest.TestCase):

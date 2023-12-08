@@ -321,7 +321,7 @@ def _set_init_process_lock():
             "this initialization sequence/module import is deferred to the "
             "user! ***\n"
         )
-        warnings.warn(msg % str(e))
+        warnings.warn(msg % str(e), errors.NumbaSystemWarning)
 
         _backend_init_process_lock = _nop()
 
@@ -515,6 +515,8 @@ def _launch_threads():
             ll.add_symbol('numba_parallel_for', lib.parallel_for)
             ll.add_symbol('do_scheduling_signed', lib.do_scheduling_signed)
             ll.add_symbol('do_scheduling_unsigned', lib.do_scheduling_unsigned)
+            ll.add_symbol('allocate_sched', lib.allocate_sched)
+            ll.add_symbol('deallocate_sched', lib.deallocate_sched)
 
             launch_threads = CFUNCTYPE(None, c_int)(lib.launch_threads)
             launch_threads(NUM_THREADS)

@@ -5,7 +5,9 @@ import traceback
 from numba.core.compiler import compile_isolated, Flags
 from numba import jit, njit
 from numba.core import types, errors
-from numba.tests.support import TestCase, expected_failure_py311
+from numba.tests.support import (TestCase, expected_failure_py311,
+                                 expected_failure_py312,
+                                 )
 import unittest
 
 force_pyobj_flags = Flags()
@@ -447,6 +449,7 @@ class TestRaising(TestCase):
         self.assertEqual(try_raise.py_func(3), try_raise(3))
 
     @expected_failure_py311
+    @expected_failure_py312
     def test_dynamic_raise(self):
 
         @njit
@@ -473,7 +476,7 @@ class TestRaising(TestCase):
             for arg in args:
                 with self.assertRaises(ValueError) as e:
                     fn(arg)
-                self.assertEquals((arg,), e.exception.args)
+                self.assertEqual((arg,), e.exception.args)
 
 
 if __name__ == '__main__':

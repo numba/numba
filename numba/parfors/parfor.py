@@ -24,6 +24,7 @@ from collections import defaultdict, OrderedDict, namedtuple
 from contextlib import contextmanager
 import operator
 from dataclasses import make_dataclass
+import warnings
 
 from llvmlite import ir as lir
 from numba.core.imputils import impl_ret_untracked
@@ -805,7 +806,7 @@ class ParforDiagnostics(object):
             val = a.get(x)
             if val is not None:
                 a[x] = val
-            elif val is []:
+            elif val == []:
                 not_roots.add(x) # debug only
             else:
                 a[x] = []
@@ -2375,7 +2376,27 @@ class ConvertLoopPass:
         # We go over all loops, smaller loops first (inner first)
         for loop, s in sorted(sized_loops, key=lambda tup: tup[1]):
             if len(loop.entries) != 1 or len(loop.exits) != 1:
+                if not config.DISABLE_PERFORMANCE_WARNINGS:
+                    for entry in loop.entries:
+                        for inst in blocks[entry].body:
+                            # if prange or pndindex call
+                            if (
+                                isinstance(inst, ir.Assign)
+                                and isinstance(inst.value, ir.Expr)
+                                and inst.value.op == "call"
+                                and self._is_parallel_loop(
+                                    inst.value.func.name, call_table)
+                            ):
+                                msg = "\nprange or pndindex loop " \
+                                      "will not be executed in " \
+                                      "parallel due to there being more than one " \
+                                      "entry to or exit from the loop (e.g., an " \
+                                      "assertion)."
+                                warnings.warn(
+                                    errors.NumbaPerformanceWarning(
+                                        msg, inst.loc))
                 continue
+
             entry = list(loop.entries)[0]
             for inst in blocks[entry].body:
                 # if prange or pndindex call
@@ -3827,10 +3848,15 @@ def get_reduce_nodes(reduction_node, nodes, func_ir):
     reduce_nodes = None
     defs = {}
 
-    def lookup(var, varonly=True):
+    def lookup(var, varonly=True, start=None):
         val = defs.get(var.name, None)
         if isinstance(val, ir.Var):
-            return lookup(val)
+            if start is None:
+                start = val
+            elif start == var:
+                # cycle detected
+                return None
+            return lookup(val, start=start)
         else:
             return var if (varonly or val is None) else val
     name = reduction_node.name
@@ -4197,8 +4223,6 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata, func_ir, typemap):
             return None, report
 
     func_ir._definitions = build_definitions(func_ir.blocks)
-    # TODO: make sure parfor1's reduction output is not used in parfor2
-    # only data parallel loops
     p1_cross_dep, p1_ip, p1_ia, p1_non_ia = has_cross_iter_dep(parfor1, func_ir, typemap)
     if not p1_cross_dep:
         p2_cross_dep = has_cross_iter_dep(parfor2, func_ir, typemap, p1_ip, p1_ia, p1_non_ia)[0]

@@ -27,11 +27,7 @@ from numba.core.config import (PYVERSION, MACHINE_BITS, # noqa: F401
 from numba.core import config
 from numba.core import types
 
-if PYVERSION <= (3, 8):
-    # This is needed for Python-3.8 and before due to the lack of PEP-585.
-    from typing import MutableSet, MutableMapping, Mapping, Sequence
-else:
-    from collections.abc import Mapping, Sequence, MutableSet, MutableMapping
+from collections.abc import Mapping, Sequence, MutableSet, MutableMapping
 
 
 def erase_traceback(exc_value):
@@ -192,15 +188,26 @@ weakref.finalize(lambda: None, lambda: None)
 atexit.register(_at_shutdown)
 
 
+_old_style_deprecation_msg = (
+    "Code using Numba extension API maybe depending on 'old_style' "
+    "error-capturing, which is deprecated and will be replaced by 'new_style' "
+    "in a future release. See details at "
+    "https://numba.readthedocs.io/en/latest/reference/deprecation.html#deprecation-of-old-style-numba-captured-errors" # noqa: E501
+)
+
+
 def _warn_old_style():
     from numba.core import errors  # to prevent circular import
 
-    warnings.warn(
-        "The 'old_style' error capturing is deprecated "
-        "and will be replaced by `new_style` in a future release.",
-        errors.NumbaPendingDeprecationWarning,
-        stacklevel=3
-    )
+    exccls, _, tb = sys.exc_info()
+    # Warn only if the active exception is not a NumbaError
+    # and not a NumbaWarning which is raised if -Werror is set.
+    numba_errs = (errors.NumbaError, errors.NumbaWarning)
+    if exccls is not None and not issubclass(exccls, numba_errs):
+        tb_last = traceback.format_tb(tb)[-1]
+        msg = f"{_old_style_deprecation_msg}\nException origin:\n{tb_last}"
+        warnings.warn(msg,
+                      errors.NumbaPendingDeprecationWarning)
 
 
 def use_new_style_errors():
@@ -740,3 +747,31 @@ def get_hashable_key(value):
         return id(value)
     else:
         return value
+
+
+class threadsafe_cached_property(functools.cached_property):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._lock = threading.RLock()
+
+    def __get__(self, *args, **kwargs):
+        with self._lock:
+            return super().__get__(*args, **kwargs)
+
+
+def dump_llvm(fndesc, module):
+    print(("LLVM DUMP %s" % fndesc).center(80, '-'))
+    if config.HIGHLIGHT_DUMPS:
+        try:
+            from pygments import highlight
+            from pygments.lexers import LlvmLexer as lexer
+            from pygments.formatters import Terminal256Formatter
+            from numba.misc.dump_style import by_colorscheme
+            print(highlight(module.__repr__(), lexer(),
+                            Terminal256Formatter( style=by_colorscheme())))
+        except ImportError:
+            msg = "Please install pygments to see highlighted dumps"
+            raise ValueError(msg)
+    else:
+        print(module)
+    print('=' * 80)

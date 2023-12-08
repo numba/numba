@@ -13,6 +13,7 @@ of a Python kernel call to a foreign device function are:
 - A declaration of the device function in Python.
 - A kernel that links with and calls the foreign function.
 
+.. _device-function-abi:
 
 Device function ABI
 -------------------

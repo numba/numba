@@ -103,6 +103,12 @@ class NumbaDebugInfoWarning(NumbaWarning):
     Warning category for an issue with the emission of debug information.
     """
 
+
+class NumbaSystemWarning(NumbaWarning):
+    """
+    Warning category for an issue with the system configuration.
+    """
+
 # These are needed in the color formatting of errors setup
 
 
@@ -457,6 +463,9 @@ class WarningsFixer(object):
     An object "fixing" warnings of a given category caught during
     certain phases.  The warnings can have their filename and lineno fixed,
     and they are deduplicated as well.
+
+    When used as a context manager, any warnings caught by `.catch_warnings()`
+    will be flushed at the exit of the context manager.
     """
 
     def __init__(self, category):
@@ -501,6 +510,12 @@ class WarningsFixer(object):
             for msg in sorted(messages):
                 warnings.warn_explicit(msg, category, filename, lineno)
         self._warnings.clear()
+
+    def __enter__(self):
+        return
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.flush()
 
 
 class NumbaError(Exception):

@@ -1,0 +1,5 @@
+Prevent kernels being dropped by implementing the used list
+===========================================================
+
+Kernels are no longer dropped when being compiled and linked using nvJitLink,
+because they are added to the ``@"llvm.used"`` list.

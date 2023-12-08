@@ -6,7 +6,7 @@ import numpy as np
 import os
 import warnings
 
-from numba import jit, njit, typed, int64, types
+from numba import jit, njit, types
 from numba.core import errors
 from numba.experimental import structref
 from numba.extending import (overload, intrinsic, overload_method,
@@ -23,10 +23,6 @@ from numba.tests.support import (skip_parfors_unsupported, override_config,
                                  SerialMixin, skip_unless_cffi,
                                  skip_unless_scipy, TestCase)
 import unittest
-
-# used in TestMiscErrorHandling::test_handling_of_write_to_*_global
-_global_list = [1, 2, 3, 4]
-_global_dict = typed.Dict.empty(int64, int64)
 
 
 class TestErrorHandlingBeforeLowering(unittest.TestCase):
@@ -135,18 +131,12 @@ class TestMiscErrorHandling(unittest.TestCase):
             self.assertIn(ex, str(raises.exception))
 
     def test_handling_of_write_to_reflected_global(self):
-        @njit
-        def foo():
-            _global_list[0] = 10
-
-        self.check_write_to_globals(foo)
+        from numba.tests.errorhandling_usecases import global_reflected_write
+        self.check_write_to_globals(njit(global_reflected_write))
 
     def test_handling_of_write_to_typed_dict_global(self):
-        @njit
-        def foo():
-            _global_dict[0] = 10
-
-        self.check_write_to_globals(foo)
+        from numba.tests.errorhandling_usecases import global_dict_write
+        self.check_write_to_globals(njit(global_dict_write))
 
     @skip_parfors_unsupported
     def test_handling_forgotten_numba_internal_import(self):
@@ -463,15 +453,21 @@ class TestCapturedErrorHandling(SerialMixin, TestCase):
                 pass
             return impl
 
-        for style, err_class in (('new_style', AttributeError),
-                                 ('old_style', errors.TypingError)):
-            with override_config('CAPTURED_ERRORS', style):
-                with self.assertRaises(err_class) as raises:
-                    @njit('void(int64)')
-                    def foo(x):
-                        bar(x)
-                expected = "object has no attribute 'some_invalid_attr'"
-                self.assertIn(expected, str(raises.exception))
+        with warnings.catch_warnings():
+            # Suppress error going into stdout
+            warnings.simplefilter("ignore",
+                                  errors.NumbaPendingDeprecationWarning)
+            # Check both new_style and old_style
+            for style, err_class in (('new_style', AttributeError),
+                                     ('old_style', errors.TypingError)):
+                with override_config('CAPTURED_ERRORS', style):
+                    with self.assertRaises(err_class) as raises:
+
+                        @njit('void(int64)')
+                        def foo(x):
+                            bar(x)
+                    expected = "object has no attribute 'some_invalid_attr'"
+                    self.assertIn(expected, str(raises.exception))
 
     @TestCase.run_test_in_subprocess(
         envvars={"NUMBA_CAPTURED_ERRORS": "old_style"},
@@ -493,8 +489,34 @@ class TestCapturedErrorHandling(SerialMixin, TestCase):
                 def foo(x):
                     bar(x)
 
-            self.assertIn("The 'old_style' error capturing is deprecated",
-                          str(warns.warnings[0].message))
+            self.assertIn(
+                "Code using Numba extension API maybe depending on 'old_style' "
+                "error-capturing",
+                str(warns.warnings[0].message),
+            )
+
+    @TestCase.run_test_in_subprocess(
+        envvars={"NUMBA_CAPTURED_ERRORS": "old_style"},
+    )
+    def test_old_style_no_deprecation(self):
+        # Verify that old_style error with NumbaError does not raise warnings
+        warnings.simplefilter("always", errors.NumbaPendingDeprecationWarning)
+
+        def bar(x):
+            pass
+
+        @overload(bar)
+        def ol_bar(x):
+            raise errors.TypingError("Invalid attribute")
+
+        with warnings.catch_warnings(record=True) as warns:
+            with self.assertRaises(errors.TypingError):
+                @njit('void(int64)')
+                def foo(x):
+                    bar(x)
+
+            self.assertEqual(len(warns), 0,
+                             msg="There should not be any warnings")
 
     @TestCase.run_test_in_subprocess(
         envvars={"NUMBA_CAPTURED_ERRORS": "new_style"},
@@ -515,8 +537,9 @@ class TestCapturedErrorHandling(SerialMixin, TestCase):
                 @njit('void(int64)')
                 def foo(x):
                     bar(x)
-
-            self.assertEqual(len(warns), 0)
+            # There should not be any warnings
+            self.assertEqual(len(warns), 0,
+                             msg="There should not be any warnings")
 
 
 if __name__ == '__main__':
