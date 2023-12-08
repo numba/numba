@@ -4268,7 +4268,6 @@ def np_asarray(a, dtype=None):
     if not type_can_asarray(a):
         return None
 
-    impl = None
     if isinstance(a, types.Array):
         if is_nonelike(dtype) or a.dtype == dtype.dtype:
             def impl(a, dtype=None):
@@ -4311,6 +4310,8 @@ def np_asarray(a, dtype=None):
 
         def impl(a, dtype=None):
             return arr.copy()
+    else:
+        impl = None
 
     return impl
 
