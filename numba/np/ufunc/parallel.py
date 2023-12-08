@@ -321,7 +321,7 @@ def _set_init_process_lock():
             "this initialization sequence/module import is deferred to the "
             "user! ***\n"
         )
-        warnings.warn(msg % str(e))
+        warnings.warn(msg % str(e), errors.NumbaSystemWarning)
 
         _backend_init_process_lock = _nop()
 

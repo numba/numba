@@ -55,10 +55,6 @@ build_c_helpers_dict(void)
     declmethod(frexpf);
     declmethod(ldexp);
     declmethod(ldexpf);
-    declmethod(exp2);
-    declmethod(exp2f);
-    declmethod(log2);
-    declmethod(log2f);
     declmethod(cpow);
     declmethod(cpowf);
     declmethod(erf);

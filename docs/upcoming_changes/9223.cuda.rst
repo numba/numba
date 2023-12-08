@@ -1,0 +1,6 @@
+Added support for compiling device functions with a C ABI
+=========================================================
+
+Support for compiling device functions with a C ABI through the
+:func:`compile_ptx() <numba.cuda.compile_ptx>` API, for easier interoperability
+with CUDA C/C++ and other languages.

@@ -413,6 +413,14 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 return sig, codegen
 
             @register_jitable
+            def fixup_axis(axis, ndim):
+                ax = axis
+                for i in range(len(axis)):
+                    val = axis[i] + ndim if axis[i] < 0 else axis[i]
+                    ax = tuple_setitem(ax, i, val)
+                return ax
+
+            @register_jitable
             def find_min(tup):
                 idx, e = 0, tup[0]
                 for i in range(len(tup)):
@@ -442,6 +450,9 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                                  initial=None):
                 if axis is None:
                     raise ValueError("'axis' must be specified")
+
+                if axis < 0:
+                    axis += array.ndim
 
                 if axis < 0 or axis >= array.ndim:
                     raise ValueError("Invalid axis")
@@ -494,7 +505,16 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                                    axis=0,
                                    dtype=None,
                                    initial=None):
-                min_idx, min_elem = find_min(axis)
+                axis_ = fixup_axis(axis, array.ndim)
+                for i in range(0, len(axis_)):
+                    if axis_[i] < 0 or axis_[i] >= array.ndim:
+                        raise ValueError("Invalid axis")
+
+                    for j in range(i + 1, len(axis_)):
+                        if axis_[i] == axis_[j]:
+                            raise ValueError("duplicate value in 'axis'")
+
+                min_idx, min_elem = find_min(axis_)
                 r = ufunc.reduce(array,
                                  axis=min_elem,
                                  dtype=dtype,
@@ -502,12 +522,12 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 if len(axis) == 1:
                     return r
                 elif len(axis) == 2:
-                    return ufunc.reduce(r, axis=axis[(min_idx + 1) % 2] - 1)
+                    return ufunc.reduce(r, axis=axis_[(min_idx + 1) % 2] - 1)
                 else:
                     ax = axis_tup
                     for i in range(len(ax)):
                         if i != min_idx:
-                            ax = tuple_setitem(ax, i, axis[i])
+                            ax = tuple_setitem(ax, i, axis_[i])
                     return ufunc.reduce(r, axis=ax)
 
             def impl_axis_empty_tuple(ufunc,

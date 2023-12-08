@@ -6,7 +6,7 @@ import numpy as np
 import os
 import warnings
 
-from numba import jit, njit, typed, int64, types
+from numba import jit, njit, types
 from numba.core import errors
 from numba.experimental import structref
 from numba.extending import (overload, intrinsic, overload_method,
@@ -23,10 +23,6 @@ from numba.tests.support import (skip_parfors_unsupported, override_config,
                                  SerialMixin, skip_unless_cffi,
                                  skip_unless_scipy, TestCase)
 import unittest
-
-# used in TestMiscErrorHandling::test_handling_of_write_to_*_global
-_global_list = [1, 2, 3, 4]
-_global_dict = typed.Dict.empty(int64, int64)
 
 
 class TestErrorHandlingBeforeLowering(unittest.TestCase):
@@ -135,18 +131,12 @@ class TestMiscErrorHandling(unittest.TestCase):
             self.assertIn(ex, str(raises.exception))
 
     def test_handling_of_write_to_reflected_global(self):
-        @njit
-        def foo():
-            _global_list[0] = 10
-
-        self.check_write_to_globals(foo)
+        from numba.tests.errorhandling_usecases import global_reflected_write
+        self.check_write_to_globals(njit(global_reflected_write))
 
     def test_handling_of_write_to_typed_dict_global(self):
-        @njit
-        def foo():
-            _global_dict[0] = 10
-
-        self.check_write_to_globals(foo)
+        from numba.tests.errorhandling_usecases import global_dict_write
+        self.check_write_to_globals(njit(global_dict_write))
 
     @skip_parfors_unsupported
     def test_handling_forgotten_numba_internal_import(self):

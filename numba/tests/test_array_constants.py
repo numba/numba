@@ -5,7 +5,7 @@ from numba import njit
 from numba.core.errors import TypingError
 from numba import jit, typeof
 from numba.core import types
-from numba.tests.support import skip_m1_llvm_rtdyld_failure, TestCase
+from numba.tests.support import TestCase
 
 
 a0 = np.array(42)
@@ -138,7 +138,6 @@ class TestConstantArray(TestCase):
         out = cfunc()
         self.assertEqual(out, 86)
 
-    @skip_m1_llvm_rtdyld_failure
     @TestCase.run_test_in_subprocess # isolate MCJIT use
     def test_too_big_to_freeze(self):
         """

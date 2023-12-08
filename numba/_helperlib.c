@@ -122,30 +122,6 @@ numba_ldexpf(float x, int exp)
     return x;
 }
 
-NUMBA_EXPORT_FUNC(double)
-numba_exp2(double x)
-{
-    return exp2(x);
-}
-
-NUMBA_EXPORT_FUNC(float)
-numba_exp2f(float x)
-{
-    return exp2f(x);
-}
-
-NUMBA_EXPORT_FUNC(double)
-numba_log2(double x)
-{
-    return log2(x);
-}
-
-NUMBA_EXPORT_FUNC(float)
-numba_log2f(float x)
-{
-    return log2f(x);
-}
-
 /* provide complex power */
 NUMBA_EXPORT_FUNC(void)
 numba_cpow(Py_complex *a, Py_complex *b, Py_complex *out) {

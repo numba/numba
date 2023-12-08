@@ -1303,7 +1303,7 @@ class TestDictIterableCtorNoJit(TestCase, DictIterableCtor):
             Dict(1, 2)
 
     def test_exception_mapping_ctor(self):
-        msg = '.*dict\(mapping\) is not supported.*'  # noqa: W605
+        msg = r'.*dict\(mapping\) is not supported.*'  # noqa: W605
         with self.assertRaisesRegex(TypingError, msg):
             Dict({1: 2})
 

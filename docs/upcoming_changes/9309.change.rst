@@ -1,0 +1,8 @@
+Make test listing not invoke CPU compilation.
+---------------------------------------------
+
+Numba's test listing command ``python -m numba.runtests -l`` has historically
+triggered CPU target compilation due to the way in which certain test functions
+were declared within the test suite. It has now been made such that the CPU
+target compiler is not invoked on test listing and a test is added to ensure
+that it remains the case.

@@ -103,6 +103,12 @@ class NumbaDebugInfoWarning(NumbaWarning):
     Warning category for an issue with the emission of debug information.
     """
 
+
+class NumbaSystemWarning(NumbaWarning):
+    """
+    Warning category for an issue with the system configuration.
+    """
+
 # These are needed in the color formatting of errors setup
 
 

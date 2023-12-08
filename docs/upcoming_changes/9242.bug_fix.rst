@@ -1,0 +1,6 @@
+Fix SSA to consider variables where use is not dominated by the definition
+==========================================================================
+
+A SSA problem is fixed such that a conditionally defined variable will receive
+a phi node showing that there is a path where the variable is undefined.
+This affects extension code that relies on SSA behavior.

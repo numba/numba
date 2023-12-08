@@ -145,7 +145,7 @@ class TestUFuncsMisc(TestCase):
     # Test for miscellaneous ufunc issues
 
     def test_exp2(self):
-        # See issue #8898
+        # See issue #8898, and TargetLibraryInfo based fix in #9336
         @njit
         def foo(x):
             return np.exp2(x)
@@ -157,7 +157,7 @@ class TestUFuncsMisc(TestCase):
             self.assertPreciseEqual(expected, got)
 
     def test_log2(self):
-        # See issue #8898
+        # See issue #8898, and TargetLibraryInfo based fix in #9336
         @njit
         def foo(x):
             return np.log2(x)
