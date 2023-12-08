@@ -139,7 +139,6 @@ class GUFunc(serialize.ReduceMixin):
 
     def _num_args_match(self, *args):
         parsed_sig = parse_signature(self.gufunc_builder.signature)
-        # parsed_sig[1] has always length 1
         return len(args) == len(parsed_sig[0]) + len(parsed_sig[1])
 
     def _get_signature(self, *args):

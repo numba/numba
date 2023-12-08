@@ -131,21 +131,6 @@ class TestMultipleOutputs(TestCase):
         np.testing.assert_allclose(A, B)
         np.testing.assert_allclose(A * 2, C)
 
-    def test_multiple_output_allocation(self):
-        @guvectorize('(x)->(x),(x)',
-                     target=self.target)
-        def copy_and_double(A, B, C):
-            for i in range(B.size):
-                B[i] = A[i]
-                C[i] = A[i] * 2
-
-        A = np.arange(10, dtype=np.float32) + 1
-        B = np.zeros_like(A)
-        C = np.zeros_like(A)
-        copy_and_double(A, B, C)
-        np.testing.assert_allclose(A, B)
-        np.testing.assert_allclose(A * 2, C)
-
     def test_multiple_output_dtypes(self):
 
         @guvectorize('(x)->(x),(x)',
