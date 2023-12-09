@@ -2364,11 +2364,6 @@ class Interpreter(object):
     else:
         raise NotImplementedError(PYVERSION)
 
-    def op_SETUP_LOOP(self, inst):
-        assert self.blocks[inst.offset] is self.current_block
-        loop = ir.Loop(inst.offset, exit=(inst.next + inst.arg))
-        self.syntax_blocks.append(loop)
-
     def op_SETUP_WITH(self, inst, contextmanager, exitfn=None):
         assert self.blocks[inst.offset] is self.current_block
         # Handle with
@@ -2948,14 +2943,6 @@ class Interpreter(object):
             tmp = self.get(res)
             out = ir.Expr.unary('not', value=tmp, loc=self.loc)
             self.store(out, res)
-
-    def op_BREAK_LOOP(self, inst, end=None):
-        if end is None:
-            loop = self.syntax_blocks[-1]
-            assert isinstance(loop, ir.Loop)
-            end = loop.exit
-        jmp = ir.Jump(target=end, loc=self.loc)
-        self.current_block.append(jmp)
 
     def _op_JUMP_IF(self, inst, pred, iftrue):
         brs = {

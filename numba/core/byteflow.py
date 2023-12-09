@@ -857,13 +857,6 @@ class TraceRunner(object):
         state.append(inst)
         state.fork(pc=inst.get_jump_target())
 
-    def op_BREAK_LOOP(self, state, inst):
-        # NOTE: bytecode removed since py3.8
-        end = state.get_top_block('LOOP')['end']
-        state.append(inst, end=end)
-        state.pop_block()
-        state.fork(pc=end)
-
     def op_RETURN_VALUE(self, state, inst):
         state.append(inst, retval=state.pop(), castval=state.make_temp())
         state.terminate()
@@ -969,15 +962,6 @@ class TraceRunner(object):
     def op_WITH_CLEANUP_FINISH(self, state, inst):
         # we don't emulate the exact stack behavior
         state.append(inst)
-
-    def op_SETUP_LOOP(self, state, inst):
-        # NOTE: bytecode removed since py3.8
-        state.push_block(
-            state.make_block(
-                kind='LOOP',
-                end=inst.get_jump_target(),
-            )
-        )
 
     def op_BEFORE_WITH(self, state, inst):
         # Almost the same as py3.10 SETUP_WITH just lacking the finally block.

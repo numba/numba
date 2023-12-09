@@ -9,7 +9,7 @@ from numba.core.utils import PYVERSION
 # List of bytecodes creating a new block in the control flow graph
 # (in addition to explicit jump labels).
 NEW_BLOCKERS = frozenset([
-    'SETUP_LOOP', 'FOR_ITER', 'SETUP_WITH', 'BEFORE_WITH'
+    'FOR_ITER', 'SETUP_WITH', 'BEFORE_WITH'
 ])
 
 
@@ -889,16 +889,6 @@ class ControlFlowAnalysis(object):
                        "supported.")
                 raise UnsupportedError(msg)
 
-    def op_SETUP_LOOP(self, inst):
-        end = inst.get_jump_target()
-        self._blockstack.append(end)
-        self._loops.append((inst.offset, end))
-        # TODO: Looplifting requires the loop entry be its own block.
-        #       Forcing a new block here is the simplest solution for now.
-        #       But, we should consider other less ad-hoc ways.
-        self.jump(inst.next)
-        self._force_new_block = True
-
     def op_SETUP_WITH(self, inst):
         end = inst.get_jump_target()
         self._blockstack.append(end)
@@ -965,8 +955,4 @@ class ControlFlowAnalysis(object):
 
     def op_RAISE_VARARGS(self, inst):
         self._curblock.terminating = True
-        self._force_new_block = True
-
-    def op_BREAK_LOOP(self, inst):
-        self.jump(self._blockstack[-1])
         self._force_new_block = True
