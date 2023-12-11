@@ -16,7 +16,7 @@ from numba.tests.support import (TestCase, tag, ignore_internal_warnings,
 from numba.core.extending import overload_method, box
 
 
-forceobj_flags = {'nopython': False, 'forceobj': True}
+forceobj_flags = {'forceobj': True}
 
 no_pyobj_flags = {'nopython': True, '_nrt': False}
 
@@ -581,11 +581,11 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.test_globals(flags=no_pyobj_flags)
 
-    def test_globals_jit(self, **jit_flags):
+    def test_globals_jit(self, flags=forceobj_flags):
         # Issue #416: weird behaviour of globals() in combination with
         # the @jit decorator.
         pyfunc = globals_usecase
-        jitted = jit(**jit_flags)(pyfunc)
+        jitted = jit(**flags)(pyfunc)
         self.assertIs(jitted(), globals())
         self.assertIs(jitted(), globals())
 
