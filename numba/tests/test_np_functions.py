@@ -10,7 +10,6 @@ from textwrap import dedent
 
 import numpy as np
 
-from numba.core.compiler import Flags
 from numba import jit, njit, typeof
 from numba.core import types
 from numba.typed import List, Dict
@@ -19,13 +18,9 @@ from numba.core.errors import TypingError, NumbaDeprecationWarning
 from numba.core.config import IS_32BITS
 from numba.core.utils import pysignature
 from numba.np.extensions import cross2d
-from numba.tests.support import (TestCase, CompilationCache, MemoryLeakMixin,
+from numba.tests.support import (TestCase, MemoryLeakMixin,
                                  needs_blas, run_in_subprocess)
 import unittest
-
-
-no_pyobj_flags = Flags()
-no_pyobj_flags.nrt = True
 
 
 def sinc(x):
@@ -483,12 +478,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def setUp(self):
         super(TestNPFunctions, self).setUp()
-        self.ccache = CompilationCache()
         self.rnd = np.random.RandomState(42)
 
-    def run_unary(self, pyfunc, x_types, x_values, flags=no_pyobj_flags,
-                  func_extra_types=None, func_extra_args=None,
-                  ignore_sign_on_zero=False, abs_tol=None, **kwargs):
+    def run_unary(self, pyfunc, x_types, x_values, func_extra_types=None,
+                  func_extra_args=None, ignore_sign_on_zero=False, abs_tol=None,
+                  **kwargs):
         """
         Runs tests for a unary function operating in the numerical real space.
 
@@ -498,7 +492,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                  functions to be tested.
         x_types: the types of the values being tested, see numba.types
         x_values: the numerical values of the values to be tested
-        flags: flags to pass to the CompilationCache::ccache::compile function
         func_extra_types: the types of additional arguments to the numpy
                           function
         func_extra_args:  additional arguments to the numpy function
@@ -515,9 +508,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             if func_extra_args is None:
                 func_extra_types = func_extra_args = [()]
             for xtypes, xargs in zip(func_extra_types, func_extra_args):
-                cr = self.ccache.compile(pyfunc, (tx,) + xtypes,
-                                         flags=flags)
-                cfunc = cr.entry_point
+                cfunc = njit((tx,) + xtypes,)(pyfunc)
                 got = cfunc(vx, *xargs)
                 expected = pyfunc(vx, *xargs)
                 try:
@@ -658,7 +649,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
             self.assertPreciseEqual(expected, received)
 
-    def test_angle(self, flags=no_pyobj_flags):
+    def test_angle(self):
         """
         Tests the angle() function.
         This test is purely to assert numerical computations are correct.

@@ -3,18 +3,9 @@ import sys
 import numpy as np
 
 import unittest
-from numba.core.compiler import compile_isolated, Flags
-from numba import jit
+from numba import jit, njit
 from numba.core import types, errors, utils
-from numba.tests.support import (captured_stdout, tag, TestCase,
-                                 EnableNRTStatsMixin)
-
-
-enable_pyobj_flags = Flags()
-enable_pyobj_flags.enable_pyobject = True
-
-force_pyobj_flags = Flags()
-force_pyobj_flags.force_pyobject = True
+from numba.tests.support import (captured_stdout, TestCase, EnableNRTStatsMixin)
 
 
 def print_value(x):
@@ -53,8 +44,7 @@ class TestPrint(EnableNRTStatsMixin, TestCase):
         pyfunc = print_value
 
         def check_values(typ, values):
-            cr = compile_isolated(pyfunc, (typ,))
-            cfunc = cr.entry_point
+            cfunc = njit((typ,))(pyfunc)
             for val in values:
                 with captured_stdout():
                     cfunc(val)
@@ -71,8 +61,7 @@ class TestPrint(EnableNRTStatsMixin, TestCase):
         check_values(types.complex64, (1+1j,))
         check_values(types.NPTimedelta('ms'), (np.timedelta64(100, 'ms'),))
 
-        cr = compile_isolated(pyfunc, (types.float32,))
-        cfunc = cr.entry_point
+        cfunc = njit((types.float32,))(pyfunc)
         with captured_stdout():
             cfunc(1.1)
             # Float32 will lose precision
@@ -85,12 +74,11 @@ class TestPrint(EnableNRTStatsMixin, TestCase):
         with self.assertNoNRTLeak():
             x = [1, 3, 5, 7]
             with self.assertRefCount(x):
-                check_values(types.List(types.int32), (x,))
+                check_values(types.List(types.intp, reflected=True), (x,))
 
-        # Array will have to use object mode
+        # Test array
         arraytype = types.Array(types.int32, 1, 'C')
-        cr = compile_isolated(pyfunc, (arraytype,), flags=enable_pyobj_flags)
-        cfunc = cr.entry_point
+        cfunc = njit((arraytype,))(pyfunc)
         with captured_stdout():
             cfunc(np.arange(10, dtype=np.int32))
             self.assertEqual(sys.stdout.getvalue(),
@@ -112,8 +100,7 @@ class TestPrint(EnableNRTStatsMixin, TestCase):
 
     def test_print_multiple_values(self):
         pyfunc = print_values
-        cr = compile_isolated(pyfunc, (types.int32,) * 3)
-        cfunc = cr.entry_point
+        cfunc = njit((types.intp,) * 3)(pyfunc)
         with captured_stdout():
             cfunc(1, 2, 3)
             self.assertEqual(sys.stdout.getvalue(), '1 2 3\n')
@@ -127,16 +114,14 @@ class TestPrint(EnableNRTStatsMixin, TestCase):
 
     def test_print_empty(self):
         pyfunc = print_empty
-        cr = compile_isolated(pyfunc, ())
-        cfunc = cr.entry_point
+        cfunc = njit((),)(pyfunc)
         with captured_stdout():
             cfunc()
             self.assertEqual(sys.stdout.getvalue(), '\n')
 
     def test_print_strings(self):
         pyfunc = print_string
-        cr = compile_isolated(pyfunc, (types.int32,))
-        cfunc = cr.entry_point
+        cfunc = njit((types.intp,))(pyfunc)
         with captured_stdout():
             cfunc(1)
             self.assertEqual(sys.stdout.getvalue(), '1 hop! 3.5\n')

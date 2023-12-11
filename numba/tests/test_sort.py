@@ -3,16 +3,13 @@ import itertools
 import math
 import random
 import sys
-from typing import KeysView
+import unittest
 
 import numpy as np
 
-from numba.core.compiler import compile_isolated, Flags
 from numba import jit, njit
-from numba.core import types, utils, errors
-import unittest
-from numba import testing
-from numba.tests.support import TestCase, MemoryLeakMixin, tag
+from numba.core import utils, errors
+from numba.tests.support import TestCase, MemoryLeakMixin
 
 from numba.misc.quicksort import make_py_quicksort, make_jit_quicksort
 from numba.misc.mergesort import make_jit_mergesort

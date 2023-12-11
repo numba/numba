@@ -801,24 +801,24 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
     # get typed IR with a dummy pipeline (similar to test_parfors.py)
     from numba.core.registry import cpu_target
     targetctx = cpu_target.target_context
-    with cpu_target.nested_context(typingctx, targetctx):
-        tp = DummyPipeline(typingctx, targetctx, args, stencil_func_ir)
 
-        rewrites.rewrite_registry.apply('before-inference', tp.state)
+    tp = DummyPipeline(typingctx, targetctx, args, stencil_func_ir)
 
-        tp.state.typemap, tp.state.return_type, tp.state.calltypes, _ = type_inference_stage(
-            tp.state.typingctx, tp.state.targetctx, tp.state.func_ir,
-            tp.state.args, None)
+    rewrites.rewrite_registry.apply('before-inference', tp.state)
 
-        type_annotations.TypeAnnotation(
-            func_ir=tp.state.func_ir,
-            typemap=tp.state.typemap,
-            calltypes=tp.state.calltypes,
-            lifted=(),
-            lifted_from=None,
-            args=tp.state.args,
-            return_type=tp.state.return_type,
-            html_output=config.HTML)
+    tp.state.typemap, tp.state.return_type, tp.state.calltypes, _ = type_inference_stage(
+        tp.state.typingctx, tp.state.targetctx, tp.state.func_ir,
+        tp.state.args, None)
+
+    type_annotations.TypeAnnotation(
+        func_ir=tp.state.func_ir,
+        typemap=tp.state.typemap,
+        calltypes=tp.state.calltypes,
+        lifted=(),
+        lifted_from=None,
+        args=tp.state.args,
+        return_type=tp.state.return_type,
+        html_output=config.HTML)
 
     # make block labels unique
     stencil_blocks = ir_utils.add_offset_to_labels(stencil_blocks,

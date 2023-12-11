@@ -1,10 +1,11 @@
 import numpy as np
 
 import unittest
-from numba.core.compiler import compile_isolated
+from numba import njit
 from numba.core.errors import TypingError
 from numba import jit, typeof
 from numba.core import types
+from numba.tests.support import TestCase
 
 
 a0 = np.array(42)
@@ -67,14 +68,13 @@ def bytes_as_const_array():
     return np.frombuffer(b'foo', dtype=np.uint8)
 
 
-class TestConstantArray(unittest.TestCase):
+class TestConstantArray(TestCase):
     """
     Test array constants.
     """
 
     def check_array_const(self, pyfunc):
-        cres = compile_isolated(pyfunc, (types.int32,))
-        cfunc = cres.entry_point
+        cfunc = njit((types.int32,))(pyfunc)
         for i in [0, 1, 2]:
             np.testing.assert_array_equal(pyfunc(i), cfunc(i))
 
@@ -116,15 +116,13 @@ class TestConstantArray(unittest.TestCase):
 
     def test_arrayscalar_const(self):
         pyfunc = use_arrayscalar_const
-        cres = compile_isolated(pyfunc, ())
-        cfunc = cres.entry_point
-
+        cfunc = njit((),)(pyfunc)
         self.assertEqual(pyfunc(), cfunc())
 
     def test_write_to_global_array(self):
         pyfunc = write_to_global_array
         with self.assertRaises(TypingError):
-            compile_isolated(pyfunc, ())
+            njit((),)(pyfunc)
 
     def test_issue_1850(self):
         """
@@ -136,10 +134,11 @@ class TestConstantArray(unittest.TestCase):
         def pyfunc():
             return constarr[0]
 
-        cres = compile_isolated(pyfunc, ())
-        out = cres.entry_point()
+        cfunc = njit((),)(pyfunc)
+        out = cfunc()
         self.assertEqual(out, 86)
 
+    @TestCase.run_test_in_subprocess # isolate MCJIT use
     def test_too_big_to_freeze(self):
         """
         Test issue https://github.com/numba/numba/issues/2188 where freezing
@@ -153,18 +152,18 @@ class TestConstantArray(unittest.TestCase):
             def pyfunc():
                 return biggie
 
-            cres = compile_isolated(pyfunc, ())
+            cfunc = njit((),)(pyfunc)
             # Check that the array is not frozen into the LLVM IR.
             # LLVM size must be less than the array size.
-            self.assertLess(len(cres.library.get_llvm_str()), biggie.nbytes)
+            self.assertLess(len(cfunc.inspect_llvm((),)), biggie.nbytes)
             # Run and test result
-            out = cres.entry_point()
+            out = cfunc()
             self.assertIs(biggie, out)
             # Remove all local references to biggie
             del out
             biggie = None  # del biggie is syntax error in py2
             # Run again and verify result
-            out = cres.entry_point()
+            out = cfunc()
             np.testing.assert_equal(expect, out)
             self.assertEqual(typeof(expect), typeof(out))
 
@@ -180,12 +179,10 @@ class TestConstantArray(unittest.TestCase):
         test(f_array)
 
 
-class TestConstantBytes(unittest.TestCase):
+class TestConstantBytes(TestCase):
     def test_constant_bytes(self):
         pyfunc = bytes_as_const_array
-        cres = compile_isolated(pyfunc, ())
-        cfunc = cres.entry_point
-
+        cfunc = njit((),)(pyfunc)
         np.testing.assert_array_equal(pyfunc(), cfunc())
 
 

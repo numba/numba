@@ -9,10 +9,8 @@ import numpy as np
 from numba.tests.support import (TestCase, override_config, override_env_config,
                       captured_stdout, forbid_codegen, skip_parfors_unsupported,
                       needs_blas)
-from numba import jit
+from numba import jit, njit
 from numba.core import types, compiler, utils
-from numba.core.compiler import compile_isolated, Flags
-from numba.core.cpu import ParallelOptions
 from numba.core.errors import NumbaPerformanceWarning
 from numba import prange
 from numba.experimental import jitclass
@@ -53,9 +51,6 @@ def unsupported_prange(n):
         assert i + 13 < 100000
     return a
 
-force_parallel_flags = Flags()
-force_parallel_flags.auto_parallel = ParallelOptions(True)
-force_parallel_flags.nrt = True
 
 class DebugTestBase(TestCase):
 
@@ -120,9 +115,9 @@ class FunctionDebugTestBase(DebugTestBase):
 
     def compile_simple_nopython(self):
         with captured_stdout() as out:
-            cres = compile_isolated(simple_nopython, (types.int64,))
+            cfunc = njit((types.int64,))(simple_nopython)
             # Sanity check compiled function
-            self.assertPreciseEqual(cres.entry_point(2), 3)
+            self.assertPreciseEqual(cfunc(2), 3)
         return out.getvalue()
 
 
@@ -170,9 +165,9 @@ class TestGeneratorDebugOutput(DebugTestBase):
 
     def compile_simple_gen(self):
         with captured_stdout() as out:
-            cres = compile_isolated(simple_gen, (types.int64, types.int64))
+            cfunc = njit((types.int64, types.int64))(simple_gen)
             # Sanity check compiled function
-            self.assertPreciseEqual(list(cres.entry_point(2, 5)), [2, 5])
+            self.assertPreciseEqual(list(cfunc(2, 5)), [2, 5])
         return out.getvalue()
 
     def test_dump_ir_generator(self):
@@ -271,8 +266,7 @@ class TestParforsDebug(TestCase):
         arr_ty = types.Array(types.float64, 2, "C")
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always", NumbaPerformanceWarning)
-            cres = compile_isolated(unsupported_parfor, (arr_ty, arr_ty),
-                                    flags=force_parallel_flags)
+            njit((arr_ty, arr_ty), parallel=True)(unsupported_parfor)
         self.check_parfors_warning(w)
 
     @needs_blas
@@ -283,8 +277,7 @@ class TestParforsDebug(TestCase):
         """
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always", NumbaPerformanceWarning)
-            cres = compile_isolated(unsupported_prange, (types.int64,),
-                                    flags=force_parallel_flags)
+            njit((types.int64,), parallel=True)(unsupported_prange)
         self.check_parfors_unsupported_prange_warning(w)
 
     @skip_parfors_unsupported
@@ -296,13 +289,11 @@ class TestParforsDebug(TestCase):
         # Parfor class state, this is to ensure the test works based
         # on indices computed based on this state and not hard coded
         # indices.
-        cres = compile_isolated(supported_parfor, (types.int64,),
-                                flags=force_parallel_flags)
+        njit((types.int64,), parallel=True)(supported_parfor)
 
         with override_env_config('NUMBA_DEBUG_ARRAY_OPT_STATS', '1'):
             with captured_stdout() as out:
-                cres = compile_isolated(supported_parfor, (types.int64,),
-                                        flags=force_parallel_flags)
+                njit((types.int64,), parallel=True)(supported_parfor)
 
             # grab the various parts out the output
             output = out.getvalue().split('\n')

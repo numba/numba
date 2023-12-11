@@ -3,7 +3,7 @@ import collections
 import types as pytypes
 
 import numpy as np
-from numba.core.compiler import compile_isolated, run_frontend, Flags, StateDict
+from numba.core.compiler import run_frontend, Flags, StateDict
 from numba import jit, njit, literal_unroll
 from numba.core import types, errors, ir, rewrites, ir_utils, utils, cpu
 from numba.core import postproc
@@ -62,8 +62,8 @@ class TestBranchPruneBase(MemoryLeakMixin, TestCase):
         # *args: the argument instances to pass to the function to check
         #        execution is still valid post transform
         # **kwargs:
-        #        - flags: compiler.Flags instance to pass to `compile_isolated`,
-        #          permits use of e.g. object mode
+        #        - flags: args to pass to `jit` default is `nopython=True`,
+        #          e.g. permits use of e.g. object mode.
 
         func_ir = compile_to_ir(func)
         before = func_ir.copy()
@@ -126,9 +126,9 @@ class TestBranchPruneBase(MemoryLeakMixin, TestCase):
             print("expect_removed", sorted(expect_removed))
             raise e
 
-        supplied_flags = kwargs.pop('flags', False)
-        compiler_kws = {'flags': supplied_flags} if supplied_flags else {}
-        cres = compile_isolated(func, args_tys, **compiler_kws)
+        supplied_flags = kwargs.pop('flags', {'nopython': True})
+        # NOTE: original testing used `compile_isolated` hence use of `cres`.
+        cres = jit(args_tys, **supplied_flags)(func).overloads[args_tys]
         if args is None:
             res = cres.entry_point()
             expected = func()
@@ -993,7 +993,7 @@ class TestBranchPrunePostSemanticConstRewrites(TestBranchPruneBase):
         # check prune fails for something with `ndim` attr that is not array
         FakeArrayType = types.NamedUniTuple(types.int64, 1, FakeArray)
         self.assert_prune(impl, (FakeArrayType,), [None], fa,
-                          flags=enable_pyobj_flags)
+                          flags={'nopython':False, 'forceobj':True})
 
     def test_semantic_const_propagates_before_static_rewrites(self):
         # see issue #5015, the ndim needs writing in as a const before

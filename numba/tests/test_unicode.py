@@ -428,9 +428,10 @@ UNICODE_COUNT_EXAMPLES = [
 
 class TestUnicode(BaseTest):
 
-    def test_literal(self, flags=no_pyobj_flags):
+    def test_literal(self):
         pyfunc = literal_usecase
-        self.run_nullary_func(pyfunc, flags=flags)
+        cfunc = njit(literal_usecase)
+        self.assertPreciseEqual(pyfunc(), cfunc())
 
     def test_passthrough(self, flags=no_pyobj_flags):
         pyfunc = passthrough_usecase

@@ -2,7 +2,6 @@ import numpy as np
 import sys
 import traceback
 
-from numba.core.compiler import compile_isolated, Flags
 from numba import jit, njit
 from numba.core import types, errors
 from numba.tests.support import (TestCase, expected_failure_py311,
@@ -10,17 +9,11 @@ from numba.tests.support import (TestCase, expected_failure_py311,
                                  )
 import unittest
 
-force_pyobj_flags = Flags()
-force_pyobj_flags.force_pyobject = True
 
-no_pyobj_flags = Flags()
-
-no_pyobj_flags_w_nrt = Flags()
-no_pyobj_flags_w_nrt.nrt = True
-
-no_gil_flags = Flags()
-no_gil_flags.release_gil = True
-no_gil_flags.nrt = True
+force_pyobj_flags = {'nopython': False, 'forceobj': True}
+no_pyobj_flags = {'nopython': True, '_nrt': False}
+no_pyobj_flags_w_nrt = {'nopython': True, '_nrt': True}
+no_gil_flags = {'nopython': True, 'nogil': True, '_nrt': True}
 
 
 class MyError(Exception):
@@ -135,10 +128,8 @@ class TestRaising(TestCase):
         def pyfunc(a, i):
             return a.shape[i]
 
-        cres = compile_isolated(pyfunc, (types.Array(types.int32, 1, 'A'),
-                                         types.int32))
+        cfunc = njit((types.Array(types.int32, 1, 'A'), types.int32),)(pyfunc)
 
-        cfunc = cres.entry_point
         a = np.empty(2, dtype=np.int32)
 
         self.assertEqual(cfunc(a, 0), pyfunc(a, 0))
@@ -191,8 +182,7 @@ class TestRaising(TestCase):
 
     def check_raise_class(self, flags):
         pyfunc = raise_class(MyError)
-        cres = compile_isolated(pyfunc, (types.int32,), flags=flags)
-        cfunc = cres.entry_point
+        cfunc = jit((types.int32,), **flags)(pyfunc)
         self.assertEqual(cfunc(0), 0)
         self.check_against_python(flags, pyfunc, cfunc, MyError, 1)
         self.check_against_python(flags, pyfunc, cfunc, ValueError, 2)
@@ -209,8 +199,7 @@ class TestRaising(TestCase):
         for clazz in [MyError, UDEArgsToSuper,
                       UDENoArgSuper]:
             pyfunc = raise_instance(clazz, "some message")
-            cres = compile_isolated(pyfunc, (types.int32,), flags=flags)
-            cfunc = cres.entry_point
+            cfunc = jit((types.int32,), **flags)(pyfunc)
 
             self.assertEqual(cfunc(0), 0)
             self.check_against_python(flags, pyfunc, cfunc, clazz, 1)
@@ -249,8 +238,7 @@ class TestRaising(TestCase):
         def raise_exc(exc):
             raise exc
         pyfunc = reraise
-        cres = compile_isolated(pyfunc, (), flags=flags)
-        cfunc = cres.entry_point
+        cfunc = jit((), **flags)(pyfunc)
         for op, err in [(lambda : raise_exc(ZeroDivisionError),
                          ZeroDivisionError),
                         (lambda : raise_exc(UDEArgsToSuper("msg", 1)),
@@ -276,8 +264,7 @@ class TestRaising(TestCase):
 
     def check_raise_invalid_class(self, cls, flags):
         pyfunc = raise_class(cls)
-        cres = compile_isolated(pyfunc, (types.int32,), flags=flags)
-        cfunc = cres.entry_point
+        cfunc = jit((types.int32,), **flags)(pyfunc)
         with self.assertRaises(TypeError) as cm:
             cfunc(1)
         self.assertEqual(str(cm.exception),
@@ -308,8 +295,7 @@ class TestRaising(TestCase):
 
     def check_assert_statement(self, flags):
         pyfunc = assert_usecase
-        cres = compile_isolated(pyfunc, (types.int32,), flags=flags)
-        cfunc = cres.entry_point
+        cfunc = jit((types.int32,), **flags)(pyfunc)
         cfunc(1)
         self.check_against_python(flags, pyfunc, cfunc, AssertionError, 2)
 
@@ -329,8 +315,7 @@ class TestRaising(TestCase):
             loc = {}
             exec(f_text, {'exc': exc}, loc)
             pyfunc = loc['f']
-            cres = compile_isolated(pyfunc, (types.int32,), flags=flags)
-            cfunc = cres.entry_point
+            cfunc = jit((types.int32,), **flags)(pyfunc)
             self.check_against_python(flags, pyfunc, cfunc, exc, 1)
 
     def test_assert_from_exec_string_objmode(self):
@@ -344,8 +329,7 @@ class TestRaising(TestCase):
         # a bug in exception initialisation (e.g. missing arg) then this also
         # has a frame injected with the location information.
         pyfunc = ude_bug_usecase
-        cres = compile_isolated(pyfunc, (), flags=flags)
-        cfunc = cres.entry_point
+        cfunc = jit((), **flags)(pyfunc)
         self.check_against_python(flags, pyfunc, cfunc, TypeError)
 
     def test_user_code_error_traceback_objmode(self):
@@ -356,8 +340,7 @@ class TestRaising(TestCase):
 
     def check_raise_runtime_value(self, flags):
         pyfunc = raise_runtime_value
-        cres = compile_isolated(pyfunc, (types.string,), flags=flags)
-        cfunc = cres.entry_point
+        cfunc = jit((types.string,), **flags)(pyfunc)
         self.check_against_python(flags, pyfunc, cfunc, ValueError, 'hello')
 
     def test_raise_runtime_value_objmode(self):
@@ -373,9 +356,7 @@ class TestRaising(TestCase):
         for clazz in [MyError, UDEArgsToSuper,
                       UDENoArgSuper]:
             pyfunc = raise_instance_runtime_args(clazz)
-            cres = compile_isolated(pyfunc, (types.int32, types.string),
-                                    flags=flags)
-            cfunc = cres.entry_point
+            cfunc = jit((types.int32, types.string), **flags)(pyfunc)
 
             self.assertEqual(cfunc(0, 'test'), 0)
             self.check_against_python(flags, pyfunc, cfunc, clazz, 1, 'hello')
@@ -412,7 +393,7 @@ class TestRaising(TestCase):
         for pyfunc, argtypes in funcs:
             msg = '.*Cannot convert native .* to a Python object.*'
             with self.assertRaisesRegex(errors.TypingError, msg):
-                compile_isolated(pyfunc, argtypes)
+                njit(argtypes)(pyfunc)
 
     def test_dynamic_raise_dict(self):
         @njit

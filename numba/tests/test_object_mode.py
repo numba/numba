@@ -6,7 +6,6 @@ Testing object mode specifics.
 import numpy as np
 
 import unittest
-from numba.core.compiler import compile_isolated, Flags
 from numba import jit
 from numba.core import utils
 from numba.tests.support import TestCase
@@ -23,10 +22,6 @@ def long_constant(n):
 
 def delitem_usecase(x):
     del x[:]
-
-
-forceobj = Flags()
-forceobj.force_pyobject = True
 
 
 def loop_nest_3(x, y):
@@ -47,14 +42,12 @@ class TestObjectMode(TestCase):
 
     def test_complex_constant(self):
         pyfunc = complex_constant
-        cres = compile_isolated(pyfunc, (), flags=forceobj)
-        cfunc = cres.entry_point
+        cfunc = jit((), forceobj=True)(pyfunc)
         self.assertPreciseEqual(pyfunc(12), cfunc(12))
 
     def test_long_constant(self):
         pyfunc = long_constant
-        cres = compile_isolated(pyfunc, (), flags=forceobj)
-        cfunc = cres.entry_point
+        cfunc = jit((), forceobj=True)(pyfunc)
         self.assertPreciseEqual(pyfunc(12), cfunc(12))
 
     def test_loop_nest(self):
@@ -63,8 +56,7 @@ class TestObjectMode(TestCase):
         If the bug occurs, a segfault should occur
         """
         pyfunc = loop_nest_3
-        cres = compile_isolated(pyfunc, (), flags=forceobj)
-        cfunc = cres.entry_point
+        cfunc = jit((), forceobj=True)(pyfunc)
         self.assertEqual(pyfunc(5, 5), cfunc(5, 5))
 
         def bm_pyfunc():
@@ -100,8 +92,7 @@ class TestObjectMode(TestCase):
 
     def test_delitem(self):
         pyfunc = delitem_usecase
-        cres = compile_isolated(pyfunc, (), flags=forceobj)
-        cfunc = cres.entry_point
+        cfunc = jit((), forceobj=True)(pyfunc)
 
         l = [3, 4, 5]
         cfunc(l)

@@ -33,7 +33,7 @@ import numpy as np
 from numba import testing, types
 from numba.core import errors, typing, utils, config, cpu
 from numba.core.typing import cffi_utils
-from numba.core.compiler import (compile_extra, compile_isolated, Flags,
+from numba.core.compiler import (compile_extra, Flags,
                                  DEFAULT_FLAGS, CompilerBase,
                                  DefaultPassBuilder)
 from numba.core.typed_passes import IRLegalization
@@ -204,37 +204,6 @@ def ignore_internal_warnings():
                             message=r".*TBB_INTERFACE_VERSION.*",
                             category=errors.NumbaWarning,
                             module=r'numba\.np\.ufunc\.parallel.*')
-
-
-class CompilationCache(object):
-    """
-    A cache of compilation results for various signatures and flags.
-    This can make tests significantly faster (or less slow).
-    """
-
-    def __init__(self):
-        self.typingctx = typing.Context()
-        self.targetctx = cpu.CPUContext(self.typingctx, 'cpu')
-        self.cr_cache = {}
-
-    def compile(self, func, args, return_type=None, flags=DEFAULT_FLAGS):
-        """
-        Compile the function or retrieve an already compiled result
-        from the cache.
-        """
-        from numba.core.registry import cpu_target
-
-        cache_key = (func, args, return_type, flags)
-        if cache_key in self.cr_cache:
-            cr = self.cr_cache[cache_key]
-        else:
-            # Register the contexts in case for nested @jit or @overload calls
-            # (same as compile_isolated())
-            with cpu_target.nested_context(self.typingctx, self.targetctx):
-                cr = compile_extra(self.typingctx, self.targetctx, func,
-                                   args, return_type, flags, locals={})
-            self.cr_cache[cache_key] = cr
-        return cr
 
 
 class TestCase(unittest.TestCase):
@@ -578,19 +547,6 @@ class TestCase(unittest.TestCase):
                 _assertNumberEqual(first, second, delta)
         else:
             _assertNumberEqual(first, second, delta)
-
-    def run_nullary_func(self, pyfunc, flags):
-        """
-        Compile the 0-argument *pyfunc* with the given *flags*, and check
-        it returns the same result as the pure Python function.
-        The got and expected results are returned.
-        """
-        cr = compile_isolated(pyfunc, (), flags=flags)
-        cfunc = cr.entry_point
-        expected = pyfunc()
-        got = cfunc()
-        self.assertPreciseEqual(got, expected)
-        return got, expected
 
     def subprocess_test_runner(self, test_module, test_class=None,
                                test_name=None, envvars=None, timeout=60):

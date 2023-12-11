@@ -16,8 +16,8 @@ import numpy as np
 from numba import jit, config, typed, typeof
 from numba.core import types, utils
 import unittest
-from numba.tests.support import (TestCase, tag, CompilationCache,
-                                 skip_unless_py10_or_later, run_in_subprocess)
+from numba.tests.support import (TestCase, skip_unless_py10_or_later,
+                                 run_in_subprocess)
 
 from numba.cpython.unicode import compile_time_get_string_data
 from numba.cpython import hashing
