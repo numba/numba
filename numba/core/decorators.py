@@ -144,6 +144,8 @@ def jit(signature_or_function=None, locals={}, cache=False,
     if 'restype' in options:
         raise DeprecationError(_msg_deprecated_signature_arg.format('restype'))
     nopython = options.get('nopython', None)
+    if nopython is not None:
+        assert type(nopython) is bool, "nopython option must be a bool"
     if nopython is True and forceobj:
         raise ValueError("Only one of 'nopython' or 'forceobj' can be True.")
 
