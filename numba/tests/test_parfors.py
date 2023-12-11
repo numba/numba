@@ -44,7 +44,7 @@ from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                                  override_env_config, linux_only, tag,
                                  skip_parfors_unsupported, _32bit, needs_blas,
                                  needs_lapack, disabled_test, skip_unless_scipy,
-                                 needs_subprocess, expected_failure_py312)
+                                 needs_subprocess)
 from numba.core.extending import register_jitable
 from numba.core.bytecode import _fix_LOAD_GLOBAL_arg
 from numba.core import utils
@@ -4031,7 +4031,6 @@ class TestPrangeBasic(TestPrangeBase):
 class TestPrangeSpecific(TestPrangeBase):
     """ Tests specific features/problems found under prange"""
 
-    @expected_failure_py312
     def test_prange_two_instances_same_reduction_var(self):
         # issue4922 - multiple uses of same reduction variable
         def test_impl(n):
@@ -4043,7 +4042,6 @@ class TestPrangeSpecific(TestPrangeBase):
             return c
         self.prange_tester(test_impl, 9)
 
-    @expected_failure_py312
     def test_prange_conflicting_reduction_ops(self):
         def test_impl(n):
             c = 0
