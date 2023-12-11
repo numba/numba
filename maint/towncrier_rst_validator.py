@@ -39,7 +39,14 @@ def list_rst_filename() -> str:
             stderr=STDOUT,
         )
         all_files = output.strip().splitlines()
-        rst_file = [file for file in all_files if 
+        rst_dir_modified = [file for file in all_files if 
+                    file.startswith(rst_dir)]
+        print("Found modified .rst files in directory",
+              f"{rst_dir} from git diff: ")
+        for file in rst_dir_modified:
+            print(file)
+        print("\n")
+        rst_file = [file for file in rst_dir_modified if 
                     file.startswith(rst_dir + "/" + str(args.pull_request_id) + ".")]
     assert len(rst_file) == 1, f"No valid .rst file found in {rst_dir} for the given" + \
         f" Pull Request ID: {pr_id}. Valid .rst file should " + \
