@@ -1,0 +1,6 @@
+Add validation capability for user generated towncrier ``.rst`` files.
+======================================================================
+
+Added a validation script for user generated towncrier ``.rst`` files.
+The script will run as a part of towncrier Github workflow automatically
+on every PR.
