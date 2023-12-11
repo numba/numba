@@ -1,7 +1,9 @@
-from numba.core import (types, typing, funcdesc, config, pylowering, transforms)
+from numba.core import (types, typing, funcdesc, config, pylowering, transforms,
+                        errors)
 from numba.core.compiler_machinery import (FunctionPass, LoweringPass,
                                            register_pass)
 from collections import defaultdict
+import warnings
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)
@@ -134,5 +136,12 @@ class ObjectModeBackEnd(LoweringPass):
             metadata=state.metadata,
             reload_init=state.reload_init,
         )
+
+        if state.flags.release_gil:
+            warn_msg = ("Code running in object mode won't allow parallel"
+                        " execution despite nogil=True.")
+            warnings.warn_explicit(warn_msg, errors.NumbaWarning,
+                                    state.func_id.filename,
+                                    state.func_id.firstlineno)
 
         return True

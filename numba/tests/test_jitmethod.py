@@ -12,7 +12,7 @@ class TestJITMethod(unittest.TestCase):
             def __init__(self, x0):
                 self.x0 = x0
 
-            @jit
+            @jit(forceobj=True)
             def method(self, x):
                 a = np.empty(shape=5, dtype=np.float32)
                 x0 = self.x0
@@ -37,7 +37,7 @@ class TestJITMethod(unittest.TestCase):
             def __init__(self, x0):
                 self.x0 = x0
 
-            @jit
+            @jit(forceobj=True)
             def method(self):
                 return self.x0
 

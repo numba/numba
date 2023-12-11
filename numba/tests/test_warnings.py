@@ -27,64 +27,6 @@ class TestBuiltins(unittest.TestCase):
         self.assertEqual(w.category, NumbaDeprecationWarning)
         self.assertIn(msg, str(w.message))
 
-    def test_type_infer_warning(self):
-        def add(x, y):
-            a = {} # noqa dead
-            return x + y
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always', NumbaWarning)
-            ignore_internal_warnings()
-
-            cfunc = jit(add)
-            cfunc(1, 2)
-
-            self.assertEqual(len(w), 4)
-
-            # 'nopython=' kwarg was not supplied to @jit
-            self.check_nopython_kwarg_missing_warning(w[0])
-
-            # Type inference failure
-            self.assertEqual(w[1].category, NumbaWarning)
-            self.assertIn('type inference', str(w[1].message))
-
-            # Object mode
-            self.assertEqual(w[2].category, NumbaWarning)
-            self.assertIn('object mode', str(w[2].message))
-
-            # check objmode deprecation warning
-            self.check_objmode_deprecation_warning(w[3])
-
-    def test_return_type_warning(self):
-        y = np.ones(4, dtype=np.float32)
-
-        def return_external_array():
-            return y
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always', NumbaWarning)
-            ignore_internal_warnings()
-
-            cfunc = jit(_nrt=False)(return_external_array)
-            cfunc()
-
-            self.assertEqual(len(w), 4)
-
-            # 'nopython=' kwarg was not supplied to @jit
-            self.check_nopython_kwarg_missing_warning(w[0])
-
-            # Legal return value failure
-            self.assertEqual(w[1].category, NumbaWarning)
-            self.assertIn('return type', str(w[1].message))
-
-            # Object mode fall-back
-            self.assertEqual(w[2].category, NumbaWarning)
-            self.assertIn('object mode without forceobj=True',
-                          str(w[2].message))
-
-            # check objmode deprecation warning
-            self.check_objmode_deprecation_warning(w[3])
-
     def test_return_type_warning_with_nrt(self):
         """
         Rerun test_return_type_warning with nrt
@@ -116,48 +58,6 @@ class TestBuiltins(unittest.TestCase):
             cfunc(1, 2)
 
             self.assertEqual(len(w), 0)
-
-    def test_loop_lift_warn(self):
-        def do_loop(x):
-            a = {} # noqa dead
-            for i in range(x.shape[0]):
-                x[i] *= 2
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always', NumbaWarning)
-            ignore_internal_warnings()
-
-            x = np.ones(4, dtype=np.float32)
-            cfunc = jit(do_loop)
-            cfunc(x)
-
-            msg = '\n'.join(f"----------\n{x.message}" for x in w)
-
-            self.assertEqual(len(w), 5, msg=msg)
-
-            # 'nopython=' kwarg was not supplied to @jit
-            self.check_nopython_kwarg_missing_warning(w[0])
-
-            # Type inference failure (1st pass, in npm, fall-back to objmode
-            # with looplift)
-            self.assertEqual(w[1].category, NumbaWarning)
-            self.assertIn('type inference', str(w[1].message))
-            self.assertIn('WITH looplifting', str(w[1].message))
-
-            # Type inference failure (2nd pass, objmode with lifted loops,
-            # loop found but still failed, fall back to objmode no looplift)
-            self.assertEqual(w[1].category, NumbaWarning)
-            self.assertIn('type inference', str(w[2].message))
-            self.assertIn('WITHOUT looplifting', str(w[2].message))
-
-            # States compilation outcome
-            self.assertEqual(w[3].category, NumbaWarning)
-            self.assertIn('compiled in object mode without forceobj=True',
-                          str(w[3].message))
-            self.assertIn('but has lifted loops', str(w[3].message))
-
-            # check objmode deprecation warning
-            self.check_objmode_deprecation_warning(w[4])
 
     def test_deprecated(self):
         @deprecated('foo')

@@ -1193,6 +1193,13 @@ class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
 
                 self._pre_compile(args, return_type, flags)
 
+                # copy the flags, use nopython first
+                npm_loop_flags = flags.copy()
+                npm_loop_flags.force_pyobject = False
+
+                pyobject_loop_flags = flags.copy()
+                pyobject_loop_flags.force_pyobject = True
+
                 # Clone IR to avoid (some of the) mutation in the rewrite pass
                 cloned_func_ir = self.func_ir.copy()
 
@@ -1202,19 +1209,32 @@ class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
                     return_type=return_type,
                 )
                 with ev.trigger_event("numba:compile", data=ev_details):
-                    cres = compiler.compile_ir(typingctx=self.typingctx,
-                                               targetctx=self.targetctx,
-                                               func_ir=cloned_func_ir,
-                                               args=args,
-                                               return_type=return_type,
-                                               flags=flags, locals=self.locals,
-                                               lifted=(),
-                                               lifted_from=self.lifted_from,
-                                               is_lifted_loop=True,)
-
+                    # this emulates "object mode fall-back", try nopython, if it
+                    # fails, then try again in object mode.
+                    try:
+                        cres = compiler.compile_ir(typingctx=self.typingctx,
+                                                   targetctx=self.targetctx,
+                                                   func_ir=cloned_func_ir,
+                                                   args=args,
+                                                   return_type=return_type,
+                                                   flags=npm_loop_flags,
+                                                   locals=self.locals,
+                                                   lifted=(),
+                                                   lifted_from=self.lifted_from,
+                                                   is_lifted_loop=True,)
+                    except errors.TypingError:
+                        cres = compiler.compile_ir(typingctx=self.typingctx,
+                                                   targetctx=self.targetctx,
+                                                   func_ir=cloned_func_ir,
+                                                   args=args,
+                                                   return_type=return_type,
+                                                   flags=pyobject_loop_flags,
+                                                   locals=self.locals,
+                                                   lifted=(),
+                                                   lifted_from=self.lifted_from,
+                                                   is_lifted_loop=True,)
                     # Check typing error if object mode is used
-                    if (cres.typing_error is not None and
-                            not flags.enable_pyobject):
+                    if (cres.typing_error is not None):
                         raise cres.typing_error
                     self.add_overload(cres)
                 return cres.entry_point

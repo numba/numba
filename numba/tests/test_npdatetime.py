@@ -852,21 +852,21 @@ class TestMetadataScalingFactor(TestCase):
     and timedelta64 dtypes.
     """
 
-    def test_datetime(self, **jitargs):
+    def test_datetime(self, jitargs={'forceobj':True}):
         eq = jit(**jitargs)(eq_usecase)
         self.assertTrue(eq(DT('2014', '10Y'), DT('2010')))
 
     def test_datetime_npm(self):
         with self.assertTypingError():
-            self.test_datetime(nopython=True)
+            self.test_datetime(jitargs={'nopython':True})
 
-    def test_timedelta(self, **jitargs):
+    def test_timedelta(self, jitargs={'forceobj':True}):
         eq = jit(**jitargs)(eq_usecase)
         self.assertTrue(eq(TD(2, '10Y'), TD(20, 'Y')))
 
     def test_timedelta_npm(self):
         with self.assertTypingError():
-            self.test_timedelta(nopython=True)
+            self.test_timedelta(jitargs={'nopython':True})
 
 
 class TestDatetimeDeltaOps(TestCase):

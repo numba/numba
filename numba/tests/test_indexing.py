@@ -11,7 +11,7 @@ from numba.core.typing import arraydecl
 from numba.core.types import intp, ellipsis, slice2_type, slice3_type
 
 
-enable_pyobj_flags = {'nopython': False, 'forceobj': True}
+enable_pyobj_flags = {'forceobj': True}
 
 Noflags = {'nopython': True}
 
@@ -747,7 +747,7 @@ class TestSetItem(TestCase):
             for index in range(len(array)):
                 array[index] = index % decimal.Decimal(100)
 
-        cfunc = jit("void(i8[:])")(pyfunc)
+        cfunc = jit("void(i8[:])", **flags)(pyfunc)
 
         udt = np.arange(100, dtype='i1')
         control = udt.copy()
