@@ -508,14 +508,14 @@ class TestCapturedErrorHandling(SerialMixin, TestCase):
         # if NUMBA_CAPTURED_ERRORS is unset
         env = {"NUMBA_CAPTURED_ERRORS": ""}
         _out, err = self._run_in_separate_process(code, env)
-        # Check that the deprecated message is shown
+        # Check that the deprecated message is not shown
         self.assertNotIn("NumbaPendingDeprecationWarning", err.decode())
 
         # Check that the deprecated message is NOT shown
         # if NUMBA_CAPTURED_ERRORS=new_style
         env = {"NUMBA_CAPTURED_ERRORS": "new_style"}
         _out, err = self._run_in_separate_process(code, env)
-        # Check that the deprecated message is shown
+        # Check that the deprecated message is not shown
         self.assertNotIn("NumbaPendingDeprecationWarning", err.decode())
 
     def _test_old_style_deprecation(self):
