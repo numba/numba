@@ -44,7 +44,7 @@ class TestPrint(EnableNRTStatsMixin, TestCase):
         pyfunc = print_value
 
         def check_values(typ, values):
-            cfunc = njit((typ,))(pyfunc)
+            cfunc = njit((typ,))(pyfunc).overloads[(typ,)].entry_point
             for val in values:
                 with captured_stdout():
                     cfunc(val)
@@ -74,7 +74,12 @@ class TestPrint(EnableNRTStatsMixin, TestCase):
         with self.assertNoNRTLeak():
             x = [1, 3, 5, 7]
             with self.assertRefCount(x):
-                check_values(types.List(types.intp, reflected=True), (x,))
+                # NOTE: The type supplied to this check is the type as per when
+                # compile_isolated existed (see numba#9330 for its removal).
+                # It's unclear why the list is this type, changing the reflected
+                # flag to True may be the cause of an NRT leak (it's suspected
+                # that there's an issue in boxing/unboxing around `print`).
+                check_values(types.List(types.intp, reflected=False), (x,))
 
         # Test array
         arraytype = types.Array(types.int32, 1, 'C')
