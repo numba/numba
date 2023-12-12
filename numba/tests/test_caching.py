@@ -315,10 +315,6 @@ class TestCache(DispatcherCacheUsecasesTest):
         self.check_pycache(9)  # 3 index, 6 data
         self.check_hits(f, 0, 2)
 
-        f = mod.generated_usecase
-        self.assertPreciseEqual(f(3, 2), 1)
-        self.assertPreciseEqual(f(3j, 2), 2 + 3j)
-
         # Check the code runs ok from another process
         self.run_in_separate_process()
 
@@ -459,7 +455,6 @@ class TestCache(DispatcherCacheUsecasesTest):
         mod.outer(2, 3)
         mod.record_return(mod.packed_arr, 0)
         mod.record_return(mod.aligned_arr, 1)
-        mod.generated_usecase(2, 3)
         mtimes = self.get_cache_mtimes()
         # Two signatures compiled
         self.check_hits(mod.add_usecase, 0, 2)
