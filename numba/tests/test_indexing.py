@@ -538,7 +538,7 @@ class TestGetItem(TestCase):
         # C layout
         pyfunc = integer_indexing_1d_usecase
         arraytype = types.Array(types.int32, 1, 'C')
-        idxtype = types.IntEnumMember(EnumIndex, types.int32)
+        idxtype = types.IntEnumMember(EnumIndex, types.intp)
         cr = compile_isolated(pyfunc, (arraytype, idxtype), flags=flags)
         cfunc = cr.entry_point
 
