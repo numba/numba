@@ -1052,6 +1052,9 @@ class TestNoRetryFailedSignature(unittest.TestCase):
 
         self.run_test(foo)
 
+    @unittest.skip(("Unconditionally skip. @overload does not have an error "
+                    "cache. See PR #9259 for this feature and revert the skip "
+                    "once this is merged."))
     def test_error_count(self):
         def check(field, would_fail):
             # Slightly modified from the reproducer in issue #4117.
