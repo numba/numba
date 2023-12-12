@@ -5,7 +5,7 @@ The standout feature of this release is the official support for Python 3.12
 in Numba.
 
 Please note that profiling support is temporarily disabled in 
-this release and several known issues have been identified 
+this release (for Python 3.12) and several known issues have been identified 
 during development. The Numba team is actively working on resolving them. 
 Please refer to the respective issue pages 
 (`Numba #9289 <https://github.com/numba/numba/pull/9289>`_ and 
