@@ -1,4 +1,4 @@
-Added support for using EnumInt as numpy array's index.
-========================================
+Added support for using IntEnum as NumPy array's index.
+=======================================================
 
-Added support for using EnumInt as numpy array's index.
+Added support for using IntEnum as NumPy array's index.
