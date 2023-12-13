@@ -109,7 +109,7 @@ class TestMutualRecursion(TestCase):
         self.assertIn(errmsg, str(raises.exception))
         # objectmode
         # error is never trigger, function return normally
-        cfunc = make_inner_error(jit)
+        cfunc = make_inner_error(jit(forceobj=True))
         pfunc = make_inner_error()
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore', category=NumbaWarning)

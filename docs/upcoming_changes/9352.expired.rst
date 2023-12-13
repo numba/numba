@@ -1,0 +1,8 @@
+Object mode *fall-back* support has been removed.
+=================================================
+
+As per the deprecation schedule for Numba 0.59.0, support for
+"object mode fall-back" is removed from all Numba ``jit``-family decorators.
+Further, the default for the ``nopython`` key-word argument has been changed to
+``True``, this means that all Numba ``jit``-family decorated functions will now
+compile in ``nopython`` mode by default.

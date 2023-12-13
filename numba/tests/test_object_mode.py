@@ -65,11 +65,11 @@ class TestObjectMode(TestCase):
         def bm_cfunc():
             cfunc(5, 5)
 
-        print(utils.benchmark(bm_pyfunc))
-        print(utils.benchmark(bm_cfunc))
+        utils.benchmark(bm_pyfunc)
+        utils.benchmark(bm_cfunc)
 
     def test_array_of_object(self):
-        cfunc = jit(array_of_object)
+        cfunc = jit(forceobj=True)(array_of_object)
         objarr = np.array([object()] * 10)
         self.assertIs(cfunc(objarr), objarr)
 
@@ -148,7 +148,7 @@ class TestObjectModeInvalidRewrite(TestCase):
                 raise ValueError()
             return test0(n)  # trigger objmode fallback
 
-        compiled = jit(test1)
+        compiled = jit(forceobj=True)(test1)
         self.assertEqual(test1(10), compiled(10))
         self._ensure_objmode(compiled)
 
@@ -168,7 +168,7 @@ class TestObjectModeInvalidRewrite(TestCase):
             a2[0] = 1
             return test0(a1.sum() + a2.sum())   # trigger objmode fallback
 
-        compiled = jit(test)
+        compiled = jit(forceobj=True)(test)
         args = np.array([3]), np.array([4])
         self.assertEqual(test(*args), compiled(*args))
         self._ensure_objmode(compiled)

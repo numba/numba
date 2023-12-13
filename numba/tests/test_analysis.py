@@ -407,24 +407,6 @@ class TestBranchPrune(TestBranchPruneBase, SerialMixin):
         check(fn, (types.NoneType('none'),), 1)
         check(fn, (types.IntegerLiteral(10),), 0)
 
-    def test_obj_mode_fallback(self):
-        # see issue #3879, this checks that object mode fall back doesn't suffer
-        # from the IR mutation
-
-        @jit
-        def bug(a, b):
-            if a.ndim == 1:
-                if b is None:
-                    return dict()
-                return 12
-            return []
-
-        self.assertEqual(bug(np.zeros(10), 4), 12)
-        self.assertEqual(bug(np.arange(10), None), dict())
-        self.assertEqual(bug(np.arange(10).reshape((2, 5)), 10), [])
-        self.assertEqual(bug(np.arange(10).reshape((2, 5)), None), [])
-        self.assertFalse(bug.nopython_signatures)
-
     def test_global_bake_in(self):
 
         def impl(x):

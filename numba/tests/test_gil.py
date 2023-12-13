@@ -129,7 +129,7 @@ class TestGILRelease(TestCase):
         Test the GIL can by released by a lifted loop even though the
         surrounding code uses object mode.
         """
-        cfunc = jit(f_sig, nogil=True)(lifted_f)
+        cfunc = jit(f_sig, forceobj=True, nogil=True)(lifted_f)
         self.check_gil_released(cfunc)
 
     def test_gil_released_by_caller(self):
@@ -170,7 +170,7 @@ class TestGILRelease(TestCase):
         """
         with warnings.catch_warnings(record=True) as wlist:
             warnings.simplefilter('always', errors.NumbaWarning)
-            cfunc = jit(f_sig, nogil=True)(object_f)
+            cfunc = jit(f_sig, forceobj=True, nogil=True)(object_f)
         self.assertTrue(any(w.category is errors.NumbaWarning
                             and "Code running in object mode won't allow parallel execution" in str(w.message)
                             for w in wlist), wlist)
