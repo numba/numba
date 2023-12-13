@@ -141,7 +141,7 @@ class ObjectModeBackEnd(LoweringPass):
             warn_msg = ("Code running in object mode won't allow parallel"
                         " execution despite nogil=True.")
             warnings.warn_explicit(warn_msg, errors.NumbaWarning,
-                                    state.func_id.filename,
-                                    state.func_id.firstlineno)
+                                   state.func_id.filename,
+                                   state.func_id.firstlineno)
 
         return True
