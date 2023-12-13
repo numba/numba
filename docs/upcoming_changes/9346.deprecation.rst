@@ -1,0 +1,8 @@
+Explicitly setting ``NUMBA_CAPTURED_ERRORS=old_style`` will raise deprecation warnings
+======================================================================================
+
+As per deprecation schedule of old-style error-capturing, explicitly setting 
+``NUMBA_CAPTURED_ERRORS=old_style`` will raise deprecation warnings. 
+This release is the last to use "old_style" as the default.
+Details are documented at 
+https://numba.readthedocs.io/en/0.58.1/reference/deprecation.html#deprecation-of-old-style-numba-captured-errors

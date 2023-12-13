@@ -589,8 +589,6 @@ class TestCase(unittest.TestCase):
                    f'captured stderr: {status.stderr}')
         self.assertEqual(status.returncode, 0, streams)
         self.assertIn('OK', status.stderr)
-        self.assertNotIn('FAIL', status.stderr)
-        self.assertNotIn('ERROR', status.stderr)
 
     def run_test_in_subprocess(maybefunc=None, timeout=60, envvars=None):
         """Runs the decorated test in a subprocess via invoking numba's test
