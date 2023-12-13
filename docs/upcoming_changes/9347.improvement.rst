@@ -1,0 +1,9 @@
+Numba deprecation warning classes are now subclasses of builtin ones
+====================================================================
+
+To help users manage and suppress deprecation warnings from Numba, the
+``NumbaDeprecationWarning`` and ``NumbaPendingDeprecationWarning`` classes are
+now subclasses of the builtin ``DeprecationWarning`` and
+``PendingDeprecationWarning`` respectively. Therefore, warning filters on
+``DeprecationWarning`` and ``PendingDeprecationWarning`` will apply to Numba
+deprecation warnings.
