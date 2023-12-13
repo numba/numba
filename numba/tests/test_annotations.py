@@ -81,7 +81,7 @@ class TestAnnotation(TestCase):
         """
         Test some format and behavior of the html annotation with lifted loop
         """
-        @numba.jit
+        @numba.jit(forceobj=True)
         def udt(x):
             object()  # to force object mode
             z = 0
