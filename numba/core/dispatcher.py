@@ -8,6 +8,7 @@ import types as pytypes
 import uuid
 import weakref
 from contextlib import ExitStack
+from abc import abstractmethod
 
 from numba import _dispatcher
 from numba.core import (
@@ -1162,6 +1163,22 @@ class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         """
         pass
 
+    @abstractmethod
+    def compile(self, sig):
+        """Lifted code should implement a compilation method that will return
+        a CompileResult.entry_point for the given signature."""
+        pass
+
+    def _get_dispatcher_for_current_target(self):
+        # Lifted code does not honor the target switch currently.
+        # No work has been done to check if this can be allowed.
+        return self
+
+
+class LiftedLoop(LiftedCode):
+    def _pre_compile(self, args, return_type, flags):
+        assert not flags.enable_looplift, "Enable looplift flags is on"
+
     def compile(self, sig):
         with ExitStack() as scope:
             cres = None
@@ -1239,16 +1256,6 @@ class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
                     self.add_overload(cres)
                 return cres.entry_point
 
-    def _get_dispatcher_for_current_target(self):
-        # Lifted code does not honor the target switch currently.
-        # No work has been done to check if this can be allowed.
-        return self
-
-
-class LiftedLoop(LiftedCode):
-    def _pre_compile(self, args, return_type, flags):
-        assert not flags.enable_looplift, "Enable looplift flags is on"
-
 
 class LiftedWith(LiftedCode):
 
@@ -1281,6 +1288,65 @@ class LiftedWith(LiftedCode):
         call_template = typing.make_concrete_template(
             name, key=func_name, signatures=self.nopython_signatures)
         return call_template, pysig, args, kws
+
+    def compile(self, sig):
+        # this is similar to LiftedLoop's compile but does not have the
+        # "fallback" to object mode part.
+        with ExitStack() as scope:
+            cres = None
+
+            def cb_compiler(dur):
+                if cres is not None:
+                    self._callback_add_compiler_timer(dur, cres)
+
+            def cb_llvm(dur):
+                if cres is not None:
+                    self._callback_add_llvm_timer(dur, cres)
+
+            scope.enter_context(ev.install_timer("numba:compiler_lock",
+                                                 cb_compiler))
+            scope.enter_context(ev.install_timer("numba:llvm_lock", cb_llvm))
+            scope.enter_context(global_compiler_lock)
+
+            # Use counter to track recursion compilation depth
+            with self._compiling_counter:
+                # XXX this is mostly duplicated from Dispatcher.
+                flags = self.flags
+                args, return_type = sigutils.normalize_signature(sig)
+
+                # Don't recompile if signature already exists
+                # (e.g. if another thread compiled it before we got the lock)
+                existing = self.overloads.get(tuple(args))
+                if existing is not None:
+                    return existing.entry_point
+
+                self._pre_compile(args, return_type, flags)
+
+                # Clone IR to avoid (some of the) mutation in the rewrite pass
+                cloned_func_ir = self.func_ir.copy()
+
+                ev_details = dict(
+                    dispatcher=self,
+                    args=args,
+                    return_type=return_type,
+                )
+                with ev.trigger_event("numba:compile", data=ev_details):
+                    cres = compiler.compile_ir(typingctx=self.typingctx,
+                                               targetctx=self.targetctx,
+                                               func_ir=cloned_func_ir,
+                                               args=args,
+                                               return_type=return_type,
+                                               flags=flags, locals=self.locals,
+                                               lifted=(),
+                                               lifted_from=self.lifted_from,
+                                               is_lifted_loop=True,)
+
+                    # Check typing error if object mode is used
+                    if (cres.typing_error is not None and
+                            not flags.enable_pyobject):
+                        raise cres.typing_error
+                    self.add_overload(cres)
+                return cres.entry_point
 
 
 class ObjModeLiftedWith(LiftedWith):
