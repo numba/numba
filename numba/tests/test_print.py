@@ -37,31 +37,30 @@ def make_print_closure(x):
 
 class TestPrint(EnableNRTStatsMixin, TestCase):
 
+    def check_values(self, typ, values):
+        cfunc = njit((typ,))(print_value)
+        for val in values:
+            with captured_stdout():
+                cfunc(val)
+                self.assertEqual(sys.stdout.getvalue(), str(val) + '\n')
+
     def test_print_values(self):
         """
         Test printing a single argument value.
         """
-        pyfunc = print_value
-
-        def check_values(typ, values):
-            cfunc = njit((typ,))(pyfunc)
-            for val in values:
-                with captured_stdout():
-                    cfunc(val)
-                    self.assertEqual(sys.stdout.getvalue(), str(val) + '\n')
-
         # Various scalars
-        check_values(types.int32, (1, -234))
-        check_values(types.int64, (1, -234,
-                                   123456789876543210, -123456789876543210))
-        check_values(types.uint64, (1, 234,
-                                   123456789876543210, 2**63 + 123))
-        check_values(types.boolean, (True, False))
-        check_values(types.float64, (1.5, 100.0**10.0, float('nan')))
-        check_values(types.complex64, (1+1j,))
-        check_values(types.NPTimedelta('ms'), (np.timedelta64(100, 'ms'),))
+        self.check_values(types.int32, (1, -234))
+        self.check_values(types.int64, (1, -234,
+                                        123456789876543210,
+                                        -123456789876543210))
+        self.check_values(types.uint64, (1, 234,
+                                         123456789876543210, 2**63 + 123))
+        self.check_values(types.boolean, (True, False))
+        self.check_values(types.float64, (1.5, 100.0**10.0, float('nan')))
+        self.check_values(types.complex64, (1+1j,))
+        self.check_values(types.NPTimedelta('ms'), (np.timedelta64(100, 'ms'),))
 
-        cfunc = njit((types.float32,))(pyfunc)
+        cfunc = njit((types.float32,))(print_value)
         with captured_stdout():
             cfunc(1.1)
             # Float32 will lose precision
@@ -70,19 +69,26 @@ class TestPrint(EnableNRTStatsMixin, TestCase):
             self.assertTrue(got.startswith(expect))
             self.assertTrue(got.endswith('\n'))
 
-        # NRT-enabled type
-        with self.assertNoNRTLeak():
-            x = [1, 3, 5, 7]
-            with self.assertRefCount(x):
-                check_values(types.List(types.intp, reflected=True), (x,))
-
         # Test array
         arraytype = types.Array(types.int32, 1, 'C')
-        cfunc = njit((arraytype,))(pyfunc)
+        cfunc = njit((arraytype,))(print_value)
         with captured_stdout():
             cfunc(np.arange(10, dtype=np.int32))
             self.assertEqual(sys.stdout.getvalue(),
                              '[0 1 2 3 4 5 6 7 8 9]\n')
+
+    @unittest.skip("Issue with intermittent NRT leak, see #9355.")
+    def test_print_nrt_type(self):
+        # NOTE: this check is extracted from the above as it started
+        # intermittently leaking since the merge of #9330 (compile_isolated
+        # removal patch). It's not clear why this happens, see #9355 for
+        # thoughts/details. This test is skipped until it is resolved.
+
+        # NRT-enabled type
+        with self.assertNoNRTLeak():
+            x = [1, 3, 5, 7]
+            with self.assertRefCount(x):
+                self.check_values(types.List(types.intp, reflected=True), (x,))
 
     def test_print_array_item(self):
         """
