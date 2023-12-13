@@ -315,7 +315,7 @@ def _set_init_process_lock():
         # probably lack of /dev/shm for semaphore writes, warn the user
         msg = (
             "Could not obtain multiprocessing lock due to OS level error: %s\n"
-            "A likely cause of this problem is '/dev/shm' is missing or"
+            "A likely cause of this problem is '/dev/shm' is missing or "
             "read-only such that necessary semaphores cannot be written.\n"
             "*** The responsibility of ensuring multiprocessing safe access to "
             "this initialization sequence/module import is deferred to the "
