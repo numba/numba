@@ -245,33 +245,6 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
     return wrapper
 
 
-def generated_jit(function=None, cache=False,
-                  pipeline_class=None, **options):
-    """
-    This decorator allows flexible type-based compilation
-    of a jitted function.  It works as `@jit`, except that the decorated
-    function is called at compile-time with the *types* of the arguments
-    and should return an implementation function for those types.
-    """
-    url_s = "https://numba.readthedocs.io/en/stable/reference/deprecation.html"
-    url_anchor = "#deprecation-of-generated-jit"
-    url = f"{url_s}{url_anchor}"
-    msg = ("numba.generated_jit is deprecated. Please see the documentation "
-           f"at: {url} for more information and advice on a suitable "
-           "replacement.")
-    warnings.warn(msg, NumbaDeprecationWarning)
-    dispatcher_args = {}
-    if pipeline_class is not None:
-        dispatcher_args['pipeline_class'] = pipeline_class
-    wrapper = _jit(sigs=None, locals={}, target='cpu', cache=cache,
-                   targetoptions=options, impl_kind='generated',
-                   **dispatcher_args)
-    if function is not None:
-        return wrapper(function)
-    else:
-        return wrapper
-
-
 def njit(*args, **kws):
     """
     Equivalent to jit(nopython=True)

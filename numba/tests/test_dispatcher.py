@@ -8,12 +8,13 @@ from io import StringIO
 
 import numpy as np
 
-from numba import njit, jit, generated_jit, typeof, vectorize
+from numba import njit, jit, typeof, vectorize
 from numba.core import types, errors
 from numba import _dispatcher
 from numba.tests.support import TestCase, captured_stdout
 from numba.np.numpy_support import as_dtype
 from numba.core.dispatcher import Dispatcher
+from numba.extending import overload
 from numba.tests.support import needs_lapack, SerialMixin
 from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
 import unittest
@@ -654,48 +655,6 @@ class TestSignatureHandlingObjectMode(TestSignatureHandling):
     jit_args = dict(forceobj=True)
 
 
-class TestGeneratedDispatcher(TestCase):
-    """
-    Tests for @generated_jit.
-    """
-
-    def test_generated(self):
-        f = generated_jit(nopython=True)(generated_usecase)
-        self.assertEqual(f(8), 8 - 5)
-        self.assertEqual(f(x=8), 8 - 5)
-        self.assertEqual(f(x=8, y=4), 8 - 4)
-        self.assertEqual(f(1j), 5 + 1j)
-        self.assertEqual(f(1j, 42), 42 + 1j)
-        self.assertEqual(f(x=1j, y=7), 7 + 1j)
-
-    def test_generated_dtype(self):
-        f = generated_jit(nopython=True)(dtype_generated_usecase)
-        a = np.ones((10,), dtype=np.float32)
-        b = np.ones((10,), dtype=np.float64)
-        self.assertEqual(f(a, b).dtype, np.float64)
-        self.assertEqual(f(a, b, dtype=np.dtype('int32')).dtype, np.int32)
-        self.assertEqual(f(a, b, dtype=np.int32).dtype, np.int32)
-
-    def test_signature_errors(self):
-        """
-        Check error reporting when implementation signature doesn't match
-        generating function signature.
-        """
-        f = generated_jit(nopython=True)(bad_generated_usecase)
-        # Mismatching # of arguments
-        with self.assertRaises(TypeError) as raises:
-            f(1j)
-        self.assertIn("should be compatible with signature '(x, y=5)', "
-                      "but has signature '(x)'",
-                      str(raises.exception))
-        # Mismatching defaults
-        with self.assertRaises(TypeError) as raises:
-            f(1)
-        self.assertIn("should be compatible with signature '(x, y=5)', "
-                      "but has signature '(x, y=6)'",
-                      str(raises.exception))
-
-
 class TestDispatcherMethods(TestCase):
 
     def test_recompile(self):
@@ -1093,6 +1052,9 @@ class TestNoRetryFailedSignature(unittest.TestCase):
 
         self.run_test(foo)
 
+    @unittest.expectedFailure
+    # NOTE: @overload does not have an error cache. See PR #9259 for this
+    # feature and remove the xfail once this is merged.
     def test_error_count(self):
         def check(field, would_fail):
             # Slightly modified from the reproducer in issue #4117.
@@ -1102,8 +1064,11 @@ class TestNoRetryFailedSignature(unittest.TestCase):
             k = 10
             counter = {'c': 0}
 
-            @generated_jit
             def trigger(x):
+                assert 0, "unreachable"
+
+            @overload(trigger)
+            def ol_trigger(x):
                 # Keep track of every visit
                 counter['c'] += 1
                 if would_fail:

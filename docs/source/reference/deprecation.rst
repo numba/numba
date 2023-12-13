@@ -303,10 +303,10 @@ functionality has been removed.
 Schedule
 --------
 
-This feature will be removed with respect to this schedule:
+This feature was removed with respect to this schedule:
 
-* Deprecation warnings will be issued in version 0.57.0.
-* Removal will take place in version 0.59.0.
+* Deprecation warnings were issued in version 0.57.0.
+* Removal took place in version 0.59.0.
 
 Recommendations
 ---------------
