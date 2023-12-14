@@ -94,7 +94,7 @@ with open(file, "r") as f:
     assert len(title) > 0, "Title must not be empty"
     underline = contents[1]
     for underline_type in underline:
-        assert underline_type == "=", "Header should be underlined with = characters"
+        assert underline_type == "-", "Header should be underlined with - characters"
     assert len(title) == len(underline), "Title and underline must be the same length." + \
         f" (Found Title: {len(title)}, Underline: {len(underline)})"
     blank_line = contents[2]
