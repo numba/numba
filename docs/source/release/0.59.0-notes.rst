@@ -1,6 +1,6 @@
 
-Version 0.59.0 (14 December 2023)
------------------------------
+Version 0.59.0rc1 (14 December 2023)
+------------------------------------
 
 .. contents:: Table of Contents
    :depth: 2
