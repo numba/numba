@@ -95,10 +95,10 @@ Support is added for ``numpy.indices()``.
 
 (`PR-#9126 <https://github.com/numba/numba/pull/9126>`__)
 
-Added support for `np.polynomial.polynomial.Polynomial` class.
-==============================================================
+Added support for ``np.polynomial.polynomial.Polynomial`` class.
+================================================================
 
-Support is added for the `Polynomial` class from the package `np.polynomial.polynomial`.
+Support is added for the `Polynomial` class from the package ``np.polynomial.polynomial``.
 
 (`PR-#9140 <https://github.com/numba/numba/pull/9140>`__)
 
@@ -119,7 +119,7 @@ Support is added for ``numpy.unwrap()``. The ``axis`` argument is only supported
 Adds support for checking if dtypes are equal.
 ==============================================
 
-Support is added for checking if two dtype objects are equal, for example `assert X.dtype == np.dtype(np.float64)`.
+Support is added for checking if two dtype objects are equal, for example ``assert X.dtype == np.dtype(np.float64)``.
 
 (`PR-#9249 <https://github.com/numba/numba/pull/9249>`__)
 
@@ -139,7 +139,7 @@ with CUDA C/C++ and other languages.
 Make grid() and gridsize() use 64-bit integers
 ==============================================
 
-`cuda.grid()` and `cuda.gridsize()` now use 64-bit integers, so they no longer
+``cuda.grid()`` and ``cuda.gridsize()`` now use 64-bit integers, so they no longer
 overflow when the grid contains more than ``2 ** 31`` threads.
 
 (`PR-#9235 <https://github.com/numba/numba/pull/9235>`__)
@@ -204,10 +204,10 @@ where it is now possible to call a guvectorize with multiple outputs.
 
 (`PR-#9049 <https://github.com/numba/numba/pull/9049>`__)
 
-Handling of `None` args fixed in `PythonAPI.call`.
-==================================================
+Handling of ``None`` args fixed in ``PythonAPI.call``.
+======================================================
 
-Fixing segfault when `args=None` was passed to `PythonAPI.call`.
+Fixing segfault when ``args=None`` was passed to ``PythonAPI.call``.
 
 (`PR-#9089 <https://github.com/numba/numba/pull/9089>`__)
 
@@ -454,7 +454,6 @@ Pull-Requests:
 * PR `#9144 <https://github.com/numba/numba/pull/9144>`_: Fix error when literal is wrongly propagated in a PHI node (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
 * PR `#9148 <https://github.com/numba/numba/pull/9148>`_: bump llvmdev dependency to 0.42.0dev for next development cycle (`esc <https://github.com/esc>`_)
 * PR `#9149 <https://github.com/numba/numba/pull/9149>`_: update release checklist post 0.58.0rc1 (`esc <https://github.com/esc>`_)
-* PR `#9152 <https://github.com/numba/numba/pull/9152>`_: Fix old_style error capturing deprecation warnings (`sklam <https://github.com/sklam>`_)
 * PR `#9154 <https://github.com/numba/numba/pull/9154>`_: Add support for np.unwrap() (`KrisMinchev <https://github.com/KrisMinchev>`_)
 * PR `#9155 <https://github.com/numba/numba/pull/9155>`_: Remove unused test.cmd (`sklam <https://github.com/sklam>`_)
 * PR `#9159 <https://github.com/numba/numba/pull/9159>`_: Fix uncaught exception in `find_file()` (`gmarkall <https://github.com/gmarkall>`_)
@@ -462,16 +461,10 @@ Pull-Requests:
 * PR `#9169 <https://github.com/numba/numba/pull/9169>`_: Update `np.digitize` handling of np.nan bin edge(s) (`rjenc29 <https://github.com/rjenc29>`_)
 * PR `#9170 <https://github.com/numba/numba/pull/9170>`_: Fix an inappropriate test expression to remove a logical short circuit (`munahaf <https://github.com/munahaf>`_)
 * PR `#9171 <https://github.com/numba/numba/pull/9171>`_: Fix the implementation of a special method (`munahaf <https://github.com/munahaf>`_)
-* PR `#9173 <https://github.com/numba/numba/pull/9173>`_: Towncrier fixups (Continue #9158 and retarget to main branch) (`sklam <https://github.com/sklam>`_ `esc <https://github.com/esc>`_)
-* PR `#9181 <https://github.com/numba/numba/pull/9181>`_: Remove extra decrefs in RNG (`sklam <https://github.com/sklam>`_)
 * PR `#9189 <https://github.com/numba/numba/pull/9189>`_: Align `searchsorted` behaviour with numpy (`rjenc29 <https://github.com/rjenc29>`_)
-* PR `#9190 <https://github.com/numba/numba/pull/9190>`_: Fix issue with incompatible multiprocessing context in test. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#9191 <https://github.com/numba/numba/pull/9191>`_: Add a Numba power-on-self-test script and use in CI. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#9205 <https://github.com/numba/numba/pull/9205>`_: release notes and version support updates from release0.58 branch (`esc <https://github.com/esc>`_)
-* PR `#9220 <https://github.com/numba/numba/pull/9220>`_: Support passing arbitrary flags to NVVM (`gmarkall <https://github.com/gmarkall>`_)
 * PR `#9223 <https://github.com/numba/numba/pull/9223>`_: CUDA: Add support for compiling device functions with C ABI (`gmarkall <https://github.com/gmarkall>`_)
-* PR `#9227 <https://github.com/numba/numba/pull/9227>`_: Support NumPy 1.26 (PR aimed at review / merge) (`gmarkall <https://github.com/gmarkall>`_ `Tialo <https://github.com/Tialo>`_)
-* PR `#9228 <https://github.com/numba/numba/pull/9228>`_: Fix #9222 - Don't replace `.` with `_` in func arg names in inline closures (`gmarkall <https://github.com/gmarkall>`_)
 * PR `#9235 <https://github.com/numba/numba/pull/9235>`_: CUDA: Make `grid()` and `gridsize()` use 64-bit integers (`gmarkall <https://github.com/gmarkall>`_)
 * PR `#9236 <https://github.com/numba/numba/pull/9236>`_: Fixes numba/numba#9234 (`SridharCR <https://github.com/SridharCR>`_)
 * PR `#9244 <https://github.com/numba/numba/pull/9244>`_: Fix Recursion error in parfor lookup (`sklam <https://github.com/sklam>`_)
@@ -513,6 +506,7 @@ Pull-Requests:
 * PR `#9358 <https://github.com/numba/numba/pull/9358>`_: Remove note about OpenMP restriction in wheels. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#9359 <https://github.com/numba/numba/pull/9359>`_: Fix test_jit_module test against objmode fallback. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#9360 <https://github.com/numba/numba/pull/9360>`_: AzureCI changes. RVSDG test config should still test its assigned test slice (`sklam <https://github.com/sklam>`_)
+* PR `#9362 <https://github.com/numba/numba/pull/9362>`_: Fix ``np.MachAr`` warning matching in test. (`sklam <https://github.com/sklam>`_)
 
 Authors:
 ~~~~~~~~
@@ -534,4 +528,3 @@ Authors:
 * `sklam <https://github.com/sklam>`_
 * `SridharCR <https://github.com/SridharCR>`_
 * `stuartarchibald <https://github.com/stuartarchibald>`_
-* `Tialo <https://github.com/Tialo>`_
