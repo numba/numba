@@ -1,5 +1,5 @@
 
-Version 0.59.0 (Release Date)
+Version 0.59.0 (14 December 2023)
 -----------------------------
 
 .. contents:: Table of Contents
