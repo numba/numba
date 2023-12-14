@@ -6239,8 +6239,9 @@ def foo():
         # typing part of the `np.MachAr` overload, which may already have been
         # executed for the given types and so an empty in memory cache is
         # needed.
-        msg = r'`np.MachAr` is deprecated \(NumPy 1.22\)'
+        msg = r'.*`np.MachAr` is deprecated \(NumPy 1.22\)'
         with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('ignore')  # override warning behavior
             warnings.filterwarnings("always", message=msg,
                                     category=NumbaDeprecationWarning,)
             f = njit(lambda : np.MachAr().eps)
