@@ -456,7 +456,6 @@ Pull-Requests:
 * PR `#9149 <https://github.com/numba/numba/pull/9149>`_: update release checklist post 0.58.0rc1 (`esc <https://github.com/esc>`_)
 * PR `#9154 <https://github.com/numba/numba/pull/9154>`_: Add support for np.unwrap() (`KrisMinchev <https://github.com/KrisMinchev>`_)
 * PR `#9155 <https://github.com/numba/numba/pull/9155>`_: Remove unused test.cmd (`sklam <https://github.com/sklam>`_)
-* PR `#9159 <https://github.com/numba/numba/pull/9159>`_: Fix uncaught exception in `find_file()` (`gmarkall <https://github.com/gmarkall>`_)
 * PR `#9168 <https://github.com/numba/numba/pull/9168>`_: fix the `get_template_info` method in `overload_method` template (`sklam <https://github.com/sklam>`_)
 * PR `#9169 <https://github.com/numba/numba/pull/9169>`_: Update `np.digitize` handling of np.nan bin edge(s) (`rjenc29 <https://github.com/rjenc29>`_)
 * PR `#9170 <https://github.com/numba/numba/pull/9170>`_: Fix an inappropriate test expression to remove a logical short circuit (`munahaf <https://github.com/munahaf>`_)
