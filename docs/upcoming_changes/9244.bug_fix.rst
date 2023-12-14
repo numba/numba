@@ -1,5 +1,5 @@
 Fixed ``RecursionError`` in ``prange``
-======================================
+--------------------------------------
 
 A problem with certain loop patterns using ``prange`` leading to 
 ``RecursionError`` in the compiler is fixed. An example of such loop is shown 
