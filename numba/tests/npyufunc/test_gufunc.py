@@ -334,6 +334,10 @@ class TestDynamicGUFunc(TestCase):
         self.assertPreciseEqual(x, np.array([2, 4, 3, 4]))
 
 
+class TestDynamicGUFuncParallel(TestDynamicGUFunc):
+    target = 'parallel'
+
+
 class TestGUVectorizeScalar(TestCase):
     """
     Nothing keeps user from out-of-bound memory access
@@ -433,7 +437,7 @@ class TestGUVectorizeScalarParallel(TestGUVectorizeScalar):
 
 
 class TestGUVectorizePickling(TestCase):
-    def test_pickle_gufunc_non_dyanmic(self):
+    def test_pickle_gufunc_non_dynamic(self):
         """Non-dynamic gufunc.
         """
         @guvectorize(["f8,f8[:]"], "()->()")
@@ -448,8 +452,7 @@ class TestGUVectorizePickling(TestCase):
         self.assertEqual(cloned._frozen, double._frozen)
         self.assertEqual(cloned.identity, double.identity)
         self.assertEqual(cloned.is_dynamic, double.is_dynamic)
-        self.assertEqual(cloned.gufunc_builder._sigs,
-                         double.gufunc_builder._sigs)
+        self.assertEqual(cloned._sigs, double._sigs)
         # expected value of attributes
         self.assertTrue(cloned._frozen)
 
@@ -462,7 +465,7 @@ class TestGUVectorizePickling(TestCase):
         arr = np.arange(10)
         self.assertPreciseEqual(double(arr), cloned(arr))
 
-    def test_pickle_gufunc_dyanmic_null_init(self):
+    def test_pickle_gufunc_dynamic_null_init(self):
         """Dynamic gufunc w/o prepopulating before pickling.
         """
         @guvectorize("()->()", identity=1)
@@ -477,8 +480,7 @@ class TestGUVectorizePickling(TestCase):
         self.assertEqual(cloned._frozen, double._frozen)
         self.assertEqual(cloned.identity, double.identity)
         self.assertEqual(cloned.is_dynamic, double.is_dynamic)
-        self.assertEqual(cloned.gufunc_builder._sigs,
-                         double.gufunc_builder._sigs)
+        self.assertEqual(cloned._sigs, double._sigs)
         # expected value of attributes
         self.assertFalse(cloned._frozen)
 
@@ -524,8 +526,7 @@ class TestGUVectorizePickling(TestCase):
         self.assertEqual(cloned._frozen, double._frozen)
         self.assertEqual(cloned.identity, double.identity)
         self.assertEqual(cloned.is_dynamic, double.is_dynamic)
-        self.assertEqual(cloned.gufunc_builder._sigs,
-                         double.gufunc_builder._sigs)
+        self.assertEqual(cloned._sigs, double._sigs)
         # expected value of attributes
         self.assertFalse(cloned._frozen)
 
