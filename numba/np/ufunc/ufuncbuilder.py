@@ -264,11 +264,11 @@ class _BaseUFuncBuilder(object):
         self._cres[sig] = cres
         return cres
 
-    # def disable_compile(self):
-    #     """
-    #     Disable the compilation of new signatures at call time.
-    #     """
-    #     # Override this for implementations that support lazy compilation
+    def disable_compile(self):
+        """
+        Disable the compilation of new signatures at call time.
+        """
+        # Override this for implementations that support lazy compilation
 
 
 def make_gufunc_kernel(_dufunc):
@@ -511,10 +511,6 @@ class GUFuncBuilder(serialize.ReduceMixin, _BaseUFuncBuilder, UfuncBase):
     @property
     def is_dynamic(self):
         return self._is_dynamic
-
-    # @property
-    # def signature(self):
-    #     return self._signature
 
     def _install_type(self, typingctx=None):
         """Constructs and installs a typing class for a gufunc object in the
