@@ -542,7 +542,7 @@ class TestBuiltins(TestCase):
             self.assertPreciseEqual(cfunc(x), pyfunc(x), prec='single')
 
         cfunc = jit((types.string,), **flags)(pyfunc)
-        for x in ['-1.1', '0.0', '1.1']:
+        for x in ['-1.1', '0.0', '1.1', 'inf', '-inf', 'INF', '-INF']:
             self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
     def test_float_npm(self):

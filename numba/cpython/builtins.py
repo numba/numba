@@ -298,6 +298,14 @@ def int_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
+@lower_builtin(float, types.StringLiteral)
+def float_inf_impl(context, builder, sig, args):
+    [ty] = sig.args
+    assert ty.literal_value.lower() in ('inf', '-inf')
+    res = context.get_constant(sig.return_type, np.inf)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
 @lower_builtin(complex, types.VarArg(types.Any))
 def complex_impl(context, builder, sig, args):
     complex_type = sig.return_type
