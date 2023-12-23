@@ -1,0 +1,4 @@
+Add ``float('INF')`` and ``float('-INF')`` ctor
+===============================================
+
+Support for ``float('INF')`` and ``float('-INF')`` is added.
