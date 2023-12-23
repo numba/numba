@@ -1,0 +1,4 @@
+Support dynamic parallel GUFuncs
+--------------------------------
+
+Support for dynamic GUFuncs is added to the parallel target.
