@@ -539,8 +539,8 @@ class TestGetItem(TestCase):
         pyfunc = integer_indexing_1d_usecase
         arraytype = types.Array(types.int32, 1, 'C')
         idxtype = types.IntEnumMember(EnumIndex, types.intp)
-        cr = compile_isolated(pyfunc, (arraytype, idxtype), flags=flags)
-        cfunc = cr.entry_point
+        argtys = (arraytype, idxtype)
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         a = np.arange(10, dtype='i4')
         self.assertEqual(pyfunc(a, EnumIndex.INDEX0), cfunc(a, EnumIndex.INDEX0))
