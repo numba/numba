@@ -79,6 +79,15 @@ def filter_usecase(x, filter_func):
 def float_usecase(x):
     return float(x)
 
+def float_inf_usecase(x):
+    d = {
+        1: float('inf'),
+        2: float('INF'),
+        3: float('-inf'),
+        4: float('-INF'),
+    }
+    return d.get(x)
+
 def format_usecase(x, y):
     return x.format(y)
 
@@ -548,6 +557,12 @@ class TestBuiltins(TestCase):
     def test_float_npm(self):
         with self.assertTypingError():
             self.test_float(flags=no_pyobj_flags)
+
+    def test_float_string_literal(self):
+        pyfunc = float_inf_usecase
+        cfunc = njit(pyfunc)
+        for x in range(1, 5):
+            self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
     def test_format(self, flags=forceobj_flags):
         pyfunc = format_usecase

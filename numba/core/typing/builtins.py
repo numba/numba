@@ -995,6 +995,10 @@ class Float(AbstractTemplate):
 
         [arg] = args
 
+        if isinstance(arg, types.UnicodeType):
+            msg = 'argument must be a string literal'
+            raise errors.RequireLiteralValue(msg)
+
         if isinstance(arg, types.StringLiteral):
             if arg.literal_value.lower in ('inf', '-inf'):
                 msg = 'float(string) only supported for "inf" value'
