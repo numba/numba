@@ -299,12 +299,9 @@ def int_impl(context, builder, sig, args):
 
 
 @lower_builtin(float, types.StringLiteral)
-def float_inf_impl(context, builder, sig, args):
+def float_literal_impl(context, builder, sig, args):
     [ty] = sig.args
-    value = ty.literal_value.lower()
-    assert value in ('inf', '-inf')
-    s = 1 if value == 'inf' else -1
-    res = context.get_constant(sig.return_type, s * np.inf)
+    res = context.get_constant(sig.return_type, float(ty.literal_value))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 

@@ -1000,9 +1000,6 @@ class Float(AbstractTemplate):
             raise errors.RequireLiteralValue(msg)
 
         if isinstance(arg, types.StringLiteral):
-            if arg.literal_value.lower in ('inf', '-inf'):
-                msg = 'float(string) only supported for "inf" value'
-                raise errors.NumbaTypeError(msg)
             return signature(types.float64, arg)
 
         if arg not in types.number_domain:

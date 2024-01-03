@@ -81,10 +81,14 @@ def float_usecase(x):
 
 def float_inf_usecase(x):
     d = {
-        1: float('inf'),
-        2: float('INF'),
-        3: float('-inf'),
-        4: float('-INF'),
+        0: float('inf'),
+        1: float('INF'),
+        2: float('-inf'),
+        3: float('-INF'),
+        4: float('\r\nINF\r       '),
+        5: float('       \r\n\t-INF'),
+        6: float('1234.45'),
+        7: float('\n-123.4\r'),
     }
     return d.get(x)
 
@@ -561,7 +565,7 @@ class TestBuiltins(TestCase):
     def test_float_string_literal(self):
         pyfunc = float_inf_usecase
         cfunc = njit(pyfunc)
-        for x in range(1, 5):
+        for x in range(8):
             self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
     def test_format(self, flags=forceobj_flags):
