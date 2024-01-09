@@ -530,6 +530,13 @@ class TestRandom(BaseTest):
             paramlist=[{'low': 1.5, 'high': 1e6},
                        {'low': -2.5, 'high': 1e3},
                        {'low': 1.5, 'high': -2.5}])
+    def test_njit_with_np_random_uniform_error(self):
+        with self.assertRaises(numba.core.errors.TypingError):
+            @numba.njit
+            def uniform():
+                return np.random.uniform(0, 1, size=())
+
+            uniform()
 
     def _check_triangular(self, func2, func3, ptr):
         """
