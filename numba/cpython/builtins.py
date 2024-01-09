@@ -294,8 +294,15 @@ def round_impl_binary(context, builder, sig, args):
 def int_impl(context, builder, sig, args):
     [ty] = sig.args
     [val] = args
-    res = context.cast(builder, val, ty, sig.return_type)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+    if ty == types.float64 and isinstance(val, types.Const) and val.value == float("inf"):
+        # Handle the case of float("inf")
+        result = context.get_constant(types.float64, float("inf"))
+    else:
+        # Standard conversion for other cases
+        result = context.cast(builder, val, ty, sig.return_type)
+
+    return impl_ret_untracked(context, builder, sig.return_type, result)
 
 
 @lower_builtin(complex, types.VarArg(types.Any))

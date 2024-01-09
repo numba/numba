@@ -996,17 +996,23 @@ class Float(AbstractTemplate):
         [arg] = args
 
         if arg not in types.number_domain:
-            raise errors.NumbaTypeError("float() only support for numbers")
+            raise errors.NumbaTypeError("float() only supports numbers")
 
         if arg in types.complex_domain:
             raise errors.NumbaTypeError("float() does not support complex")
 
-        if arg in types.integer_domain:
+        if arg == types.float64:
+            # Handle the case of float("inf")
+            if isinstance(arg, types.Const) and arg.value == float("inf"):
+                return signature(types.float64, arg)
+
+            return signature(arg, arg)
+        
+        elif arg in types.integer_domain:
             return signature(types.float64, arg)
 
         elif arg in types.real_domain:
             return signature(arg, arg)
-
 
 @infer_global(complex)
 class Complex(AbstractTemplate):
