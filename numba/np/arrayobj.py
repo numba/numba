@@ -12,7 +12,7 @@ from llvmlite.ir import Constant
 
 import numpy as np
 
-from numba import pndindex, literal_unroll
+from numba import pndindex, literal_unroll, cuda, njit, types #type : ignore
 from numba.core import types, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, from_dtype, carray, farray,
                                     is_contiguous, is_fortran,
@@ -29,7 +29,7 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
 from numba.core.typing import signature
 from numba.core.types import StringLiteral
 from numba.core.extending import (register_jitable, overload, overload_method,
-                                  intrinsic, overload_attribute)
+                                  intrinsic, overload_attribute, lower_builtin)
 from numba.misc import quicksort, mergesort
 from numba.cpython import slicing
 from numba.cpython.unsafe.tuple import tuple_setitem, build_full_slice_tuple
@@ -40,6 +40,28 @@ from numba.core.typing.npydecl import (parse_dtype as ty_parse_dtype,
                                        _sequence_of_arrays,
                                        _choose_concatenation_layout)
 
+
+@lower_builtin(operator.is_, types.Record, types.Record)
+def record_is(context, builder, sig, args):
+    aty, bty = sig.args
+    if aty != bty:
+        return cgutils.false_bit
+
+    return builder.icmp_unsigned('==', args[0], args[1])
+
+
+def test_kernel(a, b) -> None:
+    print(int(a is a))
+    print(int(a is b))
+    print(int(b is a))
+    print(int(b is b))
+
+
+a = np.zeros(1, dtype=[("a", "i4"), ("b", "i4")])[0]
+b = a.copy()
+njit(test_kernel)(a, b)
+cuda.jit(test_kernel)[1, 1](a, b)
+cuda.synchronize()
 
 def set_range_metadata(builder, load, lower_bound, upper_bound):
     """
