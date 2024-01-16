@@ -27,7 +27,7 @@
  *
  */
 
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 12)
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 12) || (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 13)
 /* empty */
 #elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 11)
 #ifndef Py_BUILD_CORE
@@ -651,7 +651,7 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
     fn = (PyCFunctionWithKeywords) PyCFunction_GET_FUNCTION(cfunc);
     tstate = PyThreadState_GET();
 
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 12)
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 12) || (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 13)
     /* FIXME: as per the changes from PEP 669 Numba does not support profiling
      * (yet?). Just skip frame injection entirely. JIT compiled functions will
      * NOT show up in cProfile profiler.
@@ -723,7 +723,7 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
         }
         /* Populate the 'fast locals' in `frame` */
         PyFrame_LocalsToFast(frame, 0);
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 12)
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 12) || (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 13)
         /* empty */
 #elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 11)
         C_TRACE(result, fn(PyCFunction_GET_SELF(cfunc), args, kws), frame);
@@ -1273,7 +1273,7 @@ static PyTypeObject DispatcherType = {
 /* WARNING: Do not remove this, only modify it! It is a version guard to
  * act as a reminder to update this struct on Python version update! */
 #if (PY_MAJOR_VERSION == 3)
-#if ! ((PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11) || (PY_MINOR_VERSION == 12))
+#if ! (NB_SUPPORTED_PYTHON_MINOR)
 #error "Python minor version is not supported."
 #endif
 #else
