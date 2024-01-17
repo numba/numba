@@ -954,7 +954,7 @@ class ControlFlowAnalysis(object):
         self._curblock.terminating = True
         self._force_new_block = True
 
-    if PYVERSION in ((3, 12), ):
+    if PYVERSION in ((3, 12), (3, 13)):
         def op_RETURN_CONST(self, inst):
             self._curblock.terminating = True
             self._force_new_block = True

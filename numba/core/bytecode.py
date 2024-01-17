@@ -9,7 +9,7 @@ from numba.core import errors, utils, serialize
 from numba.core.utils import PYVERSION
 
 
-if PYVERSION in ((3, 12), ):
+if PYVERSION in ((3, 12), (3, 13)):
     from opcode import _inline_cache_entries
     # Instruction/opcode length in bytes
     INSTR_LEN = 2
@@ -104,7 +104,11 @@ class ByteCodeInst(object):
         # https://bugs.python.org/issue27129
         # https://github.com/python/cpython/pull/25069
         assert self.is_jump
-        if PYVERSION in ((3, 12), ):
+        if PYVERSION in ((3, 13),):
+            if self.opcode in (dis.opmap[k]
+                               for k in ["JUMP_BACKWARD"]):
+                return self.next - (self.arg * 2)
+        elif PYVERSION in ((3, 12),):
             if self.opcode in (dis.opmap[k]
                                for k in ["JUMP_BACKWARD"]):
                 return self.offset - (self.arg - 1) * 2
@@ -121,7 +125,7 @@ class ByteCodeInst(object):
         else:
             raise NotImplementedError(PYVERSION)
 
-        if PYVERSION in ((3, 10), (3, 11), (3, 12)):
+        if PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
             if self.opcode in JREL_OPS:
                 return self.next + self.arg * 2
             else:
@@ -160,7 +164,7 @@ OPCODE_NOP = dis.opname.index('NOP')
 
 
 # Adapted from Lib/dis.py
-def _unpack_opargs(code):
+def _unpack_opargs_pre_3_13(code):
     """
     Returns a 4-int-tuple of
     (bytecode offset, opcode, argument, offset of next bytecode).
@@ -176,7 +180,7 @@ def _unpack_opargs(code):
             for j in range(ARG_LEN):
                 arg |= code[i + j] << (8 * j)
             i += ARG_LEN
-            if PYVERSION in ((3, 12), ):
+            if PYVERSION in ((3, 12),):
                 # Python 3.12 introduced cache slots. We need to account for
                 # cache slots when we determine the offset of the next opcode.
                 # The number of cache slots is specific to each opcode and can
@@ -200,7 +204,7 @@ def _unpack_opargs(code):
         else:
             arg = None
             i += NO_ARG_LEN
-            if PYVERSION in ((3, 12), ):
+            if PYVERSION in ((3, 12),):
                 # Python 3.12 introduced cache slots. We need to account for
                 # cache slots when we determine the offset of the next opcode.
                 # The number of cache slots is specific to each opcode and can
@@ -214,6 +218,20 @@ def _unpack_opargs(code):
         extended_arg = 0
         yield (offset, op, arg, i)
         offset = i  # Mark inst offset at first extended
+
+
+if PYVERSION in ((3, 13),):
+
+    def _unpack_opargs(code):
+        instlist = list(dis._get_instructions_bytes(code))
+        for i, inst in enumerate(instlist):
+            if i + 1 < len(instlist):
+                nextoffset = instlist[i + 1].offset
+            else:
+                nextoffset = inst.offset + 2
+            yield inst.start_offset, inst.opcode, inst.arg, nextoffset
+else:
+    _unpack_opargs = _unpack_opargs_pre_3_13
 
 
 def _patched_opargs(bc_stream):
@@ -528,7 +546,7 @@ class ByteCodePy312(ByteCodePy311):
 
 if PYVERSION == (3, 11):
     ByteCode = ByteCodePy311
-elif PYVERSION == (3, 12):
+elif PYVERSION == (3, 12) or PYVERSION == (3, 13):
     ByteCode = ByteCodePy312
 elif PYVERSION < (3, 11):
     ByteCode = _ByteCode
