@@ -1,4 +1,4 @@
-Add ``float(string_literal)`` ctor
+Add ``float(<string literal>)`` ctor
 ==================================
 
-Support for ``float(string_literal)`` is added.
+Support for ``float(<string literal>)`` is added.
