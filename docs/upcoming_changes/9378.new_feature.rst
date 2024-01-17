@@ -1,4 +1,4 @@
-Add ``float('INF')`` and ``float('-INF')`` ctor
-===============================================
+Add ``float(string_literal)`` ctor
+==================================
 
-Support for ``float('INF')`` and ``float('-INF')`` is added.
+Support for ``float(string_literal)`` is added.
