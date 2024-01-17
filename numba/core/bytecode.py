@@ -316,7 +316,7 @@ class _ByteCode(object):
         # Start with first bytecode's lineno
         known = code.co_firstlineno
         for inst in table.values():
-            if inst.lineno >= 0:
+            if inst.lineno is not None and inst.lineno >= 0:
                 known = inst.lineno
             else:
                 inst.lineno = known
