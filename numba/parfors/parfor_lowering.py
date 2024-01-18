@@ -867,7 +867,7 @@ def find_vars(var, varset):
     return var
 
 def _hoist_internal(inst, dep_on_param, call_table, hoisted, not_hoisted,
-                    typemap, stored_arrays):
+                    typemap, stored_arrays, check_mutable=False):
     if inst.target.name in stored_arrays:
         not_hoisted.append((inst, "stored array"))
         if config.DEBUG_ARRAY_OPT >= 1:
@@ -875,7 +875,7 @@ def _hoist_internal(inst, dep_on_param, call_table, hoisted, not_hoisted,
         return False
 
     target_type = typemap[inst.target.name]
-    if getattr(target_type, "mutable", False):
+    if check_mutable and getattr(target_type, "mutable", False):
         if config.DEBUG_ARRAY_OPT >= 1:
             print("Instruction", inst, "could not be hoisted because objects of this type are mutable.")
         return False
@@ -966,7 +966,8 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
                 continue
             elif isinstance(inst, ir.Assign) and inst.target.name in def_once:
                 if _hoist_internal(inst, dep_on_param, call_table,
-                                   hoisted, not_hoisted, typemap, itemsset):
+                                   hoisted, not_hoisted, typemap, itemsset,
+                                   check_mutable=True):
                     # don't add this instruction to the block since it is
                     # hoisted
                     continue
@@ -982,7 +983,8 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
                     elif (isinstance(ib_inst, ir.Assign) and
                         ib_inst.target.name in def_once):
                         if _hoist_internal(ib_inst, dep_on_param, call_table,
-                                           hoisted, not_hoisted, typemap, itemsset):
+                                           hoisted, not_hoisted, typemap,
+                                           itemsset, check_mutable=True):
                             # don't add this instruction to the block since it is hoisted
                             continue
                     new_init_block.append(ib_inst)
