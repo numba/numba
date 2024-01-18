@@ -1,0 +1,4 @@
+Fix parfor hoisting.
+====================
+
+Disallow hoisting of mutable objects from within parfors.
