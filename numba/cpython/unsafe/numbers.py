@@ -51,3 +51,36 @@ def leading_zeros(typeingctx, src):
         [src] = args
         return builder.ctlz(src, ir.Constant(ir.IntType(1), 0))
     return src(src), codegen
+
+
+def _impl_byteswap(context, builder, typ, value):
+    """Byteswap an atomic value."""
+    if isinstance(typ, types.Boolean) or typ.bitwidth == 8:
+        # It's a no-op
+        return value
+    # llvm.bswap only works on integer types
+    if isinstance(typ, types.Integer):
+        intty = value.type
+    else:
+        intty = ir.IntType(typ.bitwidth)
+    fn = builder.module.declare_intrinsic("llvm.bswap", [intty])
+    cast = builder.bitcast(value, intty)
+    swapped = builder.call(fn, (cast,))
+    return builder.bitcast(swapped, value.type)
+
+
+@intrinsic
+def byteswap(typingctx, value):
+    sig = value(value)
+
+    def codegen(context, builder, signature, args):
+        [val] = args
+        if isinstance(value, types.Complex):
+            z = context.make_complex(builder, signature.args[0], value=val)
+            floatty = signature.args[0].underlying_float
+            z.real = _impl_byteswap(context, builder, floatty, z.real)
+            z.imag = _impl_byteswap(context, builder, floatty, z.imag)
+            return z._getvalue()
+        else:
+            return _impl_byteswap(context, builder, sig.args[0], val)
+    return sig, codegen
