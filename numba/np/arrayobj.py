@@ -41,17 +41,6 @@ from numba.core.typing.npydecl import (parse_dtype as ty_parse_dtype,
                                        _choose_concatenation_layout)
 
 
-
-def record_is(context, builder, sig, args):
-    aty, bty = sig.args
-    if aty != bty:
-        return cgutils.false_bit
-
-    return builder.icmp_unsigned('==', args[0], args[1])
-
-
-
-
 def set_range_metadata(builder, load, lower_bound, upper_bound):
     """
     Set the "range" metadata on a load instruction.
@@ -3285,7 +3274,6 @@ def constant_bytes(context, builder, ty, pyval):
 
 
 @lower_builtin(operator.is_, types.Array, types.Array)
-@lower_builtin(operator.is_, types.Record, types.Record)
 def array_is(context, builder, sig, args):
     aty, bty = sig.args
     if aty != bty:
@@ -3297,6 +3285,16 @@ def array_is(context, builder, sig, args):
                 a.ctypes.data == b.ctypes.data)
 
     return context.compile_internal(builder, array_is_impl, sig, args)
+
+@lower_builtin(operator.is_, types.Record, types.Record)
+def record_is(context, builder, sig, args):
+    aty, bty = sig.args
+    if aty != bty:
+        return cgutils.false_bit
+
+    return builder.icmp_unsigned('==', args[0], args[1])
+
+
 
 # ------------------------------------------------------------------------------
 # Hash
