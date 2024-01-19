@@ -84,6 +84,9 @@ def np_ascontiguousarray(arr):
 def array_view(arr, newtype):
     return arr.view(newtype)
 
+def array_byteswap(a, inplace=False):
+    return a.byteswap(inplace=inplace)
+
 def array_take(arr, indices):
     return arr.take(indices)
 
@@ -550,6 +553,27 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         got = cfunc(byteary)
 
         self.assertEqual(expect, got)
+
+    def test_array_byteswap_in_place(self):
+        pyfunc = array_byteswap
+        cfunc = jit(nopython=True)(pyfunc)
+        for dt in [np.int8, np.uint8, np.int16, np.uint16, np.int32, np.uint32,
+                   np.int64, np.uint64, np.float32, np.float64]:
+            a = np.array([[0, 12345678],
+                          [0xdeadbeefcafebabe, 0x0102030405060708]], np.uint64).astype(dt)
+            b = a.copy()
+            self.assertIs(pyfunc(a, inplace=True), a)
+            self.assertIs(cfunc(b, inplace=True), b)
+            np.testing.assert_array_equal(a, b)
+
+    def test_array_byteswap_out_of_place(self):
+        pyfunc = array_byteswap
+        cfunc = jit(nopython=True)(pyfunc)
+        for dt in [np.int8, np.uint8, np.int16, np.uint16, np.int32, np.uint32,
+                   np.int64, np.uint64, np.float32, np.float64]:
+            a = np.array([[0, 12345678],
+                          [0xdeadbeefcafebabe, 0x0102030405060708]], np.uint64).astype(dt)
+            np.testing.assert_array_equal(pyfunc(a), cfunc(a))
 
     def test_array_astype(self):
 
