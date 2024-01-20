@@ -12,7 +12,7 @@ from numba.core.errors import TypingError, NumbaValueError
 from numba.np.numpy_support import as_dtype, numpy_version
 from numba.tests.support import TestCase, MemoryLeakMixin, needs_blas
 from numba.core import ir, cgutils
-from np.arrayobj import record_is 
+from numba.np.arrayobj import record_is 
 
 TIMEDELTA_M = 'timedelta64[M]'
 TIMEDELTA_Y = 'timedelta64[Y]'

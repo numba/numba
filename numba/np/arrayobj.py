@@ -3295,10 +3295,8 @@ def record_is(context, builder, sig, args):
     return builder.icmp_unsigned('==', args[0], args[1])
 
 
-
 # ------------------------------------------------------------------------------
 # Hash
-
 
 @overload_attribute(types.Array, "__hash__")
 def ol_array_hash(arr):
