@@ -3286,6 +3286,7 @@ def array_is(context, builder, sig, args):
 
     return context.compile_internal(builder, array_is_impl, sig, args)
 
+
 @lower_builtin(operator.is_, types.Record, types.Record)
 def record_is(context, builder, sig, args):
     aty, bty = sig.args
