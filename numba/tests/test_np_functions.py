@@ -15,7 +15,7 @@ from numba import jit, njit, typeof
 from numba.core import types
 from numba.typed import List, Dict
 from numba.np.numpy_support import numpy_version
-from numba.core.errors import TypingError, NumbaDeprecationWarning
+from numba.core.errors import (TypingError, NumbaDeprecationWarning)
 from numba.core.config import IS_32BITS
 from numba.core.utils import pysignature
 from numba.np.extensions import cross2d
@@ -512,6 +512,10 @@ def np_in1d_4(a, b, assume_unique=False, invert=False):
     return np.in1d(a, b, assume_unique, invert)
 
 
+def np_in1d_5(a, b, assume_unique=False, invert=False, kind=None):
+    return np.in1d(a, b, assume_unique, invert, kind=kind)
+
+
 def np_isin_2(a, b):
     return np.isin(a, b)
 
@@ -526,6 +530,10 @@ def np_isin_3b(a, b, invert=False):
 
 def np_isin_4(a, b, assume_unique=False, invert=False):
     return np.isin(a, b, assume_unique, invert)
+
+
+def np_isin_5(a, b, assume_unique=False, invert=False, kind=None):
+    return np.isin(a, b, assume_unique, invert, kind=kind)
 
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
@@ -878,6 +886,20 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 expected = pyfunc(a, b, assume_unique=True)
                 got = cfunc(a, b, assume_unique=True)
                 self.assertPreciseEqual(expected, got)
+
+    def test_intersect1d_errors(self):
+        np_pyfunc = intersect1d_3
+        np_nbfunc = njit(np_pyfunc)
+
+        a = np.array([1])
+        b = np.array([2])
+        self.disable_leak_check()
+        with self.assertRaises(TypingError):
+            np_nbfunc(a, b, "foo")
+        with self.assertRaises(TypingError):
+            np_nbfunc("foo", b, True)
+        with self.assertRaises(TypingError):
+            np_nbfunc(a, "foo", True)
 
     def test_count_nonzero(self):
 
@@ -6332,6 +6354,20 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             if len(np.unique(a)) == len(a) and len(np.unique(b)) == len(b):
                 check(a, b, True)
 
+    def test_setxor1d_errors(self):
+        np_pyfunc = np_setxor1d_3
+        np_nbfunc = njit(np_pyfunc)
+
+        a = np.array([1])
+        b = np.array([2])
+        self.disable_leak_check()
+        with self.assertRaises(TypingError):
+            np_nbfunc(a, b, "foo")
+        with self.assertRaises(TypingError):
+            np_nbfunc("foo", b, True)
+        with self.assertRaises(TypingError):
+            np_nbfunc(a, "foo", True)
+
     def test_setdiff1d_2(self):
         np_pyfunc = np_setdiff1d_2
         np_nbfunc = njit(np_pyfunc)
@@ -6405,6 +6441,20 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             check(a, b)
             if len(np.unique(a)) == len(a) and len(np.unique(b)) == len(b):
                 check(a, b, True)
+
+    def test_setdiff1d_errors(self):
+        np_pyfunc = np_setdiff1d_3
+        np_nbfunc = njit(np_pyfunc)
+
+        a = np.array([1])
+        b = np.array([2])
+        self.disable_leak_check()
+        with self.assertRaises(TypingError):
+            np_nbfunc(a, b, "foo")
+        with self.assertRaises(TypingError):
+            np_nbfunc("foo", b, True)
+        with self.assertRaises(TypingError):
+            np_nbfunc(a, "foo", True)
 
     def test_in1d_2(self):
         np_pyfunc = np_in1d_2
@@ -6540,6 +6590,33 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             if len(np.unique(a)) == len(a) and len(np.unique(b)) == len(b):
                 check(a, b, assume_unique=True, invert=False)
                 check(a, b, assume_unique=True, invert=True)
+
+    def test_in1d_errors(self):
+        np_pyfunc = np_in1d_5
+        np_nbfunc = njit(np_pyfunc)
+
+        a = np.array([1])
+        b = np.array([2])
+        x = np_nbfunc(a, b, kind=None)
+        self.assertPreciseEqual(x, np.array([False]))
+
+        self.disable_leak_check()
+        with self.assertRaises(TypingError):
+            np_nbfunc(a, b, "foo", False)
+        with self.assertRaises(TypingError):
+            np_nbfunc(a, b, False, "foo")
+        with self.assertRaises(TypingError):
+            np_nbfunc("foo", b, True, False)
+        with self.assertRaises(TypingError):
+            np_nbfunc(a, "foo", True, False)
+        with self.assertRaises(TypingError):
+            np_nbfunc(a, b, True, False, False)
+
+        @njit()
+        def table_in1d(a, b):
+            return np.in1d(a, b, kind="table")
+        with self.assertRaises(TypingError):
+            table_in1d(a, b)
 
     @staticmethod
     def _isin_arrays():
@@ -6716,7 +6793,35 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 check(a, b, assume_unique=True, invert=False)
                 check(a, b, assume_unique=True, invert=True)
 
+    def test_isin_errors(self):
+        np_pyfunc = np_isin_5
+        np_nbfunc = njit(np_pyfunc)
+
+        a = np.array([1])
+        b = np.array([2])
+        x = np_nbfunc(a, b, kind=None)
+        self.assertPreciseEqual(x, np.array([False]))
+
+        self.disable_leak_check()
+        with self.assertRaises(TypingError):
+            np_nbfunc(a, b, "foo", False)
+        with self.assertRaises(TypingError):
+            np_nbfunc(a, b, False, "foo")
+        with self.assertRaises(TypingError):
+            np_nbfunc("foo", b, True, False)
+        with self.assertRaises(TypingError):
+            np_nbfunc(a, "foo", True, False)
+        with self.assertRaises(TypingError):
+            np_nbfunc(a, b, True, False, False)
+
+        @njit()
+        def table_isin(a, b):
+            return np.isin(a, b, kind="table")
+        with self.assertRaises(TypingError):
+            table_isin(a, b)
+
     def test_setops_manyways(self):
+        # https://github.com/numpy/numpy/blob/b0371ef240560e78b651a5d7c9407ae3212a3d56/numpy/lib/tests/test_arraysetops.py#L588 # noqa: E501
         nb_setxor1d = njit(np_setxor1d_2)
         nb_intersect1d = njit(intersect1d_2)
         nb_union1d = njit(np_union1d)
