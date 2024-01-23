@@ -4,8 +4,6 @@ import weakref
 import collections
 import functools
 
-from typing import Callable, Concatenate, Generic, ParamSpec, TypeVar
-
 import numba
 from numba.core import types, errors, utils, config
 
@@ -313,32 +311,19 @@ def make_attribute_wrapper(typeclass, struct_attr, python_attr):
         return impl_ret_borrowed(context, builder, attrty, attrval)
 
 
-# Type of the parameters of the function being converted to an intrinsic,
-# excluding the typing context parameter.
-P = ParamSpec("P")
-# Return type of the function being converted to an intrinsic
-R = TypeVar("R")
-
-
-class _Intrinsic(ReduceMixin, Generic[P, R]):
+class _Intrinsic(ReduceMixin):
     """
     Dummy callable for intrinsic
     """
-    _memo: weakref.WeakValueDictionary = weakref.WeakValueDictionary()
+    _memo = weakref.WeakValueDictionary()
     __cache_size = config.FUNCTION_CACHE_SIZE # type: ignore
     # hold refs to last N functions deserialized, retaining them in _memo
     # regardless of whether there is another reference
-    _recent: collections.deque = collections.deque(maxlen=__cache_size)
+    _recent = collections.deque(maxlen=__cache_size)
 
     __uuid = None
 
-    def __init__(
-        self,
-        name,
-        defn: Callable[Concatenate[object, P], R],
-        prefer_literal=False,
-        **kwargs
-    ):
+    def __init__(self, name, defn, prefer_literal=False, **kwargs):
         self._ctor_kwargs = kwargs
         self._name = name
         self._defn = defn
@@ -376,7 +361,7 @@ class _Intrinsic(ReduceMixin, Generic[P, R]):
         infer(template)
         infer_global(self, types.Function(template))
 
-    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
+    def __call__(self, *args, **kwargs):
         """
         This is only defined to pretend to be a callable from CPython.
         """
@@ -411,10 +396,7 @@ class _Intrinsic(ReduceMixin, Generic[P, R]):
             return llc
 
 
-def intrinsic(*args, **kwargs) -> Callable[
-    [Callable[Concatenate[object, P], R]],
-    Callable[P, R]
-]:
+def intrinsic(*args, **kwargs):
     """
     A decorator marking the decorated function as typing and implementing
     *func* in nopython mode using the llvmlite IRBuilder API.  This is an escape
@@ -451,7 +433,7 @@ def intrinsic(*args, **kwargs) -> Callable[
                 return sig, codegen
     """
     # Make inner function for the actual work
-    def _intrinsic(func: Callable[Concatenate[object, P], R]) -> Callable[P, R]:
+    def _intrinsic(func):
         name = getattr(func, '__name__', str(func))
         llc = _Intrinsic(name, func, **kwargs)
         llc._register()
@@ -463,12 +445,9 @@ def intrinsic(*args, **kwargs) -> Callable[
     else:
         # options are given, create a new callable to recv the
         # definition function
-        def wrapper(
-            func: Callable[Concatenate[object, P], R]
-        ) -> Callable[P, R]:
+        def wrapper(func):
             return _intrinsic(func)
         return wrapper
-
 
 def get_cython_function_address(module_name, function_name):
     """
