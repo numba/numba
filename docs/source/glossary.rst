@@ -52,9 +52,11 @@ Glossary
       A Numba compilation mode that generates code that does not access the
       Python C API.  This compilation mode produces the highest performance
       code, but requires that the native types of all values in the function
-      can be :term:`inferred <type inference>`.  Unless otherwise instructed,
-      the ``@jit`` decorator will automatically fall back to :term:`object
-      mode` if nopython mode cannot be used.
+      can be :term:`inferred <type inference>`.
+
+      .. note:: Prior to Numba 0.59, ``@jit`` does not set ``nopython=True`` by
+                default and allows automatically fall back to
+                :term:`object mode`.
 
    Numba IR
    Numba intermediate representation
