@@ -1782,9 +1782,9 @@ class TestArrayComparisons(TestCase):
 
     def test_record_is(self):
         def check(a, b, expected):
+            pyfunc=record_is
             cfunc = njit((types.Record, types.Record))(pyfunc)
 
-            pyfunc=record_is
 
             result = cfunc(a, b)
             self.assertEqual(result, expected)
