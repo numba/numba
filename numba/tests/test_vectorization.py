@@ -25,6 +25,7 @@ class TestVectorization(TestCase):
             jitted = njit(args_tuple, fastmath=fastmath)(func)
             return jitted.inspect_llvm(args_tuple)
 
+    @TestCase.run_test_in_subprocess()
     def test_nditer_loop(self):
         # see https://github.com/numba/numba/issues/5033
         def do_sum(x):
@@ -54,6 +55,7 @@ class TestVectorization(TestCase):
         llvm_ir = self.gen_ir(foo, ((ty,) * 4 + (ty[::1],)), fastmath=True)
         self.assertIn("2 x double", llvm_ir)
 
+    @TestCase.run_test_in_subprocess()
     def test_instcombine_effect(self):
         # Without instcombine running ahead of refprune, the IR has refops that
         # are trivially prunable (same BB) but the arguments are obfuscated
