@@ -242,7 +242,7 @@ def compute_cfg_from_blocks(blocks):
         try:
             for target in term.get_targets():
                 cfg.add_edge(k, target)
-        except:
+        except Exception:
             pass # Allow blocks without a terminator like last block in parfor.
 
     cfg.set_entry_point(min(blocks))
