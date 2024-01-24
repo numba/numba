@@ -11,8 +11,6 @@ from numba.core import types
 from numba.core.errors import TypingError, NumbaValueError
 from numba.np.numpy_support import as_dtype, numpy_version
 from numba.tests.support import TestCase, MemoryLeakMixin, needs_blas
-from numba.core import ir, cgutils
-from np.arrayobj import record_is 
 
 TIMEDELTA_M = 'timedelta64[M]'
 TIMEDELTA_Y = 'timedelta64[Y]'
@@ -1782,59 +1780,35 @@ class TestArrayComparisons(TestCase):
         check(arr, arr.T, False)
         check(arr, arr[:-1], False)
 
+    def test_record_is(self):
+        def check(a, b, expected):
+            cfunc = njit((types.Record, types.Record))(pyfunc)
+
+            pyfunc=record_is
+
+            result = cfunc(a, b)
+            self.assertEqual(result, expected)
+
+        record_type = np.dtype([("a", "i4"), ("b", "i4")])
+
+        # Test case: Same records
+        a = np.zeros(1, dtype=record_type)[0]
+        b = a.copy()
+        check(a, b, True)
+
+        # Test case: Different records
+        c = np.ones(1, dtype=record_type)[0]
+        check(a, c, False)
+
+        # Test case: Same records with different values
+        d = np.zeros(1, dtype=record_type)[0]
+        d['a'] = 42
+        check(a, d, False)
+
+
+
     # tests for record  comparison
-    def create_mock_context():
-       return cgutils.lowering.Context("test_module")
-
-    def create_mock_builder(context, func):
-       block = context.append_basic_block(func, "entry")
-       return cgutils.Builder(context, block)
-    def test_equal_records(self):
-
-        sig = types.signature(types.boolean,
-                              types.Record(('a', types.int32), ('b', types.int32)),
-                              types.Record(('a', types.int32), ('b', types.int32)))
-
-        context = create_mock_context()
-        func = ir.Function(ir.Module(), ir.FunctionType(ir.types.Boolean(), [ir.types.Int(32), ir.types.Int(32)]), "test_function")
-        builder = create_mock_builder(context, func)
-
-        args = (cgutils.create_record(context, builder, sig.args[0]),
-                cgutils.create_record(context, builder, sig.args[1]))
-
-        result = record_is(context, builder, sig, args)
-        self.assertTrue(result, "Expected True for equal records")
-
-    def test_different_records(self):
-        sig = types.signature(types.boolean,
-                              types.Record(('a', types.int32), ('b', types.int32)),
-                              types.Record(('a', types.int32), ('c', types.int32)))
-
-        context = create_mock_context()
-        func = ir.Function(ir.Module(), ir.FunctionType(ir.types.Boolean(), [ir.types.Int(32), ir.types.Int(32)]), "test_function")
-        builder = create_mock_builder(context, func)
-
-        args = (cgutils.create_record(context, builder, sig.args[0]),
-                cgutils.create_record(context, builder, sig.args[1]))
-
-        result = record_is(context, builder, sig, args)
-        self.assertFalse(result, "Expected False for different records")
-
-    def test_mixed_records(self):
-        sig = types.signature(types.boolean,
-                              types.Record(('a', types.int32), ('b', types.int32)),
-                              types.Record(('a', types.int32), ('b', types.float64)))
-
-        context = create_mock_context()
-        func = ir.Function(ir.Module(), ir.FunctionType(ir.types.Boolean(), [ir.types.Int(32), ir.types.Int(32)]), "test_function")
-        builder = create_mock_builder(context, func)
-
-        args = (cgutils.create_record(context, builder, sig.args[0]),
-                cgutils.create_record(context, builder, sig.args[1]))
-
-        result = record_is(context, builder, sig, args)
-        self.assertFalse(result, "Expected False for mixed records")
-
+    
     # Other comparison operators ('==', etc.) are tested in test_ufuncs
 
 

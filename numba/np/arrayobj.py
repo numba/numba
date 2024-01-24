@@ -3293,11 +3293,18 @@ def record_is(context, builder, sig, args):
     if aty != bty:
         return cgutils.false_bit
 
-    return builder.icmp_unsigned('==', args[0], args[1])
+    def record_is_impl(a, b):
+        for field in aty.fields:
+            a_field = getattr(a, field)
+            b_field = getattr(b, field)
+            if a_field != b_field:
+                return cgutils.false_bit
 
+    return context.compile_internal(builder, record_is_impl, sig, args)
 
 # ------------------------------------------------------------------------------
 # Hash
+
 
 @overload_attribute(types.Array, "__hash__")
 def ol_array_hash(arr):
