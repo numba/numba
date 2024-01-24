@@ -31,6 +31,7 @@ from numba.core.ir_utils import (
     transfer_scope,
     find_max_label,
     get_global_func_typ,
+    find_topo_order,
 )
 from numba.core.typing import signature
 from numba.core import lowering
@@ -738,7 +739,9 @@ def _print_block(block):
 def _print_body(body_dict):
     '''Pretty-print a set of IR blocks.
     '''
-    for label, block in body_dict.items():
+    topo_order = find_topo_order(body_dict)
+    for label in topo_order:
+        block = body_dict[label]
         print("label: ", label)
         _print_block(block)
 
@@ -838,8 +841,10 @@ def compute_def_once_internal(loop_body, def_once, def_more, getattr_taken, type
        and use the given sets for storing which variables are defined once, more than
        once and which have had a getattr call on them.
     '''
-    # For each block...
-    for label, block in loop_body.items():
+    # For each block in topological order...
+    topo_order = find_topo_order(loop_body)
+    for label in topo_order:
+        block = loop_body[label]
         # Scan this block and effect changes to def_once, def_more, and getattr_taken
         # based on the instructions in that block.
         compute_def_once_block(block, def_once, def_more, getattr_taken, typemap, module_assigns)
@@ -867,7 +872,7 @@ def find_vars(var, varset):
     return var
 
 def _hoist_internal(inst, dep_on_param, call_table, hoisted, not_hoisted,
-                    typemap, stored_arrays, check_mutable=False):
+                    typemap, stored_arrays):
     if inst.target.name in stored_arrays:
         not_hoisted.append((inst, "stored array"))
         if config.DEBUG_ARRAY_OPT >= 1:
@@ -875,10 +880,6 @@ def _hoist_internal(inst, dep_on_param, call_table, hoisted, not_hoisted,
         return False
 
     target_type = typemap[inst.target.name]
-    if check_mutable and getattr(target_type, "mutable", False):
-        if config.DEBUG_ARRAY_OPT >= 1:
-            print("Instruction", inst, "could not be hoisted because objects of this type are mutable.")
-        return False
 
     uses = set()
     # Get vars used by this statement.
@@ -966,8 +967,7 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
                 continue
             elif isinstance(inst, ir.Assign) and inst.target.name in def_once:
                 if _hoist_internal(inst, dep_on_param, call_table,
-                                   hoisted, not_hoisted, typemap, itemsset,
-                                   check_mutable=True):
+                                   hoisted, not_hoisted, typemap, itemsset):
                     # don't add this instruction to the block since it is
                     # hoisted
                     continue
@@ -984,7 +984,7 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
                         ib_inst.target.name in def_once):
                         if _hoist_internal(ib_inst, dep_on_param, call_table,
                                            hoisted, not_hoisted, typemap,
-                                           itemsset, check_mutable=True):
+                                           itemsset):
                             # don't add this instruction to the block since it is hoisted
                             continue
                     new_init_block.append(ib_inst)
