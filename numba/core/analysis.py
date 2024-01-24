@@ -238,8 +238,8 @@ def compute_cfg_from_blocks(blocks):
         cfg.add_node(k)
 
     for k, b in blocks.items():
-        term = b.terminator
         try:
+            term = b.terminator
             for target in term.get_targets():
                 cfg.add_edge(k, target)
         except Exception:
