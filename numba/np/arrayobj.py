@@ -3294,12 +3294,17 @@ def record_is(context, builder, sig, args):
         return cgutils.false_bit
 
     def record_is_impl(a, b):
-        for field in aty.fields:
-            a_field = getattr(a, field)
-            b_field = getattr(b, field)
-            if a_field != b_field:
-                return cgutils.false_bit
-
+        if a.itemsize != b.itemsize:
+            return False
+        if len(a.dtype.fields) != len(b.dtype.fields):
+            return False
+        num_fields = len(a.dtype.names)
+        for i in range( num_fields ) :
+            if a.dtype.names[i] != b.dtype.names[i]:
+                return False
+            if a.dtype[i] != b.dtype[i]:
+                return False
+        return True
     return context.compile_internal(builder, record_is_impl, sig, args)
 
 # ------------------------------------------------------------------------------

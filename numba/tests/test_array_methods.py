@@ -11,7 +11,7 @@ from numba.core import types
 from numba.core.errors import TypingError, NumbaValueError
 from numba.np.numpy_support import as_dtype, numpy_version
 from numba.tests.support import TestCase, MemoryLeakMixin, needs_blas
-from np.arrayobj import record_is
+#from np.arrayobj import record_is
 
 TIMEDELTA_M = 'timedelta64[M]'
 TIMEDELTA_Y = 'timedelta64[Y]'
@@ -1764,7 +1764,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         np.testing.assert_array_equal(pyfunc(*args), cfunc(*args))
 
 class TestArrayComparisons(TestCase):
-    
     def test_identity(self):
         def check(a, b, expected):
             cfunc = njit((typeof(a), typeof(b)))(pyfunc)
@@ -1783,8 +1782,8 @@ class TestArrayComparisons(TestCase):
 
     def test_record_is(self):
         def check(a, b, expected):
-            pyfunc=record_is
-            cfunc = njit((types.Record, types.Record))(pyfunc)
+            pyfunc = identity_usecase
+            cfunc=njit(pyfunc)
 
 
             result = cfunc(a, b)
