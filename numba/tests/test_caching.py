@@ -266,9 +266,11 @@ class DispatcherCacheUsecasesTest(BaseCacheTest):
             mod.self_test()
             """ % dict(tempdir=self.tempdir, modname=self.modname)
 
+        subp_env = os.environ.copy()
+        subp_env.update(envvars)
         popen = subprocess.Popen([sys.executable, "-c", code],
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                 env=envvars)
+                                 env={**os.environ, **envvars})
         out, err = popen.communicate()
         if popen.returncode != 0:
             raise AssertionError(
