@@ -3,8 +3,8 @@ import numpy as np
 from numba import types
 import unittest
 from numba import njit
-from numba.tests.support import override_env_config, TestCase
-
+from numba.core import config
+from numba.tests.support import TestCase
 
 _DEBUG = False
 if _DEBUG:
@@ -13,19 +13,25 @@ if _DEBUG:
     llvm.set_option("", "--debug-only=loop-vectorize")
 
 
+_skylake_env = {
+    "NUMBA_CPU_NAME": "skylake-avx512",
+    "NUMBA_CPU_FEATURES": "",
+}
+
+
 @unittest.skipIf(platform.machine() != 'x86_64', 'x86_64 only test')
 class TestVectorization(TestCase):
     """
     Tests to assert that code which should vectorize does indeed vectorize
     """
     def gen_ir(self, func, args_tuple, fastmath=False):
-        with override_env_config(
-            "NUMBA_CPU_NAME", "skylake-avx512"
-        ), override_env_config("NUMBA_CPU_FEATURES", ""):
-            jitted = njit(args_tuple, fastmath=fastmath)(func)
-            return jitted.inspect_llvm(args_tuple)
+        self.assertEqual(config.CPU_NAME, "skylake-avx512")
+        self.assertEqual(config.CPU_FEATURES, "")
 
-    @TestCase.run_test_in_subprocess()
+        jitted = njit(args_tuple, fastmath=fastmath)(func)
+        return jitted.inspect_llvm(args_tuple)
+
+    @TestCase.run_test_in_subprocess(envvars=_skylake_env)
     def test_nditer_loop(self):
         # see https://github.com/numba/numba/issues/5033
         def do_sum(x):
@@ -40,7 +46,9 @@ class TestVectorization(TestCase):
 
     # SLP is off by default due to miscompilations, see #8705. Put this into a
     # subprocess to isolate any potential issues.
-    @TestCase.run_test_in_subprocess(envvars={'NUMBA_SLP_VECTORIZE': '1'})
+    @TestCase.run_test_in_subprocess(
+        envvars={'NUMBA_SLP_VECTORIZE': '1', **_skylake_env},
+    )
     def test_slp(self):
         # Sample translated from:
         # https://www.llvm.org/docs/Vectorizers.html#the-slp-vectorizer
@@ -55,7 +63,7 @@ class TestVectorization(TestCase):
         llvm_ir = self.gen_ir(foo, ((ty,) * 4 + (ty[::1],)), fastmath=True)
         self.assertIn("2 x double", llvm_ir)
 
-    @TestCase.run_test_in_subprocess()
+    @TestCase.run_test_in_subprocess(envvars=_skylake_env)
     def test_instcombine_effect(self):
         # Without instcombine running ahead of refprune, the IR has refops that
         # are trivially prunable (same BB) but the arguments are obfuscated

@@ -4664,6 +4664,7 @@ class TestParforsVectorizer(TestPrangeBase):
             self.assertTrue('zmm' not in v)
 
     @linux_only
+    @TestCase.run_test_in_subprocess(envvars={'NUMBA_BOUNDSCHECK': '0'})
     def test_unsigned_refusal_to_vectorize(self):
         """ This checks that if fastmath is set and the underlying hardware
         is suitable, and the function supplied is amenable to fastmath based
@@ -4685,12 +4686,12 @@ class TestParforsVectorizer(TestPrangeBase):
         arg = np.zeros(10)
 
         # Boundschecking breaks vectorization
-        with override_env_config('NUMBA_BOUNDSCHECK', '0'):
-            novec_asm = self.get_gufunc_asm(will_not_vectorize, 'signed', arg,
-                                            fastmath=True)
+        self.assertFalse(config.BOUNDSCHECK)
+        novec_asm = self.get_gufunc_asm(will_not_vectorize, 'signed', arg,
+                                        fastmath=True)
 
-            vec_asm = self.get_gufunc_asm(will_vectorize, 'unsigned', arg,
-                                          fastmath=True)
+        vec_asm = self.get_gufunc_asm(will_vectorize, 'unsigned', arg,
+                                        fastmath=True)
 
         for v in novec_asm.values():
             # vector variant should not be present
@@ -4710,6 +4711,7 @@ class TestParforsVectorizer(TestPrangeBase):
     @linux_only
     # needed as 32bit doesn't have equivalent signed/unsigned instruction
     # generation for this function
+    @TestCase.run_test_in_subprocess(envvars={'NUMBA_BOUNDSCHECK': '0'})
     def test_signed_vs_unsigned_vec_asm(self):
         """ This checks vectorization for signed vs unsigned variants of a
         trivial accumulator, the only meaningful difference should be the
@@ -4731,11 +4733,11 @@ class TestParforsVectorizer(TestPrangeBase):
             return A
 
         # Boundschecking breaks the diff check below because of the pickled exception
-        with override_env_config('NUMBA_BOUNDSCHECK', '0'):
-            signed_asm = self.get_gufunc_asm(signed_variant, 'signed',
-                                             fastmath=True)
-            unsigned_asm = self.get_gufunc_asm(unsigned_variant, 'unsigned',
-                                               fastmath=True)
+        self.assertFalse(config.BOUNDSCHECK)
+        signed_asm = self.get_gufunc_asm(signed_variant, 'signed',
+                                            fastmath=True)
+        unsigned_asm = self.get_gufunc_asm(unsigned_variant, 'unsigned',
+                                            fastmath=True)
 
         def strip_instrs(asm):
             acc = []

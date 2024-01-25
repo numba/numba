@@ -21,7 +21,6 @@ from numba.tests.support import (
     capture_cache_log,
     import_dynamic,
     override_config,
-    override_env_config,
     run_in_new_process_caching,
     skip_if_typeguard,
     skip_parfors_unsupported,
@@ -255,7 +254,7 @@ class DispatcherCacheUsecasesTest(BaseCacheTest):
     usecases_file = os.path.join(here, "cache_usecases.py")
     modname = "dispatcher_caching_test_fodder"
 
-    def run_in_separate_process(self):
+    def run_in_separate_process(self, *, envvars={}):
         # Cached functions can be run from a distinct process.
         # Also stresses issue #1603: uncached function calling cached function
         # shouldn't fail compiling.
@@ -268,7 +267,8 @@ class DispatcherCacheUsecasesTest(BaseCacheTest):
             """ % dict(tempdir=self.tempdir, modname=self.modname)
 
         popen = subprocess.Popen([sys.executable, "-c", code],
-                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                 env=envvars)
         out, err = popen.communicate()
         if popen.returncode != 0:
             raise AssertionError(
@@ -745,8 +745,7 @@ class TestCacheWithCpuSetting(DispatcherCacheUsecasesTest):
 
         mtimes = self.get_cache_mtimes()
         # Change CPU name to generic
-        with override_env_config('NUMBA_CPU_NAME', 'generic'):
-            self.run_in_separate_process()
+        self.run_in_separate_process(envvars={'NUMBA_CPU_NAME': 'generic'})
 
         self.check_later_mtimes(mtimes)
         self.assertGreater(len(self.cache_contents()), cache_size)
@@ -778,8 +777,9 @@ class TestCacheWithCpuSetting(DispatcherCacheUsecasesTest):
         system_features = codegen.get_host_cpu_features()
 
         self.assertNotEqual(system_features, my_cpu_features)
-        with override_env_config('NUMBA_CPU_FEATURES', my_cpu_features):
-            self.run_in_separate_process()
+        self.run_in_separate_process(
+            envvars={'NUMBA_CPU_FEATURES': my_cpu_features},
+        )
         self.check_later_mtimes(mtimes)
         self.assertGreater(len(self.cache_contents()), cache_size)
         # Check cache index
