@@ -4624,6 +4624,7 @@ class TestParforsVectorizer(TestPrangeBase):
             return asm
 
     @linux_only
+    @TestCase.run_test_in_subprocess
     def test_vectorizer_fastmath_asm(self):
         """ This checks that if fastmath is set and the underlying hardware
         is suitable, and the function supplied is amenable to fastmath based
