@@ -238,12 +238,9 @@ def compute_cfg_from_blocks(blocks):
         cfg.add_node(k)
 
     for k, b in blocks.items():
-        try:
-            term = b.terminator
-            for target in term.get_targets():
-                cfg.add_edge(k, target)
-        except Exception:
-            pass # Allow blocks without a terminator like last block in parfor.
+        term = b.terminator
+        for target in term.get_targets():
+            cfg.add_edge(k, target)
 
     cfg.set_entry_point(min(blocks))
     cfg.process()
