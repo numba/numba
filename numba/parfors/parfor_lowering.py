@@ -739,7 +739,7 @@ def _print_block(block):
 def _print_body(body_dict):
     '''Pretty-print a set of IR blocks.
     '''
-    topo_order = find_topo_order(body_dict)
+    topo_order = wrap_find_topo(body_dict)
     for label in topo_order:
         block = body_dict[label]
         print("label: ", label)
@@ -836,13 +836,19 @@ def compute_def_once_block(block, def_once, def_more, getattr_taken, typemap, mo
                     # to the def lists.
                     add_to_def_once_sets(argvar, def_once, def_more)
 
+def wrap_find_topo(loop_body):
+    blocks = wrap_loop_body(loop_body)
+    topo_order = find_topo_order(blocks)
+    unwrap_loop_body(loop_body)
+    return topo_order
+
 def compute_def_once_internal(loop_body, def_once, def_more, getattr_taken, typemap, module_assigns):
     '''Compute the set of variables defined exactly once in the given set of blocks
        and use the given sets for storing which variables are defined once, more than
        once and which have had a getattr call on them.
     '''
     # For each block in topological order...
-    topo_order = find_topo_order(loop_body)
+    topo_order = wrap_find_topo(loop_body)
     for label in topo_order:
         block = loop_body[label]
         # Scan this block and effect changes to def_once, def_more, and getattr_taken
