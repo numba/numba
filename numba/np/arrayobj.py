@@ -3292,20 +3292,7 @@ def record_is(context, builder, sig, args):
     aty, bty = sig.args
     if aty != bty:
         return cgutils.false_bit
-
-    def record_is_impl(a, b):
-        if a.itemsize != b.itemsize:
-            return False
-        if len(a.dtype.fields) != len(b.dtype.fields):
-            return False
-        num_fields = len(a.dtype.names)
-        for i in range( num_fields ) :
-            if a.dtype.names[i] != b.dtype.names[i]:
-                return False
-            if a.dtype[i] != b.dtype[i]:
-                return False
-        return True
-    return context.compile_internal(builder, record_is_impl, sig, args)
+    return builder.icmp_unsigned('==', args[0], args[1])
 
 # ------------------------------------------------------------------------------
 # Hash
