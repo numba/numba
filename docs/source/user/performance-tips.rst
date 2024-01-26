@@ -75,11 +75,11 @@ A Case for Object mode: LoopLifting
 
 Some functions may be incompatible with the restrictive :term:`nopython mode` 
 but contain compatible loops. You can enable these functions to attempt nopython 
-mode on their loops by setting `@jit(forceobj=True)`. The incompatible code 
+mode on their loops by setting ``@jit(forceobj=True)``. The incompatible code 
 segments will run in object mode.
 
-While using looplifting in object mode can provide some performance increase, 
-compiling functions entirely in :term:``nopython mode`` is key to achieving 
+Whilst using looplifting in object mode can provide some performance increase, 
+compiling functions entirely in :term:`nopython mode` is key to achieving 
 optimal performance.
 
 .. _fast-math:

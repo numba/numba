@@ -54,8 +54,8 @@ Glossary
       code, but requires that the native types of all values in the function
       can be :term:`inferred <type inference>`.
 
-      .. note:: Prior to Numba 0.59, ``@jit`` does not set ``nopython=True`` by
-                default and allows automatically fall back to
+      .. note:: Prior to Numba 0.59, ``@jit`` did not set ``nopython=True`` by
+                default and allowed automatically fall back to
                 :term:`object mode`.
 
    Numba IR
