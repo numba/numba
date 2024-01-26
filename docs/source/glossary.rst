@@ -55,7 +55,7 @@ Glossary
       can be :term:`inferred <type inference>`.
 
       .. note:: Prior to Numba 0.59, ``@jit`` did not set ``nopython=True`` by
-                default and allowed automatically fall back to
+                default and allowed automatic fall back to
                 :term:`object mode`.
 
    Numba IR
