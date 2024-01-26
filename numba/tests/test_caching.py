@@ -270,7 +270,7 @@ class DispatcherCacheUsecasesTest(BaseCacheTest):
         subp_env.update(envvars)
         popen = subprocess.Popen([sys.executable, "-c", code],
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                 env={**os.environ, **envvars})
+                                 env=subp_env)
         out, err = popen.communicate()
         if popen.returncode != 0:
             raise AssertionError(
