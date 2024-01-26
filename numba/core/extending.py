@@ -449,6 +449,7 @@ def intrinsic(*args, **kwargs):
             return _intrinsic(func)
         return wrapper
 
+
 def get_cython_function_address(module_name, function_name):
     """
     Get the address of a Cython function.
