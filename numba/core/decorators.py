@@ -49,7 +49,7 @@ def jit(signature_or_function=None, locals={}, cache=False,
             nopython: bool
                 Set to True to disable the use of PyObjects and Python API
                 calls. The default behavior is to allow the use of PyObjects
-                and Python API. Default value is False.
+                and Python API. Default value is True.
 
             forceobj: bool
                 Set to True to force the use of PyObjects for every value.
