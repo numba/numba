@@ -214,12 +214,13 @@ used to instruct the typing mechanism::
 `Object mode` or ``@jit(forceobj=True)`` is too slow
 ====================================================
 
-:term:`Object mode` provides little to no speedup compared to regular Python 
-interpretation, and its main point is to allow an internal optimization known as
-:term:`loop-lifting`: this optimization will allow to compile inner
-loops in :term:`nopython mode` regardless of what code surrounds those
-inner loops. The inner loops can still fallback to :term:`object mode` if it 
-uses types or operations that :term:`nopython mode` does not support.
+:term:`object mode` provides little to no speedup compared to regular Python 
+interpretation, its main point is to allow an internal optimization known as  
+:term:`loop-lifting`: . This optimization will allow compilation of inner  
+loops in :term:`nopython mode` regardless of what code surrounds those  
+inner loops. The compilation of inner loops can still fallback to  
+:term:`object mode` if they use types or operations that  
+:term:`nopython mode` does not support. 
 
 
 Disabling JIT compilation

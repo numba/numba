@@ -18,19 +18,23 @@ CPU (4 hardware threads) with an input of ``np.arange(1.e7)``.
    tuning. The information presented here is to demonstrate features, not to act
    as canonical guidance!
 
-No Python mode vs Object mode
------------------------------
 
-A common pattern is to decorate functions with ``@jit`` as this is the most
-flexible decorator offered by Numba. ``@jit`` essentially encompasses two modes
-of compilation, first it will try and compile the decorated function in no
-Python mode, if this fails it will try again to compile the function using
-object mode. Whilst the use of looplifting in object mode can enable some
-performance increase, getting functions to compile under no python mode is
-really the key to good performance. To make it such that only no python mode is
-used and if compilation fails an exception is raised the decorators ``@njit``
-and ``@jit(nopython=True)`` can be used (the first is an alias of the
-second for convenience).
+NoPython mode
+-------------
+
+The default mode in which Numba's ``@jit`` decorator operates is
+:term:`nopython mode`. This mode is most restrictive about what can be compiled,
+but results in faster executable code.
+
+.. note::
+    Historically (prior to 0.59.0) the default compilation mode was a fall-back
+    mode whereby the compiler would try to compile in :term:`nopython mode` and
+    if it failed it would fall-back to :term:`object mode`. It is likely that
+    you'll see ``@jit(nopython=True)``, or its alias ``@njit``, in use in
+    code/documentation as this was the recommended best practice method to force
+    use of :term:`nopython mode`. Since Numba 0.59.0 this is no long necessary
+    as :term:`nopython mode` is the default mode for ``@jit``.
+
 
 Loops
 -----
@@ -65,6 +69,18 @@ the decorator the vectorized function is a couple of orders of magnitude faster.
 +-----------------+-------+----------------+
 | ``ident_loops`` | Yes   |     0.670s     |
 +-----------------+-------+----------------+
+
+A Case for Object mode: LoopLifting
+-----------------------------------
+
+Some functions may be incompatible with the restrictive :term:`nopython mode` 
+but contain compatible loops. You can enable these functions to attempt nopython 
+mode on their loops by setting `@jit(forceobj=True)`. The incompatible code 
+segments will run in object mode.
+
+While using looplifting in object mode can provide some performance increase, 
+compiling functions entirely in :term:``nopython mode`` is key to achieving 
+optimal performance.
 
 .. _fast-math:
 

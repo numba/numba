@@ -511,6 +511,7 @@ Authors:
 ~~~~~~~~
 
 * `apmasell <https://github.com/apmasell>`_
+* `dlee992 <https://github.com/dlee992>`_
 * `DrTodd13 <https://github.com/DrTodd13>`_
 * `esc <https://github.com/esc>`_
 * `gmarkall <https://github.com/gmarkall>`_
