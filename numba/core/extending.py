@@ -315,11 +315,11 @@ class _Intrinsic(ReduceMixin):
     """
     Dummy callable for intrinsic
     """
-    _memo = weakref.WeakValueDictionary()
+    _memo: weakref.WeakValueDictionary = weakref.WeakValueDictionary()
     __cache_size = config.FUNCTION_CACHE_SIZE # type: ignore
     # hold refs to last N functions deserialized, retaining them in _memo
     # regardless of whether there is another reference
-    _recent = collections.deque(maxlen=__cache_size)
+    _recent: collections.deque = collections.deque(maxlen=__cache_size)
 
     __uuid = None
 
