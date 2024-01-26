@@ -588,7 +588,12 @@ class TestCase(unittest.TestCase):
         streams = (f'\ncaptured stdout: {status.stdout}\n'
                    f'captured stderr: {status.stderr}')
         self.assertEqual(status.returncode, 0, streams)
-        self.assertIn('OK', status.stderr)
+        # Python 3.12.1 report
+        no_tests_ran = "NO TESTS RAN"
+        if no_tests_ran in status.stderr:
+            self.skipTest(no_tests_ran)
+        else:
+            self.assertIn('OK', status.stderr)
 
     def run_test_in_subprocess(maybefunc=None, timeout=60, envvars=None):
         """Runs the decorated test in a subprocess via invoking numba's test
