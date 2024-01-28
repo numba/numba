@@ -310,6 +310,7 @@ The following methods of NumPy arrays are supported:
 * :meth:`~numpy.ndarray.argsort` (``kind`` key word argument supported for
   values ``'quicksort'`` and ``'mergesort'``)
 * :meth:`~numpy.ndarray.astype` (only the 1-argument form)
+* :meth:`~numpy.ndarray.byteswap` (only for numbers and booleans)
 * :meth:`~numpy.ndarray.copy` (without arguments)
 * :meth:`~numpy.ndarray.dot` (only the 1-argument form)
 * :meth:`~numpy.ndarray.flatten` (no order argument; 'C' order only)
