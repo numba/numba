@@ -381,7 +381,7 @@ class _ByteCode(object):
 
 
 def _fix_LOAD_GLOBAL_arg(arg):
-    if PYVERSION in ((3, 11), (3, 12)):
+    if PYVERSION in ((3, 11), (3, 12), (3, 13)):
         return arg >> 1
     elif PYVERSION in ((3, 9), (3, 10)):
         return arg

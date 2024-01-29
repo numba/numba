@@ -12,7 +12,6 @@ from numba.core.controlflow import NEW_BLOCKERS, CFGraph
 from numba.core.ir import Loc
 from numba.core.errors import UnsupportedError
 
-
 _logger = logging.getLogger(__name__)
 
 _EXCEPT_STACK_OFFSET = 6
@@ -451,8 +450,7 @@ class TraceRunner(object):
             state.push(res)
 
     elif PYVERSION < (3, 13):
-        raise NotImplementedError(PYVERSION)
-
+        pass
 
 
     if PYVERSION in ((3, 13),):
@@ -494,7 +492,8 @@ class TraceRunner(object):
         state.push(res)
 
     def op_LOAD_CONST(self, state, inst):
-        res = state.make_temp("const")
+        # append const index for interpreter to read the const value
+        res = state.make_temp(f"const") + f".{inst.arg}"
         state.push(res)
         state.append(inst, res=res)
 
@@ -527,6 +526,18 @@ class TraceRunner(object):
             state.append(inst, value1=value1, value2=value2)
             state.push(value1)
             state.push(value2)
+
+        def op_STORE_FAST_LOAD_FAST(self, state, inst):
+            oparg = inst.arg
+            # oparg1 = oparg >> 4  # not needed
+            oparg2 = oparg & 15
+            store_value = state.pop()
+            load_value = state.get_varname_by_arg(oparg2)
+            state.append(inst, store_value=store_value, load_value=load_value)
+            state.push(load_value)
+
+    else:
+        assert PYVERSION < (3, 13)
 
     if PYVERSION in ((3, 12), (3, 13)):
         op_LOAD_FAST_CHECK = op_LOAD_FAST
@@ -1157,6 +1168,7 @@ class TraceRunner(object):
             callable = state.pop()
             if not _is_null_temp_reg(null_or_firstarg):
                 args = [null_or_firstarg, *args]
+            kw_names = None
         elif PYVERSION <= (3, 13):
             callable_or_firstarg = state.pop()
             null_or_callable = state.pop()
@@ -1165,9 +1177,9 @@ class TraceRunner(object):
             else:
                 callable = null_or_callable
                 args = [callable_or_firstarg, *args]
+            kw_names = state.pop_kw_names()
         res = state.make_temp()
 
-        kw_names = state.pop_kw_names()
         state.append(inst, func=callable, args=args, kw_names=kw_names, res=res)
         state.push(res)
 
@@ -1193,28 +1205,65 @@ class TraceRunner(object):
         state.append(inst, func=func, args=args, names=names, res=res)
         state.push(res)
 
-    def op_CALL_FUNCTION_EX(self, state, inst):
-        if inst.arg & 1 and PYVERSION < (3, 10):
-            errmsg = "CALL_FUNCTION_EX with **kwargs not supported"
-            raise UnsupportedError(errmsg)
-        if inst.arg & 1:
-            varkwarg = state.pop()
-        else:
-            varkwarg = None
-        vararg = state.pop()
-        func = state.pop()
+    if PYVERSION in ((3, 13),):
+        def op_CALL_KW(self, state, inst):
+            narg = inst.arg
+            kw_names = state.pop()
+            args = list(reversed([state.pop() for _ in range(narg)]))
+            null_or_firstarg = state.pop()
+            callable = state.pop()
+            if not _is_null_temp_reg(null_or_firstarg):
+                args = [null_or_firstarg, *args]
 
-        if PYVERSION in ((3, 11), (3, 12), (3, 13)):
-            if _is_null_temp_reg(state.peek(1)):
-                state.pop() # pop NULL, it's not used
-        elif PYVERSION in ((3, 9), (3, 10)):
-            pass
-        else:
-            raise NotImplementedError(PYVERSION)
+            res = state.make_temp()
+            state.append(inst, func=callable, args=args, kw_names=kw_names, res=res)
+            state.push(res)
 
-        res = state.make_temp()
-        state.append(inst, func=func, vararg=vararg, varkwarg=varkwarg, res=res)
-        state.push(res)
+    else:
+        assert PYVERSION < (3, 13)
+
+    if PYVERSION in ((3, 13),):
+        def op_CALL_FUNCTION_EX(self, state, inst):
+            # (func, unused, callargs, kwargs if (oparg & 1) -- result))
+            if inst.arg & 1:
+                varkwarg = state.pop()
+            else:
+                varkwarg = None
+
+            vararg = state.pop()
+            state.pop()  # unused
+            func = state.pop()
+
+            res = state.make_temp()
+            state.append(inst, func=func, vararg=vararg, varkwarg=varkwarg, res=res)
+            state.push(res)
+
+    elif PYVERSION < (3, 13):
+
+        def op_CALL_FUNCTION_EX(self, state, inst):
+            if inst.arg & 1 and PYVERSION < (3, 10):
+                errmsg = "CALL_FUNCTION_EX with **kwargs not supported"
+                raise UnsupportedError(errmsg)
+            if inst.arg & 1:
+                varkwarg = state.pop()
+            else:
+                varkwarg = None
+            vararg = state.pop()
+            func = state.pop()
+
+            if PYVERSION in ((3, 11), (3, 12), (3, 13)):
+                if _is_null_temp_reg(state.peek(1)):
+                    state.pop() # pop NULL, it's not used
+            elif PYVERSION in ((3, 9), (3, 10)):
+                pass
+            else:
+                raise NotImplementedError(PYVERSION)
+
+            res = state.make_temp()
+            state.append(inst, func=func, vararg=vararg, varkwarg=varkwarg, res=res)
+            state.push(res)
+    else:
+        raise NotImplementedError(PYVERSION)
 
     def _dup_topx(self, state, inst, count):
         orig = [state.pop() for _ in range(count)]
@@ -1541,14 +1590,19 @@ class TraceRunner(object):
             raise NotImplementedError(PYVERSION)
         code = state.pop()
         closure = annotations = kwdefaults = defaults = None
-        if inst.arg & 0x8:
-            closure = state.pop()
-        if inst.arg & 0x4:
-            annotations = state.pop()
-        if inst.arg & 0x2:
-            kwdefaults = state.pop()
-        if inst.arg & 0x1:
-            defaults = state.pop()
+        if PYVERSION == (3, 13):
+            assert inst.arg is None
+            # SET_FUNCTION_ATTRIBUTE is responsible for setting
+            # closure, annotations, kwdefaults and defaults.
+        else:
+            if inst.arg & 0x8:
+                closure = state.pop()
+            if inst.arg & 0x4:
+                annotations = state.pop()
+            if inst.arg & 0x2:
+                kwdefaults = state.pop()
+            if inst.arg & 0x1:
+                defaults = state.pop()
         res = state.make_temp()
         state.append(
             inst,

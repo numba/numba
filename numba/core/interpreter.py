@@ -1735,7 +1735,7 @@ class Interpreter(object):
                 val = self.get(varname)
             except ir.NotDefinedError:
                 # Hack to make sure exception variables are defined
-                assert PYVERSION in ((3, 11), (3, 12)), \
+                assert PYVERSION in ((3, 11), (3, 12), (3, 13)), \
                        "unexpected missing definition"
                 val = ir.Const(value=None, loc=self.loc)
             stmt = ir.Assign(value=val, target=target,
@@ -2232,6 +2232,20 @@ class Interpreter(object):
             self.store(value=src1, name=value1)
             self.store(value=src2, name=value2)
 
+        def op_STORE_FAST_LOAD_FAST(self, inst, store_value, load_value):
+            oparg = inst.arg
+            oparg1 = oparg >> 4
+            oparg2 = oparg & 15
+
+            dstname = self.code_locals[oparg1]
+            dst_value = self.get(store_value)
+            self.store(value=dst_value, name=dstname)
+
+            src_value = self.get(self.code_locals[oparg2])
+            self.store(value=src_value, name=load_value)
+    else:
+        assert PYVERSION < (3, 13)
+
     if PYVERSION in ((3, 12), (3, 13)):
         op_LOAD_FAST_CHECK = op_LOAD_FAST
 
@@ -2397,7 +2411,7 @@ class Interpreter(object):
 
     def op_BEFORE_WITH(self, inst, contextmanager, exitfn, end):
         assert self.blocks[inst.offset] is self.current_block
-        if PYVERSION in ((3, 12), ):
+        if PYVERSION in ((3, 12), (3, 13)):
             # Python 3.12 hack for handling nested with blocks
             if end > self.last_active_offset:
                 # Use exception entries to figure out end of syntax block
@@ -2447,6 +2461,7 @@ class Interpreter(object):
         func = self.get(func)
         args = [self.get(x) for x in args]
         if kw_names is not None:
+            assert PYVERSION < (3, 13)
             names = self.code_consts[kw_names]
             kwargs = list(zip(names, args[-len(names):]))
             args = args[:-len(names)]
@@ -2454,6 +2469,19 @@ class Interpreter(object):
             kwargs = ()
         expr = ir.Expr.call(func, args, kwargs, loc=self.loc)
         self.store(expr, res)
+
+    if PYVERSION in ((3, 13),):
+        def op_CALL_KW(self, inst, func, args, kw_names, res):
+            func = self.get(func)
+            args = [self.get(x) for x in args]
+            consti = int(kw_names.rsplit('.', 2)[-1])
+            names = self.code_consts[consti]
+            kwargs = list(zip(names, args[-len(names):]))
+            args = args[:-len(names)]
+            expr = ir.Expr.call(func, args, kwargs, loc=self.loc)
+            self.store(expr, res)
+    else:
+        assert PYVERSION < (3, 13)
 
     def op_CALL_FUNCTION(self, inst, func, args, res):
         func = self.get(func)
@@ -2921,7 +2949,7 @@ class Interpreter(object):
             self.store(self.get(val), res) # TODO: just a lazy hack
 
     elif PYVERSION < (3, 13):
-        raise NotImplementedError(PYVERSION)
+        pass
 
 
     def op_COMPARE_OP(self, inst, lhs, rhs, res):
