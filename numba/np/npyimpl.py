@@ -427,8 +427,8 @@ class _Kernel(object):
         complex to real/int casts.
 
         """
-        if (isinstance(fromty, types.Complex) and
-            not isinstance(toty, types.Complex)):
+        if (isinstance(fromty, types.BaseComplex) and
+            not isinstance(toty, types.BaseComplex)):
             # attempt conversion of the real part to the specified type.
             # note that NumPy issues a warning in this kind of conversions
             newty = fromty.underlying_float

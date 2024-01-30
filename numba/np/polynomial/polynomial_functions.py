@@ -19,7 +19,7 @@ def roots_impl(p):
     # cast int vectors to float cf. numpy, this is a bit dicey as
     # the roots could be complex which will fail anyway
     ty = getattr(p, 'dtype', p)
-    if isinstance(ty, types.Integer):
+    if isinstance(ty, types.BaseInteger):
         cast_t = np.float64
     else:
         cast_t = as_dtype(ty)
@@ -93,7 +93,7 @@ def polyutils_as_series(alist, trim=True):
         msg = 'The argument "alist" must be array-like'
         raise errors.TypingError(msg)
 
-    if not isinstance(trim, (bool, types.Boolean)):
+    if not isinstance(trim, (bool, types.BaseBoolean)):
         msg = 'The argument "trim" must be boolean'
         raise errors.TypingError(msg)
 
@@ -261,7 +261,7 @@ def poly_polyval(x, c, tensor=True):
         msg = 'The argument "c" must be array-like'
         raise errors.TypingError(msg)
 
-    if not isinstance(tensor, (bool, types.BooleanLiteral)):
+    if not isinstance(tensor, (bool, types.BaseBooleanLiteral)):
         msg = 'The argument "tensor" must be boolean'
         raise errors.RequireLiteralValue(msg)
 
@@ -305,7 +305,7 @@ def poly_polyint(c, m=1):
         msg = 'The argument "c" must be array-like'
         raise errors.TypingError(msg)
 
-    if not isinstance(m, (int, types.Integer)):
+    if not isinstance(m, (int, types.BaseInteger)):
         msg = 'The argument "m" must be an integer'
         raise errors.TypingError(msg)
 

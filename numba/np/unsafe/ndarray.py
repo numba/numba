@@ -48,7 +48,7 @@ def to_fixed_tuple(typingctx, array, length):
     - No boundchecking.
       If *length* is longer than *array.size*, the behavior is undefined.
     """
-    if not isinstance(length, types.IntegerLiteral):
+    if not isinstance(length, types.BaseIntegerLiteral):
         raise RequireLiteralValue('*length* argument must be a constant')
 
     if array.ndim != 1:

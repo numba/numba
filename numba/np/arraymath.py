@@ -245,9 +245,9 @@ def gen_sum_axis_impl(is_axis_const, const_axis_val, op, zero):
 
 
 @lower_builtin(np.sum, types.Array, types.intp, types.DTypeSpec)
-@lower_builtin(np.sum, types.Array, types.IntegerLiteral, types.DTypeSpec)
+@lower_builtin(np.sum, types.Array, types.BaseIntegerLiteral, types.DTypeSpec)
 @lower_builtin("array.sum", types.Array, types.intp, types.DTypeSpec)
-@lower_builtin("array.sum", types.Array, types.IntegerLiteral, types.DTypeSpec)
+@lower_builtin("array.sum", types.Array, types.BaseIntegerLiteral, types.DTypeSpec)
 def array_sum_axis_dtype(context, builder, sig, args):
     retty = sig.return_type
     zero = getattr(retty, 'dtype', retty)(0)
@@ -304,9 +304,9 @@ def array_sum_dtype(context, builder, sig, args):
 
 
 @lower_builtin(np.sum, types.Array, types.intp)
-@lower_builtin(np.sum, types.Array, types.IntegerLiteral)
+@lower_builtin(np.sum, types.Array, types.BaseIntegerLiteral)
 @lower_builtin("array.sum", types.Array, types.intp)
-@lower_builtin("array.sum", types.Array, types.IntegerLiteral)
+@lower_builtin("array.sum", types.Array, types.BaseIntegerLiteral)
 def array_sum_axis(context, builder, sig, args):
     retty = sig.return_type
     zero = getattr(retty, 'dtype', retty)(0)
@@ -498,7 +498,7 @@ def npy_min(a):
     if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
         pre_return_func = np.isnat
         comparator = min_comparator
-    elif isinstance(a.dtype, types.Complex):
+    elif isinstance(a.dtype, types.BaseComplex):
         pre_return_func = return_false
 
         def comp_func(a, min_val):
@@ -510,7 +510,7 @@ def npy_min(a):
             return False
 
         comparator = register_jitable(comp_func)
-    elif isinstance(a.dtype, types.Float):
+    elif isinstance(a.dtype, types.BaseFloat):
         pre_return_func = np.isnan
         comparator = min_comparator
     else:
@@ -548,7 +548,7 @@ def npy_max(a):
     if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
         pre_return_func = np.isnat
         comparator = max_comparator
-    elif isinstance(a.dtype, types.Complex):
+    elif isinstance(a.dtype, types.BaseComplex):
         pre_return_func = return_false
 
         def comp_func(a, max_val):
@@ -560,7 +560,7 @@ def npy_max(a):
             return False
 
         comparator = register_jitable(comp_func)
-    elif isinstance(a.dtype, types.Float):
+    elif isinstance(a.dtype, types.BaseFloat):
         pre_return_func = np.isnan
         comparator = max_comparator
     else:
@@ -657,7 +657,7 @@ def array_argmin_impl_generic(arry):
 def array_argmin(a, axis=None):
     if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
         flatten_impl = array_argmin_impl_datetime
-    elif isinstance(a.dtype, types.Float):
+    elif isinstance(a.dtype, types.BaseFloat):
         flatten_impl = array_argmin_impl_float
     else:
         flatten_impl = array_argmin_impl_generic
@@ -783,7 +783,7 @@ def build_argmax_or_argmin_with_axis_impl(a, axis, flatten_impl):
 def array_argmax(a, axis=None):
     if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
         flatten_impl = array_argmax_impl_datetime
-    elif isinstance(a.dtype, types.Float):
+    elif isinstance(a.dtype, types.BaseFloat):
         flatten_impl = array_argmax_impl_float
     else:
         flatten_impl = array_argmax_impl_generic
@@ -846,15 +846,15 @@ def np_allclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     if not type_can_asarray(b):
         raise TypingError('The second argument "b" must be array-like')
 
-    if not isinstance(rtol, (float, types.Float)):
+    if not isinstance(rtol, (float, types.BaseFloat)):
         raise TypingError('The third argument "rtol" must be a '
                           'floating point')
 
-    if not isinstance(atol, (float, types.Float)):
+    if not isinstance(atol, (float, types.BaseFloat)):
         raise TypingError('The fourth argument "atol" must be a '
                           'floating point')
 
-    if not isinstance(equal_nan, (bool, types.Boolean)):
+    if not isinstance(equal_nan, (bool, types.BaseBoolean)):
         raise TypingError('The fifth argument "equal_nan" must be a '
                           'boolean')
 
@@ -957,7 +957,7 @@ def get_isnan(dtype):
     """
     A generic isnan() function
     """
-    if isinstance(dtype, (types.Float, types.Complex)):
+    if isinstance(dtype, (types.BaseFloat, types.BaseComplex)):
         return np.isnan
     else:
         @register_jitable
@@ -1130,15 +1130,15 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     if not type_can_asarray(b):
         raise TypingError('The second argument "b" must be array-like')
 
-    if not isinstance(rtol, (float, types.Float)):
+    if not isinstance(rtol, (float, types.BaseFloat)):
         raise TypingError('The third argument "rtol" must be a '
                           'floating point')
 
-    if not isinstance(atol, (float, types.Float)):
+    if not isinstance(atol, (float, types.BaseFloat)):
         raise TypingError('The fourth argument "atol" must be a '
                           'floating point')
 
-    if not isinstance(equal_nan, (bool, types.Boolean)):
+    if not isinstance(equal_nan, (bool, types.BaseBoolean)):
         raise TypingError('The fifth argument "equal_nan" must be a '
                           'boolean')
 
@@ -1257,7 +1257,7 @@ def np_nanstd(a):
 def np_nansum(a):
     if not isinstance(a, types.Array):
         return
-    if isinstance(a.dtype, types.Integer):
+    if isinstance(a.dtype, types.BaseInteger):
         retty = types.intp
     else:
         retty = a.dtype
@@ -1279,7 +1279,7 @@ def np_nansum(a):
 def np_nanprod(a):
     if not isinstance(a, types.Array):
         return
-    if isinstance(a.dtype, types.Integer):
+    if isinstance(a.dtype, types.BaseInteger):
         retty = types.intp
     else:
         retty = a.dtype
@@ -1302,7 +1302,7 @@ def np_nancumprod(a):
     if not isinstance(a, types.Array):
         return
 
-    if isinstance(a.dtype, (types.Boolean, types.Integer)):
+    if isinstance(a.dtype, (types.BaseBoolean, types.BaseInteger)):
         # dtype cannot possibly contain NaN
         return lambda a: np.cumprod(a)
     else:
@@ -1327,7 +1327,7 @@ def np_nancumsum(a):
     if not isinstance(a, types.Array):
         return
 
-    if isinstance(a.dtype, (types.Boolean, types.Integer)):
+    if isinstance(a.dtype, (types.BaseBoolean, types.BaseInteger)):
         # dtype cannot possibly contain NaN
         return lambda a: np.cumsum(a)
     else:
@@ -1357,7 +1357,7 @@ def prepare_ptp_input(a):
 
 
 def _compute_current_val_impl_gen(op, current_val, val):
-    if isinstance(current_val, types.Complex):
+    if isinstance(current_val, types.BaseComplex):
         # The sort order for complex numbers is lexicographic. If both the
         # real and imaginary parts are non-nan then the order is determined
         # by the real parts except when they are equal, in which case the
@@ -1401,7 +1401,7 @@ def _early_return(val):
 @overload(_early_return)
 def _early_return_impl(val):
     UNUSED = 0
-    if isinstance(val, types.Complex):
+    if isinstance(val, types.BaseComplex):
         def impl(val):
             if np.isnan(val.real):
                 if np.isnan(val.imag):
@@ -1410,7 +1410,7 @@ def _early_return_impl(val):
                     return True, np.nan + 0j
             else:
                 return False, UNUSED
-    elif isinstance(val, types.Float):
+    elif isinstance(val, types.BaseFloat):
         def impl(val):
             if np.isnan(val):
                 return True, np.nan
@@ -1427,7 +1427,7 @@ def _early_return_impl(val):
 def np_ptp(a):
 
     if hasattr(a, 'dtype'):
-        if isinstance(a.dtype, types.Boolean):
+        if isinstance(a.dtype, types.BaseBoolean):
             raise TypingError("Boolean dtype is unsupported (as per NumPy)")
             # Numpy raises a TypeError
 
@@ -1735,7 +1735,7 @@ def _percentile_quantile_inner(a, q, skip_nan, factor, check_q):
     def np_percentile_impl(a, q):
         return _collect_percentiles(a, q, check_q, factor, skip_nan)
 
-    if isinstance(q, (types.Number, types.Boolean)):
+    if isinstance(q, (types.Number, types.BaseBoolean)):
         return np_percentile_q_scalar_impl
     elif isinstance(q, types.Array) and q.ndim == 0:
         return np_percentile_q_scalar_impl
@@ -1884,7 +1884,7 @@ def np_partition(a, kth):
         raise TypeError('The first argument must be at least 1-D (found 0-D)')
 
     kthdt = getattr(kth, 'dtype', kth)
-    if not isinstance(kthdt, (types.Boolean, types.Integer)):
+    if not isinstance(kthdt, (types.BaseBoolean, types.BaseInteger)):
         # bool gets cast to int subsequently
         raise TypeError('Partition index must be integer')
 
@@ -1909,7 +1909,7 @@ def np_argpartition(a, kth):
         raise TypeError('The first argument must be at least 1-D (found 0-D)')
 
     kthdt = getattr(kth, 'dtype', kth)
-    if not isinstance(kthdt, (types.Boolean, types.Integer)):
+    if not isinstance(kthdt, (types.BaseBoolean, types.BaseInteger)):
         # bool gets cast to int subsequently
         raise TypeError('Partition index must be integer')
 
@@ -2107,7 +2107,7 @@ def _prepare_array_impl(arr):
 def _dtype_of_compound(inobj):
     obj = inobj
     while True:
-        if isinstance(obj, (types.Number, types.Boolean)):
+        if isinstance(obj, (types.Number, types.BaseBoolean)):
             return as_dtype(obj)
         l = getattr(obj, '__len__', None)
         if l is not None and l() == 0: # empty tuple or similar
@@ -2125,7 +2125,7 @@ def _dtype_of_compound(inobj):
 def np_ediff1d(ary, to_end=None, to_begin=None):
 
     if isinstance(ary, types.Array):
-        if isinstance(ary.dtype, types.Boolean):
+        if isinstance(ary.dtype, types.BaseBoolean):
             raise NumbaTypeError("Boolean dtype is unsupported (as per NumPy)")
             # Numpy tries to do this: return ary[1:] - ary[:-1] which
             # results in a TypeError exception being raised
@@ -2214,7 +2214,7 @@ def get_d_impl(x, dx):
 @overload(np.trapz)
 def np_trapz(y, x=None, dx=1.0):
 
-    if isinstance(y, (types.Number, types.Boolean)):
+    if isinstance(y, (types.Number, types.BaseBoolean)):
         raise TypingError('y cannot be a scalar')
     elif isinstance(y, types.Array) and y.ndim == 0:
         raise TypingError('y cannot be 0D')
@@ -2272,7 +2272,7 @@ def _check_vander_params(x, N):
 @overload(np.vander)
 def np_vander(x, N=None, increasing=False):
     if N not in (None, types.none):
-        if not isinstance(N, types.Integer):
+        if not isinstance(N, types.BaseInteger):
             raise TypingError('Second argument N must be None or an integer')
 
     def np_vander_impl(x, N=None, increasing=False):
@@ -2311,7 +2311,7 @@ def np_vander(x, N=None, increasing=False):
 
 @overload(np.roll)
 def np_roll(a, shift):
-    if not isinstance(shift, (types.Integer, types.Boolean)):
+    if not isinstance(shift, (types.BaseInteger, types.BaseBoolean)):
         raise TypingError('shift must be an integer')
 
     def np_roll_impl(a, shift):
@@ -2326,7 +2326,7 @@ def np_roll(a, shift):
 
         return out
 
-    if isinstance(a, (types.Number, types.Boolean)):
+    if isinstance(a, (types.Number, types.BaseBoolean)):
         return lambda a, shift: np.asarray(a)
     else:
         return np_roll_impl
@@ -2640,7 +2640,7 @@ def np_interp(x, xp, fp):
         return inner(x, xp, fp, dtype).flat[0]
 
     if isinstance(x, types.Number):
-        if isinstance(x, types.Complex):
+        if isinstance(x, types.BaseComplex):
             raise TypingError(complex_dtype_msg)
         return np_interp_scalar_impl
 
@@ -2748,7 +2748,7 @@ def determine_dtype(array_like):
     array_like_dt = np.float64
     if isinstance(array_like, types.Array):
         array_like_dt = as_dtype(array_like.dtype)
-    elif isinstance(array_like, (types.Number, types.Boolean)):
+    elif isinstance(array_like, (types.Number, types.BaseBoolean)):
         array_like_dt = as_dtype(array_like)
     elif isinstance(array_like, (types.UniTuple, types.Tuple)):
         coltypes = set()
@@ -2801,7 +2801,7 @@ def scalar_result_expected(mandatory_input, optional_input):
         return opt_is_none
 
     if isinstance(mandatory_input, types.BaseTuple):
-        if all(isinstance(x, (types.Number, types.Boolean))
+        if all(isinstance(x, (types.Number, types.BaseBoolean))
                for x in mandatory_input.types):
             return opt_is_none
         else:
@@ -2809,7 +2809,7 @@ def scalar_result_expected(mandatory_input, optional_input):
                     isinstance(mandatory_input.types[0], types.BaseTuple)):
                 return opt_is_none
 
-    if isinstance(mandatory_input, (types.Number, types.Boolean)):
+    if isinstance(mandatory_input, (types.Number, types.BaseBoolean)):
         return opt_is_none
 
     if isinstance(mandatory_input, types.Sequence):
@@ -2844,9 +2844,9 @@ def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
     if ddof in (None, types.none):
         _DDOF_HANDLER = _handle_ddof_nop
     else:
-        if isinstance(ddof, (types.Integer, types.Boolean)):
+        if isinstance(ddof, (types.BaseInteger, types.BaseBoolean)):
             _DDOF_HANDLER = _handle_ddof_nop
-        elif isinstance(ddof, types.Float):
+        elif isinstance(ddof, types.BaseFloat):
             _DDOF_HANDLER = _handle_ddof
         else:
             raise TypingError('ddof must be a real numerical scalar type')
@@ -2933,7 +2933,7 @@ def np_argwhere(a):
     # needs to be much more array-like for the array impl to work, Numba bug
     # in one of the underlying function calls?
 
-    use_scalar = isinstance(a, (types.Number, types.Boolean))
+    use_scalar = isinstance(a, (types.Number, types.BaseBoolean))
     if type_can_asarray(a) and not use_scalar:
         def impl(a):
             arr = np.asarray(a)
@@ -3050,7 +3050,7 @@ def _asarray_impl(x):
         return lambda x: x
     elif isinstance(x, (types.Sequence, types.Tuple)):
         return lambda x: np.array(x)
-    elif isinstance(x, (types.Number, types.Boolean)):
+    elif isinstance(x, (types.Number, types.BaseBoolean)):
         ty = as_dtype(x)
         return lambda x: np.array([x], dtype=ty)
 
@@ -3062,9 +3062,9 @@ def np_fill_diagonal(a, val, wrap=False):
         # the following can be simplified after #3088; until then, employ
         # a basic mechanism for catching cases where val is of a type/value
         # which cannot safely be cast to a.dtype
-        if isinstance(a.dtype, types.Integer):
+        if isinstance(a.dtype, types.BaseInteger):
             checker = _check_val_int
-        elif isinstance(a.dtype, types.Float):
+        elif isinstance(a.dtype, types.BaseFloat):
             checker = _check_val_float
         else:
             checker = _check_nop
@@ -3079,7 +3079,7 @@ def np_fill_diagonal(a, val, wrap=False):
             checker(a, tmpval)
             _fill_diagonal(a, tmpval, wrap)
 
-        if isinstance(val, (types.Float, types.Integer, types.Boolean)):
+        if isinstance(val, (types.BaseFloat, types.BaseInteger, types.BaseBoolean)):
             return scalar_impl
         elif isinstance(val, (types.Tuple, types.Sequence, types.Array)):
             return non_scalar_impl
@@ -3149,23 +3149,23 @@ def impl_np_round(a, decimals=0, out=None):
         msg = 'The argument "out" must be an array if it is provided'
         raise TypingError(msg)
 
-    if isinstance(a, (types.Float, types.Integer, types.Complex)):
+    if isinstance(a, (types.BaseFloat, types.BaseInteger, types.BaseComplex)):
         if is_nonelike(out):
-            if isinstance(a, types.Float):
+            if isinstance(a, types.BaseFloat):
                 def impl(a, decimals=0, out=None):
                     if decimals == 0:
                         return _np_round_float(a)
                     else:
                         return round_ndigits(a, decimals)
                 return impl
-            elif isinstance(a, types.Integer):
+            elif isinstance(a, types.BaseInteger):
                 def impl(a, decimals=0, out=None):
                     if decimals == 0:
                         return a
                     else:
                         return int(round_ndigits(a, decimals))
                 return impl
-            elif isinstance(a, types.Complex):
+            elif isinstance(a, types.BaseComplex):
                 def impl(a, decimals=0, out=None):
                     if decimals == 0:
                         real = _np_round_float(a.real)
@@ -3231,9 +3231,9 @@ def ov_np_angle(z, deg=False):
     elif isinstance(z, types.Array):
         dtype = z.dtype
 
-        if isinstance(dtype, types.Complex):
+        if isinstance(dtype, types.BaseComplex):
             ret_dtype = dtype.underlying_float
-        elif isinstance(dtype, types.Float):
+        elif isinstance(dtype, types.BaseFloat):
             ret_dtype = dtype
         else:
             return
@@ -3487,7 +3487,7 @@ def np_delete(arr, obj):
         if isinstance(obj, (types.SliceType)):
             handler = np_delete_handler_isslice
         else:
-            if not isinstance(obj.dtype, types.Integer):
+            if not isinstance(obj.dtype, types.BaseInteger):
                 raise TypingError('obj should be of Integer dtype')
             handler = np_delete_handler_isarray
 
@@ -3502,7 +3502,7 @@ def np_delete(arr, obj):
         return np_delete_impl
 
     else: # scalar value
-        if not isinstance(obj, types.Integer):
+        if not isinstance(obj, types.BaseInteger):
             raise TypingError('obj should be of Integer dtype')
 
         def np_delete_scalar_impl(arr, obj):
@@ -3567,7 +3567,7 @@ def np_array_equal(a1, a2):
     if not (type_can_asarray(a1) and type_can_asarray(a2)):
         raise TypingError('Both arguments to "array_equals" must be array-like')
 
-    accepted = (types.Boolean, types.Number)
+    accepted = (types.BaseBoolean, types.Number)
     if isinstance(a1, accepted) and isinstance(a2, accepted):
         # special case
         def impl(a1, a2):
@@ -3620,7 +3620,7 @@ def validate_1d_array_like(func_name, seq):
 def np_bincount(a, weights=None, minlength=0):
     validate_1d_array_like("bincount", a)
 
-    if not isinstance(a.dtype, types.Integer):
+    if not isinstance(a.dtype, types.BaseInteger):
         return
 
     check_is_integer(minlength, 'minlength')
@@ -3906,7 +3906,7 @@ _range = range
 
 @overload(np.histogram)
 def np_histogram(a, bins=10, range=None):
-    if isinstance(bins, (int, types.Integer)):
+    if isinstance(bins, (int, types.BaseInteger)):
         # With a uniform distribution of bins, use a fast algorithm
         # independent of the number of bins
 
@@ -4285,14 +4285,14 @@ def np_asarray(a, dtype=None):
         else:
             def impl(a, dtype=None):
                 return np.array(a, dtype)
-    elif isinstance(a, (types.Number, types.Boolean)):
+    elif isinstance(a, (types.Number, types.BaseBoolean)):
         dt_conv = a if is_nonelike(dtype) else dtype
         ty = as_dtype(dt_conv)
 
         def impl(a, dtype=None):
             return np.array(a, ty)
     elif isinstance(a, types.containers.ListType):
-        if not isinstance(a.dtype, (types.Number, types.Boolean)):
+        if not isinstance(a.dtype, (types.Number, types.BaseBoolean)):
             raise TypingError(
                 "asarray support for List is limited "
                 "to Boolean and Number types")
@@ -4377,7 +4377,7 @@ def np_select(condlist, choicelist, default=0):
         raise NumbaTypeError('condlist must be a List or a Tuple')
     if not isinstance(choicelist, (types.List, types.UniTuple)):
         raise NumbaTypeError('choicelist must be a List or a Tuple')
-    if not isinstance(default, (int, types.Number, types.Boolean)):
+    if not isinstance(default, (int, types.Number, types.BaseBoolean)):
         raise NumbaTypeError('default must be a scalar (number or boolean)')
     # the types of the parameters have been checked, now we test the types
     # of the content of the parameters
@@ -4391,11 +4391,11 @@ def np_select(condlist, choicelist, default=0):
     # the types of the parameters and their contents have been checked,
     # now we test the dtypes of the content of parameters
     if isinstance(condlist[0], types.Array):
-        if not isinstance(condlist[0].dtype, types.Boolean):
+        if not isinstance(condlist[0].dtype, types.BaseBoolean):
             raise NumbaTypeError('condlist arrays must contain booleans')
     if isinstance(condlist[0], types.UniTuple):
         if not (isinstance(condlist[0], types.UniTuple)
-                and isinstance(condlist[0][0], types.Boolean)):
+                and isinstance(condlist[0][0], types.BaseBoolean)):
             raise NumbaTypeError('condlist tuples must only contain booleans')
     # the input types are correct, now we perform checks on the dimensions
     if (isinstance(condlist[0], types.Array) and
@@ -4451,7 +4451,7 @@ def np_asarray_chkfinite(a, dtype=None):
 
 @overload(np.unwrap)
 def numpy_unwrap(p, discont=None, axis=-1, period=6.283185307179586):
-    if not isinstance(axis, (int, types.Integer)):
+    if not isinstance(axis, (int, types.BaseInteger)):
         msg = 'The argument "axis" must be an integer'
         raise TypingError(msg)
 
@@ -4459,7 +4459,7 @@ def numpy_unwrap(p, discont=None, axis=-1, period=6.283185307179586):
         msg = 'The argument "p" must be array-like'
         raise TypingError(msg)
 
-    if (not isinstance(discont, (types.Integer, types.Float))
+    if (not isinstance(discont, (types.BaseInteger, types.BaseFloat))
             and not cgutils.is_nonelike(discont)):
         msg = 'The argument "discont" must be a scalar'
         raise TypingError(msg)
@@ -4555,7 +4555,7 @@ def np_hanning_impl(M):
 
 def window_generator(func):
     def window_overload(M):
-        if not isinstance(M, types.Integer):
+        if not isinstance(M, types.BaseInteger):
             raise TypingError('M must be an integer')
 
         def window_impl(M):
@@ -4674,10 +4674,10 @@ def _i0n(n, alpha, beta):
 
 @overload(np.kaiser)
 def np_kaiser(M, beta):
-    if not isinstance(M, types.Integer):
+    if not isinstance(M, types.BaseInteger):
         raise TypingError('M must be an integer')
 
-    if not isinstance(beta, (types.Integer, types.Float)):
+    if not isinstance(beta, (types.BaseInteger, types.BaseFloat)):
         raise TypingError('beta must be an integer or float')
 
     def np_kaiser_impl(M, beta):

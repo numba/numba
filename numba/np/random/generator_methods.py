@@ -87,10 +87,10 @@ def check_types(obj, type_list, arg_name):
 def NumPyRandomGeneratorType_integers(inst, low, high, size=None,
                                       dtype=np.int64, endpoint=False):
     check_types(low, [types.Integer,
-                      types.Boolean, bool, int], 'low')
-    check_types(high, [types.Integer, types.Boolean,
+                      types.BaseBoolean, bool, int], 'low')
+    check_types(high, [types.Integer, types.BaseBoolean,
                        bool, int], 'high')
-    check_types(endpoint, [types.Boolean, bool], 'endpoint')
+    check_types(endpoint, [types.BaseBoolean, bool], 'endpoint')
 
     if isinstance(size, types.Omitted):
         size = size.value

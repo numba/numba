@@ -295,9 +295,9 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 msg = 'The first argument "array" must be array-like'
                 raise errors.NumbaTypeError(msg)
 
-            axis_int = isinstance(axis, types.Integer)
+            axis_int = isinstance(axis, types.BaseInteger)
             axis_int_tuple = isinstance(axis, types.UniTuple) and \
-                isinstance(axis.dtype, types.Integer)
+                isinstance(axis.dtype, types.BaseInteger)
             axis_empty_tuple = isinstance(axis, types.Tuple) and len(axis) == 0
             axis_none = cgutils.is_nonelike(axis)
             axis_tuple_size = len(axis) if axis_int_tuple else 0
@@ -558,9 +558,9 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 # ufunc(array, axis=(1, 2, ...))
                 axis_tup = (0,) * (len(axis) - 1)
                 return impl_nd_axis_tuple
-            elif axis == 0 or isinstance(axis, (types.Integer,
+            elif axis == 0 or isinstance(axis, (types.BaseInteger,
                                                 types.Omitted,
-                                                types.IntegerLiteral)):
+                                                types.BaseIntegerLiteral)):
                 # axis is default value (0) or an integer
                 # ufunc(array, axis=0)
                 return impl_nd_axis_int

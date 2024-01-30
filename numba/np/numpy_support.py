@@ -4,7 +4,7 @@ import re
 
 import numpy as np
 
-from numba.core import errors, types
+from numba.core import errors, types, config
 from numba.core.typing.templates import signature
 from numba.np import npdatetime_helpers
 from numba.core.errors import TypingError
@@ -15,27 +15,48 @@ from numba.core.cgutils import is_nonelike   # noqa: F401
 
 numpy_version = tuple(map(int, np.__version__.split('.')[:2]))
 
+if config.USE_LEGACY_TYPE_SYSTEM:
+    FROM_DTYPE = {
+        np.dtype('bool'): types.boolean,
+        np.dtype('int8'): types.int8,
+        np.dtype('int16'): types.int16,
+        np.dtype('int32'): types.int32,
+        np.dtype('int64'): types.int64,
 
-FROM_DTYPE = {
-    np.dtype('bool'): types.boolean,
-    np.dtype('int8'): types.int8,
-    np.dtype('int16'): types.int16,
-    np.dtype('int32'): types.int32,
-    np.dtype('int64'): types.int64,
+        np.dtype('uint8'): types.uint8,
+        np.dtype('uint16'): types.uint16,
+        np.dtype('uint32'): types.uint32,
+        np.dtype('uint64'): types.uint64,
 
-    np.dtype('uint8'): types.uint8,
-    np.dtype('uint16'): types.uint16,
-    np.dtype('uint32'): types.uint32,
-    np.dtype('uint64'): types.uint64,
+        np.dtype('float32'): types.float32,
+        np.dtype('float64'): types.float64,
+        np.dtype('float16'): types.float16,
+        np.dtype('complex64'): types.complex64,
+        np.dtype('complex128'): types.complex128,
 
-    np.dtype('float32'): types.float32,
-    np.dtype('float64'): types.float64,
-    np.dtype('float16'): types.float16,
-    np.dtype('complex64'): types.complex64,
-    np.dtype('complex128'): types.complex128,
+        np.dtype(object): types.pyobject,
+    }
+else:
+    FROM_DTYPE = {
+        np.dtype('bool'): types.np_bool_,
+        np.dtype('int8'): types.np_int8,
+        np.dtype('int16'): types.np_int16,
+        np.dtype('int32'): types.np_int32,
+        np.dtype('int64'): types.np_int64,
 
-    np.dtype(object): types.pyobject,
-}
+        np.dtype('uint8'): types.np_uint8,
+        np.dtype('uint16'): types.np_uint16,
+        np.dtype('uint32'): types.np_uint32,
+        np.dtype('uint64'): types.np_uint64,
+
+        np.dtype('float32'): types.np_float32,
+        np.dtype('float64'): types.np_float64,
+        np.dtype('float16'): types.np_float16,
+        np.dtype('complex64'): types.np_complex64,
+        np.dtype('complex128'): types.np_complex128,
+
+        np.dtype(object): types.pyobject,
+    }
 
 re_typestr = re.compile(r'[<>=\|]([a-z])(\d+)?$', re.I)
 re_datetimestr = re.compile(r'[<>=\|]([mM])8?(\[([a-z]+)\])?$', re.I)
@@ -128,7 +149,7 @@ def as_dtype(nbtype):
     NotImplementedError is if no correspondence is known.
     """
     nbtype = types.unliteral(nbtype)
-    if isinstance(nbtype, (types.Complex, types.Integer, types.Float)):
+    if isinstance(nbtype, (types.BaseComplex, types.BaseInteger, types.BaseFloat)):
         return np.dtype(str(nbtype))
     if nbtype is types.bool_:
         return np.dtype('?')
@@ -709,7 +730,7 @@ def type_can_asarray(arr):
     """
 
     ok = (types.Array, types.Sequence, types.Tuple, types.StringLiteral,
-          types.Number, types.Boolean, types.containers.ListType)
+          types.Number, types.BaseBoolean, types.containers.ListType)
 
     return isinstance(arr, ok)
 
@@ -720,14 +741,14 @@ def type_is_scalar(typ):
     https://numpy.org/doc/stable/reference/arrays.scalars.html#built-in-scalar-types
     """
 
-    ok = (types.Boolean, types.Number, types.UnicodeType, types.StringLiteral,
+    ok = (types.BaseBoolean, types.Number, types.UnicodeType, types.StringLiteral,
           types.NPTimedelta, types.NPDatetime)
     return isinstance(typ, ok)
 
 
 def check_is_integer(v, name):
     """Raises TypingError if the value is not an integer."""
-    if not isinstance(v, (int, types.Integer)):
+    if not isinstance(v, (int, types.BaseInteger)):
         raise TypingError('{} must be an integer'.format(name))
 
 

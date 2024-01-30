@@ -843,7 +843,7 @@ def _check_linalg_matrix(a, func_name, la_prefix=True):
     if not a.ndim == 2:
         msg = "%s.%s() only supported on 2-D arrays." % interp
         raise TypingError(msg, highlighting=False)
-    if not isinstance(a.dtype, (types.Float, types.Complex)):
+    if not isinstance(a.dtype, (types.BaseFloat, types.BaseComplex)):
         msg = "%s.%s() only supported on "\
             "float and complex arrays." % interp
         raise TypingError(msg, highlighting=False)
@@ -968,7 +968,7 @@ def _check_linalg_1_or_2d_matrix(a, func_name, la_prefix=True):
     if not a.ndim <= 2:
         raise TypingError("%s.%s() only supported on 1 and 2-D arrays "
                           % interp)
-    if not isinstance(a.dtype, (types.Float, types.Complex)):
+    if not isinstance(a.dtype, (types.BaseFloat, types.BaseComplex)):
         raise TypingError("%s.%s() only supported on "
                           "float and complex arrays." % interp)
 
@@ -1605,7 +1605,7 @@ def _lstsq_residual_impl(b, n, nrhs):
     real_dtype = np_support.as_dtype(getattr(dtype, "underlying_float", dtype))
 
     if ndim == 1:
-        if isinstance(dtype, (types.Complex)):
+        if isinstance(dtype, (types.BaseComplex)):
             def cmplx_impl(b, n, nrhs):
                 res = np.empty((1,), dtype=real_dtype)
                 res[0] = np.sum(np.abs(b[n:, 0])**2)
@@ -1619,7 +1619,7 @@ def _lstsq_residual_impl(b, n, nrhs):
             return real_impl
     else:
         assert ndim == 2
-        if isinstance(dtype, (types.Complex)):
+        if isinstance(dtype, (types.BaseComplex)):
             def cmplx_impl(b, n, nrhs):
                 res = np.empty((nrhs), dtype=real_dtype)
                 for k in range(nrhs):
@@ -2003,7 +2003,7 @@ def _get_slogdet_diag_walker(a):
     The return sign is adjusted based on the values found
     such that the log(value) stays in the real domain.
     """
-    if isinstance(a.dtype, types.Complex):
+    if isinstance(a.dtype, types.BaseComplex):
         @register_jitable
         def cmplx_diag_walker(n, a, sgn):
             # walk diagonal
@@ -2568,7 +2568,7 @@ def matrix_power_impl(a, n):
     np_dtype = np_support.as_dtype(a.dtype)
 
     nt = getattr(n, 'dtype', n)
-    if not isinstance(nt, types.Integer):
+    if not isinstance(nt, types.BaseInteger):
         raise NumbaTypeError("Exponent must be an integer.")
 
     def matrix_power_impl(a, n):
@@ -2647,7 +2647,7 @@ def matrix_trace_impl(a, offset=0):
 
     _check_linalg_matrix(a, "trace", la_prefix=False)
 
-    if not isinstance(offset, (int, types.Integer)):
+    if not isinstance(offset, (int, types.BaseInteger)):
         raise NumbaTypeError("integer argument expected, got %s" % offset)
 
     def matrix_trace_impl(a, offset=0):
