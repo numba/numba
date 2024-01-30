@@ -41,7 +41,7 @@ def grid(typingctx, ndim):
     attributes.
     '''
 
-    if not isinstance(ndim, types.IntegerLiteral):
+    if not isinstance(ndim, types.BaseIntegerLiteral):
         raise RequireLiteralValue(ndim)
 
     sig = _type_grid_function(ndim)
@@ -74,7 +74,7 @@ def gridsize(typingctx, ndim):
     attributes.
     '''
 
-    if not isinstance(ndim, types.IntegerLiteral):
+    if not isinstance(ndim, types.BaseIntegerLiteral):
         raise RequireLiteralValue(ndim)
 
     sig = _type_grid_function(ndim)
@@ -149,7 +149,7 @@ def syncthreads(typingctx):
 
 
 def _syncthreads_predicate(typingctx, predicate, fname):
-    if not isinstance(predicate, types.Integer):
+    if not isinstance(predicate, types.BaseInteger):
         return None
 
     sig = signature(types.i4, types.i4)

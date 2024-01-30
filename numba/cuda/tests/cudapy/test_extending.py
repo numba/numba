@@ -52,7 +52,7 @@ if not config.ENABLE_CUDASIM:
     @type_callable(Interval)
     def type_interval(context):
         def typer(lo, hi):
-            if isinstance(lo, types.Float) and isinstance(hi, types.Float):
+            if isinstance(lo, types.BaseFloat) and isinstance(hi, types.BaseFloat):
                 return interval_type
         return typer
 
@@ -68,7 +68,7 @@ if not config.ENABLE_CUDASIM:
     make_attribute_wrapper(IntervalType, 'lo', 'lo')
     make_attribute_wrapper(IntervalType, 'hi', 'hi')
 
-    @lower_builtin(Interval, types.Float, types.Float)
+    @lower_builtin(Interval, types.BaseFloat, types.BaseFloat)
     def impl_interval(context, builder, sig, args):
         typ = sig.return_type
         lo, hi = args

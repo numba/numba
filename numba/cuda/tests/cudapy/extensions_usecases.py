@@ -44,11 +44,11 @@ if not config.ENABLE_CUDASIM:
     @type_callable(TestStruct)
     def type_test_struct(context):
         def typer(x, y):
-            if isinstance(x, types.Integer) and isinstance(y, types.Integer):
+            if isinstance(x, types.BaseInteger) and isinstance(y, types.BaseInteger):
                 return test_struct_model_type
         return typer
 
-    @lower(TestStruct, types.Integer, types.Integer)
+    @lower(TestStruct, types.BaseInteger, types.BaseInteger)
     def lower_test_type_ctor(context, builder, sig, args):
         obj = cgutils.create_struct_proxy(
             test_struct_model_type

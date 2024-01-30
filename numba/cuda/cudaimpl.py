@@ -91,7 +91,7 @@ def _get_unique_smem_id(name):
     return "{0}_{1}".format(name, _unique_smem_id)
 
 
-@lower(cuda.shared.array, types.IntegerLiteral, types.Any)
+@lower(cuda.shared.array, types.BaseIntegerLiteral, types.Any)
 def cuda_shared_array_integer(context, builder, sig, args):
     length = sig.args[0].literal_value
     dtype = parse_dtype(sig.args[1])
@@ -112,7 +112,7 @@ def cuda_shared_array_tuple(context, builder, sig, args):
                           can_dynsized=True)
 
 
-@lower(cuda.local.array, types.IntegerLiteral, types.Any)
+@lower(cuda.local.array, types.BaseIntegerLiteral, types.Any)
 def cuda_local_array_integer(context, builder, sig, args):
     length = sig.args[0].literal_value
     dtype = parse_dtype(sig.args[1])
@@ -317,7 +317,7 @@ def float16_float_ty_constraint(bitwidth):
         raise errors.CudaLoweringError(msg)
 
 
-@lower_cast(types.float16, types.Float)
+@lower_cast(types.float16, types.BaseFloat)
 def float16_to_float_cast(context, builder, fromty, toty, val):
     if fromty.bitwidth == toty.bitwidth:
         return val
@@ -329,7 +329,7 @@ def float16_to_float_cast(context, builder, fromty, toty, val):
     return builder.call(asm, [val])
 
 
-@lower_cast(types.Float, types.float16)
+@lower_cast(types.BaseFloat, types.float16)
 def float_to_float16_cast(context, builder, fromty, toty, val):
     if fromty.bitwidth == toty.bitwidth:
         return val
@@ -351,7 +351,7 @@ def float16_int_constraint(bitwidth):
         raise errors.CudaLoweringError(msg)
 
 
-@lower_cast(types.float16, types.Integer)
+@lower_cast(types.float16, types.BaseInteger)
 def float16_to_integer_cast(context, builder, fromty, toty, val):
     bitwidth = toty.bitwidth
     constraint = float16_int_constraint(bitwidth)
@@ -364,8 +364,8 @@ def float16_to_integer_cast(context, builder, fromty, toty, val):
     return builder.call(asm, [val])
 
 
-@lower_cast(types.Integer, types.float16)
-@lower_cast(types.IntegerLiteral, types.float16)
+@lower_cast(types.BaseInteger, types.float16)
+@lower_cast(types.BaseIntegerLiteral, types.float16)
 def integer_to_float16_cast(context, builder, fromty, toty, val):
     bitwidth = fromty.bitwidth
     constraint = float16_int_constraint(bitwidth)
@@ -637,8 +637,8 @@ def ptx_round(context, builder, sig, args):
 # version" of double_round in CPython.
 # https://github.com/python/cpython/blob/a755410e054e1e2390de5830befc08fe80706c66/Objects/floatobject.c#L964-L1007
 
-@lower(round, types.f4, types.Integer)
-@lower(round, types.f8, types.Integer)
+@lower(round, types.f4, types.BaseInteger)
+@lower(round, types.f8, types.BaseInteger)
 def round_to_impl(context, builder, sig, args):
     def round_ndigits(x, ndigits):
         if math.isinf(x) or math.isnan(x):
@@ -958,7 +958,7 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
     # Check that we support the requested dtype
     data_model = context.data_model_manager[dtype]
     other_supported_type = (
-        isinstance(dtype, (types.Record, types.Boolean))
+        isinstance(dtype, (types.Record, types.BaseBoolean))
         or isinstance(data_model, models.StructModel)
         or dtype == types.float16
     )
