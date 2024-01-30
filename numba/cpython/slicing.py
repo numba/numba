@@ -215,7 +215,7 @@ def slice_step_impl(context, builder, typ, value):
         return context.get_constant(types.intp, 1)
 
 
-@lower_builtin("slice.indices", types.SliceType, types.Integer)
+@lower_builtin("slice.indices", types.SliceType, types.BaseInteger)
 def slice_indices(context, builder, sig, args):
     length = args[1]
     sli = context.make_helper(builder, sig.args[0], args[0])

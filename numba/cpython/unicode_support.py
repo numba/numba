@@ -23,7 +23,7 @@ typerecord = namedtuple('typerecord',
 
 # The Py_UCS4 type from CPython:
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/unicodeobject.h#L112    # noqa: E501
-_Py_UCS4 = types.uint32
+_Py_UCS4 = types.c_uint32
 
 # ------------------------------------------------------------------------------
 # Start code related to/from CPython's unicodectype impl
@@ -84,7 +84,7 @@ def _gettyperecord_impl(typingctx, codepoint):
     Provides the binding to numba_gettyperecord, returns a `typerecord`
     namedtuple of properties from the codepoint.
     """
-    if not isinstance(codepoint, types.Integer):
+    if not isinstance(codepoint, types.BaseInteger):
         raise TypingError("codepoint must be an integer")
 
     def details(context, builder, signature, args):
@@ -147,7 +147,7 @@ def gettyperecord_impl(a):
             data = _gettyperecord_impl(_Py_UCS4(code_point))
             return data
         return impl
-    if isinstance(a, types.Integer):
+    if isinstance(a, types.BaseInteger):
         return lambda a: _gettyperecord_impl(_Py_UCS4(a))
 
 
@@ -159,7 +159,7 @@ def _PyUnicode_ExtendedCase(typingctx, index):
     Accessor function for the _PyUnicode_ExtendedCase array, binds to
     numba_get_PyUnicode_ExtendedCase which wraps the array and does the lookup
     """
-    if not isinstance(index, types.Integer):
+    if not isinstance(index, types.BaseInteger):
         raise TypingError("Expected an index")
 
     def details(context, builder, signature, args):

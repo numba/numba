@@ -193,7 +193,7 @@ def getitem_literal_idx(tup, idx):
     with a static_getitem.
     """
     if not (isinstance(tup, types.BaseTuple)
-            and isinstance(idx, types.IntegerLiteral)):
+            and isinstance(idx, types.BaseIntegerLiteral)):
         return None
 
     idx_val = idx.literal_value
@@ -288,10 +288,12 @@ def getitem_typed(context, builder, sig, args):
         return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-@lower_builtin(operator.getitem, types.UniTuple, types.intp)
-@lower_builtin(operator.getitem, types.UniTuple, types.uintp)
-@lower_builtin(operator.getitem, types.NamedUniTuple, types.intp)
-@lower_builtin(operator.getitem, types.NamedUniTuple, types.uintp)
+@lower_builtin(operator.getitem, types.UniTuple, types.py_intp)
+@lower_builtin(operator.getitem, types.UniTuple, types.np_intp)
+@lower_builtin(operator.getitem, types.UniTuple, types.np_uintp)
+@lower_builtin(operator.getitem, types.NamedUniTuple, types.py_intp)
+@lower_builtin(operator.getitem, types.NamedUniTuple, types.np_intp)
+@lower_builtin(operator.getitem, types.NamedUniTuple, types.np_uintp)
 def getitem_unituple(context, builder, sig, args):
     tupty, _ = sig.args
     tup, idx = args
@@ -344,9 +346,9 @@ def getitem_unituple(context, builder, sig, args):
 
 
 @lower_builtin('static_getitem', types.LiteralStrKeyDict, types.StringLiteral)
-@lower_builtin('static_getitem', types.LiteralList, types.IntegerLiteral)
+@lower_builtin('static_getitem', types.LiteralList, types.BaseIntegerLiteral)
 @lower_builtin('static_getitem', types.LiteralList, types.SliceLiteral)
-@lower_builtin('static_getitem', types.BaseTuple, types.IntegerLiteral)
+@lower_builtin('static_getitem', types.BaseTuple, types.BaseIntegerLiteral)
 @lower_builtin('static_getitem', types.BaseTuple, types.SliceLiteral)
 def static_getitem_tuple(context, builder, sig, args):
     tupty, idxty = sig.args

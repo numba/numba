@@ -163,9 +163,9 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
 
 
 range_impl_map = {
-    types.int32 : (types.range_state32_type, types.range_iter32_type),
-    types.int64 : (types.range_state64_type, types.range_iter64_type),
-    types.uint64 : (types.unsigned_range_state64_type, types.unsigned_range_iter64_type)
+    types.np_int32 : (types.np_range_state32_type, types.np_range_iter32_type),
+    types.np_int64 : (types.np_range_state64_type, types.np_range_iter64_type),
+    types.np_uint64 : (types.np_unsigned_range_state64_type, types.np_unsigned_range_iter64_type)
 }
 
 for int_type, state_types in range_impl_map.items():
@@ -270,10 +270,10 @@ def impl_contains(robj, val):
     if not isinstance(robj, types.RangeType):
         return
 
-    elif isinstance(val, (types.Integer, types.Boolean)):
+    elif isinstance(val, (types.BaseInteger, types.BaseBoolean)):
         return impl_contains_helper
 
-    elif isinstance(val, types.Float):
+    elif isinstance(val, types.BaseFloat):
         def impl(robj, val):
             if val % 1 != 0:
                 return False
@@ -281,7 +281,7 @@ def impl_contains(robj, val):
                 return impl_contains_helper(robj, int(val))
         return impl
 
-    elif isinstance(val, types.Complex):
+    elif isinstance(val, types.BaseComplex):
         def impl(robj, val):
             if val.imag != 0:
                 return False

@@ -10,9 +10,9 @@ from llvmlite import ir
 def viewer(tyctx, val, viewty):
     """ Bitcast a scalar 'val' to the given type 'viewty'. """
     bits = val.bitwidth
-    if isinstance(viewty.dtype, types.Integer):
+    if isinstance(viewty.dtype, types.BaseInteger):
         bitcastty = ir.IntType(bits)
-    elif isinstance(viewty.dtype, types.Float):
+    elif isinstance(viewty.dtype, types.BaseFloat):
         bitcastty = ir.FloatType() if bits == 32 else ir.DoubleType()
     else:
         assert 0, "unreachable"
@@ -28,7 +28,7 @@ def viewer(tyctx, val, viewty):
 @intrinsic
 def trailing_zeros(typeingctx, src):
     """Counts trailing zeros in the binary representation of an integer."""
-    if not isinstance(src, types.Integer):
+    if not isinstance(src, types.BaseInteger):
         msg = ("trailing_zeros is only defined for integers, but value passed "
                f"was '{src}'.")
         raise errors.NumbaTypeError(msg)
@@ -42,7 +42,7 @@ def trailing_zeros(typeingctx, src):
 @intrinsic
 def leading_zeros(typeingctx, src):
     """Counts leading zeros in the binary representation of an integer."""
-    if not isinstance(src, types.Integer):
+    if not isinstance(src, types.BaseInteger):
         msg = ("leading_zeros is only defined for integers, but value passed "
                f"was '{src}'.")
         raise errors.NumbaTypeError(msg)

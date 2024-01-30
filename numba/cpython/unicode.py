@@ -71,7 +71,7 @@ if PYVERSION in ((3, 9), (3, 10), (3, 11)):
 _MAX_UNICODE = 0x10ffff
 
 # https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/stringlib/fastsearch.h#L31    # noqa: E501
-_BLOOM_WIDTH = types.intp.bitwidth
+_BLOOM_WIDTH = types.py_intp.bitwidth
 
 # DATA MODEL
 
@@ -611,7 +611,7 @@ def unicode_idx_check_type(ty, name):
     elif isinstance(ty, types.Optional):
         thety = ty.type
 
-    accepted = (types.Integer, types.NoneType)
+    accepted = (types.BaseInteger, types.NoneType)
     if thety is not None and not isinstance(thety, accepted):
         raise TypingError('"{}" must be {}, not {}'.format(name, accepted, ty))
 
@@ -951,11 +951,11 @@ def _adjust_indices(length, start, end):
 
 @overload_method(types.UnicodeType, 'startswith')
 def unicode_startswith(s, prefix, start=None, end=None):
-    if not is_nonelike(start) and not isinstance(start, types.Integer):
+    if not is_nonelike(start) and not isinstance(start, types.BaseInteger):
         raise TypingError(
             "When specified, the arg 'start' must be an Integer or None")
 
-    if not is_nonelike(end) and not isinstance(end, types.Integer):
+    if not is_nonelike(end) and not isinstance(end, types.BaseInteger):
         raise TypingError(
             "When specified, the arg 'end' must be an Integer or None")
 
@@ -1005,12 +1005,12 @@ def unicode_startswith(s, prefix, start=None, end=None):
 @overload_method(types.UnicodeType, 'endswith')
 def unicode_endswith(s, substr, start=None, end=None):
     if not (start is None or isinstance(start, (types.Omitted,
-                                                types.Integer,
+                                                types.BaseInteger,
                                                 types.NoneType))):
         raise TypingError('The arg must be a Integer or None')
 
     if not (end is None or isinstance(end, (types.Omitted,
-                                            types.Integer,
+                                            types.BaseInteger,
                                             types.NoneType))):
         raise TypingError('The arg must be a Integer or None')
 
@@ -1063,7 +1063,7 @@ def unicode_expandtabs(data, tabsize=8):
     elif isinstance(tabsize, types.Optional):
         thety = tabsize.type
 
-    accepted = (types.Integer, int)
+    accepted = (types.BaseInteger, int)
     if thety is not None and not isinstance(thety, accepted):
         raise TypingError(
             '"tabsize" must be {}, not {}'.format(accepted, tabsize))
@@ -1120,8 +1120,8 @@ def unicode_expandtabs(data, tabsize=8):
 @overload_method(types.UnicodeType, 'split')
 def unicode_split(a, sep=None, maxsplit=-1):
     if not (maxsplit == -1 or
-            isinstance(maxsplit, (types.Omitted, types.Integer,
-                                  types.IntegerLiteral))):
+            isinstance(maxsplit, (types.Omitted, types.BaseInteger,
+                                  types.BaseIntegerLiteral))):
         return None  # fail typing if maxsplit is not an integer
 
     if isinstance(sep, types.UnicodeCharSeq):
@@ -1274,7 +1274,7 @@ def unicode_rsplit(data, sep=None, maxsplit=-1):
     _unicode_rsplit_check_type(sep, 'sep', (types.UnicodeType,
                                             types.UnicodeCharSeq,
                                             types.NoneType))
-    _unicode_rsplit_check_type(maxsplit, 'maxsplit', (types.Integer, int))
+    _unicode_rsplit_check_type(maxsplit, 'maxsplit', (types.BaseInteger, int))
 
     if sep is None or isinstance(sep, (types.NoneType, types.Omitted)):
 
@@ -1337,7 +1337,7 @@ def unicode_rsplit(data, sep=None, maxsplit=-1):
 
 @overload_method(types.UnicodeType, 'center')
 def unicode_center(string, width, fillchar=' '):
-    if not isinstance(width, types.Integer):
+    if not isinstance(width, types.BaseInteger):
         raise TypingError('The width must be an Integer')
 
     if isinstance(fillchar, types.UnicodeCharSeq):
@@ -1375,7 +1375,7 @@ def unicode_center(string, width, fillchar=' '):
 
 def gen_unicode_Xjust(STRING_FIRST):
     def unicode_Xjust(string, width, fillchar=' '):
-        if not isinstance(width, types.Integer):
+        if not isinstance(width, types.BaseInteger):
             raise TypingError('The width must be an Integer')
 
         if isinstance(fillchar, types.UnicodeCharSeq):
@@ -1470,7 +1470,7 @@ def unicode_splitlines(data, keepends=False):
     elif isinstance(keepends, types.Optional):
         thety = keepends.type
 
-    accepted = (types.Integer, int, types.Boolean, bool)
+    accepted = (types.BaseInteger, int, types.BaseBoolean, bool)
     if thety is not None and not isinstance(thety, accepted):
         raise TypingError(
             '"{}" must be {}, not {}'.format('keepends', accepted, keepends))
@@ -1546,7 +1546,7 @@ def unicode_join(sep, parts):
 
 @overload_method(types.UnicodeType, 'zfill')
 def unicode_zfill(string, width):
-    if not isinstance(width, types.Integer):
+    if not isinstance(width, types.BaseInteger):
         raise TypingError("<width> must be an Integer")
 
     def zfill_impl(string, width):
@@ -1620,7 +1620,7 @@ def _count_args_types_check(arg):
     if isinstance(arg, types.Optional):
         arg = arg.type
     if not (arg is None or isinstance(arg, (types.Omitted,
-                                            types.Integer,
+                                            types.BaseInteger,
                                             types.NoneType))):
         raise TypingError("The slice indices must be an Integer or None")
 
@@ -1817,7 +1817,7 @@ def _get_str_slice_view(typingctx, src_t, start_t, length_t):
 @overload(operator.getitem)
 def unicode_getitem(s, idx):
     if isinstance(s, types.UnicodeType):
-        if isinstance(idx, types.Integer):
+        if isinstance(idx, types.BaseInteger):
             def getitem_char(s, idx):
                 idx = normalize_str_idx(idx, len(s))
                 cp = _get_code_point(s, idx)
@@ -1926,11 +1926,11 @@ def _repeat_impl(str_arg, mult_arg):
 
 @overload(operator.mul)
 def unicode_repeat(a, b):
-    if isinstance(a, types.UnicodeType) and isinstance(b, types.Integer):
+    if isinstance(a, types.UnicodeType) and isinstance(b, types.BaseInteger):
         def wrap(a, b):
             return _repeat_impl(a, b)
         return wrap
-    elif isinstance(a, types.Integer) and isinstance(b, types.UnicodeType):
+    elif isinstance(a, types.BaseInteger) and isinstance(b, types.UnicodeType):
         def wrap(a, b):
             return _repeat_impl(b, a)
         return wrap
@@ -1952,7 +1952,7 @@ def unicode_replace(s, old_str, new_str, count=-1):
     elif isinstance(count, types.Optional):
         thety = count.type
 
-    if not isinstance(thety, (int, types.Integer)):
+    if not isinstance(thety, (int, types.BaseInteger)):
         raise TypingError('Unsupported parameters. The parameters '
                           'must be Integer. Given count: {}'.format(count))
 
@@ -2543,7 +2543,7 @@ def _PyUnicode_FromOrdinal(ordinal):
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Python/bltinmodule.c#L715-L720    # noqa: E501
 @overload(chr)
 def ol_chr(i):
-    if isinstance(i, types.Integer):
+    if isinstance(i, types.BaseInteger):
         def impl(i):
             return _PyUnicode_FromOrdinal(i)
         return impl
@@ -2561,7 +2561,7 @@ def unicode_repr(s):
     return lambda s: "'" + s + "'"
 
 
-@overload_method(types.Integer, "__str__")
+@overload_method(types.BaseInteger, "__str__")
 def integer_str(n):
 
     ten = n(10)
@@ -2589,13 +2589,13 @@ def integer_str(n):
     return impl
 
 
-@overload_method(types.Integer, "__repr__")
+@overload_method(types.BaseInteger, "__repr__")
 def integer_repr(n):
     return lambda n: n.__str__()
 
 
-@overload_method(types.Boolean, "__repr__")
-@overload_method(types.Boolean, "__str__")
+@overload_method(types.BaseBoolean, "__repr__")
+@overload_method(types.BaseBoolean, "__str__")
 def boolean_str(b):
     return lambda b: 'True' if b else 'False'
 

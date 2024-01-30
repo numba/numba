@@ -18,7 +18,7 @@ from numba.cpython import unicode
 
 s1_dtype = np.dtype('S1')
 assert s1_dtype.itemsize == 1
-bytes_type = types.Bytes(types.uint8, 1, "C", readonly=True)
+bytes_type = types.Bytes(types.c_uint8, 1, "C", readonly=True)
 
 # Currently, NumPy supports only UTF-32 arrays but this may change in
 # future and the approach used here for supporting str arrays may need
@@ -329,7 +329,7 @@ def unicode_to_unicode_charseq(context, builder, fromty, toty, val):
 @overload(operator.getitem)
 def charseq_getitem(s, i):
     get_value = None
-    if isinstance(i, types.Integer):
+    if isinstance(i, types.BaseInteger):
         if isinstance(s, types.CharSeq):
             get_value = charseq_get_value
         if isinstance(s, types.UnicodeCharSeq):
@@ -780,8 +780,8 @@ def _map_bytes(seq):
 @overload_method(types.Bytes, 'split')
 def unicode_charseq_split(a, sep=None, maxsplit=-1):
     if not (maxsplit == -1 or
-            isinstance(maxsplit, (types.Omitted, types.Integer,
-                                  types.IntegerLiteral))):
+            isinstance(maxsplit, (types.Omitted, types.BaseInteger,
+                                  types.BaseIntegerLiteral))):
         return None
     if isinstance(a, types.UnicodeCharSeq):
         if isinstance(sep, types.UnicodeCharSeq):

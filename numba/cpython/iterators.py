@@ -18,7 +18,7 @@ def iterator_getiter(context, builder, sig, args):
 # builtin `enumerate` implementation
 
 @lower_builtin(enumerate, types.IterableType)
-@lower_builtin(enumerate, types.IterableType, types.Integer)
+@lower_builtin(enumerate, types.IterableType, types.BaseInteger)
 def make_enumerate_object(context, builder, sig, args):
     assert len(args) == 1 or len(args) == 2 # enumerate(it) or enumerate(it, start)
     srcty = sig.args[0]
