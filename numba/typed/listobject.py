@@ -1298,7 +1298,7 @@ def ol_list_sort(lst, key=None, reverse=False):
 
 @overload_method(types.ListType, "getitem_unchecked")
 def ol_getitem_unchecked(lst, index):
-    if not isinstance(index, types.Integer):
+    if not isinstance(index, types.BaseInteger):
         return
 
     def impl(lst, index):

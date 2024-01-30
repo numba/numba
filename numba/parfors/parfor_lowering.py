@@ -1890,14 +1890,14 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
                 else:
                     unpacked_aty = aty
                 typ = (context.get_data_type(unpacked_aty)
-                       if not isinstance(unpacked_aty, types.Boolean)
+                       if not isinstance(unpacked_aty, types.BaseBoolean)
                        else llvmlite.ir.IntType(1))
                 ptr = cgutils.alloca_once(builder, typ)
                 builder.store(arg, ptr)
             else:
                 # Scalar output, must allocate
                 typ = (context.get_data_type(aty)
-                       if not isinstance(aty, types.Boolean)
+                       if not isinstance(aty, types.BaseBoolean)
                        else llvmlite.ir.IntType(1))
                 ptr = cgutils.alloca_once(builder, typ)
             builder.store(builder.bitcast(ptr, byte_ptr_t), dst)

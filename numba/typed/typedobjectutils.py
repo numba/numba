@@ -46,9 +46,9 @@ def _sentry_safe_cast(fromty, toty):
         warnings.warn(m.format(fromty, toty),
                       category=NumbaTypeSafetyWarning)
 
-    isint = lambda x: isinstance(x, types.Integer)
-    isflt = lambda x: isinstance(x, types.Float)
-    iscmplx = lambda x: isinstance(x, types.Complex)
+    isint = lambda x: isinstance(x, types.BaseInteger)
+    isflt = lambda x: isinstance(x, types.BaseFloat)
+    iscmplx = lambda x: isinstance(x, types.BaseComplex)
     isdict = lambda x: isinstance(x, types.DictType)
     # Only check against numeric types.
     if by is None or by > Conversion.safe:
