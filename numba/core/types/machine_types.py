@@ -1,8 +1,10 @@
 
 from .utils import parse_integer_bitwidth, parse_integer_signed
-from .scalars import BaseInteger, BaseIntegerLiteral, BaseBoolean, BaseBooleanLiteral, BaseFloat, BaseComplex
+from .scalars import (BaseInteger, BaseIntegerLiteral, BaseBoolean,
+                      BaseBooleanLiteral, BaseFloat, BaseComplex)
 from functools import total_ordering
 from numba.core.typeconv import Conversion
+
 
 @total_ordering
 class MachineInteger(BaseInteger):
@@ -56,12 +58,10 @@ class MachineIntegerLiteral(BaseIntegerLiteral, MachineInteger):
         self._literal_init(value)
         name = 'Literal[int]({})'.format(value)
         basetype = self.literal_type
-        MachineInteger.__init__(
-            self,
-            name=name,
-            bitwidth=basetype.bitwidth,
-            signed=basetype.signed,
-            )
+        MachineInteger.__init__(self,
+                                name=name,
+                                bitwidth=basetype.bitwidth,
+                                signed=basetype.signed,)
 
     def can_convert_to(self, typingctx, other):
         conv = typingctx.can_convert(self.literal_type, other)
@@ -79,10 +79,8 @@ class MachineBooleanLiteral(BaseBooleanLiteral, MachineBoolean):
     def __init__(self, value):
         self._literal_init(value)
         name = 'Literal[bool]({})'.format(value)
-        MachineBoolean.__init__(
-            self,
-            name=name
-            )
+        MachineBoolean.__init__(self,
+                                name=name)
 
     def cast_python_value(self, value):
         return float(value)
@@ -91,6 +89,7 @@ class MachineBooleanLiteral(BaseBooleanLiteral, MachineBoolean):
         conv = typingctx.can_convert(self.literal_type, other)
         if conv is not None:
             return max(conv, Conversion.promote)
+
 
 @total_ordering
 class MachineFloat(BaseFloat):
@@ -116,7 +115,6 @@ class MachineComplex(BaseComplex):
         assert self.name.startswith('c_complex')
         bitwidth = int(self.name[10:])
         self.bitwidth = bitwidth
-
 
     def cast_python_value(self, value):
         return complex(value)

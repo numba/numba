@@ -1477,7 +1477,8 @@ def numpy_broadcast_to(array, shape):
 
     elif isinstance(shape, types.Tuple) and shape.count > 0:
         # check if all types are integers
-        if not all([isinstance(typ, types.BaseIntegerLiteral) for typ in shape]):
+        if not all([isinstance(typ, types.BaseIntegerLiteral)
+                    for typ in shape]):
             msg = f'"{shape}" object cannot be interpreted as an integer'
             raise errors.TypingError(msg)
         return _default_broadcast_to_impl
@@ -1587,7 +1588,8 @@ def numpy_broadcast_arrays(*args):
     for idx, arg in enumerate(args):
         if isinstance(arg, types.ArrayCompatible):
             m = max(m, arg.ndim)
-        elif isinstance(arg, (types.Number, types.BaseBoolean, types.BaseTuple)):
+        elif isinstance(arg, (types.Number, types.BaseBoolean,
+                              types.BaseTuple)):
             m = max(m, 1)
         else:
             raise errors.TypingError(f'Unhandled type {arg}')
@@ -3225,7 +3227,8 @@ def record_static_setitem_str(context, builder, sig, args):
     return impl(builder, (rec, val))
 
 
-@lower_builtin('static_setitem', types.Record, types.BaseIntegerLiteral, types.Any)
+@lower_builtin('static_setitem', types.Record,
+               types.BaseIntegerLiteral, types.Any)
 def record_static_setitem_int(context, builder, sig, args):
     """
     Record.__setitem__ redirects to setattr()
@@ -6239,7 +6242,8 @@ def np_array_split(ary, indices_or_sections, axis=0):
 
     elif (
         isinstance(indices_or_sections, types.Tuple)
-        and all(isinstance(t, types.BaseInteger) for t in indices_or_sections.types)
+        and all(isinstance(t, types.BaseInteger)
+                for t in indices_or_sections.types)
     ):
         def impl(ary, indices_or_sections, axis=0):
             slice_tup = build_full_slice_tuple(ary.ndim)

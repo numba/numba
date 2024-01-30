@@ -247,7 +247,8 @@ def gen_sum_axis_impl(is_axis_const, const_axis_val, op, zero):
 @lower_builtin(np.sum, types.Array, types.intp, types.DTypeSpec)
 @lower_builtin(np.sum, types.Array, types.BaseIntegerLiteral, types.DTypeSpec)
 @lower_builtin("array.sum", types.Array, types.intp, types.DTypeSpec)
-@lower_builtin("array.sum", types.Array, types.BaseIntegerLiteral, types.DTypeSpec)
+@lower_builtin("array.sum", types.Array, types.BaseIntegerLiteral,
+               types.DTypeSpec)
 def array_sum_axis_dtype(context, builder, sig, args):
     retty = sig.return_type
     zero = getattr(retty, 'dtype', retty)(0)
@@ -3079,7 +3080,8 @@ def np_fill_diagonal(a, val, wrap=False):
             checker(a, tmpval)
             _fill_diagonal(a, tmpval, wrap)
 
-        if isinstance(val, (types.BaseFloat, types.BaseInteger, types.BaseBoolean)):
+        if isinstance(val, (types.BaseFloat, types.BaseInteger,
+                            types.BaseBoolean)):
             return scalar_impl
         elif isinstance(val, (types.Tuple, types.Sequence, types.Array)):
             return non_scalar_impl

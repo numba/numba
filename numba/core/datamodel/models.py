@@ -656,7 +656,7 @@ class StructModel(CompositeModel):
 class BaseComplexModel(StructModel):
     pass
 
-if config.USE_LEGACY_TYPE_SYSTEM:
+if config.USE_LEGACY_TYPE_SYSTEM:  # type: ignore
     @register_default(types.Boolean)
     @register_default(types.BooleanLiteral)
     class BooleanModel(DataModel):

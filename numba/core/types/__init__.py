@@ -50,7 +50,11 @@ def iter_type_sets(*type_sets):
         for type_ in type_set:
             yield type_
 
-if config.USE_LEGACY_TYPE_SYSTEM:
+# Need to ignore mypy errors because mypy cannot unify types for both
+# the type systems even if they're logically mutually exclusive.
+# mypy: ignore-errors
+
+if config.USE_LEGACY_TYPE_SYSTEM: # type: ignore
     boolean = bool_ = Boolean('bool')
 
     byte = uint8 = Integer('uint8')

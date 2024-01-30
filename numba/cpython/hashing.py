@@ -532,7 +532,8 @@ if _Py_hashfunc_name in ('siphash13', 'siphash24', 'fnv'):
     @register_jitable(locals={'x': types.np_uint64,
                               'b': types.np_uint64, })
     def _ROTATE(x, b):
-        return types.np_uint64(((x) << (b)) | ((x) >> (types.np_uint64(64) - (b))))
+        return types.np_uint64(((x) << (b)) |
+                               ((x) >> (types.np_uint64(64) - (b))))
 
     @register_jitable(locals={'a': types.np_uint64,
                               'b': types.np_uint64,
@@ -627,8 +628,8 @@ if _Py_hashfunc_name in ('siphash13', 'siphash24', 'fnv'):
                 for i in range(4):
                     jmp = i * 8
                     mask = ~types.np_uint64(ohexefef << jmp)
-                    t = (t & mask) | (types.np_uint64(grab_byte(src, boffset + i))
-                                      << jmp)
+                    t = (t & mask) | \
+                        (types.np_uint64(grab_byte(src, boffset + i)) << jmp)
             if src_sz >= 3:
                 jmp = (2 * 8)
                 mask = ~types.np_uint64(ohexefef << jmp)

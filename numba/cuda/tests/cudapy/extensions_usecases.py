@@ -44,7 +44,8 @@ if not config.ENABLE_CUDASIM:
     @type_callable(TestStruct)
     def type_test_struct(context):
         def typer(x, y):
-            if isinstance(x, types.BaseInteger) and isinstance(y, types.BaseInteger):
+            if isinstance(x, types.BaseInteger) and \
+               isinstance(y, types.BaseInteger):
                 return test_struct_model_type
         return typer
 

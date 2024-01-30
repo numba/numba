@@ -1,13 +1,12 @@
 from numba.core import types
 from numba.core.imputils import lower_cast
 
+
 @lower_cast(types.PythonIntegerLiteral, types.PythonInteger)
 def literal_int_to_number(context, builder, fromty, toty, val):
-    lit = context.get_constant_generic(
-        builder,
-        fromty.literal_type,
-        fromty.literal_value,
-        )
+    lit = context.get_constant_generic(builder,
+                                       fromty.literal_type,
+                                       fromty.literal_value,)
     return context.cast(builder, lit, fromty.literal_type, toty)
 
 

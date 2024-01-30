@@ -31,7 +31,7 @@ class BaseFloatLiteral(Number):
 class BaseComplex(Number):
     pass
 
-if config.USE_LEGACY_TYPE_SYSTEM:
+if config.USE_LEGACY_TYPE_SYSTEM: # type: ignore
     class Boolean(BaseBoolean):
         def cast_python_value(self, value):
             return bool(value)

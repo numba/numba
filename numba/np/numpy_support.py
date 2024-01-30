@@ -149,7 +149,9 @@ def as_dtype(nbtype):
     NotImplementedError is if no correspondence is known.
     """
     nbtype = types.unliteral(nbtype)
-    if isinstance(nbtype, (types.BaseComplex, types.BaseInteger, types.BaseFloat)):
+    if isinstance(nbtype, (types.BaseComplex,
+                           types.BaseInteger,
+                           types.BaseFloat)):
         return np.dtype(str(nbtype))
     if nbtype is types.bool_:
         return np.dtype('?')
@@ -741,7 +743,8 @@ def type_is_scalar(typ):
     https://numpy.org/doc/stable/reference/arrays.scalars.html#built-in-scalar-types
     """
 
-    ok = (types.BaseBoolean, types.Number, types.UnicodeType, types.StringLiteral,
+    ok = (types.BaseBoolean, types.Number,
+          types.UnicodeType, types.StringLiteral,
           types.NPTimedelta, types.NPDatetime)
     return isinstance(typ, ok)
 

@@ -5,5 +5,5 @@ def parse_integer_bitwidth(name):
 
 
 def parse_integer_signed(name):
-    signed = 'int' in name and not 'uint' in name
+    signed = 'int' in name and 'uint' not in name
     return signed

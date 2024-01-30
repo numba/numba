@@ -131,11 +131,9 @@ if config.USE_LEGACY_TYPE_SYSTEM:
     def _typeof_bool(val, c):
         return types.boolean
 
-
     @typeof_impl.register(float)
     def _typeof_float(val, c):
         return types.float64
-
 
     @typeof_impl.register(complex)
     def _typeof_complex(val, c):
@@ -151,15 +149,14 @@ else:
     def _typeof_bool(val, c):
         return types.py_bool
 
-
     @typeof_impl.register(float)
     def _typeof_float(val, c):
         return types.py_float64
 
-
     @typeof_impl.register(complex)
     def _typeof_complex(val, c):
         return types.py_complex128
+
 
 @typeof_impl.register(np.generic)
 def _typeof_numpy_scalar(val, c):

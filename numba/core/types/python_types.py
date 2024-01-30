@@ -1,9 +1,11 @@
 
 from .abstract import Literal
 from .utils import parse_integer_bitwidth, parse_integer_signed
-from .scalars import BaseInteger, BaseIntegerLiteral, BaseBoolean, BaseBooleanLiteral, BaseFloat, BaseComplex
+from .scalars import (BaseInteger, BaseIntegerLiteral, BaseBoolean,
+                      BaseBooleanLiteral, BaseFloat, BaseComplex)
 from functools import total_ordering
 from numba.core.typeconv import Conversion
+
 
 @total_ordering
 class PythonInteger(BaseInteger):
@@ -57,12 +59,10 @@ class PythonIntegerLiteral(BaseIntegerLiteral, PythonInteger):
         self._literal_init(value)
         name = 'Literal[int]({})'.format(value)
         basetype = self.literal_type
-        PythonInteger.__init__(
-            self,
-            name=name,
-            bitwidth=basetype.bitwidth,
-            signed=basetype.signed,
-            )
+        PythonInteger.__init__(self,
+                               name=name,
+                               bitwidth=basetype.bitwidth,
+                               signed=basetype.signed,)
 
     def can_convert_to(self, typingctx, other):
         conv = typingctx.can_convert(self.literal_type, other)
@@ -71,6 +71,7 @@ class PythonIntegerLiteral(BaseIntegerLiteral, PythonInteger):
 
 
 Literal.ctor_map[int] = PythonIntegerLiteral
+
 
 class PythonBoolean(BaseBoolean):
     def cast_python_value(self, value):
@@ -82,10 +83,7 @@ class PythonBooleanLiteral(BaseBooleanLiteral, PythonBoolean):
     def __init__(self, value):
         self._literal_init(value)
         name = 'Literal[bool]({})'.format(value)
-        PythonBoolean.__init__(
-            self,
-            name=name
-            )
+        PythonBoolean.__init__(self, name=name)
 
     def can_convert_to(self, typingctx, other):
         conv = typingctx.can_convert(self.literal_type, other)
@@ -94,6 +92,7 @@ class PythonBooleanLiteral(BaseBooleanLiteral, PythonBoolean):
 
 
 Literal.ctor_map[bool] = PythonBooleanLiteral
+
 
 @total_ordering
 class PythonFloat(BaseFloat):
