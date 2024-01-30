@@ -3278,6 +3278,22 @@ class TestParforsMisc(TestParforsBase):
             )
         )
 
+    def test_lookup_cycle_detection(self):
+        # This test is added due to a bug discovered in the PR 9244 patch.
+        # The cyclic detection was incorrectly flagging cycles.
+        @njit(parallel=True)
+        def foo():
+            # The following `acc` variable is used in the `lookup()` function
+            # in parfor's reduction code.
+            acc = 0
+            for n in prange(1):
+                for i in range(1):
+                    for j in range(1):
+                        acc += 1
+            return acc
+
+        self.assertEqual(foo(), foo.py_func())
+
 
 @skip_parfors_unsupported
 class TestParforsDiagnostics(TestParforsBase):
