@@ -418,7 +418,7 @@ def intrinsic(*args, **kwargs):
         @intrinsic
         def cast_int_to_byte_ptr(typingctx, src):
             # check for accepted types
-            if isinstance(src, types.Integer):
+            if isinstance(src, types.BaseInteger):
                 # create the expected type signature
                 result_type = types.CPointer(types.uint8)
                 sig = result_type(types.uintp)

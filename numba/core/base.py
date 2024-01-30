@@ -1013,7 +1013,7 @@ class BaseContext(object):
         """
         Get a helper object to access the given complex numbers' members.
         """
-        assert isinstance(typ, types.Complex), typ
+        assert isinstance(typ, types.BaseComplex), typ
         return self.make_helper(builder, typ, value)
 
     def make_tuple(self, builder, typ, values):

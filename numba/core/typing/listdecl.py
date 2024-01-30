@@ -67,7 +67,7 @@ class ListAttribute(AttributeTemplate):
     def resolve_insert(self, list, args, kws):
         idx, item = args
         assert not kws
-        if isinstance(idx, types.Integer):
+        if isinstance(idx, types.BaseInteger):
             unified = self.context.unify_pairs(list.dtype, item)
             if unified is not None:
                 sig = signature(types.none, types.intp, unified)
@@ -81,7 +81,7 @@ class ListAttribute(AttributeTemplate):
             return signature(list.dtype)
         else:
             idx, = args
-            if isinstance(idx, types.Integer):
+            if isinstance(idx, types.BaseInteger):
                 return signature(list.dtype, types.intp)
 
 @infer_global(operator.add)
@@ -113,9 +113,9 @@ class MulList(AbstractTemplate):
 
     def generic(self, args, kws):
         a, b = args
-        if isinstance(a, types.List) and isinstance(b, types.Integer):
+        if isinstance(a, types.List) and isinstance(b, types.BaseInteger):
             return signature(a, a, types.intp)
-        elif isinstance(a, types.Integer) and isinstance(b, types.List):
+        elif isinstance(a, types.BaseInteger) and isinstance(b, types.List):
             return signature(b, types.intp, b)
 
 

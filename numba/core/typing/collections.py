@@ -48,7 +48,7 @@ class GetItemSequence(AbstractTemplate):
                 # Slicing a tuple only supported with static_getitem
                 if not isinstance(seq, types.BaseTuple):
                     return signature(seq, seq, idx)
-            elif isinstance(idx, types.Integer):
+            elif isinstance(idx, types.BaseInteger):
                 return signature(seq.dtype, seq, idx)
 
 @infer_global(operator.setitem)
@@ -59,7 +59,7 @@ class SetItemSequence(AbstractTemplate):
             idx = normalize_1d_index(idx)
             if isinstance(idx, types.SliceType):
                 return signature(types.none, seq, idx, seq)
-            elif isinstance(idx, types.Integer):
+            elif isinstance(idx, types.BaseInteger):
                 if not self.context.can_convert(value, seq.dtype):
                     msg = "invalid setitem with value of {} to element of {}"
                     raise errors.TypingError(msg.format(types.unliteral(value), seq.dtype))
