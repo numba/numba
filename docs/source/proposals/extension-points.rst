@@ -230,7 +230,7 @@ be expressed::
 
        def generic(self, args, kws):
            tup, idx = args
-           if isinstance(tup, types.UniTuple) and isinstance(idx, types.Integer):
+           if isinstance(tup, types.UniTuple) and isinstance(idx, types.BaseInteger):
                return signature(tup.dtype, tup, idx)
 
 
@@ -240,7 +240,7 @@ and ``.imag`` attributes of complex numbers::
 
    @builtin_attr
    class ComplexAttribute(AttributeTemplate):
-       key = types.Complex
+       key = types.BaseComplex
 
        def resolve_real(self, ty):
            return ty.underlying_float
@@ -264,7 +264,7 @@ lists::
 
        def generic(self):
            def typer(iterable, key=None, reverse=None):
-               if reverse is not None and not isinstance(reverse, types.Boolean):
+               if reverse is not None and not isinstance(reverse, types.BaseBoolean):
                    return
                if key is not None and not isinstance(key, types.Callable):
                    return
@@ -336,7 +336,7 @@ monolithic sequence of choices and type checks in the
 appends a type-specific check in that method.
 
 Boolean evaluation is a special case of implicit conversion (the
-destination type being :class:`types.Boolean`).
+destination type being :class:`types.BaseBoolean`).
 
 .. note::
    Explicit conversion is seen as a regular operation, e.g. a constructor
@@ -349,7 +349,7 @@ Add a generic function for implicit conversion, with multiple dispatch
 based on the source and destination types.  Here is an example showing
 how to write a float-to-integer conversion::
 
-   @lower_cast(types.Float, types.Integer)
+   @lower_cast(types.BaseFloat, types.BaseInteger)
    def float_to_integer(context, builder, fromty, toty, val):
        lty = context.get_value_type(toty)
        if toty.signed:
@@ -401,7 +401,7 @@ a generic function.  The implementations for standard Numba types
 are in :mod:`numba.targets.boxing`.  For example, here is the boxing
 implementation for a boolean value::
 
-   @box(types.Boolean)
+   @box(types.BaseBoolean)
    def box_bool(c, typ, val):
        longval = c.builder.zext(val, c.pyapi.long)
        return c.pyapi.bool_from_long(longval)

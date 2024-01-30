@@ -200,8 +200,8 @@ constructor) for some specific argument types.  This allows defining
 type-specific implementations of a given operation, which is important
 for heavily overloaded functions such as :func:`len`.
 
-``types.Float`` is the class of all floating-point types (``types.float64``
-is an instance of ``types.Float``).  It is generally more future-proof
+``types.BaseFloat`` is the class of all floating-point types (``types.float64``
+is an instance of ``types.BaseFloat``).  It is generally more future-proof
 to match argument types on their class rather than on specific instances
 (however, when *returning* a type -- chiefly during the type inference
 phase --, you must usually return a type instance).

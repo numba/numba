@@ -332,7 +332,7 @@ other. First define a type specialised function dispatch with the
 
   @generated_jit
   def select(x):
-      if isinstance(x, types.Float):
+      if isinstance(x, types.BaseFloat):
           def impl(x):
               return x + 1
           return impl
@@ -369,7 +369,7 @@ adjusting it to use the ``overload`` API::
   # An overload for the `select` function cf. generated_jit
   @overload(select)
   def ol_select(x):
-      if isinstance(x, types.Float):
+      if isinstance(x, types.BaseFloat):
           def impl(x):
               return x + 1
           return impl
