@@ -71,35 +71,38 @@ class CPUContext(BaseContext):
                                    listobj, numbers, rangeobj, # noqa F401
                                    setobj, slicing, tupleobj, # noqa F401
                                    unicode,) # noqa F401
-        from numba.core import optional # noqa F401
-        from numba.misc import gdb_hook, literal # noqa F401
-        from numba.np import linalg, arraymath, arrayobj # noqa F401
-        from numba.np.random import generator_core, generator_methods # noqa F401
-        from numba.np.polynomial import polynomial_core, polynomial_functions # noqa F401
-        from numba.typed import typeddict, dictimpl # noqa F401
-        from numba.typed import typedlist, listobject # noqa F401
-        from numba.experimental import jitclass, function_type # noqa F401
-        from numba.np import npdatetime # noqa F401
+        if numba.core.config.USE_LEGACY_TYPE_SYSTEM:
+            from numba.core import optional # noqa F401
+            from numba.misc import gdb_hook, literal # noqa F401
+            from numba.np import linalg, arraymath, arrayobj # noqa F401
+            from numba.np.random import generator_core, generator_methods # noqa F401
+            from numba.np.polynomial import polynomial_core, polynomial_functions # noqa F401
+            from numba.typed import typeddict, dictimpl # noqa F401
+            from numba.typed import typedlist, listobject # noqa F401
+            from numba.experimental import jitclass, function_type # noqa F401
+            from numba.np import npdatetime # noqa F401
 
-        # Add target specific implementations
-        from numba.np import npyimpl
-        from numba.cpython import cmathimpl, mathimpl, printimpl, randomimpl
-        from numba.misc import cffiimpl
-        from numba.experimental.jitclass.base import ClassBuilder as \
-            jitclassimpl
-        self.install_registry(cmathimpl.registry)
-        self.install_registry(cffiimpl.registry)
-        self.install_registry(mathimpl.registry)
-        self.install_registry(npyimpl.registry)
-        self.install_registry(printimpl.registry)
-        self.install_registry(randomimpl.registry)
-        self.install_registry(jitclassimpl.class_impl_registry)
+            # Add target specific implementations
+            from numba.np import npyimpl
+            from numba.cpython import cmathimpl, mathimpl, printimpl, randomimpl
+            from numba.misc import cffiimpl
+            from numba.experimental.jitclass.base import ClassBuilder as \
+                jitclassimpl
+            self.install_registry(cmathimpl.registry)
+            self.install_registry(cffiimpl.registry)
+            self.install_registry(mathimpl.registry)
+            self.install_registry(npyimpl.registry)
+            self.install_registry(printimpl.registry)
+            self.install_registry(randomimpl.registry)
+            self.install_registry(jitclassimpl.class_impl_registry)
 
-        # load 3rd party extensions
-        numba.core.entrypoints.init_all()
+            # load 3rd party extensions
+            numba.core.entrypoints.init_all()
 
-        # fix for #8940
-        from numba.np.unsafe import ndarray # noqa F401
+            # fix for #8940
+            from numba.np.unsafe import ndarray # noqa F401
+        else:
+            from numba.core import casting # noqa F401
 
     @property
     def target_data(self):
