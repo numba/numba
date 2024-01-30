@@ -680,7 +680,7 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
                     def impl(li):
                         return 3
                 return impl
-            elif isinstance(li, types.IntegerLiteral):
+            elif isinstance(li, types.BaseIntegerLiteral):
                 value = li.literal_value
                 if value == 0xca11ab1e:
                     def impl(li):
@@ -835,7 +835,7 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
 
         @overload(dt, inline='always')
         def ol_dt(li):
-            if isinstance(li, types.IntegerLiteral):
+            if isinstance(li, types.BaseIntegerLiteral):
                 value = li.literal_value
                 if value == 1000:
                     def impl(li):
@@ -878,7 +878,7 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
 
         @overload(dt, inline='always')
         def ol_dt(li):
-            if isinstance(li, types.IntegerLiteral):
+            if isinstance(li, types.BaseIntegerLiteral):
                 value = li.literal_value
                 if value == 1000:
                     def impl(li):
@@ -1393,7 +1393,7 @@ class TestConstListUnroll(MemoryLeakMixin, TestCase):
                     def impl(li):
                         return 3
                 return impl
-            elif isinstance(li, types.IntegerLiteral):
+            elif isinstance(li, types.BaseIntegerLiteral):
                 value = li.literal_value
                 if value == 0xca11ab1e:
                     def impl(li):

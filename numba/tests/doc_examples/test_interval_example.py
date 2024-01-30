@@ -57,7 +57,7 @@ class IntervalExampleTest(unittest.TestCase):
         @type_callable(Interval)
         def type_interval(context):
             def typer(lo, hi):
-                if isinstance(lo, types.Float) and isinstance(hi, types.Float):
+                if isinstance(lo, types.BaseFloat) and isinstance(hi, types.BaseFloat):
                     return interval_type
             return typer
         # magictoken.numba_type_callable.end
@@ -94,7 +94,7 @@ class IntervalExampleTest(unittest.TestCase):
         from numba.extending import lower_builtin
         from numba.core import cgutils
 
-        @lower_builtin(Interval, types.Float, types.Float)
+        @lower_builtin(Interval, types.BaseFloat, types.BaseFloat)
         def impl_interval(context, builder, sig, args):
             typ = sig.return_type
             lo, hi = args

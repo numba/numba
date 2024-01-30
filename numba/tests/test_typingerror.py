@@ -94,7 +94,7 @@ class TestTypingError(unittest.TestCase):
 
         expected = ((_header_lead + " Function(<built-in function mul>) found "
                      "for signature:\n \n >>> mul(UniTuple({} x 1), {})")
-            .format(str(types.intp), types.IntegerLiteral(2)))
+            .format(str(types.intp), types.BaseIntegerLiteral(2)))
         self.assertIn(expected, str(raises.exception))
         self.assertIn("During: typing of", str(raises.exception))
 

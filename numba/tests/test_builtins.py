@@ -1299,7 +1299,7 @@ class TestIsinstanceBuiltin(TestCase):
                 return isinstance(1, clazz_type)
             return impl
 
-        clazz_types = (types.Integer, types.Float, types.Array,)
+        clazz_types = (types.BaseInteger, types.BaseFloat, types.Array,)
 
         msg = "Numba type classes.*are not supported"
         for ct in clazz_types:

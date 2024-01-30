@@ -313,7 +313,7 @@ class TestErrorMessages(unittest.TestCase):
 
         @intrinsic
         def myintrin(typingctx, x, arr):
-            if not isinstance(x, types.IntegerLiteral):
+            if not isinstance(x, types.BaseIntegerLiteral):
                 raise errors.RequireLiteralValue(given_reason1)
 
             if arr.ndim != 1:

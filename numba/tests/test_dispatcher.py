@@ -57,7 +57,7 @@ def star_defaults(x, y=2, *z):
 
 
 def generated_usecase(x, y=5):
-    if isinstance(x, types.Complex):
+    if isinstance(x, types.BaseComplex):
         def impl(x, y):
             return x + y
     else:
@@ -67,7 +67,7 @@ def generated_usecase(x, y=5):
 
 
 def bad_generated_usecase(x, y=5):
-    if isinstance(x, types.Complex):
+    if isinstance(x, types.BaseComplex):
         def impl(x):
             return x
     else:

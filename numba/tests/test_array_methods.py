@@ -337,7 +337,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                 cfunc = njit(argtys)(pyfunc)
                 check_round(cfunc, values, inty, outty, 0)
                 check_round(cfunc, values, inty, outty, 1)
-                if not isinstance(outty, types.Integer):
+                if not isinstance(outty, types.BaseInteger):
                     check_round(cfunc, values * 10, inty, outty, -1)
                 else:
                     # Avoid Numpy bug when output is an int:

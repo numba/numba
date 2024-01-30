@@ -155,7 +155,7 @@ def type_func1_(context):
         if x in (None, types.none):
             # 0-arg or 1-arg with None
             return types.int32
-        elif isinstance(x, types.Float):
+        elif isinstance(x, types.BaseFloat):
             # 1-arg with float
             return x
 
@@ -171,7 +171,7 @@ def func1_nullary(context, builder, sig, args):
     return context.get_constant(sig.return_type, 42)
 
 
-@lower_builtin(func1, types.Float)
+@lower_builtin(func1, types.BaseFloat)
 def func1_unary(context, builder, sig, args):
     def func1_impl(x):
         return math.sqrt(2 * x)
@@ -318,7 +318,7 @@ def overload_add_dummy(arg1, arg2):
 
 @overload(operator.delitem)
 def overload_dummy_delitem(obj, idx):
-    if isinstance(obj, MyDummyType) and isinstance(idx, types.Integer):
+    if isinstance(obj, MyDummyType) and isinstance(idx, types.BaseInteger):
 
         def dummy_delitem_impl(obj, idx):
             print("del", obj, idx)
@@ -328,7 +328,7 @@ def overload_dummy_delitem(obj, idx):
 
 @overload(operator.getitem)
 def overload_dummy_getitem(obj, idx):
-    if isinstance(obj, MyDummyType) and isinstance(idx, types.Integer):
+    if isinstance(obj, MyDummyType) and isinstance(idx, types.BaseInteger):
 
         def dummy_getitem_impl(obj, idx):
             return idx + 123
@@ -341,8 +341,8 @@ def overload_dummy_setitem(obj, idx, val):
     if all(
         [
             isinstance(obj, MyDummyType),
-            isinstance(idx, types.Integer),
-            isinstance(val, types.Integer),
+            isinstance(idx, types.BaseInteger),
+            isinstance(val, types.BaseInteger),
         ]
     ):
 
@@ -1103,7 +1103,7 @@ class TestHighLevelExtending(TestCase):
         @overload_method(types.Array, "litfoo")
         def litfoo(arr, val):
             # Must be an integer
-            if isinstance(val, types.Integer):
+            if isinstance(val, types.BaseInteger):
                 # Must not be literal
                 if not isinstance(val, types.Literal):
 
@@ -1209,7 +1209,7 @@ class TestHighLevelExtending(TestCase):
 
         @overload(CallableTypeRef)
         def callable_type_call_ovld1(x):
-            if isinstance(x, types.Integer):
+            if isinstance(x, types.BaseInteger):
                 def impl(x):
                     return 42.5 + x
                 return impl
@@ -1350,7 +1350,7 @@ class TestIntrinsic(TestCase):
             @intrinsic
             def unsafe_cast(typingctx, src):
                 self.assertIsInstance(typingctx, typing.Context)
-                if isinstance(src, types.Integer):
+                if isinstance(src, types.BaseInteger):
                     sig = result_type(types.uintp)
 
                     # defines the custom code generation
@@ -1980,7 +1980,7 @@ class TestOverloadPreferLiteral(TestCase):
             pass
 
         def ov(x):
-            if isinstance(x, types.IntegerLiteral):
+            if isinstance(x, types.BaseIntegerLiteral):
                 # With prefer_literal=False, this branch will not be reached.
                 if x.literal_value == 1:
                     def impl(x):
@@ -2016,7 +2016,7 @@ class TestOverloadPreferLiteral(TestCase):
 
     def test_overload_method(self):
         def ov(self, x):
-            if isinstance(x, types.IntegerLiteral):
+            if isinstance(x, types.BaseIntegerLiteral):
                 # With prefer_literal=False, this branch will not be reached.
                 if x.literal_value == 1:
                     def impl(self, x):
@@ -2071,7 +2071,7 @@ class TestIntrinsicPreferLiteral(TestCase):
         def intrin(context, x):
             # This intrinsic will return 0xcafe if `x` is a literal `1`.
             sig = signature(types.intp, x)
-            if isinstance(x, types.IntegerLiteral):
+            if isinstance(x, types.BaseIntegerLiteral):
                 # With prefer_literal=False, this branch will not be reached
                 if x.literal_value == 1:
                     def codegen(context, builder, signature, args):

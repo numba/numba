@@ -12,19 +12,19 @@ from numba.core.errors import NumbaNotImplementedError, NumbaTypeError
 class TestOverloadSelector(unittest.TestCase):
     def test_select_and_sort_1(self):
         os = OverloadSelector()
-        os.append(1, (types.Any, types.Boolean))
-        os.append(2, (types.Boolean, types.Integer))
-        os.append(3, (types.Boolean, types.Any))
-        os.append(4, (types.Boolean, types.Boolean))
+        os.append(1, (types.Any, types.BaseBoolean))
+        os.append(2, (types.BaseBoolean, types.BaseInteger))
+        os.append(3, (types.BaseBoolean, types.Any))
+        os.append(4, (types.BaseBoolean, types.BaseBoolean))
         compats = os._select_compatible((types.boolean, types.boolean))
         self.assertEqual(len(compats), 3)
         ordered, scoring = os._sort_signatures(compats)
         self.assertEqual(len(ordered), 3)
         self.assertEqual(len(scoring), 3)
-        self.assertEqual(ordered[0], (types.Boolean, types.Boolean))
-        self.assertEqual(scoring[types.Boolean, types.Boolean], 0)
-        self.assertEqual(scoring[types.Boolean, types.Any], 1)
-        self.assertEqual(scoring[types.Any, types.Boolean], 1)
+        self.assertEqual(ordered[0], (types.BaseBoolean, types.BaseBoolean))
+        self.assertEqual(scoring[types.BaseBoolean, types.BaseBoolean], 0)
+        self.assertEqual(scoring[types.BaseBoolean, types.Any], 1)
+        self.assertEqual(scoring[types.Any, types.BaseBoolean], 1)
 
     def test_select_and_sort_2(self):
         os = OverloadSelector()
@@ -45,8 +45,8 @@ class TestOverloadSelector(unittest.TestCase):
 
     def test_match(self):
         os = OverloadSelector()
-        self.assertTrue(os._match(formal=types.Boolean, actual=types.boolean))
-        self.assertTrue(os._match(formal=types.Boolean, actual=types.Boolean))
+        self.assertTrue(os._match(formal=types.BaseBoolean, actual=types.boolean))
+        self.assertTrue(os._match(formal=types.BaseBoolean, actual=types.BaseBoolean))
         # test subclass
         self.assertTrue(issubclass(types.Sequence, types.Container))
         self.assertTrue(os._match(formal=types.Container,
@@ -61,8 +61,8 @@ class TestOverloadSelector(unittest.TestCase):
     def test_ambiguous_detection(self):
         os = OverloadSelector()
         # unambiguous signatures
-        os.append(1, (types.Any, types.Boolean))
-        os.append(2, (types.Integer, types.Boolean))
+        os.append(1, (types.Any, types.BaseBoolean))
+        os.append(2, (types.BaseInteger, types.BaseBoolean))
         self.assertEqual(os.find((types.boolean, types.boolean)), 1)
         # not implemented
         with self.assertRaises(NumbaNotImplementedError) as raises:
@@ -72,7 +72,7 @@ class TestOverloadSelector(unittest.TestCase):
         self.assertEqual(os.find((types.boolean, types.int32)), 3)
         self.assertEqual(os.find((types.boolean, types.boolean)), 1)
         # add ambiguous signature; can match (bool, any) and (any, bool)
-        os.append(4, (types.Boolean, types.Any))
+        os.append(4, (types.BaseBoolean, types.Any))
         with self.assertRaises(NumbaTypeError) as raises:
             os.find((types.boolean, types.boolean))
         self.assertIn('2 ambiguous signatures', str(raises.exception))
@@ -95,7 +95,7 @@ class TestOverloadSelector(unittest.TestCase):
         os.append(1, (types.Any,))
         self.assertEqual(os.find((types.int32,)), 1)
         self.assertEqual(len(os._cache), 1)
-        os.append(2, (types.Integer,))
+        os.append(2, (types.BaseInteger,))
         self.assertEqual(len(os._cache), 0)
         self.assertEqual(os.find((types.int32,)), 2)
         self.assertEqual(len(os._cache), 1)

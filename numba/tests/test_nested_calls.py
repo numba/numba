@@ -53,7 +53,7 @@ def generated_inner(x, y=5, z=6):
 
 @overload(generated_inner)
 def ol_generated_inner(x, y=5, z=6):
-    if isinstance(x, types.Complex):
+    if isinstance(x, types.BaseComplex):
         def impl(x, y=5, z=6):
             return x + y, z
     else:
