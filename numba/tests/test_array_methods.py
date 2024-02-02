@@ -1781,10 +1781,11 @@ class TestArrayComparisons(TestCase):
 
     
     def test_record_is(self):
-        def check(a, b, expected):
+        def check(a, b):
             pyfunc = identity_usecase
             cfunc=njit(pyfunc)
             result = cfunc(a, b)
+            expected = pyfunc(a, b)
             self.assertEqual(result, expected)
         
         record_type = np.dtype([("a", "i4"), ("b", "i4")])
@@ -1792,16 +1793,16 @@ class TestArrayComparisons(TestCase):
         # Test case: Same records
         a = np.zeros(1, dtype=record_type)[0]
         b = a.copy()
-        check(a, b, True)
+        check(a, b)
 
         # Test case: Different records
         c = np.ones(1, dtype=record_type)[0]
-        check(a, c, False)
+        check(a, c)
 
         # Test case: Same records with different values
         d = np.zeros(1, dtype=record_type)[0]
         d['a'] = 42
-        check(a, d, False)
+        check(a, d)
 
 
 if __name__ == '__main__':
