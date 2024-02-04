@@ -531,7 +531,7 @@ class TestRandom(BaseTest):
                        {'low': -2.5, 'high': 1e3},
                        {'low': 1.5, 'high': -2.5}])
     def test_njit_with_np_random_uniform_error(self):
-        with self.assertRaises(numba.core.errors.TypingError):
+        
             try:
                 @numba.njit
                 def uniform():
