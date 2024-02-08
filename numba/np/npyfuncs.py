@@ -46,7 +46,7 @@ def _check_arity_and_homogeneity(sig, args, arity, return_type = None):
 
 
 def _call_func_by_name_with_cast(context, builder, sig, args,
-                                 func_name, ty=types.float64):
+                                 func_name, ty=types.np_float64):
     # it is quite common in NumPy to have loops implemented as a call
     # to the double version of the function, wrapped in casts. This
     # helper function facilitates that.

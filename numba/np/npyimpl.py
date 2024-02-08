@@ -69,7 +69,7 @@ class _ScalarHelper(object):
         self.builder = bld
         self.val = val
         self.base_type = ty
-        intpty = ctxt.get_value_type(types.intp)
+        intpty = ctxt.get_value_type(types.np_intp)
         self.shape = [ir.Constant(intpty, 1)]
 
         lty = ctxt.get_data_type(ty) if ty != types.boolean else ir.IntType(1)
@@ -93,7 +93,7 @@ class _ArrayIndexingHelper(namedtuple('_ArrayIndexingHelper',
                                       ('array', 'indices'))):
     def update_indices(self, loop_indices, name):
         bld = self.array.builder
-        intpty = self.array.context.get_value_type(types.intp)
+        intpty = self.array.context.get_value_type(types.np_intp)
         ONE = ir.Constant(ir.IntType(intpty.width), 1)
 
         # we are only interested in as many inner dimensions as dimensions
@@ -125,7 +125,7 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder',
     items as well as support code for handling indices.
     """
     def create_iter_indices(self):
-        intpty = self.context.get_value_type(types.intp)
+        intpty = self.context.get_value_type(types.np_intp)
         ZERO = ir.Constant(ir.IntType(intpty.width), 0)
 
         indices = []
@@ -184,8 +184,8 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
                                   str(tyinp)))
 
 
-_broadcast_onto_sig = types.intp(types.intp, types.CPointer(types.intp),
-                                 types.intp, types.CPointer(types.intp))
+_broadcast_onto_sig = types.np_intp(types.np_intp, types.CPointer(types.np_intp),
+                                 types.np_intp, types.CPointer(types.np_intp))
 def _broadcast_onto(src_ndim, src_shape, dest_ndim, dest_shape):
     '''Low-level utility function used in calculating a shape for
     an implicit output array.  This function assumes that the
@@ -235,9 +235,9 @@ def _build_array(context, builder, array_ty, input_types, inputs):
     input_types = [x.type if isinstance(x, types.Optional) else x
                    for x in input_types]
 
-    intp_ty = context.get_value_type(types.intp)
+    intp_ty = context.get_value_type(types.np_intp)
     def make_intp_const(val):
-        return context.get_constant(types.intp, val)
+        return context.get_constant(types.np_intp, val)
 
     ZERO = make_intp_const(0)
     ONE = make_intp_const(1)
@@ -375,7 +375,7 @@ def numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
         [a.base_type for a in inputs]
     )
     kernel = kernel_class(context, builder, outer_sig)
-    intpty = context.get_value_type(types.intp)
+    intpty = context.get_value_type(types.np_intp)
 
     indices = [inp.create_iter_indices() for inp in inputs]
 

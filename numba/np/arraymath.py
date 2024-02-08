@@ -54,7 +54,7 @@ def _create_tuple_result_shape(tyctx, shape_list, shape_tuple):
     # dimension removed.
     nd = len(shape_tuple) - 1
     # The return type of this intrinsic is an int tuple of length nd.
-    tupty = types.UniTuple(types.intp, nd)
+    tupty = types.UniTuple(types.np_intp, nd)
     # The function signature for this intrinsic.
     function_sig = tupty(shape_list, shape_tuple)
 
@@ -71,10 +71,10 @@ def _create_tuple_result_shape(tyctx, shape_list, shape_tuple):
 
         # loop to fill the tuple
         for i in range(nd):
-            dataidx = cgctx.get_constant(types.intp, i)
+            dataidx = cgctx.get_constant(types.np_intp, i)
             # compile and call array_indexer
             data = cgctx.compile_internal(builder, array_indexer,
-                                          types.intp(shape_list, types.intp),
+                                          types.np_intp(shape_list, types.np_intp),
                                           [in_shape, dataidx])
             tup = builder.insert_value(tup, data, i)
         return tup
@@ -113,7 +113,7 @@ def _gen_index_tuple(tyctx, shape_tuple, value, axis):
 
     types_list = []
     types_list += [types.slice2_type] * before
-    types_list += [types.intp]
+    types_list += [types.np_intp]
     types_list += [types.slice2_type] * after
 
     # Creates the output type of the function.
@@ -244,9 +244,9 @@ def gen_sum_axis_impl(is_axis_const, const_axis_val, op, zero):
     return inner
 
 
-@lower_builtin(np.sum, types.Array, types.intp, types.DTypeSpec)
+@lower_builtin(np.sum, types.Array, types.np_intp, types.DTypeSpec)
 @lower_builtin(np.sum, types.Array, types.BaseIntegerLiteral, types.DTypeSpec)
-@lower_builtin("array.sum", types.Array, types.intp, types.DTypeSpec)
+@lower_builtin("array.sum", types.Array, types.np_intp, types.DTypeSpec)
 @lower_builtin("array.sum", types.Array, types.BaseIntegerLiteral,
                types.DTypeSpec)
 def array_sum_axis_dtype(context, builder, sig, args):
@@ -304,9 +304,9 @@ def array_sum_dtype(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-@lower_builtin(np.sum, types.Array, types.intp)
+@lower_builtin(np.sum, types.Array, types.np_intp)
 @lower_builtin(np.sum, types.Array, types.BaseIntegerLiteral)
-@lower_builtin("array.sum", types.Array, types.intp)
+@lower_builtin("array.sum", types.Array, types.np_intp)
 @lower_builtin("array.sum", types.Array, types.BaseIntegerLiteral)
 def array_sum_axis(context, builder, sig, args):
     retty = sig.return_type
@@ -379,9 +379,9 @@ def array_cumsum(a):
     if isinstance(a, types.Array):
         is_integer = a.dtype in types.signed_domain
         is_bool = a.dtype == types.bool_
-        if (is_integer and a.dtype.bitwidth < types.intp.bitwidth)\
+        if (is_integer and a.dtype.bitwidth < types.np_intp.bitwidth)\
                 or is_bool:
-            dtype = as_dtype(types.intp)
+            dtype = as_dtype(types.np_intp)
         else:
             dtype = as_dtype(a.dtype)
 
@@ -404,9 +404,9 @@ def array_cumprod(a):
     if isinstance(a, types.Array):
         is_integer = a.dtype in types.signed_domain
         is_bool = a.dtype == types.bool_
-        if (is_integer and a.dtype.bitwidth < types.intp.bitwidth)\
+        if (is_integer and a.dtype.bitwidth < types.np_intp.bitwidth)\
                 or is_bool:
-            dtype = as_dtype(types.intp)
+            dtype = as_dtype(types.np_intp)
         else:
             dtype = as_dtype(a.dtype)
 
@@ -741,7 +741,7 @@ def build_argmax_or_argmin_with_axis_impl(a, axis, flatten_impl):
     array, return the implementation function.
     """
     check_is_integer(axis, "axis")
-    retty = types.intp
+    retty = types.np_intp
 
     tuple_buffer = tuple(range(a.ndim))
 
@@ -1259,7 +1259,7 @@ def np_nansum(a):
     if not isinstance(a, types.Array):
         return
     if isinstance(a.dtype, types.BaseInteger):
-        retty = types.intp
+        retty = types.np_intp
     else:
         retty = a.dtype
     zero = retty(0)
@@ -1281,7 +1281,7 @@ def np_nanprod(a):
     if not isinstance(a, types.Array):
         return
     if isinstance(a.dtype, types.BaseInteger):
-        retty = types.intp
+        retty = types.np_intp
     else:
         retty = a.dtype
     one = retty(1)
@@ -2939,7 +2939,7 @@ def np_argwhere(a):
         def impl(a):
             arr = np.asarray(a)
             if arr.shape == ():
-                return np.zeros((0, 1), dtype=types.intp)
+                return np.zeros((0, 1), dtype=types.np_intp)
             return np.transpose(np.vstack(np.nonzero(arr)))
     else:
         falseish = (0, 0)
@@ -2947,9 +2947,9 @@ def np_argwhere(a):
 
         def impl(a):
             if a is not None and bool(a):
-                return np.zeros(trueish, dtype=types.intp)
+                return np.zeros(trueish, dtype=types.np_intp)
             else:
-                return np.zeros(falseish, dtype=types.intp)
+                return np.zeros(falseish, dtype=types.np_intp)
 
     return impl
 
@@ -2967,7 +2967,7 @@ def np_flatnonzero(a):
                 data = [0]
             else:
                 data = [x for x in range(0)]
-            return np.array(data, dtype=types.intp)
+            return np.array(data, dtype=types.np_intp)
 
     return impl
 
@@ -3267,8 +3267,8 @@ def array_nonzero(context, builder, sig, args):
     layout = aryty.layout
 
     # First count the number of non-zero elements
-    zero = context.get_constant(types.intp, 0)
-    one = context.get_constant(types.intp, 1)
+    zero = context.get_constant(types.np_intp, 0)
+    one = context.get_constant(types.np_intp, 1)
     count = cgutils.alloca_once_value(builder, zero)
     with cgutils.loop_nest(builder, shape, zero.type) as indices:
         ptr = cgutils.get_item_pointer2(context, builder, data, shape, strides,
@@ -3644,7 +3644,7 @@ def np_bincount(a, weights=None, minlength=0):
             out[val] += weights[idx]
 
     else:
-        out_dtype = types.intp
+        out_dtype = types.np_intp
 
         @register_jitable
         def validate_inputs(a, weights, minlength):
