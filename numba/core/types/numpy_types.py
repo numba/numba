@@ -26,7 +26,7 @@ class NumPyInteger(BaseInteger):
         return cls(name)
 
     def cast_python_value(self, value):
-        return getattr(np, self.name)(value)
+        return getattr(np, self.name.split("np_")[-1])(value)
 
     def __lt__(self, other):
         if self.__class__ is not other.__class__:

@@ -354,6 +354,7 @@ else:
     np_uint64
     np_intp
     np_uintp
+    void
     '''
 
 __all__ = all_str.split()

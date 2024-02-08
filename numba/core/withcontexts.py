@@ -150,7 +150,7 @@ class _ObjModeContextType(WithContext):
             return np.asarray(list(reversed(x.tolist())))
 
         # Output type as global variable
-        out_ty = types.intp[:]
+        out_ty = types.py_intp[:]
 
         @njit
         def foo():

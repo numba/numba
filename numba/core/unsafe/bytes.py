@@ -17,7 +17,7 @@ def grab_byte(typingctx, data, offset):
         ch = builder.load(builder.gep(ptr, [idx]))
         return ch
 
-    sig = types.uint8(types.voidptr, types.intp)
+    sig = types.uint8(types.voidptr, types.py_intp)
     return sig, impl
 
 
@@ -29,7 +29,7 @@ def grab_uint64_t(typingctx, data, offset):
         ptr = builder.bitcast(data, ir.IntType(64).as_pointer())
         ch = builder.load(builder.gep(ptr, [idx]))
         return ch
-    sig = types.uint64(types.voidptr, types.intp)
+    sig = types.uint64(types.voidptr, types.py_intp)
     return sig, impl
 
 
@@ -44,6 +44,6 @@ def memcpy_region(typingctx, dst, dst_offset, src, src_offset, nbytes, align):
         cgutils.raw_memcpy(builder, dst_ptr, src_ptr, nbytes_val, align_val)
         return context.get_dummy_value()
 
-    sig = types.void(types.voidptr, types.intp, types.voidptr, types.intp,
-                     types.intp, types.intp)
+    sig = types.void(types.voidptr, types.py_intp, types.voidptr, types.py_intp,
+                     types.py_intp, types.py_intp)
     return sig, codegen

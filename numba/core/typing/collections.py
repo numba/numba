@@ -22,7 +22,7 @@ class ContainerLen(AbstractTemplate):
         assert not kws
         (val,) = args
         if isinstance(val, (types.Container)):
-            return signature(types.intp, val)
+            return signature(types.py_intp, val)
 
 
 @infer_global(operator.truth)

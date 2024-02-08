@@ -70,7 +70,7 @@ class ListAttribute(AttributeTemplate):
         if isinstance(idx, types.BaseInteger):
             unified = self.context.unify_pairs(list.dtype, item)
             if unified is not None:
-                sig = signature(types.none, types.intp, unified)
+                sig = signature(types.none, types.py_intp, unified)
                 sig = sig.replace(recvr = list.copy(dtype=unified))
                 return sig
 
@@ -82,7 +82,7 @@ class ListAttribute(AttributeTemplate):
         else:
             idx, = args
             if isinstance(idx, types.BaseInteger):
-                return signature(list.dtype, types.intp)
+                return signature(list.dtype, types.py_intp)
 
 @infer_global(operator.add)
 class AddList(AbstractTemplate):
@@ -114,9 +114,9 @@ class MulList(AbstractTemplate):
     def generic(self, args, kws):
         a, b = args
         if isinstance(a, types.List) and isinstance(b, types.BaseInteger):
-            return signature(a, a, types.intp)
+            return signature(a, a, types.py_intp)
         elif isinstance(a, types.BaseInteger) and isinstance(b, types.List):
-            return signature(b, types.intp, b)
+            return signature(b, types.py_intp, b)
 
 
 @infer_global(operator.imul)

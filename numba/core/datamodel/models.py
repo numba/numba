@@ -913,10 +913,10 @@ class ListPayloadModel(StructModel):
         # by reference.  This scheme allows mutations of an array to
         # be seen by its iterators.
         members = [
-            ('size', types.intp),
-            ('allocated', types.intp),
+            ('size', types.py_intp),
+            ('allocated', types.py_intp),
             # This member is only used only for reflected lists
-            ('dirty', types.boolean),
+            ('dirty', types.py_bool),
             # Actually an inlined var-sized array
             ('data', fe_type.container.dtype),
         ]
@@ -944,7 +944,7 @@ class ListIterModel(StructModel):
             # The meminfo data points to a ListPayload (shared with the
             # original list object)
             ('meminfo', types.MemInfoPointer(payload_type)),
-            ('index', types.EphemeralPointer(types.intp)),
+            ('index', types.EphemeralPointer(types.py_intp)),
             ]
         super(ListIterModel, self).__init__(dmm, fe_type, members)
 
@@ -955,7 +955,7 @@ class SetEntryModel(StructModel):
         dtype = fe_type.set_type.dtype
         members = [
             # -1 = empty, -2 = deleted
-            ('hash', types.intp),
+            ('hash', types.py_intp),
             ('key', dtype),
         ]
         super(SetEntryModel, self).__init__(dmm, fe_type, members)
@@ -967,15 +967,15 @@ class SetPayloadModel(StructModel):
         entry_type = types.SetEntry(fe_type.container)
         members = [
             # Number of active + deleted entries
-            ('fill', types.intp),
+            ('fill', types.py_intp),
             # Number of active entries
-            ('used', types.intp),
+            ('used', types.py_intp),
             # Allocated size - 1 (size being a power of 2)
-            ('mask', types.intp),
+            ('mask', types.py_intp),
             # Search finger
-            ('finger', types.intp),
+            ('finger', types.py_intp),
             # This member is only used only for reflected sets
-            ('dirty', types.boolean),
+            ('dirty', types.py_bool),
             # Actually an inlined var-sized array
             ('entries', entry_type),
         ]
@@ -1002,7 +1002,7 @@ class SetIterModel(StructModel):
             # original set object)
             ('meminfo', types.MemInfoPointer(payload_type)),
             # The index into the entries table
-            ('index', types.EphemeralPointer(types.intp)),
+            ('index', types.EphemeralPointer(types.py_intp)),
             ]
         super(SetIterModel, self).__init__(dmm, fe_type, members)
 
@@ -1019,11 +1019,11 @@ class ArrayModel(StructModel):
         members = [
             ('meminfo', types.MemInfoPointer(fe_type.dtype)),
             ('parent', types.pyobject),
-            ('nitems', types.intp),
-            ('itemsize', types.intp),
+            ('nitems', types.py_intp),
+            ('itemsize', types.py_intp),
             ('data', types.CPointer(fe_type.dtype)),
-            ('shape', types.UniTuple(types.intp, ndim)),
-            ('strides', types.UniTuple(types.intp, ndim)),
+            ('shape', types.UniTuple(types.py_intp, ndim)),
+            ('strides', types.UniTuple(types.py_intp, ndim)),
 
         ]
         super(ArrayModel, self).__init__(dmm, fe_type, members)
@@ -1057,7 +1057,7 @@ class OptionalModel(StructModel):
     def __init__(self, dmm, fe_type):
         members = [
             ('data', fe_type.type),
-            ('valid', types.boolean),
+            ('valid', types.py_bool),
         ]
         self._value_model = dmm.lookup(fe_type.type)
         super(OptionalModel, self).__init__(dmm, fe_type, members)
@@ -1198,12 +1198,12 @@ class CContiguousFlatIter(StructModel):
         dtype = array_type.dtype
         ndim = array_type.ndim
         members = [('array', array_type),
-                   ('stride', types.intp),
-                   ('index', types.EphemeralPointer(types.intp)),
+                   ('stride', types.py_intp),
+                   ('index', types.EphemeralPointer(types.py_intp)),
                    ]
         if need_indices:
             # For ndenumerate()
-            members.append(('indices', types.EphemeralArray(types.intp, ndim)))
+            members.append(('indices', types.EphemeralArray(types.py_intp, ndim)))
         super(CContiguousFlatIter, self).__init__(dmm, fe_type, members)
 
 
@@ -1214,8 +1214,8 @@ class FlatIter(StructModel):
         ndim = array_type.ndim
         members = [('array', array_type),
                    ('pointers', types.EphemeralArray(types.CPointer(dtype), ndim)),
-                   ('indices', types.EphemeralArray(types.intp, ndim)),
-                   ('exhausted', types.EphemeralPointer(types.boolean)),
+                   ('indices', types.EphemeralArray(types.py_intp, ndim)),
+                   ('exhausted', types.EphemeralPointer(types.py_bool)),
         ]
         super(FlatIter, self).__init__(dmm, fe_type, members)
 
@@ -1223,7 +1223,7 @@ class FlatIter(StructModel):
 @register_default(types.UniTupleIter)
 class UniTupleIter(StructModel):
     def __init__(self, dmm, fe_type):
-        members = [('index', types.EphemeralPointer(types.intp)),
+        members = [('index', types.EphemeralPointer(types.py_intp)),
                    ('tuple', fe_type.container,)]
         super(UniTupleIter, self).__init__(dmm, fe_type, members)
 
@@ -1232,9 +1232,9 @@ class UniTupleIter(StructModel):
 @register_default(types.SliceType)
 class SliceModel(StructModel):
     def __init__(self, dmm, fe_type):
-        members = [('start', types.intp),
-                   ('stop', types.intp),
-                   ('step', types.intp),
+        members = [('start', types.py_intp),
+                   ('stop', types.py_intp),
+                   ('step', types.py_intp),
                    ]
         super(SliceModel, self).__init__(dmm, fe_type, members)
 
@@ -1259,7 +1259,7 @@ class ArrayIterator(StructModel):
 @register_default(types.EnumerateType)
 class EnumerateType(StructModel):
     def __init__(self, dmm, fe_type):
-        members = [('count', types.EphemeralPointer(types.intp)),
+        members = [('count', types.EphemeralPointer(types.py_intp)),
                    ('iter', fe_type.source_type)]
 
         super(EnumerateType, self).__init__(dmm, fe_type, members)
@@ -1364,9 +1364,9 @@ class RangeModel(StructModel):
 class NdIndexModel(StructModel):
     def __init__(self, dmm, fe_type):
         ndim = fe_type.ndim
-        members = [('shape', types.UniTuple(types.intp, ndim)),
-                   ('indices', types.EphemeralArray(types.intp, ndim)),
-                   ('exhausted', types.EphemeralPointer(types.boolean)),
+        members = [('shape', types.UniTuple(types.py_intp, ndim)),
+                   ('indices', types.EphemeralArray(types.py_intp, ndim)),
+                   ('exhausted', types.EphemeralPointer(types.py_bool)),
                    ]
         super(NdIndexModel, self).__init__(dmm, fe_type, members)
 
@@ -1397,11 +1397,11 @@ class NdIter(StructModel):
         array_types = fe_type.arrays
         ndim = fe_type.ndim
         shape_len = ndim if fe_type.need_shaped_indexing else 1
-        members = [('exhausted', types.EphemeralPointer(types.boolean)),
+        members = [('exhausted', types.EphemeralPointer(types.py_bool)),
                    ('arrays', types.Tuple(array_types)),
                    # The iterator's main shape and indices
-                   ('shape', types.UniTuple(types.intp, shape_len)),
-                   ('indices', types.EphemeralArray(types.intp, shape_len)),
+                   ('shape', types.UniTuple(types.py_intp, shape_len)),
+                   ('indices', types.EphemeralArray(types.py_intp, shape_len)),
                    ]
         # Indexing state for the various sub-iterators
         # XXX use a tuple instead?
@@ -1410,7 +1410,7 @@ class NdIter(StructModel):
             member_name = 'index%d' % i
             if kind == 'flat':
                 # A single index into the flattened array
-                members.append((member_name, types.EphemeralPointer(types.intp)))
+                members.append((member_name, types.EphemeralPointer(types.py_intp)))
             elif kind in ('scalar', 'indexed', '0d'):
                 # Nothing required
                 pass

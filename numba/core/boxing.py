@@ -359,7 +359,7 @@ def box_unicodecharseq(typ, val, c):
     rawptr = cgutils.alloca_once_value(c.builder, value=val)
     strptr = c.builder.bitcast(rawptr, c.pyapi.cstring)
 
-    fullsize = c.context.get_constant(types.intp, typ.count)
+    fullsize = c.context.get_constant(types.py_intp, typ.count)
     zero = fullsize.type(0)
     one = fullsize.type(1)
     step = fullsize.type(numpy_support.sizeof_unicode_char)
@@ -416,7 +416,7 @@ def box_bytes(typ, val, c):
 def box_charseq(typ, val, c):
     rawptr = cgutils.alloca_once_value(c.builder, value=val)
     strptr = c.builder.bitcast(rawptr, c.pyapi.cstring)
-    fullsize = c.context.get_constant(types.intp, typ.count)
+    fullsize = c.context.get_constant(types.py_intp, typ.count)
     zero = fullsize.type(0)
     one = fullsize.type(1)
     count = cgutils.alloca_once_value(c.builder, zero)

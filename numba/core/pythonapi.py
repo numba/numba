@@ -733,7 +733,7 @@ class PythonAPI(object):
         fnty = ir.FunctionType(self.pyobj, [self.pyobj, self.py_ssize_t])
         fn = self._get_function(fnty, name="PyList_GetItem")
         if isinstance(idx, int):
-            idx = self.context.get_constant(types.intp, idx)
+            idx = self.context.get_constant(types.py_intp, idx)
         return self.builder.call(fn, [lst, idx])
 
     def list_setslice(self, lst, start, stop, obj):
@@ -755,13 +755,13 @@ class PythonAPI(object):
         """
         fnty = ir.FunctionType(self.pyobj, [self.pyobj, self.py_ssize_t])
         fn = self._get_function(fnty, name="PyTuple_GetItem")
-        idx = self.context.get_constant(types.intp, idx)
+        idx = self.context.get_constant(types.py_intp, idx)
         return self.builder.call(fn, [tup, idx])
 
     def tuple_pack(self, items):
         fnty = ir.FunctionType(self.pyobj, [self.py_ssize_t], var_arg=True)
         fn = self._get_function(fnty, name="PyTuple_Pack")
-        n = self.context.get_constant(types.intp, len(items))
+        n = self.context.get_constant(types.py_intp, len(items))
         args = [n]
         args.extend(items)
         return self.builder.call(fn, args)
@@ -774,7 +774,7 @@ class PythonAPI(object):
     def tuple_new(self, count):
         fnty = ir.FunctionType(self.pyobj, [ir.IntType(32)])
         fn = self._get_function(fnty, name='PyTuple_New')
-        return self.builder.call(fn, [self.context.get_constant(types.int32,
+        return self.builder.call(fn, [self.context.get_constant(types.py_int32,
                                                                 count)])
 
     def tuple_setitem(self, tuple_val, index, item):
@@ -783,7 +783,7 @@ class PythonAPI(object):
         """
         fnty = ir.FunctionType(ir.IntType(32), [self.pyobj, ir.IntType(32), self.pyobj])
         setitem_fn = self._get_function(fnty, name='PyTuple_SetItem')
-        index = self.context.get_constant(types.int32, index)
+        index = self.context.get_constant(types.py_int32, index)
         self.builder.call(setitem_fn, [tuple_val, index, item])
 
     #
@@ -983,7 +983,7 @@ class PythonAPI(object):
             opid = ops.index(opstr)
             fnty = ir.FunctionType(self.pyobj, [self.pyobj, self.pyobj, ir.IntType(32)])
             fn = self._get_function(fnty, name="PyObject_RichCompare")
-            lopid = self.context.get_constant(types.int32, opid)
+            lopid = self.context.get_constant(types.py_int32, opid)
             return self.builder.call(fn, (lhs, rhs, lopid))
         elif opstr == 'is':
             bitflag = self.builder.icmp_unsigned('==', lhs, rhs)
@@ -995,7 +995,7 @@ class PythonAPI(object):
             fnty = ir.FunctionType(ir.IntType(32), [self.pyobj, self.pyobj])
             fn = self._get_function(fnty, name="PySequence_Contains")
             status = self.builder.call(fn, (rhs, lhs))
-            negone = self.context.get_constant(types.int32, -1)
+            negone = self.context.get_constant(types.py_int32, -1)
             is_good = self.builder.icmp_unsigned('!=', status, negone)
             # Stack allocate output and initialize to Null
             outptr = cgutils.alloca_once_value(self.builder,
@@ -1225,8 +1225,8 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="NRT_adapt_ndarray_to_python_acqref")
         fn.args[0].add_attribute('nocapture')
 
-        ndim = self.context.get_constant(types.int32, aryty.ndim)
-        writable = self.context.get_constant(types.int32, int(aryty.mutable))
+        ndim = self.context.get_constant(types.py_int32, aryty.ndim)
+        writable = self.context.get_constant(types.py_int32, int(aryty.mutable))
 
         aryptr = cgutils.alloca_once_value(self.builder, ary)
         return self.builder.call(fn, [self.builder.bitcast(aryptr,
@@ -1342,10 +1342,10 @@ class PythonAPI(object):
 
     def list_pack(self, items):
         n = len(items)
-        seq = self.list_new(self.context.get_constant(types.intp, n))
+        seq = self.list_new(self.context.get_constant(types.py_intp, n))
         with self.if_object_ok(seq):
             for i in range(n):
-                idx = self.context.get_constant(types.intp, i)
+                idx = self.context.get_constant(types.py_intp, i)
                 self.incref(items[i])
                 self.list_setitem(seq, idx, items[i])
         return seq
@@ -1589,7 +1589,7 @@ class PythonAPI(object):
 
     def string_from_constant_string(self, string):
         cstr = self.context.insert_const_string(self.module, string)
-        sz = self.context.get_constant(types.intp, len(string))
+        sz = self.context.get_constant(types.py_intp, len(string))
         return self.string_from_string_and_size(cstr, sz)
 
     def call_jit_code(self, func, sig, args):

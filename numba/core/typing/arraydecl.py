@@ -64,7 +64,7 @@ def get_array_index_type(ary, idx):
         # branches below are considered as advanced indices.
         elif isinstance(ty, types.BaseInteger):
             # Normalize integer index
-            ty = types.intp if ty.signed else types.uintp
+            ty = types.py_intp if ty.signed else types.uintp
             # Integer indexing removes the given dimension
             ndim -= 1
             # If we're within a subspace/contiguous group of
@@ -276,12 +276,12 @@ class SetItemBuffer(AbstractTemplate):
 def normalize_shape(shape):
     if isinstance(shape, types.UniTuple):
         if isinstance(shape.dtype, types.BaseInteger):
-            dimtype = types.intp if shape.dtype.signed else types.uintp
+            dimtype = types.py_intp if shape.dtype.signed else types.uintp
             return types.UniTuple(dimtype, len(shape))
 
     elif isinstance(shape, types.Tuple) and shape.count == 0:
         # Force (0 x intp) for consistency with other shapes
-        return types.UniTuple(types.intp, 0)
+        return types.UniTuple(types.py_intp, 0)
 
 
 @infer_getattr
@@ -292,22 +292,22 @@ class ArrayAttribute(AttributeTemplate):
         return types.DType(ary.dtype)
 
     def resolve_nbytes(self, ary):
-        return types.intp
+        return types.py_intp
 
     def resolve_itemsize(self, ary):
-        return types.intp
+        return types.py_intp
 
     def resolve_shape(self, ary):
-        return types.UniTuple(types.intp, ary.ndim)
+        return types.UniTuple(types.py_intp, ary.ndim)
 
     def resolve_strides(self, ary):
-        return types.UniTuple(types.intp, ary.ndim)
+        return types.UniTuple(types.py_intp, ary.ndim)
 
     def resolve_ndim(self, ary):
-        return types.intp
+        return types.py_intp
 
     def resolve_size(self, ary):
-        return types.intp
+        return types.py_intp
 
     def resolve_flat(self, ary):
         return types.NumpyFlatType(ary)
@@ -414,7 +414,7 @@ class ArrayAttribute(AttributeTemplate):
         assert not kws
         # 0-dim arrays return one result array
         ndim = max(ary.ndim, 1)
-        retty = types.UniTuple(types.Array(types.intp, 1, 'C'), ndim)
+        retty = types.UniTuple(types.Array(types.py_intp, 1, 'C'), ndim)
         return signature(retty)
 
     @bound_function("array.reshape")
@@ -480,7 +480,7 @@ class ArrayAttribute(AttributeTemplate):
             def argsort_stub(kind='quicksort'):
                 pass
             pysig = utils.pysignature(argsort_stub)
-            sig = signature(types.Array(types.intp, 1, 'C'), kind).replace(pysig=pysig)
+            sig = signature(types.Array(types.py_intp, 1, 'C'), kind).replace(pysig=pysig)
             return sig
 
     @bound_function("array.view")
@@ -715,11 +715,11 @@ def _expand_integer(ty):
     """
     if isinstance(ty, types.BaseInteger):
         if ty.signed:
-            return max(types.intp, ty)
+            return max(types.py_intp, ty)
         else:
             return max(types.uintp, ty)
     elif isinstance(ty, types.BaseBoolean):
-        return types.intp
+        return types.py_intp
     else:
         return ty
 
@@ -840,7 +840,7 @@ def generic_hetero_always_real(self, args, kws):
 def generic_index(self, args, kws):
     assert not args
     assert not kws
-    return signature(types.intp, recvr=self.this)
+    return signature(types.py_intp, recvr=self.this)
 
 
 def install_array_method(name, generic, prefer_literal=True):
