@@ -40,12 +40,17 @@ class PrintItem(AbstractTemplate):
 
 @infer_global(abs)
 class Abs(ConcreteTemplate):
-    int_cases = [signature(ty, ty) for ty in sorted(types.np_signed_domain)]
-    uint_cases = [signature(ty, ty) for ty in sorted(types.np_unsigned_domain)]
-    real_cases = [signature(ty, ty) for ty in sorted(types.np_real_domain)]
-    complex_cases = [signature(ty.underlying_float, ty)
+    # Python templates
+    cases = [signature(ty, ty) for ty in sorted(types.py_signed_domain)]
+    cases += [signature(ty, ty) for ty in sorted(types.py_real_domain)]
+    cases += [signature(ty.underlying_float, ty)
+                     for ty in sorted(types.py_complex_domain)]
+    # NumPy templates
+    cases += [signature(ty, ty) for ty in sorted(types.np_signed_domain)]
+    cases += [signature(ty, ty) for ty in sorted(types.np_unsigned_domain)]
+    cases += [signature(ty, ty) for ty in sorted(types.np_real_domain)]
+    cases += [signature(ty.underlying_float, ty)
                      for ty in sorted(types.np_complex_domain)]
-    cases = int_cases + uint_cases +  real_cases + complex_cases
 
 
 @infer_global(slice)
@@ -1042,16 +1047,17 @@ class Float(AbstractTemplate):
 
         [arg] = args
 
-        if arg not in types.number_domain:
+        if arg not in (*types.np_number_domain,
+                       *types.py_number_domain):
             raise errors.NumbaTypeError("float() only support for numbers")
 
-        if arg in types.np_complex_domain:
+        if arg in (*types.np_complex_domain, *types.py_complex_domain):
             raise errors.NumbaTypeError("float() does not support complex")
 
-        if arg in types.integer_domain:
-            return signature(types.np_float64, arg)
+        if arg in (*types.py_integer_domain, *types.np_integer_domain):
+            return signature(types.py_float64, arg)
 
-        elif arg in types.np_real_domain:
+        elif arg in (*types.np_real_domain, *types.py_real_domain):
             return signature(arg, arg)
 
 
@@ -1060,25 +1066,21 @@ class Complex(AbstractTemplate):
 
     def generic(self, args, kws):
         assert not kws
+        all_number_domains = (*types.np_number_domain,
+                              *types.py_number_domain)
 
         if len(args) == 1:
             [arg] = args
-            if arg not in types.number_domain:
+            if arg not in all_number_domains:
                 raise errors.NumbaTypeError("complex() only support for numbers")
-            if arg == types.np_float32:
-                return signature(types.complex64, arg)
-            else:
-                return signature(types.complex128, arg)
+            return signature(types.py_complex128, arg)
 
         elif len(args) == 2:
             [real, imag] = args
-            if (real not in types.number_domain or
-                imag not in types.number_domain):
+            if (real not in all_number_domains or
+                imag not in all_number_domains):
                 raise errors.NumbaTypeError("complex() only support for numbers")
-            if real == imag == types.np_float32:
-                return signature(types.complex64, real, imag)
-            else:
-                return signature(types.complex128, real, imag)
+            return signature(types.py_complex128, real, imag)
 
 
 #------------------------------------------------------------------------------

@@ -34,6 +34,11 @@ infer_global = registry.register_global
 @infer_global(math.lgamma)
 class Math_unary(ConcreteTemplate):
     cases = [
+        # Python cases
+        signature(types.py_float64, types.py_int64),
+        signature(types.py_float64, types.py_float64),
+
+        # Numpy cases
         signature(types.np_float64, types.np_int64),
         signature(types.np_float64, types.np_uint64),
         signature(types.np_float32, types.np_float32),
@@ -44,6 +49,11 @@ class Math_unary(ConcreteTemplate):
 @infer_global(math.atan2)
 class Math_atan2(ConcreteTemplate):
     cases = [
+        # Python cases
+        signature(types.py_float64, types.py_int64, types.py_int64),
+        signature(types.py_float64, types.py_float64, types.py_float64),
+
+        # Numpy cases
         signature(types.np_float64, types.np_int64, types.np_int64),
         signature(types.np_float64, types.np_uint64, types.np_uint64),
         signature(types.np_float32, types.np_float32, types.np_float32),
@@ -54,6 +64,12 @@ class Math_atan2(ConcreteTemplate):
 @infer_global(math.trunc)
 class Math_converter(ConcreteTemplate):
     cases = [
+        # Python cases
+        signature(types.py_intp, types.py_intp),
+        signature(types.py_int64, types.py_int64),
+        signature(types.py_int64, types.py_float64),
+
+        # Numpy cases
         signature(types.np_intp, types.np_intp),
         signature(types.np_int64, types.np_int64),
         signature(types.np_uint64, types.np_uint64),
@@ -71,6 +87,10 @@ class Math_floor_ceil(Math_converter):
 @infer_global(math.copysign)
 class Math_copysign(ConcreteTemplate):
     cases = [
+        # Python cases
+        signature(types.py_float64, types.py_float64, types.py_float64),
+
+        # Numpy cases
         signature(types.np_float32, types.np_float32, types.np_float32),
         signature(types.np_float64, types.np_float64, types.np_float64),
     ]
@@ -79,6 +99,11 @@ class Math_copysign(ConcreteTemplate):
 @infer_global(math.hypot)
 class Math_hypot(ConcreteTemplate):
     cases = [
+        # Python cases
+        signature(types.py_float64, types.py_int64, types.py_int64),
+        signature(types.py_float64, types.py_float64, types.py_float64),
+
+        # Numpy cases
         signature(types.np_float64, types.np_int64, types.np_int64),
         signature(types.np_float64, types.np_uint64, types.np_uint64),
         signature(types.np_float32, types.np_float32, types.np_float32),
@@ -90,6 +115,11 @@ class Math_hypot(ConcreteTemplate):
 @infer_global(math.isnan)
 class Math_predicate(ConcreteTemplate):
     cases = [
+        # Python cases
+        signature(types.py_bool, types.py_int64),
+        signature(types.py_bool, types.py_float64),
+
+        # Numpy cases
         signature(types.np_bool_, types.np_int64),
         signature(types.np_bool_, types.np_uint64),
         signature(types.np_bool_, types.np_float32),
@@ -105,6 +135,11 @@ class Math_isfinite(Math_predicate):
 @infer_global(math.pow)
 class Math_pow(ConcreteTemplate):
     cases = [
+        # Python cases
+        signature(types.py_float64, types.py_float64, types.py_int64),
+        signature(types.py_float64, types.py_float64, types.py_float64),
+
+        # Numpy cases
         signature(types.np_float64, types.np_float64, types.np_int64),
         signature(types.np_float64, types.np_float64, types.np_uint64),
         signature(types.np_float32, types.np_float32, types.np_float32),
@@ -115,6 +150,11 @@ class Math_pow(ConcreteTemplate):
 @infer_global(math.gcd)
 class Math_gcd(ConcreteTemplate):
     cases = [
+        # Python cases
+        signature(types.py_int64, types.py_int64, types.py_int64),
+        signature(types.py_int32, types.py_int32, types.py_int32),
+
+        # Numpy cases
         signature(types.np_int64, types.np_int64, types.np_int64),
         signature(types.np_int32, types.np_int32, types.np_int32),
         signature(types.np_int16, types.np_int16, types.np_int16),
@@ -129,6 +169,10 @@ class Math_gcd(ConcreteTemplate):
 @infer_global(math.frexp)
 class Math_frexp(ConcreteTemplate):
     cases = [
+        # Python cases
+        signature(types.Tuple((types.py_float64, types.py_int64)), types.py_float64),
+
+        # Numpy cases
         signature(types.Tuple((types.np_float64, types.np_intc)), types.np_float64),
         signature(types.Tuple((types.np_float32, types.np_intc)), types.np_float32),
     ]
@@ -136,6 +180,10 @@ class Math_frexp(ConcreteTemplate):
 @infer_global(math.ldexp)
 class Math_ldexp(ConcreteTemplate):
     cases = [
+        # Python cases
+        signature(types.py_float64, types.py_float64, types.py_int64),
+
+        # Numpy cases
         signature(types.np_float64, types.np_float64, types.np_intc),
         signature(types.np_float32, types.np_float32, types.np_intc),
     ]
