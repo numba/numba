@@ -207,6 +207,12 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
                     ),
                 )
                 builder.store(next_indvar, self.iter)
+                # update count
+                count = builder.load(self.count)
+                builder.store(
+                    builder.sub(count, count.type(1), flags=["nsw"]),
+                    self.count,
+                )
 
 
 range_impl_map = {

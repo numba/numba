@@ -1142,7 +1142,7 @@ class RangeIteratorType(StructModel):
             ('adj_stop', int_type),
             # For scaling iter to indvar
             ('scale', int_type),
-            # Count. e.g. len(iter(range())).
+            # Count. e.g. length_of_iterator(iter(range())).
             ('count', types.EphemeralPointer(int_type)),
         ]
         super(RangeIteratorType, self).__init__(dmm, fe_type, members)

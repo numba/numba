@@ -44,6 +44,17 @@ def range_iter_len1(a):
 def range_iter_len2(a):
     return length_of_iterator(iter(a))
 
+def range_iter_len3():
+    it = iter(range(3))
+    a = length_of_iterator(it)
+    next(it)
+    b = length_of_iterator(it)
+    next(it)
+    c = length_of_iterator(it)
+    next(it)
+    d = length_of_iterator(it)
+    return a, b, c, d
+
 def range_attrs(start, stop, step):
     r1 = range(start)
     r2 = range(start, stop)
@@ -133,6 +144,10 @@ class TestRange(unittest.TestCase):
         cfunc = njit((types.List(types.intp, reflected=True),))(range_iter_func)
         arglist = [1, 2, 3, 4, 5]
         self.assertEqual(cfunc(arglist), len(arglist))
+
+    def test_range_iter_len3(self):
+        out = njit(range_iter_len3)()
+        self.assertEqual(out, (3, 2, 1, 0))
 
     def test_range_attrs(self):
         pyfunc = range_attrs
