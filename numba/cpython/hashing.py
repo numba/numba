@@ -26,15 +26,15 @@ _py310_or_later = utils.PYVERSION >= (3, 10)
 # This is Py_hash_t, which is a Py_ssize_t, which has sizeof(size_t):
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Include/pyport.h#L91-L96    # noqa: E501
 _hash_width = sys.hash_info.width
-_Py_hash_t = getattr(types, 'int%s' % _hash_width)
-_Py_uhash_t = getattr(types, 'uint%s' % _hash_width)
+_Py_hash_t = getattr(types, 'c_int%s' % _hash_width)
+_Py_uhash_t = getattr(types, 'c_uint%s' % _hash_width)
 
 # Constants from CPython source, obtained by various means:
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Include/pyhash.h    # noqa: E501
 _PyHASH_INF = sys.hash_info.inf
 _PyHASH_NAN = sys.hash_info.nan
 _PyHASH_MODULUS = _Py_uhash_t(sys.hash_info.modulus)
-_PyHASH_BITS = 31 if types.intp.bitwidth == 32 else 61  # mersenne primes
+_PyHASH_BITS = 31 if types.py_intp.bitwidth == 32 else 61  # mersenne primes
 _PyHASH_MULTIPLIER = 0xf4243  # 1000003UL
 _PyHASH_IMAG = _PyHASH_MULTIPLIER
 _PyLong_SHIFT = sys.int_info.bits_per_digit
@@ -93,13 +93,15 @@ def process_return(val):
 # elects to replicate the behaviour i.e. hash of nan is something "unique" which
 # satisfies https://bugs.python.org/issue43475.
 
+
 @register_jitable(locals={'x': _Py_uhash_t,
                           'y': _Py_uhash_t,
-                          'm': types.double,
-                          'e': types.intc,
-                          'sign': types.intc,
+                          'm': types.np_double,
+                          'e': types.np_intc,
+                          'sign': types.np_intc,
                           '_PyHASH_MODULUS': _Py_uhash_t,
-                          '_PyHASH_BITS': types.intc})
+                          '_PyHASH_BITS': types.np_intc
+                          })
 def _Py_HashDouble(v):
     if not np.isfinite(v):
         if (np.isinf(v)):
@@ -196,8 +198,8 @@ def _prng_random_hash(tyctx):
                           'p3': _Py_uhash_t,
                           'p4': _Py_uhash_t,
                           '_PyHASH_MODULUS': _Py_uhash_t,
-                          '_PyHASH_BITS': types.int32,
-                          '_PyLong_SHIFT': types.int32,})
+                          '_PyHASH_BITS': types.py_int32,
+                          '_PyLong_SHIFT': types.py_int32,})
 def _long_impl(val):
     # This function assumes val came from a long int repr with val being a
     # uint64_t this means having to split the input into PyLong_SHIFT size
@@ -236,7 +238,7 @@ def int_hash(val):
 
     # Find a suitable type to hold a "big" value, i.e. iinfo(ty).min/max
     # this is to ensure e.g. int32.min is handled ok as it's abs() is its value
-    _BIG = types.int64 if getattr(val, 'signed', False) else types.uint64
+    _BIG = types.int64 if getattr(val, 'signed', False) else types.np_uint64
 
     # this is a bit involved due to the CPython repr of ints
     def impl(val):
@@ -312,24 +314,25 @@ def complex_hash(val):
 
 # These consts are needed for this alg variant, they are from:
 # https://github.com/python/cpython/blob/b738237d6792acba85b1f6e6c8993a812c7fd815/Objects/tupleobject.c#L353-L363    # noqa: E501
+
 if _Py_uhash_t.bitwidth // 8 > 4:
     _PyHASH_XXPRIME_1 = _Py_uhash_t(11400714785074694791)
     _PyHASH_XXPRIME_2 = _Py_uhash_t(14029467366897019727)
     _PyHASH_XXPRIME_5 = _Py_uhash_t(2870177450012600261)
 
-    @register_jitable(locals={'x': types.uint64})
+    @register_jitable(locals={'x': types.np_uint64})
     def _PyHASH_XXROTATE(x):
         # Rotate left 31 bits
-        return ((x << types.uint64(31)) | (x >> types.uint64(33)))
+        return ((x << types.np_uint64(31)) | (x >> types.np_uint64(33)))
 else:
     _PyHASH_XXPRIME_1 = _Py_uhash_t(2654435761)
     _PyHASH_XXPRIME_2 = _Py_uhash_t(2246822519)
     _PyHASH_XXPRIME_5 = _Py_uhash_t(374761393)
 
-    @register_jitable(locals={'x': types.uint64})
+    @register_jitable(locals={'x': types.np_uint64})
     def _PyHASH_XXROTATE(x):
         # Rotate left 13 bits
-        return ((x << types.uint64(13)) | (x >> types.uint64(19)))
+        return ((x << types.np_uint64(13)) | (x >> types.np_uint64(19)))
 
 
 @register_jitable(locals={'acc': _Py_uhash_t, 'lane': _Py_uhash_t,
@@ -526,17 +529,18 @@ if _Py_hashfunc_name in ('siphash13', 'siphash24', 'fnv'):
     # - letoh64() fallback
     # */
 
-    @register_jitable(locals={'x': types.uint64,
-                              'b': types.uint64, })
+    @register_jitable(locals={'x': types.np_uint64,
+                              'b': types.np_uint64, })
     def _ROTATE(x, b):
-        return types.uint64(((x) << (b)) | ((x) >> (types.uint64(64) - (b))))
+        return types.np_uint64(((x) << (b)) |
+                               ((x) >> (types.np_uint64(64) - (b))))
 
-    @register_jitable(locals={'a': types.uint64,
-                              'b': types.uint64,
-                              'c': types.uint64,
-                              'd': types.uint64,
-                              's': types.uint64,
-                              't': types.uint64, })
+    @register_jitable(locals={'a': types.np_uint64,
+                              'b': types.np_uint64,
+                              'c': types.np_uint64,
+                              'd': types.np_uint64,
+                              's': types.np_uint64,
+                              't': types.np_uint64, })
     def _HALF_ROUND(a, b, c, d, s, t):
         a += b
         c += d
@@ -545,19 +549,19 @@ if _Py_hashfunc_name in ('siphash13', 'siphash24', 'fnv'):
         a = _ROTATE(a, 32)
         return a, b, c, d
 
-    @register_jitable(locals={'v0': types.uint64,
-                              'v1': types.uint64,
-                              'v2': types.uint64,
-                              'v3': types.uint64, })
+    @register_jitable(locals={'v0': types.np_uint64,
+                              'v1': types.np_uint64,
+                              'v2': types.np_uint64,
+                              'v3': types.np_uint64, })
     def _SINGLE_ROUND(v0, v1, v2, v3):
         v0, v1, v2, v3 = _HALF_ROUND(v0, v1, v2, v3, 13, 16)
         v2, v1, v0, v3 = _HALF_ROUND(v2, v1, v0, v3, 17, 21)
         return v0, v1, v2, v3
 
-    @register_jitable(locals={'v0': types.uint64,
-                              'v1': types.uint64,
-                              'v2': types.uint64,
-                              'v3': types.uint64, })
+    @register_jitable(locals={'v0': types.np_uint64,
+                              'v1': types.np_uint64,
+                              'v2': types.np_uint64,
+                              'v3': types.np_uint64, })
     def _DOUBLE_ROUND(v0, v1, v2, v3):
         v0, v1, v2, v3 = _SINGLE_ROUND(v0, v1, v2, v3)
         v0, v1, v2, v3 = _SINGLE_ROUND(v0, v1, v2, v3)
@@ -573,22 +577,22 @@ if _Py_hashfunc_name in ('siphash13', 'siphash24', 'fnv'):
         else:
             assert 0, 'unreachable'
 
-        @register_jitable(locals={'v0': types.uint64,
-                                  'v1': types.uint64,
-                                  'v2': types.uint64,
-                                  'v3': types.uint64,
-                                  'b': types.uint64,
-                                  'mi': types.uint64,
-                                  't': types.uint64,
-                                  'mask': types.uint64,
-                                  'jmp': types.uint64,
-                                  'ohexefef': types.uint64})
+        @register_jitable(locals={'v0': types.np_uint64,
+                                  'v1': types.np_uint64,
+                                  'v2': types.np_uint64,
+                                  'v3': types.np_uint64,
+                                  'b': types.np_uint64,
+                                  'mi': types.np_uint64,
+                                  't': types.np_uint64,
+                                  'mask': types.np_uint64,
+                                  'jmp': types.np_uint64,
+                                  'ohexefef': types.np_uint64})
         def _siphash(k0, k1, src, src_sz):
-            b = types.uint64(src_sz) << 56
-            v0 = k0 ^ types.uint64(0x736f6d6570736575)
-            v1 = k1 ^ types.uint64(0x646f72616e646f6d)
-            v2 = k0 ^ types.uint64(0x6c7967656e657261)
-            v3 = k1 ^ types.uint64(0x7465646279746573)
+            b = types.np_uint64(src_sz) << 56
+            v0 = k0 ^ types.np_uint64(0x736f6d6570736575)
+            v1 = k1 ^ types.np_uint64(0x646f72616e646f6d)
+            v2 = k0 ^ types.np_uint64(0x6c7967656e657261)
+            v3 = k1 ^ types.np_uint64(0x7465646279746573)
 
             idx = 0
             while (src_sz >= 8):
@@ -601,44 +605,44 @@ if _Py_hashfunc_name in ('siphash13', 'siphash24', 'fnv'):
 
             # this is the switch fallthrough:
             # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L390-L400    # noqa: E501
-            t = types.uint64(0x0)
+            t = types.np_uint64(0x0)
             boffset = idx * 8
-            ohexefef = types.uint64(0xff)
+            ohexefef = types.np_uint64(0xff)
             if src_sz >= 7:
                 jmp = (6 * 8)
-                mask = ~types.uint64(ohexefef << jmp)
-                t = (t & mask) | (types.uint64(grab_byte(src, boffset + 6))
+                mask = ~types.np_uint64(ohexefef << jmp)
+                t = (t & mask) | (types.np_uint64(grab_byte(src, boffset + 6))
                                   << jmp)
             if src_sz >= 6:
                 jmp = (5 * 8)
-                mask = ~types.uint64(ohexefef << jmp)
-                t = (t & mask) | (types.uint64(grab_byte(src, boffset + 5))
+                mask = ~types.np_uint64(ohexefef << jmp)
+                t = (t & mask) | (types.np_uint64(grab_byte(src, boffset + 5))
                                   << jmp)
             if src_sz >= 5:
                 jmp = (4 * 8)
-                mask = ~types.uint64(ohexefef << jmp)
-                t = (t & mask) | (types.uint64(grab_byte(src, boffset + 4))
+                mask = ~types.np_uint64(ohexefef << jmp)
+                t = (t & mask) | (types.np_uint64(grab_byte(src, boffset + 4))
                                   << jmp)
             if src_sz >= 4:
-                t &= types.uint64(0xffffffff00000000)
+                t &= types.np_uint64(0xffffffff00000000)
                 for i in range(4):
                     jmp = i * 8
-                    mask = ~types.uint64(ohexefef << jmp)
-                    t = (t & mask) | (types.uint64(grab_byte(src, boffset + i))
-                                      << jmp)
+                    mask = ~types.np_uint64(ohexefef << jmp)
+                    t = (t & mask) | \
+                        (types.np_uint64(grab_byte(src, boffset + i)) << jmp)
             if src_sz >= 3:
                 jmp = (2 * 8)
-                mask = ~types.uint64(ohexefef << jmp)
-                t = (t & mask) | (types.uint64(grab_byte(src, boffset + 2))
+                mask = ~types.np_uint64(ohexefef << jmp)
+                t = (t & mask) | (types.np_uint64(grab_byte(src, boffset + 2))
                                   << jmp)
             if src_sz >= 2:
                 jmp = (1 * 8)
-                mask = ~types.uint64(ohexefef << jmp)
-                t = (t & mask) | (types.uint64(grab_byte(src, boffset + 1))
+                mask = ~types.np_uint64(ohexefef << jmp)
+                t = (t & mask) | (types.np_uint64(grab_byte(src, boffset + 1))
                                   << jmp)
             if src_sz >= 1:
                 mask = ~(ohexefef)
-                t = (t & mask) | (types.uint64(grab_byte(src, boffset + 0)))
+                t = (t & mask) | (types.np_uint64(grab_byte(src, boffset + 0)))
 
             b |= t
             v3 ^= b
@@ -672,7 +676,7 @@ def _inject_hashsecret_read(tyctx, name):
         raise errors.TypingError("requires literal string")
 
     sym = _hashsecret[name.literal_value].symbol
-    resty = types.uint64
+    resty = types.np_uint64
     sig = resty(name)
 
     def impl(cgctx, builder, sig, args):
@@ -719,8 +723,8 @@ def _Py_HashBytes(val, _len):
         _hash ^= _len
         _hash ^= _load_hashsecret('djbx33a_suffix')
     else:
-        tmp = _siphasher(types.uint64(_load_hashsecret('siphash_k0')),
-                         types.uint64(_load_hashsecret('siphash_k1')),
+        tmp = _siphasher(types.np_uint64(_load_hashsecret('siphash_k0')),
+                         types.np_uint64(_load_hashsecret('siphash_k1')),
                          val, _len)
         _hash = process_return(tmp)
     return process_return(_hash)
