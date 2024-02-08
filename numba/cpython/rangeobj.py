@@ -163,7 +163,10 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
 
 
 range_impl_map = {
+    types.py_int32 : (types.py_range_state32_type, types.py_range_iter32_type),
     types.np_int32 : (types.np_range_state32_type, types.np_range_iter32_type),
+
+    types.py_int64 : (types.py_range_state64_type, types.py_range_iter64_type),
     types.np_int64 : (types.np_range_state64_type, types.np_range_iter64_type),
     types.np_uint64 : (types.np_unsigned_range_state64_type, types.np_unsigned_range_iter64_type)
 }
@@ -196,39 +199,39 @@ def length_of_iterator(typingctx, val):
     elif isinstance(val, types.ListIter):
         def codegen(context, builder, sig, args):
             (value,) = args
-            intp_t = context.get_value_type(types.intp)
+            intp_t = context.get_value_type(types.py_intp)
             iterobj = ListIterInstance(context, builder, sig.args[0], value)
             return impl_ret_untracked(context, builder, intp_t, iterobj.size)
-        return signature(types.intp, val), codegen
+        return signature(types.py_intp, val), codegen
     elif isinstance(val, types.ArrayIterator):
         def  codegen(context, builder, sig, args):
             (iterty,) = sig.args
             (value,) = args
-            intp_t = context.get_value_type(types.intp)
+            intp_t = context.get_value_type(types.py_intp)
             iterobj = context.make_helper(builder, iterty, value=value)
             arrayty = iterty.array_type
             ary = make_array(arrayty)(context, builder, value=iterobj.array)
             shape = cgutils.unpack_tuple(builder, ary.shape)
             # array iterates along the outer dimension
             return impl_ret_untracked(context, builder, intp_t, shape[0])
-        return signature(types.intp, val), codegen
+        return signature(types.py_intp, val), codegen
     elif isinstance(val, types.UniTupleIter):
         def codegen(context, builder, sig, args):
             (iterty,) = sig.args
             tuplety = iterty.container
-            intp_t = context.get_value_type(types.intp)
+            intp_t = context.get_value_type(types.py_intp)
             count_const = intp_t(tuplety.count)
             return impl_ret_untracked(context, builder, intp_t, count_const)
 
-        return signature(types.intp, val), codegen
+        return signature(types.py_intp, val), codegen
     elif isinstance(val, types.ListTypeIteratorType):
         def codegen(context, builder, sig, args):
             (value,) = args
-            intp_t = context.get_value_type(types.intp)
+            intp_t = context.get_value_type(types.py_intp)
             from numba.typed.listobject import ListIterInstance
             iterobj = ListIterInstance(context, builder, sig.args[0], value)
             return impl_ret_untracked(context, builder, intp_t, iterobj.size)
-        return signature(types.intp, val), codegen
+        return signature(types.py_intp, val), codegen
     else:
         msg = ('Unsupported iterator found in array comprehension, try '
                'preallocating the array and filling manually.')

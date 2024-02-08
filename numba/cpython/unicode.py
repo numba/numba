@@ -81,7 +81,7 @@ class UnicodeModel(models.StructModel):
     def __init__(self, dmm, fe_type):
         members = [
             ('data', types.voidptr),
-            ('length', types.intp),
+            ('length', types.py_intp),
             ('kind', types.int32),
             ('is_ascii', types.uint32),
             ('hash', _Py_hash_t),
@@ -228,19 +228,19 @@ def make_deref_codegen(bitsize):
 
 @intrinsic
 def deref_uint8(typingctx, data, offset):
-    sig = types.uint32(types.voidptr, types.intp)
+    sig = types.uint32(types.voidptr, types.py_intp)
     return sig, make_deref_codegen(8)
 
 
 @intrinsic
 def deref_uint16(typingctx, data, offset):
-    sig = types.uint32(types.voidptr, types.intp)
+    sig = types.uint32(types.voidptr, types.py_intp)
     return sig, make_deref_codegen(16)
 
 
 @intrinsic
 def deref_uint32(typingctx, data, offset):
-    sig = types.uint32(types.voidptr, types.intp)
+    sig = types.uint32(types.voidptr, types.py_intp)
     return sig, make_deref_codegen(32)
 
 
@@ -271,7 +271,7 @@ def _malloc_string(typingctx, kind, char_bytes, length, is_ascii):
         uni_str.parent = cgutils.get_null_value(uni_str.parent.type)
         return uni_str._getvalue()
 
-    sig = types.unicode_type(types.int32, types.intp, types.intp, types.uint32)
+    sig = types.unicode_type(types.int32, types.py_intp, types.py_intp, types.uint32)
     return sig, details
 
 
@@ -314,19 +314,19 @@ def make_set_codegen(bitsize):
 
 @intrinsic
 def set_uint8(typingctx, data, idx, ch):
-    sig = types.void(types.voidptr, types.int64, types.uint32)
+    sig = types.void(types.voidptr, types.np_int64, types.np_uint32)
     return sig, make_set_codegen(8)
 
 
 @intrinsic
 def set_uint16(typingctx, data, idx, ch):
-    sig = types.void(types.voidptr, types.int64, types.uint32)
+    sig = types.void(types.voidptr, types.np_int64, types.np_uint32)
     return sig, make_set_codegen(16)
 
 
 @intrinsic
 def set_uint32(typingctx, data, idx, ch):
-    sig = types.void(types.voidptr, types.int64, types.uint32)
+    sig = types.void(types.voidptr, types.np_int64, types.np_uint32)
     return sig, make_set_codegen(32)
 
 
@@ -647,7 +647,7 @@ def _default_find(data, substr, start, end):
     gap = mlast = m - 1
     last = _get_code_point(substr, mlast)
 
-    zero = types.intp(0)
+    zero = types.py_intp(0)
     mask = _bloom_add(zero, last)
     for i in range(mlast):
         ch = _get_code_point(substr, i)
@@ -1749,7 +1749,7 @@ def _normalize_slice(typingctx, sliceobj, length):
 def _slice_span(typingctx, sliceobj):
     """Compute the span from the given slice object.
     """
-    sig = types.intp(sliceobj)
+    sig = types.py_intp(sliceobj)
 
     def codegen(context, builder, sig, args):
         [slicetype] = sig.args
@@ -1810,7 +1810,7 @@ def _get_str_slice_view(typingctx, src_t, start_t, length_t):
             context.nrt.incref(builder, sig.args[0], src)
         return view_str._getvalue()
 
-    sig = types.unicode_type(types.unicode_type, types.intp, types.intp)
+    sig = types.unicode_type(types.unicode_type, types.py_intp, types.py_intp)
     return sig, codegen
 
 

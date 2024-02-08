@@ -234,11 +234,11 @@ def _long_impl(val):
 def int_hash(val):
 
     _HASH_I64_MIN = -2 if sys.maxsize <= 2 ** 32 else -4
-    _SIGNED_MIN = types.int64(-0x8000000000000000)
+    _SIGNED_MIN = types.c_int64(-0x8000000000000000)
 
     # Find a suitable type to hold a "big" value, i.e. iinfo(ty).min/max
     # this is to ensure e.g. int32.min is handled ok as it's abs() is its value
-    _BIG = types.int64 if getattr(val, 'signed', False) else types.np_uint64
+    _BIG = types.np_int64 if getattr(val, 'signed', False) else types.c_uint64
 
     # this is a bit involved due to the CPython repr of ints
     def impl(val):

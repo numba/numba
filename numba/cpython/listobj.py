@@ -219,7 +219,7 @@ class ListInstance(_ListPayloadMixin):
         builder = self._builder
         base = self._gep(start)
         end = self._gep(stop)
-        intaddr_t = self._context.get_value_type(types.intp)
+        intaddr_t = self._context.get_value_type(types.py_intp)
         size = builder.sub(builder.ptrtoint(end, intaddr_t),
                            builder.ptrtoint(base, intaddr_t))
         cgutils.memset(builder, base, size, ir.IntType(8)(0))
@@ -232,7 +232,7 @@ class ListInstance(_ListPayloadMixin):
         *instance* is a ListInstance object (the object's contents are
         only valid when *ok* is true).
         """
-        intp_t = context.get_value_type(types.intp)
+        intp_t = context.get_value_type(types.py_intp)
 
         if isinstance(nitems, int):
             nitems = ir.Constant(intp_t, nitems)
@@ -421,7 +421,7 @@ class ListIterInstance(_ListPayloadMixin):
     def from_list(cls, context, builder, iter_type, list_val):
         list_inst = ListInstance(context, builder, iter_type.container, list_val)
         self = cls(context, builder, iter_type, None)
-        index = context.get_constant(types.intp, 0)
+        index = context.get_constant(types.py_intp, 0)
         self._iter.index = cgutils.alloca_once_value(builder, index)
         self._iter.meminfo = list_inst.meminfo
         return self
@@ -455,9 +455,9 @@ def build_list(context, builder, list_type, items):
     nitems = len(items)
     inst = ListInstance.allocate(context, builder, list_type, nitems)
     # Populate list
-    inst.size = context.get_constant(types.intp, nitems)
+    inst.size = context.get_constant(types.py_intp, nitems)
     for i, val in enumerate(items):
-        inst.setitem(context.get_constant(types.intp, i), val, incref=True)
+        inst.setitem(context.get_constant(types.py_intp, i), val, incref=True)
 
     return impl_ret_new_ref(context, builder, list_type, inst.value)
 
@@ -504,7 +504,7 @@ def iternext_listiter(context, builder, sig, args, result):
 
     with builder.if_then(is_valid):
         result.yield_(inst.getitem(index))
-        inst.index = builder.add(index, context.get_constant(types.intp, 1))
+        inst.index = builder.add(index, context.get_constant(types.py_intp, 1))
 
 
 @lower_builtin(operator.getitem, types.List, types.BaseInteger)
@@ -880,7 +880,7 @@ def list_append(context, builder, sig, args):
 @lower_builtin("list.clear", types.List)
 def list_clear(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
-    inst.resize(context.get_constant(types.intp, 0))
+    inst.resize(context.get_constant(types.py_intp, 0))
 
     return context.get_dummy_value()
 

@@ -143,7 +143,7 @@ def getiter_unituple(context, builder, sig, args):
 
     iterval = context.make_helper(builder, types.UniTupleIter(tupty))
 
-    index0 = context.get_constant(types.intp, 0)
+    index0 = context.get_constant(types.py_intp, 0)
     indexptr = cgutils.alloca_once(builder, index0.type)
     builder.store(index0, indexptr)
 
@@ -165,7 +165,7 @@ def iternext_unituple(context, builder, sig, args, result):
     tup = iterval.tuple
     idxptr = iterval.index
     idx = builder.load(idxptr)
-    count = context.get_constant(types.intp, tupiterty.container.count)
+    count = context.get_constant(types.py_intp, tupiterty.container.count)
 
     is_valid = builder.icmp_signed('<', idx, count)
     result.set_valid(is_valid)
@@ -173,7 +173,7 @@ def iternext_unituple(context, builder, sig, args, result):
     with builder.if_then(is_valid):
         getitem_sig = typing.signature(tupiterty.container.dtype,
                                        tupiterty.container,
-                                       types.intp)
+                                       types.py_intp)
         getitem_out = getitem_unituple(context, builder, getitem_sig,
                                        [tup, idx])
         # As a iternext_impl function, this will incref the yieled value.
@@ -181,7 +181,7 @@ def iternext_unituple(context, builder, sig, args, result):
         if context.enable_nrt:
             context.nrt.decref(builder, tupiterty.container.dtype, getitem_out)
         result.yield_(getitem_out)
-        nidx = builder.add(idx, context.get_constant(types.intp, 1))
+        nidx = builder.add(idx, context.get_constant(types.py_intp, 1))
         builder.store(nidx, iterval.index)
 
 
@@ -238,12 +238,12 @@ def getitem_typed(context, builder, sig, args):
             phinode = builder.phi(voidptrty)
 
         for i in range(tupty.count):
-            ki = context.get_constant(types.intp, i)
+            ki = context.get_constant(types.py_intp, i)
             bbi = builder.append_basic_block("typed_switch.%d" % i)
             switch.add_case(ki, bbi)
             # handle negative indexing, create case (-tuple.count + i) to
             # reference same block as i
-            kin = context.get_constant(types.intp, -tupty.count + i)
+            kin = context.get_constant(types.py_intp, -tupty.count + i)
             switch.add_case(kin, bbi)
             with builder.goto_block(bbi):
                 value = builder.extract_value(tup, i)
@@ -327,12 +327,12 @@ def getitem_unituple(context, builder, sig, args):
             phinode = builder.phi(lrtty)
 
         for i in range(tupty.count):
-            ki = context.get_constant(types.intp, i)
+            ki = context.get_constant(types.py_intp, i)
             bbi = builder.append_basic_block("switch.%d" % i)
             switch.add_case(ki, bbi)
             # handle negative indexing, create case (-tuple.count + i) to
             # reference same block as i
-            kin = context.get_constant(types.intp, -tupty.count + i)
+            kin = context.get_constant(types.py_intp, -tupty.count + i)
             switch.add_case(kin, bbi)
             with builder.goto_block(bbi):
                 value = builder.extract_value(tup, i)

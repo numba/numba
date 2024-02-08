@@ -316,7 +316,7 @@ class _SetPayload(object):
         context = self._context
         builder = self._builder
 
-        intp_t = context.get_value_type(types.intp)
+        intp_t = context.get_value_type(types.py_intp)
         one = ir.Constant(intp_t, 1)
         size = builder.add(self.mask, one)
 
@@ -337,7 +337,7 @@ class _SetPayload(object):
         context = self._context
         builder = self._builder
 
-        intp_t = context.get_value_type(types.intp)
+        intp_t = context.get_value_type(types.py_intp)
         zero = ir.Constant(intp_t, 0)
         one = ir.Constant(intp_t, 1)
         mask = self.mask
@@ -518,7 +518,7 @@ class SetInstance(object):
         """Python API compatible version of `get_hash_value()`.
         """
         argtypes = [self._ty.dtype]
-        resty = types.intp
+        resty = types.py_intp
 
         def wrapper(val):
             return _get_hash_value_intrinsic(val)
@@ -569,7 +569,7 @@ class SetInstance(object):
         context = self._context
         builder = self._builder
 
-        intp_t = context.get_value_type(types.intp)
+        intp_t = context.get_value_type(types.py_intp)
         minsize = ir.Constant(intp_t, MINSIZE)
         self._replace_payload(minsize)
         self.set_dirty(True)
@@ -760,7 +760,7 @@ class SetInstance(object):
         *instance* is a SetInstance object (the object's contents are
         only valid when *ok* is true).
         """
-        intp_t = context.get_value_type(types.intp)
+        intp_t = context.get_value_type(types.py_intp)
 
         if nitems is None:
             nentries = ir.Constant(intp_t, MINSIZE)
@@ -1000,7 +1000,7 @@ class SetInstance(object):
 
         ok = cgutils.alloca_once_value(builder, cgutils.true_bit)
 
-        intp_t = context.get_value_type(types.intp)
+        intp_t = context.get_value_type(types.py_intp)
         zero = ir.Constant(intp_t, 0)
         one = ir.Constant(intp_t, 1)
 
@@ -1070,7 +1070,7 @@ class SetInstance(object):
 
         ok = cgutils.alloca_once_value(builder, cgutils.true_bit)
 
-        intp_t = context.get_value_type(types.intp)
+        intp_t = context.get_value_type(types.py_intp)
         zero = ir.Constant(intp_t, 0)
         one = ir.Constant(intp_t, 1)
 
@@ -1179,7 +1179,7 @@ class SetIterInstance(object):
     def from_set(cls, context, builder, iter_type, set_val):
         set_inst = SetInstance(context, builder, iter_type.container, set_val)
         self = cls(context, builder, iter_type, None)
-        index = context.get_constant(types.intp, 0)
+        index = context.get_constant(types.py_intp, 0)
         self._iter.index = cgutils.alloca_once_value(builder, index)
         self._iter.meminfo = set_inst.meminfo
         return self
@@ -1233,7 +1233,7 @@ def build_set(context, builder, set_type, items):
         array = cgutils.pack_array(builder, items)
         array_ptr = cgutils.alloca_once_value(builder, array)
 
-        count = context.get_constant(types.intp, nitems)
+        count = context.get_constant(types.py_intp, nitems)
         with cgutils.for_range(builder, count) as loop:
             item = builder.load(cgutils.gep(builder, array_ptr, 0, loop.index))
             inst.add(item)

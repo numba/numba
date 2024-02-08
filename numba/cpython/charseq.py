@@ -45,19 +45,19 @@ def make_deref_codegen(bitsize):
 
 @intrinsic
 def deref_uint8(typingctx, data, offset):
-    sig = types.uint32(data, types.intp)
+    sig = types.uint32(data, types.py_intp)
     return sig, make_deref_codegen(8)
 
 
 @intrinsic
 def deref_uint16(typingctx, data, offset):
-    sig = types.uint32(data, types.intp)
+    sig = types.uint32(data, types.py_intp)
     return sig, make_deref_codegen(16)
 
 
 @intrinsic
 def deref_uint32(typingctx, data, offset):
-    sig = types.uint32(data, types.intp)
+    sig = types.uint32(data, types.py_intp)
     return sig, make_deref_codegen(32)
 
 

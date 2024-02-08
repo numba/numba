@@ -1,5 +1,6 @@
 import math
 import numbers
+import itertools
 
 import numpy as np
 import operator
@@ -549,25 +550,10 @@ lower_builtin(operator.pos, types.np_bool_)(bool_unary_positive_impl)
 
 def _implement_integer_operators():
     ty = types.BaseInteger
-    
-    if not config.USE_LEGACY_TYPE_SYSTEM:
-        np_ty = types.NumPyInteger
-        py_ty = types.PythonInteger
 
     lower_builtin(operator.add, ty, ty)(int_add_impl)
     lower_builtin(operator.iadd, ty, ty)(int_add_impl)
 
-    if not config.USE_LEGACY_TYPE_SYSTEM:
-        lower_builtin(operator.add, py_ty, py_ty)(int_add_impl)
-        lower_builtin(operator.add, np_ty, py_ty)(int_add_impl)
-        lower_builtin(operator.add, py_ty, np_ty)(int_add_impl)
-        lower_builtin(operator.add, np_ty, np_ty)(int_add_impl)
-
-        lower_builtin(operator.iadd, py_ty, py_ty)(int_add_impl)
-        lower_builtin(operator.iadd, np_ty, py_ty)(int_add_impl)
-        lower_builtin(operator.iadd, py_ty, np_ty)(int_add_impl)
-        lower_builtin(operator.iadd, np_ty, np_ty)(int_add_impl)
-    
     lower_builtin(operator.sub, ty, ty)(int_sub_impl)
     lower_builtin(operator.isub, ty, ty)(int_sub_impl)
     lower_builtin(operator.mul, ty, ty)(int_mul_impl)
@@ -601,7 +587,7 @@ def _implement_integer_operators():
     lower_builtin(operator.gt, types.BaseIntegerLiteral, types.BaseIntegerLiteral)(int_slt_impl)
     lower_builtin(operator.le, types.BaseIntegerLiteral, types.BaseIntegerLiteral)(int_slt_impl)
     lower_builtin(operator.ge, types.BaseIntegerLiteral, types.BaseIntegerLiteral)(int_slt_impl)
-    for ty in types.py_signed_domain:
+    for ty in itertools.chain(types.py_signed_domain, types.np_signed_domain):
         lower_builtin(operator.lt, ty, ty)(int_slt_impl)
         lower_builtin(operator.le, ty, ty)(int_sle_impl)
         lower_builtin(operator.gt, ty, ty)(int_sgt_impl)
@@ -1284,6 +1270,9 @@ def literal_int_to_number(context, builder, fromty, toty, val):
 
 @lower_cast(types.BaseInteger, types.BaseInteger)
 def integer_to_integer(context, builder, fromty, toty, val):
+    # TODO: Type System Changes
+    # Logic here that forbids casting between
+    # domains of python/ numpy / C
     if toty.bitwidth == fromty.bitwidth:
         # Just a change of signedness
         return val

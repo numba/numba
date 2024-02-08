@@ -156,7 +156,7 @@ def slice_constructor_impl(context, builder, sig, args):
         default_stop_pos,
         default_stop_neg,
         default_step,
-    ) = [context.get_constant(types.intp, x) for x in get_defaults(context)]
+    ) = [context.get_constant(types.py_intp, x) for x in get_defaults(context)]
 
     slice_args = [None] * 3
 
@@ -178,7 +178,7 @@ def slice_constructor_impl(context, builder, sig, args):
 
     step = get_arg_value(2, default_step)
     is_step_negative = builder.icmp_signed('<', step,
-                                           context.get_constant(types.intp, 0))
+                                           context.get_constant(types.py_intp, 0))
     default_stop = builder.select(is_step_negative,
                                   default_stop_neg, default_stop_pos)
     default_start = builder.select(is_step_negative,
@@ -212,7 +212,7 @@ def slice_step_impl(context, builder, typ, value):
         sli = context.make_helper(builder, typ, value)
         return sli.step
     else:
-        return context.get_constant(types.intp, 1)
+        return context.get_constant(types.py_intp, 1)
 
 
 @lower_builtin("slice.indices", types.SliceType, types.BaseInteger)
@@ -242,7 +242,7 @@ def slice_indices(context, builder, sig, args):
 
 def make_slice_from_constant(context, builder, ty, pyval):
     sli = context.make_helper(builder, ty)
-    lty = context.get_value_type(types.intp)
+    lty = context.get_value_type(types.py_intp)
 
     (
         default_start_pos,
@@ -250,7 +250,7 @@ def make_slice_from_constant(context, builder, ty, pyval):
         default_stop_pos,
         default_stop_neg,
         default_step,
-    ) = [context.get_constant(types.intp, x) for x in get_defaults(context)]
+    ) = [context.get_constant(types.py_intp, x) for x in get_defaults(context)]
 
     step = pyval.step
     if step is None:
