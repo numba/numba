@@ -8,6 +8,7 @@ class Interval:
     """
     A half-open interval on the real number line.
     """
+
     def __init__(self, lo, hi):
         self.lo = lo
         self.hi = hi
@@ -52,7 +53,8 @@ if not config.ENABLE_CUDASIM:
     @type_callable(Interval)
     def type_interval(context):
         def typer(lo, hi):
-            if isinstance(lo, types.Float) and isinstance(hi, types.Float):
+            if isinstance(lo, types.Float) \
+               and isinstance(hi, types.Float):
                 return interval_type
         return typer
 

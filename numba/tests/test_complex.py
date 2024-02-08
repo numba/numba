@@ -11,7 +11,7 @@ enable_pyobj_flags = {'forceobj': True}
 no_pyobj_flags = {'nopython': True}
 
 
-class BaseComplexTest(object):
+class ComplexTest(object):
 
     def basic_values(self):
         reals = [-0.0, +0.0, 1, -1, +1.5, -3.5,
@@ -69,7 +69,7 @@ class BaseComplexTest(object):
                                         ulps=ulps, msg=msg)
 
 
-class TestComplex(BaseComplexTest, TestCase):
+class TestComplex(ComplexTest, TestCase):
 
     def test_real(self, flags=enable_pyobj_flags):
         self.run_unary(real_usecase, [types.complex64, types.complex128],
@@ -118,7 +118,7 @@ class TestComplex(BaseComplexTest, TestCase):
         self.test_div(flags=no_pyobj_flags)
 
 
-class TestCMath(BaseComplexTest, TestCase):
+class TestCMath(ComplexTest, TestCase):
     """
     Tests for cmath module support.
     """
