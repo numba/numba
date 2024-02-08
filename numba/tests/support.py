@@ -101,6 +101,9 @@ skip_unless_py10 = unittest.skipUnless(
 
 skip_if_32bit = unittest.skipIf(_32bit, "Not supported on 32 bit")
 
+skip_if_new_type_system = unittest.skipIf(not config.USE_LEGACY_TYPE_SYSTEM,
+                                          "Not yet supported on new type system")
+
 def expected_failure_py311(fn):
     if utils.PYVERSION == (3, 11):
         return unittest.expectedFailure(fn)
