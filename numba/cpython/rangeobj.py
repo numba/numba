@@ -14,6 +14,9 @@ from numba.core.typing import signature
 from numba.core.extending import intrinsic, overload, overload_attribute, register_jitable
 from numba.parfors.parfor import internal_prange
 
+from llvmlite import ir as llvmir
+
+
 def make_range_iterator(typ):
     """
     Return the Structure representation of the given *typ* (an
@@ -109,29 +112,49 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
             stop = state.stop
             step = state.step
 
-            startptr = cgutils.alloca_once(builder, start.type)
-            builder.store(start, startptr)
-
-            countptr = cgutils.alloca_once(builder, start.type)
-
-            self.iter = startptr
-            self.stop = stop
-            self.step = step
-            self.count = countptr
-
-            diff = builder.sub(stop, start)
+            lltype = stop.type
+            # guard zero step
             zero = context.get_constant(int_type, 0)
-            one = context.get_constant(int_type, 1)
-            pos_diff = builder.icmp_signed('>', diff, zero)
-            pos_step = builder.icmp_signed('>', step, zero)
-            sign_differs = builder.xor(pos_diff, pos_step)
             zero_step = builder.icmp_unsigned('==', step, zero)
 
             with cgutils.if_unlikely(builder, zero_step):
                 # step shouldn't be zero
                 context.call_conv.return_user_exc(builder, ValueError,
                                                   ("range() arg 3 must not be zero",))
+            # diff = stop - start
+            diff = builder.sub(stop, start, name='diff')
+            # endadj = -1 if step < 0 else +1
+            negative = builder.icmp_signed('<', step, lltype(0))
+            endadj = builder.select(negative, lltype(-1), lltype(+1),
+                                    name='endadj')
+            # adjust start
+            adj_start = lltype(0)
+            # adj_stop = (diff + (step - endadj)) // step
+            adj_stop = builder.sdiv(
+                builder.add(diff, builder.sub(step, endadj)),
+                step,
+                name="adj_stop",
+            )
 
+            # store range states
+            startptr = cgutils.alloca_once(builder, start.type)
+            builder.store(adj_start, startptr)
+
+            self.iter = startptr
+            self.start = start
+            self.adj_stop = adj_stop
+            self.scale = step
+
+            # handle count
+            # It's done in a way that help LLVM optimize-away all these.
+            # It is rare for users to query the len() of a range.
+            countptr = cgutils.alloca_once(builder, start.type)
+            self.count = countptr
+
+            one = context.get_constant(int_type, 1)
+            pos_diff = builder.icmp_signed('>', diff, zero)
+            pos_step = builder.icmp_signed('>', step, zero)
+            sign_differs = builder.xor(pos_diff, pos_step)
             with builder.if_else(sign_differs) as (then, orelse):
                 with then:
                     builder.store(zero, self.count)
@@ -147,19 +170,43 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
             return self
 
         def iternext(self, context, builder, result):
-            zero = context.get_constant(int_type, 0)
-            countptr = self.count
-            count = builder.load(countptr)
-            is_valid = builder.icmp_signed('>', count, zero)
+            indvar = builder.load(self.iter)
+
+            # Compute the next indvar.
+            # Handle overflow by extending to a bigger int type.
+            # Sadly, loop-vectorizer does not handle llvm.sadd.with.overflow.
+            ext_type = llvmir.IntType(indvar.type.width + 1)
+
+            ext_indvar = builder.sext(indvar, ext_type)
+            ext_next_indvar = builder.add(ext_indvar, ext_indvar.type(1))
+
+            of = builder.trunc(
+                builder.lshr(
+                    ext_next_indvar,
+                    ext_next_indvar.type(ext_type.width - 1),
+                ),
+                llvmir.IntType(1),
+                name='overflow',
+            )
+
+            next_indvar = builder.trunc(ext_next_indvar, indvar.type,
+                                        name='next_indvar')
+            is_valid = builder.and_(
+                builder.not_(of),
+                builder.icmp_signed("<", indvar, self.adj_stop),
+            )
             result.set_valid(is_valid)
 
             with builder.if_then(is_valid):
-                value = builder.load(self.iter)
-                result.yield_(value)
-                one = context.get_constant(int_type, 1)
-
-                builder.store(builder.sub(count, one, flags=["nsw"]), countptr)
-                builder.store(builder.add(value, self.step), self.iter)
+                # start + (indvar * scale)
+                result.yield_(
+                    builder.add(
+                        self.start,
+                        builder.mul(indvar, self.scale),
+                        name='scaled_indvar',
+                    ),
+                )
+                builder.store(next_indvar, self.iter)
 
 
 range_impl_map = {

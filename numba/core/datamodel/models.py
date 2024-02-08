@@ -1133,10 +1133,18 @@ class ZipType(StructModel):
 class RangeIteratorType(StructModel):
     def __init__(self, dmm, fe_type):
         int_type = fe_type.yield_type
-        members = [('iter', types.EphemeralPointer(int_type)),
-                   ('stop', int_type),
-                   ('step', int_type),
-                   ('count', types.EphemeralPointer(int_type))]
+        members = [
+            # The iter state. a counter from 0.
+            ('iter', types.EphemeralPointer(int_type)),
+            # The start offset.
+            ('start', int_type),
+            # Adjusted stop for iter. Valid range is 0 < iter < adj_stop.
+            ('adj_stop', int_type),
+            # For scaling iter to indvar
+            ('scale', int_type),
+            # Count. e.g. len(iter(range())).
+            ('count', types.EphemeralPointer(int_type)),
+        ]
         super(RangeIteratorType, self).__init__(dmm, fe_type, members)
 
 
