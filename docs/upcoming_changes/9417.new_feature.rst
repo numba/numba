@@ -1,0 +1,4 @@
+Support math.log2
+=================
+
+Support for ``np.log2`` is added to CUDA target.
