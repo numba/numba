@@ -149,3 +149,8 @@ if [[ "$TEST_RVSDG" == "yes" ]]; then
     echo "Running RVSDG tests..."
     NUMBA_USE_RVSDG_FRONTEND=1 NUMBA_CAPTURED_ERRORS=new_style NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -m $TEST_NPROCS -- numba.tests.test_usecases
 fi
+
+if [[ "$TEST_NEW_TYPES" == "yes" ]]; then
+    echo "Running tests for new type system..."
+    USE_LEGACY_TYPE_SYSTEM=0 NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -m $TEST_NPROCS -- numba.tests.test_builtins
+fi
