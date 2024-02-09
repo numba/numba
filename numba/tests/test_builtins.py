@@ -79,6 +79,19 @@ def filter_usecase(x, filter_func):
 def float_usecase(x):
     return float(x)
 
+def float_inf_usecase(x):
+    d = {
+        0: float('inf'),
+        1: float('INF'),
+        2: float('-inf'),
+        3: float('-INF'),
+        4: float('\r\nINF\r       '),
+        5: float('       \r\n\t-INF'),
+        6: float('1234.45'),
+        7: float('\n-123.4\r'),
+    }
+    return d.get(x)
+
 def format_usecase(x, y):
     return x.format(y)
 
@@ -542,12 +555,18 @@ class TestBuiltins(TestCase):
             self.assertPreciseEqual(cfunc(x), pyfunc(x), prec='single')
 
         cfunc = jit((types.string,), **flags)(pyfunc)
-        for x in ['-1.1', '0.0', '1.1']:
+        for x in ['-1.1', '0.0', '1.1', 'inf', '-inf', 'INF', '-INF']:
             self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
     def test_float_npm(self):
         with self.assertTypingError():
             self.test_float(flags=no_pyobj_flags)
+
+    def test_float_string_literal(self):
+        pyfunc = float_inf_usecase
+        cfunc = njit(pyfunc)
+        for x in range(8):
+            self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
     def test_format(self, flags=forceobj_flags):
         pyfunc = format_usecase
