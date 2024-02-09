@@ -653,9 +653,6 @@ class StructModel(CompositeModel):
         return self._models
 
 
-class ComplexModel(StructModel):
-    pass
-
 if config.USE_LEGACY_TYPE_SYSTEM:  # type: ignore
     @register_default(types.Boolean)
     @register_default(types.BooleanLiteral)
@@ -720,7 +717,7 @@ if config.USE_LEGACY_TYPE_SYSTEM:  # type: ignore
             super(FloatModel, self).__init__(dmm, fe_type, be_type)
 
     @register_default(types.Complex)
-    class ComplexModel(ComplexModel):
+    class ComplexModel(StructModel):
         _element_type = NotImplemented
 
         def __init__(self, dmm, fe_type):
@@ -788,6 +785,13 @@ else:
         def __init__(self, dmm, fe_type):
             be_type = ir.DoubleType()
             super(PythonFloatModel, self).__init__(dmm, fe_type, be_type)
+
+
+    # This is required to check isinstance(x, ComplexModel)
+    # within Numba internals
+    class ComplexModel(StructModel): # type: ignore
+        pass
+
 
     @register_default(types.PythonComplex)
     class PythonComplexModel(ComplexModel):

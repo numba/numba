@@ -10,8 +10,12 @@ from numba.core.typeconv import Conversion
 from numba.np import npdatetime_helpers
 
 
+# Need to ignore mypy errors because mypy cannot unify types for both
+# the type systems even if they're logically mutually exclusive.
+# mypy: ignore-errors
+
 if config.USE_LEGACY_TYPE_SYSTEM: # type: ignore
-    class Boolean(Number):
+    class Boolean(Hashable):
         def cast_python_value(self, value):
             return bool(value)
 
@@ -146,7 +150,7 @@ if config.USE_LEGACY_TYPE_SYSTEM: # type: ignore
     PythonIntegerLiteral = NumPyIntegerLiteral = MachineIntegerLiteral = IntegerLiteral
     PythonBooleanLiteral = NumPyBooleanLiteral = MachineBooleanLiteral = BooleanLiteral
 else:
-    class Boolean(Number):
+    class Boolean(Hashable):
         pass
 
 
