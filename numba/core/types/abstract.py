@@ -7,6 +7,7 @@ from functools import cached_property
 import numpy as np
 
 from numba.core.utils import get_hashable_key
+from numba import config
 
 # Types are added to a global registry (_typecache) in order to assign
 # them unique integer codes for fast matching in _dispatcher.c.
@@ -254,15 +255,18 @@ class Number(Hashable):
         """
         Unify the two number types using Numpy's rules.
         """
-        from numba.np import numpy_support
-        if isinstance(other, Number):
-            # XXX: this can produce unsafe conversions,
-            # e.g. would unify {int64, uint64} to float64
-            a = numpy_support.as_dtype(self)
-            b = numpy_support.as_dtype(other)
-            sel = np.promote_types(a, b)
-            return numpy_support.from_dtype(sel)
-
+        if config.USE_LEGACY_TYPE_SYSTEM:
+            from numba.np import numpy_support
+            if isinstance(other, Number):
+                # XXX: this can produce unsafe conversions,
+                # e.g. would unify {int64, uint64} to float64
+                a = numpy_support.as_dtype(self)
+                b = numpy_support.as_dtype(other)
+                sel = np.promote_types(a, b)
+                return numpy_support.from_dtype(sel)
+        else:
+            # TODO: Type System Changes
+            pass
 
 class Callable(Type):
     """

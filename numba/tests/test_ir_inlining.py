@@ -935,21 +935,21 @@ class TestOverloadInlining(MemoryLeakMixin, InliningBase):
 
         # this is the Python equiv of the overloads below
         def bar(x):
-            if isinstance(typeof(x), types.Float):
+            if isinstance(typeof(x), types.BaseFloat):
                 return x + 1234
             else:
                 return x + 1
 
         @overload(bar, inline='always')
         def bar_int_ol(x):
-            if isinstance(x, types.Integer):
+            if isinstance(x, types.BaseInteger):
                 def impl(x):
                     return x + 1
                 return impl
 
         @overload(bar, inline='never')
         def bar_float_ol(x):
-            if isinstance(x, types.Float):
+            if isinstance(x, types.BaseFloat):
                 def impl(x):
                     return x + 1234
                 return impl
@@ -959,7 +959,7 @@ class TestOverloadInlining(MemoryLeakMixin, InliningBase):
 
         @overload(bar, inline=always_inline_cost_model)
         def bar_complex_ol(x):
-            if isinstance(x, types.Complex):
+            if isinstance(x, types.BaseComplex):
                 def impl(x):
                     return x + 1
                 return impl
@@ -1473,7 +1473,7 @@ class TestInlineMiscIssues(TestCase):
 
         @overload(bar, inline='always')
         def ol_bar(x):
-            if isinstance(x, types.Integer):
+            if isinstance(x, types.BaseInteger):
                 def impl(x):
                     return x + 1.3
                 return impl

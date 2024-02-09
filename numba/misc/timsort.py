@@ -57,7 +57,7 @@ MergeRun = collections.namedtuple('MergeRun', ('start', 'size'))
 def make_timsort_impl(wrap, make_temp_area):
 
     make_temp_area = wrap(make_temp_area)
-    intp = types.intp
+    intp = types.py_intp
     zero = intp(0)
 
     @wrap

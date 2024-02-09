@@ -62,9 +62,9 @@ def get_array_index_type(ary, idx):
         # In advanced indexing, any index broadcastable to an
         # array is considered an advanced index. Hence all the
         # branches below are considered as advanced indices.
-        elif isinstance(ty, types.Integer):
+        elif isinstance(ty, types.BaseInteger):
             # Normalize integer index
-            ty = types.intp if ty.signed else types.uintp
+            ty = types.py_intp if ty.signed else types.uintp
             # Integer indexing removes the given dimension
             ndim -= 1
             # If we're within a subspace/contiguous group of
@@ -76,14 +76,14 @@ def get_array_index_type(ary, idx):
                 num_subspaces += 1
                 in_subspace = True
         elif (isinstance(ty, types.Array) and ty.ndim == 0
-              and isinstance(ty.dtype, types.Integer)):
+              and isinstance(ty.dtype, types.BaseInteger)):
             # 0-d array used as integer index
             ndim -= 1
             if not in_subspace:
                 num_subspaces += 1
                 in_subspace = True
         elif (isinstance(ty, types.Array)
-              and isinstance(ty.dtype, (types.Integer, types.Boolean))):
+              and isinstance(ty.dtype, (types.BaseInteger, types.BaseBoolean))):
             if ty.ndim > 1:
                 # Advanced indexing limitation # 1
                 raise NumbaTypeError(
@@ -152,7 +152,7 @@ def get_array_index_type(ary, idx):
         def keeps_contiguity(ty, is_innermost):
             # A slice can only keep an array contiguous if it is the
             # innermost index and it is not strided
-            return (ty is types.ellipsis or isinstance(ty, types.Integer)
+            return (ty is types.ellipsis or isinstance(ty, types.BaseInteger)
                     or (is_innermost and isinstance(ty, types.SliceType)
                         and not ty.has_step))
 
@@ -275,13 +275,13 @@ class SetItemBuffer(AbstractTemplate):
 
 def normalize_shape(shape):
     if isinstance(shape, types.UniTuple):
-        if isinstance(shape.dtype, types.Integer):
-            dimtype = types.intp if shape.dtype.signed else types.uintp
+        if isinstance(shape.dtype, types.BaseInteger):
+            dimtype = types.py_intp if shape.dtype.signed else types.uintp
             return types.UniTuple(dimtype, len(shape))
 
     elif isinstance(shape, types.Tuple) and shape.count == 0:
         # Force (0 x intp) for consistency with other shapes
-        return types.UniTuple(types.intp, 0)
+        return types.UniTuple(types.py_intp, 0)
 
 
 @infer_getattr
@@ -292,22 +292,22 @@ class ArrayAttribute(AttributeTemplate):
         return types.DType(ary.dtype)
 
     def resolve_nbytes(self, ary):
-        return types.intp
+        return types.py_intp
 
     def resolve_itemsize(self, ary):
-        return types.intp
+        return types.py_intp
 
     def resolve_shape(self, ary):
-        return types.UniTuple(types.intp, ary.ndim)
+        return types.UniTuple(types.py_intp, ary.ndim)
 
     def resolve_strides(self, ary):
-        return types.UniTuple(types.intp, ary.ndim)
+        return types.UniTuple(types.py_intp, ary.ndim)
 
     def resolve_ndim(self, ary):
-        return types.intp
+        return types.py_intp
 
     def resolve_size(self, ary):
-        return types.intp
+        return types.py_intp
 
     def resolve_flat(self, ary):
         return types.NumpyFlatType(ary)
@@ -349,7 +349,7 @@ class ArrayAttribute(AttributeTemplate):
         def sentry_shape_scalar(ty):
             if ty in types.number_domain:
                 # Guard against non integer type
-                if not isinstance(ty, types.Integer):
+                if not isinstance(ty, types.BaseInteger):
                     raise TypeError("transpose() arg cannot be {0}".format(ty))
                 return True
             else:
@@ -414,7 +414,7 @@ class ArrayAttribute(AttributeTemplate):
         assert not kws
         # 0-dim arrays return one result array
         ndim = max(ary.ndim, 1)
-        retty = types.UniTuple(types.Array(types.intp, 1, 'C'), ndim)
+        retty = types.UniTuple(types.Array(types.py_intp, 1, 'C'), ndim)
         return signature(retty)
 
     @bound_function("array.reshape")
@@ -422,7 +422,7 @@ class ArrayAttribute(AttributeTemplate):
         def sentry_shape_scalar(ty):
             if ty in types.number_domain:
                 # Guard against non integer type
-                if not isinstance(ty, types.Integer):
+                if not isinstance(ty, types.BaseInteger):
                     raise TypeError("reshape() arg cannot be {0}".format(ty))
                 return True
             else:
@@ -480,7 +480,7 @@ class ArrayAttribute(AttributeTemplate):
             def argsort_stub(kind='quicksort'):
                 pass
             pysig = utils.pysignature(argsort_stub)
-            sig = signature(types.Array(types.intp, 1, 'C'), kind).replace(pysig=pysig)
+            sig = signature(types.Array(types.py_intp, 1, 'C'), kind).replace(pysig=pysig)
             return sig
 
     @bound_function("array.view")
@@ -633,7 +633,7 @@ class StaticGetItemLiteralRecord(AbstractTemplate):
                 ret = record.typeof(idx.literal_value)
                 assert ret
                 return signature(ret, *args)
-            elif isinstance(idx, types.IntegerLiteral):
+            elif isinstance(idx, types.BaseIntegerLiteral):
                 if idx.literal_value >= len(record.fields):
                     msg = f"Requested index {idx.literal_value} is out of range"
                     raise NumbaIndexError(msg)
@@ -713,13 +713,13 @@ def _expand_integer(ty):
     """
     If *ty* is an integer, expand it to a machine int (like Numpy).
     """
-    if isinstance(ty, types.Integer):
+    if isinstance(ty, types.BaseInteger):
         if ty.signed:
-            return max(types.intp, ty)
+            return max(types.py_intp, ty)
         else:
             return max(types.uintp, ty)
-    elif isinstance(ty, types.Boolean):
-        return types.intp
+    elif isinstance(ty, types.BaseBoolean):
+        return types.py_intp
     else:
         return ty
 
@@ -822,7 +822,7 @@ def generic_expand_cumulative(self, args, kws):
 def generic_hetero_real(self, args, kws):
     assert not args
     assert not kws
-    if isinstance(self.this.dtype, (types.Integer, types.Boolean)):
+    if isinstance(self.this.dtype, (types.BaseInteger, types.BaseBoolean)):
         return signature(types.float64, recvr=self.this)
     return signature(self.this.dtype, recvr=self.this)
 
@@ -830,9 +830,9 @@ def generic_hetero_real(self, args, kws):
 def generic_hetero_always_real(self, args, kws):
     assert not args
     assert not kws
-    if isinstance(self.this.dtype, (types.Integer, types.Boolean)):
+    if isinstance(self.this.dtype, (types.BaseInteger, types.BaseBoolean)):
         return signature(types.float64, recvr=self.this)
-    if isinstance(self.this.dtype, types.Complex):
+    if isinstance(self.this.dtype, types.BaseComplex):
         return signature(self.this.dtype.underlying_float, recvr=self.this)
     return signature(self.this.dtype, recvr=self.this)
 
@@ -840,7 +840,7 @@ def generic_hetero_always_real(self, args, kws):
 def generic_index(self, args, kws):
     assert not args
     assert not kws
-    return signature(types.intp, recvr=self.this)
+    return signature(types.py_intp, recvr=self.this)
 
 
 def install_array_method(name, generic, prefer_literal=True):

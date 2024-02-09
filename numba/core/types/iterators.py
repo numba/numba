@@ -60,9 +60,9 @@ class EnumerateType(SimpleIteratorType):
     """
 
     def __init__(self, iterable_type):
-        from numba.core.types import Tuple, intp
+        from numba.core.types import Tuple, py_intp
         self.source_type = iterable_type.iterator_type
-        yield_type = Tuple([intp, self.source_type.yield_type])
+        yield_type = Tuple([py_intp, self.source_type.yield_type])
         name = 'enumerate(%s)' % (self.source_type)
         super(EnumerateType, self).__init__(name, yield_type)
 

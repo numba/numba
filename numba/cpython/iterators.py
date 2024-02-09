@@ -18,17 +18,17 @@ def iterator_getiter(context, builder, sig, args):
 # builtin `enumerate` implementation
 
 @lower_builtin(enumerate, types.IterableType)
-@lower_builtin(enumerate, types.IterableType, types.Integer)
+@lower_builtin(enumerate, types.IterableType, types.BaseInteger)
 def make_enumerate_object(context, builder, sig, args):
     assert len(args) == 1 or len(args) == 2 # enumerate(it) or enumerate(it, start)
     srcty = sig.args[0]
 
     if len(args) == 1:
         src = args[0]
-        start_val = context.get_constant(types.intp, 0)
+        start_val = context.get_constant(types.py_intp, 0)
     elif len(args) == 2:
         src = args[0]
-        start_val = context.cast(builder, args[1], sig.args[1], types.intp)
+        start_val = context.cast(builder, args[1], sig.args[1], types.py_intp)
 
     iterobj = call_getiter(context, builder, srcty, src)
 
@@ -52,7 +52,7 @@ def iternext_enumerate(context, builder, sig, args, result):
     enum = context.make_helper(builder, enumty, value=enum)
 
     count = builder.load(enum.count)
-    ncount = builder.add(count, context.get_constant(types.intp, 1))
+    ncount = builder.add(count, context.get_constant(types.py_intp, 1))
     builder.store(ncount, enum.count)
 
     srcres = call_iternext(context, builder, enumty.source_type, enum.iter)

@@ -44,9 +44,9 @@ ll_bytes = cgutils.voidptr_t
 
 _meminfo_listptr = types.MemInfoPointer(types.voidptr)
 
-INDEXTY = types.intp
+INDEXTY = types.py_intp
 
-index_types = types.integer_domain
+index_types = types.py_integer_domain
 
 DEFAULT_ALLOCATED = 0
 
@@ -1298,7 +1298,7 @@ def ol_list_sort(lst, key=None, reverse=False):
 
 @overload_method(types.ListType, "getitem_unchecked")
 def ol_getitem_unchecked(lst, index):
-    if not isinstance(index, types.Integer):
+    if not isinstance(index, types.BaseInteger):
         return
 
     def impl(lst, index):

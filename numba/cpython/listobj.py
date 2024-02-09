@@ -219,7 +219,7 @@ class ListInstance(_ListPayloadMixin):
         builder = self._builder
         base = self._gep(start)
         end = self._gep(stop)
-        intaddr_t = self._context.get_value_type(types.intp)
+        intaddr_t = self._context.get_value_type(types.py_intp)
         size = builder.sub(builder.ptrtoint(end, intaddr_t),
                            builder.ptrtoint(base, intaddr_t))
         cgutils.memset(builder, base, size, ir.IntType(8)(0))
@@ -232,7 +232,7 @@ class ListInstance(_ListPayloadMixin):
         *instance* is a ListInstance object (the object's contents are
         only valid when *ok* is true).
         """
-        intp_t = context.get_value_type(types.intp)
+        intp_t = context.get_value_type(types.py_intp)
 
         if isinstance(nitems, int):
             nitems = ir.Constant(intp_t, nitems)
@@ -421,7 +421,7 @@ class ListIterInstance(_ListPayloadMixin):
     def from_list(cls, context, builder, iter_type, list_val):
         list_inst = ListInstance(context, builder, iter_type.container, list_val)
         self = cls(context, builder, iter_type, None)
-        index = context.get_constant(types.intp, 0)
+        index = context.get_constant(types.py_intp, 0)
         self._iter.index = cgutils.alloca_once_value(builder, index)
         self._iter.meminfo = list_inst.meminfo
         return self
@@ -455,9 +455,9 @@ def build_list(context, builder, list_type, items):
     nitems = len(items)
     inst = ListInstance.allocate(context, builder, list_type, nitems)
     # Populate list
-    inst.size = context.get_constant(types.intp, nitems)
+    inst.size = context.get_constant(types.py_intp, nitems)
     for i, val in enumerate(items):
-        inst.setitem(context.get_constant(types.intp, i), val, incref=True)
+        inst.setitem(context.get_constant(types.py_intp, i), val, incref=True)
 
     return impl_ret_new_ref(context, builder, list_type, inst.value)
 
@@ -504,10 +504,10 @@ def iternext_listiter(context, builder, sig, args, result):
 
     with builder.if_then(is_valid):
         result.yield_(inst.getitem(index))
-        inst.index = builder.add(index, context.get_constant(types.intp, 1))
+        inst.index = builder.add(index, context.get_constant(types.py_intp, 1))
 
 
-@lower_builtin(operator.getitem, types.List, types.Integer)
+@lower_builtin(operator.getitem, types.List, types.BaseInteger)
 def getitem_list(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     index = args[1]
@@ -518,7 +518,7 @@ def getitem_list(context, builder, sig, args):
 
     return impl_ret_borrowed(context, builder, sig.return_type, result)
 
-@lower_builtin(operator.setitem, types.List, types.Integer, types.Any)
+@lower_builtin(operator.setitem, types.List, types.BaseInteger, types.Any)
 def setitem_list(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     index = args[1]
@@ -614,7 +614,7 @@ def setitem_list(context, builder, sig, args):
 
 
 
-@lower_builtin(operator.delitem, types.List, types.Integer)
+@lower_builtin(operator.delitem, types.List, types.BaseInteger)
 def delitem_list_index(context, builder, sig, args):
 
     def list_delitem_impl(lst, i):
@@ -714,8 +714,8 @@ def list_add_inplace(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, dest.value)
 
 
-@lower_builtin(operator.mul, types.List, types.Integer)
-@lower_builtin(operator.mul, types.Integer, types.List)
+@lower_builtin(operator.mul, types.List, types.BaseInteger)
+@lower_builtin(operator.mul, types.BaseInteger, types.List)
 def list_mul(context, builder, sig, args):
     if isinstance(sig.args[0], types.List):
         list_idx, int_idx = 0, 1
@@ -739,7 +739,7 @@ def list_mul(context, builder, sig, args):
 
     return impl_ret_new_ref(context, builder, sig.return_type, dest.value)
 
-@lower_builtin(operator.imul, types.List, types.Integer)
+@lower_builtin(operator.imul, types.List, types.BaseInteger)
 def list_mul_inplace(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     src_size = inst.size
@@ -880,7 +880,7 @@ def list_append(context, builder, sig, args):
 @lower_builtin("list.clear", types.List)
 def list_clear(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
-    inst.resize(context.get_constant(types.intp, 0))
+    inst.resize(context.get_constant(types.py_intp, 0))
 
     return context.get_dummy_value()
 
@@ -939,15 +939,15 @@ def list_extend(context, builder, sig, args):
     return context.compile_internal(builder, list_extend, sig, args)
 
 
-intp_max = types.intp.maxval
+intp_max = types.py_intp.maxval
 
 
 @overload_method(types.List, "index")
 def list_index(lst, value, start=0, stop=intp_max):
 
-    if not isinstance(start, (int, types.Integer, types.Omitted)):
+    if not isinstance(start, (int, types.BaseInteger, types.Omitted)):
         raise errors.TypingError(f'arg "start" must be an Integer. Got {start}')
-    if not isinstance(stop, (int, types.Integer, types.Omitted)):
+    if not isinstance(stop, (int, types.BaseInteger, types.Omitted)):
         raise errors.TypingError(f'arg "stop" must be an Integer. Got {stop}')
 
     def list_index_impl(lst, value, start=0, stop=intp_max):
@@ -968,7 +968,7 @@ def list_index(lst, value, start=0, stop=intp_max):
     return list_index_impl
 
 
-@lower_builtin("list.insert", types.List, types.Integer,
+@lower_builtin("list.insert", types.List, types.BaseInteger,
            types.Any)
 def list_insert(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
@@ -999,7 +999,7 @@ def list_pop(context, builder, sig, args):
     inst.resize(n)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-@lower_builtin("list.pop", types.List, types.Integer)
+@lower_builtin("list.pop", types.List, types.BaseInteger)
 def list_pop(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     idx = inst.fix_index(args[1])
@@ -1062,7 +1062,7 @@ def _sort_check_reverse(reverse):
         rty = reverse.type
     else:
         rty = reverse
-    if not isinstance(rty, (types.Boolean, types.Integer, int, bool)):
+    if not isinstance(rty, (types.BaseBoolean, types.BaseInteger, int, bool)):
         msg = "an integer is required for 'reverse' (got type %s)" % reverse
         raise errors.TypingError(msg)
     return rty
@@ -1179,7 +1179,7 @@ def literal_list_banned_reverse(lst):
     raise _banned_error
 
 
-_index_end = types.intp.maxval
+_index_end = types.py_intp.maxval
 @overload_method(types.LiteralList, 'index')
 def literal_list_index(lst, x, start=0, end=_index_end):
     # TODO: To make this work, need consts as slice for start/end so as to

@@ -344,7 +344,7 @@ def constant_dummy(context, builder, ty, pyval):
 
 
 # and how to deal with IntegerLiteral to Integer casts
-@dpu_function_registry.lower_cast(types.IntegerLiteral, types.Integer)
+@dpu_function_registry.lower_cast(types.BaseIntegerLiteral, types.BaseInteger)
 def literal_int_to_number(context, builder, fromty, toty, val):
     lit = context.get_constant_generic(
         builder, fromty.literal_type, fromty.literal_value,
@@ -353,14 +353,14 @@ def literal_int_to_number(context, builder, fromty, toty, val):
 
 
 # and how to lower an Int constant
-@dpu_function_registry.lower_constant(types.Integer)
+@dpu_function_registry.lower_constant(types.BaseInteger)
 def const_int(context, builder, ty, pyval):
     lty = context.get_value_type(ty)
     return lty(pyval)
 
 
 # and tell the DPU how to lower a float constant
-@dpu_function_registry.lower_constant(types.Float)
+@dpu_function_registry.lower_constant(types.BaseFloat)
 def const_float(context, builder, ty, pyval):
     lty = context.get_value_type(ty)
     return lty(pyval)
@@ -380,7 +380,7 @@ def intrin_add(tyctx, x, y):
 # Use extending.overload API to register 'add', call the dpu specific intrinsic
 @overload(operator.add, target="dpu")
 def ol_add(x, y):
-    if isinstance(x, types.Integer) and isinstance(y, types.Integer):
+    if isinstance(x, types.BaseInteger) and isinstance(y, types.BaseInteger):
 
         def impl(x, y):
             return intrin_add(x, y)

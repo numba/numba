@@ -3,7 +3,7 @@ trigger:
 
 variables:
   # Change the following along with adding new TEST_START_INDEX.
-  TEST_COUNT: 18
+  TEST_COUNT: 19
 
 jobs:
 # Mac and Linux use the same template with different matrixes
@@ -103,18 +103,27 @@ jobs:
         CONDA_ENV: azure_ci
         TEST_RVSDG: yes
         TEST_START_INDEX: 13   # Not used by test script
+      # RVSDG tests
+      py311_np126_new_types:
+        PYTHON: '3.11'
+        NUMPY: '1.26'
+        RUN_MYPY: yes
+        RUN_FLAKE8: yes
+        CONDA_ENV: azure_ci
+        TEST_NEW_TYPES: yes
+        TEST_START_INDEX: 14   # Not used by test script
       py311_np125_svml:
         PYTHON: '3.11'
         NUMPY: '1.25'
         CONDA_ENV: azure_ci
         TEST_SVML: yes
-        TEST_START_INDEX: 14
+        TEST_START_INDEX: 15
 
       py312_np126:
         PYTHON: '3.12'
         NUMPY: '1.26'
         CONDA_ENV: azure_ci
-        TEST_START_INDEX: 15
+        TEST_START_INDEX: 16
 
 - template: buildscripts/azure/azure-windows.yml
   parameters:

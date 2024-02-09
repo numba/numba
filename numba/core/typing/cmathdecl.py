@@ -21,14 +21,14 @@ infer_global = registry.register_global
 @infer_global(cmath.sqrt)
 @infer_global(cmath.tan)
 class CMath_unary(ConcreteTemplate):
-    cases = [signature(tp, tp) for tp in sorted(types.complex_domain)]
+    cases = [signature(tp, tp) for tp in sorted(types.np_complex_domain)]
 
 
 @infer_global(cmath.isinf)
 @infer_global(cmath.isnan)
 class CMath_predicate(ConcreteTemplate):
-    cases = [signature(types.boolean, tp) for tp in
-             sorted(types.complex_domain)]
+    cases = [signature(types.np_bool_, tp) for tp in
+             sorted(types.np_complex_domain)]
 
 
 @infer_global(cmath.isfinite)
@@ -39,6 +39,6 @@ class CMath_isfinite(CMath_predicate):
 @infer_global(cmath.log)
 class Cmath_log(ConcreteTemplate):
     # unary cmath.log()
-    cases = [signature(tp, tp) for tp in sorted(types.complex_domain)]
+    cases = [signature(tp, tp) for tp in sorted(types.np_complex_domain)]
     # binary cmath.log()
-    cases += [signature(tp, tp, tp) for tp in sorted(types.complex_domain)]
+    cases += [signature(tp, tp, tp) for tp in sorted(types.np_complex_domain)]

@@ -108,7 +108,7 @@ def assert_heap_type(heap):
         raise TypingError('heap argument must be a list')
 
     dt = heap.dtype
-    if isinstance(dt, types.Complex):
+    if isinstance(dt, types.BaseComplex):
         msg = ("'<' not supported between instances "
                "of 'complex' and 'complex'")
         raise TypingError(msg)
@@ -189,7 +189,7 @@ def heappushpop(heap, item):
 
 def check_input_types(n, iterable):
 
-    if not isinstance(n, (types.Integer, types.Boolean)):
+    if not isinstance(n, (types.BaseInteger, types.BaseBoolean)):
         raise TypingError("First argument 'n' must be an integer")
         # heapq also accepts 1.0 (but not 0.0, 2.0, 3.0...) but
         # this isn't replicated

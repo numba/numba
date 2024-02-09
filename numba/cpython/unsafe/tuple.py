@@ -36,7 +36,7 @@ def tuple_setitem(typingctx, tup, idx, val):
 @intrinsic
 def build_full_slice_tuple(tyctx, sz):
     """Creates a sz-tuple of full slices."""
-    if not isinstance(sz, types.IntegerLiteral):
+    if not isinstance(sz, types.BaseIntegerLiteral):
         raise errors.RequireLiteralValue(sz)
 
     size = int(sz.literal_value)
@@ -50,9 +50,9 @@ def build_full_slice_tuple(tyctx, sz):
                 out = tuple_setitem(out, i, slice(None, None))
             return out
 
-        inner_argtypes = [types.intp, tuple_type]
+        inner_argtypes = [types.py_intp, tuple_type]
         inner_sig = typing.signature(tuple_type, *inner_argtypes)
-        ll_idx_type = context.get_value_type(types.intp)
+        ll_idx_type = context.get_value_type(types.py_intp)
         # Allocate an empty tuple
         empty_tuple = context.get_constant_undef(tuple_type)
         inner_args = [ll_idx_type(size), empty_tuple]

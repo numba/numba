@@ -543,7 +543,7 @@ class TestOptionals(MemoryLeakMixin, unittest.TestCase):
         s = arr_expr.signatures
         oty = s[0][1]
         self.assertTrue(isinstance(oty, types.Optional))
-        self.assertTrue(isinstance(oty.type, types.Float))
+        self.assertTrue(isinstance(oty.type, types.BaseFloat))
 
     def test_optional_array_type(self):
 
@@ -571,7 +571,7 @@ class TestOptionals(MemoryLeakMixin, unittest.TestCase):
         oty = s[0][1]
         self.assertTrue(isinstance(oty, types.Optional))
         self.assertTrue(isinstance(oty.type, types.Array))
-        self.assertTrue(isinstance(oty.type.dtype, types.Float))
+        self.assertTrue(isinstance(oty.type.dtype, types.BaseFloat))
 
 
 class TestOptionalsExceptions(MemoryLeakMixin, unittest.TestCase):
@@ -605,7 +605,7 @@ class TestOptionalsExceptions(MemoryLeakMixin, unittest.TestCase):
         s = arr_expr.signatures
         oty = s[0][1]
         self.assertTrue(isinstance(oty, types.Optional))
-        self.assertTrue(isinstance(oty.type, types.Float))
+        self.assertTrue(isinstance(oty.type, types.BaseFloat))
 
     def test_optional_array_type_exception_on_none(self):
 
@@ -638,7 +638,7 @@ class TestOptionalsExceptions(MemoryLeakMixin, unittest.TestCase):
         oty = s[0][1]
         self.assertTrue(isinstance(oty, types.Optional))
         self.assertTrue(isinstance(oty.type, types.Array))
-        self.assertTrue(isinstance(oty.type.dtype, types.Float))
+        self.assertTrue(isinstance(oty.type.dtype, types.BaseFloat))
 
 
 class TestExternalTypes(MemoryLeakMixin, unittest.TestCase):

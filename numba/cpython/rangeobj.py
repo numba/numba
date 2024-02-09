@@ -163,9 +163,12 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
 
 
 range_impl_map = {
-    types.int32 : (types.range_state32_type, types.range_iter32_type),
-    types.int64 : (types.range_state64_type, types.range_iter64_type),
-    types.uint64 : (types.unsigned_range_state64_type, types.unsigned_range_iter64_type)
+    types.py_int32 : (types.py_range_state32_type, types.py_range_iter32_type),
+    types.np_int32 : (types.np_range_state32_type, types.np_range_iter32_type),
+
+    types.py_int64 : (types.py_range_state64_type, types.py_range_iter64_type),
+    types.np_int64 : (types.np_range_state64_type, types.np_range_iter64_type),
+    types.np_uint64 : (types.np_unsigned_range_state64_type, types.np_unsigned_range_iter64_type)
 }
 
 for int_type, state_types in range_impl_map.items():
@@ -196,39 +199,39 @@ def length_of_iterator(typingctx, val):
     elif isinstance(val, types.ListIter):
         def codegen(context, builder, sig, args):
             (value,) = args
-            intp_t = context.get_value_type(types.intp)
+            intp_t = context.get_value_type(types.py_intp)
             iterobj = ListIterInstance(context, builder, sig.args[0], value)
             return impl_ret_untracked(context, builder, intp_t, iterobj.size)
-        return signature(types.intp, val), codegen
+        return signature(types.py_intp, val), codegen
     elif isinstance(val, types.ArrayIterator):
         def  codegen(context, builder, sig, args):
             (iterty,) = sig.args
             (value,) = args
-            intp_t = context.get_value_type(types.intp)
+            intp_t = context.get_value_type(types.py_intp)
             iterobj = context.make_helper(builder, iterty, value=value)
             arrayty = iterty.array_type
             ary = make_array(arrayty)(context, builder, value=iterobj.array)
             shape = cgutils.unpack_tuple(builder, ary.shape)
             # array iterates along the outer dimension
             return impl_ret_untracked(context, builder, intp_t, shape[0])
-        return signature(types.intp, val), codegen
+        return signature(types.py_intp, val), codegen
     elif isinstance(val, types.UniTupleIter):
         def codegen(context, builder, sig, args):
             (iterty,) = sig.args
             tuplety = iterty.container
-            intp_t = context.get_value_type(types.intp)
+            intp_t = context.get_value_type(types.py_intp)
             count_const = intp_t(tuplety.count)
             return impl_ret_untracked(context, builder, intp_t, count_const)
 
-        return signature(types.intp, val), codegen
+        return signature(types.py_intp, val), codegen
     elif isinstance(val, types.ListTypeIteratorType):
         def codegen(context, builder, sig, args):
             (value,) = args
-            intp_t = context.get_value_type(types.intp)
+            intp_t = context.get_value_type(types.py_intp)
             from numba.typed.listobject import ListIterInstance
             iterobj = ListIterInstance(context, builder, sig.args[0], value)
             return impl_ret_untracked(context, builder, intp_t, iterobj.size)
-        return signature(types.intp, val), codegen
+        return signature(types.py_intp, val), codegen
     else:
         msg = ('Unsupported iterator found in array comprehension, try '
                'preallocating the array and filling manually.')
@@ -270,10 +273,10 @@ def impl_contains(robj, val):
     if not isinstance(robj, types.RangeType):
         return
 
-    elif isinstance(val, (types.Integer, types.Boolean)):
+    elif isinstance(val, (types.BaseInteger, types.BaseBoolean)):
         return impl_contains_helper
 
-    elif isinstance(val, types.Float):
+    elif isinstance(val, types.BaseFloat):
         def impl(robj, val):
             if val % 1 != 0:
                 return False
@@ -281,7 +284,7 @@ def impl_contains(robj, val):
                 return impl_contains_helper(robj, int(val))
         return impl
 
-    elif isinstance(val, types.Complex):
+    elif isinstance(val, types.BaseComplex):
         def impl(robj, val):
             if val.imag != 0:
                 return False

@@ -212,7 +212,7 @@ def _timedelta_times_number(context, builder, td_arg, td_type,
                             number_arg, number_type, return_type):
     ret = alloc_timedelta_result(builder)
     with cgutils.if_likely(builder, is_not_nat(builder, td_arg)):
-        if isinstance(number_type, types.Float):
+        if isinstance(number_type, types.BaseFloat):
             val = builder.sitofp(td_arg, number_arg.type)
             val = builder.fmul(val, number_arg)
             val = _cast_to_timedelta(context, builder, val)
@@ -225,10 +225,10 @@ def _timedelta_times_number(context, builder, td_arg, td_type,
     return builder.load(ret)
 
 
-@lower_builtin(operator.mul, types.NPTimedelta, types.Integer)
-@lower_builtin(operator.imul, types.NPTimedelta, types.Integer)
-@lower_builtin(operator.mul, types.NPTimedelta, types.Float)
-@lower_builtin(operator.imul, types.NPTimedelta, types.Float)
+@lower_builtin(operator.mul, types.NPTimedelta, types.BaseInteger)
+@lower_builtin(operator.imul, types.NPTimedelta, types.BaseInteger)
+@lower_builtin(operator.mul, types.NPTimedelta, types.BaseFloat)
+@lower_builtin(operator.imul, types.NPTimedelta, types.BaseFloat)
 def timedelta_times_number(context, builder, sig, args):
     res = _timedelta_times_number(context, builder,
                                   args[0], sig.args[0], args[1], sig.args[1],
@@ -236,10 +236,10 @@ def timedelta_times_number(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(operator.mul, types.Integer, types.NPTimedelta)
-@lower_builtin(operator.imul, types.Integer, types.NPTimedelta)
-@lower_builtin(operator.mul, types.Float, types.NPTimedelta)
-@lower_builtin(operator.imul, types.Float, types.NPTimedelta)
+@lower_builtin(operator.mul, types.BaseInteger, types.NPTimedelta)
+@lower_builtin(operator.imul, types.BaseInteger, types.NPTimedelta)
+@lower_builtin(operator.mul, types.BaseFloat, types.NPTimedelta)
+@lower_builtin(operator.imul, types.BaseFloat, types.NPTimedelta)
 def number_times_timedelta(context, builder, sig, args):
     res = _timedelta_times_number(context, builder,
                                   args[1], sig.args[1], args[0], sig.args[0],
@@ -247,14 +247,14 @@ def number_times_timedelta(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(operator.truediv, types.NPTimedelta, types.Integer)
-@lower_builtin(operator.itruediv, types.NPTimedelta, types.Integer)
-@lower_builtin(operator.floordiv, types.NPTimedelta, types.Integer)
-@lower_builtin(operator.ifloordiv, types.NPTimedelta, types.Integer)
-@lower_builtin(operator.truediv, types.NPTimedelta, types.Float)
-@lower_builtin(operator.itruediv, types.NPTimedelta, types.Float)
-@lower_builtin(operator.floordiv, types.NPTimedelta, types.Float)
-@lower_builtin(operator.ifloordiv, types.NPTimedelta, types.Float)
+@lower_builtin(operator.truediv, types.NPTimedelta, types.BaseInteger)
+@lower_builtin(operator.itruediv, types.NPTimedelta, types.BaseInteger)
+@lower_builtin(operator.floordiv, types.NPTimedelta, types.BaseInteger)
+@lower_builtin(operator.ifloordiv, types.NPTimedelta, types.BaseInteger)
+@lower_builtin(operator.truediv, types.NPTimedelta, types.BaseFloat)
+@lower_builtin(operator.itruediv, types.NPTimedelta, types.BaseFloat)
+@lower_builtin(operator.floordiv, types.NPTimedelta, types.BaseFloat)
+@lower_builtin(operator.ifloordiv, types.NPTimedelta, types.BaseFloat)
 def timedelta_over_number(context, builder, sig, args):
     td_arg, number_arg = args
     number_type = sig.args[1]
@@ -263,7 +263,7 @@ def timedelta_over_number(context, builder, sig, args):
                       builder.not_(cgutils.is_scalar_zero_or_nan(builder, number_arg)))
     with cgutils.if_likely(builder, ok):
         # Denominator is non-zero, non-NaN
-        if isinstance(number_type, types.Float):
+        if isinstance(number_type, types.BaseFloat):
             val = builder.sitofp(td_arg, number_arg.type)
             val = builder.fdiv(val, number_arg)
             val = _cast_to_timedelta(context, builder, val)
@@ -798,8 +798,8 @@ def _np_isnat_impl(context, builder, sig, args):
     return npyfuncs.np_datetime_isnat_impl(context, builder, sig, args)
 
 
-@lower_cast(types.NPDatetime, types.Integer)
-@lower_cast(types.NPTimedelta, types.Integer)
+@lower_cast(types.NPDatetime, types.BaseInteger)
+@lower_cast(types.NPTimedelta, types.BaseInteger)
 def _cast_npdatetime_int64(context, builder, fromty, toty, val):
     if toty.bitwidth != 64: # all date time types are 64 bit
         msg = f"Cannot cast {fromty} to {toty} as {toty} is not 64 bits wide."

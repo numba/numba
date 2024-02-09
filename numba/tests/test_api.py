@@ -27,7 +27,8 @@ class TestNumbaModule(TestCase):
         self.check_member("NumbaError")
         self.check_member("TypingError")
         # types
-        self.check_member("int32")
+        self.check_member("py_int64")
+        self.check_member("np_int32")
         # misc
         numba.__version__  # not in __all__
 

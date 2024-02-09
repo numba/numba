@@ -25,8 +25,8 @@ def print_item(ty, context, builder, val):
                               % (ty,))
 
 
-@print_item.register(types.Integer)
-@print_item.register(types.IntegerLiteral)
+@print_item.register(types.BaseInteger)
+@print_item.register(types.BaseIntegerLiteral)
 def int_print_impl(ty, context, builder, val):
     if ty in types.unsigned_domain:
         rawfmt = "%llu"
@@ -38,7 +38,7 @@ def int_print_impl(ty, context, builder, val):
     return rawfmt, [lld]
 
 
-@print_item.register(types.Float)
+@print_item.register(types.BaseFloat)
 def real_print_impl(ty, context, builder, val):
     lld = context.cast(builder, val, ty, types.float64)
     return "%f", [lld]

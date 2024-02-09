@@ -266,7 +266,7 @@ class _IternextResult(object):
         """
         Mark the iterator as exhausted.
         """
-        self._pairobj.second = self._context.get_constant(types.boolean, False)
+        self._pairobj.second = self._context.get_constant(types.py_bool, False)
 
     def set_valid(self, is_valid=True):
         """
@@ -274,7 +274,7 @@ class _IternextResult(object):
         be either a Python boolean or a LLVM inst).
         """
         if is_valid in (False, True):
-            is_valid = self._context.get_constant(types.boolean, is_valid)
+            is_valid = self._context.get_constant(types.py_bool, is_valid)
         self._pairobj.second = is_valid
 
     def yield_(self, value):
@@ -288,7 +288,7 @@ class _IternextResult(object):
         Return whether the iterator is marked valid.
         """
         return self._context.get_argument_value(self._builder,
-                                                types.boolean,
+                                                types.py_bool,
                                                 self._pairobj.second)
 
     def yielded_value(self):
@@ -366,7 +366,7 @@ def call_iternext(context, builder, iterator_type, val):
     reflecting the results.
     """
     itemty = iterator_type.yield_type
-    pair_type = types.Pair(itemty, types.boolean)
+    pair_type = types.Pair(itemty, types.py_bool)
     iternext_sig = typing.signature(pair_type, iterator_type)
     iternext_impl = context.get_function('iternext', iternext_sig)
     val = iternext_impl(builder, (val,))
@@ -380,7 +380,7 @@ def call_len(context, builder, ty, val):
     this type.
     """
     try:
-        len_impl = context.get_function(len, typing.signature(types.intp, ty,))
+        len_impl = context.get_function(len, typing.signature(types.py_intp, ty,))
     except NotImplementedError:
         return None
     else:

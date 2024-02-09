@@ -65,8 +65,8 @@ binarys_fastmath = {}
 binarys_fastmath['powf'] = 'fast_powf'
 
 
-@lower(math.isinf, types.Integer)
-@lower(math.isnan, types.Integer)
+@lower(math.isinf, types.BaseInteger)
+@lower(math.isnan, types.BaseInteger)
 def math_isinf_isnan_int(context, builder, sig, args):
     return context.get_constant(types.boolean, 0)
 
@@ -84,7 +84,7 @@ def maybe_fast_truediv(context, builder, sig, args):
         return res
 
 
-@lower(math.isfinite, types.Integer)
+@lower(math.isfinite, types.BaseInteger)
 def math_isfinite_int(context, builder, sig, args):
     return context.get_constant(types.boolean, 1)
 

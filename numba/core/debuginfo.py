@@ -9,7 +9,7 @@ from contextlib import contextmanager
 
 from llvmlite import ir
 from numba.core import cgutils, types
-from numba.core.datamodel.models import ComplexModel, UniTupleModel
+from numba.core.datamodel.models import BaseComplexModel, UniTupleModel
 from numba.core import config
 
 
@@ -130,7 +130,7 @@ class DIBuilder(AbstractDIBuilder):
             else:
                 # This is probably a known int/float scalar type
                 name = str(datamodel.fe_type)
-                if isinstance(datamodel.fe_type, types.Integer):
+                if isinstance(datamodel.fe_type, types.BaseInteger):
                     if datamodel.fe_type.signed:
                         ditok = 'DW_ATE_signed'
                     else:
@@ -142,7 +142,7 @@ class DIBuilder(AbstractDIBuilder):
                 'size': bitsize,
                 'encoding': ir.DIToken(ditok),
             })
-        elif isinstance(datamodel, ComplexModel):
+        elif isinstance(datamodel, BaseComplexModel):
             # TODO: Is there a better way of determining "this is a complex
             # number"?
             #

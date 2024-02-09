@@ -555,7 +555,7 @@ class TestSignatures(TestCase):
         check(typing.signature(i16, c64), (c64,), i16)
 
         msg = "invalid type in signature: expected a type instance"
-        check_error((types.Integer,), msg)
+        check_error((types.BaseInteger,), msg)
         check_error((None,), msg)
         check_error([], "invalid signature")
 

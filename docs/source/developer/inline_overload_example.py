@@ -20,7 +20,7 @@ def ol_bar_tuple(x):
 
 def cost_model(expr, caller, callee):
     # Only inline if the type of the argument is an Integer
-    return isinstance(caller.typemap[expr.args[0].name], types.Integer)
+    return isinstance(caller.typemap[expr.args[0].name], types.BaseInteger)
 
 
 @overload(bar, inline=cost_model)
@@ -45,14 +45,14 @@ def foo():
     # instance, hence the cost_model will be used to determine whether to
     # inline.
     # The function will be inlined as the value 100 is an IntegerLiteral which
-    # is an instance of a types.Integer as required by the cost_model function.
+    # is an instance of a types.BaseInteger as required by the cost_model function.
     b = bar(100)
 
     # This will also resolve via `ol_bar_scalar` as the argument is a
     # types.Number instance, again the cost_model will be used to determine
     # whether to inline.
     # The function will not be inlined as the complex value is not an instance
-    # of a types.Integer as required by the cost_model function.
+    # of a types.BaseInteger as required by the cost_model function.
     c = bar(300j)
 
     return a + b + c

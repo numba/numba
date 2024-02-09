@@ -45,7 +45,7 @@ def enum_value(context, builder, ty, val):
     return val
 
 
-@lower_cast(types.IntEnumMember, types.Integer)
+@lower_cast(types.IntEnumMember, types.BaseInteger)
 def int_enum_to_int(context, builder, fromty, toty, val):
     """
     Convert an IntEnum member to its raw integer value.

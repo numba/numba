@@ -419,7 +419,7 @@ for func in ['sum', 'argsort', 'nonzero', 'ravel']:
 # Numpy scalar constructors
 
 # Register np.int8, etc. as converters to the equivalent Numba types
-np_types = set(getattr(np, str(nb_type)) for nb_type in types.number_domain)
+np_types = set(getattr(np, str(nb_type).split('np_')[-1]) for nb_type in types.np_number_domain)
 np_types.add(np.bool_)
 # Those may or may not be aliases (depending on the Numpy build / version)
 np_types.add(np.intc)
@@ -430,7 +430,10 @@ np_types.add(np.uintp)
 
 def register_number_classes(register_global):
     for np_type in np_types:
-        nb_type = getattr(types, np_type.__name__)
+        if config.USE_LEGACY_TYPE_SYSTEM:
+            nb_type = getattr(types, np_type.__name__)
+        else:
+            nb_type = getattr(types, 'np_' + np_type.__name__)
 
         register_global(np_type, types.NumberClass(nb_type))
 
@@ -446,10 +449,10 @@ def parse_shape(shape):
     Given a shape, return the number of dimensions.
     """
     ndim = None
-    if isinstance(shape, types.Integer):
+    if isinstance(shape, types.BaseInteger):
         ndim = 1
     elif isinstance(shape, (types.Tuple, types.UniTuple)):
-        int_tys = (types.Integer, types.IntEnumMember)
+        int_tys = (types.BaseInteger, types.IntEnumMember)
         if all(isinstance(s, int_tys) for s in shape):
             ndim = len(shape)
     return ndim
@@ -605,7 +608,7 @@ class MatMulTyperMixin(object):
         if not all(x.dtype == a.dtype for x in all_args):
             raise TypingError("%s arguments must all have "
                               "the same dtype" % (self.func_name,))
-        if not isinstance(a.dtype, (types.Float, types.Complex)):
+        if not isinstance(a.dtype, (types.BaseFloat, types.BaseComplex)):
             raise TypingError("%s only supported on "
                               "float and complex arrays"
                               % (self.func_name,))
@@ -623,7 +626,7 @@ def _check_linalg_matrix(a, func_name):
     if not a.ndim == 2:
         raise TypingError("np.linalg.%s() only supported on 2-D arrays"
                           % func_name)
-    if not isinstance(a.dtype, (types.Float, types.Complex)):
+    if not isinstance(a.dtype, (types.BaseFloat, types.BaseComplex)):
         raise TypingError("np.linalg.%s() only supported on "
                           "float and complex arrays" % func_name)
 
@@ -678,7 +681,7 @@ class NdIndex(AbstractTemplate):
         else:
             shape = args
 
-        if all(isinstance(x, types.Integer) for x in shape):
+        if all(isinstance(x, types.BaseInteger) for x in shape):
             iterator_type = types.NumpyNdIndexType(len(shape))
             return signature(iterator_type, *args)
 

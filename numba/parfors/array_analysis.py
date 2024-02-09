@@ -160,7 +160,7 @@ def assert_equiv(typingctx, *val):
             types.ArrayCompatible,
             types.BaseTuple,
             types.SliceType,
-            types.Integer
+            types.BaseInteger
         ))
         for a in val[0][1:]
     )
@@ -1312,13 +1312,13 @@ class ArrayAnalysis(object):
             elif isinstance(inst.value, ir.Arg):
                 if (
                     isinstance(typ, types.containers.UniTuple)
-                    and isinstance(typ.dtype, types.Integer)
+                    and isinstance(typ.dtype, types.BaseInteger)
                 ):
                     shape = inst.value
                 elif (
                     isinstance(typ, types.containers.Tuple)
                     and all([isinstance(x,
-                            (types.Integer, types.IntegerLiteral))
+                            (types.BaseInteger, types.BaseIntegerLiteral))
                         for x in typ.types]
                     )
                 ):
@@ -1333,7 +1333,7 @@ class ArrayAnalysis(object):
                 else:
                     shape = None
             elif isinstance(shape, ir.Var) and isinstance(
-                self.typemap[shape.name], types.Integer
+                self.typemap[shape.name], types.BaseInteger
             ):
                 shape = (shape,)
             elif isinstance(shape, WrapIndexMeta):
@@ -1373,14 +1373,14 @@ class ArrayAnalysis(object):
                         equiv_set, lhs, typ.ndim, shape, post
                     )
             elif isinstance(typ, types.UniTuple):
-                if shape and isinstance(typ.dtype, types.Integer):
+                if shape and isinstance(typ.dtype, types.BaseInteger):
                     shape = self._gen_shape_call(
                         equiv_set, lhs, len(typ), shape, post
                     )
             elif (
                 isinstance(typ, types.containers.Tuple)
                 and all([isinstance(x,
-                        (types.Integer, types.IntegerLiteral))
+                        (types.BaseInteger, types.BaseIntegerLiteral))
                     for x in typ.types]
                 )
             ):
@@ -1463,8 +1463,8 @@ class ArrayAnalysis(object):
                 rhs_typ = self.typemap[cond_def.rhs.name]
                 if br is not None and (
                     (
-                        isinstance(lhs_typ, types.Integer)
-                        and isinstance(rhs_typ, types.Integer)
+                        isinstance(lhs_typ, types.BaseInteger)
+                        and isinstance(rhs_typ, types.BaseInteger)
                     )
                     or (
                         isinstance(lhs_typ, types.BaseTuple)
@@ -2383,7 +2383,7 @@ class ArrayAnalysis(object):
         assert len(args) > 0
         var = args[0]
         typ = self.typemap[var.name]
-        if isinstance(typ, types.Integer):
+        if isinstance(typ, types.BaseInteger):
             return ArrayAnalysis.AnalyzeResult(shape=(1,))
         elif isinstance(typ, types.ArrayCompatible) and equiv_set.has_shape(
             var

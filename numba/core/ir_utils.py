@@ -72,7 +72,7 @@ def mk_alloc(typingctx, typemap, calltypes, lhs, size_var, dtype, scope, loc,
     """
     out = []
     ndims = 1
-    size_typ = types.intp
+    size_typ = types.py_intp
     if isinstance(size_var, tuple):
         if len(size_var) == 1:
             size_var = size_var[0]
@@ -83,7 +83,7 @@ def mk_alloc(typingctx, typemap, calltypes, lhs, size_var, dtype, scope, loc,
             tuple_var = ir.Var(scope, mk_unique_var("$tuple_var"), loc)
             if typemap:
                 typemap[tuple_var.name] = types.containers.UniTuple(
-                    types.intp, ndims)
+                    types.py_intp, ndims)
             # constant sizes need to be assigned to vars
             new_sizes = [convert_size_to_var(s, typemap, scope, loc, out)
                          for s in size_var]
@@ -91,7 +91,7 @@ def mk_alloc(typingctx, typemap, calltypes, lhs, size_var, dtype, scope, loc,
             tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
             out.append(tuple_assign)
             size_var = tuple_var
-            size_typ = types.containers.UniTuple(types.intp, ndims)
+            size_typ = types.containers.UniTuple(types.py_intp, ndims)
     if hasattr(lhs_typ, "__allocate__"):
         return lhs_typ.__allocate__(
             typingctx,
@@ -183,7 +183,7 @@ def convert_size_to_var(size_var, typemap, scope, loc, nodes):
     if isinstance(size_var, int):
         new_size = ir.Var(scope, mk_unique_var("$alloc_size"), loc)
         if typemap:
-            typemap[new_size.name] = types.intp
+            typemap[new_size.name] = types.py_intp
         size_assign = ir.Assign(ir.Const(size_var, loc), new_size, loc)
         nodes.append(size_assign)
         return new_size
@@ -215,21 +215,21 @@ def mk_range_block(typemap, start, stop, step, calltypes, scope, loc):
     # range_call_var = call g_range_var(start, stop, step)
     range_call = ir.Expr.call(g_range_var, args, (), loc)
     calltypes[range_call] = typemap[g_range_var.name].get_call_type(
-        typing.Context(), [types.intp] * len(args), {})
-    #signature(types.range_state64_type, types.intp)
+        typing.Context(), [types.py_intp] * len(args), {})
+    #signature(types.range_state64_type, types.py_intp)
     range_call_var = ir.Var(scope, mk_unique_var("$range_c_var"), loc)
-    typemap[range_call_var.name] = types.iterators.RangeType(types.intp)
+    typemap[range_call_var.name] = types.iterators.RangeType(types.py_intp)
     range_call_assign = ir.Assign(range_call, range_call_var, loc)
     # iter_var = getiter(range_call_var)
     iter_call = ir.Expr.getiter(range_call_var, loc)
     calltypes[iter_call] = signature(types.range_iter64_type,
                                      types.range_state64_type)
     iter_var = ir.Var(scope, mk_unique_var("$iter_var"), loc)
-    typemap[iter_var.name] = types.iterators.RangeIteratorType(types.intp)
+    typemap[iter_var.name] = types.iterators.RangeIteratorType(types.py_intp)
     iter_call_assign = ir.Assign(iter_call, iter_var, loc)
     # $phi = iter_var
     phi_var = ir.Var(scope, mk_unique_var("$phi"), loc)
-    typemap[phi_var.name] = types.iterators.RangeIteratorType(types.intp)
+    typemap[phi_var.name] = types.iterators.RangeIteratorType(types.py_intp)
     phi_assign = ir.Assign(iter_var, phi_var, loc)
     # jump to header
     jump_header = ir.Jump(-1, loc)
@@ -247,7 +247,7 @@ def _mk_range_args(typemap, start, stop, step, scope, loc):
         assert isinstance(stop, int)
         g_stop_var = ir.Var(scope, mk_unique_var("$range_stop"), loc)
         if typemap:
-            typemap[g_stop_var.name] = types.intp
+            typemap[g_stop_var.name] = types.py_intp
         stop_assign = ir.Assign(ir.Const(stop, loc), g_stop_var, loc)
         nodes.append(stop_assign)
     if start == 0 and step == 1:
@@ -259,7 +259,7 @@ def _mk_range_args(typemap, start, stop, step, scope, loc):
         assert isinstance(start, int)
         g_start_var = ir.Var(scope, mk_unique_var("$range_start"), loc)
         if typemap:
-            typemap[g_start_var.name] = types.intp
+            typemap[g_start_var.name] = types.py_intp
         start_assign = ir.Assign(ir.Const(start, loc), g_start_var, loc)
         nodes.append(start_assign)
     if step == 1:
@@ -271,7 +271,7 @@ def _mk_range_args(typemap, start, stop, step, scope, loc):
         assert isinstance(step, int)
         g_step_var = ir.Var(scope, mk_unique_var("$range_step"), loc)
         if typemap:
-            typemap[g_step_var.name] = types.intp
+            typemap[g_step_var.name] = types.py_intp
         step_assign = ir.Assign(ir.Const(step, loc), g_step_var, loc)
         nodes.append(step_assign)
 
@@ -293,17 +293,17 @@ def mk_loop_header(typemap, phi_var, calltypes, scope, loc):
     # iternext_var = iternext(phi_var)
     iternext_var = ir.Var(scope, mk_unique_var("$iternext_var"), loc)
     typemap[iternext_var.name] = types.containers.Pair(
-        types.intp, types.boolean)
+        types.py_intp, types.boolean)
     iternext_call = ir.Expr.iternext(phi_var, loc)
     calltypes[iternext_call] = signature(
         types.containers.Pair(
-            types.intp,
+            types.py_intp,
             types.boolean),
         types.range_iter64_type)
     iternext_assign = ir.Assign(iternext_call, iternext_var, loc)
     # pair_first_var = pair_first(iternext_var)
     pair_first_var = ir.Var(scope, mk_unique_var("$pair_first_var"), loc)
-    typemap[pair_first_var.name] = types.intp
+    typemap[pair_first_var.name] = types.py_intp
     pair_first_call = ir.Expr.pair_first(iternext_var, loc)
     pair_first_assign = ir.Assign(pair_first_call, pair_first_var, loc)
     # pair_second_var = pair_second(iternext_var)
@@ -313,7 +313,7 @@ def mk_loop_header(typemap, phi_var, calltypes, scope, loc):
     pair_second_assign = ir.Assign(pair_second_call, pair_second_var, loc)
     # phi_b_var = pair_first_var
     phi_b_var = ir.Var(scope, mk_unique_var("$phi"), loc)
-    typemap[phi_b_var.name] = types.intp
+    typemap[phi_b_var.name] = types.py_intp
     phi_b_assign = ir.Assign(pair_first_var, phi_b_var, loc)
     # branch pair_second_var body_block out_block
     branch = ir.Branch(pair_second_var, -1, -1, loc)

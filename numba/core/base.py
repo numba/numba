@@ -1013,7 +1013,7 @@ class BaseContext(object):
         """
         Get a helper object to access the given complex numbers' members.
         """
-        assert isinstance(typ, types.Complex), typ
+        assert isinstance(typ, types.BaseComplex), typ
         return self.make_helper(builder, typ, value)
 
     def make_tuple(self, builder, typ, values):
@@ -1054,18 +1054,18 @@ class BaseContext(object):
             rt_addr = None
 
         # Handle shape
-        llintp = self.get_value_type(types.intp)
-        shapevals = [self.get_constant(types.intp, s) for s in ary.shape]
+        llintp = self.get_value_type(types.py_intp)
+        shapevals = [self.get_constant(types.py_intp, s) for s in ary.shape]
         cshape = cgutils.create_constant_array(llintp, shapevals)
 
         # Handle strides
-        stridevals = [self.get_constant(types.intp, s) for s in ary.strides]
+        stridevals = [self.get_constant(types.py_intp, s) for s in ary.strides]
         cstrides = cgutils.create_constant_array(llintp, stridevals)
 
         # Create array structure
         cary = self.make_array(typ)(self, builder)
 
-        intp_itemsize = self.get_constant(types.intp, ary.dtype.itemsize)
+        intp_itemsize = self.get_constant(types.py_intp, ary.dtype.itemsize)
         self.populate_array(cary,
                             data=builder.bitcast(data, cary.data.type),
                             shape=cshape,

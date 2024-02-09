@@ -614,7 +614,7 @@ def set_num_threads(n):
 @overload(set_num_threads)
 def ol_set_num_threads(n):
     _launch_threads()
-    if not isinstance(n, types.Integer):
+    if not isinstance(n, types.BaseInteger):
         msg = "The number of threads specified must be an integer"
         raise errors.TypingError(msg)
 
@@ -741,7 +741,7 @@ def get_parallel_chunksize():
 @overload(set_parallel_chunksize)
 def ol_set_parallel_chunksize(n):
     _launch_threads()
-    if not isinstance(n, types.Integer):
+    if not isinstance(n, types.BaseInteger):
         msg = "The parallel chunksize must be an integer"
         raise errors.TypingError(msg)
 

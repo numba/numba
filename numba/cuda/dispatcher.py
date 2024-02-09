@@ -410,7 +410,7 @@ class _Kernel(serialize.ReduceMixin):
             for ax in range(devary.ndim):
                 kernelargs.append(c_intp(devary.strides[ax]))
 
-        elif isinstance(ty, types.Integer):
+        elif isinstance(ty, types.BaseInteger):
             cval = getattr(ctypes, "c_%s" % ty)(val)
             kernelargs.append(cval)
 

@@ -388,7 +388,7 @@ class PyLower(BaseLower):
             self.check_error(tup)
             # Check tuple size is as expected
             tup_size = self.pyapi.tuple_size(tup)
-            expected_size = self.context.get_constant(types.intp, expr.count)
+            expected_size = self.context.get_constant(types.py_intp, expr.count)
             has_wrong_size = self.builder.icmp_unsigned('!=',
                                                tup_size, expected_size)
             with cgutils.if_unlikely(self.builder, has_wrong_size):
@@ -402,7 +402,7 @@ class PyLower(BaseLower):
             return res
         elif expr.op == 'static_getitem':
             value = self.loadvar(expr.value.name)
-            index = self.context.get_constant(types.intp, expr.index)
+            index = self.context.get_constant(types.py_intp, expr.index)
             indexobj = self.pyapi.long_from_ssize_t(index)
             self.check_error(indexobj)
             res = self.pyapi.object_getitem(value, indexobj)

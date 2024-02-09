@@ -277,7 +277,7 @@ class TestLiteralDispatch(TestCase):
 
         @overload(do_this)
         def ov_do_this(x, y):
-            if isinstance(x, types.Integer):
+            if isinstance(x, types.BaseInteger):
                 # At this point, `x` can be a literal or not
                 return lambda x, y: hidden(x, y)
 
@@ -308,7 +308,7 @@ class TestLiteralDispatch(TestCase):
 
         @overload(do_this)
         def ov_do_this(x, y):
-            if isinstance(y, types.IntegerLiteral):
+            if isinstance(y, types.BaseIntegerLiteral):
                 # This error is however suppressed because a non-literal
                 # version is valid.
                 raise errors.NumbaValueError("oops")

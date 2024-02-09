@@ -1444,7 +1444,7 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
         # Create a tuple to pass to empty below to specify the new array size.
         size_var = scope.redefine("size", loc)
         size_tuple_var = scope.redefine("size_tuple", loc)
-        size_typ = types.intp
+        size_typ = types.py_intp
         size_tuple_typ = types.UniTuple(size_typ, 1)
         typemap[size_var.name] = size_typ
         typemap[size_tuple_var.name] = size_tuple_typ
@@ -1502,7 +1502,7 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
         # Fill in the new empty array one-by-one.
         for i in range(size):
             index_var = scope.redefine("index", loc)
-            index_typ = types.intp
+            index_typ = types.py_intp
             typemap[index_var.name] = index_typ
             stmts.append(
                 _new_definition(func_ir, index_var, ir.Const(i, loc), loc))

@@ -435,7 +435,7 @@ for example:
                 def impl(li):
                     return 3
             return impl
-        elif isinstance(li, types.IntegerLiteral):
+        elif isinstance(li, types.BaseIntegerLiteral):
             value = li.literal_value
             if value == 0xca11ab1e:
                 def impl(li):

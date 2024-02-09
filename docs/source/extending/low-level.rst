@@ -70,7 +70,7 @@ Lowering
 --------
 
 The following decorators all take a type specification of some kind.
-A type specification is usually a type class (such as ``types.Float``)
+A type specification is usually a type class (such as ``types.BaseFloat``)
 or a specific type instance (such as ``types.float64``).  Some values
 have a special meaning:
 

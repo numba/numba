@@ -200,7 +200,7 @@ class TestZeroCounts(TestCase):
         func_name = func._name
 
         unsupported_types = filter(
-            lambda x: not isinstance(x, types.Integer), types.number_domain
+            lambda x: not isinstance(x, types.BaseInteger), types.number_domain
         )
         for typ in sorted(unsupported_types, key=str):
             with self.assertRaises(TypingError) as e:

@@ -391,7 +391,7 @@ def arange_parallel_impl(return_type, *args, dtype=None):
     def arange_3_dtype(start, stop, step, dtype):
         return np.arange(start, stop, step, dtype)
 
-    if any(isinstance(a, types.Complex) for a in args):
+    if any(isinstance(a, types.BaseComplex) for a in args):
         def arange_4(start, stop, step, dtype):
             numba.parfors.parfor.init_prange()
             nitems_c = (stop - start) / step
@@ -1785,7 +1785,7 @@ class ConvertSetItemPass:
                     # Handle A[boolean_array] = <scalar or array>
                     if isinstance(target_typ, types.npytypes.Array):
                         if (isinstance(index_typ, types.npytypes.Array) and
-                            isinstance(index_typ.dtype, types.Boolean) and
+                            isinstance(index_typ.dtype, types.BaseBoolean) and
                             target_typ.ndim == index_typ.ndim):
                             # RHS is a scalar number
                             if isinstance(value_typ, types.Number):
@@ -2546,7 +2546,7 @@ class ConvertLoopPass:
                             in_arr = args[0]
                         assert(isinstance(in_arr, ir.Var))
                         in_arr_typ = pass_states.typemap[in_arr.name]
-                        if isinstance(in_arr_typ, types.Integer):
+                        if isinstance(in_arr_typ, types.BaseInteger):
                             index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
                             pass_states.typemap[index_var.name] = types.uintp
                             loops = [LoopNest(index_var, 0, in_arr, 1)]
@@ -2853,7 +2853,7 @@ def _find_mask(typemap, func_ir, arr_def):
     ndim = value_typ.ndim
     require(isinstance(value_typ, types.npytypes.Array))
     if (isinstance(index_typ, types.npytypes.Array) and
-        isinstance(index_typ.dtype, types.Boolean) and
+        isinstance(index_typ.dtype, types.BaseBoolean) and
         ndim == index_typ.ndim):
         return value, index, index_typ.dtype, None
     elif isinstance(index_typ, types.BaseTuple):
@@ -2868,18 +2868,18 @@ def _find_mask(typemap, func_ir, arr_def):
             index_typ = typemap[ind.name]
             # Handle boolean mask
             if (isinstance(index_typ, types.npytypes.Array) and
-                isinstance(index_typ.dtype, types.Boolean)):
+                isinstance(index_typ.dtype, types.BaseBoolean)):
                 mask_var = ind
                 mask_typ = index_typ.dtype
                 mask_indices.append(None)
             # Handle integer array selector
             elif (isinstance(index_typ, types.npytypes.Array) and
-                isinstance(index_typ.dtype, types.Integer)):
+                isinstance(index_typ.dtype, types.BaseInteger)):
                 mask_var = ind
                 mask_typ = index_typ.dtype
                 mask_indices.append(None)
             # Handle integer index
-            elif isinstance(index_typ, types.Integer):
+            elif isinstance(index_typ, types.BaseInteger):
                 count_consts += 1
                 mask_indices.append(ind)
 

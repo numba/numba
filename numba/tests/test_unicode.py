@@ -554,7 +554,7 @@ class TestUnicode(BaseTest):
         pyfunc = expandtabs_with_tabsize_usecase
         cfunc = njit(pyfunc)
 
-        accepted_types = (types.Integer, int)
+        accepted_types = (types.BaseInteger, int)
         with self.assertRaises(TypingError) as raises:
             cfunc('\t', 2.4)
         msg = '"tabsize" must be {}, not float'.format(accepted_types)
@@ -879,7 +879,7 @@ class TestUnicode(BaseTest):
         pyfunc = find_with_start_end_usecase
         cfunc = njit(pyfunc)
 
-        accepted = (types.Integer, types.NoneType)
+        accepted = (types.BaseInteger, types.NoneType)
         for start, end, name in [(0.1, 5, 'start'), (0, 0.5, 'end')]:
             with self.assertRaises(TypingError) as raises:
                 cfunc('ascii', 'sci', start, end)
@@ -1097,7 +1097,7 @@ class TestUnicode(BaseTest):
     def test_rfind_wrong_start_end(self):
         cfunc = njit(rfind_with_start_end_usecase)
 
-        accepted_types = (types.Integer, types.NoneType)
+        accepted_types = (types.BaseInteger, types.NoneType)
         for s in UNICODE_EXAMPLES:
             for sub_str in ['', 'xx', s[:-2], s[3:], s]:
                 # test wrong start
@@ -1117,7 +1117,7 @@ class TestUnicode(BaseTest):
     def test_rfind_wrong_start_end_optional(self):
         s = UNICODE_EXAMPLES[0]
         sub_str = s[1:-1]
-        accepted_types = (types.Integer, types.NoneType)
+        accepted_types = (types.BaseInteger, types.NoneType)
         msg = 'must be {}'.format(accepted_types)
 
         def try_compile_wrong_start_optional(*args):
@@ -1277,7 +1277,7 @@ class TestUnicode(BaseTest):
                             self.assertIn(msg, str(raises.exception))
 
     def test_index_rindex_exception_noninteger_start_end(self):
-        accepted = (types.Integer, types.NoneType)
+        accepted = (types.BaseInteger, types.NoneType)
         pyfuncs = [index_with_start_end_usecase, rindex_with_start_end_usecase]
         for pyfunc in pyfuncs:
             cfunc = njit(pyfunc)
@@ -1583,7 +1583,7 @@ class TestUnicode(BaseTest):
         pyfunc = splitlines_with_keepends_usecase
         cfunc = njit(pyfunc)
 
-        accepted_types = (types.Integer, int, types.Boolean, bool)
+        accepted_types = (types.BaseInteger, int, types.BaseBoolean, bool)
         for ty, keepends in (('none', None), ('unicode_type', 'None')):
             with self.assertRaises(TypingError) as raises:
                 cfunc('\n', keepends)
@@ -1636,7 +1636,7 @@ class TestUnicode(BaseTest):
         pyfunc = rsplit_with_maxsplit_usecase
         cfunc = njit(pyfunc)
 
-        accepted_types = (types.Integer, int)
+        accepted_types = (types.BaseInteger, int)
         for sep in [' ', None]:
             with self.assertRaises(TypingError) as raises:
                 cfunc('a', sep, 2.4)
