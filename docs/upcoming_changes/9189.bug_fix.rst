@@ -1,5 +1,5 @@
 ``numpy.searchsorted`` and ``numpy.sort`` behaviour updates
-===========================================================
+-----------------------------------------------------------
 
 * ``numpy.searchsorted`` implementation updated to produce
   identical outputs to numpy for a wider set of use cases,

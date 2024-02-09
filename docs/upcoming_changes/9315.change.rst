@@ -1,5 +1,5 @@
 Semantic differences due to Python 3.12 variable shadowing in comprehensions
-============================================================================
+----------------------------------------------------------------------------
 
 Python 3.12 introduced a new bytecode ``LOAD_FAST_AND_CLEAR`` that is only used 
 in comprehensions. It has dynamic semantics that Numba cannot model. 

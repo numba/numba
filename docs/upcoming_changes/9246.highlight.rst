@@ -1,5 +1,5 @@
 Python 3.12 Support
-===================
+-------------------
 
 The standout feature of this release is the official support for Python 3.12 
 in Numba.

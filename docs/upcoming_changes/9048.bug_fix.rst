@@ -1,5 +1,5 @@
 Dynamically Allocate Parfor Schedules
-=====================================
+-------------------------------------
 
 This PR fixes an issue where a parallel region is executed in a loop
 many times.  The previous code used an alloca to allocate the parfor
