@@ -224,7 +224,7 @@ class _EnvReloader(object):
         USE_RVSDG_FRONTEND = _readenv("NUMBA_USE_RVSDG_FRONTEND", int, 0)
 
         # Type casting rules selection
-        USE_LEGACY_TYPE_SYSTEM = _readenv("NUMBA_USE_LEGACY_TYPES", int, 1)
+        USE_LEGACY_TYPE_SYSTEM = _readenv("NUMBA_USE_LEGACY_TYPE_SYSTEM", int, 0)
 
         # developer mode produces full tracebacks, disables help instructions
         DEVELOPER_MODE = _readenv("NUMBA_DEVELOPER_MODE", int, 0)
