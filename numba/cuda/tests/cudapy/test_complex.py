@@ -61,7 +61,7 @@ def compile_scalar_func(pyfunc, argtypes, restype):
     return kernel_wrapper
 
 
-class ComplexTest(CUDATestCase):
+class BaseComplexTest(CUDATestCase):
 
     def basic_values(self):
         reals = [-0.0, +0.0, 1, -1, +1.5, -3.5,
@@ -112,7 +112,7 @@ class ComplexTest(CUDATestCase):
     run_binary = run_func
 
 
-class TestComplex(ComplexTest):
+class TestComplex(BaseComplexTest):
 
     def check_real_image(self, pyfunc):
         values = self.basic_values()
@@ -135,7 +135,7 @@ class TestComplex(ComplexTest):
                        values)
 
 
-class TestCMath(ComplexTest):
+class TestCMath(BaseComplexTest):
     """
     Tests for cmath module support.
     """
