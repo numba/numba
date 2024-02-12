@@ -198,8 +198,8 @@ def _prng_random_hash(tyctx):
                           'p3': _Py_uhash_t,
                           'p4': _Py_uhash_t,
                           '_PyHASH_MODULUS': _Py_uhash_t,
-                          '_PyHASH_BITS': types.py_int32,
-                          '_PyLong_SHIFT': types.py_int32,})
+                          '_PyHASH_BITS': types.c_int32,
+                          '_PyLong_SHIFT': types.c_int32,})
 def _long_impl(val):
     # This function assumes val came from a long int repr with val being a
     # uint64_t this means having to split the input into PyLong_SHIFT size

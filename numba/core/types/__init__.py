@@ -100,7 +100,7 @@ if config.USE_LEGACY_TYPE_SYSTEM: # type: ignore
 
     c_int8 = np_int8 = int8
     c_int16 = np_int16 = int16
-    c_int32 = py_int32 = np_int32 = int32
+    c_int32 = np_int32 = int32
     c_int64 = py_int64 = np_int64 = int64
     c_intp = py_intp = np_intp = intp
 
@@ -255,10 +255,9 @@ else:
     ### Python Datatypes ###
     # Python Integers
     py_bool = PythonBoolean('py_bool')
-    py_int32 = PythonInteger('py_int32')
     py_int64 = PythonInteger('py_int64')
 
-    py_intp = py_int32 if utils.MACHINE_BITS == 32 else py_int64
+    py_intp = py_int64
 
     # Python Float
     py_float64 = PythonFloat('py_float64')
@@ -266,15 +265,13 @@ else:
     # Python Complex
     py_complex128 = PythonComplex('py_complex128', py_float64)
 
-    py_signed_domain = frozenset([py_int32, py_int64])
+    py_signed_domain = frozenset([py_int64])
     py_integer_domain = py_signed_domain
     py_real_domain = frozenset([py_float64])
     py_complex_domain = frozenset([py_complex128])
     py_number_domain = py_real_domain | py_integer_domain | py_complex_domain
 
-    py_range_iter32_type = RangeIteratorType(py_int32)
     py_range_iter64_type = RangeIteratorType(py_int64)
-    py_range_state32_type = RangeType(py_int32)
     py_range_state64_type = RangeType(py_int64)
 
     ### NumPy Datatypes ###
@@ -336,7 +333,6 @@ else:
     np_ulonglong = _make_unsigned(np.longlong)
 
     all_str = '''
-    py_int32
     py_int64
     py_intp
     np_int8

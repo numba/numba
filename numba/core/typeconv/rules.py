@@ -61,15 +61,12 @@ def _init_casting_rules_new(tm):
     tcr = TypeCastingRules(tm)
     # Python to NumPy conversions
     tcr.safe(types.py_bool, types.np_bool_)
-    tcr.safe(types.py_int32, types.np_int32)
     tcr.safe(types.py_int64, types.np_int64)
     tcr.safe(types.py_float64, types.np_float64)
     tcr.safe(types.py_complex128, types.np_complex128)
 
     # Pure Python typecasting
     tcr.promote_unsafe(types.py_bool, types.py_intp)
-    tcr.promote_unsafe(types.py_int32, types.py_int64)
-    tcr.promote_unsafe(types.py_int32, types.py_float64)
     tcr.promote_unsafe(types.py_int64, types.py_float64)
     tcr.promote_unsafe(types.py_float64, types.py_complex128)
     
