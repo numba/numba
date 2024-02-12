@@ -73,19 +73,22 @@ class Slice(ConcreteTemplate):
 @infer_global(internal_prange, typing_key=internal_prange)
 class Range(ConcreteTemplate):
     cases = [
-        signature(types.np_range_state32_type, types.np_int32),
-        signature(types.np_range_state32_type, types.np_int32, types.np_int32),
-        signature(types.np_range_state32_type, types.np_int32, types.np_int32,
-                  types.np_int32),
-        signature(types.np_range_state64_type, types.np_int64),
-        signature(types.np_range_state64_type, types.np_int64, types.np_int64),
-        signature(types.np_range_state64_type, types.np_int64, types.np_int64,
-                  types.np_int64),
-        signature(types.np_unsigned_range_state64_type, types.np_uint64),
-        signature(types.np_unsigned_range_state64_type, types.np_uint64, types.np_uint64),
-        signature(types.np_unsigned_range_state64_type, types.np_uint64, types.np_uint64,
-                  types.np_uint64),
+        signature(types.range_state64_type, types.py_int64),
+        signature(types.range_state64_type, types.py_int64, types.py_int64),
+        signature(types.range_state64_type, types.py_int64, types.py_int64,
+                types.py_int64),
     ]
+    if config.USE_LEGACY_TYPE_SYSTEM:
+        cases += [
+            signature(types.range_state32_type, types.int32),
+            signature(types.range_state32_type, types.int32, types.int32),
+            signature(types.range_state32_type, types.int32, types.int32,
+                    types.int32),
+            signature(types.unsigned_range_state64_type, types.uint64),
+            signature(types.unsigned_range_state64_type, types.uint64, types.uint64),
+            signature(types.unsigned_range_state64_type, types.uint64, types.uint64,
+                    types.uint64),
+        ]
 
 
 @infer

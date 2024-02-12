@@ -4,7 +4,7 @@ Implementation of the range object for fixed-size integers.
 
 import operator
 
-from numba import prange
+from numba import prange, config
 from numba.core import types, cgutils, errors
 from numba.cpython.listobj import ListIterInstance
 from numba.np.arrayobj import make_array
@@ -161,12 +161,16 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
                 builder.store(builder.sub(count, one, flags=["nsw"]), countptr)
                 builder.store(builder.add(value, self.step), self.iter)
 
-
-range_impl_map = {
-    types.np_int32 : (types.np_range_state32_type, types.np_range_iter32_type),
-    types.np_int64 : (types.np_range_state64_type, types.np_range_iter64_type),
-    types.np_uint64 : (types.np_unsigned_range_state64_type, types.np_unsigned_range_iter64_type)
-}
+if config.USE_LEGACY_TYPE_SYSTEM:
+    range_impl_map = {
+        types.int32 : (types.range_state32_type, types.range_iter32_type),
+        types.int64 : (types.range_state64_type, types.range_iter64_type),
+        types.uint64 : (types.unsigned_range_state64_type, types.unsigned_range_iter64_type)
+    }
+else:
+    range_impl_map = {
+        types.py_int64 : (types.range_state64_type, types.range_iter64_type),
+    }
 
 for int_type, state_types in range_impl_map.items():
     make_range_impl(int_type, *state_types)
