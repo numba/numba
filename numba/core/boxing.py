@@ -66,6 +66,7 @@ if config.USE_LEGACY_TYPE_SYSTEM:
         if typ.bitwidth <= 32:
             dbval = c.builder.fpext(val, c.pyapi.double)
         else:
+            assert typ == types.float64
             dbval = val
         return c.pyapi.float_from_double(dbval)
 
@@ -78,6 +79,7 @@ if config.USE_LEGACY_TYPE_SYSTEM:
             val = c.builder.fptrunc(dbval,
                                     c.context.get_argument_type(typ))
         else:
+            assert typ == types.float64
             val = dbval
         return NativeValue(val, is_error=c.pyapi.c_api_error())
 
@@ -128,6 +130,7 @@ else:
         np_scalar_constructor = c.pyapi.object_getattr_string(numpy_module, type_str)
         np_scalar = c.pyapi.call_function_objargs(np_scalar_constructor, (py_scalar,))
 
+        c.pyapi.decref(numpy_module)
         c.pyapi.decref(np_scalar_constructor)
         c.pyapi.decref(py_scalar)
 
