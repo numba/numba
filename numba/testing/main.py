@@ -615,11 +615,16 @@ class ParallelTestResult(runner.TextTestResult):
     A TestResult able to inject results from other results.
     """
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.test_runtime = 0.0
+
     def add_results(self, result):
         """
         Add the results from the other *result* to this result.
         """
         self.stream.write(result.stream.getvalue())
+        self.test_runtime += result.test_runtime
         self.stream.flush()
         self.testsRun += result.testsRun
         self.failures.extend(result.failures)
@@ -637,7 +642,7 @@ class _MinimalResult(object):
     __slots__ = (
         'failures', 'errors', 'skipped', 'expectedFailures',
         'unexpectedSuccesses', 'stream', 'shouldStop', 'testsRun',
-        'test_id')
+        'test_id', 'test_runtime')
 
     def fixup_case(self, case):
         """
@@ -646,7 +651,7 @@ class _MinimalResult(object):
         # Python 3.3 doesn't reset this one.
         case._outcomeForDoCleanups = None
 
-    def __init__(self, original_result, test_id=None):
+    def __init__(self, original_result, test_id=None, test_runtime=None):
         for attr in self.__slots__:
             setattr(self, attr, getattr(original_result, attr, None))
         for case, _ in self.expectedFailures:
@@ -656,7 +661,7 @@ class _MinimalResult(object):
         for case, _ in self.failures:
             self.fixup_case(case)
         self.test_id = test_id
-
+        self.test_runtime = test_runtime
 
 class _FakeStringIO(object):
     """
@@ -696,11 +701,13 @@ class _MinimalRunner(object):
         signals.registerResult(result)
         result.failfast = runner.failfast
         result.buffer = runner.buffer
+        start_time = time.perf_counter()
         with self.cleanup_object(test):
             test(result)
+        end_time = time.perf_counter()
         # HACK as cStringIO.StringIO isn't picklable in 2.x
         result.stream = _FakeStringIO(result.stream.getvalue())
-        return _MinimalResult(result, test.id())
+        return _MinimalResult(result, test.id(), test_runtime=end_time - start_time)
 
     @contextlib.contextmanager
     def cleanup_object(self, test):
@@ -827,4 +834,6 @@ class ParallelTestRunner(runner.TextTestRunner):
                                             len(self._stests)))
         # This will call self._run_inner() on the created result object,
         # and print out the detailed test results at the end.
-        return super(ParallelTestRunner, self).run(self._run_inner)
+        result = super(ParallelTestRunner, self).run(self._run_inner)
+        self.stream.write(f"Total test runtime: {result.test_runtime}\n")
+        return result
