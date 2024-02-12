@@ -177,8 +177,8 @@ else:
         bitwidth = choose_result_bitwidth(*inputs)
         signed = any(tp.signed for tp in inputs)
 
-        # If any integer is a numpy integer, promotion should be to the
-        # respective numpy type.
+        # If any integer is a NumPy integer, promotion should be to the
+        # respective NumPy type.
         if any('np' in tp.name for tp in inputs):
             return types.NumPyInteger.from_bitwidth(bitwidth, signed)
         

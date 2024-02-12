@@ -433,7 +433,7 @@ def register_number_classes(register_global):
         if config.USE_LEGACY_TYPE_SYSTEM:
             nb_type = getattr(types, np_type.__name__)
         else:
-            nb_type = getattr(types, 'np_' + np_type.__name__)
+            nb_type = getattr(types, f'np_{np_type.__name__}')
 
         register_global(np_type, types.NumberClass(nb_type))
 

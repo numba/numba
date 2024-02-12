@@ -1,4 +1,4 @@
-Added initial implemantation for a new type system.
+Added initial implementation for a new type system.
 ===================================================
 
 This adds a new type system that will allow Numba to
@@ -6,10 +6,10 @@ differentiate between Python and NumPy scalars.
 
 This has been achieved as follows:
 
-- Retaining Numba's old type system as default.
-- Adds a config flag USE_LEGACY_TYPE_SYSTEM set to `1`/ `on` by default.
-  Switching it to `0` / `off` will activate new type system.
-- Within the new type system, the python and numpy scalars will be treated
-  and returned seperately as different entities through JIT compiled functions. 
+- Retain Numba's old type system as default.
+- Add a config flag `USE_LEGACY_TYPE_SYSTEM` set to `1` (on) by default.
+  Switching it to `0` (off) will activate new type system.
+- Within the new type system, Python and NumPy scalars will be treated
+  and returned separately as different entities through JIT compiled functions. 
 - Additionally basic binary operations such as addition/subtraction can be
   performed with the newly added types.

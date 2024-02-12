@@ -59,7 +59,7 @@ if config.USE_LEGACY_TYPE_SYSTEM:
             c.pyapi.decref(longobj)
             c.builder.store(c.builder.trunc(llval, ll_type), val)
         return NativeValue(c.builder.load(val),
-                        is_error=c.pyapi.c_api_error())
+                           is_error=c.pyapi.c_api_error())
 
     @box(types.Float)
     def box_float(typ, val, c):
@@ -176,7 +176,7 @@ else:
             c.pyapi.decref(longobj)
             c.builder.store(c.builder.trunc(llval, ll_type), val)
         return NativeValue(c.builder.load(val),
-                        is_error=c.pyapi.c_api_error())
+                           is_error=c.pyapi.c_api_error())
 
     @box(types.PythonInteger)
     def box_py_integer(typ, val, c):
