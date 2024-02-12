@@ -1,3 +1,6 @@
+"""
+    Type definitions for NumPy types.
+"""
 
 import numpy as np
 

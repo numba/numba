@@ -1,3 +1,6 @@
+"""
+    Type definitions for machine types.
+"""
 
 from .utils import parse_integer_bitwidth, parse_integer_signed
 from .scalars import (Integer, IntegerLiteral, Boolean,

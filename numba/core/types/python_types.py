@@ -1,3 +1,6 @@
+"""
+    Type definitions for Python types.
+"""
 
 from .abstract import Literal
 from .utils import parse_integer_bitwidth, parse_integer_signed
