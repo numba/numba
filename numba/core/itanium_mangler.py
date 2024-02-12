@@ -45,6 +45,9 @@ PREFIX = "_Z"
 # https://itanium-cxx-abi.github.io/cxx-abi/abi.html#mangling-builtin
 N2CODE = {
     types.void: 'v',
+    types.py_bool: 'b',
+    types.py_int64: 'x',
+    types.py_float64: 'd',
     types.np_bool_: 'b',
     types.np_uint8: 'h',
     types.np_int8: 'a',
