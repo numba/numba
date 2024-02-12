@@ -231,6 +231,7 @@ else:
     c_uintp = c_uint32 if utils.MACHINE_BITS == 32 else c_uint64
 
     # Machine Floats
+    c_float16 = MachineFloat('c_float16')
     c_float32 = MachineFloat('c_float32')
     c_float64 = MachineFloat('c_float64')
 
