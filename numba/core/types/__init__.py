@@ -119,13 +119,6 @@ if config.USE_LEGACY_TYPE_SYSTEM: # type: ignore
     py_complex_domain = np_complex_domain = complex_domain
     py_number_domain = np_number_domain = number_domain
 
-    py_range_iter32_type = np_range_iter32_type = range_iter32_type
-    py_range_iter64_type = np_range_iter64_type = range_iter64_type
-    np_unsigned_range_iter64_type = unsigned_range_iter64_type
-    py_range_state32_type = np_range_state32_type = range_state32_type
-    py_range_state64_type = np_range_state64_type = range_state64_type
-    np_unsigned_range_state64_type = unsigned_range_state64_type
-
     # Aliases to NumPy type names
 
     b1 = bool_
@@ -271,8 +264,8 @@ else:
     py_complex_domain = frozenset([py_complex128])
     py_number_domain = py_real_domain | py_integer_domain | py_complex_domain
 
-    py_range_iter64_type = RangeIteratorType(py_int64)
-    py_range_state64_type = RangeType(py_int64)
+    range_iter64_type = RangeIteratorType(py_int64)
+    range_state64_type = RangeType(py_int64)
 
     ### NumPy Datatypes ###
     # Numpy Integers
@@ -304,14 +297,6 @@ else:
     np_real_domain = frozenset([np_float32, np_float64])
     np_complex_domain = frozenset([np_complex64, np_complex128])
     np_number_domain = np_real_domain | np_integer_domain | np_complex_domain
-
-    # NumPy ranges
-    np_range_iter32_type = RangeIteratorType(np_int32)
-    np_range_iter64_type = RangeIteratorType(np_int64)
-    np_unsigned_range_iter64_type = RangeIteratorType(np_uint64)
-    np_range_state32_type = RangeType(np_int32)
-    np_range_state64_type = RangeType(np_int64)
-    np_unsigned_range_state64_type = RangeType(np_uint64)
 
     # NumPy globals
     np_float_ = np_float32
