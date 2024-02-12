@@ -300,8 +300,7 @@ else:
     np_number_domain = np_real_domain | np_integer_domain | np_complex_domain
 
     # NumPy globals
-    np_float_ = np_float32
-    np_double = np_float64
+    np_double = np_float_ = np_float64
     _make_signed = lambda x: globals()["np_int%d" % (np.dtype(x).itemsize * 8)]
     _make_unsigned = lambda x: globals()["np_uint%d" % (np.dtype(x).itemsize * 8)]
 
