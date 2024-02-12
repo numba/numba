@@ -2,6 +2,7 @@
     Type System utilities common across type systems.
 """
 
+
 def parse_integer_bitwidth(name):
     bitwidth = int(name.split('int')[-1])
     return bitwidth
