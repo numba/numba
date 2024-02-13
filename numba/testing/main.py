@@ -900,7 +900,7 @@ class ParallelTestRunner(runner.TextTestRunner):
         # Write timing
         if self.show_timing:
             self.stream.write(f"Total test runtime (seconds): {result.test_runtime}\n")
-
+        # Write junit xml
         if self.write_junit:
             filename = f"junit_testsuites_{time.time()}.xml"
             print("Writing junit xml file:", filename)
