@@ -497,19 +497,19 @@ def np_setdiff1d_3(a, b, assume_unique=False):
 
 
 def np_in1d_2(a, b):
-    return np.in1d(a, b)
+    return np.in1d(a, b, kind="sort")
 
 
 def np_in1d_3a(a, b, assume_unique=False):
-    return np.in1d(a, b, assume_unique=assume_unique)
+    return np.in1d(a, b, assume_unique=assume_unique, kind="sort")
 
 
 def np_in1d_3b(a, b, invert=False):
-    return np.in1d(a, b, invert=invert)
+    return np.in1d(a, b, invert=invert, kind="sort")
 
 
 def np_in1d_4(a, b, assume_unique=False, invert=False):
-    return np.in1d(a, b, assume_unique, invert)
+    return np.in1d(a, b, assume_unique, invert, kind="sort")
 
 
 def np_in1d_5(a, b, assume_unique=False, invert=False, kind=None):
@@ -517,19 +517,19 @@ def np_in1d_5(a, b, assume_unique=False, invert=False, kind=None):
 
 
 def np_isin_2(a, b):
-    return np.isin(a, b)
+    return np.isin(a, b, kind="sort")
 
 
 def np_isin_3a(a, b, assume_unique=False):
-    return np.isin(a, b, assume_unique=assume_unique)
+    return np.isin(a, b, assume_unique=assume_unique, kind="sort")
 
 
 def np_isin_3b(a, b, invert=False):
-    return np.isin(a, b, invert=invert)
+    return np.isin(a, b, invert=invert, kind="sort")
 
 
 def np_isin_4(a, b, assume_unique=False, invert=False):
-    return np.isin(a, b, assume_unique, invert)
+    return np.isin(a, b, assume_unique, invert, kind="sort")
 
 
 def np_isin_5(a, b, assume_unique=False, invert=False, kind=None):
@@ -6597,25 +6597,27 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         a = np.array([1])
         b = np.array([2])
-        x = np_nbfunc(a, b, kind=None)
+        x = np_nbfunc(a, b, kind="sort")
         self.assertPreciseEqual(x, np.array([False]))
 
         self.disable_leak_check()
         with self.assertRaises(TypingError):
-            np_nbfunc(a, b, "foo", False)
+            np_nbfunc(a, b, "foo", False, "sort")
         with self.assertRaises(TypingError):
-            np_nbfunc(a, b, False, "foo")
+            np_nbfunc(a, b, False, "foo", "sort")
         with self.assertRaises(TypingError):
-            np_nbfunc("foo", b, True, False)
+            np_nbfunc("foo", b, True, False, "sort")
         with self.assertRaises(TypingError):
-            np_nbfunc(a, "foo", True, False)
+            np_nbfunc(a, "foo", True, False, "sort")
         with self.assertRaises(TypingError):
-            np_nbfunc(a, b, True, False, False)
+            np_nbfunc(a, b, True, False)
+        with self.assertRaises(TypingError):
+            np_nbfunc(a, b, True, False, None)
 
         @njit()
         def table_in1d(a, b):
             return np.in1d(a, b, kind="table")
-        with self.assertRaises(TypingError):
+        with self.assertRaises(ValueError):
             table_in1d(a, b)
 
     @staticmethod
@@ -6799,25 +6801,27 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         a = np.array([1])
         b = np.array([2])
-        x = np_nbfunc(a, b, kind=None)
+        x = np_nbfunc(a, b, kind="sort")
         self.assertPreciseEqual(x, np.array([False]))
 
         self.disable_leak_check()
         with self.assertRaises(TypingError):
-            np_nbfunc(a, b, "foo", False)
+            np_nbfunc(a, b, "foo", False, "sort")
         with self.assertRaises(TypingError):
-            np_nbfunc(a, b, False, "foo")
+            np_nbfunc(a, b, False, "foo", "sort")
         with self.assertRaises(TypingError):
-            np_nbfunc("foo", b, True, False)
+            np_nbfunc("foo", b, True, False, "sort")
         with self.assertRaises(TypingError):
-            np_nbfunc(a, "foo", True, False)
+            np_nbfunc(a, "foo", True, False, "sort")
         with self.assertRaises(TypingError):
-            np_nbfunc(a, b, True, False, False)
+            np_nbfunc(a, b, True, False)
+        with self.assertRaises(TypingError):
+            np_nbfunc(a, b, True, False, None)
 
         @njit()
         def table_isin(a, b):
             return np.isin(a, b, kind="table")
-        with self.assertRaises(TypingError):
+        with self.assertRaises(ValueError):
             table_isin(a, b)
 
     def test_setops_manyways(self):

@@ -4895,7 +4895,8 @@ def jit_np_setdiff1d(ar1, ar2, assume_unique=False):
         else:
             ar1 = np.unique(ar1)
             ar2 = np.unique(ar2)
-        return ar1[np.in1d(ar1, ar2, assume_unique=True, invert=True)]
+        return ar1[np.in1d(ar1, ar2,
+                           assume_unique=True, invert=True, kind="sort")]
 
     return np_setdiff1d_impl
 
@@ -4908,18 +4909,12 @@ def jit_np_in1d(ar1, ar2, assume_unique=False, invert=False, kind=None):
         raise TypingError('in1d: Argument "assume_unique" must be boolean')
     if not isinstance(invert, (types.Boolean, bool)):
         raise TypingError('in1d: Argument "invert" must be boolean')
-
-    if not (kind is None or isinstance(kind, types.NoneType)):
-        kindval = getattr(kind, "literal_value", kind)
-        if not isinstance(kindval,
-                          (types.UnicodeType, str, types.StringLiteral)):
-            raise TypingError('in1d: Argument "kind" must be a string or None')
-        elif kindval != "sort":
-            raise NumbaValueError('in1d: Only kind="sort" is supported')
+    if not isinstance(kind, (types.UnicodeType, str, types.StringLiteral)):
+        raise TypingError('in1d: Only kind="sort" is supported')
 
     def np_in1d_impl(ar1, ar2, assume_unique=False, invert=False, kind=None):
         # https://github.com/numpy/numpy/blob/03b62604eead0f7d279a5a4c094743eb29647368/numpy/lib/arraysetops.py#L525 # noqa: E501
-        if kind is not None and kind != "sort":
+        if kind != "sort":
             raise ValueError('in1d: Only kind="sort" is supported')
 
         # Ravel both arrays, behavior for the first array could be different
@@ -4988,24 +4983,18 @@ def jit_np_isin(element, test_elements, assume_unique=False, invert=False,
         raise TypingError('isin: Argument "assume_unique" must be boolean')
     if not (isinstance(invert, (types.Boolean, bool))):
         raise TypingError('isin: Argument "invert" must be boolean')
-
-    if not (kind is None or isinstance(kind, types.NoneType)):
-        kindval = getattr(kind, "literal_value", kind)
-        if not isinstance(kindval,
-                          (types.UnicodeType, str, types.StringLiteral)):
-            raise TypingError('in1d: Argument "kind" must be a string or None')
-        elif kindval != "sort":
-            raise NumbaValueError('in1d: Only kind="sort" is supported')
+    if not isinstance(kind, (types.UnicodeType, str, types.StringLiteral)):
+        raise TypingError('isin: Only kind="sort" is supported')
 
     # https://github.com/numpy/numpy/blob/03b62604eead0f7d279a5a4c094743eb29647368/numpy/lib/arraysetops.py#L889 # noqa: E501
     def np_isin_impl(element, test_elements, assume_unique=False, invert=False,
                      kind=None):
 
-        if kind is not None and kind != "sort":
+        if kind != "sort":
             raise ValueError('isin: Only kind="sort" is supported')
 
         element = np.asarray(element)
         return np.in1d(element, test_elements, assume_unique=assume_unique,
-                       invert=invert).reshape(element.shape)
+                       invert=invert, kind="sort").reshape(element.shape)
 
     return np_isin_impl
