@@ -633,11 +633,9 @@ class ParallelTestResult(runner.TextTestResult):
         """
         Add the results from the other *result* to this result.
         """
-        classname, testname = result.test_id.rsplit('.', 1)
         streamout = result.stream.getvalue()
         self.records.append({
-            'classname': classname,
-            'testname': testname,
+            'test_id': result.test_id,
             'stream': streamout,
             'runtime': result.test_runtime,
             'failures': result.failures,
@@ -645,6 +643,8 @@ class ParallelTestResult(runner.TextTestResult):
             'skipped': result.skipped,
             'expectedFailures': result.expectedFailures,
             'unexpectedSuccesses': result.unexpectedSuccesses,
+            'pid': result.pid,
+            'start_time': result.start_time,
         })
         self.stream.write(streamout)
         self.test_runtime += result.test_runtime
@@ -670,22 +670,35 @@ class ParallelTestResult(runner.TextTestResult):
             'errors': 'error',
             'failures': 'failure',
             'skipped': 'skipped',
-            'expectedFailures': 'failure',
+            'expectedFailures': 'skipped',
             'unexpectedSuccesses': 'failure',
         }
+        # Process each record
         for rec in self.records:
+            filename, classname, testname = rec['test_id'].rsplit('.', 2)
+
             testcase = SubElement(
-                suite, "testcase", name=rec['testname'],
-                classname=rec['classname'], time=str(rec['runtime']),
+                suite, "testcase",
+                name='.'.join([classname, testname]),
+                classname=filename,
+                time=str(rec['runtime']),
             )
+            props = SubElement(testcase, 'properties')
+            # Write PID and start_time to help isolate the sequence of tests
+            # to reach a interrupted (e.g. segfault) test
+            SubElement(props, 'property', name='pid', value=str(rec['pid']))
+            SubElement(props, 'property', name='start_time',
+                       value=str(rec['start_time']))
             # Add error/failure/skipped tags accordingly
             for kind, tag in status_to_tags.items():
                 if rec[kind]:
                     [(_id, traceback)] = rec[kind]
                     SubElement(testcase, tag).text = traceback
                     break
-
-        ElementTree(suites).write(output, xml_declaration=True, encoding='utf-8')
+        # Write XML to output
+        ElementTree(suites).write(
+            output, xml_declaration=True, encoding='utf-8',
+        )
 
 
 class _MinimalResult(object):
@@ -696,7 +709,7 @@ class _MinimalResult(object):
     __slots__ = (
         'failures', 'errors', 'skipped', 'expectedFailures',
         'unexpectedSuccesses', 'stream', 'shouldStop', 'testsRun',
-        'test_id', 'test_runtime')
+        'test_id', 'test_runtime', 'start_time', 'pid')
 
     def fixup_case(self, case):
         """
@@ -705,7 +718,8 @@ class _MinimalResult(object):
         # Python 3.3 doesn't reset this one.
         case._outcomeForDoCleanups = None
 
-    def __init__(self, original_result, test_id=None, test_runtime=None):
+    def __init__(self, original_result, test_id=None, test_runtime=None,
+                 start_time=None, pid=None):
         for attr in self.__slots__:
             setattr(self, attr, getattr(original_result, attr, None))
         for case, _ in self.expectedFailures:
@@ -716,6 +730,9 @@ class _MinimalResult(object):
             self.fixup_case(case)
         self.test_id = test_id
         self.test_runtime = test_runtime
+        self.start_time = start_time
+        self.pid = pid
+
 
 class _FakeStringIO(object):
     """
@@ -766,7 +783,10 @@ class _MinimalRunner(object):
             print(f"    Runtime (seconds): {runtime}", file=result.stream)
         # HACK as cStringIO.StringIO isn't picklable in 2.x
         result.stream = _FakeStringIO(result.stream.getvalue())
-        return _MinimalResult(result, test.id(), test_runtime=runtime)
+        return _MinimalResult(
+            result, test.id(), test_runtime=runtime, start_time=start_time,
+            pid=os.getpid(),
+        )
 
     @contextlib.contextmanager
     def cleanup_object(self, test):
